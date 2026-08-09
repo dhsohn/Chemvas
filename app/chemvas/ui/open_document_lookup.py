@@ -3,8 +3,8 @@
 Chemvas opens each document in its own window; without a check, opening the
 same file twice would spawn a second, independent copy that could silently
 diverge. This locates the existing (window, canvas) so callers can switch to it
-instead. Paths are compared by absolute, case-folded key so different spellings
-of the same file still match.
+instead. Paths are compared by absolute, platform-normalized keys so equivalent
+spellings on case-insensitive platforms still match.
 """
 
 from __future__ import annotations
@@ -17,12 +17,12 @@ from chemvas.ui.canvas_document_metadata_state import document_file_path_for
 
 
 def normalized_path_key(path: str) -> str:
-    # os.path.normcase already case-folds on Windows; on macOS it is a no-op even
-    # though the default volume is case-insensitive, so fold explicitly there.
-    # Linux is case-sensitive and left as-is.
-    key = os.path.normcase(os.path.abspath(path))
+    key = os.path.abspath(path)
+    if sys.platform == "win32":
+        return os.path.normcase(key)
+    # macOS default volumes are case-insensitive, while Linux is case-sensitive.
     if sys.platform == "darwin":
-        key = key.casefold()
+        return key.casefold()
     return key
 
 

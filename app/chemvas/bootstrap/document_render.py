@@ -36,6 +36,10 @@ class _RenderedDocument:
     height_pixels: int | None
 
 
+def _qt_platform_for_render(platform: str | None = None) -> str:
+    return "windows" if (platform or sys.platform) == "win32" else "offscreen"
+
+
 def run(argv: list[str]) -> int:
     parser = _argument_parser()
     args = parser.parse_args(argv)
@@ -189,7 +193,7 @@ def _render_offscreen(
     dpi: int,
 ) -> _RenderedDocument:
     previous_qt_platform = os.environ.get("QT_QPA_PLATFORM")
-    os.environ["QT_QPA_PLATFORM"] = "offscreen"
+    os.environ["QT_QPA_PLATFORM"] = _qt_platform_for_render()
     try:
         from PyQt6.QtCore import QEvent
         from PyQt6.QtWidgets import QApplication

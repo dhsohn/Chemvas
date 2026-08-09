@@ -95,6 +95,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the loose one-shot command buttons beside them (flip and rotate).
 
 ### Fixed
+- Windows headless document rendering now uses the native Qt platform without
+  showing a window, preventing labels from turning into boxes when `offscreen`
+  is selected only after the process has started.
+- `chemvas --help`, `chemvas -h`, and `chemvas --version` now return root CLI
+  metadata without starting Qt; the help identifies desktop startup, supported
+  root options, and every dispatched headless subcommand.
 - Cleared transient hover indicators before Perspective rotation captures its
   scene snapshot, preventing a false scene-mutation failure at release. Failed
   press, preview, or finalization callbacks are also contained at the PyQt6

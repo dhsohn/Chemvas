@@ -176,7 +176,9 @@ def _app_python_files() -> list[Path]:
 def _matching_lines(pattern: re.Pattern[str], paths: list[Path]) -> list[str]:
     matches: list[str] = []
     for path in paths:
-        for line_no, line in enumerate(path.read_text().splitlines(), start=1):
+        for line_no, line in enumerate(
+            path.read_text(encoding="utf-8").splitlines(), start=1
+        ):
             if pattern.search(line):
                 matches.append(
                     f"{path.relative_to(APP_ROOT.parents[0])}:{line_no}: {line.strip()}"
@@ -329,10 +331,12 @@ def test_main_window_code_uses_canvas_service_accessor_instead_of_canvas_service
 
 
 def test_main_window_delegates_canvas_tab_setup_to_helper_module() -> None:
-    source = (APP_ROOT / "chemvas" / "shell" / "main_window.py").read_text()
-    setup_source = (
-        APP_ROOT / "chemvas" / "ui" / "main_window_tab_setup.py"
-    ).read_text()
+    source = (APP_ROOT / "chemvas" / "shell" / "main_window.py").read_text(
+        encoding="utf-8"
+    )
+    setup_source = (APP_ROOT / "chemvas" / "ui" / "main_window_tab_setup.py").read_text(
+        encoding="utf-8"
+    )
 
     assert "class SheetTabBar" not in source
     assert "QTabBar" not in source
@@ -344,7 +348,7 @@ def test_main_window_bootstrap_uses_runtime_services_without_window_service_wrap
     None
 ):
     bootstrap = APP_ROOT / "chemvas" / "bootstrap" / "main_window_runtime.py"
-    source = bootstrap.read_text()
+    source = bootstrap.read_text(encoding="utf-8")
     removed_wrappers = (
         "window.add_canvas(",
         "window.update_action_availability()",
@@ -363,7 +367,9 @@ def test_main_window_bootstrap_uses_runtime_services_without_window_service_wrap
 
 
 def test_main_window_keeps_action_availability_surface_off_window() -> None:
-    source = (APP_ROOT / "chemvas" / "shell" / "main_window.py").read_text()
+    source = (APP_ROOT / "chemvas" / "shell" / "main_window.py").read_text(
+        encoding="utf-8"
+    )
     tree = ast.parse(source)
     main_window_class = next(
         node
@@ -385,7 +391,9 @@ def test_main_window_keeps_action_availability_surface_off_window() -> None:
 
 
 def test_main_window_keeps_removed_service_surfaces_off_window() -> None:
-    source = (APP_ROOT / "chemvas" / "shell" / "main_window.py").read_text()
+    source = (APP_ROOT / "chemvas" / "shell" / "main_window.py").read_text(
+        encoding="utf-8"
+    )
     tree = ast.parse(source)
     method_names = {
         node.name for node in ast.walk(tree) if isinstance(node, ast.FunctionDef)
@@ -473,7 +481,9 @@ def test_main_window_keeps_removed_service_surfaces_off_window() -> None:
 
 
 def test_main_window_delegates_runtime_state_to_state_object() -> None:
-    source = (APP_ROOT / "chemvas" / "shell" / "main_window.py").read_text()
+    source = (APP_ROOT / "chemvas" / "shell" / "main_window.py").read_text(
+        encoding="utf-8"
+    )
     tree = ast.parse(source)
 
     private_state_attrs = {
@@ -509,7 +519,9 @@ def test_main_window_delegates_runtime_state_to_state_object() -> None:
 
 
 def test_main_window_delegates_toolbar_ui_references_to_reference_object() -> None:
-    source = (APP_ROOT / "chemvas" / "shell" / "main_window.py").read_text()
+    source = (APP_ROOT / "chemvas" / "shell" / "main_window.py").read_text(
+        encoding="utf-8"
+    )
     tree = ast.parse(source)
 
     private_ui_attrs = {
@@ -554,10 +566,12 @@ def test_main_window_delegates_toolbar_ui_references_to_reference_object() -> No
 
 
 def test_main_window_delegates_canvas_tab_references_to_reference_object() -> None:
-    source = (APP_ROOT / "chemvas" / "shell" / "main_window.py").read_text()
+    source = (APP_ROOT / "chemvas" / "shell" / "main_window.py").read_text(
+        encoding="utf-8"
+    )
     bootstrap_source = (
         APP_ROOT / "chemvas" / "bootstrap" / "main_window_runtime.py"
-    ).read_text()
+    ).read_text(encoding="utf-8")
     tree = ast.parse(source)
 
     assert "window.canvas_tabs" not in bootstrap_source
@@ -591,7 +605,9 @@ def test_main_window_delegates_canvas_tab_references_to_reference_object() -> No
 
 
 def test_main_window_does_not_wrap_tool_action_construction() -> None:
-    source = (APP_ROOT / "chemvas" / "shell" / "main_window.py").read_text()
+    source = (APP_ROOT / "chemvas" / "shell" / "main_window.py").read_text(
+        encoding="utf-8"
+    )
     tree = ast.parse(source)
     method_names = {
         node.name for node in ast.walk(tree) if isinstance(node, ast.FunctionDef)
@@ -607,7 +623,7 @@ def test_main_window_context_page_state_service_uses_injected_services_and_publi
 ):
     service = APP_ROOT / "chemvas" / "ui" / "main_window_context_page_state_service.py"
     main_window = APP_ROOT / "chemvas" / "shell" / "main_window.py"
-    main_window_source = main_window.read_text()
+    main_window_source = main_window.read_text(encoding="utf-8")
     tree = ast.parse(main_window_source)
     pattern = re.compile(
         r"\bwindow\._"
@@ -650,7 +666,7 @@ def test_main_window_ports_keep_window_accessors_consolidated() -> None:
     for module_name in old_port_modules:
         assert not (APP_ROOT / "chemvas" / "ui" / module_name).exists()
         assert module_name.removesuffix(".py") not in "\n".join(
-            path.read_text() for path in _app_python_files()
+            path.read_text(encoding="utf-8") for path in _app_python_files()
         )
 
 
@@ -730,7 +746,7 @@ def test_main_window_services_delegates_canvas_port_lookup_to_ports_module() -> 
 
 def test_main_window_canvas_document_service_uses_injected_tab_collaborators() -> None:
     service = APP_ROOT / "chemvas" / "ui" / "main_window_canvas_document_service.py"
-    source = service.read_text()
+    source = service.read_text(encoding="utf-8")
     pattern = re.compile(
         r"\bwindow\.plus_tab_index\("
         r"|\bwindow\.canvas_tabs\b"
@@ -745,7 +761,7 @@ def test_main_window_canvas_document_service_uses_injected_tab_collaborators() -
 
 def test_main_window_canvas_tab_ui_service_uses_injected_close_port() -> None:
     service = APP_ROOT / "chemvas" / "ui" / "main_window_canvas_tab_ui_service.py"
-    source = service.read_text()
+    source = service.read_text(encoding="utf-8")
     pattern = re.compile(
         r"\bwindow\.plus_tab_index\("
         r"|\bwindow\.recreate_sheet_add_tab\("
@@ -913,7 +929,7 @@ def test_main_window_code_binds_preview_rdkit_through_preview_api() -> None:
 
 def test_preview_3d_does_not_reintroduce_renderer_delegate_wrappers() -> None:
     preview = APP_ROOT / "chemvas" / "ui" / "preview_3d.py"
-    tree = ast.parse(preview.read_text())
+    tree = ast.parse(preview.read_text(encoding="utf-8"))
     preview_class = next(
         node
         for node in tree.body
@@ -950,7 +966,7 @@ def test_preview_3d_does_not_reintroduce_renderer_delegate_wrappers() -> None:
 
 def test_preview_3d_renderer_delegates_molecule_scene_drawing() -> None:
     renderer = APP_ROOT / "chemvas" / "ui" / "preview_3d_renderer.py"
-    renderer_source = renderer.read_text()
+    renderer_source = renderer.read_text(encoding="utf-8")
 
     assert "def draw_projected_scene" not in renderer_source
     assert "def preview_element_color" not in renderer_source
@@ -969,7 +985,7 @@ def test_main_window_ui_assembly_service_uses_injected_canvas_service_ports() ->
 
 def test_main_window_ui_assembly_moves_tool_actions_into_panel_toolbar() -> None:
     service = APP_ROOT / "chemvas" / "ui" / "main_window_ui_assembly_service.py"
-    service_source = service.read_text()
+    service_source = service.read_text(encoding="utf-8")
 
     assert not (APP_ROOT / "chemvas" / "ui" / "main_window_left_toolbar.py").exists()
     assert "from chemvas.ui.main_window_left_toolbar import" not in service_source
@@ -980,8 +996,8 @@ def test_main_window_ui_assembly_moves_tool_actions_into_panel_toolbar() -> None
 def test_main_window_ui_assembly_delegates_panel_toolbar_to_module() -> None:
     service = APP_ROOT / "chemvas" / "ui" / "main_window_ui_assembly_service.py"
     panel_toolbar = APP_ROOT / "chemvas" / "ui" / "main_window_panel_toolbar.py"
-    service_source = service.read_text()
-    panel_toolbar_source = panel_toolbar.read_text()
+    service_source = service.read_text(encoding="utf-8")
+    panel_toolbar_source = panel_toolbar.read_text(encoding="utf-8")
     pattern = re.compile(
         r"triggered\.connect\(window\."
         r"|callback=window\."
@@ -1002,7 +1018,7 @@ def test_main_window_ui_assembly_delegates_panel_toolbar_to_module() -> None:
 
 def test_main_window_ui_assembly_delegates_toolbar_buttons_to_module() -> None:
     service = APP_ROOT / "chemvas" / "ui" / "main_window_ui_assembly_service.py"
-    service_source = service.read_text()
+    service_source = service.read_text(encoding="utf-8")
 
     assert "QPainter" not in service_source
     assert "QPolygonF" not in service_source
@@ -1013,7 +1029,7 @@ def test_main_window_document_action_service_delegates_dialog_assembly_to_module
     None
 ):
     service = APP_ROOT / "chemvas" / "ui" / "main_window_document_action_service.py"
-    service_source = service.read_text()
+    service_source = service.read_text(encoding="utf-8")
 
     assert "prompt_sheet_setup(" not in service_source
     assert "QDialog" not in service_source
@@ -1025,7 +1041,7 @@ def test_main_window_document_action_service_delegates_dialog_assembly_to_module
 
 def test_main_window_keeps_dialog_defaults_inside_action_services() -> None:
     main_window = APP_ROOT / "chemvas" / "shell" / "main_window.py"
-    main_window_source = main_window.read_text()
+    main_window_source = main_window.read_text(encoding="utf-8")
 
     for concrete_default in (
         "QColorDialog",
@@ -1043,9 +1059,9 @@ def test_main_window_panel_service_owns_preview_window_assembly() -> None:
     ui_assembly = APP_ROOT / "chemvas" / "ui" / "main_window_ui_assembly_service.py"
     panel_service = APP_ROOT / "chemvas" / "ui" / "main_window_panel_service.py"
     preview_window = APP_ROOT / "chemvas" / "ui" / "main_window_preview_window.py"
-    ui_source = ui_assembly.read_text()
-    panel_service_source = panel_service.read_text()
-    preview_window_source = preview_window.read_text()
+    ui_source = ui_assembly.read_text(encoding="utf-8")
+    panel_service_source = panel_service.read_text(encoding="utf-8")
+    preview_window_source = preview_window.read_text(encoding="utf-8")
 
     assert "init_panels" not in ui_source
     assert "QDockWidget" not in ui_source
@@ -1083,7 +1099,7 @@ def test_main_window_document_action_service_uses_injected_canvas_service_ports(
 ):
     service = APP_ROOT / "chemvas" / "ui" / "main_window_document_action_service.py"
     services = APP_ROOT / "chemvas" / "bootstrap" / "main_window_services.py"
-    source = service.read_text()
+    source = service.read_text(encoding="utf-8")
     pattern = re.compile(
         r"\bcanvas_service_for\b"
         r"|(?:document_session_service|geometry_controller)=None"
@@ -1100,14 +1116,16 @@ def test_main_window_document_action_service_uses_injected_canvas_service_ports(
     assert "set_sheet_setup_for_window" not in source
     assert "workbook_document_service" not in source
     assert "save_document_state" not in source
-    assert "sheet_size_for_window=sheet_size_for_window" not in services.read_text()
+    assert "sheet_size_for_window=sheet_size_for_window" not in services.read_text(
+        encoding="utf-8"
+    )
     assert (
         "sheet_orientation_for_window=sheet_orientation_for_window"
-        not in services.read_text()
+        not in services.read_text(encoding="utf-8")
     )
     assert (
         "set_sheet_setup_for_window=set_sheet_setup_for_window"
-        not in services.read_text()
+        not in services.read_text(encoding="utf-8")
     )
     assert _matching_lines(pattern, [service]) == []
 
@@ -1238,7 +1256,7 @@ def test_access_helpers_do_not_repeat_default_private_legacy_names_at_call_sites
 def test_production_context_factories_use_default_public_context_keys() -> None:
     matches: list[str] = []
     for path in _app_python_files():
-        tree = ast.parse(path.read_text())
+        tree = ast.parse(path.read_text(encoding="utf-8"))
         for node in ast.walk(tree):
             if not isinstance(node, ast.Call):
                 continue
@@ -1289,8 +1307,8 @@ def test_selection_flow_does_not_use_selection_context_facade() -> None:
 def test_selection_collection_helpers_live_in_canonical_modules() -> None:
     collection = APP_ROOT / "chemvas" / "ui" / "selection_collection_access.py"
     service_access = APP_ROOT / "chemvas" / "ui" / "selection_service_access.py"
-    collection_source = collection.read_text()
-    service_source = service_access.read_text()
+    collection_source = collection.read_text(encoding="utf-8")
+    service_source = service_access.read_text(encoding="utf-8")
     moved_defs = (
         "selected_ids_for",
         "selected_scene_items_for",
@@ -1378,7 +1396,9 @@ def test_canvas_service_ports_keep_simple_service_accessors_consolidated() -> No
         "structure_insert_ports.py",
         "structure_mutation_ports.py",
     )
-    app_source = "\n".join(path.read_text() for path in _app_python_files())
+    app_source = "\n".join(
+        path.read_text(encoding="utf-8") for path in _app_python_files()
+    )
 
     for module_name in old_port_modules:
         assert not (APP_ROOT / "chemvas" / "ui" / module_name).exists()
@@ -1428,7 +1448,7 @@ def test_structure_build_access_delegates_service_lookup_to_structure_build_port
         r"|\b_SERVICE_TEMPLATE_METHODS\b"
     )
 
-    assert "add_structure_template_for" not in access.read_text()
+    assert "add_structure_template_for" not in access.read_text(encoding="utf-8")
     assert _matching_lines(forbidden, [access]) == []
 
 
@@ -1825,7 +1845,7 @@ def test_selection_controller_delegates_preference_details() -> None:
 
 def test_selection_controller_does_not_reintroduce_private_delegate_wrappers() -> None:
     controller = APP_ROOT / "chemvas" / "ui" / "selection_controller.py"
-    tree = ast.parse(controller.read_text())
+    tree = ast.parse(controller.read_text(encoding="utf-8"))
     private_methods: list[str] = []
     for node in ast.walk(tree):
         if not isinstance(node, ast.ClassDef) or node.name != "SelectionController":
@@ -1852,7 +1872,7 @@ def test_selection_controller_does_not_construct_collaborator_services() -> None
         "SelectionHitTestService",
     }
     matches: list[str] = []
-    tree = ast.parse(controller.read_text())
+    tree = ast.parse(controller.read_text(encoding="utf-8"))
     for node in ast.walk(tree):
         if not isinstance(node, ast.Call):
             continue
@@ -1889,13 +1909,17 @@ def test_selection_lookup_services_require_explicit_collaborators() -> None:
 
 
 def test_tool_controller_assembles_tool_context_with_explicit_ports() -> None:
-    source = (APP_ROOT / "chemvas" / "ui" / "tool_controller.py").read_text()
+    source = (APP_ROOT / "chemvas" / "ui" / "tool_controller.py").read_text(
+        encoding="utf-8"
+    )
 
     assert "ToolContext(canvas)" not in source
 
 
 def _canvas_services_entrypoint_source() -> str:
-    return (APP_ROOT / "chemvas" / "ui" / "canvas_services.py").read_text()
+    return (APP_ROOT / "chemvas" / "ui" / "canvas_services.py").read_text(
+        encoding="utf-8"
+    )
 
 
 def _service_assembly_paths() -> list[Path]:
@@ -1908,7 +1932,7 @@ def test_canvas_services_delegates_tool_controller_assembly_to_factory() -> None
     assembly_source = _canvas_services_entrypoint_source()
     factory_source = (
         APP_ROOT / "chemvas" / "ui" / "tool_controller_factory.py"
-    ).read_text()
+    ).read_text(encoding="utf-8")
 
     assert "ToolController(" not in assembly_source
     assert "tool_mode_controller" not in factory_source
@@ -1925,7 +1949,7 @@ def test_canvas_services_delegates_handle_service_assembly_to_bundle() -> None:
 
 def test_canvas_runtime_services_exposes_single_runtimes_directly() -> None:
     runtime_services = APP_ROOT / "chemvas" / "ui" / "canvas_runtime_services.py"
-    tree = ast.parse(runtime_services.read_text())
+    tree = ast.parse(runtime_services.read_text(encoding="utf-8"))
     annotations: dict[str, str] = {}
     for node in tree.body:
         if not isinstance(node, ast.ClassDef) or node.name != "CanvasRuntimeServices":
@@ -1997,7 +2021,7 @@ def test_canvas_services_delegates_interaction_service_assembly_to_bundle() -> N
 
 def test_atom_label_service_is_a_direct_runtime_without_auxiliary_bundle() -> None:
     runtime_services = APP_ROOT / "chemvas" / "ui" / "canvas_runtime_services.py"
-    source = runtime_services.read_text()
+    source = runtime_services.read_text(encoding="utf-8")
 
     assert "atom_label_service:" in source
     assert "AuxiliaryServices" not in source
@@ -2064,7 +2088,7 @@ def test_production_canvas_service_consumers_use_grouped_runtime_api() -> None:
     for path in sorted((APP_ROOT / "chemvas").rglob("*.py")):
         if path == runtime_services:
             continue
-        tree = ast.parse(path.read_text())
+        tree = ast.parse(path.read_text(encoding="utf-8"))
         for node in ast.walk(tree):
             if isinstance(node, ast.Attribute) and node.attr in legacy_names:
                 owner = node.value
@@ -2112,7 +2136,9 @@ def test_production_canvas_service_consumers_use_grouped_runtime_api() -> None:
 def test_selection_service_bundle_assembles_selection_controller_collaborators_explicitly() -> (
     None
 ):
-    source = (APP_ROOT / "chemvas" / "ui" / "selection_service_bundle.py").read_text()
+    source = (APP_ROOT / "chemvas" / "ui" / "selection_service_bundle.py").read_text(
+        encoding="utf-8"
+    )
 
     assert "resolve_canvas_graph_service" not in source
 
@@ -2328,7 +2354,7 @@ def test_canvas_model_access_delegates_model_storage_to_model_state() -> None:
 
 def test_canvas_view_uses_model_state_for_model_creation() -> None:
     view = APP_ROOT / "chemvas" / "ui" / "canvas_view.py"
-    source = view.read_text()
+    source = view.read_text(encoding="utf-8")
 
     assert "MoleculeModel" not in source
 
@@ -2354,21 +2380,23 @@ def test_direct_canvas_collaborators_stay_behind_setup_and_access_modules() -> N
 
 
 def test_rdkit_async_jobs_store_running_jobs_in_state_module() -> None:
-    source = (APP_ROOT / "chemvas" / "ui" / "rdkit_async_jobs.py").read_text()
+    source = (APP_ROOT / "chemvas" / "ui" / "rdkit_async_jobs.py").read_text(
+        encoding="utf-8"
+    )
 
     assert "_rdkit_export_jobs" not in source
 
 
 def test_canvas_view_delegates_rdkit_adapter_creation_to_setup() -> None:
     view = APP_ROOT / "chemvas" / "ui" / "canvas_view.py"
-    source = view.read_text()
+    source = view.read_text(encoding="utf-8")
 
     assert "RDKitAdapter" not in source
 
 
 def test_canvas_view_delegates_bond_renderer_creation_to_setup() -> None:
     view = APP_ROOT / "chemvas" / "ui" / "canvas_view.py"
-    source = view.read_text()
+    source = view.read_text(encoding="utf-8")
 
     assert "BondRenderer" not in source
 
@@ -2488,7 +2516,9 @@ def test_dead_structure_template_catalog_modules_are_removed() -> None:
         "structure_template_build_service.py",
         "structure_template_commands.py",
     }
-    app_source = "\n".join(path.read_text() for path in _app_python_files())
+    app_source = "\n".join(
+        path.read_text(encoding="utf-8") for path in _app_python_files()
+    )
 
     for module_name in removed_modules:
         assert not (APP_ROOT / "chemvas" / "ui" / module_name).exists()
@@ -2544,7 +2574,7 @@ def test_insert_controller_does_not_use_context_facade() -> None:
 def test_main_window_canvas_document_service_does_not_use_context_facade() -> None:
     removed_context = APP_ROOT / "chemvas" / "ui" / "main_window_workbook_context.py"
     service = APP_ROOT / "chemvas" / "ui" / "main_window_canvas_document_service.py"
-    source = service.read_text()
+    source = service.read_text(encoding="utf-8")
     pattern = re.compile(
         r"\bMainWindowWorkbookContext\b"
         r"|\bmain_window_workbook_context_for\b"
@@ -2580,8 +2610,8 @@ def test_main_window_document_and_icon_services_do_not_use_context_facade() -> N
 def test_main_window_icon_factory_delegates_canvas_style_access_to_port() -> None:
     factory = APP_ROOT / "chemvas" / "ui" / "main_window_icon_factory.py"
     port = APP_ROOT / "chemvas" / "ui" / "main_window_icon_canvas_style.py"
-    factory_source = factory.read_text()
-    port_source = port.read_text()
+    factory_source = factory.read_text(encoding="utf-8")
+    port_source = port.read_text(encoding="utf-8")
 
     assert "window.canvas" not in factory_source
     assert "self.window" not in factory_source
@@ -2595,7 +2625,7 @@ def test_main_window_icon_factory_delegates_hidpi_icon_rendering_to_pixmap_facto
     None
 ):
     factory = APP_ROOT / "chemvas" / "ui" / "main_window_icon_factory.py"
-    factory_source = factory.read_text()
+    factory_source = factory.read_text(encoding="utf-8")
 
     assert "QPixmap" not in factory_source
     assert "QPainter" not in factory_source
@@ -2605,7 +2635,7 @@ def test_main_window_icon_factory_delegates_hidpi_icon_rendering_to_pixmap_facto
 
 def test_main_window_icon_factory_delegates_pure_geometry_to_helper() -> None:
     factory = APP_ROOT / "chemvas" / "ui" / "main_window_icon_factory.py"
-    factory_source = factory.read_text()
+    factory_source = factory.read_text(encoding="utf-8")
 
     assert "from chemvas.ui.main_window_icon_geometry import" not in factory_source
     assert "def benzene_icon_polygon" not in factory_source
@@ -2615,7 +2645,7 @@ def test_main_window_icon_factory_delegates_pure_geometry_to_helper() -> None:
 
 def test_main_window_icon_factory_delegates_bond_drawing_to_renderer() -> None:
     factory = APP_ROOT / "chemvas" / "ui" / "main_window_icon_factory.py"
-    factory_source = factory.read_text()
+    factory_source = factory.read_text(encoding="utf-8")
 
     for icon_name in (
         "bond",
@@ -2636,7 +2666,7 @@ def test_main_window_icon_factory_delegates_bond_drawing_to_renderer() -> None:
 
 def test_main_window_icon_factory_delegates_arrow_drawing_to_renderer() -> None:
     factory = APP_ROOT / "chemvas" / "ui" / "main_window_icon_factory.py"
-    factory_source = factory.read_text()
+    factory_source = factory.read_text(encoding="utf-8")
 
     # Arrow previews/presets/controls now render through the shared SVG design
     # icon set rather than the per-shape QPainter renderer.
@@ -2646,7 +2676,7 @@ def test_main_window_icon_factory_delegates_arrow_drawing_to_renderer() -> None:
 
 def test_main_window_template_icons_use_only_static_design_mapping() -> None:
     factory = APP_ROOT / "chemvas" / "ui" / "main_window_icon_factory.py"
-    factory_source = factory.read_text()
+    factory_source = factory.read_text(encoding="utf-8")
 
     assert not (
         APP_ROOT / "chemvas" / "ui" / "main_window_template_icon_renderer.py"
@@ -2660,8 +2690,8 @@ def test_main_window_template_icons_use_only_static_design_mapping() -> None:
 def test_main_window_icon_factory_delegates_utility_drawing_to_renderer() -> None:
     factory = APP_ROOT / "chemvas" / "ui" / "main_window_icon_factory.py"
     utility_icons = APP_ROOT / "chemvas" / "ui" / "main_window_utility_icon_renderer.py"
-    factory_source = factory.read_text()
-    utility_icons_source = utility_icons.read_text()
+    factory_source = factory.read_text(encoding="utf-8")
+    utility_icons_source = utility_icons.read_text(encoding="utf-8")
 
     for icon_name in (
         "undo",
@@ -2693,7 +2723,7 @@ def test_main_window_icon_factory_delegates_utility_drawing_to_renderer() -> Non
 
 def test_main_window_icon_factory_delegates_tool_drawing_to_renderer() -> None:
     factory = APP_ROOT / "chemvas" / "ui" / "main_window_icon_factory.py"
-    factory_source = factory.read_text()
+    factory_source = factory.read_text(encoding="utf-8")
 
     for icon_name in (
         "atom",
@@ -2755,8 +2785,8 @@ def test_scene_item_controller_does_not_use_context_facade() -> None:
 def test_scene_item_controller_delegates_lifecycle_registry_work_to_service() -> None:
     controller = APP_ROOT / "chemvas" / "ui" / "scene_item_controller.py"
     lifecycle_service = APP_ROOT / "chemvas" / "ui" / "scene_item_lifecycle_service.py"
-    controller_source = controller.read_text()
-    lifecycle_source = lifecycle_service.read_text()
+    controller_source = controller.read_text(encoding="utf-8")
+    lifecycle_source = lifecycle_service.read_text(encoding="utf-8")
 
     for forbidden in (
         "append_scene_item_for",
@@ -2794,7 +2824,7 @@ def test_scene_clipboard_controller_delegates_copy_paste_workflows_to_services()
     None
 ):
     controller = APP_ROOT / "chemvas" / "ui" / "scene_clipboard_controller.py"
-    controller_source = controller.read_text()
+    controller_source = controller.read_text(encoding="utf-8")
 
     for forbidden in (
         "build_clipboard_copy_plan",
@@ -2861,7 +2891,7 @@ def test_selection_rotation_controller_does_not_use_context_facade() -> None:
 
 def test_selection_rotation_planarity_owns_planar_graph_helpers() -> None:
     access = APP_ROOT / "chemvas" / "ui" / "selection_rotation_access.py"
-    access_source = access.read_text()
+    access_source = access.read_text(encoding="utf-8")
 
     assert "edge_has_reachable_alternative_path" not in access_source
 
@@ -2977,9 +3007,9 @@ def test_input_pointer_and_shortcut_controllers_use_explicit_service_ports() -> 
 
 
 def test_perspective_tool_controller_requires_injected_tool_context() -> None:
-    source = (
-        APP_ROOT / "chemvas" / "ui" / "perspective_tool_controller.py"
-    ).read_text()
+    source = (APP_ROOT / "chemvas" / "ui" / "perspective_tool_controller.py").read_text(
+        encoding="utf-8"
+    )
 
     assert "ToolContext(" not in source
     assert "hit_testing_service=" not in source
@@ -3184,7 +3214,7 @@ def test_production_code_uses_atom_graphics_accessors_instead_of_canvas_alias_fa
 
 def test_hover_state_accessor_stays_a_thin_runtime_state_leaf() -> None:
     hover_state = APP_ROOT / "chemvas" / "ui" / "canvas_hover_state.py"
-    tree = ast.parse(hover_state.read_text())
+    tree = ast.parse(hover_state.read_text(encoding="utf-8"))
     classes = [node.name for node in tree.body if isinstance(node, ast.ClassDef)]
     functions = [
         node.name
@@ -3206,8 +3236,8 @@ def test_hover_state_accessor_stays_a_thin_runtime_state_leaf() -> None:
 def test_input_view_state_access_is_strict_runtime_owned() -> None:
     state_module = APP_ROOT / "chemvas" / "ui" / "input_view_state.py"
     access_module = APP_ROOT / "chemvas" / "ui" / "input_view_access.py"
-    state_source = state_module.read_text()
-    access_source = access_module.read_text()
+    state_source = state_module.read_text(encoding="utf-8")
+    access_source = access_module.read_text(encoding="utf-8")
     access_tree = ast.parse(access_source)
     getter = next(
         node
@@ -3230,7 +3260,7 @@ def test_input_view_state_access_is_strict_runtime_owned() -> None:
 
 def test_callback_state_accessor_is_strict_runtime_owned() -> None:
     callback_state = APP_ROOT / "chemvas" / "ui" / "canvas_callback_state.py"
-    source = callback_state.read_text()
+    source = callback_state.read_text(encoding="utf-8")
     tree = ast.parse(source)
     getter = next(
         node
@@ -3350,7 +3380,7 @@ def test_canvas_state_lookup_does_not_promote_legacy_private_state_to_public_att
 
 def test_canvas_state_lookup_prefers_runtime_state_over_public_state_aliases() -> None:
     state_lookup = APP_ROOT / "chemvas" / "ui" / "canvas_state_lookup.py"
-    tree = ast.parse(state_lookup.read_text())
+    tree = ast.parse(state_lookup.read_text(encoding="utf-8"))
     function = next(
         node
         for node in ast.walk(tree)
@@ -3385,7 +3415,7 @@ def test_state_accessors_do_not_refresh_existing_state_from_canvas_attrs() -> No
     matches = [
         str(path.relative_to(APP_ROOT.parents[0]))
         for path in _app_python_files()
-        if pattern.search(path.read_text())
+        if pattern.search(path.read_text(encoding="utf-8"))
     ]
 
     assert matches == []
@@ -3415,7 +3445,7 @@ def test_tool_context_is_not_reintroduced_with_canvas_state_attr_fallbacks() -> 
 
 def test_tool_context_requires_explicit_ports_without_service_lookup() -> None:
     tool_context = APP_ROOT / "chemvas" / "ui" / "tool_context.py"
-    source = tool_context.read_text()
+    source = tool_context.read_text(encoding="utf-8")
     pattern = re.compile(
         r"\bcanvas_hit_testing_service_for\b"
         r"|\bselection_controller_for\b"
@@ -3500,7 +3530,7 @@ def test_perspective_tool_controller_does_not_reintroduce_context_delegate_wrapp
         "_selection_hit_test",
         "_select_structure_for_item",
     }
-    tree = ast.parse(controller.read_text())
+    tree = ast.parse(controller.read_text(encoding="utf-8"))
     private_methods: set[str] = set()
     for node in ast.walk(tree):
         if (
@@ -3575,7 +3605,7 @@ def _static_app_import_graph() -> dict[str, set[str]]:
 
     graph = {module: set() for module in module_paths}
     for module, path in module_paths.items():
-        tree = ast.parse(path.read_text())
+        tree = ast.parse(path.read_text(encoding="utf-8"))
         for node in ast.walk(tree):
             candidates: list[str] = []
             if isinstance(node, ast.Import):
@@ -3657,7 +3687,7 @@ def _static_top_level_app_import_graph() -> dict[str, set[str]]:
 
     graph = {module: set() for module in module_paths}
     for module, path in module_paths.items():
-        tree = ast.parse(path.read_text())
+        tree = ast.parse(path.read_text(encoding="utf-8"))
         for node in eager_imports(tree.body):
             candidates: list[str] = []
             if isinstance(node, ast.Import):
@@ -3784,7 +3814,11 @@ def test_history_stack_snapshot_has_one_production_owner() -> None:
     owners = [
         path
         for path in _app_python_files()
-        if re.search(r"^class HistoryStackSnapshot\b", path.read_text(), re.MULTILINE)
+        if re.search(
+            r"^class HistoryStackSnapshot\b",
+            path.read_text(encoding="utf-8"),
+            re.MULTILINE,
+        )
     ]
 
     assert owners == [APP_ROOT / "chemvas" / "ui" / "canvas_history_service.py"]
@@ -3853,7 +3887,7 @@ def test_core_does_not_import_ui_statically() -> None:
     """core stays importable without Qt: any ui dependency must be lazy."""
     violations: list[str] = []
     for path in sorted((APP_ROOT / "chemvas" / "core").rglob("*.py")):
-        tree = ast.parse(path.read_text())
+        tree = ast.parse(path.read_text(encoding="utf-8"))
         for node in tree.body:
             if isinstance(node, ast.Import):
                 names = [alias.name for alias in node.names]
@@ -3871,7 +3905,7 @@ def test_core_does_not_import_ui_statically() -> None:
 def test_core_has_no_direct_qt_dependencies() -> None:
     qt_modules: set[str] = set()
     for path in sorted((APP_ROOT / "chemvas" / "core").rglob("*.py")):
-        tree = ast.parse(path.read_text())
+        tree = ast.parse(path.read_text(encoding="utf-8"))
         if any(
             (
                 isinstance(node, ast.Import)
@@ -3900,7 +3934,9 @@ def test_chemvas_is_the_only_production_top_level_package() -> None:
 
 def _canvas_runtime_state_field_names() -> set[str]:
     tree = ast.parse(
-        (APP_ROOT / "chemvas" / "ui" / "canvas_runtime_state.py").read_text()
+        (APP_ROOT / "chemvas" / "ui" / "canvas_runtime_state.py").read_text(
+            encoding="utf-8"
+        )
     )
     for node in ast.walk(tree):
         if isinstance(node, ast.ClassDef) and node.name == "CanvasRuntimeState":
@@ -3930,7 +3966,7 @@ def test_state_accessor_names_match_runtime_state_container() -> None:
     )
     violations: list[str] = []
     for path in sorted((APP_ROOT / "chemvas" / "ui").glob("*.py")):
-        for match in call_pattern.finditer(path.read_text()):
+        for match in call_pattern.finditer(path.read_text(encoding="utf-8")):
             name = match.group("name")
             direct = "runtime_field=False" in match.group("rest")
             if direct and name not in DIRECT_CANVAS_STATE_ATTRS:

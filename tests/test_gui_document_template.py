@@ -538,7 +538,9 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
         self.assertEqual(self.window.statusBar().currentMessage(), "Idle")
 
     def test_save_canvas_reuses_current_path_without_opening_dialog(self) -> None:
-        self._set_current_file_path("/tmp/existing.chemvas")
+        current_path = "/tmp/existing.chemvas"
+        expected_path = os.path.abspath(current_path)
+        self._set_current_file_path(current_path)
         doc_service = active_canvas_for_window(
             self.window
         ).services.document.canvas_document_session_service
@@ -554,11 +556,11 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
             )
             self._document_actions().save_canvas(self.window)
 
-        save_mock.assert_called_once_with("/tmp/existing.chemvas")
+        save_mock.assert_called_once_with(expected_path)
         dialog_mock.assert_not_called()
-        self.assertEqual(self._current_file_path(), "/tmp/existing.chemvas")
+        self.assertEqual(self._current_file_path(), expected_path)
         self.assertEqual(
-            self.window.statusBar().currentMessage(), "Saved: /tmp/existing.chemvas"
+            self.window.statusBar().currentMessage(), f"Saved: {expected_path}"
         )
 
     def test_save_canvas_as_updates_current_path_and_status_message(self) -> None:
@@ -601,6 +603,7 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
     def test_save_canvas_as_failure_warns_and_preserves_current_path(self) -> None:
         self._set_current_file_path("/tmp/original.chemvas")
         self.window.statusBar().showMessage("Before save as")
+        attempted_path = os.path.abspath("/tmp/renamed.chemvas")
         doc_service = active_canvas_for_window(
             self.window
         ).services.document.canvas_document_session_service
@@ -622,7 +625,7 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
             )
             self._document_actions().save_canvas_as(self.window)
 
-        save_mock.assert_called_once_with("/tmp/renamed.chemvas")
+        save_mock.assert_called_once_with(attempted_path)
         warning.assert_called_once_with(
             self.window,
             "Save Error",
@@ -680,6 +683,7 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
     def test_export_xyz_failure_warns_and_preserves_status_message(self) -> None:
         self._set_current_file_path("/tmp/original.chemvas")
         self.window.statusBar().showMessage("Before export")
+        expected_path = str(Path("/tmp/output.xyz"))
 
         with (
             patch(
@@ -704,7 +708,7 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
             )
             self._document_actions().export_xyz(self.window)
 
-        self.assertEqual(export_mock.call_args.args, ("/tmp/output.xyz",))
+        self.assertEqual(export_mock.call_args.args, (expected_path,))
         warning.assert_called_once_with(
             self.window,
             "Export Error",
@@ -729,6 +733,7 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
     def test_save_canvas_failure_warns_and_preserves_current_path(self) -> None:
         self._set_current_file_path("/tmp/original.chemvas")
         self.window.statusBar().showMessage("Before save")
+        attempted_path = os.path.abspath("/tmp/original.chemvas")
         doc_service = active_canvas_for_window(
             self.window
         ).services.document.canvas_document_session_service
@@ -746,7 +751,7 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
             )
             self._document_actions().save_canvas(self.window)
 
-        save_mock.assert_called_once_with("/tmp/original.chemvas")
+        save_mock.assert_called_once_with(attempted_path)
         warning.assert_called_once_with(
             self.window,
             "Save Error",

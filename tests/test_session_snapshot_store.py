@@ -197,7 +197,7 @@ def test_unreadable_snapshot_does_not_inflate_recovered_count(tmp_path, monkeypa
             ),
         ]
     )
-    manifest = json.loads((root / "prev" / "session.json").read_text())
+    manifest = json.loads((root / "prev" / "session.json").read_text(encoding="utf-8"))
     lost_snapshot = next(
         entry["snapshot"]
         for entry in manifest["docs"]
@@ -299,7 +299,7 @@ def test_clean_saved_doc_is_recorded_without_a_snapshot(tmp_path):
     )
 
     assert list((root / "cur").glob("doc-*.json")) == []
-    manifest = json.loads((root / "cur" / "session.json").read_text())
+    manifest = json.loads((root / "cur" / "session.json").read_text(encoding="utf-8"))
     assert manifest["docs"][0]["snapshot"] is None
     assert manifest["docs"][0]["file_path"] == str(saved)
 
@@ -320,7 +320,7 @@ def test_pristine_untitled_canvas_is_not_persisted(tmp_path):
         ]
     )
 
-    manifest = json.loads((root / "cur" / "session.json").read_text())
+    manifest = json.loads((root / "cur" / "session.json").read_text(encoding="utf-8"))
     assert manifest["docs"] == []
 
 
@@ -360,7 +360,7 @@ def test_snapshot_names_are_generation_unique_and_pruned_after_commit(tmp_path):
     assert sorted(p.name for p in session.glob("doc-*.json")) == [
         "doc-2-0.json"
     ]  # gen 1 pruned
-    manifest = json.loads((session / "session.json").read_text())
+    manifest = json.loads((session / "session.json").read_text(encoding="utf-8"))
     assert [entry["snapshot"] for entry in manifest["docs"]] == ["doc-2-0.json"]
 
 

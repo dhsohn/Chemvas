@@ -123,8 +123,10 @@ def test_real_rdkit_pack_writes_self_consistent_bundle(
 
     assert exit_code == 0
     manifest = json.loads(capsys.readouterr().out)
-    atom_map = json.loads((output / "atom_map.json").read_text())
-    xyz_count = int((output / "geometry.xyz").read_text().splitlines()[0])
+    atom_map = json.loads((output / "atom_map.json").read_text(encoding="utf-8"))
+    xyz_count = int(
+        (output / "geometry.xyz").read_text(encoding="utf-8").splitlines()[0]
+    )
     assert manifest["structure"]["atom_counts"]["xyz"] == xyz_count
     assert len(atom_map["entries"]) == xyz_count
     assert manifest["structure"]["geometry_generation"]["random_seed"] == 12648430

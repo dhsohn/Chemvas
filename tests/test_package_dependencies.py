@@ -165,7 +165,7 @@ def _import_edges() -> list[ImportEdge]:
     }
     edges: list[ImportEdge] = []
     for source, path in module_paths.items():
-        tree = ast.parse(path.read_text())
+        tree = ast.parse(path.read_text(encoding="utf-8"))
         for node in ast.walk(tree):
             dependencies: list[str] = []
             if isinstance(node, ast.Import):
@@ -287,7 +287,10 @@ def test_migrated_selection_runtime_types_do_not_reintroduce_public_any() -> Non
         CHEMVAS_ROOT / "features" / "selection" / "outline.py",
     ]
 
-    assert all("from typing import Any" not in path.read_text() for path in paths)
+    assert all(
+        "from typing import Any" not in path.read_text(encoding="utf-8")
+        for path in paths
+    )
 
 
 def test_hover_feature_policy_is_qt_and_adapter_free() -> None:
@@ -389,7 +392,7 @@ def test_main_window_shell_is_constructed_only_by_bootstrap() -> None:
 
 def test_window_registry_does_not_know_ui_services() -> None:
     registry = CHEMVAS_ROOT / "bootstrap" / "window_registry.py"
-    source = registry.read_text()
+    source = registry.read_text(encoding="utf-8")
 
     assert "chemvas.ui" not in source
     assert "services_for_window" not in source
@@ -397,7 +400,7 @@ def test_window_registry_does_not_know_ui_services() -> None:
 
 def test_drag_transaction_uses_shared_history_savepoint_port() -> None:
     drag = CHEMVAS_ROOT / "ui" / "selection_drag_tool.py"
-    source = drag.read_text()
+    source = drag.read_text(encoding="utf-8")
 
     assert "chemvas.ui.history_canvas_access" in source
     assert "chemvas.ui.transactions.document import" not in source

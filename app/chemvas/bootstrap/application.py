@@ -7,6 +7,8 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
 
+from chemvas import __version__
+
 IGNORED_STDERR_SUBSTRINGS = (
     "TSM AdjustCapsLockLEDForKeyTransitionHandling",
     "error messaging the mach port for IMKCFRunLoopWakeUpReliable",
@@ -14,6 +16,22 @@ IGNORED_STDERR_SUBSTRINGS = (
 )
 
 STARTUP_DOCUMENT_SUFFIXES = frozenset((".chemvas", ".json", ".svg"))
+DOCUMENT_PATCH_COMMANDS = frozenset(("apply-patch", "inspect-document"))
+DOCUMENT_RENDER_COMMANDS = frozenset(("render-document",))
+CALCULATION_BUNDLE_COMMANDS = frozenset(
+    ("attach-plan", "inspect", "inspect-plan", "pack", "pack-step")
+)
+HEADLESS_SUBCOMMAND_HELP = (
+    ("apply-patch", "validate or apply a Chemvas graph patch"),
+    ("attach-plan", "embed a calculation plan in a new document"),
+    ("inspect", "inspect connected structures as JSON"),
+    ("inspect-document", "inspect the complete chemical graph as JSON"),
+    ("inspect-plan", "inspect embedded calculation states and steps"),
+    ("pack", "create a calculation bundle directory"),
+    ("pack-step", "create an elementary-step calculation bundle"),
+    ("render-document", "render a document to SVG or PNG"),
+)
+HEADLESS_SUBCOMMANDS = tuple(command for command, _help in HEADLESS_SUBCOMMAND_HELP)
 
 
 def _should_filter_stderr(platform: str | None = None) -> bool:
@@ -27,6 +45,23 @@ def _startup_document_path(argv: list[str]) -> str | None:
         if Path(argument).suffix.lower() in STARTUP_DOCUMENT_SUFFIXES:
             return argument
     return None
+
+
+def _root_help() -> str:
+    command_help = "\n".join(
+        f"  {command:<18} {description}"
+        for command, description in HEADLESS_SUBCOMMAND_HELP
+    )
+    return (
+        "Usage:\n"
+        "  chemvas\n"
+        "  chemvas <command> [options]\n\n"
+        "Run with no arguments to launch the desktop app.\n\n"
+        "Options:\n"
+        "  -h, --help         show this help message and exit\n"
+        "  --version          show version and exit\n\n"
+        f"Headless commands:\n{command_help}\n"
+    )
 
 
 def _stderr_filter_loop(
@@ -69,28 +104,27 @@ def _filtered_stderr(stderr_fd: int = 2, platform: str | None = None) -> Iterato
 
 
 def main() -> None:
-    if len(sys.argv) > 1 and sys.argv[1] in {
-        "apply-patch",
-        "inspect-document",
-    }:
+    if len(sys.argv) > 1 and sys.argv[1] in {"-h", "--help"}:
+        sys.stdout.write(_root_help())
+        raise SystemExit(0)
+
+    if len(sys.argv) > 1 and sys.argv[1] == "--version":
+        sys.stdout.write(f"chemvas {__version__}\n")
+        raise SystemExit(0)
+
+    if len(sys.argv) > 1 and sys.argv[1] in DOCUMENT_PATCH_COMMANDS:
         from chemvas.bootstrap.document_patch import run
 
         raise SystemExit(run(sys.argv[1:]))
 
-    if len(sys.argv) > 1 and sys.argv[1] == "render-document":
+    if len(sys.argv) > 1 and sys.argv[1] in DOCUMENT_RENDER_COMMANDS:
         from chemvas.bootstrap.document_render import run
 
         with _filtered_stderr():
             result = run(sys.argv[1:])
         raise SystemExit(result)
 
-    if len(sys.argv) > 1 and sys.argv[1] in {
-        "attach-plan",
-        "inspect",
-        "inspect-plan",
-        "pack",
-        "pack-step",
-    }:
+    if len(sys.argv) > 1 and sys.argv[1] in CALCULATION_BUNDLE_COMMANDS:
         from chemvas.bootstrap.calculation_bundle import run
 
         raise SystemExit(run(sys.argv[1:]))

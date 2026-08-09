@@ -1,4 +1,5 @@
 import unittest
+from pathlib import Path
 
 from chemvas.features.export import (
     default_export_path,
@@ -28,12 +29,17 @@ class ExportDialogLogicTest(unittest.TestCase):
         self.assertTrue(file_filter_for_format("svg").endswith("All Files (*)"))
 
     def test_normalize_adds_missing_suffix(self):
-        self.assertEqual(normalize_export_path("/tmp/figure", "png"), "/tmp/figure.png")
-        self.assertEqual(normalize_export_path("/tmp/figure", "pdf"), "/tmp/figure.pdf")
+        self.assertEqual(
+            normalize_export_path("/tmp/figure", "png"), str(Path("/tmp/figure.png"))
+        )
+        self.assertEqual(
+            normalize_export_path("/tmp/figure", "pdf"), str(Path("/tmp/figure.pdf"))
+        )
 
     def test_normalize_keeps_explicit_suffix(self):
         self.assertEqual(
-            normalize_export_path("/tmp/figure.tiff", "png"), "/tmp/figure.tiff"
+            normalize_export_path("/tmp/figure.tiff", "png"),
+            str(Path("/tmp/figure.tiff")),
         )
 
     def test_normalize_blank_is_none(self):
@@ -42,7 +48,8 @@ class ExportDialogLogicTest(unittest.TestCase):
 
     def test_default_export_path_swaps_suffix(self):
         self.assertEqual(
-            default_export_path("/work/mol.chemvas", "pdf"), "/work/mol.pdf"
+            default_export_path("/work/mol.chemvas", "pdf"),
+            str(Path("/work/mol.pdf")),
         )
         self.assertEqual(default_export_path("", "pdf"), "")
 

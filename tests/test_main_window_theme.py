@@ -73,7 +73,7 @@ def test_main_window_stylesheet_composes_section_modules() -> None:
             main_window_status_stylesheet(PALETTE),
         )
     )
-    source = Path(main_window_stylesheet_module.__file__).read_text()
+    source = Path(main_window_stylesheet_module.__file__).read_text(encoding="utf-8")
 
     assert MAIN_WINDOW_STYLESHEET == expected
     assert build_main_window_stylesheet(PALETTE) == expected

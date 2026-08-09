@@ -62,6 +62,7 @@ python -m pip install -e .
 ## 사용 방법
 - 실행(개발 트리): `python app/main.py`
 - 실행(설치 후): `chemvas`
+- Qt를 시작하지 않는 CLI 도움말/버전 확인: `chemvas --help`, `chemvas --version`
 - 상단 툴바에서 도구를 선택하고 캔버스에 클릭/드래그하여 구조를 그립니다.
 - 상단의 SMILES 입력란에 문자열을 입력한 뒤 Insert를 누르면 배치 모드가 활성화됩니다.
   마우스를 이동하면 미리보기가 표시되고, 클릭하면 해당 위치에 삽입됩니다. Esc로 취소할 수 있습니다.

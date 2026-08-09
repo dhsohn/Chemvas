@@ -245,27 +245,37 @@ def test_rendered_output_limit_leaves_no_final_or_staging_file(
     assert not list(tmp_path.glob(f".{output.name}.staging-*"))
 
 
-def test_existing_file_directory_and_symlink_outputs_are_preserved(
-    tmp_path: Path,
-) -> None:
+def test_existing_file_and_directory_outputs_are_preserved(tmp_path: Path) -> None:
     source = tmp_path / "source.chemvas"
     _write_source(source)
-    targets = [
-        tmp_path / "file.svg",
-        tmp_path / "directory.svg",
-        tmp_path / "link.svg",
-    ]
+    targets = [tmp_path / "file.svg", tmp_path / "directory.svg"]
     targets[0].write_text("keep")
     targets[1].mkdir()
-    targets[2].symlink_to(tmp_path / "missing")
 
     for target in targets:
         with pytest.raises(SystemExit) as error:
             cli.run(["render-document", str(source), "--output", str(target)])
         assert error.value.code == 2
-    assert targets[0].read_text() == "keep"
+    assert targets[0].read_text(encoding="utf-8") == "keep"
     assert targets[1].is_dir()
-    assert targets[2].is_symlink()
+
+
+def test_existing_symlink_output_is_preserved(tmp_path: Path) -> None:
+    source = tmp_path / "source.chemvas"
+    _write_source(source)
+    output = tmp_path / "link.svg"
+    try:
+        output.symlink_to(tmp_path / "missing")
+    except OSError as exc:
+        if os.name == "nt" and getattr(exc, "winerror", None) == 1314:
+            pytest.skip("Windows symlink creation requires developer privileges")
+        raise
+
+    with pytest.raises(SystemExit) as error:
+        cli.run(["render-document", str(source), "--output", str(output)])
+
+    assert error.value.code == 2
+    assert output.is_symlink()
 
 
 def test_atomic_publish_rejects_target_created_after_preflight(
@@ -287,7 +297,7 @@ def test_atomic_publish_rejects_target_created_after_preflight(
         cli.run(["render-document", str(source), "--output", str(output)])
 
     assert error.value.code == 2
-    assert output.read_text() == "racer owns this path"
+    assert output.read_text(encoding="utf-8") == "racer owns this path"
     assert not list(tmp_path.glob(f".{output.name}.staging-*"))
 
 
@@ -348,7 +358,7 @@ def test_python_module_entrypoint_renders_without_desktop_startup(
 ) -> None:
     source = tmp_path / "source.chemvas"
     source_bytes = _write_source(source)
-    output = tmp_path / "entrypoint.svg"
+    output = tmp_path / "entrypoint.png"
     env = os.environ.copy()
     pythonpath = env.get("PYTHONPATH")
     app_root = Path(__file__).resolve().parents[1] / "app"
@@ -366,6 +376,10 @@ def test_python_module_entrypoint_renders_without_desktop_startup(
             str(source),
             "--output",
             str(output),
+            "--background",
+            "white",
+            "--dpi",
+            "300",
         ],
         check=False,
         capture_output=True,
@@ -378,6 +392,10 @@ def test_python_module_entrypoint_renders_without_desktop_startup(
     assert output.is_file()
     assert report["source_sha256"] == hashlib.sha256(source_bytes).hexdigest()
     assert report["output_sha256"] == hashlib.sha256(output.read_bytes()).hexdigest()
+    if sys.platform == "win32":
+        # Offscreen QPA rendered the note as square placeholders and expanded
+        # this fixture to 95.74 points.
+        assert report["width_points"] < 72.0
 
 
 def test_rendering_does_not_load_rdkit_or_leave_visible_windows(
@@ -391,6 +409,7 @@ def test_rendering_does_not_load_rdkit_or_leave_visible_windows(
     rdkit_modules_before = {
         name for name in sys.modules if name == "rdkit" or name.startswith("rdkit.")
     }
+    recovery_module_was_loaded = "chemvas.ui.session_recovery_service" in sys.modules
 
     assert cli.run(["render-document", str(source), "--output", str(output)]) == 0
     capsys.readouterr()
@@ -402,4 +421,6 @@ def test_rendering_does_not_load_rdkit_or_leave_visible_windows(
         name for name in sys.modules if name == "rdkit" or name.startswith("rdkit.")
     }
     assert rdkit_modules_after == rdkit_modules_before
-    assert "chemvas.ui.session_recovery_service" not in sys.modules
+    assert (
+        "chemvas.ui.session_recovery_service" in sys.modules
+    ) is recovery_module_was_loaded

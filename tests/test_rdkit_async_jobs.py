@@ -237,6 +237,7 @@ class ExportXYZInThreadTest(unittest.TestCase):
             path = Path(temp_dir) / "export.xyz"
             path.write_text("previous xyz", encoding="utf-8")
             path.chmod(0o640)
+            original_mode = stat.S_IMODE(path.stat().st_mode)
             with (
                 mock.patch.object(rdkit_async_jobs, "QThread", new=_FakeThread),
                 mock.patch.object(rdkit_async_jobs, "XYZExportWorker", new=_FakeWorker),
@@ -271,7 +272,7 @@ class ExportXYZInThreadTest(unittest.TestCase):
             worker.succeeded.emit(worker.path)
             worker.failed.emit("ignored duplicate result")
             self.assertEqual(path.read_text(encoding="utf-8"), "new xyz")
-            self.assertEqual(stat.S_IMODE(path.stat().st_mode), 0o640)
+            self.assertEqual(stat.S_IMODE(path.stat().st_mode), original_mode)
             self.assertEqual(succeeded, [str(path)])
             self.assertEqual(failed, [])
 

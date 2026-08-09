@@ -152,7 +152,7 @@ def test_pack_creates_complete_hashed_non_overwriting_bundle(
         == 0
     )
     stdout_manifest = json.loads(capsys.readouterr().out)
-    disk_manifest = json.loads((output / "manifest.json").read_text())
+    disk_manifest = json.loads((output / "manifest.json").read_text(encoding="utf-8"))
 
     assert stdout_manifest == disk_manifest
     assert set(path.name for path in output.iterdir()) == {

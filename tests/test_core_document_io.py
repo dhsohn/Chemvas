@@ -580,10 +580,11 @@ class DocumentIOTest(unittest.TestCase):
             path = Path(temp_dir) / "shared.chemvas"
             path.write_text("ORIGINAL", encoding="utf-8")
             os.chmod(path, 0o664)
+            original_mode = stat.S_IMODE(path.stat().st_mode)
 
             atomic_write_text(path, "NEW")
 
-            self.assertEqual(stat.S_IMODE(path.stat().st_mode), 0o664)
+            self.assertEqual(stat.S_IMODE(path.stat().st_mode), original_mode)
             self.assertEqual(path.read_text(encoding="utf-8"), "NEW")
 
 

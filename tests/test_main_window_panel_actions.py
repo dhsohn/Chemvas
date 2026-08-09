@@ -1,5 +1,6 @@
 import os
 import unittest
+from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
 
@@ -87,16 +88,19 @@ class MainWindowPanelActionsTest(unittest.TestCase):
             service.default_save_dialog_path(self.window), "/tmp/current.chemvas"
         )
         self.assertEqual(
-            service.default_xyz_export_path(self.window), "/tmp/current.xyz"
+            service.default_xyz_export_path(self.window),
+            str(Path("/tmp/current.xyz")),
         )
         self.assertFalse(hasattr(type(self.window), "normalize_xyz_export_path"))
         self.assertEqual(service.normalize_xyz_export_path(None), None)
         self.assertEqual(service.normalize_xyz_export_path(""), None)
         self.assertEqual(
-            service.normalize_xyz_export_path("/tmp/export"), "/tmp/export.xyz"
+            service.normalize_xyz_export_path("/tmp/export"),
+            str(Path("/tmp/export.xyz")),
         )
         self.assertEqual(
-            service.normalize_xyz_export_path("/tmp/export.xyz"), "/tmp/export.xyz"
+            service.normalize_xyz_export_path("/tmp/export.xyz"),
+            str(Path("/tmp/export.xyz")),
         )
 
     def test_document_action_service_surface_stays_off_main_window(self) -> None:
@@ -162,6 +166,7 @@ class MainWindowPanelActionsTest(unittest.TestCase):
         from chemvas.bootstrap.window_registry import open_windows
 
         load_action = self._find_action("Open...")
+        input_path = os.path.abspath("/tmp/input.chemvas")
         state = snapshot_canvas_state_for(active_canvas_for_window(self.window))
         existing = set(open_windows())
 
@@ -182,16 +187,16 @@ class MainWindowPanelActionsTest(unittest.TestCase):
             self.addCleanup(window.close)
 
         dialog.assert_called_once()
-        read_document.assert_called_once_with("/tmp/input.chemvas")
+        read_document.assert_called_once_with(input_path)
         # The file opens in its own window; the triggering window keeps its document.
         self.assertEqual(len(spawned), 1)
         loaded_window = spawned[0]
         self.assertEqual(
             document_file_path_for(active_canvas_for_window(loaded_window)),
-            "/tmp/input.chemvas",
+            input_path,
         )
         self.assertEqual(
-            loaded_window.statusBar().currentMessage(), "Loaded: /tmp/input.chemvas"
+            loaded_window.statusBar().currentMessage(), f"Loaded: {input_path}"
         )
         self.assertIsNone(document_file_path_for(active_canvas_for_window(self.window)))
 
@@ -261,6 +266,7 @@ class MainWindowPanelActionsTest(unittest.TestCase):
         preview._scene = object()
         preview._sync_export_xyz_button()
         export_button = self._find_button(object_name="preview_export_xyz_button")
+        output_path = str(Path("/tmp/output.xyz"))
 
         with mock.patch(
             "chemvas.ui.main_window_document_action_service.QFileDialog.getSaveFileName",
@@ -281,15 +287,13 @@ class MainWindowPanelActionsTest(unittest.TestCase):
 
         dialog.assert_called_once()
         self.assertEqual(dialog.call_args.args[2], "")
-        self.assertEqual(
-            doc_service.export_xyz_async.call_args.args, ("/tmp/output.xyz",)
-        )
+        self.assertEqual(doc_service.export_xyz_async.call_args.args, (output_path,))
         self.assertEqual(
             doc_service.export_xyz_async.call_args.kwargs["selected_only"], True
         )
         canvas.export_xyz_async.assert_not_called()
         self.assertEqual(
-            self.window.statusBar().currentMessage(), "Exported XYZ: /tmp/output.xyz"
+            self.window.statusBar().currentMessage(), f"Exported XYZ: {output_path}"
         )
 
         with (
