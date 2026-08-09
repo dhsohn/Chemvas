@@ -8,6 +8,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Path-ready elementary-step endpoints**: `inspect-plan` now reports stable
+  source-mapping, electronic-state, and component-count blockers. For a
+  qualifying single-component step, `pack-step` emits reactant/product XYZ in
+  one explicit reactant atom-identity order together with canonical 0-based
+  reaction-center indices and artifact provenance. Steps that pass the existing
+  mapping gate but fail a path-only condition retain the generic bundle and
+  explain why no path endpoint pair was generated.
 - **Headless document rendering**: `chemvas render-document` now renders a
   bounded `.chemvas` drawing to a new SVG or PNG through the canonical figure
   exporter without opening a desktop window or loading RDKit. It preserves the

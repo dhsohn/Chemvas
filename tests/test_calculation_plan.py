@@ -23,6 +23,7 @@ from chemvas.features.calculation_bundle import (
     calculation_plan_report,
     calculation_step_by_id,
     correspondence_readiness,
+    path_precheck,
     require_step_ready,
     validate_calculation_plan,
 )
@@ -196,8 +197,28 @@ def test_partial_mapping_is_storable_but_not_step_pack_ready() -> None:
     step = calculation_step_by_id(plan, "S01")
 
     assert report["steps"][0]["readiness"]["mapping_complete"] is False  # type: ignore[index]
+    assert report["steps"][0]["path_precheck"]["blocking_reasons"] == (  # type: ignore[index]
+        "source_atom_mapping_incomplete",
+        "multicomponent_precomplex_geometry_not_provided",
+    )
     with pytest.raises(ValueError, match="complete one-to-one"):
         require_step_ready(plan, step)
+
+
+def test_path_precheck_reports_multicomponent_geometry_gap() -> None:
+    state = _document_state()
+    plan = validate_calculation_plan(state, _plan())
+    step = calculation_step_by_id(plan, "S01")
+
+    readiness = path_precheck(plan, step)
+
+    assert readiness.source_mapping_complete is True
+    assert readiness.reactant_component_count == 2
+    assert readiness.product_component_count == 2
+    assert readiness.ready_for_path_endpoints is False
+    assert readiness.blocking_reasons == (
+        "multicomponent_precomplex_geometry_not_provided",
+    )
 
 
 def test_bond_change_uses_explicit_atom_correspondence() -> None:

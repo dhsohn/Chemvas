@@ -7,7 +7,13 @@ from pathlib import Path
 import pytest
 from chemvas.bootstrap import calculation_bundle as cli
 from chemvas.core.document_io import read_document, write_document
-from chemvas.domain.document import CANVAS_FILE_VERSION
+from chemvas.domain.document import (
+    CANVAS_FILE_VERSION,
+    Atom,
+    Bond,
+    MoleculeModel,
+    serialize_model_state,
+)
 from chemvas.features.calculation_bundle import AtomMapEntry, CalculationArtifacts
 
 from tests.test_calculation_plan import _document_state, _plan
@@ -17,13 +23,25 @@ class _StateFakeAdapter:
     last_error: str | None = None
 
     def model_to_calculation_artifacts(self, model, atom_annotations=None):
+        formal_charge = sum(
+            values.get("formal_charge", 0)
+            for values in (atom_annotations or {}).values()
+        )
         atom_ids = sorted(model.atoms)
         entries = tuple(
             AtomMapEntry(
                 xyz_index=index,
                 mol_index=index,
-                symbol=model.atoms[atom_id].element,
-                origin="chemvas_atom",
+                symbol=(
+                    "C"
+                    if model.atoms[atom_id].element == "Me"
+                    else model.atoms[atom_id].element
+                ),
+                origin=(
+                    "alias_attachment"
+                    if model.atoms[atom_id].element == "Me"
+                    else "chemvas_atom"
+                ),
                 chemvas_atom_id=atom_id,
             )
             for index, atom_id in enumerate(atom_ids, start=1)
@@ -37,9 +55,9 @@ class _StateFakeAdapter:
             xyz_block="\n".join(xyz_lines) + "\n",
             atom_map=entries,
             rdkit_version="test-rdkit",
-            rdkit_formal_charge=0,
+            rdkit_formal_charge=formal_charge,
             rdkit_radical_electrons=0,
-            electron_count=100,
+            electron_count=100 - formal_charge,
             geometry_embedding="ETKDGv3",
             geometry_random_seed=0xC0FFEE,
             geometry_optimization_policy="test",
@@ -53,6 +71,53 @@ def _write_document_with_plan(path: Path, *, complete_mapping: bool = True) -> N
     state = _document_state()
     state["calculation_plan"] = _plan(complete_mapping=complete_mapping)
     write_document(path, state, CANVAS_FILE_VERSION)
+
+
+def _path_ready_state(
+    *,
+    product_charge: int = 0,
+    product_multiplicity: int = 1,
+) -> dict[str, object]:
+    state = _document_state()
+    state["model"] = serialize_model_state(
+        MoleculeModel(
+            atoms={
+                0: Atom("C", 0.0, 0.0),
+                1: Atom("Me", 1.0, 0.0),
+                2: Atom("Me", 4.0, 0.0),
+                3: Atom("C", 5.0, 0.0),
+                4: Atom("Pt", 2.5, 3.0),
+                5: Atom("Cl", 2.5, -3.0),
+            },
+            bonds=[Bond(0, 1, order=2), Bond(2, 3, order=1)],
+            atom_annotations=(
+                {2: {"formal_charge": product_charge}} if product_charge else {}
+            ),
+        )
+    )
+    state["marks"] = [
+        {
+            "kind": "plus" if product_charge > 0 else "minus",
+            "text": "+" if product_charge > 0 else "-",
+            "atom_id": 2,
+            "dx": None,
+            "dy": None,
+            "x": 4.0,
+            "y": 0.0,
+        }
+        for _ in range(abs(product_charge))
+    ]
+    plan = _plan()
+    plan["states"][0]["members"][1]["inclusion"] = "context_only"  # type: ignore[index]
+    plan["states"][1]["members"][1]["inclusion"] = "context_only"  # type: ignore[index]
+    plan["states"][1]["charge"] = product_charge  # type: ignore[index]
+    plan["states"][1]["multiplicity"] = product_multiplicity  # type: ignore[index]
+    plan["steps"][0]["atom_correspondence"] = [  # type: ignore[index]
+        {"reactant_atom_id": 0, "product_atom_id": 3},
+        {"reactant_atom_id": 1, "product_atom_id": 2},
+    ]
+    state["calculation_plan"] = plan
+    return state
 
 
 def test_attach_and_inspect_plan_create_new_v5_document_without_overwrite(
@@ -134,6 +199,12 @@ def test_pack_step_creates_paired_state_bundles_mapping_and_bond_changes(
     assert manifest["geometry_scope"]["interaction_geometry_guarantee"] == (
         "not_provided"
     )
+    assert manifest["path_readiness"]["ready_for_path_endpoints"] is False
+    assert manifest["path_readiness"]["blocking_reasons"] == [
+        "multicomponent_precomplex_geometry_not_provided"
+    ]
+    assert manifest["path_readiness"]["path_endpoint_directory"] is None
+    assert not (output / "path_endpoints").exists()
     assert (output / "reactant.bundle" / "geometry.xyz").is_file()
     assert (output / "product.bundle" / "geometry.xyz").is_file()
     correspondence = json.loads(
@@ -158,6 +229,102 @@ def test_pack_step_creates_paired_state_bundles_mapping_and_bond_changes(
         content = (output / name).read_bytes()
         assert metadata["sha256"] == hashlib.sha256(content).hexdigest()
         assert metadata["bytes"] == len(content)
+
+
+def test_pack_step_writes_identity_ordered_path_endpoints(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    source = tmp_path / "path-ready.chemvas"
+    write_document(source, _path_ready_state(), CANVAS_FILE_VERSION)
+    output = tmp_path / "S01"
+    monkeypatch.setattr(cli, "RDKitAdapter", _StateFakeAdapter)
+
+    assert (
+        cli.run(
+            [
+                "pack-step",
+                str(source),
+                "--step",
+                "S01",
+                "--output",
+                str(output),
+            ]
+        )
+        == 0
+    )
+    manifest = json.loads(capsys.readouterr().out)
+    path_manifest = json.loads(
+        (output / "path_endpoints" / "manifest.json").read_text(encoding="utf-8")
+    )
+    reactant_rows = (
+        (output / "path_endpoints" / "reactant.xyz")
+        .read_text(encoding="utf-8")
+        .splitlines()[2:]
+    )
+    product_rows = (
+        (output / "path_endpoints" / "product.xyz")
+        .read_text(encoding="utf-8")
+        .splitlines()[2:]
+    )
+
+    assert manifest["path_readiness"]["ready_for_path_endpoints"] is True
+    assert manifest["path_readiness"]["path_endpoint_directory"] == "path_endpoints"
+    assert [row.split()[0] for row in reactant_rows] == ["C", "C"]
+    assert [row.split()[0] for row in product_rows] == ["C", "C"]
+    assert [float(row.split()[1]) for row in product_rows] == [2.0, 1.0]
+    assert [
+        entry["product_xyz_index"] for entry in path_manifest["ordering"]["atom_order"]
+    ] == [2, 1]
+    assert [entry["origin"] for entry in path_manifest["ordering"]["atom_order"]] == [
+        "chemvas_atom",
+        "alias_attachment",
+    ]
+    assert path_manifest["reaction_center"]["atom_indices"] == [0, 1]
+    for name, metadata in path_manifest["artifacts"].items():
+        content = (output / "path_endpoints" / name).read_bytes()
+        assert metadata["sha256"] == hashlib.sha256(content).hexdigest()
+        assert metadata["bytes"] == len(content)
+
+
+def test_pack_step_keeps_generic_bundle_when_endpoint_electronic_state_differs(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    source = tmp_path / "spin-change.chemvas"
+    write_document(
+        source,
+        _path_ready_state(product_charge=1, product_multiplicity=2),
+        CANVAS_FILE_VERSION,
+    )
+    output = tmp_path / "S01"
+    monkeypatch.setattr(cli, "RDKitAdapter", _StateFakeAdapter)
+
+    assert (
+        cli.run(
+            [
+                "pack-step",
+                str(source),
+                "--step",
+                "S01",
+                "--output",
+                str(output),
+            ]
+        )
+        == 0
+    )
+    manifest = json.loads(capsys.readouterr().out)
+
+    assert manifest["path_readiness"]["ready_for_path_endpoints"] is False
+    assert manifest["path_readiness"]["blocking_reasons"] == [
+        "endpoint_charge_mismatch",
+        "endpoint_multiplicity_mismatch",
+    ]
+    assert (output / "reactant.bundle" / "geometry.xyz").is_file()
+    assert (output / "product.bundle" / "geometry.xyz").is_file()
+    assert not (output / "path_endpoints").exists()
 
 
 def test_pack_step_rejects_incomplete_mapping_before_rdkit_or_output(
