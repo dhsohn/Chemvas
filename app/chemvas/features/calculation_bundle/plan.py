@@ -30,6 +30,22 @@ class StepReadiness:
     ready_for_step_pack: bool
 
 
+@dataclass(frozen=True)
+class PathPrecheck:
+    reactant_charge: int
+    product_charge: int
+    charge_matches: bool
+    reactant_multiplicity: int
+    product_multiplicity: int
+    multiplicity_matches: bool
+    reactant_component_count: int
+    product_component_count: int
+    single_component_endpoints: bool
+    source_mapping_complete: bool
+    ready_for_path_endpoints: bool
+    blocking_reasons: tuple[str, ...]
+
+
 def validate_calculation_plan(
     document_state: Mapping[str, object],
     plan_state: object,
@@ -107,6 +123,7 @@ def calculation_plan_report(
                 "reactant_state": step.reactant.state_id,
                 "product_state": step.product.state_id,
                 "readiness": asdict(step_readiness(plan, step)),
+                "path_precheck": asdict(path_precheck(plan, step)),
             }
             for step in plan.steps
         ],
@@ -181,6 +198,42 @@ def step_readiness(plan: CalculationPlan, step: CalculationStep) -> StepReadines
     )
 
 
+def path_precheck(plan: CalculationPlan, step: CalculationStep) -> PathPrecheck:
+    reactant_state = calculation_state_by_id(plan, step.reactant.state_id)
+    product_state = calculation_state_by_id(plan, step.product.state_id)
+    source_mapping_complete = step_readiness(plan, step).ready_for_step_pack
+    charge_matches = reactant_state.charge == product_state.charge
+    multiplicity_matches = reactant_state.multiplicity == product_state.multiplicity
+    reactant_component_count = _included_component_count(reactant_state)
+    product_component_count = _included_component_count(product_state)
+    single_component_endpoints = (
+        reactant_component_count == 1 and product_component_count == 1
+    )
+    blocking_reasons: list[str] = []
+    if not source_mapping_complete:
+        blocking_reasons.append("source_atom_mapping_incomplete")
+    if not charge_matches:
+        blocking_reasons.append("endpoint_charge_mismatch")
+    if not multiplicity_matches:
+        blocking_reasons.append("endpoint_multiplicity_mismatch")
+    if not single_component_endpoints:
+        blocking_reasons.append("multicomponent_precomplex_geometry_not_provided")
+    return PathPrecheck(
+        reactant_charge=reactant_state.charge,
+        product_charge=product_state.charge,
+        charge_matches=charge_matches,
+        reactant_multiplicity=reactant_state.multiplicity,
+        product_multiplicity=product_state.multiplicity,
+        multiplicity_matches=multiplicity_matches,
+        reactant_component_count=reactant_component_count,
+        product_component_count=product_component_count,
+        single_component_endpoints=single_component_endpoints,
+        source_mapping_complete=source_mapping_complete,
+        ready_for_path_endpoints=not blocking_reasons,
+        blocking_reasons=tuple(blocking_reasons),
+    )
+
+
 def correspondence_readiness(
     reactant_state: CalculationState,
     product_state: CalculationState,
@@ -224,6 +277,10 @@ def included_atom_ids(state: CalculationState) -> set[int]:
         if member.inclusion == "included"
         for atom_id in member.component_atom_ids
     }
+
+
+def _included_component_count(state: CalculationState) -> int:
+    return sum(member.inclusion == "included" for member in state.members)
 
 
 def calculate_bond_changes(
@@ -373,6 +430,7 @@ def _pair(a: int, b: int) -> tuple[int, int]:
 
 
 __all__ = [
+    "PathPrecheck",
     "StepReadiness",
     "calculate_bond_changes",
     "calculation_plan_for_document",
@@ -383,6 +441,7 @@ __all__ = [
     "identity_correspondence",
     "included_atom_ids",
     "member",
+    "path_precheck",
     "plan_with_replaced_step",
     "require_step_ready",
     "select_calculation_state",

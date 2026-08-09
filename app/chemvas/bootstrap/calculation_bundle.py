@@ -9,10 +9,11 @@ import re
 import shutil
 import sys
 import tempfile
+from collections.abc import Mapping
 from dataclasses import asdict
 from decimal import Decimal
 from pathlib import Path
-from typing import Any
+from typing import Any, TypedDict
 
 from chemvas import __version__
 from chemvas.core.document_io import (
@@ -40,6 +41,7 @@ from chemvas.features.calculation_bundle import (
     calculation_state_by_id,
     calculation_step_by_id,
     inspect_components,
+    path_precheck,
     require_step_ready,
     select_calculation_state,
     select_component,
@@ -51,6 +53,18 @@ _BUNDLE_FORMAT = "chemvas-calculation-bundle"
 _BUNDLE_VERSION = 1
 _STEP_BUNDLE_FORMAT = "chemvas-elementary-step-bundle"
 _STEP_BUNDLE_VERSION = 1
+_PATH_ENDPOINTS_FORMAT = "chemvas-path-endpoints"
+_PATH_ENDPOINTS_VERSION = 1
+
+
+class _PathAtomOrderEntry(TypedDict):
+    path_index: int
+    reactant_xyz_index: int
+    product_xyz_index: int
+    symbol: str
+    reactant_chemvas_atom_id: int | None
+    product_chemvas_atom_id: int | None
+    origin: str
 
 
 def run(argv: list[str]) -> int:
@@ -281,6 +295,7 @@ def _pack_step(
     require_step_ready(plan, step)
     reactant_state = calculation_state_by_id(plan, step.reactant.state_id)
     product_state = calculation_state_by_id(plan, step.product.state_id)
+    precheck = path_precheck(plan, step)
     reactant_selection = select_calculation_state(document.state, reactant_state)
     product_selection = select_calculation_state(document.state, product_state)
 
@@ -336,6 +351,25 @@ def _pack_step(
     )
     file_bytes["atom_correspondence.json"] = _json_text(correspondence).encode("utf-8")
     file_bytes["bond_changes.json"] = _json_text(bond_changes).encode("utf-8")
+    path_endpoint_directory: str | None = None
+    if precheck.ready_for_path_endpoints:
+        path_endpoint_directory = "path_endpoints"
+        file_bytes.update(
+            _path_endpoint_file_bytes(
+                step=step,
+                reactant_state=reactant_state,
+                product_state=product_state,
+                reactant_artifacts=reactant_artifacts,
+                product_artifacts=product_artifacts,
+                correspondence=correspondence,
+                bond_changes=bond_changes,
+            )
+        )
+    path_readiness = {
+        **asdict(precheck),
+        "generated_atom_mapping_complete": True,
+        "path_endpoint_directory": path_endpoint_directory,
+    }
     manifest = {
         "format": _STEP_BUNDLE_FORMAT,
         "version": _STEP_BUNDLE_VERSION,
@@ -356,6 +390,7 @@ def _pack_step(
         "atom_correspondence_file": "atom_correspondence.json",
         "bond_changes_file": "bond_changes.json",
         "mapping_validation": "complete_source_and_generated_geometry_bijection",
+        "path_readiness": path_readiness,
         "geometry_scope": {
             "reactant_component_count": len(reactant_selection.component_indices),
             "product_component_count": len(product_selection.component_indices),
@@ -490,6 +525,188 @@ def _state_bundle_file_bytes(
     }
     local_files["manifest.json"] = _json_text(manifest).encode("utf-8")
     return {f"{prefix}/{name}": content for name, content in local_files.items()}
+
+
+def _path_endpoint_file_bytes(
+    *,
+    step: CalculationStep,
+    reactant_state: CalculationState,
+    product_state: CalculationState,
+    reactant_artifacts: CalculationArtifacts,
+    product_artifacts: CalculationArtifacts,
+    correspondence: Mapping[str, object],
+    bond_changes: Mapping[str, object],
+) -> dict[str, bytes]:
+    reactant_rows = _xyz_atom_rows(reactant_artifacts, label="reactant")
+    product_rows = _xyz_atom_rows(product_artifacts, label="product")
+    atom_order = _path_atom_order(
+        correspondence,
+        reactant_atom_count=len(reactant_rows),
+        product_atom_count=len(product_rows),
+    )
+    aligned_product_rows = tuple(
+        product_rows[entry["product_xyz_index"] - 1] for entry in atom_order
+    )
+    reactant_path = _path_xyz_block(
+        reactant_rows,
+        comment="Chemvas path reactant; canonical reactant atom identity order",
+    )
+    product_path = _path_xyz_block(
+        aligned_product_rows,
+        comment="Chemvas path product; canonical reactant atom identity order",
+    )
+    reaction_center_indices = _reaction_center_indices(atom_order, bond_changes)
+    local_files = {
+        "reactant.xyz": reactant_path.encode("utf-8"),
+        "product.xyz": product_path.encode("utf-8"),
+    }
+    manifest = {
+        "format": _PATH_ENDPOINTS_FORMAT,
+        "version": _PATH_ENDPOINTS_VERSION,
+        "generator": {"name": "Chemvas", "version": __version__},
+        "step_id": step.id,
+        "source": {
+            "atom_correspondence_file": "../atom_correspondence.json",
+            "bond_changes_file": "../bond_changes.json",
+        },
+        "electronic_state": {
+            "charge": reactant_state.charge,
+            "multiplicity": reactant_state.multiplicity,
+            "validation": "reactant_product_match",
+        },
+        "ordering": {
+            "canonical_side": "reactant",
+            "path_index_base": 0,
+            "identity_mapping": "explicit_generated_geometry_bijection",
+            "atom_order": atom_order,
+        },
+        "reaction_center": {
+            "atom_indices": reaction_center_indices,
+            "index_base": 0,
+            "definition": "atoms_incident_to_source_bond_changes",
+        },
+        "geometry": {
+            "reactant_file": "reactant.xyz",
+            "product_file": "product.xyz",
+            "atom_count": len(reactant_rows),
+            "component_count": 1,
+            "precomplex_geometry": "single_component_endpoints",
+            "rigid_alignment": "not_performed",
+            "endpoint_optimization": "required_downstream",
+            "intended_use": (
+                "atom-identity-aligned initial endpoints for downstream path search "
+                "and researcher review"
+            ),
+        },
+        "artifacts": {
+            name: {"sha256": _sha256(content), "bytes": len(content)}
+            for name, content in sorted(local_files.items())
+        },
+    }
+    local_files["manifest.json"] = _json_text(manifest).encode("utf-8")
+    return {f"path_endpoints/{name}": content for name, content in local_files.items()}
+
+
+def _xyz_atom_rows(
+    artifacts: CalculationArtifacts,
+    *,
+    label: str,
+) -> tuple[str, ...]:
+    lines = artifacts.xyz_block.splitlines()
+    if len(lines) != artifacts.xyz_atom_count + 2:
+        raise ValueError(f"{label} XYZ rows do not match the generated atom count.")
+    try:
+        declared_count = int(lines[0].strip())
+    except ValueError as exc:
+        raise ValueError(f"{label} XYZ has an invalid atom count.") from exc
+    if declared_count != artifacts.xyz_atom_count:
+        raise ValueError(f"{label} XYZ has an inconsistent atom count.")
+    rows = tuple(lines[2:])
+    for row, atom_map_entry in zip(rows, artifacts.atom_map, strict=True):
+        fields = row.split()
+        if len(fields) != 4 or fields[0] != atom_map_entry.symbol:
+            raise ValueError(f"{label} XYZ rows do not match the generated atom map.")
+    return rows
+
+
+def _path_atom_order(
+    correspondence: Mapping[str, object],
+    *,
+    reactant_atom_count: int,
+    product_atom_count: int,
+) -> list[_PathAtomOrderEntry]:
+    raw_entries = correspondence.get("geometry_entries")
+    if not isinstance(raw_entries, list):
+        raise ValueError("Generated geometry correspondence is missing.")
+    entries: list[_PathAtomOrderEntry] = []
+    for raw_entry in raw_entries:
+        if not isinstance(raw_entry, Mapping):
+            raise ValueError("Generated geometry correspondence is invalid.")
+        reactant_index = raw_entry.get("reactant_xyz_index")
+        product_index = raw_entry.get("product_xyz_index")
+        if type(reactant_index) is not int or type(product_index) is not int:
+            raise ValueError("Generated geometry correspondence indices are invalid.")
+        symbol = raw_entry.get("symbol")
+        reactant_atom_id = raw_entry.get("reactant_chemvas_atom_id")
+        product_atom_id = raw_entry.get("product_chemvas_atom_id")
+        origin = raw_entry.get("origin")
+        if (
+            not isinstance(symbol, str)
+            or not isinstance(origin, str)
+            or (reactant_atom_id is not None and type(reactant_atom_id) is not int)
+            or (product_atom_id is not None and type(product_atom_id) is not int)
+        ):
+            raise ValueError("Generated geometry correspondence values are invalid.")
+        entries.append(
+            {
+                "path_index": reactant_index - 1,
+                "reactant_xyz_index": reactant_index,
+                "product_xyz_index": product_index,
+                "symbol": symbol,
+                "reactant_chemvas_atom_id": reactant_atom_id,
+                "product_chemvas_atom_id": product_atom_id,
+                "origin": origin,
+            }
+        )
+    entries.sort(key=lambda entry: entry["reactant_xyz_index"])
+    if [entry["reactant_xyz_index"] for entry in entries] != list(
+        range(1, reactant_atom_count + 1)
+    ) or {entry["product_xyz_index"] for entry in entries} != set(
+        range(1, product_atom_count + 1)
+    ):
+        raise ValueError(
+            "Generated geometry correspondence is not a complete bijection."
+        )
+    return entries
+
+
+def _reaction_center_indices(
+    atom_order: list[_PathAtomOrderEntry],
+    bond_changes: Mapping[str, object],
+) -> list[int]:
+    raw_changes = bond_changes.get("entries")
+    if not isinstance(raw_changes, list):
+        raise ValueError("Bond-change entries are missing.")
+    changed_source_atoms: set[int] = set()
+    for change in raw_changes:
+        if not isinstance(change, Mapping):
+            raise ValueError("Bond-change entry is invalid.")
+        atom_ids = change.get("reactant_atom_ids")
+        if not isinstance(atom_ids, list) or not all(
+            type(item) is int for item in atom_ids
+        ):
+            raise ValueError("Bond-change atom identities are invalid.")
+        changed_source_atoms.update(atom_ids)
+    return sorted(
+        entry["path_index"]
+        for entry in atom_order
+        if entry["origin"] in {"chemvas_atom", "alias_attachment"}
+        and entry["reactant_chemvas_atom_id"] in changed_source_atoms
+    )
+
+
+def _path_xyz_block(rows: tuple[str, ...], *, comment: str) -> str:
+    return "\n".join((str(len(rows)), comment, *rows, ""))
 
 
 def _step_atom_correspondence(

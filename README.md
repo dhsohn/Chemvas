@@ -310,10 +310,23 @@ must be sorted. `pack-step` creates `reactant.bundle/`, `product.bundle/`,
 `atom_correspondence.json`, `bond_changes.json`, and `step_manifest.json`. It
 also requires a complete mapping for RDKit-generated atoms; draw transferred
 hydrogens explicitly when implicit-hydrogen counts differ between endpoints.
-Multi-component coordinates are only initial guesses: the manifest explicitly
-records that Chemvas does not guarantee a catalyst/substrate interaction
-geometry, and downstream quantum optimization plus researcher review remain
-required.
+`inspect-plan` reports a deterministic `path_precheck` for each step. When the
+source mapping is complete, both endpoints have the same charge and
+multiplicity, and each endpoint contains exactly one included component,
+`pack-step` also creates `path_endpoints/reactant.xyz`, `product.xyz`, and
+`manifest.json`. The product XYZ is rewritten into the reactant atom-identity
+order; the path manifest records that order and the bond-change reaction-center
+atoms as canonical 0-based indices. Downstream tools therefore do not need to
+reconstruct the mapping from element order or coordinates.
+
+An incomplete source mapping still blocks `pack-step` at its existing gate. Once
+that gate and the generated-atom bijection pass, a multi-component or
+electronic-state mismatch keeps the generic step bundle and records in
+`path_readiness.blocking_reasons` why no `path_endpoints/` directory was emitted.
+In particular, Chemvas does not invent a multi-component catalyst/substrate
+precomplex. All generated coordinates remain initial guesses: the path endpoint
+pair is not rigidly aligned or quantum-mechanically optimized, and researcher
+review remains required.
 
 ## Keyboard shortcuts
 

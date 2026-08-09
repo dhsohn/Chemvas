@@ -8,6 +8,7 @@ from .model import (
     ComponentSummary,
 )
 from .plan import (
+    PathPrecheck,
     StepReadiness,
     calculate_bond_changes,
     calculation_plan_for_document,
@@ -18,6 +19,7 @@ from .plan import (
     identity_correspondence,
     included_atom_ids,
     member,
+    path_precheck,
     plan_with_replaced_step,
     require_step_ready,
     select_calculation_state,
@@ -33,6 +35,7 @@ __all__ = [
     "CalculationStateSelection",
     "ComponentSelection",
     "ComponentSummary",
+    "PathPrecheck",
     "StepReadiness",
     "calculate_bond_changes",
     "calculation_plan_for_document",
@@ -44,6 +47,7 @@ __all__ = [
     "included_atom_ids",
     "inspect_components",
     "member",
+    "path_precheck",
     "plan_with_replaced_step",
     "require_step_ready",
     "select_calculation_state",
