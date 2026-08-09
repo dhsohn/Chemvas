@@ -103,7 +103,7 @@ def _single_component_state() -> dict[str, object]:
 
 def test_real_rdkit_packs_balanced_multicomponent_step(tmp_path: Path) -> None:
     source = tmp_path / "balanced.chemvas"
-    output = tmp_path / "S01.json"
+    output = tmp_path / "machine.json"
     write_document(source, _balanced_state(), CANVAS_FILE_VERSION)
 
     assert (
@@ -120,20 +120,21 @@ def test_real_rdkit_packs_balanced_multicomponent_step(tmp_path: Path) -> None:
         == 0
     )
 
-    artifact = json.loads(output.read_text(encoding="utf-8"))
+    observation = json.loads(output.read_text(encoding="utf-8"))
+    artifact = observation["payload"]["data"]
     correspondence = artifact["atom_correspondence"]
     assert correspondence["geometry_mapping"] == "complete_bijection"
     assert len(correspondence["geometry_entries"]) == 11
     assert artifact["reactant"]["structure"]["component_count"] == 2
     assert artifact["reactant"]["structure"]["atom_counts"]["xyz"] == 11
     assert artifact["product"]["structure"]["atom_counts"]["xyz"] == 11
-    assert artifact["path_readiness"]["ready_for_path_endpoints"] is False
+    assert observation["handoff"]["status"] == "blocked"
     assert artifact["endpoint_pair"] is None
 
 
 def test_real_rdkit_writes_single_component_path_endpoints(tmp_path: Path) -> None:
     source = tmp_path / "single-component.chemvas"
-    output = tmp_path / "S01.json"
+    output = tmp_path / "machine.json"
     write_document(source, _single_component_state(), CANVAS_FILE_VERSION)
 
     assert (
@@ -150,7 +151,9 @@ def test_real_rdkit_writes_single_component_path_endpoints(tmp_path: Path) -> No
         == 0
     )
 
-    artifact = json.loads(output.read_text(encoding="utf-8"))
+    observation = json.loads(output.read_text(encoding="utf-8"))
+    artifact = observation["payload"]["data"]
+    assert observation["handoff"] == {"status": "ready", "codes": []}
     endpoint_pair = artifact["endpoint_pair"]
     reactant_symbols = [
         row.split()[0]

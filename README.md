@@ -212,34 +212,18 @@ Graph Patch v1 deliberately does not delete atoms or edit charge/radical annotat
 arrows, groups, or Calculation Plans. It makes no chemical or mechanistic inference;
 use the GUI or a separately reviewed plan update for those semantics.
 
-## Headless calculation bundles
+## Headless structure inspection
 
-Installed Chemvas can expose structures to an agent without starting Qt. First
-inspect the connected components, then package one explicit component:
+Installed Chemvas can expose structures to an agent without starting Qt:
 
 ```bash
 chemvas inspect scheme.chemvas
-chemvas pack scheme.chemvas \
-  --component 0 --species-id reactant-a \
-  --charge 0 --multiplicity 1 \
-  --output reactant-a.bundle
 ```
 
-`inspect` needs no RDKit and prints JSON. `pack` requires the optional RDKit
-dependency and creates a new, non-overwriting Calculation Bundle v1 directory:
-`source.chemvas`, `structure.mol`, `geometry.xyz`, `atom_map.json`, and
-`manifest.json`. The manifest records payload-file SHA-256 hashes, the selected
-Chemvas atom IDs, declared charge/multiplicity, modeled formal charge/radicals,
-RDKit version, and atom counts. The atom map explains alias expansion and
-implicit hydrogens so the coordinate indices can be traced back to the drawing.
-
-Chemvas rejects a declared charge that differs from the attached charge marks.
-Multiplicity is always explicit; Chemvas checks only its electron-count parity
-and records that no spin state was inferred from the 2D drawing. It does not
-guess reaction roles or a mechanism.
-
-Give every species/run a unique output directory. `pack` rejects an existing
-target but does not coordinate multiple orchestrators racing for the same path.
+`inspect` needs no RDKit and prints a JSON inventory of connected components
+with stable atom IDs, formal charges, and annotation totals. Machine handoff of
+geometries happens exclusively through the elementary-step `machine.json`
+published by `pack-step` below; there is no separate per-species bundle format.
 
 ### Calculation states and elementary steps
 
@@ -273,7 +257,7 @@ Agents can attach and inspect the same contract without Qt:
 ```bash
 chemvas attach-plan scheme.chemvas plan.json --output mechanism.chemvas
 chemvas inspect-plan mechanism.chemvas
-chemvas pack-step mechanism.chemvas --step S01 --output calculations/S01.json
+chemvas pack-step mechanism.chemvas --step S01 --output calculations/machine.json
 ```
 
 `plan.json` uses Calculation Plan v1. States own calculation membership and
@@ -306,10 +290,11 @@ charge/multiplicity; step endpoints own roles:
 ```
 
 Every `component_atom_ids` list must equal one complete connected component and
-must be sorted. `pack-step` atomically writes exactly one
-`chemvas-elementary-step` v1 JSON file. It inlines the source document hash,
-endpoint state and RDKit atom provenance, complete source/generated atom
-correspondence, bond changes, and deterministic path readiness. Draw transferred
+must be sorted. `pack-step` atomically writes exactly one non-overwriting file
+named `machine.json`. It uses the shared `factory/machine-observation` v1
+envelope and a `chemistry/elementary-step` v1 payload containing the source
+document hash, endpoint state and RDKit atom provenance, complete
+source/generated atom correspondence, and bond changes. Draw transferred
 hydrogens explicitly when implicit-hydrogen counts differ between endpoints;
 the generated atoms must also form a complete bijection.
 
@@ -324,12 +309,12 @@ the mapping from element order or coordinates.
 
 An incomplete source mapping still blocks `pack-step` without creating the
 output. Once that gate and the generated-atom bijection pass, a multi-component
-or electronic-state mismatch writes one blocked JSON artifact with
-`endpoint_pair: null` and exact `path_readiness.blocking_reasons`. Chemvas does
-not invent a multi-component catalyst/substrate precomplex. All generated
-coordinates remain initial guesses: the path endpoint pair is not rigidly
-aligned or quantum-mechanically optimized, and researcher review remains
-required.
+or electronic-state mismatch writes one observation with
+`handoff.status: "blocked"`, namespaced `handoff.codes`, and
+`payload.data.endpoint_pair: null`. Chemvas does not invent a multi-component
+catalyst/substrate precomplex. All generated coordinates remain initial guesses:
+the path endpoint pair is not rigidly aligned or quantum-mechanically optimized,
+and researcher review remains required.
 
 ## Keyboard shortcuts
 

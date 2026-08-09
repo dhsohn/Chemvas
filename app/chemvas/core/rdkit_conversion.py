@@ -870,7 +870,7 @@ class RDKitConversionHelper:
         if mol_h is None:
             return None
         conformer = mol_h.GetConformer()
-        xyz_lines = [str(mol_h.GetNumAtoms()), "Chemvas Calculation Bundle v1"]
+        xyz_lines = [str(mol_h.GetNumAtoms()), "Chemvas geometry v1"]
         atom_map: list[AtomMapEntry] = []
         base_atom_count = mol.GetNumAtoms()
         for atom_index, rd_atom in enumerate(mol_h.GetAtoms()):
