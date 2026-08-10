@@ -4,6 +4,7 @@ from collections import Counter
 from collections.abc import Mapping, Sequence
 from typing import cast
 
+from chemvas.domain.atom_aliases import AliasAttachment, modeled_atom_formal_charge
 from chemvas.domain.document import Atom, Bond, MoleculeModel, deserialize_model_state
 
 from .model import CalculationStateSelection, ComponentSelection, ComponentSummary
@@ -112,7 +113,11 @@ def select_components(
         component_indices=component_indices,
         atom_ids=tuple(sorted(selected_ids)),
         formal_charge=sum(
-            int(selected_annotations.get(atom_id, {}).get("formal_charge", 0))
+            _modeled_atom_formal_charge(
+                model,
+                atom_id,
+                selected_annotations.get(atom_id),
+            )
             for atom_id in selected_ids
         ),
         radical_electrons=sum(
@@ -143,7 +148,7 @@ def _resolve_annotations(
     model: MoleculeModel, marks: Sequence[object]
 ) -> dict[int, dict[str, int]]:
     mark_totals: dict[int, dict[str, int]] = {}
-    marked_atom_ids: set[int] = set()
+    electronic_marked_atom_ids: set[int] = set()
     for raw_mark in marks:
         if not isinstance(raw_mark, Mapping):
             raise ValueError("Invalid Chemvas document state: mark entry is invalid.")
@@ -155,7 +160,9 @@ def _resolve_annotations(
             raise ValueError("Invalid Chemvas document state: mark atom is invalid.")
         if not isinstance(kind, str):
             raise ValueError("Invalid Chemvas document state: mark kind is invalid.")
-        marked_atom_ids.add(atom_id)
+        if kind not in _CHARGE_MARKS and kind != "radical":
+            continue
+        electronic_marked_atom_ids.add(atom_id)
         values = mark_totals.setdefault(
             atom_id, {"formal_charge": 0, "radical_electrons": 0}
         )
@@ -171,18 +178,24 @@ def _resolve_annotations(
         int(atom_id): _normalize_annotation(values)
         for atom_id, values in model.atom_annotations.items()
     }
-    for atom_id, model_annotation in normalized_model.items():
-        if normalized_marks.get(atom_id, {}) != model_annotation:
+    model_electronic_atom_ids = {
+        int(atom_id)
+        for atom_id, values in model.atom_annotations.items()
+        if any(key in values for key in ("formal_charge", "radical_electrons"))
+    }
+    for atom_id in model_electronic_atom_ids:
+        if atom_id not in electronic_marked_atom_ids or normalized_marks.get(
+            atom_id, {}
+        ) != normalized_model.get(atom_id, {}):
             raise ValueError(
                 "Conflicting charge/radical annotations for Chemvas atom "
                 f"{atom_id}; repair the document before calculation export."
             )
 
     resolved: dict[int, dict[str, int]] = {}
-    for atom_id in marked_atom_ids:
+    for atom_id in electronic_marked_atom_ids:
         annotation = normalized_marks.get(atom_id, {})
-        if annotation:
-            resolved[atom_id] = annotation
+        resolved[atom_id] = annotation or {"formal_charge": 0}
     return resolved
 
 
@@ -245,7 +258,11 @@ def _component_summary(
         ),
         formula_labels=tuple(sorted(labels.items())),
         formal_charge=sum(
-            int(active_annotations.get(atom_id, {}).get("formal_charge", 0))
+            _modeled_atom_formal_charge(
+                model,
+                atom_id,
+                active_annotations.get(atom_id),
+            )
             for atom_id in atom_ids
         ),
         radical_electrons=sum(
@@ -253,6 +270,34 @@ def _component_summary(
             for atom_id in atom_ids
         ),
         bounds=(min(xs), min(ys), max(xs), max(ys)),
+    )
+
+
+def _modeled_atom_formal_charge(
+    model: MoleculeModel,
+    atom_id: int,
+    annotation: Mapping[str, int] | None,
+) -> int:
+    attachments: list[AliasAttachment] = []
+    for bond in model.bonds:
+        if bond is None or atom_id not in {bond.a, bond.b}:
+            continue
+        neighbor_id = bond.b if bond.a == atom_id else bond.a
+        neighbor = model.atoms.get(neighbor_id)
+        if neighbor is None:
+            continue
+        attachments.append(
+            AliasAttachment(
+                neighbor_element=neighbor.element,
+                bond_order=bond.order,
+                bond_style=bond.style,
+            )
+        )
+    return modeled_atom_formal_charge(
+        model.atoms[atom_id].element,
+        annotation,
+        atom_id=atom_id,
+        attachments=attachments,
     )
 
 

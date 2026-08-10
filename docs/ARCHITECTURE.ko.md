@@ -8,7 +8,7 @@
 따른다.
 - CanvasView (`app/chemvas/ui/canvas_view.py`): 입력 처리, 도구(tool) 디스패치, 선택 상태 관리, 그리고 모델/렌더/히스토리 업데이트의 조율을 담당한다. 저수준 드로잉 프리미티브(low-level drawing primitives)를 직접 소유해서는 안 된다.
 - MoleculeModel (`app/chemvas/domain/document/model.py`): 순수한 원자/결합 데이터와 ID. Qt 의존성이 없다.
-- RDKitAdapter (`app/chemvas/core/rdkit_adapter.py`): SMILES 가져오기, 물성 계산, 3D 좌표 생성, 별칭(alias) 확장, 미리보기 씬(preview scene) 구성을 담당하는 선택적 화학 백엔드. UI 코드는 이를 필수 시작 의존성이 아니라 최선 노력(best-effort) 서비스로 취급해야 한다.
+- RDKitAdapter (`app/chemvas/core/rdkit_adapter.py`): SMILES 가져오기, 물성 계산, 3D 좌표 생성, 별칭(alias) 확장, 미리보기 씬(preview scene) 구성을 담당하는 선택적 화학 백엔드. Alias 검증은 scene, XYZ, MOL, calculation-artifact 경로가 중앙에서 공유한다. Carbon-bound `PPh3`는 정확히 하나의 single bond를 가진 phosphonium `C-[P+](Ph)3`로만 확장하며, 모호한 attachment 또는 명시적인 전자 annotation은 fail closed한다. UI 코드는 RDKit을 필수 시작 의존성이 아니라 최선 노력(best-effort) 서비스로 취급해야 한다.
 - Renderer (`app/chemvas/adapters/qt/renderer.py`): 순수
   `chemvas.features.rendering.acs1996_style` 정책을 사용하는 Qt 펜/브러시와
   폰트 설정.

@@ -8,6 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Context-validated attached `PPh3` alias expansion**: a `PPh3` atom label
+  connected to carbon by one ordinary covalent single bond now expands into an
+  explicit four-coordinate `[P+](Ph)3` fragment for 3D `.xyz` conversion,
+  Molecule Info, and elementary-step geometry. Standalone, metal-coordinate,
+  non-single, styled, and explicitly re-annotated contexts fail closed.
 - **Structural atom-mapping suggestions**: the Calculation dialog's atom
   correspondence editor gains a **Suggest by structure** button that fills
   unmapped reactant atoms from the maximum common substructure of the included

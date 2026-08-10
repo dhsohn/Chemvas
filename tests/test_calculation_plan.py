@@ -25,6 +25,7 @@ from chemvas.features.calculation_bundle import (
     correspondence_readiness,
     path_precheck,
     require_step_ready,
+    select_calculation_state,
     validate_calculation_plan,
 )
 
@@ -246,6 +247,60 @@ def test_semantic_validation_rejects_state_charge_drift() -> None:
 
     with pytest.raises(ValueError, match="modeled formal charge 0"):
         validate_calculation_plan(state, bad)
+
+
+def test_pph3_intrinsic_charge_is_used_across_calculation_state_selection() -> None:
+    state = _document_state()
+    model = MoleculeModel(
+        atoms={
+            0: Atom("C", 0.0, 0.0),
+            1: Atom("PPh3", 1.0, 0.0),
+            2: Atom("C", 4.0, 0.0),
+            3: Atom("PPh3", 5.0, 0.0),
+        },
+        bonds=[Bond(0, 1), Bond(2, 3)],
+    )
+    state["model"] = serialize_model_state(model)
+    plan_state = {
+        "format": "chemvas-calculation-plan",
+        "version": 1,
+        "states": [
+            {
+                "id": "R01",
+                "charge": 1,
+                "multiplicity": 1,
+                "members": [{"component_atom_ids": [0, 1], "inclusion": "included"}],
+            },
+            {
+                "id": "P01",
+                "charge": 1,
+                "multiplicity": 1,
+                "members": [{"component_atom_ids": [2, 3], "inclusion": "included"}],
+            },
+        ],
+        "steps": [
+            {
+                "id": "S01",
+                "reactant": {
+                    "state_id": "R01",
+                    "roles": [{"component_atom_ids": [0, 1], "role": "reactant"}],
+                },
+                "product": {
+                    "state_id": "P01",
+                    "roles": [{"component_atom_ids": [2, 3], "role": "product"}],
+                },
+                "atom_correspondence": [
+                    {"reactant_atom_id": 0, "product_atom_id": 2},
+                    {"reactant_atom_id": 1, "product_atom_id": 3},
+                ],
+            }
+        ],
+    }
+
+    plan = validate_calculation_plan(state, plan_state)
+    selection = select_calculation_state(state, plan.states[0])
+
+    assert selection.formal_charge == 1
 
 
 def test_plan_rejects_duplicate_product_atom_correspondence() -> None:

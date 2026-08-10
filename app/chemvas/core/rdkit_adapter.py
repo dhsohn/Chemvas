@@ -5,6 +5,7 @@ from typing import Any
 
 from chemvas.core.rdkit_conversion import RDKitConversionHelper
 from chemvas.core.rdkit_import import RDKitImportHelper
+from chemvas.domain.atom_aliases import alias_fragment_smiles
 from chemvas.domain.document import MoleculeModel
 from chemvas.features.calculation_bundle import CalculationArtifacts
 from chemvas.features.insertion import (
@@ -40,32 +41,7 @@ class RDKitAdapter:
             "c1ccc2cnccc2c1": "Isoquinoline",
             "c1ccc2[nH]cnc2c1": "Benzimidazole",
         }
-        self._alias_smiles = {
-            "Me": "[*:1]C",
-            "Et": "[*:1]CC",
-            "OH": "[*:1]O",
-            "Ph": "[*:1]c1ccccc1",
-            "OMe": "[*:1]OC",
-            "Boc": "[*:1]C(=O)OC(C)(C)C",
-            "CO2Me": "[*:1]C(=O)OC",
-            "t-Bu": "[*:1]C(C)(C)C",
-            "tBu": "[*:1]C(C)(C)C",
-            "i-Pr": "[*:1]C(C)C",
-            "CF3": "[*:1]C(F)(F)F",
-            # Sulfonates/sulfonyls and common acyl protecting groups. The
-            # O-prefixed labels attach through the ester oxygen; the bare
-            # sulfonyl/acyl labels attach through S/C. Ns is the para isomer
-            # (4-nitrobenzenesulfonyl).
-            "OTs": "[*:1]OS(=O)(=O)c1ccc(C)cc1",
-            "Ts": "[*:1]S(=O)(=O)c1ccc(C)cc1",
-            "OMs": "[*:1]OS(=O)(=O)C",
-            "Ms": "[*:1]S(=O)(=O)C",
-            "OTf": "[*:1]OS(=O)(=O)C(F)(F)F",
-            "Tf": "[*:1]S(=O)(=O)C(F)(F)F",
-            "Ns": "[*:1]S(=O)(=O)c1ccc(cc1)[N+](=O)[O-]",
-            "OAc": "[*:1]OC(C)=O",
-            "Ac": "[*:1]C(C)=O",
-        }
+        self._alias_smiles = alias_fragment_smiles()
         self._import_helper = RDKitImportHelper(self)
         self._conversion_helper = RDKitConversionHelper(self)
 

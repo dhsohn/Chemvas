@@ -8,7 +8,7 @@ package boundaries and dependency direction are defined by
 follow the ADR instead of copying the flat `core` / `ui` layout below.
 - CanvasView (`app/chemvas/ui/canvas_view.py`): input handling, tool dispatch, selection state, and coordinating model/render/history updates. It should not own low-level drawing primitives.
 - MoleculeModel (`app/chemvas/domain/document/model.py`): pure atom/bond data and IDs. No Qt dependencies.
-- RDKitAdapter (`app/chemvas/core/rdkit_adapter.py`): optional chemistry backend for SMILES import, property calculation, 3D coordinate generation, alias expansion, and preview scene building. UI code should treat it as a best-effort service, not a required startup dependency.
+- RDKitAdapter (`app/chemvas/core/rdkit_adapter.py`): optional chemistry backend for SMILES import, property calculation, 3D coordinate generation, alias expansion, and preview scene building. Alias validation is centralized and shared by scene, XYZ, MOL, and calculation-artifact paths; carbon-bound `PPh3` expands only as one-single-bond phosphonium `C-[P+](Ph)3`, while ambiguous attachment or explicit electronic annotations fail closed. UI code should treat RDKit as a best-effort service, not a required startup dependency.
 - Renderer (`app/chemvas/adapters/qt/renderer.py`): Qt pens/brushes and fonts,
   driven by the pure `chemvas.features.rendering.acs1996_style` policy.
 - HistoryCommand (`app/chemvas/core/history.py`): delta-based undo/redo. Multi-entity operations are grouped with `CompositeCommand`, which applies its child delta commands in order on redo and in reverse on undo.

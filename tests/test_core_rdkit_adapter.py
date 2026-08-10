@@ -1143,7 +1143,7 @@ class RDKitAdapterTest(unittest.TestCase):
             "Unsupported atom labels for 3D conversion: "
             "Bad0 (atom 0), Bad1 (atom 1), Bad2 (atom 2), Bad3 (atom 3), Bad4 (atom 4), .... "
             "Supported aliases: Ac, Boc, CF3, CO2Me, Et, Me, Ms, Ns, OAc, OH, OMe, "
-            "OMs, OTf, OTs, Ph, Tf, Ts, i-Pr, t-Bu, tBu.",
+            "OMs, OTf, OTs, PPh3, Ph, Tf, Ts, i-Pr, t-Bu, tBu.",
         )
 
     def test_build_conversion_rdkit_mol_rejects_wedge_on_non_single_bond(self) -> None:
@@ -1770,6 +1770,216 @@ class RDKitAdapterTest(unittest.TestCase):
             ),
             [],
         )
+
+    @unittest.skipUnless(
+        _RealChem is not None, "RDKit is required for alias expansion tests"
+    )
+    def test_build_conversion_expands_attached_pph3_as_phosphonium(self) -> None:
+        adapter = RDKitAdapter()
+        model = MoleculeModel()
+        scaffold = model.add_atom("C", -1.0, 0.0)
+        triphenylphosphine = model.add_atom("PPh3", 1.0, 0.0)
+        model.add_bond(scaffold, triphenylphosphine, 1)
+
+        mol = adapter._build_conversion_rdkit_mol(model)
+
+        self.assertIsNotNone(mol)
+        assert mol is not None
+        phosphorus_atoms = [atom for atom in mol.GetAtoms() if atom.GetSymbol() == "P"]
+        self.assertEqual(len(phosphorus_atoms), 1)
+        phosphorus = phosphorus_atoms[0]
+        self.assertEqual(phosphorus.GetFormalCharge(), 1)
+        self.assertEqual(phosphorus.GetDegree(), 4)
+        self.assertEqual(phosphorus.GetTotalNumHs(), 0)
+        self.assertEqual(
+            sum(atom.GetSymbol() == "C" for atom in mol.GetAtoms()),
+            19,
+        )
+
+        artifacts = adapter.model_to_calculation_artifacts(model)
+        self.assertIsNotNone(artifacts)
+        assert artifacts is not None
+        owned_entries = [
+            entry
+            for entry in artifacts.atom_map
+            if entry.chemvas_atom_id == triphenylphosphine
+            or entry.parent_chemvas_atom_id == triphenylphosphine
+        ]
+        self.assertEqual(len(owned_entries), 34)
+        self.assertEqual(
+            sum(
+                entry.origin == "alias_attachment" and entry.symbol == "P"
+                for entry in owned_entries
+            ),
+            1,
+        )
+        self.assertEqual(
+            sum(
+                entry.origin == "alias_expansion" and entry.symbol == "C"
+                for entry in owned_entries
+            ),
+            18,
+        )
+        self.assertEqual(
+            sum(
+                entry.origin == "implicit_hydrogen" and entry.symbol == "H"
+                for entry in owned_entries
+            ),
+            15,
+        )
+        self.assertEqual(artifacts.rdkit_formal_charge, 1)
+
+    @unittest.skipUnless(
+        _RealChem is not None, "RDKit is required for alias expansion tests"
+    )
+    def test_calculation_artifacts_reject_pph3_model_annotations_with_or_without_argument(
+        self,
+    ) -> None:
+        annotations = (
+            {"formal_charge": 1},
+            {"radical_electrons": 1},
+            {"formal_charge": 0},
+        )
+        for annotation in annotations:
+            for pass_argument in (False, True):
+                with self.subTest(
+                    annotation=annotation,
+                    pass_argument=pass_argument,
+                ):
+                    adapter = RDKitAdapter()
+                    model = MoleculeModel()
+                    scaffold = model.add_atom("C", -1.0, 0.0)
+                    triphenylphosphine = model.add_atom("PPh3", 1.0, 0.0)
+                    model.add_bond(scaffold, triphenylphosphine, 1)
+                    model.atom_annotations = {triphenylphosphine: dict(annotation)}
+
+                    if pass_argument:
+                        artifacts = adapter.model_to_calculation_artifacts(
+                            model,
+                            atom_annotations=model.atom_annotations,
+                        )
+                    else:
+                        artifacts = adapter.model_to_calculation_artifacts(model)
+
+                    self.assertIsNone(artifacts)
+                    self.assertIn(
+                        "does not support explicit charge or radical annotations",
+                        adapter.last_error or "",
+                    )
+
+    @unittest.skipUnless(
+        _RealChem is not None, "RDKit is required for alias expansion tests"
+    )
+    def test_all_conversion_apis_reject_pph3_annotations_with_or_without_argument(
+        self,
+    ) -> None:
+        annotations = (
+            {"formal_charge": 1},
+            {"radical_electrons": 1},
+            {"formal_charge": 0},
+            {"radical_electrons": 0},
+        )
+        methods = (
+            "model_to_3d_scene",
+            "model_to_3d_scene_result",
+            "model_to_xyz_block",
+            "model_to_xyz_block_result",
+            "model_to_mol_block",
+            "model_to_mol_block_result",
+            "model_to_calculation_artifacts",
+            "model_to_calculation_artifacts_result",
+        )
+        for annotation in annotations:
+            for pass_argument in (False, True):
+                for method_name in methods:
+                    with self.subTest(
+                        annotation=annotation,
+                        pass_argument=pass_argument,
+                        method_name=method_name,
+                    ):
+                        adapter = RDKitAdapter()
+                        model = MoleculeModel()
+                        scaffold = model.add_atom("C", -1.0, 0.0)
+                        triphenylphosphine = model.add_atom("PPh3", 1.0, 0.0)
+                        model.add_bond(scaffold, triphenylphosphine, 1)
+                        model.atom_annotations = {triphenylphosphine: dict(annotation)}
+                        method = getattr(adapter, method_name)
+
+                        if pass_argument:
+                            result = method(
+                                model, atom_annotations=model.atom_annotations
+                            )
+                        else:
+                            result = method(model)
+                        if method_name.endswith("_result"):
+                            self.assertIsNone(result.value)
+                            error = result.error
+                        else:
+                            self.assertIsNone(result)
+                            error = adapter.last_error
+                        self.assertIn(
+                            "does not support explicit charge or radical annotations",
+                            error or "",
+                        )
+
+    @unittest.skipUnless(
+        _RealChem is not None, "RDKit is required for alias expansion tests"
+    )
+    def test_build_conversion_rejects_ambiguous_pph3_attachment_contexts(self) -> None:
+        cases = (
+            ("Pt", 1, "single"),
+            ("N", 1, "single"),
+            ("C", 2, "double"),
+            ("C", 3, "triple"),
+            ("C", 1, "dotted"),
+            ("C", 1, "dotted_double"),
+            ("C", 1, "bold"),
+        )
+        for neighbor_element, bond_order, bond_style in cases:
+            with self.subTest(
+                neighbor_element=neighbor_element,
+                bond_order=bond_order,
+                bond_style=bond_style,
+            ):
+                adapter = RDKitAdapter()
+                model = MoleculeModel()
+                neighbor = model.add_atom(neighbor_element, -1.0, 0.0)
+                triphenylphosphine = model.add_atom("PPh3", 1.0, 0.0)
+                bond_id = model.add_bond(neighbor, triphenylphosphine, bond_order)
+                bond = model.bonds[bond_id]
+                assert bond is not None
+                bond.style = bond_style
+
+                mol = adapter._build_conversion_rdkit_mol(model)
+
+                self.assertIsNone(mol)
+                self.assertIn(
+                    "requires one ordinary single bond to carbon",
+                    adapter.last_error or "",
+                )
+
+    @unittest.skipUnless(
+        _RealChem is not None, "RDKit is required for alias expansion tests"
+    )
+    def test_build_conversion_rejects_unattached_or_multiply_attached_pph3(
+        self,
+    ) -> None:
+        for attachment_count in (0, 2):
+            with self.subTest(attachment_count=attachment_count):
+                adapter = RDKitAdapter()
+                model = MoleculeModel()
+                triphenylphosphine = model.add_atom("PPh3", 0.0, 0.0)
+                for index in range(attachment_count):
+                    neighbor = model.add_atom("C", -2.0 + (index * 4.0), 0.0)
+                    model.add_bond(neighbor, triphenylphosphine, 1)
+
+                mol = adapter._build_conversion_rdkit_mol(model)
+
+                self.assertIsNone(mol)
+                self.assertIn(
+                    "requires exactly one attachment bond",
+                    adapter.last_error or "",
+                )
 
     @unittest.skipUnless(
         _RealChem is not None, "RDKit is required for alias expansion tests"

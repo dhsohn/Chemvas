@@ -106,7 +106,7 @@ python -m pip install -e .
 - RDKit이 없는 환경에서는 이 기능을 사용할 수 없습니다. Chemvas는 기본 실행에 RDKit을 강제하지 않습니다.
 - atom에 붙은 `+/-/radical` mark는 formal charge / radical electron으로 변환되어 3D 생성에 반영됩니다.
 - wedge/hash 결합은 single bond에서 RDKit stereochemistry 힌트로 변환됩니다.
-- 대표적인 축약/alias 라벨 `Me`, `Et`, `OH`, `Ph`, `OMe`, `Boc`, `CO2Me`, `t-Bu`, `i-Pr`와 sulfonate/acyl 계열 `OTs`, `Ts`, `OMs`, `Ms`, `OTf`, `Tf`, `Ns`, `OAc`, `Ac`는 3D 변환 전에 fragment로 확장됩니다(예: `OTs` → tosylate `-O-S(=O)(=O)-C6H4-CH3` 전체). `Ns`는 para(4-nitrobenzenesulfonyl) 이성질체입니다.
+- 대표적인 축약/alias 라벨 `Me`, `Et`, `OH`, `Ph`, `OMe`, `Boc`, `CO2Me`, `t-Bu`, `i-Pr`와 sulfonate/acyl 계열 `OTs`, `Ts`, `OMs`, `Ms`, `OTf`, `Tf`, `Ns`, `OAc`, `Ac`, `PPh3`는 3D 변환 전에 fragment로 확장됩니다(예: `OTs` → tosylate `-O-S(=O)(=O)-C6H4-CH3` 전체). `Ns`는 para(4-nitrobenzenesulfonyl) 이성질체입니다. Carbon-bound `PPh3`는 정확히 하나의 일반 covalent single bond로 carbon에 연결된 경우만 phosphonium `C-[P+](Ph)3`로 확장합니다. standalone, non-carbon, multiple, non-single, styled attachment 또는 명시적인 charge/radical annotation은 fail closed합니다.
 - 지원되지 않는 라벨, 잘못 연결된 alias, wedge/hash의 잘못된 사용(예: non-single bond) 등은 명시적인 에러 메시지로 안내합니다.
 - 메뉴바의 **View ▸ Molecule Info**는 별도 창을 열어 현재 선택된 분자의 3D preview와 분자식/분자량을 표시합니다. 선택된 화학 구조가 없으면 preview는 비어 있으며, 창 안의 `Export 3D XYZ` 버튼으로 선택된 분자를 내보낼 수 있습니다. 마우스 드래그로 회전, 휠로 확대/축소할 수 있습니다.
 - `.xyz`는 원자 기호와 3D 좌표만 저장하는 포맷이므로, 결합 차수/입체정보/반응 스킴을 완전하게 round-trip하는 용도에는 적합하지 않습니다.
