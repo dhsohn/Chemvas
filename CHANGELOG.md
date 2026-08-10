@@ -41,6 +41,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   restores it.
 
 ### Fixed
+- **Terminal spam when opening menus under Wayland/WSLg**: Qt's Wayland backend
+  prints `This plugin supports grabbing the mouse only for popup windows` to
+  the terminal every time a menu opens. The startup stderr filter — previously
+  macOS-only — now also runs on Linux and drops this known-harmless line.
 - **Molecule Info title hidden behind the header buttons**: unless the window
   was stretched wide, the SMILES/InChI/InChIKey/Export 3D buttons reached over
   the painted "Molecule Info" heading and covered it. The buttons are now sized
