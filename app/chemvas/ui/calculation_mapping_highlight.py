@@ -65,7 +65,6 @@ class CalculationMappingHighlighter:
             color=_REACTANT_COLOR,
             pen_style=Qt.PenStyle.SolidLine,
             padding=2.0,
-            label_side="left",
         )
         if product_atom_id is None:
             return
@@ -76,7 +75,6 @@ class CalculationMappingHighlighter:
             color=_PRODUCT_COLOR,
             pen_style=Qt.PenStyle.DashLine,
             padding=5.0 if same_atom else 2.0,
-            label_side="right" if same_atom else "left",
         )
 
     def show_atom_labels(
@@ -135,8 +133,11 @@ class CalculationMappingHighlighter:
         color: QColor,
         pen_style: Qt.PenStyle,
         padding: float,
-        label_side: str,
     ) -> None:
+        # The role is carried by color and pen style alone (solid blue =
+        # reactant, dashed orange = product); a floating R/P letter next to the
+        # atom proved visually distracting. The label survives as an item data
+        # tag for tests and tooling.
         rect = selection_indicator_rect_for_atom_for(self._canvas, atom_id)
         if rect is None:
             return
@@ -156,26 +157,6 @@ class CalculationMappingHighlighter:
         self._prepare_item(marker, z_value=_HIGHLIGHT_Z)
         scene.addItem(marker)
         self._mapping_items.append(marker)
-
-        text = QGraphicsSimpleTextItem(label)
-        text.setData(0, "calculation_mapping_highlight")
-        text.setData(1, label)
-        text.setBrush(QBrush(color))
-        font = QFont()
-        font.setPointSizeF(8.0)
-        font.setBold(True)
-        text.setFont(font)
-        text.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIgnoresTransformations, True)
-        text_rect = text.boundingRect()
-        label_x = (
-            marker_rect.right() - text_rect.width()
-            if label_side == "right"
-            else marker_rect.left()
-        )
-        text.setPos(label_x, marker_rect.top() - text_rect.height())
-        self._prepare_item(text, z_value=_HIGHLIGHT_Z + 1.0)
-        scene.addItem(text)
-        self._mapping_items.append(text)
 
     def _add_id_label(
         self, scene: QGraphicsScene, *, atom_id: int, color: QColor
