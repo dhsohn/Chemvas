@@ -111,12 +111,12 @@ File ▸ Save / Open works with `.chemvas` files — a JSON-based format holding
 molecule model, annotations, arrows, bracket annotations, and settings:
 
 ```json
-{ "type": "chemvas", "version": 5, "state": { /* ... */ } }
+{ "type": "chemvas", "version": 6, "state": { /* ... */ } }
 ```
 
-Version 5 can also carry an optional `calculation_plan`: reusable calculation
-states plus elementary-step endpoint roles and explicit atom correspondence.
-Older v1-v4 drawings remain loadable.
+Version 6 can also carry an optional Calculation Plan v2 with bounded precomplex
+candidates, exact XYZ provenance, and explicit endpoint review selections. Version 5
+Calculation Plan v1 documents and versions 1-4 remain readable.
 
 Figure export defaults to plain SVG without Chemvas source metadata. Choose
 **Editable Chemvas SVG** only when you want the SVG to carry the original
@@ -278,6 +278,33 @@ chemvas inspect-plan mechanism.chemvas
 chemvas pack-step mechanism.chemvas --step S01 --output calculations/machine.json
 ```
 
+For a step with exactly two included components on each endpoint, generate and
+review bounded rigid-placement candidates before packing:
+
+```bash
+chemvas generate-precomplex mechanism.chemvas precomplex-request.json \
+  --step S01 --output mechanism-candidates.chemvas
+chemvas inspect-precomplex mechanism-candidates.chemvas --step S01
+chemvas select-precomplex mechanism-candidates.chemvas --step S01 \
+  --reactant-candidate <candidate-id> --product-candidate <candidate-id> \
+  --reviewer <reviewer> --output mechanism-reviewed.chemvas
+chemvas pack-step mechanism-reviewed.chemvas --step S01 \
+  --output calculations/machine.json
+```
+
+The strict request binds generation to the exact input through
+`source_document_sha256` and `step_id`, names one intercomponent contact per
+endpoint, records an explicit gas-phase or solvent environment, and sets a
+retained candidate cap. Generation writes a new version-6 document with
+Calculation Plan v2 and `selection: null`; `inspect-precomplex` exposes IDs,
+provenance, validation metrics, hashes, and exact XYZ. `select-precomplex`
+records one reactant/product pair with the same reviewer and timestamp and binds
+each selection to its XYZ hash. Before handoff, `pack-step` deterministically
+regenerates both bounded ensembles from the current graph, plan, RDKit
+provenance, contacts, and profile and rejects any mismatch. Placement scores are
+geometric clash and contact metrics, not energies or stability rankings.
+Unreviewed or partially reviewed multicomponent endpoints remain blocked.
+
 `plan.json` uses Calculation Plan v1. States own calculation membership and
 charge/multiplicity; step endpoints own roles:
 
@@ -318,7 +345,8 @@ the generated atoms must also form a complete bijection.
 
 `inspect-plan` reports a deterministic `path_precheck` for each step. When the
 source mapping is complete, both endpoints have the same charge and
-multiplicity, and each endpoint contains exactly one included component, the
+multiplicity, and either each endpoint is single-component or both
+multicomponent endpoints have an explicitly reviewed precomplex selection, the
 single artifact's `endpoint_pair` contains the exact reactant/product XYZ text
 and hashes. The product XYZ is rewritten into the reactant atom-identity order;
 the same object records that order and the bond-change reaction-center atoms as
@@ -326,13 +354,13 @@ canonical 0-based indices. Downstream tools therefore do not need to reconstruct
 the mapping from element order or coordinates.
 
 An incomplete source mapping still blocks `pack-step` without creating the
-output. Once that gate and the generated-atom bijection pass, a multi-component
-or electronic-state mismatch writes one observation with
+output. Once that gate and the generated-atom bijection pass, an unreviewed
+multicomponent endpoint or electronic-state mismatch writes one observation with
 `handoff.status: "blocked"`, namespaced `handoff.codes`, and
-`payload.data.endpoint_pair: null`. Chemvas does not invent a multi-component
-catalyst/substrate precomplex. All generated coordinates remain initial guesses:
-the path endpoint pair is not rigidly aligned or quantum-mechanically optimized,
-and researcher review remains required.
+`payload.data.endpoint_pair: null`. Chemvas does not invent contacts, select a
+candidate automatically, or treat generated coordinates as optimized minima.
+Reviewed generated coordinates remain initial guesses requiring downstream
+quantum optimization and scientific validation.
 
 ## Keyboard shortcuts
 

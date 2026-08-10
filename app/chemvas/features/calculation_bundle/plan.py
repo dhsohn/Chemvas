@@ -10,12 +10,14 @@ from chemvas.domain.document import (
     CalculationState,
     CalculationStateMember,
     CalculationStep,
+    CalculationStepEndpoint,
     MoleculeModel,
     calculation_plan_from_state,
     calculation_plan_to_state,
     deserialize_model_state,
     model_bond_pairs,
 )
+from chemvas.domain.document.precomplex import precomplex_state_from_json
 
 from .model import CalculationStateSelection, ComponentSummary
 from .service import inspect_components, select_components
@@ -209,6 +211,10 @@ def path_precheck(plan: CalculationPlan, step: CalculationStep) -> PathPrecheck:
     single_component_endpoints = (
         reactant_component_count == 1 and product_component_count == 1
     )
+    reviewed_precomplex_endpoints = all(
+        _endpoint_has_reviewed_precomplex(endpoint)
+        for endpoint in (step.reactant, step.product)
+    )
     blocking_reasons: list[str] = []
     if not source_mapping_complete:
         blocking_reasons.append("source_atom_mapping_incomplete")
@@ -216,7 +222,7 @@ def path_precheck(plan: CalculationPlan, step: CalculationStep) -> PathPrecheck:
         blocking_reasons.append("endpoint_charge_mismatch")
     if not multiplicity_matches:
         blocking_reasons.append("endpoint_multiplicity_mismatch")
-    if not single_component_endpoints:
+    if not single_component_endpoints and not reviewed_precomplex_endpoints:
         blocking_reasons.append("multicomponent_precomplex_geometry_not_provided")
     return PathPrecheck(
         reactant_charge=reactant_state.charge,
@@ -232,6 +238,15 @@ def path_precheck(plan: CalculationPlan, step: CalculationStep) -> PathPrecheck:
         ready_for_path_endpoints=not blocking_reasons,
         blocking_reasons=tuple(blocking_reasons),
     )
+
+
+def _endpoint_has_reviewed_precomplex(
+    endpoint: CalculationStepEndpoint,
+) -> bool:
+    if endpoint.precomplex.kind != "candidate_ensemble":
+        return False
+    state = precomplex_state_from_json(endpoint.precomplex.payload_json)
+    return isinstance(state.get("selection"), Mapping)
 
 
 def correspondence_readiness(
@@ -384,6 +399,7 @@ def plan_with_replaced_step(
     candidate = CalculationPlan(
         states=tuple(merged_states),
         steps=retained_steps + (step,),
+        version=existing_plan.version,
     )
     return validate_calculation_plan(
         document_state,

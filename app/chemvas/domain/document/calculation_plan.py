@@ -4,8 +4,15 @@ import re
 from collections.abc import Mapping
 from dataclasses import dataclass
 
+from .precomplex import (
+    NO_PRECOMPLEX_JSON,
+    canonicalize_precomplex_state,
+    precomplex_state_from_json,
+)
+
 CALCULATION_PLAN_FORMAT = "chemvas-calculation-plan"
-CALCULATION_PLAN_VERSION = 1
+LEGACY_CALCULATION_PLAN_VERSION = 1
+CALCULATION_PLAN_VERSION = 2
 CALCULATION_INCLUSIONS = frozenset(("included", "context_only"))
 CALCULATION_ROLES = frozenset(("reactant", "product", "catalyst", "spectator"))
 
@@ -33,9 +40,22 @@ class CalculationEndpointRole:
 
 
 @dataclass(frozen=True)
+class CalculationEndpointPrecomplex:
+    kind: str
+    payload_json: str
+
+
+NO_PRECOMPLEX = CalculationEndpointPrecomplex(
+    kind="none",
+    payload_json=NO_PRECOMPLEX_JSON,
+)
+
+
+@dataclass(frozen=True)
 class CalculationStepEndpoint:
     state_id: str
     roles: tuple[CalculationEndpointRole, ...]
+    precomplex: CalculationEndpointPrecomplex = NO_PRECOMPLEX
 
 
 @dataclass(frozen=True)
@@ -56,6 +76,7 @@ class CalculationStep:
 class CalculationPlan:
     states: tuple[CalculationState, ...]
     steps: tuple[CalculationStep, ...]
+    version: int = LEGACY_CALCULATION_PLAN_VERSION
 
 
 def calculation_plan_from_state(
@@ -71,15 +92,16 @@ def calculation_plan_from_state(
         "steps",
     }:
         raise ValueError("Invalid Chemvas calculation plan.")
-    if (
-        value.get("format") != CALCULATION_PLAN_FORMAT
-        or value.get("version") != CALCULATION_PLAN_VERSION
-    ):
+    version = value.get("version")
+    if value.get("format") != CALCULATION_PLAN_FORMAT or version not in {
+        LEGACY_CALCULATION_PLAN_VERSION,
+        CALCULATION_PLAN_VERSION,
+    }:
         raise ValueError("Invalid Chemvas calculation plan.")
 
     components = _connected_components(atom_ids, bond_pairs)
     states = _parse_states(value.get("states"), components)
-    steps = _parse_steps(value.get("steps"), states, atom_ids)
+    steps = _parse_steps(value.get("steps"), states, atom_ids, version=version)
     referenced_state_ids = {
         endpoint.state_id
         for step in steps
@@ -87,13 +109,17 @@ def calculation_plan_from_state(
     }
     if referenced_state_ids != set(states):
         raise ValueError("Every calculation state must be referenced by a step.")
-    return CalculationPlan(states=tuple(states.values()), steps=tuple(steps))
+    return CalculationPlan(
+        states=tuple(states.values()),
+        steps=tuple(steps),
+        version=version,
+    )
 
 
 def calculation_plan_to_state(plan: CalculationPlan) -> dict[str, object]:
     return {
         "format": CALCULATION_PLAN_FORMAT,
-        "version": CALCULATION_PLAN_VERSION,
+        "version": plan.version,
         "states": [
             {
                 "id": state.id,
@@ -112,8 +138,8 @@ def calculation_plan_to_state(plan: CalculationPlan) -> dict[str, object]:
         "steps": [
             {
                 "id": step.id,
-                "reactant": _endpoint_to_state(step.reactant),
-                "product": _endpoint_to_state(step.product),
+                "reactant": _endpoint_to_state(step.reactant, plan.version),
+                "product": _endpoint_to_state(step.product, plan.version),
                 "atom_correspondence": [
                     {
                         "reactant_atom_id": entry.reactant_atom_id,
@@ -127,8 +153,11 @@ def calculation_plan_to_state(plan: CalculationPlan) -> dict[str, object]:
     }
 
 
-def _endpoint_to_state(endpoint: CalculationStepEndpoint) -> dict[str, object]:
-    return {
+def _endpoint_to_state(
+    endpoint: CalculationStepEndpoint,
+    version: int,
+) -> dict[str, object]:
+    state: dict[str, object] = {
         "state_id": endpoint.state_id,
         "roles": [
             {
@@ -138,6 +167,11 @@ def _endpoint_to_state(endpoint: CalculationStepEndpoint) -> dict[str, object]:
             for role in endpoint.roles
         ],
     }
+    if version == CALCULATION_PLAN_VERSION:
+        state["precomplex"] = precomplex_state_from_json(
+            endpoint.precomplex.payload_json
+        )
+    return state
 
 
 def _parse_states(
@@ -213,6 +247,8 @@ def _parse_steps(
     value: object,
     states: Mapping[str, CalculationState],
     atom_ids: set[int],
+    *,
+    version: int,
 ) -> list[CalculationStep]:
     if not isinstance(value, list) or not value:
         raise ValueError("A calculation plan must contain at least one step.")
@@ -235,12 +271,14 @@ def _parse_steps(
             states,
             side="reactant",
             step_id=step_id,
+            version=version,
         )
         product = _parse_endpoint(
             raw_step.get("product"),
             states,
             side="product",
             step_id=step_id,
+            version=version,
         )
         if reactant.state_id == product.state_id:
             raise ValueError(f"Step {step_id} must connect two different states.")
@@ -268,8 +306,12 @@ def _parse_endpoint(
     *,
     side: str,
     step_id: str,
+    version: int,
 ) -> CalculationStepEndpoint:
-    if not isinstance(value, Mapping) or set(value) != {"state_id", "roles"}:
+    expected_keys = {"state_id", "roles"}
+    if version == CALCULATION_PLAN_VERSION:
+        expected_keys.add("precomplex")
+    if not isinstance(value, Mapping) or set(value) != expected_keys:
         raise ValueError(f"Step {step_id} has an invalid {side} endpoint.")
     state_id = _identifier(value.get("state_id"), "state")
     state = states.get(state_id)
@@ -313,7 +355,34 @@ def _parse_endpoint(
         for role in roles
     ):
         raise ValueError(f"Step {step_id} {side} endpoint has no reactive structure.")
-    return CalculationStepEndpoint(state_id=state_id, roles=tuple(roles))
+    precomplex = NO_PRECOMPLEX
+    if version == CALCULATION_PLAN_VERSION:
+        included_components = tuple(
+            sorted(
+                component_ids
+                for component_ids, member in member_by_ids.items()
+                if member.inclusion == "included"
+            )
+        )
+        try:
+            kind, payload_json = canonicalize_precomplex_state(
+                value.get("precomplex"),
+                side=side,
+                included_components=included_components,
+            )
+        except ValueError as exc:
+            raise ValueError(
+                f"Step {step_id} has an invalid {side} precomplex: {exc}"
+            ) from exc
+        precomplex = CalculationEndpointPrecomplex(
+            kind=kind,
+            payload_json=payload_json,
+        )
+    return CalculationStepEndpoint(
+        state_id=state_id,
+        roles=tuple(roles),
+        precomplex=precomplex,
+    )
 
 
 def _parse_correspondence(
@@ -435,7 +504,9 @@ __all__ = [
     "CALCULATION_PLAN_FORMAT",
     "CALCULATION_PLAN_VERSION",
     "CALCULATION_ROLES",
+    "LEGACY_CALCULATION_PLAN_VERSION",
     "CalculationAtomCorrespondence",
+    "CalculationEndpointPrecomplex",
     "CalculationEndpointRole",
     "CalculationPlan",
     "CalculationState",

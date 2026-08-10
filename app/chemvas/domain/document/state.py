@@ -11,9 +11,11 @@ from .model import Atom, Bond, MoleculeModel
 StateDict = dict[Any, Any]
 
 CHEMVAS_FILE_TYPE = "chemvas"
-# v5: an optional calculation_plan stores explicit states and elementary steps.
-CANVAS_FILE_VERSION = 5
+# v5: an optional Calculation Plan v1 stores explicit states and elementary steps.
 CALCULATION_PLAN_CANVAS_FILE_VERSION = 5
+# v6: Calculation Plan v2 may store step-side precomplex state.
+CANVAS_FILE_VERSION = 6
+PRECOMPLEX_CANVAS_FILE_VERSION = CANVAS_FILE_VERSION
 COMPACT_BONDS_CANVAS_FILE_VERSION = 4
 GROUPS_CANVAS_FILE_VERSION = 3
 PERSPECTIVE_CANVAS_FILE_VERSION = 2
@@ -26,6 +28,7 @@ SUPPORTED_FILE_VERSIONS = frozenset(
         PERSPECTIVE_CANVAS_FILE_VERSION,
         GROUPS_CANVAS_FILE_VERSION,
         COMPACT_BONDS_CANVAS_FILE_VERSION,
+        CALCULATION_PLAN_CANVAS_FILE_VERSION,
         CANVAS_FILE_VERSION,
     )
 )
@@ -64,7 +67,13 @@ CANVAS_STATE_KEYS_BY_VERSION = {
         | _V2_OPTIONAL_CANVAS_STATE_KEYS
         | _V3_OPTIONAL_CANVAS_STATE_KEYS
     ),
-    CANVAS_FILE_VERSION: (
+    CALCULATION_PLAN_CANVAS_FILE_VERSION: (
+        CANVAS_STATE_KEYS
+        | _V2_OPTIONAL_CANVAS_STATE_KEYS
+        | _V3_OPTIONAL_CANVAS_STATE_KEYS
+        | _V5_OPTIONAL_CANVAS_STATE_KEYS
+    ),
+    PRECOMPLEX_CANVAS_FILE_VERSION: (
         CANVAS_STATE_KEYS
         | _V2_OPTIONAL_CANVAS_STATE_KEYS
         | _V3_OPTIONAL_CANVAS_STATE_KEYS
@@ -734,11 +743,13 @@ def _validate_canvas_state(state: Mapping[str, object], *, version: int) -> None
         if version < CALCULATION_PLAN_CANVAS_FILE_VERSION:
             raise ValueError("Invalid Chemvas file.")
         try:
-            calculation_plan_from_state(
+            parsed_plan = calculation_plan_from_state(
                 calculation_plan,
                 atom_ids=atom_ids,
                 bond_pairs=bond_pairs,
             )
+            if parsed_plan.version > 1 and version < PRECOMPLEX_CANVAS_FILE_VERSION:
+                raise ValueError("Invalid Chemvas file.")
         except ValueError as exc:
             raise ValueError("Invalid Chemvas file.") from exc
     settings = state.get("settings")
