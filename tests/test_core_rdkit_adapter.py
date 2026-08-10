@@ -1142,7 +1142,8 @@ class RDKitAdapterTest(unittest.TestCase):
             adapter.last_error,
             "Unsupported atom labels for 3D conversion: "
             "Bad0 (atom 0), Bad1 (atom 1), Bad2 (atom 2), Bad3 (atom 3), Bad4 (atom 4), .... "
-            "Supported aliases: Boc, CF3, CO2Me, Et, Me, OH, OMe, Ph, i-Pr, t-Bu, tBu.",
+            "Supported aliases: Ac, Boc, CF3, CO2Me, Et, Me, Ms, Ns, OAc, OH, OMe, "
+            "OMs, OTf, OTs, Ph, Tf, Ts, i-Pr, t-Bu, tBu.",
         )
 
     def test_build_conversion_rdkit_mol_rejects_wedge_on_non_single_bond(self) -> None:
@@ -1769,6 +1770,30 @@ class RDKitAdapterTest(unittest.TestCase):
             ),
             [],
         )
+
+    @unittest.skipUnless(
+        _RealChem is not None, "RDKit is required for alias expansion tests"
+    )
+    def test_model_to_xyz_block_expands_tosylate_alias_label(self) -> None:
+        adapter = RDKitAdapter()
+        model = MoleculeModel()
+        scaffold = model.add_atom("C", -1.0, 0.0)
+        tosylate = model.add_atom("OTs", 1.0, 0.0)
+        model.add_bond(scaffold, tosylate, 1)
+
+        xyz_block = adapter.model_to_xyz_block(model)
+
+        self.assertIsNotNone(xyz_block)
+        assert xyz_block is not None
+        _, _, records = _parse_xyz_block(xyz_block)
+        elements = [element for element, _ in records]
+        # Tosylate = -O-S(=O)(=O)-C6H4-CH3: one sulfur, at least the ester and
+        # two sulfonyl oxygens, and the tolyl ring carbons — never a single
+        # opaque "OTs" pseudo-atom.
+        self.assertEqual(elements.count("S"), 1)
+        self.assertGreaterEqual(elements.count("O"), 3)
+        self.assertGreaterEqual(elements.count("C"), 8)
+        self.assertNotIn("OTs", elements)
 
     @unittest.skipUnless(_RealChem is not None, "RDKit is required for stereo tests")
     def test_conversion_path_maps_wedge_and_hash_to_opposite_chirality(self) -> None:

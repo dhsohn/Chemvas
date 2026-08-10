@@ -32,7 +32,9 @@ conversion — Chemvas runs without it.
 - **Brackets & annotations** — square / round / curly brackets, dagger (`†`) and
   double dagger (`‡`) annotation objects.
 - **Atom labels** — elements, charges, radicals, and common alias labels
-  (`Me`, `Et`, `OH`, `Ph`, `OMe`, `Boc`, `CO2Me`, `t-Bu`, `i-Pr`).
+  (`Me`, `Et`, `OH`, `Ph`, `OMe`, `Boc`, `CO2Me`, `t-Bu`, `i-Pr`, and the
+  sulfonate/acyl groups `OTs`, `Ts`, `OMs`, `Ms`, `OTf`, `Tf`, `Ns`, `OAc`,
+  `Ac`).
 - **SMILES import** _(RDKit)_ — type a SMILES string, preview it under the cursor,
   and click to place it on the canvas.
 - **MOL interchange** — open MDL Molfiles (`.mol`, V2000) as new documents and
@@ -134,6 +136,9 @@ open. Snapshots are pruned once a session has been restored or closed cleanly.
   Arrows, bracket annotations, and free text are **not** included in `.xyz`.
 - `+`/`-`/radical marks become formal charges / radical electrons; wedge/hash bonds
   on single bonds become RDKit stereochemistry hints.
+- Alias labels expand into explicit fragments (e.g. `OTs` → the full
+  `-O-S(=O)(=O)-C6H4-CH3` tosylate). Each alias attaches through a single bond;
+  `Ns` is the para (4-nitrobenzenesulfonyl) isomer.
 - Unsupported labels, mis-connected aliases, and invalid wedge/hash use fail with an
   explicit error message instead of guessing.
 - `.xyz` stores element symbols and 3D coordinates only — it is **not** a full
