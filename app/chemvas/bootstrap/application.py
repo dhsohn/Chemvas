@@ -13,6 +13,9 @@ IGNORED_STDERR_SUBSTRINGS = (
     "TSM AdjustCapsLockLEDForKeyTransitionHandling",
     "error messaging the mach port for IMKCFRunLoopWakeUpReliable",
     "qt.qpa.keymapper: Mismatch between Cocoa",
+    # Qt's Wayland backend (e.g. WSLg) warns on every non-popup mouse grab —
+    # opening any menu prints this once or twice. Harmless and unactionable.
+    "This plugin supports grabbing the mouse only for popup windows",
 )
 
 STARTUP_DOCUMENT_SUFFIXES = frozenset((".chemvas", ".json", ".svg"))
@@ -45,7 +48,7 @@ HEADLESS_SUBCOMMANDS = tuple(command for command, _help in HEADLESS_SUBCOMMAND_H
 
 
 def _should_filter_stderr(platform: str | None = None) -> bool:
-    return (platform or sys.platform) == "darwin"
+    return (platform or sys.platform) in {"darwin", "linux"}
 
 
 def _startup_document_path(argv: list[str]) -> str | None:

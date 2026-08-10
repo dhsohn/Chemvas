@@ -142,9 +142,23 @@ class MainStderrFilterTest(unittest.TestCase):
         self.assertIn("second visible line", output)
         self.assertNotIn("TSM AdjustCapsLockLEDForKeyTransitionHandling", output)
 
-    def test_filtered_stderr_is_noop_outside_macos(self) -> None:
+    def test_filtered_stderr_suppresses_known_wayland_noise_on_linux(self) -> None:
         output = self._capture_stderr_output(
             platform="linux",
+            lines=[
+                "visible line\n",
+                "This plugin supports grabbing the mouse only for popup windows\n",
+                "second visible line\n",
+            ],
+        )
+
+        self.assertIn("visible line", output)
+        self.assertIn("second visible line", output)
+        self.assertNotIn("supports grabbing the mouse", output)
+
+    def test_filtered_stderr_is_noop_outside_macos_and_linux(self) -> None:
+        output = self._capture_stderr_output(
+            platform="win32",
             lines=["qt.qpa.keymapper: Mismatch between Cocoa should remain visible\n"],
         )
 
@@ -156,6 +170,8 @@ class MainStderrFilterTest(unittest.TestCase):
         with mock.patch.object(chemvas_main.sys, "platform", "darwin"):
             self.assertTrue(app_main._should_filter_stderr())
         with mock.patch.object(chemvas_main.sys, "platform", "linux"):
+            self.assertTrue(app_main._should_filter_stderr())
+        with mock.patch.object(chemvas_main.sys, "platform", "win32"):
             self.assertFalse(app_main._should_filter_stderr())
 
     def test_main_constructs_window_and_executes_application(self) -> None:
