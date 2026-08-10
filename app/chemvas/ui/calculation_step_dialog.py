@@ -45,6 +45,7 @@ from chemvas.features.calculation_bundle import (
 )
 from chemvas.ui.calculation_mapping_highlight import CalculationMappingHighlighter
 from chemvas.ui.canvas_calculation_plan_state import set_calculation_plan_for
+from chemvas.ui.main_window_palette import PALETTE
 from chemvas.ui.main_window_ports import (
     active_canvas_for_window,
     document_session_service_for_window,
@@ -52,6 +53,16 @@ from chemvas.ui.main_window_ports import (
 )
 
 _UNUSED = "unused"
+
+# Painted onto a combo whose endpoint is locked by the opposite side's reactive
+# role, so the lock is visible at a glance and not just a disabled control.
+_LOCKED_COMBO_STYLE = (
+    f"QComboBox {{"
+    f"  background: {PALETTE['surface_app']};"
+    f"  color: {PALETTE['text_faint']};"
+    f"  border: 1px solid {PALETTE['border']};"
+    f"}}"
+)
 
 
 @dataclass(frozen=True)
@@ -420,15 +431,22 @@ class CalculationStepDialog(QDialog):
             inclusion_combo.setEnabled(False)
             role_combo.setEnabled(False)
             consumed_as = "product" if side == "reactant" else "reactant"
-            inclusion_combo.setToolTip(
+            lock_reason = (
                 f"This component is the step's {consumed_as}; a consumed species "
                 "is not present at the other endpoint. Use Catalyst or Spectator "
                 "to keep it on both sides."
             )
+            inclusion_combo.setToolTip(lock_reason)
+            role_combo.setToolTip(lock_reason)
+            inclusion_combo.setStyleSheet(_LOCKED_COMBO_STYLE)
+            role_combo.setStyleSheet(_LOCKED_COMBO_STYLE)
         else:
             inclusion_combo.setEnabled(True)
             role_combo.setEnabled(inclusion_combo.currentData() != _UNUSED)
             inclusion_combo.setToolTip("")
+            role_combo.setToolTip("")
+            inclusion_combo.setStyleSheet("")
+            role_combo.setStyleSheet("")
 
     def _sync_modeled_charge(self, side: str) -> None:
         charge = sum(
