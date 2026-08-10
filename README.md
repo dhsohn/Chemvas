@@ -249,9 +249,13 @@ consumed species is not present on both sides), while catalysts and spectators
 stay editable on both. The atom-correspondence table lists
 only included reactant atoms and offers same-element product atoms by stable
 Chemvas ID. **Suggest by structure** _(RDKit)_ fills the unmapped atoms of the
-maximum common substructure — the conserved framework — leaving the reaction
-center for you to map; it never overwrites a mapping you made and is a
-review-only starting point, not an automated mechanism inference. Exact IDs shared by both endpoints, such as a drawn catalyst reused
+maximum common substructure; bond orders are matched loosely, so a reaction
+center whose bonds only change order (e.g. C-O → C=O) is suggested too, and only
+atoms whose connectivity breaks or forms are left for you. It never overwrites a
+mapping you made and is a review-only starting point, not an automated mechanism
+inference. While the dialog is open, each included atom is labelled with its
+Chemvas ID on the drawing — reactant atoms in blue, product atoms in orange — so
+a table row is easy to locate on the structure. Exact IDs shared by both endpoints, such as a drawn catalyst reused
 on both sides, are suggested once; they are not inferred by element or position,
 and an explicit **Unmapped** choice is preserved. Duplicate product mappings are
 rejected. The GUI saves an incomplete table as a draft, while its mapped/total

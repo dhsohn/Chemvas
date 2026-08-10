@@ -145,11 +145,12 @@ class RDKitConversionHelper:
         """Suggest reactant->product atom pairs from the common substructure.
 
         Returns element-consistent ``(reactant_id, product_id)`` pairs for the
-        atoms RDKit matches with identical element and bond order — typically the
-        conserved framework, leaving the reaction center for the researcher to
-        map by hand. Returns an empty list when RDKit is unavailable or there is
-        no shared substructure. This is a review-only suggestion and decides no
-        chemistry on its own.
+        atoms RDKit matches by element and connectivity. Bond orders are compared
+        loosely, so atoms whose bonds only change order (a typical reaction
+        center, e.g. C-O -> C=O) are mapped too; only atoms whose connectivity
+        actually breaks or forms are left for the researcher. Returns an empty
+        list when RDKit is unavailable or there is no shared substructure. This
+        is a review-only suggestion and decides no chemistry on its own.
         """
         rdkit = self.adapter._load_rdkit()
         if rdkit == (None, None):
@@ -177,7 +178,10 @@ class RDKitConversionHelper:
         result = rdFMCS.FindMCS(
             [reactant_mol, product_mol],
             atomCompare=rdFMCS.AtomCompare.CompareElements,
-            bondCompare=rdFMCS.BondCompare.CompareOrder,
+            # Order-agnostic so a bond-order change at the reaction center does
+            # not drop those atoms from the suggestion; a ring atom still only
+            # matches a ring atom.
+            bondCompare=rdFMCS.BondCompare.CompareAny,
             ringMatchesRingOnly=True,
             completeRingsOnly=False,
             timeout=5,

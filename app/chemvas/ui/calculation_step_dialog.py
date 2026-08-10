@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
 from typing import Any, Protocol, cast
 
@@ -68,7 +68,15 @@ class _MappingHighlighter(Protocol):
         product_atom_id: int | None,
     ) -> None: ...
 
+    def show_atom_labels(
+        self,
+        reactant_atom_ids: Iterable[int],
+        product_atom_ids: Iterable[int],
+    ) -> None: ...
+
     def clear(self) -> None: ...
+
+    def clear_all(self) -> None: ...
 
 
 class _CorrespondenceSuggester(Protocol):
@@ -533,6 +541,8 @@ class CalculationStepDialog(QDialog):
         product_state, _product_endpoint = self._build_endpoint("product")
         reactant_ids = included_atom_ids(reactant_state)
         product_ids = included_atom_ids(product_state)
+        if self._mapping_highlighter is not None:
+            self._mapping_highlighter.show_atom_labels(reactant_ids, product_ids)
         self._seed_new_identity_defaults(
             reactant_state=reactant_state,
             product_state=product_state,
@@ -887,7 +897,8 @@ class CalculationStepDialog(QDialog):
         super().accept()
 
     def done(self, result: int) -> None:
-        self._clear_mapping_highlight()
+        if self._mapping_highlighter is not None:
+            self._mapping_highlighter.clear_all()
         super().done(result)
 
 
@@ -936,7 +947,7 @@ def edit_calculation_plan_for_window(
         )
         dialog_result = dialog.exec()
     finally:
-        mapping_highlighter.clear()
+        mapping_highlighter.clear_all()
     if dialog_result != QDialog.DialogCode.Accepted:
         return False
     if dialog.result_plan_state is None:
