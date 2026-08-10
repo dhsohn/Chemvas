@@ -350,6 +350,51 @@ def test_dialog_rejects_context_only_component_with_reactive_role(
 
 
 @pytest.mark.skipif(QApplication is None, reason="PyQt6 is required")
+def test_reactant_role_disables_product_side_and_reenables_on_role_change() -> None:
+    app = QApplication.instance() or QApplication([])
+    app.setQuitOnLastWindowClosed(False)
+    dialog = CalculationStepDialog(_document_state())
+
+    # Including a component as the reactant (default reactive role) locks the
+    # same component's product side, and vice versa.
+    _select_component(dialog, "reactant", 0, "included", "reactant")
+    assert not dialog._inclusion_combos[("product", 0)].isEnabled()
+    assert not dialog._role_combos[("product", 0)].isEnabled()
+    assert dialog._inclusion_combos[("reactant", 0)].isEnabled()
+
+    # Turning that component into a catalyst re-enables the product side; the
+    # lock is role-aware, not a blanket reactant-implies-off rule.
+    dialog._set_combo_data(dialog._role_combos[("reactant", 0)], "catalyst")
+    assert dialog._inclusion_combos[("product", 0)].isEnabled()
+
+    _select_component(dialog, "product", 1, "included", "product")
+    assert not dialog._inclusion_combos[("reactant", 1)].isEnabled()
+    dialog.deleteLater()
+
+
+@pytest.mark.skipif(QApplication is None, reason="PyQt6 is required")
+def test_catalyst_included_on_both_sides_is_never_cleared() -> None:
+    app = QApplication.instance() or QApplication([])
+    app.setQuitOnLastWindowClosed(False)
+    dialog = CalculationStepDialog(_document_state())
+
+    # A catalyst is included on both endpoints. The locking must only disable a
+    # reactive component's opposite side, never clear a catalyst selection.
+    _select_component(dialog, "reactant", 2, "included", "catalyst")
+    _select_component(dialog, "product", 2, "included", "catalyst")
+
+    assert dialog._inclusion_value("reactant", 2) == "included"
+    assert dialog._inclusion_value("product", 2) == "included"
+    assert dialog._inclusion_combos[("reactant", 2)].isEnabled()
+    assert dialog._inclusion_combos[("product", 2)].isEnabled()
+
+    # A context-only reactant is not consumed, so it does not lock the product.
+    _select_component(dialog, "reactant", 3, "context_only", "spectator")
+    assert dialog._inclusion_combos[("product", 3)].isEnabled()
+    dialog.deleteLater()
+
+
+@pytest.mark.skipif(QApplication is None, reason="PyQt6 is required")
 def test_dialog_highlights_rows_candidates_and_clears_on_reject() -> None:
     class _Highlighter:
         def __init__(self) -> None:

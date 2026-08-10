@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Role-aware endpoint locking in the Calculation dialog**: once a drawn
+  component is included as a step's reactant (or product), the same
+  component's opposite endpoint is disabled, so a consumed species cannot be
+  assigned to both sides by mistake. The lock is role-aware — catalysts and
+  spectators stay editable on both endpoints — and only disables the other
+  side; it never clears an existing selection, so changing the role back
+  restores it.
+
 ### Fixed
 - **Crash while using the Calculation dialog with an IME**: clicking a table
   cell in **Calculation ▸ Edit States and Steps...** while an input-method
