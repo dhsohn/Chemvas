@@ -60,6 +60,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   recovery.
 
 ### Removed
+- **Painted "well" behind the modal tool buttons**: the top toolbar no longer
+  draws the inset tray that grouped the pick-one mode tools apart from the
+  flip/rotate command buttons. The decoration read poorly in practice, so the
+  toolbar is back to a flat bar; buttons, actions, and shortcuts are unchanged.
 - **Single-species `pack` command**: the Calculation Bundle v1 directory export
   (`source.chemvas`, `structure.mol`, `geometry.xyz`, `atom_map.json`,
   `manifest.json`) had no remaining consumer. Machine handoff of geometries now
