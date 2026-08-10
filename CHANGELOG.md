@@ -8,6 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Sulfonate and acyl alias labels**: `OTs`, `Ts`, `OMs`, `Ms`, `OTf`, `Tf`,
+  `Ns`, `OAc`, and `Ac` now expand into explicit fragments for 3D `.xyz`
+  conversion, Molecule Info, and elementary-step geometry, instead of being
+  rejected as a single opaque pseudo-atom. `Ns` is the para
+  (4-nitrobenzenesulfonyl) isomer.
 - **Role-aware endpoint locking in the Calculation dialog**: once a drawn
   component is included as a step's reactant (or product), the same
   component's opposite endpoint is disabled, so a consumed species cannot be

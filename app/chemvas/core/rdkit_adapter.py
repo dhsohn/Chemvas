@@ -52,6 +52,19 @@ class RDKitAdapter:
             "tBu": "[*:1]C(C)(C)C",
             "i-Pr": "[*:1]C(C)C",
             "CF3": "[*:1]C(F)(F)F",
+            # Sulfonates/sulfonyls and common acyl protecting groups. The
+            # O-prefixed labels attach through the ester oxygen; the bare
+            # sulfonyl/acyl labels attach through S/C. Ns is the para isomer
+            # (4-nitrobenzenesulfonyl).
+            "OTs": "[*:1]OS(=O)(=O)c1ccc(C)cc1",
+            "Ts": "[*:1]S(=O)(=O)c1ccc(C)cc1",
+            "OMs": "[*:1]OS(=O)(=O)C",
+            "Ms": "[*:1]S(=O)(=O)C",
+            "OTf": "[*:1]OS(=O)(=O)C(F)(F)F",
+            "Tf": "[*:1]S(=O)(=O)C(F)(F)F",
+            "Ns": "[*:1]S(=O)(=O)c1ccc(cc1)[N+](=O)[O-]",
+            "OAc": "[*:1]OC(C)=O",
+            "Ac": "[*:1]C(C)=O",
         }
         self._import_helper = RDKitImportHelper(self)
         self._conversion_helper = RDKitConversionHelper(self)
