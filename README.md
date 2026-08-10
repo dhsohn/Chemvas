@@ -138,7 +138,10 @@ open. Snapshots are pruned once a session has been restored or closed cleanly.
   on single bonds become RDKit stereochemistry hints.
 - Alias labels expand into explicit fragments (e.g. `OTs` → the full
   `-O-S(=O)(=O)-C6H4-CH3` tosylate). Each alias attaches through a single bond;
-  `Ns` is the para (4-nitrobenzenesulfonyl) isomer.
+  `Ns` is the para (4-nitrobenzenesulfonyl) isomer. Carbon-bound `PPh3` is
+  accepted only through exactly one ordinary covalent single bond and expands as
+  phosphonium `C-[P+](Ph)3`; standalone, non-carbon, multiple, non-single, styled,
+  or explicitly charge/radical-annotated uses fail closed.
 - Unsupported labels, mis-connected aliases, and invalid wedge/hash use fail with an
   explicit error message instead of guessing.
 - `.xyz` stores element symbols and 3D coordinates only — it is **not** a full
