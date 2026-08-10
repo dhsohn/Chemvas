@@ -8,6 +8,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Structural atom-mapping suggestions**: the Calculation dialog's atom
+  correspondence editor gains a **Suggest by structure** button that fills
+  unmapped reactant atoms from the maximum common substructure of the included
+  reactant and product (RDKit). It only fills gaps — it never overwrites a
+  mapping you set, keeps the same-element rule, and reuses no product atom — so
+  the conserved framework is proposed and the reaction center is left for you
+  to map and review. The button is disabled when RDKit is unavailable.
 - **Sulfonate and acyl alias labels**: `OTs`, `Ts`, `OMs`, `Ms`, `OTf`, `Tf`,
   `Ns`, `OAc`, and `Ac` now expand into explicit fragments for 3D `.xyz`
   conversion, Molecule Info, and elementary-step geometry, instead of being

@@ -114,6 +114,16 @@ class RDKitAdapter:
     def model_to_rdkit_tolerant(self, model: MoleculeModel):
         return self._conversion_helper.model_to_rdkit_tolerant(model)
 
+    def suggest_atom_correspondence(
+        self,
+        model: MoleculeModel,
+        reactant_atom_ids: frozenset[int] | set[int],
+        product_atom_ids: frozenset[int] | set[int],
+    ) -> list[tuple[int, int]]:
+        return self._conversion_helper.suggest_atom_correspondence(
+            model, reactant_atom_ids, product_atom_ids
+        )
+
     def compute_props(
         self, model: MoleculeModel
     ) -> tuple[str | None, float | None, str | None]:

@@ -111,6 +111,107 @@ class RDKitConversionHelper:
         mol, _ = self.adapter.model_to_rdkit_with_map_tolerant(model)
         return mol
 
+    @staticmethod
+    def _submodel(
+        model: MoleculeModel, atom_ids: frozenset[int] | set[int]
+    ) -> MoleculeModel:
+        atoms = {
+            atom_id: model.atoms[atom_id]
+            for atom_id in atom_ids
+            if atom_id in model.atoms
+        }
+        bonds = [
+            bond
+            for bond in model.bonds
+            if bond is not None and bond.a in atoms and bond.b in atoms
+        ]
+        annotations = getattr(model, "atom_annotations", {})
+        return MoleculeModel(
+            atoms=dict(atoms),
+            bonds=list(bonds),
+            atom_annotations={
+                atom_id: dict(annotations[atom_id])
+                for atom_id in atoms
+                if atom_id in annotations
+            },
+        )
+
+    def suggest_atom_correspondence(
+        self,
+        model: MoleculeModel,
+        reactant_atom_ids: frozenset[int] | set[int],
+        product_atom_ids: frozenset[int] | set[int],
+    ) -> list[tuple[int, int]]:
+        """Suggest reactant->product atom pairs from the common substructure.
+
+        Returns element-consistent ``(reactant_id, product_id)`` pairs for the
+        atoms RDKit matches with identical element and bond order — typically the
+        conserved framework, leaving the reaction center for the researcher to
+        map by hand. Returns an empty list when RDKit is unavailable or there is
+        no shared substructure. This is a review-only suggestion and decides no
+        chemistry on its own.
+        """
+        rdkit = self.adapter._load_rdkit()
+        if rdkit == (None, None):
+            return []
+        Chem, _ = rdkit
+        try:
+            from rdkit.Chem import rdFMCS
+        except Exception:
+            return []
+        reactant_mol, reactant_map = self.adapter.model_to_rdkit_with_map_tolerant(
+            self._submodel(model, reactant_atom_ids)
+        )
+        product_mol, product_map = self.adapter.model_to_rdkit_with_map_tolerant(
+            self._submodel(model, product_atom_ids)
+        )
+        if (
+            reactant_mol is None
+            or product_mol is None
+            or reactant_map is None
+            or product_map is None
+            or reactant_mol.GetNumAtoms() == 0
+            or product_mol.GetNumAtoms() == 0
+        ):
+            return []
+        result = rdFMCS.FindMCS(
+            [reactant_mol, product_mol],
+            atomCompare=rdFMCS.AtomCompare.CompareElements,
+            bondCompare=rdFMCS.BondCompare.CompareOrder,
+            ringMatchesRingOnly=True,
+            completeRingsOnly=False,
+            timeout=5,
+        )
+        if result.canceled or result.numAtoms == 0:
+            return []
+        query = Chem.MolFromSmarts(result.smartsString)
+        if query is None:
+            return []
+        reactant_match = reactant_mol.GetSubstructMatch(query)
+        product_match = product_mol.GetSubstructMatch(query)
+        if len(reactant_match) != len(product_match):
+            return []
+        reactant_id_by_idx = {idx: atom_id for atom_id, idx in reactant_map.items()}
+        product_id_by_idx = {idx: atom_id for atom_id, idx in product_map.items()}
+        pairs: list[tuple[int, int]] = []
+        used_products: set[int] = set()
+        for reactant_idx, product_idx in zip(
+            reactant_match, product_match, strict=True
+        ):
+            reactant_id = reactant_id_by_idx.get(reactant_idx)
+            product_id = product_id_by_idx.get(product_idx)
+            if reactant_id is None or product_id is None:
+                continue
+            # The drawn element is authoritative (aliases collapse to carbon in
+            # the tolerant mol), so keep the same-element rule the dialog enforces.
+            if model.atoms[reactant_id].element != model.atoms[product_id].element:
+                continue
+            if product_id in used_products:
+                continue
+            used_products.add(product_id)
+            pairs.append((reactant_id, product_id))
+        return pairs
+
     def model_to_rdkit_strict_labels(self, model: MoleculeModel):
         mol, _ = self.adapter.model_to_rdkit_with_map_strict_labels(model)
         return mol

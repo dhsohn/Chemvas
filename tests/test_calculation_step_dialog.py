@@ -395,6 +395,63 @@ def test_catalyst_included_on_both_sides_is_never_cleared() -> None:
 
 
 @pytest.mark.skipif(QApplication is None, reason="PyQt6 is required")
+def test_suggest_button_disabled_without_a_suggester() -> None:
+    app = QApplication.instance() or QApplication([])
+    app.setQuitOnLastWindowClosed(False)
+    dialog = CalculationStepDialog(_document_state())
+    assert not dialog.suggest_mapping_button.isEnabled()
+    dialog.deleteLater()
+
+
+@pytest.mark.skipif(QApplication is None, reason="PyQt6 is required")
+def test_structural_suggestion_fills_only_safe_gaps() -> None:
+    app = QApplication.instance() or QApplication([])
+    app.setQuitOnLastWindowClosed(False)
+    calls: list[tuple[frozenset[int], frozenset[int]]] = []
+
+    def suggester(
+        reactant_ids: frozenset[int], product_ids: frozenset[int]
+    ) -> list[tuple[int, int]]:
+        calls.append((reactant_ids, product_ids))
+        # (0,2) fills an unmapped gap; (1,3) must not overwrite the existing
+        # mapping; (0,3) would reuse a product already taken by (0,2).
+        return [(0, 2), (1, 3), (0, 3)]
+
+    state = _document_state()
+    dialog = CalculationStepDialog(state, correspondence_suggester=suggester)
+    assert dialog.suggest_mapping_button.isEnabled()
+    _configure_separate_endpoints(dialog)
+    _set_mapping(dialog, 1, 3)
+
+    dialog.suggest_mapping_button.click()
+
+    assert calls, "the suggester should be invoked"
+    reactant_ids, product_ids = calls[-1]
+    assert 0 in reactant_ids and 3 in product_ids
+    # Gap filled, existing mapping preserved, no product reused.
+    assert dialog._mapping_by_reactant[0] == 2
+    assert dialog._mapping_by_reactant[1] == 3
+    assert "Suggested 1 mapping" in dialog.suggestion_status.text()
+    dialog.deleteLater()
+
+
+@pytest.mark.skipif(QApplication is None, reason="PyQt6 is required")
+def test_structural_suggestion_reports_when_nothing_new() -> None:
+    app = QApplication.instance() or QApplication([])
+    app.setQuitOnLastWindowClosed(False)
+    dialog = CalculationStepDialog(
+        _document_state(),
+        correspondence_suggester=lambda _r, _p: [],
+    )
+    _configure_separate_endpoints(dialog)
+
+    dialog.suggest_mapping_button.click()
+
+    assert "No new structural suggestion" in dialog.suggestion_status.text()
+    dialog.deleteLater()
+
+
+@pytest.mark.skipif(QApplication is None, reason="PyQt6 is required")
 def test_dialog_highlights_rows_candidates_and_clears_on_reject() -> None:
     class _Highlighter:
         def __init__(self) -> None:

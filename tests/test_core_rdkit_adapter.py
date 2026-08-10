@@ -1723,6 +1723,55 @@ class RDKitAdapterTest(unittest.TestCase):
         self.assertIn("H", elements)
 
     @unittest.skipUnless(
+        _RealChem is not None, "RDKit is required for MCS suggestion tests"
+    )
+    def test_suggest_atom_correspondence_maps_conserved_frame_only(self) -> None:
+        adapter = RDKitAdapter()
+        model = MoleculeModel()
+        # Reactant propan-1-ol: C0-C1-C2-O3 (all single bonds).
+        r0 = model.add_atom("C", 0.0, 0.0)
+        r1 = model.add_atom("C", 1.0, 0.0)
+        r2 = model.add_atom("C", 2.0, 0.0)
+        r3 = model.add_atom("O", 3.0, 0.0)
+        model.add_bond(r0, r1, 1)
+        model.add_bond(r1, r2, 1)
+        model.add_bond(r2, r3, 1)
+        # Product propanal: C4-C5-C6=O7 (the terminal C-O becomes a double bond).
+        p0 = model.add_atom("C", 0.0, 5.0)
+        p1 = model.add_atom("C", 1.0, 5.0)
+        p2 = model.add_atom("C", 2.0, 5.0)
+        p3 = model.add_atom("O", 3.0, 5.0)
+        model.add_bond(p0, p1, 1)
+        model.add_bond(p1, p2, 1)
+        model.add_bond(p2, p3, 2)
+
+        pairs = adapter.suggest_atom_correspondence(
+            model, frozenset({r0, r1, r2, r3}), frozenset({p0, p1, p2, p3})
+        )
+
+        # The conserved carbon chain is suggested; the oxygen whose bond order
+        # changed (the reaction center) is left for the researcher to map.
+        self.assertEqual(set(pairs), {(r0, p0), (r1, p1), (r2, p2)})
+        self.assertTrue(
+            all(model.atoms[r].element == model.atoms[p].element for r, p in pairs)
+        )
+        product_ids = [p for _r, p in pairs]
+        self.assertEqual(len(product_ids), len(set(product_ids)))
+
+    def test_suggest_atom_correspondence_returns_empty_without_rdkit(self) -> None:
+        adapter = RDKitAdapter()
+        adapter._rdkit = (None, None)
+        model = MoleculeModel()
+        first = model.add_atom("C", 0.0, 0.0)
+        second = model.add_atom("C", 1.0, 0.0)
+        self.assertEqual(
+            adapter.suggest_atom_correspondence(
+                model, frozenset({first}), frozenset({second})
+            ),
+            [],
+        )
+
+    @unittest.skipUnless(
         _RealChem is not None, "RDKit is required for alias expansion tests"
     )
     def test_model_to_xyz_block_expands_tosylate_alias_label(self) -> None:
