@@ -369,13 +369,24 @@ def test_reactant_role_disables_product_side_and_reenables_on_role_change() -> N
     assert not dialog._role_combos[("product", 0)].isEnabled()
     assert dialog._inclusion_combos[("reactant", 0)].isEnabled()
 
+    # The lock is visible, not just functional: both locked combos carry the
+    # muted style and the lock explanation, while the active side stays plain.
+    assert dialog._inclusion_combos[("product", 0)].styleSheet()
+    assert dialog._role_combos[("product", 0)].styleSheet()
+    assert "consumed species" in dialog._role_combos[("product", 0)].toolTip()
+    assert not dialog._inclusion_combos[("reactant", 0)].styleSheet()
+
     # Turning that component into a catalyst re-enables the product side; the
     # lock is role-aware, not a blanket reactant-implies-off rule.
     dialog._set_combo_data(dialog._role_combos[("reactant", 0)], "catalyst")
     assert dialog._inclusion_combos[("product", 0)].isEnabled()
+    assert not dialog._inclusion_combos[("product", 0)].styleSheet()
+    assert not dialog._role_combos[("product", 0)].styleSheet()
+    assert not dialog._role_combos[("product", 0)].toolTip()
 
     _select_component(dialog, "product", 1, "included", "product")
     assert not dialog._inclusion_combos[("reactant", 1)].isEnabled()
+    assert dialog._inclusion_combos[("reactant", 1)].styleSheet()
     dialog.deleteLater()
 
 

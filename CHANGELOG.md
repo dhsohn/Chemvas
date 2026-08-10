@@ -40,6 +40,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   side; it never clears an existing selection, so changing the role back
   restores it.
 
+### Changed
+- **Locked endpoints in the Calculation dialog look locked**: when including a
+  component as the step's reactant (or product) disables its opposite
+  endpoint, the locked inclusion and role dropdowns are now visibly muted
+  (gray background, faint text) instead of only being unclickable, and both
+  carry the explanation tooltip.
+
 ### Fixed
 - **Terminal spam when opening menus under Wayland/WSLg**: Qt's Wayland backend
   prints `This plugin supports grabbing the mouse only for popup windows` to
