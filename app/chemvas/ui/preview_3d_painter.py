@@ -39,6 +39,10 @@ class Preview3DPaintState:
     rotation_x: float
     rotation_y: float
     zoom: float
+    # Widget-space x of the leftmost header control (identifier/export buttons),
+    # or None when they are not laid out. The painted title/subtitle stop short
+    # of it so the buttons never cover them.
+    header_controls_left: float | None = None
 
 
 def preview_overlay_font(base_font: QFont) -> QFont:
@@ -124,6 +128,7 @@ def paint_preview_3d_panel(
         caption_font=caption_font,
         status_badge=preview_status_badge(state.scene, state.message),
         subtitle=preview_metadata_summary(state.scene, state.message),
+        controls_left=state.header_controls_left,
     )
     draw_viewport(painter, layout["viewport"])
 

@@ -41,6 +41,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   restores it.
 
 ### Fixed
+- **Molecule Info title hidden behind the header buttons**: unless the window
+  was stretched wide, the SMILES/InChI/InChIKey/Export 3D buttons reached over
+  the painted "Molecule Info" heading and covered it. The buttons are now sized
+  to their labels, which leaves the full title visible at the window's default
+  width, and on narrower windows the title and subtitle elide at the button row
+  instead of running underneath it.
 - **Atom-correspondence dropdown could not be scrolled**: when a structure has
   many same-element atoms, the product-atom dropdown in the Calculation dialog
   showed every candidate in one over-tall popup with no scrollbar, so the lower
