@@ -19,16 +19,27 @@ STARTUP_DOCUMENT_SUFFIXES = frozenset((".chemvas", ".json", ".svg"))
 DOCUMENT_PATCH_COMMANDS = frozenset(("apply-patch", "inspect-document"))
 DOCUMENT_RENDER_COMMANDS = frozenset(("render-document",))
 CALCULATION_BUNDLE_COMMANDS = frozenset(
-    ("attach-plan", "inspect", "inspect-plan", "pack-step")
+    (
+        "attach-plan",
+        "generate-precomplex",
+        "inspect",
+        "inspect-plan",
+        "inspect-precomplex",
+        "pack-step",
+        "select-precomplex",
+    )
 )
 HEADLESS_SUBCOMMAND_HELP = (
     ("apply-patch", "validate or apply a Chemvas graph patch"),
     ("attach-plan", "embed a calculation plan in a new document"),
+    ("generate-precomplex", "generate bounded endpoint precomplex candidates"),
     ("inspect", "inspect connected structures as JSON"),
     ("inspect-document", "inspect the complete chemical graph as JSON"),
     ("inspect-plan", "inspect embedded calculation states and steps"),
+    ("inspect-precomplex", "inspect persisted candidate XYZ and provenance"),
     ("pack-step", "create one elementary-step JSON artifact"),
     ("render-document", "render a document to SVG or PNG"),
+    ("select-precomplex", "review and select a precomplex endpoint pair"),
 )
 HEADLESS_SUBCOMMANDS = tuple(command for command, _help in HEADLESS_SUBCOMMAND_HELP)
 

@@ -75,9 +75,10 @@ python -m pip install -e .
 ## 저장/불러오기
 - 메뉴바의 **File** 메뉴에서 `.chemvas` 파일을 저장/불러옵니다.
 - `.chemvas`는 JSON 기반 포맷이며, 분자 모델/주석/화살표/bracket annotation/설정값 등을 포함합니다.
-  (형식: `{"type":"chemvas","version":5,"state":{...}}`)
-- v5는 선택적인 `calculation_plan`에 재사용 가능한 계산 상태, elementary-step 양끝의 역할,
-  명시적 원자 대응을 함께 저장합니다. 기존 v1-v4 문서도 계속 불러옵니다.
+  (형식: `{"type":"chemvas","version":6,"state":{...}}`)
+- v6는 선택적인 Calculation Plan v2에 bounded precomplex 후보, exact XYZ provenance,
+  명시적으로 review한 endpoint selection을 함께 저장합니다. v5 Calculation Plan v1과
+  기존 v1-v4 문서도 계속 불러옵니다.
 - Figure export의 SVG 기본값은 Chemvas 원본 데이터를 포함하지 않는 plain SVG입니다. Chemvas에서 다시
   편집 가능한 round-trip 파일이 필요할 때만 **Editable Chemvas SVG**를 선택하세요.
 
@@ -221,6 +222,32 @@ chemvas inspect-plan mechanism.chemvas
 chemvas pack-step mechanism.chemvas --step S01 --output calculations/machine.json
 ```
 
+양 endpoint에 included component가 정확히 두 개씩 있는 step은 bounded rigid-placement
+후보를 생성하고 검토한 뒤 pack합니다.
+
+```bash
+chemvas generate-precomplex mechanism.chemvas precomplex-request.json \
+  --step S01 --output mechanism-candidates.chemvas
+chemvas inspect-precomplex mechanism-candidates.chemvas --step S01
+chemvas select-precomplex mechanism-candidates.chemvas --step S01 \
+  --reactant-candidate <candidate-id> --product-candidate <candidate-id> \
+  --reviewer <reviewer> --output mechanism-reviewed.chemvas
+chemvas pack-step mechanism-reviewed.chemvas --step S01 \
+  --output calculations/machine.json
+```
+
+strict request는 `source_document_sha256`와 `step_id`로 generation을 정확한 입력에
+결속하고, endpoint마다 component 사이 contact 하나, gas phase 또는 solvent
+environment, retained candidate cap을 명시합니다. Generation은 `selection: null`인
+Calculation Plan v2/version-6 새 문서를 쓰며, `inspect-precomplex`는 candidate ID,
+provenance, validation metric, hash, exact XYZ를 보여줍니다. `select-precomplex`는
+동일한 reviewer와 timestamp로 reactant/product 한 쌍을 기록하고 각 selection을 XYZ
+hash에 결속합니다. handoff 전에 `pack-step`은 현재 graph, plan, RDKit provenance,
+contacts, profile로 두 bounded ensemble을 결정론적으로 다시 생성하고 불일치를
+거부합니다. Placement score는 energy나 안정성 순위가 아니라 geometric clash/contact
+metric입니다. 검토하지 않았거나 한쪽만 검토한 multicomponent endpoint는 계속
+blocked입니다.
+
 Calculation Plan v1에서 state는 계산 성분과 전하·다중도를, step endpoint는 역할을 소유합니다.
 
 ```json
@@ -257,18 +284,20 @@ bond change가 들어갑니다. RDKit이 만든 원자까지 완전한 bijection
 implicit hydrogen 수가 달라지는 전달 수소는 명시적으로 그려야 합니다.
 
 `inspect-plan`은 각 step에 결정론적인 `path_precheck`를 보고합니다. source mapping이 완전하고,
-양 endpoint의 전하·다중도가 같고, endpoint마다 included 연결 성분이 정확히 하나라면 단일
-artifact의 `endpoint_pair`에 정확한 reactant/product XYZ 본문과 hash가 들어갑니다. product XYZ는
+양 endpoint의 전하·다중도가 같고, endpoint가 각각 단일 component이거나 양쪽 multicomponent
+endpoint에 명시적으로 검토한 precomplex selection이 있으면 단일 artifact의 `endpoint_pair`에
+정확한 reactant/product XYZ 본문과 hash가 들어갑니다. product XYZ는
 reactant의 원자 identity 순서로 재작성되며, 같은 객체가 그 순서와 결합 변화에 참여한 반응중심
 원자를 공통 0-based index로 기록합니다. 따라서 downstream 도구가 원소 순서나 좌표로 대응을
 다시 추론할 필요가 없습니다.
 
 source mapping이 불완전하면 `pack-step`은 출력 없이 중단합니다. 이 gate와 생성 원자 bijection을
-통과한 뒤 다성분 또는 전자상태 조건만 맞지 않으면 `handoff.status: "blocked"`, namespace가 붙은
+통과한 뒤 검토하지 않은 multicomponent endpoint 또는 전자상태 조건이 맞지 않으면
+`handoff.status: "blocked"`, namespace가 붙은
 `handoff.codes`, `payload.data.endpoint_pair: null`을 가진 observation 하나를 씁니다. Chemvas는
-다성분 catalyst/substrate precomplex를 임의로 만들지 않습니다. 모든 생성 좌표는 초기 추정이며
-path endpoint pair에는 rigid alignment나 양자화학 최적화가 수행되지 않습니다. 후속 최적화와
-연구자 검토가 필요합니다.
+contact를 추론하거나 candidate를 자동 선택하지 않으며, 생성 좌표를 최적화된 minimum으로
+간주하지 않습니다. 검토한 생성 좌표도 후속 양자화학 최적화와 과학적 검증이 필요한 초기
+추정입니다.
 
 ## 개발 / 기여
 - 테스트는 headless로 실행하되, 전체 suite는 Qt 전역 상태 격리를 위해 `test_*.py` 파일마다 별도 pytest 프로세스를 사용합니다. 정확한 CI 미러 명령은 [Running the checks](CONTRIBUTING.md#running-the-checks)를 따르세요.

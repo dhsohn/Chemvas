@@ -3,9 +3,11 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import math
 import sys
 from collections.abc import Mapping
-from dataclasses import asdict
+from dataclasses import asdict, replace
+from datetime import UTC, datetime
 from decimal import Decimal
 from pathlib import Path
 from typing import Any, TypedDict
@@ -20,11 +22,14 @@ from chemvas.core.document_io import (
 from chemvas.core.rdkit_adapter import RDKitAdapter
 from chemvas.domain.document import (
     CANVAS_FILE_VERSION,
+    PRECOMPLEX_CANVAS_FILE_VERSION,
+    CalculationPlan,
     CalculationState,
     CalculationStep,
     CalculationStepEndpoint,
     calculation_plan_to_state,
 )
+from chemvas.domain.document.precomplex import precomplex_state_from_json
 from chemvas.features.calculation_bundle import (
     AtomMapEntry,
     CalculationArtifacts,
@@ -40,6 +45,13 @@ from chemvas.features.calculation_bundle import (
     require_step_ready,
     select_calculation_state,
     validate_calculation_plan,
+)
+from chemvas.features.precomplex_generation import (
+    ContactRequest,
+    GeneratedCandidate,
+    PlacementRequest,
+    component_geometries_from_artifacts,
+    generate_precomplex_candidates,
 )
 
 _MACHINE_CONTRACT_NAME = "factory/machine-observation"
@@ -77,6 +89,30 @@ def run(argv: list[str]) -> int:
         if args.command == "inspect-plan":
             payload = _inspect_plan(Path(args.document))
             sys.stdout.write(_json_text(payload))
+            return 0
+        if args.command == "inspect-precomplex":
+            payload = _inspect_precomplex(Path(args.document), step_id=args.step)
+            sys.stdout.write(_json_text(payload))
+            return 0
+        if args.command == "generate-precomplex":
+            result = _generate_precomplex(
+                Path(args.document),
+                request_path=Path(args.request),
+                step_id=args.step,
+                output=Path(args.output),
+            )
+            sys.stdout.write(_json_text(result))
+            return 0
+        if args.command == "select-precomplex":
+            result = _select_precomplex(
+                Path(args.document),
+                step_id=args.step,
+                reactant_candidate_id=args.reactant_candidate,
+                product_candidate_id=args.product_candidate,
+                reviewer=args.reviewer,
+                output=Path(args.output),
+            )
+            sys.stdout.write(_json_text(result))
             return 0
         if args.command == "pack-step":
             artifact = _pack_step(
@@ -117,6 +153,35 @@ def _argument_parser() -> argparse.ArgumentParser:
         help="inspect embedded calculation states and elementary steps as JSON",
     )
     inspect_plan_parser.add_argument("document", help="input .chemvas document")
+
+    inspect_precomplex_parser = subparsers.add_parser(
+        "inspect-precomplex",
+        help="inspect exact persisted precomplex candidates and XYZ as JSON",
+    )
+    inspect_precomplex_parser.add_argument(
+        "document", help="candidate .chemvas document"
+    )
+    inspect_precomplex_parser.add_argument("--step", required=True)
+
+    generate_parser = subparsers.add_parser(
+        "generate-precomplex",
+        help="generate bounded endpoint precomplex candidates in a new .chemvas file",
+    )
+    generate_parser.add_argument("document", help="input .chemvas document")
+    generate_parser.add_argument("request", help="strict precomplex request JSON file")
+    generate_parser.add_argument("--step", required=True)
+    generate_parser.add_argument("--output", required=True)
+
+    select_parser = subparsers.add_parser(
+        "select-precomplex",
+        help="review and select one persisted reactant/product precomplex pair",
+    )
+    select_parser.add_argument("document", help="candidate .chemvas document")
+    select_parser.add_argument("--step", required=True)
+    select_parser.add_argument("--reactant-candidate", required=True)
+    select_parser.add_argument("--product-candidate", required=True)
+    select_parser.add_argument("--reviewer", required=True)
+    select_parser.add_argument("--output", required=True)
 
     pack_step_parser = subparsers.add_parser(
         "pack-step",
@@ -189,6 +254,521 @@ def _inspect(source: Path) -> dict[str, object]:
     }
 
 
+def _inspect_precomplex(source: Path, *, step_id: str) -> dict[str, object]:
+    _validate_source(source)
+    document = read_document(source)
+    plan = calculation_plan_for_document(document.state)
+    if plan.version != 2:
+        raise ValueError(
+            "precomplex inspection requires a Calculation Plan v2 document."
+        )
+    step = calculation_step_by_id(plan, step_id)
+    endpoints: dict[str, object] = {}
+    for side, endpoint in (("reactant", step.reactant), ("product", step.product)):
+        endpoints[side] = precomplex_state_from_json(endpoint.precomplex.payload_json)
+    return {
+        "format": "chemvas-precomplex-inspection",
+        "version": 1,
+        "source": str(source),
+        "step_id": step.id,
+        "endpoints": endpoints,
+    }
+
+
+def _select_precomplex(
+    source: Path,
+    *,
+    step_id: str,
+    reactant_candidate_id: str,
+    product_candidate_id: str,
+    reviewer: str,
+    output: Path,
+) -> dict[str, object]:
+    _validate_source(source)
+    _validate_new_chemvas_output(source, output)
+    reviewer = reviewer.strip()
+    if not reviewer or len(reviewer) > 128:
+        raise ValueError("precomplex reviewer must be between 1 and 128 characters.")
+    _source_bytes, document = read_exact_document(source)
+    plan = calculation_plan_for_document(document.state)
+    if plan.version != 2:
+        raise ValueError(
+            "precomplex selection requires a Calculation Plan v2 document."
+        )
+    step = calculation_step_by_id(plan, step_id)
+    require_step_ready(plan, step)
+    plan_state = calculation_plan_to_state(plan)
+    raw_steps = plan_state.get("steps")
+    if not isinstance(raw_steps, list):
+        raise ValueError("Calculation Plan step serialization is invalid.")
+    raw_step = next(
+        (
+            item
+            for item in raw_steps
+            if isinstance(item, dict) and item.get("id") == step.id
+        ),
+        None,
+    )
+    if raw_step is None:
+        raise ValueError(
+            f"Calculation Plan step {step.id} disappeared during serialization."
+        )
+    reviewed_at = datetime.now(UTC).isoformat(timespec="seconds").replace("+00:00", "Z")
+    selected_ids = {
+        "reactant": reactant_candidate_id,
+        "product": product_candidate_id,
+    }
+    adapter = RDKitAdapter()
+    for side in ("reactant", "product"):
+        raw_endpoint = raw_step.get(side)
+        if not isinstance(raw_endpoint, dict):
+            raise ValueError("Calculation Plan endpoint serialization is invalid.")
+        precomplex = raw_endpoint.get("precomplex")
+        if (
+            not isinstance(precomplex, dict)
+            or precomplex.get("kind") != "candidate_ensemble"
+        ):
+            raise ValueError(f"Step {step.id} has no {side} precomplex candidates.")
+        expected_basis = _precomplex_basis_sha256(
+            document.state,
+            plan,
+            step_id=step.id,
+            side=side,
+        )
+        if precomplex.get("basis_sha256") != expected_basis:
+            raise ValueError(
+                f"Step {step.id} {side} precomplex candidates are stale for this graph or plan."
+            )
+        endpoint = step.reactant if side == "reactant" else step.product
+        calculation_state = calculation_state_by_id(plan, endpoint.state_id)
+        calculation_selection = select_calculation_state(
+            document.state, calculation_state
+        )
+        current_artifacts = _state_artifacts(
+            adapter,
+            calculation_selection,
+            state_id=calculation_state.id,
+            charge=calculation_state.charge,
+            multiplicity=calculation_state.multiplicity,
+        )
+        _require_reproducible_precomplex(
+            state=precomplex,
+            calculation_state=calculation_state,
+            current=current_artifacts,
+            step=step,
+            side=side,
+        )
+        candidates = precomplex.get("candidates")
+        if not isinstance(candidates, list):
+            raise ValueError(
+                f"Step {step.id} has invalid {side} precomplex candidates."
+            )
+        candidate = next(
+            (
+                item
+                for item in candidates
+                if isinstance(item, dict) and item.get("id") == selected_ids[side]
+            ),
+            None,
+        )
+        if candidate is None:
+            raise ValueError(
+                f"Unknown {side} precomplex candidate: {selected_ids[side]}"
+            )
+        xyz_sha256 = candidate.get("xyz_sha256")
+        if not isinstance(xyz_sha256, str):
+            raise ValueError(f"Step {step.id} has invalid {side} candidate provenance.")
+        precomplex["selection"] = {
+            "candidate_id": selected_ids[side],
+            "candidate_xyz_sha256": xyz_sha256,
+            "reviewer": reviewer,
+            "reviewed_at": reviewed_at,
+            "acceptance_statement": "accepted_for_path_endpoint_review",
+        }
+    validated_plan = validate_calculation_plan(document.state, plan_state)
+    state_payload = dict(document.state)
+    state_payload["calculation_plan"] = calculation_plan_to_state(validated_plan)
+    output_document = create_document(state_payload, PRECOMPLEX_CANVAS_FILE_VERSION)
+    atomic_create_bytes(output, _json_text(output_document.payload).encode("utf-8"))
+    return {
+        "format": "chemvas-precomplex-selection",
+        "version": 1,
+        "source": str(source),
+        "output": str(output),
+        "step_id": step.id,
+        "reviewer": reviewer,
+        "reviewed_at": reviewed_at,
+        "selected": selected_ids,
+    }
+
+
+def _verify_precomplex_selection_pair(step: CalculationStep) -> None:
+    identities: list[tuple[object, object, object]] = []
+    for endpoint in (step.reactant, step.product):
+        state = precomplex_state_from_json(endpoint.precomplex.payload_json)
+        selection = state.get("selection")
+        if not isinstance(selection, Mapping):
+            raise ValueError("Precomplex review pair is incomplete.")
+        identities.append(
+            (
+                selection.get("reviewer"),
+                selection.get("reviewed_at"),
+                selection.get("acceptance_statement"),
+            )
+        )
+    if identities[0] != identities[1]:
+        raise ValueError("Precomplex endpoint reviews do not form one atomic pair.")
+
+
+def _generate_precomplex(
+    source: Path,
+    *,
+    request_path: Path,
+    step_id: str,
+    output: Path,
+) -> dict[str, object]:
+    _validate_source(source)
+    _validate_new_chemvas_output(source, output)
+    request = _read_precomplex_request(request_path)
+    source_bytes, document = read_exact_document(source)
+    plan = calculation_plan_for_document(document.state)
+    step = calculation_step_by_id(plan, step_id)
+    require_step_ready(plan, step)
+    candidate_cap, environment, contacts_by_side = _parse_precomplex_request(
+        request,
+        step_id=step.id,
+        source_document_sha256=_sha256(source_bytes),
+    )
+    adapter = RDKitAdapter()
+    endpoint_payloads: dict[str, dict[str, object]] = {}
+    candidate_counts: dict[str, int] = {}
+    candidate_summaries: dict[str, list[dict[str, str]]] = {}
+    for side, endpoint in (("reactant", step.reactant), ("product", step.product)):
+        state = calculation_state_by_id(plan, endpoint.state_id)
+        selection = select_calculation_state(document.state, state)
+        artifacts = _state_artifacts(
+            adapter,
+            selection,
+            state_id=state.id,
+            charge=state.charge,
+            multiplicity=state.multiplicity,
+        )
+        included_components = tuple(
+            member.component_atom_ids
+            for member in state.members
+            if member.inclusion == "included"
+        )
+        components = component_geometries_from_artifacts(
+            artifacts,
+            included_components,
+        )
+        basis_sha256 = _precomplex_basis_sha256(
+            document.state,
+            plan,
+            step_id=step.id,
+            side=side,
+        )
+        candidates = generate_precomplex_candidates(
+            PlacementRequest(
+                source_sha256=_sha256(source_bytes),
+                plan_sha256=basis_sha256,
+                step_id=step.id,
+                side=side,
+                contacts=contacts_by_side[side],
+                candidate_cap=candidate_cap,
+            ),
+            components,
+        )
+        endpoint_payloads[side] = _precomplex_endpoint_state(
+            side=side,
+            source_document_sha256=_sha256(source_bytes),
+            basis_sha256=basis_sha256,
+            environment=environment,
+            contacts=contacts_by_side[side],
+            artifacts=artifacts,
+            candidates=candidates,
+        )
+        candidate_counts[side] = len(candidates)
+        candidate_summaries[side] = [
+            {"id": candidate.id, "xyz_sha256": candidate.xyz_sha256}
+            for candidate in candidates
+        ]
+
+    plan_state = calculation_plan_to_state(plan)
+    plan_state["version"] = 2
+    raw_steps = plan_state.get("steps")
+    if not isinstance(raw_steps, list):
+        raise ValueError("Calculation Plan step serialization is invalid.")
+    matched_step = False
+    for raw_step in raw_steps:
+        if not isinstance(raw_step, dict):
+            raise ValueError("Calculation Plan step serialization is invalid.")
+        for side in ("reactant", "product"):
+            raw_endpoint = raw_step.get(side)
+            if not isinstance(raw_endpoint, dict):
+                raise ValueError("Calculation Plan endpoint serialization is invalid.")
+            raw_endpoint.setdefault("precomplex", {"kind": "none"})
+        if raw_step.get("id") == step.id:
+            matched_step = True
+            for side in ("reactant", "product"):
+                raw_endpoint = raw_step.get(side)
+                if not isinstance(raw_endpoint, dict):
+                    raise ValueError(
+                        "Calculation Plan endpoint serialization is invalid."
+                    )
+                raw_endpoint["precomplex"] = endpoint_payloads[side]
+    if not matched_step:
+        raise ValueError(
+            f"Calculation Plan step {step.id} disappeared during serialization."
+        )
+    validated_plan = validate_calculation_plan(document.state, plan_state)
+    state_payload = dict(document.state)
+    state_payload["calculation_plan"] = calculation_plan_to_state(validated_plan)
+    output_document = create_document(state_payload, PRECOMPLEX_CANVAS_FILE_VERSION)
+    atomic_create_bytes(output, _json_text(output_document.payload).encode("utf-8"))
+    return {
+        "format": "chemvas-precomplex-generation",
+        "version": 1,
+        "source": str(source),
+        "output": str(output),
+        "step_id": step.id,
+        "chemvas_document_version": PRECOMPLEX_CANVAS_FILE_VERSION,
+        "profile": "chemvas-rigid-precomplex-placement/1",
+        "candidate_counts": candidate_counts,
+        "candidates": candidate_summaries,
+    }
+
+
+def _read_precomplex_request(path: Path) -> Mapping[str, object]:
+    if not path.is_file():
+        raise ValueError(f"precomplex request does not exist: {path}")
+    try:
+        payload = json.loads(path.read_bytes(), parse_float=Decimal)
+    except (ValueError, RecursionError, UnicodeError) as exc:
+        raise ValueError("Invalid precomplex request JSON file.") from exc
+    if not isinstance(payload, Mapping):
+        raise ValueError("Invalid precomplex request JSON file.")
+    return payload
+
+
+def _parse_precomplex_request(
+    request: Mapping[str, object],
+    *,
+    step_id: str,
+    source_document_sha256: str,
+) -> tuple[int, dict[str, object], dict[str, tuple[ContactRequest, ...]]]:
+    if set(request) != {
+        "format",
+        "version",
+        "source_document_sha256",
+        "step_id",
+        "candidate_cap",
+        "environment",
+        "endpoints",
+    }:
+        raise ValueError("Invalid precomplex request fields.")
+    if (
+        request.get("format") != "chemvas-precomplex-request"
+        or request.get("version") != 1
+    ):
+        raise ValueError("Unsupported precomplex request format or version.")
+    if request.get("source_document_sha256") != source_document_sha256:
+        raise ValueError(
+            "precomplex request source_document_sha256 does not match the input document."
+        )
+    if request.get("step_id") != step_id:
+        raise ValueError("precomplex request step_id does not match --step.")
+    candidate_cap = request.get("candidate_cap")
+    if type(candidate_cap) is not int or not 1 <= candidate_cap <= 16:
+        raise ValueError("precomplex candidate_cap must be between 1 and 16.")
+    environment = _precomplex_environment(request.get("environment"))
+    endpoints = request.get("endpoints")
+    if not isinstance(endpoints, Mapping) or set(endpoints) != {
+        "reactant",
+        "product",
+    }:
+        raise ValueError("precomplex request must define both endpoints.")
+    contacts_by_side: dict[str, tuple[ContactRequest, ...]] = {}
+    for side in ("reactant", "product"):
+        endpoint = endpoints.get(side)
+        if not isinstance(endpoint, Mapping) or set(endpoint) != {"contacts"}:
+            raise ValueError(f"Invalid {side} precomplex request endpoint.")
+        contacts = endpoint.get("contacts")
+        if not isinstance(contacts, list) or len(contacts) != 1:
+            raise ValueError(
+                f"Placement profile v1 requires one explicit {side} contact."
+            )
+        contacts_by_side[side] = (
+            _contact_request(contacts[0], side=side, step_id=step_id),
+        )
+    return candidate_cap, environment, contacts_by_side
+
+
+def _precomplex_environment(value: object) -> dict[str, object]:
+    if not isinstance(value, Mapping):
+        raise ValueError("precomplex environment is required.")
+    if value.get("kind") == "gas_phase" and set(value) == {"kind"}:
+        return {"kind": "gas_phase"}
+    if value.get("kind") == "solvent" and set(value) == {"kind", "model", "name"}:
+        model = value.get("model")
+        name = value.get("name")
+        if (
+            not isinstance(model, str)
+            or not model.strip()
+            or len(model) > 128
+            or not isinstance(name, str)
+            or not name.strip()
+            or len(name) > 128
+        ):
+            raise ValueError("Invalid precomplex solvent environment.")
+        return {"kind": "solvent", "model": model, "name": name}
+    raise ValueError("Invalid precomplex environment.")
+
+
+def _contact_request(value: object, *, side: str, step_id: str) -> ContactRequest:
+    if not isinstance(value, Mapping) or set(value) != {
+        "id",
+        "first_atom_id",
+        "second_atom_id",
+        "target_distance_angstrom",
+        "tolerance_angstrom",
+    }:
+        raise ValueError(f"Invalid {side} contact for step {step_id}.")
+    contact_id = value.get("id")
+    first = value.get("first_atom_id")
+    second = value.get("second_atom_id")
+    if (
+        not isinstance(contact_id, str)
+        or not contact_id.strip()
+        or len(contact_id) > 64
+        or type(first) is not int
+        or type(second) is not int
+    ):
+        raise ValueError(f"Invalid {side} contact identity for step {step_id}.")
+    target = _request_float(value.get("target_distance_angstrom"), "contact target")
+    tolerance = _request_float(value.get("tolerance_angstrom"), "contact tolerance")
+    if target <= 0.0 or tolerance < 0.0 or tolerance > 1.0:
+        raise ValueError(
+            f"Invalid {side} contact distance or tolerance for step {step_id}."
+        )
+    return ContactRequest(
+        id=contact_id,
+        first_atom_id=first,
+        second_atom_id=second,
+        target_distance_angstrom=target,
+        tolerance_angstrom=tolerance,
+    )
+
+
+def _request_float(value: object, label: str) -> float:
+    if isinstance(value, bool) or not isinstance(value, (int, float, Decimal)):
+        raise ValueError(f"Invalid precomplex {label}.")
+    number = float(value)
+    if not math.isfinite(number):
+        raise ValueError(f"Invalid precomplex {label}.")
+    return number
+
+
+def _precomplex_basis_sha256(
+    document_state: Mapping[str, object],
+    plan: CalculationPlan,
+    *,
+    step_id: str,
+    side: str,
+) -> str:
+    plan_state = calculation_plan_to_state(plan)
+    plan_state["version"] = 2
+    raw_steps = plan_state.get("steps")
+    if not isinstance(raw_steps, list):
+        raise ValueError("Calculation Plan step serialization is invalid.")
+    for raw_step in raw_steps:
+        if not isinstance(raw_step, dict):
+            raise ValueError("Calculation Plan step serialization is invalid.")
+        for endpoint_side in ("reactant", "product"):
+            endpoint = raw_step.get(endpoint_side)
+            if not isinstance(endpoint, dict):
+                raise ValueError("Calculation Plan endpoint serialization is invalid.")
+            endpoint["precomplex"] = {"kind": "none"}
+    payload = {
+        "format": "chemvas-precomplex-basis",
+        "version": 1,
+        "model": document_state.get("model"),
+        "calculation_plan": plan_state,
+        "step_id": step_id,
+        "side": side,
+    }
+    canonical = json.dumps(
+        payload, sort_keys=True, separators=(",", ":"), ensure_ascii=True
+    )
+    return _sha256(canonical.encode("ascii"))
+
+
+def _precomplex_endpoint_state(
+    *,
+    side: str,
+    source_document_sha256: str,
+    basis_sha256: str,
+    environment: Mapping[str, object],
+    contacts: tuple[ContactRequest, ...],
+    artifacts: CalculationArtifacts,
+    candidates: tuple[GeneratedCandidate, ...],
+) -> dict[str, object]:
+    return {
+        "kind": "candidate_ensemble",
+        "source_document_sha256": source_document_sha256,
+        "basis_sha256": basis_sha256,
+        "side": side,
+        "profile": "chemvas-rigid-precomplex-placement/1",
+        "environment": dict(environment),
+        "contacts": [asdict(contact) for contact in contacts],
+        "source_geometry": {
+            "rdkit_version": artifacts.rdkit_version,
+            "rdkit_formal_charge": artifacts.rdkit_formal_charge,
+            "rdkit_radical_electrons": artifacts.rdkit_radical_electrons,
+            "electron_count": artifacts.electron_count,
+            "geometry_embedding": artifacts.geometry_embedding,
+            "geometry_random_seed": artifacts.geometry_random_seed,
+            "geometry_optimization_policy": artifacts.geometry_optimization_policy,
+            "geometry_optimization_result": artifacts.geometry_optimization_result,
+            "mol_atom_count": artifacts.mol_atom_count,
+            "xyz_atom_count": artifacts.xyz_atom_count,
+            "atom_map": [asdict(entry) for entry in artifacts.atom_map],
+        },
+        "candidates": [
+            _precomplex_candidate_state(candidate) for candidate in candidates
+        ],
+        "selection": None,
+    }
+
+
+def _precomplex_candidate_state(candidate: GeneratedCandidate) -> dict[str, object]:
+    validation = candidate.validation
+    return {
+        "id": candidate.id,
+        "geometry_class": candidate.geometry_class,
+        "xyz": candidate.xyz,
+        "xyz_sha256": candidate.xyz_sha256,
+        "transform": {
+            "approach_index": candidate.transform.approach_index,
+            "rotation_index": candidate.transform.rotation_index,
+            "approach_vector": list(candidate.transform.approach_vector),
+        },
+        "component_conformer_ids": list(candidate.component_conformer_ids),
+        "validation": {
+            "hard_clash_count": validation.hard_clash_count,
+            "soft_overlap_score": validation.soft_overlap_score,
+            "contact_error_angstrom": validation.contact_error_angstrom,
+            "limiting_pair": (
+                None
+                if validation.limiting_pair is None
+                else list(validation.limiting_pair)
+            ),
+            "limiting_distance_angstrom": validation.limiting_distance_angstrom,
+            "limiting_threshold_angstrom": validation.limiting_threshold_angstrom,
+        },
+    }
+
+
 def _pack_step(
     source: Path,
     *,
@@ -222,6 +802,31 @@ def _pack_step(
         charge=product_state.charge,
         multiplicity=product_state.multiplicity,
     )
+    reviewed_precomplex_pair = (
+        not precheck.single_component_endpoints
+        and "multicomponent_precomplex_geometry_not_provided"
+        not in precheck.blocking_reasons
+    )
+    interaction_geometry_guarantee = "not_provided"
+    if reviewed_precomplex_pair:
+        _verify_precomplex_selection_pair(step)
+        reactant_artifacts = _reviewed_precomplex_artifacts(
+            document_state=document.state,
+            plan=plan,
+            step=step,
+            endpoint=step.reactant,
+            side="reactant",
+            current=reactant_artifacts,
+        )
+        product_artifacts = _reviewed_precomplex_artifacts(
+            document_state=document.state,
+            plan=plan,
+            step=step,
+            endpoint=step.product,
+            side="product",
+            current=product_artifacts,
+        )
+        interaction_geometry_guarantee = "reviewed_precomplex_pair"
     correspondence = _step_atom_correspondence(
         step,
         reactant_artifacts=reactant_artifacts,
@@ -239,6 +844,12 @@ def _pack_step(
             product_artifacts=product_artifacts,
             correspondence=correspondence,
             bond_changes=bond_changes,
+            component_count=(2 if reviewed_precomplex_pair else 1),
+            precomplex_geometry=(
+                "reviewed_precomplex_pair"
+                if reviewed_precomplex_pair
+                else "single_component_endpoints"
+            ),
         )
         if precheck.ready_for_path_endpoints
         else None
@@ -255,12 +866,14 @@ def _pack_step(
             endpoint=step.reactant,
             selection=reactant_selection,
             artifacts=reactant_artifacts,
+            interaction_geometry_guarantee=interaction_geometry_guarantee,
         ),
         "product": _state_payload(
             state=product_state,
             endpoint=step.product,
             selection=product_selection,
             artifacts=product_artifacts,
+            interaction_geometry_guarantee=interaction_geometry_guarantee,
         ),
         "atom_correspondence": correspondence,
         "bond_changes": bond_changes,
@@ -269,7 +882,7 @@ def _pack_step(
         "geometry_scope": {
             "reactant_component_count": len(reactant_selection.component_indices),
             "product_component_count": len(product_selection.component_indices),
-            "interaction_geometry_guarantee": "not_provided",
+            "interaction_geometry_guarantee": interaction_geometry_guarantee,
             "intended_use": (
                 "initial endpoint guesses requiring downstream quantum optimization "
                 "and researcher review"
@@ -310,6 +923,153 @@ def _pack_step(
     return observation
 
 
+def _reviewed_precomplex_artifacts(
+    *,
+    document_state: Mapping[str, object],
+    plan: CalculationPlan,
+    step: CalculationStep,
+    endpoint: CalculationStepEndpoint,
+    side: str,
+    current: CalculationArtifacts,
+) -> CalculationArtifacts:
+    state = precomplex_state_from_json(endpoint.precomplex.payload_json)
+    if state.get("kind") != "candidate_ensemble":
+        raise ValueError(f"Step {step.id} has no reviewed {side} precomplex.")
+    expected_basis = _precomplex_basis_sha256(
+        document_state,
+        plan,
+        step_id=step.id,
+        side=side,
+    )
+    if state.get("basis_sha256") != expected_basis:
+        raise ValueError(
+            f"Step {step.id} {side} reviewed precomplex is stale for this graph or plan."
+        )
+    expected_source_geometry = {
+        "rdkit_version": current.rdkit_version,
+        "rdkit_formal_charge": current.rdkit_formal_charge,
+        "rdkit_radical_electrons": current.rdkit_radical_electrons,
+        "electron_count": current.electron_count,
+        "geometry_embedding": current.geometry_embedding,
+        "geometry_random_seed": current.geometry_random_seed,
+        "geometry_optimization_policy": current.geometry_optimization_policy,
+        "geometry_optimization_result": current.geometry_optimization_result,
+        "mol_atom_count": current.mol_atom_count,
+        "xyz_atom_count": current.xyz_atom_count,
+        "atom_map": [asdict(entry) for entry in current.atom_map],
+    }
+    if state.get("source_geometry") != expected_source_geometry:
+        raise ValueError(
+            f"Step {step.id} {side} reviewed precomplex no longer matches the "
+            "current RDKit geometry identity or provenance. Regenerate and review it."
+        )
+    _require_reproducible_precomplex(
+        state=state,
+        calculation_state=calculation_state_by_id(plan, endpoint.state_id),
+        current=current,
+        step=step,
+        side=side,
+    )
+    selection = state.get("selection")
+    candidates = state.get("candidates")
+    if not isinstance(selection, Mapping) or not isinstance(candidates, list):
+        raise ValueError(f"Step {step.id} has no reviewed {side} precomplex selection.")
+    candidate_id = selection.get("candidate_id")
+    candidate = next(
+        (
+            item
+            for item in candidates
+            if isinstance(item, Mapping) and item.get("id") == candidate_id
+        ),
+        None,
+    )
+    if candidate is None:
+        raise ValueError(f"Step {step.id} {side} selected candidate is missing.")
+    xyz = candidate.get("xyz")
+    xyz_sha256 = candidate.get("xyz_sha256")
+    if (
+        not isinstance(xyz, str)
+        or not isinstance(xyz_sha256, str)
+        or selection.get("candidate_xyz_sha256") != xyz_sha256
+        or _sha256(xyz.encode("ascii")) != xyz_sha256
+    ):
+        raise ValueError(
+            f"Step {step.id} {side} selected candidate geometry is invalid."
+        )
+    reviewed = replace(current, xyz_block=xyz)
+    _xyz_atom_rows(reviewed, label=f"{side} reviewed precomplex")
+    return reviewed
+
+
+def _require_reproducible_precomplex(
+    *,
+    state: Mapping[str, object],
+    calculation_state: CalculationState,
+    current: CalculationArtifacts,
+    step: CalculationStep,
+    side: str,
+) -> None:
+    expected_source_geometry = {
+        "rdkit_version": current.rdkit_version,
+        "rdkit_formal_charge": current.rdkit_formal_charge,
+        "rdkit_radical_electrons": current.rdkit_radical_electrons,
+        "electron_count": current.electron_count,
+        "geometry_embedding": current.geometry_embedding,
+        "geometry_random_seed": current.geometry_random_seed,
+        "geometry_optimization_policy": current.geometry_optimization_policy,
+        "geometry_optimization_result": current.geometry_optimization_result,
+        "mol_atom_count": current.mol_atom_count,
+        "xyz_atom_count": current.xyz_atom_count,
+        "atom_map": [asdict(entry) for entry in current.atom_map],
+    }
+    if state.get("source_geometry") != expected_source_geometry:
+        raise ValueError(
+            f"Step {step.id} {side} precomplex no longer matches the current "
+            "RDKit geometry identity or provenance. Regenerate and review it."
+        )
+    raw_candidates = state.get("candidates")
+    raw_contacts = state.get("contacts")
+    source_document_sha256 = state.get("source_document_sha256")
+    basis_sha256 = state.get("basis_sha256")
+    if (
+        not isinstance(raw_candidates, list)
+        or not raw_candidates
+        or not isinstance(raw_contacts, list)
+        or not isinstance(source_document_sha256, str)
+        or not isinstance(basis_sha256, str)
+    ):
+        raise ValueError(f"Step {step.id} {side} precomplex provenance is incomplete.")
+    contacts = tuple(
+        _contact_request(contact, side=side, step_id=step.id)
+        for contact in raw_contacts
+    )
+    included_components = tuple(
+        member.component_atom_ids
+        for member in calculation_state.members
+        if member.inclusion == "included"
+    )
+    components = component_geometries_from_artifacts(current, included_components)
+    regenerated = generate_precomplex_candidates(
+        PlacementRequest(
+            source_sha256=source_document_sha256,
+            plan_sha256=basis_sha256,
+            step_id=step.id,
+            side=side,
+            contacts=contacts,
+            candidate_cap=len(raw_candidates),
+        ),
+        components,
+    )
+    expected_candidates = [
+        _precomplex_candidate_state(candidate) for candidate in regenerated
+    ]
+    if raw_candidates != expected_candidates:
+        raise ValueError(
+            f"Step {step.id} {side} precomplex candidate ensemble does not reproduce "
+            "from its current source geometry and provenance."
+        )
+
+
 def _state_artifacts(
     adapter: RDKitAdapter,
     selection: CalculationStateSelection,
@@ -346,6 +1106,7 @@ def _state_payload(
     endpoint: CalculationStepEndpoint,
     selection: CalculationStateSelection,
     artifacts: CalculationArtifacts,
+    interaction_geometry_guarantee: str,
 ) -> dict[str, object]:
     member_inclusion = {
         member.component_atom_ids: member.inclusion for member in state.members
@@ -385,7 +1146,7 @@ def _state_payload(
                 "random_seed": artifacts.geometry_random_seed,
                 "optimization_policy": artifacts.geometry_optimization_policy,
                 "optimization_result": artifacts.geometry_optimization_result,
-                "interaction_geometry_guarantee": "not_provided",
+                "interaction_geometry_guarantee": interaction_geometry_guarantee,
                 "intended_use": (
                     "initial geometry requiring downstream quantum optimization "
                     "and researcher review"
@@ -407,6 +1168,8 @@ def _path_endpoint_payload(
     product_artifacts: CalculationArtifacts,
     correspondence: Mapping[str, object],
     bond_changes: Mapping[str, object],
+    component_count: int,
+    precomplex_geometry: str,
 ) -> dict[str, object]:
     reactant_rows = _xyz_atom_rows(reactant_artifacts, label="reactant")
     product_rows = _xyz_atom_rows(product_artifacts, label="product")
@@ -462,9 +1225,13 @@ def _path_endpoint_payload(
         },
         "geometry": {
             "atom_count": len(reactant_rows),
-            "component_count": 1,
-            "precomplex_geometry": "single_component_endpoints",
-            "rigid_alignment": "not_performed",
+            "component_count": component_count,
+            "precomplex_geometry": precomplex_geometry,
+            "rigid_alignment": (
+                "deterministic_precomplex_placement"
+                if precomplex_geometry == "reviewed_precomplex_pair"
+                else "not_performed"
+            ),
             "endpoint_optimization": "required_downstream",
             "intended_use": (
                 "atom-identity-aligned initial endpoints for downstream path search "

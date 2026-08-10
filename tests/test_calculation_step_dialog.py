@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import json
 import os
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+from chemvas.bootstrap import calculation_bundle as calculation_bundle_cli
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -29,6 +32,7 @@ if QApplication is not None:
     )
 
 from tests.test_calculation_plan import _document_state, _plan
+from tests.test_precomplex_cli import _generate_candidate_fixture
 
 
 def _select_component(
@@ -631,4 +635,83 @@ def test_dialog_tables_reject_input_method_cell_editing() -> None:
         viewport = table.viewport()
         assert viewport is not None
         assert viewport.findChild(QLineEdit) is None
+    dialog.deleteLater()
+
+
+def _reviewed_precomplex_state(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> dict[str, object]:
+    _source, candidates, raw = _generate_candidate_fixture(
+        tmp_path, monkeypatch, capsys
+    )
+    step = raw["state"]["calculation_plan"]["steps"][0]
+    reviewed = tmp_path / "reviewed.chemvas"
+    assert (
+        calculation_bundle_cli.run(
+            [
+                "select-precomplex",
+                str(candidates),
+                "--step",
+                "S01",
+                "--reactant-candidate",
+                step["reactant"]["precomplex"]["candidates"][0]["id"],
+                "--product-candidate",
+                step["product"]["precomplex"]["candidates"][0]["id"],
+                "--reviewer",
+                "test-reviewer",
+                "--output",
+                str(reviewed),
+            ]
+        )
+        == 0
+    )
+    capsys.readouterr()
+    state = json.loads(reviewed.read_text(encoding="utf-8"))["state"]
+    assert isinstance(state, dict)
+    return state
+
+
+@pytest.mark.skipif(QApplication is None, reason="PyQt6 is required")
+def test_dialog_noop_edit_preserves_reviewed_precomplex_pair(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    app = QApplication.instance() or QApplication([])
+    app.setQuitOnLastWindowClosed(False)
+    state = _reviewed_precomplex_state(tmp_path, monkeypatch, capsys)
+    before = state["calculation_plan"]["steps"][0]
+    dialog = CalculationStepDialog(state)
+
+    dialog.step_selector.setCurrentIndex(1)
+    dialog.accept()
+
+    assert dialog.result_plan_state is not None
+    after = dialog.result_plan_state["steps"][0]
+    assert after["reactant"]["precomplex"] == before["reactant"]["precomplex"]
+    assert after["product"]["precomplex"] == before["product"]["precomplex"]
+    dialog.deleteLater()
+
+
+@pytest.mark.skipif(QApplication is None, reason="PyQt6 is required")
+def test_dialog_dependency_edit_invalidates_precomplex_pair(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    app = QApplication.instance() or QApplication([])
+    app.setQuitOnLastWindowClosed(False)
+    state = _reviewed_precomplex_state(tmp_path, monkeypatch, capsys)
+    dialog = CalculationStepDialog(state)
+    dialog.step_selector.setCurrentIndex(1)
+    dialog._set_combo_data(dialog._role_combos[("reactant", 2)], "spectator")
+
+    dialog.accept()
+
+    assert dialog.result_plan_state is not None
+    step = dialog.result_plan_state["steps"][0]
+    assert step["reactant"]["precomplex"] == {"kind": "none"}
+    assert step["product"]["precomplex"] == {"kind": "none"}
     dialog.deleteLater()

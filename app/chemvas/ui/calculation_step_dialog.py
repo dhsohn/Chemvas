@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Iterable, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any, Protocol, cast
 
 from PyQt6.QtCore import Qt, pyqtSignal
@@ -884,6 +884,52 @@ class CalculationStepDialog(QDialog):
                 reactant_state,
                 product_state,
             )
+            step = CalculationStep(
+                id=step_id,
+                reactant=reactant_endpoint,
+                product=product_endpoint,
+                atom_correspondence=correspondence,
+            )
+            existing_step = (
+                next(
+                    (
+                        candidate
+                        for candidate in self._plan.steps
+                        if candidate.id == selected_step_id
+                    ),
+                    None,
+                )
+                if self._plan is not None and selected_step_id is not None
+                else None
+            )
+            if existing_step is not None:
+                assert self._plan is not None
+                existing_reactant_state = calculation_state_by_id(
+                    self._plan, existing_step.reactant.state_id
+                )
+                existing_product_state = calculation_state_by_id(
+                    self._plan, existing_step.product.state_id
+                )
+                if (
+                    reactant_state == existing_reactant_state
+                    and product_state == existing_product_state
+                    and reactant_endpoint.state_id == existing_step.reactant.state_id
+                    and reactant_endpoint.roles == existing_step.reactant.roles
+                    and product_endpoint.state_id == existing_step.product.state_id
+                    and product_endpoint.roles == existing_step.product.roles
+                    and correspondence == existing_step.atom_correspondence
+                ):
+                    step = replace(
+                        step,
+                        reactant=replace(
+                            step.reactant,
+                            precomplex=existing_step.reactant.precomplex,
+                        ),
+                        product=replace(
+                            step.product,
+                            precomplex=existing_step.product.precomplex,
+                        ),
+                    )
             plan = plan_with_replaced_step(
                 self._document_state,
                 current_plan_state=(
@@ -893,12 +939,7 @@ class CalculationStepDialog(QDialog):
                 ),
                 reactant_state=reactant_state,
                 product_state=product_state,
-                step=CalculationStep(
-                    id=step_id,
-                    reactant=reactant_endpoint,
-                    product=product_endpoint,
-                    atom_correspondence=correspondence,
-                ),
+                step=step,
             )
         except ValueError as exc:
             QMessageBox.warning(self, "Invalid calculation step", str(exc))
