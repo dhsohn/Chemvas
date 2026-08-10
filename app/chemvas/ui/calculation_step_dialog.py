@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from typing import Any, Protocol, cast
 
 from PyQt6.QtCore import Qt, pyqtSignal
+from PyQt6.QtGui import QInputMethodEvent
 from PyQt6.QtWidgets import (
     QAbstractItemView,
     QComboBox,
@@ -68,6 +69,26 @@ class _MappingHighlighter(Protocol):
     ) -> None: ...
 
     def clear(self) -> None: ...
+
+
+class _NoInputMethodTableWidget(QTableWidget):
+    """Table that ignores input-method composition outright.
+
+    Neither dialog table takes text input: cells are read-only items or
+    persistent combo widgets. QAbstractItemView still reacts to a
+    QInputMethodEvent by starting or focusing an editor for the current
+    cell, and for cells hosting a widget, edit() focuses that widget
+    before consulting the edit triggers — so NoEditTriggers alone does
+    not stop it. On Wayland (WSLg) each such focus change makes the
+    text-input integration re-deliver the composition event, and the
+    mutual recursion overflows the C stack; an active Korean IME crashed
+    the app this way twice. Dropping the event here removes the app-side
+    entry point of that recursion for every cell kind.
+    """
+
+    def inputMethodEvent(self, event: QInputMethodEvent | None) -> None:
+        if event is not None:
+            event.ignore()
 
 
 class _MappingProductCombo(QComboBox):
@@ -144,14 +165,10 @@ class CalculationStepDialog(QDialog):
         self.product_widgets = self._endpoint_fields("Product", fields)
         layout.addLayout(fields)
 
-        self.table = QTableWidget(len(self._components), 6, self)
-        # Direct cell editing must stay disabled on both dialog tables: every
-        # edit goes through read-only items or persistent cell widgets, and the
-        # cells hosting widgets have no item, so the model reports the default
-        # editable flags. Letting an input-method event open an item editor
-        # recurses with Qt's Wayland text-input focus handling (focus change
-        # resends the event) until the C stack overflows — an IME composition
-        # over a focused cell crashed the app under WSLg.
+        self.table = _NoInputMethodTableWidget(len(self._components), 6, self)
+        # Cells hosting widgets have no item, so the model reports the default
+        # editable flags; direct cell editing stays disabled so no phantom item
+        # editor can open (composition input is handled by the table class).
         self.table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self.table.setHorizontalHeaderLabels(
             (
@@ -200,7 +217,7 @@ class CalculationStepDialog(QDialog):
         mapping_actions.addWidget(self.clear_mapping_button)
         layout.addLayout(mapping_actions)
 
-        self.mapping_table = QTableWidget(0, 3, self)
+        self.mapping_table = _NoInputMethodTableWidget(0, 3, self)
         # Same constraint as the components table above: no direct cell editing.
         self.mapping_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self.mapping_table.setAccessibleName("Atom correspondence table")
