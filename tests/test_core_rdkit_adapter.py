@@ -1505,7 +1505,7 @@ class RDKitAdapterTest(unittest.TestCase):
 
         self.assertEqual(coords, {10: (1.0, 2.0, 3.0), 11: (4.0, 5.0, 6.0)})
         self.assertEqual(all_chem.embed_calls, [False, True])
-        self.assertEqual(all_chem.optimize_calls, [50])
+        self.assertEqual(all_chem.optimize_calls, [500])
         self.assertEqual(all_chem.params_created[0].randomSeed, 0xC0FFEE)
         self.assertTrue(all_chem.params_created[0].useRandomCoords)
 

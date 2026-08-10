@@ -188,6 +188,7 @@ def generate_precomplex_candidates(
     root_contact = _contact_atom(root, _contact_id_for_component(contact, root))
     child_contact = _contact_atom(child, _contact_id_for_component(contact, child))
     directions = _fibonacci_sphere(APPROACH_SAMPLE_COUNT)
+    component_conformer_ids = tuple(component.conformer_id for component in components)
     candidates: list[GeneratedCandidate] = []
     for approach_index, direction in enumerate(directions):
         aligned = _align_child_contact_outward(child, child_contact, direction)
@@ -232,8 +233,7 @@ def generate_precomplex_candidates(
             )
             candidate_id = _candidate_id(
                 request,
-                root,
-                child,
+                components,
                 transform,
                 xyz_sha256,
             )
@@ -246,7 +246,7 @@ def generate_precomplex_candidates(
                     xyz=xyz,
                     xyz_sha256=xyz_sha256,
                     transform=transform,
-                    component_conformer_ids=(root.conformer_id, child.conformer_id),
+                    component_conformer_ids=component_conformer_ids,
                     validation=validation,
                 )
             )
@@ -540,8 +540,7 @@ def _validate_placement(
 
 def _candidate_id(
     request: PlacementRequest,
-    root: ComponentGeometry,
-    child: ComponentGeometry,
+    components: tuple[ComponentGeometry, ...],
     transform: CandidateTransform,
     xyz_sha256: str,
 ) -> str:
@@ -562,10 +561,9 @@ def _candidate_id(
             for contact in request.contacts
         ],
         "component_atom_ids": [
-            list(root.component_atom_ids),
-            list(child.component_atom_ids),
+            list(component.component_atom_ids) for component in components
         ],
-        "component_conformer_ids": [root.conformer_id, child.conformer_id],
+        "component_conformer_ids": [component.conformer_id for component in components],
         "approach_index": transform.approach_index,
         "rotation_index": transform.rotation_index,
         "xyz_sha256": xyz_sha256,
