@@ -15,6 +15,8 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+_GEOMETRY_OPTIMIZATION_MAX_ITERS = 500
+
 
 class RDKitConversionHelper:
     def __init__(self, adapter: RDKitAdapter) -> None:
@@ -238,10 +240,14 @@ class RDKitConversionHelper:
                 if hasattr(
                     AllChem, "MMFFHasAllMoleculeParams"
                 ) and AllChem.MMFFHasAllMoleculeParams(mol_h):
-                    status = AllChem.MMFFOptimizeMolecule(mol_h, maxIters=50)
+                    status = AllChem.MMFFOptimizeMolecule(
+                        mol_h, maxIters=_GEOMETRY_OPTIMIZATION_MAX_ITERS
+                    )
                     optimization_result = self._optimization_result("MMFF", status)
                 else:
-                    status = AllChem.UFFOptimizeMolecule(mol_h, maxIters=50)
+                    status = AllChem.UFFOptimizeMolecule(
+                        mol_h, maxIters=_GEOMETRY_OPTIMIZATION_MAX_ITERS
+                    )
                     optimization_result = self._optimization_result("UFF", status)
             except Exception:
                 logger.debug(
@@ -249,7 +255,9 @@ class RDKitConversionHelper:
                     exc_info=True,
                 )
                 try:
-                    status = AllChem.UFFOptimizeMolecule(mol_h, maxIters=50)
+                    status = AllChem.UFFOptimizeMolecule(
+                        mol_h, maxIters=_GEOMETRY_OPTIMIZATION_MAX_ITERS
+                    )
                     optimization_result = self._optimization_result(
                         "UFF_fallback", status
                     )

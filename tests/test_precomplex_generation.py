@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import hashlib
+import json
 import math
 
 import pytest
@@ -101,6 +103,95 @@ def test_generate_precomplex_candidates_is_bounded_and_byte_deterministic() -> N
         by_index = {atom.path_index: atom.coordinates for atom in candidate.atoms}
         assert _distance(by_index[0], by_index[2]) == 3.0
         assert candidate.xyz.encode("ascii")
+
+
+def test_candidate_provenance_preserves_plan_component_order() -> None:
+    components = (
+        ComponentGeometry(
+            component_atom_ids=(0,),
+            conformer_id="small-first",
+            atoms=(
+                GeometryAtom(
+                    path_index=0,
+                    symbol="O",
+                    source_atom_id=0,
+                    parent_source_atom_id=None,
+                    origin="chemvas_atom",
+                    coordinates=(0.0, 0.0, 0.0),
+                ),
+            ),
+        ),
+        ComponentGeometry(
+            component_atom_ids=(2, 3),
+            conformer_id="large-second",
+            atoms=(
+                GeometryAtom(
+                    path_index=1,
+                    symbol="C",
+                    source_atom_id=2,
+                    parent_source_atom_id=None,
+                    origin="chemvas_atom",
+                    coordinates=(-1.5, 0.0, 0.0),
+                ),
+                GeometryAtom(
+                    path_index=2,
+                    symbol="S",
+                    source_atom_id=3,
+                    parent_source_atom_id=None,
+                    origin="chemvas_atom",
+                    coordinates=(0.0, 0.0, 0.0),
+                ),
+            ),
+        ),
+    )
+    request = PlacementRequest(
+        source_sha256="a" * 64,
+        plan_sha256="b" * 64,
+        step_id="S01",
+        side="reactant",
+        contacts=(
+            ContactRequest(
+                id="forming-o-s",
+                first_atom_id=0,
+                second_atom_id=3,
+                target_distance_angstrom=3.0,
+                tolerance_angstrom=0.05,
+            ),
+        ),
+        candidate_cap=1,
+    )
+
+    candidate = generate_precomplex_candidates(request, components)[0]
+
+    assert candidate.component_conformer_ids == ("small-first", "large-second")
+    identity = {
+        "profile": candidate.profile,
+        "source_sha256": request.source_sha256,
+        "plan_sha256": request.plan_sha256,
+        "step_id": request.step_id,
+        "side": request.side,
+        "contacts": [
+            {
+                "id": "forming-o-s",
+                "first_atom_id": 0,
+                "second_atom_id": 3,
+                "target_distance_angstrom": 3.0,
+                "tolerance_angstrom": 0.05,
+            }
+        ],
+        "component_atom_ids": [[0], [2, 3]],
+        "component_conformer_ids": ["small-first", "large-second"],
+        "approach_index": candidate.transform.approach_index,
+        "rotation_index": candidate.transform.rotation_index,
+        "xyz_sha256": candidate.xyz_sha256,
+    }
+    expected_id = (
+        "pc-"
+        + hashlib.sha256(
+            json.dumps(identity, sort_keys=True, separators=(",", ":")).encode("ascii")
+        ).hexdigest()
+    )
+    assert candidate.id == expected_id
 
 
 def test_component_geometries_preserve_canonical_atom_order_and_ownership() -> None:
