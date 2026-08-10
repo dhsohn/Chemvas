@@ -41,6 +41,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   restores it.
 
 ### Changed
+- **Mapping markers on the canvas lost their R/P letters**: while picking an
+  atom correspondence, the rings around the selected reactant and product
+  atoms no longer float an "R"/"P" letter beside the atom — the letters sat
+  awkwardly over the drawing. Solid blue still means reactant and dashed
+  orange still means product.
 - **Mapping UI grays out what cannot be mapped**: in the Calculation dialog's
   atom correspondence, a reactant row with no same-element product candidate
   reads muted until the counterpart component joins the product endpoint; a

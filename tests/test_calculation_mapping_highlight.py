@@ -62,7 +62,10 @@ def test_highlighter_distinguishes_mapping_without_changing_selection(
         if item.data(0) == "calculation_mapping_highlight"
     ]
     paths = [item for item in overlays if isinstance(item, QGraphicsPathItem)]
-    assert len(overlays) == 4
+    # Ring markers only — the floating R/P letters were removed as visual
+    # noise; the role tag lives on in the item data.
+    assert len(overlays) == 2
+    assert overlays == paths
     assert {item.data(1) for item in overlays} == {"R", "P"}
     assert {path.pen().color().name() for path in paths} == {
         "#0072b2",
@@ -239,7 +242,7 @@ def test_real_canvas_highlight_is_transient_and_preserves_document_selection() -
         for item in canvas.scene().items()
         if item.data(0) == "calculation_mapping_highlight"
     ]
-    assert len(overlays) == 4
+    assert len(overlays) == 2
     assert selected.isSelected() is True
     assert document_service.snapshot_state() == before
 
