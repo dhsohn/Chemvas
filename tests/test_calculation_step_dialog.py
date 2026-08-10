@@ -457,25 +457,37 @@ def test_dialog_tables_reject_input_method_cell_editing() -> None:
     app.setQuitOnLastWindowClosed(False)
     dialog = CalculationStepDialog(_document_state())
     _configure_separate_endpoints(dialog)
+    dialog.show()
 
     no_triggers = QAbstractItemView.EditTrigger.NoEditTriggers
     assert dialog.table.editTriggers() == no_triggers
     assert dialog.mapping_table.editTriggers() == no_triggers
 
-    # Cells hosting combo widgets have no item, so the model reports the
-    # default editable flags. An IME composition delivered to the focused
-    # table must never open an item editor: on Wayland the editor focus
-    # change re-sends the composition event and the mutual recursion
-    # crashed the app.
+    # Composition events must be ignored for every cell kind. An item cell
+    # could open a phantom editor, and for a cell hosting a combo widget
+    # QAbstractItemView::edit focuses the widget before consulting the edit
+    # triggers. Either reaction moves focus, and on Wayland the text input
+    # re-delivers the composition event on each focus change — that mutual
+    # recursion crashed the app under WSLg with a Korean IME (twice: once
+    # per cell kind).
+    mapping_row = dialog._mapping_row_by_reactant[0]
     for table, row, column in (
         (dialog.table, 0, 2),
-        (dialog.mapping_table, dialog._mapping_row_by_reactant[0], 1),
+        (dialog.mapping_table, mapping_row, 1),
+        (dialog.table, 0, 0),
+        (dialog.mapping_table, mapping_row, 0),
     ):
         table.setCurrentCell(row, column)
-        app.sendEvent(table, QInputMethodEvent("ㅎ", []))
+        table.setFocus()
+        focus_before = app.focusWidget()
+        preedit = QInputMethodEvent("ㅎ", [])
+        app.sendEvent(table, preedit)
         commit = QInputMethodEvent()
         commit.setCommitString("하")
         app.sendEvent(table, commit)
+        assert not preedit.isAccepted()
+        assert not commit.isAccepted()
+        assert app.focusWidget() is focus_before
         viewport = table.viewport()
         assert viewport is not None
         assert viewport.findChild(QLineEdit) is None

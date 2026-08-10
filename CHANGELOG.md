@@ -11,12 +11,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Crash while using the Calculation dialog with an IME**: clicking a table
   cell in **Calculation ▸ Edit States and Steps...** while an input-method
   composition (e.g. Korean) was active could crash the whole app on Wayland,
-  including WSLg. Qt re-delivers the composition event on every editor focus
-  change, and the dialog tables — whose cells are only ever edited through
-  read-only items and embedded combo boxes — still accepted the event as a
-  cell-edit trigger, so the two recursed until the stack overflowed. Direct
-  cell editing is now disabled on both tables; unsaved work from a crashed
-  session was already restored by autosave recovery.
+  including WSLg. Qt reacts to a composition event by starting or focusing a
+  cell editor — for cells hosting the embedded combo boxes it focuses the
+  combo before even consulting the edit triggers — and the Wayland text
+  input re-delivers the composition event on every such focus change, so
+  the two recursed until the stack overflowed. The dialog tables take no
+  text input at all: direct cell editing is now disabled and both tables
+  ignore composition events outright, for item and widget cells alike.
+  Unsaved work from a crashed session was already restored by autosave
+  recovery.
 
 ### Removed
 - **Single-species `pack` command**: the Calculation Bundle v1 directory export
