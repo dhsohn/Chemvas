@@ -41,6 +41,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   restores it.
 
 ### Changed
+- **Mapping UI grays out what cannot be mapped**: in the Calculation dialog's
+  atom correspondence, a reactant row with no same-element product candidate
+  reads muted until the counterpart component joins the product endpoint; a
+  product candidate already mapped by another row shows muted in the other
+  dropdowns (picking it still just flags the duplicate); and atoms of
+  components that sit out of the step entirely now get gray id labels on the
+  canvas instead of no label.
 - **Locked endpoints in the Calculation dialog look locked**: when including a
   component as the step's reactant (or product) disables its opposite
   endpoint, the locked inclusion and role dropdowns are now visibly muted

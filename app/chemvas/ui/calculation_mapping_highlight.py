@@ -19,6 +19,9 @@ from chemvas.ui.selection_style_access import (
 
 _REACTANT_COLOR = QColor("#0072B2")
 _PRODUCT_COLOR = QColor("#D55E00")
+# Palette text_faint: atoms of components that sit out of the step (unused, or
+# locked out by the opposite endpoint's reactive role) label in a muted gray.
+_EXCLUDED_COLOR = QColor("#9B9B96")
 _HIGHLIGHT_Z = 40.0
 _LABEL_Z = 39.0
 # Small offset from the atom's own anchor so the id sits just above-right of the
@@ -80,20 +83,29 @@ class CalculationMappingHighlighter:
         self,
         reactant_atom_ids: Iterable[int],
         product_atom_ids: Iterable[int],
+        excluded_atom_ids: Iterable[int] = (),
     ) -> None:
         self._remove_items(self._label_items)
         scene = self._scene()
         if scene is None:
             return
         reactant_ids = set(reactant_atom_ids)
+        product_ids = set(product_atom_ids)
         for atom_id in sorted(reactant_ids):
             self._add_id_label(scene, atom_id=atom_id, color=_REACTANT_COLOR)
-        for atom_id in sorted(set(product_atom_ids)):
+        for atom_id in sorted(product_ids):
             # A component reused on both endpoints keeps a single reactant-tinted
             # label; only product-exclusive atoms get the product tint.
             if atom_id in reactant_ids:
                 continue
             self._add_id_label(scene, atom_id=atom_id, color=_PRODUCT_COLOR)
+        for atom_id in sorted(set(excluded_atom_ids)):
+            # Atoms sitting out of the step (unused or locked-out components)
+            # keep a gray id label, so "not participating" is visible instead of
+            # just unlabeled.
+            if atom_id in reactant_ids or atom_id in product_ids:
+                continue
+            self._add_id_label(scene, atom_id=atom_id, color=_EXCLUDED_COLOR)
 
     def clear(self) -> None:
         self._remove_items(self._mapping_items)

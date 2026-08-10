@@ -177,6 +177,37 @@ def test_highlighter_labels_atoms_and_coexist_with_mapping_marks(
 
 
 @pytest.mark.skipif(QApplication is None, reason="PyQt6 is required")
+def test_highlighter_grays_out_excluded_atom_labels(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    app = QApplication.instance() or QApplication([])
+    app.setQuitOnLastWindowClosed(False)
+    scene = QGraphicsScene()
+    canvas = SimpleNamespace(scene=lambda: scene)
+    centers = {
+        1: QPointF(5.0, 5.0),
+        2: QPointF(25.0, 5.0),
+        3: QPointF(45.0, 5.0),
+    }
+    monkeypatch.setattr(
+        highlight_module,
+        "atom_center_point_for",
+        lambda _canvas, atom_id: centers.get(atom_id),
+    )
+    highlighter = CalculationMappingHighlighter(canvas)
+
+    highlighter.show_atom_labels({1}, {2}, {2, 3})
+
+    labels = [
+        item for item in scene.items() if item.data(0) == "calculation_atom_id_label"
+    ]
+    color_by_id = {item.data(1): item.brush().color().name() for item in labels}
+    # Only atoms outside both endpoints go gray; an excluded id that is also
+    # included keeps its endpoint tint.
+    assert color_by_id == {1: "#0072b2", 2: "#d55e00", 3: "#9b9b96"}
+
+
+@pytest.mark.skipif(QApplication is None, reason="PyQt6 is required")
 def test_highlighter_tolerates_missing_scene() -> None:
     highlighter = CalculationMappingHighlighter(SimpleNamespace(scene=lambda: None))
 

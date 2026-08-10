@@ -11,6 +11,7 @@ from chemvas.bootstrap import calculation_bundle as calculation_bundle_cli
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 try:
+    from PyQt6.QtCore import Qt
     from PyQt6.QtGui import QInputMethodEvent
     from PyQt6.QtWidgets import (
         QAbstractItemView,
@@ -413,6 +414,50 @@ def test_catalyst_included_on_both_sides_is_never_cleared() -> None:
 
 
 @pytest.mark.skipif(QApplication is None, reason="PyQt6 is required")
+def test_mapping_rows_and_used_candidates_read_muted() -> None:
+    app = QApplication.instance() or QApplication([])
+    app.setQuitOnLastWindowClosed(False)
+    dialog = CalculationStepDialog(_document_state())
+    faint = "#9b9b96"
+
+    # With no product included yet, the reactant rows have no candidate to map
+    # to, so the atom text reads muted.
+    _select_component(dialog, "reactant", 0, "included", "reactant")
+    row = dialog._mapping_row_by_reactant[0]
+    item = dialog.mapping_table.item(row, 0)
+    assert item is not None
+    assert item.foreground().color().name() == faint
+
+    # A catalyst on both endpoints supplies same-element candidates; its
+    # identity mapping is seeded automatically. Rows with candidates read
+    # normal again.
+    _select_component(dialog, "reactant", 1, "included", "catalyst")
+    _select_component(dialog, "product", 1, "included", "catalyst")
+    row = dialog._mapping_row_by_reactant[0]
+    item = dialog.mapping_table.item(row, 0)
+    assert item is not None
+    assert item.foreground().color().name() != faint
+
+    # Product atom 2 is identity-mapped by reactant 2, so in another row's
+    # dropdown that candidate shows muted; the owning row's own dropdown keeps
+    # it plain.
+    assert dialog._mapping_by_reactant[2] == 2
+    other_combo = dialog._mapping_combos[0]
+    used_index = other_combo.findData(2)
+    assert used_index >= 0
+    foreground = other_combo.itemData(used_index, Qt.ItemDataRole.ForegroundRole)
+    assert foreground is not None and foreground.color().name() == faint
+    own_combo = dialog._mapping_combos[2]
+    own_index = own_combo.findData(2)
+    assert own_combo.itemData(own_index, Qt.ItemDataRole.ForegroundRole) is None
+
+    # Unmapping frees the candidate everywhere.
+    own_combo.setCurrentIndex(0)
+    assert other_combo.itemData(used_index, Qt.ItemDataRole.ForegroundRole) is None
+    dialog.deleteLater()
+
+
+@pytest.mark.skipif(QApplication is None, reason="PyQt6 is required")
 def test_suggest_button_disabled_without_a_suggester() -> None:
     app = QApplication.instance() or QApplication([])
     app.setQuitOnLastWindowClosed(False)
@@ -505,9 +550,15 @@ def test_dialog_highlights_rows_candidates_and_clears_on_reject() -> None:
         ) -> None:
             self.shown.append((reactant_atom_id, product_atom_id))
 
-        def show_atom_labels(self, reactant_atom_ids, product_atom_ids) -> None:
+        def show_atom_labels(
+            self, reactant_atom_ids, product_atom_ids, excluded_atom_ids=()
+        ) -> None:
             self.labels.append(
-                (frozenset(reactant_atom_ids), frozenset(product_atom_ids))
+                (
+                    frozenset(reactant_atom_ids),
+                    frozenset(product_atom_ids),
+                    frozenset(excluded_atom_ids),
+                )
             )
 
         def clear(self) -> None:
@@ -539,8 +590,10 @@ def test_dialog_highlights_rows_candidates_and_clears_on_reject() -> None:
 
     _set_mapping(dialog, 0, 2)
     assert highlighter.shown[-1] == (0, 2)
-    # Atom-id labels are drawn for the included atoms whenever the table refreshes.
+    # Atom-id labels are drawn for the included atoms whenever the table refreshes;
+    # atoms outside both endpoints (here the context-only Cl) go to the gray set.
     assert highlighter.labels and highlighter.labels[-1][0] == frozenset({0, 1, 4})
+    assert highlighter.labels[-1][2] == frozenset({5})
     dialog.reject()
 
     assert highlighter.clear_count > clear_count_after_refresh
