@@ -290,6 +290,11 @@ class CalculationStepDialog(QDialog):
                         self._inclusion_changed(active_side, active_row)
                     )
                 )
+                role.currentIndexChanged.connect(
+                    lambda _index, active_side=side, active_row=row: self._role_changed(
+                        active_side, active_row
+                    )
+                )
                 self._inclusion_combos[(side, row)] = inclusion
                 self._role_combos[(side, row)] = role
                 self.table.setCellWidget(row, inclusion_column, inclusion)
@@ -318,10 +323,69 @@ class CalculationStepDialog(QDialog):
         role_combo = self._role_combos[(side, row)]
         role_combo.setEnabled(inclusion != _UNUSED)
         if inclusion == "context_only" and role_combo.currentData() == side:
+            blocked = role_combo.blockSignals(True)
             role_combo.setCurrentIndex(role_combo.findData("spectator"))
+            role_combo.blockSignals(blocked)
         if not self._loading:
-            self._sync_modeled_charge(side)
-            self._refresh_mapping_table()
+            self._apply_side_selection_effects()
+
+    def _role_changed(self, _side: str, _row: int) -> None:
+        # A role change can flip a component between reactive and catalyst/
+        # spectator, which changes whether the opposite endpoint is locked.
+        if not self._loading:
+            self._apply_side_selection_effects()
+
+    def _apply_side_selection_effects(self) -> None:
+        was_loading = self._loading
+        self._loading = True
+        try:
+            self._refresh_cross_side_availability()
+        finally:
+            self._loading = was_loading
+        self._sync_modeled_charge("reactant")
+        self._sync_modeled_charge("product")
+        self._refresh_mapping_table()
+
+    def _reactive_role_active(self, side: str, row: int) -> bool:
+        # "Reactive" means the component is the endpoint's actual reactant or
+        # product (role equal to the side), as opposed to a catalyst or
+        # spectator that legitimately appears on both endpoints.
+        if self._inclusion_value(side, row) == _UNUSED:
+            return False
+        return str(self._role_combos[(side, row)].currentData()) == side
+
+    def _refresh_cross_side_availability(self) -> None:
+        # A component consumed as this endpoint's reactant (or produced as its
+        # product) cannot also appear at the other endpoint, so lock the other
+        # side. Catalysts and spectators are not reactive and stay editable on
+        # both sides. Locking only disables — it never clears an existing
+        # selection, so switching a role back unlocks the other side intact.
+        for row in range(len(self._components)):
+            reactant_reactive = self._reactive_role_active("reactant", row)
+            product_reactive = self._reactive_role_active("product", row)
+            self._set_side_locked(
+                "product", row, locked=reactant_reactive and not product_reactive
+            )
+            self._set_side_locked(
+                "reactant", row, locked=product_reactive and not reactant_reactive
+            )
+
+    def _set_side_locked(self, side: str, row: int, *, locked: bool) -> None:
+        inclusion_combo = self._inclusion_combos[(side, row)]
+        role_combo = self._role_combos[(side, row)]
+        if locked:
+            inclusion_combo.setEnabled(False)
+            role_combo.setEnabled(False)
+            consumed_as = "product" if side == "reactant" else "reactant"
+            inclusion_combo.setToolTip(
+                f"This component is the step's {consumed_as}; a consumed species "
+                "is not present at the other endpoint. Use Catalyst or Spectator "
+                "to keep it on both sides."
+            )
+        else:
+            inclusion_combo.setEnabled(True)
+            role_combo.setEnabled(inclusion_combo.currentData() != _UNUSED)
+            inclusion_combo.setToolTip("")
 
     def _sync_modeled_charge(self, side: str) -> None:
         charge = sum(
@@ -362,7 +426,7 @@ class CalculationStepDialog(QDialog):
             )
         finally:
             self._loading = False
-        self._refresh_mapping_table()
+        self._apply_side_selection_effects()
 
     def _load_new_step_defaults(self) -> None:
         existing_step_ids = (
@@ -387,7 +451,7 @@ class CalculationStepDialog(QDialog):
                 self._sync_modeled_charge(side)
         finally:
             self._loading = False
-        self._refresh_mapping_table()
+        self._apply_side_selection_effects()
 
     def _load_endpoint(self, side: str, state: CalculationState, endpoint) -> None:
         widgets = self._endpoint_widgets(side)
