@@ -4,7 +4,7 @@ from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, replace
 from typing import Any, Protocol, cast
 
-from PyQt6.QtCore import Qt, pyqtSignal
+from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QBrush, QColor, QInputMethodEvent
 from PyQt6.QtWidgets import (
     QAbstractItemView,
@@ -73,20 +73,12 @@ class _EndpointWidgets:
 
 
 class _MappingHighlighter(Protocol):
-    def show_mapping(
-        self,
-        reactant_atom_id: int,
-        product_atom_id: int | None,
-    ) -> None: ...
-
     def show_atom_labels(
         self,
         reactant_atom_ids: Iterable[int],
         product_atom_ids: Iterable[int],
         excluded_atom_ids: Iterable[int] = (),
     ) -> None: ...
-
-    def clear(self) -> None: ...
 
     def clear_all(self) -> None: ...
 
@@ -120,8 +112,6 @@ class _NoInputMethodTableWidget(QTableWidget):
 
 
 class _MappingProductCombo(QComboBox):
-    popup_closed = pyqtSignal()
-
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         # A structure with many same-element atoms gives this combo a long
@@ -131,10 +121,6 @@ class _MappingProductCombo(QComboBox):
         # combobox popup restores the capped, scrollable list.
         self.setStyleSheet("QComboBox { combobox-popup: 0; }")
         self.setMaxVisibleItems(12)
-
-    def hidePopup(self) -> None:
-        super().hidePopup()
-        self.popup_closed.emit()
 
 
 class CalculationStepDialog(QDialog):
@@ -285,7 +271,6 @@ class CalculationStepDialog(QDialog):
         mapping_horizontal_header = self.mapping_table.horizontalHeader()
         if mapping_horizontal_header is not None:
             mapping_horizontal_header.setStretchLastSection(True)
-        self.mapping_table.currentCellChanged.connect(self._mapping_row_changed)
         layout.addWidget(self.mapping_table)
 
         buttons = QDialogButtonBox(
@@ -565,24 +550,10 @@ class CalculationStepDialog(QDialog):
         return state, CalculationStepEndpoint(state_id, tuple(roles))
 
     def _refresh_mapping_table(self) -> None:
-        self._clear_mapping_highlight()
         reactant_state, _reactant_endpoint = self._build_endpoint("reactant")
         product_state, _product_endpoint = self._build_endpoint("product")
         reactant_ids = included_atom_ids(reactant_state)
         product_ids = included_atom_ids(product_state)
-        if self._mapping_highlighter is not None:
-            excluded_ids = (
-                {
-                    atom_id
-                    for component in self._components
-                    for atom_id in component.atom_ids
-                }
-                - set(reactant_ids)
-                - set(product_ids)
-            )
-            self._mapping_highlighter.show_atom_labels(
-                reactant_ids, product_ids, excluded_ids
-            )
         self._seed_new_identity_defaults(
             reactant_state=reactant_state,
             product_state=product_state,
@@ -648,16 +619,6 @@ class CalculationStepDialog(QDialog):
                 product_combo.currentIndexChanged.connect(
                     lambda _index, atom_id=reactant_atom_id, combo=product_combo: (
                         self._mapping_changed(atom_id, combo)
-                    )
-                )
-                product_combo.highlighted.connect(
-                    lambda index, atom_id=reactant_atom_id, combo=product_combo: (
-                        self._mapping_candidate_highlighted(atom_id, combo, index)
-                    )
-                )
-                product_combo.popup_closed.connect(
-                    lambda atom_id=reactant_atom_id, combo=product_combo: (
-                        self._show_mapping_highlight(atom_id, combo.currentData())
                     )
                 )
                 self._mapping_combos[reactant_atom_id] = product_combo
@@ -774,53 +735,6 @@ class CalculationStepDialog(QDialog):
             product_atom_id if type(product_atom_id) is int else None
         )
         self._update_mapping_status()
-        self._show_mapping_highlight(reactant_atom_id, product_atom_id)
-
-    def _mapping_row_changed(
-        self,
-        current_row: int,
-        _current_column: int,
-        _previous_row: int,
-        _previous_column: int,
-    ) -> None:
-        if self._loading or current_row < 0:
-            return
-        item = self.mapping_table.item(current_row, 0)
-        if item is None:
-            self._clear_mapping_highlight()
-            return
-        reactant_atom_id = item.data(Qt.ItemDataRole.UserRole)
-        if type(reactant_atom_id) is not int:
-            self._clear_mapping_highlight()
-            return
-        self._show_mapping_highlight(
-            reactant_atom_id,
-            self._mapping_by_reactant.get(reactant_atom_id),
-        )
-
-    def _mapping_candidate_highlighted(
-        self,
-        reactant_atom_id: int,
-        combo: QComboBox,
-        index: int,
-    ) -> None:
-        self._show_mapping_highlight(reactant_atom_id, combo.itemData(index))
-
-    def _show_mapping_highlight(
-        self,
-        reactant_atom_id: int,
-        product_atom_id: object,
-    ) -> None:
-        if self._mapping_highlighter is None:
-            return
-        self._mapping_highlighter.show_mapping(
-            reactant_atom_id,
-            product_atom_id if type(product_atom_id) is int else None,
-        )
-
-    def _clear_mapping_highlight(self) -> None:
-        if self._mapping_highlighter is not None:
-            self._mapping_highlighter.clear()
 
     def _active_correspondence(
         self,
@@ -845,6 +759,22 @@ class CalculationStepDialog(QDialog):
             reactant_state,
             product_state,
         )
+        if self._mapping_highlighter is not None:
+            # Label colors track the mapping itself: a mapped reactant/product
+            # atom takes its endpoint tint, every other atom stays gray until
+            # it is mapped.
+            mapped_reactant_ids = {entry.reactant_atom_id for entry in correspondence}
+            mapped_product_ids = {entry.product_atom_id for entry in correspondence}
+            all_atom_ids = {
+                atom_id
+                for component in self._components
+                for atom_id in component.atom_ids
+            }
+            self._mapping_highlighter.show_atom_labels(
+                mapped_reactant_ids,
+                mapped_product_ids,
+                all_atom_ids - mapped_reactant_ids - mapped_product_ids,
+            )
         product_counts: dict[int, int] = {}
         mismatched_reactant_ids: set[int] = set()
         for entry in correspondence:

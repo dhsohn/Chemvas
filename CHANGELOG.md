@@ -41,6 +41,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   restores it.
 
 ### Changed
+- **Canvas atom-id labels now color by mapping state**: while the Calculation
+  dialog is open, an atom's id label takes the blue reactant or orange product
+  tint only once that atom is actually mapped; every unmapped atom stays gray.
+  Mapping progress is visible on the drawing at a glance.
+- **Mapping rings removed from the canvas**: the blue/orange rings that framed
+  the selected correspondence pair (drawn on row selection and while hovering
+  dropdown candidates) are gone — they read as clutter over the structure.
+  The mapping-state label colors above carry that information instead.
 - **Mapping markers on the canvas lost their R/P letters**: while picking an
   atom correspondence, the rings around the selected reactant and product
   atoms no longer float an "R"/"P" letter beside the atom — the letters sat

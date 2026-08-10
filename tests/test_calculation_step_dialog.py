@@ -536,19 +536,13 @@ def test_structural_suggestion_reports_when_nothing_new() -> None:
 
 
 @pytest.mark.skipif(QApplication is None, reason="PyQt6 is required")
-def test_dialog_highlights_rows_candidates_and_clears_on_reject() -> None:
+def test_dialog_label_colors_track_mapping_and_clear_on_reject() -> None:
     class _Highlighter:
         def __init__(self) -> None:
-            self.shown: list[tuple[int, int | None]] = []
-            self.labels: list[tuple[frozenset[int], frozenset[int]]] = []
+            self.labels: list[
+                tuple[frozenset[int], frozenset[int], frozenset[int]]
+            ] = []
             self.clear_count = 0
-
-        def show_mapping(
-            self,
-            reactant_atom_id: int,
-            product_atom_id: int | None,
-        ) -> None:
-            self.shown.append((reactant_atom_id, product_atom_id))
 
         def show_atom_labels(
             self, reactant_atom_ids, product_atom_ids, excluded_atom_ids=()
@@ -561,9 +555,6 @@ def test_dialog_highlights_rows_candidates_and_clears_on_reject() -> None:
                 )
             )
 
-        def clear(self) -> None:
-            self.clear_count += 1
-
         def clear_all(self) -> None:
             self.clear_count += 1
 
@@ -575,28 +566,27 @@ def test_dialog_highlights_rows_candidates_and_clears_on_reject() -> None:
         mapping_highlighter=highlighter,
     )
     _configure_separate_endpoints(dialog)
-    clear_count_after_refresh = highlighter.clear_count
 
-    row = dialog._mapping_row_by_reactant[0]
-    dialog.mapping_table.setCurrentCell(row, 0)
-    assert highlighter.shown[-1] == (0, None)
-
-    combo = dialog._mapping_combos[0]
-    product_index = combo.findData(2)
-    combo.highlighted.emit(product_index)
-    assert highlighter.shown[-1] == (0, 2)
-    combo.hidePopup()
-    assert highlighter.shown[-1] == (0, None)
+    # Label tints follow the mapping, not mere inclusion: only the identity-
+    # seeded catalyst atom is mapped so far, everything else is gray.
+    assert highlighter.labels
+    assert highlighter.labels[-1] == (
+        frozenset({4}),
+        frozenset({4}),
+        frozenset({0, 1, 2, 3, 5}),
+    )
 
     _set_mapping(dialog, 0, 2)
-    assert highlighter.shown[-1] == (0, 2)
-    # Atom-id labels are drawn for the included atoms whenever the table refreshes;
-    # atoms outside both endpoints (here the context-only Cl) go to the gray set.
-    assert highlighter.labels and highlighter.labels[-1][0] == frozenset({0, 1, 4})
-    assert highlighter.labels[-1][2] == frozenset({5})
+    assert highlighter.labels[-1] == (
+        frozenset({0, 4}),
+        frozenset({2, 4}),
+        frozenset({1, 3, 5}),
+    )
+
+    clear_count_before_reject = highlighter.clear_count
     dialog.reject()
 
-    assert highlighter.clear_count > clear_count_after_refresh
+    assert highlighter.clear_count > clear_count_before_reject
     dialog.deleteLater()
 
 
@@ -614,9 +604,6 @@ def test_window_editor_injects_and_finally_clears_canvas_highlighter(
             self.canvas = active_canvas
             self.clear_count = 0
             instances.append(self)
-
-        def clear(self) -> None:
-            self.clear_count += 1
 
         def clear_all(self) -> None:
             self.clear_count += 1

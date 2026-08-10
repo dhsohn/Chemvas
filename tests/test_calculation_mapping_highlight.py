@@ -8,13 +8,8 @@ import pytest
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 try:
-    from PyQt6.QtCore import QPointF, QRectF, Qt
-    from PyQt6.QtWidgets import (
-        QApplication,
-        QGraphicsPathItem,
-        QGraphicsRectItem,
-        QGraphicsScene,
-    )
+    from PyQt6.QtCore import QPointF
+    from PyQt6.QtWidgets import QApplication, QGraphicsScene
 except ModuleNotFoundError:
     QApplication = None
 
@@ -32,113 +27,18 @@ from tests.test_calculation_plan import _document_state
 
 
 @pytest.mark.skipif(QApplication is None, reason="PyQt6 is required")
-def test_highlighter_distinguishes_mapping_without_changing_selection(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    app = QApplication.instance() or QApplication([])
-    app.setQuitOnLastWindowClosed(False)
-    scene = QGraphicsScene()
-    selected = QGraphicsRectItem(0.0, 0.0, 4.0, 4.0)
-    selected.setFlag(QGraphicsRectItem.GraphicsItemFlag.ItemIsSelectable, True)
-    scene.addItem(selected)
-    selected.setSelected(True)
-    canvas = SimpleNamespace(scene=lambda: scene)
-    rects = {
-        10: QRectF(10.0, 20.0, 12.0, 12.0),
-        20: QRectF(40.0, 20.0, 12.0, 12.0),
-    }
-    monkeypatch.setattr(
-        highlight_module,
-        "selection_indicator_rect_for_atom_for",
-        lambda _canvas, atom_id: rects.get(atom_id),
-    )
-    highlighter = CalculationMappingHighlighter(canvas)
-
-    highlighter.show_mapping(10, 20)
-
-    overlays = [
-        item
-        for item in scene.items()
-        if item.data(0) == "calculation_mapping_highlight"
-    ]
-    paths = [item for item in overlays if isinstance(item, QGraphicsPathItem)]
-    # Ring markers only — the floating R/P letters were removed as visual
-    # noise; the role tag lives on in the item data.
-    assert len(overlays) == 2
-    assert overlays == paths
-    assert {item.data(1) for item in overlays} == {"R", "P"}
-    assert {path.pen().color().name() for path in paths} == {
-        "#0072b2",
-        "#d55e00",
-    }
-    assert {path.pen().style() for path in paths} == {
-        Qt.PenStyle.SolidLine,
-        Qt.PenStyle.DashLine,
-    }
-    assert scene.selectedItems() == [selected]
-
-    highlighter.clear()
-
-    assert scene.items() == [selected]
-    assert selected.isSelected() is True
-
-
-@pytest.mark.skipif(QApplication is None, reason="PyQt6 is required")
-def test_highlighter_draws_concentric_roles_and_skips_missing_atoms(
+def test_highlighter_labels_atoms_with_endpoint_tints(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     app = QApplication.instance() or QApplication([])
     app.setQuitOnLastWindowClosed(False)
     scene = QGraphicsScene()
     canvas = SimpleNamespace(scene=lambda: scene)
-    monkeypatch.setattr(
-        highlight_module,
-        "selection_indicator_rect_for_atom_for",
-        lambda _canvas, atom_id: (
-            QRectF(10.0, 20.0, 12.0, 12.0) if atom_id == 4 else None
-        ),
-    )
-    highlighter = CalculationMappingHighlighter(canvas)
-
-    highlighter.show_mapping(4, 4)
-
-    paths = [item for item in scene.items() if isinstance(item, QGraphicsPathItem)]
-    assert len(paths) == 2
-    assert len({path.path().boundingRect().width() for path in paths}) == 2
-
-    highlighter.show_mapping(4, 99)
-
-    assert {
-        item.data(1)
-        for item in scene.items()
-        if item.data(0) == "calculation_mapping_highlight"
-    } == {"R"}
-
-
-@pytest.mark.skipif(QApplication is None, reason="PyQt6 is required")
-def test_highlighter_labels_atoms_and_coexist_with_mapping_marks(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    app = QApplication.instance() or QApplication([])
-    app.setQuitOnLastWindowClosed(False)
-    scene = QGraphicsScene()
-    canvas = SimpleNamespace(scene=lambda: scene)
-    rects = {
-        1: QRectF(0.0, 0.0, 10.0, 10.0),
-        2: QRectF(20.0, 0.0, 10.0, 10.0),
-        # A wide indicator rect, as a long label like OTs/PPh3 produces.
-        3: QRectF(40.0, 0.0, 80.0, 10.0),
-    }
     centers = {
         1: QPointF(5.0, 5.0),
         2: QPointF(25.0, 5.0),
         3: QPointF(45.0, 5.0),
     }
-    monkeypatch.setattr(
-        highlight_module,
-        "selection_indicator_rect_for_atom_for",
-        lambda _canvas, atom_id: rects.get(atom_id),
-    )
     monkeypatch.setattr(
         highlight_module,
         "atom_center_point_for",
@@ -153,27 +53,17 @@ def test_highlighter_labels_atoms_and_coexist_with_mapping_marks(
     ]
     assert {item.data(1) for item in labels} == {1, 2, 3}
     color_by_id = {item.data(1): item.brush().color().name() for item in labels}
-    # Reactant-included atoms (1, 2) take the reactant tint; 2 stays reactant even
-    # though it is also in the product set, and product-only 3 takes the product tint.
+    # Reactant-set atoms (1, 2) take the reactant tint; 2 stays reactant even
+    # though it is also in the product set, and product-only 3 takes the
+    # product tint.
     assert color_by_id[1] == "#0072b2"
     assert color_by_id[2] == "#0072b2"
     assert color_by_id[3] == "#d55e00"
 
-    # The id hugs the atom's own anchor (center x 45), not the far right edge of
-    # its wide indicator rect (x 120): it sits within a few units of the center.
+    # The id hugs the atom's own anchor, sitting within a few units of the
+    # center rather than floating away from the glyph.
     label_3 = next(item for item in labels if item.data(1) == 3)
     assert abs(label_3.pos().x() - centers[3].x()) < 10.0
-
-    # A mapping mark is a separate layer: clear() drops only the mark, not labels.
-    highlighter.show_mapping(1, 2)
-    assert any(
-        item.data(0) == "calculation_mapping_highlight" for item in scene.items()
-    )
-    highlighter.clear()
-    assert not any(
-        item.data(0) == "calculation_mapping_highlight" for item in scene.items()
-    )
-    assert any(item.data(0) == "calculation_atom_id_label" for item in scene.items())
 
     highlighter.clear_all()
     assert scene.items() == []
@@ -205,8 +95,8 @@ def test_highlighter_grays_out_excluded_atom_labels(
         item for item in scene.items() if item.data(0) == "calculation_atom_id_label"
     ]
     color_by_id = {item.data(1): item.brush().color().name() for item in labels}
-    # Only atoms outside both endpoints go gray; an excluded id that is also
-    # included keeps its endpoint tint.
+    # Only atoms outside both endpoint sets go gray; an excluded id that is
+    # also included keeps its endpoint tint.
     assert color_by_id == {1: "#0072b2", 2: "#d55e00", 3: "#9b9b96"}
 
 
@@ -214,14 +104,12 @@ def test_highlighter_grays_out_excluded_atom_labels(
 def test_highlighter_tolerates_missing_scene() -> None:
     highlighter = CalculationMappingHighlighter(SimpleNamespace(scene=lambda: None))
 
-    highlighter.show_mapping(1, 2)
     highlighter.show_atom_labels({1}, {2})
-    highlighter.clear()
     highlighter.clear_all()
 
 
 @pytest.mark.skipif(QApplication is None, reason="PyQt6 is required")
-def test_real_canvas_highlight_is_transient_and_preserves_document_selection() -> None:
+def test_real_canvas_labels_are_transient_and_preserve_document_selection() -> None:
     app = QApplication.instance() or QApplication([])
     app.setQuitOnLastWindowClosed(False)
     canvas = CanvasView(renderer=Renderer())
@@ -235,22 +123,21 @@ def test_real_canvas_highlight_is_transient_and_preserves_document_selection() -
     before = document_service.snapshot_state()
     highlighter = CalculationMappingHighlighter(canvas)
 
-    highlighter.show_mapping(0, 2)
+    highlighter.show_atom_labels({0}, {2}, {1})
 
-    overlays = [
+    labels = [
         item
         for item in canvas.scene().items()
-        if item.data(0) == "calculation_mapping_highlight"
+        if item.data(0) == "calculation_atom_id_label"
     ]
-    assert len(overlays) == 2
+    assert {item.data(1) for item in labels} == {0, 1, 2}
     assert selected.isSelected() is True
     assert document_service.snapshot_state() == before
 
-    highlighter.clear()
+    highlighter.clear_all()
 
     assert not any(
-        item.data(0) == "calculation_mapping_highlight"
-        for item in canvas.scene().items()
+        item.data(0) == "calculation_atom_id_label" for item in canvas.scene().items()
     )
     assert selected.isSelected() is True
     assert document_service.snapshot_state() == before
