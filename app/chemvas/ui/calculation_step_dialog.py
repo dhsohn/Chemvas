@@ -71,6 +71,14 @@ class _MappingHighlighter(Protocol):
     def clear(self) -> None: ...
 
 
+class _CorrespondenceSuggester(Protocol):
+    def __call__(
+        self,
+        reactant_atom_ids: frozenset[int],
+        product_atom_ids: frozenset[int],
+    ) -> list[tuple[int, int]]: ...
+
+
 class _NoInputMethodTableWidget(QTableWidget):
     """Table that ignores input-method composition outright.
 
@@ -106,12 +114,14 @@ class CalculationStepDialog(QDialog):
         *,
         parent: QWidget | None = None,
         mapping_highlighter: _MappingHighlighter | None = None,
+        correspondence_suggester: _CorrespondenceSuggester | None = None,
     ) -> None:
         super().__init__(parent)
         self.setWindowTitle("Calculation States and Elementary Step")
         self.resize(1080, 760)
         self._document_state = document_state
         self._mapping_highlighter = mapping_highlighter
+        self._correspondence_suggester = correspondence_suggester
         self._components = inspect_components(document_state)
         raw_model = document_state.get("model")
         if not isinstance(raw_model, Mapping):
@@ -206,6 +216,16 @@ class CalculationStepDialog(QDialog):
         self.mapping_status.setWordWrap(True)
         self.mapping_status.setAccessibleName("Atom correspondence readiness")
         mapping_actions.addWidget(self.mapping_status, 1)
+        self.suggest_mapping_button = QPushButton("Suggest by structure", self)
+        self.suggest_mapping_button.setToolTip(
+            "Fill unmapped atoms from the maximum common substructure (RDKit). "
+            "Suggestions are a starting point — review them before saving."
+        )
+        self.suggest_mapping_button.clicked.connect(self._suggest_structural_mapping)
+        self.suggest_mapping_button.setEnabled(
+            self._correspondence_suggester is not None
+        )
+        mapping_actions.addWidget(self.suggest_mapping_button)
         self.identity_mapping_button = QPushButton("Map identical atom IDs", self)
         self.identity_mapping_button.setToolTip(
             "Suggest only exact Chemvas atom IDs shared by both endpoints."
@@ -216,6 +236,11 @@ class CalculationStepDialog(QDialog):
         self.clear_mapping_button.clicked.connect(self._clear_active_mappings)
         mapping_actions.addWidget(self.clear_mapping_button)
         layout.addLayout(mapping_actions)
+
+        self.suggestion_status = QLabel(self)
+        self.suggestion_status.setWordWrap(True)
+        self.suggestion_status.setAccessibleName("Structural suggestion status")
+        layout.addWidget(self.suggestion_status)
 
         self.mapping_table = _NoInputMethodTableWidget(0, 3, self)
         # Same constraint as the components table above: no direct cell editing.
@@ -633,6 +658,55 @@ class CalculationStepDialog(QDialog):
             self._mapping_by_reactant[atom_id] = None
         self._refresh_mapping_table()
 
+    def _suggest_structural_mapping(self) -> None:
+        if self._correspondence_suggester is None:
+            return
+        reactant_state, _reactant_endpoint = self._build_endpoint("reactant")
+        product_state, _product_endpoint = self._build_endpoint("product")
+        reactant_ids = included_atom_ids(reactant_state)
+        product_ids = included_atom_ids(product_state)
+        suggestions = self._correspondence_suggester(
+            frozenset(reactant_ids), frozenset(product_ids)
+        )
+        used_product_ids = {
+            product_atom_id
+            for reactant_atom_id, product_atom_id in self._mapping_by_reactant.items()
+            if reactant_atom_id in reactant_ids and type(product_atom_id) is int
+        }
+        applied = 0
+        for reactant_atom_id, product_atom_id in suggestions:
+            # Only fill gaps: never overwrite a mapping the researcher already
+            # set, keep the same-element rule, and never reuse a product atom.
+            if (
+                reactant_atom_id not in reactant_ids
+                or product_atom_id not in product_ids
+            ):
+                continue
+            if self._mapping_by_reactant.get(reactant_atom_id) is not None:
+                continue
+            if product_atom_id in used_product_ids:
+                continue
+            if (
+                self._atom_elements[reactant_atom_id]
+                != self._atom_elements[product_atom_id]
+            ):
+                continue
+            self._mapping_by_reactant[reactant_atom_id] = product_atom_id
+            used_product_ids.add(product_atom_id)
+            applied += 1
+        self._refresh_mapping_table()
+        if applied:
+            note = (
+                f"Suggested {applied} mapping(s) from the shared substructure. "
+                "Review them and map the reaction center yourself."
+            )
+        else:
+            note = (
+                "No new structural suggestion — RDKit found no shared substructure "
+                "beyond what is already mapped."
+            )
+        self.suggestion_status.setText(note)
+
     def _mapping_changed(self, reactant_atom_id: int, combo: QComboBox) -> None:
         if self._loading:
             return
@@ -817,6 +891,26 @@ class CalculationStepDialog(QDialog):
         super().done(result)
 
 
+def _correspondence_suggester_for(
+    canvas: Any, document_state: Mapping[str, object]
+) -> _CorrespondenceSuggester | None:
+    adapter = getattr(canvas, "rdkit", None)
+    raw_model = document_state.get("model")
+    if adapter is None or not isinstance(raw_model, Mapping):
+        return None
+    model = deserialize_model_state(cast(Mapping[str, object], raw_model))
+
+    def suggest(
+        reactant_atom_ids: frozenset[int],
+        product_atom_ids: frozenset[int],
+    ) -> list[tuple[int, int]]:
+        return adapter.suggest_atom_correspondence(
+            model, reactant_atom_ids, product_atom_ids
+        )
+
+    return suggest
+
+
 def edit_calculation_plan_for_window(
     window: Any,
     *,
@@ -832,11 +926,13 @@ def edit_calculation_plan_for_window(
         )
         return False
     mapping_highlighter = CalculationMappingHighlighter(canvas)
+    correspondence_suggester = _correspondence_suggester_for(canvas, document_state)
     try:
         dialog = dialog_factory(
             document_state,
             parent=window,
             mapping_highlighter=mapping_highlighter,
+            correspondence_suggester=correspondence_suggester,
         )
         dialog_result = dialog.exec()
     finally:

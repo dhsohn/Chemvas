@@ -8,6 +8,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Structural atom-mapping suggestions**: the Calculation dialog's atom
+  correspondence editor gains a **Suggest by structure** button that fills
+  unmapped reactant atoms from the maximum common substructure of the included
+  reactant and product (RDKit). It only fills gaps — it never overwrites a
+  mapping you set, keeps the same-element rule, and reuses no product atom — so
+  the conserved framework is proposed and the reaction center is left for you
+  to map and review. The button is disabled when RDKit is unavailable.
 - **Role-aware endpoint locking in the Calculation dialog**: once a drawn
   component is included as a step's reactant (or product), the same
   component's opposite endpoint is disabled, so a consumed species cannot be

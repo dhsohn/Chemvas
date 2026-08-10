@@ -238,9 +238,15 @@ connected component one of these inclusion modes:
 
 Roles (`reactant`, `product`, `catalyst`, `spectator`) belong to a step endpoint,
 not globally to a structure. A state can therefore be S01's product and S02's
-reactant without changing the state itself. The atom-correspondence table lists
+reactant without changing the state itself. Including a component as an
+endpoint's own reactant or product disables it on the opposite endpoint (a
+consumed species is not present on both sides), while catalysts and spectators
+stay editable on both. The atom-correspondence table lists
 only included reactant atoms and offers same-element product atoms by stable
-Chemvas ID. Exact IDs shared by both endpoints, such as a drawn catalyst reused
+Chemvas ID. **Suggest by structure** _(RDKit)_ fills the unmapped atoms of the
+maximum common substructure — the conserved framework — leaving the reaction
+center for you to map; it never overwrites a mapping you made and is a
+review-only starting point, not an automated mechanism inference. Exact IDs shared by both endpoints, such as a drawn catalyst reused
 on both sides, are suggested once; they are not inferred by element or position,
 and an explicit **Unmapped** choice is preserved. Duplicate product mappings are
 rejected. The GUI saves an incomplete table as a draft, while its mapped/total
