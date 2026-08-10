@@ -36,6 +36,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   restores it.
 
 ### Fixed
+- **Atom-correspondence dropdown could not be scrolled**: when a structure has
+  many same-element atoms, the product-atom dropdown in the Calculation dialog
+  showed every candidate in one over-tall popup with no scrollbar, so the lower
+  atoms ran off-screen and the mouse wheel had nothing to scroll. The popup is
+  now capped to a visible window with a working scrollbar.
 - **Crash while using the Calculation dialog with an IME**: clicking a table
   cell in **Calculation ▸ Edit States and Steps...** while an input-method
   composition (e.g. Korean) was active could crash the whole app on Wayland,
