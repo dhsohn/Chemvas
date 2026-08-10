@@ -5,7 +5,7 @@ from dataclasses import dataclass, replace
 from typing import Any, Protocol, cast
 
 from PyQt6.QtCore import Qt, pyqtSignal
-from PyQt6.QtGui import QInputMethodEvent
+from PyQt6.QtGui import QBrush, QColor, QInputMethodEvent
 from PyQt6.QtWidgets import (
     QAbstractItemView,
     QComboBox,
@@ -83,6 +83,7 @@ class _MappingHighlighter(Protocol):
         self,
         reactant_atom_ids: Iterable[int],
         product_atom_ids: Iterable[int],
+        excluded_atom_ids: Iterable[int] = (),
     ) -> None: ...
 
     def clear(self) -> None: ...
@@ -570,7 +571,18 @@ class CalculationStepDialog(QDialog):
         reactant_ids = included_atom_ids(reactant_state)
         product_ids = included_atom_ids(product_state)
         if self._mapping_highlighter is not None:
-            self._mapping_highlighter.show_atom_labels(reactant_ids, product_ids)
+            excluded_ids = (
+                {
+                    atom_id
+                    for component in self._components
+                    for atom_id in component.atom_ids
+                }
+                - set(reactant_ids)
+                - set(product_ids)
+            )
+            self._mapping_highlighter.show_atom_labels(
+                reactant_ids, product_ids, excluded_ids
+            )
         self._seed_new_identity_defaults(
             reactant_state=reactant_state,
             product_state=product_state,
@@ -591,6 +603,15 @@ class CalculationStepDialog(QDialog):
                     reactant_item.flags() & ~Qt.ItemFlag.ItemIsEditable
                 )
                 reactant_item.setData(Qt.ItemDataRole.UserRole, reactant_atom_id)
+                # An atom with no same-element product candidate cannot be mapped
+                # until the counterpart component joins the product endpoint, so
+                # its row reads muted rather than actionable.
+                if not any(
+                    self._atom_elements[product_atom_id]
+                    == self._atom_elements[reactant_atom_id]
+                    for product_atom_id in product_ids
+                ):
+                    reactant_item.setForeground(QBrush(QColor(PALETTE["text_faint"])))
                 self.mapping_table.setItem(row, 0, reactant_item)
 
                 product_combo = _MappingProductCombo(self.mapping_table)
@@ -877,6 +898,29 @@ class CalculationStepDialog(QDialog):
             item = self.mapping_table.item(row, 2)
             if item is not None:
                 item.setText(status)
+        self._refresh_used_candidate_marks()
+
+    def _refresh_used_candidate_marks(self) -> None:
+        # A product atom already mapped by another row would only produce a
+        # "Duplicate product" error if picked again, so it shows muted in every
+        # other row's dropdown. Marking only — the pick stays possible and the
+        # existing duplicate validation still decides.
+        muted = QBrush(QColor(PALETTE["text_faint"]))
+        for reactant_atom_id, combo in self._mapping_combos.items():
+            for index in range(1, combo.count()):
+                product_atom_id = combo.itemData(index)
+                if type(product_atom_id) is not int:
+                    continue
+                used_by_other = any(
+                    mapped == product_atom_id
+                    for other_id, mapped in self._mapping_by_reactant.items()
+                    if other_id != reactant_atom_id
+                )
+                combo.setItemData(
+                    index,
+                    muted if used_by_other else None,
+                    Qt.ItemDataRole.ForegroundRole,
+                )
 
     def _atom_description(self, atom_id: int) -> str:
         return (
