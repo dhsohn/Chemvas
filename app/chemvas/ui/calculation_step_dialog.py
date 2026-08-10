@@ -110,6 +110,16 @@ class _NoInputMethodTableWidget(QTableWidget):
 class _MappingProductCombo(QComboBox):
     popup_closed = pyqtSignal()
 
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        # A structure with many same-element atoms gives this combo a long
+        # candidate list. Qt otherwise ignores maxVisibleItems and shows every
+        # item in one over-tall popup with no scrollbar, so the lower atoms run
+        # off-screen and the wheel has nothing to scroll; disabling the native
+        # combobox popup restores the capped, scrollable list.
+        self.setStyleSheet("QComboBox { combobox-popup: 0; }")
+        self.setMaxVisibleItems(12)
+
     def hidePopup(self) -> None:
         super().hidePopup()
         self.popup_closed.emit()

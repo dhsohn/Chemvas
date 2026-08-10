@@ -23,7 +23,10 @@ if QApplication is not None:
         calculation_plan_for_document,
         step_readiness,
     )
-    from chemvas.ui.calculation_step_dialog import CalculationStepDialog
+    from chemvas.ui.calculation_step_dialog import (
+        CalculationStepDialog,
+        _MappingProductCombo,
+    )
 
 from tests.test_calculation_plan import _document_state, _plan
 
@@ -433,6 +436,27 @@ def test_structural_suggestion_fills_only_safe_gaps() -> None:
     assert dialog._mapping_by_reactant[1] == 3
     assert "Suggested 1 mapping" in dialog.suggestion_status.text()
     dialog.deleteLater()
+
+
+@pytest.mark.skipif(QApplication is None, reason="PyQt6 is required")
+def test_mapping_product_combo_popup_scrolls_a_long_candidate_list() -> None:
+    app = QApplication.instance() or QApplication([])
+    app.setQuitOnLastWindowClosed(False)
+    combo = _MappingProductCombo()
+    for atom_id in range(21):
+        combo.addItem(f"C #{atom_id}", atom_id)
+    assert combo.maxVisibleItems() == 12
+
+    combo.show()
+    combo.showPopup()
+    app.processEvents()
+    scrollbar = combo.view().verticalScrollBar()
+    # Capped to maxVisibleItems, so the surplus atoms sit behind a scrollable bar
+    # the wheel can reach — not stacked in one over-tall popup that runs off the
+    # screen with no scrollbar (the reported bug).
+    assert scrollbar.maximum() > scrollbar.minimum()
+    combo.hidePopup()
+    combo.deleteLater()
 
 
 @pytest.mark.skipif(QApplication is None, reason="PyQt6 is required")
