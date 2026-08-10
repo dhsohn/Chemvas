@@ -113,11 +113,61 @@ def test_highlighter_draws_concentric_roles_and_skips_missing_atoms(
 
 
 @pytest.mark.skipif(QApplication is None, reason="PyQt6 is required")
+def test_highlighter_labels_atoms_and_coexist_with_mapping_marks(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    app = QApplication.instance() or QApplication([])
+    app.setQuitOnLastWindowClosed(False)
+    scene = QGraphicsScene()
+    canvas = SimpleNamespace(scene=lambda: scene)
+    rects = {
+        1: QRectF(0.0, 0.0, 10.0, 10.0),
+        2: QRectF(20.0, 0.0, 10.0, 10.0),
+        3: QRectF(40.0, 0.0, 10.0, 10.0),
+    }
+    monkeypatch.setattr(
+        highlight_module,
+        "selection_indicator_rect_for_atom_for",
+        lambda _canvas, atom_id: rects.get(atom_id),
+    )
+    highlighter = CalculationMappingHighlighter(canvas)
+
+    highlighter.show_atom_labels({1, 2}, {2, 3})
+
+    labels = [
+        item for item in scene.items() if item.data(0) == "calculation_atom_id_label"
+    ]
+    assert {item.data(1) for item in labels} == {1, 2, 3}
+    color_by_id = {item.data(1): item.brush().color().name() for item in labels}
+    # Reactant-included atoms (1, 2) take the reactant tint; 2 stays reactant even
+    # though it is also in the product set, and product-only 3 takes the product tint.
+    assert color_by_id[1] == "#0072b2"
+    assert color_by_id[2] == "#0072b2"
+    assert color_by_id[3] == "#d55e00"
+
+    # A mapping mark is a separate layer: clear() drops only the mark, not labels.
+    highlighter.show_mapping(1, 2)
+    assert any(
+        item.data(0) == "calculation_mapping_highlight" for item in scene.items()
+    )
+    highlighter.clear()
+    assert not any(
+        item.data(0) == "calculation_mapping_highlight" for item in scene.items()
+    )
+    assert any(item.data(0) == "calculation_atom_id_label" for item in scene.items())
+
+    highlighter.clear_all()
+    assert scene.items() == []
+
+
+@pytest.mark.skipif(QApplication is None, reason="PyQt6 is required")
 def test_highlighter_tolerates_missing_scene() -> None:
     highlighter = CalculationMappingHighlighter(SimpleNamespace(scene=lambda: None))
 
     highlighter.show_mapping(1, 2)
+    highlighter.show_atom_labels({1}, {2})
     highlighter.clear()
+    highlighter.clear_all()
 
 
 @pytest.mark.skipif(QApplication is None, reason="PyQt6 is required")

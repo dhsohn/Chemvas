@@ -1725,7 +1725,7 @@ class RDKitAdapterTest(unittest.TestCase):
     @unittest.skipUnless(
         _RealChem is not None, "RDKit is required for MCS suggestion tests"
     )
-    def test_suggest_atom_correspondence_maps_conserved_frame_only(self) -> None:
+    def test_suggest_atom_correspondence_maps_bond_order_change(self) -> None:
         adapter = RDKitAdapter()
         model = MoleculeModel()
         # Reactant propan-1-ol: C0-C1-C2-O3 (all single bonds).
@@ -1749,9 +1749,9 @@ class RDKitAdapterTest(unittest.TestCase):
             model, frozenset({r0, r1, r2, r3}), frozenset({p0, p1, p2, p3})
         )
 
-        # The conserved carbon chain is suggested; the oxygen whose bond order
-        # changed (the reaction center) is left for the researcher to map.
-        self.assertEqual(set(pairs), {(r0, p0), (r1, p1), (r2, p2)})
+        # The oxygen's bond only changes order, so it is now suggested along with
+        # the conserved carbon chain — every atom is mapped one-to-one.
+        self.assertEqual(set(pairs), {(r0, p0), (r1, p1), (r2, p2), (r3, p3)})
         self.assertTrue(
             all(model.atoms[r].element == model.atoms[p].element for r, p in pairs)
         )

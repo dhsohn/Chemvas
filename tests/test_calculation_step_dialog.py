@@ -456,6 +456,7 @@ def test_dialog_highlights_rows_candidates_and_clears_on_reject() -> None:
     class _Highlighter:
         def __init__(self) -> None:
             self.shown: list[tuple[int, int | None]] = []
+            self.labels: list[tuple[frozenset[int], frozenset[int]]] = []
             self.clear_count = 0
 
         def show_mapping(
@@ -465,7 +466,15 @@ def test_dialog_highlights_rows_candidates_and_clears_on_reject() -> None:
         ) -> None:
             self.shown.append((reactant_atom_id, product_atom_id))
 
+        def show_atom_labels(self, reactant_atom_ids, product_atom_ids) -> None:
+            self.labels.append(
+                (frozenset(reactant_atom_ids), frozenset(product_atom_ids))
+            )
+
         def clear(self) -> None:
+            self.clear_count += 1
+
+        def clear_all(self) -> None:
             self.clear_count += 1
 
     app = QApplication.instance() or QApplication([])
@@ -491,6 +500,8 @@ def test_dialog_highlights_rows_candidates_and_clears_on_reject() -> None:
 
     _set_mapping(dialog, 0, 2)
     assert highlighter.shown[-1] == (0, 2)
+    # Atom-id labels are drawn for the included atoms whenever the table refreshes.
+    assert highlighter.labels and highlighter.labels[-1][0] == frozenset({0, 1, 4})
     dialog.reject()
 
     assert highlighter.clear_count > clear_count_after_refresh
@@ -513,6 +524,9 @@ def test_window_editor_injects_and_finally_clears_canvas_highlighter(
             instances.append(self)
 
         def clear(self) -> None:
+            self.clear_count += 1
+
+        def clear_all(self) -> None:
             self.clear_count += 1
 
     class _Dialog:
