@@ -8,7 +8,7 @@ import pytest
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 try:
-    from PyQt6.QtCore import QRectF, Qt
+    from PyQt6.QtCore import QPointF, QRectF, Qt
     from PyQt6.QtWidgets import (
         QApplication,
         QGraphicsPathItem,
@@ -123,12 +123,23 @@ def test_highlighter_labels_atoms_and_coexist_with_mapping_marks(
     rects = {
         1: QRectF(0.0, 0.0, 10.0, 10.0),
         2: QRectF(20.0, 0.0, 10.0, 10.0),
-        3: QRectF(40.0, 0.0, 10.0, 10.0),
+        # A wide indicator rect, as a long label like OTs/PPh3 produces.
+        3: QRectF(40.0, 0.0, 80.0, 10.0),
+    }
+    centers = {
+        1: QPointF(5.0, 5.0),
+        2: QPointF(25.0, 5.0),
+        3: QPointF(45.0, 5.0),
     }
     monkeypatch.setattr(
         highlight_module,
         "selection_indicator_rect_for_atom_for",
         lambda _canvas, atom_id: rects.get(atom_id),
+    )
+    monkeypatch.setattr(
+        highlight_module,
+        "atom_center_point_for",
+        lambda _canvas, atom_id: centers.get(atom_id),
     )
     highlighter = CalculationMappingHighlighter(canvas)
 
@@ -144,6 +155,11 @@ def test_highlighter_labels_atoms_and_coexist_with_mapping_marks(
     assert color_by_id[1] == "#0072b2"
     assert color_by_id[2] == "#0072b2"
     assert color_by_id[3] == "#d55e00"
+
+    # The id hugs the atom's own anchor (center x 45), not the far right edge of
+    # its wide indicator rect (x 120): it sits within a few units of the center.
+    label_3 = next(item for item in labels if item.data(1) == 3)
+    assert abs(label_3.pos().x() - centers[3].x()) < 10.0
 
     # A mapping mark is a separate layer: clear() drops only the mark, not labels.
     highlighter.show_mapping(1, 2)

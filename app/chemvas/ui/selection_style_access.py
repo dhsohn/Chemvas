@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from PyQt6.QtCore import QRectF
+from PyQt6.QtCore import QPointF, QRectF
 
 from chemvas.ui.canvas_atom_graphics_state import (
     atom_dots_for,
@@ -74,6 +74,13 @@ def selection_bond_overlay_width_for(canvas, base_pen) -> float:
     )
 
 
+def atom_center_point_for(canvas, atom_id: int):
+    atom = atom_for_id(canvas, atom_id)
+    if atom is None:
+        return None
+    return QPointF(atom.x, atom.y)
+
+
 def selection_indicator_rect_for_atom_for(canvas, atom_id: int):
     atom = atom_for_id(canvas, atom_id)
     if atom is None:
@@ -104,6 +111,7 @@ def selection_indicator_rect_for_atom_for(canvas, atom_id: int):
 
 
 __all__ = [
+    "atom_center_point_for",
     "emit_selection_info_for",
     "restore_selection_from_ids_for",
     "selected_highlight_items_for",

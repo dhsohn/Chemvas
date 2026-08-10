@@ -12,12 +12,18 @@ from PyQt6.QtWidgets import (
     QGraphicsSimpleTextItem,
 )
 
-from chemvas.ui.selection_style_access import selection_indicator_rect_for_atom_for
+from chemvas.ui.selection_style_access import (
+    atom_center_point_for,
+    selection_indicator_rect_for_atom_for,
+)
 
 _REACTANT_COLOR = QColor("#0072B2")
 _PRODUCT_COLOR = QColor("#D55E00")
 _HIGHLIGHT_Z = 40.0
 _LABEL_Z = 39.0
+# Small offset from the atom's own anchor so the id sits just above-right of the
+# glyph, hugging it rather than floating out at the pick-circle corner.
+_LABEL_OFFSET = 2.5
 
 
 class CalculationMappingHighlighter:
@@ -162,8 +168,8 @@ class CalculationMappingHighlighter:
     def _add_id_label(
         self, scene: QGraphicsScene, *, atom_id: int, color: QColor
     ) -> None:
-        rect = selection_indicator_rect_for_atom_for(self._canvas, atom_id)
-        if rect is None:
+        center = atom_center_point_for(self._canvas, atom_id)
+        if center is None:
             return
         text = QGraphicsSimpleTextItem(str(atom_id))
         text.setData(0, "calculation_atom_id_label")
@@ -174,9 +180,12 @@ class CalculationMappingHighlighter:
         font.setBold(True)
         text.setFont(font)
         text.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIgnoresTransformations, True)
-        # Top-right of the atom, opposite the R/P markers' top-left label, so the
-        # id stays readable even when a mapping marker is also shown.
-        text.setPos(rect.right(), rect.top() - text.boundingRect().height())
+        # Anchor to the atom itself (not the pick circle, which widens to cover a
+        # long label like OTs or PPh3), just above-right so the id hugs the glyph.
+        text.setPos(
+            center.x() + _LABEL_OFFSET,
+            center.y() - text.boundingRect().height() - _LABEL_OFFSET,
+        )
         self._prepare_item(text, z_value=_LABEL_Z)
         scene.addItem(text)
         self._label_items.append(text)
