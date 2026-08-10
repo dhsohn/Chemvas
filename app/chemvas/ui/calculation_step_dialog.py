@@ -6,6 +6,7 @@ from typing import Any, Protocol, cast
 
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtWidgets import (
+    QAbstractItemView,
     QComboBox,
     QDialog,
     QDialogButtonBox,
@@ -144,6 +145,14 @@ class CalculationStepDialog(QDialog):
         layout.addLayout(fields)
 
         self.table = QTableWidget(len(self._components), 6, self)
+        # Direct cell editing must stay disabled on both dialog tables: every
+        # edit goes through read-only items or persistent cell widgets, and the
+        # cells hosting widgets have no item, so the model reports the default
+        # editable flags. Letting an input-method event open an item editor
+        # recurses with Qt's Wayland text-input focus handling (focus change
+        # resends the event) until the C stack overflows — an IME composition
+        # over a focused cell crashed the app under WSLg.
+        self.table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self.table.setHorizontalHeaderLabels(
             (
                 "Component",
@@ -192,6 +201,8 @@ class CalculationStepDialog(QDialog):
         layout.addLayout(mapping_actions)
 
         self.mapping_table = QTableWidget(0, 3, self)
+        # Same constraint as the components table above: no direct cell editing.
+        self.mapping_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self.mapping_table.setAccessibleName("Atom correspondence table")
         self.mapping_table.setHorizontalHeaderLabels(
             ("Reactant atom", "Product atom", "Status")
