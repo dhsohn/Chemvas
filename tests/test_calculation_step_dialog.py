@@ -8,7 +8,13 @@ import pytest
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 try:
-    from PyQt6.QtWidgets import QApplication, QDialog
+    from PyQt6.QtGui import QInputMethodEvent
+    from PyQt6.QtWidgets import (
+        QAbstractItemView,
+        QApplication,
+        QDialog,
+        QLineEdit,
+    )
 except ModuleNotFoundError:
     QApplication = None
 
@@ -443,3 +449,34 @@ def test_window_editor_injects_and_finally_clears_canvas_highlighter(
     assert received["mapping_highlighter"] is instances[0]
     assert instances[0].canvas is canvas
     assert instances[0].clear_count == 1
+
+
+@pytest.mark.skipif(QApplication is None, reason="PyQt6 is required")
+def test_dialog_tables_reject_input_method_cell_editing() -> None:
+    app = QApplication.instance() or QApplication([])
+    app.setQuitOnLastWindowClosed(False)
+    dialog = CalculationStepDialog(_document_state())
+    _configure_separate_endpoints(dialog)
+
+    no_triggers = QAbstractItemView.EditTrigger.NoEditTriggers
+    assert dialog.table.editTriggers() == no_triggers
+    assert dialog.mapping_table.editTriggers() == no_triggers
+
+    # Cells hosting combo widgets have no item, so the model reports the
+    # default editable flags. An IME composition delivered to the focused
+    # table must never open an item editor: on Wayland the editor focus
+    # change re-sends the composition event and the mutual recursion
+    # crashed the app.
+    for table, row, column in (
+        (dialog.table, 0, 2),
+        (dialog.mapping_table, dialog._mapping_row_by_reactant[0], 1),
+    ):
+        table.setCurrentCell(row, column)
+        app.sendEvent(table, QInputMethodEvent("ㅎ", []))
+        commit = QInputMethodEvent()
+        commit.setCommitString("하")
+        app.sendEvent(table, commit)
+        viewport = table.viewport()
+        assert viewport is not None
+        assert viewport.findChild(QLineEdit) is None
+    dialog.deleteLater()
