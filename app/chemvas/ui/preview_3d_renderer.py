@@ -48,6 +48,22 @@ def status_badge_width(text: str, metrics: QFontMetricsF) -> float:
     return max(50.0, metrics.horizontalAdvance(text) + 20.0)
 
 
+def header_text_width(
+    rect: QRectF, badge_width: float, controls_left: float | None
+) -> float:
+    """Horizontal space available to the painted header texts.
+
+    The title and subtitle must stop short of whatever sits at the header's
+    right edge: at least the status badge, and — when the identifier/export
+    buttons are laid out — the leftmost of those buttons, which reach further
+    left than the badge.
+    """
+    limit = rect.right() - badge_width - 10.0
+    if controls_left is not None:
+        limit = min(limit, controls_left - 10.0)
+    return max(0.0, limit - rect.left())
+
+
 def draw_header(
     painter: QPainter,
     rect: QRectF,
@@ -56,6 +72,7 @@ def draw_header(
     caption_font: QFont,
     status_badge: tuple[str, QColor, QColor, QColor],
     subtitle: str,
+    controls_left: float | None = None,
 ) -> None:
     painter.save()
     status_text, status_fill, status_border, status_pen = status_badge
@@ -69,27 +86,25 @@ def draw_header(
     painter.setFont(caption_font)
     painter.drawText(badge, int(Qt.AlignmentFlag.AlignCenter), status_text)
 
-    title_rect = QRectF(
-        rect.left(),
-        rect.top() + 1.0,
-        max(20.0, rect.width() - badge_width - 10.0),
-        20.0,
-    )
+    text_width = header_text_width(rect, badge_width, controls_left)
+    title_rect = QRectF(rect.left(), rect.top() + 1.0, text_width, 20.0)
     painter.setPen(_palette_color("text"))
     painter.setFont(title_font)
     painter.drawText(
         title_rect,
         int(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter),
-        "Molecule Info",
+        QFontMetricsF(title_font).elidedText(
+            "Molecule Info", Qt.TextElideMode.ElideRight, text_width
+        ),
     )
 
-    subtitle_rect = QRectF(rect.left(), title_rect.bottom() + 1.0, rect.width(), 17.0)
+    subtitle_rect = QRectF(rect.left(), title_rect.bottom() + 1.0, text_width, 17.0)
     painter.setPen(_palette_color("text_muted"))
     painter.setFont(caption_font)
     painter.drawText(
         subtitle_rect,
         int(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter),
-        subtitle,
+        metrics.elidedText(subtitle, Qt.TextElideMode.ElideRight, text_width),
     )
     painter.restore()
 
@@ -288,5 +303,6 @@ __all__ = [
     "draw_panel",
     "draw_projected_scene",
     "draw_viewport",
+    "header_text_width",
     "preview_element_color",
 ]

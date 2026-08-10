@@ -29,6 +29,7 @@ if QApplication is not None:
         preview_caption_font,
         preview_footer_height_for_lines,
         preview_layout_for_widget,
+        preview_title_font,
         project_preview_paint_scene,
     )
     from chemvas.ui.preview_3d_renderer import status_badge_width
@@ -646,6 +647,48 @@ class Preview3DRecoveryTest(unittest.TestCase):
 
         inchikey_button.click()
         self.assertEqual(QApplication.clipboard().text(), "IKHGUXGNUITLKF-UHFFFAOYSA-N")
+
+    def test_header_buttons_leave_room_for_painted_title_at_default_size(self) -> None:
+        preview = self._create_preview(SequencedAdapter([]))
+        preview.resize(560, 520)
+        preview.set_export_xyz_action(mock.Mock())
+        preview._scene = self._make_scene()
+        preview.set_info(
+            "C2H4O",
+            "44.05",
+            "CC=O",
+            "InChI=1S/C2H4O/c1-2-3/h2H,1H3",
+            "IKHGUXGNUITLKF-UHFFFAOYSA-N",
+        )
+        preview._sync_export_xyz_button()
+
+        smiles_button = preview._copy_smiles_button
+        assert smiles_button is not None
+        header = preview_layout_for_widget(QRectF(preview.rect()), [], preview.font())[
+            "header"
+        ]
+        title_metrics = QFontMetricsF(preview_title_font(preview.font()))
+        title_right = header.left() + title_metrics.horizontalAdvance("Molecule Info")
+        # At the window's default width the button row must stop short of the
+        # painted "Molecule Info" title instead of covering it.
+        self.assertGreaterEqual(smiles_button.geometry().left(), title_right)
+        # The painter is told where the buttons start so it can elide the
+        # title/subtitle on narrower windows.
+        self.assertEqual(
+            preview._header_controls_left, float(smiles_button.geometry().x())
+        )
+
+    def test_header_controls_left_cleared_with_preview(self) -> None:
+        preview = self._create_preview(SequencedAdapter([]))
+        preview.resize(560, 520)
+        preview.set_export_xyz_action(mock.Mock())
+        preview._scene = self._make_scene()
+        preview.set_info("C2H4O", "44.05", "CC=O", "inchi", "inchikey")
+        preview._sync_export_xyz_button()
+        assert preview._header_controls_left is not None
+
+        preview.clear_preview()
+        self.assertIsNone(preview._header_controls_left)
 
     def test_copy_buttons_hidden_when_identifiers_absent(self) -> None:
         preview = self._create_preview(SequencedAdapter([]))

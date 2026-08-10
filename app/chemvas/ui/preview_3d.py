@@ -52,6 +52,7 @@ class Preview3D(QWidget):
         self._copy_smiles_button: QToolButton | None = None
         self._copy_inchi_button: QToolButton | None = None
         self._copy_inchikey_button: QToolButton | None = None
+        self._header_controls_left: float | None = None
         self._rotation_x = math.radians(-18.0)
         self._rotation_y = math.radians(22.0)
         self._zoom = 1.0
@@ -385,7 +386,7 @@ class Preview3D(QWidget):
         layout = preview_layout_for_widget(QRectF(self.rect()), [], self.font())
         header = layout["header"]
         metrics = QFontMetricsF(button.font())
-        width = max(112.0, metrics.horizontalAdvance(button.text()) + 36.0)
+        width = max(88.0, metrics.horizontalAdvance(button.text()) + 24.0)
         height = 22.0
         # The status badge (e.g. "Ready") is painted at the header's right edge.
         # Anchor the Export button to the left of it so they never overlap.
@@ -469,6 +470,7 @@ class Preview3D(QWidget):
                 if button is not None:
                     button.setVisible(False)
                     button.setEnabled(False)
+            self._set_header_controls_left(None)
             return
         geometry = export.geometry()
         right_edge = float(geometry.x())
@@ -484,10 +486,19 @@ class Preview3D(QWidget):
             button.setFont(export.font())
             button.setToolTip(f"{base_tooltip}\n{value}")
             metrics = QFontMetricsF(button.font())
-            width = max(96.0, metrics.horizontalAdvance(button.text()) + 28.0)
+            width = max(56.0, metrics.horizontalAdvance(button.text()) + 20.0)
             x = right_edge - gap - width
             button.setGeometry(round(x), geometry.y(), round(width), geometry.height())
             right_edge = x
+        # Report where the button row actually starts on screen (geometry is
+        # set with rounded x), so the painted title elides exactly at it.
+        self._set_header_controls_left(float(round(right_edge)))
+
+    def _set_header_controls_left(self, value: float | None) -> None:
+        if value == self._header_controls_left:
+            return
+        self._header_controls_left = value
+        self._safe_update()
 
     def _handle_copy_clicked(self, value: str, button: QToolButton, label: str) -> None:
         if not value:
@@ -512,5 +523,6 @@ class Preview3D(QWidget):
                 rotation_x=self._rotation_x,
                 rotation_y=self._rotation_y,
                 zoom=self._zoom,
+                header_controls_left=self._header_controls_left,
             ),
         )

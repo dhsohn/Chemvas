@@ -5,7 +5,7 @@ from chemvas.ui.preview_3d_molecule_renderer import (
     draw_projected_scene,
     preview_element_color,
 )
-from chemvas.ui.preview_3d_renderer import draw_panel
+from chemvas.ui.preview_3d_renderer import draw_panel, header_text_width
 from PyQt6.QtCore import QRectF
 from PyQt6.QtGui import QColor, QImage, QPainter
 from PyQt6.QtWidgets import QApplication
@@ -49,3 +49,18 @@ def test_preview_renderer_draws_panel_and_projected_scene_to_image() -> None:
 
     assert _has_non_background_pixel(image, background)
     assert app is not None
+
+
+def test_header_text_width_stops_at_badge_without_controls() -> None:
+    rect = QRectF(20.0, 18.0, 520.0, 42.0)
+    assert header_text_width(rect, 54.0, None) == rect.right() - 54.0 - 10.0 - 20.0
+
+
+def test_header_text_width_stops_at_leftmost_header_control() -> None:
+    rect = QRectF(20.0, 18.0, 520.0, 42.0)
+    assert header_text_width(rect, 54.0, 176.0) == 176.0 - 10.0 - 20.0
+
+
+def test_header_text_width_never_goes_negative() -> None:
+    rect = QRectF(20.0, 18.0, 60.0, 42.0)
+    assert header_text_width(rect, 54.0, 22.0) == 0.0
