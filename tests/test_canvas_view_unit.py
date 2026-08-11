@@ -71,6 +71,7 @@ if QApplication is not None:
         selection_indicator_rect_for_atom_for,
     )
     from chemvas.ui.sheet_setup_access import set_sheet_setup_for, sheet_rect_for
+    from chemvas.ui.sheet_setup_state import sheet_setup_state_for
     from chemvas.ui.structure_geometry_access import (
         atom_point_for,
         regular_ring_points_for_atom_for,
@@ -210,6 +211,19 @@ class CanvasViewUnitTest(unittest.TestCase):
         self.assertAlmostEqual(canvas.sceneRect().width(), 755.0)
         self.assertAlmostEqual(canvas.sceneRect().height(), 1002.0)
         self.assertEqual(canvas.scene().sceneRect(), canvas.sceneRect())
+
+    def test_canvas_keeps_one_sheet_setup_state(self) -> None:
+        # Writing the sheet state before the runtime container existed left the
+        # write on the bare canvas while the container built a second copy
+        # beside it, whose rect then diverged from the one every reader uses.
+        canvas = build_canvas_view()
+        self.addCleanup(canvas.close)
+
+        self.assertIsNone(getattr(canvas, "sheet_setup_state", None))
+        self.assertIs(
+            sheet_setup_state_for(canvas), canvas.runtime_state.sheet_setup_state
+        )
+        self.assertFalse(canvas.runtime_state.sheet_setup_state.rect.isNull())
 
     def test_history_fields_are_backed_by_state_holder(self) -> None:
         canvas = build_canvas_view()

@@ -77,23 +77,3 @@ def test_ensure_canvas_state_rejects_missing_field_on_strict_container() -> None
     with pytest.raises(AttributeError, match="out of sync"):
         ensure_canvas_state(canvas, "group_state", list)
     assert not hasattr(canvas, "group_state")
-
-
-def test_ensure_canvas_state_direct_attr_skips_strict_check() -> None:
-    canvas = SimpleNamespace(runtime_state=_StrictContainer())
-
-    state = ensure_canvas_state(canvas, "model", lambda: "fresh", runtime_field=False)
-
-    assert state == "fresh"
-    assert canvas.model == "fresh"
-
-
-def test_ensure_canvas_state_prefers_runtime_entry_even_for_direct_attr() -> None:
-    canvas = SimpleNamespace(
-        model="public", runtime_state=SimpleNamespace(model="runtime")
-    )
-
-    assert (
-        ensure_canvas_state(canvas, "model", lambda: "fresh", runtime_field=False)
-        == "runtime"
-    )

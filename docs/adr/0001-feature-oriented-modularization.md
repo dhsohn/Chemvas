@@ -107,6 +107,12 @@ suite, and milestone-level full-suite/package verification.
   migration slice removes its entry when its concrete Qt implementation moves to
   `chemvas.adapters`; no new entries are allowed, and an empty set ends the
   exception.
+- The canvas model is created by canvas setup instead of appearing on first
+  access. `model_for` reads `canvas.model`, so `ensure_canvas_state` no longer
+  carries a `runtime_field` switch and every remaining accessor resolves against
+  the strict runtime container. Setup also builds that container before writing
+  the sheet state, which previously landed on the bare canvas and left a second,
+  never-read `SheetSetupState` beside the live one.
 
 ## Consequences
 

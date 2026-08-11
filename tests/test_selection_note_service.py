@@ -14,6 +14,7 @@ except ModuleNotFoundError:
     QApplication = None
 
 if QApplication is not None:
+    from chemvas.domain.document import MoleculeModel
     from chemvas.ui.canvas_group_state import register_group_for
     from chemvas.ui.canvas_scene_items_state import (
         selected_notes_for,
@@ -109,6 +110,7 @@ class SelectionNoteServiceTest(unittest.TestCase):
     def _note_canvas(self):
         return SimpleNamespace(
             note_padding=6.0,
+            model=MoleculeModel(),
             selection_style_state=SelectionStyleState(
                 color=QColor("#1f5eff"), stroke_delta=0.8
             ),

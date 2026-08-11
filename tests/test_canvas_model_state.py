@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from chemvas.domain.document import MoleculeModel
+import pytest
 from chemvas.ui.canvas_model_state import model_for, set_model_for
 
 
@@ -18,10 +18,8 @@ def test_canvas_model_state_returns_and_replaces_canvas_model() -> None:
     assert canvas.model is new_model
 
 
-def test_canvas_model_state_creates_default_model_when_missing() -> None:
-    canvas = SimpleNamespace()
-
-    model = model_for(canvas)
-
-    assert isinstance(model, MoleculeModel)
-    assert canvas.model is model
+def test_canvas_model_state_does_not_invent_a_model() -> None:
+    # Canvas setup creates the model; a canvas without one is a wiring bug and
+    # must not be handed a fresh empty document instead.
+    with pytest.raises(AttributeError):
+        model_for(SimpleNamespace())
