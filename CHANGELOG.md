@@ -68,6 +68,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   carry the explanation tooltip.
 
 ### Fixed
+- **Colouring a ring that contains a dotted double bond did nothing**: picking a
+  colour on a ring — clicking its fill with the colour tool, or recolouring a
+  selection that holds the ring but not that bond's own line — failed silently
+  when any bond in the ring used the dotted double style. Nothing was recoloured
+  and the attempt still consumed a step of undo history. A dotted double bond is
+  drawn as two graphics items and recolouring the ring correctly restyles both,
+  but an internal check counted the second item as an unrelated object being
+  changed and aborted the whole operation. Rings recolour normally now, at any
+  bond style.
 - **Terminal spam when opening menus under Wayland/WSLg**: Qt's Wayland backend
   prints `This plugin supports grabbing the mouse only for popup windows` to
   the terminal every time a menu opens. The startup stderr filter — previously
