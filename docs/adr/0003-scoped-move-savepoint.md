@@ -68,3 +68,28 @@ drag round-trips are the behavioral guard.
   (`chemvas.ui.transactions.document`), keeping ADR 0002's one-owner rule.
 - The whole-document capture path is byte-for-byte unchanged when no scope
   is passed.
+- The restore-time canonical bond redraw (`_refresh_bond_geometry`) is also
+  restricted to the scope's bonds. Unscoped bonds have no exact snapshot
+  staying authoritative over a redraw, and their live graphics are
+  legitimately non-canonical (a prior successful drag leaves interior bond
+  items translated via ``moveBy``), so an unscoped redraw would be a
+  terminal writer that visibly rewrites bonds the gesture never touched.
+  This was found by adversarial review and is pinned by
+  ``test_failed_drag_does_not_rewrite_unscoped_bond_graphics``.
+
+## Accepted limitations (adversarial review, 2026-08-11)
+
+- Per-item topology (parent/z/stacking) repair and the selection/visibility
+  restores are scope-limited, while ordered scene-identity verification
+  stays whole-document. A mid-gesture detach/re-attach of an *unscoped*
+  item sharing ``(parent, z)`` with another item would be unrepairable and
+  fail verification. Today the only mid-gesture detach is the selection
+  outlines (z 19–21, always in scope), so this is unreachable; giving
+  another item kind those z values, or detaching non-outline items inside
+  the commit closure, requires extending the footprint first.
+- ``note_box``/``note_select`` visibility snapshots are empty under a scope
+  (those kinds are never in the selection item set). The move path performs
+  no note-box mutation, so nothing is lost today; a future note-move hook
+  that touches the box must add it to the footprint builder.
+- The stale-mitre look of interior bold bonds after a *successful* drag is
+  pre-existing fast-path behavior and is intentionally preserved by restore.

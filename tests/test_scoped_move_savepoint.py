@@ -46,17 +46,26 @@ def _document_state(canvas) -> dict:
     return canvas.services.document.canvas_document_session_service.snapshot_state()
 
 
+def _add_bond_with_graphics(canvas, a: int, b: int) -> int:
+    from chemvas.ui.bond_graphics_access import add_bond_graphics_for
+    from chemvas.ui.structure_mutation_access import add_bond_for
+
+    bond_id = add_bond_for(canvas, a, b)
+    add_bond_graphics_for(canvas, bond_id)
+    return bond_id
+
+
 def _draw_two_molecules(canvas) -> tuple[set[int], set[int]]:
     """Two disconnected two-atom molecules; returns their atom-id sets."""
 
-    from chemvas.ui.structure_mutation_access import add_atom_for, add_bond_for
+    from chemvas.ui.structure_mutation_access import add_atom_for
 
     a1 = add_atom_for(canvas, "C", 100.0, 100.0)
     a2 = add_atom_for(canvas, "N", 140.0, 100.0)
-    add_bond_for(canvas, a1, a2)
+    _add_bond_with_graphics(canvas, a1, a2)
     b1 = add_atom_for(canvas, "O", 300.0, 300.0)
     b2 = add_atom_for(canvas, "S", 340.0, 300.0)
-    add_bond_for(canvas, b1, b2)
+    _add_bond_with_graphics(canvas, b1, b2)
     return {a1, a2}, {b1, b2}
 
 
@@ -146,6 +155,65 @@ def test_moved_drag_still_pushes_one_command_and_round_trips(canvas) -> None:
     assert _document_state(canvas) == drawn
     history.redo()
     assert _document_state(canvas) == moved
+
+
+def _bond_item_states(canvas, bond_id: int) -> list[tuple]:
+    from chemvas.ui.canvas_bond_graphics_state import bond_items_for_id
+
+    states = []
+    for item in bond_items_for_id(canvas, bond_id):
+        pos = item.pos()
+        line = item.line() if hasattr(item, "line") else None
+        line_state = (
+            (line.x1(), line.y1(), line.x2(), line.y2()) if line is not None else None
+        )
+        states.append(((pos.x(), pos.y()), line_state))
+    return states
+
+
+def test_failed_drag_does_not_rewrite_unscoped_bond_graphics(canvas) -> None:
+    """A prior successful drag leaves interior bond items translated via
+    ``moveBy`` (``pos != 0`` with stale local coordinates). The restore of a
+    later, unrelated failed drag must not canonicalize those untouched items.
+    """
+
+    from chemvas.ui.structure_mutation_access import add_atom_for
+
+    a1 = add_atom_for(canvas, "C", 100.0, 100.0)
+    a2 = add_atom_for(canvas, "C", 140.0, 100.0)
+    a3 = add_atom_for(canvas, "C", 180.0, 100.0)
+    interior_bond_id = _add_bond_with_graphics(canvas, a1, a2)
+    _add_bond_with_graphics(canvas, a2, a3)
+    b1 = add_atom_for(canvas, "O", 300.0, 300.0)
+    b2 = add_atom_for(canvas, "S", 340.0, 300.0)
+    _add_bond_with_graphics(canvas, b1, b2)
+
+    tool = MoveTool(canvas, context=canvas.services.tool_controller.context)
+    # Drag 1 (succeeds): bond a1-a2 is interior, bond a2-a3 is a boundary
+    # bond. The interior bond's items now carry a nonzero pos.
+    assert tool._begin_selection_drag({a1, a2}, [], QPointF())
+    tool._apply_drag_delta(QPointF(11.0, 9.0))
+    tool._commit_selection_drag()
+
+    interior_states = _bond_item_states(canvas, interior_bond_id)
+    assert any(pos != (0.0, 0.0) for pos, _line in interior_states)
+    after_first_drag = _document_state(canvas)
+    ordered_items = [id(item) for item in canvas.scene().items()]
+
+    # Drag 2 (fails at commit): moves the unrelated O-S fragment only.
+    assert tool._begin_selection_drag({b1, b2}, [], QPointF())
+    tool._apply_drag_delta(QPointF(5.0, 5.0))
+    with mock.patch.object(
+        canvas.services.history_service,
+        "push",
+        return_value=False,
+    ):
+        with pytest.raises(RuntimeError):
+            tool._commit_selection_drag()
+
+    assert _document_state(canvas) == after_first_drag
+    assert _bond_item_states(canvas, interior_bond_id) == interior_states
+    assert [id(item) for item in canvas.scene().items()] == ordered_items
 
 
 def test_scoped_capture_skips_atoms_outside_the_footprint(canvas) -> None:

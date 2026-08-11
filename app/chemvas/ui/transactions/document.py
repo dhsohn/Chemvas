@@ -151,6 +151,7 @@ class DocumentSavepoint:
     scene_rect_snapshot: SceneRectSnapshot | None
     scene_items_bounding_rect_getter: Any | None
     notify_history_change: Callable[[], object] | None
+    move_scope: MoveGestureScope | None = None
     history_notification_published: bool = False
     active: bool = True
 
@@ -337,6 +338,7 @@ class DocumentSavepoint:
             scene_rect_snapshot=scene_rect_snapshot,
             scene_items_bounding_rect_getter=scene_items_bounding_rect_getter,
             notify_history_change=notify_history_change,
+            move_scope=move_scope,
         )
 
     def verify(
@@ -405,6 +407,17 @@ class DocumentSavepoint:
             )
             for bond_id, bond in enumerate(cast(Any, bonds)):
                 if bond is None:
+                    continue
+                if (
+                    self.move_scope is not None
+                    and bond_id not in self.move_scope.bond_ids
+                ):
+                    # A canonical redraw of a bond outside the gesture's
+                    # footprint would be a terminal writer with no exact
+                    # snapshot to stay authoritative over it — it must not
+                    # rewrite graphics the gesture never touched (a prior
+                    # drag legitimately leaves interior bond items translated
+                    # via moveBy rather than in canonical form).
                     continue
                 try:
                     update_bond_geometry(bond_id)
