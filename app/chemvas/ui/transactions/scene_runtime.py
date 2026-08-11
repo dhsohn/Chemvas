@@ -898,9 +898,20 @@ def capture_scene_runtime(
     else:
         focus_item_getter = None
         focus_item_setter = None
-    detail_scope_items = (
-        list(detail_items) if detail_items is not None else (scene_items or [])
-    )
+    if detail_items is None:
+        detail_scope_items = scene_items or []
+    elif scene_items:
+        # The detail contracts (topology/selection/visibility) are only
+        # meaningful — and only strict-checked — for items that are actually
+        # part of the captured scene, exactly like the whole-document loops
+        # over ``scene_items``. Footprint entries that are not scene items
+        # (stale registry references, lightweight test doubles) are skipped.
+        scene_item_ids = {id(item) for item in scene_items}
+        detail_scope_items = [
+            item for item in detail_items if id(item) in scene_item_ids
+        ]
+    else:
+        detail_scope_items = []
     topology_states = _scene_item_topology_snapshots(
         detail_scope_items,
         strict=strict,
