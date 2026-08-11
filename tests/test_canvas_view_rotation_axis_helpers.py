@@ -4,6 +4,7 @@ from types import SimpleNamespace
 from unittest import mock
 
 from tests.runtime_services import canvas_runtime_services
+from tests.runtime_state import canvas_runtime_state
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -46,6 +47,7 @@ class CanvasViewRotationAxisHelperTest(unittest.TestCase):
     ) -> None:
         view = SimpleNamespace(
             model=SimpleNamespace(bonds=[Bond(1, 2, 1)]),
+            runtime_state=canvas_runtime_state(graph_state=CanvasGraphState()),
         )
         service = _bind_graph_service(view)
         service.component_without_bond = _component_lookup(
@@ -85,6 +87,7 @@ class CanvasViewRotationAxisHelperTest(unittest.TestCase):
                 },
             ),
             renderer=SimpleNamespace(style=SimpleNamespace(bond_length_px=20.0)),
+            runtime_state=canvas_runtime_state(graph_state=CanvasGraphState()),
         )
         service = _bind_graph_service(view)
         service.component_without_bond = _component_lookup(
@@ -131,10 +134,12 @@ class CanvasViewRotationAxisHelperTest(unittest.TestCase):
     ) -> None:
         preferred = mock.Mock(return_value={1, 3})
         view = SimpleNamespace(
-            graph_state=CanvasGraphState(
-                rotation_axis_cache_version=5, graph_version=5
-            ),
             model=SimpleNamespace(bonds=[Bond(1, 2, 1)]),
+            runtime_state=canvas_runtime_state(
+                graph_state=CanvasGraphState(
+                    rotation_axis_cache_version=5, graph_version=5
+                )
+            ),
         )
         service = _bind_graph_service(view)
         service.bond_is_rotatable = mock.Mock(return_value=True)
@@ -148,7 +153,7 @@ class CanvasViewRotationAxisHelperTest(unittest.TestCase):
         self.assertEqual(second, (0, {1, 3}))
         preferred.assert_called_once_with(0, {1, 2}, allow_fallback=True)
 
-        view.graph_state.graph_version = 6
+        view.runtime_state.graph_state.graph_version = 6
         preferred.return_value = {2, 4}
         third = service.rotatable_axis_from_selection({1, 2}, {0})
         self.assertEqual(third, (0, {2, 4}))
@@ -159,15 +164,17 @@ class CanvasViewRotationAxisHelperTest(unittest.TestCase):
     ) -> None:
         leaf_rotation = mock.Mock(return_value={2, 3})
         leaf_view = SimpleNamespace(
-            graph_state=CanvasGraphState(
-                rotation_axis_cache_version=1, graph_version=1
-            ),
             model=SimpleNamespace(
                 bonds=[
                     Bond(1, 2, 1),
                     Bond(2, 3, 1),
                     Bond(3, 4, 1),
                 ]
+            ),
+            runtime_state=canvas_runtime_state(
+                graph_state=CanvasGraphState(
+                    rotation_axis_cache_version=1, graph_version=1
+                )
             ),
         )
         leaf_service = _bind_graph_service(leaf_view)
@@ -184,14 +191,16 @@ class CanvasViewRotationAxisHelperTest(unittest.TestCase):
 
         boundary_rotation = mock.Mock(return_value={1, 2})
         boundary_view = SimpleNamespace(
-            graph_state=CanvasGraphState(
-                rotation_axis_cache_version=2, graph_version=2
-            ),
             model=SimpleNamespace(
                 bonds=[
                     Bond(1, 2, 1),
                     Bond(2, 3, 1),
                 ]
+            ),
+            runtime_state=canvas_runtime_state(
+                graph_state=CanvasGraphState(
+                    rotation_axis_cache_version=2, graph_version=2
+                )
             ),
         )
         boundary_service = _bind_graph_service(boundary_view)
@@ -207,10 +216,12 @@ class CanvasViewRotationAxisHelperTest(unittest.TestCase):
         boundary_rotation.assert_called_once_with(1, {1, 2}, allow_fallback=False)
 
         none_view = SimpleNamespace(
-            graph_state=CanvasGraphState(
-                rotation_axis_cache_version=3, graph_version=3
-            ),
             model=SimpleNamespace(bonds=[]),
+            runtime_state=canvas_runtime_state(
+                graph_state=CanvasGraphState(
+                    rotation_axis_cache_version=3, graph_version=3
+                )
+            ),
         )
         none_service = _bind_graph_service(none_view)
         none_service.bond_is_rotatable = mock.Mock(return_value=False)

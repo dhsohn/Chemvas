@@ -3948,22 +3948,53 @@ def _canvas_runtime_state_field_names() -> set[str]:
     raise AssertionError("CanvasRuntimeState class not found")
 
 
-def test_state_accessor_names_match_runtime_state_container() -> None:
-    """Every ensure_canvas_state name must be a CanvasRuntimeState field.
+def test_state_accessors_read_the_runtime_container_directly() -> None:
+    """Every canvas state accessor resolves its field on CanvasRuntimeState.
 
-    A mismatched name would make the accessor attach a shadow state directly
-    on the canvas while the container holds the real one, silently splitting
-    the state in two.
+    Attaching state to the canvas instead splits it in two: the container keeps
+    the real one while the accessor hands out a shadow copy. Reading the field
+    off the slotted container makes a renamed or misspelled field raise.
     """
-    field_names = _canvas_runtime_state_field_names() - {"STRICT_STATE_CONTAINER"}
-    call_pattern = re.compile(r"ensure_canvas_state\(\s*canvas,\s*\"(?P<name>\w+)\"")
+    field_names = _canvas_runtime_state_field_names()
+    runtime_read = re.compile(r"canvas\.runtime_state\.(?P<name>\w+)\b")
+    fallback = re.compile(
+        r"\bensure_canvas_state\b|\b(?:getattr|setattr)\(\s*canvas\s*,\s*[\"']"
+    )
+    resolved: set[str] = set()
     violations: list[str] = []
     for path in sorted((APP_ROOT / "chemvas" / "ui").glob("*.py")):
-        for match in call_pattern.finditer(path.read_text(encoding="utf-8")):
-            name = match.group("name")
-            if name not in field_names:
+        source = path.read_text(encoding="utf-8")
+        if "canvas.runtime_state." not in source:
+            continue
+        tree = ast.parse(source)
+        for node in tree.body:
+            if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                continue
+            body = ast.get_source_segment(source, node) or ""
+            names = {match.group("name") for match in runtime_read.finditer(body)}
+            if not names:
+                continue
+            resolved |= names
+            for name in sorted(names - field_names):
                 violations.append(
-                    f"{path.name}: {name!r} is not a CanvasRuntimeState field"
+                    f"{path.name}:{node.name}: {name!r} is not a"
+                    " CanvasRuntimeState field"
+                )
+            if fallback.search(body):
+                violations.append(
+                    f"{path.name}:{node.name} falls back off the runtime container"
                 )
 
     assert violations == []
+    assert resolved, "no state accessor reads the runtime container"
+
+
+def test_ensure_canvas_state_stays_removed() -> None:
+    """The lazy attach-on-first-use accessor does not come back.
+
+    It let a state accessor create a second copy of a state on the canvas
+    whenever the container did not already hold one.
+    """
+    pattern = re.compile(r"\bensure_canvas_state\b")
+
+    assert _matching_lines(pattern, _app_python_files()) == []

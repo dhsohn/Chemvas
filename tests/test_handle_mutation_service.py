@@ -4,6 +4,7 @@ from types import SimpleNamespace
 from unittest import mock
 
 from tests.runtime_services import canvas_runtime_services
+from tests.runtime_state import canvas_runtime_state
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -75,7 +76,9 @@ class HandleMutationServiceTest(unittest.TestCase):
             renderer=SimpleNamespace(
                 style=SimpleNamespace(bond_length_px=bond_length_px)
             ),
-            tool_settings_state=CanvasToolSettingsState(),
+            runtime_state=canvas_runtime_state(
+                tool_settings_state=CanvasToolSettingsState()
+            ),
             refresh_selection_outline=mock.Mock(),
         )
         canvas.services = canvas_runtime_services(
@@ -107,8 +110,8 @@ class HandleMutationServiceTest(unittest.TestCase):
         self.assertAlmostEqual(centered_item._scale, 0.5)
         self.assertAlmostEqual(centered_item._rotation, 90.0)
 
-        canvas.tool_settings_state.orbital_snap_enabled = True
-        canvas.tool_settings_state.orbital_snap_step = 15
+        canvas.runtime_state.tool_settings_state.orbital_snap_enabled = True
+        canvas.runtime_state.tool_settings_state.orbital_snap_step = 15
         fallback_item = _FakeGraphicsItem(
             rect=QRectF(0.0, 0.0, 20.0, 10.0), data={1: {}}
         )

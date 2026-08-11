@@ -5,6 +5,7 @@ from types import SimpleNamespace
 from unittest import mock
 
 from tests.runtime_services import canvas_runtime_services
+from tests.runtime_state import canvas_runtime_state
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -17,6 +18,7 @@ except ModuleNotFoundError:
 
 if QApplication is not None:
     from chemvas.domain.document import Atom
+    from chemvas.ui.canvas_mark_registry import CanvasMarkRegistry
     from chemvas.ui.canvas_mark_scene_service import CanvasMarkSceneService
     from chemvas.ui.canvas_scene_decoration_build_service import (
         CanvasSceneDecorationBuildService,
@@ -113,7 +115,10 @@ class CanvasViewMarkHelperTest(unittest.TestCase):
         view = SimpleNamespace(
             model=SimpleNamespace(atoms={7: Atom("C", 10.0, 20.0)}),
             renderer=self._renderer(bond_length_px=50.0),
-            tool_settings_state=CanvasToolSettingsState(mark_kind="plus"),
+            runtime_state=canvas_runtime_state(
+                mark_registry=CanvasMarkRegistry(),
+                tool_settings_state=CanvasToolSettingsState(mark_kind="plus"),
+            ),
         )
         mark_target_distance = mock.Mock(return_value=20.0)
         view.services = canvas_runtime_services(
@@ -143,7 +148,10 @@ class CanvasViewMarkHelperTest(unittest.TestCase):
         view = SimpleNamespace(
             model=SimpleNamespace(atoms={7: Atom("C", 10.0, 20.0)}),
             renderer=self._renderer(bond_length_px=50.0),
-            tool_settings_state=CanvasToolSettingsState(mark_kind="radical"),
+            runtime_state=canvas_runtime_state(
+                mark_registry=CanvasMarkRegistry(),
+                tool_settings_state=CanvasToolSettingsState(mark_kind="radical"),
+            ),
         )
         mark_target_distance = mock.Mock(return_value=0.0)
         view.services = canvas_runtime_services(

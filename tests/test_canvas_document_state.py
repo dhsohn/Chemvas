@@ -3,8 +3,16 @@ from types import SimpleNamespace
 from unittest import mock
 
 from chemvas.domain.document import Atom, Bond, MoleculeModel
-from chemvas.ui.atom_coords_access import atom_coords_3d_for, set_atom_coords_3d_for
-from chemvas.ui.canvas_atom_graphics_state import set_atom_items_for
+from chemvas.ui.atom_coords_access import (
+    CanvasAtomCoords3DState,
+    atom_coords_3d_for,
+    set_atom_coords_3d_for,
+)
+from chemvas.ui.canvas_atom_graphics_state import (
+    CanvasAtomGraphicsState,
+    set_atom_items_for,
+)
+from chemvas.ui.canvas_calculation_plan_state import CanvasCalculationPlanState
 from chemvas.ui.canvas_document_state import (
     apply_document_settings,
     restore_document_post_model_items,
@@ -12,7 +20,8 @@ from chemvas.ui.canvas_document_state import (
     restore_document_projection_state,
     snapshot_canvas_document_state,
 )
-from chemvas.ui.canvas_rotation_state import rotation_state_for
+from chemvas.ui.canvas_group_state import CanvasGroupState
+from chemvas.ui.canvas_rotation_state import CanvasRotationState, rotation_state_for
 from chemvas.ui.canvas_scene_items_state import CanvasSceneItemsState
 from chemvas.ui.canvas_smiles_input_state import (
     CanvasSmilesInputState,
@@ -22,11 +31,15 @@ from chemvas.ui.canvas_text_style_state import (
     CanvasTextStyleState,
     text_style_state_for,
 )
-from chemvas.ui.canvas_tool_settings_state import tool_settings_state_for
+from chemvas.ui.canvas_tool_settings_state import (
+    CanvasToolSettingsState,
+    tool_settings_state_for,
+)
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QColor
 
 from tests.runtime_services import canvas_runtime_services
+from tests.runtime_state import canvas_runtime_state
 
 
 class _Canvas:
@@ -141,44 +154,50 @@ class CanvasDocumentStateTest(unittest.TestCase):
                 },
                 bonds=[Bond(1, 2, 1), Bond(2, 3, 1), Bond(1, 3, 1)],
             ),
-            scene_items_state=CanvasSceneItemsState(
-                ring_items=[ring_item, detached, disposed],
-                note_items=[note_item, detached],
-                mark_items=[mark_item],
-                arrow_items=[empty_arrow_item, detached],
-                ts_bracket_items=[ts_item],
-                orbital_items=[orbital_item],
-            ),
             renderer=SimpleNamespace(
                 style=SimpleNamespace(bond_length_px=18.0),
                 set_bond_length=mock.Mock(),
             ),
-            arrow_line_width=1.5,
-            arrow_head_scale=0.4,
-            orbital_phase_enabled=True,
-            text_font_size=13,
-            text_font_weight=600,
-            text_italic=False,
             sheet_size="A4",
             sheet_orientation="portrait",
-            smiles_input_state=CanvasSmilesInputState(last_smiles_input="CCO"),
-            text_style_state=CanvasTextStyleState(
-                text_font_family="Courier New",
-                text_font_size=13,
-                text_font_weight=600,
-                text_italic=False,
-                text_color=QColor("#123456"),
-                text_alignment=Qt.AlignmentFlag.AlignRight,
-                text_line_spacing=1.25,
-                note_box_enabled=True,
-                note_box_color=QColor("#abcdef"),
-                note_box_alpha=0.4,
-                note_border_enabled=True,
-                note_border_color=QColor("#654321"),
-                note_border_width=1.7,
-                note_padding=9.0,
-            ),
             scene=lambda: scene_obj,
+            runtime_state=canvas_runtime_state(
+                atom_coords_3d_state=CanvasAtomCoords3DState(),
+                atom_graphics_state=CanvasAtomGraphicsState(),
+                calculation_plan_state=CanvasCalculationPlanState(),
+                group_state=CanvasGroupState(),
+                rotation_state=CanvasRotationState(),
+                scene_items_state=CanvasSceneItemsState(
+                    ring_items=[ring_item, detached, disposed],
+                    note_items=[note_item, detached],
+                    mark_items=[mark_item],
+                    arrow_items=[empty_arrow_item, detached],
+                    ts_bracket_items=[ts_item],
+                    orbital_items=[orbital_item],
+                ),
+                smiles_input_state=CanvasSmilesInputState(last_smiles_input="CCO"),
+                tool_settings_state=CanvasToolSettingsState(
+                    arrow_line_width=1.5,
+                    arrow_head_scale=0.4,
+                    orbital_phase_enabled=True,
+                ),
+                text_style_state=CanvasTextStyleState(
+                    text_font_family="Courier New",
+                    text_font_size=13,
+                    text_font_weight=600,
+                    text_italic=False,
+                    text_color=QColor("#123456"),
+                    text_alignment=Qt.AlignmentFlag.AlignRight,
+                    text_line_spacing=1.25,
+                    note_box_enabled=True,
+                    note_box_color=QColor("#abcdef"),
+                    note_box_alpha=0.4,
+                    note_border_enabled=True,
+                    note_border_color=QColor("#654321"),
+                    note_border_width=1.7,
+                    note_padding=9.0,
+                ),
+            ),
         )
         set_atom_items_for(canvas, {1: object()})
         set_atom_coords_3d_for(
@@ -260,17 +279,15 @@ class CanvasDocumentStateTest(unittest.TestCase):
                 style=SimpleNamespace(bond_length_px=18.0),
                 set_bond_length=mock.Mock(),
             ),
-            arrow_line_width=1.0,
-            arrow_head_scale=0.3,
-            orbital_phase_enabled=False,
-            text_font_size=12,
-            text_font_weight=400,
-            text_italic=False,
             sheet_size="A4",
             sheet_orientation="landscape",
             setSceneRect=mock.Mock(),
             viewport=lambda: SimpleNamespace(update=mock.Mock()),
-            smiles_input_state=CanvasSmilesInputState(last_smiles_input="before"),
+            runtime_state=canvas_runtime_state(
+                smiles_input_state=CanvasSmilesInputState(last_smiles_input="before"),
+                text_style_state=CanvasTextStyleState(),
+                tool_settings_state=CanvasToolSettingsState(),
+            ),
         )
 
         apply_document_settings(
@@ -337,12 +354,15 @@ class CanvasDocumentStateTest(unittest.TestCase):
             ),
             setSceneRect=mock.Mock(),
             viewport=lambda: SimpleNamespace(update=mock.Mock()),
-            smiles_input_state=CanvasSmilesInputState(last_smiles_input="before"),
-            text_style_state=CanvasTextStyleState(
-                text_font_family="Courier New",
-                text_color=QColor("#ff00aa"),
-                text_alignment=Qt.AlignmentFlag.AlignRight,
-                note_box_enabled=True,
+            runtime_state=canvas_runtime_state(
+                smiles_input_state=CanvasSmilesInputState(last_smiles_input="before"),
+                text_style_state=CanvasTextStyleState(
+                    text_font_family="Courier New",
+                    text_color=QColor("#ff00aa"),
+                    text_alignment=Qt.AlignmentFlag.AlignRight,
+                    note_box_enabled=True,
+                ),
+                tool_settings_state=CanvasToolSettingsState(),
             ),
         )
 
@@ -373,7 +393,12 @@ class CanvasDocumentStateTest(unittest.TestCase):
     def test_restore_document_projection_state_restores_coords_and_projection(
         self,
     ) -> None:
-        canvas = SimpleNamespace()
+        canvas = SimpleNamespace(
+            runtime_state=canvas_runtime_state(
+                atom_coords_3d_state=CanvasAtomCoords3DState(),
+                rotation_state=CanvasRotationState(),
+            )
+        )
         set_atom_coords_3d_for(canvas, {9: (9.0, 9.0, 9.0)})
         rotation = rotation_state_for(canvas)
         rotation.projection_center_3d = (1.0, 1.0, 1.0)
@@ -397,7 +422,12 @@ class CanvasDocumentStateTest(unittest.TestCase):
     def test_restore_document_projection_state_clears_missing_legacy_projection(
         self,
     ) -> None:
-        canvas = SimpleNamespace()
+        canvas = SimpleNamespace(
+            runtime_state=canvas_runtime_state(
+                atom_coords_3d_state=CanvasAtomCoords3DState(),
+                rotation_state=CanvasRotationState(),
+            )
+        )
         set_atom_coords_3d_for(canvas, {1: (1.0, 2.0, 3.0)})
         rotation = rotation_state_for(canvas)
         rotation.projection_center_3d = (4.0, 5.0, 6.0)
@@ -414,17 +444,15 @@ class CanvasDocumentStateTest(unittest.TestCase):
 
         canvas = SimpleNamespace(
             renderer=Renderer(),
-            arrow_line_width=1.0,
-            arrow_head_scale=0.3,
-            orbital_phase_enabled=False,
-            text_font_size=12,
-            text_font_weight=400,
-            text_italic=False,
             sheet_size="A4",
             sheet_orientation="landscape",
             setSceneRect=mock.Mock(),
             viewport=lambda: SimpleNamespace(update=mock.Mock()),
-            smiles_input_state=CanvasSmilesInputState(last_smiles_input="x"),
+            runtime_state=canvas_runtime_state(
+                smiles_input_state=CanvasSmilesInputState(last_smiles_input="x"),
+                text_style_state=CanvasTextStyleState(),
+                tool_settings_state=CanvasToolSettingsState(),
+            ),
         )
         settings = {
             "bond_length_px": 22.0,

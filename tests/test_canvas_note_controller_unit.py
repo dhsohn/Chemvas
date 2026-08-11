@@ -4,6 +4,7 @@ from types import SimpleNamespace
 from unittest import mock
 
 from tests.runtime_services import canvas_runtime_services
+from tests.runtime_state import canvas_runtime_state
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -23,6 +24,8 @@ if QApplication is not None:
         _EditingNoteSnapshot,
     )
     from chemvas.ui.canvas_scene_items_state import (
+        CanvasSceneItemsState,
+        note_items_for,
         selected_notes_for,
         set_selected_notes_for,
     )
@@ -97,7 +100,9 @@ class CanvasNoteControllerUnitTest(unittest.TestCase):
             selected_notes.append(target)
 
         canvas = SimpleNamespace(
-            selected_notes=selected_notes,
+            runtime_state=canvas_runtime_state(
+                scene_items_state=CanvasSceneItemsState(selected_notes=selected_notes)
+            ),
             services=canvas_runtime_services(
                 selection_controller=SimpleNamespace(
                     select_note=mock.Mock(side_effect=_select_note)
@@ -129,12 +134,14 @@ class CanvasNoteControllerUnitTest(unittest.TestCase):
 
         def _attach(target) -> None:
             scene.addItem(target)
-            canvas.note_items.append(target)
+            note_items_for(canvas).append(target)
             canvas._make_selectable(target)
 
         attach_mock = mock.Mock(side_effect=_attach)
         canvas = SimpleNamespace(
-            note_items=[],
+            runtime_state=canvas_runtime_state(
+                scene_items_state=CanvasSceneItemsState()
+            ),
             services=canvas_runtime_services(
                 scene_item_controller=SimpleNamespace(attach_scene_item=attach_mock),
             ),
@@ -151,7 +158,7 @@ class CanvasNoteControllerUnitTest(unittest.TestCase):
         self.assertEqual(committed_note_text_for(created), "Mechanism")
         self.assertEqual(created.data(0), "note")
         self.assertEqual(created.pos(), pos)
-        self.assertEqual(canvas.note_items, [created])
+        self.assertEqual(note_items_for(canvas), [created])
         self.assertIn(created, scene.items())
         attach_mock.assert_called_once_with(created)
         canvas._make_selectable.assert_called_once_with(created)
@@ -166,16 +173,18 @@ class CanvasNoteControllerUnitTest(unittest.TestCase):
 
         def _attach(target) -> None:
             scene.addItem(target)
-            canvas.note_items.append(target)
+            note_items_for(canvas).append(target)
 
         def _remove(target) -> None:
             removed.append(target)
-            if target in canvas.note_items:
-                canvas.note_items.remove(target)
+            if target in note_items_for(canvas):
+                note_items_for(canvas).remove(target)
             scene.removeItem(target)
 
         canvas = SimpleNamespace(
-            note_items=[],
+            runtime_state=canvas_runtime_state(
+                scene_items_state=CanvasSceneItemsState()
+            ),
             services=canvas_runtime_services(
                 scene_item_controller=SimpleNamespace(
                     attach_scene_item=mock.Mock(side_effect=_attach),
@@ -192,14 +201,18 @@ class CanvasNoteControllerUnitTest(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "style failed"):
             controller.create_text_note(pos, "Mechanism")
 
-        self.assertEqual(canvas.note_items, [])
+        self.assertEqual(note_items_for(canvas), [])
         self.assertEqual(len(removed), 1)
         self.assertNotIn(removed[0], scene.items())
 
     def _editing_note_controller(self, text: str):
         scene = QGraphicsScene()
         canvas = SimpleNamespace(
-            scene=lambda: scene, text_style_state=CanvasTextStyleState()
+            scene=lambda: scene,
+            runtime_state=canvas_runtime_state(
+                text_style_state=CanvasTextStyleState(),
+                scene_items_state=CanvasSceneItemsState(),
+            ),
         )
         note = NoteItem(canvas)
         note.setData(0, "note")
@@ -256,7 +269,10 @@ class CanvasNoteControllerUnitTest(unittest.TestCase):
         push_command = mock.Mock()
         canvas = SimpleNamespace(
             scene=lambda: scene,
-            text_style_state=CanvasTextStyleState(),
+            runtime_state=canvas_runtime_state(
+                text_style_state=CanvasTextStyleState(),
+                scene_items_state=CanvasSceneItemsState(),
+            ),
             services=canvas_runtime_services(
                 history_service=_history_service(push_command)
             ),
@@ -289,7 +305,11 @@ class CanvasNoteControllerUnitTest(unittest.TestCase):
     def test_format_methods_noop_when_no_note_is_focused(self) -> None:
         scene = QGraphicsScene()
         canvas = SimpleNamespace(
-            scene=lambda: scene, text_style_state=CanvasTextStyleState()
+            scene=lambda: scene,
+            runtime_state=canvas_runtime_state(
+                text_style_state=CanvasTextStyleState(),
+                scene_items_state=CanvasSceneItemsState(),
+            ),
         )
         controller = CanvasNoteController(canvas)
         # No focused note -> should not raise.
@@ -322,25 +342,28 @@ class CanvasNoteControllerUnitTest(unittest.TestCase):
 
         selection_controller = SimpleNamespace(update_note_selection_box=mock.Mock())
         canvas = SimpleNamespace(
-            text_style_state=CanvasTextStyleState(
-                text_font_family="Arial",
-                text_font_size=13,
-                text_font_weight=QFont.Weight.DemiBold,
-                text_italic=True,
-                text_color=QColor("#334455"),
-                text_alignment=Qt.AlignmentFlag.AlignRight,
-                text_line_spacing=1.25,
-                note_padding=6.0,
-                note_box_enabled=True,
-                note_border_enabled=True,
-                note_box_color=QColor("#ffffff"),
-                note_box_alpha=0.4,
-                note_border_color=QColor("#111111"),
-                note_border_width=1.2,
-            ),
-            selection_style_state=SelectionStyleState(
-                color=QColor("#1f5eff"),
-                stroke_delta=0.8,
+            runtime_state=canvas_runtime_state(
+                text_style_state=CanvasTextStyleState(
+                    text_font_family="Arial",
+                    text_font_size=13,
+                    text_font_weight=QFont.Weight.DemiBold,
+                    text_italic=True,
+                    text_color=QColor("#334455"),
+                    text_alignment=Qt.AlignmentFlag.AlignRight,
+                    text_line_spacing=1.25,
+                    note_padding=6.0,
+                    note_box_enabled=True,
+                    note_border_enabled=True,
+                    note_box_color=QColor("#ffffff"),
+                    note_box_alpha=0.4,
+                    note_border_color=QColor("#111111"),
+                    note_border_width=1.2,
+                ),
+                selection_style_state=SelectionStyleState(
+                    color=QColor("#1f5eff"),
+                    stroke_delta=0.8,
+                ),
+                scene_items_state=CanvasSceneItemsState(),
             ),
             services=canvas_runtime_services(selection_controller=selection_controller),
         )
@@ -367,14 +390,17 @@ class CanvasNoteControllerUnitTest(unittest.TestCase):
         item = QGraphicsTextItem("Mechanism")
         scene.addItem(item)
         canvas = SimpleNamespace(
-            text_style_state=CanvasTextStyleState(
-                note_padding=6.0,
-                note_box_enabled=True,
-                note_border_enabled=True,
-                note_box_color=QColor("#ffffff"),
-                note_box_alpha=0.4,
-                note_border_color=QColor("#111111"),
-                note_border_width=1.2,
+            runtime_state=canvas_runtime_state(
+                text_style_state=CanvasTextStyleState(
+                    note_padding=6.0,
+                    note_box_enabled=True,
+                    note_border_enabled=True,
+                    note_box_color=QColor("#ffffff"),
+                    note_box_alpha=0.4,
+                    note_border_color=QColor("#111111"),
+                    note_border_width=1.2,
+                ),
+                scene_items_state=CanvasSceneItemsState(),
             ),
         )
         _attach_history_service(canvas)
@@ -395,8 +421,11 @@ class CanvasNoteControllerUnitTest(unittest.TestCase):
         scene = QGraphicsScene()
         canvas = SimpleNamespace(
             scene=lambda: scene,
-            text_style_state=CanvasTextStyleState(
-                note_padding=6.0, note_border_enabled=True
+            runtime_state=canvas_runtime_state(
+                text_style_state=CanvasTextStyleState(
+                    note_padding=6.0, note_border_enabled=True
+                ),
+                scene_items_state=CanvasSceneItemsState(),
             ),
         )
         _attach_history_service(canvas)
@@ -424,7 +453,11 @@ class CanvasNoteControllerUnitTest(unittest.TestCase):
     def test_focus_out_ends_editing_and_clears_text_selection(self) -> None:
         scene = QGraphicsScene()
         canvas = SimpleNamespace(
-            scene=lambda: scene, text_style_state=CanvasTextStyleState()
+            scene=lambda: scene,
+            runtime_state=canvas_runtime_state(
+                text_style_state=CanvasTextStyleState(),
+                scene_items_state=CanvasSceneItemsState(),
+            ),
         )
         _attach_history_service(canvas)
         canvas.services.selection.selection_controller = SimpleNamespace(
@@ -455,10 +488,13 @@ class CanvasNoteControllerUnitTest(unittest.TestCase):
         item = QGraphicsTextItem("Mechanism")
         scene.addItem(item)
         canvas = SimpleNamespace(
-            text_style_state=CanvasTextStyleState(note_padding=6.0),
-            selection_style_state=SelectionStyleState(
-                color=QColor("#1f5eff"),
-                stroke_delta=0.8,
+            runtime_state=canvas_runtime_state(
+                text_style_state=CanvasTextStyleState(note_padding=6.0),
+                selection_style_state=SelectionStyleState(
+                    color=QColor("#1f5eff"),
+                    stroke_delta=0.8,
+                ),
+                scene_items_state=CanvasSceneItemsState(),
             ),
         )
         set_selected_notes_for(canvas, [item])
@@ -478,6 +514,9 @@ class CanvasNoteControllerUnitTest(unittest.TestCase):
             commands=[],
             removed_items=[],
             updated_boxes=[],
+            runtime_state=canvas_runtime_state(
+                scene_items_state=CanvasSceneItemsState()
+            ),
         )
         set_selected_notes_for(canvas, [])
 
@@ -531,6 +570,9 @@ class CanvasNoteControllerUnitTest(unittest.TestCase):
                 "x": item.pos().x(),
                 "y": item.pos().y(),
             },
+            runtime_state=canvas_runtime_state(
+                scene_items_state=CanvasSceneItemsState()
+            ),
         )
         set_selected_notes_for(canvas, [])
 
@@ -565,6 +607,9 @@ class CanvasNoteControllerUnitTest(unittest.TestCase):
             removed_items=[],
             restored_items=[],
             updated_boxes=[],
+            runtime_state=canvas_runtime_state(
+                scene_items_state=CanvasSceneItemsState()
+            ),
         )
         set_selected_notes_for(canvas, [])
 
@@ -610,6 +655,9 @@ class CanvasNoteControllerUnitTest(unittest.TestCase):
             removed_items=[],
             updated_boxes=[],
             _note_state_dict=lambda item: {},
+            runtime_state=canvas_runtime_state(
+                scene_items_state=CanvasSceneItemsState()
+            ),
         )
         set_selected_notes_for(canvas, [])
         canvas.push_command = canvas.commands.append
@@ -646,6 +694,9 @@ class CanvasNoteControllerUnitTest(unittest.TestCase):
             removed_items=[],
             updated_boxes=[],
             _note_state_dict=lambda item: {},
+            runtime_state=canvas_runtime_state(
+                scene_items_state=CanvasSceneItemsState()
+            ),
         )
         set_selected_notes_for(canvas, [])
         canvas.push_command = canvas.commands.append
@@ -687,6 +738,9 @@ class CanvasNoteControllerUnitTest(unittest.TestCase):
             removed_items=[],
             updated_boxes=[],
             _note_state_dict=lambda item: {},
+            runtime_state=canvas_runtime_state(
+                scene_items_state=CanvasSceneItemsState()
+            ),
         )
         set_selected_notes_for(canvas, [])
         canvas.push_command = canvas.commands.append
@@ -718,6 +772,9 @@ class CanvasNoteControllerUnitTest(unittest.TestCase):
             removed_items=[],
             updated_boxes=[],
             _note_state_dict=lambda item: {},
+            runtime_state=canvas_runtime_state(
+                scene_items_state=CanvasSceneItemsState()
+            ),
             services=canvas_runtime_services(
                 scene_item_controller=SimpleNamespace(
                     remove_scene_item=controller_remove
@@ -743,14 +800,17 @@ class CanvasNoteControllerUnitTest(unittest.TestCase):
         item = QGraphicsTextItem("Mechanism")
         scene.addItem(item)
         canvas = SimpleNamespace(
-            text_style_state=CanvasTextStyleState(
-                note_padding=6.0,
-                note_box_enabled=False,
-                note_border_enabled=True,
-                note_box_color=QColor("#ffffff"),
-                note_box_alpha=0.4,
-                note_border_color=QColor("#111111"),
-                note_border_width=1.2,
+            runtime_state=canvas_runtime_state(
+                text_style_state=CanvasTextStyleState(
+                    note_padding=6.0,
+                    note_box_enabled=False,
+                    note_border_enabled=True,
+                    note_box_color=QColor("#ffffff"),
+                    note_box_alpha=0.4,
+                    note_border_color=QColor("#111111"),
+                    note_border_width=1.2,
+                ),
+                scene_items_state=CanvasSceneItemsState(),
             ),
         )
         _attach_history_service(canvas)
@@ -820,14 +880,17 @@ class CanvasNoteControllerUnitTest(unittest.TestCase):
         )
         selection_controller = SimpleNamespace(update_note_selection_box=mock.Mock())
         canvas = SimpleNamespace(
-            text_style_state=CanvasTextStyleState(
-                text_font_family="Arial",
-                text_font_size=13,
-                text_font_weight=QFont.Weight.Bold,
-                text_italic=False,
-                text_color=QColor("#334455"),
-                text_alignment=Qt.AlignmentFlag.AlignHCenter,
-                text_line_spacing=1.25,
+            runtime_state=canvas_runtime_state(
+                text_style_state=CanvasTextStyleState(
+                    text_font_family="Arial",
+                    text_font_size=13,
+                    text_font_weight=QFont.Weight.Bold,
+                    text_italic=False,
+                    text_color=QColor("#334455"),
+                    text_alignment=Qt.AlignmentFlag.AlignHCenter,
+                    text_line_spacing=1.25,
+                ),
+                scene_items_state=CanvasSceneItemsState(),
             ),
             services=canvas_runtime_services(selection_controller=selection_controller),
         )

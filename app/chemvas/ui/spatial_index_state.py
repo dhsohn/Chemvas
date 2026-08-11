@@ -1,8 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-
-from chemvas.ui.canvas_state_lookup import ensure_canvas_state
+from typing import cast
 
 
 @dataclass(slots=True)
@@ -16,7 +15,7 @@ class CanvasSpatialIndexState:
 
 
 def spatial_index_state_for(canvas) -> CanvasSpatialIndexState:
-    return ensure_canvas_state(canvas, "spatial_index_state", CanvasSpatialIndexState)
+    return cast(CanvasSpatialIndexState, canvas.runtime_state.spatial_index_state)
 
 
 def has_fresh_spatial_index_for(

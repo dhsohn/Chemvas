@@ -5,6 +5,7 @@ import pytest
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
+from chemvas.ui.canvas_scene_items_state import CanvasSceneItemsState
 from chemvas.ui.transactions.scene_item_attach import (
     SceneItemAttachPorts,
     SceneItemAttachSnapshot,
@@ -29,6 +30,8 @@ from PyQt6.QtWidgets import (
     QGraphicsScene,
     QGraphicsView,
 )
+
+from tests.runtime_state import canvas_runtime_state
 
 
 class _Signal:
@@ -506,7 +509,10 @@ def test_builtin_attach_sequence_keeps_single_item_hint_linear_path() -> None:
 
     scene = CountingScene()
     scene.addRect(0.0, 0.0, 10.0, 10.0)
-    canvas = SimpleNamespace(scene=lambda: scene)
+    canvas = SimpleNamespace(
+        scene=lambda: scene,
+        runtime_state=canvas_runtime_state(scene_items_state=CanvasSceneItemsState()),
+    )
     for index in range(30):
         item = QGraphicsRectItem(QRectF(float(index * 20 + 20), 0.0, 10.0, 10.0))
         item.setData(0, "shape")
@@ -541,7 +547,12 @@ def test_builtin_attach_inside_existing_rect_stays_linear_with_an_actual_view() 
         scene.addItem(baseline_item)
         scene.sceneRect()
         view = QGraphicsView(scene)
-        canvas = SimpleNamespace(scene=lambda: scene)
+        canvas = SimpleNamespace(
+            scene=lambda: scene,
+            runtime_state=canvas_runtime_state(
+                scene_items_state=CanvasSceneItemsState()
+            ),
+        )
         CountingItem.calls = 0
         for index in range(count):
             item = CountingItem(QRectF(float(index * 2 + 10), 10.0, 1.0, 1.0))
@@ -694,7 +705,10 @@ def test_custom_attach_callback_uses_full_bounds_fallback_only_at_top_level() ->
 
     scene = CallbackScene()
     scene.addRect(0.0, 0.0, 10.0, 10.0)
-    canvas = SimpleNamespace(scene=lambda: scene)
+    canvas = SimpleNamespace(
+        scene=lambda: scene,
+        runtime_state=canvas_runtime_state(scene_items_state=CanvasSceneItemsState()),
+    )
     item = QGraphicsRectItem(QRectF(20.0, 0.0, 10.0, 10.0))
     item.setData(0, "shape")
     ports = SceneItemAttachPorts.capture(scene, item)
@@ -722,7 +736,11 @@ def test_attach_snapshot_keeps_truly_sparse_fake_fallback() -> None:
         def data(self, role: int):
             return "unknown" if role == 0 else None
 
-    snapshot = SceneItemAttachSnapshot.capture(SimpleNamespace(), SparseItem())
+    canvas = SimpleNamespace(
+        runtime_state=canvas_runtime_state(scene_items_state=CanvasSceneItemsState())
+    )
+
+    snapshot = SceneItemAttachSnapshot.capture(canvas, SparseItem())
 
     assert snapshot.scene is None
     assert snapshot.collection is None

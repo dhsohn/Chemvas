@@ -3,12 +3,23 @@ from unittest import mock
 
 from chemvas.domain.document import Atom, Bond
 from chemvas.features.selection import StructureHit
-from chemvas.ui.canvas_atom_graphics_state import set_atom_dots_for, set_atom_items_for
-from chemvas.ui.canvas_bond_graphics_state import set_bond_items_for
-from chemvas.ui.canvas_scene_items_state import set_scene_item_collection_for
+from chemvas.ui.canvas_atom_graphics_state import (
+    CanvasAtomGraphicsState,
+    set_atom_dots_for,
+    set_atom_items_for,
+)
+from chemvas.ui.canvas_bond_graphics_state import (
+    CanvasBondGraphicsState,
+    set_bond_items_for,
+)
+from chemvas.ui.canvas_scene_items_state import (
+    CanvasSceneItemsState,
+    set_scene_item_collection_for,
+)
 from chemvas.ui.selection_structure_service import SelectionStructureService
 
 from tests.runtime_services import canvas_runtime_services
+from tests.runtime_state import canvas_runtime_state
 
 
 class _FakeItem:
@@ -53,6 +64,11 @@ def _make_canvas(**overrides):
             ),
         ),
         scene=lambda: scene,
+        runtime_state=canvas_runtime_state(
+            atom_graphics_state=CanvasAtomGraphicsState(),
+            bond_graphics_state=CanvasBondGraphicsState(),
+            scene_items_state=CanvasSceneItemsState(),
+        ),
     )
     set_atom_items_for(canvas, overrides.pop("atom_items", {}))
     set_atom_dots_for(canvas, overrides.pop("atom_dots", {}))

@@ -1,9 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any
-
-from chemvas.ui.canvas_state_lookup import ensure_canvas_state
+from typing import Any, cast
 
 Coords3D = tuple[float, float, float]
 Point2D = tuple[float, float]
@@ -55,7 +53,7 @@ class CanvasRotationState:
 
 
 def rotation_state_for(canvas: Any) -> CanvasRotationState:
-    return ensure_canvas_state(canvas, "rotation_state", CanvasRotationState)
+    return cast(CanvasRotationState, canvas.runtime_state.rotation_state)
 
 
 __all__ = ["CanvasRotationState", "rotation_state_for"]

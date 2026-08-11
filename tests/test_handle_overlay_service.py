@@ -4,6 +4,7 @@ from types import SimpleNamespace
 from unittest import mock
 
 from tests.runtime_services import canvas_runtime_services
+from tests.runtime_state import canvas_runtime_state
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -76,7 +77,7 @@ class HandleOverlayServiceTest(unittest.TestCase):
             renderer=SimpleNamespace(
                 style=SimpleNamespace(bond_length_px=bond_length_px)
             ),
-            handle_state=CanvasHandleState(),
+            runtime_state=canvas_runtime_state(handle_state=CanvasHandleState()),
             services=canvas_runtime_services(
                 selection_highlight_styler=mock.Mock(),
                 handle_mutation_service=SimpleNamespace(
@@ -93,13 +94,13 @@ class HandleOverlayServiceTest(unittest.TestCase):
         handle_b = QGraphicsEllipseItem(5.0, 0.0, 4.0, 4.0)
         scene.addItem(handle_a)
         scene.addItem(handle_b)
-        canvas.handle_state.active_handles = [handle_a, handle_b]
-        canvas.handle_state.target = object()
+        canvas.runtime_state.handle_state.active_handles = [handle_a, handle_b]
+        canvas.runtime_state.handle_state.target = object()
 
         HandleOverlayService(canvas).clear_handles()
 
-        self.assertEqual(canvas.handle_state.active_handles, [])
-        self.assertIsNone(canvas.handle_state.target)
+        self.assertEqual(canvas.runtime_state.handle_state.active_handles, [])
+        self.assertIsNone(canvas.runtime_state.handle_state.target)
         self.assertIsNone(handle_a.scene())
         self.assertIsNone(handle_b.scene())
         canvas.services.scene_view.selection_highlight_styler.clear_selection_highlight.assert_called_once_with()
@@ -112,7 +113,7 @@ class HandleOverlayServiceTest(unittest.TestCase):
             side_effect=AssertionError("scene facade should not be used by service")
         )
         handle = object()
-        canvas.handle_state.active_handles = [handle]
+        canvas.runtime_state.handle_state.active_handles = [handle]
 
         with mock.patch(
             "chemvas.ui.handle_overlay_service.clear_handle_items_for_canvas",
@@ -122,7 +123,7 @@ class HandleOverlayServiceTest(unittest.TestCase):
 
         clear_handles.assert_called_once_with(canvas, [handle])
         canvas.scene.assert_not_called()
-        self.assertEqual(canvas.handle_state.active_handles, [])
+        self.assertEqual(canvas.runtime_state.handle_state.active_handles, [])
 
     def test_create_handle_adds_item_to_scene(self) -> None:
         scene = QGraphicsScene()
@@ -171,12 +172,12 @@ class HandleOverlayServiceTest(unittest.TestCase):
         canvas.services.scene_view.selection_highlight_styler.set_selection_highlight.assert_called_once_with(
             [item]
         )
-        self.assertIs(canvas.handle_state.target, item)
-        self.assertEqual(len(canvas.handle_state.active_handles), 2)
+        self.assertIs(canvas.runtime_state.handle_state.target, item)
+        self.assertEqual(len(canvas.runtime_state.handle_state.active_handles), 2)
         self.assertEqual(
             [
                 (handle.rect().center().x(), handle.rect().center().y())
-                for handle in canvas.handle_state.active_handles
+                for handle in canvas.runtime_state.handle_state.active_handles
             ],
             [(17.0, 20.0), (10.0, 13.0)],
         )
@@ -190,7 +191,7 @@ class HandleOverlayServiceTest(unittest.TestCase):
         self.assertEqual(
             [
                 (handle.rect().center().x(), handle.rect().center().y())
-                for handle in canvas.handle_state.active_handles
+                for handle in canvas.runtime_state.handle_state.active_handles
             ],
             [(42.0, 5.0), (10.0, -27.0)],
         )
@@ -211,11 +212,11 @@ class HandleOverlayServiceTest(unittest.TestCase):
         canvas.services.handles.handle_mutation_service.update_curved_control.assert_called_once_with(
             item, QPointF(5.0, 1.5)
         )
-        self.assertEqual(len(canvas.handle_state.active_handles), 3)
+        self.assertEqual(len(canvas.runtime_state.handle_state.active_handles), 3)
         self.assertEqual(
             [
                 (handle.data(1), handle.rect().center().x(), handle.rect().center().y())
-                for handle in canvas.handle_state.active_handles
+                for handle in canvas.runtime_state.handle_state.active_handles
             ],
             [
                 ("curved_start", 0.0, 0.0),
@@ -232,11 +233,11 @@ class HandleOverlayServiceTest(unittest.TestCase):
             [fallback]
         )
         canvas.services.handles.handle_mutation_service.update_curved_control.assert_not_called()
-        self.assertEqual(len(canvas.handle_state.active_handles), 1)
+        self.assertEqual(len(canvas.runtime_state.handle_state.active_handles), 1)
         self.assertEqual(
             (
-                canvas.handle_state.active_handles[0].rect().center().x(),
-                canvas.handle_state.active_handles[0].rect().center().y(),
+                canvas.runtime_state.handle_state.active_handles[0].rect().center().x(),
+                canvas.runtime_state.handle_state.active_handles[0].rect().center().y(),
             ),
             (10.0, 10.0),
         )
@@ -257,7 +258,10 @@ class HandleOverlayServiceTest(unittest.TestCase):
             QPointF(5.0, 3.5),
         )
         self.assertEqual(
-            [handle.data(1) for handle in canvas.handle_state.active_handles],
+            [
+                handle.data(1)
+                for handle in canvas.runtime_state.handle_state.active_handles
+            ],
             ["curved_start", "curved_control", "curved_end"],
         )
 

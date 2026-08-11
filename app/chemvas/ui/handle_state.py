@@ -1,8 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-
-from chemvas.ui.canvas_state_lookup import ensure_canvas_state
+from typing import cast
 
 
 @dataclass(slots=True)
@@ -12,7 +11,7 @@ class CanvasHandleState:
 
 
 def handle_state_for(canvas) -> CanvasHandleState:
-    return ensure_canvas_state(canvas, "handle_state", CanvasHandleState)
+    return cast(CanvasHandleState, canvas.runtime_state.handle_state)
 
 
 def active_handles_for(canvas):

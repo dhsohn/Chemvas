@@ -7,7 +7,11 @@ from unittest import mock
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 import pytest
-from chemvas.ui.canvas_group_state import CanvasSceneGroup, group_state_for
+from chemvas.ui.canvas_group_state import (
+    CanvasGroupState,
+    CanvasSceneGroup,
+    group_state_for,
+)
 from chemvas.ui.canvas_history_service import CanvasHistoryService
 from chemvas.ui.canvas_history_state import CanvasHistoryState
 from chemvas.ui.history_commands import (
@@ -40,6 +44,8 @@ from PyQt6.QtWidgets import (
     QGraphicsScene,
     QGraphicsTextItem,
 )
+
+from tests.runtime_state import canvas_runtime_state
 
 
 class _Scene:
@@ -213,6 +219,7 @@ class _StyledSceneItem(_SceneItem):
 class _Canvas:
     def __init__(self) -> None:
         self._scene = _Scene()
+        self.runtime_state = canvas_runtime_state(group_state=CanvasGroupState())
 
     def scene(self) -> _Scene:
         return self._scene
@@ -1541,7 +1548,9 @@ def test_move_model_backed_item_restores_absolute_model_and_3d_state_on_refresh_
         7: (1.0, 2.0, 3.0),
         8: (5.0, 6.0, 7.0),
     }
-    canvas.atom_coords_3d_state = SimpleNamespace(atom_coords_3d=coords_3d)
+    canvas.runtime_state.atom_coords_3d_state = SimpleNamespace(
+        atom_coords_3d=coords_3d
+    )
     item = _ModelBackedSceneItem(kind, kind, item_id)
     canvas.scene().attach(item)
     before_positions = {
@@ -1571,7 +1580,7 @@ def test_move_model_backed_item_restores_absolute_model_and_3d_state_on_refresh_
             atoms[atom_id].x = x
             atoms[atom_id].y = y
         if coords_3d is not None:
-            canvas.atom_coords_3d_state.atom_coords_3d.update(coords_3d)
+            canvas.runtime_state.atom_coords_3d_state.atom_coords_3d.update(coords_3d)
 
     command = MoveItemsCommand([item], 4.0, 9.0)
     with (
@@ -2058,10 +2067,17 @@ def _group_snapshot(canvas) -> tuple[dict[int, CanvasSceneGroup], int, bool]:
     return dict(state.groups), state.next_group_id, state.expanding
 
 
+def _group_canvas(**attrs) -> SimpleNamespace:
+    return SimpleNamespace(
+        runtime_state=canvas_runtime_state(group_state=CanvasGroupState()),
+        **attrs,
+    )
+
+
 def test_group_redo_rolls_back_when_second_absorbed_group_removal_mutates_then_raises() -> (
     None
 ):
-    canvas = SimpleNamespace()
+    canvas = _group_canvas()
     state = group_state_for(canvas)
     absorbed = [
         (1, CanvasSceneGroup({1}, [])),
@@ -2095,7 +2111,7 @@ def test_group_redo_rolls_back_when_second_absorbed_group_removal_mutates_then_r
 def test_group_undo_rolls_back_when_second_absorbed_group_restore_mutates_then_raises() -> (
     None
 ):
-    canvas = SimpleNamespace()
+    canvas = _group_canvas()
     state = group_state_for(canvas)
     absorbed = [
         (1, CanvasSceneGroup({1}, [])),
@@ -2169,7 +2185,7 @@ def test_group_command_restores_exact_outline_runtime_after_persistent_refresh_f
 def test_ungroup_command_rolls_back_when_second_group_mutates_then_raises(
     method_name: str,
 ) -> None:
-    canvas = SimpleNamespace()
+    canvas = _group_canvas()
     state = group_state_for(canvas)
     removed = [
         (1, CanvasSceneGroup({1}, [])),
@@ -2262,7 +2278,7 @@ def test_explicit_group_and_label_history_success_never_scans_global_item_bounds
     app.setQuitOnLastWindowClosed(False)
     scene = QGraphicsScene()
     label = scene.addRect(QRectF(0.0, 0.0, 10.0, 10.0))
-    canvas = SimpleNamespace(scene=lambda: scene)
+    canvas = _group_canvas(scene=lambda: scene)
     explicit_rect = QRectF(-100.0, -100.0, 200.0, 200.0)
     set_explicit_scene_rect(scene, explicit_rect)
     state = group_state_for(canvas)

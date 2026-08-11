@@ -7,25 +7,34 @@ from types import SimpleNamespace
 from unittest import mock
 
 from tests.runtime_services import canvas_runtime_services
+from tests.runtime_state import canvas_runtime_state
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from chemvas.adapters.qt.renderer import Renderer
 from chemvas.core.svg_roundtrip import extract_chemvas_document_from_svg
 from chemvas.domain.document import MoleculeModel, serialize_settings
+from chemvas.ui.atom_coords_access import CanvasAtomCoords3DState
 from chemvas.ui.bond_graphics_access import add_bond_graphics_for
 from chemvas.ui.canvas_atom_graphics_state import atom_dots_for, atom_items_for
 from chemvas.ui.canvas_bond_graphics_state import bond_items_for_id
+from chemvas.ui.canvas_calculation_plan_state import CanvasCalculationPlanState
 from chemvas.ui.canvas_document_session_service import (
     CanvasDocumentSessionService,
     _snapshot_canvas_scene,
 )
+from chemvas.ui.canvas_group_state import CanvasGroupState
 from chemvas.ui.canvas_history_service import CanvasHistoryService
 from chemvas.ui.canvas_history_state import CanvasHistoryState, history_state_for
+from chemvas.ui.canvas_rotation_state import CanvasRotationState
 from chemvas.ui.canvas_runtime_state import attach_canvas_runtime_state
+from chemvas.ui.canvas_scene_items_state import CanvasSceneItemsState
 from chemvas.ui.canvas_scene_reset_service import CanvasSceneResetService
 from chemvas.ui.history_commands import UpdateSceneItemCommand
-from chemvas.ui.selection_info_state import selection_info_state_for
+from chemvas.ui.selection_info_state import (
+    SelectionInfoState,
+    selection_info_state_for,
+)
 from chemvas.ui.selection_style_state import (
     SelectionStyleState,
     selection_style_state_for,
@@ -87,16 +96,36 @@ def _document_services(
     )
 
 
+def _document_runtime_state(**states):
+    """Runtime state for the session-service doubles.
+
+    ``apply_state`` and the export helpers walk the whole document lifecycle on
+    every run, so a double carries the states it touches even when the test
+    only asserts on history.
+    """
+    states.setdefault("history_state", CanvasHistoryState())
+    states.setdefault("selection_style_state", SelectionStyleState())
+    states.setdefault("selection_info_state", SelectionInfoState.create())
+    states.setdefault("scene_items_state", CanvasSceneItemsState())
+    states.setdefault("calculation_plan_state", CanvasCalculationPlanState())
+    states.setdefault("group_state", CanvasGroupState())
+    states.setdefault("atom_coords_3d_state", CanvasAtomCoords3DState())
+    states.setdefault("rotation_state", CanvasRotationState())
+    return canvas_runtime_state(**states)
+
+
 def _attach_history_service(canvas):
+    runtime_state = getattr(canvas, "runtime_state", None)
+    if runtime_state is None:
+        runtime_state = _document_runtime_state()
+        canvas.runtime_state = runtime_state
     service = CanvasHistoryService(canvas, history_state_for(canvas))
     services = getattr(canvas, "services", None)
     if services is None:
         services = canvas_runtime_services()
         canvas.services = services
     services.history_service = service
-    runtime_state = getattr(canvas, "runtime_state", None)
-    if runtime_state is not None and hasattr(runtime_state, "history_service"):
-        runtime_state.history_service = service
+    runtime_state.history_service = service
     return canvas
 
 
@@ -195,16 +224,17 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
         events = []
         selection_callback = object()
         canvas = SimpleNamespace(
-            history_state=CanvasHistoryState(),
             clear_scene=mock.Mock(side_effect=lambda: events.append("clear")),
             model="old-model",
-            selection_style_state=SelectionStyleState(selected_items=[object()]),
-            selection_info_state=SimpleNamespace(
-                callback=selection_callback,
-                signature=(frozenset({1}), frozenset()),
-                pending_signature=(frozenset({1}), frozenset()),
-                cache=("C", "12.01"),
-                rdkit_warmup_pending=True,
+            runtime_state=_document_runtime_state(
+                selection_style_state=SelectionStyleState(selected_items=[object()]),
+                selection_info_state=SimpleNamespace(
+                    callback=selection_callback,
+                    signature=(frozenset({1}), frozenset()),
+                    pending_signature=(frozenset({1}), frozenset()),
+                    cache=("C", "12.01"),
+                    rdkit_warmup_pending=True,
+                ),
             ),
         )
         canvas.services = _document_services(
@@ -254,12 +284,13 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
         self.assertTrue(history_state_for(canvas).enabled)
         self.assertEqual(history_state_for(canvas).history, [])
         self.assertEqual(history_state_for(canvas).redo_stack, [])
-        self.assertEqual(canvas.selection_style_state.selected_items, [])
-        self.assertIs(canvas.selection_info_state.callback, selection_callback)
-        self.assertIsNone(canvas.selection_info_state.signature)
-        self.assertIsNone(canvas.selection_info_state.pending_signature)
-        self.assertEqual(canvas.selection_info_state.cache, ("", ""))
-        self.assertFalse(canvas.selection_info_state.rdkit_warmup_pending)
+        selection_info = selection_info_state_for(canvas)
+        self.assertEqual(selection_style_state_for(canvas).selected_items, [])
+        self.assertIs(selection_info.callback, selection_callback)
+        self.assertIsNone(selection_info.signature)
+        self.assertIsNone(selection_info.pending_signature)
+        self.assertEqual(selection_info.cache, ("", ""))
+        self.assertFalse(selection_info.rdkit_warmup_pending)
         self.assertEqual(
             events,
             [
@@ -278,9 +309,9 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
 
     def test_apply_state_reenables_history_when_restore_fails(self) -> None:
         canvas = SimpleNamespace(
-            history_state=CanvasHistoryState(),
             clear_scene=mock.Mock(),
             model="old-model",
+            runtime_state=_document_runtime_state(),
         )
         canvas.services = _document_services(
             clear_scene=lambda: canvas.clear_scene(),
@@ -330,18 +361,20 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
             "scene": ["target-model-item", "target-note"],
         }
         canvas = SimpleNamespace(
-            history_state=CanvasHistoryState(enabled=False),
             model="old-model",
             settings="old-settings",
             scene_items=list(old_state["scene"]),
             sheet_size="Letter",
             sheet_orientation="landscape",
-            selection_info_state=SimpleNamespace(
-                callback=object(),
-                signature=(frozenset({1}), frozenset({2})),
-                pending_signature=(frozenset({1}), frozenset({2})),
-                cache=("old", "selection"),
-                rdkit_warmup_pending=True,
+            runtime_state=_document_runtime_state(
+                history_state=CanvasHistoryState(enabled=False),
+                selection_info_state=SimpleNamespace(
+                    callback=object(),
+                    signature=(frozenset({1}), frozenset({2})),
+                    pending_signature=(frozenset({1}), frozenset({2})),
+                    cache=("old", "selection"),
+                    rdkit_warmup_pending=True,
+                ),
             ),
         )
 
@@ -367,7 +400,8 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
         history_state.redo_stack.append(redo_command)
         original_history = history_state.history
         original_redo = history_state.redo_stack
-        original_selection_callback = canvas.selection_info_state.callback
+        selection_info = selection_info_state_for(canvas)
+        original_selection_callback = selection_info.callback
 
         def restore_post_items(_canvas, state) -> None:
             if state is target_state:
@@ -414,13 +448,13 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
         self.assertEqual(canvas.scene_items, old_state["scene"])
         self.assertEqual(canvas.sheet_size, "Letter")
         self.assertEqual(canvas.sheet_orientation, "landscape")
-        self.assertIs(canvas.selection_info_state.callback, original_selection_callback)
+        self.assertIs(selection_info.callback, original_selection_callback)
         self.assertEqual(
-            canvas.selection_info_state.signature,
+            selection_info.signature,
             (frozenset({1}), frozenset({2})),
         )
-        self.assertEqual(canvas.selection_info_state.cache, ("old", "selection"))
-        self.assertTrue(canvas.selection_info_state.rdkit_warmup_pending)
+        self.assertEqual(selection_info.cache, ("old", "selection"))
+        self.assertTrue(selection_info.rdkit_warmup_pending)
         self.assertIs(history_state.history, original_history)
         self.assertIs(history_state.redo_stack, original_redo)
         self.assertEqual(history_state.history, [undo_command])
@@ -431,10 +465,12 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
         self,
     ) -> None:
         canvas = SimpleNamespace(
-            history_state=CanvasHistoryState(
-                history=[object()], redo_stack=[object()], enabled=False
-            ),
             model="old-model",
+            runtime_state=_document_runtime_state(
+                history_state=CanvasHistoryState(
+                    history=[object()], redo_stack=[object()], enabled=False
+                )
+            ),
         )
 
         def clear_scene() -> None:
@@ -484,10 +520,10 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
         for failing_phase in ("pre", "post", "groups"):
             with self.subTest(failing_phase=failing_phase):
                 canvas = SimpleNamespace(
-                    history_state=CanvasHistoryState(),
                     model="old-model",
                     settings="old-settings",
                     scene_items=["old-item"],
+                    runtime_state=_document_runtime_state(),
                 )
 
                 def clear_scene(target_canvas=canvas) -> None:
@@ -628,9 +664,11 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
         first.current_scene = scene
         second.current_scene = scene
         canvas = SimpleNamespace(
-            history_state=CanvasHistoryState(history=[object()]),
             model="old-model",
             scene=lambda: scene,
+            runtime_state=_document_runtime_state(
+                history_state=CanvasHistoryState(history=[object()])
+            ),
         )
         clear_scene = mock.Mock()
         canvas.services = _document_services(
@@ -673,12 +711,13 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
         scene.setFocusItem(parent_item)
         scene_registry = [parent_item, child_item]
         canvas = SimpleNamespace(
-            history_state=CanvasHistoryState(),
             model="old-model",
             settings="old-settings",
             scene_items=scene_registry,
-            selection_style_state=SelectionStyleState(selected_items=[parent_item]),
             scene=lambda: scene,
+            runtime_state=_document_runtime_state(
+                selection_style_state=SelectionStyleState(selected_items=[parent_item])
+            ),
         )
 
         def clear_scene() -> None:
@@ -751,7 +790,9 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
             self.assertIs(child_item.scene(), scene)
             self.assertIs(canvas.scene_items, scene_registry)
             self.assertEqual(canvas.scene_items, [parent_item, child_item])
-            self.assertEqual(canvas.selection_style_state.selected_items, [parent_item])
+            self.assertEqual(
+                selection_style_state_for(canvas).selected_items, [parent_item]
+            )
             self.assertTrue(parent_item.isSelected())
             self.assertIs(scene.focusItem(), parent_item)
             canvas.services.history_service.undo()
@@ -1030,8 +1071,8 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
 
     def test_restore_save_and_load_delegate_through_session_methods(self) -> None:
         canvas = SimpleNamespace(
-            history_state=CanvasHistoryState(),
             FILE_FORMAT_VERSION=7,
+            runtime_state=_document_runtime_state(),
         )
         _attach_history_service(canvas)
         service = _session_service(canvas)

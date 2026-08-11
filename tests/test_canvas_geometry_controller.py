@@ -13,10 +13,22 @@ except ModuleNotFoundError:
 
 if QApplication is not None:
     from chemvas.domain.document import Atom, Bond
-    from chemvas.ui.atom_coords_access import CanvasAtomCoords3DState
-    from chemvas.ui.canvas_atom_graphics_state import set_atom_items_for
+    from chemvas.ui.atom_coords_access import (
+        CanvasAtomCoords3DState,
+        atom_coords_3d_for,
+    )
+    from chemvas.ui.canvas_atom_graphics_state import (
+        CanvasAtomGraphicsState,
+        set_atom_items_for,
+    )
     from chemvas.ui.canvas_geometry_controller import CanvasGeometryController
-    from chemvas.ui.canvas_scene_items_state import set_scene_item_collection_for
+    from chemvas.ui.canvas_rotation_state import CanvasRotationState
+    from chemvas.ui.canvas_scene_items_state import (
+        CanvasSceneItemsState,
+        set_scene_item_collection_for,
+    )
+
+    from tests.runtime_state import canvas_runtime_state
 
 
 class _FakeRingItem:
@@ -52,6 +64,9 @@ class CanvasGeometryControllerTest(unittest.TestCase):
         ring_item = _FakeRingItem([1, 2, 3])
         canvas = SimpleNamespace(
             model=SimpleNamespace(bonds=[Bond(1, 2, 1), None, Bond(4, 5, 1)]),
+            runtime_state=canvas_runtime_state(
+                scene_items_state=CanvasSceneItemsState()
+            ),
         )
         set_scene_item_collection_for(
             canvas, "ring_items", [_FakeRingItem("bad"), ring_item]
@@ -70,13 +85,17 @@ class CanvasGeometryControllerTest(unittest.TestCase):
             model=SimpleNamespace(
                 atoms={1: Atom("C", 0.0, 0.0), 3: Atom("C", 6.0, 12.0)}
             ),
-            atom_coords_3d_state=CanvasAtomCoords3DState(
-                atom_coords_3d={
-                    1: (0.0, 0.0, 0.0),
-                    3: (6.0, 12.0, 9.0),
-                }
-            ),
             renderer=SimpleNamespace(style=SimpleNamespace(bond_length_px=20.0)),
+            runtime_state=canvas_runtime_state(
+                atom_coords_3d_state=CanvasAtomCoords3DState(
+                    atom_coords_3d={
+                        1: (0.0, 0.0, 0.0),
+                        3: (6.0, 12.0, 9.0),
+                    }
+                ),
+                rotation_state=CanvasRotationState(),
+                scene_items_state=CanvasSceneItemsState(),
+            ),
         )
         set_scene_item_collection_for(
             canvas,
@@ -91,7 +110,7 @@ class CanvasGeometryControllerTest(unittest.TestCase):
         self.assertIsNone(controller.ring_center_3d_for_bond(Bond(1, 3, 1)))
 
         controller.canvas.model.atoms[2] = Atom("C", 3.0, 6.0)
-        controller.canvas.atom_coords_3d_state.atom_coords_3d[2] = (3.0, 6.0, 3.0)
+        atom_coords_3d_for(controller.canvas)[2] = (3.0, 6.0, 3.0)
         self.assertEqual(
             controller.ring_center_3d_for_bond(Bond(1, 3, 1)), (3.0, 6.0, 4.0)
         )
@@ -101,9 +120,11 @@ class CanvasGeometryControllerTest(unittest.TestCase):
     ) -> None:
         controller = CanvasGeometryController(
             SimpleNamespace(
-                atom_items={},
                 renderer=SimpleNamespace(style=SimpleNamespace(bond_line_width=2.0)),
                 model=SimpleNamespace(atoms={1: Atom("C", 0.0, 0.0)}),
+                runtime_state=canvas_runtime_state(
+                    atom_graphics_state=CanvasAtomGraphicsState()
+                ),
             )
         )
 
@@ -195,6 +216,9 @@ class CanvasGeometryControllerTest(unittest.TestCase):
     def test_trim_line_for_labels_handles_none_radii_and_min_span_clamp(self) -> None:
         canvas = SimpleNamespace(
             renderer=SimpleNamespace(style=SimpleNamespace(bond_line_width=5.0)),
+            runtime_state=canvas_runtime_state(
+                atom_graphics_state=CanvasAtomGraphicsState()
+            ),
         )
         controller = CanvasGeometryController(canvas)
         controller.label_cut_radius_for_atom = lambda atom_id: {1: None, 2: 49.6}.get(
@@ -231,6 +255,9 @@ class CanvasGeometryControllerTest(unittest.TestCase):
     def test_trim_line_for_labels_clamps_start_only_and_end_only_min_span(self) -> None:
         canvas = SimpleNamespace(
             renderer=SimpleNamespace(style=SimpleNamespace(bond_line_width=5.0)),
+            runtime_state=canvas_runtime_state(
+                atom_graphics_state=CanvasAtomGraphicsState()
+            ),
         )
         controller = CanvasGeometryController(canvas)
         controller.label_cut_radius_for_atom = lambda atom_id: {1: 99.9, 2: 99.9}.get(

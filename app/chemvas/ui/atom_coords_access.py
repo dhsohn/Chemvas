@@ -2,11 +2,10 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, cast
 
 from chemvas.ui.bond_graphics_access import project_point_3d_for
 from chemvas.ui.canvas_model_access import atom_for_id
-from chemvas.ui.canvas_state_lookup import ensure_canvas_state
 from chemvas.ui.renderer_style_access import bond_length_px_for
 
 AtomCoords3D = tuple[float, float, float]
@@ -17,11 +16,8 @@ class CanvasAtomCoords3DState:
     atom_coords_3d: dict[int, AtomCoords3D] = field(default_factory=dict)
 
 
-ATOM_COORDS_3D_ATTRS = ("atom_coords_3d",)
-
-
 def atom_coords_3d_state_for(canvas: Any) -> CanvasAtomCoords3DState:
-    return ensure_canvas_state(canvas, "atom_coords_3d_state", CanvasAtomCoords3DState)
+    return cast(CanvasAtomCoords3DState, canvas.runtime_state.atom_coords_3d_state)
 
 
 def atom_coords_3d_for(canvas: Any) -> dict[int, AtomCoords3D]:
@@ -78,7 +74,6 @@ def current_atom_coords_3d_for(
 
 
 __all__ = [
-    "ATOM_COORDS_3D_ATTRS",
     "AtomCoords3D",
     "CanvasAtomCoords3DState",
     "atom_coords_3d_for",

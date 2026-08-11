@@ -4,6 +4,7 @@ from types import SimpleNamespace
 from unittest import mock
 
 from tests.runtime_services import canvas_runtime_services
+from tests.runtime_state import canvas_runtime_state
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -14,12 +15,17 @@ except ModuleNotFoundError:
 
 if QApplication is not None:
     from chemvas.ui.canvas_atom_graphics_state import (
+        CanvasAtomGraphicsState,
         atom_dots_for,
         atom_items_for,
         set_atom_dots_for,
         set_atom_items_for,
     )
-    from chemvas.ui.canvas_bond_graphics_state import bond_items_for, set_bond_items_for
+    from chemvas.ui.canvas_bond_graphics_state import (
+        CanvasBondGraphicsState,
+        bond_items_for,
+        set_bond_items_for,
+    )
     from chemvas.ui.canvas_model_access import rebuild_graphics_for
     from chemvas.ui.scene_item_access import (
         clear_scene_item_list_map,
@@ -52,6 +58,10 @@ class CanvasViewSceneOpsRebuildTest(unittest.TestCase):
             scene=lambda: scene,
             services=canvas_runtime_services(
                 structure_build_service=SimpleNamespace(render_model=mock.Mock())
+            ),
+            runtime_state=canvas_runtime_state(
+                atom_graphics_state=CanvasAtomGraphicsState(),
+                bond_graphics_state=CanvasBondGraphicsState(),
             ),
         )
         set_atom_items_for(view, {3: atom_label})

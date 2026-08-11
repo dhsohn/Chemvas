@@ -3,7 +3,10 @@ from __future__ import annotations
 from types import SimpleNamespace
 from unittest import mock
 
-from chemvas.ui.canvas_scene_items_state import set_selected_notes_for
+from chemvas.ui.canvas_scene_items_state import (
+    CanvasSceneItemsState,
+    set_selected_notes_for,
+)
 from chemvas.ui.selection_collection_access import (
     selection_status_count_for,
     selection_status_item_identity,
@@ -19,6 +22,7 @@ from chemvas.ui.selection_service_access import (
 )
 
 from tests.runtime_services import canvas_runtime_services
+from tests.runtime_state import canvas_runtime_state
 
 
 class _Item:
@@ -91,7 +95,10 @@ def test_selection_status_count_dedupes_structures_and_includes_selected_notes()
     scene = _Scene([atom, duplicate_atom, bond, ring, custom, handle, outline])
     note = _Item("note", "n1", scene=scene)
     outside_note = _Item("note", "n2", scene=object())
-    canvas = SimpleNamespace(scene=mock.Mock(return_value=scene))
+    canvas = SimpleNamespace(
+        scene=mock.Mock(return_value=scene),
+        runtime_state=canvas_runtime_state(scene_items_state=CanvasSceneItemsState()),
+    )
     set_selected_notes_for(canvas, [note, outside_note])
 
     assert selection_status_count_for(canvas) == 5

@@ -4,6 +4,7 @@ from types import SimpleNamespace
 from unittest import mock
 
 from tests.runtime_services import canvas_runtime_services
+from tests.runtime_state import canvas_runtime_state
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -25,7 +26,10 @@ if QApplication is not None:
         implicit_carbon_dot_brush_for,
         uses_compact_label_hit_shape_for,
     )
-    from chemvas.ui.canvas_atom_graphics_state import set_atom_items_for
+    from chemvas.ui.canvas_atom_graphics_state import (
+        CanvasAtomGraphicsState,
+        set_atom_items_for,
+    )
     from chemvas.ui.canvas_history_service import CanvasHistoryService
     from chemvas.ui.canvas_history_state import CanvasHistoryState, history_state_for
     from chemvas.ui.canvas_hit_testing_service import CanvasHitTestingService
@@ -33,6 +37,7 @@ if QApplication is not None:
     from chemvas.ui.canvas_mark_registry import CanvasMarkRegistry
     from chemvas.ui.canvas_note_controller import CanvasNoteController
     from chemvas.ui.canvas_scene_items_state import (
+        CanvasSceneItemsState,
         ring_items_for,
         selected_notes_for,
         set_scene_item_collection_for,
@@ -93,6 +98,9 @@ class _FakeNoteCanvas:
     def __init__(self) -> None:
         self.commands = []
         self.removed_items = []
+        self.runtime_state = canvas_runtime_state(
+            scene_items_state=CanvasSceneItemsState()
+        )
         set_selected_notes_for(self, [])
         self.updated_boxes = []
         self.history_service = CanvasHistoryService(self, CanvasHistoryState())
@@ -411,6 +419,9 @@ class CanvasViewUnitTest(unittest.TestCase):
         snapshot_view = SimpleNamespace(
             scene=lambda: scene,
             model=SimpleNamespace(bonds=[Bond(1, 2, 1)]),
+            runtime_state=canvas_runtime_state(
+                scene_items_state=CanvasSceneItemsState()
+            ),
         )
         snapshot = selection_snapshot_for(snapshot_view)
         self.assertEqual(snapshot.selected_atom_ids, frozenset({1, 2}))
@@ -478,6 +489,7 @@ class CanvasViewUnitTest(unittest.TestCase):
         selected_payload_view = SimpleNamespace(
             scene=lambda: selected_payload_scene,
             model=SimpleNamespace(atoms={}, bonds=[]),
+            runtime_state=canvas_runtime_state(mark_registry=CanvasMarkRegistry()),
         )
         with mock.patch(
             "chemvas.ui.structure_payload_access.build_structure_payload_state",
@@ -492,7 +504,9 @@ class CanvasViewUnitTest(unittest.TestCase):
             build_structure.call_args.args, (selected_payload_view.model, {5}, {6}, {})
         )
 
-        payload_view = SimpleNamespace()
+        payload_view = SimpleNamespace(
+            runtime_state=canvas_runtime_state(mark_registry=CanvasMarkRegistry())
+        )
         with mock.patch(
             "chemvas.ui.structure_payload_access.build_3d_conversion_payload_state",
             return_value=("export", {"a": 1}),
@@ -514,8 +528,11 @@ class CanvasViewUnitTest(unittest.TestCase):
         )
         structure_payload_view = SimpleNamespace(
             model=structure_payload_model,
-            mark_registry=CanvasMarkRegistry(
-                {9: [_FakeItem("mark", {"kind": "minus"})]}
+            runtime_state=canvas_runtime_state(
+                atom_graphics_state=CanvasAtomGraphicsState(),
+                mark_registry=CanvasMarkRegistry(
+                    {9: [_FakeItem("mark", {"kind": "minus"})]}
+                ),
             ),
         )
         with mock.patch(
@@ -700,6 +717,9 @@ class CanvasViewUnitTest(unittest.TestCase):
                 )
             ),
             model=SimpleNamespace(atoms={1: Atom("C", 7.0, -2.0)}),
+            runtime_state=canvas_runtime_state(
+                atom_graphics_state=CanvasAtomGraphicsState()
+            ),
         )
         pen = QPen()
         pen.setWidthF(1.5)
@@ -737,6 +757,9 @@ class CanvasViewUnitTest(unittest.TestCase):
                     2: Atom("O", 4.0, 5.0),
                 },
                 bonds=[Bond(1, 2, 1), None],
+            ),
+            runtime_state=canvas_runtime_state(
+                atom_graphics_state=CanvasAtomGraphicsState()
             ),
         )
         set_atom_items_for(fake_view, {1: object()})
@@ -791,6 +814,9 @@ class CanvasViewUnitTest(unittest.TestCase):
                 bonds=[Bond(1, 2, 1)],
             ),
             renderer=SimpleNamespace(style=SimpleNamespace(bond_length_px=20.0)),
+            runtime_state=canvas_runtime_state(
+                scene_items_state=CanvasSceneItemsState()
+            ),
         )
 
         with (
@@ -888,6 +914,9 @@ class CanvasViewUnitTest(unittest.TestCase):
     ) -> None:
         fake_view = SimpleNamespace(
             model=SimpleNamespace(bonds=[Bond(1, 2, 1)]),
+            runtime_state=canvas_runtime_state(
+                scene_items_state=CanvasSceneItemsState()
+            ),
         )
         set_scene_item_collection_for(fake_view, "ring_items", ["ring"])
 

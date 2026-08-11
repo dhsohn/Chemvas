@@ -3,7 +3,10 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 import chemvas.ui.scene_clipboard_access as access
+from chemvas.ui.scene_clipboard_state import SceneClipboardState
 from PyQt6.QtCore import QRectF
+
+from tests.runtime_state import canvas_runtime_state
 
 
 class _Canvas:
@@ -46,7 +49,11 @@ class _Item:
 
 class SceneClipboardAccessTest(unittest.TestCase):
     def test_clipboard_paste_state_helpers_read_and_write_canvas_state(self) -> None:
-        canvas = SimpleNamespace()
+        canvas = SimpleNamespace(
+            runtime_state=canvas_runtime_state(
+                scene_clipboard_state=SceneClipboardState()
+            )
+        )
 
         self.assertIsNone(access.clipboard_paste_source_json_for(canvas))
         self.assertEqual(access.clipboard_paste_count_for(canvas), 0)

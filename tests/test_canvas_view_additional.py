@@ -4,6 +4,7 @@ from types import SimpleNamespace
 from unittest import mock
 
 from tests.runtime_services import canvas_runtime_services
+from tests.runtime_state import canvas_runtime_state
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -34,18 +35,24 @@ if QApplication is not None:
         prompt_atom_label_for,
     )
     from chemvas.ui.canvas_atom_graphics_state import (
+        CanvasAtomGraphicsState,
         atom_dots_for,
         atom_items_for,
         set_atom_dots_for,
         set_atom_items_for,
     )
-    from chemvas.ui.canvas_bond_graphics_state import bond_items_for, set_bond_items_for
+    from chemvas.ui.canvas_bond_graphics_state import (
+        CanvasBondGraphicsState,
+        bond_items_for,
+        set_bond_items_for,
+    )
     from chemvas.ui.canvas_callback_state import CanvasCallbackState
     from chemvas.ui.canvas_color_mutation_service import (
         CanvasColorMutationService,
         UpdateBondColorCommand,
     )
     from chemvas.ui.canvas_document_session_service import CanvasDocumentSessionService
+    from chemvas.ui.canvas_group_state import CanvasGroupState
     from chemvas.ui.canvas_history_service import CanvasHistoryService
     from chemvas.ui.canvas_history_state import CanvasHistoryState, history_state_for
     from chemvas.ui.canvas_mark_registry import CanvasMarkRegistry
@@ -55,6 +62,7 @@ if QApplication is not None:
         update_ring_fills_for_atoms_for,
     )
     from chemvas.ui.canvas_scene_items_state import (
+        CanvasSceneItemsState,
         selected_notes_for,
         set_scene_item_collection_for,
     )
@@ -140,6 +148,8 @@ if QApplication is not None:
         selected_items_for_transform_for,
         selection_items_for_copy_for,
     )
+    from chemvas.ui.selection_info_state import SelectionInfoState
+    from chemvas.ui.selection_outline_state import SelectionOutlineState
     from chemvas.ui.selection_service_access import (
         clear_note_selection_for,
         refresh_selection_outline_for,
@@ -147,7 +157,10 @@ if QApplication is not None:
         toggle_note_selection_for,
     )
     from chemvas.ui.selection_service_bundle import build_selection_services
-    from chemvas.ui.selection_style_state import SelectionStyleState
+    from chemvas.ui.selection_style_state import (
+        SelectionStyleState,
+        selection_style_state_for,
+    )
     from chemvas.ui.structure_build_access import (
         add_benzene_template_for,
         fuse_benzene_to_bond_for,
@@ -300,12 +313,12 @@ class CanvasViewAdditionalTest(unittest.TestCase):
         second = _FakeCommand()
         third = _FakeCommand()
         history_view = SimpleNamespace(
-            history_state=CanvasHistoryState(limit=2, redo_stack=["stale"]),
+            runtime_state=canvas_runtime_state(
+                history_state=CanvasHistoryState(limit=2, redo_stack=["stale"]),
+            ),
         )
-        history_view.runtime_state = SimpleNamespace(
-            history_service=CanvasHistoryService(
-                history_view, history_state_for(history_view)
-            )
+        history_view.runtime_state.history_service = CanvasHistoryService(
+            history_view, history_state_for(history_view)
         )
 
         history_service = history_view.runtime_state.history_service
@@ -318,10 +331,14 @@ class CanvasViewAdditionalTest(unittest.TestCase):
         self.assertEqual(history_state_for(history_view).redo_stack, [])
 
         failing_push_view = SimpleNamespace(
-            history_state=CanvasHistoryState(
-                history=[first],
-                redo_stack=[second],
-                change_callback=mock.Mock(side_effect=RuntimeError("notify failed")),
+            runtime_state=canvas_runtime_state(
+                history_state=CanvasHistoryState(
+                    history=[first],
+                    redo_stack=[second],
+                    change_callback=mock.Mock(
+                        side_effect=RuntimeError("notify failed")
+                    ),
+                ),
             ),
         )
         failing_push_history = CanvasHistoryService(
@@ -334,26 +351,26 @@ class CanvasViewAdditionalTest(unittest.TestCase):
         history_state_for(failing_push_view).change_callback.assert_called_once_with()
 
         disabled_view = SimpleNamespace(
-            history_state=CanvasHistoryState(
-                enabled=False, limit=2, redo_stack=["redo"]
+            runtime_state=canvas_runtime_state(
+                history_state=CanvasHistoryState(
+                    enabled=False, limit=2, redo_stack=["redo"]
+                ),
             ),
         )
-        disabled_view.runtime_state = SimpleNamespace(
-            history_service=CanvasHistoryService(
-                disabled_view, history_state_for(disabled_view)
-            )
+        disabled_view.runtime_state.history_service = CanvasHistoryService(
+            disabled_view, history_state_for(disabled_view)
         )
         disabled_view.runtime_state.history_service.push(first)
         self.assertEqual(history_state_for(disabled_view).history, [])
         self.assertEqual(history_state_for(disabled_view).redo_stack, ["redo"])
 
         undo_redo_view = SimpleNamespace(
-            history_state=CanvasHistoryState(history=[first])
-        )
-        undo_redo_view.runtime_state = SimpleNamespace(
-            history_service=CanvasHistoryService(
-                undo_redo_view, history_state_for(undo_redo_view)
+            runtime_state=canvas_runtime_state(
+                history_state=CanvasHistoryState(history=[first])
             )
+        )
+        undo_redo_view.runtime_state.history_service = CanvasHistoryService(
+            undo_redo_view, history_state_for(undo_redo_view)
         )
         undo_redo_history = undo_redo_view.runtime_state.history_service
         undo_redo_history.undo()
@@ -369,7 +386,9 @@ class CanvasViewAdditionalTest(unittest.TestCase):
         failing_undo = _FakeCommand()
         failing_undo.undo = mock.Mock(side_effect=RuntimeError("undo failed"))
         failing_undo_view = SimpleNamespace(
-            history_state=CanvasHistoryState(history=[failing_undo])
+            runtime_state=canvas_runtime_state(
+                history_state=CanvasHistoryState(history=[failing_undo])
+            )
         )
         failing_undo_history = CanvasHistoryService(
             failing_undo_view,
@@ -385,7 +404,9 @@ class CanvasViewAdditionalTest(unittest.TestCase):
         failing_redo = _FakeCommand()
         failing_redo.redo = mock.Mock(side_effect=RuntimeError("redo failed"))
         failing_redo_view = SimpleNamespace(
-            history_state=CanvasHistoryState(redo_stack=[failing_redo])
+            runtime_state=canvas_runtime_state(
+                history_state=CanvasHistoryState(redo_stack=[failing_redo])
+            )
         )
         failing_redo_history = CanvasHistoryService(
             failing_redo_view,
@@ -396,18 +417,17 @@ class CanvasViewAdditionalTest(unittest.TestCase):
         self.assertEqual(history_state_for(failing_redo_view).history, [])
         self.assertEqual(history_state_for(failing_redo_view).redo_stack, [])
 
-        noop_view = SimpleNamespace(history_state=CanvasHistoryState())
-        noop_view.runtime_state = SimpleNamespace(
-            history_service=CanvasHistoryService(
-                noop_view, history_state_for(noop_view)
-            )
+        noop_view = SimpleNamespace(
+            runtime_state=canvas_runtime_state(history_state=CanvasHistoryState())
+        )
+        noop_view.runtime_state.history_service = CanvasHistoryService(
+            noop_view, history_state_for(noop_view)
         )
         noop_history = noop_view.runtime_state.history_service
         noop_history.undo()
         noop_history.redo()
 
         tool_view = SimpleNamespace(
-            insert_state=SimpleNamespace(template_active=True, smiles_active=True),
             services=canvas_runtime_services(
                 tool_controller=SimpleNamespace(set_active=mock.Mock()),
                 insert_controller=SimpleNamespace(
@@ -417,10 +437,11 @@ class CanvasViewAdditionalTest(unittest.TestCase):
                 hover=SimpleNamespace(refresh=mock.Mock()),
             ),
             refresh_selection_outline=mock.Mock(),
-            runtime_state=SimpleNamespace(
-                callback_state=CanvasCallbackState(tool_change=mock.Mock())
+            runtime_state=canvas_runtime_state(
+                callback_state=CanvasCallbackState(tool_change=mock.Mock()),
+                insert_state=SimpleNamespace(template_active=True, smiles_active=True),
+                tool_settings_state=CanvasToolSettingsState(mark_kind="plus"),
             ),
-            tool_settings_state=CanvasToolSettingsState(mark_kind="plus"),
         )
         tool_view.services.selection.selection_controller = SimpleNamespace(
             update_selection_outline=tool_view.refresh_selection_outline
@@ -623,6 +644,7 @@ class CanvasViewAdditionalTest(unittest.TestCase):
             services=canvas_runtime_services(
                 history_service=SimpleNamespace(push=mock.Mock())
             ),
+            runtime_state=canvas_runtime_state(mark_registry=CanvasMarkRegistry()),
         )
         with self.assertRaisesRegex(ValueError, "RDKit export failed"):
             CanvasDocumentSessionService(
@@ -646,7 +668,6 @@ class CanvasViewAdditionalTest(unittest.TestCase):
     def test_tool_change_callback_runs_from_tool_mode_controller(self) -> None:
         callback = mock.Mock()
         view = SimpleNamespace(
-            insert_state=SimpleNamespace(template_active=True, smiles_active=False),
             services=canvas_runtime_services(
                 tool_controller=SimpleNamespace(set_active=mock.Mock()),
                 insert_controller=SimpleNamespace(
@@ -656,8 +677,9 @@ class CanvasViewAdditionalTest(unittest.TestCase):
                 hover=SimpleNamespace(refresh=mock.Mock()),
             ),
             refresh_selection_outline=mock.Mock(),
-            runtime_state=SimpleNamespace(
-                callback_state=CanvasCallbackState(tool_change=callback)
+            runtime_state=canvas_runtime_state(
+                callback_state=CanvasCallbackState(tool_change=callback),
+                insert_state=SimpleNamespace(template_active=True, smiles_active=False),
             ),
         )
         view.services.input.tool_mode_controller = CanvasToolModeController(
@@ -683,9 +705,11 @@ class CanvasViewAdditionalTest(unittest.TestCase):
             services=canvas_runtime_services(
                 structure_build_service=structure_build_service
             ),
-            tool_settings_state=CanvasToolSettingsState(
-                active_bond_style="double",
-                active_bond_order=2,
+            runtime_state=canvas_runtime_state(
+                tool_settings_state=CanvasToolSettingsState(
+                    active_bond_style="double",
+                    active_bond_order=2,
+                ),
             ),
         )
 
@@ -1327,6 +1351,9 @@ class CanvasViewAdditionalTest(unittest.TestCase):
         label_item = mock.Mock()
         state_view = SimpleNamespace(
             model=SimpleNamespace(atoms={1: Atom("C", 1.0, 2.0, color="#111111")}),
+            runtime_state=canvas_runtime_state(
+                atom_graphics_state=CanvasAtomGraphicsState()
+            ),
         )
         set_atom_items_for(state_view, {1: label_item})
         self.assertEqual(
@@ -1423,26 +1450,28 @@ class CanvasViewAdditionalTest(unittest.TestCase):
     ) -> None:
         note_controller = SimpleNamespace(apply_text_style_to_selected=mock.Mock())
         style_view = SimpleNamespace(
-            tool_settings_state=CanvasToolSettingsState(atom_symbol="C"),
-            selection_style_state=SelectionStyleState(
-                color=QColor("#000000"),
-                stroke_delta=0.6,
-            ),
-            text_style_state=CanvasTextStyleState(
-                text_font_family="Helvetica",
-                text_font_size=11,
-                text_font_weight=QFont.Weight.Normal,
-                text_italic=False,
-                text_color=QColor("#222222"),
-                text_alignment=Qt.AlignmentFlag.AlignLeft,
-                text_line_spacing=1.0,
-                note_box_enabled=False,
-                note_box_color=QColor("#ffffff"),
-                note_box_alpha=0.3,
-                note_border_enabled=False,
-                note_border_color=QColor("#111111"),
-                note_border_width=1.0,
-                note_padding=4.0,
+            runtime_state=canvas_runtime_state(
+                tool_settings_state=CanvasToolSettingsState(atom_symbol="C"),
+                selection_style_state=SelectionStyleState(
+                    color=QColor("#000000"),
+                    stroke_delta=0.6,
+                ),
+                text_style_state=CanvasTextStyleState(
+                    text_font_family="Helvetica",
+                    text_font_size=11,
+                    text_font_weight=QFont.Weight.Normal,
+                    text_italic=False,
+                    text_color=QColor("#222222"),
+                    text_alignment=Qt.AlignmentFlag.AlignLeft,
+                    text_line_spacing=1.0,
+                    note_box_enabled=False,
+                    note_box_color=QColor("#ffffff"),
+                    note_box_alpha=0.3,
+                    note_border_enabled=False,
+                    note_border_color=QColor("#111111"),
+                    note_border_width=1.0,
+                    note_padding=4.0,
+                ),
             ),
             renderer=SimpleNamespace(
                 style=SimpleNamespace(font_size_pt=12, atom_color="#123456")
@@ -1469,9 +1498,9 @@ class CanvasViewAdditionalTest(unittest.TestCase):
         tool_mode_controller.set_curved_symmetry(True)
         self.assertTrue(tool_mode_controller.get_curved_symmetry())
         style_controller.set_selection_color(QColor("#abcdef"))
-        self.assertEqual(style_view.selection_style_state.color.name(), "#abcdef")
+        self.assertEqual(selection_style_state_for(style_view).color.name(), "#abcdef")
         style_controller.set_selection_color(QColor())
-        self.assertEqual(style_view.selection_style_state.color.name(), "#abcdef")
+        self.assertEqual(selection_style_state_for(style_view).color.name(), "#abcdef")
         style_controller.set_selection_stroke_delta(-5.0)
         self.assertEqual(style_controller.get_selection_stroke_delta(), 0.1)
 
@@ -1558,25 +1587,31 @@ class CanvasViewAdditionalTest(unittest.TestCase):
         scene.addItem(item)
 
         note_view = SimpleNamespace(
-            text_style_state=CanvasTextStyleState(
-                note_padding=6.0,
-                note_box_enabled=True,
-                note_border_enabled=True,
-                note_box_color=QColor("#ffffff"),
-                note_box_alpha=0.4,
-                note_border_color=QColor("#111111"),
-                note_border_width=1.2,
-                text_font_family="Arial",
-                text_font_size=13,
-                text_font_weight=QFont.Weight.DemiBold,
-                text_italic=True,
-                text_color=QColor("#334455"),
-                text_alignment=Qt.AlignmentFlag.AlignRight,
-                text_line_spacing=1.25,
-            ),
-            selection_style_state=SelectionStyleState(
-                color=QColor("#1f5eff"),
-                stroke_delta=0.8,
+            runtime_state=canvas_runtime_state(
+                text_style_state=CanvasTextStyleState(
+                    note_padding=6.0,
+                    note_box_enabled=True,
+                    note_border_enabled=True,
+                    note_box_color=QColor("#ffffff"),
+                    note_box_alpha=0.4,
+                    note_border_color=QColor("#111111"),
+                    note_border_width=1.2,
+                    text_font_family="Arial",
+                    text_font_size=13,
+                    text_font_weight=QFont.Weight.DemiBold,
+                    text_italic=True,
+                    text_color=QColor("#334455"),
+                    text_alignment=Qt.AlignmentFlag.AlignRight,
+                    text_line_spacing=1.25,
+                ),
+                selection_style_state=SelectionStyleState(
+                    color=QColor("#1f5eff"),
+                    stroke_delta=0.8,
+                ),
+                scene_items_state=CanvasSceneItemsState(),
+                group_state=CanvasGroupState(),
+                selection_outline_state=SelectionOutlineState(),
+                selection_info_state=SelectionInfoState.create(),
             ),
             scene=lambda: scene,
             setFocus=mock.Mock(),
@@ -1671,6 +1706,9 @@ class CanvasViewAdditionalTest(unittest.TestCase):
         transform_view = SimpleNamespace(
             scene=lambda: transform_scene,
             model=SimpleNamespace(atoms={}, bonds=[]),
+            runtime_state=canvas_runtime_state(
+                scene_items_state=CanvasSceneItemsState()
+            ),
         )
         set_scene_item_collection_for(
             transform_view,
@@ -1741,6 +1779,10 @@ class CanvasViewAdditionalTest(unittest.TestCase):
         copy_view = SimpleNamespace(
             scene=lambda: copy_scene,
             model=SimpleNamespace(atoms={}, bonds=[]),
+            runtime_state=canvas_runtime_state(
+                scene_items_state=CanvasSceneItemsState(),
+                bond_graphics_state=CanvasBondGraphicsState(),
+            ),
         )
         set_scene_item_collection_for(
             copy_view, "selected_notes", [note, _FakeItem("note", scene_token=object())]
@@ -1765,11 +1807,14 @@ class CanvasViewAdditionalTest(unittest.TestCase):
                     3: Atom("N", 9.0, 9.0),
                 }
             ),
-            atom_coords_3d_state=CanvasAtomCoords3DState(
-                atom_coords_3d={1: (0.0, 0.0, 1.0), 3: (9.0, 9.0, 3.0)}
-            ),
-            mark_registry=CanvasMarkRegistry(
-                {1: [mark_with_offset, mark_without_offset]}
+            runtime_state=canvas_runtime_state(
+                atom_coords_3d_state=CanvasAtomCoords3DState(
+                    atom_coords_3d={1: (0.0, 0.0, 1.0), 3: (9.0, 9.0, 3.0)}
+                ),
+                mark_registry=CanvasMarkRegistry(
+                    {1: [mark_with_offset, mark_without_offset]}
+                ),
+                atom_graphics_state=CanvasAtomGraphicsState(),
             ),
             services=canvas_runtime_services(
                 atom_label_service=SimpleNamespace(position_label=mock.Mock()),
@@ -1824,8 +1869,11 @@ class CanvasViewAdditionalTest(unittest.TestCase):
 
         quiet_view = SimpleNamespace(
             model=SimpleNamespace(atoms={}, bonds=[]),
-            atom_coords_3d_state=CanvasAtomCoords3DState(),
-            mark_registry=CanvasMarkRegistry(),
+            runtime_state=canvas_runtime_state(
+                atom_coords_3d_state=CanvasAtomCoords3DState(),
+                mark_registry=CanvasMarkRegistry(),
+                atom_graphics_state=CanvasAtomGraphicsState(),
+            ),
             services=canvas_runtime_services(
                 atom_label_service=SimpleNamespace(position_label=mock.Mock()),
                 scene_decoration_build_service=SimpleNamespace(
@@ -1848,8 +1896,11 @@ class CanvasViewAdditionalTest(unittest.TestCase):
 
         noop_view = SimpleNamespace(
             model=SimpleNamespace(atoms={1: Atom("C", 1.0, 1.0)}),
-            atom_coords_3d_state=CanvasAtomCoords3DState(),
-            mark_registry=CanvasMarkRegistry(),
+            runtime_state=canvas_runtime_state(
+                atom_coords_3d_state=CanvasAtomCoords3DState(),
+                mark_registry=CanvasMarkRegistry(),
+                atom_graphics_state=CanvasAtomGraphicsState(),
+            ),
             services=canvas_runtime_services(
                 atom_label_service=SimpleNamespace(position_label=mock.Mock()),
                 scene_decoration_build_service=SimpleNamespace(
@@ -1928,6 +1979,11 @@ class CanvasViewAdditionalTest(unittest.TestCase):
                 )
             ),
             refresh_selection_outline=mock.Mock(),
+            runtime_state=canvas_runtime_state(
+                scene_items_state=CanvasSceneItemsState(),
+                atom_graphics_state=CanvasAtomGraphicsState(),
+                bond_graphics_state=CanvasBondGraphicsState(),
+            ),
         )
         set_scene_item_collection_for(view, "ring_items", [ring_item])
         set_atom_items_for(view, {1: atom_item, 2: atom_item_2})
@@ -1964,6 +2020,11 @@ class CanvasViewAdditionalTest(unittest.TestCase):
                 )
             ),
             refresh_selection_outline=mock.Mock(),
+            runtime_state=canvas_runtime_state(
+                scene_items_state=CanvasSceneItemsState(),
+                atom_graphics_state=CanvasAtomGraphicsState(),
+                bond_graphics_state=CanvasBondGraphicsState(),
+            ),
         )
         set_scene_item_collection_for(ring_view, "ring_items", [ring_only])
         set_atom_items_for(
@@ -1985,6 +2046,11 @@ class CanvasViewAdditionalTest(unittest.TestCase):
                 graph_service=SimpleNamespace(expand_connected_atoms=mock.Mock())
             ),
             refresh_selection_outline=mock.Mock(),
+            runtime_state=canvas_runtime_state(
+                scene_items_state=CanvasSceneItemsState(),
+                atom_graphics_state=CanvasAtomGraphicsState(),
+                bond_graphics_state=CanvasBondGraphicsState(),
+            ),
         )
         set_scene_item_collection_for(note_view, "ring_items", [])
         set_atom_items_for(note_view, {})
@@ -2008,6 +2074,11 @@ class CanvasViewAdditionalTest(unittest.TestCase):
                 )
             ),
             refresh_selection_outline=mock.Mock(),
+            runtime_state=canvas_runtime_state(
+                scene_items_state=CanvasSceneItemsState(),
+                atom_graphics_state=CanvasAtomGraphicsState(),
+                bond_graphics_state=CanvasBondGraphicsState(),
+            ),
         )
         set_scene_item_collection_for(invalid_view, "ring_items", [])
         set_atom_items_for(invalid_view, {})
@@ -2031,7 +2102,10 @@ class CanvasViewAdditionalTest(unittest.TestCase):
         bond_view = SimpleNamespace(
             scene=lambda: scene,
             model=SimpleNamespace(bonds=[Bond(1, 2, 1, color="#000000")]),
-            smiles_input_state=CanvasSmilesInputState(last_smiles_input="smiles"),
+            runtime_state=canvas_runtime_state(
+                smiles_input_state=CanvasSmilesInputState(last_smiles_input="smiles"),
+                bond_graphics_state=CanvasBondGraphicsState(),
+            ),
             _bond_state_dict=lambda bond: {
                 "a": bond.a,
                 "b": bond.b,
@@ -2066,6 +2140,9 @@ class CanvasViewAdditionalTest(unittest.TestCase):
         atom_view = SimpleNamespace(
             scene=lambda: scene,
             model=SimpleNamespace(atoms={7: Atom("O", 0.0, 0.0, color="#101010")}),
+            runtime_state=canvas_runtime_state(
+                atom_graphics_state=CanvasAtomGraphicsState()
+            ),
             services=canvas_runtime_services(
                 history_service=SimpleNamespace(push=atom_pushes.append),
                 atom_label_service=SimpleNamespace(
@@ -2099,6 +2176,10 @@ class CanvasViewAdditionalTest(unittest.TestCase):
             scene=lambda: scene,
             model=SimpleNamespace(
                 atoms={1: Atom("C", 0.0, 0.0), 2: Atom("O", 1.0, 0.0)}
+            ),
+            runtime_state=canvas_runtime_state(
+                atom_graphics_state=CanvasAtomGraphicsState(),
+                bond_graphics_state=CanvasBondGraphicsState(),
             ),
             services=canvas_runtime_services(
                 history_service=SimpleNamespace(push=mock.Mock()),

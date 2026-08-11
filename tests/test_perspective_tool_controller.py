@@ -4,6 +4,7 @@ from types import SimpleNamespace
 from unittest import mock
 
 from tests.runtime_services import canvas_runtime_services
+from tests.runtime_state import canvas_runtime_state
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -68,7 +69,9 @@ class _PerspectiveCanvas:
         self.begin_calls = []
         self.clear_handles_calls = 0
         self.toggle_result = False
-        self.rotation_state = CanvasRotationState(mode="rigid")
+        self.runtime_state = canvas_runtime_state(
+            rotation_state=CanvasRotationState(mode="rigid")
+        )
         self.services = canvas_runtime_services(
             hit_testing_service=SimpleNamespace(
                 scene_pos_from_event=lambda event: event.position(),

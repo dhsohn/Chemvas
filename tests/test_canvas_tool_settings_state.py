@@ -6,9 +6,11 @@ from chemvas.ui.canvas_tool_settings_state import (
     tool_settings_state_for,
 )
 
+from tests.runtime_state import canvas_runtime_state
+
 
 def test_tool_settings_state_for_uses_runtime_state() -> None:
-    runtime_state = SimpleNamespace(
+    runtime_state = canvas_runtime_state(
         tool_settings_state=CanvasToolSettingsState(active_bond_style="hash")
     )
     canvas = SimpleNamespace(runtime_state=runtime_state)
@@ -25,6 +27,9 @@ def test_tool_settings_state_for_does_not_read_legacy_fake_canvas_attrs() -> Non
         active_arrow_type="equilibrium",
         active_bracket_type="dagger",
         arrow_line_width=2.5,
+        runtime_state=canvas_runtime_state(
+            tool_settings_state=CanvasToolSettingsState()
+        ),
     )
 
     state = tool_settings_state_for(canvas)
@@ -38,7 +43,11 @@ def test_tool_settings_state_for_does_not_read_legacy_fake_canvas_attrs() -> Non
 
 
 def test_set_tool_setting_for_updates_state_without_canvas_attr_mirror() -> None:
-    canvas = SimpleNamespace()
+    canvas = SimpleNamespace(
+        runtime_state=canvas_runtime_state(
+            tool_settings_state=CanvasToolSettingsState()
+        )
+    )
 
     set_tool_setting_for(canvas, "active_bond_style", "dotted")
     set_tool_setting_for(canvas, "active_bond_order", 1)

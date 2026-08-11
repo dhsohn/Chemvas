@@ -2,10 +2,9 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, cast
 
 from chemvas.core.history import HistoryCommand
-from chemvas.ui.canvas_state_lookup import ensure_canvas_state
 
 
 @dataclass
@@ -18,7 +17,7 @@ class CanvasHistoryState:
 
 
 def history_state_for(canvas: Any) -> CanvasHistoryState:
-    return ensure_canvas_state(canvas, "history_state", CanvasHistoryState)
+    return cast(CanvasHistoryState, canvas.runtime_state.history_state)
 
 
 __all__ = ["CanvasHistoryState", "history_state_for"]

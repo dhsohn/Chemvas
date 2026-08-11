@@ -3,6 +3,7 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 from chemvas.ui.canvas_group_state import (
+    CanvasGroupState,
     CanvasSceneGroup,
     clear_groups_for,
     group_ids_for_members_for,
@@ -12,9 +13,17 @@ from chemvas.ui.canvas_group_state import (
     restore_group_for,
 )
 
+from tests.runtime_state import canvas_runtime_state
 
-def test_group_state_attaches_once_per_canvas() -> None:
-    canvas = SimpleNamespace()
+
+def _canvas() -> SimpleNamespace:
+    return SimpleNamespace(
+        runtime_state=canvas_runtime_state(group_state=CanvasGroupState())
+    )
+
+
+def test_group_state_reads_the_canonical_container() -> None:
+    canvas = _canvas()
 
     state = group_state_for(canvas)
 
@@ -25,7 +34,7 @@ def test_group_state_attaches_once_per_canvas() -> None:
 
 
 def test_register_group_assigns_incrementing_ids() -> None:
-    canvas = SimpleNamespace()
+    canvas = _canvas()
     item = object()
 
     first = register_group_for(canvas, {1, 2}, [item])
@@ -40,7 +49,7 @@ def test_register_group_assigns_incrementing_ids() -> None:
 
 
 def test_remove_group_returns_removed_group() -> None:
-    canvas = SimpleNamespace()
+    canvas = _canvas()
     group_id = register_group_for(canvas, {1}, [])
 
     removed = remove_group_for(canvas, group_id)
@@ -52,7 +61,7 @@ def test_remove_group_returns_removed_group() -> None:
 
 
 def test_restore_group_reinstates_and_bumps_next_id() -> None:
-    canvas = SimpleNamespace()
+    canvas = _canvas()
 
     restore_group_for(canvas, 5, CanvasSceneGroup({7}, []))
 
@@ -62,7 +71,7 @@ def test_restore_group_reinstates_and_bumps_next_id() -> None:
 
 
 def test_group_ids_for_members_matches_atoms_and_item_identity() -> None:
-    canvas = SimpleNamespace()
+    canvas = _canvas()
     item = object()
     other_item = object()
     atom_group = register_group_for(canvas, {1, 2}, [])
@@ -75,7 +84,7 @@ def test_group_ids_for_members_matches_atoms_and_item_identity() -> None:
 
 
 def test_clear_groups_resets_state() -> None:
-    canvas = SimpleNamespace()
+    canvas = _canvas()
     register_group_for(canvas, {1}, [])
     state = group_state_for(canvas)
     state.expanding = True

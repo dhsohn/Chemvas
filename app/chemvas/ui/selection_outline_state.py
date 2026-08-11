@@ -1,9 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any
-
-from chemvas.ui.canvas_state_lookup import ensure_canvas_state
+from typing import Any, cast
 
 
 @dataclass(slots=True)
@@ -12,7 +10,7 @@ class SelectionOutlineState:
 
 
 def selection_outline_state_for(canvas: Any) -> SelectionOutlineState:
-    return ensure_canvas_state(canvas, "selection_outline_state", SelectionOutlineState)
+    return cast(SelectionOutlineState, canvas.runtime_state.selection_outline_state)
 
 
 def selection_outlines_for(canvas: Any) -> list[Any]:

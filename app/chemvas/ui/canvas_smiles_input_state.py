@@ -1,9 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
-
-from chemvas.ui.canvas_state_lookup import ensure_canvas_state
+from typing import Any, cast
 
 
 @dataclass(slots=True)
@@ -11,11 +9,8 @@ class CanvasSmilesInputState:
     last_smiles_input: str | None = None
 
 
-SMILES_INPUT_ATTRS = ("last_smiles_input",)
-
-
 def smiles_input_state_for(canvas: Any) -> CanvasSmilesInputState:
-    return ensure_canvas_state(canvas, "smiles_input_state", CanvasSmilesInputState)
+    return cast(CanvasSmilesInputState, canvas.runtime_state.smiles_input_state)
 
 
 def last_smiles_input_for(canvas: Any) -> str | None:
@@ -32,7 +27,6 @@ def clear_last_smiles_input_for(canvas: Any) -> None:
 
 
 __all__ = [
-    "SMILES_INPUT_ATTRS",
     "CanvasSmilesInputState",
     "clear_last_smiles_input_for",
     "last_smiles_input_for",

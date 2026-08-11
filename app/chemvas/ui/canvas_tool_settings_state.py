@@ -1,10 +1,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, cast
 
 from chemvas.features.annotations import DEFAULT_BRACKET_KIND
-from chemvas.ui.canvas_state_lookup import ensure_canvas_state
 
 
 @dataclass(slots=True)
@@ -47,7 +46,7 @@ TOOL_SETTING_ATTRS = (
 
 
 def tool_settings_state_for(canvas: Any) -> CanvasToolSettingsState:
-    return ensure_canvas_state(canvas, "tool_settings_state", CanvasToolSettingsState)
+    return cast(CanvasToolSettingsState, canvas.runtime_state.tool_settings_state)
 
 
 def set_tool_setting_for(canvas: Any, name: str, value: Any) -> None:

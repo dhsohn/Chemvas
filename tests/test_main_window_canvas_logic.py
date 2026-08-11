@@ -4,9 +4,14 @@ from unittest import mock
 
 from chemvas.ui.canvas_callback_state import CanvasCallbackState, callback_state_for
 from chemvas.ui.canvas_history_service import CanvasHistoryService
-from chemvas.ui.canvas_history_state import history_state_for
-from chemvas.ui.canvas_text_style_state import set_text_style_for, text_style_state_for
+from chemvas.ui.canvas_history_state import CanvasHistoryState, history_state_for
+from chemvas.ui.canvas_text_style_state import (
+    CanvasTextStyleState,
+    set_text_style_for,
+    text_style_state_for,
+)
 from chemvas.ui.canvas_tool_settings_state import (
+    CanvasToolSettingsState,
     set_tool_setting_for,
     tool_settings_state_for,
 )
@@ -18,16 +23,21 @@ from chemvas.ui.main_window_canvas_logic import (
     copy_canvas_template_settings,
     resolve_active_canvas,
 )
-from chemvas.ui.selection_info_state import selection_info_state_for
+from chemvas.ui.selection_info_state import SelectionInfoState, selection_info_state_for
+
+from tests.runtime_state import canvas_runtime_state
 
 
 class MainWindowCanvasLogicTest(unittest.TestCase):
     @staticmethod
     def _canvas_with_history() -> SimpleNamespace:
         canvas = SimpleNamespace()
-        canvas.runtime_state = SimpleNamespace(
-            history_service=CanvasHistoryService(canvas, history_state_for(canvas)),
+        history_state = CanvasHistoryState()
+        canvas.runtime_state = canvas_runtime_state(
+            history_state=history_state,
+            history_service=CanvasHistoryService(canvas, history_state),
             callback_state=CanvasCallbackState(),
+            selection_info_state=SelectionInfoState.create(),
         )
         return canvas
 
@@ -55,6 +65,10 @@ class MainWindowCanvasLogicTest(unittest.TestCase):
 
     def test_copy_canvas_template_settings_copies_known_fields(self) -> None:
         target = SimpleNamespace(
+            runtime_state=canvas_runtime_state(
+                tool_settings_state=CanvasToolSettingsState(),
+                text_style_state=CanvasTextStyleState(),
+            ),
             renderer=SimpleNamespace(set_bond_length=mock.Mock()),
             sheet_size="Letter",
             sheet_orientation="landscape",
@@ -62,6 +76,10 @@ class MainWindowCanvasLogicTest(unittest.TestCase):
             viewport=lambda: SimpleNamespace(update=mock.Mock()),
         )
         template = SimpleNamespace(
+            runtime_state=canvas_runtime_state(
+                tool_settings_state=CanvasToolSettingsState(),
+                text_style_state=CanvasTextStyleState(),
+            ),
             renderer=SimpleNamespace(style=SimpleNamespace(bond_length_px=24.0)),
             sheet_size="A4",
             sheet_orientation="portrait",

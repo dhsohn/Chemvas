@@ -6,10 +6,15 @@ from unittest import mock
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from chemvas.domain.document import Bond
-from chemvas.ui.canvas_bond_graphics_state import bond_items_for, set_bond_items_for
+from chemvas.ui.canvas_bond_graphics_state import (
+    CanvasBondGraphicsState,
+    bond_items_for,
+    set_bond_items_for,
+)
 from chemvas.ui.canvas_bond_mutation_service import CanvasBondMutationService
 
 from tests.runtime_services import canvas_runtime_services
+from tests.runtime_state import canvas_runtime_state
 
 try:
     from chemvas.ui.canvas_graph_service import CanvasGraphService
@@ -60,6 +65,10 @@ def _services(*, graph=None, hit_testing=None, bond_mutation=None):
         hit_testing_service=hit_testing,
         canvas_bond_mutation_service=bond_mutation,
     )
+
+
+def _runtime_state():
+    return canvas_runtime_state(bond_graphics_state=CanvasBondGraphicsState())
 
 
 def _service_for(canvas) -> CanvasBondMutationService:
@@ -146,6 +155,7 @@ class CanvasBondMutationServiceTest(unittest.TestCase):
             scene=lambda: scene,
             model=SimpleNamespace(bonds=[Bond(1, 2, 1)]),
             bond_renderer=SimpleNamespace(add_bond_graphics=mock.Mock()),
+            runtime_state=_runtime_state(),
         )
         set_bond_items_for(canvas, {0: [old_item]})
 
@@ -172,6 +182,7 @@ class CanvasBondMutationServiceTest(unittest.TestCase):
             scene=lambda: _FakeScene(),
             model=SimpleNamespace(bonds=[]),
             bond_renderer=SimpleNamespace(add_bond_graphics=mock.Mock()),
+            runtime_state=_runtime_state(),
         )
         set_bond_items_for(canvas, {})
 
@@ -200,6 +211,7 @@ class CanvasBondMutationServiceTest(unittest.TestCase):
             services=_services(graph=graph, hit_testing=hit_testing),
             model=SimpleNamespace(bonds=[Bond(4, 5, 1)]),
             scene=lambda: scene,
+            runtime_state=_runtime_state(),
         )
         set_bond_items_for(canvas, {0: [old_item]})
 
@@ -223,6 +235,7 @@ class CanvasBondMutationServiceTest(unittest.TestCase):
             services=_services(graph=graph, hit_testing=hit_testing),
             model=SimpleNamespace(bonds=[None]),
             scene=lambda: scene,
+            runtime_state=_runtime_state(),
         )
         set_bond_items_for(canvas, {0: [old_item]})
 
@@ -243,6 +256,7 @@ class CanvasBondMutationServiceTest(unittest.TestCase):
             services=_services(graph=graph, hit_testing=hit_testing),
             model=SimpleNamespace(bonds=[Bond(1, 2, 1), None, Bond(2, 3, 2)]),
             scene=lambda: scene,
+            runtime_state=_runtime_state(),
         )
         set_bond_items_for(canvas, {1: [object()], 2: [tail_item]})
 
@@ -266,6 +280,7 @@ class CanvasBondMutationServiceTest(unittest.TestCase):
             scene=lambda: _FakeScene(),
             model=SimpleNamespace(bonds=[]),
             bond_renderer=SimpleNamespace(add_bond_graphics=mock.Mock()),
+            runtime_state=_runtime_state(),
         )
         set_bond_items_for(canvas, {})
 
@@ -309,9 +324,12 @@ class CanvasBondMutationServiceStaleIndexTest(unittest.TestCase):
         )
         hit_testing = _hit_testing_service()
         canvas = SimpleNamespace(
-            graph_state=graph_state,
             model=SimpleNamespace(bonds=[Bond(1, 2, 1), Bond(1, 2, 2)]),
             scene=lambda: scene,
+            runtime_state=canvas_runtime_state(
+                bond_graphics_state=CanvasBondGraphicsState(),
+                graph_state=graph_state,
+            ),
         )
         graph = CanvasGraphService(canvas)
         canvas.services = _services(graph=graph, hit_testing=hit_testing)

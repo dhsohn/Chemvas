@@ -1,9 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any
-
-from chemvas.ui.canvas_state_lookup import ensure_canvas_state
+from typing import Any, cast
 
 
 @dataclass(slots=True)
@@ -35,7 +33,7 @@ class CanvasGraphState:
 
 
 def graph_state_for(canvas: Any) -> CanvasGraphState:
-    return ensure_canvas_state(canvas, "graph_state", CanvasGraphState)
+    return cast(CanvasGraphState, canvas.runtime_state.graph_state)
 
 
 __all__ = ["CanvasGraphState", "graph_state_for"]

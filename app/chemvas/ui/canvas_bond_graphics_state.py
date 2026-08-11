@@ -1,9 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any
-
-from chemvas.ui.canvas_state_lookup import ensure_canvas_state
+from typing import Any, cast
 
 
 @dataclass(slots=True)
@@ -11,11 +9,8 @@ class CanvasBondGraphicsState:
     bond_items: dict[int, list[Any]] = field(default_factory=dict)
 
 
-BOND_GRAPHICS_ATTRS = ("bond_items",)
-
-
 def bond_graphics_state_for(canvas: Any) -> CanvasBondGraphicsState:
-    return ensure_canvas_state(canvas, "bond_graphics_state", CanvasBondGraphicsState)
+    return cast(CanvasBondGraphicsState, canvas.runtime_state.bond_graphics_state)
 
 
 def bond_items_for(canvas: Any) -> dict[int, list[Any]]:
@@ -47,7 +42,6 @@ def clear_bond_graphics_for(canvas: Any) -> None:
 
 
 __all__ = [
-    "BOND_GRAPHICS_ATTRS",
     "CanvasBondGraphicsState",
     "bond_graphics_state_for",
     "bond_items_for",

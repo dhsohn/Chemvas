@@ -10,12 +10,19 @@ from chemvas.features.insertion import (
     TemplateInsertRequest,
     TemplateInsertResolution,
 )
+from chemvas.ui.atom_coords_access import CanvasAtomCoords3DState
+from chemvas.ui.canvas_atom_graphics_state import CanvasAtomGraphicsState
+from chemvas.ui.canvas_bond_graphics_state import CanvasBondGraphicsState
+from chemvas.ui.canvas_graph_state import CanvasGraphState
 from chemvas.ui.canvas_history_recording_service import CanvasHistoryRecordingService
+from chemvas.ui.canvas_mark_registry import CanvasMarkRegistry
 from chemvas.ui.canvas_scene_items_state import (
+    CanvasSceneItemsState,
     ring_items_for,
     set_scene_item_collection_for,
 )
 from chemvas.ui.canvas_smiles_input_state import (
+    CanvasSmilesInputState,
     last_smiles_input_for,
     set_last_smiles_input_for,
 )
@@ -25,6 +32,7 @@ from chemvas.ui.structure_build_service import StructureBuildService
 from PyQt6.QtCore import QPointF
 
 from tests.runtime_services import canvas_runtime_services
+from tests.runtime_state import canvas_runtime_state
 
 
 class _BrokenAddNoteInterrupt(KeyboardInterrupt):
@@ -98,6 +106,15 @@ class _FakeCanvas:
         self.model = MoleculeModel()
         self.renderer = SimpleNamespace(style=SimpleNamespace(bond_length_px=20.0))
         self.viewport_center = QPointF(50.0, 60.0)
+        self.runtime_state = canvas_runtime_state(
+            smiles_input_state=CanvasSmilesInputState(),
+            scene_items_state=CanvasSceneItemsState(),
+            atom_graphics_state=CanvasAtomGraphicsState(),
+            bond_graphics_state=CanvasBondGraphicsState(),
+            atom_coords_3d_state=CanvasAtomCoords3DState(),
+            graph_state=CanvasGraphState(),
+            mark_registry=CanvasMarkRegistry(),
+        )
         set_last_smiles_input_for(self, "before")
         self.added_graphics: list[int] = []
         self.carbon_dots: list[int] = []

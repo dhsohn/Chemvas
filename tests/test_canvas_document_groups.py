@@ -2,6 +2,8 @@ import os
 import unittest
 from types import SimpleNamespace
 
+from tests.runtime_state import canvas_runtime_state
+
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 try:
@@ -13,7 +15,11 @@ if QApplication is not None:
     from chemvas.domain.document import Atom, MoleculeModel
     from chemvas.ui.canvas_document_state import _snapshot_groups as snapshot_groups
     from chemvas.ui.canvas_document_state import restore_document_groups
-    from chemvas.ui.canvas_group_state import group_state_for, register_group_for
+    from chemvas.ui.canvas_group_state import (
+        CanvasGroupState,
+        group_state_for,
+        register_group_for,
+    )
     from chemvas.ui.canvas_scene_items_state import CanvasSceneItemsState
 
 
@@ -41,10 +47,13 @@ def _canvas_with_items(scene_obj):
     )
     canvas = SimpleNamespace(
         model=MoleculeModel(atoms={1: Atom("C", 0.0, 0.0), 2: Atom("O", 5.0, 0.0)}),
-        scene_items_state=CanvasSceneItemsState(
-            note_items=[note_item],
-            arrow_items=[arrow_item],
-            mark_items=[mark_item],
+        runtime_state=canvas_runtime_state(
+            group_state=CanvasGroupState(),
+            scene_items_state=CanvasSceneItemsState(
+                note_items=[note_item],
+                arrow_items=[arrow_item],
+                mark_items=[mark_item],
+            ),
         ),
         scene=lambda: scene_obj,
     )
@@ -82,7 +91,7 @@ class CanvasDocumentGroupsTest(unittest.TestCase):
         scene_obj = object()
         canvas, _, arrow_item, _ = _canvas_with_items(scene_obj)
         empty_arrow = _SceneItem(scene_obj, {})
-        canvas.scene_items_state.arrow_items = [empty_arrow, arrow_item]
+        canvas.runtime_state.scene_items_state.arrow_items = [empty_arrow, arrow_item]
         register_group_for(canvas, {1}, [arrow_item])
 
         groups = snapshot_groups(canvas)

@@ -4,6 +4,7 @@ from types import SimpleNamespace
 from unittest import mock
 
 from tests.runtime_services import canvas_runtime_services
+from tests.runtime_state import canvas_runtime_state
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -21,16 +22,28 @@ except ModuleNotFoundError:
 if QApplication is not None:
     from chemvas.adapters.qt.renderer import Renderer
     from chemvas.domain.document import MoleculeModel
-    from chemvas.ui.canvas_atom_graphics_state import set_atom_item_for
-    from chemvas.ui.canvas_bond_graphics_state import bond_items_for
-    from chemvas.ui.canvas_group_state import group_state_for, register_group_for
-    from chemvas.ui.canvas_mark_registry import mark_registry_for
+    from chemvas.ui.canvas_atom_graphics_state import (
+        CanvasAtomGraphicsState,
+        set_atom_item_for,
+    )
+    from chemvas.ui.canvas_bond_graphics_state import (
+        CanvasBondGraphicsState,
+        bond_items_for,
+    )
+    from chemvas.ui.canvas_group_state import (
+        CanvasGroupState,
+        group_state_for,
+        register_group_for,
+    )
+    from chemvas.ui.canvas_mark_registry import CanvasMarkRegistry, mark_registry_for
     from chemvas.ui.canvas_model_access import model_for
     from chemvas.ui.canvas_scene_items_state import (
+        CanvasSceneItemsState,
         add_selected_note_for,
         append_scene_item_for,
         selected_notes_for,
     )
+    from chemvas.ui.canvas_text_style_state import CanvasTextStyleState
     from chemvas.ui.history_commands import (
         GroupSceneItemsCommand,
         UngroupSceneItemsCommand,
@@ -65,7 +78,15 @@ if QApplication is not None:
             self.renderer = Renderer()
             self.model = MoleculeModel()
             self.history = _History()
-            self.runtime_state = SimpleNamespace(history_service=self.history)
+            self.runtime_state = canvas_runtime_state(
+                atom_graphics_state=CanvasAtomGraphicsState(),
+                bond_graphics_state=CanvasBondGraphicsState(),
+                group_state=CanvasGroupState(),
+                history_service=self.history,
+                mark_registry=CanvasMarkRegistry(),
+                scene_items_state=CanvasSceneItemsState(),
+                text_style_state=CanvasTextStyleState(),
+            )
             self.selection_controller = SimpleNamespace(
                 select_note=mock.Mock(),
                 toggle_note_selection=mock.Mock(),

@@ -15,27 +15,36 @@ from chemvas.features.insertion import (
     TemplateInsertResolution,
     plan_template_commit,
 )
-from chemvas.ui.atom_coords_access import atom_coords_3d_for, set_atom_coords_3d_for
+from chemvas.ui.atom_coords_access import (
+    CanvasAtomCoords3DState,
+    atom_coords_3d_for,
+    set_atom_coords_3d_for,
+)
+from chemvas.ui.canvas_atom_graphics_state import CanvasAtomGraphicsState
+from chemvas.ui.canvas_bond_graphics_state import CanvasBondGraphicsState
 from chemvas.ui.canvas_callback_state import CanvasCallbackState
-from chemvas.ui.canvas_insert_state import CanvasInsertState
-from chemvas.ui.canvas_mark_registry import CanvasMarkRegistry
-from chemvas.ui.canvas_rotation_state import rotation_state_for
+from chemvas.ui.canvas_insert_state import CanvasInsertState, insert_state_for
+from chemvas.ui.canvas_mark_registry import CanvasMarkRegistry, mark_registry_for
+from chemvas.ui.canvas_rotation_state import CanvasRotationState, rotation_state_for
 from chemvas.ui.canvas_scene_items_state import (
     SCENE_ITEM_COLLECTION_ATTRS,
+    CanvasSceneItemsState,
     scene_item_collection_for,
     set_scene_item_collection_for,
 )
 from chemvas.ui.canvas_smiles_input_state import (
+    CanvasSmilesInputState,
     last_smiles_input_for,
     set_last_smiles_input_for,
 )
 from chemvas.ui.history_commands import AddSceneItemsCommand, DeleteSceneItemsCommand
 from chemvas.ui.insert_controller import InsertController
 from chemvas.ui.insert_smiles_service import MAX_SMILES_INPUT_LENGTH
-from chemvas.ui.sheet_setup_state import sheet_setup_state_for
+from chemvas.ui.sheet_setup_state import SheetSetupState, sheet_setup_state_for
 from PyQt6.QtCore import QPointF, QRectF
 
 from tests.runtime_services import canvas_runtime_services
+from tests.runtime_state import canvas_runtime_state
 
 
 def _point_tuples(points) -> list[tuple[float, float]]:
@@ -89,6 +98,9 @@ class _FakeSceneItem:
 
 
 class _FakeCanvas:
+    insert_state = property(insert_state_for)
+    mark_registry = property(mark_registry_for)
+
     def __init__(self) -> None:
         self.rdkit = SimpleNamespace(
             smiles_to_2d=Mock(return_value=None),
@@ -102,11 +114,19 @@ class _FakeCanvas:
             bond_pen=Mock(return_value="pen"),
         )
         self.model = MoleculeModel()
-        self.runtime_state = SimpleNamespace(callback_state=CanvasCallbackState())
+        self.runtime_state = canvas_runtime_state(
+            callback_state=CanvasCallbackState(),
+            smiles_input_state=CanvasSmilesInputState(),
+            insert_state=CanvasInsertState(),
+            mark_registry=CanvasMarkRegistry(),
+            scene_items_state=CanvasSceneItemsState(),
+            atom_graphics_state=CanvasAtomGraphicsState(),
+            bond_graphics_state=CanvasBondGraphicsState(),
+            atom_coords_3d_state=CanvasAtomCoords3DState(),
+            rotation_state=CanvasRotationState(),
+            sheet_setup_state=SheetSetupState(),
+        )
         set_last_smiles_input_for(self, None)
-        self.insert_state = CanvasInsertState()
-
-        self.mark_registry = CanvasMarkRegistry()
         for name in SCENE_ITEM_COLLECTION_ATTRS:
             set_scene_item_collection_for(self, name, [])
         self._scene = object()

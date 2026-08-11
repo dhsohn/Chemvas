@@ -14,6 +14,8 @@ if QPointF is not None:
     from chemvas.ui.canvas_handle_controller import CanvasHandleController
     from chemvas.ui.canvas_tool_settings_state import CanvasToolSettingsState
 
+    from tests.runtime_state import canvas_runtime_state
+
 
 class _Handle:
     def __init__(self, handle_type: str, target) -> None:
@@ -29,8 +31,10 @@ class _Handle:
 class CanvasHandleControllerTest(unittest.TestCase):
     def test_overlay_and_selection_wrappers_delegate_to_services(self) -> None:
         canvas = SimpleNamespace(
-            tool_settings_state=CanvasToolSettingsState(curved_snap_step=0.25),
             renderer=SimpleNamespace(style=SimpleNamespace(bond_length_px=20.0)),
+            runtime_state=canvas_runtime_state(
+                tool_settings_state=CanvasToolSettingsState(curved_snap_step=0.25)
+            ),
         )
         overlay = SimpleNamespace(
             clear_handles=mock.Mock(),
@@ -83,10 +87,12 @@ class CanvasHandleControllerTest(unittest.TestCase):
             show_curved_handles=mock.Mock(),
         )
         canvas = SimpleNamespace(
-            tool_settings_state=CanvasToolSettingsState(
-                curved_snap=True, curved_snap_step=0.25
-            ),
             renderer=SimpleNamespace(style=SimpleNamespace(bond_length_px=20.0)),
+            runtime_state=canvas_runtime_state(
+                tool_settings_state=CanvasToolSettingsState(
+                    curved_snap=True, curved_snap_step=0.25
+                )
+            ),
         )
         controller = CanvasHandleController(
             canvas,

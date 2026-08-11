@@ -20,7 +20,12 @@ except ModuleNotFoundError:
 if QApplication is not None:
     from chemvas.domain.document import Atom
     from chemvas.ui.canvas_ring_fill_scene_service import CanvasRingFillSceneService
-    from chemvas.ui.canvas_scene_items_state import set_scene_item_collection_for
+    from chemvas.ui.canvas_scene_items_state import (
+        CanvasSceneItemsState,
+        set_scene_item_collection_for,
+    )
+
+    from tests.runtime_state import canvas_runtime_state
 else:
     CanvasRingFillSceneService = None
 
@@ -65,6 +70,9 @@ class CanvasRingFillSceneServiceTest(unittest.TestCase):
                     6: Atom("O", 9.5, 10.0),
                 }
             ),
+            runtime_state=canvas_runtime_state(
+                scene_items_state=CanvasSceneItemsState()
+            ),
         )
         set_scene_item_collection_for(
             canvas, "ring_items", [matching_ring, non_matching_ring, invalid_ring]
@@ -92,6 +100,9 @@ class CanvasRingFillSceneServiceTest(unittest.TestCase):
                     1: Atom("C", 0.0, 0.0),
                     2: Atom("C", 2.0, 0.0),
                 }
+            ),
+            runtime_state=canvas_runtime_state(
+                scene_items_state=CanvasSceneItemsState()
             ),
         )
         set_scene_item_collection_for(canvas, "ring_items", [short_ring])

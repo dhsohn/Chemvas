@@ -4,6 +4,7 @@ from types import SimpleNamespace
 from unittest import mock
 
 from tests.runtime_services import canvas_runtime_services
+from tests.runtime_state import canvas_runtime_state
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -25,19 +26,29 @@ if QApplication is not None:
     from chemvas.domain.document import Atom, Bond
     from chemvas.features.selection import StructureHit
     from chemvas.ui.canvas_atom_graphics_state import (
+        CanvasAtomGraphicsState,
         atom_dots_for,
         atom_items_for,
         set_atom_dots_for,
         set_atom_items_for,
     )
-    from chemvas.ui.canvas_bond_graphics_state import bond_items_for, set_bond_items_for
+    from chemvas.ui.canvas_bond_graphics_state import (
+        CanvasBondGraphicsState,
+        bond_items_for,
+        set_bond_items_for,
+    )
+    from chemvas.ui.canvas_group_state import CanvasGroupState
+    from chemvas.ui.canvas_rotation_state import CanvasRotationState
     from chemvas.ui.canvas_scene_items_state import (
+        CanvasSceneItemsState,
         selected_notes_for,
         set_scene_item_collection_for,
         set_selected_notes_for,
     )
+    from chemvas.ui.canvas_text_style_state import CanvasTextStyleState
     from chemvas.ui.selection_info_state import SelectionInfoState
     from chemvas.ui.selection_outline_state import (
+        SelectionOutlineState,
         selection_outlines_for,
         set_selection_outlines_for,
     )
@@ -133,7 +144,30 @@ class _FakeShapeItem:
         return QRectF(self._rect)
 
 
+def _canvas_runtime_state():
+    """Canonical state container the accessors read through."""
+
+    return canvas_runtime_state(
+        atom_graphics_state=CanvasAtomGraphicsState(),
+        bond_graphics_state=CanvasBondGraphicsState(),
+        group_state=CanvasGroupState(),
+        rotation_state=CanvasRotationState(),
+        scene_items_state=CanvasSceneItemsState(),
+        selection_info_state=SelectionInfoState.create(),
+        selection_outline_state=SelectionOutlineState(),
+        selection_style_state=SelectionStyleState(),
+        text_style_state=CanvasTextStyleState(),
+    )
+
+
 class _FakeCanvas(SimpleNamespace):
+    def __init__(self, **attributes) -> None:
+        # The runtime state must exist before the property setters below run:
+        # they write through the state accessors, which read it off the canvas.
+        super().__init__(runtime_state=_canvas_runtime_state())
+        for name, value in attributes.items():
+            setattr(self, name, value)
+
     @property
     def atom_items(self):
         return atom_items_for(self)
@@ -197,9 +231,7 @@ def _make_canvas(**overrides):
     selected_notes = defaults.pop("selected_notes")
     selection_outlines = defaults.pop("selection_outlines")
     selection_info_callback = defaults.pop("selection_info_callback")
-    defaults["selection_info_state"] = SelectionInfoState(
-        callback=selection_info_callback
-    )
+    selection_style_state = defaults.pop("selection_style_state")
     hit_testing_service = defaults.pop("hit_testing_service", None)
     graph_service = defaults.pop("graph_service", None)
     graph_expand_connected_atoms = defaults.pop("graph_expand_connected_atoms")
@@ -207,6 +239,10 @@ def _make_canvas(**overrides):
     tool_controller = defaults.pop("tool_controller", SimpleNamespace(active=None))
     services = defaults.pop("services", canvas_runtime_services())
     canvas = _FakeCanvas(**defaults)
+    canvas.runtime_state.selection_style_state = selection_style_state
+    canvas.runtime_state.selection_info_state = SelectionInfoState(
+        callback=selection_info_callback
+    )
     set_atom_items_for(canvas, atom_items)
     set_atom_dots_for(canvas, atom_dots)
     set_bond_items_for(canvas, bond_items)
@@ -860,12 +896,12 @@ class SelectionControllerAdditionalTest(unittest.TestCase):
         scene.addItem(note_a)
         scene.addItem(note_b)
         canvas = SimpleNamespace(
-            note_padding=6.0,
-            selection_style_state=SelectionStyleState(
-                color=QColor("#1f5eff"),
-                stroke_delta=0.8,
-            ),
+            runtime_state=_canvas_runtime_state(),
             clear_note_selection=None,
+        )
+        canvas.runtime_state.selection_style_state = SelectionStyleState(
+            color=QColor("#1f5eff"),
+            stroke_delta=0.8,
         )
         set_selected_notes_for(canvas, [note_a])
         controller = _make_selection_controller(canvas)

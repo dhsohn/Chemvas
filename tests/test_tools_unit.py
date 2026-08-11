@@ -4,6 +4,7 @@ from types import SimpleNamespace
 from unittest import mock
 
 from tests.runtime_services import canvas_runtime_services
+from tests.runtime_state import canvas_runtime_state
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -33,19 +34,29 @@ if QApplication is not None:
     from chemvas.features.hover import HoverState
     from chemvas.ui.bond_tool import BondTool
     from chemvas.ui.canvas_atom_graphics_state import (
+        CanvasAtomGraphicsState,
         atom_dots_for,
         atom_items_for,
         set_atom_dots_for,
         set_atom_items_for,
     )
-    from chemvas.ui.canvas_bond_graphics_state import bond_items_for, set_bond_items_for
+    from chemvas.ui.canvas_bond_graphics_state import (
+        CanvasBondGraphicsState,
+        bond_items_for,
+        set_bond_items_for,
+    )
     from chemvas.ui.canvas_hover_state import hover_state_for
+    from chemvas.ui.canvas_mark_registry import CanvasMarkRegistry
     from chemvas.ui.canvas_scene_items_state import (
+        CanvasSceneItemsState,
         selected_notes_for,
         set_scene_item_collection_for,
         set_selected_notes_for,
     )
-    from chemvas.ui.canvas_tool_settings_state import set_tool_setting_for
+    from chemvas.ui.canvas_tool_settings_state import (
+        CanvasToolSettingsState,
+        set_tool_setting_for,
+    )
     from chemvas.ui.handle_state import CanvasHandleState
     from chemvas.ui.history_commands import MoveItemsCommand, UpdateSceneItemCommand
     from chemvas.ui.move_tool import MoveTool
@@ -54,7 +65,11 @@ if QApplication is not None:
     from chemvas.ui.scene_item_state import scene_item_state_for
     from chemvas.ui.select_tool import SelectTool
     from chemvas.ui.selection_drag_tool import independent_selection_items
-    from chemvas.ui.selection_style_state import selection_style_state_for
+    from chemvas.ui.selection_outline_state import SelectionOutlineState
+    from chemvas.ui.selection_style_state import (
+        SelectionStyleState,
+        selection_style_state_for,
+    )
     from chemvas.ui.tool_base import Tool
     from chemvas.ui.tool_context import ToolContext
 
@@ -220,6 +235,16 @@ class _FakeSelectCanvas:
     def __init__(self) -> None:
         self.drag_mode = None
         self.scene_obj = _FakeScene()
+        self.handle_state = CanvasHandleState()
+        self.runtime_state = canvas_runtime_state(
+            atom_graphics_state=CanvasAtomGraphicsState(),
+            bond_graphics_state=CanvasBondGraphicsState(),
+            handle_state=self.handle_state,
+            mark_registry=CanvasMarkRegistry(),
+            scene_items_state=CanvasSceneItemsState(),
+            selection_outline_state=SelectionOutlineState(),
+            selection_style_state=SelectionStyleState(),
+        )
         set_atom_items_for(self, {})
         set_atom_dots_for(self, {})
         set_bond_items_for(self, {})
@@ -229,7 +254,6 @@ class _FakeSelectCanvas:
         self.toggle_result = False
         self.curved_handles_shown = []
         self.clear_handles_calls = 0
-        self.handle_state = CanvasHandleState()
         self.preferred_item = None
         self.selection_hit = False
         self.suspend_calls = []
@@ -408,11 +432,16 @@ class _FakeBondCanvas:
     def __init__(self) -> None:
         self.drag_mode = None
         self.scene_obj = _FakeScene()
-        self.active_bond_style = "single"
-        self.active_bond_order = 1
-        self.snap_angle_step = 30
         self.renderer = SimpleNamespace(style=SimpleNamespace(bond_length_px=20.0))
-        self.runtime_state = SimpleNamespace(hover_preview_state=HoverState())
+        self.runtime_state = canvas_runtime_state(
+            hover_preview_state=HoverState(),
+            tool_settings_state=CanvasToolSettingsState(
+                active_bond_style="single",
+                active_bond_order=1,
+                snap_angle_step=30,
+            ),
+            scene_items_state=CanvasSceneItemsState(),
+        )
         self.preview_build_items = ["new-preview"]
         self.atom_near = None
         self.item = None
@@ -538,7 +567,9 @@ class _FakePreviewCanvas:
     def __init__(self) -> None:
         self.drag_mode = None
         self.scene_obj = _FakePreviewScene()
-        self.active_arrow_type = "reaction"
+        self.runtime_state = canvas_runtime_state(
+            tool_settings_state=CanvasToolSettingsState(active_arrow_type="reaction")
+        )
         self.preview_arrow_calls = []
         self.preview_ts_bracket_calls = []
         self.add_arrow_calls = []

@@ -5,6 +5,7 @@ from types import SimpleNamespace
 from unittest import mock
 
 from tests.runtime_services import canvas_runtime_services
+from tests.runtime_state import canvas_runtime_state
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -25,7 +26,10 @@ if QApplication is not None:
         label_rect_for_atom_for,
         trim_line_for_labels_for,
     )
-    from chemvas.ui.canvas_atom_graphics_state import set_atom_items_for
+    from chemvas.ui.canvas_atom_graphics_state import (
+        CanvasAtomGraphicsState,
+        set_atom_items_for,
+    )
     from chemvas.ui.canvas_geometry_access import (
         label_cut_radius_for_atom_for,
         mark_clearance_for_kind_for,
@@ -33,7 +37,11 @@ if QApplication is not None:
         visible_label_rect_for_atom_for,
     )
     from chemvas.ui.canvas_geometry_controller import CanvasGeometryController
-    from chemvas.ui.canvas_scene_items_state import set_scene_item_collection_for
+    from chemvas.ui.canvas_rotation_state import CanvasRotationState
+    from chemvas.ui.canvas_scene_items_state import (
+        CanvasSceneItemsState,
+        set_scene_item_collection_for,
+    )
 
 
 class _FakeLabelItem:
@@ -85,6 +93,9 @@ class CanvasViewLabelGeometryHelperTest(unittest.TestCase):
                 }
             ),
             renderer=SimpleNamespace(style=SimpleNamespace(bond_line_width=1.0)),
+            runtime_state=canvas_runtime_state(
+                atom_graphics_state=CanvasAtomGraphicsState()
+            ),
         )
         set_atom_items_for(view, {1: _FakeLabelItem(QRectF(-1.0, -1.0, 2.0, 2.0))})
         self._bind_geometry_controller(view)
@@ -93,7 +104,13 @@ class CanvasViewLabelGeometryHelperTest(unittest.TestCase):
         self.assertAlmostEqual(radius, (math.sqrt(2.0) + 0.03) * 0.6)
 
         self.assertIsNone(label_cut_radius_for_atom_for(view, 2))
-        empty_view = SimpleNamespace(model=view.model, renderer=view.renderer)
+        empty_view = SimpleNamespace(
+            model=view.model,
+            renderer=view.renderer,
+            runtime_state=canvas_runtime_state(
+                atom_graphics_state=CanvasAtomGraphicsState()
+            ),
+        )
         set_atom_items_for(empty_view, {})
         self._bind_geometry_controller(empty_view)
         self.assertIsNone(label_cut_radius_for_atom_for(empty_view, 1))
@@ -118,6 +135,9 @@ class CanvasViewLabelGeometryHelperTest(unittest.TestCase):
 
         missing_atom_view = SimpleNamespace(
             model=SimpleNamespace(atoms={}),
+            runtime_state=canvas_runtime_state(
+                atom_graphics_state=CanvasAtomGraphicsState()
+            ),
         )
         self._bind_geometry_controller(missing_atom_view)
         self.assertEqual(
@@ -174,6 +194,9 @@ class CanvasViewLabelGeometryHelperTest(unittest.TestCase):
 
         start_view = SimpleNamespace(
             renderer=SimpleNamespace(style=SimpleNamespace(bond_line_width=5.0)),
+            runtime_state=canvas_runtime_state(
+                atom_graphics_state=CanvasAtomGraphicsState()
+            ),
         )
         start_controller = CanvasGeometryController(start_view)
         start_controller.label_cut_radius_for_atom = lambda atom_id: {1: 5.0}[atom_id]
@@ -184,6 +207,9 @@ class CanvasViewLabelGeometryHelperTest(unittest.TestCase):
 
         end_view = SimpleNamespace(
             renderer=SimpleNamespace(style=SimpleNamespace(bond_line_width=5.0)),
+            runtime_state=canvas_runtime_state(
+                atom_graphics_state=CanvasAtomGraphicsState()
+            ),
         )
         end_controller = CanvasGeometryController(end_view)
         end_controller.label_cut_radius_for_atom = lambda atom_id: {2: 5.0}[atom_id]
@@ -194,6 +220,9 @@ class CanvasViewLabelGeometryHelperTest(unittest.TestCase):
 
         tight_view = SimpleNamespace(
             renderer=SimpleNamespace(style=SimpleNamespace(bond_line_width=5.0)),
+            runtime_state=canvas_runtime_state(
+                atom_graphics_state=CanvasAtomGraphicsState()
+            ),
         )
         tight_controller = CanvasGeometryController(tight_view)
         tight_controller.label_cut_radius_for_atom = lambda atom_id: {1: 49.6, 2: 49.6}[
@@ -215,6 +244,9 @@ class CanvasViewLabelGeometryHelperTest(unittest.TestCase):
                     5: Atom("C", 60.0, 50.0),
                     6: Atom("C", 50.0, 60.0),
                 }
+            ),
+            runtime_state=canvas_runtime_state(
+                scene_items_state=CanvasSceneItemsState()
             ),
         )
         set_scene_item_collection_for(
@@ -252,8 +284,12 @@ class CanvasViewLabelGeometryHelperTest(unittest.TestCase):
                     3: Atom("C", 0.0, 6.0),
                 }
             ),
-            atom_coords_3d_state=CanvasAtomCoords3DState(atom_coords_3d=coords_map),
             renderer=renderer,
+            runtime_state=canvas_runtime_state(
+                atom_coords_3d_state=CanvasAtomCoords3DState(atom_coords_3d=coords_map),
+                rotation_state=CanvasRotationState(),
+                scene_items_state=CanvasSceneItemsState(),
+            ),
         )
         set_scene_item_collection_for(
             view, "ring_items", [_FakeRingItem([1, 2, 3]), _FakeRingItem([4, 5, 6])]
@@ -270,8 +306,12 @@ class CanvasViewLabelGeometryHelperTest(unittest.TestCase):
                     2: Atom("C", 6.0, 0.0),
                 }
             ),
-            atom_coords_3d_state=CanvasAtomCoords3DState(atom_coords_3d=coords_map),
             renderer=renderer,
+            runtime_state=canvas_runtime_state(
+                atom_coords_3d_state=CanvasAtomCoords3DState(atom_coords_3d=coords_map),
+                rotation_state=CanvasRotationState(),
+                scene_items_state=CanvasSceneItemsState(),
+            ),
         )
         set_scene_item_collection_for(
             sparse_view, "ring_items", [_FakeRingItem([1, 2, 4])]

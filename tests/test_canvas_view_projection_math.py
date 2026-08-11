@@ -5,6 +5,7 @@ from types import SimpleNamespace
 from unittest import mock
 
 from tests.runtime_services import canvas_runtime_services
+from tests.runtime_state import canvas_runtime_state
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -24,6 +25,7 @@ if QApplication is not None:
     )
     from chemvas.domain.document import Atom, Bond
     from chemvas.ui.atom_coords_access import (
+        CanvasAtomCoords3DState,
         atom_coords_3d_for,
         current_atom_coords_3d_for,
         set_atom_coords_3d_for,
@@ -42,12 +44,16 @@ if QApplication is not None:
     )
     from chemvas.ui.bond_renderer_access import bond_renderer_for
     from chemvas.ui.canvas_atom_graphics_state import (
+        CanvasAtomGraphicsState,
         atom_dots_for,
         atom_items_for,
         set_atom_dots_for,
         set_atom_items_for,
     )
-    from chemvas.ui.canvas_bond_graphics_state import bond_items_for_id
+    from chemvas.ui.canvas_bond_graphics_state import (
+        CanvasBondGraphicsState,
+        bond_items_for_id,
+    )
     from chemvas.ui.canvas_geometry_controller import CanvasGeometryController
     from chemvas.ui.canvas_graph_service import CanvasGraphService
     from chemvas.ui.canvas_graph_state import CanvasGraphState
@@ -55,6 +61,7 @@ if QApplication is not None:
     from chemvas.ui.canvas_move_controller import CanvasMoveController
     from chemvas.ui.canvas_rotation_state import CanvasRotationState
     from chemvas.ui.canvas_scene_items_state import (
+        CanvasSceneItemsState,
         set_scene_item_collection_for,
     )
     from chemvas.ui.graphics_items import AtomLabelItem
@@ -583,13 +590,16 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
                     2: Atom("O", 20.0, 0.0),
                 }
             ),
-            rotation_state=CanvasRotationState(
-                projection_center_3d=(10.0, 0.0, 0.0),
-                projection_anchor_2d=(10.0, 0.0),
+            runtime_state=canvas_runtime_state(
+                atom_coords_3d_state=CanvasAtomCoords3DState(),
+                atom_graphics_state=CanvasAtomGraphicsState(),
+                bond_graphics_state=CanvasBondGraphicsState(),
+                rotation_state=CanvasRotationState(
+                    projection_center_3d=(10.0, 0.0, 0.0),
+                    projection_anchor_2d=(10.0, 0.0),
+                ),
+                scene_items_state=CanvasSceneItemsState(),
             ),
-            bond_items={},
-            atom_items={},
-            atom_dots={},
             scene=lambda: SimpleNamespace(removeItem=mock.Mock()),
             services=canvas_runtime_services(
                 history_service=SimpleNamespace(push=pushed.append),
@@ -615,8 +625,9 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
             atom_coords_3d_for(view), {1: (-4.625, 0.0, 6.0), 2: (24.625, 0.0, 6.0)}
         )
         self.assertEqual(current_atom_coords_3d_for(view, 1), (-4.625, 0.0, 6.0))
-        self.assertEqual(view.rotation_state.projection_center_3d, (10.0, 0.0, 0.0))
-        self.assertEqual(view.rotation_state.projection_anchor_2d, (10.0, 0.0))
+        rotation_state = view.runtime_state.rotation_state
+        self.assertEqual(rotation_state.projection_center_3d, (10.0, 0.0, 0.0))
+        self.assertEqual(rotation_state.projection_anchor_2d, (10.0, 0.0))
         scaled_points = [(point.x(), point.y()) for point in ring_item.polygon()]
         self.assertEqual(scaled_points, [(-5.0, 0.0), (25.0, 0.0), (10.0, 15.0)])
         structure_build_service.render_model.assert_not_called()
@@ -658,6 +669,9 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
             model=SimpleNamespace(atoms={}),
             push_command=mock.Mock(),
             services=canvas_runtime_services(),
+            runtime_state=canvas_runtime_state(
+                scene_items_state=CanvasSceneItemsState()
+            ),
         )
         set_scene_item_collection_for(empty_view, "ring_items", [])
         empty_view.services.history_service = SimpleNamespace(
@@ -681,6 +695,9 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
             model=SimpleNamespace(atoms={1: Atom("C", 1.0, 2.0)}),
             push_command=mock.Mock(),
             services=canvas_runtime_services(),
+            runtime_state=canvas_runtime_state(
+                scene_items_state=CanvasSceneItemsState()
+            ),
         )
         set_scene_item_collection_for(same_view, "ring_items", [])
         same_view.services.history_service = SimpleNamespace(
@@ -695,7 +712,9 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
         self.assertIsNone(normalize_3d(0.0, 0.0, 0.0))
         self.assertEqual(normalize_3d(0.0, 3.0, 4.0), (0.0, 0.6, 0.8))
 
-        no_projection_view = SimpleNamespace(rotation_state=CanvasRotationState())
+        no_projection_view = SimpleNamespace(
+            runtime_state=canvas_runtime_state(rotation_state=CanvasRotationState())
+        )
         self.assertEqual(
             project_point_3d_for(no_projection_view, (2.0, 3.0, 4.0)), (2.0, 3.0)
         )
@@ -706,9 +725,12 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
 
         projected_view = SimpleNamespace(
             renderer=SimpleNamespace(style=SimpleNamespace(bond_length_px=20.0)),
-            rotation_state=CanvasRotationState(
-                projection_center_3d=(10.0, 20.0, 30.0),
-                projection_anchor_2d=(100.0, 200.0),
+            runtime_state=canvas_runtime_state(
+                atom_coords_3d_state=CanvasAtomCoords3DState(),
+                rotation_state=CanvasRotationState(
+                    projection_center_3d=(10.0, 20.0, 30.0),
+                    projection_anchor_2d=(100.0, 200.0),
+                ),
             ),
         )
 
@@ -752,7 +774,11 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
     ) -> None:
         projected_view = SimpleNamespace(
             renderer=SimpleNamespace(style=SimpleNamespace(bond_length_px=20.0)),
-            rotation_state=CanvasRotationState(projection_center_3d=(10.0, 20.0, 30.0)),
+            runtime_state=canvas_runtime_state(
+                rotation_state=CanvasRotationState(
+                    projection_center_3d=(10.0, 20.0, 30.0)
+                )
+            ),
         )
 
         projected = project_point_3d_for(projected_view, (12.0, 24.0, 30.0))
@@ -798,14 +824,16 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
                     None,
                 ]
             ),
-            graph_state=CanvasGraphState(
-                atom_bond_ids={
-                    1: {0},
-                    2: {0, 1},
-                    3: {1, 2},
-                    4: {2, 3},
-                    5: {3},
-                }
+            runtime_state=canvas_runtime_state(
+                graph_state=CanvasGraphState(
+                    atom_bond_ids={
+                        1: {0},
+                        2: {0, 1},
+                        3: {1, 2},
+                        4: {2, 3},
+                        5: {3},
+                    }
+                )
             ),
             services=canvas_runtime_services(
                 graph_service=SimpleNamespace(
@@ -850,7 +878,11 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
     ) -> None:
         view = SimpleNamespace(
             model=SimpleNamespace(bonds=[None, Bond(1, 2, 1), Bond(2, 3, 1)]),
-            graph_state=CanvasGraphState(atom_bond_ids={1: {0, 9}, 2: {0, 1}, 3: {2}}),
+            runtime_state=canvas_runtime_state(
+                graph_state=CanvasGraphState(
+                    atom_bond_ids={1: {0, 9}, 2: {0, 1}, 3: {2}}
+                )
+            ),
             services=canvas_runtime_services(
                 graph_service=SimpleNamespace(bond_in_cycle=lambda bond_id: False)
             ),
@@ -932,6 +964,7 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
 
         small_component_view = SimpleNamespace(
             model=SimpleNamespace(bonds=[Bond(1, 2, 2)]),
+            runtime_state=canvas_runtime_state(graph_state=CanvasGraphState()),
         )
         self.assertEqual(
             planar_fragment_components_for(small_component_view, {1, 2}), []
@@ -974,12 +1007,16 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
             model=SimpleNamespace(
                 atoms={1: Atom("C", 0.0, 0.0), 2: Atom("O", 4.0, 5.0)}
             ),
-            mark_registry=CanvasMarkRegistry(
-                {1: [mark_with_offset, mark_without_offset]}
-            ),
             services=canvas_runtime_services(
                 atom_label_service=atom_label_service,
                 scene_decoration_build_service=scene_decoration_build_service,
+            ),
+            runtime_state=canvas_runtime_state(
+                atom_coords_3d_state=CanvasAtomCoords3DState(),
+                atom_graphics_state=CanvasAtomGraphicsState(),
+                mark_registry=CanvasMarkRegistry(
+                    {1: [mark_with_offset, mark_without_offset]}
+                ),
             ),
         )
         set_atom_coords_3d_for(view, {})
@@ -1017,12 +1054,16 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
     ) -> None:
         view = SimpleNamespace(
             model=SimpleNamespace(atoms={1: Atom("C", 0.0, 0.0)}),
-            mark_registry=CanvasMarkRegistry(),
             services=canvas_runtime_services(
                 atom_label_service=SimpleNamespace(position_label=mock.Mock()),
                 scene_decoration_build_service=SimpleNamespace(
                     set_mark_center=mock.Mock()
                 ),
+            ),
+            runtime_state=canvas_runtime_state(
+                atom_coords_3d_state=CanvasAtomCoords3DState(),
+                atom_graphics_state=CanvasAtomGraphicsState(),
+                mark_registry=CanvasMarkRegistry(),
             ),
         )
         set_atom_coords_3d_for(view, {})
@@ -1045,11 +1086,15 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
         self.assertEqual((view.model.atoms[1].x, view.model.atoms[1].y), (1.0, 2.0))
 
         sparse_view = SimpleNamespace(
-            graph_state=CanvasGraphState(atom_bond_ids={1: {0, 99}, 2: {0}, 3: {1}}),
             model=SimpleNamespace(bonds=[Bond(1, 2, 1), None]),
-            rotation_state=CanvasRotationState(
-                base_bond_length=10.0,
-                base_coords={1: (0.0, 0.0, 0.0), 2: (5.0, 0.0, 0.0)},
+            runtime_state=canvas_runtime_state(
+                graph_state=CanvasGraphState(
+                    atom_bond_ids={1: {0, 99}, 2: {0}, 3: {1}}
+                ),
+                rotation_state=CanvasRotationState(
+                    base_bond_length=10.0,
+                    base_coords={1: (0.0, 0.0, 0.0), 2: (5.0, 0.0, 0.0)},
+                ),
             ),
         )
         self.assertEqual(bond_ids_within_atom_ids_for(sparse_view, set()), set())
@@ -1080,15 +1125,17 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
             )
 
         tail_view = SimpleNamespace(
-            graph_state=CanvasGraphState(
-                atom_bond_ids={1: {0, 1, 2}, 2: {0, 2}, 3: {1}}
-            ),
             model=SimpleNamespace(
                 bonds=[
                     None,
                     Bond(1, 3, 1),
                     Bond(1, 2, 1),
                 ]
+            ),
+            runtime_state=canvas_runtime_state(
+                graph_state=CanvasGraphState(
+                    atom_bond_ids={1: {0, 1, 2}, 2: {0, 2}, 3: {1}}
+                )
             ),
         )
         self.assertIsNone(
@@ -1110,7 +1157,8 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
                     Bond(1, 3, 1),
                     Bond(1, 2, 1),
                 ]
-            )
+            ),
+            runtime_state=canvas_runtime_state(graph_state=CanvasGraphState()),
         )
         self.assertAlmostEqual(
             average_bond_length_for_atoms_for(
@@ -1127,19 +1175,21 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
 
     def test_bond_lookup_average_scale_and_axis_rotation_helpers(self) -> None:
         indexed_view = SimpleNamespace(
-            graph_state=CanvasGraphState(
-                atom_bond_ids={1: {0, 99}, 2: {0, 1}, 3: {1, 2}}
-            ),
             model=SimpleNamespace(
                 bonds=[Bond(1, 2, 1), Bond(2, 3, 1), Bond(3, 4, 1), None]
             ),
-            rotation_state=CanvasRotationState(
-                base_bond_length=10.0,
-                base_coords={
-                    1: (0.0, 0.0, 0.0),
-                    2: (8.0, 0.0, 0.0),
-                    3: (18.0, 0.0, 0.0),
-                },
+            runtime_state=canvas_runtime_state(
+                graph_state=CanvasGraphState(
+                    atom_bond_ids={1: {0, 99}, 2: {0, 1}, 3: {1, 2}}
+                ),
+                rotation_state=CanvasRotationState(
+                    base_bond_length=10.0,
+                    base_coords={
+                        1: (0.0, 0.0, 0.0),
+                        2: (8.0, 0.0, 0.0),
+                        3: (18.0, 0.0, 0.0),
+                    },
+                ),
             ),
             _redraw_bond=mock.Mock(),
         )
@@ -1171,8 +1221,11 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
         )
 
         redraw_view = SimpleNamespace(
-            graph_state=CanvasGraphState(atom_bond_ids={1: {0}, 2: {0, 1}}),
             bond_renderer=SimpleNamespace(redraw_bond=mock.Mock()),
+            runtime_state=canvas_runtime_state(
+                graph_state=CanvasGraphState(atom_bond_ids={1: {0}, 2: {0, 1}}),
+                mark_registry=CanvasMarkRegistry(),
+            ),
         )
         CanvasMoveController(
             redraw_view,
@@ -1187,13 +1240,15 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
         )
 
         fallback_view = SimpleNamespace(
-            graph_state=CanvasGraphState(),
             model=SimpleNamespace(bonds=[Bond(1, 2, 1), None, Bond(2, 3, 1)]),
+            runtime_state=canvas_runtime_state(graph_state=CanvasGraphState()),
         )
         self.assertEqual(bond_ids_within_atom_ids_for(fallback_view, {1, 2, 3}), {0, 2})
         self.assertIsNone(average_bond_length_for_atoms_for(fallback_view, set(), {}))
 
-        no_scale_view = SimpleNamespace(rotation_state=CanvasRotationState())
+        no_scale_view = SimpleNamespace(
+            runtime_state=canvas_runtime_state(rotation_state=CanvasRotationState())
+        )
         self.assertEqual(rotation_scale_for_coords_for(no_scale_view, set(), {}), 1.0)
 
         rotated = rotate_point_around_axis_for(
@@ -1223,15 +1278,18 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
             model=SimpleNamespace(
                 bonds=bonds, atoms={1: Atom("C", 0.0, 0.0), 2: Atom("C", 10.0, 0.0)}
             ),
-            graph_state=CanvasGraphState(
-                atom_bond_ids={1: {0, 1, 3}, 2: {0, 1}, 3: {3}}
+            runtime_state=canvas_runtime_state(
+                graph_state=CanvasGraphState(
+                    atom_bond_ids={1: {0, 1, 3}, 2: {0, 1}, 3: {3}}
+                ),
+                rotation_state=CanvasRotationState(),
             ),
         )
         fallback_view = SimpleNamespace(
             model=SimpleNamespace(
                 bonds=bonds, atoms={1: Atom("C", 0.0, 0.0), 2: Atom("C", 10.0, 0.0)}
             ),
-            graph_state=CanvasGraphState(),
+            runtime_state=canvas_runtime_state(graph_state=CanvasGraphState()),
         )
 
         cached_service = CanvasGraphService(cached_view)
@@ -1256,7 +1314,11 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
             CanvasGraphService(
                 SimpleNamespace(
                     model=SimpleNamespace(bonds=[Bond(3, 4, 1), None]),
-                    graph_state=CanvasGraphState(atom_bond_ids={1: {0, 1}, 2: {0, 1}}),
+                    runtime_state=canvas_runtime_state(
+                        graph_state=CanvasGraphState(
+                            atom_bond_ids={1: {0, 1}, 2: {0, 1}}
+                        )
+                    ),
                 )
             ).bond_id_between(1, 2)
         )
@@ -1309,7 +1371,10 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
             redraw_connected_bonds=mock.Mock(),
             draw_ring_double_bond=mock.Mock(return_value=ring_bond),
         )
-        view = SimpleNamespace(bond_renderer=renderer)
+        view = SimpleNamespace(
+            bond_renderer=renderer,
+            runtime_state=canvas_runtime_state(mark_registry=CanvasMarkRegistry()),
+        )
         center = QPointF(5.0, 6.0)
 
         self.assertEqual(

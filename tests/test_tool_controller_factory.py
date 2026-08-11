@@ -5,6 +5,8 @@ from types import SimpleNamespace
 import chemvas.ui.tool_controller_factory as tool_controller_factory
 from chemvas.ui.tool_controller_factory import build_tool_controller
 
+from tests.runtime_state import canvas_runtime_state
+
 
 class _StubToolController:
     def __init__(self, *args, **kwargs) -> None:
@@ -15,7 +17,9 @@ class _StubToolController:
 def test_build_tool_controller_injects_canvas_ports(monkeypatch) -> None:
     monkeypatch.setattr(tool_controller_factory, "ToolController", _StubToolController)
     canvas = SimpleNamespace()
-    canvas.tool_settings_state = SimpleNamespace(atom_symbol="Br")
+    canvas.runtime_state = canvas_runtime_state(
+        tool_settings_state=SimpleNamespace(atom_symbol="Br")
+    )
     canvas.setDragMode = object()
     canvas.DragMode = SimpleNamespace(RubberBandDrag="rubber")
     graph_service = SimpleNamespace(bond_sets_for_atoms=object())

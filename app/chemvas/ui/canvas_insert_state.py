@@ -1,10 +1,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, cast
 
 from chemvas.domain.document import MoleculeModel
-from chemvas.ui.canvas_state_lookup import ensure_canvas_state
 
 
 @dataclass
@@ -25,7 +24,7 @@ class CanvasInsertState:
 
 
 def insert_state_for(canvas: Any) -> CanvasInsertState:
-    return ensure_canvas_state(canvas, "insert_state", CanvasInsertState)
+    return cast(CanvasInsertState, canvas.runtime_state.insert_state)
 
 
 __all__ = ["CanvasInsertState", "insert_state_for"]

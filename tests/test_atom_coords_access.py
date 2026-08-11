@@ -11,6 +11,9 @@ from chemvas.ui.atom_coords_access import (
     set_atom_coords_3d_for,
     set_atom_coords_3d_for_id,
 )
+from chemvas.ui.canvas_rotation_state import CanvasRotationState
+
+from tests.runtime_state import canvas_runtime_state
 
 
 def _canvas_with_atom(x: float = 1.0, y: float = 2.0):
@@ -18,11 +21,15 @@ def _canvas_with_atom(x: float = 1.0, y: float = 2.0):
     return SimpleNamespace(
         model=SimpleNamespace(atoms={1: atom}),
         renderer=SimpleNamespace(style=SimpleNamespace(bond_length_px=20.0)),
+        runtime_state=canvas_runtime_state(
+            atom_coords_3d_state=CanvasAtomCoords3DState(),
+            rotation_state=CanvasRotationState(),
+        ),
     )
 
 
 def test_atom_coords_3d_state_for_uses_runtime_state() -> None:
-    runtime_state = SimpleNamespace(
+    runtime_state = canvas_runtime_state(
         atom_coords_3d_state=CanvasAtomCoords3DState(
             atom_coords_3d={1: (1.0, 2.0, 3.0)}
         )
@@ -35,7 +42,12 @@ def test_atom_coords_3d_state_for_uses_runtime_state() -> None:
 
 def test_atom_coords_3d_state_for_does_not_read_legacy_fake_canvas_attrs() -> None:
     coords = {1: (1.0, 2.0, 3.0)}
-    canvas = SimpleNamespace(atom_coords_3d=coords)
+    canvas = SimpleNamespace(
+        atom_coords_3d=coords,
+        runtime_state=canvas_runtime_state(
+            atom_coords_3d_state=CanvasAtomCoords3DState()
+        ),
+    )
 
     state = atom_coords_3d_state_for(canvas)
 
@@ -45,7 +57,11 @@ def test_atom_coords_3d_state_for_does_not_read_legacy_fake_canvas_attrs() -> No
 
 
 def test_atom_coords_3d_setters_update_state_without_canvas_attr_mirror() -> None:
-    canvas = SimpleNamespace()
+    canvas = SimpleNamespace(
+        runtime_state=canvas_runtime_state(
+            atom_coords_3d_state=CanvasAtomCoords3DState()
+        )
+    )
 
     set_atom_coords_3d_for(canvas, {1: (1.0, 2.0, 3.0)})
     set_atom_coords_3d_for_id(canvas, 2, (4.0, 5.0, 6.0))
@@ -58,7 +74,14 @@ def test_atom_coords_3d_setters_update_state_without_canvas_attr_mirror() -> Non
 
 
 def test_clear_atom_coords_3d_for_updates_state_without_canvas_attr_mirror() -> None:
-    canvas = SimpleNamespace(atom_coords_3d={1: (1.0, 2.0, 3.0)})
+    canvas = SimpleNamespace(
+        atom_coords_3d={1: (1.0, 2.0, 3.0)},
+        runtime_state=canvas_runtime_state(
+            atom_coords_3d_state=CanvasAtomCoords3DState(
+                atom_coords_3d={1: (1.0, 2.0, 3.0)}
+            )
+        ),
+    )
 
     clear_atom_coords_3d_for(canvas)
 

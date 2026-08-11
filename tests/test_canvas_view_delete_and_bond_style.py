@@ -4,6 +4,7 @@ from types import SimpleNamespace
 from unittest import mock
 
 from tests.runtime_services import canvas_runtime_services
+from tests.runtime_state import canvas_runtime_state
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -19,8 +20,17 @@ if QApplication is not None:
         DeleteBondCommand,
     )
     from chemvas.domain.document import Atom, Bond
-    from chemvas.ui.canvas_bond_graphics_state import bond_items_for, set_bond_items_for
+    from chemvas.ui.atom_coords_access import CanvasAtomCoords3DState
+    from chemvas.ui.canvas_atom_graphics_state import CanvasAtomGraphicsState
+    from chemvas.ui.canvas_bond_graphics_state import (
+        CanvasBondGraphicsState,
+        bond_items_for,
+        set_bond_items_for,
+    )
+    from chemvas.ui.canvas_graph_state import CanvasGraphState
+    from chemvas.ui.canvas_group_state import CanvasGroupState
     from chemvas.ui.canvas_mark_registry import CanvasMarkRegistry
+    from chemvas.ui.canvas_scene_items_state import CanvasSceneItemsState
     from chemvas.ui.canvas_smiles_input_state import (
         CanvasSmilesInputState,
         last_smiles_input_for,
@@ -104,8 +114,14 @@ class CanvasViewDeleteAndBondStyleTest(unittest.TestCase):
             model=SimpleNamespace(
                 atoms={1: Atom("C", 0.0, 0.0)}, bonds=[], next_atom_id=5
             ),
-            smiles_input_state=CanvasSmilesInputState(last_smiles_input="C"),
-            mark_registry=CanvasMarkRegistry({1: [mark_item]}),
+            runtime_state=canvas_runtime_state(
+                smiles_input_state=CanvasSmilesInputState(last_smiles_input="C"),
+                mark_registry=CanvasMarkRegistry({1: [mark_item]}),
+                group_state=CanvasGroupState(),
+                atom_graphics_state=CanvasAtomGraphicsState(),
+                atom_coords_3d_state=CanvasAtomCoords3DState(),
+                scene_items_state=CanvasSceneItemsState(),
+            ),
             _bond_state_dict=mock.Mock(),
             services=canvas_runtime_services(
                 canvas_atom_mutation_service=atom_mutation_service,
@@ -167,8 +183,14 @@ class CanvasViewDeleteAndBondStyleTest(unittest.TestCase):
                 bonds=bonds,
                 next_atom_id=10,
             ),
-            smiles_input_state=CanvasSmilesInputState(last_smiles_input="CO"),
-            mark_registry=CanvasMarkRegistry({1: []}),
+            runtime_state=canvas_runtime_state(
+                smiles_input_state=CanvasSmilesInputState(last_smiles_input="CO"),
+                mark_registry=CanvasMarkRegistry({1: []}),
+                group_state=CanvasGroupState(),
+                atom_graphics_state=CanvasAtomGraphicsState(),
+                atom_coords_3d_state=CanvasAtomCoords3DState(),
+                scene_items_state=CanvasSceneItemsState(),
+            ),
             _atom_state_dict=mock.Mock(return_value={"atom": 1}),
             _bond_state_dict=mock.Mock(
                 side_effect=lambda bond: {"a": bond.a, "b": bond.b, "order": bond.order}
@@ -210,7 +232,12 @@ class CanvasViewDeleteAndBondStyleTest(unittest.TestCase):
         move_controller = SimpleNamespace(redraw_connected_bonds=mock.Mock())
         view = SimpleNamespace(
             model=SimpleNamespace(bonds=bonds),
-            smiles_input_state=CanvasSmilesInputState(last_smiles_input="CC"),
+            runtime_state=canvas_runtime_state(
+                smiles_input_state=CanvasSmilesInputState(last_smiles_input="CC"),
+                mark_registry=CanvasMarkRegistry(),
+                group_state=CanvasGroupState(),
+                scene_items_state=CanvasSceneItemsState(),
+            ),
             _bond_state_dict=mock.Mock(return_value={"bond": 0}),
             services=canvas_runtime_services(
                 canvas_bond_mutation_service=SimpleNamespace(
@@ -241,6 +268,11 @@ class CanvasViewDeleteAndBondStyleTest(unittest.TestCase):
         ring_item = _StateItem({"kind": "ring"})
         scene_item_controller = SimpleNamespace(remove_scene_item=mock.Mock())
         view = SimpleNamespace(
+            runtime_state=canvas_runtime_state(
+                mark_registry=CanvasMarkRegistry(),
+                group_state=CanvasGroupState(),
+                scene_items_state=CanvasSceneItemsState(),
+            ),
             services=canvas_runtime_services(
                 scene_item_controller=scene_item_controller
             ),
@@ -270,7 +302,12 @@ class CanvasViewDeleteAndBondStyleTest(unittest.TestCase):
         view = SimpleNamespace(
             model=SimpleNamespace(bonds=[wedge_bond, plain_bond]),
             scene=lambda: scene,
-            smiles_input_state=CanvasSmilesInputState(last_smiles_input="C=C"),
+            runtime_state=canvas_runtime_state(
+                smiles_input_state=CanvasSmilesInputState(last_smiles_input="C=C"),
+                mark_registry=CanvasMarkRegistry(),
+                graph_state=CanvasGraphState(),
+                bond_graphics_state=CanvasBondGraphicsState(),
+            ),
             _bond_state_dict=mock.Mock(
                 side_effect=lambda bond: {"a": bond.a, "b": bond.b, "style": bond.style}
             ),
@@ -323,7 +360,12 @@ class CanvasViewDeleteAndBondStyleTest(unittest.TestCase):
         view = SimpleNamespace(
             model=SimpleNamespace(bonds=[styled_bond, cycled_bond]),
             scene=lambda: scene,
-            smiles_input_state=CanvasSmilesInputState(last_smiles_input="CN"),
+            runtime_state=canvas_runtime_state(
+                smiles_input_state=CanvasSmilesInputState(last_smiles_input="CN"),
+                mark_registry=CanvasMarkRegistry(),
+                graph_state=CanvasGraphState(),
+                bond_graphics_state=CanvasBondGraphicsState(),
+            ),
             _bond_state_dict=mock.Mock(
                 side_effect=lambda bond: {
                     "a": bond.a,

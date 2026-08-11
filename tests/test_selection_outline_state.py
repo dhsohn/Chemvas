@@ -9,6 +9,8 @@ from chemvas.ui.selection_outline_state import (
     set_selection_outlines_for,
 )
 
+from tests.runtime_state import canvas_runtime_state
+
 
 def test_selection_outline_state_for_uses_runtime_state() -> None:
     runtime_state = SimpleNamespace(
@@ -22,7 +24,12 @@ def test_selection_outline_state_for_uses_runtime_state() -> None:
 
 def test_selection_outline_state_for_does_not_read_legacy_fake_canvas_attrs() -> None:
     outlines = ["existing"]
-    canvas = SimpleNamespace(selection_outlines=outlines)
+    canvas = SimpleNamespace(
+        selection_outlines=outlines,
+        runtime_state=canvas_runtime_state(
+            selection_outline_state=SelectionOutlineState()
+        ),
+    )
 
     state = selection_outline_state_for(canvas)
 
@@ -33,7 +40,11 @@ def test_selection_outline_state_for_does_not_read_legacy_fake_canvas_attrs() ->
 def test_selection_outline_state_setters_update_state_without_canvas_attr_mirror() -> (
     None
 ):
-    canvas = SimpleNamespace()
+    canvas = SimpleNamespace(
+        runtime_state=canvas_runtime_state(
+            selection_outline_state=SelectionOutlineState()
+        )
+    )
 
     set_selection_outlines_for(canvas, ["a"])
     append_selection_outline_for(canvas, "b")

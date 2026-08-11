@@ -4,6 +4,7 @@ from types import SimpleNamespace
 from unittest import mock
 
 from tests.runtime_services import canvas_runtime_services
+from tests.runtime_state import canvas_runtime_state
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -15,11 +16,13 @@ except ModuleNotFoundError:
 
 if QApplication is not None:
     from chemvas.domain.document import MoleculeModel
-    from chemvas.ui.canvas_group_state import register_group_for
+    from chemvas.ui.canvas_group_state import CanvasGroupState, register_group_for
     from chemvas.ui.canvas_scene_items_state import (
+        CanvasSceneItemsState,
         selected_notes_for,
         set_selected_notes_for,
     )
+    from chemvas.ui.canvas_text_style_state import CanvasTextStyleState
     from chemvas.ui.selection_note_service import SelectionNoteService
     from chemvas.ui.selection_style_state import SelectionStyleState
 
@@ -42,9 +45,13 @@ class SelectionNoteServiceTest(unittest.TestCase):
         scene.addItem(note_a)
         scene.addItem(note_b)
         canvas = SimpleNamespace(
-            note_padding=6.0,
-            selection_style_state=SelectionStyleState(
-                color=QColor("#1f5eff"), stroke_delta=0.8
+            runtime_state=canvas_runtime_state(
+                group_state=CanvasGroupState(),
+                scene_items_state=CanvasSceneItemsState(),
+                selection_style_state=SelectionStyleState(
+                    color=QColor("#1f5eff"), stroke_delta=0.8
+                ),
+                text_style_state=CanvasTextStyleState(note_padding=6.0),
             ),
         )
         set_selected_notes_for(canvas, [note_a])
@@ -68,9 +75,13 @@ class SelectionNoteServiceTest(unittest.TestCase):
         note = QGraphicsTextItem("A")
         scene.addItem(note)
         canvas = SimpleNamespace(
-            note_padding=6.0,
-            selection_style_state=SelectionStyleState(
-                color=QColor("#1f5eff"), stroke_delta=0.8
+            runtime_state=canvas_runtime_state(
+                group_state=CanvasGroupState(),
+                scene_items_state=CanvasSceneItemsState(),
+                selection_style_state=SelectionStyleState(
+                    color=QColor("#1f5eff"), stroke_delta=0.8
+                ),
+                text_style_state=CanvasTextStyleState(note_padding=6.0),
             ),
         )
         set_selected_notes_for(canvas, [])
@@ -91,9 +102,13 @@ class SelectionNoteServiceTest(unittest.TestCase):
         scene.addItem(note_a)
         scene.addItem(note_b)
         canvas = SimpleNamespace(
-            note_padding=6.0,
-            selection_style_state=SelectionStyleState(
-                color=QColor("#1f5eff"), stroke_delta=0.8
+            runtime_state=canvas_runtime_state(
+                group_state=CanvasGroupState(),
+                scene_items_state=CanvasSceneItemsState(),
+                selection_style_state=SelectionStyleState(
+                    color=QColor("#1f5eff"), stroke_delta=0.8
+                ),
+                text_style_state=CanvasTextStyleState(note_padding=6.0),
             ),
         )
         set_selected_notes_for(canvas, [note_a, note_b])
@@ -109,10 +124,14 @@ class SelectionNoteServiceTest(unittest.TestCase):
 
     def _note_canvas(self):
         return SimpleNamespace(
-            note_padding=6.0,
             model=MoleculeModel(),
-            selection_style_state=SelectionStyleState(
-                color=QColor("#1f5eff"), stroke_delta=0.8
+            runtime_state=canvas_runtime_state(
+                group_state=CanvasGroupState(),
+                scene_items_state=CanvasSceneItemsState(),
+                selection_style_state=SelectionStyleState(
+                    color=QColor("#1f5eff"), stroke_delta=0.8
+                ),
+                text_style_state=CanvasTextStyleState(note_padding=6.0),
             ),
         )
 

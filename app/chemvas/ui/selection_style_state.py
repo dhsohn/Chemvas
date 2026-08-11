@@ -1,11 +1,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, cast
 
 from PyQt6.QtGui import QColor
-
-from chemvas.ui.canvas_state_lookup import ensure_canvas_state
 
 
 @dataclass(slots=True)
@@ -17,7 +15,7 @@ class SelectionStyleState:
 
 
 def selection_style_state_for(canvas: Any) -> SelectionStyleState:
-    return ensure_canvas_state(canvas, "selection_style_state", SelectionStyleState)
+    return cast(SelectionStyleState, canvas.runtime_state.selection_style_state)
 
 
 __all__ = [

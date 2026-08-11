@@ -4,6 +4,7 @@ from types import SimpleNamespace
 from unittest import mock
 
 from tests.runtime_services import canvas_runtime_services
+from tests.runtime_state import canvas_runtime_state
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -79,6 +80,8 @@ class SceneDecorationServiceTest(unittest.TestCase):
         scene = _FakeScene()
         pushed = []
         text_mark = QGraphicsTextItem("-")
+        scene_items_state = CanvasSceneItemsState()
+        mark_registry = CanvasMarkRegistry()
         set_mark_center = mock.Mock(
             side_effect=lambda item, center: item.setPos(center)
         )
@@ -89,16 +92,18 @@ class SceneDecorationServiceTest(unittest.TestCase):
 
         def _attach(item) -> None:
             scene.addItem(item)
-            canvas.mark_items.append(item)
+            scene_items_state.mark_items.append(item)
             data = item.data(1) or {}
             atom_id = data.get("atom_id") if isinstance(data, dict) else None
             if isinstance(atom_id, int):
-                canvas.mark_registry.add_for_atom(atom_id, item)
+                mark_registry.add_for_atom(atom_id, item)
 
         canvas = SimpleNamespace(
-            tool_settings_state=CanvasToolSettingsState(mark_kind="plus"),
-            mark_items=[],
-            mark_registry=CanvasMarkRegistry(),
+            runtime_state=canvas_runtime_state(
+                tool_settings_state=CanvasToolSettingsState(mark_kind="plus"),
+                scene_items_state=scene_items_state,
+                mark_registry=mark_registry,
+            ),
             attach_scene_item=mock.Mock(side_effect=_attach),
         )
         canvas.services = canvas_runtime_services(
@@ -122,8 +127,8 @@ class SceneDecorationServiceTest(unittest.TestCase):
             item.data(1),
             {"kind": "minus", "atom_id": 7, "dx": 1.5, "dy": -2.5, "text": "-"},
         )
-        self.assertEqual(canvas.mark_items, [item])
-        self.assertEqual(canvas.mark_registry.by_atom, {7: [item]})
+        self.assertEqual(scene_items_state.mark_items, [item])
+        self.assertEqual(mark_registry.by_atom, {7: [item]})
         self.assertEqual(scene.items, [item])
         canvas.attach_scene_item.assert_called_once_with(item)
         build_service.set_mark_center.assert_called_once_with(item, QPointF(4.0, 5.0))
@@ -150,6 +155,8 @@ class SceneDecorationServiceTest(unittest.TestCase):
     def test_add_mark_removes_attached_item_if_centering_raises(self) -> None:
         scene = _FakeScene()
         text_mark = QGraphicsTextItem("-")
+        scene_items_state = CanvasSceneItemsState()
+        mark_registry = CanvasMarkRegistry()
         build_service = SimpleNamespace(
             build_mark_item=mock.Mock(return_value=text_mark),
             set_mark_center=mock.Mock(side_effect=RuntimeError("center failed")),
@@ -158,27 +165,29 @@ class SceneDecorationServiceTest(unittest.TestCase):
 
         def _attach(item) -> None:
             scene.addItem(item)
-            canvas.mark_items.append(item)
+            scene_items_state.mark_items.append(item)
             data = item.data(1) or {}
             atom_id = data.get("atom_id") if isinstance(data, dict) else None
             if isinstance(atom_id, int):
-                canvas.mark_registry.add_for_atom(atom_id, item)
+                mark_registry.add_for_atom(atom_id, item)
 
         def _remove(item) -> None:
             removed.append(item)
             scene.removeItem(item)
-            if item in canvas.mark_items:
-                canvas.mark_items.remove(item)
-            for atom_id, items in list(canvas.mark_registry.by_atom.items()):
+            if item in scene_items_state.mark_items:
+                scene_items_state.mark_items.remove(item)
+            for atom_id, items in list(mark_registry.by_atom.items()):
                 if item in items:
                     items.remove(item)
                 if not items:
-                    canvas.mark_registry.by_atom.pop(atom_id, None)
+                    mark_registry.by_atom.pop(atom_id, None)
 
         canvas = SimpleNamespace(
-            tool_settings_state=CanvasToolSettingsState(mark_kind="plus"),
-            mark_items=[],
-            mark_registry=CanvasMarkRegistry(),
+            runtime_state=canvas_runtime_state(
+                tool_settings_state=CanvasToolSettingsState(mark_kind="plus"),
+                scene_items_state=scene_items_state,
+                mark_registry=mark_registry,
+            ),
             attach_scene_item=mock.Mock(side_effect=_attach),
             remove_scene_item=mock.Mock(side_effect=_remove),
         )
@@ -193,8 +202,8 @@ class SceneDecorationServiceTest(unittest.TestCase):
             service.add_mark(QPointF(4.0, 5.0), kind="minus", atom_id=7, record=False)
 
         self.assertEqual(scene.items, [])
-        self.assertEqual(canvas.mark_items, [])
-        self.assertEqual(canvas.mark_registry.by_atom, {})
+        self.assertEqual(scene_items_state.mark_items, [])
+        self.assertEqual(mark_registry.by_atom, {})
         self.assertEqual(removed, [text_mark])
         canvas.services.history_service.push.assert_not_called()
 
@@ -233,9 +242,11 @@ class SceneDecorationServiceTest(unittest.TestCase):
                 return scene
 
         canvas = Canvas(
-            scene_items_state=scene_items_state,
-            mark_registry=mark_registry,
-            tool_settings_state=CanvasToolSettingsState(mark_kind="plus"),
+            runtime_state=canvas_runtime_state(
+                scene_items_state=scene_items_state,
+                mark_registry=mark_registry,
+                tool_settings_state=CanvasToolSettingsState(mark_kind="plus"),
+            ),
         )
         canvas.services = canvas_runtime_services(
             history_service=history,
@@ -285,9 +296,11 @@ class SceneDecorationServiceTest(unittest.TestCase):
 
         canvas = SimpleNamespace(
             scene=lambda: scene,
-            scene_items_state=scene_items_state,
-            mark_registry=mark_registry,
-            tool_settings_state=CanvasToolSettingsState(mark_kind="plus"),
+            runtime_state=canvas_runtime_state(
+                scene_items_state=scene_items_state,
+                mark_registry=mark_registry,
+                tool_settings_state=CanvasToolSettingsState(mark_kind="plus"),
+            ),
             attach_scene_item=attach,
         )
         canvas.services = canvas_runtime_services(
@@ -331,17 +344,21 @@ class SceneDecorationServiceTest(unittest.TestCase):
             build_ts_bracket_item=mock.Mock(return_value=ts_item),
         )
 
+        scene_items_state = CanvasSceneItemsState()
+
         def _attach(item) -> None:
             scene.addItem(item)
             kind = item.data(0)
             if kind == "ts_bracket":
-                canvas.ts_bracket_items.append(item)
+                scene_items_state.ts_bracket_items.append(item)
             else:
-                canvas.arrow_items.append(item)
+                scene_items_state.arrow_items.append(item)
 
         canvas = SimpleNamespace(
-            arrow_items=[],
-            ts_bracket_items=[],
+            runtime_state=canvas_runtime_state(
+                scene_items_state=scene_items_state,
+                tool_settings_state=CanvasToolSettingsState(),
+            ),
             attach_scene_item=mock.Mock(side_effect=_attach),
         )
         canvas.services = canvas_runtime_services(
@@ -362,8 +379,8 @@ class SceneDecorationServiceTest(unittest.TestCase):
         self.assertEqual(arrow.data(2)["end"], QPointF(6.0, 7.0))
         self.assertTrue(arrow.data(2)["double"])
         self.assertIs(ts_bracket, ts_item)
-        self.assertEqual(canvas.arrow_items, [arrow_item])
-        self.assertEqual(canvas.ts_bracket_items, [ts_item])
+        self.assertEqual(scene_items_state.arrow_items, [arrow_item])
+        self.assertEqual(scene_items_state.ts_bracket_items, [ts_item])
         self.assertEqual(scene.items, [arrow_item, ts_item])
         self.assertEqual(
             canvas.attach_scene_item.call_args_list,
@@ -387,8 +404,10 @@ class SceneDecorationServiceTest(unittest.TestCase):
 
         canvas = SimpleNamespace(
             scene=lambda: scene,
-            scene_items_state=CanvasSceneItemsState(orbital_items=orbital_items),
-            tool_settings_state=CanvasToolSettingsState(active_orbital_type="p"),
+            runtime_state=canvas_runtime_state(
+                scene_items_state=CanvasSceneItemsState(orbital_items=orbital_items),
+                tool_settings_state=CanvasToolSettingsState(active_orbital_type="p"),
+            ),
             renderer=SimpleNamespace(style=SimpleNamespace(bond_length_px=20.0)),
             attach_scene_item=mock.Mock(side_effect=attach),
         )

@@ -4,6 +4,7 @@ from types import SimpleNamespace
 from unittest.mock import Mock, call, patch
 
 from tests.runtime_services import canvas_runtime_services
+from tests.runtime_state import canvas_runtime_state
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -24,17 +25,27 @@ if QApplication is not None:
     )
     from chemvas.domain.document import Atom, Bond, MoleculeModel
     from chemvas.features.hover import HoverState
-    from chemvas.ui.atom_coords_access import atom_coords_3d_for, set_atom_coords_3d_for
+    from chemvas.ui.atom_coords_access import (
+        CanvasAtomCoords3DState,
+        atom_coords_3d_for,
+        set_atom_coords_3d_for,
+    )
     from chemvas.ui.atom_label_service import AtomLabelService
     from chemvas.ui.canvas_atom_graphics_state import (
+        CanvasAtomGraphicsState,
         atom_dots_for,
         atom_items_for,
         set_atom_dots_for,
         set_atom_items_for,
     )
-    from chemvas.ui.canvas_bond_graphics_state import bond_items_for, set_bond_items_for
+    from chemvas.ui.canvas_bond_graphics_state import (
+        CanvasBondGraphicsState,
+        bond_items_for,
+        set_bond_items_for,
+    )
     from chemvas.ui.canvas_history_state import CanvasHistoryState
     from chemvas.ui.canvas_smiles_input_state import (
+        CanvasSmilesInputState,
         last_smiles_input_for,
         set_last_smiles_input_for,
     )
@@ -82,12 +93,19 @@ class _FakeCanvas:
             ),
             atom_font=Mock(return_value=QFont()),
         )
+        self.history_state = CanvasHistoryState()
+        self.runtime_state = canvas_runtime_state(
+            atom_coords_3d_state=CanvasAtomCoords3DState(),
+            atom_graphics_state=CanvasAtomGraphicsState(),
+            bond_graphics_state=CanvasBondGraphicsState(),
+            smiles_input_state=CanvasSmilesInputState(),
+            history_state=self.history_state,
+            hover_preview_state=HoverState(),
+        )
         set_atom_items_for(self, {})
         set_atom_dots_for(self, {})
         set_bond_items_for(self, {})
         set_last_smiles_input_for(self, None)
-        self.runtime_state = SimpleNamespace(hover_preview_state=HoverState())
-        self.history_state = CanvasHistoryState()
 
         self.scene_obj = _FakeScene()
         self.redraw_calls = []

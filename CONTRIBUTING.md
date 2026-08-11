@@ -121,11 +121,19 @@ be retired.
 
 Production service lookup accepts only `CanvasRuntimeServices`; it does not adapt
 flat or duck-typed service bags. Focused legacy UI tests use the test-only builder
-in `tests/runtime_services.py` when they need a partial runtime. Legacy state
-accessors may still attach state to a plain headless collaborator, but a real
-`CanvasView` always uses the strict `CanvasRuntimeState` and fails on an unknown
-field. Remove that plain-object state seam when the last legacy state accessor has
-moved to a canonical feature runtime.
+in `tests/runtime_services.py` when they need a partial runtime.
+
+State works the same way. Every `<name>_state_for(canvas)` accessor reads its field
+off `canvas.runtime_state`, and nothing creates state on the canvas on first access
+any more. A double therefore needs its own partial container — build it with
+`tests/runtime_state.canvas_runtime_state(**states)`, which checks the names against
+the real `CanvasRuntimeState`:
+
+```python
+canvas = SimpleNamespace(
+    runtime_state=canvas_runtime_state(graph_state=CanvasGraphState()),
+)
+```
 
 ### Core vs UI
 

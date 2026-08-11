@@ -14,14 +14,24 @@ from chemvas.features.insertion import (
     TemplateInsertResolution,
 )
 from chemvas.ui import insert_commit_rollback as insert_rollback_module
-from chemvas.ui.atom_coords_access import atom_coords_3d_for, set_atom_coords_3d_for
+from chemvas.ui.atom_coords_access import (
+    CanvasAtomCoords3DState,
+    atom_coords_3d_for,
+    set_atom_coords_3d_for,
+)
+from chemvas.ui.canvas_atom_graphics_state import CanvasAtomGraphicsState
+from chemvas.ui.canvas_bond_graphics_state import CanvasBondGraphicsState
+from chemvas.ui.canvas_graph_state import CanvasGraphState
+from chemvas.ui.canvas_mark_registry import CanvasMarkRegistry
 from chemvas.ui.canvas_runtime_services import CanvasRuntimeServices
 from chemvas.ui.canvas_scene_items_state import (
+    CanvasSceneItemsState,
     append_scene_item_for,
     remove_scene_item_from_collection_for,
     ring_items_for,
 )
 from chemvas.ui.canvas_smiles_input_state import (
+    CanvasSmilesInputState,
     last_smiles_input_for,
     set_last_smiles_input_for,
 )
@@ -38,6 +48,7 @@ from chemvas.ui.structure_insert_access import (
 from PyQt6.QtCore import QPointF
 
 from tests.runtime_services import canvas_runtime_services
+from tests.runtime_state import canvas_runtime_state
 
 
 def _points(count: int, *, start: float = 1.0) -> list[tuple[float, float]]:
@@ -75,6 +86,15 @@ class _FakeRingItem:
 class _FakeCanvas:
     def __init__(self) -> None:
         self.model = MoleculeModel()
+        self.runtime_state = canvas_runtime_state(
+            smiles_input_state=CanvasSmilesInputState(),
+            scene_items_state=CanvasSceneItemsState(),
+            atom_coords_3d_state=CanvasAtomCoords3DState(),
+            atom_graphics_state=CanvasAtomGraphicsState(),
+            bond_graphics_state=CanvasBondGraphicsState(),
+            mark_registry=CanvasMarkRegistry(),
+            graph_state=CanvasGraphState(),
+        )
         set_last_smiles_input_for(self, "before")
         self.record_calls: list[dict] = []
         self.add_atom_calls: list[tuple[str, float, float]] = []
@@ -349,7 +369,16 @@ class InsertCommitServiceTest(unittest.TestCase):
     def test_rollback_insert_mutation_direct_fallback_removes_atom_coords_3d(
         self,
     ) -> None:
-        canvas = SimpleNamespace(model=MoleculeModel())
+        canvas = SimpleNamespace(
+            model=MoleculeModel(),
+            runtime_state=canvas_runtime_state(
+                atom_coords_3d_state=CanvasAtomCoords3DState(),
+                atom_graphics_state=CanvasAtomGraphicsState(),
+                bond_graphics_state=CanvasBondGraphicsState(),
+                mark_registry=CanvasMarkRegistry(),
+                graph_state=CanvasGraphState(),
+            ),
+        )
         atom_id = canvas.model.add_atom("C", 1.0, 2.0)
         set_atom_coords_3d_for(canvas, {atom_id: (1.0, 2.0, 3.0)})
 
