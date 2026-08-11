@@ -1454,6 +1454,12 @@ class ToolsUnitTest(unittest.TestCase):
         self.assertIsNone(tool._drag_transaction)
 
     def test_actual_drag_failure_restores_parent_topology_and_z_value(self) -> None:
+        # ADR 0003: a selection move's savepoint is scoped to the gesture's
+        # footprint. The dragged item's own topology damage is repaired
+        # exactly; the real move path cannot touch other items' parents or
+        # z-values, so out-of-footprint repair is no longer part of the
+        # contract (it remains covered for unscoped captures by the delete
+        # and document-session transaction suites).
         canvas, shapes = self._canvas_with_shapes(count=3)
         parent, child, peer = shapes
         child.setParentItem(parent)
@@ -1465,9 +1471,7 @@ class ToolsUnitTest(unittest.TestCase):
 
         def corrupt_topology_then_fail(*_args, **_kwargs) -> None:
             child.setParentItem(peer)
-            parent.setZValue(9.0)
             child.setZValue(-4.0)
-            peer.setZValue(-2.0)
             raise RuntimeError("drag damaged scene topology")
 
         try:
@@ -1489,8 +1493,8 @@ class ToolsUnitTest(unittest.TestCase):
                 tool._apply_drag_delta(QPointF(4.0, 5.0))
 
             self.assertIs(child.parentItem(), parent)
-            self.assertEqual(parent.zValue(), 2.0)
             self.assertEqual(child.zValue(), 3.0)
+            self.assertEqual(parent.zValue(), 2.0)
             self.assertEqual(peer.zValue(), 2.0)
             self.assertEqual(list(canvas.scene().items()), expected_order)
             self.assertIsNone(tool._drag_transaction)

@@ -27,7 +27,7 @@ from chemvas.ui.history_atom_position_restore import set_atom_positions_for_hist
 from chemvas.ui.move_access import move_atoms_for
 from chemvas.ui.renderer_style_access import set_bond_length_for
 from chemvas.ui.scene_item_access import restore_mark_from_state
-from chemvas.ui.transactions.document import DocumentSavepoint
+from chemvas.ui.transactions.document import DocumentSavepoint, MoveGestureScope
 
 
 def _add_move_rollback_note(
@@ -45,11 +45,13 @@ def capture_history_transaction_for_history(
     *,
     history_service=None,
     guard_scene_rect: bool = True,
+    move_scope: MoveGestureScope | None = None,
 ) -> DocumentSavepoint:
     return DocumentSavepoint.capture(
         canvas,
         history_service=history_service,
         guard_scene_rect=guard_scene_rect,
+        move_scope=move_scope,
     )
 
 
@@ -213,6 +215,7 @@ def trim_bonds_for_history(canvas, length: int) -> None:
 
 
 __all__ = [
+    "MoveGestureScope",
     "apply_atom_color_for_history",
     "capture_history_transaction_for_history",
     "move_atoms_for_history",

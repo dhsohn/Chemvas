@@ -1,15 +1,23 @@
 """Selection/direct-item drag transaction mixin for the select and move tools.
 
 A drag mutates the document in place on every pointer frame. The mixin keeps
-one gesture contract: nothing is captured for a plain click, a whole-document
-savepoint opens lazily before the first effective mutation, a failed or
-cancelled drag restores that savepoint, and exactly one history command is
-pushed per moved gesture. After a successful push the stack top describes the
-document, so later finalization failures never revert it (ADR 0002).
+one gesture contract: nothing is captured for a plain click, a savepoint opens
+lazily before the first effective mutation, a failed or cancelled drag
+restores that savepoint, and exactly one history command is pushed per moved
+gesture. After a successful push the stack top describes the document, so
+later finalization failures never revert it (ADR 0002).
+
+Selection moves capture a savepoint scoped to the gesture's mutation
+footprint instead of the whole document (ADR 0003): a pure move only touches
+the selected atoms, their incident bonds, and a closed set of scene items, so
+the O(document) capture cost that froze large documents at drag start is
+avoided. Gestures without a closed footprint (handle drags, direct item
+drags) keep the whole-document capture.
 """
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
@@ -20,9 +28,14 @@ from chemvas.core.history import (
     HistoryCommand,
     MoveAtomsCommand,
 )
+from chemvas.ui.canvas_atom_graphics_state import atom_dots_for, atom_items_for
+from chemvas.ui.canvas_bond_graphics_state import bond_items_for_id
+from chemvas.ui.canvas_mark_registry import mark_registry_for
 from chemvas.ui.canvas_model_access import bond_for_id
 from chemvas.ui.canvas_scene_items_state import ring_items_for_atoms
+from chemvas.ui.handle_state import active_handles_for
 from chemvas.ui.history_canvas_access import (
+    MoveGestureScope,
     capture_history_transaction_for_history,
 )
 from chemvas.ui.history_commands import MoveItemsCommand
@@ -32,6 +45,7 @@ from chemvas.ui.move_access import (
     shift_selection_outlines_for,
 )
 from chemvas.ui.selection_collection_access import independent_selection_items
+from chemvas.ui.selection_outline_state import selection_outlines_for
 from chemvas.ui.selection_service_access import refresh_selection_outline_for
 from chemvas.ui.selection_style_access import suspend_selection_outline_for
 
@@ -118,13 +132,26 @@ class SelectionDragMixin:
                 f"Selection drag owner changed while {phase or 'interacting'}"
             )
 
-    def _prepare_drag_mutation(self, token: _DragTransactionToken) -> None:
-        """Open the whole-document savepoint before the first mutation."""
+    def _prepare_drag_mutation(
+        self,
+        token: _DragTransactionToken,
+        *,
+        move_scope_factory: Callable[[], MoveGestureScope] | None = None,
+    ) -> None:
+        """Open the savepoint before the first mutation.
+
+        Without a scope factory the savepoint captures the whole document.
+        Selection moves pass their footprint factory so the capture cost
+        scales with the selection, not the document (ADR 0003).
+        """
 
         if token.savepoint is None:
             token.savepoint = capture_history_transaction_for_history(
                 self.canvas,
                 history_service=token.history_service,
+                move_scope=(
+                    move_scope_factory() if move_scope_factory is not None else None
+                ),
             )
 
     def _release_drag_transaction(self, token: _DragTransactionToken) -> None:
@@ -261,6 +288,59 @@ class SelectionDragMixin:
         self._total_delta = QPointF(0.0, 0.0)
         return True
 
+    def _selection_move_scope(self) -> MoveGestureScope:
+        """Enumerate the selection move's mutation footprint at capture time.
+
+        The footprint mirrors the single move path
+        (``CanvasMoveController.move_atoms``/``move_item`` with
+        ``update_selection=False`` plus outline shifting): atom labels/dots,
+        atom-attached marks, incident bond items, affected ring polygons, the
+        independently moved selection items with their children, active
+        handles, and the current selection outlines. A failed commit can also
+        rebuild outlines; membership restore for items created after capture
+        is whole-document by construction.
+        """
+
+        canvas = self.canvas
+        items: list = []
+        seen: set[int] = set()
+
+        def add(item: object) -> None:
+            if item is None or id(item) in seen:
+                return
+            seen.add(id(item))
+            items.append(item)
+            child_items = getattr(item, "childItems", None)
+            if callable(child_items):
+                for child in child_items():
+                    add(child)
+
+        atom_labels = atom_items_for(canvas)
+        atom_dots = atom_dots_for(canvas)
+        marks = mark_registry_for(canvas)
+        for atom_id in self._selection_atom_ids:
+            add(atom_labels.get(atom_id))
+            add(atom_dots.get(atom_id))
+            for mark in marks.get_for_atom(atom_id) or ():
+                add(mark)
+        bond_ids = self._drag_bond_ids | self._drag_boundary_bond_ids
+        for bond_id in bond_ids:
+            for bond_item in bond_items_for_id(canvas, bond_id):
+                add(bond_item)
+        for ring_item in self._drag_affected_ring_items or ():
+            add(ring_item)
+        for outline in selection_outlines_for(canvas):
+            add(outline)
+        for handle in active_handles_for(canvas):
+            add(handle)
+        for selection_item in self._selection_items:
+            add(selection_item)
+        return MoveGestureScope(
+            atom_ids=frozenset(self._selection_atom_ids),
+            bond_ids=frozenset(bond_ids),
+            scene_items=tuple(items),
+        )
+
     @staticmethod
     def _drag_delta_is_effective(delta: QPointF) -> bool:
         return (
@@ -285,7 +365,10 @@ class SelectionDragMixin:
             return
         token = self._require_drag_token()
         try:
-            self._prepare_drag_mutation(token)
+            self._prepare_drag_mutation(
+                token,
+                move_scope_factory=self._selection_move_scope,
+            )
             if not self._suspended_outline:
                 self.context.suspend_selection_outline(True)
             self._suspended_outline = True
