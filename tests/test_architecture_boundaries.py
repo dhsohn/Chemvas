@@ -4016,7 +4016,10 @@ def test_state_accessors_read_the_runtime_container_directly() -> None:
                 )
 
     assert violations == []
-    assert checked
+    # A floor, not an exact count: adding an accessor is fine, but one renamed
+    # out of the `*_state_for` pattern would otherwise leave the enumeration
+    # silently instead of being reported.
+    assert len(checked) >= 23, checked
 
 
 def test_ensure_canvas_state_stays_removed() -> None:
