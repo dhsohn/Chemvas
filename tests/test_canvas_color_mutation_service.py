@@ -50,6 +50,7 @@ if QApplication is not None:
         set_committed_note_text_for,
     )
     from chemvas.ui.scene_item_state import note_state_dict_for
+    from chemvas.ui.structure_mutation_access import add_benzene_ring_for
 
     from tests.canvas_factory import build_canvas_view
 
@@ -144,7 +145,27 @@ class CanvasColorMutationServiceTest(unittest.TestCase):
         QCoreApplication.sendPostedEvents(canvas, QEvent.Type.DeferredDelete)
         self.app.processEvents()
 
-    def test_ring_batch_reuses_frozen_targets_without_second_graph_lookup(
+    def test_ring_recolor_covers_a_ring_holding_a_dotted_double_bond(self) -> None:
+        # A dotted double bond is drawn as two graphics items, and colouring the
+        # ring legitimately restyles both. Colouring the ring must not be
+        # mistaken for touching something outside the operation.
+        canvas = build_canvas_view()
+        self.addCleanup(self._dispose_canvas, canvas)
+        add_benzene_ring_for(canvas, QPointF(0.0, 0.0))
+        ring = next(item for item in canvas.scene().items() if item.data(0) == "ring")
+        transform = canvas.services.scene_operations.scene_transform_controller
+        transform.apply_bond_style(0, "dotted_double", 2)
+        self.assertEqual(len(bond_items_for(canvas)[0]), 2)
+        service = canvas.services.scene_operations.canvas_color_mutation_service
+
+        service.apply_color_to_items([ring], QColor("#cc3344"))
+
+        self.assertEqual(
+            [bond.color for bond in canvas.model.bonds if bond is not None],
+            ["#cc3344"] * 6,
+        )
+
+    def test_ring_batch_resolves_graph_targets_once_per_operation(
         self,
     ) -> None:
         canvas = build_canvas_view()
@@ -161,16 +182,17 @@ class CanvasColorMutationServiceTest(unittest.TestCase):
         ring.setData(2, [atom_id])
         canvas.scene().addItem(ring)
 
-        class SecondLookupPoisoningGraphService:
+        # Batch rollback capture and the mutation both need this ring's
+        # targets; the service resolves them once instead of asking the graph
+        # twice for the same ring.
+        class CountingGraphService:
             calls = 0
 
             def bond_sets_for_atoms(self, _atom_ids):
                 self.calls += 1
-                if self.calls == 2:
-                    atom.color = "#abcdef"
                 return set(), set()
 
-        graph_service = SecondLookupPoisoningGraphService()
+        graph_service = CountingGraphService()
         history_service = canvas.services.history_service
         history = history_service.state
         service = CanvasColorMutationService(
