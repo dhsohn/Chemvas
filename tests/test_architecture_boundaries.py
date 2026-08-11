@@ -3948,22 +3948,85 @@ def _canvas_runtime_state_field_names() -> set[str]:
     raise AssertionError("CanvasRuntimeState class not found")
 
 
-def test_state_accessor_names_match_runtime_state_container() -> None:
-    """Every ensure_canvas_state name must be a CanvasRuntimeState field.
+# Functions whose name looks like a state accessor but which are not one, with
+# the reason each is exempt from reading CanvasRuntimeState.
+NON_RUNTIME_STATE_ACCESSORS = {
+    # The surviving canvas_state_object seam: these two still create their state
+    # and attach it to the canvas. Converting them belongs to that seam's own
+    # slice, together with the transaction kernel's private copies of the lookup.
+    "sheet_setup_state_for",
+    "document_metadata_state_for",
+    # Setter, not an accessor.
+    "set_sheet_setup_state_for",
+    # Whole-canvas snapshot/restore helpers, not a single state field.
+    "snapshot_canvas_state_for",
+    "restore_canvas_state_for",
+    # Applies a captured insert session; does not resolve a container field.
+    "apply_insert_session_state_for",
+    # Serializes one scene item's state, not canvas state.
+    "scene_item_state_for",
+}
 
-    A mismatched name would make the accessor attach a shadow state directly
-    on the canvas while the container holds the real one, silently splitting
-    the state in two.
+
+def test_state_accessors_read_the_runtime_container_directly() -> None:
+    """Every canvas state accessor resolves its field on CanvasRuntimeState.
+
+    Attaching state to the canvas instead splits it in two: the container keeps
+    the real one while the accessor hands out a shadow copy. Reading the field
+    off the slotted container makes a renamed or misspelled field raise.
+
+    The check enumerates rather than samples: an accessor that stops reading the
+    container at all is a violation, not a skipped file, so neither a renamed
+    lookup helper nor an accessor that synthesizes its own state can pass.
     """
-    field_names = _canvas_runtime_state_field_names() - {"STRICT_STATE_CONTAINER"}
-    call_pattern = re.compile(r"ensure_canvas_state\(\s*canvas,\s*\"(?P<name>\w+)\"")
+    field_names = _canvas_runtime_state_field_names()
+    runtime_read = re.compile(r"canvas\.runtime_state\.(?P<name>\w+)\b")
+    fallback = re.compile(
+        r"\bensure_canvas_state\b|\b(?:getattr|setattr)\(\s*canvas\s*,\s*[\"']"
+    )
+    accessor_name = re.compile(r"_(?:state|registry)_for$")
+    checked: list[str] = []
     violations: list[str] = []
     for path in sorted((APP_ROOT / "chemvas" / "ui").glob("*.py")):
-        for match in call_pattern.finditer(path.read_text(encoding="utf-8")):
-            name = match.group("name")
-            if name not in field_names:
+        source = path.read_text(encoding="utf-8")
+        tree = ast.parse(source)
+        for node in tree.body:
+            if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                continue
+            if not accessor_name.search(node.name):
+                continue
+            if node.name in NON_RUNTIME_STATE_ACCESSORS:
+                continue
+            body = ast.get_source_segment(source, node) or ""
+            names = {match.group("name") for match in runtime_read.finditer(body)}
+            checked.append(f"{path.name}:{node.name}")
+            if not names:
                 violations.append(
-                    f"{path.name}: {name!r} is not a CanvasRuntimeState field"
+                    f"{path.name}:{node.name} does not read the runtime container"
+                )
+                continue
+            for name in sorted(names - field_names):
+                violations.append(
+                    f"{path.name}:{node.name}: {name!r} is not a"
+                    " CanvasRuntimeState field"
+                )
+            if fallback.search(body):
+                violations.append(
+                    f"{path.name}:{node.name} falls back off the runtime container"
                 )
 
     assert violations == []
+    # A shrinking set would mean accessors were renamed out of the check rather
+    # than fixed, so pin the count the migration left behind.
+    assert len(checked) == 23, checked
+
+
+def test_ensure_canvas_state_stays_removed() -> None:
+    """The lazy attach-on-first-use accessor does not come back.
+
+    It let a state accessor create a second copy of a state on the canvas
+    whenever the container did not already hold one.
+    """
+    pattern = re.compile(r"\bensure_canvas_state\b")
+
+    assert _matching_lines(pattern, _app_python_files()) == []

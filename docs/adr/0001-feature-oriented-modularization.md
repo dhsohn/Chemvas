@@ -121,6 +121,20 @@ suite, and milestone-level full-suite/package verification.
   the strict runtime container. Setup also builds that container before writing
   the sheet state, which previously landed on the bare canvas and left a second,
   never-read `SheetSetupState` beside the live one.
+- Step 4 is complete: all twenty remaining state accessors now read
+  `canvas.runtime_state.<field>` directly, and `ensure_canvas_state` is deleted
+  along with the `STRICT_STATE_CONTAINER` marker that existed only for it — a
+  `slots=True` container raises on a wrong field by itself. Focused tests build a
+  partial container with `tests/runtime_state.canvas_runtime_state`, which
+  validates field names against the real one.
+  `test_state_accessors_read_the_runtime_container_directly` enumerates the
+  accessors in scope, so an accessor that stops reading the container fails
+  rather than dropping out of the check; the earlier per-state guards for
+  input-view, callbacks and hover stay. `canvas_state_object` survives for
+  `sheet_setup_state_for` and `document_metadata_state_for`, which still attach
+  their state to the canvas, and for the transaction kernel; those two, and the
+  kernel's private copies of the same lookup, are a separate seam and are listed
+  in `NON_RUNTIME_STATE_ACCESSORS`.
 
 ## Consequences
 

@@ -4,6 +4,7 @@ import unittest
 from types import SimpleNamespace
 
 from tests.runtime_services import canvas_runtime_services
+from tests.runtime_state import canvas_runtime_state
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -28,22 +29,34 @@ if QApplication is not None:
         DeleteBondCommand,
     )
     from chemvas.domain.document import Atom, Bond, MoleculeModel
-    from chemvas.ui.atom_coords_access import atom_coords_3d_for
+    from chemvas.ui.atom_coords_access import (
+        CanvasAtomCoords3DState,
+        atom_coords_3d_for,
+    )
     from chemvas.ui.canvas_atom_graphics_state import (
+        CanvasAtomGraphicsState,
         atom_dots_for,
         atom_items_for,
         set_atom_dots_for,
         set_atom_items_for,
     )
-    from chemvas.ui.canvas_bond_graphics_state import bond_items_for, set_bond_items_for
-    from chemvas.ui.canvas_graph_state import CanvasGraphState
-    from chemvas.ui.canvas_mark_registry import CanvasMarkRegistry
+    from chemvas.ui.canvas_bond_graphics_state import (
+        CanvasBondGraphicsState,
+        bond_items_for,
+        set_bond_items_for,
+    )
+    from chemvas.ui.canvas_graph_state import CanvasGraphState, graph_state_for
+    from chemvas.ui.canvas_group_state import CanvasGroupState
+    from chemvas.ui.canvas_mark_registry import CanvasMarkRegistry, mark_registry_for
+    from chemvas.ui.canvas_rotation_state import CanvasRotationState
     from chemvas.ui.canvas_scene_items_state import (
         SCENE_ITEM_COLLECTION_ATTRS,
+        CanvasSceneItemsState,
         scene_item_collection_for,
         set_scene_item_collection_for,
     )
     from chemvas.ui.canvas_smiles_input_state import (
+        CanvasSmilesInputState,
         last_smiles_input_for,
         set_last_smiles_input_for,
     )
@@ -54,7 +67,10 @@ if QApplication is not None:
         CLIPBOARD_SVG_MIME,
         SceneClipboardController,
     )
-    from chemvas.ui.scene_clipboard_state import SceneClipboardState
+    from chemvas.ui.scene_clipboard_state import (
+        SceneClipboardState,
+        scene_clipboard_state_for,
+    )
     from chemvas.ui.scene_clipboard_transaction_logic import build_clipboard_copy_plan
     from chemvas.ui.scene_delete_controller import SceneDeleteController
     from chemvas.ui.scene_transform_controller import SceneTransformController
@@ -952,15 +968,24 @@ class _FakeCanvas:
         self.renderer = SimpleNamespace(
             style=SimpleNamespace(bond_length_px=20.0, bond_line_width=1.0)
         )
+        self.runtime_state = canvas_runtime_state(
+            atom_coords_3d_state=CanvasAtomCoords3DState(),
+            atom_graphics_state=CanvasAtomGraphicsState(),
+            bond_graphics_state=CanvasBondGraphicsState(),
+            graph_state=CanvasGraphState(),
+            group_state=CanvasGroupState(),
+            mark_registry=CanvasMarkRegistry(),
+            rotation_state=CanvasRotationState(),
+            scene_clipboard_state=SceneClipboardState(),
+            scene_items_state=CanvasSceneItemsState(),
+            smiles_input_state=CanvasSmilesInputState(),
+        )
         set_last_smiles_input_for(self, None)
-        self.mark_registry = CanvasMarkRegistry()
         for name in SCENE_ITEM_COLLECTION_ATTRS:
             set_scene_item_collection_for(self, name, [])
-        self.scene_clipboard_state = SceneClipboardState()
         self.scene_clipboard_state.paste_source_json = None
         self.scene_clipboard_state.paste_count = 0
         self._clipboard_payload = None
-        self.graph_state = CanvasGraphState()
         self.delete_bond_calls: list[tuple[int, bool]] = []
         self.remove_bond_calls: list[int] = []
         self.redraw_connected_bonds_calls: list[int] = []
@@ -1073,6 +1098,9 @@ class _FakeCanvas:
         lambda self: self._scene_items("orbital_items"),
         lambda self, value: self._set_scene_items("orbital_items", value),
     )
+    graph_state = property(lambda self: graph_state_for(self))
+    mark_registry = property(lambda self: mark_registry_for(self))
+    scene_clipboard_state = property(lambda self: scene_clipboard_state_for(self))
 
     @property
     def atom_items(self):

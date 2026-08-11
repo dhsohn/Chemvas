@@ -5,6 +5,7 @@ from types import SimpleNamespace
 from unittest import mock
 
 from tests.runtime_services import canvas_runtime_services
+from tests.runtime_state import canvas_runtime_state
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -24,10 +25,17 @@ except ModuleNotFoundError:
 
 if QApplication is not None:
     from chemvas.domain.document import Atom, Bond, MoleculeModel
-    from chemvas.ui.atom_coords_access import set_atom_coords_3d_for
-    from chemvas.ui.canvas_mark_registry import CanvasMarkRegistry
-    from chemvas.ui.canvas_rotation_state import rotation_state_for
-    from chemvas.ui.canvas_scene_items_state import set_scene_item_collection_for
+    from chemvas.ui.atom_coords_access import (
+        CanvasAtomCoords3DState,
+        set_atom_coords_3d_for,
+    )
+    from chemvas.ui.canvas_atom_graphics_state import CanvasAtomGraphicsState
+    from chemvas.ui.canvas_mark_registry import CanvasMarkRegistry, mark_registry_for
+    from chemvas.ui.canvas_rotation_state import CanvasRotationState, rotation_state_for
+    from chemvas.ui.canvas_scene_items_state import (
+        CanvasSceneItemsState,
+        set_scene_item_collection_for,
+    )
     from chemvas.ui.scene_clipboard_controller import SceneClipboardController
     from chemvas.ui.scene_clipboard_logic import (
         MAX_CLIPBOARD_SELECTION_PAYLOAD_BYTES,
@@ -490,7 +498,7 @@ class SceneClipboardLogicTest(unittest.TestCase):
             "arrow", state={"kind": "arrow", "start": (5.0, 6.0), "end": (7.0, 8.0)}
         )
 
-        canvas.mark_registry.by_atom[2] = [linked_mark]
+        mark_registry_for(canvas).by_atom[2] = [linked_mark]
         set_scene_item_collection_for(canvas, "ring_items", [ring_item])
         for item in (atom_item, bond_item, free_mark, note_item, arrow_item):
             canvas.add_item(item, selected=True)
@@ -779,11 +787,17 @@ class _FakeCanvas:
     def __init__(self) -> None:
         self._scene = QGraphicsScene()
         self.model = MoleculeModel()
-        self.ring_items: list[QGraphicsItem] = []
-        self.mark_registry = CanvasMarkRegistry()
-        self.scene_clipboard_state = SceneClipboardState()
-        self.scene_clipboard_state.paste_source_json = None
-        self.scene_clipboard_state.paste_count = 0
+        scene_clipboard_state = SceneClipboardState()
+        scene_clipboard_state.paste_source_json = None
+        scene_clipboard_state.paste_count = 0
+        self.runtime_state = canvas_runtime_state(
+            scene_items_state=CanvasSceneItemsState(),
+            atom_graphics_state=CanvasAtomGraphicsState(),
+            mark_registry=CanvasMarkRegistry(),
+            scene_clipboard_state=scene_clipboard_state,
+            atom_coords_3d_state=CanvasAtomCoords3DState(),
+            rotation_state=CanvasRotationState(),
+        )
         self.history_service = SimpleNamespace(push=mock.Mock())
         self.services = canvas_runtime_services(history_service=self.history_service)
 

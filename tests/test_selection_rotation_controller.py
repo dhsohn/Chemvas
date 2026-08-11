@@ -9,6 +9,7 @@ from chemvas.core.history import SetAtomPositionsCommand
 from chemvas.domain.document import Atom, Bond, MoleculeModel
 
 from tests.runtime_services import canvas_runtime_services
+from tests.runtime_state import canvas_runtime_state
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -16,6 +17,7 @@ from chemvas.ui.atom_coords_access import CanvasAtomCoords3DState
 from chemvas.ui.canvas_atom_graphics_state import visible_atom_item_for
 from chemvas.ui.canvas_lifecycle import schedule_canvas_deletion_for
 from chemvas.ui.canvas_rotation_state import CanvasRotationState
+from chemvas.ui.canvas_scene_items_state import CanvasSceneItemsState
 from chemvas.ui.selection_rotation_controller import SelectionRotationController
 from chemvas.ui.selection_rotation_preview_transaction import (
     capture_rotation_preview_authority,
@@ -145,12 +147,21 @@ class _FakeCanvas:
             },
             bonds=[Bond(0, 1), Bond(1, 2)],
         )
-        self.atom_coords_3d_state = CanvasAtomCoords3DState(
-            atom_coords_3d={
-                0: (0.0, 0.0, 0.0),
-                1: (10.0, 0.0, 0.0),
-                2: (20.0, 5.0, 3.0),
-            }
+        self.runtime_state = canvas_runtime_state(
+            atom_coords_3d_state=CanvasAtomCoords3DState(
+                atom_coords_3d={
+                    0: (0.0, 0.0, 0.0),
+                    1: (10.0, 0.0, 0.0),
+                    2: (20.0, 5.0, 3.0),
+                }
+            ),
+            rotation_state=CanvasRotationState(
+                projection_center_3d=(100.0, 200.0, 300.0),
+                projection_anchor_2d=(50.0, 60.0),
+                start_coords_3d={999: (1.0, 1.0, 1.0)},
+                coord_atom_ids={999},
+            ),
+            scene_items_state=CanvasSceneItemsState(),
         )
         self.renderer = SimpleNamespace(style=SimpleNamespace(bond_length_px=20.0))
         self._scene = _FakeScene()
@@ -158,13 +169,6 @@ class _FakeCanvas:
         self._selected_bond_ids: set[int] = set()
         self.axis_hint_response: tuple[int, set[int]] | None = None
         self.flattened_coords: dict[int, tuple[float, float, float]] | None = None
-
-        self.rotation_state = CanvasRotationState(
-            projection_center_3d=(100.0, 200.0, 300.0),
-            projection_anchor_2d=(50.0, 60.0),
-            start_coords_3d={999: (1.0, 1.0, 1.0)},
-            coord_atom_ids={999},
-        )
 
         self.axis_hint_calls: list[tuple[int, set[int], QPointF | None]] = []
         self.flatten_calls: list[
@@ -222,12 +226,16 @@ class _FakeCanvas:
         return self._scene
 
     @property
+    def rotation_state(self) -> CanvasRotationState:
+        return self.runtime_state.rotation_state
+
+    @property
     def atom_coords_3d(self):
-        return self.atom_coords_3d_state.atom_coords_3d
+        return self.runtime_state.atom_coords_3d_state.atom_coords_3d
 
     @atom_coords_3d.setter
     def atom_coords_3d(self, value) -> None:
-        self.atom_coords_3d_state.atom_coords_3d = value
+        self.runtime_state.atom_coords_3d_state.atom_coords_3d = value
 
     @property
     def selected_atom_ids(self) -> set[int]:
@@ -1050,7 +1058,9 @@ class SelectionRotationControllerTest(unittest.TestCase):
         deleted_ring.setData(0, "ring")
         deleted_ring.setData(2, [2])
         sip.delete(deleted_ring)
-        canvas.scene_items_state = SimpleNamespace(ring_items=[live_ring, deleted_ring])
+        canvas.runtime_state.scene_items_state = SimpleNamespace(
+            ring_items=[live_ring, deleted_ring]
+        )
         controller = _controller_for(canvas)
 
         preview = capture_rotation_preview_authority(controller, {2})

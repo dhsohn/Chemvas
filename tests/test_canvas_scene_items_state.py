@@ -14,9 +14,11 @@ from chemvas.ui.canvas_scene_items_state import (
     set_scene_item_collection_for,
 )
 
+from tests.runtime_state import canvas_runtime_state
+
 
 def test_scene_items_state_for_uses_runtime_state() -> None:
-    runtime_state = SimpleNamespace(
+    runtime_state = canvas_runtime_state(
         scene_items_state=CanvasSceneItemsState(
             ring_items=["ring"], note_items=["note"]
         )
@@ -32,7 +34,12 @@ def test_scene_items_state_for_does_not_read_legacy_fake_canvas_attrs() -> None:
     notes = ["selected"]
     rings = ["ring"]
     marks = ["mark"]
-    canvas = SimpleNamespace(selected_notes=notes, ring_items=rings, mark_items=marks)
+    canvas = SimpleNamespace(
+        selected_notes=notes,
+        ring_items=rings,
+        mark_items=marks,
+        runtime_state=canvas_runtime_state(scene_items_state=CanvasSceneItemsState()),
+    )
 
     state = scene_items_state_for(canvas)
 
@@ -50,7 +57,9 @@ def test_scene_items_state_for_does_not_read_legacy_fake_canvas_attrs() -> None:
 def test_scene_item_collection_setters_update_state_without_canvas_attr_mirror() -> (
     None
 ):
-    canvas = SimpleNamespace()
+    canvas = SimpleNamespace(
+        runtime_state=canvas_runtime_state(scene_items_state=CanvasSceneItemsState())
+    )
 
     set_scene_item_collection_for(canvas, "note_items", ["note"])
     append_scene_item_for(canvas, "ring_items", "ring")
@@ -87,6 +96,7 @@ def test_clear_scene_item_collections_for_updates_state_without_canvas_attr_mirr
         arrow_items=["arrow"],
         ts_bracket_items=["ts"],
         orbital_items=["orbital"],
+        runtime_state=canvas_runtime_state(scene_items_state=CanvasSceneItemsState()),
     )
 
     clear_scene_item_collections_for(canvas)

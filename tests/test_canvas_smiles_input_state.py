@@ -8,9 +8,11 @@ from chemvas.ui.canvas_smiles_input_state import (
     smiles_input_state_for,
 )
 
+from tests.runtime_state import canvas_runtime_state
+
 
 def test_smiles_input_state_for_uses_runtime_state() -> None:
-    runtime_state = SimpleNamespace(
+    runtime_state = canvas_runtime_state(
         smiles_input_state=CanvasSmilesInputState(last_smiles_input="CCO")
     )
     canvas = SimpleNamespace(runtime_state=runtime_state)
@@ -20,7 +22,10 @@ def test_smiles_input_state_for_uses_runtime_state() -> None:
 
 
 def test_smiles_input_state_for_does_not_read_legacy_fake_canvas_attrs() -> None:
-    canvas = SimpleNamespace(last_smiles_input="CCO")
+    canvas = SimpleNamespace(
+        last_smiles_input="CCO",
+        runtime_state=canvas_runtime_state(smiles_input_state=CanvasSmilesInputState()),
+    )
 
     state = smiles_input_state_for(canvas)
 
@@ -29,7 +34,9 @@ def test_smiles_input_state_for_does_not_read_legacy_fake_canvas_attrs() -> None
 
 
 def test_smiles_input_setters_update_state_without_canvas_attr_mirror() -> None:
-    canvas = SimpleNamespace()
+    canvas = SimpleNamespace(
+        runtime_state=canvas_runtime_state(smiles_input_state=CanvasSmilesInputState())
+    )
 
     set_last_smiles_input_for(canvas, "CCO")
 
@@ -43,7 +50,10 @@ def test_smiles_input_setters_update_state_without_canvas_attr_mirror() -> None:
 
 
 def test_smiles_input_state_ignores_canvas_attr_after_state_exists() -> None:
-    canvas = SimpleNamespace(last_smiles_input="before")
+    canvas = SimpleNamespace(
+        last_smiles_input="before",
+        runtime_state=canvas_runtime_state(smiles_input_state=CanvasSmilesInputState()),
+    )
     smiles_input_state_for(canvas)
 
     canvas.last_smiles_input = "after"

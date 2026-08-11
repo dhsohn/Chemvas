@@ -4,6 +4,7 @@ from types import SimpleNamespace
 from unittest import mock
 
 from tests.runtime_services import canvas_runtime_services
+from tests.runtime_state import canvas_runtime_state
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -118,12 +119,14 @@ def _make_proxy(
     view = SimpleNamespace(
         scene=lambda: scene,
         renderer=SimpleNamespace(style=SimpleNamespace(bond_length_px=bond_length_px)),
-        handle_state=CanvasHandleState(),
-        selection_style_state=SelectionStyleState(
-            color=QColor("#1f5eff"),
-            stroke_delta=0.6,
+        runtime_state=canvas_runtime_state(
+            handle_state=CanvasHandleState(),
+            selection_style_state=SelectionStyleState(
+                color=QColor("#1f5eff"),
+                stroke_delta=0.6,
+            ),
+            tool_settings_state=CanvasToolSettingsState(curved_snap_step=2),
         ),
-        tool_settings_state=CanvasToolSettingsState(curved_snap_step=2),
         refresh_selection_outline=mock.Mock(),
         services=canvas_runtime_services(
             scene_decoration_build_service=SimpleNamespace(add_arrow_head=mock.Mock()),
@@ -179,20 +182,24 @@ class CanvasViewHandleHelpersTest(unittest.TestCase):
         self.assertEqual(stored_pen.color().name(), original_pen.color().name())
         self.assertAlmostEqual(stored_pen.widthF(), original_pen.widthF())
         self.assertEqual(
-            selected_pen.color().name(), view.selection_style_state.color.name()
+            selected_pen.color().name(),
+            view.runtime_state.selection_style_state.color.name(),
         )
         self.assertAlmostEqual(
             selected_pen.widthF(),
-            original_pen.widthF() + view.selection_style_state.stroke_delta,
+            original_pen.widthF()
+            + view.runtime_state.selection_style_state.stroke_delta,
         )
-        self.assertEqual(view.selection_style_state.selected_items, [group])
+        self.assertEqual(
+            view.runtime_state.selection_style_state.selected_items, [group]
+        )
 
         view.services.scene_view.selection_highlight_styler.clear_selection_highlight()
 
         restored_pen = child.pen()
         self.assertEqual(restored_pen.color().name(), original_pen.color().name())
         self.assertAlmostEqual(restored_pen.widthF(), original_pen.widthF())
-        self.assertEqual(view.selection_style_state.selected_items, [])
+        self.assertEqual(view.runtime_state.selection_style_state.selected_items, [])
 
     def test_clear_handles_removes_active_handles_and_clears_target(self) -> None:
         scene = _RecordingScene()
@@ -203,15 +210,15 @@ class CanvasViewHandleHelpersTest(unittest.TestCase):
         handle_two = QGraphicsEllipseItem(10.0, 0.0, 10.0, 10.0)
         scene.addItem(handle_one)
         scene.addItem(handle_two)
-        view.handle_state.active_handles = [handle_one, handle_two]
-        view.handle_state.target = object()
-        view.selection_style_state.selected_items = []
+        view.runtime_state.handle_state.active_handles = [handle_one, handle_two]
+        view.runtime_state.handle_state.target = object()
+        view.runtime_state.selection_style_state.selected_items = []
 
         clear_handles_for(view)
 
         self.assertEqual(scene.removed_items, [handle_one, handle_two])
-        self.assertEqual(view.handle_state.active_handles, [])
-        self.assertIsNone(view.handle_state.target)
+        self.assertEqual(view.runtime_state.handle_state.active_handles, [])
+        self.assertIsNone(view.runtime_state.handle_state.target)
         view.services.scene_view.selection_highlight_styler.clear_selection_highlight.assert_called_once()
 
     def test_show_orbital_handles_creates_handles_from_center_and_bounds(self) -> None:
@@ -223,17 +230,18 @@ class CanvasViewHandleHelpersTest(unittest.TestCase):
 
         show_orbital_handles_for(view, center_item)
 
-        self.assertEqual(len(view.handle_state.active_handles), 2)
-        self.assertIs(view.handle_state.target, center_item)
+        self.assertEqual(len(view.runtime_state.handle_state.active_handles), 2)
+        self.assertIs(view.runtime_state.handle_state.target, center_item)
         self.assertEqual(
             [
                 _point_tuple(handle.rect().center())
-                for handle in view.handle_state.active_handles
+                for handle in view.runtime_state.handle_state.active_handles
             ],
             [(17.0, 20.0), (10.0, 13.0)],
         )
         self.assertEqual(
-            center_item.pen().color().name(), view.selection_style_state.color.name()
+            center_item.pen().color().name(),
+            view.runtime_state.selection_style_state.color.name(),
         )
         self.assertIn(6, center_item._data)
 
@@ -245,12 +253,13 @@ class CanvasViewHandleHelpersTest(unittest.TestCase):
         self.assertEqual(
             [
                 _point_tuple(handle.rect().center())
-                for handle in view.handle_state.active_handles
+                for handle in view.runtime_state.handle_state.active_handles
             ],
             [(42.0, 5.0), (10.0, -27.0)],
         )
         self.assertEqual(
-            fallback_item.pen().color().name(), view.selection_style_state.color.name()
+            fallback_item.pen().color().name(),
+            view.runtime_state.selection_style_state.color.name(),
         )
         self.assertGreaterEqual(len(scene.removed_items), 2)
 
@@ -265,8 +274,8 @@ class CanvasViewHandleHelpersTest(unittest.TestCase):
 
         show_curved_handles_for(view, curved_item)
 
-        self.assertEqual(len(view.handle_state.active_handles), 3)
-        self.assertIs(view.handle_state.target, curved_item)
+        self.assertEqual(len(view.runtime_state.handle_state.active_handles), 3)
+        self.assertIs(view.runtime_state.handle_state.target, curved_item)
         self.assertFalse(curved_item.path().isEmpty())
         self.assertIn("control", curved_item.data(2))
         expected_mid = curved_midpoint_for(
@@ -275,7 +284,7 @@ class CanvasViewHandleHelpersTest(unittest.TestCase):
         self.assertEqual(
             [
                 (handle.data(1), _point_tuple(handle.rect().center()))
-                for handle in view.handle_state.active_handles
+                for handle in view.runtime_state.handle_state.active_handles
             ],
             [
                 ("curved_start", (0.0, 0.0)),
@@ -291,7 +300,9 @@ class CanvasViewHandleHelpersTest(unittest.TestCase):
         show_curved_handles_for(view, fallback_item)
 
         self.assertEqual(
-            _point_tuple(view.handle_state.active_handles[0].rect().center()),
+            _point_tuple(
+                view.runtime_state.handle_state.active_handles[0].rect().center()
+            ),
             (10.0, 10.0),
         )
 

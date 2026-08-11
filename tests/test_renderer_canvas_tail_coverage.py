@@ -6,6 +6,7 @@ from types import SimpleNamespace
 from unittest import mock
 
 from tests.runtime_services import canvas_runtime_services
+from tests.runtime_state import canvas_runtime_state
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -26,11 +27,19 @@ except ModuleNotFoundError:
 if QApplication is not None:
     from chemvas.core.history import CompositeCommand, SetRingPolygonsCommand
     from chemvas.domain.document import Atom, Bond
+    from chemvas.ui.atom_coords_access import CanvasAtomCoords3DState
     from chemvas.ui.bond_renderer import BondRenderer
-    from chemvas.ui.canvas_bond_graphics_state import bond_items_for, set_bond_items_for
+    from chemvas.ui.canvas_atom_graphics_state import CanvasAtomGraphicsState
+    from chemvas.ui.canvas_bond_graphics_state import (
+        CanvasBondGraphicsState,
+        bond_items_for,
+        set_bond_items_for,
+    )
     from chemvas.ui.canvas_geometry_controller import CanvasGeometryController
     from chemvas.ui.canvas_graph_service import CanvasGraphService
-    from chemvas.ui.canvas_graph_state import CanvasGraphState
+    from chemvas.ui.canvas_graph_state import CanvasGraphState, graph_state_for
+    from chemvas.ui.canvas_rotation_state import CanvasRotationState
+    from chemvas.ui.canvas_scene_items_state import CanvasSceneItemsState
     from chemvas.ui.scene_clipboard_transaction_logic import translated_scene_item_state
     from chemvas.ui.selection_collection_access import append_selected_item_ids
     from chemvas.ui.selection_rotation_access import average_bond_length_for_atoms_for
@@ -87,9 +96,12 @@ class _FakeCanvas:
             },
             bonds=[],
         )
+        self.runtime_state = canvas_runtime_state(
+            bond_graphics_state=CanvasBondGraphicsState(),
+            graph_state=CanvasGraphState(),
+            atom_coords_3d_state=CanvasAtomCoords3DState(),
+        )
         set_bond_items_for(self, {})
-        self.graph_state = CanvasGraphState()
-        self.atom_coords_3d: dict[int, tuple[float, float, float]] = {}
         self._labels: dict[int, object] = {}
         self._normal = (0.0, 1.0)
         self._ring_center = None
@@ -168,13 +180,13 @@ class RendererCanvasTailCoverageTest(unittest.TestCase):
         set_bond_items_for(self.canvas, {})
 
     def test_renderer_helper_tails_cover_optional_neighbor_and_id_paths(self) -> None:
-        self.canvas.graph_state.atom_bond_ids = {0: {0, 1}}
+        graph_state_for(self.canvas).atom_bond_ids = {0: {0, 1}}
         self.canvas.model.bonds = [Bond(0, 1, 1), Bond(0, 2, 1)]
         self.assertGreater(
             self.renderer.line_geometry._junction_trim_for_atom(0, None), 0.0
         )
 
-        self.canvas.graph_state.atom_bond_ids = {}
+        graph_state_for(self.canvas).atom_bond_ids = {}
         self.assertEqual(
             self.renderer.line_geometry._plain_double_normal(
                 0.0, 0.0, 10.0, 0.0, None, 1
@@ -298,10 +310,13 @@ class RendererCanvasTailCoverageTest(unittest.TestCase):
             model=SimpleNamespace(
                 atoms={1: Atom("C", 0.0, 0.0), 2: Atom("C", 10.0, 0.0)}
             ),
-            ring_items=[],
-            bond_items={},
-            atom_items={},
-            atom_dots={},
+            runtime_state=canvas_runtime_state(
+                scene_items_state=CanvasSceneItemsState(),
+                bond_graphics_state=CanvasBondGraphicsState(),
+                atom_graphics_state=CanvasAtomGraphicsState(),
+                atom_coords_3d_state=CanvasAtomCoords3DState(),
+                rotation_state=CanvasRotationState(),
+            ),
             scene=lambda: SimpleNamespace(removeItem=mock.Mock()),
             services=canvas_runtime_services(
                 history_service=SimpleNamespace(push=pushed.append),
@@ -353,9 +368,10 @@ class RendererCanvasTailCoverageTest(unittest.TestCase):
         selection_controller = SimpleNamespace(update_selection_outline=mock.Mock())
         restore_view = SimpleNamespace(
             scene=lambda: scene,
-            atom_items={},
-            atom_dots={},
-            bond_items={},
+            runtime_state=canvas_runtime_state(
+                atom_graphics_state=CanvasAtomGraphicsState(),
+                bond_graphics_state=CanvasBondGraphicsState(),
+            ),
             services=canvas_runtime_services(selection_controller=selection_controller),
         )
         restore_selection_from_ids_for(restore_view, {99}, {42})
@@ -367,7 +383,11 @@ class RendererCanvasTailCoverageTest(unittest.TestCase):
     ) -> None:
         average_view = SimpleNamespace(
             model=SimpleNamespace(bonds=_ChangingBonds()),
-            graph_state=CanvasGraphState(atom_bond_ids={1: {0, 1, 2}, 2: {0, 1, 2}}),
+            runtime_state=canvas_runtime_state(
+                graph_state=CanvasGraphState(
+                    atom_bond_ids={1: {0, 1, 2}, 2: {0, 1, 2}}
+                ),
+            ),
         )
         coords = {1: (0.0, 0.0, 0.0), 2: (10.0, 0.0, 0.0)}
         self.assertEqual(
@@ -376,6 +396,7 @@ class RendererCanvasTailCoverageTest(unittest.TestCase):
 
         order_view = SimpleNamespace(
             model=SimpleNamespace(bonds=[Bond(1, 2, 2), Bond(3, 4, 3), None]),
+            runtime_state=canvas_runtime_state(graph_state=CanvasGraphState()),
         )
         order_view.services = canvas_runtime_services(
             graph_service=CanvasGraphService(order_view)

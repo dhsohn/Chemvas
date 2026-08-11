@@ -4,6 +4,7 @@ from types import SimpleNamespace
 from unittest import mock
 
 from tests.runtime_services import canvas_runtime_services
+from tests.runtime_state import canvas_runtime_state
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -20,11 +21,18 @@ except ModuleNotFoundError:
 
 if QApplication is not None:
     from chemvas.ui.canvas_atom_graphics_state import (
+        CanvasAtomGraphicsState,
         set_atom_dot_for,
         set_atom_item_for,
     )
-    from chemvas.ui.canvas_bond_graphics_state import bond_items_for
-    from chemvas.ui.canvas_scene_items_state import append_scene_item_for
+    from chemvas.ui.canvas_bond_graphics_state import (
+        CanvasBondGraphicsState,
+        bond_items_for,
+    )
+    from chemvas.ui.canvas_scene_items_state import (
+        CanvasSceneItemsState,
+        append_scene_item_for,
+    )
     from chemvas.ui.select_all_access import select_all_scene_items_for
 
 
@@ -33,6 +41,11 @@ if QApplication is not None:
     class _Canvas(QGraphicsView):
         def __init__(self) -> None:
             super().__init__(QGraphicsScene())
+            self.runtime_state = canvas_runtime_state(
+                atom_graphics_state=CanvasAtomGraphicsState(),
+                bond_graphics_state=CanvasBondGraphicsState(),
+                scene_items_state=CanvasSceneItemsState(),
+            )
             self.selection_controller = SimpleNamespace(
                 select_note=mock.Mock(),
                 update_selection_outline=mock.Mock(),

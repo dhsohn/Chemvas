@@ -4,6 +4,7 @@ from types import SimpleNamespace
 from unittest import mock
 
 from tests.runtime_services import canvas_runtime_services
+from tests.runtime_state import canvas_runtime_state
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -101,7 +102,11 @@ class CanvasViewSelectionHighlightTest(unittest.TestCase):
         cls.app.setQuitOnLastWindowClosed(False)
 
     def test_apply_selection_style_handles_items_and_groups(self) -> None:
-        view = SimpleNamespace(selection_style_state=_selection_style_state())
+        view = SimpleNamespace(
+            runtime_state=canvas_runtime_state(
+                selection_style_state=_selection_style_state()
+            )
+        )
         services = _attach_handle_services(view)
         styler = services.selection_highlight_styler
         item = _path_item()
@@ -128,7 +133,11 @@ class CanvasViewSelectionHighlightTest(unittest.TestCase):
         old_item = _path_item("#333333", 1.0)
         new_item = _path_item("#444444", 1.2)
         view = SimpleNamespace(
-            selection_style_state=_selection_style_state("#ff0000", 0.5, [old_item]),
+            runtime_state=canvas_runtime_state(
+                selection_style_state=_selection_style_state(
+                    "#ff0000", 0.5, [old_item]
+                ),
+            ),
         )
         services = _attach_handle_services(view)
         styler = services.selection_highlight_styler
@@ -136,12 +145,14 @@ class CanvasViewSelectionHighlightTest(unittest.TestCase):
         styler.apply_selection_style(old_item, True)
         styler.set_selection_highlight([new_item])
 
-        self.assertEqual(view.selection_style_state.selected_items, [new_item])
+        self.assertEqual(
+            view.runtime_state.selection_style_state.selected_items, [new_item]
+        )
         self.assertEqual(old_item.pen().color().name(), "#333333")
         self.assertEqual(new_item.pen().color().name(), "#ff0000")
 
         styler.clear_selection_highlight()
-        self.assertEqual(view.selection_style_state.selected_items, [])
+        self.assertEqual(view.runtime_state.selection_style_state.selected_items, [])
         self.assertEqual(new_item.pen().color().name(), "#444444")
 
     def test_clear_handles_removes_scene_items_and_selection_highlight(self) -> None:
@@ -153,11 +164,13 @@ class CanvasViewSelectionHighlightTest(unittest.TestCase):
         selected_item = _path_item()
         view = SimpleNamespace(
             scene=lambda: scene,
-            handle_state=CanvasHandleState(
-                active_handles=[handle_a, handle_b], target=object()
-            ),
-            selection_style_state=_selection_style_state(
-                selected_items=[selected_item]
+            runtime_state=canvas_runtime_state(
+                handle_state=CanvasHandleState(
+                    active_handles=[handle_a, handle_b], target=object()
+                ),
+                selection_style_state=_selection_style_state(
+                    selected_items=[selected_item]
+                ),
             ),
         )
         services = _attach_handle_services(view)
@@ -165,11 +178,11 @@ class CanvasViewSelectionHighlightTest(unittest.TestCase):
 
         clear_handles_for(view)
 
-        self.assertEqual(view.handle_state.active_handles, [])
-        self.assertIsNone(view.handle_state.target)
+        self.assertEqual(view.runtime_state.handle_state.active_handles, [])
+        self.assertIsNone(view.runtime_state.handle_state.target)
         self.assertIsNone(handle_a.scene())
         self.assertIsNone(handle_b.scene())
-        self.assertEqual(view.selection_style_state.selected_items, [])
+        self.assertEqual(view.runtime_state.selection_style_state.selected_items, [])
         self.assertEqual(selected_item.pen().color().name(), "#111111")
 
     def test_show_orbital_handles_creates_scale_and_rotate_handles(self) -> None:
@@ -179,23 +192,26 @@ class CanvasViewSelectionHighlightTest(unittest.TestCase):
         view = SimpleNamespace(
             scene=lambda: scene,
             renderer=SimpleNamespace(style=SimpleNamespace(bond_length_px=20.0)),
-            handle_state=CanvasHandleState(),
-            selection_style_state=_selection_style_state(),
+            runtime_state=canvas_runtime_state(
+                handle_state=CanvasHandleState(),
+                selection_style_state=_selection_style_state(),
+            ),
         )
         _attach_handle_services(view)
         view.clear_handles = lambda: clear_handles_for(view)
 
         show_orbital_handles_for(view, item)
 
-        self.assertEqual(len(view.handle_state.active_handles), 2)
+        handle_state = view.runtime_state.handle_state
+        self.assertEqual(len(handle_state.active_handles), 2)
         self.assertEqual(
-            {handle.data(1) for handle in view.handle_state.active_handles},
+            {handle.data(1) for handle in handle_state.active_handles},
             {"orbital_scale", "orbital_rotate"},
         )
         self.assertTrue(
-            all(handle.data(2) is item for handle in view.handle_state.active_handles)
+            all(handle.data(2) is item for handle in handle_state.active_handles)
         )
-        self.assertIs(view.handle_state.target, item)
+        self.assertIs(handle_state.target, item)
         self.assertEqual(item.pen().color().name(), "#1f5eff")
 
     def test_show_orbital_then_curved_handles_replaces_previous_handles_and_highlight(
@@ -209,30 +225,33 @@ class CanvasViewSelectionHighlightTest(unittest.TestCase):
         view = SimpleNamespace(
             scene=lambda: scene,
             renderer=SimpleNamespace(style=SimpleNamespace(bond_length_px=20.0)),
-            handle_state=CanvasHandleState(),
-            selection_style_state=_selection_style_state(),
+            runtime_state=canvas_runtime_state(
+                handle_state=CanvasHandleState(),
+                selection_style_state=_selection_style_state(),
+                tool_settings_state=CanvasToolSettingsState(curved_snap_step=2),
+            ),
             services=canvas_runtime_services(
                 scene_decoration_build_service=SimpleNamespace(
                     add_arrow_head=mock.Mock()
                 )
             ),
             refresh_selection_outline=mock.Mock(),
-            tool_settings_state=CanvasToolSettingsState(curved_snap_step=2),
         )
         _attach_handle_services(view)
         view.clear_handles = lambda: clear_handles_for(view)
 
         show_orbital_handles_for(view, orbital)
-        first_handles = list(view.handle_state.active_handles)
+        handle_state = view.runtime_state.handle_state
+        first_handles = list(handle_state.active_handles)
 
         show_curved_handles_for(view, curved)
 
         self.assertTrue(all(handle.scene() is None for handle in first_handles))
         self.assertEqual(
-            [handle.data(1) for handle in view.handle_state.active_handles],
+            [handle.data(1) for handle in handle_state.active_handles],
             ["curved_start", "curved_control", "curved_end"],
         )
-        self.assertIs(view.handle_state.target, curved)
+        self.assertIs(handle_state.target, curved)
         self.assertEqual(orbital.pen().color().name(), "#111111")
         self.assertEqual(curved.pen().color().name(), "#1f5eff")
 
@@ -324,8 +343,10 @@ class CanvasViewSelectionHighlightTest(unittest.TestCase):
 
         orbital_view = SimpleNamespace(
             renderer=SimpleNamespace(style=SimpleNamespace(bond_length_px=20.0)),
-            tool_settings_state=CanvasToolSettingsState(
-                orbital_snap_enabled=True, orbital_snap_step=15
+            runtime_state=canvas_runtime_state(
+                tool_settings_state=CanvasToolSettingsState(
+                    orbital_snap_enabled=True, orbital_snap_step=15
+                )
             ),
         )
         _attach_handle_services(orbital_view)
@@ -343,6 +364,9 @@ class CanvasViewSelectionHighlightTest(unittest.TestCase):
             },
         )
         curved_view = SimpleNamespace(
+            runtime_state=canvas_runtime_state(
+                tool_settings_state=CanvasToolSettingsState()
+            ),
             services=canvas_runtime_services(
                 scene_decoration_build_service=SimpleNamespace(
                     add_arrow_head=mock.Mock()

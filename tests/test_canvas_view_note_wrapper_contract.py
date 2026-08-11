@@ -4,6 +4,7 @@ from types import SimpleNamespace
 from unittest import mock
 
 from tests.runtime_services import canvas_runtime_services
+from tests.runtime_state import canvas_runtime_state
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -22,6 +23,10 @@ except ModuleNotFoundError:
 
 if QApplication is not None:
     from chemvas.ui.canvas_note_controller import CanvasNoteController
+    from chemvas.ui.canvas_scene_items_state import (
+        CanvasSceneItemsState,
+        scene_item_collection_for,
+    )
     from chemvas.ui.canvas_service_access import canvas_services_for
     from chemvas.ui.canvas_text_style_state import (
         CanvasTextStyleState,
@@ -56,32 +61,35 @@ class _FakeNoteController:
 
 def _make_canvas_note_view(scene: QGraphicsScene) -> SimpleNamespace:
     view = SimpleNamespace(
-        selected_notes=[],
-        text_style_state=CanvasTextStyleState(
-            note_padding=6.0,
-            note_box_enabled=True,
-            note_border_enabled=True,
-            note_box_color=QColor("#ffffff"),
-            note_box_alpha=0.4,
-            note_border_color=QColor("#111111"),
-            note_border_width=1.2,
-            text_font_family="Arial",
-            text_font_size=13,
-            text_font_weight=QFont.Weight.DemiBold,
-            text_italic=True,
-            text_color=QColor("#334455"),
-            text_alignment=Qt.AlignmentFlag.AlignRight,
-            text_line_spacing=1.25,
-        ),
         scene=lambda: scene,
         setFocus=mock.Mock(),
+        runtime_state=canvas_runtime_state(
+            scene_items_state=CanvasSceneItemsState(),
+            text_style_state=CanvasTextStyleState(
+                note_padding=6.0,
+                note_box_enabled=True,
+                note_border_enabled=True,
+                note_box_color=QColor("#ffffff"),
+                note_box_alpha=0.4,
+                note_border_color=QColor("#111111"),
+                note_border_width=1.2,
+                text_font_family="Arial",
+                text_font_size=13,
+                text_font_weight=QFont.Weight.DemiBold,
+                text_italic=True,
+                text_color=QColor("#334455"),
+                text_alignment=Qt.AlignmentFlag.AlignRight,
+                text_line_spacing=1.25,
+            ),
+        ),
     )
 
     def select_note(target, additive: bool = False) -> None:
+        selected_notes = scene_item_collection_for(view, "selected_notes")
         if not additive:
-            view.selected_notes.clear()
-        if target not in view.selected_notes:
-            view.selected_notes.append(target)
+            selected_notes.clear()
+        if target not in selected_notes:
+            selected_notes.append(target)
 
     view.select_note = select_note
     view.services = canvas_runtime_services(
@@ -156,7 +164,7 @@ class CanvasViewNoteWrapperContractTest(unittest.TestCase):
 
         controller.begin_note_edit(item)
 
-        self.assertIn(item, view.selected_notes)
+        self.assertIn(item, scene_item_collection_for(view, "selected_notes"))
         self.assertEqual(
             item.textInteractionFlags(), Qt.TextInteractionFlag.TextEditorInteraction
         )

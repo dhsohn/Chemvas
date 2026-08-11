@@ -4,6 +4,7 @@ from types import SimpleNamespace
 from unittest import mock
 
 from tests.runtime_services import canvas_runtime_services
+from tests.runtime_state import canvas_runtime_state
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -15,15 +16,27 @@ except ModuleNotFoundError:
 
 if QApplication is not None:
     from chemvas.domain.document import Atom, Bond
-    from chemvas.ui.atom_coords_access import atom_coords_3d_for, set_atom_coords_3d_for
+    from chemvas.ui.atom_coords_access import (
+        CanvasAtomCoords3DState,
+        atom_coords_3d_for,
+        set_atom_coords_3d_for,
+    )
     from chemvas.ui.canvas_atom_graphics_state import (
+        CanvasAtomGraphicsState,
         set_atom_dots_for,
         set_atom_items_for,
     )
-    from chemvas.ui.canvas_bond_graphics_state import set_bond_items_for
+    from chemvas.ui.canvas_bond_graphics_state import (
+        CanvasBondGraphicsState,
+        set_bond_items_for,
+    )
     from chemvas.ui.canvas_mark_registry import CanvasMarkRegistry
     from chemvas.ui.canvas_move_controller import CanvasMoveController
-    from chemvas.ui.canvas_scene_items_state import set_scene_item_collection_for
+    from chemvas.ui.canvas_scene_items_state import (
+        CanvasSceneItemsState,
+        set_scene_item_collection_for,
+    )
+    from chemvas.ui.handle_state import CanvasHandleState
     from chemvas.ui.move_access import move_atoms_for, move_item_for
 
 
@@ -106,6 +119,12 @@ class CanvasViewMoveHelpersTest(unittest.TestCase):
             ),
             bond_renderer=SimpleNamespace(redraw_bond=mock.Mock()),
             refresh_selection_outline=mock.Mock(),
+            runtime_state=canvas_runtime_state(
+                atom_coords_3d_state=CanvasAtomCoords3DState(),
+                atom_graphics_state=CanvasAtomGraphicsState(),
+                handle_state=CanvasHandleState(),
+                mark_registry=CanvasMarkRegistry(),
+            ),
         )
         self._bind_move_controller(view)
         # The atom branch delegates to move_atom, which repositions the atom's
@@ -150,6 +169,10 @@ class CanvasViewMoveHelpersTest(unittest.TestCase):
                 )
             ),
             refresh_selection_outline=mock.Mock(),
+            runtime_state=canvas_runtime_state(
+                handle_state=CanvasHandleState(),
+                mark_registry=CanvasMarkRegistry(),
+            ),
         )
         controller = self._bind_move_controller(view)
         controller.move_atom = mock.Mock()
@@ -185,7 +208,13 @@ class CanvasViewMoveHelpersTest(unittest.TestCase):
         shape = _FakeItem("shape", data1={"rect": QRectF(0.0, 0.0, 10.0, 10.0)})
         handle_a = _FakeItem("handle")
         handle_b = _FakeItem("handle")
-        view = SimpleNamespace(refresh_selection_outline=mock.Mock())
+        view = SimpleNamespace(
+            refresh_selection_outline=mock.Mock(),
+            runtime_state=canvas_runtime_state(
+                handle_state=CanvasHandleState(),
+                mark_registry=CanvasMarkRegistry(),
+            ),
+        )
         self._bind_move_controller(view)
         set_handle_target_for(view, shape)
         set_active_handles_for(view, [handle_a, handle_b])
@@ -229,6 +258,10 @@ class CanvasViewMoveHelpersTest(unittest.TestCase):
                 )
             ),
             refresh_selection_outline=mock.Mock(),
+            runtime_state=canvas_runtime_state(
+                handle_state=CanvasHandleState(),
+                mark_registry=CanvasMarkRegistry(),
+            ),
         )
         controller = self._bind_move_controller(view)
         controller.move_atom = mock.Mock()
@@ -260,6 +293,10 @@ class CanvasViewMoveHelpersTest(unittest.TestCase):
         view = SimpleNamespace(
             bond_renderer=SimpleNamespace(update_bond_geometry=mock.Mock()),
             refresh_selection_outline=mock.Mock(),
+            runtime_state=canvas_runtime_state(
+                bond_graphics_state=CanvasBondGraphicsState(),
+                mark_registry=CanvasMarkRegistry(),
+            ),
         )
         set_bond_items_for(view, {3: [bond_graphic], 4: []})
         controller = self._bind_move_controller(view)
@@ -315,6 +352,10 @@ class CanvasViewMoveHelpersTest(unittest.TestCase):
                     6: Atom("O", 9.0, 10.0),
                 }
             ),
+            runtime_state=canvas_runtime_state(
+                mark_registry=CanvasMarkRegistry(),
+                scene_items_state=CanvasSceneItemsState(),
+            ),
         )
         set_scene_item_collection_for(
             view,
@@ -342,6 +383,7 @@ class CanvasViewMoveHelpersTest(unittest.TestCase):
                 }
             ),
             refresh_selection_outline=mock.Mock(),
+            runtime_state=canvas_runtime_state(mark_registry=CanvasMarkRegistry()),
         )
         controller = self._bind_move_controller(view)
         controller.move_atom = mock.Mock()
@@ -371,8 +413,12 @@ class CanvasViewMoveHelpersTest(unittest.TestCase):
         hit_testing_service = SimpleNamespace(mark_spatial_index_dirty=mock.Mock())
         view = SimpleNamespace(
             model=SimpleNamespace(atoms={1: Atom("C", 1.0, 2.0)}),
-            mark_registry=CanvasMarkRegistry({1: [mark]}),
             services=canvas_runtime_services(hit_testing_service=hit_testing_service),
+            runtime_state=canvas_runtime_state(
+                atom_coords_3d_state=CanvasAtomCoords3DState(),
+                atom_graphics_state=CanvasAtomGraphicsState(),
+                mark_registry=CanvasMarkRegistry({1: [mark]}),
+            ),
         )
         set_atom_items_for(view, {1: label})
         set_atom_dots_for(view, {1: dot})

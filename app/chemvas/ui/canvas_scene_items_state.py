@@ -1,11 +1,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, cast
 
 from PyQt6 import sip
-
-from chemvas.ui.canvas_state_lookup import ensure_canvas_state
 
 
 @dataclass(slots=True)
@@ -33,7 +31,7 @@ SCENE_ITEM_COLLECTION_ATTRS = (
 
 
 def scene_items_state_for(canvas: Any) -> CanvasSceneItemsState:
-    return ensure_canvas_state(canvas, "scene_items_state", CanvasSceneItemsState)
+    return cast(CanvasSceneItemsState, canvas.runtime_state.scene_items_state)
 
 
 def scene_item_collection_for(canvas: Any, name: str) -> list[Any]:

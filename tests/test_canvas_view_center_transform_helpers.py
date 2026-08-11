@@ -4,6 +4,7 @@ from types import SimpleNamespace
 from unittest import mock
 
 from tests.runtime_services import canvas_runtime_services
+from tests.runtime_state import canvas_runtime_state
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -27,13 +28,18 @@ if QApplication is not None:
         center_for_atoms,
     )
     from chemvas.ui.canvas_atom_graphics_state import (
+        CanvasAtomGraphicsState,
         set_atom_dots_for,
         set_atom_items_for,
     )
     from chemvas.ui.canvas_callback_state import CanvasCallbackState
     from chemvas.ui.canvas_insert_state import CanvasInsertState
+    from chemvas.ui.canvas_scene_items_state import CanvasSceneItemsState
     from chemvas.ui.canvas_tool_mode_controller import CanvasToolModeController
-    from chemvas.ui.canvas_tool_settings_state import CanvasToolSettingsState
+    from chemvas.ui.canvas_tool_settings_state import (
+        CanvasToolSettingsState,
+        tool_settings_state_for,
+    )
     from chemvas.ui.history_canvas_access import set_ring_polygons_for_history
     from chemvas.ui.input_view_access import update_view_transform_for
     from chemvas.ui.input_view_state import InputViewState
@@ -152,6 +158,9 @@ class CanvasViewCenterTransformHelpersTest(unittest.TestCase):
                 },
                 bounds=mock.Mock(return_value=(-5.0, -6.0, 7.0, 8.0)),
             ),
+            runtime_state=canvas_runtime_state(
+                atom_graphics_state=CanvasAtomGraphicsState()
+            ),
         )
         set_atom_items_for(view, {1: label})
         set_atom_dots_for(view, {1: dot})
@@ -175,17 +184,17 @@ class CanvasViewCenterTransformHelpersTest(unittest.TestCase):
     ) -> None:
         ring = QGraphicsPolygonItem()
         view = SimpleNamespace(
-            insert_state=CanvasInsertState(template_active=True),
             refresh_selection_outline=mock.Mock(),
-            runtime_state=SimpleNamespace(
-                callback_state=CanvasCallbackState(tool_change=mock.Mock())
-            ),
-            tool_settings_state=CanvasToolSettingsState(
-                active_bond_style="single",
-                active_bond_order=1,
-                active_arrow_type="reaction",
-                active_orbital_type="p",
-                curved_snap_step=0.25,
+            runtime_state=canvas_runtime_state(
+                callback_state=CanvasCallbackState(tool_change=mock.Mock()),
+                insert_state=CanvasInsertState(template_active=True),
+                tool_settings_state=CanvasToolSettingsState(
+                    active_bond_style="single",
+                    active_bond_order=1,
+                    active_arrow_type="reaction",
+                    active_orbital_type="p",
+                    curved_snap_step=0.25,
+                ),
             ),
         )
         view.services = canvas_runtime_services(
@@ -219,7 +228,7 @@ class CanvasViewCenterTransformHelpersTest(unittest.TestCase):
         tool_mode_controller.set_curved_snap(1)
         tool_mode_controller.set_curved_snap_step(0.01)
 
-        settings = view.tool_settings_state
+        settings = tool_settings_state_for(view)
         self.assertEqual(
             (settings.active_bond_style, settings.active_bond_order), ("double", 2)
         )
@@ -274,6 +283,9 @@ class CanvasViewCenterTransformHelpersTest(unittest.TestCase):
                 bonds=[],
             ),
             renderer=SimpleNamespace(style=SimpleNamespace(bond_length_px=14.0)),
+            runtime_state=canvas_runtime_state(
+                scene_items_state=CanvasSceneItemsState()
+            ),
         )
 
         self.assertEqual(

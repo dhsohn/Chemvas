@@ -4,6 +4,7 @@ from types import SimpleNamespace
 from unittest import mock
 
 from tests.runtime_services import canvas_runtime_services
+from tests.runtime_state import canvas_runtime_state
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -27,12 +28,17 @@ if QApplication is not None:
     from chemvas.domain.document import Atom, Bond
     from chemvas.ui.bond_graphics_access import add_bond_graphics_for
     from chemvas.ui.canvas_atom_graphics_state import (
+        CanvasAtomGraphicsState,
         atom_dots_for,
         atom_items_for,
         set_atom_dots_for,
         set_atom_items_for,
     )
-    from chemvas.ui.canvas_bond_graphics_state import bond_items_for, set_bond_items_for
+    from chemvas.ui.canvas_bond_graphics_state import (
+        CanvasBondGraphicsState,
+        bond_items_for,
+        set_bond_items_for,
+    )
     from chemvas.ui.canvas_color_mutation_service import (
         CanvasColorMutationService,
         UpdateBondColorCommand,
@@ -57,6 +63,14 @@ if QApplication is not None:
 
 def _history_service(push=None):
     return SimpleNamespace(push=push if push is not None else mock.Mock())
+
+
+def _runtime_state(**states):
+    return canvas_runtime_state(
+        atom_graphics_state=CanvasAtomGraphicsState(),
+        bond_graphics_state=CanvasBondGraphicsState(),
+        **states,
+    )
 
 
 def _set_atom_graphics(canvas, items=None, dots=None) -> None:
@@ -227,7 +241,9 @@ class CanvasColorMutationServiceTest(unittest.TestCase):
         bond_canvas = SimpleNamespace(
             scene=lambda: scene,
             model=SimpleNamespace(bonds=[Bond(1, 2, 1, color="#000000")]),
-            smiles_input_state=CanvasSmilesInputState(last_smiles_input="smiles"),
+            runtime_state=_runtime_state(
+                smiles_input_state=CanvasSmilesInputState(last_smiles_input="smiles")
+            ),
             _bond_state_dict=lambda bond: {
                 "a": bond.a,
                 "b": bond.b,
@@ -256,6 +272,7 @@ class CanvasColorMutationServiceTest(unittest.TestCase):
         atom_canvas = SimpleNamespace(
             scene=lambda: scene,
             model=SimpleNamespace(atoms={7: Atom("O", 0.0, 0.0, color="#101010")}),
+            runtime_state=_runtime_state(),
             services=canvas_runtime_services(
                 history_service=_history_service(atom_pushes.append),
                 atom_label_service=SimpleNamespace(
@@ -283,6 +300,7 @@ class CanvasColorMutationServiceTest(unittest.TestCase):
             model=SimpleNamespace(
                 atoms={1: Atom("C", 0.0, 0.0), 2: Atom("O", 1.0, 0.0)}
             ),
+            runtime_state=_runtime_state(),
             services=canvas_runtime_services(
                 history_service=_history_service(),
             ),
@@ -351,7 +369,9 @@ class CanvasColorMutationServiceTest(unittest.TestCase):
                 atoms={1: Atom("C", 0.0, 0.0), 2: Atom("O", 1.0, 0.0)},
                 bonds=[Bond(1, 2, 1, color="#000000")],
             ),
-            smiles_input_state=CanvasSmilesInputState(last_smiles_input=None),
+            runtime_state=_runtime_state(
+                smiles_input_state=CanvasSmilesInputState(last_smiles_input=None)
+            ),
             services=canvas_runtime_services(
                 history_service=_history_service(pushes.append),
                 atom_label_service=SimpleNamespace(
@@ -384,6 +404,7 @@ class CanvasColorMutationServiceTest(unittest.TestCase):
         canvas = SimpleNamespace(
             scene=lambda: scene,
             model=SimpleNamespace(atoms={}, bonds=[]),
+            runtime_state=_runtime_state(),
             services=canvas_runtime_services(
                 history_service=_history_service(pushes.append)
             ),
@@ -412,6 +433,7 @@ class CanvasColorMutationServiceTest(unittest.TestCase):
         canvas = SimpleNamespace(
             scene=lambda: scene,
             model=SimpleNamespace(atoms={}, bonds=[]),
+            runtime_state=_runtime_state(),
             services=canvas_runtime_services(
                 history_service=_history_service(pushes.append)
             ),
@@ -600,6 +622,7 @@ class CanvasColorMutationServiceTest(unittest.TestCase):
         canvas = SimpleNamespace(
             scene=lambda: scene,
             model=SimpleNamespace(atoms={}, bonds=[]),
+            runtime_state=_runtime_state(),
             services=canvas_runtime_services(
                 history_service=_history_service(pushes.append)
             ),
@@ -737,6 +760,7 @@ class CanvasColorMutationServiceTest(unittest.TestCase):
             scene=lambda: scene,
             model=SimpleNamespace(atoms={}, bonds=[]),
             push_command=push_command,
+            runtime_state=_runtime_state(),
             services=canvas_runtime_services(
                 history_service=_history_service(push_command)
             ),
@@ -765,6 +789,7 @@ class CanvasColorMutationServiceTest(unittest.TestCase):
             scene=lambda: scene,
             model=SimpleNamespace(atoms={}, bonds=[]),
             push_command=push_command,
+            runtime_state=_runtime_state(),
             services=canvas_runtime_services(
                 history_service=_history_service(push_command)
             ),
@@ -963,6 +988,7 @@ class CanvasColorMutationServiceTest(unittest.TestCase):
             scene=lambda: scene,
             model=SimpleNamespace(atoms={}, bonds=[]),
             push_command=push_command,
+            runtime_state=_runtime_state(),
             services=canvas_runtime_services(
                 history_service=_history_service(push_command)
             ),
@@ -1034,7 +1060,9 @@ class CanvasColorMutationServiceTest(unittest.TestCase):
         canvas = SimpleNamespace(
             scene=lambda: scene,
             model=SimpleNamespace(bonds=[bond, None]),
-            smiles_input_state=CanvasSmilesInputState(last_smiles_input="same"),
+            runtime_state=_runtime_state(
+                smiles_input_state=CanvasSmilesInputState(last_smiles_input="same")
+            ),
             _bond_state_dict=lambda current: {"color": current.color},
             services=canvas_runtime_services(
                 history_service=_history_service(pushes.append)
@@ -1066,6 +1094,7 @@ class CanvasColorMutationServiceTest(unittest.TestCase):
         canvas = SimpleNamespace(
             scene=lambda: scene,
             model=SimpleNamespace(atoms={3: Atom("N", 0.0, 0.0, color="#010101")}),
+            runtime_state=_runtime_state(),
             services=canvas_runtime_services(
                 history_service=_history_service(pushes.append),
                 atom_label_service=SimpleNamespace(
@@ -1121,6 +1150,7 @@ class CanvasColorMutationServiceTest(unittest.TestCase):
             model=SimpleNamespace(
                 atoms={1: Atom("C", 0.0, 0.0), 2: Atom("O", 1.0, 0.0)}
             ),
+            runtime_state=_runtime_state(),
             services=canvas_runtime_services(
                 history_service=_history_service(),
             ),

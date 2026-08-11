@@ -4,6 +4,7 @@ from types import SimpleNamespace
 from unittest import mock
 
 from tests.runtime_services import canvas_runtime_services
+from tests.runtime_state import canvas_runtime_state
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -28,7 +29,10 @@ if QApplication is not None:
     from chemvas.ui.benzene_tool import BenzeneTool
     from chemvas.ui.canvas_hover_state import hover_state_for
     from chemvas.ui.canvas_rotation_state import CanvasRotationState
-    from chemvas.ui.canvas_smiles_input_state import set_last_smiles_input_for
+    from chemvas.ui.canvas_smiles_input_state import (
+        CanvasSmilesInputState,
+        set_last_smiles_input_for,
+    )
     from chemvas.ui.canvas_tool_settings_state import CanvasToolSettingsState
     from chemvas.ui.edit_tools import ColorTool, DeleteTool, EditBondTool, FlipTool
     from chemvas.ui.history_commands import DeleteSceneItemsCommand, MoveItemsCommand
@@ -180,11 +184,15 @@ class _TextCanvas:
     def __init__(self) -> None:
         self.drag_mode = None
         self.renderer = SimpleNamespace(style=SimpleNamespace(bond_length_px=20.0))
-        self.runtime_state = SimpleNamespace(hover_preview_state=HoverState())
         self.item = None
         self.bond_near = None
         self.find_atom_result = None
         self.tool_settings_state = CanvasToolSettingsState(atom_symbol="")
+        self.runtime_state = canvas_runtime_state(
+            hover_preview_state=HoverState(),
+            smiles_input_state=CanvasSmilesInputState(),
+            tool_settings_state=self.tool_settings_state,
+        )
         self.model = MoleculeModel(
             atoms={
                 1: Atom("C", 0.0, 0.0),
@@ -317,6 +325,9 @@ class _DeleteCanvas:
         self.drag_mode = None
         self.scene_obj = object()
         self.item = None
+        self.runtime_state = canvas_runtime_state(
+            smiles_input_state=CanvasSmilesInputState()
+        )
         set_last_smiles_input_for(self, "before")
         self.deleted_atoms = []
         self.deleted_bonds = []
@@ -576,7 +587,9 @@ class _PerspectiveCanvas:
         self.toggle_result = False
         self.select_result = True
         self.begin_rotation_result = True
-        self.rotation_state = CanvasRotationState(mode="rigid")
+        self.runtime_state = canvas_runtime_state(
+            rotation_state=CanvasRotationState(mode="rigid")
+        )
         self.clear_handles_calls = 0
         self.selection_targets = []
         self.begin_calls = []
@@ -676,7 +689,9 @@ class _ToolControllerPreviewCanvas:
     def __init__(self) -> None:
         self.drag_mode = None
         self.scene_obj = _PreviewScene()
-        self.active_arrow_type = "reaction"
+        self.runtime_state = canvas_runtime_state(
+            tool_settings_state=CanvasToolSettingsState(active_arrow_type="reaction")
+        )
         self.clear_handles_calls = 0
         self.preview_arrow_calls = []
         self.add_arrow_calls = []

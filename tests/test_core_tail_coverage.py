@@ -3,6 +3,7 @@ import unittest
 from types import SimpleNamespace
 
 from tests.runtime_services import canvas_runtime_services
+from tests.runtime_state import canvas_runtime_state
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -17,10 +18,12 @@ from chemvas.domain.document import Atom, Bond, MoleculeModel
 from chemvas.features.hover import HoverState
 
 if QApplication is not None:
+    from chemvas.ui.canvas_scene_items_state import CanvasSceneItemsState
     from chemvas.ui.canvas_tool_settings_state import CanvasToolSettingsState
     from chemvas.ui.handle_state import CanvasHandleState
     from chemvas.ui.move_tool import MoveTool
     from chemvas.ui.select_tool import SelectTool
+    from chemvas.ui.selection_style_state import SelectionStyleState
     from chemvas.ui.text_tool import TextTool
     from chemvas.ui.tool_context import ToolContext
 
@@ -349,7 +352,11 @@ class _SelectCanvas:
         self.atom_items = {}
         self.bond_items = {}
         self.atom_dots = {}
-        self.handle_state = CanvasHandleState()
+        self.runtime_state = canvas_runtime_state(
+            handle_state=CanvasHandleState(),
+            scene_items_state=CanvasSceneItemsState(),
+            selection_style_state=SelectionStyleState(),
+        )
         self.clear_handles_calls = 0
         self.curved_handles = []
         self.pushed_commands = []
@@ -383,8 +390,8 @@ class _SelectCanvas:
 
     def clear_handles(self) -> None:
         self.clear_handles_calls += 1
-        self.handle_state.active_handles = []
-        self.handle_state.target = None
+        self.runtime_state.handle_state.active_handles = []
+        self.runtime_state.handle_state.target = None
 
     def show_curved_handles(self, item) -> None:
         self.curved_handles.append(item)
@@ -529,7 +536,7 @@ class ToolsTailCoverageTest(unittest.TestCase):
             curved,
         )
 
-        canvas.handle_state.target = object()
+        canvas.runtime_state.handle_state.target = object()
         canvas.scene_obj.selected_items = [curved]
         self.assertTrue(
             tool._begin_curved_handle_toggle_or_drag(curved, QPointF(1.0, 1.0))
@@ -537,8 +544,8 @@ class ToolsTailCoverageTest(unittest.TestCase):
         self.assertEqual(canvas.clear_handles_calls, 1)
 
         tool._pending_curved_handle_item = None
-        canvas.handle_state.target = curved
-        canvas.handle_state.active_handles = [object()]
+        canvas.runtime_state.handle_state.target = curved
+        canvas.runtime_state.handle_state.active_handles = [object()]
         self.assertTrue(
             tool._begin_curved_handle_toggle_or_drag(curved, QPointF(1.0, 1.0))
         )

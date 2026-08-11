@@ -4,6 +4,7 @@ from types import SimpleNamespace
 from unittest import mock
 
 from tests.runtime_services import canvas_runtime_services
+from tests.runtime_state import canvas_runtime_state
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -15,12 +16,16 @@ from chemvas.core.history import (
     UpdateBondCommand,
 )
 from chemvas.domain.document import Atom, Bond
-from chemvas.ui.atom_coords_access import set_atom_coords_3d_for
+from chemvas.ui.atom_coords_access import (
+    CanvasAtomCoords3DState,
+    set_atom_coords_3d_for,
+)
+from chemvas.ui.canvas_atom_graphics_state import CanvasAtomGraphicsState
 from chemvas.ui.canvas_history_recording_service import (
     CanvasHistoryRecordingService,
 )
 from chemvas.ui.canvas_history_service import CanvasHistoryService
-from chemvas.ui.canvas_history_state import CanvasHistoryState
+from chemvas.ui.canvas_history_state import CanvasHistoryState, history_state_for
 from chemvas.ui.canvas_smiles_input_state import CanvasSmilesInputState
 from chemvas.ui.history_commands import AddSceneItemsCommand
 
@@ -119,8 +124,14 @@ def _make_canvas(
             bonds=list(bonds or []),
             next_atom_id=next_atom_id,
         ),
-        smiles_input_state=CanvasSmilesInputState(last_smiles_input=last_smiles_input),
-        history_state=CanvasHistoryState(enabled=history_enabled),
+        runtime_state=canvas_runtime_state(
+            atom_coords_3d_state=CanvasAtomCoords3DState(),
+            atom_graphics_state=CanvasAtomGraphicsState(),
+            smiles_input_state=CanvasSmilesInputState(
+                last_smiles_input=last_smiles_input
+            ),
+            history_state=CanvasHistoryState(enabled=history_enabled),
+        ),
     )
 
 
@@ -170,9 +181,12 @@ class CanvasHistoryRecordingServiceTest(unittest.TestCase):
                     bonds=[],
                     next_atom_id=0,
                 )
-                self.history_state = state
-                self.smiles_input_state = CanvasSmilesInputState(
-                    last_smiles_input="after-smiles"
+                self.runtime_state = canvas_runtime_state(
+                    atom_coords_3d_state=CanvasAtomCoords3DState(),
+                    smiles_input_state=CanvasSmilesInputState(
+                        last_smiles_input="after-smiles"
+                    ),
+                    history_state=state,
                 )
                 self._services = services
                 self.services_reads = 0
@@ -197,7 +211,7 @@ class CanvasHistoryRecordingServiceTest(unittest.TestCase):
     def test_record_bond_update_does_not_cross_live_enabled_getter(self) -> None:
         bond = Bond(1, 2, order=2)
         canvas = _make_canvas(bonds=[bond], history_enabled=True)
-        state = canvas.history_state
+        state = history_state_for(canvas)
 
         class History:
             def __init__(self) -> None:
@@ -450,7 +464,7 @@ class CanvasHistoryRecordingServiceTest(unittest.TestCase):
         )
         disabled_canvas.services.history_service = CanvasHistoryService(
             disabled_canvas,
-            disabled_canvas.history_state,
+            history_state_for(disabled_canvas),
         )
         _recording_service(disabled_canvas).record_bond_update(
             bond_id=1,

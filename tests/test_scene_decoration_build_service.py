@@ -3,6 +3,8 @@ import unittest
 from types import SimpleNamespace
 from unittest import mock
 
+from tests.runtime_state import canvas_runtime_state
+
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 try:
@@ -57,10 +59,12 @@ class CanvasSceneDecorationBuildServiceTest(unittest.TestCase):
         )
         canvas = SimpleNamespace(
             renderer=renderer,
-            tool_settings_state=CanvasToolSettingsState(
-                arrow_line_width=2.5,
-                arrow_head_scale=0.3,
-                orbital_phase_enabled=orbital_phase_enabled,
+            runtime_state=canvas_runtime_state(
+                tool_settings_state=CanvasToolSettingsState(
+                    arrow_line_width=2.5,
+                    arrow_head_scale=0.3,
+                    orbital_phase_enabled=orbital_phase_enabled,
+                ),
             ),
             scene=lambda: scene,
         )

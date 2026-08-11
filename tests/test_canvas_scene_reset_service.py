@@ -12,15 +12,29 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 from chemvas.adapters.qt.renderer import Renderer
 from chemvas.domain.document import MoleculeModel
 from chemvas.features.hover import HoverState
-from chemvas.ui.atom_coords_access import atom_coords_3d_for, set_atom_coords_3d_for
-from chemvas.ui.canvas_atom_graphics_state import atom_dots_for, atom_items_for
-from chemvas.ui.canvas_bond_graphics_state import bond_items_for
+from chemvas.ui.atom_coords_access import (
+    CanvasAtomCoords3DState,
+    atom_coords_3d_for,
+    set_atom_coords_3d_for,
+)
+from chemvas.ui.canvas_atom_graphics_state import (
+    CanvasAtomGraphicsState,
+    atom_dots_for,
+    atom_items_for,
+)
+from chemvas.ui.canvas_bond_graphics_state import (
+    CanvasBondGraphicsState,
+    bond_items_for,
+)
+from chemvas.ui.canvas_calculation_plan_state import CanvasCalculationPlanState
 from chemvas.ui.canvas_graph_state import CanvasGraphState, graph_state_for
+from chemvas.ui.canvas_group_state import CanvasGroupState
 from chemvas.ui.canvas_hover_state import hover_state_for
-from chemvas.ui.canvas_insert_state import CanvasInsertState, insert_state_for
-from chemvas.ui.canvas_mark_registry import CanvasMarkRegistry, mark_registry_for
-from chemvas.ui.canvas_rotation_state import CanvasRotationState, rotation_state_for
+from chemvas.ui.canvas_insert_state import CanvasInsertState
+from chemvas.ui.canvas_mark_registry import CanvasMarkRegistry
+from chemvas.ui.canvas_rotation_state import CanvasRotationState
 from chemvas.ui.canvas_scene_items_state import (
+    CanvasSceneItemsState,
     arrow_items_for,
     mark_items_for,
     note_items_for,
@@ -31,6 +45,7 @@ from chemvas.ui.canvas_scene_items_state import (
 )
 from chemvas.ui.canvas_scene_reset_service import CanvasSceneResetService
 from chemvas.ui.handle_state import (
+    CanvasHandleState,
     active_handles_for,
     handle_target_for,
     set_active_handles_for,
@@ -40,11 +55,13 @@ from chemvas.ui.history_commands import AddSceneItemsCommand
 from chemvas.ui.insert_mode_logic import clear_insert_session
 from chemvas.ui.selection_info_state import SelectionInfoState, selection_info_state_for
 from chemvas.ui.selection_outline_state import (
+    SelectionOutlineState,
     selection_outlines_for,
     set_selection_outlines_for,
 )
 from chemvas.ui.selection_style_state import (
     SelectionStyleState,
+    selection_style_state_for,
 )
 from PyQt6 import sip
 from PyQt6.QtWidgets import (
@@ -53,6 +70,7 @@ from PyQt6.QtWidgets import (
 )
 
 from tests.canvas_factory import build_canvas_view
+from tests.runtime_state import canvas_runtime_state
 
 
 class _FakeScene:
@@ -64,13 +82,41 @@ class _FakeScene:
 
 
 def _attach_minimal_runtime_state(canvas) -> None:
+    """Publish the double's pre-seeded states through the canonical container.
+
+    The reset walks every state accessor, so the container has to carry each
+    field the reset touches; the states the test seeded stay the same objects
+    so its assertions still read what the reset mutated.
+    """
+
     canvas.renderer = Renderer()
-    canvas.runtime_state = SimpleNamespace(
-        graph_state=graph_state_for(canvas),
-        rotation_state=rotation_state_for(canvas),
-        insert_state=insert_state_for(canvas),
-        mark_registry=mark_registry_for(canvas),
+    canvas.runtime_state = canvas_runtime_state(
+        graph_state=canvas.graph_state,
+        rotation_state=canvas.rotation_state,
+        insert_state=canvas.insert_state,
+        mark_registry=canvas.mark_registry,
+        selection_style_state=canvas.selection_style_state,
+        selection_info_state=canvas.selection_info_state,
         hover_preview_state=HoverState(),
+        atom_coords_3d_state=CanvasAtomCoords3DState(),
+        atom_graphics_state=CanvasAtomGraphicsState(
+            atom_items=canvas.atom_items,
+            atom_dots=canvas.atom_dots,
+        ),
+        bond_graphics_state=CanvasBondGraphicsState(bond_items=canvas.bond_items),
+        scene_items_state=CanvasSceneItemsState(
+            ring_items=canvas.ring_items,
+            note_items=canvas.note_items,
+            mark_items=canvas.mark_items,
+            arrow_items=canvas.arrow_items,
+            ts_bracket_items=canvas.ts_bracket_items,
+            shape_items=canvas.shape_items,
+            orbital_items=canvas.orbital_items,
+        ),
+        selection_outline_state=SelectionOutlineState(),
+        handle_state=CanvasHandleState(),
+        group_state=CanvasGroupState(),
+        calculation_plan_state=CanvasCalculationPlanState(),
     )
 
 
@@ -303,9 +349,12 @@ class CanvasSceneResetServiceTest(unittest.TestCase):
         scene = MalformedScene()
         canvas = SimpleNamespace(
             scene=lambda: scene,
-            selection_style_state=SelectionStyleState(
-                selected_items=[object()],
-                suspend_outline=True,
+            runtime_state=canvas_runtime_state(
+                selection_style_state=SelectionStyleState(
+                    selected_items=[object()],
+                    suspend_outline=True,
+                ),
+                selection_info_state=SelectionInfoState.create(),
             ),
         )
         service = CanvasSceneResetService.__new__(CanvasSceneResetService)
@@ -315,8 +364,8 @@ class CanvasSceneResetServiceTest(unittest.TestCase):
             service.clear_scene()
 
         self.assertEqual(scene.clear_calls, 0)
-        self.assertEqual(len(canvas.selection_style_state.selected_items), 1)
-        self.assertTrue(canvas.selection_style_state.suspend_outline)
+        self.assertEqual(len(selection_style_state_for(canvas).selected_items), 1)
+        self.assertTrue(selection_style_state_for(canvas).suspend_outline)
 
     def test_empty_status_publication_reentry_publishes_once(self) -> None:
         app = QApplication.instance() or QApplication([])

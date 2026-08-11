@@ -1,9 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any
-
-from chemvas.ui.canvas_state_lookup import ensure_canvas_state
+from typing import Any, cast
 
 
 @dataclass(slots=True)
@@ -20,7 +18,7 @@ class CanvasGroupState:
 
 
 def group_state_for(canvas: Any) -> CanvasGroupState:
-    return ensure_canvas_state(canvas, "group_state", CanvasGroupState)
+    return cast(CanvasGroupState, canvas.runtime_state.group_state)
 
 
 def clear_groups_for(canvas: Any) -> None:

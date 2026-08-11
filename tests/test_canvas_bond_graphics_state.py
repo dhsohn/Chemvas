@@ -11,9 +11,11 @@ from chemvas.ui.canvas_bond_graphics_state import (
     set_bond_items_for_id,
 )
 
+from tests.runtime_state import canvas_runtime_state
+
 
 def test_bond_graphics_state_for_uses_runtime_state() -> None:
-    runtime_state = SimpleNamespace(
+    runtime_state = canvas_runtime_state(
         bond_graphics_state=CanvasBondGraphicsState(bond_items={1: ["bond"]})
     )
     canvas = SimpleNamespace(runtime_state=runtime_state)
@@ -24,7 +26,12 @@ def test_bond_graphics_state_for_uses_runtime_state() -> None:
 
 def test_bond_graphics_state_for_does_not_read_legacy_fake_canvas_attrs() -> None:
     items = {1: ["bond"]}
-    canvas = SimpleNamespace(bond_items=items)
+    canvas = SimpleNamespace(
+        bond_items=items,
+        runtime_state=canvas_runtime_state(
+            bond_graphics_state=CanvasBondGraphicsState()
+        ),
+    )
 
     state = bond_graphics_state_for(canvas)
 
@@ -35,7 +42,11 @@ def test_bond_graphics_state_for_does_not_read_legacy_fake_canvas_attrs() -> Non
 
 
 def test_bond_graphics_state_setters_update_state_without_canvas_attr_mirror() -> None:
-    canvas = SimpleNamespace()
+    canvas = SimpleNamespace(
+        runtime_state=canvas_runtime_state(
+            bond_graphics_state=CanvasBondGraphicsState()
+        )
+    )
 
     set_bond_items_for(canvas, {1: ["bond-a"]})
     set_bond_items_for_id(canvas, 2, ["bond-b"])
@@ -49,7 +60,12 @@ def test_bond_graphics_state_setters_update_state_without_canvas_attr_mirror() -
 
 
 def test_clear_bond_graphics_for_updates_state_without_canvas_attr_mirror() -> None:
-    canvas = SimpleNamespace(bond_items={1: ["bond"]})
+    canvas = SimpleNamespace(
+        bond_items={1: ["bond"]},
+        runtime_state=canvas_runtime_state(
+            bond_graphics_state=CanvasBondGraphicsState(bond_items={1: ["bond"]})
+        ),
+    )
 
     clear_bond_graphics_for(canvas)
 

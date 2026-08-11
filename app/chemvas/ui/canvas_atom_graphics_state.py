@@ -1,9 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any
-
-from chemvas.ui.canvas_state_lookup import ensure_canvas_state
+from typing import Any, cast
 
 
 @dataclass(slots=True)
@@ -12,11 +10,8 @@ class CanvasAtomGraphicsState:
     atom_dots: dict[int, Any] = field(default_factory=dict)
 
 
-ATOM_GRAPHICS_ATTRS = ("atom_items", "atom_dots")
-
-
 def atom_graphics_state_for(canvas: Any) -> CanvasAtomGraphicsState:
-    return ensure_canvas_state(canvas, "atom_graphics_state", CanvasAtomGraphicsState)
+    return cast(CanvasAtomGraphicsState, canvas.runtime_state.atom_graphics_state)
 
 
 def atom_items_for(canvas: Any) -> dict[int, Any]:
@@ -69,7 +64,6 @@ def clear_atom_graphics_for(canvas: Any) -> None:
 
 
 __all__ = [
-    "ATOM_GRAPHICS_ATTRS",
     "CanvasAtomGraphicsState",
     "atom_dots_for",
     "atom_graphics_state_for",

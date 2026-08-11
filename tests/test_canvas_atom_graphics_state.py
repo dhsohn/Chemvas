@@ -14,9 +14,11 @@ from chemvas.ui.canvas_atom_graphics_state import (
     visible_atom_item_for,
 )
 
+from tests.runtime_state import canvas_runtime_state
+
 
 def test_atom_graphics_state_for_uses_runtime_state() -> None:
-    runtime_state = SimpleNamespace(
+    runtime_state = canvas_runtime_state(
         atom_graphics_state=CanvasAtomGraphicsState(atom_items={1: "label"})
     )
     canvas = SimpleNamespace(runtime_state=runtime_state)
@@ -28,7 +30,13 @@ def test_atom_graphics_state_for_uses_runtime_state() -> None:
 def test_atom_graphics_state_for_does_not_read_legacy_fake_canvas_attrs() -> None:
     labels = {1: "label"}
     dots = {2: "dot"}
-    canvas = SimpleNamespace(atom_items=labels, atom_dots=dots)
+    canvas = SimpleNamespace(
+        atom_items=labels,
+        atom_dots=dots,
+        runtime_state=canvas_runtime_state(
+            atom_graphics_state=CanvasAtomGraphicsState()
+        ),
+    )
 
     state = atom_graphics_state_for(canvas)
 
@@ -41,7 +49,11 @@ def test_atom_graphics_state_for_does_not_read_legacy_fake_canvas_attrs() -> Non
 
 
 def test_atom_graphics_state_setters_update_state_without_canvas_attr_mirror() -> None:
-    canvas = SimpleNamespace()
+    canvas = SimpleNamespace(
+        runtime_state=canvas_runtime_state(
+            atom_graphics_state=CanvasAtomGraphicsState()
+        )
+    )
 
     set_atom_items_for(canvas, {1: "label"})
     set_atom_dot_for(canvas, 2, "dot")
@@ -61,7 +73,15 @@ def test_atom_graphics_state_setters_update_state_without_canvas_attr_mirror() -
 
 
 def test_clear_atom_graphics_for_updates_state_without_canvas_attr_mirror() -> None:
-    canvas = SimpleNamespace(atom_items={1: "label"}, atom_dots={2: "dot"})
+    canvas = SimpleNamespace(
+        atom_items={1: "label"},
+        atom_dots={2: "dot"},
+        runtime_state=canvas_runtime_state(
+            atom_graphics_state=CanvasAtomGraphicsState(
+                atom_items={1: "label"}, atom_dots={2: "dot"}
+            )
+        ),
+    )
 
     clear_atom_graphics_for(canvas)
 

@@ -1,12 +1,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, cast
 
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QColor, QFont
-
-from chemvas.ui.canvas_state_lookup import ensure_canvas_state
 
 
 @dataclass(slots=True)
@@ -46,7 +44,7 @@ TEXT_STYLE_ATTRS = (
 
 
 def text_style_state_for(canvas: Any) -> CanvasTextStyleState:
-    return ensure_canvas_state(canvas, "text_style_state", CanvasTextStyleState)
+    return cast(CanvasTextStyleState, canvas.runtime_state.text_style_state)
 
 
 def set_text_style_for(canvas: Any, name: str, value: Any) -> None:

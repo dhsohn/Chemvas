@@ -1,8 +1,6 @@
 from __future__ import annotations
 
-from typing import Any
-
-from chemvas.ui.canvas_state_lookup import ensure_canvas_state
+from typing import Any, cast
 
 
 class CanvasMarkRegistry:
@@ -28,7 +26,7 @@ class CanvasMarkRegistry:
 
 
 def mark_registry_for(canvas: Any) -> CanvasMarkRegistry:
-    return ensure_canvas_state(canvas, "mark_registry", CanvasMarkRegistry)
+    return cast(CanvasMarkRegistry, canvas.runtime_state.mark_registry)
 
 
 __all__ = ["CanvasMarkRegistry", "mark_registry_for"]

@@ -6,8 +6,13 @@ from unittest import mock
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from chemvas.domain.document import Atom, Bond
-from chemvas.ui.atom_coords_access import atom_coords_3d_for, set_atom_coords_3d_for
+from chemvas.ui.atom_coords_access import (
+    CanvasAtomCoords3DState,
+    atom_coords_3d_for,
+    set_atom_coords_3d_for,
+)
 from chemvas.ui.canvas_atom_graphics_state import (
+    CanvasAtomGraphicsState,
     atom_dots_for,
     atom_items_for,
     set_atom_dots_for,
@@ -18,6 +23,7 @@ from chemvas.ui.canvas_graph_state import CanvasGraphState
 from PyQt6.QtGui import QColor
 
 from tests.runtime_services import canvas_runtime_services
+from tests.runtime_state import canvas_runtime_state
 
 
 class _FakeModel:
@@ -69,6 +75,14 @@ def _services(
     )
 
 
+def _runtime_state(graph_state=None):
+    return canvas_runtime_state(
+        atom_coords_3d_state=CanvasAtomCoords3DState(),
+        atom_graphics_state=CanvasAtomGraphicsState(),
+        graph_state=CanvasGraphState() if graph_state is None else graph_state,
+    )
+
+
 def _set_atom_graphics(canvas, items=None, dots=None) -> None:
     set_atom_items_for(canvas, dict(items or {}))
     set_atom_dots_for(canvas, dict(dots or {}))
@@ -93,6 +107,7 @@ class CanvasAtomMutationServiceTest(unittest.TestCase):
                 graph=graph, atom_label=atom_label, hit_testing=hit_testing
             ),
             model=model,
+            runtime_state=_runtime_state(),
         )
 
         atom_id = _service_for(canvas).add_atom("C", 1.0, 2.0)
@@ -122,6 +137,7 @@ class CanvasAtomMutationServiceTest(unittest.TestCase):
                 graph=graph, atom_label=atom_label, hit_testing=registry_hit_testing
             ),
             model=model,
+            runtime_state=_runtime_state(),
         )
 
         atom_id = CanvasAtomMutationService(
@@ -143,6 +159,7 @@ class CanvasAtomMutationServiceTest(unittest.TestCase):
                 hit_testing=_hit_testing_service(),
             ),
             model=_FakeModel(),
+            runtime_state=_runtime_state(),
         )
 
         atom_id = _service_for(canvas).add_atom("O", -1.5, 3.25)
@@ -162,6 +179,12 @@ class CanvasAtomMutationServiceTest(unittest.TestCase):
         dot_item = object()
         mark_scene = SimpleNamespace(remove_marks_for_atom=mock.Mock())
         hit_testing = _hit_testing_service()
+        graph_state = CanvasGraphState(
+            atom_neighbors={1: {2}, 2: {1}},
+            graph_version=4,
+            selection_component_cache_signature="cached",
+            atom_bond_ids={1: {0}, 2: {0}},
+        )
         canvas = SimpleNamespace(
             services=_services(mark_scene=mark_scene, hit_testing=hit_testing),
             model=SimpleNamespace(
@@ -169,12 +192,7 @@ class CanvasAtomMutationServiceTest(unittest.TestCase):
                 bonds=[Bond(1, 2, 1)],
                 atom_annotations={1: {"formal_charge": 1}},
             ),
-            graph_state=CanvasGraphState(
-                atom_neighbors={1: {2}, 2: {1}},
-                graph_version=4,
-                selection_component_cache_signature="cached",
-                atom_bond_ids={1: {0}, 2: {0}},
-            ),
+            runtime_state=_runtime_state(graph_state),
             scene=lambda: scene,
         )
         set_atom_coords_3d_for(canvas, {1: (0.0, 0.0, 0.0)})
@@ -187,11 +205,11 @@ class CanvasAtomMutationServiceTest(unittest.TestCase):
         self.assertNotIn(1, canvas.model.atoms)
         self.assertNotIn(1, canvas.model.atom_annotations)
         self.assertNotIn(1, atom_coords_3d_for(canvas))
-        self.assertNotIn(1, canvas.graph_state.atom_neighbors)
-        self.assertEqual(canvas.graph_state.atom_neighbors[2], set())
-        self.assertEqual(canvas.graph_state.graph_version, 5)
-        self.assertIsNone(canvas.graph_state.selection_component_cache_signature)
-        self.assertEqual(canvas.graph_state.atom_bond_ids[2], set())
+        self.assertNotIn(1, graph_state.atom_neighbors)
+        self.assertEqual(graph_state.atom_neighbors[2], set())
+        self.assertEqual(graph_state.graph_version, 5)
+        self.assertIsNone(graph_state.selection_component_cache_signature)
+        self.assertEqual(graph_state.atom_bond_ids[2], set())
         hit_testing.mark_spatial_index_dirty.assert_called_once_with()
 
     def test_remove_atom_only_skips_mark_removal_when_requested(self) -> None:
@@ -200,8 +218,7 @@ class CanvasAtomMutationServiceTest(unittest.TestCase):
         canvas = SimpleNamespace(
             services=_services(mark_scene=mark_scene, hit_testing=hit_testing),
             model=SimpleNamespace(atoms={}, bonds=[]),
-            atom_coords_3d={},
-            graph_state=CanvasGraphState(),
+            runtime_state=_runtime_state(),
             scene=lambda: _FakeScene(),
         )
         _set_atom_graphics(canvas)
@@ -225,6 +242,7 @@ class CanvasAtomMutationServiceTest(unittest.TestCase):
                 graph=graph, atom_label=atom_label, hit_testing=hit_testing
             ),
             model=_FakeModel(next_atom_id=1),
+            runtime_state=_runtime_state(),
             scene=lambda: scene,
         )
         _set_atom_graphics(canvas, {4: old_label}, {4: old_dot})
@@ -271,6 +289,7 @@ class CanvasAtomMutationServiceTest(unittest.TestCase):
                 hit_testing=_hit_testing_service(),
             ),
             model=_FakeModel(next_atom_id=0),
+            runtime_state=_runtime_state(),
             scene=lambda: _FakeScene(),
         )
         _set_atom_graphics(canvas)
@@ -298,6 +317,7 @@ class CanvasAtomMutationServiceTest(unittest.TestCase):
         canvas = SimpleNamespace(
             services=_services(atom_label=atom_label),
             model=SimpleNamespace(atoms={7: Atom("O", 0.0, 0.0, color="#101010")}),
+            runtime_state=_runtime_state(),
         )
         _set_atom_graphics(canvas, {7: mock.Mock()}, {7: mock.Mock()})
 
@@ -314,6 +334,7 @@ class CanvasAtomMutationServiceTest(unittest.TestCase):
         canvas = SimpleNamespace(
             services=_services(atom_label=atom_label),
             model=SimpleNamespace(atoms={7: Atom("O", 0.0, 0.0, color="#101010")}),
+            runtime_state=_runtime_state(),
         )
         _set_atom_graphics(canvas, {7: mock.Mock()}, {7: mock.Mock()})
 
@@ -327,6 +348,12 @@ class CanvasAtomMutationServiceTest(unittest.TestCase):
 
     def test_remove_atom_only_tolerates_sparse_neighbor_and_bond_indexes(self) -> None:
         hit_testing = _hit_testing_service()
+        graph_state = CanvasGraphState(
+            atom_neighbors={1: {2, 3}, 2: {1}},
+            graph_version=7,
+            selection_component_cache_signature="cached",
+            atom_bond_ids={1: {0, 1, 8}, 2: set()},
+        )
         canvas = SimpleNamespace(
             services=_services(
                 mark_scene=SimpleNamespace(remove_marks_for_atom=mock.Mock()),
@@ -336,22 +363,16 @@ class CanvasAtomMutationServiceTest(unittest.TestCase):
                 atoms={1: Atom("C", 0.0, 0.0)},
                 bonds=[None, Bond(1, 9, 1)],
             ),
-            atom_coords_3d={},
-            graph_state=CanvasGraphState(
-                atom_neighbors={1: {2, 3}, 2: {1}},
-                graph_version=7,
-                selection_component_cache_signature="cached",
-                atom_bond_ids={1: {0, 1, 8}, 2: set()},
-            ),
+            runtime_state=_runtime_state(graph_state),
             scene=lambda: _FakeScene(),
         )
         _set_atom_graphics(canvas)
 
         _service_for(canvas).remove_atom_only(1)
 
-        self.assertEqual(canvas.graph_state.atom_neighbors[2], set())
-        self.assertEqual(canvas.graph_state.graph_version, 8)
-        self.assertIsNone(canvas.graph_state.selection_component_cache_signature)
+        self.assertEqual(graph_state.atom_neighbors[2], set())
+        self.assertEqual(graph_state.graph_version, 8)
+        self.assertIsNone(graph_state.selection_component_cache_signature)
         hit_testing.mark_spatial_index_dirty.assert_called_once_with()
 
     def test_restore_atom_from_state_skips_empty_input_and_labels_noncarbon_atoms(
@@ -364,6 +385,7 @@ class CanvasAtomMutationServiceTest(unittest.TestCase):
                 graph=graph, atom_label=atom_label, hit_testing=_hit_testing_service()
             ),
             model=_FakeModel(next_atom_id=10),
+            runtime_state=_runtime_state(),
             scene=lambda: _FakeScene(),
         )
         _set_atom_graphics(canvas)

@@ -20,11 +20,18 @@ from chemvas.core.history import (
     UpdateBondLengthCommand,
 )
 from chemvas.domain.document import Atom
-from chemvas.ui.atom_coords_access import atom_coords_3d_for, set_atom_coords_3d_for
+from chemvas.ui.atom_coords_access import (
+    CanvasAtomCoords3DState,
+    atom_coords_3d_for,
+    set_atom_coords_3d_for,
+)
+from chemvas.ui.canvas_atom_graphics_state import CanvasAtomGraphicsState
+from chemvas.ui.canvas_bond_graphics_state import CanvasBondGraphicsState
 from chemvas.ui.canvas_history_service import CanvasHistoryService
 from chemvas.ui.canvas_history_state import CanvasHistoryState
 from chemvas.ui.canvas_rotation_state import CanvasRotationState
 from chemvas.ui.canvas_smiles_input_state import (
+    CanvasSmilesInputState,
     last_smiles_input_for,
     set_last_smiles_input_for,
 )
@@ -37,6 +44,7 @@ from chemvas.ui.history_commands import (
 )
 
 from tests.runtime_services import canvas_runtime_services
+from tests.runtime_state import canvas_runtime_state
 
 
 class _RecorderCommand:
@@ -86,21 +94,24 @@ class _FakeCanvas:
 
     def __init__(self) -> None:
         self.calls: list[tuple] = []
+        self.runtime_state = canvas_runtime_state(
+            smiles_input_state=CanvasSmilesInputState(),
+            atom_coords_3d_state=CanvasAtomCoords3DState(),
+            atom_graphics_state=CanvasAtomGraphicsState(),
+            bond_graphics_state=CanvasBondGraphicsState(),
+            mark_registry=SimpleNamespace(get_for_atom=lambda _atom_id: []),
+            rotation_state=CanvasRotationState(
+                projection_center_3d="before-center",
+                projection_anchor_2d="before-anchor",
+            ),
+        )
         self.last_smiles_input = None
         self.model = SimpleNamespace(
             next_atom_id=0, atoms={1: Atom("C", 0.0, 0.0)}, bonds=[]
         )
         self.atom_coords_3d = {}
-        self.atom_items = {}
-        self.atom_dots = {}
-        self.bond_items = {}
-        self.mark_registry = SimpleNamespace(get_for_atom=lambda _atom_id: [])
         self._scene_obj = object()
         self.renderer = _FakeRenderer(self)
-        self.rotation_state = CanvasRotationState(
-            projection_center_3d="before-center",
-            projection_anchor_2d="before-anchor",
-        )
         self.services = canvas_runtime_services(
             atom_label_service=SimpleNamespace(
                 add_or_update_atom_label=self.add_or_update_atom_label
@@ -284,7 +295,7 @@ class _FakeSceneItemController:
 class _MinimalCanvas(_FakeCanvas):
     def __init__(self) -> None:
         super().__init__()
-        self.rotation_state = CanvasRotationState()
+        self.runtime_state.rotation_state = CanvasRotationState()
 
 
 class _AtomicHistoryCanvas:
@@ -1614,12 +1625,16 @@ class HistoryCommandTest(unittest.TestCase):
         )
 
         command.redo(canvas)
-        self.assertEqual(canvas.rotation_state.projection_center_3d, (5.0, 6.0, 7.0))
-        self.assertEqual(canvas.rotation_state.projection_anchor_2d, (8.0, 9.0))
+        self.assertEqual(
+            canvas.runtime_state.rotation_state.projection_center_3d, (5.0, 6.0, 7.0)
+        )
+        self.assertEqual(
+            canvas.runtime_state.rotation_state.projection_anchor_2d, (8.0, 9.0)
+        )
 
         command.undo(canvas)
-        self.assertIsNone(canvas.rotation_state.projection_center_3d)
-        self.assertIsNone(canvas.rotation_state.projection_anchor_2d)
+        self.assertIsNone(canvas.runtime_state.rotation_state.projection_center_3d)
+        self.assertIsNone(canvas.runtime_state.rotation_state.projection_anchor_2d)
 
     def test_set_atom_positions_command_uses_current_projection_and_coords_contract(
         self,
@@ -1640,8 +1655,8 @@ class HistoryCommandTest(unittest.TestCase):
         self.assertEqual(canvas.atom_coords_3d[1], (0.0, 0.0, 0.0))
         self.assertEqual(canvas.calls.count(("redraw_bonds_for_atoms", {1})), 2)
         self.assertEqual(canvas.calls.count(("refresh_selection_outline",)), 2)
-        self.assertIsNone(canvas.rotation_state.projection_center_3d)
-        self.assertIsNone(canvas.rotation_state.projection_anchor_2d)
+        self.assertIsNone(canvas.runtime_state.rotation_state.projection_center_3d)
+        self.assertIsNone(canvas.runtime_state.rotation_state.projection_anchor_2d)
 
     def test_update_commands_apply_length_color_scene_state_and_smiles(self) -> None:
         canvas = _FakeCanvas()
@@ -1745,13 +1760,17 @@ class HistoryCommandTest(unittest.TestCase):
         )
 
         command.undo(canvas)
-        self.assertEqual(canvas.rotation_state.projection_center_3d, (1.0, 2.0, 3.0))
-        self.assertEqual(canvas.rotation_state.projection_anchor_2d, (1.0, 2.0))
+        self.assertEqual(
+            canvas.runtime_state.rotation_state.projection_center_3d, (1.0, 2.0, 3.0)
+        )
+        self.assertEqual(
+            canvas.runtime_state.rotation_state.projection_anchor_2d, (1.0, 2.0)
+        )
         self.assertEqual(atom_coords_3d_for(canvas)[3], (1.0, 2.0, 3.0))
 
         command.redo(canvas)
-        self.assertIsNone(canvas.rotation_state.projection_center_3d)
-        self.assertIsNone(canvas.rotation_state.projection_anchor_2d)
+        self.assertIsNone(canvas.runtime_state.rotation_state.projection_center_3d)
+        self.assertIsNone(canvas.runtime_state.rotation_state.projection_anchor_2d)
 
     def test_delete_atoms_command_can_skip_mark_restoration_and_mark_removal(
         self,

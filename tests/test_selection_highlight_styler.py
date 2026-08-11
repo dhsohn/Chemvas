@@ -3,6 +3,7 @@ import unittest
 from types import SimpleNamespace
 
 from tests.runtime_services import canvas_runtime_services
+from tests.runtime_state import canvas_runtime_state
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -44,9 +45,11 @@ class SelectionHighlightStylerTest(unittest.TestCase):
     def _make_canvas(self):
         return SimpleNamespace(
             services=canvas_runtime_services(),
-            selection_style_state=SelectionStyleState(
-                color=QColor("#1f5eff"),
-                stroke_delta=0.6,
+            runtime_state=canvas_runtime_state(
+                selection_style_state=SelectionStyleState(
+                    color=QColor("#1f5eff"),
+                    stroke_delta=0.6,
+                )
             ),
         )
 
@@ -80,15 +83,17 @@ class SelectionHighlightStylerTest(unittest.TestCase):
         styler = SelectionHighlightStyler(canvas)
 
         styler.apply_selection_style(old_item, True)
-        canvas.selection_style_state.selected_items = [old_item]
+        canvas.runtime_state.selection_style_state.selected_items = [old_item]
         styler.set_selection_highlight([new_item])
 
-        self.assertEqual(canvas.selection_style_state.selected_items, [new_item])
+        self.assertEqual(
+            canvas.runtime_state.selection_style_state.selected_items, [new_item]
+        )
         self.assertEqual(old_item.pen().color().name(), "#333333")
         self.assertEqual(new_item.pen().color().name(), "#1f5eff")
 
         styler.clear_selection_highlight()
-        self.assertEqual(canvas.selection_style_state.selected_items, [])
+        self.assertEqual(canvas.runtime_state.selection_style_state.selected_items, [])
         self.assertEqual(new_item.pen().color().name(), "#444444")
 
     def test_apply_selection_style_ignores_items_without_pen(self) -> None:
@@ -99,7 +104,7 @@ class SelectionHighlightStylerTest(unittest.TestCase):
         styler.apply_selection_style(item, True)
         styler.apply_selection_style(item, False)
 
-        self.assertEqual(canvas.selection_style_state.selected_items, [])
+        self.assertEqual(canvas.runtime_state.selection_style_state.selected_items, [])
 
     def test_apply_selection_style_ignores_non_pen_restore_data(self) -> None:
         canvas = self._make_canvas()

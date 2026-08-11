@@ -15,13 +15,16 @@ except ModuleNotFoundError:
 
 if QPointF is not None:
     from chemvas.domain.document import Atom
-    from chemvas.ui.canvas_mark_registry import CanvasMarkRegistry
+    from chemvas.ui.canvas_mark_registry import CanvasMarkRegistry, mark_registry_for
     from chemvas.ui.canvas_mark_scene_service import CanvasMarkSceneService
     from chemvas.ui.canvas_scene_items_state import (
+        CanvasSceneItemsState,
         mark_items_for,
         set_scene_item_collection_for,
     )
     from chemvas.ui.canvas_tool_settings_state import CanvasToolSettingsState
+
+    from tests.runtime_state import canvas_runtime_state
 
 
 @unittest.skipUnless(
@@ -35,7 +38,10 @@ class CanvasMarkSceneServiceTest(unittest.TestCase):
                 scene_decoration_service=scene_decoration_service
             ),
             model=SimpleNamespace(atoms={}),
-            tool_settings_state=CanvasToolSettingsState(mark_kind="plus"),
+            runtime_state=canvas_runtime_state(
+                mark_registry=CanvasMarkRegistry(),
+                tool_settings_state=CanvasToolSettingsState(mark_kind="plus"),
+            ),
         )
         service = CanvasMarkSceneService(canvas)
 
@@ -54,7 +60,10 @@ class CanvasMarkSceneServiceTest(unittest.TestCase):
                 scene_decoration_service=scene_decoration_service
             ),
             model=SimpleNamespace(atoms={7: Atom("C", 10.0, 20.0)}),
-            tool_settings_state=CanvasToolSettingsState(mark_kind="plus"),
+            runtime_state=canvas_runtime_state(
+                mark_registry=CanvasMarkRegistry(),
+                tool_settings_state=CanvasToolSettingsState(mark_kind="plus"),
+            ),
         )
         service = CanvasMarkSceneService(
             canvas, scene_decoration_service=scene_decoration_service
@@ -81,7 +90,10 @@ class CanvasMarkSceneServiceTest(unittest.TestCase):
         canvas = SimpleNamespace(
             model=SimpleNamespace(atoms={7: Atom("C", 10.0, 20.0)}),
             renderer=SimpleNamespace(style=SimpleNamespace(bond_length_px=50.0)),
-            tool_settings_state=CanvasToolSettingsState(mark_kind="radical"),
+            runtime_state=canvas_runtime_state(
+                mark_registry=CanvasMarkRegistry(),
+                tool_settings_state=CanvasToolSettingsState(mark_kind="radical"),
+            ),
         )
         mark_target_distance = mock.Mock(return_value=20.0)
         canvas.services = canvas_runtime_services(
@@ -110,8 +122,11 @@ class CanvasMarkSceneServiceTest(unittest.TestCase):
         atom_mark_2 = SimpleNamespace(data=lambda key: {1: {"atom_id": 9}}.get(key))
         free_mark = SimpleNamespace(data=lambda key: {1: {"atom_id": None}}.get(key))
         canvas = SimpleNamespace(
-            mark_registry=CanvasMarkRegistry({4: [atom_mark], 9: [atom_mark_2]}),
             scene=lambda: scene,
+            runtime_state=canvas_runtime_state(
+                mark_registry=CanvasMarkRegistry({4: [atom_mark], 9: [atom_mark_2]}),
+                scene_items_state=CanvasSceneItemsState(),
+            ),
         )
         set_scene_item_collection_for(
             canvas, "mark_items", [atom_mark, atom_mark_2, free_mark]
@@ -122,7 +137,7 @@ class CanvasMarkSceneServiceTest(unittest.TestCase):
         service.remove_marks_for_atom(9)
 
         self.assertEqual(mark_items_for(canvas), [free_mark])
-        self.assertEqual(canvas.mark_registry.by_atom, {})
+        self.assertEqual(mark_registry_for(canvas).by_atom, {})
         self.assertEqual(
             scene.removeItem.call_args_list,
             [mock.call(atom_mark), mock.call(atom_mark_2)],
@@ -135,8 +150,11 @@ class CanvasMarkSceneServiceTest(unittest.TestCase):
         loose_mark = SimpleNamespace(data=lambda key: None)
         foreign_mark = SimpleNamespace(data=lambda key: {1: {"atom_id": 5}}.get(key))
         canvas = SimpleNamespace(
-            mark_registry=CanvasMarkRegistry({5: [foreign_mark]}),
             scene=lambda: scene,
+            runtime_state=canvas_runtime_state(
+                mark_registry=CanvasMarkRegistry({5: [foreign_mark]}),
+                scene_items_state=CanvasSceneItemsState(),
+            ),
         )
         set_scene_item_collection_for(canvas, "mark_items", [])
         service = CanvasMarkSceneService(canvas)
@@ -148,7 +166,7 @@ class CanvasMarkSceneServiceTest(unittest.TestCase):
         set_scene_item_collection_for(canvas, "mark_items", [])
         service.remove_marks_for_atom(5)
 
-        self.assertEqual(canvas.mark_registry.by_atom, {})
+        self.assertEqual(mark_registry_for(canvas).by_atom, {})
         self.assertEqual(
             scene.removeItem.call_args_list,
             [mock.call(loose_mark), mock.call(mock.ANY), mock.call(foreign_mark)],
@@ -157,6 +175,7 @@ class CanvasMarkSceneServiceTest(unittest.TestCase):
     def test_mark_center_for_pointer_returns_pointer_for_missing_atom(self) -> None:
         canvas = SimpleNamespace(
             model=SimpleNamespace(atoms={7: Atom("C", 10.0, 20.0)}),
+            runtime_state=canvas_runtime_state(mark_registry=CanvasMarkRegistry()),
         )
         service = CanvasMarkSceneService(canvas)
         service.mark_offset_from_click = mock.Mock(return_value=QPointF(1.5, -2.5))

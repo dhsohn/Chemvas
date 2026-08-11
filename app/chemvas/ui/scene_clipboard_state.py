@@ -1,9 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
-
-from chemvas.ui.canvas_state_lookup import ensure_canvas_state
+from typing import Any, cast
 
 
 @dataclass(slots=True)
@@ -13,7 +11,7 @@ class SceneClipboardState:
 
 
 def scene_clipboard_state_for(canvas: Any) -> SceneClipboardState:
-    return ensure_canvas_state(canvas, "scene_clipboard_state", SceneClipboardState)
+    return cast(SceneClipboardState, canvas.runtime_state.scene_clipboard_state)
 
 
 __all__ = ["SceneClipboardState", "scene_clipboard_state_for"]

@@ -3,9 +3,7 @@ from __future__ import annotations
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any
-
-from chemvas.ui.canvas_state_lookup import ensure_canvas_state
+from typing import Any, cast
 
 SelectionSignature = tuple[frozenset[int], frozenset[int]]
 
@@ -26,9 +24,7 @@ class SelectionInfoState:
 
 
 def selection_info_state_for(canvas: Any) -> SelectionInfoState:
-    return ensure_canvas_state(
-        canvas, "selection_info_state", SelectionInfoState.create
-    )
+    return cast(SelectionInfoState, canvas.runtime_state.selection_info_state)
 
 
 __all__ = [

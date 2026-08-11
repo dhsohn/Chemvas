@@ -4,6 +4,7 @@ from types import SimpleNamespace
 from unittest import mock
 
 from tests.runtime_services import canvas_runtime_services
+from tests.runtime_state import canvas_runtime_state
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -15,15 +16,22 @@ except ModuleNotFoundError:
 if QApplication is not None:
     from chemvas.domain.document import Atom, Bond
     from chemvas.ui.canvas_atom_graphics_state import (
+        CanvasAtomGraphicsState,
         set_atom_dots_for,
         set_atom_items_for,
     )
-    from chemvas.ui.canvas_bond_graphics_state import set_bond_items_for
+    from chemvas.ui.canvas_bond_graphics_state import (
+        CanvasBondGraphicsState,
+        set_bond_items_for,
+    )
     from chemvas.ui.canvas_graph_service import CanvasGraphService
     from chemvas.ui.canvas_graph_state import CanvasGraphState
     from chemvas.ui.canvas_ring_fill_scene_access import update_ring_fills_for_atoms_for
     from chemvas.ui.canvas_ring_fill_scene_service import CanvasRingFillSceneService
-    from chemvas.ui.canvas_scene_items_state import set_scene_item_collection_for
+    from chemvas.ui.canvas_scene_items_state import (
+        CanvasSceneItemsState,
+        set_scene_item_collection_for,
+    )
     from chemvas.ui.input_view_access import rotate_view_for
     from chemvas.ui.input_view_state import InputViewState
     from chemvas.ui.selection_style_access import restore_selection_from_ids_for
@@ -116,12 +124,14 @@ class CanvasViewTransformHelperTest(unittest.TestCase):
                     None,
                 ]
             ),
-            graph_state=CanvasGraphState(
-                atom_bond_ids={
-                    1: {0, 1},
-                    2: {0, 1},
-                    3: {2},
-                }
+            runtime_state=canvas_runtime_state(
+                graph_state=CanvasGraphState(
+                    atom_bond_ids={
+                        1: {0, 1},
+                        2: {0, 1},
+                        3: {2},
+                    }
+                )
             ),
         )
         classified_graph_service = CanvasGraphService(classified_view)
@@ -141,7 +151,7 @@ class CanvasViewTransformHelperTest(unittest.TestCase):
                     None,
                 ]
             ),
-            graph_state=CanvasGraphState(),
+            runtime_state=canvas_runtime_state(graph_state=CanvasGraphState()),
         )
         fallback_graph_service = CanvasGraphService(fallback_view)
         fallback_view.services = canvas_runtime_services(
@@ -166,6 +176,10 @@ class CanvasViewTransformHelperTest(unittest.TestCase):
         selection_controller = SimpleNamespace(update_selection_outline=mock.Mock())
         view = SimpleNamespace(
             scene=lambda: scene,
+            runtime_state=canvas_runtime_state(
+                atom_graphics_state=CanvasAtomGraphicsState(),
+                bond_graphics_state=CanvasBondGraphicsState(),
+            ),
             services=canvas_runtime_services(selection_controller=selection_controller),
         )
         set_atom_items_for(view, {1: atom_item})
@@ -185,6 +199,10 @@ class CanvasViewTransformHelperTest(unittest.TestCase):
         atom_item = _FakeSelectableItem("atom", 1)
         selection_controller = SimpleNamespace(update_selection_outline=mock.Mock())
         view = SimpleNamespace(
+            runtime_state=canvas_runtime_state(
+                atom_graphics_state=CanvasAtomGraphicsState(),
+                bond_graphics_state=CanvasBondGraphicsState(),
+            ),
             services=canvas_runtime_services(selection_controller=selection_controller),
         )
         set_atom_items_for(view, {1: atom_item})
@@ -205,7 +223,8 @@ class CanvasViewTransformHelperTest(unittest.TestCase):
                     Bond(4, 5, 1),
                     None,
                 ]
-            )
+            ),
+            runtime_state=canvas_runtime_state(graph_state=CanvasGraphState()),
         )
         graph_service = CanvasGraphService(view)
         view.services = canvas_runtime_services(graph_service=graph_service)
@@ -228,6 +247,9 @@ class CanvasViewTransformHelperTest(unittest.TestCase):
                     5: Atom("O", 10.0, 9.0),
                     6: Atom("O", 9.5, 10.0),
                 }
+            ),
+            runtime_state=canvas_runtime_state(
+                scene_items_state=CanvasSceneItemsState()
             ),
         )
         set_scene_item_collection_for(

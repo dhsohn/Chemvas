@@ -14,10 +14,18 @@ except ModuleNotFoundError:
 if QApplication is not None:
     from chemvas.domain.document import Atom, Bond
     from chemvas.features.hover import HoverState
-    from chemvas.ui.canvas_bond_graphics_state import set_bond_items_for
+    from chemvas.ui.canvas_bond_graphics_state import (
+        CanvasBondGraphicsState,
+        set_bond_items_for,
+    )
     from chemvas.ui.canvas_hit_testing_service import CanvasHitTestingService
     from chemvas.ui.canvas_hover_state import hover_state_for
-    from chemvas.ui.spatial_index_state import CanvasSpatialIndexState
+    from chemvas.ui.spatial_index_state import (
+        CanvasSpatialIndexState,
+        spatial_index_state_for,
+    )
+
+    from tests.runtime_state import canvas_runtime_state
 
 
 class _FakeScene:
@@ -93,6 +101,9 @@ class CanvasHitTestingServiceTest(unittest.TestCase):
                     atom_item,
                 ]
             ),
+            runtime_state=canvas_runtime_state(
+                bond_graphics_state=CanvasBondGraphicsState()
+            ),
         )
         set_bond_items_for(canvas, {})
         service = CanvasHitTestingService(canvas)
@@ -103,6 +114,9 @@ class CanvasHitTestingServiceTest(unittest.TestCase):
         nearby_bond_graphic = _FakeItem("bond_graphic")
         fallback_canvas = SimpleNamespace(
             scene=lambda: _FakeScene([_FakeItem("note_box"), _FakeItem("other")]),
+            runtime_state=canvas_runtime_state(
+                bond_graphics_state=CanvasBondGraphicsState()
+            ),
         )
         set_bond_items_for(fallback_canvas, {4: [nearby_bond_graphic]})
         fallback_service = CanvasHitTestingService(fallback_canvas)
@@ -114,6 +128,9 @@ class CanvasHitTestingServiceTest(unittest.TestCase):
 
         empty_fallback_canvas = SimpleNamespace(
             scene=lambda: _FakeScene([_FakeItem("note_box"), _FakeItem("other")]),
+            runtime_state=canvas_runtime_state(
+                bond_graphics_state=CanvasBondGraphicsState()
+            ),
         )
         set_bond_items_for(empty_fallback_canvas, {4: []})
         empty_fallback_service = CanvasHitTestingService(empty_fallback_canvas)
@@ -127,7 +144,11 @@ class CanvasHitTestingServiceTest(unittest.TestCase):
         self,
     ) -> None:
         atom_item = _FakeItem("atom")
-        canvas = SimpleNamespace()
+        canvas = SimpleNamespace(
+            runtime_state=canvas_runtime_state(
+                bond_graphics_state=CanvasBondGraphicsState()
+            )
+        )
         set_bond_items_for(canvas, {})
         canvas.scene = mock.Mock(
             side_effect=AssertionError("scene facade should not be used by service")
@@ -155,7 +176,9 @@ class CanvasHitTestingServiceTest(unittest.TestCase):
                 },
                 bonds=[Bond(1, 2, 1), None],
             ),
-            spatial_index_state=CanvasSpatialIndexState(),
+            runtime_state=canvas_runtime_state(
+                spatial_index_state=CanvasSpatialIndexState()
+            ),
         )
         service = CanvasHitTestingService(canvas)
 
@@ -164,14 +187,14 @@ class CanvasHitTestingServiceTest(unittest.TestCase):
 
         service.ensure_spatial_index()
 
-        self.assertFalse(canvas.spatial_index_state.dirty)
-        self.assertEqual(canvas.spatial_index_state.cell_size, 20.0)
+        self.assertFalse(spatial_index_state_for(canvas).dirty)
+        self.assertEqual(spatial_index_state_for(canvas).cell_size, 20.0)
         self.assertEqual(service.find_atom_near(1.0, 1.0, 5.0), 1)
         self.assertEqual(service.find_bond_near(QPointF(5.0, 2.0), 4.0), 0)
         self.assertIsNone(service.find_bond_near(QPointF(40.0, 40.0), 4.0))
 
         service.mark_spatial_index_dirty()
-        self.assertTrue(canvas.spatial_index_state.dirty)
+        self.assertTrue(spatial_index_state_for(canvas).dirty)
 
     def test_spatial_index_self_heals_when_dirty_mark_was_missed(self) -> None:
         # The dirty flag depends on every mutation path remembering to call
@@ -183,7 +206,9 @@ class CanvasHitTestingServiceTest(unittest.TestCase):
                 atoms={1: Atom("C", 0.0, 0.0)},
                 bonds=[],
             ),
-            spatial_index_state=CanvasSpatialIndexState(),
+            runtime_state=canvas_runtime_state(
+                spatial_index_state=CanvasSpatialIndexState()
+            ),
         )
         service = CanvasHitTestingService(canvas)
         service.ensure_spatial_index()
@@ -203,22 +228,26 @@ class CanvasHitTestingServiceTest(unittest.TestCase):
                 atoms={1: Atom("C", 0.0, 0.0)},
                 bonds=[Bond(1, 99, 1)],
             ),
-            spatial_index_state=CanvasSpatialIndexState(),
+            runtime_state=canvas_runtime_state(
+                spatial_index_state=CanvasSpatialIndexState()
+            ),
         )
         sparse_service = CanvasHitTestingService(sparse_canvas)
         sparse_service.rebuild_spatial_index(20.0)
-        self.assertEqual(sparse_canvas.spatial_index_state.bond_grid, {})
+        self.assertEqual(spatial_index_state_for(sparse_canvas).bond_grid, {})
 
         sparse_lookup_canvas = SimpleNamespace(
             renderer=SimpleNamespace(style=SimpleNamespace(bond_length_px=20.0)),
             model=SimpleNamespace(
                 atoms={1: Atom("C", 0.0, 0.0)}, bonds=[None, Bond(1, 99, 1)]
             ),
-            spatial_index_state=CanvasSpatialIndexState(
-                dirty=False,
-                cell_size=20.0,
-                atom_grid={(0, 0): {9, 1}},
-                bond_grid={(0, 0): {5, 0, 1}},
+            runtime_state=canvas_runtime_state(
+                spatial_index_state=CanvasSpatialIndexState(
+                    dirty=False,
+                    cell_size=20.0,
+                    atom_grid={(0, 0): {9, 1}},
+                    bond_grid={(0, 0): {5, 0, 1}},
+                )
             ),
         )
         sparse_lookup_service = CanvasHitTestingService(sparse_lookup_canvas)
@@ -236,7 +265,7 @@ class CanvasHitTestingServiceTest(unittest.TestCase):
             renderer=SimpleNamespace(
                 style=SimpleNamespace(bond_line_width=1.0, bond_length_px=20.0)
             ),
-            runtime_state=SimpleNamespace(hover_preview_state=HoverState()),
+            runtime_state=canvas_runtime_state(hover_preview_state=HoverState()),
         )
         hover_state_for(canvas).bond_id = 7
         service = CanvasHitTestingService(canvas)

@@ -11,6 +11,8 @@ from chemvas.ui.selection_rotation_session import (
     explicit_rotation_atom_ids_from_items,
 )
 
+from tests.runtime_state import canvas_runtime_state
+
 
 class _Item:
     def __init__(self, kind: str, payload=None) -> None:
@@ -27,7 +29,11 @@ class _Item:
 
 class _RigidPorts:
     def __init__(self) -> None:
-        self.canvas = SimpleNamespace(atom_coords_3d_state=CanvasAtomCoords3DState())
+        self.canvas = SimpleNamespace(
+            runtime_state=canvas_runtime_state(
+                atom_coords_3d_state=CanvasAtomCoords3DState()
+            )
+        )
         self.atoms = {
             1: SimpleNamespace(x=0.0, y=0.0),
             2: SimpleNamespace(x=10.0, y=4.0),
@@ -211,7 +217,10 @@ def test_begin_rigid_rotation_session_populates_rotation_state_and_canvas_coords
     assert state.start_projection_center_3d == (100.0, 200.0, 300.0)
     assert state.start_projection_anchor_2d == (40.0, 50.0)
     assert state.base_coords == {1: (1.0, -1.0, 0.5), 2: (11.0, 3.0, 2.5)}
-    assert ports.canvas.atom_coords_3d_state.atom_coords_3d == state.base_coords
+    assert (
+        ports.canvas.runtime_state.atom_coords_3d_state.atom_coords_3d
+        == state.base_coords
+    )
     assert ports.average_calls == [({1, 2}, dict(state.base_coords))]
 
 
@@ -225,7 +234,7 @@ def test_begin_selection_rotation_false_paths_restore_exact_state_and_retry() ->
     ):
         ports = _SelectionPorts()
         state, coords_state = _rotation_prestate()
-        ports.canvas.atom_coords_3d_state = coords_state
+        ports.canvas.runtime_state.atom_coords_3d_state = coords_state
         axis_hint = None
         if scenario == "empty_selection":
             ports.selected_atom_ids.clear()

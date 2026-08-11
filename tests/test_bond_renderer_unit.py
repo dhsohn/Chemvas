@@ -4,6 +4,7 @@ from types import SimpleNamespace
 from unittest import mock
 
 from tests.runtime_services import canvas_runtime_services
+from tests.runtime_state import canvas_runtime_state
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -34,9 +35,19 @@ if QApplication is not None:
         trim_segment,
     )
     from chemvas.features.rendering.acs1996_style import ACS1996Style
+    from chemvas.ui.atom_coords_access import (
+        CanvasAtomCoords3DState,
+        atom_coords_3d_for,
+        set_atom_coords_3d_for,
+    )
     from chemvas.ui.bond_renderer import BondRenderer
-    from chemvas.ui.canvas_bond_graphics_state import bond_items_for, set_bond_items_for
-    from chemvas.ui.canvas_graph_state import CanvasGraphState
+    from chemvas.ui.canvas_bond_graphics_state import (
+        CanvasBondGraphicsState,
+        bond_items_for,
+        set_bond_items_for,
+    )
+    from chemvas.ui.canvas_graph_state import CanvasGraphState, graph_state_for
+    from chemvas.ui.canvas_rotation_state import CanvasRotationState
     from chemvas.ui.graphics_items import (
         NoSelectLineItem,
         NoSelectPathItem,
@@ -96,14 +107,18 @@ class _FakeCanvas:
             },
             bonds=[],
         )
+        self.runtime_state = canvas_runtime_state(
+            atom_coords_3d_state=CanvasAtomCoords3DState(),
+            bond_graphics_state=CanvasBondGraphicsState(),
+            graph_state=CanvasGraphState(),
+            rotation_state=CanvasRotationState(),
+        )
         set_bond_items_for(self, {})
         self._trim = (0.0, 1.0)
-        self.atom_coords_3d: dict[int, tuple[float, float, float]] = {}
         self._labels: dict[int, object] = {}
         self._ring_center = None
         self._ring_center_3d = None
         self._normal = (0.0, 1.0)
-        self.graph_state = CanvasGraphState()
         self._scene = QGraphicsScene()
         self.selectable_items: list = []
         self.services = canvas_runtime_services(
@@ -125,6 +140,18 @@ class _FakeCanvas:
     @bond_items.setter
     def bond_items(self, value) -> None:
         set_bond_items_for(self, value)
+
+    @property
+    def atom_coords_3d(self):
+        return atom_coords_3d_for(self)
+
+    @atom_coords_3d.setter
+    def atom_coords_3d(self, value) -> None:
+        set_atom_coords_3d_for(self, value)
+
+    @property
+    def graph_state(self):
+        return graph_state_for(self)
 
     def trim_line_for_labels(self, a_id, b_id, x1, y1, x2, y2):
         return self._trim

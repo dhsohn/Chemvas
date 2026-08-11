@@ -4,6 +4,7 @@ from types import SimpleNamespace
 from unittest import mock
 
 from tests.runtime_services import canvas_runtime_services
+from tests.runtime_state import canvas_runtime_state
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -17,12 +18,19 @@ except ModuleNotFoundError:
 if QApplication is not None:
     from chemvas.domain.document import Atom, Bond
     from chemvas.ui.canvas_atom_graphics_state import (
+        CanvasAtomGraphicsState,
         set_atom_dots_for,
         set_atom_items_for,
     )
-    from chemvas.ui.canvas_bond_graphics_state import set_bond_items_for
+    from chemvas.ui.canvas_bond_graphics_state import (
+        CanvasBondGraphicsState,
+        set_bond_items_for,
+    )
     from chemvas.ui.canvas_mark_registry import CanvasMarkRegistry
-    from chemvas.ui.canvas_scene_items_state import set_scene_item_collection_for
+    from chemvas.ui.canvas_scene_items_state import (
+        CanvasSceneItemsState,
+        set_scene_item_collection_for,
+    )
     from chemvas.ui.mark_item_access import mark_kinds_by_atom_for
     from chemvas.ui.scene_clipboard_transaction_logic import _copy_bounds_for_items
     from chemvas.ui.selection_collection_access import (
@@ -103,6 +111,9 @@ class CanvasViewSelectionClipboardWrappersTest(unittest.TestCase):
         ]
         view = SimpleNamespace(
             scene=lambda: scene,
+            runtime_state=canvas_runtime_state(
+                scene_items_state=CanvasSceneItemsState()
+            ),
         )
         set_scene_item_collection_for(
             view, "selected_notes", [included_note, other_scene_note]
@@ -124,6 +135,9 @@ class CanvasViewSelectionClipboardWrappersTest(unittest.TestCase):
         scene.selectedItems = lambda: [selected_atom, selected_outline, selected_note]
         view = SimpleNamespace(
             scene=lambda: scene,
+            runtime_state=canvas_runtime_state(
+                scene_items_state=CanvasSceneItemsState()
+            ),
         )
         set_scene_item_collection_for(
             view, "selected_notes", [selected_note, other_scene_note]
@@ -203,7 +217,14 @@ class CanvasViewSelectionClipboardWrappersTest(unittest.TestCase):
             return_value=[],
         ):
             self.assertEqual(
-                selection_items_for_copy_for(SimpleNamespace(bond_items={})), []
+                selection_items_for_copy_for(
+                    SimpleNamespace(
+                        runtime_state=canvas_runtime_state(
+                            bond_graphics_state=CanvasBondGraphicsState()
+                        )
+                    )
+                ),
+                [],
             )
 
         child = _FakeItem("note")
@@ -213,7 +234,13 @@ class CanvasViewSelectionClipboardWrappersTest(unittest.TestCase):
             "chemvas.ui.selection_collection_access.selected_scene_items_for",
             return_value=[invalid_bond],
         ):
-            copied = selection_items_for_copy_for(SimpleNamespace(bond_items={}))
+            copied = selection_items_for_copy_for(
+                SimpleNamespace(
+                    runtime_state=canvas_runtime_state(
+                        bond_graphics_state=CanvasBondGraphicsState()
+                    )
+                )
+            )
         self.assertEqual(copied, [invalid_bond, child])
 
         root = _FakeItem("note", children=[_FakeItem("note")])
@@ -228,7 +255,13 @@ class CanvasViewSelectionClipboardWrappersTest(unittest.TestCase):
             ) as append_unique,
         ):
             self.assertEqual(
-                selection_items_for_copy_for(SimpleNamespace(bond_items={})),
+                selection_items_for_copy_for(
+                    SimpleNamespace(
+                        runtime_state=canvas_runtime_state(
+                            bond_graphics_state=CanvasBondGraphicsState()
+                        )
+                    )
+                ),
                 [],
             )
         append_unique.assert_called_once()
@@ -240,7 +273,14 @@ class CanvasViewSelectionClipboardWrappersTest(unittest.TestCase):
             return_value=[child],
         ):
             self.assertEqual(
-                selection_items_for_copy_for(SimpleNamespace(bond_items={})), [child]
+                selection_items_for_copy_for(
+                    SimpleNamespace(
+                        runtime_state=canvas_runtime_state(
+                            bond_graphics_state=CanvasBondGraphicsState()
+                        )
+                    )
+                ),
+                [child],
             )
 
         controller = SimpleNamespace(
@@ -279,7 +319,13 @@ class CanvasViewSelectionClipboardWrappersTest(unittest.TestCase):
         bond_graphic = _FakeItem("bond", data1=0)
         atom_label = _FakeItem("atom", data1=1)
         atom_dot = _FakeItem("atom", data1=2)
-        view = SimpleNamespace(model=SimpleNamespace(bonds=[Bond(1, 2, 1)]))
+        view = SimpleNamespace(
+            model=SimpleNamespace(bonds=[Bond(1, 2, 1)]),
+            runtime_state=canvas_runtime_state(
+                atom_graphics_state=CanvasAtomGraphicsState(),
+                bond_graphics_state=CanvasBondGraphicsState(),
+            ),
+        )
         set_bond_items_for(view, {0: [bond_graphic]})
         set_atom_items_for(view, {1: atom_label})
         set_atom_dots_for(view, {2: atom_dot})
@@ -297,16 +343,18 @@ class CanvasViewSelectionClipboardWrappersTest(unittest.TestCase):
     ) -> None:
         view = SimpleNamespace(
             model=SimpleNamespace(atoms={1: Atom("C", 0.0, 0.0)}),
-            mark_registry=CanvasMarkRegistry(
-                {
-                    1: [
-                        _FakeItem("mark", data1="bad"),
-                        _FakeItem("mark", data1={"kind": 7}),
-                    ],
-                    2: [
-                        _FakeItem("mark", data1={"kind": "plus"}),
-                    ],
-                }
+            runtime_state=canvas_runtime_state(
+                mark_registry=CanvasMarkRegistry(
+                    {
+                        1: [
+                            _FakeItem("mark", data1="bad"),
+                            _FakeItem("mark", data1={"kind": 7}),
+                        ],
+                        2: [
+                            _FakeItem("mark", data1={"kind": "plus"}),
+                        ],
+                    }
+                )
             ),
         )
         self.assertEqual(mark_kinds_by_atom_for(view), {2: ["plus"]})

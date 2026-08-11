@@ -8,9 +8,11 @@ from chemvas.ui.canvas_text_style_state import (
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QColor
 
+from tests.runtime_state import canvas_runtime_state
+
 
 def test_text_style_state_for_uses_runtime_state() -> None:
-    runtime_state = SimpleNamespace(
+    runtime_state = canvas_runtime_state(
         text_style_state=CanvasTextStyleState(text_font_size=18)
     )
     canvas = SimpleNamespace(runtime_state=runtime_state)
@@ -32,6 +34,7 @@ def test_text_style_state_for_does_not_read_legacy_fake_canvas_attrs() -> None:
         note_box_enabled=True,
         note_box_alpha=0.5,
         note_padding=9.0,
+        runtime_state=canvas_runtime_state(text_style_state=CanvasTextStyleState()),
     )
 
     state = text_style_state_for(canvas)
@@ -50,7 +53,9 @@ def test_text_style_state_for_does_not_read_legacy_fake_canvas_attrs() -> None:
 
 
 def test_set_text_style_for_updates_state_without_canvas_attr_mirror() -> None:
-    canvas = SimpleNamespace()
+    canvas = SimpleNamespace(
+        runtime_state=canvas_runtime_state(text_style_state=CanvasTextStyleState())
+    )
 
     set_text_style_for(canvas, "text_font_size", 15)
     set_text_style_for(canvas, "text_italic", True)

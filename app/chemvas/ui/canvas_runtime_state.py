@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, ClassVar
+from typing import Any
 from weakref import ref
 
 from PyQt6.QtCore import QObject, QTimer, pyqtSlot
@@ -60,10 +60,9 @@ class RdkitIdleWarmupBridge(QObject):
 
 @dataclass(slots=True)
 class CanvasRuntimeState:
-    # Marks this as the canonical, complete state container: state accessors
-    # refuse to shadow a missing field on it (see ensure_canvas_state).
-    STRICT_STATE_CONTAINER: ClassVar[bool] = True
-
+    # The canonical, complete state container. State accessors read their field
+    # off it directly, and ``slots=True`` makes a renamed or misspelled field
+    # raise instead of quietly becoming a second copy of the state.
     document_metadata_state: CanvasDocumentMetadataState
     calculation_plan_state: CanvasCalculationPlanState
     sheet_setup_state: SheetSetupState

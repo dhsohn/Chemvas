@@ -7,7 +7,10 @@ from unittest import mock
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 import pytest
-from chemvas.ui.canvas_scene_items_state import set_selected_notes_for
+from chemvas.ui.canvas_scene_items_state import (
+    CanvasSceneItemsState,
+    set_selected_notes_for,
+)
 from chemvas.ui.selection_scene_access import (
     clear_scene_selection_for,
     scene_selected_items_for,
@@ -21,6 +24,8 @@ from PyQt6.QtWidgets import (
     QGraphicsScene,
     QGraphicsView,
 )
+
+from tests.runtime_state import canvas_runtime_state
 
 
 class _Item:
@@ -94,7 +99,10 @@ def test_selected_scene_notes_for_filters_notes_attached_to_canvas_scene() -> No
     scene = _Scene()
     note = _Item(scene)
     outside_note = _Item(object())
-    canvas = SimpleNamespace(scene=mock.Mock(return_value=scene))
+    canvas = SimpleNamespace(
+        scene=mock.Mock(return_value=scene),
+        runtime_state=canvas_runtime_state(scene_items_state=CanvasSceneItemsState()),
+    )
     set_selected_notes_for(canvas, [note, outside_note])
 
     assert selected_scene_notes_for(canvas) == [note]
@@ -104,7 +112,10 @@ def test_selected_scene_notes_for_ignores_deleted_notes_and_canvas() -> None:
     scene = _Scene()
     deleted_note = mock.Mock()
     deleted_note.scene.side_effect = RuntimeError("deleted")
-    canvas = SimpleNamespace(scene=mock.Mock(return_value=scene))
+    canvas = SimpleNamespace(
+        scene=mock.Mock(return_value=scene),
+        runtime_state=canvas_runtime_state(scene_items_state=CanvasSceneItemsState()),
+    )
     set_selected_notes_for(canvas, [deleted_note])
 
     assert selected_scene_notes_for(canvas) == []

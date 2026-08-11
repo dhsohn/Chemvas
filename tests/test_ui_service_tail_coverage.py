@@ -4,6 +4,7 @@ from types import SimpleNamespace
 from unittest import mock
 
 from tests.runtime_services import canvas_runtime_services
+from tests.runtime_state import canvas_runtime_state
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -21,10 +22,12 @@ except ModuleNotFoundError:
     QApplication = None
 
 if QApplication is not None:
+    from chemvas.ui.canvas_atom_graphics_state import CanvasAtomGraphicsState
     from chemvas.ui.canvas_color_mutation_service import CanvasColorMutationService
     from chemvas.ui.canvas_note_controller import CanvasNoteController
     from chemvas.ui.canvas_ring_fill_scene_service import CanvasRingFillSceneService
     from chemvas.ui.canvas_scene_items_state import (
+        CanvasSceneItemsState,
         selected_notes_for,
         set_selected_notes_for,
     )
@@ -203,8 +206,12 @@ class UIServiceTailCoverageTest(unittest.TestCase):
         atom_item.setData(1, 7)
         atom_canvas = SimpleNamespace(
             model=SimpleNamespace(atoms={7: SimpleNamespace(color="#112233")}),
-            atom_items={7: atom_item},
-            atom_dots={7: atom_item},
+            runtime_state=canvas_runtime_state(
+                atom_graphics_state=CanvasAtomGraphicsState(
+                    atom_items={7: atom_item},
+                    atom_dots={7: atom_item},
+                )
+            ),
             services=canvas_runtime_services(
                 history_service=_history_service(),
                 atom_label_service=SimpleNamespace(
@@ -229,6 +236,9 @@ class UIServiceTailCoverageTest(unittest.TestCase):
             scene=mock.Mock(return_value=QGraphicsScene()),
             setFocus=mock.Mock(),
             push_command=mock.Mock(),
+            runtime_state=canvas_runtime_state(
+                scene_items_state=CanvasSceneItemsState()
+            ),
             services=canvas_runtime_services(
                 history_service=_history_service(),
                 selection_controller=SimpleNamespace(select_note=mock.Mock()),
@@ -298,14 +308,16 @@ class UIServiceTailCoverageTest(unittest.TestCase):
             document=mock.Mock(return_value=document),
         )
         canvas = SimpleNamespace(
-            text_style_state=CanvasTextStyleState(
-                text_font_family="Arial",
-                text_font_size=12,
-                text_font_weight=QFont.Weight.Bold,
-                text_italic=False,
-                text_color=QColor("#123456"),
-                text_alignment=Qt.AlignmentFlag.AlignLeft,
-                text_line_spacing=1.4,
+            runtime_state=canvas_runtime_state(
+                text_style_state=CanvasTextStyleState(
+                    text_font_family="Arial",
+                    text_font_size=12,
+                    text_font_weight=QFont.Weight.Bold,
+                    text_italic=False,
+                    text_color=QColor("#123456"),
+                    text_alignment=Qt.AlignmentFlag.AlignLeft,
+                    text_line_spacing=1.4,
+                )
             ),
             services=canvas_runtime_services(
                 history_service=_history_service(),
@@ -370,14 +382,16 @@ class UIServiceTailCoverageTest(unittest.TestCase):
             document=mock.Mock(return_value=_FakeDocument()),
         )
         canvas = SimpleNamespace(
-            text_style_state=CanvasTextStyleState(
-                text_font_family="Arial",
-                text_font_size=12,
-                text_font_weight=QFont.Weight.Bold,
-                text_italic=False,
-                text_color=QColor("#123456"),
-                text_alignment=Qt.AlignmentFlag.AlignLeft,
-                text_line_spacing=1.4,
+            runtime_state=canvas_runtime_state(
+                text_style_state=CanvasTextStyleState(
+                    text_font_family="Arial",
+                    text_font_size=12,
+                    text_font_weight=QFont.Weight.Bold,
+                    text_italic=False,
+                    text_color=QColor("#123456"),
+                    text_alignment=Qt.AlignmentFlag.AlignLeft,
+                    text_line_spacing=1.4,
+                )
             ),
             services=canvas_runtime_services(
                 history_service=_history_service(),
