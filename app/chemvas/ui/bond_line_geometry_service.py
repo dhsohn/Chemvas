@@ -1,20 +1,19 @@
 from __future__ import annotations
 
 import math
-from typing import TYPE_CHECKING
 
 from PyQt6.QtCore import QPointF
 
 from chemvas.features.rendering import (
     DOUBLE_STYLE_DEFAULT,
     DOUBLE_STYLE_OUTER,
-    dotted_bond_path_from_trimmed_segment,
+    dotted_bond_dot_centers,
     hash_segments_from_segment,
     normalized_plain_double_style,
     offset_segment,
     trim_segment,
     trimmed_line_segment,
-    wedge_polygon_from_segment,
+    wedge_triangle_from_segment,
 )
 from chemvas.ui.bond_graphics_access import bond_offset_unit_3d_for, line_normal_for
 from chemvas.ui.bond_label_geometry_access import (
@@ -29,9 +28,6 @@ from chemvas.ui.renderer_style_access import (
     renderer_bond_spacing_for,
     renderer_hash_spacing_for,
 )
-
-if TYPE_CHECKING:
-    from PyQt6.QtGui import QPainterPath, QPolygonF
 
 
 class BondLineGeometryService:
@@ -72,7 +68,7 @@ class BondLineGeometryService:
             return 0.0
         return max(self._hash_spacing() * 0.4, self._dotted_dot_radius() * 1.75)
 
-    def dotted_bond_path(
+    def dotted_bond_dots(
         self,
         x1: float,
         y1: float,
@@ -80,18 +76,18 @@ class BondLineGeometryService:
         y2: float,
         a_id: int | None = None,
         b_id: int | None = None,
-    ) -> QPainterPath:
-        radius = self._dotted_dot_radius()
-        return dotted_bond_path_from_trimmed_segment(
+    ) -> tuple[list[tuple[float, float]], float]:
+        """Dot centres plus the radius to draw each of them at."""
+        centers = dotted_bond_dot_centers(
             x1,
             y1,
             x2,
             y2,
             start_trim=self._junction_trim_for_atom(a_id, b_id),
             end_trim=self._junction_trim_for_atom(b_id, a_id),
-            dot_radius=radius,
             target_spacing=self._dotted_target_spacing(),
         )
+        return centers, self._dotted_dot_radius()
 
     def parallel_bond_segments(
         self,
@@ -261,7 +257,7 @@ class BondLineGeometryService:
             )
         return outer_center_seg, inner_center_seg, (inner_nx, inner_ny)
 
-    def wedge_polygon(
+    def wedge_triangle(
         self,
         x1: float,
         y1: float,
@@ -269,9 +265,13 @@ class BondLineGeometryService:
         y2: float,
         a_id: int | None = None,
         b_id: int | None = None,
-    ) -> QPolygonF:
+    ) -> tuple[
+        tuple[float, float],
+        tuple[float, float],
+        tuple[float, float],
+    ]:
         t0, t1 = trim_line_for_labels_for(self.canvas, a_id, b_id, x1, y1, x2, y2)
-        return wedge_polygon_from_segment(
+        return wedge_triangle_from_segment(
             trimmed_line_segment(x1, y1, x2, y2, t0=t0, t1=t1),
             max_width=bold_bond_pen_for(self.canvas).widthF(),
         )

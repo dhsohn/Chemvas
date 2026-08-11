@@ -3,7 +3,7 @@ from __future__ import annotations
 from chemvas.features.rendering import (
     hash_segments_from_segment,
     trimmed_line_segment,
-    wedge_polygon_from_segment,
+    wedge_triangle_from_segment,
 )
 
 
@@ -16,15 +16,15 @@ def test_trimmed_line_segment_applies_parametric_bounds() -> None:
     )
 
 
-def test_wedge_polygon_from_segment_uses_narrow_start_and_wide_end() -> None:
-    polygon = wedge_polygon_from_segment((0.0, 0.0, 10.0, 0.0), max_width=4.0)
+def test_wedge_triangle_from_segment_uses_narrow_start_and_wide_end() -> None:
+    tip, wide_a, wide_b = wedge_triangle_from_segment(
+        (0.0, 0.0, 10.0, 0.0), max_width=4.0
+    )
 
-    assert polygon.count() == 3
-    assert polygon[0].x() == 1.0
-    assert polygon[0].y() == 0.0
-    assert polygon[1].x() == 10.0
-    assert polygon[2].x() == 10.0
-    assert polygon[1].y() > polygon[2].y()
+    assert tip == (1.0, 0.0)
+    assert wide_a[0] == 10.0
+    assert wide_b[0] == 10.0
+    assert wide_a[1] > wide_b[1]
 
 
 def test_hash_segments_from_segment_scales_dashes_along_bond() -> None:

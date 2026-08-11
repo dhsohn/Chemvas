@@ -14,7 +14,7 @@ from chemvas.features.rendering import (
     is_bold_double_bond_style,
     line_intersection,
     normal_away_from_parallel_segment,
-    strip_polygon,
+    strip_corners,
 )
 from chemvas.ui.canvas_graph_state import graph_state_for
 from chemvas.ui.canvas_model_access import atom_for_id, bond_for_id
@@ -114,7 +114,8 @@ class BondGraphicsDrawService:
         # a shared vertex. Extend each end edge to meet the neighbour's matching
         # edge (a true mitre) so the run reads as one continuous outline.
         if a_id is None and b_id is None:
-            return strip_polygon(x1, y1, x2, y2, nx, ny, base_width, bold_width)
+            corners = strip_corners(x1, y1, x2, y2, nx, ny, base_width, bold_width)
+            return QPolygonF([QPointF(x, y) for x, y in corners])
         outer_off = -base_width / 2.0
         inner_off = bold_width - base_width / 2.0
         dx = x2 - x1

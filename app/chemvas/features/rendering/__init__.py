@@ -1,7 +1,7 @@
 """Bond rendering policy and Qt geometry primitives."""
 
 from .acs1996_style import ACS1996Style
-from .bond_dotted import dotted_bond_path_from_trimmed_segment
+from .bond_dotted import dotted_bond_dot_centers
 from .bond_geometry import (
     DEFAULT_BOLD_OUT_LENGTH_SCALE,
     LineSegment,
@@ -12,7 +12,7 @@ from .bond_geometry import (
     normalize_3d,
     offset_segment,
     scale_segment,
-    strip_polygon,
+    strip_corners,
     trim_segment,
 )
 from .bond_graphics import refresh_bond_graphics
@@ -20,7 +20,7 @@ from .bond_preview import plain_double_preview_segments
 from .bond_stereo import (
     hash_segments_from_segment,
     trimmed_line_segment,
-    wedge_polygon_from_segment,
+    wedge_triangle_from_segment,
 )
 from .bond_style import (
     BOLD_BOND_STYLES,
@@ -80,7 +80,7 @@ __all__ = [
     "bold_double_style_for_style",
     "bold_out_scale",
     "cycle_plain_bond_style",
-    "dotted_bond_path_from_trimmed_segment",
+    "dotted_bond_dot_centers",
     "dotted_double_variant_for_style",
     "double_position_for_style",
     "extend_segment",
@@ -98,10 +98,10 @@ __all__ = [
     "plain_double_preview_segments",
     "refresh_bond_graphics",
     "scale_segment",
-    "strip_polygon",
+    "strip_corners",
     "style_for_double_position",
     "style_for_existing_bond_overlay",
     "trim_segment",
     "trimmed_line_segment",
-    "wedge_polygon_from_segment",
+    "wedge_triangle_from_segment",
 ]

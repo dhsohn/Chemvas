@@ -2,10 +2,8 @@ from __future__ import annotations
 
 import math
 
-from PyQt6.QtCore import QPointF
-from PyQt6.QtGui import QPolygonF
-
 LineSegment = tuple[float, float, float, float]
+Point2D = tuple[float, float]
 DEFAULT_BOLD_OUT_LENGTH_SCALE = 1.1
 
 
@@ -114,7 +112,7 @@ def line_intersection(
     return (px + dx * t, py + dy * t)
 
 
-def strip_polygon(
+def strip_corners(
     x1: float,
     y1: float,
     x2: float,
@@ -123,17 +121,15 @@ def strip_polygon(
     ny: float,
     base_width: float,
     bold_width: float,
-) -> QPolygonF:
+) -> tuple[Point2D, Point2D, Point2D, Point2D]:
     half_base = base_width / 2.0
     inner_offset = half_base + max(0.0, bold_width - base_width)
     outer_offset = -half_base
-    return QPolygonF(
-        [
-            QPointF(x1 + nx * outer_offset, y1 + ny * outer_offset),
-            QPointF(x2 + nx * outer_offset, y2 + ny * outer_offset),
-            QPointF(x2 + nx * inner_offset, y2 + ny * inner_offset),
-            QPointF(x1 + nx * inner_offset, y1 + ny * inner_offset),
-        ]
+    return (
+        (x1 + nx * outer_offset, y1 + ny * outer_offset),
+        (x2 + nx * outer_offset, y2 + ny * outer_offset),
+        (x2 + nx * inner_offset, y2 + ny * inner_offset),
+        (x1 + nx * inner_offset, y1 + ny * inner_offset),
     )
 
 
@@ -158,6 +154,6 @@ __all__ = [
     "normalize_3d",
     "offset_segment",
     "scale_segment",
-    "strip_polygon",
+    "strip_corners",
     "trim_segment",
 ]
