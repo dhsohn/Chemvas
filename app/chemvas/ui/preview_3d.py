@@ -27,11 +27,21 @@ from chemvas.ui.preview_3d_worker import Preview3DWorker
 from chemvas.ui.structure_payload_access import build_selected_3d_conversion_payload_for
 
 
+def _mouse_interaction_active() -> bool:
+    return QApplication.mouseButtons() != Qt.MouseButton.NoButton
+
+
 class Preview3D(QWidget):
-    def __init__(self, rdkit_adapter: RDKitAdapter | None = None) -> None:
+    def __init__(
+        self,
+        rdkit_adapter: RDKitAdapter | None = None,
+        *,
+        interaction_active: Callable[[], bool] | None = None,
+    ) -> None:
         super().__init__()
         self._rdkit = rdkit_adapter or RDKitAdapter()
         self._async_enabled = rdkit_adapter is None
+        self._interaction_active = interaction_active or _mouse_interaction_active
         self._preview_request_id = 0
         self._preview_jobs: dict[int, tuple[QThread, Preview3DWorker]] = {}
         # Single-flight guard: at most one preview worker runs at a time. If a
@@ -62,7 +72,7 @@ class Preview3D(QWidget):
         self._update_timer = QTimer(self)
         self._update_timer.setSingleShot(True)
         self._update_timer.setInterval(120)
-        self._update_timer.timeout.connect(self._rebuild_scene)
+        self._update_timer.timeout.connect(self._handle_update_timer_timeout)
         self.setMinimumSize(260, 220)
         self.setMouseTracking(True)
 
@@ -167,6 +177,17 @@ class Preview3D(QWidget):
     def _payload_signature(self, model, atom_annotations) -> tuple:
         return preview_payload_signature(model, atom_annotations)
 
+    def _handle_update_timer_timeout(self) -> None:
+        # An RDKit rebuild competes with the GUI thread for the GIL, so a
+        # debounce that fires while the user is still holding a drag would
+        # stutter the very interaction that scheduled it. Re-arm and rebuild
+        # once the interaction ends.
+        if self._interaction_active():
+            if not self._disposed:
+                self._update_timer.start()
+            return
+        self._rebuild_scene()
+
     def _rebuild_scene(self) -> None:
         if self._disposed:
             return
@@ -246,7 +267,9 @@ class Preview3D(QWidget):
             return
         if self._preview_restart_pending and self._pending_model is not None:
             self._preview_restart_pending = False
-            self._rebuild_scene()
+            # Same interaction gate as the debounce: don't start the next
+            # RDKit job while the user is still mid-drag.
+            self._handle_update_timer_timeout()
 
     def _handle_preview_worker_finished(
         self,
