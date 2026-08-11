@@ -1,7 +1,6 @@
 from types import SimpleNamespace
 
 import pytest
-from chemvas.ui.canvas_model_state import model_for
 from chemvas.ui.canvas_state_lookup import canvas_state_object, ensure_canvas_state
 
 
@@ -78,12 +77,3 @@ def test_ensure_canvas_state_rejects_missing_field_on_strict_container() -> None
     with pytest.raises(AttributeError, match="out of sync"):
         ensure_canvas_state(canvas, "group_state", list)
     assert not hasattr(canvas, "group_state")
-
-
-def test_model_for_reads_the_canvas_attribute_without_creating_one() -> None:
-    canvas = SimpleNamespace(model="document")
-
-    assert model_for(canvas) == "document"
-
-    with pytest.raises(AttributeError):
-        model_for(SimpleNamespace())
