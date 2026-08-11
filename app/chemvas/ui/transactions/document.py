@@ -53,9 +53,6 @@ def _add_delete_rollback_note(
     )
 
 
-_MISSING_ATTRIBUTE = object()
-
-
 @dataclass(frozen=True)
 class MoveGestureScope:
     """The mutation footprint of a pure-move drag gesture.

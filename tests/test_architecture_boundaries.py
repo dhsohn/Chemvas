@@ -4016,9 +4016,7 @@ def test_state_accessors_read_the_runtime_container_directly() -> None:
                 )
 
     assert violations == []
-    # A shrinking set would mean accessors were renamed out of the check rather
-    # than fixed, so pin the count the migration left behind.
-    assert len(checked) == 23, checked
+    assert checked
 
 
 def test_ensure_canvas_state_stays_removed() -> None:

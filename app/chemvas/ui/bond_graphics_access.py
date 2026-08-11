@@ -135,17 +135,22 @@ def bond_offset_unit_3d_for(
 
 
 def ring_center_for_bond_for(canvas, bond):
+    # Only the service lookup answers "no controller yet" with AttributeError.
+    # The controller itself returns None for a bond that is not in a ring, so a
+    # wider catch would report a bug inside it as an ordinary non-ring bond.
     try:
-        return geometry_controller_for_access(canvas).ring_center_for_bond(bond)
+        controller = geometry_controller_for_access(canvas)
     except AttributeError:
         return None
+    return controller.ring_center_for_bond(bond)
 
 
 def ring_center_3d_for_bond_for(canvas, bond):
     try:
-        return geometry_controller_for_access(canvas).ring_center_3d_for_bond(bond)
+        controller = geometry_controller_for_access(canvas)
     except AttributeError:
         return None
+    return controller.ring_center_3d_for_bond(bond)
 
 
 def apply_color_to_bond_item_for(canvas, item, color) -> None:

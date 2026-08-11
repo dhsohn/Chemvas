@@ -115,6 +115,19 @@ suite, and milestone-level full-suite/package verification.
   added. `BondLineGeometryService` now holds no Qt shape types at all, which its
   own boundary check (`test_bond_line_geometry_delegates_special_glyph_geometry`)
   requires.
+- **The "empty set" end state is not reachable as written, and what replaces it
+  is undecided.** Of the twelve entries left, eight are irreducibly Qt: figure
+  export's input *is* a `QGraphicsScene`, so no Qt-free formulation of it exists.
+  For the rest, "move it to `chemvas.adapters`" is not a file move — every
+  production consumer lives in `chemvas.ui`, and
+  `test_concrete_adapters_are_known_only_by_adapters_and_bootstrap` forbids a
+  `chemvas.ui -> chemvas.adapters` edge, so each migration needs a port protocol,
+  bootstrap construction and `CanvasRuntimeServices` wiring. That turns a 60-line
+  move into a few hundred lines that mostly relocate Qt code from one Qt module
+  to another and add an indirection hop, which conflicts with this repo's rule
+  against building what is not needed. The three that left did so only because
+  their Qt construction had an existing home. Until this is decided, the
+  allowlist is a frozen inventory that may only shrink, not a countdown to zero.
 - The canvas model is created by canvas setup instead of appearing on first
   access. `model_for` reads `canvas.model`, so `ensure_canvas_state` no longer
   carries a `runtime_field` switch and every remaining accessor resolves against

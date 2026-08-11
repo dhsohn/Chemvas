@@ -118,9 +118,6 @@ _DOCUMENT_MUTATED_RUNTIME_FIELDS = (
 )
 
 
-_MISSING_ATTRIBUTE = object()
-
-
 def _capture_optional_attribute(
     target: object,
     name: str,
@@ -737,12 +734,6 @@ class CanvasDocumentSessionService:
             names=("style",),
         )
         append_snapshot(
-            _capture_optional_attribute(self.canvas, "selection_style_state")
-        )
-        append_snapshot(
-            _capture_optional_attribute(self.canvas, "selection_info_state")
-        )
-        append_snapshot(
             self.canvas,
             names=(
                 "settings",
@@ -792,14 +783,7 @@ class CanvasDocumentSessionService:
 
     def _clear_detached_selection_state(self) -> None:
         set_selected_highlight_items_for(self.canvas, [])
-        runtime_state = getattr(self.canvas, "runtime_state", None)
-        selection_info_state = (
-            getattr(runtime_state, "selection_info_state", None)
-            if runtime_state is not None
-            else getattr(self.canvas, "selection_info_state", None)
-        )
-        if selection_info_state is None:
-            return
+        selection_info_state = selection_info_state_for(self.canvas)
         selection_info_state.signature = None
         selection_info_state.pending_signature = None
         selection_info_state.cache = ("", "")

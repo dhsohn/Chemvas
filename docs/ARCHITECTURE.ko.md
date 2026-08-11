@@ -52,8 +52,13 @@
 목표 경계는 구체 Qt 통합을 `chemvas.adapters`에 둔다. 다만 진행 중인 namespace
 마이그레이션에는 아직 고정된 일부 feature 구현 모듈의 직접 Qt import가 남아 있다.
 `tests/test_package_dependencies.py`의 `FEATURE_QT_MIGRATION_ALLOWLIST`가 실행 가능한
-목록이다. 새 모듈은 추가할 수 없고, 각 adapter 이전에서 해당 항목을 제거한다. 목록이
-비면 예외 검사를 `chemvas.features`의 Qt import 전면 금지로 교체한다.
+목록이다. 새 모듈은 추가할 수 없고, 각 adapter 이전에서 해당 항목을 제거한다.
+
+다만 **목록을 비우는 것은 현재 도달 가능한 목표가 아니다** — 남은 12항목 중 8건은 환원
+불가능한 Qt이고(figure export는 입력 자체가 `QGraphicsScene`이다), 나머지를 옮기는 것은
+실제 의존을 없애지 못한 채 port와 배선만 늘린다. 측정 근거는
+[ADR 0001](adr/0001-feature-oriented-modularization.md)에 있다. 종료 형태가 결정되기
+전까지 이 목록은 **줄어들기만 하는 동결 목록**으로 다룬다.
 
 ## 트랜잭션과 복구 소유권
 

@@ -20,10 +20,7 @@ if QApplication is not None:
     )
     from chemvas.ui.canvas_hit_testing_service import CanvasHitTestingService
     from chemvas.ui.canvas_hover_state import hover_state_for
-    from chemvas.ui.spatial_index_state import (
-        CanvasSpatialIndexState,
-        spatial_index_state_for,
-    )
+    from chemvas.ui.spatial_index_state import CanvasSpatialIndexState
 
     from tests.runtime_state import canvas_runtime_state
 
@@ -166,6 +163,7 @@ class CanvasHitTestingServiceTest(unittest.TestCase):
         canvas.scene.assert_not_called()
 
     def test_spatial_index_helpers_rebuild_and_find_atom_and_bond(self) -> None:
+        index_state = CanvasSpatialIndexState()
         canvas = SimpleNamespace(
             renderer=SimpleNamespace(style=SimpleNamespace(bond_length_px=20.0)),
             model=SimpleNamespace(
@@ -176,9 +174,7 @@ class CanvasHitTestingServiceTest(unittest.TestCase):
                 },
                 bonds=[Bond(1, 2, 1), None],
             ),
-            runtime_state=canvas_runtime_state(
-                spatial_index_state=CanvasSpatialIndexState()
-            ),
+            runtime_state=canvas_runtime_state(spatial_index_state=index_state),
         )
         service = CanvasHitTestingService(canvas)
 
@@ -187,14 +183,14 @@ class CanvasHitTestingServiceTest(unittest.TestCase):
 
         service.ensure_spatial_index()
 
-        self.assertFalse(spatial_index_state_for(canvas).dirty)
-        self.assertEqual(spatial_index_state_for(canvas).cell_size, 20.0)
+        self.assertFalse(index_state.dirty)
+        self.assertEqual(index_state.cell_size, 20.0)
         self.assertEqual(service.find_atom_near(1.0, 1.0, 5.0), 1)
         self.assertEqual(service.find_bond_near(QPointF(5.0, 2.0), 4.0), 0)
         self.assertIsNone(service.find_bond_near(QPointF(40.0, 40.0), 4.0))
 
         service.mark_spatial_index_dirty()
-        self.assertTrue(spatial_index_state_for(canvas).dirty)
+        self.assertTrue(index_state.dirty)
 
     def test_spatial_index_self_heals_when_dirty_mark_was_missed(self) -> None:
         # The dirty flag depends on every mutation path remembering to call
@@ -222,19 +218,18 @@ class CanvasHitTestingServiceTest(unittest.TestCase):
     def test_spatial_index_and_nearest_helpers_cover_missing_sparse_and_zero_cell_paths(
         self,
     ) -> None:
+        sparse_index_state = CanvasSpatialIndexState()
         sparse_canvas = SimpleNamespace(
             renderer=SimpleNamespace(style=SimpleNamespace(bond_length_px=20.0)),
             model=SimpleNamespace(
                 atoms={1: Atom("C", 0.0, 0.0)},
                 bonds=[Bond(1, 99, 1)],
             ),
-            runtime_state=canvas_runtime_state(
-                spatial_index_state=CanvasSpatialIndexState()
-            ),
+            runtime_state=canvas_runtime_state(spatial_index_state=sparse_index_state),
         )
         sparse_service = CanvasHitTestingService(sparse_canvas)
         sparse_service.rebuild_spatial_index(20.0)
-        self.assertEqual(spatial_index_state_for(sparse_canvas).bond_grid, {})
+        self.assertEqual(sparse_index_state.bond_grid, {})
 
         sparse_lookup_canvas = SimpleNamespace(
             renderer=SimpleNamespace(style=SimpleNamespace(bond_length_px=20.0)),
