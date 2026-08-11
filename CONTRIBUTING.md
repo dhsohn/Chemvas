@@ -123,11 +123,13 @@ Production service lookup accepts only `CanvasRuntimeServices`; it does not adap
 flat or duck-typed service bags. Focused legacy UI tests use the test-only builder
 in `tests/runtime_services.py` when they need a partial runtime.
 
-State works the same way. Every `<name>_state_for(canvas)` accessor reads its field
-off `canvas.runtime_state`, and nothing creates state on the canvas on first access
-any more. A double therefore needs its own partial container — build it with
-`tests/runtime_state.canvas_runtime_state(**states)`, which checks the names against
-the real `CanvasRuntimeState`:
+State works the same way. A `<name>_state_for(canvas)` accessor reads its field off
+`canvas.runtime_state` and does not create state on the canvas on first access. (Two
+hold-outs, `sheet_setup_state_for` and `document_metadata_state_for`, still go through
+the older `canvas_state_object` path and do attach; `NON_RUNTIME_STATE_ACCESSORS` in
+the boundary test records them.) A double therefore needs its own partial container —
+build it with `tests/runtime_state.canvas_runtime_state(**states)`, which checks the
+names against the real `CanvasRuntimeState`:
 
 ```python
 canvas = SimpleNamespace(
