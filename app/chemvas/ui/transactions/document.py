@@ -56,6 +56,27 @@ def _add_delete_rollback_note(
 _MISSING_ATTRIBUTE = object()
 
 
+@dataclass(frozen=True)
+class MoveGestureScope:
+    """The mutation footprint of a pure-move drag gesture.
+
+    A selection move mutates only atom coordinates, their 3D coordinates,
+    the runtime state objects, and the positions/geometry/data of a closed
+    set of scene items (atom labels/dots, marks, incident bond items,
+    affected ring polygons, independently moved selection items, active
+    handles, and selection outlines). Capturing a savepoint restricted to
+    that footprint keeps the fail-closed restore exact for everything the
+    gesture can touch while skipping the per-item snapshots of the rest of
+    the document. Gestures whose footprint is not closed (handle drags,
+    direct item drags that redraw bonds) must keep the whole-document
+    capture by passing no scope.
+    """
+
+    atom_ids: frozenset[int]
+    bond_ids: frozenset[int]
+    scene_items: tuple[Any, ...]
+
+
 def _capture_optional_attribute(
     target: object,
     name: str,
@@ -140,6 +161,7 @@ class DocumentSavepoint:
         *,
         history_service=None,
         guard_scene_rect: bool = False,
+        move_scope: MoveGestureScope | None = None,
     ) -> DocumentSavepoint:
         containers = _ContainerGraphSnapshot()
 
@@ -194,11 +216,15 @@ class DocumentSavepoint:
         )
         atoms = _capture_optional_attribute(model, "atoms")
         if isinstance(atoms, dict):
-            for atom in tuple(atoms.values()):
+            for atom_id, atom in tuple(atoms.items()):
+                if move_scope is not None and atom_id not in move_scope.atom_ids:
+                    continue
                 append(atom)
         bonds = _capture_optional_attribute(model, "bonds")
         if isinstance(bonds, (list, tuple)):
-            for bond in tuple(bonds):
+            for bond_id, bond in enumerate(tuple(bonds)):
+                if move_scope is not None and bond_id not in move_scope.bond_ids:
+                    continue
                 append(bond)
 
         runtime_states: dict[str, object | None] = {}
@@ -243,26 +269,39 @@ class DocumentSavepoint:
                 scene_item_snapshots.append(snapshot)
 
         scene = _delete_scene_for_capture(canvas)
-        for scene_item in _delete_scene_items_for_capture(scene):
-            capture_scene_item(scene_item)
+        if move_scope is None:
+            for scene_item in _delete_scene_items_for_capture(scene):
+                capture_scene_item(scene_item)
 
-        scene_runtime = capture_scene_runtime(canvas, strict=True)
+        scene_runtime = capture_scene_runtime(
+            canvas,
+            strict=True,
+            detail_items=(None if move_scope is None else move_scope.scene_items),
+            detail_bond_ids=(None if move_scope is None else move_scope.bond_ids),
+        )
         if scene is None:
             scene = getattr(scene_runtime, "scene", None)
-        for scene_item in scene_runtime.scene_items or ():
-            capture_scene_item(scene_item)
+        if move_scope is None:
+            for scene_item in scene_runtime.scene_items or ():
+                capture_scene_item(scene_item)
 
-        registered_ring_items = _capture_optional_attribute(
-            runtime_states["scene_items_state"],
-            "ring_items",
-        )
-        if isinstance(registered_ring_items, (list, tuple)):
-            for scene_item in registered_ring_items:
+            registered_ring_items = _capture_optional_attribute(
+                runtime_states["scene_items_state"],
+                "ring_items",
+            )
+            if isinstance(registered_ring_items, (list, tuple)):
+                for scene_item in registered_ring_items:
+                    capture_scene_item(scene_item)
+        else:
+            # The scope owner enumerated the gesture's mutation footprint;
+            # exact per-item snapshots are restricted to it.
+            for scene_item in move_scope.scene_items:
                 capture_scene_item(scene_item)
 
         atom_primitive_graphics = capture_atom_primitive_graphics(
             canvas,
             strict=True,
+            atom_ids=(None if move_scope is None else move_scope.atom_ids),
         )
 
         # The rect guard is the only mutation capture performs, so take it
@@ -526,5 +565,6 @@ def document_transaction(
 
 __all__ = [
     "DocumentSavepoint",
+    "MoveGestureScope",
     "document_transaction",
 ]

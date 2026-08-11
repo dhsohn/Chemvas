@@ -417,6 +417,7 @@ def _bond_primitive_graphics_snapshots(
     canvas,
     *,
     strict: bool = False,
+    bond_ids: frozenset[int] | None = None,
 ) -> tuple[BondPrimitiveGraphicsSnapshot, ...]:
     state = _snapshot_canvas_state_object(
         canvas,
@@ -428,7 +429,9 @@ def _bond_primitive_graphics_snapshots(
         return ()
     snapshots: list[BondPrimitiveGraphicsSnapshot] = []
     seen: set[int] = set()
-    for items in mapping.values():
+    for bond_id, items in mapping.items():
+        if bond_ids is not None and bond_id not in bond_ids:
+            continue
         if not isinstance(items, (list, tuple)):
             continue
         for item in items:
@@ -448,6 +451,7 @@ def capture_atom_primitive_graphics(
     canvas,
     *,
     strict: bool = False,
+    atom_ids: frozenset[int] | None = None,
 ) -> tuple[BondPrimitiveGraphicsSnapshot, ...]:
     state = _snapshot_canvas_state_object(
         canvas,
@@ -463,7 +467,9 @@ def capture_atom_primitive_graphics(
     for mapping in mappings:
         if not isinstance(mapping, dict):
             continue
-        for item in mapping.values():
+        for atom_id, item in mapping.items():
+            if atom_ids is not None and atom_id not in atom_ids:
+                continue
             if item is None or id(item) in seen:
                 continue
             seen.add(id(item))
@@ -811,7 +817,18 @@ def capture_scene_runtime(
     *,
     strict: bool = False,
     scene_override: object = _MISSING_SNAPSHOT_ATTRIBUTE,
+    detail_items: tuple[object, ...] | None = None,
+    detail_bond_ids: frozenset[int] | None = None,
 ) -> SceneRuntimeSnapshot:
+    """Capture the scene runtime authorities.
+
+    ``detail_items``/``detail_bond_ids`` restrict the per-item detail
+    snapshots (topology, selection, visibility, bond primitives) to a
+    gesture's known mutation footprint. The full ordered scene-item identity
+    list is always captured, so membership restore and identity verification
+    stay whole-document. Callers own the completeness of the footprint; pass
+    ``None`` (the default) for the whole-document capture.
+    """
     scene: object | None
     if scene_override is not _MISSING_SNAPSHOT_ATTRIBUTE:
         scene = scene_override
@@ -881,12 +898,15 @@ def capture_scene_runtime(
     else:
         focus_item_getter = None
         focus_item_setter = None
+    detail_scope_items = (
+        list(detail_items) if detail_items is not None else (scene_items or [])
+    )
     topology_states = _scene_item_topology_snapshots(
-        scene_items or [],
+        detail_scope_items,
         strict=strict,
     )
     selected_states: list[_SceneSelectionSnapshot] = []
-    for item in scene_items or ():
+    for item in detail_scope_items:
         if graphics_item_is_deleted(item):
             continue
         is_selected = _snapshot_attribute(item, "isSelected", strict=strict)
@@ -1012,7 +1032,7 @@ def capture_scene_runtime(
         topology_states=topology_states,
         selected_states=selected_states,
         visibility_states=_visibility_snapshots(
-            scene_items or [],
+            detail_scope_items,
             strict=strict,
         ),
         selection_visuals=selection_visuals,
@@ -1032,6 +1052,7 @@ def capture_scene_runtime(
         bond_primitive_graphics=_bond_primitive_graphics_snapshots(
             canvas,
             strict=strict,
+            bond_ids=detail_bond_ids,
         ),
     )
 
