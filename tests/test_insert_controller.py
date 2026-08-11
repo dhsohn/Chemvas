@@ -24,7 +24,7 @@ from chemvas.ui.canvas_atom_graphics_state import CanvasAtomGraphicsState
 from chemvas.ui.canvas_bond_graphics_state import CanvasBondGraphicsState
 from chemvas.ui.canvas_callback_state import CanvasCallbackState
 from chemvas.ui.canvas_insert_state import CanvasInsertState, insert_state_for
-from chemvas.ui.canvas_mark_registry import CanvasMarkRegistry, mark_registry_for
+from chemvas.ui.canvas_mark_registry import CanvasMarkRegistry
 from chemvas.ui.canvas_rotation_state import CanvasRotationState, rotation_state_for
 from chemvas.ui.canvas_scene_items_state import (
     SCENE_ITEM_COLLECTION_ATTRS,
@@ -99,9 +99,11 @@ class _FakeSceneItem:
 
 class _FakeCanvas:
     insert_state = property(insert_state_for)
-    mark_registry = property(mark_registry_for)
 
     def __init__(self) -> None:
+        # Held by name so assertions read the object the runtime container was
+        # given, not whatever the accessor happens to hand back.
+        self.mark_registry = CanvasMarkRegistry()
         self.rdkit = SimpleNamespace(
             smiles_to_2d=Mock(return_value=None),
             last_error=None,
@@ -118,7 +120,7 @@ class _FakeCanvas:
             callback_state=CanvasCallbackState(),
             smiles_input_state=CanvasSmilesInputState(),
             insert_state=CanvasInsertState(),
-            mark_registry=CanvasMarkRegistry(),
+            mark_registry=self.mark_registry,
             scene_items_state=CanvasSceneItemsState(),
             atom_graphics_state=CanvasAtomGraphicsState(),
             bond_graphics_state=CanvasBondGraphicsState(),

@@ -4,7 +4,7 @@ from chemvas.core.history import AddAtomsCommand, AddBondCommand, CompositeComma
 from chemvas.domain.document import Atom, Bond, MoleculeModel
 from chemvas.ui.atom_coords_access import CanvasAtomCoords3DState
 from chemvas.ui.canvas_atom_graphics_state import CanvasAtomGraphicsState
-from chemvas.ui.canvas_mark_registry import CanvasMarkRegistry, mark_registry_for
+from chemvas.ui.canvas_mark_registry import CanvasMarkRegistry
 from chemvas.ui.canvas_rotation_state import CanvasRotationState
 from chemvas.ui.canvas_scene_items_state import (
     SCENE_ITEM_COLLECTION_ATTRS,
@@ -39,13 +39,16 @@ class _FakeItem:
 
 class _FakeCanvas:
     def __init__(self) -> None:
+        # Held by name so assertions read the object the runtime container was
+        # given, not whatever the accessor happens to hand back.
+        self.mark_registry = CanvasMarkRegistry()
         self.runtime_state = canvas_runtime_state(
             smiles_input_state=CanvasSmilesInputState(),
             scene_items_state=CanvasSceneItemsState(),
             atom_graphics_state=CanvasAtomGraphicsState(),
             atom_coords_3d_state=CanvasAtomCoords3DState(),
             rotation_state=CanvasRotationState(),
-            mark_registry=CanvasMarkRegistry(),
+            mark_registry=self.mark_registry,
         )
         set_last_smiles_input_for(self, "before")
         self.model = MoleculeModel()
@@ -94,7 +97,7 @@ class SmilesLoadTransactionBuilderTest(unittest.TestCase):
         ts_bracket = _FakeItem("ts")
         shape = _FakeItem("shape")
         orbital = _FakeItem("orbital")
-        mark_registry_for(canvas).by_atom = {1: [bound_mark]}
+        canvas.mark_registry.by_atom = {1: [bound_mark]}
         set_scene_item_collection_for(
             canvas, "mark_items", [bound_mark, stale_mark, free_mark]
         )

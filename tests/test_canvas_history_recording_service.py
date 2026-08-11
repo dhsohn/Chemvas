@@ -113,12 +113,6 @@ def _make_canvas(
     return SimpleNamespace(
         push_command=push_command,
         services=canvas_runtime_services(history_service=history_service),
-        _atom_state_dict=mock.Mock(
-            side_effect=lambda atom_id: {"atom_id": atom_id, "kind": "atom"}
-        ),
-        _bond_state_dict=mock.Mock(
-            side_effect=lambda bond: {"bond": getattr(bond, "name", "bond")}
-        ),
         model=SimpleNamespace(
             atoms=dict(atoms or {}),
             bonds=list(bonds or []),

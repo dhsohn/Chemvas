@@ -45,9 +45,9 @@ if QApplication is not None:
         bond_items_for,
         set_bond_items_for,
     )
-    from chemvas.ui.canvas_graph_state import CanvasGraphState, graph_state_for
+    from chemvas.ui.canvas_graph_state import CanvasGraphState
     from chemvas.ui.canvas_group_state import CanvasGroupState
-    from chemvas.ui.canvas_mark_registry import CanvasMarkRegistry, mark_registry_for
+    from chemvas.ui.canvas_mark_registry import CanvasMarkRegistry
     from chemvas.ui.canvas_rotation_state import CanvasRotationState
     from chemvas.ui.canvas_scene_items_state import (
         SCENE_ITEM_COLLECTION_ATTRS,
@@ -67,10 +67,7 @@ if QApplication is not None:
         CLIPBOARD_SVG_MIME,
         SceneClipboardController,
     )
-    from chemvas.ui.scene_clipboard_state import (
-        SceneClipboardState,
-        scene_clipboard_state_for,
-    )
+    from chemvas.ui.scene_clipboard_state import SceneClipboardState
     from chemvas.ui.scene_clipboard_transaction_logic import build_clipboard_copy_plan
     from chemvas.ui.scene_delete_controller import SceneDeleteController
     from chemvas.ui.scene_transform_controller import SceneTransformController
@@ -968,15 +965,20 @@ class _FakeCanvas:
         self.renderer = SimpleNamespace(
             style=SimpleNamespace(bond_length_px=20.0, bond_line_width=1.0)
         )
+        # Bound to attributes as well as the runtime container: a test asserting
+        # on the object it seeded fails if production mutated a different one.
+        self.graph_state = CanvasGraphState()
+        self.mark_registry = CanvasMarkRegistry()
+        self.scene_clipboard_state = SceneClipboardState()
         self.runtime_state = canvas_runtime_state(
             atom_coords_3d_state=CanvasAtomCoords3DState(),
             atom_graphics_state=CanvasAtomGraphicsState(),
             bond_graphics_state=CanvasBondGraphicsState(),
-            graph_state=CanvasGraphState(),
+            graph_state=self.graph_state,
             group_state=CanvasGroupState(),
-            mark_registry=CanvasMarkRegistry(),
+            mark_registry=self.mark_registry,
             rotation_state=CanvasRotationState(),
-            scene_clipboard_state=SceneClipboardState(),
+            scene_clipboard_state=self.scene_clipboard_state,
             scene_items_state=CanvasSceneItemsState(),
             smiles_input_state=CanvasSmilesInputState(),
         )
@@ -1098,9 +1100,6 @@ class _FakeCanvas:
         lambda self: self._scene_items("orbital_items"),
         lambda self, value: self._set_scene_items("orbital_items", value),
     )
-    graph_state = property(lambda self: graph_state_for(self))
-    mark_registry = property(lambda self: mark_registry_for(self))
-    scene_clipboard_state = property(lambda self: scene_clipboard_state_for(self))
 
     @property
     def atom_items(self):

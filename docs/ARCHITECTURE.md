@@ -52,9 +52,14 @@ The target boundary keeps concrete Qt integration in `chemvas.adapters`, but the
 ongoing namespace migration still has direct Qt imports in a fixed set of feature
 implementation modules. `FEATURE_QT_MIGRATION_ALLOWLIST` in
 `tests/test_package_dependencies.py` is the executable inventory: new modules may
-not join it, and each adapter migration removes its module from the set. When the
-set becomes empty, replace the inventory check with an unconditional ban on Qt
-imports from `chemvas.features`.
+not join it, and each adapter migration removes its module from the set.
+
+Emptying the set is **not** currently a reachable goal — eight of the twelve
+remaining entries are irreducibly Qt (figure export takes a `QGraphicsScene` as
+input), and migrating the rest would add ports and wiring without removing a real
+dependency. See [ADR 0001](adr/0001-feature-oriented-modularization.md) for the
+measurement. Treat the list as a frozen inventory that may only shrink until that
+end state is decided.
 
 ## Transaction and Recovery Ownership
 

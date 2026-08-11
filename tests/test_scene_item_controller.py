@@ -24,14 +24,14 @@ except ModuleNotFoundError:
     QApplication = None
 
 if QApplication is not None:
-    from chemvas.ui.canvas_mark_registry import CanvasMarkRegistry, mark_registry_for
+    from chemvas.ui.canvas_mark_registry import CanvasMarkRegistry
     from chemvas.ui.canvas_scene_items_state import (
         SCENE_ITEM_COLLECTION_ATTRS,
         CanvasSceneItemsState,
         scene_item_collection_for,
         set_scene_item_collection_for,
     )
-    from chemvas.ui.handle_state import CanvasHandleState, handle_state_for
+    from chemvas.ui.handle_state import CanvasHandleState
     from chemvas.ui.scene_item_controller import SceneItemController
     from chemvas.ui.transactions.scene_rect import scene_rect_is_automatic
 
@@ -47,9 +47,13 @@ class _FakeCanvas:
             update_bond_geometry=self.update_bond_geometry
         )
         self.model = SimpleNamespace(atoms={})
+        # Bound to attributes as well as the runtime container: a test asserting
+        # on the object it seeded fails if production mutated a different one.
+        self.handle_state = CanvasHandleState()
+        self.mark_registry = CanvasMarkRegistry()
         self.runtime_state = canvas_runtime_state(
-            handle_state=CanvasHandleState(),
-            mark_registry=CanvasMarkRegistry(),
+            handle_state=self.handle_state,
+            mark_registry=self.mark_registry,
             scene_items_state=CanvasSceneItemsState(),
         )
         for name in SCENE_ITEM_COLLECTION_ATTRS:
@@ -129,8 +133,6 @@ class _FakeCanvas:
         lambda self: self._scene_items("orbital_items"),
         lambda self, value: self._set_scene_items("orbital_items", value),
     )
-    handle_state = property(lambda self: handle_state_for(self))
-    mark_registry = property(lambda self: mark_registry_for(self))
 
     def _make_selectable(self, item) -> None:
         self.make_selectable_calls.append(item)

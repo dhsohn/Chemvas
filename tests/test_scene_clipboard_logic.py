@@ -30,7 +30,7 @@ if QApplication is not None:
         set_atom_coords_3d_for,
     )
     from chemvas.ui.canvas_atom_graphics_state import CanvasAtomGraphicsState
-    from chemvas.ui.canvas_mark_registry import CanvasMarkRegistry, mark_registry_for
+    from chemvas.ui.canvas_mark_registry import CanvasMarkRegistry
     from chemvas.ui.canvas_rotation_state import CanvasRotationState, rotation_state_for
     from chemvas.ui.canvas_scene_items_state import (
         CanvasSceneItemsState,
@@ -498,7 +498,7 @@ class SceneClipboardLogicTest(unittest.TestCase):
             "arrow", state={"kind": "arrow", "start": (5.0, 6.0), "end": (7.0, 8.0)}
         )
 
-        mark_registry_for(canvas).by_atom[2] = [linked_mark]
+        canvas.mark_registry.by_atom[2] = [linked_mark]
         set_scene_item_collection_for(canvas, "ring_items", [ring_item])
         for item in (atom_item, bond_item, free_mark, note_item, arrow_item):
             canvas.add_item(item, selected=True)
@@ -790,10 +790,13 @@ class _FakeCanvas:
         scene_clipboard_state = SceneClipboardState()
         scene_clipboard_state.paste_source_json = None
         scene_clipboard_state.paste_count = 0
+        # Held by name so assertions read the object the runtime container was
+        # given, not whatever the accessor happens to hand back.
+        self.mark_registry = CanvasMarkRegistry()
         self.runtime_state = canvas_runtime_state(
             scene_items_state=CanvasSceneItemsState(),
             atom_graphics_state=CanvasAtomGraphicsState(),
-            mark_registry=CanvasMarkRegistry(),
+            mark_registry=self.mark_registry,
             scene_clipboard_state=scene_clipboard_state,
             atom_coords_3d_state=CanvasAtomCoords3DState(),
             rotation_state=CanvasRotationState(),

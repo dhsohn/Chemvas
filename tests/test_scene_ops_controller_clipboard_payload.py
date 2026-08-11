@@ -26,17 +26,14 @@ except ModuleNotFoundError:
 if QApplication is not None:
     from chemvas.domain.document import Atom, Bond, MoleculeModel
     from chemvas.ui.canvas_atom_graphics_state import CanvasAtomGraphicsState
-    from chemvas.ui.canvas_mark_registry import CanvasMarkRegistry, mark_registry_for
+    from chemvas.ui.canvas_mark_registry import CanvasMarkRegistry
     from chemvas.ui.canvas_scene_items_state import (
         SCENE_ITEM_COLLECTION_ATTRS,
         CanvasSceneItemsState,
         set_scene_item_collection_for,
     )
     from chemvas.ui.scene_clipboard_controller import SceneClipboardController
-    from chemvas.ui.scene_clipboard_state import (
-        SceneClipboardState,
-        scene_clipboard_state_for,
-    )
+    from chemvas.ui.scene_clipboard_state import SceneClipboardState
 
 
 def _set_selectable(item: QGraphicsItem) -> QGraphicsItem:
@@ -439,10 +436,14 @@ class _FakeCanvas:
     def __init__(self) -> None:
         self._scene = QGraphicsScene()
         self.model = MoleculeModel()
+        # Bound to attributes as well as the runtime container: a test asserting
+        # on the object it seeded fails if production mutated a different one.
+        self.mark_registry = CanvasMarkRegistry()
+        self.scene_clipboard_state = SceneClipboardState()
         self.runtime_state = canvas_runtime_state(
             atom_graphics_state=CanvasAtomGraphicsState(),
-            mark_registry=CanvasMarkRegistry(),
-            scene_clipboard_state=SceneClipboardState(),
+            mark_registry=self.mark_registry,
+            scene_clipboard_state=self.scene_clipboard_state,
             scene_items_state=CanvasSceneItemsState(),
         )
         for name in SCENE_ITEM_COLLECTION_ATTRS:
@@ -451,9 +452,6 @@ class _FakeCanvas:
         self.scene_clipboard_state.paste_count = 0
         self.history_service = SimpleNamespace(push=mock.Mock())
         self.services = canvas_runtime_services(history_service=self.history_service)
-
-    mark_registry = property(lambda self: mark_registry_for(self))
-    scene_clipboard_state = property(lambda self: scene_clipboard_state_for(self))
 
     def scene(self) -> QGraphicsScene:
         return self._scene
