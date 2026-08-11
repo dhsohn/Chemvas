@@ -2593,5 +2593,52 @@ class RDKitConversionEdgeTest(unittest.TestCase):
         self.assertEqual(adapter.last_error, "Alias expansion failed.")
 
 
+class WarmRdkitInBackgroundTest(unittest.TestCase):
+    def test_warmup_preloads_on_a_named_daemon_thread(self) -> None:
+        import threading
+
+        from chemvas.core.rdkit_adapter import warm_rdkit_in_background
+
+        preload_threads: list[threading.Thread] = []
+
+        def record_thread(self) -> bool:
+            preload_threads.append(threading.current_thread())
+            return True
+
+        with mock.patch.object(RDKitAdapter, "preload", record_thread):
+            thread = warm_rdkit_in_background()
+            thread.join(timeout=5.0)
+
+        self.assertFalse(thread.is_alive())
+        self.assertTrue(thread.daemon)
+        self.assertEqual(thread.name, "rdkit-warmup")
+        self.assertEqual(preload_threads, [thread])
+        self.assertIsNot(thread, threading.main_thread())
+
+    def test_warmup_records_unavailability_without_raising(self) -> None:
+        from chemvas.core.rdkit_adapter import warm_rdkit_in_background
+
+        captured: list[RDKitAdapter] = []
+        original_preload = RDKitAdapter.preload
+
+        def blocked_preload(self) -> bool:
+            captured.append(self)
+            with mock.patch("builtins.__import__", side_effect=_block_rdkit_imports):
+                self._rdkit = None
+                return original_preload(self)
+
+        with mock.patch.object(RDKitAdapter, "preload", blocked_preload):
+            thread = warm_rdkit_in_background()
+            thread.join(timeout=5.0)
+
+        self.assertFalse(thread.is_alive())
+        self.assertEqual(len(captured), 1)
+        self.assertTrue(captured[0].is_unavailable())
+        self.assertEqual(
+            captured[0].last_error,
+            "RDKit is not available in this environment.",
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

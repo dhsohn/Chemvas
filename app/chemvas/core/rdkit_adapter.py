@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import threading
 from collections.abc import Mapping
 from typing import Any
 
@@ -231,6 +232,26 @@ class RDKitAdapter:
         return RDKitResult(value, error)
 
 
+def warm_rdkit_in_background() -> threading.Thread:
+    """Import RDKit on a daemon thread so first use never stalls the GUI.
+
+    The rdkit module import costs hundreds of milliseconds and, before this
+    warmup, ran on the GUI thread the first time a selection or the 3D
+    preview needed it — typically in the middle of a drag. Importing is
+    process-wide, so warming a throwaway adapter makes every later
+    ``RDKitAdapter._load_rdkit`` resolve instantly. When RDKit is not
+    installed the thread just records the unavailability and exits.
+    """
+
+    thread = threading.Thread(
+        target=RDKitAdapter().preload,
+        name="rdkit-warmup",
+        daemon=True,
+    )
+    thread.start()
+    return thread
+
+
 __all__ = [
     "Molecule3DAtom",
     "Molecule3DBond",
@@ -238,4 +259,5 @@ __all__ = [
     "MoleculeIdentifiers",
     "RDKitAdapter",
     "RDKitResult",
+    "warm_rdkit_in_background",
 ]
