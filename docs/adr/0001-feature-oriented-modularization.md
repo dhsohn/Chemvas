@@ -107,6 +107,14 @@ suite, and milestone-level full-suite/package verification.
   migration slice removes its entry when its concrete Qt implementation moves to
   `chemvas.adapters`; no new entries are allowed, and an empty set ends the
   exception.
+- The three bond-glyph geometry modules left the allowlist by returning plain
+  coordinates instead of Qt shapes: `bond_dotted` yields dot centres,
+  `bond_stereo` a wedge triangle, and `bond_geometry` the strip corners.
+  `BondRenderer` builds the `QPainterPath`/`QPolygonF` from them, which is where
+  the Qt return types were already declared, so no port or adapter layer was
+  added. `BondLineGeometryService` now holds no Qt shape types at all, which its
+  own boundary check (`test_bond_line_geometry_delegates_special_glyph_geometry`)
+  requires.
 - The canvas model is created by canvas setup instead of appearing on first
   access. `model_for` reads `canvas.model`, so `ensure_canvas_state` no longer
   carries a `runtime_field` switch and every remaining accessor resolves against

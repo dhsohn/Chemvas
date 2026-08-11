@@ -2,11 +2,10 @@ from __future__ import annotations
 
 import math
 
-from PyQt6.QtCore import QPointF
-from PyQt6.QtGui import QPainterPath
+Point2D = tuple[float, float]
 
 
-def dotted_bond_path_from_trimmed_segment(
+def dotted_bond_dot_centers(
     x1: float,
     y1: float,
     x2: float,
@@ -14,16 +13,13 @@ def dotted_bond_path_from_trimmed_segment(
     *,
     start_trim: float,
     end_trim: float,
-    dot_radius: float,
     target_spacing: float,
-) -> QPainterPath:
-    path = QPainterPath()
+) -> list[Point2D]:
     dx = x2 - x1
     dy = y2 - y1
     length = math.hypot(dx, dy)
     if length <= 1e-6:
-        path.addEllipse(QPointF(x1, y1), dot_radius, dot_radius)
-        return path
+        return [(x1, y1)]
 
     ux = dx / length
     uy = dy / length
@@ -37,24 +33,18 @@ def dotted_bond_path_from_trimmed_segment(
     start_y = y1 + uy * start_trim
     end_x = x2 - ux * end_trim
     end_y = y2 - uy * end_trim
-    usable_dx = end_x - start_x
-    usable_dy = end_y - start_y
-    usable_length = math.hypot(usable_dx, usable_dy)
+    usable_length = math.hypot(end_x - start_x, end_y - start_y)
 
     if usable_length <= 1e-6:
-        path.addEllipse(
-            QPointF((x1 + x2) * 0.5, (y1 + y2) * 0.5), dot_radius, dot_radius
-        )
-        return path
+        return [((x1 + x2) * 0.5, (y1 + y2) * 0.5)]
 
     count = max(1, int(usable_length / target_spacing))
     step = usable_length / count
+    centers: list[Point2D] = []
     for index in range(count):
         distance = step * (index + 0.5)
-        cx = start_x + ux * distance
-        cy = start_y + uy * distance
-        path.addEllipse(QPointF(cx, cy), dot_radius, dot_radius)
-    return path
+        centers.append((start_x + ux * distance, start_y + uy * distance))
+    return centers
 
 
-__all__ = ["dotted_bond_path_from_trimmed_segment"]
+__all__ = ["dotted_bond_dot_centers"]

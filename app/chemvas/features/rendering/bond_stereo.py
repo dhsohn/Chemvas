@@ -2,10 +2,8 @@ from __future__ import annotations
 
 import math
 
-from PyQt6.QtCore import QPointF
-from PyQt6.QtGui import QPolygonF
-
 LineSegment = tuple[float, float, float, float]
+Point2D = tuple[float, float]
 
 
 def trimmed_line_segment(
@@ -27,7 +25,9 @@ def trimmed_line_segment(
     )
 
 
-def wedge_polygon_from_segment(segment: LineSegment, *, max_width: float) -> QPolygonF:
+def wedge_triangle_from_segment(
+    segment: LineSegment, *, max_width: float
+) -> tuple[Point2D, Point2D, Point2D]:
     base_x1, base_y1, base_x2, base_y2 = segment
     dx = base_x2 - base_x1
     dy = base_y2 - base_y1
@@ -39,10 +39,11 @@ def wedge_polygon_from_segment(segment: LineSegment, *, max_width: float) -> QPo
     nx = -dy / length
     ny = dx / length
     half_width = max_width * 0.5 * 0.95
-    p1 = QPointF(base_x1, base_y1)
-    p2 = QPointF(base_x2 + nx * half_width, base_y2 + ny * half_width)
-    p3 = QPointF(base_x2 - nx * half_width, base_y2 - ny * half_width)
-    return QPolygonF([p1, p2, p3])
+    return (
+        (base_x1, base_y1),
+        (base_x2 + nx * half_width, base_y2 + ny * half_width),
+        (base_x2 - nx * half_width, base_y2 - ny * half_width),
+    )
 
 
 def hash_segments_from_segment(
@@ -79,5 +80,5 @@ __all__ = [
     "LineSegment",
     "hash_segments_from_segment",
     "trimmed_line_segment",
-    "wedge_polygon_from_segment",
+    "wedge_triangle_from_segment",
 ]

@@ -8,7 +8,7 @@ from chemvas.features.rendering import (
     refresh_bond_graphics,
 )
 from chemvas.features.rendering import (
-    strip_polygon as strip_polygon_shape,
+    strip_corners as strip_corners_shape,
 )
 from chemvas.ui.atom_coords_access import current_atom_coords_3d_for
 from chemvas.ui.bond_geometry_update_service import BondGeometryUpdateService
@@ -87,7 +87,13 @@ class BondRenderer:
         a_id: int | None = None,
         b_id: int | None = None,
     ) -> QPainterPath:
-        return self.line_geometry.dotted_bond_path(x1, y1, x2, y2, a_id, b_id)
+        centers, radius = self.line_geometry.dotted_bond_dots(
+            x1, y1, x2, y2, a_id, b_id
+        )
+        path = QPainterPath()
+        for center_x, center_y in centers:
+            path.addEllipse(QPointF(center_x, center_y), radius, radius)
+        return path
 
     def parallel_bond_segments(
         self,
@@ -131,7 +137,8 @@ class BondRenderer:
         a_id: int | None = None,
         b_id: int | None = None,
     ) -> QPolygonF:
-        return self.line_geometry.wedge_polygon(x1, y1, x2, y2, a_id, b_id)
+        corners = self.line_geometry.wedge_triangle(x1, y1, x2, y2, a_id, b_id)
+        return QPolygonF([QPointF(x, y) for x, y in corners])
 
     def hash_segments(
         self,
@@ -156,7 +163,8 @@ class BondRenderer:
         base_width: float,
         bold_width: float,
     ) -> QPolygonF:
-        return strip_polygon_shape(x1, y1, x2, y2, nx, ny, base_width, bold_width)
+        corners = strip_corners_shape(x1, y1, x2, y2, nx, ny, base_width, bold_width)
+        return QPolygonF([QPointF(x, y) for x, y in corners])
 
     def ring_double_segments(
         self,
