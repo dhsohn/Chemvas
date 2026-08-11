@@ -1670,6 +1670,7 @@ class CanvasViewAdditionalTest(unittest.TestCase):
         selected_note._scene_token = transform_scene
         transform_view = SimpleNamespace(
             scene=lambda: transform_scene,
+            model=SimpleNamespace(atoms={}, bonds=[]),
         )
         set_scene_item_collection_for(
             transform_view,
@@ -1739,6 +1740,7 @@ class CanvasViewAdditionalTest(unittest.TestCase):
         note._scene_token = copy_scene
         copy_view = SimpleNamespace(
             scene=lambda: copy_scene,
+            model=SimpleNamespace(atoms={}, bonds=[]),
         )
         set_scene_item_collection_for(
             copy_view, "selected_notes", [note, _FakeItem("note", scene_token=object())]
@@ -1821,7 +1823,7 @@ class CanvasViewAdditionalTest(unittest.TestCase):
         view.refresh_selection_outline.assert_called_once_with()
 
         quiet_view = SimpleNamespace(
-            model=SimpleNamespace(atoms={}),
+            model=SimpleNamespace(atoms={}, bonds=[]),
             atom_coords_3d_state=CanvasAtomCoords3DState(),
             mark_registry=CanvasMarkRegistry(),
             services=canvas_runtime_services(

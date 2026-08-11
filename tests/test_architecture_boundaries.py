@@ -3948,30 +3948,20 @@ def _canvas_runtime_state_field_names() -> set[str]:
     raise AssertionError("CanvasRuntimeState class not found")
 
 
-# States deliberately stored as direct canvas attributes (not runtime fields).
-DIRECT_CANVAS_STATE_ATTRS = frozenset(("model",))
-
-
 def test_state_accessor_names_match_runtime_state_container() -> None:
     """Every ensure_canvas_state name must be a CanvasRuntimeState field.
 
     A mismatched name would make the accessor attach a shadow state directly
     on the canvas while the container holds the real one, silently splitting
-    the state in two. ``runtime_field=False`` accessors must instead use one
-    of the documented direct-attribute names.
+    the state in two.
     """
     field_names = _canvas_runtime_state_field_names() - {"STRICT_STATE_CONTAINER"}
-    call_pattern = re.compile(
-        r"ensure_canvas_state\(\s*canvas,\s*\"(?P<name>\w+)\"(?P<rest>[^\n]*)"
-    )
+    call_pattern = re.compile(r"ensure_canvas_state\(\s*canvas,\s*\"(?P<name>\w+)\"")
     violations: list[str] = []
     for path in sorted((APP_ROOT / "chemvas" / "ui").glob("*.py")):
         for match in call_pattern.finditer(path.read_text(encoding="utf-8")):
             name = match.group("name")
-            direct = "runtime_field=False" in match.group("rest")
-            if direct and name not in DIRECT_CANVAS_STATE_ATTRS:
-                violations.append(f"{path.name}: direct attr {name!r} not documented")
-            if not direct and name not in field_names:
+            if name not in field_names:
                 violations.append(
                     f"{path.name}: {name!r} is not a CanvasRuntimeState field"
                 )

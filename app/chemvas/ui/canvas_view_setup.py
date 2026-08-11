@@ -7,9 +7,10 @@ from PyQt6.QtGui import QColor, QPainter
 from PyQt6.QtWidgets import QGraphicsScene, QGraphicsView
 
 from chemvas.core.rdkit_adapter import RDKitAdapter
+from chemvas.domain.document import MoleculeModel
 from chemvas.ui.bond_renderer import BondRenderer
 from chemvas.ui.canvas_callback_state import callback_state_for
-from chemvas.ui.canvas_model_state import model_for
+from chemvas.ui.canvas_model_state import set_model_for
 from chemvas.ui.canvas_runtime_state import attach_canvas_runtime_state
 from chemvas.ui.canvas_services import attach_canvas_services, build_canvas_services
 from chemvas.ui.renderer_style_access import bond_line_width_for
@@ -27,11 +28,14 @@ def initialize_canvas_view(canvas, *, renderer) -> None:
     canvas.setDragMode(QGraphicsView.DragMode.RubberBandDrag)
     canvas.setTransformationAnchor(QGraphicsView.ViewportAnchor.AnchorViewCenter)
     canvas.setBackgroundBrush(QColor("#e7e7e4"))
-    set_sheet_setup_state_for(canvas, DEFAULT_SHEET_SIZE, DEFAULT_SHEET_ORIENTATION)
-    model_for(canvas)
+    set_model_for(canvas, MoleculeModel())
     canvas.renderer = renderer
     canvas.rdkit = RDKitAdapter()
+    # The runtime container owns the sheet state, so it has to exist before the
+    # setup writes one; otherwise the write lands on the bare canvas and the
+    # container builds a second, never-read copy beside it.
     runtime_state = attach_canvas_runtime_state(canvas)
+    set_sheet_setup_state_for(canvas, DEFAULT_SHEET_SIZE, DEFAULT_SHEET_ORIENTATION)
     apply_sheet_scene_rect_for(canvas)
     canvas.setMouseTracking(True)
     canvas.viewport().setMouseTracking(True)

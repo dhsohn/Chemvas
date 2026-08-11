@@ -20,6 +20,7 @@ except ModuleNotFoundError:
 
 if QApplication is not None:
     from chemvas.adapters.qt.renderer import Renderer
+    from chemvas.domain.document import MoleculeModel
     from chemvas.ui.canvas_atom_graphics_state import set_atom_item_for
     from chemvas.ui.canvas_bond_graphics_state import bond_items_for
     from chemvas.ui.canvas_group_state import group_state_for, register_group_for
@@ -62,6 +63,7 @@ if QApplication is not None:
         def __init__(self) -> None:
             super().__init__(QGraphicsScene())
             self.renderer = Renderer()
+            self.model = MoleculeModel()
             self.history = _History()
             self.runtime_state = SimpleNamespace(history_service=self.history)
             self.selection_controller = SimpleNamespace(

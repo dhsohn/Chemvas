@@ -1,6 +1,7 @@
 from types import SimpleNamespace
 
 import pytest
+from chemvas.ui.canvas_model_state import model_for
 from chemvas.ui.canvas_state_lookup import canvas_state_object, ensure_canvas_state
 
 
@@ -79,21 +80,10 @@ def test_ensure_canvas_state_rejects_missing_field_on_strict_container() -> None
     assert not hasattr(canvas, "group_state")
 
 
-def test_ensure_canvas_state_direct_attr_skips_strict_check() -> None:
-    canvas = SimpleNamespace(runtime_state=_StrictContainer())
+def test_model_for_reads_the_canvas_attribute_without_creating_one() -> None:
+    canvas = SimpleNamespace(model="document")
 
-    state = ensure_canvas_state(canvas, "model", lambda: "fresh", runtime_field=False)
+    assert model_for(canvas) == "document"
 
-    assert state == "fresh"
-    assert canvas.model == "fresh"
-
-
-def test_ensure_canvas_state_prefers_runtime_entry_even_for_direct_attr() -> None:
-    canvas = SimpleNamespace(
-        model="public", runtime_state=SimpleNamespace(model="runtime")
-    )
-
-    assert (
-        ensure_canvas_state(canvas, "model", lambda: "fresh", runtime_field=False)
-        == "runtime"
-    )
+    with pytest.raises(AttributeError):
+        model_for(SimpleNamespace())

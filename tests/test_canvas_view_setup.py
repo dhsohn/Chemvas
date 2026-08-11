@@ -49,7 +49,9 @@ def test_initialize_canvas_view_configures_view_runtime_and_services(
         "set_sheet_setup_state_for",
         lambda canvas, size, orientation: calls.append("sheet"),
     )
-    monkeypatch.setattr(setup, "model_for", lambda canvas: calls.append("model"))
+    monkeypatch.setattr(
+        setup, "set_model_for", lambda canvas, model: calls.append("model")
+    )
     monkeypatch.setattr(
         setup,
         "RDKitAdapter",
@@ -85,11 +87,13 @@ def test_initialize_canvas_view_configures_view_runtime_and_services(
 
     setup.QGraphicsScene.assert_called_once_with(canvas)
     canvas.setScene.assert_called_once_with("scene")
+    # The sheet state is written after the runtime container exists, so it
+    # lands in the container instead of on the bare canvas.
     assert calls == [
-        "sheet",
         "model",
         "rdkit",
         "runtime",
+        "sheet",
         "scene-rect",
         "bond-renderer",
     ]
