@@ -181,4 +181,10 @@ def main() -> None:
         if startup_document_path is not None:
             open_document(startup_document_path)
         recovery.start(app)
+        # Import RDKit off the GUI thread while the app is idle at startup;
+        # otherwise the first selection or 3D preview pays the import as a
+        # freeze mid-interaction.
+        from chemvas.core.rdkit_adapter import warm_rdkit_in_background
+
+        warm_rdkit_in_background()
         app.exec()
