@@ -743,5 +743,69 @@ class Preview3DRecoveryTest(unittest.TestCase):
         self.assertTrue(preview._copy_inchikey_button.isVisible())
 
 
+@unittest.skipUnless(QApplication is not None, "PyQt6 is required for Preview3D tests")
+class Preview3DInteractionDeferralTest(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.app = QApplication.instance() or QApplication([])
+        cls.app.setQuitOnLastWindowClosed(False)
+
+    def tearDown(self) -> None:
+        preview = getattr(self, "preview", None)
+        if preview is not None:
+            preview.close()
+        self.app.processEvents()
+
+    def _create_preview(self, interaction_flag: dict) -> Preview3D:
+        self.preview = Preview3D(
+            rdkit_adapter=SequencedAdapter([]),
+            interaction_active=lambda: interaction_flag["active"],
+        )
+        return self.preview
+
+    def test_debounce_defers_rebuild_while_interaction_is_active(self) -> None:
+        flag = {"active": True}
+        preview = self._create_preview(flag)
+        with mock.patch.object(preview, "_rebuild_scene") as rebuild:
+            preview._handle_update_timer_timeout()
+        rebuild.assert_not_called()
+        self.assertTrue(preview._update_timer.isActive())
+        preview._update_timer.stop()
+
+    def test_debounce_rebuilds_once_interaction_ends(self) -> None:
+        flag = {"active": False}
+        preview = self._create_preview(flag)
+        with mock.patch.object(preview, "_rebuild_scene") as rebuild:
+            preview._handle_update_timer_timeout()
+        rebuild.assert_called_once_with()
+        self.assertFalse(preview._update_timer.isActive())
+
+    def test_worker_restart_uses_the_same_interaction_gate(self) -> None:
+        flag = {"active": True}
+        preview = self._create_preview(flag)
+        preview._preview_restart_pending = True
+        preview._pending_model = object()
+        with mock.patch.object(preview, "_rebuild_scene") as rebuild:
+            preview._on_preview_thread_finished(request_id=0)
+        rebuild.assert_not_called()
+        self.assertTrue(preview._update_timer.isActive())
+        preview._update_timer.stop()
+
+        flag["active"] = False
+        preview._preview_restart_pending = True
+        with mock.patch.object(preview, "_rebuild_scene") as rebuild:
+            preview._on_preview_thread_finished(request_id=1)
+        rebuild.assert_called_once_with()
+
+    def test_disposed_preview_does_not_rearm_the_timer(self) -> None:
+        flag = {"active": True}
+        preview = self._create_preview(flag)
+        preview._disposed = True
+        with mock.patch.object(preview, "_rebuild_scene") as rebuild:
+            preview._handle_update_timer_timeout()
+        rebuild.assert_not_called()
+        self.assertFalse(preview._update_timer.isActive())
+
+
 if __name__ == "__main__":
     unittest.main()
