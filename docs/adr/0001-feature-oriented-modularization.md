@@ -144,10 +144,12 @@ suite, and milestone-level full-suite/package verification.
   accessors in scope, so an accessor that stops reading the container fails
   rather than dropping out of the check; the earlier per-state guards for
   input-view, callbacks and hover stay. `canvas_state_object` survives for
-  `sheet_setup_state_for` and `document_metadata_state_for`, which still attach
-  their state to the canvas, and for the transaction kernel; those two, and the
-  kernel's private copies of the same lookup, are a separate seam and are listed
-  in `NON_RUNTIME_STATE_ACCESSORS`.
+  `document_metadata_state_for`, which may still attach its state to the canvas,
+  and for the transaction kernel; that accessor and the kernel's private copies
+  of the same lookup remain a separate seam listed in
+  `NON_RUNTIME_STATE_ACCESSORS`. `sheet_setup_state_for` now reads the runtime
+  container directly, and sheet size/orientation are no longer mirrored as
+  canvas attributes.
 
 ## Consequences
 

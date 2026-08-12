@@ -8,6 +8,7 @@ from PyQt6.QtWidgets import QGraphicsItem
 from chemvas.ui.atom_coords_access import atom_coords_3d_for
 from chemvas.ui.canvas_model_access import atom_for_id, bond_count_for, next_atom_id_for
 from chemvas.ui.canvas_rotation_state import rotation_state_for
+from chemvas.ui.canvas_service_ports import history_service_for_access
 from chemvas.ui.canvas_smiles_input_state import last_smiles_input_for
 from chemvas.ui.history_canvas_access import (
     capture_history_transaction_for_history,
@@ -102,7 +103,6 @@ def paste_selection_from_clipboard_for_canvas(
         plan.before_smiles_input if isinstance(plan.before_smiles_input, str) else None
     )
     selection_snapshot = capture_clipboard_selection_snapshot_for_canvas(canvas)
-    services = getattr(canvas, "services", None)
     tracked_scene_items: list[object] = []
 
     def create_tracked_scene_item_from_state(state: dict) -> object:
@@ -113,7 +113,7 @@ def paste_selection_from_clipboard_for_canvas(
 
     exact_transaction = capture_history_transaction_for_history(
         canvas,
-        history_service=getattr(services, "history_service", None),
+        history_service=history_service_for_access(canvas),
     )
     try:
         result = apply_paste_payload(

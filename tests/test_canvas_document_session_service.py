@@ -39,6 +39,8 @@ from chemvas.ui.selection_style_state import (
     SelectionStyleState,
     selection_style_state_for,
 )
+from chemvas.ui.sheet_setup_access import sheet_setup_for
+from chemvas.ui.sheet_setup_state import SheetSetupState, set_sheet_setup_state_for
 from chemvas.ui.structure_mutation_access import add_atom_for, add_bond_for
 from chemvas.ui.transactions.scene_rect import (
     set_explicit_scene_rect,
@@ -111,6 +113,7 @@ def _document_runtime_state(**states):
     states.setdefault("group_state", CanvasGroupState())
     states.setdefault("atom_coords_3d_state", CanvasAtomCoords3DState())
     states.setdefault("rotation_state", CanvasRotationState())
+    states.setdefault("sheet_setup_state", SheetSetupState())
     return canvas_runtime_state(**states)
 
 
@@ -364,10 +367,11 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
             model="old-model",
             settings="old-settings",
             scene_items=list(old_state["scene"]),
-            sheet_size="Letter",
-            sheet_orientation="landscape",
             runtime_state=_document_runtime_state(
                 history_state=CanvasHistoryState(enabled=False),
+                sheet_setup_state=SheetSetupState(
+                    size_name="Letter", orientation="landscape"
+                ),
                 selection_info_state=SimpleNamespace(
                     callback=object(),
                     signature=(frozenset({1}), frozenset({2})),
@@ -418,8 +422,7 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
                 "chemvas.ui.canvas_document_session_service.apply_document_settings",
                 side_effect=lambda _canvas, state: (
                     setattr(canvas, "settings", state["settings"]["name"]),
-                    setattr(canvas, "sheet_size", "A4"),
-                    setattr(canvas, "sheet_orientation", "portrait"),
+                    set_sheet_setup_state_for(canvas, "A4", "portrait"),
                 ),
             ),
             mock.patch(
@@ -446,8 +449,7 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
         self.assertEqual(canvas.model, "old-model")
         self.assertEqual(canvas.settings, "old-settings")
         self.assertEqual(canvas.scene_items, old_state["scene"])
-        self.assertEqual(canvas.sheet_size, "Letter")
-        self.assertEqual(canvas.sheet_orientation, "landscape")
+        self.assertEqual(sheet_setup_for(canvas), ("Letter", "landscape"))
         self.assertIs(selection_info.callback, original_selection_callback)
         self.assertEqual(
             selection_info.signature,

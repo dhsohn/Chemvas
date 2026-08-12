@@ -17,8 +17,6 @@ from chemvas.ui.sheet_setup_state import (
     sheet_setup_values_for,
 )
 
-_MISSING_ATTRIBUTE = object()
-
 
 def _add_sheet_setup_recovery_note(
     original_error: BaseException,
@@ -34,30 +32,20 @@ def _add_sheet_setup_recovery_note(
 
 @dataclass(slots=True)
 class _SheetSetupSavepoint:
-    canvas: object
     state: object
     size_name: object
     orientation: object
     rect: QRectF
-    sheet_size: object
-    sheet_orientation: object
     active: bool = True
 
     @classmethod
     def capture(cls, canvas) -> _SheetSetupSavepoint:
         state = sheet_setup_state_for(canvas)
         return cls(
-            canvas=canvas,
             state=state,
             size_name=state.size_name,
             orientation=state.orientation,
             rect=QRectF(state.rect),
-            sheet_size=getattr(canvas, "sheet_size", _MISSING_ATTRIBUTE),
-            sheet_orientation=getattr(
-                canvas,
-                "sheet_orientation",
-                _MISSING_ATTRIBUTE,
-            ),
         )
 
     def restore(self) -> tuple[Exception, ...]:
@@ -68,11 +56,6 @@ class _SheetSetupSavepoint:
             lambda: setattr(self.state, "size_name", self.size_name),
             lambda: setattr(self.state, "orientation", self.orientation),
             lambda: setattr(self.state, "rect", QRectF(self.rect)),
-            lambda: self._restore_canvas_attribute("sheet_size", self.sheet_size),
-            lambda: self._restore_canvas_attribute(
-                "sheet_orientation",
-                self.sheet_orientation,
-            ),
         )
         for operation in operations:
             try:
@@ -81,13 +64,6 @@ class _SheetSetupSavepoint:
                 errors.append(error)
         self.active = False
         return tuple(errors)
-
-    def _restore_canvas_attribute(self, name: str, value: object) -> None:
-        if value is _MISSING_ATTRIBUTE:
-            if hasattr(self.canvas, name):
-                delattr(self.canvas, name)
-            return
-        setattr(self.canvas, name, value)
 
     def release(self) -> None:
         self.active = False
@@ -171,8 +147,6 @@ def _verify_sheet_setup_success(
         state.size_name != expected_size
         or state.orientation != expected_orientation
         or state.rect != expected_sheet_rect
-        or getattr(canvas, "sheet_size", None) != expected_size
-        or getattr(canvas, "sheet_orientation", None) != expected_orientation
     ):
         raise RuntimeError("sheet setup changed during successful finalization")
 

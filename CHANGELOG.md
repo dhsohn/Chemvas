@@ -8,6 +8,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Reviewed precomplex ensembles and document version 6**: Calculation Plan v2
+  can persist bounded deterministic rigid-placement candidates for two-component
+  reactant and product endpoints, including exact XYZ, environment, contact,
+  validation, and generation provenance. `generate-precomplex` creates the
+  candidates, `inspect-precomplex` reports them, and `select-precomplex` records
+  an explicit reviewer selection. `pack-step` regenerates the ensemble and
+  rejects stale or unreproducible selections before publishing a reviewed
+  endpoint pair; the coordinates remain initial guesses for downstream quantum
+  optimization and scientific review.
 - **Context-validated attached `PPh3` alias expansion**: a `PPh3` atom label
   connected to carbon by one ordinary covalent single bond now expands into an
   explicit four-coordinate `[P+](Ph)3` fragment for 3D `.xyz` conversion,

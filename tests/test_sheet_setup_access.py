@@ -12,13 +12,15 @@ from chemvas.ui.sheet_setup_access import (
     sheet_setup_for,
     sheet_size_for,
 )
-from chemvas.ui.sheet_setup_state import sheet_setup_state_for
+from chemvas.ui.sheet_setup_state import SheetSetupState, sheet_setup_state_for
 from chemvas.ui.transactions.scene_rect import (
     scene_rect_is_automatic,
     view_scene_rect_is_explicit,
 )
 from PyQt6.QtCore import QPointF, QRectF
 from PyQt6.QtWidgets import QApplication, QGraphicsScene, QGraphicsView
+
+from tests.runtime_state import canvas_runtime_state
 
 _APP = QApplication.instance() or QApplication([])
 _APP.setQuitOnLastWindowClosed(False)
@@ -33,6 +35,7 @@ def _qt_sheet_canvas() -> tuple[QGraphicsView, QGraphicsScene]:
     scene = QGraphicsScene()
     scene.addRect(0.0, 0.0, 10.0, 10.0)
     canvas = QGraphicsView(scene)
+    canvas.runtime_state = canvas_runtime_state(sheet_setup_state=SheetSetupState())
     set_sheet_setup_for(canvas, "A4", "landscape")
     return canvas, scene
 
@@ -70,8 +73,6 @@ def _sheet_configuration(canvas: QGraphicsView, scene: QGraphicsScene):
         state.orientation,
         state.rect,
         QRectF(state.rect),
-        canvas.sheet_size,
-        canvas.sheet_orientation,
         QRectF(canvas.sceneRect()),
         view_scene_rect_is_explicit(canvas),
         QRectF(scene.sceneRect()),
@@ -89,9 +90,9 @@ def _assert_sheet_configuration(
     assert actual[0] is expected[0]
     assert actual[1:3] == expected[1:3]
     assert actual[3] is expected[3]
-    assert actual[4:11] == expected[4:11]
-    actual_tracker = actual[11]
-    expected_tracker = expected[11]
+    assert actual[4:9] == expected[4:9]
+    actual_tracker = actual[9]
+    expected_tracker = expected[9]
     if expected_tracker is None:
         assert actual_tracker is None
         return
@@ -105,7 +106,11 @@ def _assert_sheet_configuration(
 
 
 def test_sheet_setup_accessors_return_current_sheet_values() -> None:
-    canvas = SimpleNamespace(sheet_size="A4", sheet_orientation="landscape")
+    canvas = SimpleNamespace(
+        runtime_state=canvas_runtime_state(
+            sheet_setup_state=SheetSetupState(size_name="A4", orientation="landscape")
+        )
+    )
 
     assert sheet_setup_for(canvas) == ("A4", "landscape")
     assert sheet_size_for(canvas) == "A4"
@@ -115,8 +120,7 @@ def test_sheet_setup_accessors_return_current_sheet_values() -> None:
 def test_set_sheet_setup_updates_scene_rect_and_viewport() -> None:
     viewport = _Viewport()
     canvas = SimpleNamespace(
-        sheet_size="A4",
-        sheet_orientation="landscape",
+        runtime_state=canvas_runtime_state(sheet_setup_state=SheetSetupState()),
         setSceneRect=mock.Mock(),
         viewport=lambda: viewport,
     )
@@ -132,13 +136,14 @@ def test_set_sheet_setup_updates_scene_rect_and_viewport() -> None:
 def test_scene_pos_in_sheet_uses_configured_sheet_rect_and_allows_uninitialized_rect() -> (
     None
 ):
-    canvas = SimpleNamespace(sheet_size="A4", sheet_orientation="landscape")
+    canvas = SimpleNamespace(
+        runtime_state=canvas_runtime_state(sheet_setup_state=SheetSetupState())
+    )
 
     assert scene_pos_in_sheet_for(canvas, QPointF(999.0, 999.0))
 
     configured = SimpleNamespace(
-        sheet_size="A4",
-        sheet_orientation="landscape",
+        runtime_state=canvas_runtime_state(sheet_setup_state=SheetSetupState()),
         setSceneRect=mock.Mock(),
         viewport=lambda: _Viewport(),
     )

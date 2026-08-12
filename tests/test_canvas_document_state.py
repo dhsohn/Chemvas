@@ -35,6 +35,8 @@ from chemvas.ui.canvas_tool_settings_state import (
     CanvasToolSettingsState,
     tool_settings_state_for,
 )
+from chemvas.ui.sheet_setup_access import sheet_setup_for
+from chemvas.ui.sheet_setup_state import SheetSetupState
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QColor
 
@@ -158,8 +160,6 @@ class CanvasDocumentStateTest(unittest.TestCase):
                 style=SimpleNamespace(bond_length_px=18.0),
                 set_bond_length=mock.Mock(),
             ),
-            sheet_size="A4",
-            sheet_orientation="portrait",
             scene=lambda: scene_obj,
             runtime_state=canvas_runtime_state(
                 atom_coords_3d_state=CanvasAtomCoords3DState(),
@@ -176,6 +176,9 @@ class CanvasDocumentStateTest(unittest.TestCase):
                     orbital_items=[orbital_item],
                 ),
                 smiles_input_state=CanvasSmilesInputState(last_smiles_input="CCO"),
+                sheet_setup_state=SheetSetupState(
+                    size_name="A4", orientation="portrait"
+                ),
                 tool_settings_state=CanvasToolSettingsState(
                     arrow_line_width=1.5,
                     arrow_head_scale=0.4,
@@ -279,12 +282,11 @@ class CanvasDocumentStateTest(unittest.TestCase):
                 style=SimpleNamespace(bond_length_px=18.0),
                 set_bond_length=mock.Mock(),
             ),
-            sheet_size="A4",
-            sheet_orientation="landscape",
             setSceneRect=mock.Mock(),
             viewport=lambda: SimpleNamespace(update=mock.Mock()),
             runtime_state=canvas_runtime_state(
                 smiles_input_state=CanvasSmilesInputState(last_smiles_input="before"),
+                sheet_setup_state=SheetSetupState(),
                 text_style_state=CanvasTextStyleState(),
                 tool_settings_state=CanvasToolSettingsState(),
             ),
@@ -320,8 +322,7 @@ class CanvasDocumentStateTest(unittest.TestCase):
         )
 
         canvas.renderer.set_bond_length.assert_called_once_with(22.0)
-        self.assertEqual(canvas.sheet_size, "A4")
-        self.assertEqual(canvas.sheet_orientation, "portrait")
+        self.assertEqual(sheet_setup_for(canvas), ("A4", "portrait"))
         canvas.setSceneRect.assert_called_once()
         tool_settings = tool_settings_state_for(canvas)
         self.assertEqual(tool_settings.arrow_line_width, 1.7)
@@ -356,6 +357,7 @@ class CanvasDocumentStateTest(unittest.TestCase):
             viewport=lambda: SimpleNamespace(update=mock.Mock()),
             runtime_state=canvas_runtime_state(
                 smiles_input_state=CanvasSmilesInputState(last_smiles_input="before"),
+                sheet_setup_state=SheetSetupState(),
                 text_style_state=CanvasTextStyleState(
                     text_font_family="Courier New",
                     text_color=QColor("#ff00aa"),
@@ -444,12 +446,11 @@ class CanvasDocumentStateTest(unittest.TestCase):
 
         canvas = SimpleNamespace(
             renderer=Renderer(),
-            sheet_size="A4",
-            sheet_orientation="landscape",
             setSceneRect=mock.Mock(),
             viewport=lambda: SimpleNamespace(update=mock.Mock()),
             runtime_state=canvas_runtime_state(
                 smiles_input_state=CanvasSmilesInputState(last_smiles_input="x"),
+                sheet_setup_state=SheetSetupState(),
                 text_style_state=CanvasTextStyleState(),
                 tool_settings_state=CanvasToolSettingsState(),
             ),

@@ -257,17 +257,16 @@ center whose bonds only change order (e.g. C-O → C=O) is suggested too, and on
 atoms whose connectivity breaks or forms are left for you. It never overwrites a
 mapping you made and is a review-only starting point, not an automated mechanism
 inference. While the dialog is open, each included atom is labelled with its
-Chemvas ID on the drawing — reactant atoms in blue, product atoms in orange — so
-a table row is easy to locate on the structure. Exact IDs shared by both endpoints, such as a drawn catalyst reused
+Chemvas ID on the drawing. Mapped reactant atoms are blue, mapped product atoms
+are orange, and unmapped atoms stay gray, so mapping progress is visible on the
+structure. Exact IDs shared by both endpoints, such as a drawn catalyst reused
 on both sides, are suggested once; they are not inferred by element or position,
 and an explicit **Unmapped** choice is preserved. Duplicate product mappings are
 rejected. The GUI saves an incomplete table as a draft, while its mapped/total
 status stays blocked until every included atom on both endpoints has a complete
 one-to-one source map. This status covers the source mapping gate; RDKit geometry
 generation and downstream chemical review are still separate requirements.
-Selecting a mapping row, or moving through its product menu, marks the reactant
-with a blue solid **R** and the product with an orange dashed **P** on the canvas.
-These markers are temporary overlays: closing the dialog removes them without
+The labels are temporary overlays: closing the dialog removes them without
 changing the drawing, the current canvas selection, or undo history.
 
 Agents can attach and inspect the same contract without Qt:

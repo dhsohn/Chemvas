@@ -24,8 +24,12 @@ from tests.test_calculation_plan import _document_state, _plan
 
 def _validate_common_machine(path: Path) -> None:
     validator = os.environ.get("FACTORY_MACHINE_CONTRACT_VALIDATOR")
-    if validator:
-        subprocess.run([sys.executable, validator, "--machine", str(path)], check=True)
+    if not validator:
+        pytest.fail(
+            "FACTORY_MACHINE_CONTRACT_VALIDATOR is required for machine.json "
+            "conformance assertions"
+        )
+    subprocess.run([sys.executable, validator, "--machine", str(path)], check=True)
 
 
 class _StateFakeAdapter:

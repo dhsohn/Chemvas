@@ -19,6 +19,18 @@ python -m pip install -e ".[dev]"                    # dev tooling
 python -m pip install -e ".[dev,rdkit]"              # also enable RDKit features
 ```
 
+The shared `machine.json` contract validator is a second development checkout
+used by `make check`:
+
+```bash
+git clone https://github.com/dhsohn/machine-contracts.git ~/machine_contracts
+```
+
+Set `FACTORY_MACHINE_CONTRACT_REPO` if that checkout lives elsewhere. `make
+check` uses an activated virtual environment first, then the repository's
+`.venv`, and finally `python3`; set `PYTHON_BIN` to choose an interpreter
+explicitly.
+
 Run the app from the development tree:
 
 ```bash
@@ -27,8 +39,8 @@ python app/main.py
 
 ## Running the checks
 
-One command runs everything CI enforces — lint, formatting, mypy, the full test
-suite, and the machine.json conformance check — before opening a PR:
+One command runs the primary local gate — lint, formatting, mypy, the full test
+suite, and the `machine.json` conformance check — before opening a PR:
 
 ```bash
 make check
@@ -60,6 +72,9 @@ QT_QPA_PLATFORM=offscreen python -m pytest tests/test_<area>.py
 
 New behavior should come with a test. Most modules have a matching
 `tests/test_<module>.py`.
+
+CI additionally runs the optional-RDKit smoke and wheel packaging smoke. Those
+two environment-specific jobs are not part of `make check`.
 
 ## Architecture conventions (read this before restructuring)
 
@@ -128,10 +143,12 @@ flat or duck-typed service bags. Focused legacy UI tests use the test-only build
 in `tests/runtime_services.py` when they need a partial runtime.
 
 State works the same way. A `<name>_state_for(canvas)` accessor reads its field off
-`canvas.runtime_state` and does not create state on the canvas on first access. (Two
-hold-outs, `sheet_setup_state_for` and `document_metadata_state_for`, still go through
-the older `canvas_state_object` path and do attach; `NON_RUNTIME_STATE_ACCESSORS` in
-the boundary test records them.) A double therefore needs its own partial container —
+`canvas.runtime_state` and does not create state on the canvas on first access.
+`SheetSetupState` is the sole owner of sheet size, orientation, and rect; those values
+are not mirrored onto the canvas. One hold-out, `document_metadata_state_for`, still
+goes through the older `canvas_state_object` path and may attach;
+`NON_RUNTIME_STATE_ACCESSORS` in the boundary test records it. A double therefore
+needs its own partial container —
 build it with `tests/runtime_state.canvas_runtime_state(**states)`, which checks the
 names against the real `CanvasRuntimeState`:
 

@@ -7,8 +7,7 @@
 ## 이 레포가 무엇인가
 
 PyQt6 기반 2D 화학 구조 드로잉 데스크톱 앱이자 오픈소스 연구 소프트웨어(MIT, PyPI
-`chemvas`)다. 정비는 WSL `/home/daehyupsohn/Chemvas`가 canonical이고, pr-autopilot이
-만드는 repo-cache clone은 언제든 버릴 수 있는 사본이다.
+`chemvas`)다. 정비는 WSL `/home/daehyupsohn/Chemvas`가 canonical이다.
 
 ## 검증
 
@@ -20,8 +19,8 @@ Ruff·format·mypy를 돌린 뒤 **테스트를 `test_*.py` 파일마다 별도 
 실행한다(offscreen). Qt가 모듈 간에 완전히 리셋되지 않는 전역 상태를 유지하므로, 전체를
 한 프로세스에 몰아넣은 실행은 통과해도 CI를 대표하지 않는다 — 이 루프가 게이트다.
 `machine.json` 적합성 검증은 게이트가 `~/machine_contracts`의 정본 validator를 직접
-연결한다(`FACTORY_MACHINE_CONTRACT_REPO`로 위치 변경 가능 — 이 연결 없이 해당 테스트를
-그냥 돌리면 아무것도 검증하지 않고 통과한다). 만진 파일만 좁혀 돌리려면:
+연결한다(`FACTORY_MACHINE_CONTRACT_REPO`로 위치 변경 가능). 해당 테스트를 직접 돌릴
+때도 validator 경로가 없으면 검증 없이 성공하지 않고 실패한다. 만진 파일만 좁혀 돌리려면:
 
 ```bash
 bash scripts/check.sh tests/test_<area>.py
