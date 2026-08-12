@@ -463,6 +463,98 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
         self.assertEqual(history_state.redo_stack, [redo_command])
         self.assertFalse(history_state.enabled)
 
+    def test_commit_failure_restores_cleared_history_stacks_in_place(self) -> None:
+        old_state = {
+            "model": {"name": "old-model"},
+            "settings": {"name": "old-settings"},
+            "scene": ["old-model-item", "old-note"],
+        }
+        target_state = {
+            "model": {"name": "target-model"},
+            "settings": {"name": "target-settings"},
+            "scene": ["target-model-item", "target-note"],
+        }
+        canvas = SimpleNamespace(
+            model="old-model",
+            settings="old-settings",
+            scene_items=list(old_state["scene"]),
+            runtime_state=_document_runtime_state(
+                history_state=CanvasHistoryState(enabled=False),
+            ),
+        )
+
+        def clear_scene() -> None:
+            canvas.model = "empty-model"
+            canvas.scene_items.clear()
+
+        def render_model() -> None:
+            canvas.scene_items.append(f"{canvas.model}-item")
+
+        canvas.services = _document_services(
+            clear_scene=clear_scene,
+            rebuild_bond_adjacency=mock.Mock(),
+            render_model=render_model,
+            mark_spatial_index_dirty=mock.Mock(),
+        )
+        _attach_history_service(canvas)
+        service = _session_service(canvas)
+        history_state = history_state_for(canvas)
+        undo_command = object()
+        redo_command = object()
+        history_state.history.append(undo_command)
+        history_state.redo_stack.append(redo_command)
+        original_history = history_state.history
+        original_redo = history_state.redo_stack
+        commit_error = RuntimeError("savepoint commit failed")
+
+        with (
+            mock.patch(
+                "chemvas.ui.canvas_document_session_service.snapshot_canvas_document_state",
+                return_value=old_state,
+            ),
+            mock.patch(
+                "chemvas.ui.canvas_document_session_service.apply_document_settings",
+                side_effect=lambda _canvas, state: setattr(
+                    canvas, "settings", state["settings"]["name"]
+                ),
+            ),
+            mock.patch(
+                "chemvas.ui.canvas_document_session_service.deserialize_model_state",
+                side_effect=lambda model_state: model_state["name"],
+            ),
+            mock.patch(
+                "chemvas.ui.canvas_document_session_service.restore_document_pre_model_items"
+            ),
+            mock.patch(
+                "chemvas.ui.canvas_document_session_service.restore_document_projection_state"
+            ),
+            mock.patch(
+                "chemvas.ui.canvas_document_session_service.restore_document_post_model_items",
+                side_effect=lambda _canvas, state: canvas.scene_items.extend(
+                    state["scene"][1:]
+                ),
+            ),
+            mock.patch(
+                "chemvas.ui.canvas_document_session_service.restore_document_groups"
+            ),
+            mock.patch(
+                "chemvas.ui.canvas_document_session_service._CanvasRollbackSnapshot.commit_replacement",
+                side_effect=commit_error,
+            ),
+        ):
+            with self.assertRaises(RuntimeError) as caught:
+                service.apply_state(target_state)
+
+        self.assertIs(caught.exception, commit_error)
+        self.assertEqual(canvas.model, "old-model")
+        self.assertEqual(canvas.settings, "old-settings")
+        self.assertEqual(canvas.scene_items, old_state["scene"])
+        self.assertIs(history_state.history, original_history)
+        self.assertIs(history_state.redo_stack, original_redo)
+        self.assertEqual(history_state.history, [undo_command])
+        self.assertEqual(history_state.redo_stack, [redo_command])
+        self.assertFalse(history_state.enabled)
+
     def test_apply_state_clears_history_only_when_previous_document_restore_also_fails(
         self,
     ) -> None:

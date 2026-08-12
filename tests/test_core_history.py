@@ -359,6 +359,13 @@ class _StatefulHistoryPort:
         self._failure = None
         raise RuntimeError(f"{operation} failed")
 
+    def release_history_transaction_for_history(
+        self,
+        _canvas,
+        _snapshot,
+    ) -> None:
+        pass
+
     def restore_projection_state_for_history(
         self,
         canvas: _AtomicHistoryCanvas,
@@ -1111,6 +1118,7 @@ class HistoryCommandTest(unittest.TestCase):
         class _SnapshotLengthPort:
             def __init__(self) -> None:
                 self.capture_calls = 0
+                self.release_calls = 0
 
             def capture_history_transaction_for_history(self, canvas, **_kwargs):
                 self.capture_calls += 1
@@ -1123,6 +1131,13 @@ class HistoryCommandTest(unittest.TestCase):
             ) -> RestoreOutcome:
                 canvas.bond_length = snapshot
                 return RestoreOutcome(authoritative=True)
+
+            def release_history_transaction_for_history(
+                self,
+                _canvas,
+                _snapshot,
+            ) -> None:
+                self.release_calls += 1
 
             def restore_bond_length_for_history(self, canvas, length: float) -> None:
                 canvas.bond_length = length
@@ -1142,6 +1157,7 @@ class HistoryCommandTest(unittest.TestCase):
 
         self.assertEqual((canvas.bond_length, canvas.toggle), (18.0, False))
         self.assertEqual(port.capture_calls, 2)
+        self.assertEqual(port.release_calls, 2)
 
     def test_move_atoms_command_restores_absolute_snapshot_after_partial_move(
         self,

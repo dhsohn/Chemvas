@@ -630,13 +630,6 @@ class CanvasDocumentSessionService:
             return
         snapshot.history[:] = snapshot.history_items
         snapshot.redo_stack[:] = snapshot.redo_items
-        # A history clear that failed midway can have replaced the stack
-        # attributes; point them back at the captured list objects so every
-        # alias holder keeps observing the same stacks.
-        if snapshot.state.history is not snapshot.history:
-            snapshot.state.history = snapshot.history
-        if snapshot.state.redo_stack is not snapshot.redo_stack:
-            snapshot.state.redo_stack = snapshot.redo_stack
 
     @staticmethod
     def _force_clear_history(snapshot: _HistoryStateSnapshot | None) -> None:
@@ -735,12 +728,7 @@ class CanvasDocumentSessionService:
         )
         append_snapshot(
             self.canvas,
-            names=(
-                "settings",
-                "scene_items",
-                "sheet_size",
-                "sheet_orientation",
-            ),
+            names=("settings", "scene_items"),
         )
 
         model = _capture_optional_attribute(self.canvas, "model")
