@@ -13,6 +13,7 @@ from chemvas.ui.input_view_access import (
     update_viewport_for,
     viewport_center_scene_pos_for,
 )
+from PyQt6.QtCore import QRectF
 
 
 class _Rect:
@@ -116,9 +117,11 @@ def test_focus_canvas_for_calls_canvas_focus() -> None:
 def test_scene_rect_and_viewport_helpers_delegate_to_canvas_view() -> None:
     viewport = SimpleNamespace(update=mock.Mock())
     canvas = SimpleNamespace(
-        setSceneRect=mock.Mock(), viewport=mock.Mock(return_value=viewport)
+        sceneRect=mock.Mock(return_value=QRectF()),
+        setSceneRect=mock.Mock(),
+        viewport=mock.Mock(return_value=viewport),
     )
-    rect = object()
+    rect = QRectF(1.0, 2.0, 3.0, 4.0)
 
     set_scene_rect_for(canvas, rect)
     update_viewport_for(canvas)

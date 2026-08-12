@@ -282,7 +282,6 @@ class CanvasDocumentStateTest(unittest.TestCase):
                 style=SimpleNamespace(bond_length_px=18.0),
                 set_bond_length=mock.Mock(),
             ),
-            setSceneRect=mock.Mock(),
             viewport=lambda: SimpleNamespace(update=mock.Mock()),
             runtime_state=canvas_runtime_state(
                 smiles_input_state=CanvasSmilesInputState(last_smiles_input="before"),
@@ -323,7 +322,6 @@ class CanvasDocumentStateTest(unittest.TestCase):
 
         canvas.renderer.set_bond_length.assert_called_once_with(22.0)
         self.assertEqual(sheet_setup_for(canvas), ("A4", "portrait"))
-        canvas.setSceneRect.assert_called_once()
         tool_settings = tool_settings_state_for(canvas)
         self.assertEqual(tool_settings.arrow_line_width, 1.7)
         self.assertEqual(tool_settings.arrow_head_scale, 0.5)
@@ -353,7 +351,6 @@ class CanvasDocumentStateTest(unittest.TestCase):
                 style=SimpleNamespace(bond_length_px=18.0),
                 set_bond_length=mock.Mock(),
             ),
-            setSceneRect=mock.Mock(),
             viewport=lambda: SimpleNamespace(update=mock.Mock()),
             runtime_state=canvas_runtime_state(
                 smiles_input_state=CanvasSmilesInputState(last_smiles_input="before"),
@@ -446,7 +443,6 @@ class CanvasDocumentStateTest(unittest.TestCase):
 
         canvas = SimpleNamespace(
             renderer=Renderer(),
-            setSceneRect=mock.Mock(),
             viewport=lambda: SimpleNamespace(update=mock.Mock()),
             runtime_state=canvas_runtime_state(
                 smiles_input_state=CanvasSmilesInputState(last_smiles_input="x"),

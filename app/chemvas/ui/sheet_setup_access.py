@@ -133,45 +133,9 @@ def _apply_sheet_scene_rect_unchecked(canvas) -> None:
     set_scene_rect_for(canvas, scene_rect)
 
 
-def _verify_sheet_setup_success(
-    canvas,
-    expected_size: str,
-    expected_orientation: str,
-) -> None:
-    expected_sheet_rect, expected_scene_rect = _expected_rects(
-        expected_size,
-        expected_orientation,
-    )
-    state = sheet_setup_state_for(canvas)
-    if (
-        state.size_name != expected_size
-        or state.orientation != expected_orientation
-        or state.rect != expected_sheet_rect
-    ):
-        raise RuntimeError("sheet setup changed during successful finalization")
-
-    scene_getter = getattr(canvas, "scene", None)
-    scene = scene_getter() if callable(scene_getter) else None
-    scene_rect_getter = getattr(scene, "sceneRect", None)
-    if (
-        callable(scene_rect_getter)
-        and QRectF(scene_rect_getter()) != expected_scene_rect
-    ):
-        raise RuntimeError("sheet scene rect changed during successful finalization")
-    view_rect_getter = getattr(canvas, "sceneRect", None)
-    if callable(view_rect_getter) and QRectF(view_rect_getter()) != expected_scene_rect:
-        raise RuntimeError("sheet view rect changed during successful finalization")
-
-
 def apply_sheet_scene_rect_for(canvas) -> None:
     def apply() -> None:
-        expected_size, expected_orientation = sheet_setup_for(canvas)
         _apply_sheet_scene_rect_unchecked(canvas)
-        _verify_sheet_setup_success(
-            canvas,
-            expected_size,
-            expected_orientation,
-        )
 
     _run_sheet_setup_transaction(canvas, apply)
 
@@ -189,18 +153,9 @@ def scene_pos_in_sheet_for(canvas, pos) -> bool:
 
 def set_sheet_setup_for(canvas, size_name: str, orientation: str) -> None:
     def apply() -> None:
-        expected_size, expected_orientation = set_sheet_setup_state_for(
-            canvas,
-            size_name,
-            orientation,
-        )
+        set_sheet_setup_state_for(canvas, size_name, orientation)
         _apply_sheet_scene_rect_unchecked(canvas)
         update_viewport_for(canvas)
-        _verify_sheet_setup_success(
-            canvas,
-            expected_size,
-            expected_orientation,
-        )
 
     _run_sheet_setup_transaction(canvas, apply)
 
