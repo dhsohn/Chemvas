@@ -18,7 +18,7 @@ IGNORED_STDERR_SUBSTRINGS = (
     "This plugin supports grabbing the mouse only for popup windows",
 )
 
-STARTUP_DOCUMENT_SUFFIXES = frozenset((".chemvas", ".json", ".svg"))
+STARTUP_DOCUMENT_SUFFIXES = frozenset((".chemvas", ".svg"))
 DOCUMENT_PATCH_COMMANDS = frozenset(("apply-patch", "inspect-document"))
 DOCUMENT_RENDER_COMMANDS = frozenset(("render-document",))
 CALCULATION_BUNDLE_COMMANDS = frozenset(

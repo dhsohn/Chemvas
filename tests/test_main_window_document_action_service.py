@@ -287,8 +287,30 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
         self.assertEqual(
             file_dialog.getSaveFileName.call_args.args[2], "/tmp/current.chemvas"
         )
+        self.assertEqual(
+            file_dialog.getSaveFileName.call_args.args[3],
+            "Chemvas (*.chemvas);;All Files (*)",
+        )
         save_canvas_to_path.assert_called_once_with(
             self.window, "/tmp/new-drawing.chemvas", canvas=None
+        )
+
+    def test_load_canvas_dialog_advertises_only_public_document_suffixes(
+        self,
+    ) -> None:
+        file_dialog = mock.Mock()
+        file_dialog.getOpenFileName.return_value = ("", "")
+
+        self.assertFalse(self.service.load_canvas(self.window, file_dialog=file_dialog))
+
+        file_dialog.getOpenFileName.assert_called_once()
+        self.assertEqual(
+            file_dialog.getOpenFileName.call_args.args[3],
+            (
+                "Chemvas / Editable SVG / MDL Molfile (*.chemvas *.svg *.mol);;"
+                "Chemvas (*.chemvas);;Editable SVG (*.svg);;"
+                "MDL Molfile (*.mol);;All Files (*)"
+            ),
         )
 
     def test_load_canvas_from_path_reuses_clean_untitled_canvas(self) -> None:
@@ -306,6 +328,22 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
         )
         self.assertEqual(
             document_file_path_for(active_canvas_for_window(self.window)), str(path)
+        )
+
+    def test_load_canvas_from_path_keeps_legacy_json_recovery_path(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "recent-legacy.json"
+            state = snapshot_canvas_state_for(active_canvas_for_window(self.window))
+            write_document(path, state, version=1)
+
+            result = self.service.load_canvas_from_path(self.window, str(path))
+
+        self.assertTrue(result)
+        self.assertEqual(
+            document_file_path_for(active_canvas_for_window(self.window)), str(path)
+        )
+        self.assertEqual(
+            self.window.tab_references.canvas_tabs.tabText(0), "recent-legacy.json"
         )
 
     def test_load_canvas_from_path_imports_mol_as_untitled_document(self) -> None:

@@ -13,7 +13,7 @@ from chemvas.ui.recent_documents_store import (
 
 def test_record_then_load_round_trips(tmp_path):
     recent = tmp_path / "recent.json"
-    existing = tmp_path / "a.chemvas"
+    existing = tmp_path / "legacy-document.json"
     existing.write_text("{}")
 
     record_recent(str(existing), path=recent)

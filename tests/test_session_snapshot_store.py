@@ -76,7 +76,7 @@ def test_crash_restore_round_trips_unsaved_work(tmp_path, monkeypatch):
 
 def test_clean_exit_reopens_saved_files_from_disk(tmp_path, monkeypatch):
     root = tmp_path / "sessions"
-    saved = tmp_path / "molecule.chemvas"
+    saved = tmp_path / "molecule.json"
     write_document(saved, _valid_state("on-disk"), CANVAS_FILE_VERSION)
 
     prev = _store(root, "prev", pid=222)
@@ -86,7 +86,7 @@ def test_clean_exit_reopens_saved_files_from_disk(tmp_path, monkeypatch):
             DocDescriptor(
                 state=_valid_state("on-disk"),
                 file_path=str(saved),
-                display_name="molecule.chemvas",
+                display_name="molecule.json",
                 dirty=False,
             )
         ]

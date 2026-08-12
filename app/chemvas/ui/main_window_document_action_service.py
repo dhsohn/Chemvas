@@ -205,7 +205,7 @@ class MainWindowDocumentActionService:
             window,
             "Save Drawing As",
             self.default_save_dialog_path(window, canvas=canvas),
-            "Chemvas (*.chemvas);;JSON (*.json);;All Files (*)",
+            "Chemvas (*.chemvas);;All Files (*)",
         )
         path = resolve_save_as_path(dialog_path)
         if path is None:
@@ -355,7 +355,7 @@ class MainWindowDocumentActionService:
             window,
             "Load Drawing",
             "",
-            "Chemvas / Editable SVG / MDL Molfile (*.chemvas *.json *.svg *.mol);;Chemvas (*.chemvas);;Editable SVG (*.svg);;MDL Molfile (*.mol);;JSON (*.json);;All Files (*)",
+            "Chemvas / Editable SVG / MDL Molfile (*.chemvas *.svg *.mol);;Chemvas (*.chemvas);;Editable SVG (*.svg);;MDL Molfile (*.mol);;All Files (*)",
         )
         path = (
             resolve_load_path(dialog_path)
