@@ -55,13 +55,10 @@ def _add_attach_rollback_note(
 ) -> None:
     if original_error is None:
         raise rollback_error
-    try:
-        original_error.add_note(
-            f"Scene-item attach recovery also failed while {phase}: "
-            f"{type(rollback_error).__name__}: {rollback_error}"
-        )
-    except Exception:
-        return
+    original_error.add_note(
+        f"Scene-item attach recovery also failed while {phase}: "
+        f"{type(rollback_error).__name__}: {rollback_error}"
+    )
 
 
 def _optional_callable(target, name: str):

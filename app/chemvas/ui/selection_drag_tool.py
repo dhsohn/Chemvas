@@ -61,13 +61,10 @@ def _add_drag_rollback_note(
     *,
     phase: str,
 ) -> None:
-    try:
-        primary_error.add_note(
-            "Selection drag recovery also encountered an error while "
-            f"{phase}: {type(rollback_error).__name__}: {rollback_error}"
-        )
-    except Exception:
-        return
+    primary_error.add_note(
+        "Selection drag recovery also encountered an error while "
+        f"{phase}: {type(rollback_error).__name__}: {rollback_error}"
+    )
 
 
 def atom_ids_with_bonds(canvas, atom_ids: set[int], bond_ids: set[int]) -> set[int]:

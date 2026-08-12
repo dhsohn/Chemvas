@@ -43,13 +43,7 @@ def _add_recorded_build_rollback_note(
     original_error: BaseException,
     rollback_error: BaseException,
 ) -> None:
-    try:
-        add_note = getattr(original_error, "add_note", None)
-        if not callable(add_note):
-            return
-        add_note(f"Recorded build rollback also failed: {rollback_error!r}")
-    except Exception:
-        return
+    original_error.add_note(f"Recorded build rollback also failed: {rollback_error!r}")
 
 
 class StructureBuildService:

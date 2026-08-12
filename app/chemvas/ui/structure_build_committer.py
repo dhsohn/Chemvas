@@ -65,13 +65,7 @@ def _add_build_rollback_note(
     *,
     phase: str,
 ) -> None:
-    try:
-        add_note = getattr(original_error, "add_note", None)
-        if not callable(add_note):
-            return
-        add_note(f"{phase}: {cleanup_error!r}")
-    except Exception:
-        return
+    original_error.add_note(f"{phase}: {cleanup_error!r}")
 
 
 @dataclass(slots=True)

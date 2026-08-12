@@ -63,13 +63,9 @@ def _add_clipboard_rollback_note(
     *,
     phase: str,
 ) -> None:
-    try:
-        add_note = getattr(original_error, "add_note", None)
-        if not callable(add_note):
-            return
-        add_note(f"Clipboard {phase} rollback also failed: {cleanup_error!r}")
-    except Exception:
-        return
+    original_error.add_note(
+        f"Clipboard {phase} rollback also failed: {cleanup_error!r}"
+    )
 
 
 def paste_selection_from_clipboard_for_canvas(

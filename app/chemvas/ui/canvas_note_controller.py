@@ -379,15 +379,10 @@ class CanvasNoteController:
                 try:
                     document.blockSignals(signals_blocked)
                 except Exception as secondary_error:
-                    try:
-                        add_note = getattr(primary_error, "add_note", None)
-                        if callable(add_note):
-                            add_note(
-                                "Editing-note signal-state restore also encountered "
-                                f"{type(secondary_error).__name__}: {secondary_error}"
-                            )
-                    except Exception:
-                        pass
+                    primary_error.add_note(
+                        "Editing-note signal-state restore also encountered "
+                        f"{type(secondary_error).__name__}: {secondary_error}"
+                    )
 
             try:
                 document.blockSignals(True)
@@ -396,15 +391,10 @@ class CanvasNoteController:
                 try:
                     item.setHtml(snapshot.html)
                 except Exception as html_error:
-                    try:
-                        add_note = getattr(block_error, "add_note", None)
-                        if callable(add_note):
-                            add_note(
-                                "Unblocked editing-note HTML restore also encountered "
-                                f"{type(html_error).__name__}: {html_error}"
-                            )
-                    except Exception:
-                        pass
+                    block_error.add_note(
+                        "Unblocked editing-note HTML restore also encountered "
+                        f"{type(html_error).__name__}: {html_error}"
+                    )
                 raise
             try:
                 item.setHtml(snapshot.html)

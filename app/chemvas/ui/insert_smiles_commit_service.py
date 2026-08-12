@@ -42,13 +42,7 @@ def _add_insert_commit_rollback_note(
     original_error: BaseException,
     message: str,
 ) -> None:
-    try:
-        add_note = getattr(original_error, "add_note", None)
-        if not callable(add_note):
-            return
-        add_note(message)
-    except Exception:
-        return
+    original_error.add_note(message)
 
 
 def apply_smiles_commit_plan(

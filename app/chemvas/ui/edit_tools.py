@@ -122,15 +122,10 @@ class DeleteTool(Tool):
         rollback_errors: list[BaseException],
     ) -> None:
         for rollback_error in rollback_errors:
-            try:
-                primary_error.add_note(
-                    "Delete tool rollback also encountered "
-                    f"{type(rollback_error).__name__}: {rollback_error}"
-                )
-            except Exception:
-                # A third-party control-flow exception can expose a broken
-                # diagnostic hook. Reporting must not replace the primary.
-                continue
+            primary_error.add_note(
+                "Delete tool rollback also encountered "
+                f"{type(rollback_error).__name__}: {rollback_error}"
+            )
 
     def _rollback_active_session(
         self, original_error: BaseException | None = None

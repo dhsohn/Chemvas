@@ -66,13 +66,10 @@ def _push_group_command(canvas, command) -> None:
         try:
             command.undo(canvas)
         except Exception as rollback_error:
-            try:
-                original_error.add_note(
-                    "Group mutation rollback also encountered "
-                    f"{type(rollback_error).__name__}: {rollback_error}"
-                )
-            except Exception:
-                pass
+            original_error.add_note(
+                "Group mutation rollback also encountered "
+                f"{type(rollback_error).__name__}: {rollback_error}"
+            )
         raise
 
 

@@ -147,14 +147,10 @@ def _add_color_rollback_note(
     *,
     phase: str,
 ) -> None:
-    with contextlib.suppress(BaseException):
-        add_note = getattr(original_error, "add_note", None)
-        if not callable(add_note):
-            return
-        add_note(
-            "Color rollback also failed during "
-            f"{phase}: {type(rollback_error).__name__}: {rollback_error}"
-        )
+    original_error.add_note(
+        "Color rollback also failed during "
+        f"{phase}: {type(rollback_error).__name__}: {rollback_error}"
+    )
 
 
 def _run_color_rollback_step(
