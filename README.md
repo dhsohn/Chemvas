@@ -304,6 +304,32 @@ provenance, contacts, and profile and rejects any mismatch. Placement scores are
 geometric clash and contact metrics, not energies or stability rankings.
 Unreviewed or partially reviewed multicomponent endpoints remain blocked.
 
+Request format v1 is frozen to the legacy
+`chemvas-rigid-precomplex-placement/1` profile so existing requests and
+persisted ensembles remain byte-reproducible. New generation requests use
+format v2 and must explicitly name
+`"profile": "chemvas-rigid-precomplex-placement/2"`. Profile 2 uses the
+covalent radii from [Cordero et al., Table 2](https://doi.org/10.1039/B801115J)
+(C sp3 and low-spin Fe/Co entries) and the van der Waals radii from
+[Alvarez, Table 1](https://doi.org/10.1039/C3DT50599E) for every supported
+element. The ensemble, generation/inspection reports, and final
+`machine.json` placement metadata carry the profile, dataset IDs, DOIs, and an
+exact radius-table hash. Profile 1 retains its original mixed, partly
+unverified van der Waals values only for reproduction; it is not a scientific
+reference table.
+
+Profile 2 remains within document version 6 and Calculation Plan v2. Chemvas
+versions predating this profile fail closed on it and cannot open such a
+document; use Chemvas 0.2.0 or newer for profile-2 files. These cited radii and
+Chemvas's thresholds still define a deterministic geometric heuristic:
+designated contacts use `0.85 ×` the covalent-radius sum; other pairs use the
+larger of `1.05 ×` the covalent-radius sum and `0.60 ×` the van der Waals-radius
+sum; soft-overlap scoring uses `0.85 ×` the van der Waals-radius sum. This is
+not a hard-sphere physical model, energy, or stability claim. Fe/Co spin and
+coordination are not represented in the current input model, so the documented
+low-spin selector is fixed rather than inferred. Researcher review and
+downstream quantum optimization remain required.
+
 `plan.json` uses Calculation Plan v1. States own calculation membership and
 charge/multiplicity; step endpoints own roles:
 

@@ -4,8 +4,13 @@ import hashlib
 import json
 import math
 import re
+from collections.abc import Mapping
 from dataclasses import replace
 
+from chemvas.domain.document.precomplex_profile import (
+    LEGACY_PROFILE_ID,
+    precomplex_placement_profile,
+)
 from chemvas.features.calculation_bundle import CalculationArtifacts
 
 from .model import (
@@ -19,45 +24,6 @@ from .model import (
     Vector3,
 )
 
-PROFILE_ID = "chemvas-rigid-precomplex-placement/1"
-APPROACH_SAMPLE_COUNT = 12
-ROTATION_SAMPLE_COUNT = 6
-MAX_CANDIDATES = 16
-
-# Frozen by PROFILE_ID. Values are covalent and van der Waals radii in angstrom.
-_RADII: dict[str, tuple[float, float]] = {
-    "H": (0.31, 1.20),
-    "Li": (1.28, 1.82),
-    "B": (0.84, 1.92),
-    "C": (0.76, 1.70),
-    "N": (0.71, 1.55),
-    "O": (0.66, 1.52),
-    "F": (0.57, 1.47),
-    "Na": (1.66, 2.27),
-    "Mg": (1.41, 1.73),
-    "Al": (1.21, 1.84),
-    "Si": (1.11, 2.10),
-    "P": (1.07, 1.80),
-    "S": (1.05, 1.80),
-    "Cl": (1.02, 1.75),
-    "K": (2.03, 2.75),
-    "Ca": (1.76, 2.31),
-    "Fe": (1.32, 2.00),
-    "Co": (1.26, 2.00),
-    "Ni": (1.24, 1.63),
-    "Cu": (1.32, 1.40),
-    "Zn": (1.22, 1.39),
-    "Br": (1.20, 1.85),
-    "Ru": (1.46, 2.00),
-    "Rh": (1.42, 2.00),
-    "Pd": (1.39, 1.63),
-    "Ag": (1.45, 1.72),
-    "Sn": (1.39, 2.17),
-    "I": (1.39, 1.98),
-    "Ir": (1.41, 2.00),
-    "Pt": (1.36, 1.75),
-    "Au": (1.36, 1.66),
-}
 _SHA256_RE = re.compile(r"[0-9a-f]{64}\Z")
 _EPSILON = 1e-12
 
@@ -65,7 +31,10 @@ _EPSILON = 1e-12
 def component_geometries_from_artifacts(
     artifacts: CalculationArtifacts,
     component_atom_ids: tuple[tuple[int, ...], ...],
+    *,
+    profile: str = LEGACY_PROFILE_ID,
 ) -> tuple[ComponentGeometry, ...]:
+    precomplex_placement_profile(profile)
     if not artifacts.geometry_optimization_result.endswith("_converged"):
         raise ValueError(
             "Precomplex generation requires a converged component geometry; "
@@ -156,7 +125,7 @@ def component_geometries_from_artifacts(
             raise ValueError("Precomplex component geometry is empty.")
         canonical = json.dumps(
             {
-                "profile": PROFILE_ID,
+                "profile": profile,
                 "component_atom_ids": list(component),
                 "atoms": identity_by_component[component_index],
                 "rdkit_version": artifacts.rdkit_version,
@@ -174,6 +143,7 @@ def component_geometries_from_artifacts(
                 conformer_id="conf-"
                 + hashlib.sha256(canonical.encode("ascii")).hexdigest(),
                 atoms=atoms,
+                profile=profile,
             )
         )
     return tuple(geometries)
@@ -183,17 +153,18 @@ def generate_precomplex_candidates(
     request: PlacementRequest,
     components: tuple[ComponentGeometry, ...],
 ) -> tuple[GeneratedCandidate, ...]:
+    profile = precomplex_placement_profile(request.profile)
     _validate_request(request, components)
     root, child, contact = _ordered_components(request.contacts[0], components)
     root_contact = _contact_atom(root, _contact_id_for_component(contact, root))
     child_contact = _contact_atom(child, _contact_id_for_component(contact, child))
-    directions = _fibonacci_sphere(APPROACH_SAMPLE_COUNT)
+    directions = _fibonacci_sphere(profile.approach_sample_count)
     component_conformer_ids = tuple(component.conformer_id for component in components)
     candidates: list[GeneratedCandidate] = []
     for approach_index, direction in enumerate(directions):
         aligned = _align_child_contact_outward(child, child_contact, direction)
-        for rotation_index in range(ROTATION_SAMPLE_COUNT):
-            angle = (2.0 * math.pi * rotation_index) / ROTATION_SAMPLE_COUNT
+        for rotation_index in range(profile.rotation_sample_count):
+            angle = (2.0 * math.pi * rotation_index) / profile.rotation_sample_count
             rotated = _rotate_component_about_contact(
                 aligned,
                 child_contact.path_index,
@@ -221,6 +192,7 @@ def generate_precomplex_candidates(
                 root_contact.path_index,
                 child_contact.path_index,
                 contact,
+                radii=profile.radii,
             )
             if validation.hard_clash_count:
                 continue
@@ -241,7 +213,7 @@ def generate_precomplex_candidates(
                 GeneratedCandidate(
                     id=candidate_id,
                     geometry_class="generated_candidate_ensemble",
-                    profile=PROFILE_ID,
+                    profile=profile.id,
                     atoms=atoms,
                     xyz=xyz,
                     xyz_sha256=xyz_sha256,
@@ -272,6 +244,7 @@ def _validate_request(
     request: PlacementRequest,
     components: tuple[ComponentGeometry, ...],
 ) -> None:
+    profile = precomplex_placement_profile(request.profile)
     if _SHA256_RE.fullmatch(request.source_sha256) is None:
         raise ValueError("Precomplex source_sha256 must be lowercase SHA-256 hex.")
     if _SHA256_RE.fullmatch(request.plan_sha256) is None:
@@ -280,17 +253,24 @@ def _validate_request(
         raise ValueError("Precomplex side must be reactant or product.")
     if not request.step_id or len(request.step_id) > 64:
         raise ValueError("Precomplex step id is invalid.")
-    if not 1 <= request.candidate_cap <= MAX_CANDIDATES:
+    if (
+        type(request.candidate_cap) is not int
+        or not 1 <= request.candidate_cap <= profile.max_candidates
+    ):
         raise ValueError(
-            f"Precomplex candidate_cap must be between 1 and {MAX_CANDIDATES}."
+            f"Precomplex candidate_cap must be between 1 and {profile.max_candidates}."
         )
     if len(components) != 2:
         raise ValueError(
-            "Placement profile v1 requires exactly two included components."
+            "The placement profile requires exactly two included components."
+        )
+    if any(component.profile != profile.id for component in components):
+        raise ValueError(
+            "Precomplex component geometries do not match the requested profile."
         )
     if len(request.contacts) != 1:
         raise ValueError(
-            "chemvas/precomplex_contact_graph_incomplete: profile v1 requires "
+            "chemvas/precomplex_contact_graph_incomplete: the profile requires "
             "exactly one intercomponent contact."
         )
     if components[0].component_atom_ids == components[1].component_atom_ids:
@@ -313,9 +293,10 @@ def _validate_request(
         ):
             raise ValueError("Precomplex component atom ids must be sorted and unique.")
         for atom in component.atoms:
-            if atom.symbol not in _RADII:
+            if atom.symbol not in profile.radii:
                 raise ValueError(
-                    "chemvas/precomplex_unsupported_radius: placement profile v1 "
+                    "chemvas/precomplex_unsupported_radius: placement profile "
+                    f"{profile.id} "
                     f"has no frozen radii for element {atom.symbol}."
                 )
             if not atom.origin or not all(
@@ -484,6 +465,8 @@ def _validate_placement(
     root_contact_index: int,
     child_contact_index: int,
     contact: ContactRequest,
+    *,
+    radii: Mapping[str, tuple[float, float]],
 ) -> ValidationMetrics:
     by_index = {atom.path_index: atom for atom in atoms}
     contact_distance = _distance(
@@ -502,8 +485,8 @@ def _validate_placement(
                 root_atom.coordinates,
                 child_atom.coordinates,
             )
-            covalent = _RADII[root_atom.symbol][0] + _RADII[child_atom.symbol][0]
-            vdw = _RADII[root_atom.symbol][1] + _RADII[child_atom.symbol][1]
+            covalent = radii[root_atom.symbol][0] + radii[child_atom.symbol][0]
+            vdw = radii[root_atom.symbol][1] + radii[child_atom.symbol][1]
             designated = {
                 root_atom.path_index,
                 child_atom.path_index,
@@ -545,7 +528,7 @@ def _candidate_id(
     xyz_sha256: str,
 ) -> str:
     payload = {
-        "profile": PROFILE_ID,
+        "profile": request.profile,
         "source_sha256": request.source_sha256,
         "plan_sha256": request.plan_sha256,
         "step_id": request.step_id,
@@ -575,7 +558,7 @@ def _candidate_id(
 def _xyz_block(request: PlacementRequest, atoms: tuple[GeometryAtom, ...]) -> str:
     lines = [
         str(len(atoms)),
-        f"Chemvas {PROFILE_ID} {request.step_id} {request.side}",
+        f"Chemvas {request.profile} {request.step_id} {request.side}",
     ]
     lines.extend(
         f"{atom.symbol:<2} {atom.coordinates[0]:.8f} {atom.coordinates[1]:.8f} "
@@ -659,10 +642,6 @@ def _cross(first: Vector3, second: Vector3) -> Vector3:
 
 
 __all__ = [
-    "APPROACH_SAMPLE_COUNT",
-    "MAX_CANDIDATES",
-    "PROFILE_ID",
-    "ROTATION_SAMPLE_COUNT",
     "component_geometries_from_artifacts",
     "generate_precomplex_candidates",
 ]

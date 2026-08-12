@@ -50,6 +50,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   restores it.
 
 ### Changed
+- **Cited, immutable precomplex radius profile**: new request format v2 requires
+  `chemvas-rigid-precomplex-placement/2`, whose complete supported-element
+  radius table uses Cordero (2008) Table 2 covalent radii and Alvarez (2013)
+  Table 1 van der Waals radii with exact dataset, DOI, selector, and table-hash
+  provenance. Frozen request/profile v1 remains byte-reproducible for existing
+  documents. Generation, inspection, deterministic regeneration, endpoint-pair
+  validation, and `machine.json` now route and report the persisted profile;
+  mixed profiles or altered provenance fail closed. The scores remain geometric
+  heuristics requiring researcher review and downstream optimization.
 - **Canvas atom-id labels now color by mapping state**: while the Calculation
   dialog is open, an atom's id label takes the blue reactant or orange product
   tint only once that atom is actually mapped; every unmapped atom stays gray.

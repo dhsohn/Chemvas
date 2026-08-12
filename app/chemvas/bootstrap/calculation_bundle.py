@@ -30,6 +30,12 @@ from chemvas.domain.document import (
     calculation_plan_to_state,
 )
 from chemvas.domain.document.precomplex import precomplex_state_from_json
+from chemvas.domain.document.precomplex_profile import (
+    CURRENT_PROFILE_ID,
+    LEGACY_PROFILE_ID,
+    precomplex_placement_profile,
+    radius_provenance_for,
+)
 from chemvas.features.calculation_bundle import (
     AtomMapEntry,
     CalculationArtifacts,
@@ -264,14 +270,26 @@ def _inspect_precomplex(source: Path, *, step_id: str) -> dict[str, object]:
         )
     step = calculation_step_by_id(plan, step_id)
     endpoints: dict[str, object] = {}
+    placement_profiles: dict[str, object] = {}
     for side, endpoint in (("reactant", step.reactant), ("product", step.product)):
-        endpoints[side] = precomplex_state_from_json(endpoint.precomplex.payload_json)
+        state = precomplex_state_from_json(endpoint.precomplex.payload_json)
+        endpoints[side] = state
+        profile_id = state.get("profile")
+        if isinstance(profile_id, str):
+            profile = precomplex_placement_profile(profile_id)
+            placement_profiles[side] = {
+                "id": profile.id,
+                "radius_provenance": radius_provenance_for(profile.id),
+            }
+        else:
+            placement_profiles[side] = None
     return {
         "format": "chemvas-precomplex-inspection",
         "version": 1,
         "source": str(source),
         "step_id": step.id,
         "endpoints": endpoints,
+        "placement_profiles": placement_profiles,
     }
 
 
@@ -386,6 +404,8 @@ def _select_precomplex(
             "acceptance_statement": "accepted_for_path_endpoint_review",
         }
     validated_plan = validate_calculation_plan(document.state, plan_state)
+    validated_step = calculation_step_by_id(validated_plan, step.id)
+    _verify_precomplex_selection_pair(validated_step)
     state_payload = dict(document.state)
     state_payload["calculation_plan"] = calculation_plan_to_state(validated_plan)
     output_document = create_document(state_payload, PRECOMPLEX_CANVAS_FILE_VERSION)
@@ -402,8 +422,9 @@ def _select_precomplex(
     }
 
 
-def _verify_precomplex_selection_pair(step: CalculationStep) -> None:
+def _verify_precomplex_selection_pair(step: CalculationStep) -> dict[str, object]:
     identities: list[tuple[object, object, object]] = []
+    profiles: list[tuple[str, object]] = []
     for endpoint in (step.reactant, step.product):
         state = precomplex_state_from_json(endpoint.precomplex.payload_json)
         selection = state.get("selection")
@@ -416,8 +437,24 @@ def _verify_precomplex_selection_pair(step: CalculationStep) -> None:
                 selection.get("acceptance_statement"),
             )
         )
+        profile_id = state.get("profile")
+        if not isinstance(profile_id, str):
+            raise ValueError("Precomplex review pair has an invalid profile.")
+        profile = precomplex_placement_profile(profile_id)
+        persisted_provenance = state.get("radius_provenance")
+        if profile.id == LEGACY_PROFILE_ID:
+            persisted_provenance = radius_provenance_for(profile.id)
+        profiles.append((profile.id, persisted_provenance))
     if identities[0] != identities[1]:
         raise ValueError("Precomplex endpoint reviews do not form one atomic pair.")
+    if profiles[0] != profiles[1]:
+        raise ValueError(
+            "Precomplex endpoint reviews use different placement profiles."
+        )
+    return {
+        "id": profiles[0][0],
+        "radius_provenance": radius_provenance_for(profiles[0][0]),
+    }
 
 
 def _generate_precomplex(
@@ -434,10 +471,12 @@ def _generate_precomplex(
     plan = calculation_plan_for_document(document.state)
     step = calculation_step_by_id(plan, step_id)
     require_step_ready(plan, step)
-    candidate_cap, environment, contacts_by_side = _parse_precomplex_request(
-        request,
-        step_id=step.id,
-        source_document_sha256=_sha256(source_bytes),
+    candidate_cap, profile_id, environment, contacts_by_side = (
+        _parse_precomplex_request(
+            request,
+            step_id=step.id,
+            source_document_sha256=_sha256(source_bytes),
+        )
     )
     adapter = RDKitAdapter()
     endpoint_payloads: dict[str, dict[str, object]] = {}
@@ -461,6 +500,7 @@ def _generate_precomplex(
         components = component_geometries_from_artifacts(
             artifacts,
             included_components,
+            profile=profile_id,
         )
         basis_sha256 = _precomplex_basis_sha256(
             document.state,
@@ -476,6 +516,7 @@ def _generate_precomplex(
                 side=side,
                 contacts=contacts_by_side[side],
                 candidate_cap=candidate_cap,
+                profile=profile_id,
             ),
             components,
         )
@@ -487,6 +528,7 @@ def _generate_precomplex(
             contacts=contacts_by_side[side],
             artifacts=artifacts,
             candidates=candidates,
+            profile_id=profile_id,
         )
         candidate_counts[side] = len(candidates)
         candidate_summaries[side] = [
@@ -533,7 +575,8 @@ def _generate_precomplex(
         "output": str(output),
         "step_id": step.id,
         "chemvas_document_version": PRECOMPLEX_CANVAS_FILE_VERSION,
-        "profile": "chemvas-rigid-precomplex-placement/1",
+        "profile": profile_id,
+        "radius_provenance": radius_provenance_for(profile_id),
         "candidate_counts": candidate_counts,
         "candidates": candidate_summaries,
     }
@@ -556,8 +599,13 @@ def _parse_precomplex_request(
     *,
     step_id: str,
     source_document_sha256: str,
-) -> tuple[int, dict[str, object], dict[str, tuple[ContactRequest, ...]]]:
-    if set(request) != {
+) -> tuple[
+    int,
+    str,
+    dict[str, object],
+    dict[str, tuple[ContactRequest, ...]],
+]:
+    base_fields = {
         "format",
         "version",
         "source_document_sha256",
@@ -565,13 +613,29 @@ def _parse_precomplex_request(
         "candidate_cap",
         "environment",
         "endpoints",
-    }:
-        raise ValueError("Invalid precomplex request fields.")
+    }
+    version = request.get("version")
     if (
         request.get("format") != "chemvas-precomplex-request"
-        or request.get("version") != 1
+        or type(version) is not int
+        or version not in {1, 2}
     ):
         raise ValueError("Unsupported precomplex request format or version.")
+    if version == 1:
+        if set(request) != base_fields:
+            raise ValueError("Invalid precomplex request fields.")
+        profile_id = LEGACY_PROFILE_ID
+    else:
+        if set(request) != base_fields | {"profile"}:
+            raise ValueError("Invalid precomplex request fields.")
+        profile_value = request.get("profile")
+        if not isinstance(profile_value, str):
+            raise ValueError("precomplex request profile is required.")
+        profile_id = precomplex_placement_profile(profile_value).id
+        if profile_id != CURRENT_PROFILE_ID:
+            raise ValueError(
+                f"precomplex request v2 requires profile {CURRENT_PROFILE_ID}."
+            )
     if request.get("source_document_sha256") != source_document_sha256:
         raise ValueError(
             "precomplex request source_document_sha256 does not match the input document."
@@ -579,8 +643,14 @@ def _parse_precomplex_request(
     if request.get("step_id") != step_id:
         raise ValueError("precomplex request step_id does not match --step.")
     candidate_cap = request.get("candidate_cap")
-    if type(candidate_cap) is not int or not 1 <= candidate_cap <= 16:
-        raise ValueError("precomplex candidate_cap must be between 1 and 16.")
+    profile = precomplex_placement_profile(profile_id)
+    if (
+        type(candidate_cap) is not int
+        or not 1 <= candidate_cap <= profile.max_candidates
+    ):
+        raise ValueError(
+            f"precomplex candidate_cap must be between 1 and {profile.max_candidates}."
+        )
     environment = _precomplex_environment(request.get("environment"))
     endpoints = request.get("endpoints")
     if not isinstance(endpoints, Mapping) or set(endpoints) != {
@@ -596,12 +666,12 @@ def _parse_precomplex_request(
         contacts = endpoint.get("contacts")
         if not isinstance(contacts, list) or len(contacts) != 1:
             raise ValueError(
-                f"Placement profile v1 requires one explicit {side} contact."
+                f"The placement profile requires one explicit {side} contact."
             )
         contacts_by_side[side] = (
             _contact_request(contacts[0], side=side, step_id=step_id),
         )
-    return candidate_cap, environment, contacts_by_side
+    return candidate_cap, profile_id, environment, contacts_by_side
 
 
 def _precomplex_environment(value: object) -> dict[str, object]:
@@ -712,13 +782,17 @@ def _precomplex_endpoint_state(
     contacts: tuple[ContactRequest, ...],
     artifacts: CalculationArtifacts,
     candidates: tuple[GeneratedCandidate, ...],
+    profile_id: str,
 ) -> dict[str, object]:
-    return {
+    profile = precomplex_placement_profile(profile_id)
+    if any(candidate.profile != profile.id for candidate in candidates):
+        raise ValueError("Precomplex candidates do not match the requested profile.")
+    state: dict[str, object] = {
         "kind": "candidate_ensemble",
         "source_document_sha256": source_document_sha256,
         "basis_sha256": basis_sha256,
         "side": side,
-        "profile": "chemvas-rigid-precomplex-placement/1",
+        "profile": profile.id,
         "environment": dict(environment),
         "contacts": [asdict(contact) for contact in contacts],
         "source_geometry": {
@@ -739,6 +813,9 @@ def _precomplex_endpoint_state(
         ],
         "selection": None,
     }
+    if profile.id != LEGACY_PROFILE_ID:
+        state["radius_provenance"] = radius_provenance_for(profile.id)
+    return state
 
 
 def _precomplex_candidate_state(candidate: GeneratedCandidate) -> dict[str, object]:
@@ -808,8 +885,9 @@ def _pack_step(
         not in precheck.blocking_reasons
     )
     interaction_geometry_guarantee = "not_provided"
+    placement_profile: dict[str, object] | None = None
     if reviewed_precomplex_pair:
-        _verify_precomplex_selection_pair(step)
+        placement_profile = _verify_precomplex_selection_pair(step)
         reactant_artifacts = _reviewed_precomplex_artifacts(
             document_state=document.state,
             plan=plan,
@@ -850,6 +928,7 @@ def _pack_step(
                 if reviewed_precomplex_pair
                 else "single_component_endpoints"
             ),
+            placement_profile=placement_profile,
         )
         if precheck.ready_for_path_endpoints
         else None
@@ -1009,6 +1088,10 @@ def _require_reproducible_precomplex(
     step: CalculationStep,
     side: str,
 ) -> None:
+    profile_id = state.get("profile")
+    if not isinstance(profile_id, str):
+        raise ValueError(f"Step {step.id} {side} precomplex profile is invalid.")
+    profile = precomplex_placement_profile(profile_id)
     expected_source_geometry = {
         "rdkit_version": current.rdkit_version,
         "rdkit_formal_charge": current.rdkit_formal_charge,
@@ -1048,7 +1131,11 @@ def _require_reproducible_precomplex(
         for member in calculation_state.members
         if member.inclusion == "included"
     )
-    components = component_geometries_from_artifacts(current, included_components)
+    components = component_geometries_from_artifacts(
+        current,
+        included_components,
+        profile=profile.id,
+    )
     regenerated = generate_precomplex_candidates(
         PlacementRequest(
             source_sha256=source_document_sha256,
@@ -1057,6 +1144,7 @@ def _require_reproducible_precomplex(
             side=side,
             contacts=contacts,
             candidate_cap=len(raw_candidates),
+            profile=profile.id,
         ),
         components,
     )
@@ -1170,6 +1258,7 @@ def _path_endpoint_payload(
     bond_changes: Mapping[str, object],
     component_count: int,
     precomplex_geometry: str,
+    placement_profile: dict[str, object] | None,
 ) -> dict[str, object]:
     reactant_rows = _xyz_atom_rows(reactant_artifacts, label="reactant")
     product_rows = _xyz_atom_rows(product_artifacts, label="product")
@@ -1233,6 +1322,11 @@ def _path_endpoint_payload(
                 else "not_performed"
             ),
             "endpoint_optimization": "required_downstream",
+            **(
+                {"placement_profile": placement_profile}
+                if placement_profile is not None
+                else {}
+            ),
             "intended_use": (
                 "atom-identity-aligned initial endpoints for downstream path search "
                 "and researcher review"

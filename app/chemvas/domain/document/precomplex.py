@@ -8,8 +8,12 @@ from collections.abc import Mapping
 from datetime import datetime
 from decimal import Decimal
 
-PROFILE_ID = "chemvas-rigid-precomplex-placement/1"
-MAX_CANDIDATES = 16
+from .precomplex_profile import (
+    LEGACY_PROFILE_ID,
+    precomplex_placement_profile,
+    radius_provenance_for,
+)
+
 MAX_ATOMS = 2000
 MAX_XYZ_BYTES = 512_000
 NO_PRECOMPLEX_JSON = '{"kind":"none"}'
@@ -31,7 +35,13 @@ def canonicalize_precomplex_state(
         if set(value) != {"kind"}:
             raise ValueError("Invalid empty endpoint precomplex state.")
         return "none", NO_PRECOMPLEX_JSON
-    if kind != "candidate_ensemble" or set(value) != {
+    if kind != "candidate_ensemble":
+        raise ValueError("Invalid endpoint precomplex candidate ensemble.")
+    profile_id = value.get("profile")
+    if not isinstance(profile_id, str):
+        raise ValueError("Endpoint precomplex profile is invalid.")
+    profile = precomplex_placement_profile(profile_id)
+    expected_fields = {
         "kind",
         "source_document_sha256",
         "basis_sha256",
@@ -42,10 +52,19 @@ def canonicalize_precomplex_state(
         "source_geometry",
         "candidates",
         "selection",
-    }:
+    }
+    if profile.id != LEGACY_PROFILE_ID:
+        expected_fields.add("radius_provenance")
+    if set(value) != expected_fields:
         raise ValueError("Invalid endpoint precomplex candidate ensemble.")
-    if value.get("side") != side or value.get("profile") != PROFILE_ID:
+    if value.get("side") != side:
         raise ValueError("Endpoint precomplex side or profile does not match.")
+    if profile.id != LEGACY_PROFILE_ID and value.get(
+        "radius_provenance"
+    ) != radius_provenance_for(profile.id):
+        raise ValueError(
+            "Endpoint precomplex radius provenance does not match profile."
+        )
     source_document_sha256 = _sha256(
         value.get("source_document_sha256"), "source_document_sha256"
     )
@@ -56,7 +75,10 @@ def canonicalize_precomplex_state(
         value.get("source_geometry"), included_components
     )
     candidates = value.get("candidates")
-    if not isinstance(candidates, list) or not 1 <= len(candidates) <= MAX_CANDIDATES:
+    if (
+        not isinstance(candidates, list)
+        or not 1 <= len(candidates) <= profile.max_candidates
+    ):
         raise ValueError("Endpoint precomplex candidates exceed the bounded profile.")
     candidate_hash_by_id: dict[str, str] = {}
     for candidate in candidates:
@@ -68,6 +90,7 @@ def canonicalize_precomplex_state(
             step_side=side,
             contacts=contacts,
             included_components=included_components,
+            profile_id=profile.id,
         )
         if candidate_id in candidate_hash_by_id:
             raise ValueError("Endpoint precomplex candidate ids must be unique.")
@@ -112,10 +135,10 @@ def _validate_contacts(
 ) -> tuple[dict[str, object], ...]:
     if len(included_components) != 2:
         raise ValueError(
-            "Placement profile v1 requires exactly two included components."
+            "The placement profile requires exactly two included components."
         )
     if not isinstance(value, list) or len(value) != 1:
-        raise ValueError("Placement profile v1 requires one explicit contact.")
+        raise ValueError("The placement profile requires one explicit contact.")
     contact = value[0]
     if not isinstance(contact, Mapping) or set(contact) != {
         "id",
@@ -270,7 +293,9 @@ def _validate_candidate(
     step_side: str,
     contacts: tuple[dict[str, object], ...],
     included_components: tuple[tuple[int, ...], ...],
+    profile_id: str,
 ) -> tuple[str, str]:
+    profile = precomplex_placement_profile(profile_id)
     if not isinstance(value, Mapping) or set(value) != {
         "id",
         "geometry_class",
@@ -313,7 +338,10 @@ def _validate_candidate(
         raise ValueError("Invalid endpoint precomplex transform.")
     approach_index = _plain_int(transform.get("approach_index"), "approach index")
     rotation_index = _plain_int(transform.get("rotation_index"), "rotation index")
-    if not 0 <= approach_index < 12 or not 0 <= rotation_index < 6:
+    if (
+        not 0 <= approach_index < profile.approach_sample_count
+        or not 0 <= rotation_index < profile.rotation_sample_count
+    ):
         raise ValueError("Endpoint precomplex transform is outside profile bounds.")
     vector = transform.get("approach_vector")
     if not isinstance(vector, list) or len(vector) != 3:
@@ -333,10 +361,10 @@ def _validate_candidate(
             raise ValueError("Invalid endpoint precomplex conformer id.")
     _validate_metrics(value.get("validation"))
     identity = {
-        "profile": PROFILE_ID,
+        "profile": profile.id,
         "source_sha256": source_document_sha256,
         "plan_sha256": basis_sha256,
-        "step_id": _xyz_step_id(xyz),
+        "step_id": _xyz_step_id(xyz, profile_id=profile.id),
         "side": step_side,
         "contacts": list(contacts),
         "component_atom_ids": [list(component) for component in included_components],
@@ -356,9 +384,9 @@ def _validate_candidate(
     return candidate_id, xyz_sha256
 
 
-def _xyz_step_id(xyz: str) -> str:
+def _xyz_step_id(xyz: str, *, profile_id: str) -> str:
     comment = xyz.splitlines()[1].split()
-    if len(comment) != 4 or comment[:2] != ["Chemvas", PROFILE_ID]:
+    if len(comment) != 4 or comment[:2] != ["Chemvas", profile_id]:
         raise ValueError("Endpoint precomplex XYZ comment provenance is invalid.")
     return comment[2]
 
@@ -500,9 +528,7 @@ def _normalize_json_value(value: object) -> object:
 
 
 __all__ = [
-    "MAX_CANDIDATES",
     "NO_PRECOMPLEX_JSON",
-    "PROFILE_ID",
     "canonicalize_precomplex_state",
     "precomplex_state_from_json",
 ]
