@@ -73,6 +73,11 @@ QT_QPA_PLATFORM=offscreen python -m pytest tests/test_<area>.py
 New behavior should come with a test. Most modules have a matching
 `tests/test_<module>.py`.
 
+Keep each test module single-style. When extending an existing module, follow
+that file's current `unittest` or plain-pytest style. New standalone test modules
+use plain pytest functions. Do not convert unrelated tests solely to change
+style.
+
 CI additionally runs the optional-RDKit smoke and wheel packaging smoke. Those
 two environment-specific jobs are not part of `make check`.
 
