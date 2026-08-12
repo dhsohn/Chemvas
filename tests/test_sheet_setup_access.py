@@ -2,6 +2,8 @@ import os
 from types import SimpleNamespace
 from unittest import mock
 
+import pytest
+
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from chemvas.ui.sheet_setup_access import (
@@ -14,6 +16,7 @@ from chemvas.ui.sheet_setup_access import (
 )
 from chemvas.ui.sheet_setup_state import SheetSetupState, sheet_setup_state_for
 from chemvas.ui.transactions.scene_rect import (
+    SceneRectSnapshot,
     scene_rect_is_automatic,
     view_scene_rect_is_explicit,
 )
@@ -89,7 +92,7 @@ def _assert_sheet_configuration(
     actual = _sheet_configuration(canvas, scene)
     assert actual[0] is expected[0]
     assert actual[1:3] == expected[1:3]
-    assert actual[3] is expected[3]
+    assert actual[3] == expected[3]
     assert actual[4:9] == expected[4:9]
     actual_tracker = actual[9]
     expected_tracker = expected[9]
@@ -118,19 +121,16 @@ def test_sheet_setup_accessors_return_current_sheet_values() -> None:
 
 
 def test_set_sheet_setup_updates_scene_rect_and_viewport() -> None:
-    viewport = _Viewport()
-    canvas = SimpleNamespace(
-        runtime_state=canvas_runtime_state(sheet_setup_state=SheetSetupState()),
-        setSceneRect=mock.Mock(),
-        viewport=lambda: viewport,
-    )
+    canvas, scene = _qt_sheet_canvas()
 
     set_sheet_setup_for(canvas, "A4", "portrait")
 
     assert sheet_setup_for(canvas) == ("A4", "portrait")
     assert sheet_rect_for(canvas) == QRectF(-297.5, -421.0, 595.0, 842.0)
-    canvas.setSceneRect.assert_called_once_with(QRectF(-377.5, -501.0, 755.0, 1002.0))
-    viewport.update.assert_called_once_with()
+    expected_scene_rect = QRectF(-377.5, -501.0, 755.0, 1002.0)
+    assert scene.sceneRect() == expected_scene_rect
+    assert canvas.sceneRect() == expected_scene_rect
+    canvas.close()
 
 
 def test_scene_pos_in_sheet_uses_configured_sheet_rect_and_allows_uninitialized_rect() -> (
@@ -144,10 +144,48 @@ def test_scene_pos_in_sheet_uses_configured_sheet_rect_and_allows_uninitialized_
 
     configured = SimpleNamespace(
         runtime_state=canvas_runtime_state(sheet_setup_state=SheetSetupState()),
-        setSceneRect=mock.Mock(),
         viewport=lambda: _Viewport(),
     )
     set_sheet_setup_for(configured, "A4", "landscape")
 
     assert scene_pos_in_sheet_for(configured, QPointF(0.0, 0.0))
     assert not scene_pos_in_sheet_for(configured, QPointF(999.0, 999.0))
+
+
+def test_sheet_setup_viewport_failure_restores_state_rect_modes_and_tracker() -> None:
+    canvas, scene = _qt_sheet_canvas()
+    tracker_snapshot = SceneRectSnapshot.capture(scene)
+    assert tracker_snapshot is not None
+    tracker_snapshot.release()
+    tracker = tracker_snapshot.tracker
+    expansion_key = id(object())
+    pending_expansions = tracker.pending_expansions
+    pending_journal = tracker.pending_journal
+    pending_expansions[expansion_key] = QRectF(1.0, 2.0, 3.0, 4.0)
+    pending_journal.append((expansion_key, False, None))
+    tracker.pending_rect = QRectF(-20.0, -30.0, 40.0, 60.0)
+    before = _sheet_configuration(canvas, scene)
+    primary = RuntimeError("sheet viewport update failed")
+    expected_scene_rect = QRectF(-377.5, -501.0, 755.0, 1002.0)
+
+    def fail_after_mutation() -> None:
+        assert sheet_setup_for(canvas) == ("A4", "portrait")
+        assert sheet_rect_for(canvas) == QRectF(-297.5, -421.0, 595.0, 842.0)
+        assert scene.sceneRect() == expected_scene_rect
+        assert canvas.sceneRect() == expected_scene_rect
+        raise primary
+
+    failing_viewport = SimpleNamespace(
+        update=mock.Mock(side_effect=fail_after_mutation)
+    )
+    with (
+        mock.patch.object(canvas, "viewport", return_value=failing_viewport),
+        pytest.raises(RuntimeError, match=str(primary)) as raised,
+    ):
+        set_sheet_setup_for(canvas, "A4", "portrait")
+
+    assert raised.value is primary
+    _assert_sheet_configuration(canvas, scene, before)
+    assert tracker.pending_expansions is pending_expansions
+    assert tracker.pending_journal is pending_journal
+    canvas.close()

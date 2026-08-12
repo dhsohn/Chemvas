@@ -54,8 +54,6 @@ class CanvasSceneRectStateSnapshot:
     scene: object | None
     scene_state: SceneRectStateSnapshot | None
     view_state: ViewSceneRectStateSnapshot | None
-    view_scene_rect_getter: object
-    view_set_scene_rect_setter: object
     active: bool = True
     recovery_errors: list[BaseException] = field(default_factory=list)
 
@@ -86,8 +84,6 @@ class CanvasSceneRectStateSnapshot:
             scene=scene,
             scene_state=scene_state,
             view_state=view_state,
-            view_scene_rect_getter=view_scene_rect,
-            view_set_scene_rect_setter=view_set_scene_rect,
         )
 
     @staticmethod
@@ -207,11 +203,6 @@ def set_scene_rect_for(canvas, rect) -> None:
                 scene_rect_getter=snapshot.view_state.scene_rect_getter,
                 set_scene_rect_setter=snapshot.view_state.set_scene_rect_setter,
             )
-        elif callable(snapshot.view_set_scene_rect_setter):
-            # Preserve the narrow legacy fallback for test doubles that expose
-            # only a raw setter. The bound port captured before mutation is
-            # still authoritative; live views take the verified branch above.
-            snapshot.view_set_scene_rect_setter(rect)
         snapshot.release()
     except Exception as original_error:
         try:
