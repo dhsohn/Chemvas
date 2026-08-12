@@ -27,7 +27,14 @@ python app/main.py
 
 ## Running the checks
 
-CI runs three gates; run the same ones locally before opening a PR.
+One command runs everything CI enforces — lint, formatting, mypy, the full test
+suite, and the machine.json conformance check — before opening a PR:
+
+```bash
+make check
+```
+
+The individual gates, for reference:
 
 ```bash
 python -m ruff check .     # lint + import sorting
@@ -44,14 +51,11 @@ QT_QPA_PLATFORM=offscreen python -m pytest tests/test_<area>.py
 
 > **Run the suite one file at a time.** Qt keeps global application state that does
 > not fully reset between test modules, so CI runs each `test_*.py` file in its own
-> pytest process. To mirror CI locally:
+> pytest process. `make check` does the same; to narrow the loop to the files you
+> touched, pass them to the script directly:
 >
 > ```bash
-> QT_QPA_PLATFORM=offscreen bash -c '
->   for f in $(find tests -maxdepth 1 -name "test_*.py" | sort); do
->     python -m pytest "$f" || exit 1
->   done
-> '
+> bash scripts/check.sh tests/test_<area>.py
 > ```
 
 New behavior should come with a test. Most modules have a matching
