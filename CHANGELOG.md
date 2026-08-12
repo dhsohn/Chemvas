@@ -50,6 +50,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   restores it.
 
 ### Changed
+- **Canonical Chemvas document extension**: the desktop Open and Save As
+  dialogs and startup argument dispatch now advertise and recognize Chemvas
+  documents only as `.chemvas`, not the old `.json` filename alias. Rename any
+  Chemvas documents that still end in `.json` to `.chemvas` before upgrading;
+  JSON request, inspection, patch, and machine-artifact files used by headless
+  commands are unaffected.
 - **Cited, immutable precomplex radius profile**: new request format v2 requires
   `chemvas-rigid-precomplex-placement/2`, whose complete supported-element
   radius table uses Cordero (2008) Table 2 covalent radii and Alvarez (2013)

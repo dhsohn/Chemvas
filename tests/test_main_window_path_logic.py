@@ -13,7 +13,7 @@ class MainWindowPathLogicTest(unittest.TestCase):
     ) -> None:
         self.assertEqual(
             resolve_save_path(
-                current_path="/tmp/current", dialog_path="/tmp/ignored.json"
+                current_path="/tmp/current", dialog_path="/tmp/ignored.custom"
             ),
             "/tmp/current",
         )
@@ -28,8 +28,8 @@ class MainWindowPathLogicTest(unittest.TestCase):
 
     def test_resolve_save_path_preserves_explicit_dialog_extension(self) -> None:
         self.assertEqual(
-            resolve_save_path(dialog_path="/tmp/example.json"),
-            "/tmp/example.json",
+            resolve_save_path(dialog_path="/tmp/example.custom"),
+            "/tmp/example.custom",
         )
 
     def test_resolve_save_path_returns_none_when_save_dialog_is_cancelled(self) -> None:
@@ -46,8 +46,8 @@ class MainWindowPathLogicTest(unittest.TestCase):
 
     def test_resolve_save_as_path_preserves_explicit_dialog_extension(self) -> None:
         self.assertEqual(
-            resolve_save_as_path("/tmp/example.json"),
-            "/tmp/example.json",
+            resolve_save_as_path("/tmp/example.custom"),
+            "/tmp/example.custom",
         )
 
     def test_resolve_save_as_path_returns_none_when_save_dialog_is_cancelled(

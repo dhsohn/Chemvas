@@ -76,3 +76,21 @@ def test_root_help_inventory_matches_dispatched_headless_commands(
         | application.DOCUMENT_RENDER_COMMANDS
         | application.CALCULATION_BUNDLE_COMMANDS
     )
+
+
+@pytest.mark.parametrize(
+    ("argument", "expected"),
+    [
+        ("drawing.chemvas", "drawing.chemvas"),
+        ("drawing.CHEMVAS", "drawing.CHEMVAS"),
+        ("drawing.svg", "drawing.svg"),
+        ("legacy.json", None),
+    ],
+)
+def test_startup_document_path_uses_only_public_document_suffixes(
+    argument: str, expected: str | None
+) -> None:
+    assert (
+        application._startup_document_path(["chemvas", "--platform", argument])
+        == expected
+    )
