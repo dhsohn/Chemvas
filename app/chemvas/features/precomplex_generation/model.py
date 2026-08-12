@@ -2,6 +2,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from chemvas.domain.document.precomplex_profile import (
+    LEGACY_PROFILE_ID,
+    precomplex_placement_profile,
+)
+
 Vector3 = tuple[float, float, float]
 
 
@@ -20,6 +25,7 @@ class ComponentGeometry:
     component_atom_ids: tuple[int, ...]
     conformer_id: str
     atoms: tuple[GeometryAtom, ...]
+    profile: str = LEGACY_PROFILE_ID
 
 
 @dataclass(frozen=True)
@@ -38,7 +44,8 @@ class PlacementRequest:
     step_id: str
     side: str
     contacts: tuple[ContactRequest, ...]
-    candidate_cap: int = 16
+    candidate_cap: int = precomplex_placement_profile(LEGACY_PROFILE_ID).max_candidates
+    profile: str = LEGACY_PROFILE_ID
 
 
 @dataclass(frozen=True)

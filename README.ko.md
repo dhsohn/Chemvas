@@ -249,6 +249,28 @@ contacts, profile로 두 bounded ensemble을 결정론적으로 다시 생성하
 metric입니다. 검토하지 않았거나 한쪽만 검토한 multicomponent endpoint는 계속
 blocked입니다.
 
+request format v1은 기존 request와 persisted ensemble을 바이트 단위로 재현하기 위해
+legacy `chemvas-rigid-precomplex-placement/1` profile에 고정됩니다. 새 generation
+request는 format v2를 사용하고
+`"profile": "chemvas-rigid-precomplex-placement/2"`를 반드시 명시합니다. Profile 2는
+모든 지원 원소에 [Cordero et al. Table 2](https://doi.org/10.1039/B801115J)의
+covalent radius(C sp3, Fe/Co low-spin 항목)와
+[Alvarez Table 1](https://doi.org/10.1039/C3DT50599E)의 van der Waals radius를
+사용합니다. Ensemble, generation/inspection report, 최종 `machine.json` placement
+metadata는 profile, dataset ID, DOI, 정확한 radius-table hash를 전달합니다. Profile 1의
+혼합되고 일부 출처가 검증되지 않은 기존 van der Waals 값은 재현 전용이며 과학 reference
+table로 사용하지 않습니다.
+
+Profile 2는 document version 6과 Calculation Plan v2 안에서 확장됩니다. 이 profile보다
+오래된 Chemvas는 모르는 profile을 fail-closed로 거부하므로 profile-2 문서는 Chemvas
+0.2.0 이상에서 여십시오. 출처가 고정된 radius와 Chemvas threshold도 결정론적
+geometric heuristic입니다. 지정 contact는 covalent-radius 합의 `0.85 ×`, 나머지 pair는
+covalent-radius 합의 `1.05 ×`와 van der Waals-radius 합의 `0.60 ×` 중 큰 값을 쓰고,
+soft-overlap score는 van der Waals-radius 합의 `0.85 ×`를 사용합니다. 이는 hard-sphere
+물리 모델, energy, 안정성 주장이 아닙니다. 현재 입력 모델은 Fe/Co의 spin과 coordination을
+표현하지 않으므로 문서화한 low-spin selector를 추론하지 않고 고정합니다. 연구자 검토와
+후속 양자화학 최적화는 계속 필수입니다.
+
 Calculation Plan v1에서 state는 계산 성분과 전하·다중도를, step endpoint는 역할을 소유합니다.
 
 ```json
