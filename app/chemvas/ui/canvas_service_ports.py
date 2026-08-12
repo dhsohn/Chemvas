@@ -41,6 +41,10 @@ def history_hit_testing_service_for(canvas) -> Any:
     return canvas_services_for(canvas).selection.hit_testing_service
 
 
+def history_service_for_access(canvas) -> Any:
+    return canvas_services_for(canvas).history_service
+
+
 def history_recording_service_for_access(canvas) -> Any:
     return canvas_services_for(canvas).document.canvas_history_recording_service
 
@@ -120,6 +124,7 @@ __all__ = [
     "history_bond_mutation_service_for",
     "history_hit_testing_service_for",
     "history_recording_service_for_access",
+    "history_service_for_access",
     "insert_controller_for_access",
     "mark_scene_service_for_access",
     "move_controller_for_access",

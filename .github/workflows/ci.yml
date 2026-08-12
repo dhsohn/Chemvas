@@ -13,6 +13,7 @@ jobs:
         python-version: ["3.12", "3.13"]
     env:
       QT_QPA_PLATFORM: offscreen
+      FACTORY_MACHINE_CONTRACT_VALIDATOR: ${{ github.workspace }}/.machine-contracts/scripts/validate.py
     steps:
       - name: Check out repository
         uses: actions/checkout@v7
@@ -41,6 +42,14 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           python -m pip install -e ".[dev]"
+
+      - name: Check out machine observation contract
+        uses: actions/checkout@v7
+        with:
+          repository: dhsohn/machine-contracts
+          ref: bc252035d01edddf1314e6641689c6d5cb88af92
+          path: .machine-contracts
+          persist-credentials: false
 
       - name: Lint
         run: python -m ruff check .
@@ -71,21 +80,6 @@ jobs:
         with:
           name: coverage-xml-${{ matrix.python-version }}
           path: coverage.xml
-
-      - name: Check out machine observation contract
-        uses: actions/checkout@v7
-        with:
-          repository: dhsohn/machine-contracts
-          ref: bc252035d01edddf1314e6641689c6d5cb88af92
-          path: .machine-contracts
-          persist-credentials: false
-
-      - name: Verify emitted machine.json against the common contract
-        env:
-          FACTORY_MACHINE_CONTRACT_VALIDATOR: ${{ github.workspace }}/.machine-contracts/scripts/validate.py
-        run: |
-          python -m pip install -r .machine-contracts/requirements.txt
-          python -m pytest tests/test_calculation_step_cli.py::test_pack_step_writes_identity_ordered_path_endpoints
 
   rdkit-smoke:
     name: RDKit smoke tests

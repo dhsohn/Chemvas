@@ -210,9 +210,10 @@ annotation 합계)를 JSON으로 출력합니다. 기하 구조의 기계 handof
 않습니다. 같은 product 원자를 중복 지정하면 저장을 거부합니다. 대응이 덜 된 표도 draft로 저장할
 수 있지만, 양 endpoint의 모든 included 원자에 완전한 1:1 source mapping이 생길 때까지 상태 표시와
 `pack-step`은 잠깁니다. 이 준비 표시는 source mapping gate만 뜻하며 RDKit geometry 생성과 후속
-화학적 검토는 별도 요구사항입니다. 대응 행을 선택하거나 product 메뉴의 후보를 훑으면 캔버스의
-reactant에는 파란 실선 **R**, product에는 주황 점선 **P**가 표시됩니다. 이 표시는 임시 overlay라
-dialog를 닫으면 사라지며 그림, 기존 canvas selection, undo history를 바꾸지 않습니다.
+화학적 검토는 별도 요구사항입니다. dialog가 열려 있는 동안 included 원자에는 Chemvas 원자 ID가
+표시됩니다. 매핑된 reactant는 파랑, 매핑된 product는 주황, 아직 매핑되지 않은 원자는 회색이어서
+구조 위에서 진행 상태를 확인할 수 있습니다. 이 label은 임시 overlay라 dialog를 닫으면 사라지며
+그림, 기존 canvas selection, undo history를 바꾸지 않습니다.
 
 Agent는 Qt 없이도 같은 계약을 붙이고 검사할 수 있습니다.
 

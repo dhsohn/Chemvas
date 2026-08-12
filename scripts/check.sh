@@ -4,10 +4,21 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT"
 
-PYTHON="${PYTHON_BIN:-$ROOT/.venv/bin/python}"
-if [[ ! -x "$PYTHON" ]]; then
-  echo "[check] ERROR: $PYTHON is not executable." >&2
-  echo "[check] Create it with: python3 -m venv .venv && .venv/bin/pip install -e '.[dev]'" >&2
+if [[ -n "${PYTHON_BIN:-}" ]]; then
+  PYTHON="$PYTHON_BIN"
+elif [[ -n "${VIRTUAL_ENV:-}" && -x "$VIRTUAL_ENV/bin/python" ]]; then
+  PYTHON="$VIRTUAL_ENV/bin/python"
+elif [[ -x "$ROOT/.venv/bin/python" ]]; then
+  PYTHON="$ROOT/.venv/bin/python"
+elif command -v python3 >/dev/null 2>&1; then
+  PYTHON="$(command -v python3)"
+else
+  echo "[check] ERROR: no Python interpreter is available." >&2
+  echo "[check] Activate a development environment or set PYTHON_BIN." >&2
+  exit 1
+fi
+if ! "$PYTHON" -c 'import sys' >/dev/null 2>&1; then
+  echo "[check] ERROR: $PYTHON is not an executable Python interpreter." >&2
   exit 1
 fi
 
@@ -23,6 +34,12 @@ if [[ ! -f "$CONTRACT_VALIDATOR" ]]; then
   exit 1
 fi
 export FACTORY_MACHINE_CONTRACT_VALIDATOR="$CONTRACT_VALIDATOR"
+
+if ! "$PYTHON" -c 'import jsonschema' >/dev/null 2>&1; then
+  echo "[check] ERROR: the contract validator dependency 'jsonschema' is missing." >&2
+  echo "[check] Install the development dependencies with: $PYTHON -m pip install -e '.[dev]'" >&2
+  exit 1
+fi
 
 echo "[check] Using Python: $("$PYTHON" -c 'import sys; print(sys.executable)')"
 

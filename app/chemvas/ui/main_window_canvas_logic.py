@@ -15,7 +15,7 @@ from chemvas.ui.canvas_window_access import (
     set_zoom_callback_for,
 )
 from chemvas.ui.renderer_style_access import bond_length_px_for, set_bond_length_for
-from chemvas.ui.sheet_setup_access import set_sheet_setup_for
+from chemvas.ui.sheet_setup_access import set_sheet_setup_for, sheet_setup_for
 
 CANVAS_TEMPLATE_TOOL_FIELDS = (
     "arrow_line_width",
@@ -85,7 +85,7 @@ def copy_canvas_template_settings(canvas, template) -> None:
     if template is None:
         return
     set_bond_length_for(canvas, bond_length_px_for(template))
-    set_sheet_setup_for(canvas, template.sheet_size, template.sheet_orientation)
+    set_sheet_setup_for(canvas, *sheet_setup_for(template))
     tool_settings = tool_settings_state_for(template)
     for field_name in CANVAS_TEMPLATE_TOOL_FIELDS:
         set_tool_setting_for(canvas, field_name, getattr(tool_settings, field_name))

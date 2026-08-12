@@ -1,11 +1,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, cast
 
 from PyQt6.QtCore import QRectF
 
-from chemvas.ui.canvas_state_lookup import canvas_state_object
 from chemvas.ui.sheet_setup_logic import (
     DEFAULT_SHEET_ORIENTATION,
     DEFAULT_SHEET_SIZE,
@@ -21,18 +20,7 @@ class SheetSetupState:
 
 
 def sheet_setup_state_for(canvas: Any) -> SheetSetupState:
-    state = canvas_state_object(canvas, "sheet_setup_state")
-    if state is not None:
-        return state
-    size_name, orientation = normalize_sheet_setup(
-        getattr(canvas, "sheet_size", DEFAULT_SHEET_SIZE),
-        getattr(canvas, "sheet_orientation", DEFAULT_SHEET_ORIENTATION),
-    )
-    state = SheetSetupState(size_name=size_name, orientation=orientation)
-    canvas.sheet_setup_state = state
-    canvas.sheet_size = state.size_name
-    canvas.sheet_orientation = state.orientation
-    return state
+    return cast(SheetSetupState, canvas.runtime_state.sheet_setup_state)
 
 
 def sheet_setup_values_for(canvas: Any) -> tuple[str, str]:
@@ -47,8 +35,6 @@ def set_sheet_setup_state_for(
     state = sheet_setup_state_for(canvas)
     state.size_name = size_name
     state.orientation = orientation
-    canvas.sheet_size = size_name
-    canvas.sheet_orientation = orientation
     return size_name, orientation
 
 

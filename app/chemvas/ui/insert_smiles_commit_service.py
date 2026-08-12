@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING
 from PyQt6.QtCore import QPointF
 
 from chemvas.features.insertion import SmilesCommitPlan
+from chemvas.ui.canvas_service_ports import history_service_for_access
 from chemvas.ui.canvas_smiles_input_state import set_last_smiles_input_for
 from chemvas.ui.history_canvas_access import (
     capture_history_transaction_for_history,
@@ -72,7 +73,6 @@ def apply_smiles_commit_plan(
     before_next_atom_id = insert_next_atom_id_for(canvas)
     before_bond_count = insert_bond_count_for(canvas)
     smiles_authority = capture_smiles_input_restore_authority(canvas)
-    services = getattr(canvas, "services", None)
     exact_transaction = None
     published_transaction = None
 
@@ -95,7 +95,7 @@ def apply_smiles_commit_plan(
         # mutate the already-captured SMILES authority before raising.
         exact_transaction = capture_history_transaction_for_history(
             canvas,
-            history_service=getattr(services, "history_service", None),
+            history_service=history_service_for_access(canvas),
         )
         for atom_plan in plan.atoms:
             new_id = add_insert_atom_for(

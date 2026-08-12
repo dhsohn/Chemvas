@@ -14,7 +14,10 @@ from chemvas.ui.canvas_scene_items_state import (
     ring_items_for,
     scene_item_collection_for,
 )
-from chemvas.ui.canvas_service_ports import scene_item_controller_for_access
+from chemvas.ui.canvas_service_ports import (
+    history_service_for_access,
+    scene_item_controller_for_access,
+)
 from chemvas.ui.canvas_smiles_input_state import (
     clear_last_smiles_input_for,
     last_smiles_input_for,
@@ -92,8 +95,7 @@ class StructureBuildCommitter:
     ) -> StructureBuildHistorySnapshot:
         if before_smiles_input is None:
             before_smiles_input = last_smiles_input_for(self.canvas)
-        services = getattr(self.canvas, "services", None)
-        history_service = getattr(services, "history_service", None)
+        history_service = history_service_for_access(self.canvas)
         smiles_authority = capture_smiles_input_restore_authority(self.canvas)
         before_next_atom_id = insert_next_atom_id_for(self.canvas)
         before_bond_count = insert_bond_count_for(self.canvas)

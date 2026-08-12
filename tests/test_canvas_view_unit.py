@@ -75,7 +75,11 @@ if QApplication is not None:
         selection_bond_overlay_width_for,
         selection_indicator_rect_for_atom_for,
     )
-    from chemvas.ui.sheet_setup_access import set_sheet_setup_for, sheet_rect_for
+    from chemvas.ui.sheet_setup_access import (
+        set_sheet_setup_for,
+        sheet_rect_for,
+        sheet_setup_for,
+    )
     from chemvas.ui.sheet_setup_state import sheet_setup_state_for
     from chemvas.ui.structure_geometry_access import (
         atom_point_for,
@@ -202,8 +206,7 @@ class CanvasViewUnitTest(unittest.TestCase):
         canvas = build_canvas_view()
         self.addCleanup(canvas.close)
 
-        self.assertEqual(canvas.sheet_size, "A4")
-        self.assertEqual(canvas.sheet_orientation, "landscape")
+        self.assertEqual(sheet_setup_for(canvas), ("A4", "landscape"))
         self.assertAlmostEqual(sheet_rect_for(canvas).width(), 842.0)
         self.assertAlmostEqual(sheet_rect_for(canvas).height(), 595.0)
         self.assertAlmostEqual(canvas.sceneRect().width(), 1002.0)
@@ -213,7 +216,7 @@ class CanvasViewUnitTest(unittest.TestCase):
 
         set_sheet_setup_for(canvas, "A4", "portrait")
 
-        self.assertEqual(canvas.sheet_orientation, "portrait")
+        self.assertEqual(sheet_setup_for(canvas), ("A4", "portrait"))
         self.assertAlmostEqual(sheet_rect_for(canvas).width(), 595.0)
         self.assertAlmostEqual(sheet_rect_for(canvas).height(), 842.0)
         self.assertAlmostEqual(canvas.sceneRect().width(), 755.0)

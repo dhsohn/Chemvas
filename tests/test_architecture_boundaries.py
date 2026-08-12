@@ -1341,21 +1341,38 @@ def test_production_code_uses_selection_specific_access_modules_instead_of_compa
     assert _matching_lines(import_pattern, _app_python_files()) == []
 
 
-def test_access_helpers_use_canvas_service_accessor_instead_of_services_lookup() -> (
-    None
-):
-    paths = [
-        APP_ROOT / "chemvas" / "ui" / "input_view_access.py",
-        APP_ROOT / "chemvas" / "ui" / "move_access.py",
-        APP_ROOT / "chemvas" / "ui" / "selection_service_access.py",
-        APP_ROOT / "chemvas" / "ui" / "history_canvas_access.py",
-    ]
-    pattern = re.compile(
-        r"\bcanvas\.services\."
-        r"|getattr\([^,\n]+,\s*\"services\""
-    )
+def test_production_canvas_service_container_lookup_is_canonical() -> None:
+    allowed_attribute_receivers = {
+        APP_ROOT / "chemvas" / "bootstrap" / "main_window_runtime.py": "runtime",
+        APP_ROOT / "chemvas" / "shell" / "main_window.py": "runtime",
+        APP_ROOT / "chemvas" / "ui" / "canvas_services.py": "canvas",
+    }
+    canonical_getattr_path = APP_ROOT / "chemvas" / "ui" / "canvas_service_access.py"
+    violations: list[str] = []
 
-    assert _matching_lines(pattern, paths) == []
+    for path in _app_python_files():
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Attribute) and node.attr == "services":
+                allowed_receiver = allowed_attribute_receivers.get(path)
+                if not (
+                    isinstance(node.value, ast.Name)
+                    and node.value.id == allowed_receiver
+                ):
+                    violations.append(f"{path}:{node.lineno}: direct .services access")
+            if not (
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Name)
+                and node.func.id == "getattr"
+                and len(node.args) >= 2
+                and isinstance(node.args[1], ast.Constant)
+                and node.args[1].value == "services"
+            ):
+                continue
+            if path != canonical_getattr_path:
+                violations.append(f"{path}:{node.lineno}: getattr(..., 'services')")
+
+    assert violations == []
 
 
 def test_simple_canvas_access_helpers_delegate_service_lookup_to_ports() -> None:
@@ -2457,6 +2474,29 @@ def test_sheet_setup_access_delegates_sheet_values_to_sheet_setup_state() -> Non
     )
 
     assert _matching_lines(forbidden, [access]) == []
+
+
+def test_sheet_setup_values_exist_only_in_the_runtime_state() -> None:
+    forbidden_names = {"sheet_size", "sheet_orientation"}
+    violations: list[str] = []
+
+    for path in _app_python_files():
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Attribute) and node.attr in forbidden_names:
+                violations.append(f"{path}:{node.lineno}: .{node.attr}")
+            if not (
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Name)
+                and node.func.id in {"getattr", "setattr"}
+                and len(node.args) >= 2
+                and isinstance(node.args[1], ast.Constant)
+                and node.args[1].value in forbidden_names
+            ):
+                continue
+            violations.append(f"{path}:{node.lineno}: {node.args[1].value!r}")
+
+    assert violations == []
 
 
 def test_structure_build_service_does_not_use_context_facade() -> None:
@@ -3951,10 +3991,9 @@ def _canvas_runtime_state_field_names() -> set[str]:
 # Functions whose name looks like a state accessor but which are not one, with
 # the reason each is exempt from reading CanvasRuntimeState.
 NON_RUNTIME_STATE_ACCESSORS = {
-    # The surviving canvas_state_object seam: these two still create their state
-    # and attach it to the canvas. Converting them belongs to that seam's own
-    # slice, together with the transaction kernel's private copies of the lookup.
-    "sheet_setup_state_for",
+    # The surviving canvas_state_object seam: this accessor still creates its
+    # state and attaches it to the canvas. Converting it belongs to that seam's
+    # own slice, together with the transaction kernel's private copies of the lookup.
     "document_metadata_state_for",
     # Setter, not an accessor.
     "set_sheet_setup_state_for",
@@ -4019,7 +4058,7 @@ def test_state_accessors_read_the_runtime_container_directly() -> None:
     # A floor, not an exact count: adding an accessor is fine, but one renamed
     # out of the `*_state_for` pattern would otherwise leave the enumeration
     # silently instead of being reported.
-    assert len(checked) >= 23, checked
+    assert len(checked) >= 24, checked
 
 
 def test_ensure_canvas_state_stays_removed() -> None:

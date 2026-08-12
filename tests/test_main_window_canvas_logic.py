@@ -24,6 +24,8 @@ from chemvas.ui.main_window_canvas_logic import (
     resolve_active_canvas,
 )
 from chemvas.ui.selection_info_state import SelectionInfoState, selection_info_state_for
+from chemvas.ui.sheet_setup_access import sheet_setup_for
+from chemvas.ui.sheet_setup_state import SheetSetupState
 
 from tests.runtime_state import canvas_runtime_state
 
@@ -66,23 +68,25 @@ class MainWindowCanvasLogicTest(unittest.TestCase):
     def test_copy_canvas_template_settings_copies_known_fields(self) -> None:
         target = SimpleNamespace(
             runtime_state=canvas_runtime_state(
+                sheet_setup_state=SheetSetupState(
+                    size_name="Letter", orientation="landscape"
+                ),
                 tool_settings_state=CanvasToolSettingsState(),
                 text_style_state=CanvasTextStyleState(),
             ),
             renderer=SimpleNamespace(set_bond_length=mock.Mock()),
-            sheet_size="Letter",
-            sheet_orientation="landscape",
             setSceneRect=mock.Mock(),
             viewport=lambda: SimpleNamespace(update=mock.Mock()),
         )
         template = SimpleNamespace(
             runtime_state=canvas_runtime_state(
+                sheet_setup_state=SheetSetupState(
+                    size_name="A4", orientation="portrait"
+                ),
                 tool_settings_state=CanvasToolSettingsState(),
                 text_style_state=CanvasTextStyleState(),
             ),
             renderer=SimpleNamespace(style=SimpleNamespace(bond_length_px=24.0)),
-            sheet_size="A4",
-            sheet_orientation="portrait",
         )
         set_tool_setting_for(template, "arrow_line_width", 2.5)
         set_tool_setting_for(template, "arrow_head_scale", 0.35)
@@ -96,8 +100,7 @@ class MainWindowCanvasLogicTest(unittest.TestCase):
         copy_canvas_template_settings(target, None)
 
         target.renderer.set_bond_length.assert_called_once_with(24.0)
-        self.assertEqual(target.sheet_size, "A4")
-        self.assertEqual(target.sheet_orientation, "portrait")
+        self.assertEqual(sheet_setup_for(target), ("A4", "portrait"))
         target.setSceneRect.assert_called_once()
         tool_settings = tool_settings_state_for(target)
         self.assertEqual(tool_settings.arrow_line_width, 2.5)

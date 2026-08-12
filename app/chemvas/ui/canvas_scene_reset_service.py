@@ -17,6 +17,7 @@ from chemvas.ui.canvas_mark_registry import mark_registry_for
 from chemvas.ui.canvas_model_access import set_model_for
 from chemvas.ui.canvas_rotation_state import rotation_state_for
 from chemvas.ui.canvas_scene_items_state import clear_scene_item_collections_for
+from chemvas.ui.canvas_service_ports import history_service_for_access
 from chemvas.ui.handle_state import set_active_handles_for, set_handle_target_for
 from chemvas.ui.insert_mode_logic import clear_insert_session
 from chemvas.ui.insert_session_access import (
@@ -167,8 +168,7 @@ class CanvasSceneResetService:
         # Emptying the stacks through their live lists keeps list identity
         # for every alias holder and deliberately skips the history change
         # notification: the reset caller publishes the new document itself.
-        services = getattr(self.canvas, "services", None)
-        history_service = getattr(services, "history_service", None)
+        history_service = history_service_for_access(self.canvas)
         state = getattr(history_service, "state", None)
         if state is None:
             return

@@ -10,6 +10,7 @@ from chemvas.features.insertion import (
     TemplateInsertRequest,
     TemplateInsertResolution,
 )
+from chemvas.ui.canvas_service_ports import history_service_for_access
 from chemvas.ui.canvas_smiles_input_state import set_last_smiles_input_for
 from chemvas.ui.history_canvas_access import (
     capture_history_transaction_for_history,
@@ -141,7 +142,6 @@ def _apply_benzene_template_commit(
     before_next_atom_id = insert_next_atom_id_for(canvas)
     before_bond_count = insert_bond_count_for(canvas)
     smiles_authority = capture_smiles_input_restore_authority(canvas)
-    services = getattr(canvas, "services", None)
     exact_transaction = None
     try:
         # Exact capture is itself fallible extension code.  If a live capture
@@ -149,7 +149,7 @@ def _apply_benzene_template_commit(
         # must restore the authority even though no ring atom exists yet.
         exact_transaction = capture_history_transaction_for_history(
             canvas,
-            history_service=getattr(services, "history_service", None),
+            history_service=history_service_for_access(canvas),
         )
         set_last_smiles_input_for(canvas, after_smiles_input)
         add_insert_benzene_ring_for(
