@@ -222,14 +222,10 @@ class SceneDeleteTransactionSession:
         observer_errors: list[tuple[str, BaseException]],
     ) -> None:
         for phase, observer_error in observer_errors:
-            try:
-                primary_error.add_note(
-                    "Delete gesture observer synchronization also failed during "
-                    f"{phase}: {type(observer_error).__name__}: {observer_error}"
-                )
-            except Exception:
-                # Observer diagnostics cannot replace cancellation/termination.
-                continue
+            primary_error.add_note(
+                "Delete gesture observer synchronization also failed during "
+                f"{phase}: {type(observer_error).__name__}: {observer_error}"
+            )
 
     def _resume_and_sync_observers(self) -> list[tuple[str, BaseException]]:
         """Publish one final selection update without recursive intermediate work."""
@@ -1054,14 +1050,10 @@ class SceneDeleteController:
         cleanup_errors: list[tuple[str, BaseException]],
     ) -> None:
         for phase, cleanup_error in cleanup_errors:
-            try:
-                primary_error.add_note(
-                    "Delete selection cleanup also failed during "
-                    f"{phase}: {type(cleanup_error).__name__}: {cleanup_error}"
-                )
-            except Exception:
-                # Cleanup diagnostics cannot replace cancellation/termination.
-                continue
+            primary_error.add_note(
+                "Delete selection cleanup also failed during "
+                f"{phase}: {type(cleanup_error).__name__}: {cleanup_error}"
+            )
 
     def _delete_selected_items(self) -> bool:
         items = selected_scene_items_for(

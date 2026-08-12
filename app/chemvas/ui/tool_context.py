@@ -226,17 +226,10 @@ class ToolContext:
         rollback_errors: list[BaseException],
     ) -> None:
         for rollback_error in rollback_errors:
-            try:
-                add_note = getattr(primary_error, "add_note", None)
-                if callable(add_note):
-                    add_note(
-                        "Delete tool session recovery also encountered "
-                        f"{type(rollback_error).__name__}: {rollback_error}"
-                    )
-            except Exception:
-                # A broken diagnostic hook must never replace validation,
-                # cancellation, or termination from the owning operation.
-                continue
+            primary_error.add_note(
+                "Delete tool session recovery also encountered "
+                f"{type(rollback_error).__name__}: {rollback_error}"
+            )
 
     @staticmethod
     def _returned_delete_session_rollback_errors(result) -> list[BaseException]:

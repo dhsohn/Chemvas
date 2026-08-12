@@ -33,12 +33,9 @@ def _add_rotation_rollback_note(
     original_error: BaseException,
     rollback_error: BaseException,
 ) -> None:
-    try:
-        original_error.add_note(
-            f"Rotation preview rollback also failed: {rollback_error!r}"
-        )
-    except Exception:
-        return
+    original_error.add_note(
+        f"Rotation preview rollback also failed: {rollback_error!r}"
+    )
 
 
 def _affected_ring_items(canvas, atom_ids: set[int]) -> list[object]:

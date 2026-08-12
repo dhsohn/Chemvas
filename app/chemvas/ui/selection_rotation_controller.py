@@ -52,13 +52,9 @@ def _add_rotation_finalization_rollback_note(
     original_error: BaseException,
     cleanup_error: BaseException,
 ) -> None:
-    try:
-        add_note = getattr(original_error, "add_note", None)
-        if not callable(add_note):
-            return
-        add_note(f"Rotation finalization rollback also failed: {cleanup_error!r}")
-    except Exception:
-        return
+    original_error.add_note(
+        f"Rotation finalization rollback also failed: {cleanup_error!r}"
+    )
 
 
 class SelectionRotationController:

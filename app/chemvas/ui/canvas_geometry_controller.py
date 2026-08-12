@@ -63,17 +63,11 @@ def _add_bond_length_rollback_note(
     *,
     phase: str | None = None,
 ) -> None:
-    try:
-        add_note = getattr(original_error, "add_note", None)
-        if not callable(add_note):
-            return
-        detail = f" while {phase}" if phase is not None else ""
-        add_note(
-            "Bond-length rollback also encountered an error"
-            f"{detail}: {type(rollback_error).__name__}: {rollback_error}"
-        )
-    except Exception:
-        return
+    detail = f" while {phase}" if phase is not None else ""
+    original_error.add_note(
+        "Bond-length rollback also encountered an error"
+        f"{detail}: {type(rollback_error).__name__}: {rollback_error}"
+    )
 
 
 class CanvasGeometryController:

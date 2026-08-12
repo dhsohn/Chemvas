@@ -80,11 +80,6 @@ class _ZeroBoundsItem(QGraphicsItem):
         return None
 
 
-class _BrokenAddNoteInterrupt(KeyboardInterrupt):
-    def add_note(self, _note: str) -> None:
-        raise SystemExit("add_note failed")
-
-
 @unittest.skipUnless(
     QApplication is not None,
     "PyQt6 is required for scene ops controller paste edge tests",

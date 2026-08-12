@@ -35,16 +35,6 @@ from tests.runtime_services import canvas_runtime_services
 from tests.runtime_state import canvas_runtime_state
 
 
-class _BrokenAddNoteInterrupt(KeyboardInterrupt):
-    def add_note(self, _note: str) -> None:
-        raise SystemExit("add_note failed")
-
-
-class _BrokenAddNoteSystemExit(SystemExit):
-    def add_note(self, _note: str) -> None:
-        raise SystemExit("add_note failed")
-
-
 class _FakeRect:
     def __init__(self, center: QPointF) -> None:
         self._center = center

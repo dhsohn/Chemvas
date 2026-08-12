@@ -39,13 +39,10 @@ def _add_scene_rect_recovery_note(
     original_error: BaseException,
     rollback_error: BaseException,
 ) -> None:
-    try:
-        original_error.add_note(
-            "Scene/view rect rollback also failed: "
-            f"{type(rollback_error).__name__}: {rollback_error}"
-        )
-    except Exception:
-        return
+    original_error.add_note(
+        "Scene/view rect rollback also failed: "
+        f"{type(rollback_error).__name__}: {rollback_error}"
+    )
 
 
 @dataclass(slots=True)

@@ -55,16 +55,6 @@ def _points(count: int, *, start: float = 1.0) -> list[tuple[float, float]]:
     return [(start + 2.0 * index, start + 2.0 * index + 1.0) for index in range(count)]
 
 
-class _BrokenAddNoteInterrupt(KeyboardInterrupt):
-    def add_note(self, _note: str) -> None:
-        raise SystemExit("add_note failed")
-
-
-class _BrokenAddNoteSystemExit(SystemExit):
-    def add_note(self, _note: str) -> None:
-        raise SystemExit("add_note failed")
-
-
 class _FakeRingItem:
     def __init__(self, points, atom_ids: list[int]) -> None:
         self._data = {

@@ -70,15 +70,10 @@ def _add_rotation_begin_rollback_note(
     original_error: BaseException,
     rollback_error: BaseException,
 ) -> None:
-    try:
-        add_note = getattr(original_error, "add_note", None)
-        if callable(add_note):
-            add_note(
-                "Selection-rotation begin rollback also encountered "
-                f"{type(rollback_error).__name__}: {rollback_error}"
-            )
-    except Exception:
-        return
+    original_error.add_note(
+        "Selection-rotation begin rollback also encountered "
+        f"{type(rollback_error).__name__}: {rollback_error}"
+    )
 
 
 def explicit_rotation_atom_ids_from_items(
