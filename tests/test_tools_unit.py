@@ -580,8 +580,10 @@ class _FakePreviewCanvas:
             ),
             scene_decoration_service=SimpleNamespace(
                 add_arrow=self.add_arrow,
-                add_ts_bracket=lambda rect: self.add_ts_bracket_from_points(
-                    rect.topLeft(), rect.bottomRight()
+                add_ts_bracket=lambda rect, *, bracket_kind: (
+                    self.add_ts_bracket_from_points(
+                        rect.topLeft(), rect.bottomRight(), bracket_kind
+                    )
                 ),
             ),
             scene_decoration_build_service=SimpleNamespace(
@@ -609,12 +611,14 @@ class _FakePreviewCanvas:
     def add_arrow(self, start, end, arrow_type) -> None:
         self.add_arrow_calls.append((QPointF(start), QPointF(end), arrow_type))
 
-    def preview_ts_bracket(self, start, end):
-        self.preview_ts_bracket_calls.append((QPointF(start), QPointF(end)))
+    def preview_ts_bracket(self, start, end, bracket_kind):
+        self.preview_ts_bracket_calls.append(
+            (QPointF(start), QPointF(end), bracket_kind)
+        )
         return _FakePreviewItem(self.scene_obj)
 
-    def add_ts_bracket_from_points(self, start, end) -> None:
-        self.add_ts_bracket_calls.append((QPointF(start), QPointF(end)))
+    def add_ts_bracket_from_points(self, start, end, bracket_kind) -> None:
+        self.add_ts_bracket_calls.append((QPointF(start), QPointF(end), bracket_kind))
 
 
 @unittest.skipUnless(QApplication is not None, "PyQt6 is required for tools tests")
@@ -1737,7 +1741,7 @@ class ToolsUnitTest(unittest.TestCase):
         self.assertFalse(tool._apply_active_style_to_bond(0))
 
         canvas.model.bonds[0] = Bond(1, 2, 2, style="bold_out")
-        set_tool_setting_for(canvas, "active_bond_style", "bold")
+        set_tool_setting_for(canvas, "active_bond_style", "bold_in")
         self.assertTrue(tool._apply_active_style_to_bond(0))
         self.assertEqual(canvas.bond_style_calls[-1], (0, "bold_out", 2))
 
@@ -1808,7 +1812,7 @@ class ToolsUnitTest(unittest.TestCase):
         self.assertTrue(tool.on_mouse_press(_FakeEvent(QPointF(1.0, 1.0))))
         self.assertEqual(canvas.bond_style_calls[-1], (0, "wedge", 1))
 
-        set_tool_setting_for(canvas, "active_bond_style", "bold")
+        set_tool_setting_for(canvas, "active_bond_style", "bold_in")
         self.assertTrue(tool.on_mouse_press(_FakeEvent(QPointF(1.0, 1.0))))
         self.assertEqual(canvas.bond_style_calls[-1], (0, "bold_in", 2))
 
@@ -1824,7 +1828,7 @@ class ToolsUnitTest(unittest.TestCase):
         canvas.model.bonds[0] = Bond(1, 2, 2, style="bold_in")
         canvas.item = None
         hover_state_for(canvas).bond_id = 0
-        set_tool_setting_for(canvas, "active_bond_style", "bold")
+        set_tool_setting_for(canvas, "active_bond_style", "bold_in")
         self.assertTrue(tool.on_mouse_press(_FakeEvent(QPointF(1.0, 1.0))))
         self.assertEqual(canvas.bond_style_calls[-1], (0, "bold_in", 2))
 
@@ -1918,9 +1922,10 @@ class ToolsUnitTest(unittest.TestCase):
         self.assertEqual(len(canvas.preview_ts_bracket_calls), 1)
 
         self.assertTrue(tool.on_mouse_release(_FakeEvent(QPointF(12.0, 13.0))))
-        start, end = canvas.add_ts_bracket_calls[-1]
+        start, end, bracket_kind = canvas.add_ts_bracket_calls[-1]
         self.assertEqual((start.x(), start.y()), (3.0, 4.0))
         self.assertEqual((end.x(), end.y()), (12.0, 13.0))
+        self.assertEqual(bracket_kind, "square_pair")
 
         tool.on_mouse_press(_FakeEvent(QPointF(0.0, 1.0)))
         tool.on_mouse_move(_FakeEvent(QPointF(2.0, 3.0)))

@@ -29,6 +29,7 @@ def _state(model: MoleculeModel | None = None) -> dict[str, object]:
         "marks": [],
         "arrows": [],
         "ts_brackets": [],
+        "shapes": [],
         "orbitals": [],
         "settings": serialize_settings(
             bond_length_px=18.0,
@@ -251,7 +252,7 @@ def test_semantic_calculation_plan_drift_rejects_entire_patch() -> None:
     state = _state(MoleculeModel(atoms={0: Atom("C", 0, 0), 1: Atom("C", 5, 0)}))
     state["calculation_plan"] = {
         "format": "chemvas-calculation-plan",
-        "version": 1,
+        "version": 2,
         "states": [
             {
                 "id": "R",
@@ -272,10 +273,12 @@ def test_semantic_calculation_plan_drift_rejects_entire_patch() -> None:
                 "reactant": {
                     "state_id": "R",
                     "roles": [{"component_atom_ids": [0], "role": "reactant"}],
+                    "precomplex": {"kind": "none"},
                 },
                 "product": {
                     "state_id": "P",
                     "roles": [{"component_atom_ids": [1], "role": "product"}],
+                    "precomplex": {"kind": "none"},
                 },
                 "atom_correspondence": [{"reactant_atom_id": 0, "product_atom_id": 1}],
             }

@@ -140,6 +140,7 @@ class SceneItemRestoreTest(unittest.TestCase):
             "top": -10.0,
             "right": 22.0,
             "bottom": 14.0,
+            "bracket_kind": "square_pair",
         }
 
         item = create_scene_item_from_state(

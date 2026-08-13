@@ -10,8 +10,7 @@ from PyQt6.QtCore import QMimeData
 from PyQt6.QtWidgets import QGraphicsItem
 
 from chemvas.domain.document import (
-    CLIPBOARD_SELECTION_PERSPECTIVE_VERSION,
-    LEGACY_CLIPBOARD_SELECTION_VERSION,
+    CLIPBOARD_SELECTION_VERSION,
     Bond,
     normalize_json_numbers,
     validate_clipboard_selection_payload,
@@ -166,6 +165,8 @@ def build_selection_clipboard_payload(
     perspective_state_getter: Callable[[set[int]], dict | None] | None = None,
     version: int,
 ) -> dict | None:
+    if type(version) is not int or version != CLIPBOARD_SELECTION_VERSION:
+        raise ValueError("Unsupported Chemvas clipboard selection version.")
     atom_ids = _selection_atom_ids(explicit_atom_ids, selected_bond_ids, bonds)
     atoms = _serialize_atoms(atom_ids, atom_state_getter)
     serialized_bonds = _serialize_bonds(atom_ids, bonds, bond_state_getter)
@@ -186,10 +187,7 @@ def build_selection_clipboard_payload(
         "marks": marks,
         "scene_items": scene_item_states,
     }
-    if (
-        version == CLIPBOARD_SELECTION_PERSPECTIVE_VERSION
-        and perspective_state_getter is not None
-    ):
+    if version == CLIPBOARD_SELECTION_VERSION and perspective_state_getter is not None:
         perspective_state = perspective_state_getter(atom_ids)
         if perspective_state is not None:
             payload["perspective"] = perspective_state
@@ -240,13 +238,11 @@ def decode_clipboard_selection_payload(
 def _is_supported_selection_payload_version(
     payload_version: object, *, current_version: int
 ) -> bool:
-    if type(payload_version) is not int:
-        return False
-    if payload_version == current_version:
-        return True
     return (
-        payload_version == LEGACY_CLIPBOARD_SELECTION_VERSION
-        and current_version >= CLIPBOARD_SELECTION_PERSPECTIVE_VERSION
+        type(payload_version) is int
+        and payload_version == CLIPBOARD_SELECTION_VERSION
+        and type(current_version) is int
+        and current_version == CLIPBOARD_SELECTION_VERSION
     )
 
 

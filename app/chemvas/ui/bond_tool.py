@@ -98,9 +98,9 @@ class BondTool(Tool):
         if active_bond_style in BOLD_BOND_STYLES:
             if bond.order == 2:
                 # Position is chosen from the shared double-bond context menu;
-                # applying Bold again must not run the legacy in/out strip flip.
+                # Applying Bold again preserves the selected double-bond position.
                 next_style = bold_double_style_for_style(bond.style, bond.order)
-            elif bond.style in {"bold_in", "bold"}:
+            elif bond.style == "bold_in":
                 next_style = "bold_out"
             elif bond.style == "bold_out":
                 next_style = "bold_in"

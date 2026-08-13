@@ -25,8 +25,10 @@ except ModuleNotFoundError:
 
 if QApplication is not None:
     from chemvas.domain.document import Atom, Bond, MoleculeModel
+    from chemvas.ui.atom_coords_access import CanvasAtomCoords3DState
     from chemvas.ui.canvas_atom_graphics_state import CanvasAtomGraphicsState
     from chemvas.ui.canvas_mark_registry import CanvasMarkRegistry
+    from chemvas.ui.canvas_rotation_state import CanvasRotationState
     from chemvas.ui.canvas_scene_items_state import (
         SCENE_ITEM_COLLECTION_ATTRS,
         CanvasSceneItemsState,
@@ -122,7 +124,7 @@ def scene_clipboard_controller_for(canvas) -> SceneClipboardController:
 def _valid_note_clipboard_payload() -> dict:
     return {
         "format": "chemvas-selection",
-        "version": 1,
+        "version": 2,
         "atoms": [],
         "bonds": [],
         "rings": [],
@@ -203,7 +205,7 @@ class SceneOpsControllerClipboardPayloadTest(unittest.TestCase):
         self.assertIsNotNone(payload)
         assert payload is not None
         self.assertEqual(payload["format"], "chemvas-selection")
-        self.assertEqual(payload["version"], 1)
+        self.assertEqual(payload["version"], 2)
         self.assertEqual(
             payload["atoms"],
             [
@@ -245,7 +247,7 @@ class SceneOpsControllerClipboardPayloadTest(unittest.TestCase):
         self.assertIn(
             {
                 "kind": "mark",
-                "mark_kind": None,
+                "mark_kind": "plus",
                 "text": None,
                 "atom_id": 1,
                 "dx": None,
@@ -258,7 +260,7 @@ class SceneOpsControllerClipboardPayloadTest(unittest.TestCase):
         self.assertIn(
             {
                 "kind": "mark",
-                "mark_kind": None,
+                "mark_kind": "plus",
                 "text": None,
                 "atom_id": None,
                 "dx": None,
@@ -370,7 +372,7 @@ class SceneOpsControllerClipboardPayloadTest(unittest.TestCase):
             [
                 {
                     "kind": "mark",
-                    "mark_kind": None,
+                    "mark_kind": "plus",
                     "text": None,
                     "atom_id": 1,
                     "dx": None,
@@ -431,7 +433,7 @@ class SceneOpsControllerClipboardPayloadTest(unittest.TestCase):
 
 class _FakeCanvas:
     CLIPBOARD_SELECTION_MIME = "application/x-chemvas-selection+json"
-    CLIPBOARD_SELECTION_VERSION = 1
+    CLIPBOARD_SELECTION_VERSION = 2
 
     def __init__(self) -> None:
         self._scene = QGraphicsScene()
@@ -442,7 +444,9 @@ class _FakeCanvas:
         self.scene_clipboard_state = SceneClipboardState()
         self.runtime_state = canvas_runtime_state(
             atom_graphics_state=CanvasAtomGraphicsState(),
+            atom_coords_3d_state=CanvasAtomCoords3DState(),
             mark_registry=self.mark_registry,
+            rotation_state=CanvasRotationState(),
             scene_clipboard_state=self.scene_clipboard_state,
             scene_items_state=CanvasSceneItemsState(),
         )

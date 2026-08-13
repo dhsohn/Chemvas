@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 DEFAULT_BRACKET_KIND = "square_pair"
-LEGACY_TS_BRACKET_KIND = "square_pair_double_dagger"
 
 BRACKET_MENU_SPECS: list[tuple[str, str]] = [
     ("Square Brackets", "square_pair"),
@@ -17,7 +16,6 @@ BRACKET_MENU_SPECS: list[tuple[str, str]] = [
 BRACKET_KIND_VALUES = frozenset(
     {
         DEFAULT_BRACKET_KIND,
-        LEGACY_TS_BRACKET_KIND,
         "parentheses_pair",
         "braces_pair",
         "double_dagger",
@@ -37,15 +35,9 @@ def normalized_bracket_kind(
     return default
 
 
-def restored_bracket_kind(value: object) -> str:
-    return normalized_bracket_kind(value, default=LEGACY_TS_BRACKET_KIND)
-
-
 __all__ = [
     "BRACKET_KIND_VALUES",
     "BRACKET_MENU_SPECS",
     "DEFAULT_BRACKET_KIND",
-    "LEGACY_TS_BRACKET_KIND",
     "normalized_bracket_kind",
-    "restored_bracket_kind",
 ]

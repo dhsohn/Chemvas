@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from chemvas.features.annotations import DEFAULT_BRACKET_KIND
 from chemvas.ui.canvas_model_access import atoms_for
 from chemvas.ui.handle_mutation_access import set_curved_arrow_path_for
 from chemvas.ui.mark_item_access import (
@@ -90,7 +91,7 @@ class SceneItemController:
     def _set_curved_arrow_path(self, item, start, end, control, double: bool) -> None:
         set_curved_arrow_path_for(self.canvas, item, start, end, control, double)
 
-    def _build_ts_bracket_item(self, rect, bracket_kind: str | None = None):
+    def _build_ts_bracket_item(self, rect, bracket_kind: str = DEFAULT_BRACKET_KIND):
         return build_ts_bracket_item_for(self.canvas, rect, bracket_kind)
 
     def _build_shape_item(self, rect, shape_kind=None, stroke_style=None, fill=None):
@@ -101,7 +102,7 @@ class SceneItemController:
     def _build_orbital_items(self, center, kind: str):
         return build_orbital_items_for(self.canvas, center, kind)
 
-    def _ts_bracket_path(self, rect, bracket_kind: str | None = None):
+    def _ts_bracket_path(self, rect, bracket_kind: str = DEFAULT_BRACKET_KIND):
         return ts_bracket_path_for(self.canvas, rect, bracket_kind)
 
     def restore_ring_from_state(self, ring_state: dict):

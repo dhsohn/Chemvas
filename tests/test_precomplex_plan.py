@@ -6,9 +6,12 @@ import json
 import pytest
 from chemvas.core.document_io import create_document
 from chemvas.domain.document import (
-    CALCULATION_PLAN_CANVAS_FILE_VERSION,
-    PRECOMPLEX_CANVAS_FILE_VERSION,
+    CANVAS_FILE_VERSION,
     calculation_plan_to_state,
+)
+from chemvas.domain.document.precomplex_profile import (
+    CURRENT_PROFILE_ID,
+    radius_provenance_for,
 )
 from chemvas.features.calculation_bundle import (
     plan_with_replaced_step,
@@ -34,7 +37,7 @@ def test_calculation_plan_v2_round_trips_explicit_empty_precomplex_endpoints() -
     assert calculation_plan_to_state(parsed) == plan_state
 
 
-def test_plan_v2_requires_precomplex_document_version() -> None:
+def test_plan_v2_requires_current_document_version() -> None:
     document_state = _document_state()
     plan_state = _plan()
     plan_state["version"] = 2
@@ -43,18 +46,18 @@ def test_plan_v2_requires_precomplex_document_version() -> None:
         step["product"]["precomplex"] = {"kind": "none"}
     document_state["calculation_plan"] = plan_state
 
-    document = create_document(document_state, PRECOMPLEX_CANVAS_FILE_VERSION)
+    document = create_document(document_state, CANVAS_FILE_VERSION)
 
-    assert document.payload["version"] == PRECOMPLEX_CANVAS_FILE_VERSION
+    assert document.payload["version"] == CANVAS_FILE_VERSION
     with pytest.raises(ValueError, match="Failed to save"):
-        create_document(document_state, CALCULATION_PLAN_CANVAS_FILE_VERSION)
+        create_document(document_state, CANVAS_FILE_VERSION - 1)
 
 
 def test_plan_v2_round_trips_bounded_candidate_ensemble() -> None:
     plan_state = _plan()
     plan_state["version"] = 2
     xyz = (
-        "2\nChemvas chemvas-rigid-precomplex-placement/1 S01 reactant\n"
+        f"2\nChemvas {CURRENT_PROFILE_ID} S01 reactant\n"
         "C 0.00000000 0.00000000 0.00000000\n"
         "O 3.00000000 0.00000000 0.00000000\n"
     )
@@ -83,7 +86,8 @@ def test_plan_v2_round_trips_bounded_candidate_ensemble() -> None:
         "source_document_sha256": "a" * 64,
         "basis_sha256": "b" * 64,
         "side": "reactant",
-        "profile": "chemvas-rigid-precomplex-placement/1",
+        "profile": CURRENT_PROFILE_ID,
+        "radius_provenance": radius_provenance_for(CURRENT_PROFILE_ID),
         "environment": {"kind": "gas_phase"},
         "contacts": [
             {
@@ -165,3 +169,14 @@ def test_plan_v2_round_trips_bounded_candidate_ensemble() -> None:
     )
     assert replaced.version == 2
     assert calculation_plan_to_state(replaced) == plan_state
+
+    precomplex.pop("radius_provenance")
+    with pytest.raises(
+        ValueError, match="Invalid endpoint precomplex candidate ensemble"
+    ):
+        validate_calculation_plan(_document_state(), plan_state)
+
+    precomplex["radius_provenance"] = radius_provenance_for(CURRENT_PROFILE_ID)
+    precomplex["profile"] = "chemvas-rigid-precomplex-placement/" + "1"
+    with pytest.raises(ValueError, match="Unsupported precomplex placement profile"):
+        validate_calculation_plan(_document_state(), plan_state)

@@ -1,7 +1,7 @@
 import unittest
 
 from chemvas.domain.document import (
-    CLIPBOARD_SELECTION_PERSPECTIVE_VERSION,
+    CLIPBOARD_SELECTION_VERSION,
     validate_clipboard_selection_payload,
 )
 
@@ -9,7 +9,7 @@ from chemvas.domain.document import (
 def _valid_payload() -> dict:
     return {
         "format": "chemvas-selection",
-        "version": 1,
+        "version": CLIPBOARD_SELECTION_VERSION,
         "atoms": [
             {
                 "id": 0,
@@ -71,7 +71,14 @@ def _valid_payload() -> dict:
                 "control": None,
                 "double": False,
             },
-            {"kind": "ts_bracket", "left": 0, "top": 0, "right": 1, "bottom": 1},
+            {
+                "kind": "ts_bracket",
+                "left": 0,
+                "top": 0,
+                "right": 1,
+                "bottom": 1,
+                "bracket_kind": "square_pair",
+            },
             {
                 "kind": "orbital",
                 "orbital_kind": "p",
@@ -98,7 +105,7 @@ class ClipboardPayloadValidationTest(unittest.TestCase):
 
     def test_accepts_v2_perspective_state(self) -> None:
         payload = _valid_payload()
-        payload["version"] = CLIPBOARD_SELECTION_PERSPECTIVE_VERSION
+        payload["version"] = CLIPBOARD_SELECTION_VERSION
         payload["perspective"] = {
             "atom_coords_3d": [
                 {"atom_id": 0, "coords": [1.0, 2.0, 3.0]},
@@ -110,7 +117,7 @@ class ClipboardPayloadValidationTest(unittest.TestCase):
 
         self.assertTrue(validate_clipboard_selection_payload(payload))
 
-    def test_accepts_unattached_mark_without_offsets(self) -> None:
+    def test_rejects_unattached_mark_without_canonical_kind(self) -> None:
         payload = _valid_payload()
         payload["marks"] = [
             {
@@ -125,7 +132,16 @@ class ClipboardPayloadValidationTest(unittest.TestCase):
             }
         ]
 
-        self.assertTrue(validate_clipboard_selection_payload(payload))
+        self.assertFalse(validate_clipboard_selection_payload(payload))
+
+    def test_rejects_old_and_non_integer_versions(self) -> None:
+        for version in (1, 2.0, True):
+            with self.subTest(version=version):
+                self._assert_rejected(
+                    lambda payload, version=version: payload.__setitem__(
+                        "version", version
+                    )
+                )
 
     def _assert_rejected(self, mutate) -> None:
         payload = _valid_payload()
@@ -134,6 +150,11 @@ class ClipboardPayloadValidationTest(unittest.TestCase):
 
     def test_rejects_top_level_extra_key(self) -> None:
         self._assert_rejected(lambda p: p.__setitem__("payload_json", "{}"))
+
+    def test_rejects_missing_required_base_sections(self) -> None:
+        for key in ("atoms", "bonds", "rings", "marks", "scene_items"):
+            with self.subTest(key=key):
+                self._assert_rejected(lambda payload, key=key: payload.pop(key))
 
     def test_rejects_string_numeric_atom_ids_and_references(self) -> None:
         cases = [
@@ -149,7 +170,7 @@ class ClipboardPayloadValidationTest(unittest.TestCase):
 
     def test_rejects_invalid_perspective_state(self) -> None:
         def add_valid_perspective(payload: dict) -> None:
-            payload["version"] = CLIPBOARD_SELECTION_PERSPECTIVE_VERSION
+            payload["version"] = CLIPBOARD_SELECTION_VERSION
             payload["perspective"] = {
                 "atom_coords_3d": [{"atom_id": 0, "coords": [1.0, 2.0, 3.0]}],
                 "projection_center_3d": [2.0, 3.0, 4.0],
@@ -157,6 +178,7 @@ class ClipboardPayloadValidationTest(unittest.TestCase):
             }
 
         def add_legacy_perspective(payload: dict) -> None:
+            payload["version"] = 1
             payload["perspective"] = {
                 "atom_coords_3d": [{"atom_id": 0, "coords": [1.0, 2.0, 3.0]}],
                 "projection_center_3d": None,
@@ -165,7 +187,7 @@ class ClipboardPayloadValidationTest(unittest.TestCase):
 
         def add_future_perspective(payload: dict) -> None:
             add_valid_perspective(payload)
-            payload["version"] = CLIPBOARD_SELECTION_PERSPECTIVE_VERSION + 1
+            payload["version"] = CLIPBOARD_SELECTION_VERSION + 1
 
         def mutate_perspective(payload: dict, mutate) -> None:
             add_valid_perspective(payload)

@@ -9,7 +9,10 @@ from unittest import mock
 from xml.etree import ElementTree as ET
 
 from chemvas.core.svg_roundtrip import (
+    CHEMVAS_SVG_ENCODING,
     CHEMVAS_SVG_NAMESPACE,
+    CHEMVAS_SVG_PAYLOAD_TYPE,
+    CHEMVAS_SVG_PAYLOAD_VERSION,
     CHEMVAS_SVG_SCOPE_SHEET,
     create_editable_svg_payload,
     embed_chemvas_document_in_svg,
@@ -41,6 +44,7 @@ def _sheet_state(text: str = "note") -> dict:
         "marks": [],
         "arrows": [],
         "ts_brackets": [],
+        "shapes": [],
         "orbitals": [],
         "settings": _settings(),
         "last_smiles_input": None,
@@ -50,6 +54,16 @@ def _sheet_state(text: str = "note") -> dict:
 def _encoded_payload(payload: dict) -> str:
     raw = json.dumps(payload, separators=(",", ":"), sort_keys=True).encode("utf-8")
     return base64.b64encode(zlib.compress(raw)).decode("ascii")
+
+
+def _source_markup(payload: dict, *, attributes: str | None = None) -> str:
+    if attributes is None:
+        attributes = (
+            f'encoding="{CHEMVAS_SVG_ENCODING}" '
+            f'type="{CHEMVAS_SVG_PAYLOAD_TYPE}" '
+            f'version="{CHEMVAS_SVG_PAYLOAD_VERSION}"'
+        )
+    return f"<chemvas:source {attributes}>{_encoded_payload(payload)}</chemvas:source>"
 
 
 def _write_svg_with_unsupported_encoding(path: Path) -> None:
@@ -125,6 +139,53 @@ class SvgRoundtripTest(unittest.TestCase):
                     ):
                         embed_chemvas_document_in_svg(path, candidate)
 
+    def test_embed_rejects_non_integer_svg_payload_version(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self._svg_path(tmp)
+            payload = create_editable_svg_payload(
+                _sheet_state(),
+                document_version=CANVAS_FILE_VERSION,
+                scope=CHEMVAS_SVG_SCOPE_SHEET,
+            )
+            for version in (True, 1.0):
+                with self.subTest(version=version):
+                    candidate = json.loads(json.dumps(payload))
+                    candidate["version"] = version
+                    with self.assertRaisesRegex(
+                        ValueError, "Invalid editable Chemvas SVG payload"
+                    ):
+                        embed_chemvas_document_in_svg(path, candidate)
+
+    def test_extract_rejects_noncanonical_source_attributes(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self._svg_path(tmp)
+            payload = create_editable_svg_payload(
+                _sheet_state(),
+                document_version=CANVAS_FILE_VERSION,
+                scope=CHEMVAS_SVG_SCOPE_SHEET,
+            )
+            attributes = (
+                f'encoding="{CHEMVAS_SVG_ENCODING}"',
+                f'encoding="{CHEMVAS_SVG_ENCODING}" type="wrong" version="1"',
+                f'encoding="{CHEMVAS_SVG_ENCODING}" '
+                f'type="{CHEMVAS_SVG_PAYLOAD_TYPE}" version="999"',
+                f'encoding="{CHEMVAS_SVG_ENCODING}" '
+                f'type="{CHEMVAS_SVG_PAYLOAD_TYPE}" version="1" extra="x"',
+            )
+            for source_attributes in attributes:
+                with self.subTest(attributes=source_attributes):
+                    path.write_text(
+                        '<svg xmlns="http://www.w3.org/2000/svg" '
+                        'xmlns:chemvas="https://chemvas.app/ns/svg-source/1">'
+                        f"<metadata>{_source_markup(payload, attributes=source_attributes)}</metadata>"
+                        "</svg>",
+                        encoding="utf-8",
+                    )
+                    with self.assertRaisesRegex(
+                        ValueError, "Unsupported editable Chemvas metadata encoding"
+                    ):
+                        extract_chemvas_document_from_svg(path)
+
     def test_embed_normalizes_decimal_document_payload(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             path = self._svg_path(tmp)
@@ -186,10 +247,10 @@ class SvgRoundtripTest(unittest.TestCase):
                 '<svg xmlns="http://www.w3.org/2000/svg" '
                 'xmlns:chemvas="https://chemvas.app/ns/svg-source/1">'
                 "<metadata><title>external metadata</title>"
-                f'<chemvas:source encoding="base64+zlib+json">{_encoded_payload(stale)}</chemvas:source>'
+                f"{_source_markup(stale)}"
                 "</metadata>"
                 "<metadata>"
-                f'<chemvas:source encoding="base64+zlib+json">{_encoded_payload(stale)}</chemvas:source>'
+                f"{_source_markup(stale)}"
                 "</metadata>"
                 "</svg>",
                 encoding="utf-8",
@@ -248,10 +309,10 @@ class SvgRoundtripTest(unittest.TestCase):
                 '<svg xmlns="http://www.w3.org/2000/svg" '
                 'xmlns:chemvas="https://chemvas.app/ns/svg-source/1">'
                 "<defs>"
-                f'<chemvas:source encoding="base64+zlib+json">{_encoded_payload(shadow)}</chemvas:source>'
+                f"{_source_markup(shadow)}"
                 "</defs>"
                 "<metadata>"
-                f'<chemvas:source encoding="base64+zlib+json">{_encoded_payload(good)}</chemvas:source>'
+                f"{_source_markup(good)}"
                 "</metadata>"
                 "</svg>",
                 encoding="utf-8",
@@ -281,7 +342,9 @@ class SvgRoundtripTest(unittest.TestCase):
                 '<svg xmlns="http://www.w3.org/2000/svg" '
                 'xmlns:chemvas="https://chemvas.app/ns/svg-source/1">'
                 "<metadata>"
-                f'<chemvas:source encoding="base64+zlib+json">{encoded}</chemvas:source>'
+                f'<chemvas:source encoding="{CHEMVAS_SVG_ENCODING}" '
+                f'type="{CHEMVAS_SVG_PAYLOAD_TYPE}" '
+                f'version="{CHEMVAS_SVG_PAYLOAD_VERSION}">{encoded}</chemvas:source>'
                 "</metadata>"
                 "</svg>",
                 encoding="utf-8",
@@ -306,7 +369,7 @@ class SvgRoundtripTest(unittest.TestCase):
                 'xmlns:chemvas="https://chemvas.app/ns/svg-source/1">'
                 "<metadata><title>external metadata</title></metadata>"
                 "<metadata>"
-                f'<chemvas:source encoding="base64+zlib+json">{_encoded_payload(good)}</chemvas:source>'
+                f"{_source_markup(good)}"
                 "</metadata>"
                 "</svg>",
                 encoding="utf-8",
@@ -323,10 +386,10 @@ class SvgRoundtripTest(unittest.TestCase):
                 '<svg xmlns="http://www.w3.org/2000/svg" '
                 'xmlns:chemvas="https://chemvas.app/ns/svg-source/1">'
                 "<metadata>"
-                f'<chemvas:source encoding="base64+zlib+json">{_encoded_payload(shadow)}</chemvas:source>'
+                f"{_source_markup(shadow)}"
                 "</metadata>"
                 "<metadata>"
-                f'<chemvas:source encoding="base64+zlib+json">{_encoded_payload(good)}</chemvas:source>'
+                f"{_source_markup(good)}"
                 "</metadata>"
                 "</svg>",
                 encoding="utf-8",
@@ -354,8 +417,8 @@ class SvgRoundtripTest(unittest.TestCase):
                 '<svg xmlns="http://www.w3.org/2000/svg" '
                 'xmlns:chemvas="https://chemvas.app/ns/svg-source/1">'
                 "<metadata>"
-                f'<chemvas:source encoding="base64+zlib+json">{_encoded_payload(first)}</chemvas:source>'
-                f'<chemvas:source encoding="base64+zlib+json">{_encoded_payload(second)}</chemvas:source>'
+                f"{_source_markup(first)}"
+                f"{_source_markup(second)}"
                 "</metadata>"
                 "</svg>",
                 encoding="utf-8",
@@ -379,7 +442,9 @@ class SvgRoundtripTest(unittest.TestCase):
                 '<svg xmlns="http://www.w3.org/2000/svg" '
                 'xmlns:chemvas="https://chemvas.app/ns/svg-source/1">'
                 "<metadata>"
-                f'<chemvas:source encoding="base64+zlib+json">{encoded}</chemvas:source>'
+                f'<chemvas:source encoding="{CHEMVAS_SVG_ENCODING}" '
+                f'type="{CHEMVAS_SVG_PAYLOAD_TYPE}" '
+                f'version="{CHEMVAS_SVG_PAYLOAD_VERSION}">{encoded}</chemvas:source>'
                 "</metadata>"
                 "</svg>"
             )
@@ -451,7 +516,7 @@ class SvgRoundtripTest(unittest.TestCase):
                 '<svg xmlns="http://www.w3.org/2000/svg" '
                 'xmlns:chemvas="https://chemvas.app/ns/svg-source/1">'
                 "<metadata>"
-                f'<chemvas:source encoding="base64+zlib+json">{_encoded_payload(payload)}</chemvas:source>'
+                f"{_source_markup(payload)}"
                 "</metadata>"
                 "</svg>",
                 encoding="utf-8",
@@ -475,7 +540,9 @@ class SvgRoundtripTest(unittest.TestCase):
                 '<svg xmlns="http://www.w3.org/2000/svg" '
                 'xmlns:chemvas="https://chemvas.app/ns/svg-source/1">'
                 "<metadata>"
-                f'<chemvas:source encoding="base64+zlib+json">{encoded}</chemvas:source>'
+                f'<chemvas:source encoding="{CHEMVAS_SVG_ENCODING}" '
+                f'type="{CHEMVAS_SVG_PAYLOAD_TYPE}" '
+                f'version="{CHEMVAS_SVG_PAYLOAD_VERSION}">{encoded}</chemvas:source>'
                 "</metadata>"
                 "</svg>",
                 encoding="utf-8",
@@ -496,7 +563,9 @@ class SvgRoundtripTest(unittest.TestCase):
             path.write_text(
                 '<svg xmlns="http://www.w3.org/2000/svg" '
                 'xmlns:chemvas="https://chemvas.app/ns/svg-source/1">'
-                '<metadata><chemvas:source encoding="base64+zlib+json">not-base64</chemvas:source></metadata>'
+                f'<metadata><chemvas:source encoding="{CHEMVAS_SVG_ENCODING}" '
+                f'type="{CHEMVAS_SVG_PAYLOAD_TYPE}" '
+                f'version="{CHEMVAS_SVG_PAYLOAD_VERSION}">not-base64</chemvas:source></metadata>'
                 "</svg>",
                 encoding="utf-8",
             )
@@ -564,7 +633,9 @@ class SvgRoundtripTest(unittest.TestCase):
                         '<svg xmlns="http://www.w3.org/2000/svg" '
                         'xmlns:chemvas="https://chemvas.app/ns/svg-source/1">'
                         "<metadata>"
-                        f'<chemvas:source encoding="base64+zlib+json">{encoded_payload}</chemvas:source>'
+                        f'<chemvas:source encoding="{CHEMVAS_SVG_ENCODING}" '
+                        f'type="{CHEMVAS_SVG_PAYLOAD_TYPE}" '
+                        f'version="{CHEMVAS_SVG_PAYLOAD_VERSION}">{encoded_payload}</chemvas:source>'
                         "</metadata>"
                         "</svg>"
                     )

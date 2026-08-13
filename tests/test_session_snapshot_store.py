@@ -19,6 +19,7 @@ def _valid_state(marker: str | None = None) -> dict:
         "marks": [],
         "arrows": [],
         "ts_brackets": [],
+        "shapes": [],
         "orbitals": [],
         "settings": serialize_settings(
             bond_length_px=18.0,
@@ -76,6 +77,34 @@ def test_crash_restore_round_trips_unsaved_work(tmp_path, monkeypatch):
 
 def test_clean_exit_reopens_saved_files_from_disk(tmp_path, monkeypatch):
     root = tmp_path / "sessions"
+    saved = tmp_path / "molecule.chemvas"
+    write_document(saved, _valid_state("on-disk"), CANVAS_FILE_VERSION)
+
+    prev = _store(root, "prev", pid=222)
+    prev.begin()
+    prev.save_documents(
+        [
+            DocDescriptor(
+                state=_valid_state("on-disk"),
+                file_path=str(saved),
+                display_name="molecule.chemvas",
+                dirty=False,
+            )
+        ]
+    )
+    prev.mark_clean_exit()
+
+    _dead_pids(monkeypatch)
+    result = _store(root, "cur").consume_previous_sessions()
+
+    assert result.recovered_unsaved == 0
+    assert [d.file_path for d in result.docs] == [str(saved)]
+    assert result.docs[0].dirty is False
+    assert result.docs[0].state is not None
+
+
+def test_clean_exit_skips_legacy_saved_file_path(tmp_path, monkeypatch):
+    root = tmp_path / "sessions"
     saved = tmp_path / "molecule.json"
     write_document(saved, _valid_state("on-disk"), CANVAS_FILE_VERSION)
 
@@ -97,9 +126,66 @@ def test_clean_exit_reopens_saved_files_from_disk(tmp_path, monkeypatch):
     result = _store(root, "cur").consume_previous_sessions()
 
     assert result.recovered_unsaved == 0
-    assert [d.file_path for d in result.docs] == [str(saved)]
-    assert result.docs[0].dirty is False
-    assert result.docs[0].state is not None
+    assert result.docs == []
+
+
+def test_crash_snapshot_with_legacy_path_recovers_unbound(tmp_path, monkeypatch):
+    root = tmp_path / "sessions"
+    legacy = tmp_path / "molecule.json"
+    write_document(legacy, _valid_state("on-disk"), CANVAS_FILE_VERSION)
+
+    prev = _store(root, "prev", pid=222)
+    prev.begin()
+    prev.save_documents(
+        [
+            DocDescriptor(
+                state=_valid_state("unsaved"),
+                file_path=str(legacy),
+                display_name="molecule.json",
+                dirty=True,
+            )
+        ]
+    )
+
+    _dead_pids(monkeypatch)
+    result = _store(root, "cur").consume_previous_sessions()
+
+    assert result.recovered_unsaved == 1
+    assert len(result.docs) == 1
+    restored = result.docs[0]
+    assert restored.file_path is None
+    assert restored.dirty is True
+    assert restored.state is not None
+    assert restored.state["last_smiles_input"] == "unsaved"
+
+
+def test_missing_crash_snapshot_does_not_fall_back_to_legacy_disk_path(
+    tmp_path, monkeypatch
+):
+    root = tmp_path / "sessions"
+    legacy = tmp_path / "molecule.json"
+    write_document(legacy, _valid_state("on-disk"), CANVAS_FILE_VERSION)
+
+    prev = _store(root, "prev", pid=222)
+    prev.begin()
+    prev.save_documents(
+        [
+            DocDescriptor(
+                state=_valid_state("unsaved"),
+                file_path=str(legacy),
+                display_name="molecule.json",
+                dirty=True,
+            )
+        ]
+    )
+    manifest = json.loads((root / "prev" / "session.json").read_text())
+    (root / "prev" / manifest["docs"][0]["snapshot"]).unlink()
+
+    _dead_pids(monkeypatch)
+    result = _store(root, "cur").consume_previous_sessions()
+
+    assert result.recovered_unsaved == 0
+    assert result.docs == []
 
 
 def test_clean_exit_drops_unsaved_untitled_docs(tmp_path, monkeypatch):

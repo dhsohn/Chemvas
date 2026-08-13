@@ -1360,8 +1360,8 @@ class GuiShortcutSmokeTest(unittest.TestCase):
         b0 = add_bond_for(canvas, a0, a1)
         b1 = add_bond_for(canvas, a1, a2)
         transform = canvas.services.scene_operations.scene_transform_controller
-        transform.apply_bond_style(b0, "bold", 1)
-        transform.apply_bond_style(b1, "bold", 1)
+        transform.apply_bond_style(b0, "bold_in", 1)
+        transform.apply_bond_style(b1, "bold_in", 1)
 
         vertex = QPointF(20.0, 0.0)
 
@@ -1405,8 +1405,8 @@ class GuiShortcutSmokeTest(unittest.TestCase):
         b0 = add_bond_for(canvas, a0, a1)
         b1 = add_bond_for(canvas, a1, a2)
         transform = canvas.services.scene_operations.scene_transform_controller
-        transform.apply_bond_style(b0, "bold", 1)
-        transform.apply_bond_style(b1, "bold", 1)
+        transform.apply_bond_style(b0, "bold_in", 1)
+        transform.apply_bond_style(b1, "bold_in", 1)
         item_ids = {
             bond_id: tuple(id(item) for item in bond_items_for_id(canvas, bond_id))
             for bond_id in (b0, b1)

@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import os
 
+import pytest
+
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 try:
@@ -37,17 +39,16 @@ def test_committed_note_text_uses_public_note_contract() -> None:
     assert not hasattr(item, "_last_text")
 
 
-def test_committed_note_text_keeps_plain_fake_compatibility_with_public_attr() -> None:
+def test_committed_note_text_rejects_objects_without_a_note_contract() -> None:
     class _PlainNote:
         pass
 
     item = _PlainNote()
 
-    set_committed_note_text_for(item, "Stable")
-
-    assert committed_note_text_for(item) == "Stable"
-    assert item.committed_note_text == "Stable"
-    assert not hasattr(item, "_last_text")
+    with pytest.raises(
+        AttributeError, match=r"^Note item does not implement set_committed_text\(\)\.$"
+    ):
+        set_committed_note_text_for(item, "Stable")
 
 
 def test_committed_note_text_uses_qgraphics_item_data_role() -> None:

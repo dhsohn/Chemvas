@@ -8,11 +8,13 @@ from chemvas.domain.document import (
     Atom,
     Bond,
     CalculationAtomCorrespondence,
+    CalculationPlan,
     CalculationState,
     CalculationStateMember,
     MoleculeModel,
     build_document_payload,
     calculation_plan_from_state,
+    calculation_plan_to_state,
     extract_document_state,
     model_bond_pairs,
     serialize_model_state,
@@ -49,6 +51,7 @@ def _document_state() -> dict[str, object]:
         "marks": [],
         "arrows": [],
         "ts_brackets": [],
+        "shapes": [],
         "orbitals": [],
         "settings": serialize_settings(
             bond_length_px=18.0,
@@ -75,7 +78,7 @@ def _plan(*, complete_mapping: bool = True) -> dict[str, object]:
         correspondence.pop()
     return {
         "format": "chemvas-calculation-plan",
-        "version": 1,
+        "version": 2,
         "states": [
             {
                 "id": "R01",
@@ -108,6 +111,7 @@ def _plan(*, complete_mapping: bool = True) -> dict[str, object]:
                         {"component_atom_ids": [4], "role": "catalyst"},
                         {"component_atom_ids": [5], "role": "spectator"},
                     ],
+                    "precomplex": {"kind": "none"},
                 },
                 "product": {
                     "state_id": "P01",
@@ -116,6 +120,7 @@ def _plan(*, complete_mapping: bool = True) -> dict[str, object]:
                         {"component_atom_ids": [4], "role": "catalyst"},
                         {"component_atom_ids": [5], "role": "spectator"},
                     ],
+                    "precomplex": {"kind": "none"},
                 },
                 "atom_correspondence": correspondence,
             }
@@ -123,7 +128,7 @@ def _plan(*, complete_mapping: bool = True) -> dict[str, object]:
     }
 
 
-def test_v5_document_round_trips_calculation_plan_and_v4_rejects_it() -> None:
+def test_v7_document_round_trips_calculation_plan_v2_and_v6_rejects_it() -> None:
     state = _document_state()
     state["calculation_plan"] = _plan()
 
@@ -131,7 +136,24 @@ def test_v5_document_round_trips_calculation_plan_and_v4_rejects_it() -> None:
 
     assert extract_document_state(payload)["calculation_plan"] == _plan()
     with pytest.raises(ValueError, match="Invalid Chemvas file"):
-        build_document_payload(state, 4)
+        build_document_payload(state, CANVAS_FILE_VERSION - 1)
+
+
+@pytest.mark.parametrize("version", [1, 2.0, True])
+def test_non_current_calculation_plan_versions_are_rejected(version: object) -> None:
+    state = _document_state()
+    plan = _plan()
+    plan["version"] = version
+
+    with pytest.raises(ValueError, match="Invalid Chemvas calculation plan"):
+        validate_calculation_plan(state, plan)
+
+
+def test_calculation_plan_serializer_rejects_non_integer_v2() -> None:
+    plan = CalculationPlan(states=(), steps=(), version=2.0)  # type: ignore[arg-type]
+
+    with pytest.raises(ValueError, match="Invalid Chemvas calculation plan version"):
+        calculation_plan_to_state(plan)
 
 
 def test_plan_roles_are_endpoint_specific_when_a_state_is_reused() -> None:
@@ -263,7 +285,7 @@ def test_pph3_intrinsic_charge_is_used_across_calculation_state_selection() -> N
     state["model"] = serialize_model_state(model)
     plan_state = {
         "format": "chemvas-calculation-plan",
-        "version": 1,
+        "version": 2,
         "states": [
             {
                 "id": "R01",
@@ -284,10 +306,12 @@ def test_pph3_intrinsic_charge_is_used_across_calculation_state_selection() -> N
                 "reactant": {
                     "state_id": "R01",
                     "roles": [{"component_atom_ids": [0, 1], "role": "reactant"}],
+                    "precomplex": {"kind": "none"},
                 },
                 "product": {
                     "state_id": "P01",
                     "roles": [{"component_atom_ids": [2, 3], "role": "product"}],
+                    "precomplex": {"kind": "none"},
                 },
                 "atom_correspondence": [
                     {"reactant_atom_id": 0, "product_atom_id": 2},

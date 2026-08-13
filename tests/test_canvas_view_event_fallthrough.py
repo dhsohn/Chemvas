@@ -290,7 +290,6 @@ class CanvasViewEventFallthroughTest(unittest.TestCase):
             ("bold_in", [True, False, False]),
             ("bold_center", [False, True, False]),
             ("bold_out", [False, False, True]),
-            ("bold", [True, False, False]),
         )
         for current_style, checked in cases:
             with self.subTest(current_style=current_style):

@@ -35,7 +35,10 @@ if QApplication is not None:
     from chemvas.ui.handle_mutation_service import HandleMutationService
     from chemvas.ui.main_window_panel_toolbar import MainWindowPanelToolbarCallbacks
     from chemvas.ui.main_window_toolbar_buttons import ArrowButton
-    from chemvas.ui.note_item_access import set_committed_note_text_for
+    from chemvas.ui.note_item_access import (
+        set_committed_note_html_for,
+        set_committed_note_text_for,
+    )
     from chemvas.ui.scene_flip_state import flip_scene_item_state
     from chemvas.ui.scene_item_restore import create_orbital_item_from_state
     from chemvas.ui.scene_paste_apply_logic import apply_paste_payload
@@ -231,6 +234,7 @@ class UIServiceTailCoverageTest(unittest.TestCase):
     ) -> None:
         item = QGraphicsTextItem("Stable")
         set_committed_note_text_for(item, "Stable")
+        set_committed_note_html_for(item, item.toHtml())
         canvas = SimpleNamespace(
             select_note=mock.Mock(),
             scene=mock.Mock(return_value=QGraphicsScene()),
@@ -260,7 +264,7 @@ class UIServiceTailCoverageTest(unittest.TestCase):
         )
         canvas.setFocus.assert_called_once_with(Qt.FocusReason.MouseFocusReason)
 
-    def test_apply_note_style_uses_legacy_line_height_value_when_enum_value_is_wrapped(
+    def test_apply_note_style_uses_current_line_height_enum_value(
         self,
     ) -> None:
         class _FakeOption:
@@ -346,7 +350,7 @@ class UIServiceTailCoverageTest(unittest.TestCase):
             item
         )
 
-    def test_apply_note_style_accepts_legacy_line_height_constant_without_value(
+    def test_apply_note_style_rejects_line_height_constant_without_value(
         self,
     ) -> None:
         class _FakeDocument:
@@ -404,6 +408,7 @@ class UIServiceTailCoverageTest(unittest.TestCase):
         controller.update_note_box = mock.Mock()
 
         with (
+            self.assertRaises(AttributeError),
             mock.patch(
                 "chemvas.ui.canvas_note_controller.QTextBlockFormat", _FakeBlockFormat
             ),
@@ -413,11 +418,6 @@ class UIServiceTailCoverageTest(unittest.TestCase):
             ),
         ):
             controller.apply_note_style(item)
-
-        self.assertEqual(
-            _FakeCursor.last_instance.block_format.height,
-            (140, "legacy-proportional-height"),
-        )
 
     def test_apply_paste_payload_skips_translated_scene_state_that_builds_no_item(
         self,

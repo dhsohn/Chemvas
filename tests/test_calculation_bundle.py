@@ -55,7 +55,7 @@ def test_inspect_components_uses_stable_atom_id_order_and_annotation_totals() ->
         ("C", 3, "triple"),
         ("C", 1, "dotted"),
         ("C", 1, "dotted_double"),
-        ("C", 1, "bold"),
+        ("C", 1, "bold_in"),
     ],
 )
 def test_component_inspection_rejects_ambiguous_pph3_attachment_contexts(

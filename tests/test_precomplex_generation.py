@@ -4,11 +4,11 @@ import hashlib
 import json
 import math
 from dataclasses import replace
+from pathlib import Path
 
 import pytest
 from chemvas.domain.document.precomplex_profile import (
     CURRENT_PROFILE_ID,
-    LEGACY_PROFILE_ID,
     precomplex_placement_profile,
     radius_provenance_for,
 )
@@ -102,24 +102,24 @@ def test_generate_precomplex_candidates_is_bounded_and_byte_deterministic() -> N
         candidate.xyz for candidate in second
     ]
     assert [candidate.id for candidate in first] == [
-        "pc-bbfe4f941b0e7ced9c944b7b4856e79fcb7efd23994e9f904a7184df52aa0401",
-        "pc-e68ba791403ad9f271bf1a291d35a3115110c6bba6ae00e66c90703ff6f6045a",
-        "pc-b2f5a07e888dcec2db0d9d010616cea605f29a071e93626fd24a4dfe852f153a",
-        "pc-cc2a1653c31085dbdc23d5580c089618f7e247fb3ecd9a2a8ddf8d0f20c232b2",
+        "pc-0f94dd6951485850e795e9b1410c221166ceb523062db747ef2517f2c84640e5",
+        "pc-257130e121cbdf62dbcb9a132012c0aec3f50593ef68a97369c8ff56bce97c5e",
+        "pc-b780641105337f9b1fe66dc07bcb2245b2521d3c0e8864dc722c2da2ae5bdfbe",
+        "pc-f64c768d00635bba8352712d54dd91292f7e2669c44ddff9f6ddc24c13f48559",
     ]
     assert first[0].xyz == (
         "4\n"
-        "Chemvas chemvas-rigid-precomplex-placement/1 S01 reactant\n"
+        "Chemvas chemvas-rigid-precomplex-placement/2 S01 reactant\n"
         "C  0.00000000 0.00000000 0.00000000\n"
         "H  -1.00000000 0.00000000 0.00000000\n"
         "O  1.19895788 2.75000000 0.00000000\n"
         "H  0.79930525 1.83333333 0.00000000\n"
     )
-    assert first[0].validation.soft_overlap_score == 0.216225
+    assert first[0].validation.soft_overlap_score == 0.27510025
     assert len({candidate.id for candidate in first}) == len(first)
     for candidate in first:
         assert candidate.geometry_class == "generated_candidate_ensemble"
-        assert candidate.profile == "chemvas-rigid-precomplex-placement/1"
+        assert candidate.profile == CURRENT_PROFILE_ID
         assert candidate.validation.hard_clash_count == 0
         assert candidate.validation.contact_error_angstrom <= 1e-8
         by_index = {atom.path_index: atom.coordinates for atom in candidate.atoms}
@@ -176,67 +176,22 @@ def _iron_cobalt_fixture() -> tuple[tuple[ComponentGeometry, ...], PlacementRequ
     )
 
 
-def test_legacy_profile_one_iron_cobalt_output_is_byte_frozen() -> None:
+def test_current_profile_iron_cobalt_output_is_byte_frozen() -> None:
     components, request = _iron_cobalt_fixture()
 
     candidate = generate_precomplex_candidates(request, components)[0]
 
-    assert request.profile == LEGACY_PROFILE_ID
+    assert request.profile == CURRENT_PROFILE_ID
     assert candidate.id == (
-        "pc-2ede86589189dcc3fc7d921d6c7f181a3c5a035f780542ef973ef6da8059c76a"
+        "pc-0bb3a54a5a65246ae9011ccc89ec6f6a5cec67c3d194fde107ad5b0cf6fb8d52"
     )
     assert candidate.xyz == (
         "2\n"
-        "Chemvas chemvas-rigid-precomplex-placement/1 S01 reactant\n"
+        "Chemvas chemvas-rigid-precomplex-placement/2 S01 reactant\n"
         "Fe 0.00000000 0.00000000 0.00000000\n"
         "Co 1.19895788 2.75000000 0.00000000\n"
     )
-    assert candidate.validation.soft_overlap_score == 0.16
-
-
-def test_legacy_profile_one_radius_table_and_provenance_are_frozen() -> None:
-    assert dict(precomplex_placement_profile(LEGACY_PROFILE_ID).radii) == {
-        "H": (0.31, 1.20),
-        "Li": (1.28, 1.82),
-        "B": (0.84, 1.92),
-        "C": (0.76, 1.70),
-        "N": (0.71, 1.55),
-        "O": (0.66, 1.52),
-        "F": (0.57, 1.47),
-        "Na": (1.66, 2.27),
-        "Mg": (1.41, 1.73),
-        "Al": (1.21, 1.84),
-        "Si": (1.11, 2.10),
-        "P": (1.07, 1.80),
-        "S": (1.05, 1.80),
-        "Cl": (1.02, 1.75),
-        "K": (2.03, 2.75),
-        "Ca": (1.76, 2.31),
-        "Fe": (1.32, 2.00),
-        "Co": (1.26, 2.00),
-        "Ni": (1.24, 1.63),
-        "Cu": (1.32, 1.40),
-        "Zn": (1.22, 1.39),
-        "Br": (1.20, 1.85),
-        "Ru": (1.46, 2.00),
-        "Rh": (1.42, 2.00),
-        "Pd": (1.39, 1.63),
-        "Ag": (1.45, 1.72),
-        "Sn": (1.39, 2.17),
-        "I": (1.39, 1.98),
-        "Ir": (1.41, 2.00),
-        "Pt": (1.36, 1.75),
-        "Au": (1.36, 1.66),
-    }
-    assert radius_provenance_for(LEGACY_PROFILE_ID) == {
-        "status": "legacy_frozen_unverified",
-        "units": "angstrom",
-        "radius_table_sha256": (
-            "d352219ef2bea3619f3ba81aff64958f146bd6246b7396c454c9de4213fd80ad"
-        ),
-        "dataset_id": "chemvas-precomplex-legacy-radius-table-v1",
-        "doi": None,
-    }
+    assert candidate.validation.soft_overlap_score == 1.240996
 
 
 def test_profile_two_uses_the_complete_cited_radius_table() -> None:
@@ -292,13 +247,8 @@ def test_profile_two_uses_the_complete_cited_radius_table() -> None:
         },
     }
 
-    components, legacy_request = _iron_cobalt_fixture()
-    current_components = tuple(
-        replace(component, profile=CURRENT_PROFILE_ID) for component in components
-    )
-    current = generate_precomplex_candidates(
-        replace(legacy_request, profile=CURRENT_PROFILE_ID), current_components
-    )[0]
+    components, request = _iron_cobalt_fixture()
+    current = generate_precomplex_candidates(request, components)[0]
 
     assert current.profile == CURRENT_PROFILE_ID
     assert f"Chemvas {CURRENT_PROFILE_ID}" in current.xyz
@@ -312,9 +262,10 @@ def test_generation_rejects_unknown_profile_and_unsupported_element() -> None:
             replace(request, profile="unknown/1"), components
         )
 
-    with pytest.raises(ValueError, match="do not match the requested profile"):
+    with pytest.raises(ValueError, match="Unsupported precomplex placement profile"):
         generate_precomplex_candidates(
-            replace(request, profile=CURRENT_PROFILE_ID), components
+            replace(request, profile="chemvas-rigid-precomplex-placement/" + "1"),
+            components,
         )
     with pytest.raises(ValueError, match="candidate_cap"):
         generate_precomplex_candidates(replace(request, candidate_cap=True), components)
@@ -322,13 +273,29 @@ def test_generation_rejects_unknown_profile_and_unsupported_element() -> None:
     xenon = replace(
         components[1],
         atoms=(replace(components[1].atoms[0], symbol="Xe"),),
-        profile=CURRENT_PROFILE_ID,
     )
     with pytest.raises(ValueError, match="precomplex_unsupported_radius"):
         generate_precomplex_candidates(
-            replace(request, profile=CURRENT_PROFILE_ID),
-            (replace(components[0], profile=CURRENT_PROFILE_ID), xenon),
+            request,
+            (components[0], xenon),
         )
+
+
+def test_removed_profile_has_no_runtime_or_source_registration() -> None:
+    removed_profile_id = "chemvas-rigid-precomplex-placement/" + "1"
+
+    with pytest.raises(ValueError, match="Unsupported precomplex placement profile"):
+        precomplex_placement_profile(removed_profile_id)
+    with pytest.raises(ValueError, match="Unsupported precomplex placement profile"):
+        radius_provenance_for(removed_profile_id)
+
+    app_root = Path(__file__).resolve().parents[1] / "app" / "chemvas"
+    production_source = "\n".join(
+        path.read_text(encoding="utf-8") for path in app_root.rglob("*.py")
+    )
+    assert removed_profile_id not in production_source
+    assert "LEGACY_PROFILE_ID" not in production_source
+    assert "legacy_frozen_unverified" not in production_source
 
 
 def test_candidate_provenance_preserves_plan_component_order() -> None:
@@ -476,8 +443,8 @@ def test_component_geometries_preserve_canonical_atom_order_and_ownership() -> N
     assert [atom.parent_source_atom_id for atom in components[0].atoms] == [None, 0]
     assert [atom.parent_source_atom_id for atom in components[1].atoms] == [None, 2]
     assert [component.conformer_id for component in components] == [
-        "conf-3d149225284863bd4cdd9f20d525d440df99ad1bf3749c80680b221161bb240b",
-        "conf-1d147cac2d7cd7bd228059a00e3caab832add1a20813b7fe2071d7b390acb054",
+        "conf-fec2c2d20d31fcb8a9fe89153c28b66883f2a4b41a9214e95808a58e1c030360",
+        "conf-12329ae7d2cd66fb00b09790434653a0941ea2d7dd73fa0dc1b624922c6a6fad",
     ]
 
 

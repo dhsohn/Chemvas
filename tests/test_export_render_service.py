@@ -23,7 +23,6 @@ if QApplication is not None:
         export_scene,
         item_export_bounds,
         render_scene_to_pdf_bytes,
-        render_scene_to_svg,
         render_scene_to_svg_bytes,
     )
     from chemvas.ui.graphics_items import AtomDotItem, AtomLabelItem
@@ -70,7 +69,7 @@ class ExportRenderServiceTest(unittest.TestCase):
         scene = self._content_scene()
         with tempfile.TemporaryDirectory() as tmp:
             path = os.path.join(tmp, "figure.svg")
-            plan = render_scene_to_svg(scene, path, margin=4.0)
+            plan = export_scene(scene, path, fmt="svg", margin=4.0)
             self.assertTrue(os.path.exists(path))
             self.assertGreater(plan.source_w, 0.0)
             with open(path, encoding="utf-8") as handle:
@@ -87,7 +86,12 @@ class ExportRenderServiceTest(unittest.TestCase):
         self.assertIsNone(content_bounds([]))
         with tempfile.TemporaryDirectory() as tmp:
             with self.assertRaises(ValueError):
-                render_scene_to_svg(scene, os.path.join(tmp, "empty.svg"), margin=4.0)
+                export_scene(
+                    scene,
+                    os.path.join(tmp, "empty.svg"),
+                    fmt="svg",
+                    margin=4.0,
+                )
 
     def test_atom_label_export_bounds_ignore_hit_radius(self) -> None:
         scene = QGraphicsScene()

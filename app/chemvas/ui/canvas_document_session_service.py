@@ -11,7 +11,6 @@ from PyQt6.QtWidgets import QGraphicsScene, QGraphicsView
 from chemvas.core.document_io import (
     atomic_write_text,
     atomic_write_via_temp,
-    read_document,
     write_document,
 )
 from chemvas.core.molfile import MolfileError, MolfileLimitError, write_molfile
@@ -45,6 +44,7 @@ from chemvas.ui.canvas_mark_registry import mark_registry_for
 from chemvas.ui.canvas_model_access import bonds_for, set_model_for
 from chemvas.ui.canvas_scene_items_state import ring_items_for
 from chemvas.ui.canvas_scene_reset_access import clear_scene_for
+from chemvas.ui.main_window_path_logic import is_canonical_saved_document_path
 from chemvas.ui.rdkit_adapter_access import (
     model_to_mol_block_for,
     model_to_xyz_block_for,
@@ -784,13 +784,12 @@ class CanvasDocumentSessionService:
         return snapshot_canvas_document_state_with_warnings(self.canvas)
 
     def save_to_file(self, path: str) -> list[str]:
+        if not is_canonical_saved_document_path(path):
+            msg = "Chemvas documents must use the .chemvas filename extension."
+            raise ValueError(msg)
         state, warnings = self.snapshot_state_with_warnings()
         write_document(path, state, file_format_version_for(self.canvas))
         return warnings
-
-    def load_from_file(self, path: str) -> None:
-        document = read_document(path)
-        self.restore_state(document.state)
 
     def _build_xyz_payload(self, *, selected_only: bool = False):
         if selected_only:

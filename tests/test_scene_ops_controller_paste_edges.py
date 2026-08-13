@@ -110,7 +110,7 @@ class SceneOpsControllerPasteEdgesTest(unittest.TestCase):
         controller.clipboard_selection_payload = lambda: (
             {
                 "format": "chemvas-selection",
-                "version": 1,
+                "version": 2,
                 "atoms": [],
                 "bonds": [],
                 "rings": [],
@@ -146,7 +146,7 @@ class SceneOpsControllerPasteEdgesTest(unittest.TestCase):
         controller = scene_clipboard_controller_for(canvas)
         payload = {
             "format": "chemvas-selection",
-            "version": 1,
+            "version": 2,
             "atoms": [
                 "bad-atom",
                 {"id": "bad"},
@@ -180,7 +180,7 @@ class SceneOpsControllerPasteEdgesTest(unittest.TestCase):
         controller = scene_clipboard_controller_for(canvas)
         payload = {
             "format": "chemvas-selection",
-            "version": 1,
+            "version": 2,
             "atoms": [
                 {
                     "id": 10,
@@ -334,7 +334,7 @@ class SceneOpsControllerPasteEdgesTest(unittest.TestCase):
         canvas.add_item(item, selected=True)
         controller.selection_payload_for_clipboard = lambda: {
             "format": "chemvas-selection",
-            "version": 1,
+            "version": 2,
             "scene_items": [{"kind": "note", "text": "flat", "x": 0.0, "y": 0.0}],
         }
 

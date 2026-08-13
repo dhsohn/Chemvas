@@ -111,12 +111,19 @@ File ▸ Save / Open works with `.chemvas` files — a JSON-based format holding
 molecule model, annotations, arrows, bracket annotations, and settings:
 
 ```json
-{ "type": "chemvas", "version": 6, "state": { /* ... */ } }
+{ "type": "chemvas", "version": 7, "state": { /* ... */ } }
 ```
 
-Version 6 can also carry an optional Calculation Plan v2 with bounded precomplex
-candidates, exact XYZ provenance, and explicit endpoint review selections. Version 5
-Calculation Plan v1 documents and versions 1-4 remain readable.
+Version 7 is the only supported document contract. It can carry an optional
+Calculation Plan v2 with bounded precomplex candidates, exact XYZ provenance,
+and explicit endpoint review selections. Earlier document versions and
+Calculation Plan v1 payloads are rejected.
+
+Chemvas drawings must use the `.chemvas` suffix. Desktop startup arguments, OS
+file-open events, **File ▸ Open**, **Open Recent**, and clean-session reopening
+all reject or ignore `.json` drawing paths; **Save** and **Save As** publish
+drawings only as `.chemvas`. JSON request, patch, report, and machine-artifact
+files used by headless commands remain separate protocols and are unaffected.
 
 Figure export defaults to plain SVG without Chemvas source metadata. Choose
 **Editable Chemvas SVG** only when you want the SVG to carry the original
@@ -129,6 +136,10 @@ seconds — nothing is written next to your own files. If the app is killed or
 crashes, the next launch restores those documents (unsaved ones flagged with a
 `●` and a status-bar note); a clean quit simply reopens whatever files were
 open. Snapshots are pruned once a session has been restored or closed cleanly.
+Stale recent-file and clean-session entries for unsupported drawing paths are
+ignored. A current internal crash autosave can still recover the drawing data,
+but an unsupported original path is discarded and the recovered canvas opens
+unbound as an unsaved document.
 
 ## 3D export & Molecule Info
 
@@ -294,7 +305,7 @@ chemvas pack-step mechanism-reviewed.chemvas --step S01 \
 The strict request binds generation to the exact input through
 `source_document_sha256` and `step_id`, names one intercomponent contact per
 endpoint, records an explicit gas-phase or solvent environment, and sets a
-retained candidate cap. Generation writes a new version-6 document with
+retained candidate cap. Generation writes a new version-7 document with
 Calculation Plan v2 and `selection: null`; `inspect-precomplex` exposes IDs,
 provenance, validation metrics, hashes, and exact XYZ. `select-precomplex`
 records one reactant/product pair with the same reviewer and timestamp and binds
@@ -304,25 +315,20 @@ provenance, contacts, and profile and rejects any mismatch. Placement scores are
 geometric clash and contact metrics, not energies or stability rankings.
 Unreviewed or partially reviewed multicomponent endpoints remain blocked.
 
-Request format v1 is frozen to the legacy
-`chemvas-rigid-precomplex-placement/1` profile so existing requests and
-persisted ensembles remain byte-reproducible. New generation requests use
-format v2 and must explicitly name
-`"profile": "chemvas-rigid-precomplex-placement/2"`. Profile 2 uses the
+Precomplex generation accepts request format v2 only and requires
+`"profile": "chemvas-rigid-precomplex-placement/2"`. This profile uses the
 covalent radii from [Cordero et al., Table 2](https://doi.org/10.1039/B801115J)
 (C sp3 and low-spin Fe/Co entries) and the van der Waals radii from
 [Alvarez, Table 1](https://doi.org/10.1039/C3DT50599E) for every supported
 element. The ensemble, generation/inspection reports, and final
 `machine.json` placement metadata carry the profile, dataset IDs, DOIs, and an
-exact radius-table hash. Profile 1 retains its original mixed, partly
-unverified van der Waals values only for reproduction; it is not a scientific
-reference table.
+exact radius-table hash. Other request versions and placement profiles are
+rejected.
 
-Profile 2 remains within document version 6 and Calculation Plan v2. Chemvas
-versions predating this profile fail closed on it and cannot open such a
-document; use Chemvas 0.2.0 or newer for profile-2 files. These cited radii and
-Chemvas's thresholds still define a deterministic geometric heuristic:
-designated contacts use `0.85 ×` the covalent-radius sum; other pairs use the
+The profile is stored in document version 7 and Calculation Plan v2. These
+cited radii and Chemvas's thresholds still define a deterministic geometric
+heuristic: designated contacts use `0.85 ×` the covalent-radius sum; other pairs
+use the
 larger of `1.05 ×` the covalent-radius sum and `0.60 ×` the van der Waals-radius
 sum; soft-overlap scoring uses `0.85 ×` the van der Waals-radius sum. This is
 not a hard-sphere physical model, energy, or stability claim. Fe/Co spin and
@@ -330,13 +336,13 @@ coordination are not represented in the current input model, so the documented
 low-spin selector is fixed rather than inferred. Researcher review and
 downstream quantum optimization remain required.
 
-`plan.json` uses Calculation Plan v1. States own calculation membership and
+`plan.json` uses Calculation Plan v2. States own calculation membership and
 charge/multiplicity; step endpoints own roles:
 
 ```json
 {
   "format": "chemvas-calculation-plan",
-  "version": 1,
+  "version": 2,
   "states": [
     {"id": "R01", "charge": 0, "multiplicity": 1,
      "members": [
@@ -349,9 +355,11 @@ charge/multiplicity; step endpoints own roles:
     "id": "S01",
     "reactant": {"state_id": "R01", "roles": [
       {"component_atom_ids": [0, 1], "role": "reactant"},
-      {"component_atom_ids": [9], "role": "spectator"}]},
+      {"component_atom_ids": [9], "role": "spectator"}],
+      "precomplex": {"kind": "none"}},
     "product": {"state_id": "P01", "roles": [
-      {"component_atom_ids": [2, 3], "role": "product"}]},
+      {"component_atom_ids": [2, 3], "role": "product"}],
+      "precomplex": {"kind": "none"}},
     "atom_correspondence": [
       {"reactant_atom_id": 0, "product_atom_id": 2},
       {"reactant_atom_id": 1, "product_atom_id": 3}]

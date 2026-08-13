@@ -51,8 +51,8 @@ class BondStyleLogicTest(unittest.TestCase):
                     style_for_double_position(plain_style, 2, plain_style), plain_style
                 )
 
+        self.assertFalse(is_bold_double_bond_style("bold", 2))
         self.assertEqual(normalized_bold_double_style("bold", 2), BOLD_STYLE_DEFAULT)
-        self.assertEqual(double_position_for_style("bold", 2), DOUBLE_STYLE_DEFAULT)
         self.assertFalse(is_bold_double_bond_style(BOLD_STYLE_CENTER, 1))
         self.assertFalse(is_positionable_double_bond_style("dotted_double", 2))
         self.assertIsNone(

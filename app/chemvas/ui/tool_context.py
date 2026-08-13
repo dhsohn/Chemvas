@@ -149,12 +149,7 @@ class ToolContext:
         method = self._callable_attr(self.selection_controller, "selection_hit_test")
         if method is None:
             return False
-        try:
-            return bool(method(pos, snapshot=snapshot))
-        except TypeError as exc:
-            if snapshot is None and "snapshot" in str(exc):
-                return bool(method(pos))
-            raise
+        return bool(method(pos, snapshot=snapshot))
 
     def select_structure_for_item(self, item) -> bool:
         return bool(

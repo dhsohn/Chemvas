@@ -15,7 +15,6 @@ from chemvas.bootstrap import document_render as cli
 from chemvas.core.document_io import write_document
 from chemvas.domain.document import (
     CANVAS_FILE_VERSION,
-    LEGACY_CANVAS_FILE_VERSION,
     Atom,
     Bond,
     MoleculeModel,
@@ -48,6 +47,7 @@ def _state(*, far_x: float = 18.0) -> dict[str, object]:
         "marks": [],
         "arrows": [],
         "ts_brackets": [],
+        "shapes": [],
         "orbitals": [],
         "settings": serialize_settings(
             bond_length_px=18.0,
@@ -170,18 +170,18 @@ def test_render_is_byte_deterministic_and_reports_exact_hashes(
         assert first_report["dpi"] == 300
 
 
-def test_default_white_png_and_legacy_document_render(
+def test_default_white_png_and_current_document_render(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    source = tmp_path / "legacy.chemvas"
-    _write_source(source, version=LEGACY_CANVAS_FILE_VERSION)
-    output = tmp_path / "legacy.png"
+    source = tmp_path / "current.chemvas"
+    _write_source(source, version=CANVAS_FILE_VERSION)
+    output = tmp_path / "current.png"
 
     assert cli.run(["render-document", str(source), "--output", str(output)]) == 0
     report = json.loads(capsys.readouterr().out)
 
     image = QImage(str(output))
-    assert report["chemvas_document_version"] == LEGACY_CANVAS_FILE_VERSION
+    assert report["chemvas_document_version"] == CANVAS_FILE_VERSION
     assert report["background"] == "white"
     assert image.pixelColor(0, 0).alpha() == 255
 

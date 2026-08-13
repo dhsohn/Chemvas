@@ -34,7 +34,6 @@ if QApplication is not None:
         add_bond_graphics_for,
         apply_color_to_bond_item_for,
         bond_offset_unit_3d_for,
-        draw_ring_double_bond_for,
         line_normal_components,
         line_normal_for,
         orient_normal_toward_target,
@@ -1362,14 +1361,12 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
     def test_bond_graphics_access_and_color_fallbacks_delegate_cleanly(self) -> None:
         hash_segments = [(0.0, 0.0, 1.0, 1.0)]
         ring_segments = ((1.0, 2.0, 3.0, 4.0), (5.0, 6.0, 7.0, 8.0), (0.0, 1.0))
-        ring_bond = object()
         renderer = SimpleNamespace(
             parallel_bond_segments=mock.Mock(return_value=hash_segments),
             ring_double_segments=mock.Mock(return_value=ring_segments),
             update_bond_geometry=mock.Mock(),
             add_bond_graphics=mock.Mock(),
             redraw_connected_bonds=mock.Mock(),
-            draw_ring_double_bond=mock.Mock(return_value=ring_bond),
         )
         view = SimpleNamespace(
             bond_renderer=renderer,
@@ -1386,19 +1383,6 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
         )
         bond_renderer_for(view).update_bond_geometry(4)
         add_bond_graphics_for(view, 5)
-        self.assertIs(
-            draw_ring_double_bond_for(
-                view,
-                "a",
-                "b",
-                center,
-                7,
-                8,
-                outer_style="bold",
-                center_3d=(1.0, 2.0, 3.0),
-            ),
-            ring_bond,
-        )
         renderer.parallel_bond_segments.assert_called_once_with(
             1.0, 2.0, 3.0, 4.0, 2, 7, 8
         )
@@ -1407,15 +1391,6 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
         )
         renderer.update_bond_geometry.assert_called_once_with(4)
         renderer.add_bond_graphics.assert_called_once_with(5)
-        renderer.draw_ring_double_bond.assert_called_once_with(
-            "a",
-            "b",
-            center,
-            7,
-            8,
-            outer_style="bold",
-            center_3d=(1.0, 2.0, 3.0),
-        )
         CanvasMoveController(
             view,
             hit_testing_service=SimpleNamespace(mark_spatial_index_dirty=mock.Mock()),

@@ -4,9 +4,9 @@ import unittest
 
 from chemvas.domain.document import (
     CANVAS_FILE_VERSION,
-    PERSPECTIVE_CANVAS_FILE_VERSION,
     build_document_payload,
     extract_document_state,
+    serialize_settings,
 )
 
 
@@ -34,17 +34,17 @@ def _model_state() -> dict:
 
 
 def _settings() -> dict:
-    return {
-        "bond_length_px": 20.0,
-        "arrow_line_width": 1.2,
-        "arrow_head_scale": 0.3,
-        "orbital_phase_enabled": False,
-        "text_font_size": 12,
-        "text_font_weight": 400,
-        "text_italic": False,
-        "sheet_size": "A4",
-        "sheet_orientation": "landscape",
-    }
+    return serialize_settings(
+        bond_length_px=20.0,
+        arrow_line_width=1.2,
+        arrow_head_scale=0.3,
+        orbital_phase_enabled=False,
+        text_font_size=12,
+        text_font_weight=400,
+        text_italic=False,
+        sheet_size="A4",
+        sheet_orientation="landscape",
+    )
 
 
 def _canvas_state(groups: list | None = None) -> dict:
@@ -73,6 +73,7 @@ def _canvas_state(groups: list | None = None) -> dict:
             }
         ],
         "ts_brackets": [],
+        "shapes": [],
         "orbitals": [],
         "settings": _settings(),
         "last_smiles_input": None,
@@ -99,11 +100,11 @@ class DocumentGroupsValidationTest(unittest.TestCase):
 
         self.assertNotIn("groups", extract_document_state(payload))
 
-    def test_groups_rejected_for_older_file_versions(self) -> None:
+    def test_groups_do_not_make_an_old_document_version_valid(self) -> None:
         state = _canvas_state(groups=[{"atoms": [0], "items": [["notes", 0]]}])
 
         with self.assertRaises(ValueError):
-            build_document_payload(state, PERSPECTIVE_CANVAS_FILE_VERSION)
+            build_document_payload(state, CANVAS_FILE_VERSION - 1)
 
     def test_invalid_group_payloads_are_rejected(self) -> None:
         cases = (

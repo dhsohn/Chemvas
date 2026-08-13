@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- **Current-only document contract**: Chemvas now reads and writes document
+  version 7 only, with compact bond arrays and Calculation Plan v2 when a plan
+  is present. Earlier document versions and Calculation Plan v1 payloads are
+  rejected instead of being upgraded or read through compatibility branches.
+- **Current-only precomplex contract**: precomplex generation accepts request
+  format v2 with `chemvas-rigid-precomplex-placement/2` only. The frozen v1
+  request/profile reproduction path and its partly unverified radius table have
+  been removed.
+- **Canonical desktop paths**: saved Chemvas drawings use `.chemvas` across
+  startup arguments, OS file-open events, File Open, Open Recent, clean-session
+  restoration, Save, and Save As; `.svg` and `.mol` remain explicit import
+  inputs. Stale unsupported recent/session paths are ignored. Current internal
+  crash autosaves can recover their drawing state, but an unsupported original
+  path is cleared and the recovered canvas opens unbound and unsaved.
+
+### Removed
+- Removed deprecated export facades, history aliases, selection-style wrappers,
+  bracket/bold compatibility aliases, and legacy version/profile constants so
+  retired contracts cannot silently return.
+
 ## [0.2.0] - 2026-08-13
 
 ### Added

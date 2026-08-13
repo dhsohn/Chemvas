@@ -178,8 +178,8 @@ def _capture_history_transaction(canvas) -> object:
         "restore_history_transaction_for_history",
         None,
     )
-    # This is one optional capability, not two independent hooks.  Treat a
-    # legacy/test port that only implements capture as unsupported so the
+    # This is one optional capability, not two independent hooks. Treat a
+    # headless/test port that only implements capture as unsupported so the
     # command keeps its inverse-operation fallback.
     if not callable(capture) or not callable(restore):
         return _NO_HISTORY_TRANSACTION
@@ -329,7 +329,7 @@ class CompositeCommand(HistoryCommand):
         # in a state no command on either stack describes.
         transaction = (
             _capture_history_transaction(canvas)
-            if _command_requires_exact_history_transaction(self)
+            if command_requires_exact_history_transaction(self)
             else _NO_HISTORY_TRANSACTION
         )
         active_token = None
@@ -370,7 +370,7 @@ class CompositeCommand(HistoryCommand):
                 if (
                     _owns_history_transaction(transaction)
                     and failed_command is not None
-                    and _command_requires_exact_history_transaction(failed_command)
+                    and command_requires_exact_history_transaction(failed_command)
                 ):
                     _run_history_rollback_step(
                         exc,
@@ -391,7 +391,7 @@ class CompositeCommand(HistoryCommand):
     def redo(self, canvas) -> None:
         transaction = (
             _capture_history_transaction(canvas)
-            if _command_requires_exact_history_transaction(self)
+            if command_requires_exact_history_transaction(self)
             else _NO_HISTORY_TRANSACTION
         )
         active_token = None
@@ -426,7 +426,7 @@ class CompositeCommand(HistoryCommand):
                 if (
                     _owns_history_transaction(transaction)
                     and failed_command is not None
-                    and _command_requires_exact_history_transaction(failed_command)
+                    and command_requires_exact_history_transaction(failed_command)
                 ):
                     _run_history_rollback_step(
                         exc,
@@ -1297,7 +1297,7 @@ def command_requires_exact_history_transaction(command: HistoryCommand) -> bool:
 
     History-stack adapters use this predicate to distinguish commands whose
     failed application is proven to restore the exact pre-operation state
-    from legacy relative commands that must retain the conservative pop-first
+    from relative commands that must retain the conservative pop-first
     failure policy.
     """
     if isinstance(
@@ -1371,11 +1371,6 @@ def command_is_fully_covered_by_history_transaction(
             for child in command.commands
         )
     return False
-
-
-# Keep the private spelling as an internal compatibility alias while callers
-# migrate to the stable predicate above.
-_command_requires_exact_history_transaction = command_requires_exact_history_transaction
 
 
 __all__ = [

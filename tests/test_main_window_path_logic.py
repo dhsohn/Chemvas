@@ -26,10 +26,10 @@ class MainWindowPathLogicTest(unittest.TestCase):
             "/tmp/example.chemvas",
         )
 
-    def test_resolve_save_path_preserves_explicit_dialog_extension(self) -> None:
+    def test_resolve_save_path_replaces_noncanonical_dialog_extension(self) -> None:
         self.assertEqual(
             resolve_save_path(dialog_path="/tmp/example.custom"),
-            "/tmp/example.custom",
+            "/tmp/example.chemvas",
         )
 
     def test_resolve_save_path_returns_none_when_save_dialog_is_cancelled(self) -> None:
@@ -44,10 +44,10 @@ class MainWindowPathLogicTest(unittest.TestCase):
             "/tmp/example.chemvas",
         )
 
-    def test_resolve_save_as_path_preserves_explicit_dialog_extension(self) -> None:
+    def test_resolve_save_as_path_replaces_noncanonical_extension(self) -> None:
         self.assertEqual(
             resolve_save_as_path("/tmp/example.custom"),
-            "/tmp/example.custom",
+            "/tmp/example.chemvas",
         )
 
     def test_resolve_save_as_path_returns_none_when_save_dialog_is_cancelled(

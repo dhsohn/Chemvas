@@ -22,7 +22,6 @@ from chemvas.core.document_io import (
 from chemvas.core.rdkit_adapter import RDKitAdapter
 from chemvas.domain.document import (
     CANVAS_FILE_VERSION,
-    PRECOMPLEX_CANVAS_FILE_VERSION,
     CalculationPlan,
     CalculationState,
     CalculationStep,
@@ -32,7 +31,6 @@ from chemvas.domain.document import (
 from chemvas.domain.document.precomplex import precomplex_state_from_json
 from chemvas.domain.document.precomplex_profile import (
     CURRENT_PROFILE_ID,
-    LEGACY_PROFILE_ID,
     precomplex_placement_profile,
     radius_provenance_for,
 )
@@ -151,7 +149,7 @@ def _argument_parser() -> argparse.ArgumentParser:
         help="validate a Calculation Plan JSON file and embed it in a new .chemvas file",
     )
     attach_parser.add_argument("document", help="input .chemvas document")
-    attach_parser.add_argument("plan", help="Calculation Plan v1 JSON file")
+    attach_parser.add_argument("plan", help="Calculation Plan v2 JSON file")
     attach_parser.add_argument("--output", required=True)
 
     inspect_plan_parser = subparsers.add_parser(
@@ -408,7 +406,7 @@ def _select_precomplex(
     _verify_precomplex_selection_pair(validated_step)
     state_payload = dict(document.state)
     state_payload["calculation_plan"] = calculation_plan_to_state(validated_plan)
-    output_document = create_document(state_payload, PRECOMPLEX_CANVAS_FILE_VERSION)
+    output_document = create_document(state_payload, CANVAS_FILE_VERSION)
     atomic_create_bytes(output, _json_text(output_document.payload).encode("utf-8"))
     return {
         "format": "chemvas-precomplex-selection",
@@ -442,8 +440,10 @@ def _verify_precomplex_selection_pair(step: CalculationStep) -> dict[str, object
             raise ValueError("Precomplex review pair has an invalid profile.")
         profile = precomplex_placement_profile(profile_id)
         persisted_provenance = state.get("radius_provenance")
-        if profile.id == LEGACY_PROFILE_ID:
-            persisted_provenance = radius_provenance_for(profile.id)
+        if persisted_provenance != radius_provenance_for(profile.id):
+            raise ValueError(
+                "Precomplex review pair has invalid placement profile provenance."
+            )
         profiles.append((profile.id, persisted_provenance))
     if identities[0] != identities[1]:
         raise ValueError("Precomplex endpoint reviews do not form one atomic pair.")
@@ -566,7 +566,7 @@ def _generate_precomplex(
     validated_plan = validate_calculation_plan(document.state, plan_state)
     state_payload = dict(document.state)
     state_payload["calculation_plan"] = calculation_plan_to_state(validated_plan)
-    output_document = create_document(state_payload, PRECOMPLEX_CANVAS_FILE_VERSION)
+    output_document = create_document(state_payload, CANVAS_FILE_VERSION)
     atomic_create_bytes(output, _json_text(output_document.payload).encode("utf-8"))
     return {
         "format": "chemvas-precomplex-generation",
@@ -574,7 +574,7 @@ def _generate_precomplex(
         "source": str(source),
         "output": str(output),
         "step_id": step.id,
-        "chemvas_document_version": PRECOMPLEX_CANVAS_FILE_VERSION,
+        "chemvas_document_version": CANVAS_FILE_VERSION,
         "profile": profile_id,
         "radius_provenance": radius_provenance_for(profile_id),
         "candidate_counts": candidate_counts,
@@ -618,24 +618,17 @@ def _parse_precomplex_request(
     if (
         request.get("format") != "chemvas-precomplex-request"
         or type(version) is not int
-        or version not in {1, 2}
+        or version != 2
     ):
         raise ValueError("Unsupported precomplex request format or version.")
-    if version == 1:
-        if set(request) != base_fields:
-            raise ValueError("Invalid precomplex request fields.")
-        profile_id = LEGACY_PROFILE_ID
-    else:
-        if set(request) != base_fields | {"profile"}:
-            raise ValueError("Invalid precomplex request fields.")
-        profile_value = request.get("profile")
-        if not isinstance(profile_value, str):
-            raise ValueError("precomplex request profile is required.")
-        profile_id = precomplex_placement_profile(profile_value).id
-        if profile_id != CURRENT_PROFILE_ID:
-            raise ValueError(
-                f"precomplex request v2 requires profile {CURRENT_PROFILE_ID}."
-            )
+    if set(request) != base_fields | {"profile"}:
+        raise ValueError("Invalid precomplex request fields.")
+    profile_value = request.get("profile")
+    if not isinstance(profile_value, str):
+        raise ValueError("precomplex request profile is required.")
+    profile_id = precomplex_placement_profile(profile_value).id
+    if profile_id != CURRENT_PROFILE_ID:
+        raise ValueError("precomplex request profile is not current.")
     if request.get("source_document_sha256") != source_document_sha256:
         raise ValueError(
             "precomplex request source_document_sha256 does not match the input document."
@@ -793,6 +786,7 @@ def _precomplex_endpoint_state(
         "basis_sha256": basis_sha256,
         "side": side,
         "profile": profile.id,
+        "radius_provenance": radius_provenance_for(profile.id),
         "environment": dict(environment),
         "contacts": [asdict(contact) for contact in contacts],
         "source_geometry": {
@@ -813,8 +807,6 @@ def _precomplex_endpoint_state(
         ],
         "selection": None,
     }
-    if profile.id != LEGACY_PROFILE_ID:
-        state["radius_provenance"] = radius_provenance_for(profile.id)
     return state
 
 

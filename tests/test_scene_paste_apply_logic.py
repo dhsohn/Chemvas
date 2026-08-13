@@ -85,7 +85,7 @@ class ScenePasteApplyLogicTest(unittest.TestCase):
         canvas.translate_empty_kinds = {"skip-empty"}
         payload = {
             "format": "chemvas-selection",
-            "version": 1,
+            "version": 2,
             "atoms": [
                 "bad",
                 {"id": "bad", "element": "C", "x": 1.0, "y": 2.0},
@@ -246,7 +246,7 @@ class ScenePasteApplyLogicTest(unittest.TestCase):
         canvas.translate_empty_kinds = {"skip-empty"}
         payload = {
             "format": "chemvas-selection",
-            "version": 1,
+            "version": 2,
             "atoms": [
                 "bad",
                 {"id": "bad", "element": "C", "x": 1.0, "y": 2.0},

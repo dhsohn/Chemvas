@@ -198,6 +198,26 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
         # before any clean-exit flag is written.
         self.assertEqual(calls, [1])
 
+    def test_save_canvas_to_path_rejects_noncanonical_document_suffix(self) -> None:
+        message_box = mock.Mock()
+
+        with mock.patch(
+            "chemvas.ui.main_window_document_action_service.save_canvas_to_file_for"
+        ) as save_canvas_to_file_for:
+            result = self.service.save_canvas_to_path(
+                self.window,
+                "/tmp/legacy.json",
+                message_box=message_box,
+            )
+
+        self.assertFalse(result)
+        save_canvas_to_file_for.assert_not_called()
+        message_box.warning.assert_called_once_with(
+            self.window,
+            "Save Error",
+            "Chemvas documents must use the .chemvas filename extension.",
+        )
+
     def test_save_canvas_to_path_reports_document_adjustments(self) -> None:
         message_box = mock.Mock()
 
@@ -317,7 +337,7 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             path = Path(temp_dir) / "input.chemvas"
             state = snapshot_canvas_state_for(active_canvas_for_window(self.window))
-            write_document(path, state, version=1)
+            write_document(path, state, version=CANVAS_FILE_VERSION)
 
             result = self.service.load_canvas_from_path(self.window, str(path))
 
@@ -330,21 +350,28 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
             document_file_path_for(active_canvas_for_window(self.window)), str(path)
         )
 
-    def test_load_canvas_from_path_keeps_legacy_json_recovery_path(self) -> None:
+    def test_load_canvas_from_path_rejects_legacy_json_document(self) -> None:
+        message_box = mock.Mock()
         with tempfile.TemporaryDirectory() as temp_dir:
             path = Path(temp_dir) / "recent-legacy.json"
             state = snapshot_canvas_state_for(active_canvas_for_window(self.window))
-            write_document(path, state, version=1)
+            write_document(path, state, version=CANVAS_FILE_VERSION)
 
-            result = self.service.load_canvas_from_path(self.window, str(path))
+            with mock.patch(
+                "chemvas.ui.main_window_document_action_service.default_read_document"
+            ) as read_document:
+                result = self.service.load_canvas_from_path(
+                    self.window, str(path), message_box=message_box
+                )
 
-        self.assertTrue(result)
-        self.assertEqual(
-            document_file_path_for(active_canvas_for_window(self.window)), str(path)
+        self.assertFalse(result)
+        read_document.assert_not_called()
+        message_box.warning.assert_called_once_with(
+            self.window,
+            "Load Error",
+            "Unsupported file type. Open a .chemvas, .svg, or .mol file.",
         )
-        self.assertEqual(
-            self.window.tab_references.canvas_tabs.tabText(0), "recent-legacy.json"
-        )
+        self.assertIsNone(document_file_path_for(active_canvas_for_window(self.window)))
 
     def test_load_canvas_from_path_imports_mol_as_untitled_document(self) -> None:
         source = MoleculeModel()

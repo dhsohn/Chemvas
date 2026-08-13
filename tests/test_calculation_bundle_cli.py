@@ -62,6 +62,7 @@ def _write_source(
         "marks": marks,
         "arrows": [],
         "ts_brackets": [],
+        "shapes": [],
         "orbitals": [],
         "settings": _settings(),
         "last_smiles_input": None,

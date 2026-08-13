@@ -1,4 +1,4 @@
-"""Qt-aware transaction savepoints shared by legacy UI workflows."""
+"""Qt-aware transaction savepoints shared by UI workflows."""
 
 from __future__ import annotations
 

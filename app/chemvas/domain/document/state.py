@@ -11,82 +11,32 @@ from .model import Atom, Bond, MoleculeModel
 StateDict = dict[Any, Any]
 
 CHEMVAS_FILE_TYPE = "chemvas"
-# v5: an optional Calculation Plan v1 stores explicit states and elementary steps.
-CALCULATION_PLAN_CANVAS_FILE_VERSION = 5
-# v6: Calculation Plan v2 may store step-side precomplex state.
-CANVAS_FILE_VERSION = 6
-PRECOMPLEX_CANVAS_FILE_VERSION = CANVAS_FILE_VERSION
-COMPACT_BONDS_CANVAS_FILE_VERSION = 4
-GROUPS_CANVAS_FILE_VERSION = 3
-PERSPECTIVE_CANVAS_FILE_VERSION = 2
-LEGACY_CANVAS_FILE_VERSION = 1
-# First version whose bond list must be compact (no null tombstone entries).
-COMPACT_BONDS_FILE_VERSION = COMPACT_BONDS_CANVAS_FILE_VERSION
-SUPPORTED_FILE_VERSIONS = frozenset(
+# v7 is the sole supported document contract. It requires canonical current
+# scene/settings payloads and Calculation Plan v2 whenever a plan is present.
+CANVAS_FILE_VERSION = 7
+SUPPORTED_FILE_VERSIONS = frozenset((CANVAS_FILE_VERSION,))
+CANVAS_STATE_KEYS = frozenset(
     (
-        LEGACY_CANVAS_FILE_VERSION,
-        PERSPECTIVE_CANVAS_FILE_VERSION,
-        GROUPS_CANVAS_FILE_VERSION,
-        COMPACT_BONDS_CANVAS_FILE_VERSION,
-        CALCULATION_PLAN_CANVAS_FILE_VERSION,
-        CANVAS_FILE_VERSION,
+        "model",
+        "ring_fills",
+        "notes",
+        "marks",
+        "arrows",
+        "ts_brackets",
+        "shapes",
+        "orbitals",
+        "settings",
+        "last_smiles_input",
     )
 )
-# Optional keys preserve compatibility with v1 files written before each feature
-# existed; everything else must be present and no unknown keys are allowed.
-_OPTIONAL_CANVAS_STATE_KEYS = frozenset(("shapes",))
-_V2_OPTIONAL_CANVAS_STATE_KEYS = frozenset(("perspective",))
-_V3_OPTIONAL_CANVAS_STATE_KEYS = frozenset(("groups",))
-_V5_OPTIONAL_CANVAS_STATE_KEYS = frozenset(("calculation_plan",))
-CANVAS_STATE_KEYS = (
-    frozenset(
-        (
-            "model",
-            "ring_fills",
-            "notes",
-            "marks",
-            "arrows",
-            "ts_brackets",
-            "orbitals",
-            "settings",
-            "last_smiles_input",
-        )
-    )
-    | _OPTIONAL_CANVAS_STATE_KEYS
-)
-CANVAS_STATE_KEYS_BY_VERSION = {
-    LEGACY_CANVAS_FILE_VERSION: CANVAS_STATE_KEYS,
-    PERSPECTIVE_CANVAS_FILE_VERSION: CANVAS_STATE_KEYS | _V2_OPTIONAL_CANVAS_STATE_KEYS,
-    GROUPS_CANVAS_FILE_VERSION: (
-        CANVAS_STATE_KEYS
-        | _V2_OPTIONAL_CANVAS_STATE_KEYS
-        | _V3_OPTIONAL_CANVAS_STATE_KEYS
-    ),
-    COMPACT_BONDS_CANVAS_FILE_VERSION: (
-        CANVAS_STATE_KEYS
-        | _V2_OPTIONAL_CANVAS_STATE_KEYS
-        | _V3_OPTIONAL_CANVAS_STATE_KEYS
-    ),
-    CALCULATION_PLAN_CANVAS_FILE_VERSION: (
-        CANVAS_STATE_KEYS
-        | _V2_OPTIONAL_CANVAS_STATE_KEYS
-        | _V3_OPTIONAL_CANVAS_STATE_KEYS
-        | _V5_OPTIONAL_CANVAS_STATE_KEYS
-    ),
-    PRECOMPLEX_CANVAS_FILE_VERSION: (
-        CANVAS_STATE_KEYS
-        | _V2_OPTIONAL_CANVAS_STATE_KEYS
-        | _V3_OPTIONAL_CANVAS_STATE_KEYS
-        | _V5_OPTIONAL_CANVAS_STATE_KEYS
-    ),
-}
+OPTIONAL_CANVAS_STATE_KEYS = frozenset(("perspective", "groups", "calculation_plan"))
 _GROUPABLE_STATE_ITEM_KEYS = frozenset(
     ("notes", "marks", "arrows", "ts_brackets", "shapes", "orbitals")
 )
 POINT_COORDINATE_TOLERANCE = Decimal("0.000001")
 MAX_SAFE_NUMBER = float(2**53 - 1)
 MAX_SAFE_NUMBER_DECIMAL = Decimal(2**53 - 1)
-REQUIRED_SETTINGS_KEYS = frozenset(
+SETTINGS_KEYS = frozenset(
     (
         "bond_length_px",
         "arrow_line_width",
@@ -97,10 +47,6 @@ REQUIRED_SETTINGS_KEYS = frozenset(
         "text_italic",
         "sheet_size",
         "sheet_orientation",
-    )
-)
-OPTIONAL_SETTINGS_KEYS = frozenset(
-    (
         "text_font_family",
         "text_color",
         "text_alignment",
@@ -114,7 +60,6 @@ OPTIONAL_SETTINGS_KEYS = frozenset(
         "note_padding",
     )
 )
-SETTINGS_KEYS = REQUIRED_SETTINGS_KEYS | OPTIONAL_SETTINGS_KEYS
 VALID_SHEET_SIZES = frozenset(("A4",))
 VALID_SHEET_ORIENTATIONS = frozenset(("landscape", "portrait"))
 VALID_BOND_ORDERS = frozenset((1, 2, 3))
@@ -130,7 +75,6 @@ VALID_BOND_STYLES = frozenset(
         "dotted",
         "dotted_double",
         "dotted_double_outer",
-        "bold",
         "bold_in",
         "bold_center",
         "bold_out",
@@ -153,7 +97,6 @@ VALID_MARK_KINDS = frozenset(
 VALID_TS_BRACKET_KINDS = frozenset(
     (
         "square_pair",
-        "square_pair_double_dagger",
         "parentheses_pair",
         "braces_pair",
         "double_dagger",
@@ -169,9 +112,8 @@ VALID_ORBITAL_KINDS = frozenset(
 VALID_SHAPE_KINDS = frozenset(("circle", "ellipse", "rounded_rect", "rect"))
 VALID_SHAPE_STROKES = frozenset(("solid", "dashed", "dotted", "none"))
 VALID_ATOM_ANNOTATION_KEYS = frozenset(("formal_charge", "radical_electrons"))
-LEGACY_CLIPBOARD_SELECTION_VERSION = 1
-CLIPBOARD_SELECTION_PERSPECTIVE_VERSION = 2
-CLIPBOARD_SELECTION_PAYLOAD_KEYS = frozenset(
+CLIPBOARD_SELECTION_VERSION = 2
+CLIPBOARD_SELECTION_REQUIRED_KEYS = frozenset(
     (
         "format",
         "version",
@@ -180,9 +122,9 @@ CLIPBOARD_SELECTION_PAYLOAD_KEYS = frozenset(
         "rings",
         "marks",
         "scene_items",
-        "perspective",
     )
 )
+CLIPBOARD_SELECTION_PAYLOAD_KEYS = CLIPBOARD_SELECTION_REQUIRED_KEYS | {"perspective"}
 
 
 def atom_to_state(atom: Atom, explicit_label: bool) -> StateDict:
@@ -213,7 +155,7 @@ def serialize_model_state(
 ) -> StateDict:
     """Serialize ``model`` into a canvas-state model dict.
 
-    Bonds are emitted as a compact list (the v4 format): the in-memory
+    Bonds are emitted as the canonical compact list: the in-memory
     deleted-slot tombstones are runtime bookkeeping and never reach the
     document. The output is also normalized to satisfy document validation
     even when the in-memory model has drifted (duplicate bonds, dangling
@@ -424,7 +366,7 @@ def _normalized_bond_state(bond_state: StateDict) -> StateDict:
 
 def deserialize_model_state(model_state: Mapping[str, object]) -> MoleculeModel:
     atoms_state = cast(Mapping[object, Mapping[str, object]], model_state["atoms"])
-    bonds_state = cast(list[Mapping[str, object] | None], model_state["bonds"])
+    bonds_state = cast(list[object], model_state["bonds"])
     model = MoleculeModel()
     model.atoms = {
         int(cast(Any, atom_id)): Atom(
@@ -438,9 +380,8 @@ def deserialize_model_state(model_state: Mapping[str, object]) -> MoleculeModel:
     }
     bonds: list[Bond | None] = []
     for bond_data in bonds_state:
-        if bond_data is None:
-            bonds.append(None)
-            continue
+        if not isinstance(bond_data, Mapping):
+            raise ValueError("Chemvas model bonds must use the compact current form.")
         bonds.append(
             Bond(
                 a=int(cast(Any, bond_data["a"])),
@@ -566,9 +507,7 @@ def selection_payload_to_canvas_state(
 
     mark_states = [
         {
-            "kind": mark_state["mark_kind"]
-            if isinstance(mark_state["mark_kind"], str)
-            else "plus",
+            "kind": mark_state["mark_kind"],
             "text": mark_state["text"],
             "atom_id": mark_state["atom_id"],
             "dx": mark_state["dx"],
@@ -714,19 +653,17 @@ def _state_kind(state: Mapping[str, object]) -> str | None:
 
 
 def _validate_canvas_state(state: Mapping[str, object], *, version: int) -> None:
-    keys = set(state)
-    allowed_keys = CANVAS_STATE_KEYS_BY_VERSION.get(version)
-    if allowed_keys is None:
+    if version != CANVAS_FILE_VERSION:
         raise ValueError("Invalid Chemvas file.")
-    required = CANVAS_STATE_KEYS - _OPTIONAL_CANVAS_STATE_KEYS
-    if not required <= keys or not keys <= allowed_keys:
+    keys = set(state)
+    if not CANVAS_STATE_KEYS <= keys or not keys <= (
+        CANVAS_STATE_KEYS | OPTIONAL_CANVAS_STATE_KEYS
+    ):
         raise ValueError("Invalid Chemvas file.")
     model_state = state.get("model")
     if not isinstance(model_state, Mapping):
         raise ValueError("Invalid Chemvas file.")
-    atom_ids, bond_pairs, atom_positions = _validate_model_state(
-        model_state, version=version
-    )
+    atom_ids, bond_pairs, atom_positions = _validate_model_state(model_state)
     _validate_ring_fill_states(
         state.get("ring_fills"), atom_ids, bond_pairs, atom_positions
     )
@@ -740,16 +677,12 @@ def _validate_canvas_state(state: Mapping[str, object], *, version: int) -> None
     _validate_group_states(state, atom_ids)
     calculation_plan = state.get("calculation_plan")
     if calculation_plan is not None:
-        if version < CALCULATION_PLAN_CANVAS_FILE_VERSION:
-            raise ValueError("Invalid Chemvas file.")
         try:
-            parsed_plan = calculation_plan_from_state(
+            calculation_plan_from_state(
                 calculation_plan,
                 atom_ids=atom_ids,
                 bond_pairs=bond_pairs,
             )
-            if parsed_plan.version > 1 and version < PRECOMPLEX_CANVAS_FILE_VERSION:
-                raise ValueError("Invalid Chemvas file.")
         except ValueError as exc:
             raise ValueError("Invalid Chemvas file.") from exc
     settings = state.get("settings")
@@ -763,8 +696,6 @@ def _validate_canvas_state(state: Mapping[str, object], *, version: int) -> None
 
 def _validate_model_state(
     model_state: Mapping[str, object],
-    *,
-    version: int = CANVAS_FILE_VERSION,
 ) -> tuple[
     set[int],
     set[tuple[int, int]],
@@ -800,11 +731,7 @@ def _validate_model_state(
     bond_pairs: set[tuple[int, int]] = set()
     for bond_state in bonds_state:
         if bond_state is None:
-            # Pre-v4 files carried deleted-slot tombstones; v4 bond lists are
-            # compact and a null entry means the file is malformed.
-            if version >= COMPACT_BONDS_FILE_VERSION:
-                raise ValueError("Invalid Chemvas file.")
-            continue
+            raise ValueError("Invalid Chemvas file.")
         if not isinstance(bond_state, Mapping):
             raise ValueError("Invalid Chemvas file.")
         bond_pair = _validate_bond_state(bond_state, atom_ids)
@@ -901,23 +828,16 @@ def _validate_ts_bracket_fields(
     if ts_bracket_state.get("kind") != "ts_bracket":
         raise ValueError(error)
     bracket_kind = ts_bracket_state.get("bracket_kind")
-    if bracket_kind is not None and not _is_valid_choice(
-        bracket_kind, VALID_TS_BRACKET_KINDS
-    ):
+    if not _is_valid_choice(bracket_kind, VALID_TS_BRACKET_KINDS):
         raise ValueError(error)
-    if keys in ({"kind", "rect"}, {"kind", "rect", "bracket_kind"}):
-        rect = ts_bracket_state.get("rect")
-        if (
-            not isinstance(rect, (list, tuple))
-            or len(rect) != 4
-            or any(not _is_number(value) for value in rect)
-        ):
-            raise ValueError(error)
-        return
-    if keys not in (
-        {"kind", "left", "top", "right", "bottom"},
-        {"kind", "left", "top", "right", "bottom", "bracket_kind"},
-    ):
+    if keys != {
+        "kind",
+        "left",
+        "top",
+        "right",
+        "bottom",
+        "bracket_kind",
+    }:
         raise ValueError(error)
     for key in ("left", "top", "right", "bottom"):
         if not _is_number(ts_bracket_state.get(key)):
@@ -1233,7 +1153,7 @@ def _validated_scene_state_list(states: object) -> list[Mapping[str, object]]:
 
 def _validate_settings_state(settings: Mapping[str, object]) -> None:
     keys = set(settings)
-    if not REQUIRED_SETTINGS_KEYS <= keys or not keys <= SETTINGS_KEYS:
+    if keys != SETTINGS_KEYS:
         raise ValueError("Invalid Chemvas file.")
     if (
         not _is_number(settings.get("bond_length_px"))
@@ -1262,51 +1182,40 @@ def _validate_settings_state(settings: Mapping[str, object]) -> None:
         raise ValueError("Invalid Chemvas file.")
     if type(settings.get("text_italic")) is not bool:
         raise ValueError("Invalid Chemvas file.")
-    if "text_font_family" in settings and (
-        not isinstance(settings.get("text_font_family"), str)
-        or not settings.get("text_font_family")
+    if not isinstance(settings.get("text_font_family"), str) or not settings.get(
+        "text_font_family"
     ):
         raise ValueError("Invalid Chemvas file.")
-    if "text_color" in settings and not _is_hex_color(settings.get("text_color")):
+    if not _is_hex_color(settings.get("text_color")):
         raise ValueError("Invalid Chemvas file.")
-    if "text_alignment" in settings and not _is_valid_choice(
+    if not _is_valid_choice(
         settings.get("text_alignment"), {"left", "center", "right", "justify"}
     ):
         raise ValueError("Invalid Chemvas file.")
-    if "text_line_spacing" in settings and (
+    if (
         not _is_number(settings.get("text_line_spacing"))
         or cast(float, settings.get("text_line_spacing")) < 0.8
     ):
         raise ValueError("Invalid Chemvas file.")
+    if type(settings.get("note_box_enabled")) is not bool:
+        raise ValueError("Invalid Chemvas file.")
+    if not _is_hex_color(settings.get("note_box_color")):
+        raise ValueError("Invalid Chemvas file.")
     if (
-        "note_box_enabled" in settings
-        and type(settings.get("note_box_enabled")) is not bool
-    ):
-        raise ValueError("Invalid Chemvas file.")
-    if "note_box_color" in settings and not _is_hex_color(
-        settings.get("note_box_color")
-    ):
-        raise ValueError("Invalid Chemvas file.")
-    if "note_box_alpha" in settings and (
         not _is_number(settings.get("note_box_alpha"))
         or not 0.0 <= cast(float, settings.get("note_box_alpha")) <= 1.0
     ):
         raise ValueError("Invalid Chemvas file.")
+    if type(settings.get("note_border_enabled")) is not bool:
+        raise ValueError("Invalid Chemvas file.")
+    if not _is_hex_color(settings.get("note_border_color")):
+        raise ValueError("Invalid Chemvas file.")
     if (
-        "note_border_enabled" in settings
-        and type(settings.get("note_border_enabled")) is not bool
-    ):
-        raise ValueError("Invalid Chemvas file.")
-    if "note_border_color" in settings and not _is_hex_color(
-        settings.get("note_border_color")
-    ):
-        raise ValueError("Invalid Chemvas file.")
-    if "note_border_width" in settings and (
         not _is_number(settings.get("note_border_width"))
         or cast(float, settings.get("note_border_width")) < 0.5
     ):
         raise ValueError("Invalid Chemvas file.")
-    if "note_padding" in settings and (
+    if (
         not _is_number(settings.get("note_padding"))
         or cast(float, settings.get("note_padding")) < 2.0
     ):
@@ -1324,24 +1233,27 @@ def validate_clipboard_selection_payload(payload: Mapping[str, object]) -> bool:
 
     Clipboard MIME data sits outside the application's trust boundary (any other
     app or script can inject it), so paste input is held to the same standard as
-    ``.chemvas`` file loading. ``format``/``version`` are checked by the decoder;
-    this verifies the structural content. Returns ``True`` only when every
-    section is well-formed, otherwise ``False`` so the caller can reject the
-    whole paste rather than build invalid scene state.
+    ``.chemvas`` file loading. This verifies the envelope and structural content.
+    Returns ``True`` only when every section is well-formed, otherwise ``False``
+    so the caller can reject the whole paste rather than build invalid scene state.
     """
     try:
         if (
             not isinstance(payload, Mapping)
+            or payload.get("format") != "chemvas-selection"
+            or type(payload.get("version")) is not int
+            or payload.get("version") != CLIPBOARD_SELECTION_VERSION
+            or not CLIPBOARD_SELECTION_REQUIRED_KEYS <= set(payload)
             or not set(payload) <= CLIPBOARD_SELECTION_PAYLOAD_KEYS
         ):
             raise ValueError("Invalid clipboard payload.")
         atom_ids, atom_positions = _validate_clipboard_atoms(payload.get("atoms"))
         bond_pairs = _validate_clipboard_bonds(payload.get("bonds"), atom_ids)
-        for ring_state in _validated_scene_state_list(payload.get("rings", [])):
+        for ring_state in _validated_scene_state_list(payload.get("rings")):
             _validate_clipboard_ring(ring_state, atom_ids, bond_pairs, atom_positions)
-        for mark_state in _validated_scene_state_list(payload.get("marks", [])):
+        for mark_state in _validated_scene_state_list(payload.get("marks")):
             _validate_clipboard_mark(mark_state, atom_ids)
-        for item_state in _validated_scene_state_list(payload.get("scene_items", [])):
+        for item_state in _validated_scene_state_list(payload.get("scene_items")):
             _validate_clipboard_scene_item(item_state)
         _validate_clipboard_perspective(payload, atom_ids)
     except ValueError:
@@ -1384,7 +1296,7 @@ def _validate_clipboard_perspective(
     if perspective_state is None:
         return
     version = payload.get("version")
-    if version != CLIPBOARD_SELECTION_PERSPECTIVE_VERSION:
+    if type(version) is not int or version != CLIPBOARD_SELECTION_VERSION:
         raise ValueError("Invalid clipboard payload.")
     if not isinstance(perspective_state, Mapping):
         raise ValueError("Invalid clipboard payload.")
@@ -1513,9 +1425,6 @@ def _validate_clipboard_ring(
 def _validate_clipboard_mark(
     mark_state: Mapping[str, object], atom_ids: set[int]
 ) -> None:
-    # Deliberately looser than _validate_mark_states: legacy clipboard payloads
-    # may carry mark_kind=None, which selection_payload_to_canvas_state maps to
-    # "plus" before the state reaches the (strict) file validator.
     if mark_state.get("kind") != "mark":
         raise ValueError("Invalid clipboard payload.")
     if set(mark_state) != {
@@ -1530,7 +1439,7 @@ def _validate_clipboard_mark(
     }:
         raise ValueError("Invalid clipboard payload.")
     mark_kind = mark_state.get("mark_kind")
-    if mark_kind is not None and not _is_valid_choice(mark_kind, VALID_MARK_KINDS):
+    if not _is_valid_choice(mark_kind, VALID_MARK_KINDS):
         raise ValueError("Invalid clipboard payload.")
     text = mark_state.get("text")
     if text is not None and not isinstance(text, str):

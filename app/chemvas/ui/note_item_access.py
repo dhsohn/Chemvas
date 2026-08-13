@@ -17,7 +17,7 @@ def new_note_item_for(canvas):
     return NoteItem(canvas)
 
 
-def _committed_note_value(item, accessor_name: str, role: int, attr_name: str) -> str:
+def _committed_note_value(item, accessor_name: str, role: int) -> str:
     accessor = getattr(item, accessor_name, None)
     if callable(accessor):
         return str(accessor())
@@ -26,12 +26,10 @@ def _committed_note_value(item, accessor_name: str, role: int, attr_name: str) -
         value = data(role)
         if value is not None:
             return str(value)
-    return str(getattr(item, attr_name, ""))
+    raise AttributeError(f"Note item does not implement {accessor_name}().")
 
 
-def _set_committed_note_value(
-    item, value, setter_name: str, role: int, attr_name: str
-) -> None:
+def _set_committed_note_value(item, value, setter_name: str, role: int) -> None:
     setter = getattr(item, setter_name, None)
     if callable(setter):
         setter(value)
@@ -41,13 +39,11 @@ def _set_committed_note_value(
     if callable(set_data):
         set_data(role, committed)
         return
-    setattr(item, attr_name, committed)
+    raise AttributeError(f"Note item does not implement {setter_name}().")
 
 
 def committed_note_text_for(item) -> str:
-    return _committed_note_value(
-        item, "committed_text", COMMITTED_NOTE_TEXT_ROLE, "committed_note_text"
-    )
+    return _committed_note_value(item, "committed_text", COMMITTED_NOTE_TEXT_ROLE)
 
 
 def set_committed_note_text_for(item, text: str) -> None:
@@ -56,14 +52,11 @@ def set_committed_note_text_for(item, text: str) -> None:
         text,
         "set_committed_text",
         COMMITTED_NOTE_TEXT_ROLE,
-        "committed_note_text",
     )
 
 
 def committed_note_html_for(item) -> str:
-    return _committed_note_value(
-        item, "committed_html", COMMITTED_NOTE_HTML_ROLE, "committed_note_html"
-    )
+    return _committed_note_value(item, "committed_html", COMMITTED_NOTE_HTML_ROLE)
 
 
 def set_committed_note_html_for(item, html: str) -> None:
@@ -72,7 +65,6 @@ def set_committed_note_html_for(item, html: str) -> None:
         html,
         "set_committed_html",
         COMMITTED_NOTE_HTML_ROLE,
-        "committed_note_html",
     )
 
 

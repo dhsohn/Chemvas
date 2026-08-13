@@ -39,7 +39,7 @@ def _balanced_state() -> dict[str, object]:
     state["model"] = serialize_model_state(model)
     state["calculation_plan"] = {
         "format": "chemvas-calculation-plan",
-        "version": 1,
+        "version": 2,
         "states": [
             {
                 "id": "R01",
@@ -72,6 +72,7 @@ def _balanced_state() -> dict[str, object]:
                         {"component_atom_ids": [4], "role": "catalyst"},
                         {"component_atom_ids": [5], "role": "spectator"},
                     ],
+                    "precomplex": {"kind": "none"},
                 },
                 "product": {
                     "state_id": "P01",
@@ -80,6 +81,7 @@ def _balanced_state() -> dict[str, object]:
                         {"component_atom_ids": [4], "role": "catalyst"},
                         {"component_atom_ids": [5], "role": "spectator"},
                     ],
+                    "precomplex": {"kind": "none"},
                 },
                 "atom_correspondence": [
                     {"reactant_atom_id": 0, "product_atom_id": 2},

@@ -352,7 +352,7 @@ class CanvasHistoryService:
                 snapshot,
                 history=inflight_history,
                 redo_stack=(*snapshot.redo_stack, command),
-                operation="legacy history undo",
+                operation="relative history undo",
             )
         finally:
             self._finish_mutation()
@@ -386,7 +386,7 @@ class CanvasHistoryService:
                 snapshot,
                 history=(*snapshot.history, command),
                 redo_stack=inflight_redo,
-                operation="legacy history redo",
+                operation="relative history redo",
             )
         finally:
             self._finish_mutation()

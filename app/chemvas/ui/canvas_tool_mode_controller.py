@@ -80,12 +80,7 @@ class CanvasToolModeController:
         self._refresh_hover_for_tool_change()
 
     def _refresh_hover_for_tool_change(self) -> None:
-        try:
-            self._hover_refresh(render_insert_preview=True)
-        except TypeError as exc:
-            if "render_insert_preview" not in str(exc):
-                raise
-            self._hover_refresh()
+        self._hover_refresh(render_insert_preview=True)
 
     def set_tool(self, tool_name: str) -> None:
         self._cancel_active_insert_modes()

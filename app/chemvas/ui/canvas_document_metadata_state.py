@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from chemvas.ui.canvas_state_lookup import canvas_state_object
+from chemvas.ui.main_window_path_logic import is_canonical_saved_document_path
 
 
 @dataclass
@@ -49,7 +50,14 @@ def mark_document_dirty_for(canvas: Any) -> None:
 
 
 def set_document_file_path_for(canvas: Any, path: str | None) -> None:
+    validate_document_file_path(path)
     document_metadata_state_for(canvas).file_path = path
+
+
+def validate_document_file_path(path: str | None) -> None:
+    if path is not None and not is_canonical_saved_document_path(path):
+        msg = "Chemvas document paths must use the .chemvas filename extension."
+        raise ValueError(msg)
 
 
 def document_file_path_for(canvas: Any) -> str | None:
@@ -80,4 +88,5 @@ __all__ = [
     "mark_document_dirty_for",
     "set_document_display_name_for",
     "set_document_file_path_for",
+    "validate_document_file_path",
 ]

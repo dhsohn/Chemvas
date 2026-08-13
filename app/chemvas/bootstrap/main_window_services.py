@@ -81,7 +81,7 @@ from chemvas.ui.main_window_ui_assembly_service import MainWindowUIAssemblyServi
 
 
 def build_main_window_services() -> MainWindowServices:
-    # The port module still fronts legacy Qt objects. Keep that dynamic seam at
+    # The port module fronts existing Qt objects. Keep that dynamic seam at
     # the composition root instead of allowing ``Any`` to leak into the typed
     # feature and shell packages.
     resolve_geometry_controller: Callable[[Any], Any] = geometry_controller_for_window

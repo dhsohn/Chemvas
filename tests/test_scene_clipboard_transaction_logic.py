@@ -56,7 +56,7 @@ class SceneClipboardTransactionLogicTest(unittest.TestCase):
 
         plan = build_clipboard_copy_plan(
             [flat],
-            payload={"format": "chemvas-selection", "version": 1},
+            payload={"format": "chemvas-selection", "version": 2},
             bond_line_width=1.5,
             device_pixel_ratio=2.0,
         )
@@ -74,7 +74,7 @@ class SceneClipboardTransactionLogicTest(unittest.TestCase):
             payload={
                 "scene_items": [{"kind": "note"}],
                 "format": "chemvas-selection",
-                "version": 1,
+                "version": 2,
             },
             bond_line_width=2.0,
             device_pixel_ratio=1.5,
@@ -87,12 +87,12 @@ class SceneClipboardTransactionLogicTest(unittest.TestCase):
         self.assertEqual(plan.image_height, 50)
         self.assertEqual(
             plan.payload_json,
-            '{"format":"chemvas-selection","scene_items":[{"kind":"note"}],"version":1}',
+            '{"format":"chemvas-selection","scene_items":[{"kind":"note"}],"version":2}',
         )
         self.assertEqual(
             clipboard_copy_cache_values(plan.payload_json),
             (
-                '{"format":"chemvas-selection","scene_items":[{"kind":"note"}],"version":1}',
+                '{"format":"chemvas-selection","scene_items":[{"kind":"note"}],"version":2}',
                 0,
             ),
         )
@@ -249,6 +249,7 @@ class SceneClipboardTransactionLogicTest(unittest.TestCase):
                     "right": 3.0,
                     "top": 2.0,
                     "bottom": 4.0,
+                    "bracket_kind": "square_pair",
                 },
                 dx=2.0,
                 dy=-1.0,
@@ -260,16 +261,8 @@ class SceneClipboardTransactionLogicTest(unittest.TestCase):
                 "right": 5.0,
                 "top": 1.0,
                 "bottom": 3.0,
+                "bracket_kind": "square_pair",
             },
-        )
-        self.assertEqual(
-            translated_scene_item_state(
-                {"kind": "ts_bracket", "rect": [1.0, 2.0, 3.0, 4.0]},
-                dx=2.0,
-                dy=-1.0,
-                atom_id_map={},
-            ),
-            {"kind": "ts_bracket", "rect": [3.0, 1.0, 3.0, 4.0]},
         )
         self.assertEqual(
             translated_scene_item_state(

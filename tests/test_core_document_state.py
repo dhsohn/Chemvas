@@ -4,8 +4,7 @@ import unittest
 from chemvas.domain.document import (
     CANVAS_FILE_VERSION,
     CHEMVAS_FILE_TYPE,
-    GROUPS_CANVAS_FILE_VERSION,
-    LEGACY_CANVAS_FILE_VERSION,
+    CLIPBOARD_SELECTION_VERSION,
     Atom,
     Bond,
     MoleculeModel,
@@ -55,6 +54,7 @@ def _canvas_state(model: dict | None = None) -> dict:
         "marks": [],
         "arrows": [],
         "ts_brackets": [],
+        "shapes": [],
         "orbitals": [],
         "settings": _settings(),
         "last_smiles_input": None,
@@ -112,7 +112,7 @@ class DocumentStateTest(unittest.TestCase):
 
         self.assertTrue(state["atoms"][0]["explicit_label"])
         self.assertTrue(state["atoms"][1]["explicit_label"])
-        # v4 serialization is compact: the in-memory tombstone slot is dropped.
+        # Current serialization is compact: the in-memory tombstone is dropped.
         self.assertEqual([bond["a"] for bond in state["bonds"]], [0])
         self.assertEqual(state["next_atom_id"], 3)
 
@@ -227,7 +227,6 @@ class DocumentStateTest(unittest.TestCase):
                 },
                 "bonds": [
                     {"a": 0, "b": 2, "order": 3, "style": "triple", "color": "#123456"},
-                    None,
                 ],
                 "next_atom_id": 7,
                 "atom_annotations": {"2": {"formal_charge": -1}},
@@ -240,8 +239,17 @@ class DocumentStateTest(unittest.TestCase):
         self.assertTrue(model.atoms[2].explicit_label)
         self.assertEqual(model.bonds[0].order, 3)
         self.assertEqual(model.bonds[0].style, "triple")
-        self.assertIsNone(model.bonds[1])
         self.assertEqual(model.atom_annotations, {2: {"formal_charge": -1}})
+
+    def test_deserialize_model_state_rejects_persisted_bond_tombstones(self) -> None:
+        with self.assertRaisesRegex(ValueError, "compact current form"):
+            deserialize_model_state(
+                {
+                    "atoms": {},
+                    "bonds": [None],
+                    "next_atom_id": 0,
+                }
+            )
 
     def test_deserialize_model_state_clamps_low_next_atom_id(self) -> None:
         model = deserialize_model_state(
@@ -279,7 +287,7 @@ class DocumentStateTest(unittest.TestCase):
             deserialize_model_state(
                 {"atoms": {"1": {"x": 1.5}}, "bonds": [], "next_atom_id": 2}
             )
-        with self.assertRaises(TypeError):
+        with self.assertRaises(ValueError):
             deserialize_model_state(
                 {"atoms": {}, "bonds": ["bad-entry"], "next_atom_id": 2}
             )
@@ -321,7 +329,7 @@ class DocumentStateTest(unittest.TestCase):
         state["settings"] = settings
         build_document_payload(state, version=CANVAS_FILE_VERSION)
 
-    def test_document_payload_accepts_legacy_settings_without_text_note_keys(
+    def test_document_payload_rejects_settings_without_current_text_note_keys(
         self,
     ) -> None:
         settings = _settings()
@@ -342,10 +350,38 @@ class DocumentStateTest(unittest.TestCase):
         state = _canvas_state()
         state["settings"] = settings
 
-        build_document_payload(state, version=CANVAS_FILE_VERSION)
+        with self.assertRaises(ValueError):
+            build_document_payload(state, version=CANVAS_FILE_VERSION)
 
-    def test_document_payload_accepts_legacy_v1_canvas_state(self) -> None:
-        build_document_payload(_canvas_state(), version=LEGACY_CANVAS_FILE_VERSION)
+    def test_document_payload_rejects_all_previous_versions(self) -> None:
+        for version in range(1, CANVAS_FILE_VERSION):
+            with self.subTest(version=version), self.assertRaises(ValueError):
+                build_document_payload(_canvas_state(), version=version)
+
+    def test_document_payload_rejects_non_integer_current_version(self) -> None:
+        for version in (float(CANVAS_FILE_VERSION), True):
+            with self.subTest(version=version), self.assertRaises(ValueError):
+                build_document_payload(_canvas_state(), version=version)  # type: ignore[arg-type]
+
+    def test_document_payload_rejects_removed_bold_bond_style(self) -> None:
+        state = _canvas_state(
+            _model_state(
+                atoms={0: _atom_state(), 1: {**_atom_state(), "x": 10.0}},
+                bonds=[
+                    {
+                        "a": 0,
+                        "b": 1,
+                        "order": 1,
+                        "style": "bold",
+                        "color": "#000000",
+                    }
+                ],
+                next_atom_id=2,
+            )
+        )
+
+        with self.assertRaises(ValueError):
+            build_document_payload(state, version=CANVAS_FILE_VERSION)
 
     def test_document_payload_accepts_optional_perspective_state(self) -> None:
         state = _canvas_state(
@@ -363,7 +399,7 @@ class DocumentStateTest(unittest.TestCase):
         build_document_payload(state, version=CANVAS_FILE_VERSION)
 
         with self.assertRaises(ValueError):
-            build_document_payload(state, version=LEGACY_CANVAS_FILE_VERSION)
+            build_document_payload(state, version=CANVAS_FILE_VERSION - 1)
 
     def test_document_payload_rejects_duplicate_bond_pairs(self) -> None:
         atoms = {
@@ -712,7 +748,7 @@ class DocumentStateTest(unittest.TestCase):
         settings = _settings()
         selection_payload = {
             "format": "chemvas-selection",
-            "version": 1,
+            "version": CLIPBOARD_SELECTION_VERSION,
             "atoms": [
                 {
                     "id": 3,
@@ -757,7 +793,7 @@ class DocumentStateTest(unittest.TestCase):
             "marks": [
                 {
                     "kind": "mark",
-                    "mark_kind": None,
+                    "mark_kind": "plus",
                     "text": "+",
                     "atom_id": 3,
                     "dx": 1.0,
@@ -787,6 +823,7 @@ class DocumentStateTest(unittest.TestCase):
                     "top": 2.0,
                     "right": 3.0,
                     "bottom": 4.0,
+                    "bracket_kind": "square_pair",
                 },
                 {
                     "kind": "orbital",
@@ -1006,11 +1043,34 @@ class DocumentStateTest(unittest.TestCase):
 
         build_document_payload(state, version=CANVAS_FILE_VERSION)
 
-    def test_build_document_payload_accepts_legacy_ts_bracket_rect_state(self) -> None:
-        state = _canvas_state()
-        state["ts_brackets"] = [{"kind": "ts_bracket", "rect": (0.0, 0.0, 12.0, 8.0)}]
+    def test_build_document_payload_rejects_noncanonical_ts_bracket_states(
+        self,
+    ) -> None:
+        cases = {
+            "rect form": {"kind": "ts_bracket", "rect": (0.0, 0.0, 12.0, 8.0)},
+            "missing kind": {
+                "kind": "ts_bracket",
+                "left": 0.0,
+                "top": 0.0,
+                "right": 12.0,
+                "bottom": 8.0,
+            },
+            "removed kind": {
+                "kind": "ts_bracket",
+                "left": 0.0,
+                "top": 0.0,
+                "right": 12.0,
+                "bottom": 8.0,
+                "bracket_kind": "square_pair_double_dagger",
+            },
+        }
+        for name, bracket_state in cases.items():
+            with self.subTest(name=name):
+                state = _canvas_state()
+                state["ts_brackets"] = [bracket_state]
 
-        build_document_payload(state, version=CANVAS_FILE_VERSION)
+                with self.assertRaises(ValueError):
+                    build_document_payload(state, version=CANVAS_FILE_VERSION)
 
     def test_build_document_payload_rejects_unsupported_mark_and_orbital_kinds(
         self,
@@ -1311,7 +1371,7 @@ class UnhashableChoiceValueTest(unittest.TestCase):
 
 
 class CompactBondFormatTest(unittest.TestCase):
-    """v4 bond lists are compact; tombstones remain readable in older files."""
+    """The v7 bond list is compact and rejects persisted tombstones."""
 
     @staticmethod
     def _state_with_bond_tombstone() -> dict:
@@ -1326,28 +1386,13 @@ class CompactBondFormatTest(unittest.TestCase):
             )
         )
 
-    def test_v4_rejects_bond_tombstones(self) -> None:
+    def test_v7_rejects_bond_tombstones(self) -> None:
         with self.assertRaisesRegex(ValueError, "Invalid Chemvas file"):
             build_document_payload(
                 self._state_with_bond_tombstone(), CANVAS_FILE_VERSION
             )
 
-    def test_pre_v4_versions_accept_bond_tombstones(self) -> None:
-        for version in (LEGACY_CANVAS_FILE_VERSION, GROUPS_CANVAS_FILE_VERSION):
-            with self.subTest(version=version):
-                payload = build_document_payload(
-                    self._state_with_bond_tombstone(), version
-                )
-                self.assertEqual(payload["version"], version)
-
-    def test_deserialize_still_reads_pre_v4_tombstoned_bonds(self) -> None:
-        model = deserialize_model_state(self._state_with_bond_tombstone()["model"])
-
-        self.assertEqual(len(model.bonds), 2)
-        self.assertIsNone(model.bonds[0])
-        self.assertEqual((model.bonds[1].a, model.bonds[1].b), (0, 1))
-
-    def test_tombstoned_model_round_trips_to_compact_v4_state(self) -> None:
+    def test_runtime_tombstone_serializes_to_compact_v7_state(self) -> None:
         model = MoleculeModel()
         a = model.add_atom("C", 0.0, 0.0)
         b = model.add_atom("C", 10.0, 0.0)

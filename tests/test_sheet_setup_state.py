@@ -27,7 +27,7 @@ def test_set_sheet_setup_state_updates_only_the_canonical_state() -> None:
         runtime_state=canvas_runtime_state(sheet_setup_state=SheetSetupState())
     )
 
-    assert set_sheet_setup_state_for(canvas, "a4", "vertical") == ("A4", "portrait")
+    assert set_sheet_setup_state_for(canvas, "a4", "portrait") == ("A4", "portrait")
 
     assert sheet_setup_values_for(canvas) == ("A4", "portrait")
     assert not hasattr(canvas, "sheet_size")

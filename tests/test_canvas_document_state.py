@@ -138,7 +138,15 @@ class CanvasDocumentStateTest(unittest.TestCase):
         )
         empty_arrow_item = _SceneItem(scene_obj, {})
         ts_item = _SceneItem(
-            scene_obj, {"kind": "ts_bracket", "rect": (0.0, 0.0, 1.0, 1.0)}
+            scene_obj,
+            {
+                "kind": "ts_bracket",
+                "left": 0.0,
+                "top": 0.0,
+                "right": 1.0,
+                "bottom": 1.0,
+                "bracket_kind": "square_pair",
+            },
         )
         orbital_item = _SceneItem(
             scene_obj,
@@ -254,7 +262,17 @@ class CanvasDocumentStateTest(unittest.TestCase):
         )
         self.assertEqual(state["arrows"], [])
         self.assertEqual(
-            state["ts_brackets"], [{"kind": "ts_bracket", "rect": (0.0, 0.0, 1.0, 1.0)}]
+            state["ts_brackets"],
+            [
+                {
+                    "kind": "ts_bracket",
+                    "left": 0.0,
+                    "top": 0.0,
+                    "right": 1.0,
+                    "bottom": 1.0,
+                    "bracket_kind": "square_pair",
+                }
+            ],
         )
         self.assertEqual(
             state["orbitals"],
@@ -343,7 +361,7 @@ class CanvasDocumentStateTest(unittest.TestCase):
         self.assertEqual(text_style.note_padding, 8.0)
         self.assertEqual(last_smiles_input_for(canvas), "after")
 
-    def test_apply_document_settings_defaults_missing_text_note_settings_for_legacy_state(
+    def test_apply_document_settings_requires_current_text_note_settings(
         self,
     ) -> None:
         canvas = SimpleNamespace(
@@ -365,29 +383,24 @@ class CanvasDocumentStateTest(unittest.TestCase):
             ),
         )
 
-        apply_document_settings(
-            canvas,
-            {
-                "settings": {
-                    "bond_length_px": 22.0,
-                    "arrow_line_width": 1.7,
-                    "arrow_head_scale": 0.5,
-                    "orbital_phase_enabled": True,
-                    "text_font_size": 14,
-                    "text_font_weight": 500,
-                    "text_italic": True,
-                    "sheet_size": "A4",
-                    "sheet_orientation": "portrait",
+        with self.assertRaises(KeyError):
+            apply_document_settings(
+                canvas,
+                {
+                    "settings": {
+                        "bond_length_px": 22.0,
+                        "arrow_line_width": 1.7,
+                        "arrow_head_scale": 0.5,
+                        "orbital_phase_enabled": True,
+                        "text_font_size": 14,
+                        "text_font_weight": 500,
+                        "text_italic": True,
+                        "sheet_size": "A4",
+                        "sheet_orientation": "portrait",
+                    },
+                    "last_smiles_input": "after",
                 },
-                "last_smiles_input": "after",
-            },
-        )
-
-        text_style = text_style_state_for(canvas)
-        self.assertEqual(text_style.text_font_family, "Arial")
-        self.assertEqual(text_style.text_color.name(), "#222222")
-        self.assertEqual(text_style.text_alignment, Qt.AlignmentFlag.AlignLeft)
-        self.assertFalse(text_style.note_box_enabled)
+            )
 
     def test_restore_document_projection_state_restores_coords_and_projection(
         self,
@@ -418,7 +431,7 @@ class CanvasDocumentStateTest(unittest.TestCase):
         self.assertEqual(rotation.projection_center_3d, (5.0, 6.5, 7.0))
         self.assertEqual(rotation.projection_anchor_2d, (8.0, 9.5))
 
-    def test_restore_document_projection_state_clears_missing_legacy_projection(
+    def test_restore_document_projection_state_clears_missing_optional_projection(
         self,
     ) -> None:
         canvas = SimpleNamespace(
@@ -437,39 +450,6 @@ class CanvasDocumentStateTest(unittest.TestCase):
         self.assertEqual(atom_coords_3d_for(canvas), {})
         self.assertIsNone(rotation.projection_center_3d)
         self.assertIsNone(rotation.projection_anchor_2d)
-
-    def test_apply_document_settings_ignores_legacy_style_preset(self) -> None:
-        from chemvas.adapters.qt.renderer import Renderer
-
-        canvas = SimpleNamespace(
-            renderer=Renderer(),
-            viewport=lambda: SimpleNamespace(update=mock.Mock()),
-            runtime_state=canvas_runtime_state(
-                smiles_input_state=CanvasSmilesInputState(last_smiles_input="x"),
-                sheet_setup_state=SheetSetupState(),
-                text_style_state=CanvasTextStyleState(),
-                tool_settings_state=CanvasToolSettingsState(),
-            ),
-        )
-        settings = {
-            "bond_length_px": 22.0,
-            "arrow_line_width": 1.0,
-            "arrow_head_scale": 0.3,
-            "orbital_phase_enabled": False,
-            "text_font_size": 12,
-            "text_font_weight": 400,
-            "text_italic": False,
-            "sheet_size": "A4",
-            "sheet_orientation": "portrait",
-            "style_preset": "Presentation",
-        }
-        apply_document_settings(
-            canvas, {"settings": settings, "last_smiles_input": "y"}
-        )
-
-        self.assertEqual(canvas.renderer.style.font_size_pt, 12)
-        self.assertEqual(canvas.renderer.style.bond_length_pt, 14.4)
-        self.assertEqual(canvas.renderer.style.bond_length_px, 22.0)
 
     def test_restore_document_items_prefer_scene_item_controller(self) -> None:
         canvas = _Canvas()
@@ -491,7 +471,17 @@ class CanvasDocumentStateTest(unittest.TestCase):
                 }
             ],
             "arrows": [{"kind": "arrow", "start": (0.0, 0.0), "end": (1.0, 1.0)}],
-            "ts_brackets": [{"kind": "ts_bracket", "rect": (0.0, 0.0, 1.0, 1.0)}],
+            "ts_brackets": [
+                {
+                    "kind": "ts_bracket",
+                    "left": 0.0,
+                    "top": 0.0,
+                    "right": 1.0,
+                    "bottom": 1.0,
+                    "bracket_kind": "square_pair",
+                }
+            ],
+            "shapes": [],
             "orbitals": [
                 {"kind": "p", "center": (3.0, 4.0), "scale": 2.0, "rotation": 45.0}
             ],
@@ -522,7 +512,17 @@ class CanvasDocumentStateTest(unittest.TestCase):
                     "controller_arrow",
                     {"kind": "arrow", "start": (0.0, 0.0), "end": (1.0, 1.0)},
                 ),
-                ("controller_ts", {"kind": "ts_bracket", "rect": (0.0, 0.0, 1.0, 1.0)}),
+                (
+                    "controller_ts",
+                    {
+                        "kind": "ts_bracket",
+                        "left": 0.0,
+                        "top": 0.0,
+                        "right": 1.0,
+                        "bottom": 1.0,
+                        "bracket_kind": "square_pair",
+                    },
+                ),
                 (
                     "controller_orbital",
                     {
@@ -535,6 +535,24 @@ class CanvasDocumentStateTest(unittest.TestCase):
                 ),
             ],
         )
+
+    def test_restore_document_post_model_items_requires_current_shapes_key(
+        self,
+    ) -> None:
+        canvas = _Canvas()
+        canvas.services = canvas_runtime_services(
+            scene_item_controller=_Controller(canvas)
+        )
+
+        with self.assertRaises(KeyError):
+            restore_document_post_model_items(
+                canvas,
+                {
+                    "arrows": [],
+                    "ts_brackets": [],
+                    "orbitals": [],
+                },
+            )
 
     def test_restore_document_items_require_scene_item_controller(self) -> None:
         canvas = _Canvas()
@@ -553,7 +571,16 @@ class CanvasDocumentStateTest(unittest.TestCase):
                 }
             ],
             "arrows": [{"kind": "equilibrium"}],
-            "ts_brackets": [{"kind": "ts_bracket", "rect": (0.0, 0.0, 2.0, 2.0)}],
+            "ts_brackets": [
+                {
+                    "kind": "ts_bracket",
+                    "left": 0.0,
+                    "top": 0.0,
+                    "right": 2.0,
+                    "bottom": 2.0,
+                    "bracket_kind": "square_pair",
+                }
+            ],
             "orbitals": [{"center": (3.0, 4.0)}],
         }
 

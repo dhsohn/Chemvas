@@ -42,13 +42,6 @@ def ring_double_segments_for(canvas, *args):
     return None
 
 
-def draw_ring_double_bond_for(canvas, *args, **kwargs):
-    method = _renderer_method(canvas, "draw_ring_double_bond")
-    if method is not None:
-        return method(*args, **kwargs)
-    return None
-
-
 def line_normal_components(
     x1: float, y1: float, x2: float, y2: float
 ) -> tuple[float, float, float]:
@@ -166,7 +159,6 @@ __all__ = [
     "add_bond_graphics_for",
     "apply_color_to_bond_item_for",
     "bond_offset_unit_3d_for",
-    "draw_ring_double_bond_for",
     "line_normal_components",
     "line_normal_for",
     "orient_normal_toward_target",

@@ -825,7 +825,7 @@ class CanvasNoteControllerUnitTest(unittest.TestCase):
         controller.update_note_box(item)
         self.assertEqual(box.pen().style(), Qt.PenStyle.NoPen)
 
-    def test_apply_note_style_prefers_line_height_type_enum_when_available(
+    def test_apply_note_style_uses_current_line_height_enum_value(
         self,
     ) -> None:
         class FakeOption:
@@ -847,8 +847,8 @@ class CanvasNoteControllerUnitTest(unittest.TestCase):
                 self.saved_option = option
 
         class FakeBlockFormat:
-            class LineHeightType:
-                ProportionalHeight = "proportional"
+            class LineHeightTypes:
+                ProportionalHeight = SimpleNamespace(value=1)
 
             def __init__(self) -> None:
                 self.height = None
@@ -916,7 +916,7 @@ class CanvasNoteControllerUnitTest(unittest.TestCase):
         )
         self.assertEqual(
             FakeCursor.last_instance.block_format.height,
-            (125, FakeBlockFormat.LineHeightType.ProportionalHeight),
+            (125, FakeBlockFormat.LineHeightTypes.ProportionalHeight.value),
         )
         controller.update_note_box.assert_called_once_with(item)
         selection_controller.update_note_selection_box.assert_called_once_with(item)

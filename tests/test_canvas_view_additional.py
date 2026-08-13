@@ -500,18 +500,10 @@ class CanvasViewAdditionalTest(unittest.TestCase):
         canvas_services_for(view).document.canvas_document_session_service.save_to_file(
             "/tmp/example.chemvas"
         )
-        canvas_services_for(
-            view
-        ).document.canvas_document_session_service.load_from_file(
-            "/tmp/example.chemvas"
-        )
 
         document_session_service.snapshot_state.assert_called_once_with()
         document_session_service.restore_state.assert_called_once_with(state)
         document_session_service.save_to_file.assert_called_once_with(
-            "/tmp/example.chemvas"
-        )
-        document_session_service.load_from_file.assert_called_once_with(
             "/tmp/example.chemvas"
         )
 
@@ -941,6 +933,7 @@ class CanvasViewAdditionalTest(unittest.TestCase):
         )
         decoration_service.add_ts_bracket.assert_called_once_with(
             QRectF(QPointF(0.0, 0.0), QPointF(3.0, 6.0)),
+            bracket_kind="square_pair",
         )
         decoration_service.add_orbital.assert_called_once_with(QPointF(9.0, 8.0))
 
@@ -1063,10 +1056,10 @@ class CanvasViewAdditionalTest(unittest.TestCase):
             QPointF(37.0, 38.0), QPointF(39.0, 40.0)
         )
         build_service.ts_bracket_stroke_width.assert_called_once_with()
-        build_service.ts_bracket_path.assert_called_once_with(rect)
-        build_service.build_ts_bracket_item.assert_called_once_with(rect)
+        build_service.ts_bracket_path.assert_called_once_with(rect, "square_pair")
+        build_service.build_ts_bracket_item.assert_called_once_with(rect, "square_pair")
         build_service.preview_ts_bracket.assert_called_once_with(
-            QPointF(41.0, 42.0), QPointF(43.0, 44.0)
+            QPointF(41.0, 42.0), QPointF(43.0, 44.0), "square_pair"
         )
         build_service.build_orbital_items.assert_called_once_with(
             QPointF(45.0, 46.0), "sp2"
@@ -1862,7 +1855,7 @@ class CanvasViewAdditionalTest(unittest.TestCase):
             {1, 2}
         )
         view.services.scene_view.canvas_ring_fill_scene_service.update_ring_fills_for_atoms.assert_called_once_with(
-            {1, 2}
+            {1, 2}, ring_items=None
         )
         view.services.selection.hit_testing_service.mark_spatial_index_dirty.assert_called_once_with()
         view.refresh_selection_outline.assert_called_once_with()
@@ -1950,7 +1943,9 @@ class CanvasViewAdditionalTest(unittest.TestCase):
             ring_item,
         )
 
-        scene_service.update_ring_fills_for_atoms.assert_called_once_with({1, 2, 3})
+        scene_service.update_ring_fills_for_atoms.assert_called_once_with(
+            {1, 2, 3}, ring_items=None
+        )
         scene_service.create_ring_fill_item.assert_called_once_with(
             [QPointF(0.0, 0.0), QPointF(2.0, 0.0), QPointF(1.0, 1.5)],
             [1, 2, 3],
