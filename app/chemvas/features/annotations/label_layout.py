@@ -64,6 +64,31 @@ def hydride_hydrogen_text(h_count: int) -> str:
     return "H" if h_count == 1 else f"H{h_count}"
 
 
+# An element-like token at one extreme of a multi-part label: an uppercase
+# letter with an optional lowercase one ("C", "Ph", "Me"). Purely typographic —
+# no chemical validation is implied.
+_LEADING_TOKEN_RE = re.compile(r"^[A-Z][a-z]?")
+_TRAILING_TOKEN_RE = re.compile(r"[A-Z][a-z]?$")
+
+
+def attachment_anchor_token(text: str, *, at_end: bool) -> str | None:
+    """The anchorable token at the start or end of a multi-part label.
+
+    ``"CF3"`` -> ``"C"`` from the start, ``"Ph3P"`` -> ``"P"`` from the end.
+    Returns ``None`` when that extreme is not an element-like token (``"CF3"``
+    from the end stops at the subscript digit) or when the token is the whole
+    label (a bare element keeps its centred layout).
+    """
+    source = text or ""
+    match = (_TRAILING_TOKEN_RE if at_end else _LEADING_TOKEN_RE).search(source)
+    if match is None:
+        return None
+    token = match.group(0)
+    if token == source:
+        return None
+    return token
+
+
 # A subscript/superscript glyph is drawn at this fraction of the base font size.
 SUB_SCALE = 0.72
 # Vertical offsets, expressed as a fraction of the base em (ascent + descent).
@@ -297,6 +322,7 @@ __all__ = [
     "LabelLayout",
     "LabelRun",
     "PlacedRun",
+    "attachment_anchor_token",
     "hydride_display_text",
     "hydride_hydrogen_text",
     "parse_atom_label",
