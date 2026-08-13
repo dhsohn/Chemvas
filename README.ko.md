@@ -75,10 +75,14 @@ python -m pip install -e .
 ## 저장/불러오기
 - 메뉴바의 **File** 메뉴에서 `.chemvas` 파일을 저장/불러옵니다.
 - `.chemvas`는 JSON 기반 포맷이며, 분자 모델/주석/화살표/bracket annotation/설정값 등을 포함합니다.
-  (형식: `{"type":"chemvas","version":6,"state":{...}}`)
-- v6는 선택적인 Calculation Plan v2에 bounded precomplex 후보, exact XYZ provenance,
-  명시적으로 review한 endpoint selection을 함께 저장합니다. v5 Calculation Plan v1과
-  기존 v1-v4 문서도 계속 불러옵니다.
+  (형식: `{"type":"chemvas","version":7,"state":{...}}`)
+- v7만 지원하는 문서 계약입니다. 선택적인 Calculation Plan v2에 bounded precomplex 후보,
+  exact XYZ provenance, 명시적으로 review한 endpoint selection을 함께 저장할 수 있습니다.
+  이전 문서 버전과 Calculation Plan v1 payload는 거부합니다.
+- Chemvas drawing은 `.chemvas` suffix만 사용합니다. desktop startup argument, OS file-open
+  event, **File ▸ Open**, **Open Recent**, clean-session reopen은 `.json` drawing path를
+  거부하거나 무시하며, **Save**와 **Save As**도 `.chemvas`로만 저장합니다. Headless
+  command의 JSON request, patch, report, machine artifact는 별도 protocol이라 영향받지 않습니다.
 - Figure export의 SVG 기본값은 Chemvas 원본 데이터를 포함하지 않는 plain SVG입니다. Chemvas에서 다시
   편집 가능한 round-trip 파일이 필요할 때만 **Editable Chemvas SVG**를 선택하세요.
 
@@ -88,6 +92,9 @@ python -m pip install -e .
 - 앱이 강제 종료되거나 크래시하면 다음 실행에서 해당 문서들을 복원하며, 미저장 문서는 `●` 표시와 상태바 안내로
   알립니다. 정상 종료 시에는 열려 있던 파일들을 다시 엽니다.
 - 스냅샷은 세션이 복원되거나 정상적으로 닫히면 정리됩니다.
+- 지원하지 않는 drawing path를 가리키는 stale recent-file/clean-session entry는 무시합니다.
+  현재 내부 crash autosave의 drawing data는 복구할 수 있지만, 지원하지 않는 원본 path는 버리고
+  recovered canvas를 path에 연결하지 않은 미저장 문서로 엽니다.
 
 ## 단축키
 - Chemvas는 ChemDraw 호환 단축키의 주요 하위집합을 지원합니다.
@@ -240,7 +247,7 @@ chemvas pack-step mechanism-reviewed.chemvas --step S01 \
 strict request는 `source_document_sha256`와 `step_id`로 generation을 정확한 입력에
 결속하고, endpoint마다 component 사이 contact 하나, gas phase 또는 solvent
 environment, retained candidate cap을 명시합니다. Generation은 `selection: null`인
-Calculation Plan v2/version-6 새 문서를 쓰며, `inspect-precomplex`는 candidate ID,
+Calculation Plan v2/version-7 새 문서를 쓰며, `inspect-precomplex`는 candidate ID,
 provenance, validation metric, hash, exact XYZ를 보여줍니다. `select-precomplex`는
 동일한 reviewer와 timestamp로 reactant/product 한 쌍을 기록하고 각 selection을 XYZ
 hash에 결속합니다. handoff 전에 `pack-step`은 현재 graph, plan, RDKit provenance,
@@ -249,21 +256,17 @@ contacts, profile로 두 bounded ensemble을 결정론적으로 다시 생성하
 metric입니다. 검토하지 않았거나 한쪽만 검토한 multicomponent endpoint는 계속
 blocked입니다.
 
-request format v1은 기존 request와 persisted ensemble을 바이트 단위로 재현하기 위해
-legacy `chemvas-rigid-precomplex-placement/1` profile에 고정됩니다. 새 generation
-request는 format v2를 사용하고
-`"profile": "chemvas-rigid-precomplex-placement/2"`를 반드시 명시합니다. Profile 2는
+Precomplex generation은 request format v2만 받으며
+`"profile": "chemvas-rigid-precomplex-placement/2"`를 반드시 명시합니다. 이 profile은
 모든 지원 원소에 [Cordero et al. Table 2](https://doi.org/10.1039/B801115J)의
 covalent radius(C sp3, Fe/Co low-spin 항목)와
 [Alvarez Table 1](https://doi.org/10.1039/C3DT50599E)의 van der Waals radius를
 사용합니다. Ensemble, generation/inspection report, 최종 `machine.json` placement
-metadata는 profile, dataset ID, DOI, 정확한 radius-table hash를 전달합니다. Profile 1의
-혼합되고 일부 출처가 검증되지 않은 기존 van der Waals 값은 재현 전용이며 과학 reference
-table로 사용하지 않습니다.
+metadata는 profile, dataset ID, DOI, 정확한 radius-table hash를 전달합니다. 다른 request
+version과 placement profile은 거부합니다.
 
-Profile 2는 document version 6과 Calculation Plan v2 안에서 확장됩니다. 이 profile보다
-오래된 Chemvas는 모르는 profile을 fail-closed로 거부하므로 profile-2 문서는 Chemvas
-0.2.0 이상에서 여십시오. 출처가 고정된 radius와 Chemvas threshold도 결정론적
+이 profile은 document version 7과 Calculation Plan v2에 저장됩니다. 출처가 고정된
+radius와 Chemvas threshold도 결정론적
 geometric heuristic입니다. 지정 contact는 covalent-radius 합의 `0.85 ×`, 나머지 pair는
 covalent-radius 합의 `1.05 ×`와 van der Waals-radius 합의 `0.60 ×` 중 큰 값을 쓰고,
 soft-overlap score는 van der Waals-radius 합의 `0.85 ×`를 사용합니다. 이는 hard-sphere
@@ -271,12 +274,12 @@ soft-overlap score는 van der Waals-radius 합의 `0.85 ×`를 사용합니다. 
 표현하지 않으므로 문서화한 low-spin selector를 추론하지 않고 고정합니다. 연구자 검토와
 후속 양자화학 최적화는 계속 필수입니다.
 
-Calculation Plan v1에서 state는 계산 성분과 전하·다중도를, step endpoint는 역할을 소유합니다.
+Calculation Plan v2에서 state는 계산 성분과 전하·다중도를, step endpoint는 역할을 소유합니다.
 
 ```json
 {
   "format": "chemvas-calculation-plan",
-  "version": 1,
+  "version": 2,
   "states": [
     {"id": "R01", "charge": 0, "multiplicity": 1,
      "members": [
@@ -289,9 +292,11 @@ Calculation Plan v1에서 state는 계산 성분과 전하·다중도를, step e
     "id": "S01",
     "reactant": {"state_id": "R01", "roles": [
       {"component_atom_ids": [0, 1], "role": "reactant"},
-      {"component_atom_ids": [9], "role": "spectator"}]},
+      {"component_atom_ids": [9], "role": "spectator"}],
+      "precomplex": {"kind": "none"}},
     "product": {"state_id": "P01", "roles": [
-      {"component_atom_ids": [2, 3], "role": "product"}]},
+      {"component_atom_ids": [2, 3], "role": "product"}],
+      "precomplex": {"kind": "none"}},
     "atom_correspondence": [
       {"reactant_atom_id": 0, "product_atom_id": 2},
       {"reactant_atom_id": 1, "product_atom_id": 3}]

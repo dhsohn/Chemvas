@@ -13,6 +13,7 @@ from pathlib import Path
 
 from chemvas.core.document_io import atomic_write_text
 from chemvas.ui.app_data_paths import recent_documents_file
+from chemvas.ui.main_window_path_logic import is_recent_document_path
 from chemvas.ui.recent_documents_logic import (
     add_recent,
     from_json,
@@ -31,12 +32,14 @@ def load_recent(*, path: Path | None = None) -> list[str]:
         data = json.loads(target.read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return []
-    return prune_missing(from_json(data), exists=os.path.exists)
+    supported = [entry for entry in from_json(data) if is_recent_document_path(entry)]
+    return prune_missing(supported, exists=os.path.exists)
 
 
 def save_recent(paths: list[str], *, path: Path | None = None) -> None:
+    supported = [entry for entry in paths if is_recent_document_path(entry)]
     try:
-        atomic_write_text(_target(path), json.dumps(to_json(paths), indent=2))
+        atomic_write_text(_target(path), json.dumps(to_json(supported), indent=2))
     except OSError:
         pass
 
@@ -44,6 +47,8 @@ def save_recent(paths: list[str], *, path: Path | None = None) -> None:
 def record_recent(new_path: str, *, path: Path | None = None) -> list[str]:
     """Promote ``new_path`` to the front of the recent list and persist it."""
     target = _target(path)
+    if not is_recent_document_path(new_path):
+        return load_recent(path=target)
     updated = add_recent(load_recent(path=target), os.path.abspath(new_path))
     save_recent(updated, path=target)
     return updated

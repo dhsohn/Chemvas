@@ -33,6 +33,7 @@ from chemvas.features.session import (
     should_persist,
 )
 from chemvas.ui.canvas_document_metadata_state import canonical_document_digest
+from chemvas.ui.main_window_path_logic import is_canonical_saved_document_path
 
 MANIFEST_NAME = "session.json"
 
@@ -261,21 +262,26 @@ class SessionSnapshotStore:
     ) -> RestoredDoc | None:
         # A crash prefers the snapshot (it holds unsaved edits); a clean exit
         # only reopens saved paths from disk.
+        file_path = (
+            entry.file_path
+            if entry.file_path and is_canonical_saved_document_path(entry.file_path)
+            else None
+        )
         if not clean_exit and entry.snapshot:
             state = self._read_state(session_dir / entry.snapshot)
             if state is not None:
                 return RestoredDoc(
                     state=state,
-                    file_path=entry.file_path,
+                    file_path=file_path,
                     display_name=entry.display_name,
                     dirty=entry.dirty,
                 )
-        if entry.file_path and os.path.exists(entry.file_path):
-            state = self._read_state(Path(entry.file_path))
+        if file_path and os.path.exists(file_path):
+            state = self._read_state(Path(file_path))
             if state is not None:
                 return RestoredDoc(
                     state=state,
-                    file_path=entry.file_path,
+                    file_path=file_path,
                     display_name=entry.display_name,
                     dirty=False,
                 )

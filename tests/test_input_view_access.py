@@ -165,30 +165,12 @@ def test_scene_pos_from_global_pos_returns_none_outside_viewport() -> None:
     canvas.mapToScene.assert_not_called()
 
 
-def test_global_pos_from_event_prefers_qt6_global_position() -> None:
+def test_global_pos_from_event_reads_qt6_global_position() -> None:
     event = SimpleNamespace(globalPosition=mock.Mock(return_value=_Point("qt6-global")))
 
     assert global_pos_from_event_for(SimpleNamespace(), event) == "qt6-global"
 
     event.globalPosition.assert_called_once_with()
-
-
-def test_global_pos_from_event_keeps_qt5_global_pos() -> None:
-    event = SimpleNamespace(globalPos=mock.Mock(return_value="qt5-global"))
-
-    assert global_pos_from_event_for(SimpleNamespace(), event) == "qt5-global"
-
-    event.globalPos.assert_called_once_with()
-
-
-def test_global_pos_from_event_maps_event_position_through_viewport() -> None:
-    canvas = SimpleNamespace(viewport=mock.Mock(return_value=_GlobalViewport()))
-    event = SimpleNamespace(position=mock.Mock(return_value=_Point("event-pos")))
-
-    assert global_pos_from_event_for(canvas, event) == "global:event-pos"
-
-    canvas.viewport.assert_called_once_with()
-    event.position.assert_called_once_with()
 
 
 def test_device_pixel_ratio_for_reads_view_ratio() -> None:

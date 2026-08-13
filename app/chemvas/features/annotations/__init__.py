@@ -4,9 +4,7 @@ from .brackets import (
     BRACKET_KIND_VALUES,
     BRACKET_MENU_SPECS,
     DEFAULT_BRACKET_KIND,
-    LEGACY_TS_BRACKET_KIND,
     normalized_bracket_kind,
-    restored_bracket_kind,
 )
 from .label_layout import (
     SUB_SCALE,
@@ -37,7 +35,6 @@ __all__ = [
     "DEFAULT_BRACKET_KIND",
     "DEFAULT_SHAPE_KIND",
     "DEFAULT_STROKE_STYLE",
-    "LEGACY_TS_BRACKET_KIND",
     "MAX_NOTE_HTML_CHARS",
     "SHAPE_KINDS",
     "STROKE_STYLES",
@@ -53,7 +50,6 @@ __all__ = [
     "pen_style_for_stroke",
     "place_hydride_stack",
     "place_runs",
-    "restored_bracket_kind",
     "sanitize_note_html",
     "shape_path",
     "split_hydride_label",

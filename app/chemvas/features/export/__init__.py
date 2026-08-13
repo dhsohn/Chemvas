@@ -37,7 +37,6 @@ from .scope import (
 from .service import (
     export_scene,
     render_scene_to_pdf_bytes,
-    render_scene_to_svg,
     render_scene_to_svg_bytes,
 )
 
@@ -66,7 +65,6 @@ __all__ = [
     "normalize_export_path",
     "points_for_mm",
     "render_scene_to_pdf_bytes",
-    "render_scene_to_svg",
     "render_scene_to_svg_bytes",
     "set_label_outline_mode",
     "suffix_for_format",

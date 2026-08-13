@@ -11,8 +11,8 @@ from xml.etree import ElementTree as ET
 
 from chemvas.core.document_io import ChemvasDocument, create_document, parse_document
 from chemvas.domain.document import (
+    CANVAS_FILE_VERSION,
     CHEMVAS_FILE_TYPE,
-    SUPPORTED_FILE_VERSIONS,
     normalize_json_numbers,
 )
 
@@ -183,7 +183,11 @@ def _encode_payload(payload: dict[str, Any]) -> str:
 
 
 def _decode_source_element(source: ET.Element) -> dict[str, Any]:
-    if source.get("encoding") != CHEMVAS_SVG_ENCODING:
+    if source.attrib != {
+        "encoding": CHEMVAS_SVG_ENCODING,
+        "type": CHEMVAS_SVG_PAYLOAD_TYPE,
+        "version": str(CHEMVAS_SVG_PAYLOAD_VERSION),
+    }:
         raise ValueError("Unsupported editable Chemvas metadata encoding.")
     text = source.text or ""
     if len(text.encode("utf-8")) > _MAX_SVG_SOURCE_TEXT_BYTES:
@@ -219,7 +223,8 @@ def _validated_editable_svg_payload(payload: dict[str, Any]) -> dict[str, Any]:
         raise ValueError("Invalid editable Chemvas SVG payload.")
     if payload.get("type") != CHEMVAS_SVG_PAYLOAD_TYPE:
         raise ValueError("Invalid editable Chemvas SVG payload.")
-    if payload.get("version") != CHEMVAS_SVG_PAYLOAD_VERSION:
+    version = payload.get("version")
+    if type(version) is not int or version != CHEMVAS_SVG_PAYLOAD_VERSION:
         raise ValueError("Invalid editable Chemvas SVG payload.")
     scope = payload.get("scope")
     if not isinstance(scope, str) or scope not in CHEMVAS_SVG_SCOPES:
@@ -231,7 +236,7 @@ def _validated_editable_svg_payload(payload: dict[str, Any]) -> dict[str, Any]:
     if (
         document.get("type") != CHEMVAS_FILE_TYPE
         or type(document_version) is not int
-        or document_version not in SUPPORTED_FILE_VERSIONS
+        or document_version != CANVAS_FILE_VERSION
     ):
         raise ValueError("Invalid editable Chemvas SVG payload.")
     try:

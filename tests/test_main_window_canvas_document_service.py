@@ -90,6 +90,31 @@ class MainWindowCanvasDocumentServiceTest(unittest.TestCase):
         )
         self.assertEqual(document_file_path_for(opened), "/tmp/opened.chemvas")
 
+    def test_document_service_rejects_noncanonical_backing_paths(self) -> None:
+        canvas = active_canvas_for_window(self.window)
+        state = snapshot_canvas_state_for(canvas)
+
+        with self.assertRaisesRegex(ValueError, r"\.chemvas filename extension"):
+            self.service.set_file_path(canvas, "/tmp/retired.json")
+        self.assertIsNone(document_file_path_for(canvas))
+
+        with self.assertRaisesRegex(ValueError, r"\.chemvas filename extension"):
+            self.service.open_state(
+                self.window,
+                state=state,
+                file_path="/tmp/retired.json",
+            )
+        self.assertIsNone(document_file_path_for(canvas))
+        self.assertEqual(self.window.tab_references.canvas_count(), 1)
+
+        with self.assertRaisesRegex(ValueError, r"\.chemvas filename extension"):
+            self.service.add_canvas(
+                self.window,
+                state=state,
+                file_path="/tmp/retired.json",
+            )
+        self.assertEqual(self.window.tab_references.canvas_count(), 1)
+
     def test_dirty_state_uses_snapshot_digest(self) -> None:
         canvas = active_canvas_for_window(self.window)
         self.assertFalse(self.service.is_dirty(canvas))

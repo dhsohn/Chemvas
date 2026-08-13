@@ -186,6 +186,7 @@ def _canvas_state() -> dict:
         "marks": [],
         "arrows": [],
         "ts_brackets": [],
+        "shapes": [],
         "orbitals": [],
         "settings": _settings(),
         "last_smiles_input": None,
@@ -1163,7 +1164,7 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
         self.assertFalse(selection_info.rdkit_warmup_pending)
         self.assertEqual(selection_callback.call_args, mock.call("", ""))
 
-    def test_restore_save_and_load_delegate_through_session_methods(self) -> None:
+    def test_restore_and_save_delegate_through_session_methods(self) -> None:
         canvas = SimpleNamespace(
             FILE_FORMAT_VERSION=7,
             runtime_state=_document_runtime_state(),
@@ -1192,17 +1193,25 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
         write_document.assert_called_once_with("/tmp/example.chemvas", {"state": 1}, 7)
         self.assertEqual(warnings, ["adjusted"])
 
-        with (
-            mock.patch(
-                "chemvas.ui.canvas_document_session_service.read_document",
-                return_value=SimpleNamespace(state={"loaded": 1}),
-            ) as read_document,
-            mock.patch.object(service, "restore_state") as restore_state,
-        ):
-            service.load_from_file("/tmp/example.chemvas")
+    def test_save_rejects_noncanonical_document_suffix_before_snapshot(self) -> None:
+        canvas = SimpleNamespace(
+            FILE_FORMAT_VERSION=7,
+            runtime_state=_document_runtime_state(),
+        )
+        _attach_history_service(canvas)
+        service = _session_service(canvas)
 
-        read_document.assert_called_once_with("/tmp/example.chemvas")
-        restore_state.assert_called_once_with({"loaded": 1})
+        with (
+            mock.patch.object(service, "snapshot_state_with_warnings") as snapshot,
+            mock.patch(
+                "chemvas.ui.canvas_document_session_service.write_document"
+            ) as write_document,
+            self.assertRaisesRegex(ValueError, r"\.chemvas filename extension"),
+        ):
+            service.save_to_file("/tmp/example.json")
+
+        snapshot.assert_not_called()
+        write_document.assert_not_called()
 
     def test_export_figure_selection_scope_uses_selected_scene_items(self) -> None:
         selected_item = _SceneItem()
@@ -1427,7 +1436,7 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
         self,
     ) -> None:
         canvas = SimpleNamespace(
-            FILE_FORMAT_VERSION=1,
+            FILE_FORMAT_VERSION=7,
             renderer=SimpleNamespace(
                 style=SimpleNamespace(
                     bond_line_width=1.0,
@@ -1460,7 +1469,7 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
 
     def test_export_figure_embeds_sheet_payload_in_editable_svg_file(self) -> None:
         canvas = SimpleNamespace(
-            FILE_FORMAT_VERSION=1,
+            FILE_FORMAT_VERSION=7,
             renderer=SimpleNamespace(
                 style=SimpleNamespace(
                     bond_line_width=1.0,
@@ -1494,7 +1503,7 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
         self,
     ) -> None:
         canvas = SimpleNamespace(
-            FILE_FORMAT_VERSION=1,
+            FILE_FORMAT_VERSION=7,
             renderer=SimpleNamespace(
                 style=SimpleNamespace(
                     bond_line_width=1.0,
@@ -1548,6 +1557,7 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
             "marks": [],
             "arrows": [],
             "ts_brackets": [],
+            "shapes": [],
             "orbitals": [],
             "settings": {},
             "last_smiles_input": None,

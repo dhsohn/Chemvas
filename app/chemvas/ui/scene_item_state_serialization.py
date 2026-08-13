@@ -12,7 +12,7 @@ from PyQt6.QtWidgets import (
 )
 
 from chemvas.features.annotations import (
-    LEGACY_TS_BRACKET_KIND,
+    DEFAULT_BRACKET_KIND,
     normalized_bracket_kind,
     normalized_shape_kind,
     normalized_stroke_style,
@@ -125,9 +125,12 @@ def note_state_dict_for(canvas, item) -> dict:
 def mark_state_dict(item, *, mark_center_getter: MarkCenterGetter) -> dict:
     data = item.data(1) or {}
     center = mark_center_getter(item)
+    mark_kind = data.get("kind")
+    if mark_kind not in {"plus", "minus", "circled_plus", "circled_minus", "radical"}:
+        mark_kind = "plus"
     return {
         "kind": "mark",
-        "mark_kind": data.get("kind"),
+        "mark_kind": mark_kind,
         "text": data.get("text"),
         "atom_id": data.get("atom_id"),
         "dx": data.get("dx"),
@@ -172,23 +175,30 @@ def ts_bracket_state_dict(item: QGraphicsPathItem) -> dict:
     rect = data.get("rect")
     if not isinstance(rect, QRectF):
         rect = item.sceneBoundingRect()
-    state = {
+    return {
         "kind": "ts_bracket",
         "left": rect.left(),
         "top": rect.top(),
         "right": rect.right(),
         "bottom": rect.bottom(),
+        "bracket_kind": normalized_bracket_kind(
+            data.get("bracket_kind"), default=DEFAULT_BRACKET_KIND
+        ),
     }
-    bracket_kind = normalized_bracket_kind(
-        data.get("bracket_kind"), default=LEGACY_TS_BRACKET_KIND
-    )
-    if bracket_kind != LEGACY_TS_BRACKET_KIND:
-        state["bracket_kind"] = bracket_kind
-    return state
 
 
 def ts_bracket_state_dict_for(canvas, item) -> dict:
     del canvas
+    embedded = embedded_scene_item_state(item)
+    if embedded:
+        return {
+            "kind": "ts_bracket",
+            "left": embedded["left"],
+            "top": embedded["top"],
+            "right": embedded["right"],
+            "bottom": embedded["bottom"],
+            "bracket_kind": normalized_bracket_kind(embedded["bracket_kind"]),
+        }
     return _typed_state_dict_for(item, QGraphicsPathItem, ts_bracket_state_dict)
 
 

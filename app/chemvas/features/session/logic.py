@@ -161,31 +161,51 @@ def manifest_to_json(manifest: SessionManifest) -> JsonObject:
 
 
 def manifest_from_json(data: object) -> SessionManifest | None:
-    if not isinstance(data, dict):
+    if (
+        not isinstance(data, dict)
+        or set(data) != {"version", "pid", "clean_exit", "docs"}
+        or type(data.get("version")) is not int
+        or data.get("version") != SESSION_SCHEMA_VERSION
+    ):
         return None
     pid = data.get("pid")
-    if not isinstance(pid, int):
-        return None
+    clean_exit = data.get("clean_exit")
     raw_docs = data.get("docs")
+    if (
+        type(pid) is not int
+        or type(clean_exit) is not bool
+        or not isinstance(raw_docs, list)
+    ):
+        return None
     docs: list[DocEntry] = []
-    if isinstance(raw_docs, list):
-        for raw in raw_docs:
-            if not isinstance(raw, dict):
-                continue
-            display_name = raw.get("display_name")
-            if not isinstance(display_name, str):
-                continue
-            file_path = raw.get("file_path")
-            snapshot = raw.get("snapshot")
-            docs.append(
-                DocEntry(
-                    file_path=file_path if isinstance(file_path, str) else None,
-                    display_name=display_name,
-                    dirty=bool(raw.get("dirty")),
-                    snapshot=snapshot if isinstance(snapshot, str) else None,
-                )
+    for raw in raw_docs:
+        if not isinstance(raw, dict) or set(raw) != {
+            "file_path",
+            "display_name",
+            "dirty",
+            "snapshot",
+        }:
+            return None
+        display_name = raw.get("display_name")
+        file_path = raw.get("file_path")
+        dirty = raw.get("dirty")
+        snapshot = raw.get("snapshot")
+        if (
+            not isinstance(display_name, str)
+            or (file_path is not None and not isinstance(file_path, str))
+            or type(dirty) is not bool
+            or (snapshot is not None and not isinstance(snapshot, str))
+        ):
+            return None
+        docs.append(
+            DocEntry(
+                file_path=file_path,
+                display_name=display_name,
+                dirty=dirty,
+                snapshot=snapshot,
             )
-    return SessionManifest(pid=pid, clean_exit=bool(data.get("clean_exit")), docs=docs)
+        )
+    return SessionManifest(pid=pid, clean_exit=clean_exit, docs=docs)
 
 
 __all__ = [

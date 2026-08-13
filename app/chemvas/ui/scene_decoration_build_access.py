@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from chemvas.features.annotations import DEFAULT_BRACKET_KIND
 from chemvas.ui.canvas_service_access import optional_canvas_service_method
 from chemvas.ui.canvas_service_ports import scene_decoration_build_service_for_access
 
@@ -17,27 +18,17 @@ def build_arrow_item_for(canvas, start, end, kind: str):
     return None
 
 
-def ts_bracket_path_for(canvas, rect, bracket_kind: str | None = None):
+def ts_bracket_path_for(canvas, rect, bracket_kind: str = DEFAULT_BRACKET_KIND):
     method = _service_method(canvas, "ts_bracket_path")
     if method is not None:
-        if bracket_kind is not None:
-            try:
-                return method(rect, bracket_kind)
-            except TypeError:
-                return method(rect)
-        return method(rect)
+        return method(rect, bracket_kind)
     return None
 
 
-def build_ts_bracket_item_for(canvas, rect, bracket_kind: str | None = None):
+def build_ts_bracket_item_for(canvas, rect, bracket_kind: str = DEFAULT_BRACKET_KIND):
     method = _service_method(canvas, "build_ts_bracket_item")
     if method is not None:
-        if bracket_kind is not None:
-            try:
-                return method(rect, bracket_kind)
-            except TypeError:
-                return method(rect)
-        return method(rect)
+        return method(rect, bracket_kind)
     return None
 
 

@@ -3,6 +3,7 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 import chemvas.ui.scene_clipboard_access as access
+from chemvas.domain.document import CLIPBOARD_SELECTION_VERSION
 from chemvas.ui.scene_clipboard_state import SceneClipboardState
 from PyQt6.QtCore import QRectF
 
@@ -84,27 +85,30 @@ class SceneClipboardAccessTest(unittest.TestCase):
             other_scene, data={0: "mark", 9: {"kind": "mark", "id": "detached"}}
         )
 
-        payload = access.build_selection_clipboard_payload_for_canvas(
-            canvas,
-            selected_items=[],
-            explicit_atom_ids={1, 2},
-            selected_bond_ids=set(),
-            bonds=[],
-            ring_items=[attached_ring, detached_ring],
-            marks_by_atom={1: [attached_mark, detached_mark]},
-            atom_state_getter=lambda atom_id: {
-                "element": "C",
-                "x": atom_id,
-                "y": atom_id,
-            },
-            bond_state_getter=lambda bond: {"bond": bond},
-            scene_item_state_getter=lambda item: item.data(9),
-            version=7,
-        )
+        with patch.object(
+            access, "_selection_perspective_state_for_canvas", return_value=None
+        ):
+            payload = access.build_selection_clipboard_payload_for_canvas(
+                canvas,
+                selected_items=[],
+                explicit_atom_ids={1, 2},
+                selected_bond_ids=set(),
+                bonds=[],
+                ring_items=[attached_ring, detached_ring],
+                marks_by_atom={1: [attached_mark, detached_mark]},
+                atom_state_getter=lambda atom_id: {
+                    "element": "C",
+                    "x": atom_id,
+                    "y": atom_id,
+                },
+                bond_state_getter=lambda bond: {"bond": bond},
+                scene_item_state_getter=lambda item: item.data(9),
+                version=CLIPBOARD_SELECTION_VERSION,
+            )
 
         self.assertIsNotNone(payload)
         assert payload is not None
-        self.assertEqual(payload["version"], 7)
+        self.assertEqual(payload["version"], CLIPBOARD_SELECTION_VERSION)
         self.assertEqual(payload["rings"], [{"kind": "ring", "id": "attached"}])
         self.assertEqual(payload["marks"], [{"kind": "mark", "id": "attached"}])
 

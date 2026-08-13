@@ -265,16 +265,12 @@ class SceneItemStateUnitTest(unittest.TestCase):
             )
         )
 
-    def test_ts_bracket_rect_from_state_restores_legacy_rect_payload(self) -> None:
+    def test_ts_bracket_rect_from_state_rejects_rect_payload(self) -> None:
         rect = ts_bracket_rect_from_state(
             {"kind": "ts_bracket", "rect": (12.0, 8.0, -4.0, -10.0)}
         )
 
-        self.assertIsNotNone(rect)
-        self.assertEqual(
-            (rect.left(), rect.top(), rect.right(), rect.bottom()),
-            (8.0, -2.0, 12.0, 8.0),
-        )
+        self.assertIsNone(rect)
 
     def test_apply_ts_bracket_state_sets_path_pen_brush_and_metadata(self) -> None:
         item = QGraphicsPathItem()
@@ -485,12 +481,13 @@ class SceneItemStateUnitTest(unittest.TestCase):
                 "top": -3.0,
                 "right": 9.0,
                 "bottom": 6.0,
+                "bracket_kind": "square_pair",
             },
             model_atoms={},
             note_style_applier=lambda item: None,
             mark_center_setter=lambda item, center: None,
             ring_fill_brush_getter=lambda: QBrush(QColor("#AA4400")),
-            ts_bracket_path_builder=lambda rect: QPainterPath(),
+            ts_bracket_path_builder=lambda rect, bracket_kind: QPainterPath(),
             bond_color="#000000",
             build_arrow_item=lambda start, end, kind: QGraphicsPathItem(),
             set_curved_arrow_path=lambda *args: None,

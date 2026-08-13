@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from chemvas.features.annotations import DEFAULT_BRACKET_KIND
 from chemvas.ui.canvas_service_access import optional_canvas_service_method
 from chemvas.ui.canvas_service_ports import (
     mark_scene_service_for_access,
@@ -65,19 +66,16 @@ def preview_arrow_for(canvas, start, end, kind: str):
     return None
 
 
-def add_ts_bracket_for(canvas, rect, bracket_kind: str | None = None):
+def add_ts_bracket_for(canvas, rect, bracket_kind: str = DEFAULT_BRACKET_KIND):
     method = _decoration_service_method(canvas, "add_ts_bracket")
     if method is not None:
-        if bracket_kind is not None:
-            try:
-                return method(rect, bracket_kind=bracket_kind)
-            except TypeError:
-                return method(rect)
-        return method(rect)
+        return method(rect, bracket_kind=bracket_kind)
     return None
 
 
-def add_ts_bracket_from_points_for(canvas, start, end, bracket_kind: str | None = None):
+def add_ts_bracket_from_points_for(
+    canvas, start, end, bracket_kind: str = DEFAULT_BRACKET_KIND
+):
     rect_from_points = _build_service_method(canvas, "ts_bracket_rect_from_points")
     if rect_from_points is not None:
         return add_ts_bracket_for(
@@ -86,15 +84,12 @@ def add_ts_bracket_from_points_for(canvas, start, end, bracket_kind: str | None 
     return None
 
 
-def preview_ts_bracket_for(canvas, start, end, bracket_kind: str | None = None):
+def preview_ts_bracket_for(
+    canvas, start, end, bracket_kind: str = DEFAULT_BRACKET_KIND
+):
     method = _build_service_method(canvas, "preview_ts_bracket")
     if method is not None:
-        if bracket_kind is not None:
-            try:
-                return method(start, end, bracket_kind)
-            except TypeError:
-                return method(start, end)
-        return method(start, end)
+        return method(start, end, bracket_kind)
     return None
 
 

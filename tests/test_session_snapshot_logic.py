@@ -146,9 +146,13 @@ def test_manifest_json_round_trips():
 def test_manifest_from_json_rejects_garbage():
     assert manifest_from_json(None) is None
     assert manifest_from_json({"clean_exit": True}) is None  # no pid
-    # A doc without a display_name is dropped, not fatal.
-    parsed = manifest_from_json(
-        {"pid": 1, "docs": [{"file_path": "/a"}, {"display_name": "ok"}]}
-    )
-    assert parsed is not None
-    assert [e.display_name for e in parsed.docs] == ["ok"]
+    base = {
+        "version": 1,
+        "pid": 1,
+        "clean_exit": False,
+        "docs": [],
+    }
+    for version in (2, 1.0, True):
+        assert manifest_from_json({**base, "version": version}) is None
+    assert manifest_from_json({**base, "clean_exit": 0}) is None
+    assert manifest_from_json({**base, "docs": [{"file_path": "/a"}]}) is None

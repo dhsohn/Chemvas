@@ -8,26 +8,19 @@ from pathlib import Path
 import pytest
 from chemvas.bootstrap import calculation_bundle as cli
 from chemvas.core.document_io import read_document
-from chemvas.domain.document import PRECOMPLEX_CANVAS_FILE_VERSION
+from chemvas.domain.document import CANVAS_FILE_VERSION
 from chemvas.domain.document.precomplex_profile import (
     CURRENT_PROFILE_ID,
-    LEGACY_PROFILE_ID,
     radius_provenance_for,
 )
 
 from tests.test_calculation_step_cli import _StateFakeAdapter, _write_document_with_plan
 
 
-@pytest.mark.parametrize(
-    ("request_version", "profile_id"),
-    [(1, LEGACY_PROFILE_ID), (2, CURRENT_PROFILE_ID)],
-)
 def test_generate_precomplex_creates_non_overwriting_plan_v2_document(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
-    request_version: int,
-    profile_id: str,
 ) -> None:
     source = tmp_path / "mechanism.chemvas"
     _write_document_with_plan(source)
@@ -35,7 +28,8 @@ def test_generate_precomplex_creates_non_overwriting_plan_v2_document(
     request_path = tmp_path / "precomplex-request.json"
     request_payload: dict[str, object] = {
         "format": "chemvas-precomplex-request",
-        "version": request_version,
+        "version": 2,
+        "profile": CURRENT_PROFILE_ID,
         "source_document_sha256": hashlib.sha256(source_bytes).hexdigest(),
         "step_id": "S01",
         "candidate_cap": 4,
@@ -65,8 +59,6 @@ def test_generate_precomplex_creates_non_overwriting_plan_v2_document(
             },
         },
     }
-    if request_version == 2:
-        request_payload["profile"] = profile_id
     request_path.write_text(
         json.dumps(request_payload),
         encoding="utf-8",
@@ -94,21 +86,20 @@ def test_generate_precomplex_creates_non_overwriting_plan_v2_document(
     plan = document.state["calculation_plan"]
     step = plan["steps"][0]
     assert source.read_bytes() == source_bytes
-    assert document.payload["version"] == PRECOMPLEX_CANVAS_FILE_VERSION
+    assert document.payload["version"] == CANVAS_FILE_VERSION
     assert plan["version"] == 2
     assert report["format"] == "chemvas-precomplex-generation"
     assert report["step_id"] == "S01"
-    assert report["profile"] == profile_id
-    assert report["radius_provenance"] == radius_provenance_for(profile_id)
+    assert report["profile"] == CURRENT_PROFILE_ID
+    assert report["radius_provenance"] == radius_provenance_for(CURRENT_PROFILE_ID)
     assert report["candidate_counts"] == {"reactant": 4, "product": 4}
     for side in ("reactant", "product"):
         precomplex = step[side]["precomplex"]
         assert precomplex["kind"] == "candidate_ensemble"
-        assert precomplex["profile"] == profile_id
-        if profile_id == CURRENT_PROFILE_ID:
-            assert precomplex["radius_provenance"] == radius_provenance_for(profile_id)
-        else:
-            assert "radius_provenance" not in precomplex
+        assert precomplex["profile"] == CURRENT_PROFILE_ID
+        assert precomplex["radius_provenance"] == radius_provenance_for(
+            CURRENT_PROFILE_ID
+        )
         assert len(precomplex["candidates"]) == 4
         assert precomplex["selection"] is None
         assert all(
@@ -129,15 +120,15 @@ def test_generate_precomplex_creates_non_overwriting_plan_v2_document(
     )
     preview = json.loads(capsys.readouterr().out)
     assert preview["format"] == "chemvas-precomplex-inspection"
-    assert preview["endpoints"]["reactant"]["profile"] == profile_id
+    assert preview["endpoints"]["reactant"]["profile"] == CURRENT_PROFILE_ID
     assert preview["placement_profiles"] == {
         "reactant": {
-            "id": profile_id,
-            "radius_provenance": radius_provenance_for(profile_id),
+            "id": CURRENT_PROFILE_ID,
+            "radius_provenance": radius_provenance_for(CURRENT_PROFILE_ID),
         },
         "product": {
-            "id": profile_id,
-            "radius_provenance": radius_provenance_for(profile_id),
+            "id": CURRENT_PROFILE_ID,
+            "radius_provenance": radius_provenance_for(CURRENT_PROFILE_ID),
         },
     }
     assert (
@@ -221,8 +212,8 @@ def test_generate_precomplex_creates_non_overwriting_plan_v2_document(
         "deterministic_precomplex_placement"
     )
     assert endpoint_pair["geometry"]["placement_profile"] == {
-        "id": profile_id,
-        "radius_provenance": radius_provenance_for(profile_id),
+        "id": CURRENT_PROFILE_ID,
+        "radius_provenance": radius_provenance_for(CURRENT_PROFILE_ID),
     }
     assert payload["geometry_scope"]["interaction_geometry_guarantee"] == (
         "reviewed_precomplex_pair"
@@ -255,8 +246,6 @@ def _generate_candidate_fixture(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
-    *,
-    profile_id: str = LEGACY_PROFILE_ID,
 ) -> tuple[Path, Path, dict[str, object]]:
     source = tmp_path / "source.chemvas"
     _write_document_with_plan(source)
@@ -264,7 +253,8 @@ def _generate_candidate_fixture(
     request = tmp_path / "request.json"
     request_payload: dict[str, object] = {
         "format": "chemvas-precomplex-request",
-        "version": 1 if profile_id == LEGACY_PROFILE_ID else 2,
+        "version": 2,
+        "profile": CURRENT_PROFILE_ID,
         "source_document_sha256": source_sha256,
         "step_id": "S01",
         "candidate_cap": 2,
@@ -294,8 +284,6 @@ def _generate_candidate_fixture(
             },
         },
     }
-    if profile_id != LEGACY_PROFILE_ID:
-        request_payload["profile"] = profile_id
     request.write_text(
         json.dumps(request_payload),
         encoding="utf-8",
@@ -320,9 +308,10 @@ def _generate_candidate_fixture(
     raw = json.loads(output.read_text(encoding="utf-8"))
     for side in ("reactant", "product"):
         precomplex = raw["state"]["calculation_plan"]["steps"][0][side]["precomplex"]
-        assert precomplex["profile"] == profile_id
-        if profile_id == LEGACY_PROFILE_ID:
-            assert "radius_provenance" not in precomplex
+        assert precomplex["profile"] == CURRENT_PROFILE_ID
+        assert precomplex["radius_provenance"] == radius_provenance_for(
+            CURRENT_PROFILE_ID
+        )
     return source, output, raw
 
 
@@ -687,8 +676,13 @@ def test_generation_requires_request_binding_to_exact_source_and_step(
     [
         (2, None, "Invalid precomplex request fields"),
         (2, "unknown/1", "Unsupported precomplex placement profile"),
-        (2, LEGACY_PROFILE_ID, "request v2 requires profile"),
-        (True, None, "Unsupported precomplex request format or version"),
+        (
+            2,
+            "chemvas-rigid-precomplex-placement/" + "1",
+            "Unsupported precomplex placement profile",
+        ),
+        (1, CURRENT_PROFILE_ID, "Unsupported precomplex request format or version"),
+        (True, CURRENT_PROFILE_ID, "Unsupported precomplex request format or version"),
     ],
 )
 def test_generation_rejects_invalid_profile_request_contract(
@@ -705,7 +699,9 @@ def test_generation_rejects_invalid_profile_request_contract(
     request_path = tmp_path / "request.json"
     request = json.loads(request_path.read_text(encoding="utf-8"))
     request["version"] = version
-    if profile is not None:
+    if profile is None:
+        request.pop("profile")
+    else:
         request["profile"] = profile
     request_path.write_text(json.dumps(request), encoding="utf-8")
     output = tmp_path / "invalid-profile-request.chemvas"
@@ -728,16 +724,20 @@ def test_generation_rejects_invalid_profile_request_contract(
     assert not output.exists()
 
 
-def test_profile_two_radius_provenance_tamper_is_rejected_on_read(
+def test_removed_request_v1_has_no_parser_branch() -> None:
+    source = Path(cli.__file__).read_text(encoding="utf-8")
+
+    assert "version not in {1, 2}" not in source
+    assert "if version == 1" not in source
+
+
+def test_current_radius_provenance_tamper_is_rejected_on_read(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     _source, _candidates, raw = _generate_candidate_fixture(
-        tmp_path,
-        monkeypatch,
-        capsys,
-        profile_id=CURRENT_PROFILE_ID,
+        tmp_path, monkeypatch, capsys
     )
     precomplex = raw["state"]["calculation_plan"]["steps"][0]["product"]["precomplex"]
     assert precomplex["radius_provenance"] == radius_provenance_for(CURRENT_PROFILE_ID)
@@ -749,51 +749,18 @@ def test_profile_two_radius_provenance_tamper_is_rejected_on_read(
         read_document(tampered)
 
 
-def test_selection_rejects_mixed_placement_profiles_without_output(
+def test_removed_profile_candidate_ensemble_is_rejected_on_read(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    _source, legacy_candidates, legacy_raw = _generate_candidate_fixture(
-        tmp_path,
-        monkeypatch,
-        capsys,
+    _source, _candidates, raw = _generate_candidate_fixture(
+        tmp_path, monkeypatch, capsys
     )
-    v2_dir = tmp_path / "v2"
-    v2_dir.mkdir()
-    _v2_source, _v2_candidates, current_raw = _generate_candidate_fixture(
-        v2_dir,
-        monkeypatch,
-        capsys,
-        profile_id=CURRENT_PROFILE_ID,
-    )
-    legacy_step = legacy_raw["state"]["calculation_plan"]["steps"][0]
-    current_step = current_raw["state"]["calculation_plan"]["steps"][0]
-    legacy_step["product"]["precomplex"] = current_step["product"]["precomplex"]
-    mixed = tmp_path / "mixed-profile-candidates.chemvas"
-    mixed.write_text(json.dumps(legacy_raw), encoding="utf-8")
-    read_document(mixed)
-    reviewed = tmp_path / "mixed-profile-reviewed.chemvas"
+    precomplex = raw["state"]["calculation_plan"]["steps"][0]["reactant"]["precomplex"]
+    precomplex["profile"] = "chemvas-rigid-precomplex-placement/" + "1"
+    removed = tmp_path / "removed-profile-candidates.chemvas"
+    removed.write_text(json.dumps(raw), encoding="utf-8")
 
-    with pytest.raises(SystemExit) as error:
-        cli.run(
-            [
-                "select-precomplex",
-                str(mixed),
-                "--step",
-                "S01",
-                "--reactant-candidate",
-                legacy_step["reactant"]["precomplex"]["candidates"][0]["id"],
-                "--product-candidate",
-                current_step["product"]["precomplex"]["candidates"][0]["id"],
-                "--reviewer",
-                "test-reviewer",
-                "--output",
-                str(reviewed),
-            ]
-        )
-
-    assert error.value.code == 2
-    assert "different placement profiles" in capsys.readouterr().err
-    assert not reviewed.exists()
-    assert legacy_candidates.exists()
+    with pytest.raises(ValueError, match="Invalid Chemvas file"):
+        read_document(removed)

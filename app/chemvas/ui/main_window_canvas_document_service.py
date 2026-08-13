@@ -12,6 +12,7 @@ from chemvas.ui.canvas_document_metadata_state import (
     mark_document_dirty_for,
     set_document_display_name_for,
     set_document_file_path_for,
+    validate_document_file_path,
 )
 from chemvas.ui.canvas_lifecycle import schedule_canvas_deletion_for
 from chemvas.ui.canvas_window_access import (
@@ -64,6 +65,7 @@ class MainWindowCanvasDocumentService:
         select: bool = True,
         template: CanvasView | None = None,
     ) -> CanvasView:
+        validate_document_file_path(file_path)
         canvas = self.create_canvas(window, template=template)
         if state is not None:
             restore_canvas_state_for(canvas, state)
@@ -102,6 +104,7 @@ class MainWindowCanvasDocumentService:
         file_path: str | None,
         display_name: str | None = None,
     ) -> None:
+        validate_document_file_path(file_path)
         restore_canvas_state_for(canvas, state)
         resolved_name = (
             display_name

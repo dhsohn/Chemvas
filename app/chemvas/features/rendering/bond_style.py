@@ -27,9 +27,7 @@ BOLD_DOUBLE_STYLE_SEQUENCE = (
 PLAIN_DOUBLE_STYLES = frozenset(DOUBLE_STYLE_SEQUENCE)
 DOTTED_DOUBLE_STYLES = frozenset(DOTTED_DOUBLE_STYLE_SEQUENCE)
 BOLD_DOUBLE_STYLES = frozenset(BOLD_DOUBLE_STYLE_SEQUENCE)
-# ``bold`` remains a readable legacy/default alias. For order-2 bonds it adopts
-# the unified Inward position; new centered bold doubles use ``bold_center``.
-BOLD_BOND_STYLES = frozenset({"bold", *BOLD_DOUBLE_STYLE_SEQUENCE})
+BOLD_BOND_STYLES = frozenset(BOLD_DOUBLE_STYLE_SEQUENCE)
 STANDARD_BOND_STYLES = frozenset(
     {
         "single",
@@ -56,7 +54,7 @@ def is_bold_double_bond_style(style: str, order: int) -> bool:
 
 
 def normalized_bold_double_style(style: str, order: int) -> str:
-    if not is_bold_double_bond_style(style, order) or style == "bold":
+    if not is_bold_double_bond_style(style, order):
         return BOLD_STYLE_DEFAULT
     return style
 

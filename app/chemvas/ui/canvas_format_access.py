@@ -4,7 +4,10 @@ from typing import Any
 
 
 def file_format_version_for(canvas: Any) -> int:
-    return int(canvas.FILE_FORMAT_VERSION)
+    version = canvas.FILE_FORMAT_VERSION
+    if type(version) is not int:
+        raise TypeError("Canvas file format version must be an integer.")
+    return version
 
 
 def clipboard_selection_mime_for(canvas: Any) -> str:
@@ -12,7 +15,10 @@ def clipboard_selection_mime_for(canvas: Any) -> str:
 
 
 def clipboard_selection_version_for(canvas: Any) -> int:
-    return int(canvas.CLIPBOARD_SELECTION_VERSION)
+    version = canvas.CLIPBOARD_SELECTION_VERSION
+    if type(version) is not int:
+        raise TypeError("Clipboard selection version must be an integer.")
+    return version
 
 
 __all__ = [

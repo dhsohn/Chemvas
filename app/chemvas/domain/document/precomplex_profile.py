@@ -6,7 +6,6 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from types import MappingProxyType
 
-LEGACY_PROFILE_ID = "chemvas-rigid-precomplex-placement/1"
 CURRENT_PROFILE_ID = "chemvas-rigid-precomplex-placement/2"
 
 
@@ -47,48 +46,6 @@ def _profile(
         radius_table_sha256=hashlib.sha256(canonical.encode("ascii")).hexdigest(),
         provenance_status=provenance_status,
     )
-
-
-# Profile 1 is immutable compatibility data. Its covalent values match Cordero
-# et al. (2008), but its mixed van der Waals column included unverified values.
-# Keeping the complete table unchanged is required to reproduce existing plans.
-_LEGACY_PROFILE = _profile(
-    LEGACY_PROFILE_ID,
-    {
-        "H": (0.31, 1.20),
-        "Li": (1.28, 1.82),
-        "B": (0.84, 1.92),
-        "C": (0.76, 1.70),
-        "N": (0.71, 1.55),
-        "O": (0.66, 1.52),
-        "F": (0.57, 1.47),
-        "Na": (1.66, 2.27),
-        "Mg": (1.41, 1.73),
-        "Al": (1.21, 1.84),
-        "Si": (1.11, 2.10),
-        "P": (1.07, 1.80),
-        "S": (1.05, 1.80),
-        "Cl": (1.02, 1.75),
-        "K": (2.03, 2.75),
-        "Ca": (1.76, 2.31),
-        "Fe": (1.32, 2.00),
-        "Co": (1.26, 2.00),
-        "Ni": (1.24, 1.63),
-        "Cu": (1.32, 1.40),
-        "Zn": (1.22, 1.39),
-        "Br": (1.20, 1.85),
-        "Ru": (1.46, 2.00),
-        "Rh": (1.42, 2.00),
-        "Pd": (1.39, 1.63),
-        "Ag": (1.45, 1.72),
-        "Sn": (1.39, 2.17),
-        "I": (1.39, 1.98),
-        "Ir": (1.41, 2.00),
-        "Pt": (1.36, 1.75),
-        "Au": (1.36, 1.66),
-    },
-    provenance_status="legacy_frozen_unverified",
-)
 
 
 # Profile 2 uses one cited definition for every supported element. Covalent
@@ -134,12 +91,7 @@ _CURRENT_PROFILE = _profile(
     provenance_status="cited",
 )
 
-_PROFILES = MappingProxyType(
-    {
-        _LEGACY_PROFILE.id: _LEGACY_PROFILE,
-        _CURRENT_PROFILE.id: _CURRENT_PROFILE,
-    }
-)
+_PROFILES = MappingProxyType({_CURRENT_PROFILE.id: _CURRENT_PROFILE})
 
 
 def precomplex_placement_profile(profile_id: object) -> PrecomplexPlacementProfile:
@@ -155,14 +107,6 @@ def precomplex_placement_profile(profile_id: object) -> PrecomplexPlacementProfi
 
 def radius_provenance_for(profile_id: str) -> dict[str, object]:
     profile = precomplex_placement_profile(profile_id)
-    if profile.id == LEGACY_PROFILE_ID:
-        return {
-            "status": profile.provenance_status,
-            "units": "angstrom",
-            "radius_table_sha256": profile.radius_table_sha256,
-            "dataset_id": "chemvas-precomplex-legacy-radius-table-v1",
-            "doi": None,
-        }
     return {
         "status": profile.provenance_status,
         "units": "angstrom",
@@ -181,7 +125,6 @@ def radius_provenance_for(profile_id: str) -> dict[str, object]:
 
 __all__ = [
     "CURRENT_PROFILE_ID",
-    "LEGACY_PROFILE_ID",
     "PrecomplexPlacementProfile",
     "precomplex_placement_profile",
     "radius_provenance_for",

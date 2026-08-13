@@ -42,7 +42,6 @@ from chemvas.ui.canvas_smiles_input_state import (
     set_last_smiles_input_for,
 )
 from chemvas.ui.canvas_text_style_state import (
-    CanvasTextStyleState,
     set_text_style_for,
     text_style_state_for,
 )
@@ -200,7 +199,6 @@ def restore_document_projection_state(canvas, state: dict) -> None:
 
 def apply_document_settings(canvas, state: dict) -> None:
     settings = state["settings"]
-    default_text_style = CanvasTextStyleState()
     set_bond_length_for(canvas, settings["bond_length_px"])
     set_tool_setting_for(canvas, "arrow_line_width", settings["arrow_line_width"])
     set_tool_setting_for(canvas, "arrow_head_scale", settings["arrow_head_scale"])
@@ -210,7 +208,7 @@ def apply_document_settings(canvas, state: dict) -> None:
     set_text_style_for(
         canvas,
         "text_font_family",
-        settings.get("text_font_family", default_text_style.text_font_family),
+        settings["text_font_family"],
     )
     set_text_style_for(canvas, "text_font_size", settings["text_font_size"])
     set_text_style_for(canvas, "text_font_weight", settings["text_font_weight"])
@@ -218,58 +216,52 @@ def apply_document_settings(canvas, state: dict) -> None:
     set_text_style_for(
         canvas,
         "text_color",
-        _color_from_setting(settings.get("text_color"), default_text_style.text_color),
+        _color_from_setting(settings["text_color"]),
     )
     set_text_style_for(
         canvas,
         "text_alignment",
-        _alignment_from_name(
-            settings.get("text_alignment"), default_text_style.text_alignment
-        ),
+        _alignment_from_name(settings["text_alignment"]),
     )
     set_text_style_for(
         canvas,
         "text_line_spacing",
-        settings.get("text_line_spacing", default_text_style.text_line_spacing),
+        settings["text_line_spacing"],
     )
     set_text_style_for(
         canvas,
         "note_box_enabled",
-        settings.get("note_box_enabled", default_text_style.note_box_enabled),
+        settings["note_box_enabled"],
     )
     set_text_style_for(
         canvas,
         "note_box_color",
-        _color_from_setting(
-            settings.get("note_box_color"), default_text_style.note_box_color
-        ),
+        _color_from_setting(settings["note_box_color"]),
     )
     set_text_style_for(
         canvas,
         "note_box_alpha",
-        settings.get("note_box_alpha", default_text_style.note_box_alpha),
+        settings["note_box_alpha"],
     )
     set_text_style_for(
         canvas,
         "note_border_enabled",
-        settings.get("note_border_enabled", default_text_style.note_border_enabled),
+        settings["note_border_enabled"],
     )
     set_text_style_for(
         canvas,
         "note_border_color",
-        _color_from_setting(
-            settings.get("note_border_color"), default_text_style.note_border_color
-        ),
+        _color_from_setting(settings["note_border_color"]),
     )
     set_text_style_for(
         canvas,
         "note_border_width",
-        settings.get("note_border_width", default_text_style.note_border_width),
+        settings["note_border_width"],
     )
     set_text_style_for(
         canvas,
         "note_padding",
-        settings.get("note_padding", default_text_style.note_padding),
+        settings["note_padding"],
     )
     set_sheet_setup_for(canvas, settings["sheet_size"], settings["sheet_orientation"])
     set_last_smiles_input_for(canvas, state["last_smiles_input"])
@@ -285,21 +277,17 @@ def _alignment_name(alignment) -> str:
     return "left"
 
 
-def _alignment_from_name(value, fallback):
+def _alignment_from_name(value: str):
     return {
         "left": Qt.AlignmentFlag.AlignLeft,
         "center": Qt.AlignmentFlag.AlignHCenter,
         "right": Qt.AlignmentFlag.AlignRight,
         "justify": Qt.AlignmentFlag.AlignJustify,
-    }.get(value, fallback)
+    }[value]
 
 
-def _color_from_setting(value, fallback: QColor) -> QColor:
-    if isinstance(value, str):
-        color = QColor(value)
-        if color.isValid():
-            return color
-    return QColor(fallback)
+def _color_from_setting(value: str) -> QColor:
+    return QColor(value)
 
 
 def restore_document_pre_model_items(canvas, state: dict) -> None:
@@ -345,7 +333,7 @@ def restore_document_post_model_items(canvas, state: dict) -> None:
     for ts_bracket_state in state["ts_brackets"]:
         restore_ts_bracket_from_state(canvas, ts_bracket_state)
 
-    for shape_state in state.get("shapes", []):
+    for shape_state in state["shapes"]:
         restore_shape_from_state(canvas, shape_state)
 
     for orbital_state in state["orbitals"]:

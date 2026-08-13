@@ -15,12 +15,12 @@ def test_alias_attachments_preserve_model_bond_order_and_raw_bond_contract() -> 
             Bond(11, 12, order=1, style="single"),
             None,
             Bond(7, 999, order=3, style="triple"),
-            Bond(3, 7, order=2, style="bold"),
+            Bond(3, 7, order=2, style="bold_in"),
             Bond(7, 9, order=1, style="hash"),
         ],
     )
 
     assert alias_attachments_for_atom(model, 7) == (
-        AliasAttachment("C", 2, "bold"),
+        AliasAttachment("C", 2, "bold_in"),
         AliasAttachment("N", 1, "hash"),
     )

@@ -133,7 +133,7 @@ def _path_ready_state(
     return state
 
 
-def test_attach_and_inspect_plan_create_new_v5_document_without_overwrite(
+def test_attach_and_inspect_plan_create_current_document_without_overwrite(
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
 ) -> None:

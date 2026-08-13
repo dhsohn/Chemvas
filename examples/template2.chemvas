@@ -1,6 +1,6 @@
 {
   "type": "chemvas",
-  "version": 3,
+  "version": 7,
   "state": {
     "model": {
       "atoms": {
@@ -678,7 +678,6 @@
           "style": "single",
           "color": "#000000"
         },
-        null,
         {
           "a": 34,
           "b": 35,
@@ -784,12 +783,6 @@
           "style": "single",
           "color": "#000000"
         },
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
         {
           "a": 40,
           "b": 53,
@@ -839,7 +832,6 @@
           "style": "single",
           "color": "#000000"
         },
-        null,
         {
           "a": 56,
           "b": 60,

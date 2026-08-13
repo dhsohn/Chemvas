@@ -11,14 +11,31 @@ from chemvas.ui.recent_documents_store import (
 )
 
 
-def test_record_then_load_round_trips(tmp_path):
+def test_load_prunes_legacy_document_paths(tmp_path):
     recent = tmp_path / "recent.json"
-    existing = tmp_path / "legacy-document.json"
-    existing.write_text("{}")
+    canonical = tmp_path / "drawing.chemvas"
+    legacy = tmp_path / "legacy-document.json"
+    canonical.write_text("{}")
+    legacy.write_text("{}")
+    recent.write_text(
+        json.dumps(
+            {
+                "version": 1,
+                "paths": [str(legacy), str(canonical)],
+            }
+        )
+    )
 
-    record_recent(str(existing), path=recent)
+    assert load_recent(path=recent) == [str(canonical)]
 
-    assert load_recent(path=recent) == [str(existing)]
+
+def test_record_ignores_legacy_document_paths(tmp_path):
+    recent = tmp_path / "recent.json"
+    legacy = tmp_path / "legacy-document.json"
+    legacy.write_text("{}")
+
+    assert record_recent(str(legacy), path=recent) == []
+    assert not recent.exists()
 
 
 def test_record_stores_absolute_paths(tmp_path, monkeypatch):

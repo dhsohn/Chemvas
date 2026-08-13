@@ -10,7 +10,7 @@ import os
 
 MAX_RECENT = 10
 
-# Bump if the on-disk shape changes; load tolerates unknown/most-recent formats.
+# Bump if the on-disk shape changes. Unknown schemas fail closed.
 RECENT_SCHEMA_VERSION = 1
 
 
@@ -58,12 +58,17 @@ def to_json(paths: list[str]) -> dict:
 
 
 def from_json(data: object) -> list[str]:
-    if not isinstance(data, dict):
+    if (
+        not isinstance(data, dict)
+        or set(data) != {"version", "paths"}
+        or type(data.get("version")) is not int
+        or data.get("version") != RECENT_SCHEMA_VERSION
+    ):
         return []
     paths = data.get("paths")
-    if not isinstance(paths, list):
+    if not isinstance(paths, list) or any(not isinstance(path, str) for path in paths):
         return []
-    return [path for path in paths if isinstance(path, str)]
+    return list(paths)
 
 
 __all__ = [

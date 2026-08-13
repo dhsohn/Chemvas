@@ -17,7 +17,8 @@ class SheetSetupLogicTest(unittest.TestCase):
         self.assertEqual(normalize_sheet_size("a4"), "A4")
         self.assertEqual(normalize_sheet_size("unknown"), "A4")
         self.assertEqual(normalize_sheet_orientation("portrait"), "portrait")
-        self.assertEqual(normalize_sheet_orientation("vertical"), "portrait")
+        self.assertEqual(normalize_sheet_orientation("vertical"), "landscape")
+        self.assertEqual(normalize_sheet_orientation("horizontal"), "landscape")
         self.assertEqual(normalize_sheet_orientation("weird"), "landscape")
         self.assertEqual(normalize_sheet_setup("a4", "horizontal"), ("A4", "landscape"))
 

@@ -1935,7 +1935,7 @@ class RDKitAdapterTest(unittest.TestCase):
             ("C", 3, "triple"),
             ("C", 1, "dotted"),
             ("C", 1, "dotted_double"),
-            ("C", 1, "bold"),
+            ("C", 1, "bold_in"),
         )
         for neighbor_element, bond_order, bond_style in cases:
             with self.subTest(

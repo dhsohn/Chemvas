@@ -57,4 +57,11 @@ def test_json_round_trips():
 def test_from_json_tolerates_garbage():
     assert from_json(None) == []
     assert from_json({"paths": "not-a-list"}) == []
-    assert from_json({"paths": ["/a/x.chemvas", 5, None]}) == ["/a/x.chemvas"]
+    assert from_json({"version": 1, "paths": ["/a/x.chemvas", 5, None]}) == []
+
+
+def test_from_json_rejects_unknown_or_non_integer_schema_versions():
+    paths = ["/a/x.chemvas"]
+    assert from_json({"version": 2, "paths": paths}) == []
+    assert from_json({"version": 1.0, "paths": paths}) == []
+    assert from_json({"version": True, "paths": paths}) == []

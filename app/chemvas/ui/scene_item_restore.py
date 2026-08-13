@@ -162,10 +162,7 @@ def create_ts_bracket_item_from_state(
     if rect is None:
         return None
     bracket_kind = ts_bracket_kind_from_state(ts_bracket_state)
-    try:
-        return build_ts_bracket_item(rect, bracket_kind)
-    except TypeError:
-        return build_ts_bracket_item(rect)
+    return build_ts_bracket_item(rect, bracket_kind)
 
 
 def create_shape_item_from_state(

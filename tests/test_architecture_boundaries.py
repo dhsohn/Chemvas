@@ -3038,6 +3038,35 @@ def test_alias_attachment_derivation_has_one_domain_owner() -> None:
     assert _matching_lines(re.compile(r"\b_alias_attachments\b"), consumers) == []
 
 
+def test_removed_compatibility_surfaces_do_not_return() -> None:
+    files = _app_python_files()
+    removed_symbols = re.compile(
+        r"\b(?:LEGACY_PROFILE_ID|LEGACY_CALCULATION_PLAN_VERSION"
+        r"|LEGACY_CANVAS_FILE_VERSION|LEGACY_CLIPBOARD_SELECTION_VERSION"
+        r"|CALCULATION_PLAN_CANVAS_FILE_VERSION|COMPACT_BONDS_CANVAS_FILE_VERSION"
+        r"|COMPACT_BONDS_FILE_VERSION|GROUPS_CANVAS_FILE_VERSION"
+        r"|PERSPECTIVE_CANVAS_FILE_VERSION"
+        r"|PRECOMPLEX_CANVAS_FILE_VERSION|CLIPBOARD_SELECTION_PERSPECTIVE_VERSION"
+        r"|ARROW_MENU_ITEMS|ARROW_PRESET_ITEMS|ACS_COLOR_PALETTE"
+        r"|render_scene_to_svg|_command_requires_exact_history_transaction"
+        r"|draw_ring_double_bond_for|load_from_file"
+        r"|draw_ring_double_bond|draw_dotted_double_bond"
+        r"|square_pair_double_dagger|globalPos|LineHeightType)\b"
+    )
+    signature_fallback = re.compile(
+        r'"(?:snapshot|render_insert_preview|bracket_kind)"\s+in\s+str\(\w+\)'
+    )
+
+    assert _matching_lines(removed_symbols, files) == []
+    assert _matching_lines(signature_fallback, files) == []
+
+
+def test_selection_style_access_does_not_reexport_selection_info() -> None:
+    access = APP_ROOT / "chemvas" / "ui" / "selection_style_access.py"
+
+    assert _matching_lines(re.compile(r"\bemit_selection_info_for\b"), [access]) == []
+
+
 def test_canvas_input_controller_does_not_use_context_facade() -> None:
     removed_context = APP_ROOT / "chemvas" / "ui" / "canvas_input_context.py"
     controller = APP_ROOT / "chemvas" / "ui" / "canvas_input_controller.py"

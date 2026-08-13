@@ -21,7 +21,6 @@ from chemvas.core.document_io import (
 from chemvas.domain.document import (
     CANVAS_FILE_VERSION,
     CHEMVAS_FILE_TYPE,
-    LEGACY_CANVAS_FILE_VERSION,
     serialize_settings,
 )
 
@@ -60,6 +59,7 @@ def _canvas_state(model: dict | None = None) -> dict:
         "marks": [],
         "arrows": [],
         "ts_brackets": [],
+        "shapes": [],
         "orbitals": [],
         "settings": _settings(),
         "last_smiles_input": None,
@@ -214,18 +214,19 @@ class DocumentIOTest(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     parse_document(payload)
 
-    def test_legacy_v1_payloads_are_still_valid(self) -> None:
+    def test_versions_before_v7_are_rejected(self) -> None:
         state = _canvas_state()
-        payload = {
-            "type": CHEMVAS_FILE_TYPE,
-            "version": LEGACY_CANVAS_FILE_VERSION,
-            "state": state,
-        }
-
-        self.assertIs(parse_document(payload).state, state)
-        self.assertIs(
-            create_document(state, version=LEGACY_CANVAS_FILE_VERSION).state, state
-        )
+        for version in range(1, CANVAS_FILE_VERSION):
+            with self.subTest(version=version):
+                payload = {
+                    "type": CHEMVAS_FILE_TYPE,
+                    "version": version,
+                    "state": state,
+                }
+                with self.assertRaises(ValueError):
+                    parse_document(payload)
+                with self.assertRaises(ValueError):
+                    create_document(state, version=version)
 
     def test_workbook_shaped_payloads_are_invalid(self) -> None:
         workbook_payload = {
@@ -292,9 +293,7 @@ class DocumentIOTest(unittest.TestCase):
         self.assertEqual(loaded.payload, written.payload)
         self.assertEqual(loaded.state, state)
 
-    def test_read_document_accepts_pre_v4_file_with_bond_tombstones(self) -> None:
-        # Files written before v4 carry null entries for deleted bond slots;
-        # they must keep loading unchanged.
+    def test_read_document_rejects_bond_tombstones(self) -> None:
         state = _canvas_state(
             _model_state(
                 {
@@ -320,15 +319,17 @@ class DocumentIOTest(unittest.TestCase):
                 2,
             )
         )
-        payload = {"type": CHEMVAS_FILE_TYPE, "version": 3, "state": state}
+        payload = {
+            "type": CHEMVAS_FILE_TYPE,
+            "version": CANVAS_FILE_VERSION,
+            "state": state,
+        }
 
         with tempfile.TemporaryDirectory() as temp_dir:
             path = Path(temp_dir) / "legacy.chemvas"
             path.write_text(json.dumps(payload), encoding="utf-8")
-            loaded = read_document(path)
-
-        self.assertEqual(loaded.payload["version"], 3)
-        self.assertEqual(loaded.state["model"]["bonds"][0], None)
+            with self.assertRaises(ValueError):
+                read_document(path)
 
     def test_write_document_rejects_bond_tombstones_at_current_version(self) -> None:
         state = _canvas_state(

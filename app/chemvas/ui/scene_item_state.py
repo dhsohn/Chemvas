@@ -13,9 +13,9 @@ from PyQt6.QtWidgets import (
 )
 
 from chemvas.features.annotations import (
+    normalized_bracket_kind,
     normalized_shape_kind,
     normalized_stroke_style,
-    restored_bracket_kind,
     sanitize_note_html,
 )
 from chemvas.ui.note_item_access import (
@@ -82,16 +82,6 @@ def _points_from_state(value: object) -> list[QPointF]:
 
 
 def ts_bracket_rect_from_state(state: Mapping[str, object]) -> QRectF | None:
-    rect = state.get("rect")
-    if isinstance(rect, (list, tuple)) and len(rect) == 4:
-        numeric_rect: list[float] = []
-        for value in rect:
-            if not isinstance(value, (int, float)):
-                return None
-            numeric_rect.append(float(value))
-        x, y, width, height = numeric_rect
-        return QRectF(float(x), float(y), float(width), float(height)).normalized()
-
     coords = (
         state.get("left"),
         state.get("top"),
@@ -108,7 +98,7 @@ def ts_bracket_rect_from_state(state: Mapping[str, object]) -> QRectF | None:
 
 
 def ts_bracket_kind_from_state(state: Mapping[str, object]) -> str:
-    return restored_bracket_kind(state.get("bracket_kind"))
+    return normalized_bracket_kind(state["bracket_kind"])
 
 
 def shape_rect_from_state(state: Mapping[str, object]) -> QRectF | None:
@@ -136,10 +126,7 @@ def shape_fill_from_state(state: Mapping[str, object]) -> QColor | None:
 def _build_ts_bracket_path(
     builder: TsBracketPathBuilder, rect: QRectF, bracket_kind: str
 ):
-    try:
-        return builder(rect, bracket_kind)
-    except TypeError:
-        return builder(rect)
+    return builder(rect, bracket_kind)
 
 
 def apply_scene_item_state(

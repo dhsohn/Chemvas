@@ -130,7 +130,7 @@ def scene_clipboard_controller_for(canvas) -> SceneClipboardController:
 def _valid_note_clipboard_payload() -> dict:
     return {
         "format": "chemvas-selection",
-        "version": 1,
+        "version": 2,
         "atoms": [],
         "bonds": [],
         "rings": [],
@@ -273,14 +273,14 @@ class SceneClipboardLogicTest(unittest.TestCase):
                 "color": bond.color,
             },
             scene_item_state_getter=lambda item: dict(item.data(9) or {}),
-            version=7,
+            version=2,
         )
 
         self.assertEqual(
             payload,
             {
                 "format": "chemvas-selection",
-                "version": 7,
+                "version": 2,
                 "atoms": [
                     {
                         "id": 1,
@@ -335,7 +335,7 @@ class SceneClipboardLogicTest(unittest.TestCase):
                 '{"format":"chemvas-selection","version":999}',
                 valid_payload_json,
             ],
-            version=1,
+            version=2,
         )
 
         self.assertEqual(payload, valid_payload)
@@ -346,7 +346,7 @@ class SceneClipboardLogicTest(unittest.TestCase):
     ) -> None:
         invalid_payload = {
             "format": "chemvas-selection",
-            "version": 1,
+            "version": 2,
             "atoms": [
                 {
                     "id": "0",
@@ -367,7 +367,7 @@ class SceneClipboardLogicTest(unittest.TestCase):
 
         payload, payload_json = decode_clipboard_selection_payload(
             [json.dumps(invalid_payload, separators=(",", ":")), valid_payload_json],
-            version=1,
+            version=2,
         )
 
         self.assertEqual(payload, valid_payload)
@@ -378,7 +378,7 @@ class SceneClipboardLogicTest(unittest.TestCase):
     ) -> None:
         invalid_payload = {
             "format": "chemvas-selection",
-            "version": 1,
+            "version": 2,
             "atoms": [
                 {
                     "id": 0,
@@ -404,7 +404,7 @@ class SceneClipboardLogicTest(unittest.TestCase):
         valid_payload_json = json.dumps(valid_payload, separators=(",", ":"))
 
         payload, payload_json = decode_clipboard_selection_payload(
-            [invalid_payload_json, valid_payload_json], version=1
+            [invalid_payload_json, valid_payload_json], version=2
         )
 
         self.assertEqual(payload, valid_payload)
@@ -431,7 +431,7 @@ class SceneClipboardLogicTest(unittest.TestCase):
         valid_payload_json = json.dumps(valid_payload, separators=(",", ":"))
 
         payload, payload_json = decode_clipboard_selection_payload(
-            [deep_json, valid_payload_json], version=1
+            [deep_json, valid_payload_json], version=2
         )
 
         self.assertEqual(payload, valid_payload)
@@ -447,24 +447,36 @@ class SceneClipboardLogicTest(unittest.TestCase):
         valid_payload_json = json.dumps(valid_payload, separators=(",", ":"))
 
         payload, payload_json = decode_clipboard_selection_payload(
-            [overlong_version_json, valid_payload_json], version=1
+            [overlong_version_json, valid_payload_json], version=2
         )
 
         self.assertEqual(payload, valid_payload)
         self.assertEqual(payload_json, valid_payload_json)
 
-    def test_decode_clipboard_selection_payload_accepts_legacy_v1_payload_for_v2_reader(
+    def test_decode_clipboard_selection_payload_rejects_v1_payload_for_v2_reader(
         self,
     ) -> None:
         valid_payload = _valid_note_clipboard_payload()
+        valid_payload["version"] = 1
         valid_payload_json = json.dumps(valid_payload, separators=(",", ":"))
 
         payload, payload_json = decode_clipboard_selection_payload(
             [valid_payload_json], version=2
         )
 
-        self.assertEqual(payload, valid_payload)
-        self.assertEqual(payload_json, valid_payload_json)
+        self.assertIsNone(payload)
+        self.assertIsNone(payload_json)
+
+    def test_decode_clipboard_selection_payload_rejects_float_v2(self) -> None:
+        payload = _valid_note_clipboard_payload()
+        payload["version"] = 2.0
+
+        decoded, source = decode_clipboard_selection_payload(
+            [json.dumps(payload, separators=(",", ":"))], version=2
+        )
+
+        self.assertIsNone(decoded)
+        self.assertIsNone(source)
 
     def test_selection_payload_extends_atom_and_bond_selection_and_keeps_related_scene_items(
         self,
@@ -511,7 +523,7 @@ class SceneClipboardLogicTest(unittest.TestCase):
         self.assertIsNotNone(payload)
         assert payload is not None
         self.assertEqual(payload["format"], "chemvas-selection")
-        self.assertEqual(payload["version"], 1)
+        self.assertEqual(payload["version"], 2)
         self.assertEqual(
             payload["atoms"],
             [
@@ -554,7 +566,7 @@ class SceneClipboardLogicTest(unittest.TestCase):
             [
                 {
                     "kind": "mark",
-                    "mark_kind": None,
+                    "mark_kind": "plus",
                     "text": None,
                     "atom_id": 2,
                     "dx": None,
@@ -564,7 +576,7 @@ class SceneClipboardLogicTest(unittest.TestCase):
                 },
                 {
                     "kind": "mark",
-                    "mark_kind": None,
+                    "mark_kind": "plus",
                     "text": None,
                     "atom_id": None,
                     "dx": None,
@@ -711,7 +723,7 @@ class SceneClipboardLogicTest(unittest.TestCase):
         )
         payload_json = json.dumps(payload, separators=(",", ":"))
         decoded_payload, decoded_json = decode_clipboard_selection_payload(
-            [payload_json], version=1
+            [payload_json], version=2
         )
         self.assertEqual(decoded_payload, payload)
         self.assertEqual(decoded_json, payload_json)
@@ -782,7 +794,7 @@ class SceneClipboardLogicTest(unittest.TestCase):
 
 class _FakeCanvas:
     CLIPBOARD_SELECTION_MIME = "application/x-chemvas-selection+json"
-    CLIPBOARD_SELECTION_VERSION = 1
+    CLIPBOARD_SELECTION_VERSION = 2
 
     def __init__(self) -> None:
         self._scene = QGraphicsScene()

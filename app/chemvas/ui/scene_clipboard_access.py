@@ -5,7 +5,7 @@ from collections.abc import Callable, Collection, Mapping, Sequence
 from PyQt6.QtCore import QRectF
 from PyQt6.QtWidgets import QGraphicsItem
 
-from chemvas.domain.document import CLIPBOARD_SELECTION_PERSPECTIVE_VERSION, Bond
+from chemvas.domain.document import CLIPBOARD_SELECTION_VERSION, Bond
 from chemvas.features.export import (
     render_scene_to_pdf_bytes,
     render_scene_to_svg_bytes,
@@ -66,7 +66,7 @@ def build_selection_clipboard_payload_for_canvas(
         perspective_state_getter=(
             lambda atom_ids: (
                 _selection_perspective_state_for_canvas(canvas, atom_ids)
-                if version == CLIPBOARD_SELECTION_PERSPECTIVE_VERSION
+                if version == CLIPBOARD_SELECTION_VERSION
                 else None
             )
         ),

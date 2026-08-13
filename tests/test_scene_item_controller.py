@@ -170,9 +170,10 @@ class _FakeCanvas:
             (item, QPointF(start), QPointF(end), QPointF(control), double)
         )
 
-    def record_build_ts_bracket_item(self, rect) -> QGraphicsPathItem:
+    def record_build_ts_bracket_item(self, rect, bracket_kind) -> QGraphicsPathItem:
         item = QGraphicsPathItem(QPainterPath())
         item.setData(0, "ts_bracket")
+        item.setData(1, {"bracket_kind": bracket_kind})
         self.built_ts_bracket_rects.append(rect)
         return item
 
@@ -182,7 +183,7 @@ class _FakeCanvas:
             return []
         return [QGraphicsTextItem(kind)]
 
-    def record_ts_bracket_path(self, _rect):
+    def record_ts_bracket_path(self, _rect, _bracket_kind):
         return QPainterPath()
 
     def bond_id_between(self, atom_a: int, atom_b: int):
@@ -563,7 +564,13 @@ class SceneItemControllerTest(unittest.TestCase):
             }
         )
         ts_bracket = self.controller.restore_ts_bracket_from_state(
-            {"left": -5.0, "top": -2.0, "right": 8.0, "bottom": 6.0}
+            {
+                "left": -5.0,
+                "top": -2.0,
+                "right": 8.0,
+                "bottom": 6.0,
+                "bracket_kind": "square_pair",
+            }
         )
         orbital = self.controller.restore_orbital_from_state(
             {

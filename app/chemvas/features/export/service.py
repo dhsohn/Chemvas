@@ -132,31 +132,6 @@ def render_scene_to_pdf_bytes(
     )
 
 
-def render_scene_to_svg(
-    scene: QGraphicsScene,
-    path: str,
-    *,
-    margin: float,
-    title: str | None = None,
-    items: Sequence[QGraphicsItem] | None = None,
-    background: str = "transparent",
-    unit_scale: float = 1.0,
-    target_width_pt: float | None = None,
-) -> ExportPlan:
-    """Backwards-compatible SVG entry point used by tests and callers."""
-    return export_scene(
-        scene,
-        path,
-        fmt="svg",
-        items=items,
-        margin=margin,
-        background=background,
-        title=title,
-        unit_scale=unit_scale,
-        target_width_pt=target_width_pt,
-    )
-
-
 __all__ = [
     "EXPORT_EXCLUDED_KINDS",
     "collect_export_items",
@@ -164,6 +139,5 @@ __all__ = [
     "export_scene",
     "item_export_bounds",
     "render_scene_to_pdf_bytes",
-    "render_scene_to_svg",
     "render_scene_to_svg_bytes",
 ]

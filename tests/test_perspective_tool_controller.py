@@ -110,7 +110,7 @@ class _PerspectiveCanvas:
     def preferred_structure_item_at_scene_pos(self, pos):
         return self.preferred_item
 
-    def selection_hit_test(self, pos):
+    def selection_hit_test(self, pos, snapshot=None):
         return self.selection_hit
 
     def _select_structure_for_item(self, item):

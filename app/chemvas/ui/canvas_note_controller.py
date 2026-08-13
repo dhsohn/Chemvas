@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass
 from functools import partial
+from typing import cast
 
 from PyQt6.QtCore import QPointF, QRectF, Qt
 from PyQt6.QtGui import (
@@ -940,15 +941,9 @@ class CanvasNoteController:
         cursor = QTextCursor(doc)
         cursor.select(QTextCursor.SelectionType.Document)
         block_format = QTextBlockFormat()
-        line_height_type = getattr(QTextBlockFormat, "LineHeightType", None)
-        if line_height_type is not None and hasattr(
-            line_height_type, "ProportionalHeight"
-        ):
-            height_type = line_height_type.ProportionalHeight
-        else:
-            height_type = QTextBlockFormat.LineHeightTypes.ProportionalHeight
-            if hasattr(height_type, "value"):
-                height_type = height_type.value
+        height_type = cast(
+            int, QTextBlockFormat.LineHeightTypes.ProportionalHeight.value
+        )
         block_format.setLineHeight(int(style.text_line_spacing * 100), height_type)
         cursor.mergeBlockFormat(block_format)
         self.update_note_box(item)

@@ -11,7 +11,6 @@ from chemvas.bootstrap import document_patch as cli
 from chemvas.core.document_io import read_document, write_document
 from chemvas.domain.document import (
     CANVAS_FILE_VERSION,
-    LEGACY_CANVAS_FILE_VERSION,
     Atom,
     Bond,
     MoleculeModel,
@@ -33,6 +32,7 @@ def _state() -> dict[str, object]:
         "marks": [],
         "arrows": [],
         "ts_brackets": [],
+        "shapes": [],
         "orbitals": [],
         "settings": serialize_settings(
             bond_length_px=18.0,
@@ -123,24 +123,6 @@ def test_dry_run_and_apply_share_candidate_hash_without_overwriting_source(
     revised = read_document(output)
     assert revised.state["model"]["bonds"][0]["order"] == 2
     assert revised.state["notes"] == [{"text": "preserve", "x": 3.0, "y": 4.0}]
-
-
-def test_apply_preserves_legacy_document_version(
-    tmp_path: Path, capsys: pytest.CaptureFixture[str]
-) -> None:
-    source = tmp_path / "legacy.chemvas"
-    source_bytes = _write_source(source, version=LEGACY_CANVAS_FILE_VERSION)
-    patch_path = tmp_path / "patch.json"
-    patch_path.write_text(json.dumps(_patch(source_bytes)))
-    output = tmp_path / "revised.chemvas"
-
-    assert (
-        cli.run(["apply-patch", str(source), str(patch_path), "--output", str(output)])
-        == 0
-    )
-    capsys.readouterr()
-
-    assert read_document(output).payload["version"] == LEGACY_CANVAS_FILE_VERSION
 
 
 @pytest.mark.parametrize(

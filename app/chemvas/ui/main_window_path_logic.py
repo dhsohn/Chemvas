@@ -1,8 +1,26 @@
 from __future__ import annotations
 
-import os
+from pathlib import Path
 
-DEFAULT_SAVE_EXTENSION = ".chemvas"
+CANONICAL_SAVED_DOCUMENT_SUFFIX = ".chemvas"
+DESKTOP_DOCUMENT_SUFFIXES = frozenset((".chemvas", ".mol", ".svg"))
+RECENT_DOCUMENT_SUFFIXES = frozenset((".chemvas", ".svg"))
+
+
+def _has_suffix(path: str, suffixes: frozenset[str]) -> bool:
+    return Path(path).suffix.lower() in suffixes
+
+
+def is_canonical_saved_document_path(path: str) -> bool:
+    return Path(path).suffix.lower() == CANONICAL_SAVED_DOCUMENT_SUFFIX
+
+
+def is_desktop_document_path(path: str) -> bool:
+    return _has_suffix(path, DESKTOP_DOCUMENT_SUFFIXES)
+
+
+def is_recent_document_path(path: str) -> bool:
+    return _has_suffix(path, RECENT_DOCUMENT_SUFFIXES)
 
 
 def resolve_save_path(
@@ -16,9 +34,9 @@ def resolve_save_path(
 def resolve_save_as_path(dialog_path: str | None) -> str | None:
     if not dialog_path:
         return None
-    if os.path.splitext(dialog_path)[1]:
+    if is_canonical_saved_document_path(dialog_path):
         return dialog_path
-    return f"{dialog_path}{DEFAULT_SAVE_EXTENSION}"
+    return str(Path(dialog_path).with_suffix(CANONICAL_SAVED_DOCUMENT_SUFFIX))
 
 
 def resolve_load_path(dialog_path: str | None) -> str | None:

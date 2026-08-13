@@ -1,6 +1,6 @@
 {
   "type": "chemvas",
-  "version": 1,
+  "version": 7,
   "state": {
     "model": {
       "atoms": {
@@ -1735,40 +1735,6 @@
           "style": "single",
           "color": "#000000"
         },
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
         {
           "a": 62,
           "b": 63,
@@ -1825,7 +1791,6 @@
           "style": "single",
           "color": "#000000"
         },
-        null,
         {
           "a": 69,
           "b": 71,
@@ -1868,12 +1833,6 @@
           "style": "single",
           "color": "#000000"
         },
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
         {
           "a": 68,
           "b": 81,
@@ -1972,36 +1931,6 @@
           "style": "double_center",
           "color": "#000000"
         },
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
         {
           "a": 131,
           "b": 132,
@@ -2366,7 +2295,6 @@
           "style": "single",
           "color": "#000000"
         },
-        null,
         {
           "a": 177,
           "b": 179,
@@ -2381,7 +2309,6 @@
           "style": "single",
           "color": "#000000"
         },
-        null,
         {
           "a": 179,
           "b": 182,
@@ -2389,7 +2316,6 @@
           "style": "double_center",
           "color": "#000000"
         },
-        null,
         {
           "a": 180,
           "b": 184,
@@ -2404,8 +2330,6 @@
           "style": "single",
           "color": "#000000"
         },
-        null,
-        null,
         {
           "a": 177,
           "b": 188,
@@ -2413,13 +2337,6 @@
           "style": "single",
           "color": "#000000"
         },
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
         {
           "a": 179,
           "b": 195,
@@ -2553,17 +2470,6 @@
           "style": "single",
           "color": "#000000"
         },
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
         {
           "a": 220,
           "b": 222,
@@ -2627,7 +2533,6 @@
           "style": "single",
           "color": "#000000"
         },
-        null,
         {
           "a": 227,
           "b": 230,
@@ -2719,17 +2624,6 @@
           "style": "single",
           "color": "#000000"
         },
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
         {
           "a": 178,
           "b": 252,
@@ -2737,12 +2631,6 @@
           "style": "single",
           "color": "#000000"
         },
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
         {
           "a": 185,
           "b": 258,
@@ -2855,7 +2743,6 @@
           "style": "single",
           "color": "#000000"
         },
-        null,
         {
           "a": 138,
           "b": 274,
@@ -3115,7 +3002,6 @@
           "style": "double_center",
           "color": "#000000"
         },
-        null,
         {
           "a": 301,
           "b": 308,
@@ -3123,28 +3009,6 @@
           "style": "double_center",
           "color": "#000000"
         },
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
-        null,
         {
           "a": 301,
           "b": 328,
@@ -3152,7 +3016,6 @@
           "style": "single",
           "color": "#000000"
         },
-        null,
         {
           "a": 328,
           "b": 331,
@@ -3201,8 +3064,7 @@
           "order": 1,
           "style": "single",
           "color": "#000000"
-        },
-        null
+        }
       ],
       "next_atom_id": 339
     },
@@ -4155,9 +4017,20 @@
       "arrow_line_width": 1.5,
       "arrow_head_scale": 0.3,
       "orbital_phase_enabled": false,
+      "text_font_family": "Arial",
       "text_font_size": 12,
       "text_font_weight": 400,
       "text_italic": false,
+      "text_color": "#222222",
+      "text_alignment": "left",
+      "text_line_spacing": 1.0,
+      "note_box_enabled": false,
+      "note_box_color": "#ffffff",
+      "note_box_alpha": 1.0,
+      "note_border_enabled": false,
+      "note_border_color": "#333333",
+      "note_border_width": 1.0,
+      "note_padding": 6.0,
       "sheet_size": "A4",
       "sheet_orientation": "landscape"
     },

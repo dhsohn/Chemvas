@@ -36,14 +36,6 @@ def suspend_selection_outline_for(canvas) -> bool:
     return bool(selection_style_state_for(canvas).suspend_outline)
 
 
-def emit_selection_info_for(canvas) -> None:
-    from chemvas.ui.selection_info_access import (
-        emit_selection_info_for as emit_selection_info,
-    )
-
-    emit_selection_info(canvas)
-
-
 def restore_selection_from_ids_for(
     canvas, atom_ids: set[int], bond_ids: set[int]
 ) -> None:
@@ -112,7 +104,6 @@ def selection_indicator_rect_for_atom_for(canvas, atom_id: int):
 
 __all__ = [
     "atom_center_point_for",
-    "emit_selection_info_for",
     "restore_selection_from_ids_for",
     "selected_highlight_items_for",
     "selection_bond_overlay_width_for",

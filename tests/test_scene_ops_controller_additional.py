@@ -471,7 +471,7 @@ class SceneOpsControllerAdditionalTest(unittest.TestCase):
             mark_item.data(9),
             {
                 "kind": "mark",
-                "mark_kind": None,
+                "mark_kind": "plus",
                 "text": None,
                 "atom_id": atom_id,
                 "x": 0.0,
@@ -613,7 +613,7 @@ class SceneOpsControllerAdditionalTest(unittest.TestCase):
         controller = scene_clipboard_controller_for(canvas)
         payload = {
             "format": "chemvas-selection",
-            "version": 1,
+            "version": 2,
             "atoms": [
                 "bad-atom",
                 {

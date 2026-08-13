@@ -187,8 +187,8 @@ class _FakeCanvas:
     def redraw_bonds_for_atoms(self, atom_ids) -> None:
         self.calls.append(("redraw_bonds_for_atoms", set(atom_ids)))
 
-    def update_ring_fills_for_atoms(self, atom_ids) -> None:
-        self.calls.append(("update_ring_fills_for_atoms", set(atom_ids)))
+    def update_ring_fills_for_atoms(self, atom_ids, *, ring_items=None) -> None:
+        self.calls.append(("update_ring_fills_for_atoms", set(atom_ids), ring_items))
 
     def mark_spatial_index_dirty(self) -> None:
         self.calls.append(("mark_spatial_index_dirty",))

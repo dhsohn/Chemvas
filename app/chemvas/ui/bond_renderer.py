@@ -191,28 +191,6 @@ class BondRenderer:
             a, b, center, a_id, b_id, center_3d, style
         )
 
-    def draw_ring_double_bond(
-        self,
-        a,
-        b,
-        center: QPointF,
-        a_id: int | None = None,
-        b_id: int | None = None,
-        outer_style: str = "normal",
-        center_3d: tuple[float, float, float] | None = None,
-        style: str = DOUBLE_STYLE_DEFAULT,
-    ):
-        return self.graphics_drawer.draw_ring_double_bond(
-            a,
-            b,
-            center,
-            a_id,
-            b_id,
-            outer_style=outer_style,
-            center_3d=center_3d,
-            style=style,
-        )
-
     def one_sided_bond_strip(
         self,
         x1: float,
@@ -252,27 +230,6 @@ class BondRenderer:
         b_id: int | None = None,
     ):
         return self.graphics_drawer.draw_dotted_bond(x1, y1, x2, y2, a_id, b_id)
-
-    def draw_dotted_double_bond(
-        self,
-        a,
-        b,
-        *,
-        style: str,
-        a_id: int | None = None,
-        b_id: int | None = None,
-        ring_center: QPointF | None = None,
-        center_3d: tuple[float, float, float] | None = None,
-    ):
-        return self.graphics_drawer.draw_dotted_double_bond(
-            a,
-            b,
-            style=style,
-            a_id=a_id,
-            b_id=b_id,
-            ring_center=ring_center,
-            center_3d=center_3d,
-        )
 
     def draw_wedge_bond(
         self,

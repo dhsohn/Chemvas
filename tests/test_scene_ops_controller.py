@@ -669,7 +669,7 @@ class SceneOpsControllerTest(unittest.TestCase):
 
         assert payload is not None
         self.assertEqual(payload["format"], "chemvas-selection")
-        self.assertEqual(payload["version"], 1)
+        self.assertEqual(payload["version"], 2)
         self.assertEqual([atom["id"] for atom in payload["atoms"]], [1, 2])
         self.assertEqual(
             payload["bonds"],
@@ -692,7 +692,7 @@ class SceneOpsControllerTest(unittest.TestCase):
             [
                 {
                     "kind": "mark",
-                    "mark_kind": None,
+                    "mark_kind": "plus",
                     "text": None,
                     "atom_id": 1,
                     "dx": 2.0,
@@ -702,7 +702,7 @@ class SceneOpsControllerTest(unittest.TestCase):
                 },
                 {
                     "kind": "mark",
-                    "mark_kind": None,
+                    "mark_kind": "plus",
                     "text": None,
                     "atom_id": None,
                     "dx": None,
@@ -791,7 +791,7 @@ class SceneOpsControllerTest(unittest.TestCase):
 
         payload = {
             "format": "chemvas-selection",
-            "version": 1,
+            "version": 2,
             "atoms": [
                 {
                     "id": 10,
@@ -875,7 +875,7 @@ class SceneOpsControllerTest(unittest.TestCase):
         controller.clipboard_selection_payload = lambda: (
             {
                 "format": "chemvas-selection",
-                "version": 1,
+                "version": 2,
                 "atoms": [],
                 "bonds": [],
                 "rings": [],
@@ -895,7 +895,7 @@ class SceneOpsControllerTest(unittest.TestCase):
         controller = scene_clipboard_controller_for(canvas)
         payload = {
             "format": "chemvas-selection",
-            "version": 1,
+            "version": 2,
             "atoms": [{"id": "bad"}],
             "bonds": [{"a": 1, "b": "bad"}],
             "rings": [],
@@ -957,7 +957,7 @@ class _FakeSceneItemController:
 
 class _FakeCanvas:
     CLIPBOARD_SELECTION_MIME = "application/x-chemvas-selection+json"
-    CLIPBOARD_SELECTION_VERSION = 1
+    CLIPBOARD_SELECTION_VERSION = 2
 
     def __init__(self) -> None:
         self._scene = QGraphicsScene()
@@ -1038,7 +1038,7 @@ class _FakeCanvas:
                 mark_spatial_index_dirty=self.mark_spatial_index_dirty
             ),
             canvas_ring_fill_scene_service=SimpleNamespace(
-                update_ring_fills_for_atoms=lambda atom_ids: None
+                update_ring_fills_for_atoms=lambda atom_ids, *, ring_items=None: None
             ),
             handle_overlay_service=SimpleNamespace(clear_handles=self.clear_handles),
             canvas_history_recording_service=SimpleNamespace(

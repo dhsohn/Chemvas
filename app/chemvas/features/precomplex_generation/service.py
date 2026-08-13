@@ -8,7 +8,7 @@ from collections.abc import Mapping
 from dataclasses import replace
 
 from chemvas.domain.document.precomplex_profile import (
-    LEGACY_PROFILE_ID,
+    CURRENT_PROFILE_ID,
     precomplex_placement_profile,
 )
 from chemvas.features.calculation_bundle import CalculationArtifacts
@@ -32,7 +32,7 @@ def component_geometries_from_artifacts(
     artifacts: CalculationArtifacts,
     component_atom_ids: tuple[tuple[int, ...], ...],
     *,
-    profile: str = LEGACY_PROFILE_ID,
+    profile: str = CURRENT_PROFILE_ID,
 ) -> tuple[ComponentGeometry, ...]:
     precomplex_placement_profile(profile)
     if not artifacts.geometry_optimization_result.endswith("_converged"):

@@ -8,11 +8,7 @@ from collections.abc import Mapping
 from datetime import datetime
 from decimal import Decimal
 
-from .precomplex_profile import (
-    LEGACY_PROFILE_ID,
-    precomplex_placement_profile,
-    radius_provenance_for,
-)
+from .precomplex_profile import precomplex_placement_profile, radius_provenance_for
 
 MAX_ATOMS = 2000
 MAX_XYZ_BYTES = 512_000
@@ -47,21 +43,18 @@ def canonicalize_precomplex_state(
         "basis_sha256",
         "side",
         "profile",
+        "radius_provenance",
         "environment",
         "contacts",
         "source_geometry",
         "candidates",
         "selection",
     }
-    if profile.id != LEGACY_PROFILE_ID:
-        expected_fields.add("radius_provenance")
     if set(value) != expected_fields:
         raise ValueError("Invalid endpoint precomplex candidate ensemble.")
     if value.get("side") != side:
         raise ValueError("Endpoint precomplex side or profile does not match.")
-    if profile.id != LEGACY_PROFILE_ID and value.get(
-        "radius_provenance"
-    ) != radius_provenance_for(profile.id):
+    if value.get("radius_provenance") != radius_provenance_for(profile.id):
         raise ValueError(
             "Endpoint precomplex radius provenance does not match profile."
         )

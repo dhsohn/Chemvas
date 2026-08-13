@@ -230,12 +230,8 @@ def scene_pos_from_global_pos_for(canvas, global_pos):
     return canvas.mapToScene(viewport_pos)
 
 
-def global_pos_from_event_for(canvas, event):
-    if hasattr(event, "globalPosition"):
-        return event.globalPosition().toPoint()
-    if hasattr(event, "globalPos"):
-        return event.globalPos()
-    return canvas.viewport().mapToGlobal(event.position().toPoint())
+def global_pos_from_event_for(_canvas, event):
+    return event.globalPosition().toPoint()
 
 
 def device_pixel_ratio_for(canvas) -> float:

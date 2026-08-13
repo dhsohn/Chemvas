@@ -328,7 +328,7 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
         # Exercise each geometry-bearing bond primitive used by the renderer:
         # dotted creates a path, bold/wedge create polygons, and the remaining
         # benzene bonds retain line primitives.
-        style_by_bond = {1: "dotted", 2: "bold", 3: "wedge"}
+        style_by_bond = {1: "dotted", 2: "bold_in", 3: "wedge"}
         for bond_id, style in style_by_bond.items():
             bond = canvas.model.bonds[bond_id]
             self.assertIsNotNone(bond)
@@ -480,7 +480,11 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
                 ring = add_benzene_ring_for(canvas, QPointF(0.0, 0.0))
                 self.assertIsNotNone(ring)
                 assert ring is not None
-                for bond_id, style in {1: "dotted", 2: "bold", 3: "wedge"}.items():
+                for bond_id, style in {
+                    1: "dotted",
+                    2: "bold_in",
+                    3: "wedge",
+                }.items():
                     bond = canvas.model.bonds[bond_id]
                     self.assertIsNotNone(bond)
                     assert bond is not None

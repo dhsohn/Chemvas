@@ -31,6 +31,10 @@ from chemvas.ui.main_window_document_dialogs import (
     prompt_export_options,
 )
 from chemvas.ui.main_window_path_logic import (
+    is_canonical_saved_document_path,
+    is_desktop_document_path,
+)
+from chemvas.ui.main_window_path_logic import (
     resolve_load_path as default_resolve_load_path,
 )
 from chemvas.ui.main_window_path_logic import (
@@ -138,6 +142,13 @@ class MainWindowDocumentActionService:
         message_box=None,
     ) -> bool:
         message_box = QMessageBox if message_box is None else message_box
+        if not is_canonical_saved_document_path(path):
+            message_box.warning(
+                window,
+                "Save Error",
+                "Chemvas documents must use the .chemvas filename extension.",
+            )
+            return False
         # Store an absolute path so the session/recent entries resolve regardless
         # of the working directory at restore time.
         path = os.path.abspath(path)
@@ -384,6 +395,13 @@ class MainWindowDocumentActionService:
         target_provider=None,
     ) -> bool:
         message_box = QMessageBox if message_box is None else message_box
+        if not is_desktop_document_path(path):
+            message_box.warning(
+                window,
+                "Load Error",
+                "Unsupported file type. Open a .chemvas, .svg, or .mol file.",
+            )
+            return False
         read_document = (
             default_read_document if read_document is None else read_document
         )

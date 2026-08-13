@@ -20,9 +20,9 @@ from PyQt6.QtWidgets import (
 )
 
 from chemvas.features.annotations import (
+    DEFAULT_BRACKET_KIND,
     DEFAULT_SHAPE_KIND,
     DEFAULT_STROKE_STYLE,
-    LEGACY_TS_BRACKET_KIND,
     normalized_bracket_kind,
     normalized_shape_kind,
     normalized_stroke_style,
@@ -309,9 +309,9 @@ class CanvasSceneDecorationBuildService:
         hook = min(rect.width() * 0.18, bond_length_px_for(self.canvas) * 0.55)
         hook = max(hook, bond_length_px_for(self.canvas) * 0.28)
         bracket_lines = QPainterPath()
-        if bracket_kind in {"square_pair", LEGACY_TS_BRACKET_KIND, "square_left"}:
+        if bracket_kind in {"square_pair", "square_left"}:
             self._add_square_bracket_lines(bracket_lines, rect, hook, left=True)
-            if bracket_kind in {"square_pair", LEGACY_TS_BRACKET_KIND}:
+            if bracket_kind == "square_pair":
                 self._add_square_bracket_lines(bracket_lines, rect, hook, left=False)
         elif bracket_kind in {"parentheses_pair", "parenthesis_left"}:
             self._add_parenthesis_lines(bracket_lines, rect, hook, left=True)
@@ -355,12 +355,10 @@ class CanvasSceneDecorationBuildService:
         return path
 
     def ts_bracket_path(
-        self, rect: QRectF, bracket_kind: str = LEGACY_TS_BRACKET_KIND
+        self, rect: QRectF, bracket_kind: str = DEFAULT_BRACKET_KIND
     ) -> QPainterPath:
         rect = QRectF(rect).normalized()
-        bracket_kind = normalized_bracket_kind(
-            bracket_kind, default=LEGACY_TS_BRACKET_KIND
-        )
+        bracket_kind = normalized_bracket_kind(bracket_kind)
         if bracket_kind == "dagger":
             path = QPainterPath()
             return self._add_bracket_symbol(path, rect, "\u2020", align_right=False)
@@ -368,20 +366,15 @@ class CanvasSceneDecorationBuildService:
             path = QPainterPath()
             return self._add_bracket_symbol(path, rect, "\u2021", align_right=False)
 
-        path = self._stroked_bracket_lines(rect, bracket_kind)
-        if bracket_kind == LEGACY_TS_BRACKET_KIND:
-            self._add_bracket_symbol(path, rect, "\u2021", align_right=True)
-        return path
+        return self._stroked_bracket_lines(rect, bracket_kind)
 
     def build_ts_bracket_item(
         self,
         rect: QRectF,
-        bracket_kind: str = LEGACY_TS_BRACKET_KIND,
+        bracket_kind: str = DEFAULT_BRACKET_KIND,
     ) -> QGraphicsPathItem:
         normalized = QRectF(rect).normalized()
-        bracket_kind = normalized_bracket_kind(
-            bracket_kind, default=LEGACY_TS_BRACKET_KIND
-        )
+        bracket_kind = normalized_bracket_kind(bracket_kind)
         item = NoSelectPathItem(self.ts_bracket_path(normalized, bracket_kind))
         item.setPen(QPen(Qt.PenStyle.NoPen))
         item.setBrush(QBrush(QColor(bond_color_for(self.canvas))))
@@ -393,7 +386,7 @@ class CanvasSceneDecorationBuildService:
         self,
         start: QPointF,
         end: QPointF,
-        bracket_kind: str = LEGACY_TS_BRACKET_KIND,
+        bracket_kind: str = DEFAULT_BRACKET_KIND,
     ):
         item = self.build_ts_bracket_item(
             self.ts_bracket_rect_from_points(start, end), bracket_kind
