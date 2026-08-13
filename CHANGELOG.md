@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- Restructured `README.md` / `README.ko.md` into a short landing page (identity,
+  statement of need, quickstart, capability table, docs index). The detailed
+  user documentation moved to `docs/REFERENCE.md` and the headless/agent
+  contracts to `docs/AGENT_CLI.md`, both without content changes. The docs-sync
+  guards now pin the file-format example and tool hotkeys to `docs/REFERENCE.md`
+  and additionally pin the READMEs' prose mention of the current document
+  version.
+
 ## [0.3.0] - 2026-08-13
 
 ### Changed
