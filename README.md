@@ -15,7 +15,7 @@ Chemvas is a lightweight PyQt6 app for **drawing 2D chemical structures and
 reaction schemes** — ACS 1996 defaults, ChemDraw-compatible shortcuts, and
 publication-ready figure export. Draw fast, export exactly.
 
-![Chemvas — a Base/THF reaction scheme and several organocatalyst structures drawn on the canvas](docs/images/demo.png)
+![Chemvas — a C–P bond cleavage reaction scheme (KOtBu / THF) drawn on the canvas](docs/images/demo.png)
 
 ## Statement of need
 
@@ -36,7 +36,7 @@ chemvas
 
 Pick a tool from the toolbar and click/drag on the canvas. Type a SMILES string
 and press **Insert** to preview and place it *(RDKit)*. Open
-[examples/template1.chemvas](examples/template1.chemvas) via **File ▸ Open** to
+[examples/template2.chemvas](examples/template2.chemvas) via **File ▸ Open** to
 explore the document shown above.
 
 ## What it does

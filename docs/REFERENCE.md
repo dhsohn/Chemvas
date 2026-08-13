@@ -19,9 +19,8 @@ SMILES string in the top input and press **Insert** to enter placement mode: mov
 the mouse to preview, click to insert, `Esc` to cancel. Templates work the same
 preview-and-click way.
 
-Open [`examples/template1.chemvas`](../examples/template1.chemvas) via
-**File ▸ Open** to explore a full document — a reaction scheme plus several
-organocatalyst structures.
+Open a sample document from [`examples/`](../examples/) via **File ▸ Open** —
+the [examples README](../examples/README.md) describes what each one contains.
 
 ## Drawing features
 
