@@ -928,6 +928,78 @@ class RDKitAdapterTest(unittest.TestCase):
         self.assertAlmostEqual(model.atoms[0].x, 3.0)
         self.assertAlmostEqual(model.atoms[0].y, -4.0)
 
+    def test_smiles_to_2d_rejects_element_symbols_an_abbreviation_claims(self) -> None:
+        fake_mol = _FakeMol(
+            atom_symbols=["C", "Ac"],
+            bonds=[(0, 1, 1.0)],
+            positions={0: (0.0, 0.0, 0.0), 1: (1.0, 0.0, 0.0)},
+        )
+        chem = _FakeChem({"C[Ac]": fake_mol})
+        adapter = RDKitAdapter()
+        adapter._rdkit = (chem, _FakeAllChem())
+
+        model = adapter.smiles_to_2d("C[Ac]")
+
+        self.assertIsNone(model)
+        self.assertEqual(
+            adapter.last_error,
+            "Cannot insert this SMILES: Chemvas draws these element symbols as "
+            "abbreviation labels instead: Ac.",
+        )
+
+    def test_smiles_to_2d_lists_each_shadowed_symbol_once(self) -> None:
+        fake_mol = _FakeMol(
+            atom_symbols=["Ac", "Ts", "Ac"],
+            bonds=[],
+            positions={0: (0.0, 0.0, 0.0), 1: (1.0, 0.0, 0.0), 2: (2.0, 0.0, 0.0)},
+        )
+        chem = _FakeChem({"[Ac][Ts][Ac]": fake_mol})
+        adapter = RDKitAdapter()
+        adapter._rdkit = (chem, _FakeAllChem())
+
+        self.assertIsNone(adapter.smiles_to_2d("[Ac][Ts][Ac]"))
+        self.assertEqual(
+            adapter.last_error,
+            "Cannot insert this SMILES: Chemvas draws these element symbols as "
+            "abbreviation labels instead: Ac, Ts.",
+        )
+
+    @unittest.skipUnless(_RealChem is not None, "RDKit is required for smoke tests")
+    def test_real_rdkit_smoke_smiles_insert_rejects_shadowed_elements(self) -> None:
+        # Driven off the alias table so an abbreviation added later that RDKit
+        # also reads as an element symbol is covered without editing this test.
+        # Labels RDKit reads as something else are skipped — "[OH]" parses as an
+        # oxygen carrying one hydrogen, not as an atom named OH — so the count
+        # is asserted afterwards to keep an all-skip run from passing silently.
+        shadowed = []
+        for label in ATOM_ALIAS_DEFINITIONS:
+            parsed = _RealChem.MolFromSmiles(f"[{label}]")
+            if parsed is None or label not in {
+                atom.GetSymbol() for atom in parsed.GetAtoms()
+            }:
+                continue
+            shadowed.append(label)
+            with self.subTest(label=label):
+                adapter = RDKitAdapter()
+
+                self.assertIsNone(adapter.smiles_to_2d(f"[{label}]"))
+                self.assertIn(label, adapter.last_error or "")
+
+        self.assertEqual(sorted(shadowed), ["Ac", "Ts"])
+
+    @unittest.skipUnless(_RealChem is not None, "RDKit is required for smoke tests")
+    def test_real_rdkit_smoke_smiles_insert_keeps_unclaimed_elements(self) -> None:
+        # Over-rejection guard: thorium neighbours actinium in the table and no
+        # abbreviation claims it.
+        adapter = RDKitAdapter()
+
+        model = adapter.smiles_to_2d("[Th]")
+
+        self.assertIsNotNone(model)
+        assert model is not None
+        self.assertEqual([atom.element for atom in model.atoms.values()], ["Th"])
+        self.assertIsNone(adapter.last_error)
+
     def test_smiles_to_2d_invalid_smiles_sets_error(self) -> None:
         chem = _FakeChem({"bad": None})
         adapter = RDKitAdapter()

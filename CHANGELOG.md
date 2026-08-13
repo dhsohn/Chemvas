@@ -21,9 +21,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - The abbreviation labels `Ts` (tosyl) and `Ac` (acetyl) are also the element
-  symbols for tennessine and actinium, and two conversion paths resolved them
-  as those elements instead of as abbreviations. Both now treat them the way
-  they treat every other abbreviation label.
+  symbols for tennessine and actinium, and three conversion paths resolved them
+  as those elements instead of as abbreviations. All of them now treat the
+  labels the way they treat every other abbreviation.
   - MOL export wrote them into the atom block as elements rather than taking
     the RDKit expansion path, so one drawing exported different chemistry to
     `.mol` than to `.xyz`. A molfile whose atom symbol is `Ts` or `Ac` is also
@@ -33,6 +33,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     `CH3OTs` at 323.03 rather than `C8H10O3S` at 186.23. Those identifiers now
     stay blank, as they already did for `Ph`, `Me`, and every other
     abbreviation.
+  - SMILES insertion placed an atom the rest of the app then read as the
+    abbreviation: typing `C[Ac]` drew what Chemvas treats as an acetyl group.
+    A SMILES asking for either element is now refused with a message naming the
+    symbol, isotope-qualified forms such as `[227Ac]` included. Every other
+    element, and every isotope of one, still imports.
 - **Suggest by structure** closed Chemvas when the drawing contained an atom
   RDKit cannot sanitize — a neutral nitrogen still carrying four bonds because
   its charge has not been added yet, a carbon that briefly holds five, and
