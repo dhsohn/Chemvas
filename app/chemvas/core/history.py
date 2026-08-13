@@ -255,19 +255,7 @@ def _release_history_transaction(canvas, snapshot: object) -> None:
         or snapshot is _DEFER_TO_OUTER_HISTORY_TRANSACTION
     ):
         return
-    release = getattr(
-        _history_canvas_port(),
-        "release_history_transaction_for_history",
-        None,
-    )
-    if callable(release):
-        release(canvas, snapshot)
-        return
-    # Backward compatibility for a legacy optional port that predates the
-    # release hook but returned a self-releasing snapshot object.
-    snapshot_release = getattr(snapshot, "release", None)
-    if callable(snapshot_release):
-        snapshot_release()
+    _history_canvas_port().release_history_transaction_for_history(canvas, snapshot)
 
 
 def release_history_transaction_for_command(canvas, snapshot: object) -> None:

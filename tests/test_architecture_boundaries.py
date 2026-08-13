@@ -2464,6 +2464,36 @@ def test_history_canvas_access_uses_mark_registry_accessor() -> None:
     assert _matching_lines(forbidden, [module]) == []
 
 
+def test_core_history_does_not_fall_back_to_self_releasing_snapshots() -> None:
+    module = APP_ROOT / "chemvas" / "core" / "history.py"
+    forbidden = re.compile(
+        r"\bsnapshot\.release\b"
+        r"|\bgetattr\(\s*snapshot\s*,\s*[\"']release[\"']"
+    )
+
+    assert _matching_lines(forbidden, [module]) == []
+
+
+def test_document_session_history_rollback_does_not_rebind_stacks() -> None:
+    module = APP_ROOT / "chemvas" / "ui" / "canvas_document_session_service.py"
+    forbidden = re.compile(r"\bsnapshot\.state\.(?:history|redo_stack)\s*=")
+
+    assert _matching_lines(forbidden, [module]) == []
+
+
+def test_document_session_does_not_snapshot_legacy_sheet_fields() -> None:
+    module = APP_ROOT / "chemvas" / "ui" / "canvas_document_session_service.py"
+    tree = ast.parse(module.read_text(encoding="utf-8"))
+    forbidden = {"sheet_size", "sheet_orientation"}
+    constants = {
+        node.value
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Constant) and isinstance(node.value, str)
+    }
+
+    assert constants.isdisjoint(forbidden)
+
+
 def test_sheet_setup_access_delegates_sheet_values_to_sheet_setup_state() -> None:
     access = APP_ROOT / "chemvas" / "ui" / "sheet_setup_access.py"
     forbidden = re.compile(
