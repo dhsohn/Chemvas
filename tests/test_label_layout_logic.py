@@ -2,6 +2,7 @@ import unittest
 
 from chemvas.features.annotations import (
     LabelRun,
+    attachment_anchor_token,
     hydride_display_text,
     hydride_hydrogen_text,
     parse_atom_label,
@@ -9,6 +10,39 @@ from chemvas.features.annotations import (
     place_runs,
     split_hydride_label,
 )
+
+
+class AttachmentAnchorTokenTest(unittest.TestCase):
+    def test_leading_single_letter_token(self):
+        self.assertEqual(attachment_anchor_token("CF3", at_end=False), "C")
+
+    def test_leading_two_letter_token(self):
+        self.assertEqual(attachment_anchor_token("Ph3P", at_end=False), "Ph")
+
+    def test_trailing_single_letter_token(self):
+        self.assertEqual(attachment_anchor_token("Ph3P", at_end=True), "P")
+
+    def test_trailing_two_letter_token(self):
+        self.assertEqual(attachment_anchor_token("OMe", at_end=True), "Me")
+
+    def test_trailing_digit_blocks_the_end_anchor(self):
+        self.assertIsNone(attachment_anchor_token("CF3", at_end=True))
+
+    def test_charge_sign_blocks_the_end_anchor(self):
+        self.assertIsNone(attachment_anchor_token("NH4+", at_end=True))
+
+    def test_lowercase_start_blocks_the_leading_anchor(self):
+        self.assertIsNone(attachment_anchor_token("t-Bu", at_end=False))
+
+    def test_lowercase_prefix_still_anchors_at_the_end(self):
+        self.assertEqual(attachment_anchor_token("t-Bu", at_end=True), "Bu")
+
+    def test_whole_label_token_keeps_centred_layout(self):
+        self.assertIsNone(attachment_anchor_token("Me", at_end=False))
+        self.assertIsNone(attachment_anchor_token("N", at_end=True))
+
+    def test_empty_label_has_no_anchor(self):
+        self.assertIsNone(attachment_anchor_token("", at_end=False))
 
 
 class SplitHydrideLabelTest(unittest.TestCase):

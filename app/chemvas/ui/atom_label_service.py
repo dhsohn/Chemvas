@@ -8,7 +8,11 @@ from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QColor, QPen
 from PyQt6.QtWidgets import QInputDialog
 
-from chemvas.features.annotations import hydride_display_text, split_hydride_label
+from chemvas.features.annotations import (
+    attachment_anchor_token,
+    hydride_display_text,
+    split_hydride_label,
+)
 from chemvas.ui.atom_label_access import uses_compact_label_hit_shape_for
 from chemvas.ui.atom_label_history_recorder import AtomLabelHistoryRecorder
 from chemvas.ui.atom_label_merge_service import AtomLabelMergeService
@@ -145,16 +149,17 @@ class AtomLabelService:
         self, atom_id: int, text: str
     ) -> tuple[str, str | None, bool, bool | None]:
         # Element+hydrogen labels ("NH", "OH", "NH2", "CH3") anchor on the element
-        # with the hydrogens pointing away from the bonds; everything else keeps
-        # its plain centred layout. Returns (display_text, anchor_element,
-        # anchor_at_end, hydrogens_below); hydrogens_below is None for the
-        # horizontal layouts and picks the stacked line side otherwise.
+        # with the hydrogens pointing away from the bonds; other multi-part
+        # labels ("CF3", "Ph3P") anchor on the token facing the bonds. Returns
+        # (display_text, anchor_element, anchor_at_end, hydrogens_below);
+        # hydrogens_below is None for the horizontal layouts and picks the
+        # stacked line side otherwise.
         split = split_hydride_label(text)
         if split is None:
-            return text, None, False, None
+            return self._token_anchor_layout(atom_id, text)
         element, h_count = split
         if h_count <= 0:
-            return text, None, False, None
+            return self._token_anchor_layout(atom_id, text)
         # Put the hydrogens on the open side of the atom, quantised to the
         # dominant axis. A vertical open side (both bonds of a vertex rising,
         # or a flat C-NH-C chain) stacks the H on its own line under/over the
@@ -180,6 +185,30 @@ class AtomLabelService:
             return text, None, False, None
         display = hydride_display_text(element, h_count, face_left=face_left)
         return display, element, face_left, None
+
+    def _token_anchor_layout(
+        self, atom_id: int, text: str
+    ) -> tuple[str, str | None, bool, bool | None]:
+        # Multi-part labels ("CF3", "Ph3P", "OMe") anchor on the element-like
+        # token facing the bonds, so the attachment glyph sits on the atom and
+        # bonds trim to it instead of clearing the whole label box. The text is
+        # never reordered: when the bonds sit on a side the typed label cannot
+        # face ("CF3" approached from the right), or the open side is vertical,
+        # the label keeps its plain centred full-clearance layout.
+        vectors = connected_atom_unit_vectors_for(self.canvas, atom_id)
+        open_x, open_y = _open_direction(vectors)
+        if abs(open_y) > abs(open_x):
+            return text, None, False, None
+        anchor_at_end = open_x < 0.0
+        token = attachment_anchor_token(text, at_end=anchor_at_end)
+        if token is None:
+            return text, None, False, None
+        # Same guard as the horizontal hydride layout: a bond running almost
+        # straight along the label body would sit under the text.
+        body_direction = -1.0 if anchor_at_end else 1.0
+        if any(dx * body_direction > 0.95 for dx, _ in vectors):
+            return text, None, False, None
+        return text, token, anchor_at_end, None
 
     def restore_atom_item_interaction(
         self,

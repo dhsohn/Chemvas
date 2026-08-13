@@ -644,6 +644,59 @@ class AtomLabelServiceTest(unittest.TestCase):
         self.assertIsNotNone(anchor)
         self.assertLess(anchor.center().y(), item.sceneBoundingRect().center().y())
 
+    def _multi_part_label_item(self, text: str, neighbor_x: float, neighbor_y: float):
+        canvas = _FakeCanvas()
+        canvas.model = MoleculeModel(
+            atoms={1: Atom("C", neighbor_x, neighbor_y), 2: Atom("C", 0.0, 0.0)},
+            bonds=[Bond(1, 2, 1, style="single")],
+        )
+        service = _atom_label_service(canvas)
+        service.add_or_update_atom_label(2, text, record=False)
+        return canvas.atom_items[2]
+
+    def test_cf3_with_a_left_bond_anchors_on_the_leading_carbon(self) -> None:
+        # R-CF3: the C glyph sits on the atom, F3 trails into the open right
+        # side, so the bond trims at the C cell instead of the whole label box.
+        item = self._multi_part_label_item("CF3", -20.0, 0.0)
+        anchor = item.anchor_scene_rect()
+        self.assertIsNotNone(anchor)
+        box = item.sceneBoundingRect()
+        self.assertLess(anchor.width(), box.width())
+        self.assertLess(anchor.center().x(), box.center().x())
+
+    def test_ph3p_with_a_right_bond_anchors_on_the_trailing_phosphorus(self) -> None:
+        # Ph3P-R: the P glyph sits on the atom, Ph3 trails into the open left
+        # side, mirroring how the user typed the attachment order.
+        item = self._multi_part_label_item("Ph3P", 20.0, 0.0)
+        anchor = item.anchor_scene_rect()
+        self.assertIsNotNone(anchor)
+        box = item.sceneBoundingRect()
+        self.assertLess(anchor.width(), box.width())
+        self.assertGreater(anchor.center().x(), box.center().x())
+
+    def test_cf3_with_a_right_bond_keeps_the_centred_layout(self) -> None:
+        # The typed order cannot face a bond from the right (the trailing "3"
+        # is not an element token), so the label keeps full-box clearance.
+        item = self._multi_part_label_item("CF3", 20.0, 0.0)
+        self.assertIsNone(item.anchor_scene_rect())
+
+    def test_multi_part_label_with_a_vertical_bond_keeps_the_centred_layout(
+        self,
+    ) -> None:
+        # A one-line box is already shallow against a vertical bond; anchoring
+        # sideways would only shift the label for no trimming gain.
+        item = self._multi_part_label_item("CF3", 0.0, -20.0)
+        self.assertIsNone(item.anchor_scene_rect())
+
+    def test_cf3_anchor_keeps_the_atom_on_the_carbon_glyph(self) -> None:
+        # position_label must put the anchored C cell (not the label midpoint)
+        # on the atom coordinates, up to the small global label offset.
+        item = self._multi_part_label_item("CF3", -20.0, 0.0)
+        anchor_center = item.anchor_scene_rect().center()
+        offset = 2.0  # _FakeCanvas atom_label_offset_px
+        self.assertAlmostEqual(anchor_center.x(), 0.0 + offset, delta=0.6)
+        self.assertAlmostEqual(anchor_center.y(), 0.0 - offset, delta=0.6)
+
     def test_record_label_change_builds_composite_single_and_noop_commands(
         self,
     ) -> None:
