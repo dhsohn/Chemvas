@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-08-13
+
 ### Changed
 - **Current-only document contract**: Chemvas now reads and writes document
   version 7 only, with compact bond arrays and Calculation Plan v2 when a plan
@@ -344,6 +346,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `.chemvas` document type (double-clicking a file opens it in Chemvas), and a
   Linux `.desktop` entry with an `application/x-chemvas` MIME type.
 
-[Unreleased]: https://github.com/dhsohn/Chemvas/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/dhsohn/Chemvas/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/dhsohn/Chemvas/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/dhsohn/Chemvas/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/dhsohn/Chemvas/releases/tag/v0.1.0
