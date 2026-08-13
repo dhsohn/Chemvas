@@ -15,7 +15,7 @@ Chemvas는 **2D 화학 구조와 반응 스킴을 그리는** 가벼운 PyQt6 �
 ACS 1996 기본 스타일, ChemDraw 호환 단축키, 논문에 바로 쓰는 figure export까지.
 빠르게 그리고, 정확하게 내보냅니다.
 
-![Chemvas — Base/THF 반응 스킴과 여러 유기촉매 구조를 그린 캔버스](docs/images/demo.png)
+![Chemvas — C–P 결합 절단 반응 스킴(KOtBu / THF)을 그린 캔버스](docs/images/demo.png)
 
 ## 왜 필요한가
 
@@ -35,7 +35,7 @@ chemvas
 
 툴바에서 도구를 고르고 캔버스에 클릭/드래그로 그립니다. SMILES 문자열을 입력하고
 **Insert**를 누르면 미리보기 후 클릭 위치에 배치됩니다 *(RDKit)*.
-**File ▸ Open**으로 [examples/template1.chemvas](examples/template1.chemvas)를
+**File ▸ Open**으로 [examples/template2.chemvas](examples/template2.chemvas)를
 열면 위 스크린샷의 문서를 볼 수 있습니다.
 
 ## 무엇을 하나

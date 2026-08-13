@@ -8,6 +8,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
+- The README hero image and example now show `examples/template2.chemvas`
+  (the C–P bond cleavage scheme); fixed a title typo in that document
+  ("Cleavege" → "Cleavage").
 - Restructured `README.md` / `README.ko.md` into a short landing page (identity,
   statement of need, quickstart, capability table, docs index). The detailed
   user documentation moved to `docs/REFERENCE.md` and the headless/agent
