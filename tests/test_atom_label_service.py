@@ -674,10 +674,70 @@ class AtomLabelServiceTest(unittest.TestCase):
         self.assertLess(anchor.width(), box.width())
         self.assertGreater(anchor.center().x(), box.center().x())
 
-    def test_cf3_with_a_right_bond_keeps_the_centred_layout(self) -> None:
+    def test_cf3_with_a_right_bond_reverses_to_f3c(self) -> None:
         # The typed order cannot face a bond from the right (the trailing "3"
-        # is not an element token), so the label keeps full-box clearance.
+        # is not an element token), so the display flips group-wise and the
+        # carbon anchors on the bond side. The stored label stays "CF3".
         item = self._multi_part_label_item("CF3", 20.0, 0.0)
+        self.assertEqual(item.toPlainText(), "F3C")
+        anchor = item.anchor_scene_rect()
+        self.assertIsNotNone(anchor)
+        self.assertGreater(anchor.center().x(), item.sceneBoundingRect().center().x())
+
+    def test_reversed_display_keeps_the_stored_label_text(self) -> None:
+        canvas = _FakeCanvas()
+        canvas.model = MoleculeModel(
+            atoms={1: Atom("C", 20.0, 0.0), 2: Atom("C", 0.0, 0.0)},
+            bonds=[Bond(1, 2, 1, style="single")],
+        )
+        service = _atom_label_service(canvas)
+        service.add_or_update_atom_label(2, "CF3", record=False)
+        self.assertEqual(canvas.model.atoms[2].element, "CF3")
+        self.assertEqual(canvas.atom_items[2].toPlainText(), "F3C")
+
+    def test_pph3_with_a_right_bond_reverses_to_ph3p(self) -> None:
+        # "PPh3" left of a bond renders "Ph3P" with the P on the bond side,
+        # matching how a chemist flips the nickname by hand.
+        item = self._multi_part_label_item("PPh3", 20.0, 0.0)
+        self.assertEqual(item.toPlainText(), "Ph3P")
+        anchor = item.anchor_scene_rect()
+        self.assertIsNotNone(anchor)
+        self.assertGreater(anchor.center().x(), item.sceneBoundingRect().center().x())
+
+    def test_ots_with_a_right_bond_reverses_to_tso(self) -> None:
+        # The alias table knows "OTs" attaches at the O, so left of a bond it
+        # renders "TsO" with the O on the bond side.
+        item = self._multi_part_label_item("OTs", 20.0, 0.0)
+        self.assertEqual(item.toPlainText(), "TsO")
+        anchor = item.anchor_scene_rect()
+        self.assertIsNotNone(anchor)
+        self.assertGreater(anchor.center().x(), item.sceneBoundingRect().center().x())
+
+    def test_ph3p_with_a_left_bond_reverses_to_pph3(self) -> None:
+        # "Ph3P" is the flipped form of the alias "PPh3": a bond from the left
+        # flips it back so the P faces the bond.
+        item = self._multi_part_label_item("Ph3P", -20.0, 0.0)
+        self.assertEqual(item.toPlainText(), "PPh3")
+        anchor = item.anchor_scene_rect()
+        self.assertIsNotNone(anchor)
+        self.assertLess(anchor.center().x(), item.sceneBoundingRect().center().x())
+
+    def test_ambiguous_label_anchors_as_typed_without_reversal(self) -> None:
+        # "PhO" is neither an alias nor syntactically decidable, so the typed
+        # order stands and the bond-facing O anchors (no flip to "OPh").
+        item = self._multi_part_label_item("PhO", 20.0, 0.0)
+        self.assertEqual(item.toPlainText(), "PhO")
+        anchor = item.anchor_scene_rect()
+        self.assertIsNotNone(anchor)
+        self.assertGreater(anchor.center().x(), item.sceneBoundingRect().center().x())
+
+    def test_unreversible_label_with_a_right_bond_keeps_the_centred_layout(
+        self,
+    ) -> None:
+        # "NH4+" cannot flip (the charge sign is not an atom group), so the
+        # centred full-clearance fallback stays.
+        item = self._multi_part_label_item("NH4+", 20.0, 0.0)
+        self.assertEqual(item.toPlainText(), "NH4+")
         self.assertIsNone(item.anchor_scene_rect())
 
     def test_multi_part_label_with_a_vertical_bond_keeps_the_centred_layout(

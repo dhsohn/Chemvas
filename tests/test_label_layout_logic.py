@@ -3,11 +3,13 @@ import unittest
 from chemvas.features.annotations import (
     LabelRun,
     attachment_anchor_token,
+    attachment_group_at_end,
     hydride_display_text,
     hydride_hydrogen_text,
     parse_atom_label,
     place_hydride_stack,
     place_runs,
+    reversed_display_text,
     split_hydride_label,
 )
 
@@ -43,6 +45,61 @@ class AttachmentAnchorTokenTest(unittest.TestCase):
 
     def test_empty_label_has_no_anchor(self):
         self.assertIsNone(attachment_anchor_token("", at_end=False))
+
+
+class ReversedDisplayTextTest(unittest.TestCase):
+    def test_trailing_subscript_group_flips_to_the_front(self):
+        self.assertEqual(reversed_display_text("CF3"), "F3C")
+
+    def test_nickname_flip_matches_the_other_typed_order(self):
+        self.assertEqual(reversed_display_text("PPh3"), "Ph3P")
+        self.assertEqual(reversed_display_text("Ph3P"), "PPh3")
+
+    def test_three_groups_reverse_group_wise(self):
+        self.assertEqual(reversed_display_text("CO2Me"), "MeO2C")
+
+    def test_two_letter_tokens_stay_intact(self):
+        self.assertEqual(reversed_display_text("OTs"), "TsO")
+
+    def test_formula_style_label_reverses_group_wise(self):
+        self.assertEqual(reversed_display_text("C10H21"), "H21C10")
+
+    def test_hyphen_and_lowercase_start_do_not_reverse(self):
+        self.assertIsNone(reversed_display_text("t-Bu"))
+
+    def test_charge_sign_does_not_reverse(self):
+        self.assertIsNone(reversed_display_text("NH4+"))
+
+    def test_identity_reversals_return_none(self):
+        self.assertIsNone(reversed_display_text("Cl"))
+        self.assertIsNone(reversed_display_text("Me3"))
+        self.assertIsNone(reversed_display_text(""))
+
+
+class AttachmentGroupAtEndTest(unittest.TestCase):
+    def test_subscripted_first_group_puts_the_attachment_last(self):
+        self.assertIs(attachment_group_at_end("Ph3P"), True)
+        self.assertIs(attachment_group_at_end("F3C"), True)
+
+    def test_subscripted_last_group_puts_the_attachment_first(self):
+        self.assertIs(attachment_group_at_end("CF3"), False)
+        self.assertIs(attachment_group_at_end("SiMe3"), False)
+
+    def test_hydrogen_end_defers_to_the_heavy_atom(self):
+        self.assertIs(attachment_group_at_end("HO"), True)
+        self.assertIs(attachment_group_at_end("H3C"), True)
+        self.assertIs(attachment_group_at_end("C10H21"), False)
+
+    def test_symmetric_unsubscripted_labels_are_ambiguous(self):
+        self.assertIsNone(attachment_group_at_end("OMe"))
+        self.assertIsNone(attachment_group_at_end("PhO"))
+        self.assertIsNone(attachment_group_at_end("CO2Me"))
+
+    def test_unclean_or_single_group_labels_are_ambiguous(self):
+        self.assertIsNone(attachment_group_at_end("t-Bu"))
+        self.assertIsNone(attachment_group_at_end("NH4+"))
+        self.assertIsNone(attachment_group_at_end("Cl"))
+        self.assertIsNone(attachment_group_at_end(""))
 
 
 class SplitHydrideLabelTest(unittest.TestCase):

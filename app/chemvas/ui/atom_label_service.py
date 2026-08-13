@@ -8,9 +8,12 @@ from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QColor, QPen
 from PyQt6.QtWidgets import QInputDialog
 
+from chemvas.domain.atom_aliases import ATOM_ALIAS_DEFINITIONS
 from chemvas.features.annotations import (
     attachment_anchor_token,
+    attachment_group_at_end,
     hydride_display_text,
+    reversed_display_text,
     split_hydride_label,
 )
 from chemvas.ui.atom_label_access import uses_compact_label_hit_shape_for
@@ -189,18 +192,27 @@ class AtomLabelService:
     def _token_anchor_layout(
         self, atom_id: int, text: str
     ) -> tuple[str, str | None, bool, bool | None]:
-        # Multi-part labels ("CF3", "Ph3P", "OMe") anchor on the element-like
-        # token facing the bonds, so the attachment glyph sits on the atom and
-        # bonds trim to it instead of clearing the whole label box. The text is
-        # never reordered: when the bonds sit on a side the typed label cannot
-        # face ("CF3" approached from the right), or the open side is vertical,
-        # the label keeps its plain centred full-clearance layout.
+        # Multi-part labels ("CF3", "Ph3P", "OMe") anchor on their attachment
+        # group, so that glyph sits on the atom and bonds trim to it instead of
+        # clearing the whole label box. When the attachment group is typed on
+        # the side away from the bonds ("CF3" or "OTs" approached from the
+        # right), the display text reverses group-wise ("F3C", "TsO"),
+        # ChemDraw-style, without touching the stored label. When the
+        # attachment end is unknowable, the token facing the bonds anchors
+        # as typed. A vertical open side, an unreversible label, or a bond
+        # running along the label body keeps the centred full-clearance layout.
         vectors = connected_atom_unit_vectors_for(self.canvas, atom_id)
         open_x, open_y = _open_direction(vectors)
         if abs(open_y) > abs(open_x):
             return text, None, False, None
         anchor_at_end = open_x < 0.0
-        token = attachment_anchor_token(text, at_end=anchor_at_end)
+        display = text
+        attachment_at_end = self._attachment_at_end(text)
+        if attachment_at_end is not None and attachment_at_end != anchor_at_end:
+            flipped = reversed_display_text(text)
+            if flipped is not None:
+                display = flipped
+        token = attachment_anchor_token(display, at_end=anchor_at_end)
         if token is None:
             return text, None, False, None
         # Same guard as the horizontal hydride layout: a bond running almost
@@ -208,7 +220,21 @@ class AtomLabelService:
         body_direction = -1.0 if anchor_at_end else 1.0
         if any(dx * body_direction > 0.95 for dx, _ in vectors):
             return text, None, False, None
-        return text, token, anchor_at_end, None
+        return display, token, anchor_at_end, None
+
+    @staticmethod
+    def _attachment_at_end(text: str) -> bool | None:
+        # The alias table is the chemistry authority: its keys are typed
+        # attachment-first, so a label matching a key attaches at the start and
+        # a label whose group-reversal matches a key ("Ph3P" -> "PPh3", "MeO"
+        # -> "OMe") attaches at the end. Unknown labels fall back to the
+        # syntactic signals; None means the end is genuinely ambiguous.
+        if text in ATOM_ALIAS_DEFINITIONS:
+            return False
+        flipped = reversed_display_text(text)
+        if flipped is not None and flipped in ATOM_ALIAS_DEFINITIONS:
+            return True
+        return attachment_group_at_end(text)
 
     def restore_atom_item_interaction(
         self,
