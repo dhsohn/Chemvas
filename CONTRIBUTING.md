@@ -180,7 +180,9 @@ canvas = SimpleNamespace(
 - Keep PRs focused; one logical change per PR.
 - Make sure `ruff`, `mypy`, and the affected tests pass locally.
 - Add or update tests for behavior changes.
-- Describe what changed and why; link any related issue.
+- Describe what changed, why, and how you verified it; link any related issue.
+  The PR template's `Motivation` / `Changes` / `Verification` sections are there
+  for exactly that.
 - Update `CHANGELOG.md` under `## [Unreleased]` when your change is user-visible.
 
 ## Reporting bugs & requesting features

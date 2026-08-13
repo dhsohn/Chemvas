@@ -1,6 +1,14 @@
-## Summary
+## Motivation
 
-<!-- What does this PR change, and why? -->
+<!-- The problem this change exists to solve, and how you found it. -->
+
+## Changes
+
+<!-- What changed. Describe the behavior, and tie each change back to the motivation. -->
+
+## Verification
+
+<!-- The commands you ran and what you observed. Say what you could not check, and any risk you are leaving in place. -->
 
 ## Related issue
 
