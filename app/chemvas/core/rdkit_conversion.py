@@ -5,7 +5,10 @@ import math
 from collections.abc import Mapping
 from typing import TYPE_CHECKING
 
-from chemvas.domain.atom_aliases import AliasAttachment, alias_attachment_error
+from chemvas.domain.atom_aliases import (
+    alias_attachment_error,
+    alias_attachments_for_atom,
+)
 from chemvas.domain.document import Bond, MoleculeModel
 from chemvas.features.calculation_bundle import AtomMapEntry, CalculationArtifacts
 from chemvas.features.insertion import Molecule3DAtom, Molecule3DBond, Molecule3DScene
@@ -712,7 +715,7 @@ class RDKitConversionHelper:
         attachment_error = alias_attachment_error(
             label,
             atom_id=atom_id,
-            attachments=self._alias_attachments(model, atom_id),
+            attachments=alias_attachments_for_atom(model, atom_id),
             annotation=annotation,
         )
         if attachment_error is not None:
@@ -754,28 +757,6 @@ class RDKitConversionHelper:
         if coord_map is None:
             return None, None
         return attachment_new_idx, coord_map
-
-    @staticmethod
-    def _alias_attachments(
-        model: MoleculeModel,
-        atom_id: int,
-    ) -> tuple[AliasAttachment, ...]:
-        attachments: list[AliasAttachment] = []
-        for bond in model.bonds:
-            if bond is None or atom_id not in {bond.a, bond.b}:
-                continue
-            neighbor_id = bond.b if bond.a == atom_id else bond.a
-            neighbor = model.atoms.get(neighbor_id)
-            if neighbor is None:
-                continue
-            attachments.append(
-                AliasAttachment(
-                    neighbor_element=neighbor.element,
-                    bond_order=bond.order,
-                    bond_style=bond.style,
-                )
-            )
-        return tuple(attachments)
 
     def _valid_conversion_bonds(self, model: MoleculeModel) -> list[tuple[int, Bond]]:
         valid_bonds: list[tuple[int, Bond]] = []
