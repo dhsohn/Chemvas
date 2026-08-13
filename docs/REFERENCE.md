@@ -96,7 +96,9 @@ RDKit is an optional backend — Chemvas runs without it. The features marked
 ### SMILES import *(RDKit)*
 
 Type a SMILES string in the top input, preview it under the cursor, and click to
-place it on the canvas.
+place it on the canvas. `Ts` and `Ac` name the tosyl and acetyl abbreviations on
+the canvas, so a SMILES asking for tennessine or actinium is refused rather than
+drawn as the abbreviation.
 
 ### MOL interchange
 

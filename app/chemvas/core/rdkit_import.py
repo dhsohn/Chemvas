@@ -26,6 +26,20 @@ class RDKitImportHelper:
                 "c1ccccc1 (benzene), C1CCCCC1 (cyclohexane)."
             )
             return None
+        # "Ts" (tosyl) and "Ac" (acetyl) are element symbols too, so RDKit
+        # returns tennessine and actinium for them. A canvas label of either
+        # kind means the abbreviation, so placing one would put a different
+        # molecule on the canvas than the SMILES asked for.
+        shadowed = sorted(
+            {atom.GetSymbol() for atom in mol.GetAtoms()}
+            & set(self.adapter._alias_smiles)
+        )
+        if shadowed:
+            self.adapter.last_error = (
+                "Cannot insert this SMILES: Chemvas draws these element symbols "
+                "as abbreviation labels instead: " + ", ".join(shadowed) + "."
+            )
+            return None
         mol = self._kekulized_import_mol(Chem, mol)
         AllChem.Compute2DCoords(mol)
 
