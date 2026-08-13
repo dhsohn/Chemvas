@@ -1774,7 +1774,9 @@ class RDKitAdapterTest(unittest.TestCase):
     @unittest.skipUnless(
         _RealChem is not None, "RDKit is required for alias expansion tests"
     )
-    def test_build_conversion_expands_attached_pph3_as_phosphonium(self) -> None:
+    def test_real_rdkit_smoke_build_conversion_expands_attached_pph3_as_phosphonium(
+        self,
+    ) -> None:
         adapter = RDKitAdapter()
         model = MoleculeModel()
         scaffold = model.add_atom("C", -1.0, 0.0)

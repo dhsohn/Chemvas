@@ -5,6 +5,8 @@ from dataclasses import dataclass
 from types import MappingProxyType
 from typing import Final
 
+from chemvas.domain.document.model import MoleculeModel
+
 
 @dataclass(frozen=True)
 class AliasAttachment:
@@ -67,6 +69,28 @@ def alias_fragment_smiles() -> dict[str, str]:
         label: definition.fragment_smiles
         for label, definition in ATOM_ALIAS_DEFINITIONS.items()
     }
+
+
+def alias_attachments_for_atom(
+    model: MoleculeModel,
+    atom_id: int,
+) -> tuple[AliasAttachment, ...]:
+    attachments: list[AliasAttachment] = []
+    for bond in model.bonds:
+        if bond is None or atom_id not in {bond.a, bond.b}:
+            continue
+        neighbor_id = bond.b if bond.a == atom_id else bond.a
+        neighbor = model.atoms.get(neighbor_id)
+        if neighbor is None:
+            continue
+        attachments.append(
+            AliasAttachment(
+                neighbor_element=neighbor.element,
+                bond_order=bond.order,
+                bond_style=bond.style,
+            )
+        )
+    return tuple(attachments)
 
 
 def modeled_atom_formal_charge(
@@ -137,6 +161,7 @@ __all__ = [
     "AliasAttachmentContract",
     "AtomAliasDefinition",
     "alias_attachment_error",
+    "alias_attachments_for_atom",
     "alias_fragment_smiles",
     "modeled_atom_formal_charge",
 ]

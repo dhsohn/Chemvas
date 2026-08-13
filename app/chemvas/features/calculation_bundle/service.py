@@ -4,7 +4,10 @@ from collections import Counter
 from collections.abc import Mapping, Sequence
 from typing import cast
 
-from chemvas.domain.atom_aliases import AliasAttachment, modeled_atom_formal_charge
+from chemvas.domain.atom_aliases import (
+    alias_attachments_for_atom,
+    modeled_atom_formal_charge,
+)
 from chemvas.domain.document import Atom, Bond, MoleculeModel, deserialize_model_state
 
 from .model import CalculationStateSelection, ComponentSelection, ComponentSummary
@@ -278,26 +281,11 @@ def _modeled_atom_formal_charge(
     atom_id: int,
     annotation: Mapping[str, int] | None,
 ) -> int:
-    attachments: list[AliasAttachment] = []
-    for bond in model.bonds:
-        if bond is None or atom_id not in {bond.a, bond.b}:
-            continue
-        neighbor_id = bond.b if bond.a == atom_id else bond.a
-        neighbor = model.atoms.get(neighbor_id)
-        if neighbor is None:
-            continue
-        attachments.append(
-            AliasAttachment(
-                neighbor_element=neighbor.element,
-                bond_order=bond.order,
-                bond_style=bond.style,
-            )
-        )
     return modeled_atom_formal_charge(
         model.atoms[atom_id].element,
         annotation,
         atom_id=atom_id,
-        attachments=attachments,
+        attachments=alias_attachments_for_atom(model, atom_id),
     )
 
 

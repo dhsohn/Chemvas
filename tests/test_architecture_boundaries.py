@@ -3030,6 +3030,14 @@ def test_bond_build_and_update_do_not_own_style_or_geometry_dispatch() -> None:
     assert _matching_lines(forbidden, [build, update]) == []
 
 
+def test_alias_attachment_derivation_has_one_domain_owner() -> None:
+    owner = APP_ROOT / "chemvas" / "domain" / "atom_aliases.py"
+    consumers = [path for path in _app_python_files() if path != owner]
+
+    assert _matching_lines(re.compile(r"\bAliasAttachment\("), consumers) == []
+    assert _matching_lines(re.compile(r"\b_alias_attachments\b"), consumers) == []
+
+
 def test_canvas_input_controller_does_not_use_context_facade() -> None:
     removed_context = APP_ROOT / "chemvas" / "ui" / "canvas_input_context.py"
     controller = APP_ROOT / "chemvas" / "ui" / "canvas_input_controller.py"
