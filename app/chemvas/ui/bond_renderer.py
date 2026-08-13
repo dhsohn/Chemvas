@@ -11,6 +11,7 @@ from chemvas.features.rendering import (
     strip_corners as strip_corners_shape,
 )
 from chemvas.ui.atom_coords_access import current_atom_coords_3d_for
+from chemvas.ui.bond_geometry_plan_service import BondGeometryPlanService
 from chemvas.ui.bond_geometry_update_service import BondGeometryUpdateService
 from chemvas.ui.bond_graphics_access import (
     bond_offset_unit_3d_for,
@@ -46,11 +47,17 @@ class BondRenderer:
         self.graphics = BondGraphicsFactory(renderer_for(canvas))
         self.line_geometry = BondLineGeometryService(canvas)
         self.graphics_drawer = BondGraphicsDrawService(canvas, renderer=self)
-        self.graphics_builder = BondGraphicsBuildService(
-            canvas, renderer=self, drawer=self.graphics_drawer
-        )
-        self.geometry_updater = BondGeometryUpdateService(canvas, renderer=self)
         self.ring_double_geometry = BondRingDoubleGeometryService(canvas, renderer=self)
+        self.geometry_planner = BondGeometryPlanService(canvas, renderer=self)
+        self.graphics_builder = BondGraphicsBuildService(
+            canvas,
+            renderer=self,
+            planner=self.geometry_planner,
+        )
+        self.geometry_updater = BondGeometryUpdateService(
+            canvas,
+            planner=self.geometry_planner,
+        )
 
     def trim_line_for_labels(
         self, a_id, b_id, x1: float, y1: float, x2: float, y2: float

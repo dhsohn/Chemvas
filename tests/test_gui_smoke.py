@@ -1407,12 +1407,23 @@ class GuiShortcutSmokeTest(unittest.TestCase):
         transform = canvas.services.scene_operations.scene_transform_controller
         transform.apply_bond_style(b0, "bold", 1)
         transform.apply_bond_style(b1, "bold", 1)
+        item_ids = {
+            bond_id: tuple(id(item) for item in bond_items_for_id(canvas, bond_id))
+            for bond_id in (b0, b1)
+        }
 
         moved = QPointF(23.0, 4.0)
         canvas.model.atoms[a1].x = moved.x()
         canvas.model.atoms[a1].y = moved.y()
         update_bond_geometry_for(canvas, b0)
         update_bond_geometry_for(canvas, b1)
+        self.assertEqual(
+            {
+                bond_id: tuple(id(item) for item in bond_items_for_id(canvas, bond_id))
+                for bond_id in (b0, b1)
+            },
+            item_ids,
+        )
 
         def near_corners(bond_id):
             polygons = [
