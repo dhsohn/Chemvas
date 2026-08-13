@@ -1,8 +1,8 @@
 """Documentation <-> code synchronization guards.
 
 Each test here pins a *user-facing fact* stated in the docs (README.md,
-README.ko.md, CHANGELOG.md) to its single source of truth in code, so the two
-cannot drift apart silently. These fill the exact gap that once let the README
+README.ko.md, docs/REFERENCE.md, CHANGELOG.md) to its single source of truth in
+code, so the two cannot drift apart silently. These fill the exact gap that once let the README
 advertise the SMILES button as "Render" (code: "Insert"), a version-1 file
 format (code: 4), PyPI as a future roadmap item (already published), and a
 fused "Atom/Text" hotkey (code: Atom `A`, Text `T`).
@@ -23,6 +23,7 @@ APP = ROOT / "app"
 
 README = ROOT / "README.md"
 README_KO = ROOT / "README.ko.md"
+REFERENCE = ROOT / "docs" / "REFERENCE.md"
 CHANGELOG = ROOT / "CHANGELOG.md"
 READMES = (README, README_KO)
 
@@ -98,17 +99,23 @@ def test_changelog_latest_release_matches_package_version():
     )
 
 
-def test_readmes_document_current_file_format_version():
+def test_docs_document_current_file_format_version():
     version = _canvas_file_version()
+    # The format example lives in the reference doc...
+    text = _collapse(_read(REFERENCE))
+    found = re.findall(r'"type"\s*:\s*"chemvas"\s*,\s*"version"\s*:\s*(\d+)', text)
+    assert found, f"{REFERENCE.name}: no {{'type':'chemvas',...}} format example found"
+    for got in found:
+        assert int(got) == version, (
+            f"{REFERENCE.name}: file-format example shows version {got}, but the "
+            f"app writes CANVAS_FILE_VERSION={version}"
+        )
+    # ...while the READMEs still name the current document version in prose.
     for path in READMES:
-        text = _collapse(_read(path))
-        found = re.findall(r'"type"\s*:\s*"chemvas"\s*,\s*"version"\s*:\s*(\d+)', text)
-        assert found, f"{path.name}: no {{'type':'chemvas',...}} format example found"
-        for got in found:
-            assert int(got) == version, (
-                f"{path.name}: file-format example shows version {got}, but the "
-                f"app writes CANVAS_FILE_VERSION={version}"
-            )
+        assert re.search(rf"version\s*{version}\b", _collapse(_read(path))), (
+            f"{path.name}: does not state the current .chemvas document version "
+            f"(app writes CANVAS_FILE_VERSION={version})"
+        )
 
 
 def test_readmes_name_the_actual_smiles_button_label():
@@ -128,18 +135,17 @@ def test_readmes_show_the_published_install_command():
         )
 
 
-def test_readmes_match_atom_and_text_tool_hotkeys():
+def test_reference_matches_atom_and_text_tool_hotkeys():
     hotkeys = _tool_hotkeys()
     for label in ("Atom", "Text"):
         assert label in hotkeys, f"{label!r} tool has no ChemDraw hint in config"
-    for path in READMES:
-        text = _collapse(_read(path))
-        for label in ("Atom", "Text"):
-            key = hotkeys[label]
-            # e.g. "Atom `A`" (en) or "Atom(`A`)" (ko): label, then the keycap in
-            # backticks within a couple of separator chars.
-            pattern = re.escape(label) + r"[^`]{0,3}`" + re.escape(key) + "`"
-            assert re.search(pattern, text), (
-                f"{path.name}: does not tie the {label!r} tool to hotkey `{key}` "
-                f"(code says {label} = {key})"
-            )
+    text = _collapse(_read(REFERENCE))
+    for label in ("Atom", "Text"):
+        key = hotkeys[label]
+        # e.g. "Atom `A`": label, then the keycap in backticks within a couple
+        # of separator chars.
+        pattern = re.escape(label) + r"[^`]{0,3}`" + re.escape(key) + "`"
+        assert re.search(pattern, text), (
+            f"{REFERENCE.name}: does not tie the {label!r} tool to hotkey `{key}` "
+            f"(code says {label} = {key})"
+        )
