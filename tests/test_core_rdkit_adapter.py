@@ -417,6 +417,10 @@ class _FakeChem:
             raise self._sanitize_error
         self.sanitized_molecules.append(mol)
 
+    def FastFindRings(self, mol) -> None:
+        # The tolerant builder perceives rings after a failed sanitize.
+        return None
+
     def AddHs(self, mol):
         if self._add_hs_error is not None:
             raise self._add_hs_error
@@ -1092,6 +1096,23 @@ class RDKitAdapterTest(unittest.TestCase):
         self.assertEqual(atom_map, {0: 0, 1: 1})
         self.assertEqual(mol.bonds, [(0, 1, "single")])
         self.assertEqual(chem.sanitized_molecules, [])
+
+    @unittest.skipUnless(_RealChem is not None, "RDKit is required for smoke tests")
+    def test_real_rdkit_smoke_tolerant_build_returns_a_queryable_mol(self) -> None:
+        # Tolerating a sanitize failure is only useful if the mol handed back
+        # can still answer questions. A failed sanitize leaves the ring cache
+        # uninitialized, and every ring-aware query then raises instead of
+        # answering.
+        adapter = RDKitAdapter()
+        model = MoleculeModel()
+        nitrogen = model.add_atom("N", 0.0, 0.0)
+        for index in range(4):
+            model.add_bond(nitrogen, model.add_atom("C", 30.0 * (index + 1), 0.0), 1)
+
+        mol, atom_map = adapter.model_to_rdkit_with_map_tolerant(model)
+
+        self.assertEqual(len(atom_map), 5)
+        self.assertEqual(mol.GetRingInfo().NumRings(), 0)
 
     def test_model_to_rdkit_with_map_strict_labels_reports_invalid_labels(self) -> None:
         adapter = RDKitAdapter()
@@ -1788,6 +1809,37 @@ class RDKitAdapterTest(unittest.TestCase):
         # The oxygen's bond only changes order, so it is now suggested along with
         # the conserved carbon chain — every atom is mapped one-to-one.
         self.assertEqual(set(pairs), {(r0, p0), (r1, p1), (r2, p2), (r3, p3)})
+        self.assertTrue(
+            all(model.atoms[r].element == model.atoms[p].element for r, p in pairs)
+        )
+        product_ids = [p for _r, p in pairs]
+        self.assertEqual(len(product_ids), len(set(product_ids)))
+
+    @unittest.skipUnless(
+        _RealChem is not None, "RDKit is required for MCS suggestion tests"
+    )
+    def test_real_rdkit_smoke_suggestion_survives_an_unsanitizable_drawing(
+        self,
+    ) -> None:
+        # A neutral nitrogen carrying four bonds is an ordinary mid-edit state:
+        # the fourth bond is drawn before the charge is added. Suggesting a
+        # mapping for it used to raise out of the dialog's slot, which aborts
+        # the process and loses every mapping made so far.
+        adapter = RDKitAdapter()
+        model = MoleculeModel()
+        reactant = [model.add_atom("N", 0.0, 0.0)]
+        for index in range(4):
+            reactant.append(model.add_atom("C", 30.0 * (index + 1), 0.0))
+            model.add_bond(reactant[0], reactant[-1], 1)
+        product = [model.add_atom("N", 0.0, 200.0)]
+        for index in range(4):
+            product.append(model.add_atom("C", 30.0 * (index + 1), 200.0))
+            model.add_bond(product[0], product[-1], 1)
+
+        pairs = adapter.suggest_atom_correspondence(
+            model, frozenset(reactant), frozenset(product)
+        )
+
         self.assertTrue(
             all(model.atoms[r].element == model.atoms[p].element for r, p in pairs)
         )

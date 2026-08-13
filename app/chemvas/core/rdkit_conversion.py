@@ -105,7 +105,8 @@ class RDKitConversionHelper:
         # surface any real failure. This deliberately differs from
         # ``_build_conversion_rdkit_mol``, which is strict and aborts on a
         # sanitize error. Keep the tolerant behavior (see
-        # test_model_to_rdkit_with_map_tolerant_ignores_invalid_bonds_and_sanitize_errors).
+        # test_model_to_rdkit_with_map_tolerant_ignores_invalid_bonds_and_sanitize_errors
+        # and test_real_rdkit_smoke_tolerant_build_returns_a_queryable_mol).
         try:
             Chem.SanitizeMol(mol)
         except Exception:
@@ -113,6 +114,13 @@ class RDKitConversionHelper:
                 "SanitizeMol failed for tolerant round-trip build; continuing.",
                 exc_info=True,
             )
+            # A failed sanitize leaves the ring cache uninitialized, and every
+            # ring-aware query on such a mol then raises a C++ pre-condition
+            # violation rather than answering. Tolerating the failure is only
+            # useful if the mol handed back is still queryable, so perceive
+            # rings here. The valence cache survives the failure and needs no
+            # such repair.
+            Chem.FastFindRings(mol)
         return mol, atom_map
 
     def model_to_rdkit_with_map_tolerant(self, model: MoleculeModel):

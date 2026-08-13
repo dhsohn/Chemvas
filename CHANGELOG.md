@@ -33,6 +33,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     `CH3OTs` at 323.03 rather than `C8H10O3S` at 186.23. Those identifiers now
     stay blank, as they already did for `Ph`, `Me`, and every other
     abbreviation.
+- **Suggest by structure** closed Chemvas when the drawing contained an atom
+  RDKit cannot sanitize — a neutral nitrogen still carrying four bonds because
+  its charge has not been added yet, a carbon that briefly holds five, and
+  similar work-in-progress states. The window disappeared without a message,
+  taking every atom correspondence mapped in that dialog with it. The
+  suggestion now runs on the connectivity as drawn; the structure's real
+  problem is still reported where it always was, by the 3D preview and by
+  `.xyz` and calculation-step export.
 
 ## [0.3.0] - 2026-08-13
 
