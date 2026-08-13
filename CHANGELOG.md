@@ -19,6 +19,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and additionally pin the READMEs' prose mention of the current document
   version.
 
+### Fixed
+- The abbreviation labels `Ts` (tosyl) and `Ac` (acetyl) are also the element
+  symbols for tennessine and actinium, and two conversion paths resolved them
+  as those elements instead of as abbreviations. Both now treat them the way
+  they treat every other abbreviation label.
+  - MOL export wrote them into the atom block as elements rather than taking
+    the RDKit expansion path, so one drawing exported different chemistry to
+    `.mol` than to `.xyz`. A molfile whose atom symbol is `Ts` or `Ac` is also
+    rejected on import now, instead of being read back as the abbreviation.
+  - Molecule Info reported a formula, molecular weight, SMILES, and InChI
+    computed from tennessine or actinium: a drawn methyl tosylate came back as
+    `CH3OTs` at 323.03 rather than `C8H10O3S` at 186.23. Those identifiers now
+    stay blank, as they already did for `Ph`, `Me`, and every other
+    abbreviation.
+
 ## [0.3.0] - 2026-08-13
 
 ### Changed

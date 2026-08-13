@@ -3,11 +3,10 @@ from __future__ import annotations
 import math
 from collections.abc import Iterable, Mapping, Sequence
 
+from chemvas.domain.atom_aliases import ATOM_ALIAS_DEFINITIONS
 from chemvas.domain.document import Bond, MoleculeModel
 
-# Element symbols (Z = 1..118). An atom whose stored label is not one of these
-# (an abbreviation such as Me/Ph/OH, or a multi-atom label) cannot be written as
-# a single MDL atom, so MOL export fails loudly instead of guessing.
+# Element symbols (Z = 1..118).
 _ELEMENTS = frozenset(
     """
     H He Li Be B C N O F Ne Na Mg Al Si P S Cl Ar K Ca Sc Ti V Cr Mn Fe Co Ni
@@ -17,6 +16,18 @@ _ELEMENTS = frozenset(
     Bh Hs Mt Ds Rg Cn Nh Fl Mc Lv Ts Og
     """.split()
 )
+
+# Two abbreviation labels are also element symbols: "Ts" is tosyl and
+# tennessine, "Ac" is acetyl and actinium. A drawn label of either kind means
+# the abbreviation, so writing one as an element would hand a downstream tool a
+# different molecule than the drawing shows, and reading one back would silently
+# turn an actinium atom into an acetyl group.
+_ALIAS_ELEMENT_SYMBOLS = _ELEMENTS & frozenset(ATOM_ALIAS_DEFINITIONS)
+
+# The symbols an MDL atom may carry. A stored label outside this set (an
+# abbreviation such as Me/Ph/OH, or any other multi-atom label) cannot be
+# written as a single MDL atom, so MOL export fails loudly instead of guessing.
+_UNAMBIGUOUS_ELEMENTS = _ELEMENTS - _ALIAS_ELEMENT_SYMBOLS
 
 # MDL bond stereo flags for single bonds drawn with a wedge/hash style.
 _STEREO_BY_STYLE = {"wedge": 1, "hash": 6}
@@ -89,9 +100,10 @@ class MolfileParseError(MolfileError):
     """Raised when MOL text cannot be read as the V2000 subset Chemvas writes.
 
     The parser is deliberately fail-closed: anything outside the constructs
-    :func:`write_molfile` emits (V3000 files, unknown element symbols,
-    3D coordinates, unsupported property lines, malformed fields) raises this
-    error with a specific message instead of guessing.
+    :func:`write_molfile` emits (V3000 files, unknown element symbols, symbols
+    an abbreviation label shadows, 3D coordinates, unsupported property lines,
+    malformed fields) raises this error with a specific message instead of
+    guessing.
     """
 
 
@@ -160,7 +172,7 @@ def write_molfile(
 
 def _reject_non_element_labels(model: MoleculeModel, atom_ids: Sequence[int]) -> None:
     unsupported = sorted(
-        {model.atoms[atom_id].element for atom_id in atom_ids} - _ELEMENTS
+        {model.atoms[atom_id].element for atom_id in atom_ids} - _UNAMBIGUOUS_ELEMENTS
     )
     if unsupported:
         raise MolfileError(
@@ -471,7 +483,13 @@ def _parse_atom_line(line: str, line_number: int) -> tuple[str, float, float]:
             "coordinate; Chemvas imports 2D (z = 0) molfiles only."
         )
     symbol = line[31:34].strip()
-    if symbol not in _ELEMENTS:
+    if symbol in _ALIAS_ELEMENT_SYMBOLS:
+        raise MolfileParseError(
+            f"Cannot import MOL: atom line {line_number} has the element symbol "
+            f"{symbol!r}, which Chemvas draws as an abbreviation label instead; "
+            "importing it would change the structure's chemistry."
+        )
+    if symbol not in _UNAMBIGUOUS_ELEMENTS:
         raise MolfileParseError(
             f"Cannot import MOL: atom line {line_number} has an unsupported "
             f"element symbol {symbol!r}."

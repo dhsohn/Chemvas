@@ -7,6 +7,7 @@ from types import ModuleType, SimpleNamespace
 from unittest import mock
 
 from chemvas.core.rdkit_adapter import RDKitAdapter
+from chemvas.domain.atom_aliases import ATOM_ALIAS_DEFINITIONS
 from chemvas.domain.document import Bond, MoleculeModel
 
 try:
@@ -813,6 +814,41 @@ class RDKitAdapterTest(unittest.TestCase):
             adapter.last_error,
             "XYZ export supports element symbols only. Unsupported atom labels: Me (atom 0), Xx (atom 1).",
         )
+
+    @unittest.skipUnless(_RealChem is not None, "RDKit is required for smoke tests")
+    def test_real_rdkit_smoke_strict_labels_reject_every_abbreviation(self) -> None:
+        # "Ts" (tosyl) and "Ac" (acetyl) are also element symbols, so Chem.Atom
+        # accepts them. Without the alias check they would become tennessine and
+        # actinium here instead of being reported as unsupported labels.
+        for label in ATOM_ALIAS_DEFINITIONS:
+            with self.subTest(label=label):
+                adapter = RDKitAdapter()
+                model = MoleculeModel()
+                model.add_atom(label, 0.0, 0.0)
+
+                mol, atom_map = adapter.model_to_rdkit_with_map_strict_labels(model)
+
+                self.assertIsNone(mol)
+                self.assertIsNone(atom_map)
+                self.assertIn(label, adapter.last_error)
+
+    @unittest.skipUnless(_RealChem is not None, "RDKit is required for smoke tests")
+    def test_real_rdkit_smoke_identifiers_stay_blank_for_a_tosylate(self) -> None:
+        # Molecule Info reporting a drawn tosylate as a tennessine ester would
+        # put a wrong molecular weight in front of the user as fact.
+        adapter = RDKitAdapter()
+        model = MoleculeModel()
+        carbon = model.add_atom("C", 0.0, 0.0)
+        oxygen = model.add_atom("O", 30.0, 0.0)
+        tosyl = model.add_atom("Ts", 60.0, 0.0)
+        model.add_bond(carbon, oxygen, 1)
+        model.add_bond(oxygen, tosyl, 1)
+
+        identifiers = adapter.compute_identifiers(model)
+
+        self.assertIsNone(identifiers.formula)
+        self.assertIsNone(identifiers.mw)
+        self.assertIsNone(identifiers.smiles)
 
     def test_smiles_to_2d_returns_none_when_rdkit_is_unavailable(self) -> None:
         adapter = RDKitAdapter()

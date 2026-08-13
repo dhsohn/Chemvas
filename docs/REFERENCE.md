@@ -102,10 +102,12 @@ place it on the canvas.
 
 Open MDL Molfiles (`.mol`, V2000) as new documents and export the selected
 structure as `.mol`. Import and plain-element export need no RDKit; abbreviation
-labels require optional RDKit expansion. Property records are limited to
-`M  CHG` / `M  RAD`, wedge/hash stereo to single bonds, and the counts-line
-chiral flag to zero. Singlet `M  RAD` code 1 is rejected until the annotation
-model can preserve spin multiplicity.
+labels require optional RDKit expansion. `Ts` and `Ac` are the tosyl and acetyl
+abbreviations on the canvas rather than tennessine and actinium, so a molfile
+that uses either symbol for the element is rejected on import. Property records
+are limited to `M  CHG` / `M  RAD`, wedge/hash stereo to single bonds, and the
+counts-line chiral flag to zero. Singlet `M  RAD` code 1 is rejected until the
+annotation model can preserve spin multiplicity.
 
 ### Molecule Info window *(RDKit)*
 
