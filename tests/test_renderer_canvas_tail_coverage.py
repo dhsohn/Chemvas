@@ -12,14 +12,8 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 try:
     from PyQt6.QtCore import QPointF, Qt
-    from PyQt6.QtGui import QColor, QPainterPath, QPen, QPolygonF
-    from PyQt6.QtWidgets import (
-        QApplication,
-        QGraphicsLineItem,
-        QGraphicsPathItem,
-        QGraphicsPolygonItem,
-        QGraphicsScene,
-    )
+    from PyQt6.QtGui import QColor, QPen
+    from PyQt6.QtWidgets import QApplication, QGraphicsScene
 except ModuleNotFoundError:
     QApplication = None
     Qt = None
@@ -212,96 +206,6 @@ class RendererCanvasTailCoverageTest(unittest.TestCase):
         self.assertEqual(normal, (0.0, 1.0))
         self.assertEqual(outer, (0.0, 0.0, 10.0, 0.0))
         self.assertGreater(inner[1], 0.0)
-
-    def test_update_dotted_double_skips_short_or_mismatched_item_lists(self) -> None:
-        self._set_bond(Bond(0, 1, 2, style="dotted_double_outer"))
-        only_path = QGraphicsPathItem(QPainterPath())
-        self.canvas.bond_items[0] = [only_path]
-        self.renderer.update_bond_geometry(0)
-        self.assertTrue(only_path.path().isEmpty())
-
-        wrong_outer = QGraphicsLineItem(0.0, 0.0, 0.0, 0.0)
-        wrong_inner = QGraphicsPolygonItem(QPolygonF())
-        self.canvas.bond_items[0] = [wrong_outer, wrong_inner]
-        self.renderer.update_bond_geometry(0)
-        self.assertEqual(wrong_outer.line().length(), 0.0)
-        self.assertEqual(len(wrong_inner.polygon()), 0)
-
-    def test_update_bold_geometry_covers_line_fallback_branches(self) -> None:
-        ring_outer_line = QGraphicsLineItem(0.0, 0.0, 0.0, 0.0)
-        ring_inner_line = QGraphicsLineItem(0.0, 0.0, 0.0, 0.0)
-        self._set_bond(Bond(0, 1, 2, style="bold_out"))
-        self.canvas._ring_center = QPointF(5.0, 5.0)
-        self.canvas.bond_items[0] = [ring_outer_line, ring_inner_line]
-        with mock.patch.object(
-            self.renderer,
-            "ring_double_segments",
-            return_value=((0.0, 0.0, 10.0, 0.0), (1.0, 1.0, 9.0, 1.0), (0.0, 1.0)),
-        ):
-            self.renderer.update_bond_geometry(0)
-        # The first scene-item slot is always the bold segment, even when the
-        # ring-outward ordinary-double geometry selects its second segment.
-        self.assertEqual(
-            (ring_outer_line.line().x1(), ring_outer_line.line().x2()), (1.0, 9.0)
-        )
-
-        first_line = QGraphicsLineItem(0.0, 0.0, 0.0, 0.0)
-        second_line = QGraphicsLineItem(0.0, 0.0, 0.0, 0.0)
-        self._set_bond(Bond(0, 1, 3, style="bold"))
-        self.canvas._ring_center = None
-        self.canvas.bond_items[0] = [first_line, second_line]
-        with mock.patch.object(
-            self.renderer,
-            "parallel_bond_segments",
-            return_value=((1.0, 0.0, 9.0, 0.0), (1.0, 2.0, 9.0, 2.0)),
-        ):
-            self.renderer.update_bond_geometry(0)
-        self.assertEqual((first_line.line().x1(), first_line.line().x2()), (1.0, 9.0))
-
-        single_line = QGraphicsLineItem(0.0, 0.0, 0.0, 0.0)
-        self._set_bond(Bond(0, 1, 1, style="bold"))
-        self.canvas.bond_items[0] = [single_line]
-        self.renderer.update_bond_geometry(0)
-        # Bold strips run straight between the atoms now (no overshoot pad).
-        self.assertAlmostEqual(single_line.line().length(), 10.0)
-
-    def test_update_plain_and_higher_order_bonds_cover_tail_type_guards(self) -> None:
-        self._set_bond(Bond(0, 1, 2, style="single"))
-        self.canvas._ring_center = QPointF(5.0, 5.0)
-        wrong_outer = QGraphicsPolygonItem(QPolygonF())
-        wrong_inner = QGraphicsPolygonItem(QPolygonF())
-        self.canvas.bond_items[0] = [wrong_outer, wrong_inner]
-        with mock.patch.object(
-            self.renderer,
-            "ring_double_segments",
-            return_value=((0.0, 0.0, 10.0, 0.0), (1.0, 1.0, 9.0, 1.0), (0.0, 1.0)),
-        ):
-            self.renderer.update_bond_geometry(0)
-        self.assertEqual(len(wrong_outer.polygon()), 0)
-        self.assertEqual(len(wrong_inner.polygon()), 0)
-
-        outer_line = QGraphicsLineItem(0.0, 0.0, 0.0, 0.0)
-        inner_line = QGraphicsLineItem(0.0, 0.0, 0.0, 0.0)
-        self.canvas._ring_center = None
-        self.canvas.bond_items[0] = [outer_line, inner_line]
-        self.renderer.update_bond_geometry(0)
-        self.assertGreater(outer_line.line().length(), 0.0)
-        self.assertGreater(inner_line.line().length(), 0.0)
-
-        skipped_polygon = QGraphicsPolygonItem(QPolygonF())
-        updated_line = QGraphicsLineItem(0.0, 0.0, 0.0, 0.0)
-        self._set_bond(Bond(0, 1, 3, style="single"))
-        self.canvas.bond_items[0] = [skipped_polygon, updated_line]
-        with mock.patch.object(
-            self.renderer,
-            "parallel_bond_segments",
-            return_value=((0.0, -2.0, 10.0, -2.0), (0.0, 2.0, 10.0, 2.0)),
-        ):
-            self.renderer.update_bond_geometry(0)
-        self.assertEqual(len(skipped_polygon.polygon()), 0)
-        self.assertEqual(
-            (updated_line.line().y1(), updated_line.line().y2()), (2.0, 2.0)
-        )
 
     def test_set_bond_length_without_ring_items_pushes_non_ring_composite(self) -> None:
         pushed = []

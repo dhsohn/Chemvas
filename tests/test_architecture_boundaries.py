@@ -3014,6 +3014,22 @@ def test_bond_line_geometry_delegates_special_glyph_geometry() -> None:
     assert _matching_lines(forbidden, [service]) == []
 
 
+def test_bond_build_and_update_do_not_own_style_or_geometry_dispatch() -> None:
+    build = APP_ROOT / "chemvas" / "ui" / "bond_graphics_build_service.py"
+    update = APP_ROOT / "chemvas" / "ui" / "bond_geometry_update_service.py"
+    forbidden = re.compile(
+        r"\bbond\.(?:style|order)\b"
+        r"|\b(?:BOLD_BOND_STYLES|is_dotted_double_bond_style"
+        r"|is_plain_double_bond_style|double_position_for_style"
+        r"|normalized_plain_double_style|ring_center_for_bond"
+        r"|trim_line_for_labels|wedge_polygon|hash_segments"
+        r"|dotted_bond_path|plain_double_segments|ring_double_segments"
+        r"|parallel_bond_segments|line_normal|bold_strip_polygon)\b"
+    )
+
+    assert _matching_lines(forbidden, [build, update]) == []
+
+
 def test_canvas_input_controller_does_not_use_context_facade() -> None:
     removed_context = APP_ROOT / "chemvas" / "ui" / "canvas_input_context.py"
     controller = APP_ROOT / "chemvas" / "ui" / "canvas_input_controller.py"
