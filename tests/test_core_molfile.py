@@ -9,6 +9,7 @@ from chemvas.core.molfile import (
     parse_molfile,
     write_molfile,
 )
+from chemvas.domain.atom_aliases import ATOM_ALIAS_DEFINITIONS
 from chemvas.domain.document import MoleculeModel
 
 try:
@@ -106,13 +107,19 @@ class MolfileWriterTest(unittest.TestCase):
         self.assertEqual(int(bond_lines[1][9:12]), 6)  # hash -> down
 
     def test_unsupported_label_raises(self) -> None:
-        model = MoleculeModel()
-        model.add_atom("Me", 0.0, 0.0)
-        model.add_atom("O", 30.0, 0.0)
-        model.add_bond(0, 1, 1)
-        with self.assertRaises(MolfileError) as ctx:
-            write_molfile(model)
-        self.assertIn("Me", str(ctx.exception))
+        # Every abbreviation label is rejected so the caller's RDKit expansion
+        # fallback runs. "Ts" (tosyl) and "Ac" (acetyl) are also the symbols for
+        # tennessine and actinium, and the canvas means the abbreviation, so
+        # they must be rejected here too rather than written as those elements.
+        for label in ATOM_ALIAS_DEFINITIONS:
+            with self.subTest(label=label):
+                model = MoleculeModel()
+                model.add_atom(label, 0.0, 0.0)
+                model.add_atom("O", 30.0, 0.0)
+                model.add_bond(0, 1, 1)
+                with self.assertRaises(MolfileError) as ctx:
+                    write_molfile(model)
+                self.assertIn(label, str(ctx.exception))
 
     @unittest.skipUnless(
         _RealChem is not None, "RDKit is required for round-trip tests"
@@ -411,6 +418,21 @@ class MolfileParserErrorTest(unittest.TestCase):
 
         with self.assertRaisesRegex(MolfileParseError, "'Xx'"):
             parse_molfile(block)
+
+    def test_element_symbol_an_abbreviation_shadows_raises(self) -> None:
+        # Reading these back as elements would silently turn an actinium atom
+        # into an acetyl group, because the canvas draws the label as the
+        # abbreviation.
+        original = write_molfile(_ethanol())
+        atom_line = original.splitlines()[4]
+
+        for symbol in ("Ac", "Ts"):
+            with self.subTest(symbol=symbol):
+                block = _replaced_line(
+                    original, 4, atom_line[:31] + f"{symbol:<3}" + atom_line[34:]
+                )
+                with self.assertRaisesRegex(MolfileParseError, "abbreviation label"):
+                    parse_molfile(block)
 
     def test_non_zero_z_coordinate_raises(self) -> None:
         block = write_molfile(_ethanol())

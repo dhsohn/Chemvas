@@ -46,9 +46,17 @@ class RDKitConversionHelper:
             formal_charge, radical_electrons = self._annotation_for_atom(
                 atom_annotations, atom_id
             )
-            try:
-                rd_atom = Chem.Atom(atom.element)
-            except Exception:
+            # An abbreviation label is not an element here. The table is checked
+            # first because "Ts" (tosyl) and "Ac" (acetyl) are also element
+            # symbols, so Chem.Atom would happily build tennessine and actinium
+            # and report a molecule the drawing never showed.
+            rd_atom = None
+            if atom.element not in self.adapter._alias_smiles:
+                try:
+                    rd_atom = Chem.Atom(atom.element)
+                except Exception:
+                    rd_atom = None
+            if rd_atom is None:
                 if strict_labels:
                     invalid_labels.append(f"{atom.element} (atom {atom_id})")
                     continue
