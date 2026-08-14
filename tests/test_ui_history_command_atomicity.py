@@ -514,6 +514,8 @@ def test_delete_html_authority_accepts_exact_baseline_and_rejects_mutation() -> 
 
 
 def test_document_savepoint_is_consumed_after_one_restore() -> None:
+    app = QApplication.instance() or QApplication([])
+    app.setQuitOnLastWindowClosed(False)
     scene = QGraphicsScene()
     canvas = SimpleNamespace(
         scene=lambda: scene,
