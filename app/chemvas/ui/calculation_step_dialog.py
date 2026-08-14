@@ -43,6 +43,7 @@ from chemvas.features.calculation_bundle import (
     plan_with_replaced_step,
     structural_calculation_plan_for_document,
 )
+from chemvas.features.insertion import RDKitResult
 from chemvas.ui.calculation_mapping_highlight import CalculationMappingHighlighter
 from chemvas.ui.canvas_calculation_plan_state import set_calculation_plan_for
 from chemvas.ui.main_window_palette import PALETTE
@@ -88,7 +89,7 @@ class _CorrespondenceSuggester(Protocol):
         self,
         reactant_atom_ids: frozenset[int],
         product_atom_ids: frozenset[int],
-    ) -> list[tuple[int, int]]: ...
+    ) -> RDKitResult[list[tuple[int, int]]]: ...
 
 
 class _NoInputMethodTableWidget(QTableWidget):
@@ -685,9 +686,18 @@ class CalculationStepDialog(QDialog):
         product_state, _product_endpoint = self._build_endpoint("product")
         reactant_ids = included_atom_ids(reactant_state)
         product_ids = included_atom_ids(product_state)
-        suggestions = self._correspondence_suggester(
+        result = self._correspondence_suggester(
             frozenset(reactant_ids), frozenset(product_ids)
         )
+        if result.value is None:
+            # A failed suggestion is not "no shared substructure": presenting
+            # a tool problem as a chemistry result sends the researcher
+            # hunting for a drawing error that does not exist.
+            self.suggestion_status.setText(
+                result.error or "The structural suggestion failed."
+            )
+            return
+        suggestions = result.value
         used_product_ids = {
             product_atom_id
             for reactant_atom_id, product_atom_id in self._mapping_by_reactant.items()
@@ -957,10 +967,17 @@ def _correspondence_suggester_for(
     def suggest(
         reactant_atom_ids: frozenset[int],
         product_atom_ids: frozenset[int],
-    ) -> list[tuple[int, int]]:
-        return adapter.suggest_atom_correspondence(
+    ) -> RDKitResult[list[tuple[int, int]]]:
+        pairs = adapter.suggest_atom_correspondence(
             model, reactant_atom_ids, product_atom_ids
         )
+        if pairs is None:
+            return RDKitResult(
+                None,
+                getattr(adapter, "last_error", None)
+                or "The structural suggestion failed.",
+            )
+        return RDKitResult(pairs)
 
     return suggest
 

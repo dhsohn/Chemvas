@@ -1918,18 +1918,61 @@ class RDKitAdapterTest(unittest.TestCase):
         product_ids = [p for _r, p in pairs]
         self.assertEqual(len(product_ids), len(set(product_ids)))
 
-    def test_suggest_atom_correspondence_returns_empty_without_rdkit(self) -> None:
+    def test_suggest_atom_correspondence_reports_missing_rdkit(self) -> None:
+        # A missing library must not read as "no shared substructure" — RDKit
+        # is the opt-in [rdkit] extra, so this is the default install.
         adapter = RDKitAdapter()
         adapter._rdkit = (None, None)
         model = MoleculeModel()
         first = model.add_atom("C", 0.0, 0.0)
         second = model.add_atom("C", 1.0, 0.0)
-        self.assertEqual(
-            adapter.suggest_atom_correspondence(
-                model, frozenset({first}), frozenset({second})
-            ),
-            [],
+
+        pairs = adapter.suggest_atom_correspondence(
+            model, frozenset({first}), frozenset({second})
         )
+
+        self.assertIsNone(pairs)
+        self.assertEqual(
+            adapter.last_error,
+            "RDKit is not available in this environment. "
+            'Install it with: pip install "chemvas[rdkit]".',
+        )
+
+    @unittest.skipUnless(_RealChem is not None, "RDKit is required for smoke tests")
+    def test_real_rdkit_smoke_suggestion_reports_an_empty_endpoint(self) -> None:
+        # Reachable purely by configuration: every product component set to
+        # context-only leaves nothing included to compare.
+        adapter = RDKitAdapter()
+        model = MoleculeModel()
+        first = model.add_atom("C", 0.0, 0.0)
+        second = model.add_atom("O", 30.0, 0.0)
+        model.add_bond(first, second, 1)
+
+        pairs = adapter.suggest_atom_correspondence(
+            model, frozenset({first, second}), frozenset()
+        )
+
+        self.assertIsNone(pairs)
+        self.assertEqual(
+            adapter.last_error,
+            "The product endpoint has no included structure to compare.",
+        )
+
+    @unittest.skipUnless(_RealChem is not None, "RDKit is required for smoke tests")
+    def test_real_rdkit_smoke_suggestion_keeps_empty_for_no_shared_atoms(self) -> None:
+        # Endpoints with no element in common are the one honest empty result,
+        # and it must stay an empty list with no error recorded.
+        adapter = RDKitAdapter()
+        model = MoleculeModel()
+        carbon = model.add_atom("C", 0.0, 0.0)
+        nitrogen = model.add_atom("N", 0.0, 200.0)
+
+        pairs = adapter.suggest_atom_correspondence(
+            model, frozenset({carbon}), frozenset({nitrogen})
+        )
+
+        self.assertEqual(pairs, [])
+        self.assertIsNone(adapter.last_error)
 
     @unittest.skipUnless(
         _RealChem is not None, "RDKit is required for alias expansion tests"

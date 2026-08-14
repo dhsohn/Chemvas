@@ -163,40 +163,59 @@ class RDKitConversionHelper:
         model: MoleculeModel,
         reactant_atom_ids: frozenset[int] | set[int],
         product_atom_ids: frozenset[int] | set[int],
-    ) -> list[tuple[int, int]]:
+    ) -> list[tuple[int, int]] | None:
         """Suggest reactant->product atom pairs from the common substructure.
 
         Returns element-consistent ``(reactant_id, product_id)`` pairs for the
         atoms RDKit matches by element and connectivity. Bond orders are compared
         loosely, so atoms whose bonds only change order (a typical reaction
         center, e.g. C-O -> C=O) are mapped too; only atoms whose connectivity
-        actually breaks or forms are left for the researcher. Returns an empty
-        list when RDKit is unavailable or there is no shared substructure. This
-        is a review-only suggestion and decides no chemistry on its own.
+        actually breaks or forms are left for the researcher. An empty list
+        means the endpoints genuinely share no substructure; ``None`` with
+        ``adapter.last_error`` set means the suggestion could not run. The two
+        are distinct on purpose — reporting a failure as an empty result would
+        present a tool problem as a chemistry claim about the drawing. This is
+        a review-only suggestion and decides no chemistry on its own.
         """
         rdkit = self.adapter._load_rdkit()
         if rdkit == (None, None):
-            return []
+            self.adapter.last_error = (
+                "RDKit is not available in this environment. "
+                'Install it with: pip install "chemvas[rdkit]".'
+            )
+            return None
         Chem, _ = rdkit
         try:
             from rdkit.Chem import rdFMCS
         except Exception:
-            return []
+            self.adapter.last_error = (
+                "RDKit is installed, but its substructure-search module "
+                "(rdkit.Chem.rdFMCS) failed to import."
+            )
+            return None
         reactant_mol, reactant_map = self.adapter.model_to_rdkit_with_map_tolerant(
             self._submodel(model, reactant_atom_ids)
         )
         product_mol, product_map = self.adapter.model_to_rdkit_with_map_tolerant(
             self._submodel(model, product_atom_ids)
         )
-        if (
-            reactant_mol is None
-            or product_mol is None
-            or reactant_map is None
-            or product_map is None
-            or reactant_mol.GetNumAtoms() == 0
-            or product_mol.GetNumAtoms() == 0
+        for side, mol, atom_map in (
+            ("reactant", reactant_mol, reactant_map),
+            ("product", product_mol, product_map),
         ):
-            return []
+            if mol is None or atom_map is None:
+                # The tolerant build records its own reason; keep it instead of
+                # clobbering it with a vaguer one.
+                if self.adapter.last_error is None:
+                    self.adapter.last_error = (
+                        f"Failed to build the {side} structure for the suggestion."
+                    )
+                return None
+            if mol.GetNumAtoms() == 0:
+                self.adapter.last_error = (
+                    f"The {side} endpoint has no included structure to compare."
+                )
+                return None
         result = rdFMCS.FindMCS(
             [reactant_mol, product_mol],
             atomCompare=rdFMCS.AtomCompare.CompareElements,
@@ -208,15 +227,31 @@ class RDKitConversionHelper:
             completeRingsOnly=False,
             timeout=5,
         )
-        if result.canceled or result.numAtoms == 0:
+        if result.canceled:
+            # A canceled search can stop in well under the timeout and is not
+            # deterministic; it may already hold a large valid MCS, but using a
+            # possibly non-maximal one is a chemistry decision this suggestion
+            # does not make. Retrying routinely succeeds.
+            self.adapter.last_error = (
+                "The substructure search stopped before it finished. "
+                "Try the suggestion again."
+            )
+            return None
+        if result.numAtoms == 0:
             return []
         query = Chem.MolFromSmarts(result.smartsString)
         if query is None:
-            return []
+            self.adapter.last_error = (
+                "RDKit could not re-read the substructure pattern it found."
+            )
+            return None
         reactant_match = reactant_mol.GetSubstructMatch(query)
         product_match = product_mol.GetSubstructMatch(query)
         if len(reactant_match) != len(product_match):
-            return []
+            self.adapter.last_error = (
+                "The shared substructure matched the two endpoints inconsistently."
+            )
+            return None
         reactant_id_by_idx = {idx: atom_id for atom_id, idx in reactant_map.items()}
         product_id_by_idx = {idx: atom_id for atom_id, idx in product_map.items()}
         pairs: list[tuple[int, int]] = []
