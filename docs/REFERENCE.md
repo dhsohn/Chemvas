@@ -33,9 +33,8 @@ the [examples README](../examples/README.md) describes what each one contains.
 - **Brackets & annotations** — square / round / curly brackets, dagger (`†`) and
   double dagger (`‡`) annotation objects.
 - **Atom labels** — elements, charges, radicals, and common alias labels
-  (`Me`, `Et`, `OH`, `Ph`, `OMe`, `Boc`, `CO2Me`, `t-Bu`, `i-Pr`, and the
-  sulfonate/acyl groups `OTs`, `Ts`, `OMs`, `Ms`, `OTf`, `Tf`, `Ns`, `OAc`,
-  `Ac`).
+  (`Me`, `Et`, `OH`, `Ph`, `PPh3`, `OMe`, `Boc`, `CO2Me`, `t-Bu`, `tBu`,
+  `i-Pr`, `CF3`, `OTs`, `Ts`, `OMs`, `Ms`, `OTf`, `Tf`, `Ns`, `OAc`, `Ac`).
 - **Editing** — select / move, an eraser tool (click or drag to erase),
   horizontal & vertical flip, perspective rotation, and delta-based undo/redo.
 - **Desktop menus** — standard File / Edit / View menus, including a
@@ -74,6 +73,11 @@ Stale recent-file and clean-session entries for unsupported drawing paths are
 ignored. A current internal crash autosave can still recover the drawing data,
 but an unsupported original path is discarded and the recovered canvas opens
 unbound as an unsaved document.
+
+Autosave never replaces a complete recovery snapshot with one whose capture
+reported a warning. It keeps the last good snapshot and shows a persistent
+status-bar warning instead; the warning clears only after a later autosave
+succeeds without warnings.
 
 Unsaved tabs show a `●` marker, the File menu keeps an **Open Recent** list, and
 reopening an already-open file switches to its window instead of duplicating it.

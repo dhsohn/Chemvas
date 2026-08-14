@@ -6,6 +6,8 @@ from dataclasses import dataclass
 from typing import Any, cast
 
 from chemvas.domain.transactions import RestoreOutcome
+from chemvas.ui.bond_renderer_access import bond_renderer_for
+from chemvas.ui.renderer_style_access import renderer_for
 from chemvas.ui.transactions.object_graph_snapshot import (
     ContainerGraphSnapshot as _ContainerGraphSnapshot,
 )
@@ -198,7 +200,11 @@ class DocumentSavepoint:
             return snapshot
 
         model = _capture_optional_attribute(canvas, "model")
-        renderer = _capture_optional_attribute(canvas, "renderer")
+        try:
+            renderer = renderer_for(canvas)
+        except AttributeError:
+            # Savepoints also support deliberately model-only/headless canvases.
+            renderer = None
         renderer_style = (
             _capture_optional_attribute(
                 renderer,
@@ -394,9 +400,11 @@ class DocumentSavepoint:
         # restored model, ring collection, and original graphics mappings are
         # now live again, so refresh those same item objects canonically.
         try:
-            renderer = getattr(self.canvas, "bond_renderer", None)
-            update_bond_geometry = getattr(renderer, "update_bond_geometry", None)
-            if not callable(update_bond_geometry):
+            try:
+                renderer = bond_renderer_for(self.canvas)
+            except AttributeError:
+                # A savepoint also supports model-only/headless canvases, where
+                # there is no bond graphics collaborator to refresh.
                 return
             bonds = (
                 _capture_optional_attribute(self.canvas_model, "bonds", default=())
@@ -417,7 +425,7 @@ class DocumentSavepoint:
                     # via moveBy rather than in canonical form).
                     continue
                 try:
-                    update_bond_geometry(bond_id)
+                    renderer.update_bond_geometry(bond_id)
                 except Exception as exc:
                     secondary_errors.append(exc)
         except Exception as exc:

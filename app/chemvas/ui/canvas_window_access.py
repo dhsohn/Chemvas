@@ -9,6 +9,10 @@ def snapshot_canvas_state_for(canvas) -> dict:
     return canvas_window_document_session_service(canvas).snapshot_state()
 
 
+def snapshot_canvas_state_with_warnings_for(canvas) -> tuple[dict, list[str]]:
+    return canvas_window_document_session_service(canvas).snapshot_state_with_warnings()
+
+
 def restore_canvas_state_for(canvas, state: dict) -> None:
     canvas_window_document_session_service(canvas).restore_state(state)
 
@@ -65,4 +69,5 @@ __all__ = [
     "set_tool_change_callback_for",
     "set_zoom_callback_for",
     "snapshot_canvas_state_for",
+    "snapshot_canvas_state_with_warnings_for",
 ]

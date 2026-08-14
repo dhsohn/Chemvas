@@ -9,6 +9,7 @@ from chemvas.domain.document import (
     CANVAS_FILE_VERSION,
     calculation_plan_to_state,
 )
+from chemvas.domain.document.precomplex import precomplex_state_from_json
 from chemvas.domain.document.precomplex_profile import (
     CURRENT_PROFILE_ID,
     radius_provenance_for,
@@ -19,6 +20,17 @@ from chemvas.features.calculation_bundle import (
 )
 
 from tests.test_calculation_plan import _document_state, _plan
+
+
+def test_canonical_precomplex_json_rejects_duplicate_object_keys() -> None:
+    with pytest.raises(ValueError, match="duplicate JSON object key"):
+        precomplex_state_from_json('{"kind":"none","kind":"candidate_ensemble"}')
+
+
+def test_canonical_precomplex_json_preserves_native_float_types() -> None:
+    state = precomplex_state_from_json('{"kind":"none","weight":1.0}')
+
+    assert type(state["weight"]) is float
 
 
 def test_calculation_plan_v2_round_trips_explicit_empty_precomplex_endpoints() -> None:

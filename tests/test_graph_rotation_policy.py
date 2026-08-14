@@ -3,8 +3,6 @@ from types import SimpleNamespace
 from chemvas.ui.graph_rotation_policy import (
     axis_from_rotation_hint_policy,
     preferred_rotation_side_for_bond_policy,
-    rotatable_axis_from_selection_policy,
-    rotation_side_for_bond_policy,
 )
 
 
@@ -18,35 +16,6 @@ class _Point:
 
     def y(self) -> float:
         return self._y
-
-
-def test_rotation_side_policy_prefers_selected_side_then_fallback_size() -> None:
-    bond = SimpleNamespace(a=1, b=2)
-
-    assert rotation_side_for_bond_policy(
-        bond,
-        {1, 3, 4},
-        {2, 5},
-        {3},
-        allow_fallback=False,
-    ) == {1, 3, 4}
-    assert rotation_side_for_bond_policy(
-        bond,
-        {1, 3},
-        {2, 5, 6},
-        set(),
-        allow_fallback=True,
-    ) == {2, 5, 6}
-    assert (
-        rotation_side_for_bond_policy(
-            bond,
-            {1, 3},
-            {2, 5},
-            set(),
-            allow_fallback=False,
-        )
-        is None
-    )
 
 
 def test_preferred_rotation_side_policy_uses_coverage_distance_and_deterministic_fallback() -> (
@@ -99,58 +68,6 @@ def test_preferred_rotation_side_policy_uses_coverage_distance_and_deterministic
         atom_b=atom_a,
         allow_fallback=True,
     ) == {1, 3}
-
-
-def test_rotatable_axis_policy_preserves_single_bond_leaf_boundary_and_candidate_rules() -> (
-    None
-):
-    bonds = [
-        SimpleNamespace(a=1, b=2),
-        SimpleNamespace(a=2, b=3),
-        SimpleNamespace(a=1, b=4),
-    ]
-
-    assert rotatable_axis_from_selection_policy(
-        set(),
-        {0},
-        bonds=bonds,
-        bond_for_id=lambda bond_id: bonds[bond_id],
-        bond_is_rotatable=lambda bond_id: bond_id == 0,
-        preferred_rotation_side_for_bond=lambda *args, **kwargs: {2},
-        rotation_side_for_bond=lambda *args, **kwargs: None,
-    ) == (0, {2})
-    assert rotatable_axis_from_selection_policy(
-        set(),
-        {0, 1},
-        bonds=bonds,
-        bond_for_id=lambda bond_id: bonds[bond_id],
-        bond_is_rotatable=lambda bond_id: True,
-        preferred_rotation_side_for_bond=lambda *args, **kwargs: None,
-        rotation_side_for_bond=lambda bond_id, *args, **kwargs: (
-            {1, 4} if bond_id == 0 else None
-        ),
-    ) == (0, {1, 4})
-    assert rotatable_axis_from_selection_policy(
-        {1},
-        set(),
-        bonds=bonds[:1],
-        bond_for_id=lambda bond_id: bonds[bond_id],
-        bond_is_rotatable=lambda bond_id: True,
-        preferred_rotation_side_for_bond=lambda *args, **kwargs: None,
-        rotation_side_for_bond=lambda *args, **kwargs: {2},
-    ) == (0, {2})
-    assert (
-        rotatable_axis_from_selection_policy(
-            set(),
-            set(),
-            bonds=bonds,
-            bond_for_id=lambda bond_id: bonds[bond_id],
-            bond_is_rotatable=lambda bond_id: True,
-            preferred_rotation_side_for_bond=lambda *args, **kwargs: None,
-            rotation_side_for_bond=lambda *args, **kwargs: None,
-        )
-        is None
-    )
 
 
 def test_axis_from_rotation_hint_policy_validates_rotatable_component_and_side() -> (

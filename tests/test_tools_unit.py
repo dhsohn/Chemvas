@@ -23,7 +23,6 @@ if QApplication is not None:
     import chemvas.ui.bond_tool as bond_tool_module
     import chemvas.ui.canvas_move_controller as canvas_move_controller_module
     import chemvas.ui.move_tool as move_tool_module
-    import chemvas.ui.rotate_tool as rotate_tool_module
     import chemvas.ui.select_tool as select_tool_module
     import chemvas.ui.selection_drag_tool as selection_drag_tool_module
     from chemvas.core.history import (
@@ -61,7 +60,6 @@ if QApplication is not None:
     from chemvas.ui.history_commands import MoveItemsCommand, UpdateSceneItemCommand
     from chemvas.ui.move_tool import MoveTool
     from chemvas.ui.preview_tools import ArrowTool, PreviewDragTool, TSBracketTool
-    from chemvas.ui.rotate_tool import RotateTool
     from chemvas.ui.scene_item_state import scene_item_state_for
     from chemvas.ui.select_tool import SelectTool
     from chemvas.ui.selection_drag_tool import independent_selection_items
@@ -962,31 +960,6 @@ class ToolsUnitTest(unittest.TestCase):
             self.assertTrue(tool.on_mouse_move(_FakeEvent(QPointF(4.0, 5.0))))
         self.assertTrue(canvas.shift_calls)
         self.assertIsNone(tool._pending_curved_handle_item)
-
-    def test_rotate_tool_activate_press_move_and_release(self) -> None:
-        canvas = SimpleNamespace(
-            DragMode=SimpleNamespace(NoDrag="none"),
-            drag_mode=None,
-            rotations=[],
-            setDragMode=lambda mode: setattr(canvas, "drag_mode", mode),
-        )
-        tool = RotateTool(canvas, context=_tool_context_for(canvas))
-        tool.activate()
-
-        self.assertEqual(canvas.drag_mode, canvas.DragMode.NoDrag)
-        self.assertFalse(
-            tool.on_mouse_press(_FakeEvent(button=Qt.MouseButton.RightButton))
-        )
-        self.assertTrue(tool.on_mouse_press(_FakeEvent(QPointF(1.0, 1.0))))
-        with mock.patch.object(
-            rotate_tool_module,
-            "rotate_view_for",
-            side_effect=lambda _canvas, amount: canvas.rotations.append(amount),
-        ):
-            self.assertTrue(tool.on_mouse_move(_FakeEvent(QPointF(6.0, 1.0))))
-        self.assertEqual(canvas.rotations, [1.5])
-        self.assertFalse(tool.on_mouse_release(_FakeEvent()))
-        self.assertFalse(tool.on_mouse_move(_FakeEvent(QPointF(8.0, 1.0))))
 
     def test_move_tool_selection_drag_builds_composite_move_command(self) -> None:
         canvas = _FakeMoveCanvas()

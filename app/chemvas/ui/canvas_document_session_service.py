@@ -57,6 +57,7 @@ from chemvas.ui.renderer_style_access import (
     bond_length_pt_for,
     bond_length_px_for,
     bond_line_width_for,
+    renderer_for,
 )
 from chemvas.ui.scene_clipboard_access import (
     build_selection_clipboard_payload_for_canvas,
@@ -723,7 +724,7 @@ class CanvasDocumentSessionService:
                 append_snapshot(_capture_optional_attribute(runtime_state, name))
 
         append_snapshot(
-            _capture_optional_attribute(self.canvas, "renderer"),
+            renderer_for(self.canvas),
             names=("style",),
         )
         append_snapshot(

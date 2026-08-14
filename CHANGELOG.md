@@ -28,8 +28,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   modules whose module-level gate skips every test without RDKit — those runs
   executed zero tests — and the same guard pins that exclusion list too, so a
   file with ungated tests cannot be excluded by mistake.
+- Multi-part atom labels now anchor the attachment-side token at the atom and
+  reverse their displayed groups when necessary (`CF3` → `F3C`, `OTs` → `TsO`,
+  `Ph3P` → `PPh3`). This keeps attached bond lines at full length without
+  changing the label stored in the document.
 
 ### Fixed
+- External JSON inputs now reject duplicate object keys and non-standard numeric
+  constants instead of silently accepting a parser-dependent interpretation.
+  This applies consistently to Chemvas documents, Calculation Plans, graph
+  patches, precomplex requests, editable SVG metadata, and clipboard payloads.
+- Autosave no longer replaces a complete recovery snapshot with a warning-bearing
+  partial snapshot, such as one that would omit a temporarily inconsistent
+  Calculation Plan. The last good snapshot remains recoverable, and a persistent
+  status-bar warning stays visible until a later autosave succeeds cleanly.
+- Bold double bonds in rings now thicken inward like bold single bonds, so
+  adjacent strips meet in sharp mitred corners instead of leaving a clipped
+  corner or white wedge.
 - The abbreviation labels `Ts` (tosyl) and `Ac` (acetyl) are also the element
   symbols for tennessine and actinium, and three conversion paths resolved them
   as those elements instead of as abbreviations. All of them now treat the

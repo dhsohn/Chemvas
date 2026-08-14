@@ -182,6 +182,40 @@ def test_attach_and_inspect_plan_create_current_document_without_overwrite(
     assert error.value.code == 2
 
 
+def test_attach_plan_rejects_duplicate_json_keys_without_output(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    source = tmp_path / "scheme.chemvas"
+    write_document(source, _document_state(), CANVAS_FILE_VERSION)
+    source_bytes = source.read_bytes()
+    plan_text = json.dumps(_plan(), separators=(",", ":"))
+    version_field = '"version":2'
+    assert version_field in plan_text
+    plan_path = tmp_path / "duplicate-plan.json"
+    plan_path.write_text(
+        plan_text.replace(version_field, '"version":999,"version":2', 1),
+        encoding="utf-8",
+    )
+    output = tmp_path / "must-not-exist.chemvas"
+
+    with pytest.raises(SystemExit) as error:
+        cli.run(
+            [
+                "attach-plan",
+                str(source),
+                str(plan_path),
+                "--output",
+                str(output),
+            ]
+        )
+
+    assert error.value.code == 2
+    assert "Invalid Calculation Plan JSON file" in capsys.readouterr().err
+    assert source.read_bytes() == source_bytes
+    assert not output.exists()
+
+
 def test_pack_step_writes_one_blocked_artifact_with_mapping_and_bond_changes(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

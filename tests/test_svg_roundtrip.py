@@ -353,6 +353,64 @@ class SvgRoundtripTest(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "Invalid editable Chemvas"):
                 extract_chemvas_document_from_svg(path)
 
+    def test_extract_rejects_duplicate_json_object_keys(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self._svg_path(tmp)
+            payload = create_editable_svg_payload(
+                _sheet_state("duplicate"),
+                document_version=CANVAS_FILE_VERSION,
+                scope=CHEMVAS_SVG_SCOPE_SHEET,
+            )
+            raw = json.dumps(payload, separators=(",", ":"), sort_keys=True).replace(
+                f'"type":"{CHEMVAS_SVG_PAYLOAD_TYPE}"',
+                f'"type":"wrong","type":"{CHEMVAS_SVG_PAYLOAD_TYPE}"',
+                1,
+            )
+            encoded = base64.b64encode(zlib.compress(raw.encode("utf-8"))).decode(
+                "ascii"
+            )
+            path.write_text(
+                '<svg xmlns="http://www.w3.org/2000/svg" '
+                'xmlns:chemvas="https://chemvas.app/ns/svg-source/1">'
+                "<metadata>"
+                f'<chemvas:source encoding="{CHEMVAS_SVG_ENCODING}" '
+                f'type="{CHEMVAS_SVG_PAYLOAD_TYPE}" '
+                f'version="{CHEMVAS_SVG_PAYLOAD_VERSION}">{encoded}</chemvas:source>'
+                "</metadata>"
+                "</svg>",
+                encoding="utf-8",
+            )
+
+            with self.assertRaisesRegex(ValueError, "Invalid editable Chemvas"):
+                extract_chemvas_document_from_svg(path)
+
+    def test_extract_rejects_non_utf8_embedded_json(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self._svg_path(tmp)
+            payload = create_editable_svg_payload(
+                _sheet_state("wide payload"),
+                document_version=CANVAS_FILE_VERSION,
+                scope=CHEMVAS_SVG_SCOPE_SHEET,
+            )
+            raw = json.dumps(payload, separators=(",", ":"), sort_keys=True).encode(
+                "utf-16"
+            )
+            encoded = base64.b64encode(zlib.compress(raw)).decode("ascii")
+            path.write_text(
+                '<svg xmlns="http://www.w3.org/2000/svg" '
+                'xmlns:chemvas="https://chemvas.app/ns/svg-source/1">'
+                "<metadata>"
+                f'<chemvas:source encoding="{CHEMVAS_SVG_ENCODING}" '
+                f'type="{CHEMVAS_SVG_PAYLOAD_TYPE}" '
+                f'version="{CHEMVAS_SVG_PAYLOAD_VERSION}">{encoded}</chemvas:source>'
+                "</metadata>"
+                "</svg>",
+                encoding="utf-8",
+            )
+
+            with self.assertRaisesRegex(ValueError, "Invalid editable Chemvas"):
+                extract_chemvas_document_from_svg(path)
+
     def test_extract_searches_all_root_metadata_but_rejects_duplicate_root_sources(
         self,
     ) -> None:

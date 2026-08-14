@@ -724,6 +724,37 @@ def test_generation_rejects_invalid_profile_request_contract(
     assert not output.exists()
 
 
+def test_generation_rejects_duplicate_request_json_keys_without_output(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    source = tmp_path / "mechanism.chemvas"
+    _write_document_with_plan(source)
+    request_path = tmp_path / "duplicate-request.json"
+    request_path.write_text(
+        '{"format":"wrong","format":"chemvas-precomplex-request","version":2}',
+        encoding="utf-8",
+    )
+    output = tmp_path / "must-not-exist.chemvas"
+
+    with pytest.raises(SystemExit) as error:
+        cli.run(
+            [
+                "generate-precomplex",
+                str(source),
+                str(request_path),
+                "--step",
+                "S01",
+                "--output",
+                str(output),
+            ]
+        )
+
+    assert error.value.code == 2
+    assert "Invalid precomplex request JSON file" in capsys.readouterr().err
+    assert not output.exists()
+
+
 def test_removed_request_v1_has_no_parser_branch() -> None:
     source = Path(cli.__file__).read_text(encoding="utf-8")
 

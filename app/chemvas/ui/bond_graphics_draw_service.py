@@ -7,11 +7,10 @@ from PyQt6.QtGui import QPolygonF
 
 from chemvas.features.rendering import (
     BOLD_BOND_STYLES,
-    DOUBLE_STYLE_OUTER,
+    bold_double_strip_geometry,
     double_position_for_style,
     is_bold_double_bond_style,
     line_intersection,
-    normal_away_from_parallel_segment,
     strip_corners,
 )
 from chemvas.ui.canvas_graph_state import graph_state_for
@@ -119,18 +118,14 @@ class BondGraphicsDrawService:
                     b_id=bond.b,
                 )
             outer_seg, inner_seg, normal = segments
-            bold_index = (
-                1 if ring_center is not None and variant == DOUBLE_STYLE_OUTER else 0
+            _, _, _, bold_normal = bold_double_strip_geometry(
+                outer_seg,
+                inner_seg,
+                normal,
+                is_ring=ring_center is not None,
+                position_style=variant,
             )
-            if ring_center is not None and bold_index == 0:
-                # Must match _bold_double_primitives: ring bold strips thicken
-                # inward along the ring normal, and the mitre intersects this
-                # neighbour normal, so a mismatch would skew the shared corner.
-                return normal
-            pair = (outer_seg, inner_seg)
-            return normal_away_from_parallel_segment(
-                pair[bold_index], pair[1 - bold_index], *normal
-            )
+            return bold_normal
         ring_center = self.renderer.ring_center_for_bond(bond)
         nx, ny = self.renderer.line_normal(a.x, a.y, b.x, b.y, ring_center)
         if bond.style == "bold_out":

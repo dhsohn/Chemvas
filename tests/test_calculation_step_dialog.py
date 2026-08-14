@@ -30,6 +30,7 @@ if QApplication is not None:
     )
     from chemvas.ui.calculation_step_dialog import (
         CalculationStepDialog,
+        _correspondence_suggester_for,
         _MappingProductCombo,
     )
 
@@ -559,6 +560,35 @@ def test_structural_suggestion_shows_the_failure_reason() -> None:
     assert dialog._mapping_by_reactant[1] == 3
     assert dialog._mapping_by_reactant.get(0) is None
     dialog.deleteLater()
+
+
+@pytest.mark.skipif(QApplication is None, reason="PyQt6 is required")
+def test_correspondence_suggester_returns_the_access_result_unchanged(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    canvas = object()
+    expected = RDKitResult(None, "The structural suggestion failed.")
+    calls: list[tuple[object, object, frozenset[int], frozenset[int]]] = []
+
+    def suggest_for(active_canvas, model, reactant_ids, product_ids):
+        calls.append((active_canvas, model, reactant_ids, product_ids))
+        return expected
+
+    monkeypatch.setattr(
+        "chemvas.ui.calculation_step_dialog.suggest_atom_correspondence_result_for",
+        suggest_for,
+    )
+    suggester = _correspondence_suggester_for(canvas, _document_state())
+    assert suggester is not None
+    reactant_ids = frozenset({0, 1})
+    product_ids = frozenset({2, 3})
+
+    result = suggester(reactant_ids, product_ids)
+
+    assert result is expected
+    assert len(calls) == 1
+    assert calls[0][0] is canvas
+    assert calls[0][2:] == (reactant_ids, product_ids)
 
 
 @pytest.mark.skipif(QApplication is None, reason="PyQt6 is required")

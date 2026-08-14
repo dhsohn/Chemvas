@@ -77,6 +77,32 @@ class DocumentIOTest(unittest.TestCase):
             self.assertEqual(source_bytes, path.read_bytes())
             self.assertEqual(document.payload["version"], CANVAS_FILE_VERSION)
 
+    def test_read_document_rejects_duplicate_json_object_keys(self) -> None:
+        payload = {
+            "type": CHEMVAS_FILE_TYPE,
+            "version": CANVAS_FILE_VERSION,
+            "state": _canvas_state(),
+        }
+        serialized = json.dumps(payload, separators=(",", ":"))
+        nested_field = '"last_smiles_input":null'
+        self.assertIn(nested_field, serialized)
+        duplicate_payloads = (
+            '{"type":"wrong",' + serialized[1:],
+            serialized.replace(
+                nested_field,
+                '"last_smiles_input":"CC","last_smiles_input":null',
+                1,
+            ),
+        )
+
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "duplicate.chemvas"
+            for raw_payload in duplicate_payloads:
+                with self.subTest(raw_payload=raw_payload):
+                    path.write_text(raw_payload, encoding="utf-8")
+                    with self.assertRaisesRegex(ValueError, "Invalid Chemvas file"):
+                        read_document(path)
+
     def test_atomic_create_bytes_never_replaces_an_existing_path(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "new.bin"

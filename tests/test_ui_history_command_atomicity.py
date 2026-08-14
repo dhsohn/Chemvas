@@ -449,6 +449,21 @@ def test_exact_scene_rect_restore_runs_after_transient_renderer_geometry() -> No
     assert scene.sceneRect().right() > 20_000.0
 
 
+def test_exact_scene_restore_reports_missing_bond_renderer_contract() -> None:
+    scene = QGraphicsScene()
+    canvas = SimpleNamespace(
+        scene=lambda: scene,
+        model=SimpleNamespace(bonds=[object()]),
+        bond_renderer=SimpleNamespace(),
+    )
+    snapshot = DocumentSavepoint.capture(canvas)
+
+    result = snapshot.restore()
+
+    assert result.authoritative
+    assert any("update_bond_geometry" in str(error) for error in result.errors)
+
+
 def test_exact_scene_snapshot_release_commits_guarded_auto_scene_growth() -> None:
     app = QApplication.instance() or QApplication([])
     app.setQuitOnLastWindowClosed(False)

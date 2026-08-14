@@ -18,6 +18,8 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+from chemvas.domain.atom_aliases import ATOM_ALIAS_DEFINITIONS
+
 ROOT = Path(__file__).resolve().parents[1]
 APP = ROOT / "app"
 
@@ -149,3 +151,18 @@ def test_reference_matches_atom_and_text_tool_hotkeys():
             f"{REFERENCE.name}: does not tie the {label!r} tool to hotkey `{key}` "
             f"(code says {label} = {key})"
         )
+
+
+def test_reference_names_every_supported_atom_alias() -> None:
+    text = _read(REFERENCE)
+    atom_labels = re.search(
+        r"(?ms)^- \*\*Atom labels\*\*.*?(?=^- \*\*|\Z)",
+        text,
+    )
+    assert atom_labels, f"{REFERENCE.name}: missing Atom labels feature entry"
+    documented = tuple(re.findall(r"`([^`]+)`", atom_labels.group(0)))
+
+    assert documented == tuple(ATOM_ALIAS_DEFINITIONS), (
+        f"{REFERENCE.name}: Atom labels list {documented!r} does not match the "
+        f"canonical aliases {tuple(ATOM_ALIAS_DEFINITIONS)!r}"
+    )

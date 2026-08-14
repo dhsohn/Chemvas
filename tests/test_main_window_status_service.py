@@ -3,7 +3,14 @@ from __future__ import annotations
 from types import SimpleNamespace
 from unittest import mock
 
+import pytest
 from chemvas.ui.main_window_status_service import MainWindowStatusService
+from PyQt6.QtWidgets import QApplication, QMainWindow
+
+
+@pytest.fixture(scope="module")
+def qapp():
+    return QApplication.instance() or QApplication([])
 
 
 def _service(
@@ -145,6 +152,37 @@ def test_show_error_message_uses_timer_default_inside_status_service() -> None:
     bar.showMessage.assert_called_once_with("Invalid molecule", 500)
     single_shot.assert_called_once()
     assert single_shot.call_args.args[0] == 500
+
+
+def test_autosave_error_stays_visible_until_cleared(qapp) -> None:
+    service = _service()
+    window = QMainWindow()
+    service.init_status_bar(window)
+    label = service.autosave_error_label
+    assert label is not None and label.isHidden()
+
+    message = "Autosave paused: disk full"
+    service.set_autosave_error(window, message)
+
+    assert label.text() == message
+    assert label.toolTip() == message
+    assert label.statusTip() == message
+    assert not label.isHidden()
+
+    service.set_autosave_error(window, None)
+
+    assert label.text() == ""
+    assert label.toolTip() == ""
+    assert label.statusTip() == ""
+    assert label.isHidden()
+    window.close()
+
+
+def test_autosave_error_requires_initialized_status_bar() -> None:
+    service = _service()
+
+    with pytest.raises(RuntimeError, match="status bar must be initialized"):
+        service.set_autosave_error(mock.Mock(), "Autosave paused: disk full")
 
 
 def test_refresh_status_context_uses_injected_zoom_port() -> None:

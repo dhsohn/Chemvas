@@ -5,6 +5,7 @@ from .bond_dotted import dotted_bond_dot_centers
 from .bond_geometry import (
     DEFAULT_BOLD_OUT_LENGTH_SCALE,
     LineSegment,
+    bold_double_strip_geometry,
     bold_out_scale,
     extend_segment,
     line_intersection,
@@ -76,6 +77,7 @@ __all__ = [
     "ACS1996Style",
     "LineSegment",
     "base_plain_double_style_for_dotted_variant",
+    "bold_double_strip_geometry",
     "bold_double_style_for_position",
     "bold_double_style_for_style",
     "bold_out_scale",

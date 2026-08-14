@@ -41,8 +41,6 @@ from chemvas.ui.graph_index_operations import (
 from chemvas.ui.graph_rotation_policy import (
     axis_from_rotation_hint_policy,
     preferred_rotation_side_for_bond_policy,
-    rotatable_axis_from_selection_policy,
-    rotation_side_for_bond_policy,
 )
 from chemvas.ui.renderer_style_access import bond_length_px_for
 
@@ -232,25 +230,6 @@ class CanvasGraphService:
         comp_b = self.component_without_bond(bond.b, bond_id)
         return comp_a | comp_b
 
-    def rotation_side_for_bond(
-        self,
-        bond_id: int,
-        selected_atom_ids: set[int],
-        allow_fallback: bool,
-    ) -> set[int] | None:
-        bond = bond_for_id(self.canvas, bond_id)
-        if bond is None:
-            return None
-        comp_a = self.component_without_bond(bond.a, bond_id)
-        comp_b = self.component_without_bond(bond.b, bond_id)
-        return rotation_side_for_bond_policy(
-            bond,
-            comp_a,
-            comp_b,
-            selected_atom_ids,
-            allow_fallback=allow_fallback,
-        )
-
     def preferred_rotation_side_for_bond(
         self,
         bond_id: int,
@@ -276,37 +255,6 @@ class CanvasGraphService:
             bond_length_px=bond_length_px_for(self.canvas),
             allow_fallback=allow_fallback,
         )
-
-    def rotatable_axis_from_selection(
-        self,
-        selected_atom_ids: set[int],
-        selected_bond_ids: set[int],
-    ) -> tuple[int, set[int]] | None:
-        if self.graph.rotation_axis_cache_version != self.graph.graph_version:
-            self.graph.rotation_axis_cache.clear()
-            self.graph.rotation_axis_cache_version = self.graph.graph_version
-        cache_key = (
-            frozenset(selected_atom_ids),
-            frozenset(selected_bond_ids),
-            self.graph.graph_version,
-        )
-        if cache_key in self.graph.rotation_axis_cache:
-            return self.graph.rotation_axis_cache[cache_key]
-
-        def _store(axis: tuple[int, set[int]] | None) -> tuple[int, set[int]] | None:
-            self.graph.rotation_axis_cache[cache_key] = axis
-            return axis
-
-        axis = rotatable_axis_from_selection_policy(
-            selected_atom_ids,
-            selected_bond_ids,
-            bonds=bonds_for(self.canvas),
-            bond_for_id=lambda bond_id: bond_for_id(self.canvas, bond_id),
-            bond_is_rotatable=self.bond_is_rotatable,
-            preferred_rotation_side_for_bond=self.preferred_rotation_side_for_bond,
-            rotation_side_for_bond=self.rotation_side_for_bond,
-        )
-        return _store(axis)
 
     def axis_from_rotation_hint(
         self,

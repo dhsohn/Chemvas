@@ -1797,20 +1797,6 @@ def verify_scene_runtime_identity(snapshot: SceneRuntimeSnapshot) -> None:
         )
 
 
-def restore_scene_runtime_identity(
-    snapshot: SceneRuntimeSnapshot,
-) -> list[BaseException]:
-    errors: list[BaseException] = []
-    try:
-        _restore_scene_contents(
-            snapshot,
-            errors=errors,
-        )
-    except Exception as restore_error:
-        errors.append(restore_error)
-    return errors
-
-
 def _restore_list_attribute(snapshot: _ListAttributeSnapshot) -> None:
     snapshot.list_object[:] = snapshot.contents
     setattr(snapshot.owner, snapshot.attribute, snapshot.list_object)

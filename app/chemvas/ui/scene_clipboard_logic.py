@@ -1,9 +1,7 @@
 from __future__ import annotations
 
 import contextlib
-import json
 from collections.abc import Callable, Mapping, Sequence
-from decimal import Decimal
 from typing import cast
 
 from PyQt6.QtCore import QMimeData
@@ -15,6 +13,7 @@ from chemvas.domain.document import (
     normalize_json_numbers,
     validate_clipboard_selection_payload,
 )
+from chemvas.domain.json_io import strict_json_loads
 
 CLIPBOARD_SELECTION_FORMAT = "chemvas-selection"
 MAX_CLIPBOARD_SELECTION_PAYLOAD_BYTES = 8 * 1024 * 1024
@@ -216,7 +215,7 @@ def decode_clipboard_selection_payload(
 ) -> tuple[dict | None, str | None]:
     for payload_json in payload_candidates:
         try:
-            payload = json.loads(payload_json, parse_float=Decimal)
+            payload = strict_json_loads(payload_json)
         except (ValueError, RecursionError):
             continue
         if not isinstance(payload, dict):

@@ -14,7 +14,7 @@ from PyQt6.QtCore import QTimer
 from chemvas.bootstrap.window_registry import (
     open_new_window as default_open_new_window,
 )
-from chemvas.bootstrap.window_registry import open_windows
+from chemvas.bootstrap.window_registry import open_windows as default_open_windows
 from chemvas.features.session import DocDescriptor, mark_quitting, set_snapshot_hook
 from chemvas.ui.app_data_paths import sessions_dir
 from chemvas.ui.canvas_document_metadata_state import (
@@ -22,7 +22,8 @@ from chemvas.ui.canvas_document_metadata_state import (
     document_file_path_for,
     document_is_dirty_for,
 )
-from chemvas.ui.canvas_window_access import snapshot_canvas_state_for
+from chemvas.ui.canvas_window_access import snapshot_canvas_state_with_warnings_for
+from chemvas.ui.main_window_ports import all_canvases_for_window
 from chemvas.ui.main_window_ports import (
     services_for_window as default_services_for_window,
 )
@@ -31,20 +32,25 @@ from chemvas.ui.session_snapshot_store import new_session_store
 AUTOSAVE_INTERVAL_MS = 15_000
 
 
+class AutosaveSnapshotError(RuntimeError):
+    """The live document cannot be serialized without adjustment or omission."""
+
+
 def collect_open_documents() -> list[DocDescriptor]:
-    """Snapshot every open canvas across every window into plain descriptors."""
+    """Snapshot every open canvas, rejecting any adjusted or incomplete state."""
     documents: list[DocDescriptor] = []
-    for window in open_windows():
-        tab_references = getattr(window, "tab_references", None)
-        if tab_references is None:
-            continue
-        for canvas in tab_references.all_canvases():
-            state = snapshot_canvas_state_for(canvas)
+    for window in default_open_windows():
+        for canvas in all_canvases_for_window(window):
+            state, warnings = snapshot_canvas_state_with_warnings_for(canvas)
+            display_name = document_display_name_for(canvas)
+            if warnings:
+                detail = " ".join(warnings)
+                raise AutosaveSnapshotError(f"{display_name}: {detail}")
             documents.append(
                 DocDescriptor(
                     state=state,
                     file_path=document_file_path_for(canvas),
-                    display_name=document_display_name_for(canvas),
+                    display_name=display_name,
                     dirty=document_is_dirty_for(canvas, state),
                 )
             )
@@ -57,12 +63,14 @@ class SessionRecoveryService:
         store,
         *,
         open_new_window=default_open_new_window,
+        open_windows=default_open_windows,
         services_for_window=default_services_for_window,
         current_documents=collect_open_documents,
         interval_ms: int = AUTOSAVE_INTERVAL_MS,
     ) -> None:
         self._store = store
         self._open_new_window = open_new_window
+        self._open_windows = open_windows
         self._services_for_window = services_for_window
         self._current_documents = current_documents
         self._interval_ms = interval_ms
@@ -119,10 +127,9 @@ class SessionRecoveryService:
         # Release the old source sessions only once the recovered work is
         # *confirmed* persisted here. A failed snapshot (unwritable app-data,
         # full disk, serialization error) leaves them in place so the next
-        # launch can still recover.
-        if self.snapshot_now():
-            self._store.prune_sessions(self._pending_prune)
-            self._pending_prune = []
+        # launch can still recover. A later successful timer tick both clears
+        # the warning and releases the old source sessions.
+        self.snapshot_now()
         set_snapshot_hook(self.snapshot_now)
         about_to_quit = getattr(app, "aboutToQuit", None)
         connect = getattr(about_to_quit, "connect", None)
@@ -134,14 +141,36 @@ class SessionRecoveryService:
         self._timer.start()
 
     def snapshot_now(self) -> bool:
-        """Persist the current open set. Returns True on success; a failure is
-        swallowed (autosave must never disrupt editing) and reported as False so
-        callers can avoid destructive follow-ups like pruning source sessions."""
+        """Persist the current open set without interrupting editing.
+
+        Failures return False, retain source recovery sessions, and remain visible
+        in each window until a later snapshot succeeds.
+        """
         try:
             self._store.save_documents(self._current_documents())
-        except Exception:
+            if self._pending_prune:
+                self._store.prune_sessions(self._pending_prune)
+                self._pending_prune = []
+        except Exception as exc:
+            detail = str(exc).strip() or type(exc).__name__
+            self._set_snapshot_error(f"Autosave paused: {detail}")
             return False
+        self._set_snapshot_error(None)
         return True
+
+    def _set_snapshot_error(self, message: str | None) -> None:
+        for window in self._open_windows():
+            try:
+                self._services_for_window(window).status_service.set_autosave_error(
+                    window, message
+                )
+            except RuntimeError as exc:
+                # A window can disappear between the registry read and Qt update.
+                # A failed next tick republishes the error; a success clears it.
+                detail = str(exc)
+                if "wrapped C/C++ object" in detail and "has been deleted" in detail:
+                    continue
+                raise
 
     def _on_about_to_quit(self) -> None:
         # Signal quit before windows finish closing so their deferred close
@@ -173,6 +202,7 @@ def create_session_recovery_service() -> SessionRecoveryService:
 
 __all__ = [
     "AUTOSAVE_INTERVAL_MS",
+    "AutosaveSnapshotError",
     "SessionRecoveryService",
     "collect_open_documents",
     "create_session_recovery_service",

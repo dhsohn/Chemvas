@@ -10,10 +10,10 @@ from chemvas.features.rendering import (
     DOUBLE_STYLE_OUTER,
     LineSegment,
     base_plain_double_style_for_dotted_variant,
+    bold_double_strip_geometry,
     double_position_for_style,
     is_dotted_double_bond_style,
     is_plain_double_bond_style,
-    normal_away_from_parallel_segment,
     normalized_plain_double_style,
 )
 from chemvas.ui.renderer_style_access import (
@@ -178,24 +178,15 @@ class BondGeometryPlanService:
         ring_center, (outer_segment, inner_segment, normal) = self._double_segments(
             bond, a, b, style=variant
         )
-        segments = (outer_segment, inner_segment)
-        # Ring Outward makes the inward segment full length. Keep the bold
-        # primitive in slot zero while assigning it that second segment so ring
-        # attach/removal never has to replace or reorder scene items.
-        bold_index = (
-            1 if ring_center is not None and variant == DOUBLE_STYLE_OUTER else 0
-        )
-        bold_segment = segments[bold_index]
-        other_segment = segments[1 - bold_index]
-        if ring_center is not None and bold_index == 0:
-            # The ring normal points at the ring centre, so the strip thickens
-            # inward like bold singles; thickening away from the inner line
-            # would leave a white wedge where strips mitre at a shared vertex.
-            bold_normal = normal
-        else:
-            bold_normal = normal_away_from_parallel_segment(
-                bold_segment, other_segment, *normal
+        bold_index, bold_segment, other_segment, bold_normal = (
+            bold_double_strip_geometry(
+                outer_segment,
+                inner_segment,
+                normal,
+                is_ring=ring_center is not None,
+                position_style=variant,
             )
+        )
         endpoint_ids = (
             (bond.a, bond.b) if ring_center is not None and bold_index == 0 else None
         )

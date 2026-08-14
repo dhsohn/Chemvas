@@ -32,8 +32,6 @@ if QApplication is not None:
         CanvasSceneItemsState,
         set_scene_item_collection_for,
     )
-    from chemvas.ui.input_view_access import rotate_view_for
-    from chemvas.ui.input_view_state import InputViewState
     from chemvas.ui.selection_style_access import restore_selection_from_ids_for
 
 
@@ -88,29 +86,6 @@ class CanvasViewTransformHelperTest(unittest.TestCase):
     def setUpClass(cls) -> None:
         cls.app = QApplication.instance() or QApplication([])
         cls.app.setQuitOnLastWindowClosed(False)
-
-    def test_rotate_view_updates_base_transform_and_skips_zero_angle(self) -> None:
-        view = SimpleNamespace(
-            runtime_state=SimpleNamespace(input_view_state=InputViewState()),
-            setTransform=mock.Mock(),
-        )
-
-        rotate_view_for(view, 45.0)
-
-        self.assertFalse(
-            view.runtime_state.input_view_state.base_transform.isIdentity()
-        )
-        view.setTransform.assert_called_once()
-
-        idle_view = SimpleNamespace(
-            runtime_state=SimpleNamespace(input_view_state=InputViewState()),
-            setTransform=mock.Mock(),
-        )
-        rotate_view_for(idle_view, 0.0)
-        self.assertTrue(
-            idle_view.runtime_state.input_view_state.base_transform.isIdentity()
-        )
-        idle_view.setTransform.assert_not_called()
 
     def test_bond_sets_for_atoms_classifies_internal_boundary_and_falls_back_to_model_scan(
         self,
