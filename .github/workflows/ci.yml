@@ -61,11 +61,18 @@ jobs:
         run: python -m mypy
 
       - name: Run tests
+        # The two excluded modules gate on RDKit at module level, so in this
+        # job (which installs no RDKit) they would run zero tests; the
+        # rdkit-smoke job runs them instead. tests/test_ci_rdkit_coverage.py
+        # pins the exclusions to those module-level gates in both directions.
         run: |
           python -m coverage erase
           while IFS= read -r test_file; do
             python -m coverage run --parallel-mode -m pytest "$test_file"
-          done < <(find tests -maxdepth 1 -name 'test_*.py' | sort)
+          done < <(find tests -maxdepth 1 -name 'test_*.py' \
+            ! -name 'test_calculation_bundle_rdkit.py' \
+            ! -name 'test_calculation_step_rdkit.py' \
+            | sort)
           python -m coverage combine
 
       - name: Report coverage

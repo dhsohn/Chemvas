@@ -71,3 +71,51 @@ def test_the_rdkit_ci_job_lists_only_gated_files():
         f"{stale}. Remove them from ci.yml, or gate their tests, so the list "
         "stays an honest census."
     )
+
+
+def _module_gated_test_files() -> set[str]:
+    """Files whose every test gates on RDKit via a module-level pytestmark.
+
+    In the main CI job, which installs no RDKit, such a file runs zero tests,
+    so the job excludes it. A file with only per-test gates stays: its
+    ungated tests are what the main job's coverage and 3.12 run exercise.
+    """
+    module_gated = set()
+    for path in sorted(TESTS.glob("test_*.py")):
+        if path.name == Path(__file__).name:
+            # This guard mentions the gate spellings without carrying one.
+            continue
+        src = path.read_text(encoding="utf-8")
+        if "pytestmark" in src and 'find_spec("rdkit")' in src:
+            module_gated.add(f"tests/{path.name}")
+    return module_gated
+
+
+def _main_job_excluded_files() -> set[str]:
+    src = CI_WORKFLOW.read_text(encoding="utf-8")
+    match = re.search(r"(?ms)^  test:.*?(?=^  \w[\w-]*:|\Z)", src)
+    assert match, "could not find the test job in .github/workflows/ci.yml"
+    return {
+        f"tests/{name}"
+        for name in re.findall(r"! -name '(test_\w+\.py)'", match.group(0))
+    }
+
+
+def test_every_module_gated_file_is_excluded_from_the_main_job():
+    module_gated = _module_gated_test_files()
+    assert module_gated, "expected at least one module-gated RDKit test file"
+    missing = sorted(module_gated - _main_job_excluded_files())
+    assert not missing, (
+        "These test files gate every test on RDKit at module level, so the "
+        f"main job runs them for zero tests: {missing}. Exclude each from the "
+        "job's find command."
+    )
+
+
+def test_the_main_job_excludes_only_module_gated_files():
+    stale = sorted(_main_job_excluded_files() - _module_gated_test_files())
+    assert not stale, (
+        "The main test job excludes files that are not module-gated on RDKit: "
+        f"{stale}. Their ungated tests would silently leave the main job's "
+        "matrix and coverage; remove the exclusions."
+    )
