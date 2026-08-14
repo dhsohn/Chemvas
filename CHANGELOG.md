@@ -18,6 +18,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   guards now pin the file-format example and tool hotkeys to `docs/REFERENCE.md`
   and additionally pin the READMEs' prose mention of the current document
   version.
+- The CI job that installs RDKit now runs every RDKit-gated test file — the
+  two calculation integration modules, the molfile round trips, and the whole
+  adapter file — instead of selecting name-prefixed tests inside one file.
+  Measured in a no-RDKit environment mirroring the main CI job, 36 tests gate
+  on a real RDKit and only 11 carried the selected prefix, so 25 ran in no CI
+  job at all. A new guard pins the workflow's file list to the gates in the
+  test tree, in both directions.
 
 ### Fixed
 - The abbreviation labels `Ts` (tosyl) and `Ac` (acetyl) are also the element
