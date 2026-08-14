@@ -7,7 +7,6 @@ import stat
 import tempfile
 from collections.abc import Callable
 from dataclasses import dataclass
-from decimal import Decimal
 from os import PathLike
 from pathlib import Path
 from typing import Any, cast
@@ -17,6 +16,7 @@ from chemvas.domain.document import (
     extract_document_state,
     normalize_json_numbers,
 )
+from chemvas.domain.json_io import strict_json_loads
 
 PathType = str | PathLike[str]
 
@@ -114,7 +114,7 @@ def read_exact_document(path: PathType) -> tuple[bytes, ChemvasDocument]:
     """Read once so callers can hash the exact bytes that were parsed."""
     source_bytes = Path(path).read_bytes()
     try:
-        payload = json.loads(source_bytes, parse_float=Decimal)
+        payload = strict_json_loads(source_bytes)
     except (ValueError, RecursionError, UnicodeError) as exc:
         raise ValueError("Invalid Chemvas file.") from exc
     return source_bytes, parse_document(payload)

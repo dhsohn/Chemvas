@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import math
 
+from .bond_style import DOUBLE_STYLE_OUTER
+
 LineSegment = tuple[float, float, float, float]
 Point2D = tuple[float, float]
 DEFAULT_BOLD_OUT_LENGTH_SCALE = 1.1
@@ -91,6 +93,35 @@ def normal_away_from_parallel_segment(
     return nx, ny
 
 
+def bold_double_strip_geometry(
+    outer_segment: LineSegment,
+    inner_segment: LineSegment,
+    normal: tuple[float, float],
+    *,
+    is_ring: bool,
+    position_style: str,
+) -> tuple[int, LineSegment, LineSegment, tuple[float, float]]:
+    """Choose the bold line and its one-sided strip normal for a double bond."""
+    segments = (outer_segment, inner_segment)
+    # Ring Outward makes the inward segment full length. Keep the bold
+    # primitive in slot zero while assigning it that second segment so ring
+    # attach/removal never has to replace or reorder scene items.
+    bold_index = 1 if is_ring and position_style == DOUBLE_STYLE_OUTER else 0
+    bold_segment = segments[bold_index]
+    other_segment = segments[1 - bold_index]
+    if is_ring and bold_index == 0:
+        # Ring normals point at the centre. Inward thickening matches bold
+        # singles and lets neighboring strips meet at one sharp mitre.
+        bold_normal = normal
+    else:
+        bold_normal = normal_away_from_parallel_segment(
+            bold_segment,
+            other_segment,
+            *normal,
+        )
+    return bold_index, bold_segment, other_segment, bold_normal
+
+
 def line_intersection(
     px: float,
     py: float,
@@ -147,6 +178,7 @@ def bold_out_scale(
 __all__ = [
     "DEFAULT_BOLD_OUT_LENGTH_SCALE",
     "LineSegment",
+    "bold_double_strip_geometry",
     "bold_out_scale",
     "extend_segment",
     "line_intersection",

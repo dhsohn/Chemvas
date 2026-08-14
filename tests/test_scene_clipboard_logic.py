@@ -437,6 +437,23 @@ class SceneClipboardLogicTest(unittest.TestCase):
         self.assertEqual(payload, valid_payload)
         self.assertEqual(payload_json, valid_payload_json)
 
+    def test_decode_clipboard_selection_payload_skips_duplicate_object_keys(
+        self,
+    ) -> None:
+        duplicate_payload_json = (
+            '{"format":"wrong","format":"chemvas-selection","version":2,'
+            '"atoms":[],"bonds":[],"rings":[],"marks":[],"scene_items":[]}'
+        )
+        valid_payload = _valid_note_clipboard_payload()
+        valid_payload_json = json.dumps(valid_payload, separators=(",", ":"))
+
+        payload, payload_json = decode_clipboard_selection_payload(
+            [duplicate_payload_json, valid_payload_json], version=2
+        )
+
+        self.assertEqual(payload, valid_payload)
+        self.assertEqual(payload_json, valid_payload_json)
+
     def test_decode_clipboard_selection_payload_skips_overlong_integer_guard_error(
         self,
     ) -> None:

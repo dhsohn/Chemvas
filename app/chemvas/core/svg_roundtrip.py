@@ -3,7 +3,6 @@ from __future__ import annotations
 import base64
 import json
 import zlib
-from decimal import Decimal
 from os import PathLike
 from pathlib import Path
 from typing import Any, cast
@@ -15,6 +14,7 @@ from chemvas.domain.document import (
     CHEMVAS_FILE_TYPE,
     normalize_json_numbers,
 )
+from chemvas.domain.json_io import strict_json_loads
 
 PathType = str | PathLike[str]
 
@@ -195,7 +195,7 @@ def _decode_source_element(source: ET.Element) -> dict[str, Any]:
     try:
         compressed = base64.b64decode(text.encode("ascii"), validate=True)
         raw = _decompress_svg_payload(compressed)
-        payload = json.loads(raw.decode("utf-8"), parse_float=Decimal)
+        payload = strict_json_loads(raw.decode("utf-8"))
     except (ValueError, OSError, RecursionError, zlib.error, UnicodeError) as exc:
         raise ValueError("Invalid editable Chemvas metadata in SVG.") from exc
     if not isinstance(payload, dict):

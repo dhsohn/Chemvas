@@ -11,10 +11,6 @@ class CanvasGraphState:
     graph_version: int = 0
     selection_component_cache_signature: tuple[frozenset[int], int] | None = None
     selection_component_cache: list[set[int]] = field(default_factory=list)
-    rotation_axis_cache: dict[
-        tuple[frozenset[int], frozenset[int], int], tuple[int, set[int]] | None
-    ] = field(default_factory=dict)
-    rotation_axis_cache_version: int = 0
     bond_cycle_cache: dict[int, tuple[int, bool]] = field(default_factory=dict)
 
     def bump_version(self) -> None:
@@ -27,8 +23,6 @@ class CanvasGraphState:
         self.graph_version = 0
         self.selection_component_cache_signature = None
         self.selection_component_cache = []
-        self.rotation_axis_cache = {}
-        self.rotation_axis_cache_version = 0
         self.bond_cycle_cache = {}
 
 

@@ -1918,6 +1918,25 @@ class RDKitAdapterTest(unittest.TestCase):
         product_ids = [p for _r, p in pairs]
         self.assertEqual(len(product_ids), len(set(product_ids)))
 
+    def test_suggest_atom_correspondence_result_reports_missing_rdkit(self) -> None:
+        adapter = RDKitAdapter()
+        adapter._rdkit = (None, None)
+        adapter.last_error = "stale error"
+        model = MoleculeModel()
+        first = model.add_atom("C", 0.0, 0.0)
+        second = model.add_atom("C", 1.0, 0.0)
+
+        result = adapter.suggest_atom_correspondence_result(
+            model, frozenset({first}), frozenset({second})
+        )
+
+        self.assertIsNone(result.value)
+        self.assertEqual(
+            result.error,
+            "RDKit is not available in this environment. "
+            'Install it with: pip install "chemvas[rdkit]".',
+        )
+
     def test_suggest_atom_correspondence_reports_missing_rdkit(self) -> None:
         # A missing library must not read as "no shared substructure" — RDKit
         # is the opt-in [rdkit] extra, so this is the default install.

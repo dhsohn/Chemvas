@@ -194,6 +194,10 @@ class MainStderrFilterTest(unittest.TestCase):
 
             def __init__(self) -> None:
                 self.shown = False
+                self.tab_references = types.SimpleNamespace(all_canvases=lambda: [])
+                self._services = types.SimpleNamespace(
+                    status_service=types.SimpleNamespace(set_autosave_error=mock.Mock())
+                )
                 FakeMainWindow.instances.append(self)
 
             def show(self) -> None:
@@ -266,9 +270,13 @@ class MainStderrFilterTest(unittest.TestCase):
                 canvas_document_service = types.SimpleNamespace(
                     reusable_open_target=lambda window: object()
                 )
+                self.tab_references = types.SimpleNamespace(all_canvases=lambda: [])
                 self._services = types.SimpleNamespace(
                     document_action_service=document_action_service,
                     canvas_document_service=canvas_document_service,
+                    status_service=types.SimpleNamespace(
+                        set_autosave_error=mock.Mock()
+                    ),
                 )
 
             def show(self) -> None:

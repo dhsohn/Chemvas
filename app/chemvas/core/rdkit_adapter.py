@@ -97,14 +97,26 @@ class RDKitAdapter:
         reactant_atom_ids: frozenset[int] | set[int],
         product_atom_ids: frozenset[int] | set[int],
     ) -> list[tuple[int, int]] | None:
-        result = self._call_with_result(
+        result = self.suggest_atom_correspondence_result(
+            model,
+            reactant_atom_ids,
+            product_atom_ids,
+        )
+        self.last_error = result.error
+        return result.value
+
+    def suggest_atom_correspondence_result(
+        self,
+        model: MoleculeModel,
+        reactant_atom_ids: frozenset[int] | set[int],
+        product_atom_ids: frozenset[int] | set[int],
+    ) -> RDKitResult[list[tuple[int, int]]]:
+        return self._call_with_result(
             lambda: self._conversion_helper.suggest_atom_correspondence(
                 model, reactant_atom_ids, product_atom_ids
             ),
             fallback_error="Failed to suggest an atom correspondence.",
         )
-        self.last_error = result.error
-        return result.value
 
     def compute_props(
         self, model: MoleculeModel

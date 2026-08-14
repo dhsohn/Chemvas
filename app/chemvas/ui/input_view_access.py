@@ -154,16 +154,6 @@ def update_view_transform_for(canvas) -> None:
     canvas.setTransform(transform)
 
 
-def rotate_view_for(canvas, angle_degrees: float) -> None:
-    if not angle_degrees:
-        return
-    state = input_view_state_for(canvas)
-    transform = QTransform(state.base_transform)
-    transform.rotate(angle_degrees)
-    state.base_transform = transform
-    update_view_transform_for(canvas)
-
-
 def touch_interaction_for(canvas) -> None:
     selection_info_state_for(canvas).last_interaction_time = time.monotonic()
 
@@ -417,7 +407,6 @@ __all__ = [
     "input_view_state_for",
     "reset_view_transform_for",
     "reset_zoom_for",
-    "rotate_view_for",
     "scene_pos_from_global_pos_for",
     "scroll_view_by_for",
     "set_focused_scene_item_for",

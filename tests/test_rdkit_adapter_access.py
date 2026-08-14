@@ -1,6 +1,7 @@
 from types import SimpleNamespace
 from unittest import mock
 
+from chemvas.features.insertion import RDKitResult
 from chemvas.ui.rdkit_adapter_access import (
     compute_props_for,
     model_to_xyz_block_for,
@@ -10,6 +11,7 @@ from chemvas.ui.rdkit_adapter_access import (
     rdkit_is_unavailable_for,
     rdkit_last_error_for,
     smiles_to_2d_for,
+    suggest_atom_correspondence_result_for,
 )
 
 
@@ -51,3 +53,27 @@ def test_rdkit_last_error_handles_missing_error_attribute() -> None:
     canvas = SimpleNamespace(rdkit=SimpleNamespace())
 
     assert rdkit_last_error_for(canvas) is None
+
+
+def test_suggest_atom_correspondence_result_delegates_to_canvas_adapter() -> None:
+    expected = RDKitResult([(1, 3)])
+    adapter = SimpleNamespace(
+        suggest_atom_correspondence_result=mock.Mock(return_value=expected)
+    )
+    canvas = SimpleNamespace(rdkit=adapter)
+    reactant_ids = frozenset({1, 2})
+    product_ids = frozenset({3, 4})
+
+    result = suggest_atom_correspondence_result_for(
+        canvas,
+        "model",
+        reactant_ids,
+        product_ids,
+    )
+
+    assert result is expected
+    adapter.suggest_atom_correspondence_result.assert_called_once_with(
+        "model",
+        reactant_ids,
+        product_ids,
+    )

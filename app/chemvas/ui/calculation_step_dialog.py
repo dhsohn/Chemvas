@@ -52,6 +52,7 @@ from chemvas.ui.main_window_ports import (
     document_session_service_for_window,
     services_for_window,
 )
+from chemvas.ui.rdkit_adapter_access import suggest_atom_correspondence_result_for
 
 _UNUSED = "unused"
 
@@ -958,9 +959,8 @@ class CalculationStepDialog(QDialog):
 def _correspondence_suggester_for(
     canvas: Any, document_state: Mapping[str, object]
 ) -> _CorrespondenceSuggester | None:
-    adapter = getattr(canvas, "rdkit", None)
     raw_model = document_state.get("model")
-    if adapter is None or not isinstance(raw_model, Mapping):
+    if not isinstance(raw_model, Mapping):
         return None
     model = deserialize_model_state(cast(Mapping[str, object], raw_model))
 
@@ -968,16 +968,12 @@ def _correspondence_suggester_for(
         reactant_atom_ids: frozenset[int],
         product_atom_ids: frozenset[int],
     ) -> RDKitResult[list[tuple[int, int]]]:
-        pairs = adapter.suggest_atom_correspondence(
-            model, reactant_atom_ids, product_atom_ids
+        return suggest_atom_correspondence_result_for(
+            canvas,
+            model,
+            reactant_atom_ids,
+            product_atom_ids,
         )
-        if pairs is None:
-            return RDKitResult(
-                None,
-                getattr(adapter, "last_error", None)
-                or "The structural suggestion failed.",
-            )
-        return RDKitResult(pairs)
 
     return suggest
 

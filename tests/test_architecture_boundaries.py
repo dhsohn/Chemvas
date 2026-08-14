@@ -186,6 +186,66 @@ def _matching_lines(pattern: re.Pattern[str], paths: list[Path]) -> list[str]:
     return matches
 
 
+def _is_canvas_reference(node: ast.expr) -> bool:
+    return (isinstance(node, ast.Name) and node.id == "canvas") or (
+        isinstance(node, ast.Attribute) and node.attr == "canvas"
+    )
+
+
+def _direct_canvas_collaborator_violations(source: str) -> list[tuple[int, str]]:
+    collaborator_names = {"renderer", "rdkit", "bond_renderer"}
+    builtin_lookup_names = {"delattr", "getattr", "hasattr", "setattr"}
+
+    def lookup_name_for(call: ast.Call) -> str | None:
+        if isinstance(call.func, ast.Name):
+            if call.func.id in builtin_lookup_names | {"_capture_optional_attribute"}:
+                return call.func.id
+            return None
+        if (
+            isinstance(call.func, ast.Attribute)
+            and isinstance(call.func.value, ast.Name)
+            and call.func.value.id == "builtins"
+            and call.func.attr in builtin_lookup_names
+        ):
+            return call.func.attr
+        return None
+
+    def argument_for(
+        call: ast.Call,
+        position: int,
+        keyword_name: str,
+    ) -> ast.expr | None:
+        if len(call.args) > position:
+            return call.args[position]
+        return next(
+            (keyword.value for keyword in call.keywords if keyword.arg == keyword_name),
+            None,
+        )
+
+    violations: list[tuple[int, str]] = []
+    for node in ast.walk(ast.parse(source)):
+        if (
+            isinstance(node, ast.Attribute)
+            and node.attr in collaborator_names
+            and _is_canvas_reference(node.value)
+        ):
+            violations.append((node.lineno, node.attr))
+            continue
+        if not isinstance(node, ast.Call) or lookup_name_for(node) is None:
+            continue
+        target = argument_for(node, 0, "target")
+        attribute_name = argument_for(node, 1, "name")
+        if not (
+            target is not None
+            and _is_canvas_reference(target)
+            and isinstance(attribute_name, ast.Constant)
+            and attribute_name.value in collaborator_names
+        ):
+            continue
+        violations.append((node.lineno, str(attribute_name.value)))
+    return violations
+
+
 def _canvas_view_state_property_assignments(
     property_names: tuple[str, ...],
 ) -> list[str]:
@@ -2383,17 +2443,57 @@ def test_direct_canvas_collaborators_stay_behind_setup_and_access_modules() -> N
         APP_ROOT / "chemvas" / "ui" / "rdkit_adapter_access.py",
         APP_ROOT / "chemvas" / "ui" / "bond_renderer_access.py",
     }
-    forbidden_paths = [
-        path for path in _app_python_files() if path not in allowed_paths
-    ]
-    direct_access = re.compile(r"\bcanvas\.(?:renderer|rdkit|bond_renderer)\b")
+    violations: list[str] = []
+    for path in _app_python_files():
+        if path in allowed_paths:
+            continue
+        source = path.read_text(encoding="utf-8")
+        violations.extend(
+            f"{path.relative_to(APP_ROOT.parents[0])}:{line_no}: {name}"
+            for line_no, name in _direct_canvas_collaborator_violations(source)
+        )
     lazy_creation = re.compile(
         r"\b(?:set_renderer_for|set_rdkit_adapter_for|set_bond_renderer_for|"
         r"new_rdkit_adapter)\b"
     )
 
-    assert _matching_lines(direct_access, forbidden_paths) == []
+    assert violations == []
     assert _matching_lines(lazy_creation, _app_python_files()) == []
+
+
+def test_direct_canvas_collaborator_guard_rejects_dynamic_lookup_mutations() -> None:
+    mutations = (
+        'value = getattr(canvas, "rdkit", None)',
+        "value = getattr(self.canvas, 'bond_renderer', None)",
+        'value = builtins.getattr(canvas, "renderer", None)',
+        'value = _capture_optional_attribute(canvas, "renderer")',
+        'value = _capture_optional_attribute(canvas, name="renderer")',
+        (
+            "value = _capture_optional_attribute("
+            "target=self.canvas, name='bond_renderer')"
+        ),
+        'value = hasattr(canvas, "rdkit")',
+        'setattr(canvas, "renderer", value)',
+        'builtins.setattr(self.canvas, "bond_renderer", value)',
+        'delattr(canvas, "rdkit")',
+        "value = canvas.renderer",
+    )
+
+    for source in mutations:
+        assert _direct_canvas_collaborator_violations(source), source
+
+
+def test_direct_canvas_collaborator_guard_ignores_unrelated_methods() -> None:
+    controls = (
+        'value = reporter.getattr(canvas, "renderer")',
+        'value = reporter.hasattr(canvas, "rdkit")',
+        'reporter.setattr(canvas, "bond_renderer", value)',
+        'reporter.delattr(canvas, "renderer")',
+        'value = reporter._capture_optional_attribute(canvas, "renderer")',
+    )
+
+    for source in controls:
+        assert _direct_canvas_collaborator_violations(source) == [], source
 
 
 def test_rdkit_async_jobs_store_running_jobs_in_state_module() -> None:
@@ -3624,7 +3724,6 @@ def test_tool_modules_use_tool_context_for_hit_testing_and_selection_ports() -> 
         APP_ROOT / "chemvas" / "ui" / "edit_tools.py",
         APP_ROOT / "chemvas" / "ui" / "move_tool.py",
         APP_ROOT / "chemvas" / "ui" / "perspective_tool.py",
-        APP_ROOT / "chemvas" / "ui" / "rotate_tool.py",
         APP_ROOT / "chemvas" / "ui" / "select_tool.py",
         APP_ROOT / "chemvas" / "ui" / "selection_drag_tool.py",
         APP_ROOT / "chemvas" / "ui" / "tool_controller.py",

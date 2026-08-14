@@ -1,41 +1,7 @@
 from __future__ import annotations
 
 import math
-from collections.abc import Callable, Sequence
-from typing import Any
-
-
-def rotation_side_for_bond_policy(
-    bond,
-    comp_a: set[int],
-    comp_b: set[int],
-    selected_atom_ids: set[int],
-    *,
-    allow_fallback: bool,
-) -> set[int] | None:
-    effective_selected = set(selected_atom_ids) - {bond.a, bond.b}
-    selected_in_a = effective_selected & comp_a
-    selected_in_b = effective_selected & comp_b
-    if selected_in_a and not selected_in_b:
-        return comp_a
-    if selected_in_b and not selected_in_a:
-        return comp_b
-    if not selected_in_a and not selected_in_b:
-        a_selected = bond.a in selected_atom_ids
-        b_selected = bond.b in selected_atom_ids
-        if a_selected ^ b_selected:
-            return comp_a if a_selected else comp_b
-    if allow_fallback:
-        count_a = len(selected_in_a)
-        count_b = len(selected_in_b)
-        if count_a != count_b:
-            return comp_a if count_a > count_b else comp_b
-        size_a = max(0, len(comp_a) - 1)
-        size_b = max(0, len(comp_b) - 1)
-        if size_a != size_b:
-            return comp_a if size_a > size_b else comp_b
-        return comp_a if len(comp_a) >= len(comp_b) else comp_b
-    return None
+from collections.abc import Callable
 
 
 def preferred_rotation_side_for_bond_policy(
@@ -99,112 +65,6 @@ def preferred_rotation_side_for_bond_policy(
     return comp_a if bond.a <= bond.b else comp_b
 
 
-def rotatable_axis_from_selection_policy(
-    selected_atom_ids: set[int],
-    selected_bond_ids: set[int],
-    *,
-    bonds: Sequence[Any],
-    bond_for_id: Callable[[int], Any | None],
-    bond_is_rotatable: Callable[[int], bool],
-    preferred_rotation_side_for_bond: Callable[..., set[int] | None],
-    rotation_side_for_bond: Callable[..., set[int] | None],
-) -> tuple[int, set[int]] | None:
-    explicit_atoms = set(selected_atom_ids)
-    bond_atoms: set[int] = set()
-    selected_bonds: set[int] = set()
-    for bond_id in selected_bond_ids:
-        bond = bond_for_id(bond_id)
-        if bond is None:
-            continue
-        selected_bonds.add(bond_id)
-        bond_atoms.add(bond.a)
-        bond_atoms.add(bond.b)
-    atoms_for_boundary = explicit_atoms | bond_atoms
-    if selected_bonds and len(selected_bonds) == 1:
-        bond_id = next(iter(selected_bonds))
-        if bond_is_rotatable(bond_id):
-            rotating = preferred_rotation_side_for_bond(
-                bond_id,
-                atoms_for_boundary,
-                allow_fallback=True,
-            )
-            if rotating is not None:
-                return bond_id, rotating
-    if not explicit_atoms and len(selected_bonds) > 1:
-        selected_degree: dict[int, int] = {}
-        for bond_id in selected_bonds:
-            bond = bond_for_id(bond_id)
-            if bond is None:
-                continue
-            selected_degree[bond.a] = selected_degree.get(bond.a, 0) + 1
-            selected_degree[bond.b] = selected_degree.get(bond.b, 0) + 1
-        has_unselected_bond: dict[int, bool] = {}
-        for other_id, other in enumerate(bonds):
-            if other is None or other_id in selected_bonds:
-                continue
-            has_unselected_bond[other.a] = True
-            has_unselected_bond[other.b] = True
-        leaf_candidates = []
-        for bond_id in selected_bonds:
-            bond = bond_for_id(bond_id)
-            if bond is None:
-                continue
-            a_leaf = selected_degree.get(bond.a, 0) == 1 and has_unselected_bond.get(
-                bond.a, False
-            )
-            b_leaf = selected_degree.get(bond.b, 0) == 1 and has_unselected_bond.get(
-                bond.b, False
-            )
-            if a_leaf ^ b_leaf:
-                leaf_candidates.append(bond_id)
-        if len(leaf_candidates) == 1:
-            bond_id = leaf_candidates[0]
-            if bond_is_rotatable(bond_id):
-                rotating = rotation_side_for_bond(
-                    bond_id,
-                    bond_atoms,
-                    allow_fallback=True,
-                )
-                if rotating is not None:
-                    return bond_id, rotating
-            return None
-    if not atoms_for_boundary:
-        return None
-    boundary = []
-    for bond_id, bond in enumerate(bonds):
-        if bond is None:
-            continue
-        a_sel = bond.a in atoms_for_boundary
-        b_sel = bond.b in atoms_for_boundary
-        if a_sel ^ b_sel:
-            boundary.append(bond_id)
-    if len(boundary) == 1:
-        bond_id = boundary[0]
-        if not bond_is_rotatable(bond_id):
-            return None
-        rotating = rotation_side_for_bond(
-            bond_id,
-            atoms_for_boundary,
-            allow_fallback=not explicit_atoms,
-        )
-        if rotating is not None:
-            return bond_id, rotating
-    atoms_for_axis = set(atoms_for_boundary)
-    candidates: list[tuple[int, set[int]]] = []
-    for bond_id, bond in enumerate(bonds):
-        if bond is None or not bond_is_rotatable(bond_id):
-            continue
-        rotating = rotation_side_for_bond(
-            bond_id,
-            atoms_for_axis,
-            allow_fallback=False,
-        )
-        if rotating is None:
-            continue
-        candidates.append((bond_id, rotating))
-    return candidates[0] if len(candidates) == 1 else None
-
-
 def axis_from_rotation_hint_policy(
     axis_hint: int,
     rotation_atom_ids: set[int],
@@ -236,6 +96,4 @@ def axis_from_rotation_hint_policy(
 __all__ = [
     "axis_from_rotation_hint_policy",
     "preferred_rotation_side_for_bond_policy",
-    "rotatable_axis_from_selection_policy",
-    "rotation_side_for_bond_policy",
 ]

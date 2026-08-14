@@ -1,10 +1,15 @@
 from __future__ import annotations
 
 from types import SimpleNamespace
+from unittest import mock
 
 import pytest
 from chemvas.features.session import RestoredDoc
-from chemvas.ui.session_recovery_service import SessionRecoveryService
+from chemvas.ui.session_recovery_service import (
+    AutosaveSnapshotError,
+    SessionRecoveryService,
+    collect_open_documents,
+)
 from chemvas.ui.session_snapshot_store import RestoreResult
 from PyQt6.QtWidgets import QApplication
 
@@ -97,13 +102,24 @@ class _FakeSignal:
         self.slots.append(slot)
 
 
-def _service(store, *, extra_windows=None, current_documents=lambda: []):
+def _service(
+    store,
+    *,
+    extra_windows=None,
+    current_documents=lambda: [],
+    open_windows=lambda: (),
+    status_service=None,
+):
     doc_service = _FakeDocService()
-    services = canvas_runtime_services(canvas_document_service=doc_service)
+    services = canvas_runtime_services(
+        canvas_document_service=doc_service,
+        status_service=status_service or mock.Mock(),
+    )
     spawned = list(extra_windows or [])
     service = SessionRecoveryService(
         store,
         open_new_window=lambda reference: spawned.pop(0),
+        open_windows=open_windows,
         services_for_window=lambda window: services,
         current_documents=current_documents,
     )
@@ -193,16 +209,132 @@ def test_snapshot_now_persists_the_current_documents():
     assert service._store.saved == [sentinel]
 
 
+def test_collect_open_documents_rejects_warning_bearing_snapshot():
+    canvas = object()
+    window = SimpleNamespace(
+        tab_references=SimpleNamespace(all_canvases=lambda: [canvas])
+    )
+    warning = "The calculation plan was not saved because it is stale."
+
+    with (
+        mock.patch(
+            "chemvas.ui.session_recovery_service.default_open_windows",
+            return_value=(window,),
+        ),
+        mock.patch(
+            "chemvas.ui.session_recovery_service."
+            "snapshot_canvas_state_with_warnings_for",
+            return_value=({"model": {}}, [warning]),
+        ),
+        mock.patch(
+            "chemvas.ui.session_recovery_service.document_display_name_for",
+            return_value="Canvas 1",
+        ),
+        pytest.raises(AutosaveSnapshotError) as error,
+    ):
+        collect_open_documents()
+
+    assert str(error.value) == f"Canvas 1: {warning}"
+
+
+def test_collect_open_documents_does_not_skip_an_unwired_window():
+    with (
+        mock.patch(
+            "chemvas.ui.session_recovery_service.default_open_windows",
+            return_value=(object(),),
+        ),
+        pytest.raises(AttributeError, match="tab_references"),
+    ):
+        collect_open_documents()
+
+
 def test_snapshot_now_swallows_store_errors_and_reports_failure():
     store = _FakeStore(RestoreResult())
+    window = _FakeWindow("first")
+    status_service = mock.Mock()
 
     def boom(_docs):
         raise RuntimeError("disk full")
 
     store.save_documents = boom  # type: ignore[method-assign]
-    service, _ = _service(store)
+    service, _ = _service(
+        store,
+        open_windows=lambda: (window,),
+        status_service=status_service,
+    )
 
     assert service.snapshot_now() is False  # must not raise; reports the failure
+    status_service.set_autosave_error.assert_called_once_with(
+        window, "Autosave paused: disk full"
+    )
+
+
+def test_snapshot_error_publication_tolerates_a_destroyed_qt_window():
+    store = _FakeStore(RestoreResult())
+    window = _FakeWindow("destroyed")
+    status_service = mock.Mock()
+    status_service.set_autosave_error.side_effect = RuntimeError(
+        "wrapped C/C++ object has been deleted"
+    )
+    service, _ = _service(
+        store,
+        open_windows=lambda: (window,),
+        status_service=status_service,
+    )
+
+    service._set_snapshot_error("Autosave paused: disk full")
+
+    status_service.set_autosave_error.assert_called_once_with(
+        window, "Autosave paused: disk full"
+    )
+
+
+def test_snapshot_error_publication_does_not_hide_wiring_errors():
+    store = _FakeStore(RestoreResult())
+    window = _FakeWindow("broken")
+    status_service = mock.Mock()
+    status_service.set_autosave_error.side_effect = RuntimeError(
+        "status bar must be initialized before autosave status"
+    )
+    service, _ = _service(
+        store,
+        open_windows=lambda: (window,),
+        status_service=status_service,
+    )
+
+    with pytest.raises(RuntimeError, match="status bar must be initialized"):
+        service._set_snapshot_error("Autosave paused: disk full")
+
+
+def test_successful_retry_clears_the_persistent_snapshot_error():
+    store = _FakeStore(RestoreResult())
+    window = _FakeWindow("first")
+    status_service = mock.Mock()
+    attempts = 0
+
+    def current_documents():
+        nonlocal attempts
+        attempts += 1
+        if attempts == 1:
+            raise AutosaveSnapshotError("Canvas 1: stale calculation plan")
+        return ["doc"]
+
+    service, _ = _service(
+        store,
+        current_documents=current_documents,
+        open_windows=lambda: (window,),
+        status_service=status_service,
+    )
+
+    assert service.snapshot_now() is False
+    assert store.saved == []
+    assert service.snapshot_now() is True
+
+    assert store.saved == [["doc"]]
+    assert status_service.set_autosave_error.call_args_list == [
+        mock.call(window, "Autosave paused: Canvas 1: stale calculation plan"),
+        mock.call(window, None),
+    ]
 
 
 def test_start_keeps_source_sessions_when_the_snapshot_fails(qapp):
@@ -253,6 +385,32 @@ def test_consumed_sessions_are_pruned_only_after_resnapshot(qapp):
     assert store.events.index("save") < store.events.index(
         "prune"
     )  # snapshot, then prune
+    service._timer.stop()
+
+
+def test_consumed_sessions_are_pruned_after_a_successful_retry(qapp):
+    store = _FakeStore(RestoreResult(prune_ids=["old-1"]))
+    attempts = 0
+
+    def save_documents(docs):
+        nonlocal attempts
+        attempts += 1
+        store.events.append("save")
+        if attempts == 1:
+            raise RuntimeError("disk full")
+        store.saved.append(docs)
+
+    store.save_documents = save_documents  # type: ignore[method-assign]
+    service, _ = _service(store, current_documents=lambda: ["doc"])
+    fake_app = SimpleNamespace(aboutToQuit=_FakeSignal())
+
+    service.restore_previous(_FakeWindow("first"))
+    service.start(fake_app)
+    assert store.pruned == []
+
+    assert service.snapshot_now() is True
+    assert store.pruned == [["old-1"]]
+    assert store.events[-2:] == ["save", "prune"]
     service._timer.stop()
 
 

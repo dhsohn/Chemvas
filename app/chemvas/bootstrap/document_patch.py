@@ -4,13 +4,12 @@ import argparse
 import hashlib
 import json
 import sys
-from collections.abc import Iterable
-from decimal import Decimal
 from pathlib import Path
 from typing import Any, cast
 
 from chemvas.core.document_io import atomic_create_bytes, read_exact_document
 from chemvas.domain.document import build_document_payload, normalize_json_numbers
+from chemvas.domain.json_io import strict_json_loads
 from chemvas.features.document_patch import (
     DocumentPatchResult,
     apply_document_patch,
@@ -165,27 +164,9 @@ def _read_patch(path: Path) -> object:
     if path.stat().st_size > MAX_PATCH_BYTES:
         raise ValueError(f"patch document exceeds the {MAX_PATCH_BYTES}-byte limit")
     try:
-        return json.loads(
-            path.read_bytes(),
-            parse_float=Decimal,
-            parse_constant=_reject_json_constant,
-            object_pairs_hook=_unique_object,
-        )
+        return strict_json_loads(path.read_bytes())
     except (ValueError, RecursionError, UnicodeError) as exc:
         raise ValueError("Invalid Chemvas Graph Patch JSON file.") from exc
-
-
-def _unique_object(pairs: Iterable[tuple[str, object]]) -> dict[str, object]:
-    result: dict[str, object] = {}
-    for key, value in pairs:
-        if key in result:
-            raise ValueError(f"duplicate JSON object key: {key}")
-        result[key] = value
-    return result
-
-
-def _reject_json_constant(value: str) -> object:
-    raise ValueError(f"non-standard JSON number is not allowed: {value}")
 
 
 def _validate_source(source: Path) -> None:

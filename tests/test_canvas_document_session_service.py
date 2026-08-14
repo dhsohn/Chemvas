@@ -133,6 +133,8 @@ def _attach_history_service(canvas):
 
 
 def _session_service(canvas):
+    if not hasattr(canvas, "renderer"):
+        canvas.renderer = SimpleNamespace(style=SimpleNamespace())
     services = getattr(canvas, "services", None)
     if services is None:
         services = canvas_runtime_services()

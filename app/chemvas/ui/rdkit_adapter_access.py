@@ -47,6 +47,19 @@ def compute_identifiers_for(canvas: Any, model):
     return rdkit_adapter_for(canvas).compute_identifiers(model)
 
 
+def suggest_atom_correspondence_result_for(
+    canvas: Any,
+    model,
+    reactant_atom_ids: frozenset[int] | set[int],
+    product_atom_ids: frozenset[int] | set[int],
+):
+    return rdkit_adapter_for(canvas).suggest_atom_correspondence_result(
+        model,
+        reactant_atom_ids,
+        product_atom_ids,
+    )
+
+
 __all__ = [
     "compute_identifiers_for",
     "compute_props_for",
@@ -58,4 +71,5 @@ __all__ = [
     "rdkit_is_unavailable_for",
     "rdkit_last_error_for",
     "smiles_to_2d_for",
+    "suggest_atom_correspondence_result_for",
 ]

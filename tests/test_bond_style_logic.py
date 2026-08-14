@@ -10,6 +10,7 @@ from chemvas.features.rendering import (
     DOUBLE_STYLE_DEFAULT,
     DOUBLE_STYLE_OUTER,
     base_plain_double_style_for_dotted_variant,
+    bold_double_strip_geometry,
     bold_double_style_for_position,
     bold_double_style_for_style,
     cycle_plain_bond_style,
@@ -27,6 +28,32 @@ from chemvas.features.rendering import (
 
 
 class BondStyleLogicTest(unittest.TestCase):
+    def test_bold_double_strip_geometry_owns_ring_and_position_normal_policy(
+        self,
+    ) -> None:
+        outer = (0.0, 0.0, 10.0, 0.0)
+        inner = (0.0, 2.0, 10.0, 2.0)
+        normal = (0.0, 1.0)
+        for is_ring, style, expected in (
+            (False, DOUBLE_STYLE_DEFAULT, (0, outer, inner, (0.0, -1.0))),
+            (False, DOUBLE_STYLE_CENTER, (0, outer, inner, (0.0, -1.0))),
+            (False, DOUBLE_STYLE_OUTER, (0, outer, inner, (0.0, -1.0))),
+            (True, DOUBLE_STYLE_DEFAULT, (0, outer, inner, normal)),
+            (True, DOUBLE_STYLE_CENTER, (0, outer, inner, normal)),
+            (True, DOUBLE_STYLE_OUTER, (1, inner, outer, normal)),
+        ):
+            with self.subTest(is_ring=is_ring, style=style):
+                self.assertEqual(
+                    bold_double_strip_geometry(
+                        outer,
+                        inner,
+                        normal,
+                        is_ring=is_ring,
+                        position_style=style,
+                    ),
+                    expected,
+                )
+
     def test_bold_double_helpers_share_plain_double_position_contract(self) -> None:
         pairs = (
             (DOUBLE_STYLE_DEFAULT, BOLD_STYLE_DEFAULT),

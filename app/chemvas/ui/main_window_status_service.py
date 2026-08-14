@@ -97,6 +97,7 @@ class MainWindowStatusService:
         self.tool_label: QLabel | None = None
         self.sheet_label: QLabel | None = None
         self.selection_label: QLabel | None = None
+        self.autosave_error_label: QLabel | None = None
         self.zoom_caption: QLabel | None = None
         self.zoom_out_button: QToolButton | None = None
         self.zoom_in_button: QToolButton | None = None
@@ -107,7 +108,15 @@ class MainWindowStatusService:
         self.tool_label = QLabel()
         self.sheet_label = QLabel()
         self.selection_label = QLabel()
+        self.autosave_error_label = QLabel()
         self.zoom_caption = QLabel("Zoom")
+
+        self.autosave_error_label.setObjectName("statusAutosaveErrorLabel")
+        self.autosave_error_label.setAlignment(
+            Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
+        )
+        self.autosave_error_label.setMaximumWidth(480)
+        self.autosave_error_label.hide()
 
         for label in (
             self.tool_label,
@@ -152,6 +161,7 @@ class MainWindowStatusService:
         )
         self.zoom_fit_button.setObjectName("statusZoomFitButton")
 
+        window.statusBar().addPermanentWidget(self.autosave_error_label, 1)
         window.statusBar().addPermanentWidget(self.tool_label)
         window.statusBar().addPermanentWidget(self.sheet_label)
         window.statusBar().addPermanentWidget(self.selection_label)
@@ -225,6 +235,21 @@ class MainWindowStatusService:
         bar.style().polish(bar)
         bar.showMessage(message, timeout)
         qtimer.singleShot(timeout, lambda: self.reset_status_state(window))
+
+    def set_autosave_error(self, window, message: str | None) -> None:
+        label = self.autosave_error_label
+        if label is None:
+            raise RuntimeError("status bar must be initialized before autosave status")
+        if message is None:
+            label.clear()
+            label.setToolTip("")
+            label.setStatusTip("")
+            label.hide()
+            return
+        label.setText(message)
+        label.setToolTip(message)
+        label.setStatusTip(message)
+        label.show()
 
     def reset_status_state(self, window) -> None:
         bar = window.statusBar()

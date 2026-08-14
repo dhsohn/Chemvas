@@ -8,6 +8,8 @@ from collections.abc import Mapping
 from datetime import datetime
 from decimal import Decimal
 
+from chemvas.domain.json_io import strict_json_loads
+
 from .precomplex_profile import precomplex_placement_profile, radius_provenance_for
 
 MAX_ATOMS = 2000
@@ -101,9 +103,22 @@ def canonicalize_precomplex_state(
 
 
 def precomplex_state_from_json(payload_json: str) -> dict[str, object]:
-    value = json.loads(payload_json)
+    value = strict_json_loads(payload_json)
     if not isinstance(value, dict):
         raise ValueError("Invalid canonical endpoint precomplex state.")
+    return {str(key): _restore_json_float_types(item) for key, item in value.items()}
+
+
+def _restore_json_float_types(value: object) -> object:
+    """Match ``json.loads`` number types after the strict boundary checks."""
+    if isinstance(value, Decimal):
+        return float(value)
+    if isinstance(value, dict):
+        return {
+            str(key): _restore_json_float_types(item) for key, item in value.items()
+        }
+    if isinstance(value, list):
+        return [_restore_json_float_types(item) for item in value]
     return value
 
 

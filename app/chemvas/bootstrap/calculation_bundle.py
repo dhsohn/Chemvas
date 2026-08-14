@@ -34,6 +34,7 @@ from chemvas.domain.document.precomplex_profile import (
     precomplex_placement_profile,
     radius_provenance_for,
 )
+from chemvas.domain.json_io import strict_json_loads
 from chemvas.features.calculation_bundle import (
     AtomMapEntry,
     CalculationArtifacts,
@@ -208,7 +209,7 @@ def _attach_plan(
     if not plan_path.is_file():
         raise ValueError(f"calculation plan does not exist: {plan_path}")
     try:
-        plan_payload = json.loads(plan_path.read_bytes(), parse_float=Decimal)
+        plan_payload = strict_json_loads(plan_path.read_bytes())
     except (ValueError, RecursionError, UnicodeError) as exc:
         raise ValueError("Invalid Calculation Plan JSON file.") from exc
     _source_bytes, document = read_exact_document(source)
@@ -586,7 +587,7 @@ def _read_precomplex_request(path: Path) -> Mapping[str, object]:
     if not path.is_file():
         raise ValueError(f"precomplex request does not exist: {path}")
     try:
-        payload = json.loads(path.read_bytes(), parse_float=Decimal)
+        payload = strict_json_loads(path.read_bytes())
     except (ValueError, RecursionError, UnicodeError) as exc:
         raise ValueError("Invalid precomplex request JSON file.") from exc
     if not isinstance(payload, Mapping):
