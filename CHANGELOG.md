@@ -24,7 +24,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Measured in a no-RDKit environment mirroring the main CI job, 36 tests gate
   on a real RDKit and only 11 carried the selected prefix, so 25 ran in no CI
   job at all. A new guard pins the workflow's file list to the gates in the
-  test tree, in both directions.
+  test tree, in both directions. The main job in turn no longer runs the two
+  modules whose module-level gate skips every test without RDKit — those runs
+  executed zero tests — and the same guard pins that exclusion list too, so a
+  file with ungated tests cannot be excluded by mistake.
 
 ### Fixed
 - The abbreviation labels `Ts` (tosyl) and `Ac` (acetyl) are also the element
