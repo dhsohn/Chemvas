@@ -7,6 +7,7 @@ from types import SimpleNamespace
 
 import pytest
 from chemvas.bootstrap import calculation_bundle as calculation_bundle_cli
+from chemvas.features.insertion import RDKitResult
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -474,11 +475,11 @@ def test_structural_suggestion_fills_only_safe_gaps() -> None:
 
     def suggester(
         reactant_ids: frozenset[int], product_ids: frozenset[int]
-    ) -> list[tuple[int, int]]:
+    ) -> RDKitResult[list[tuple[int, int]]]:
         calls.append((reactant_ids, product_ids))
         # (0,2) fills an unmapped gap; (1,3) must not overwrite the existing
         # mapping; (0,3) would reuse a product already taken by (0,2).
-        return [(0, 2), (1, 3), (0, 3)]
+        return RDKitResult([(0, 2), (1, 3), (0, 3)])
 
     state = _document_state()
     dialog = CalculationStepDialog(state, correspondence_suggester=suggester)
@@ -525,13 +526,38 @@ def test_structural_suggestion_reports_when_nothing_new() -> None:
     app.setQuitOnLastWindowClosed(False)
     dialog = CalculationStepDialog(
         _document_state(),
-        correspondence_suggester=lambda _r, _p: [],
+        correspondence_suggester=lambda _r, _p: RDKitResult([]),
     )
     _configure_separate_endpoints(dialog)
 
     dialog.suggest_mapping_button.click()
 
     assert "No new structural suggestion" in dialog.suggestion_status.text()
+    dialog.deleteLater()
+
+
+@pytest.mark.skipif(QApplication is None, reason="PyQt6 is required")
+def test_structural_suggestion_shows_the_failure_reason() -> None:
+    # A failed suggestion must not be presented as "no shared substructure" —
+    # that reads as a chemistry claim about the drawing.
+    app = QApplication.instance() or QApplication([])
+    app.setQuitOnLastWindowClosed(False)
+    message = (
+        "The substructure search stopped before it finished. Try the suggestion again."
+    )
+    dialog = CalculationStepDialog(
+        _document_state(),
+        correspondence_suggester=lambda _r, _p: RDKitResult(None, message),
+    )
+    _configure_separate_endpoints(dialog)
+    _set_mapping(dialog, 1, 3)
+
+    dialog.suggest_mapping_button.click()
+
+    assert dialog.suggestion_status.text() == message
+    # A failure applies nothing and disturbs nothing.
+    assert dialog._mapping_by_reactant[1] == 3
+    assert dialog._mapping_by_reactant.get(0) is None
     dialog.deleteLater()
 
 

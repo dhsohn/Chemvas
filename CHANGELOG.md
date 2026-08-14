@@ -46,6 +46,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   suggestion now runs on the connectivity as drawn; the structure's real
   problem is still reported where it always was, by the 3D preview and by
   `.xyz` and calculation-step export.
+- **Suggest by structure** also reported every failure as "RDKit found no
+  shared substructure beyond what is already mapped" — a chemistry claim about
+  the drawing that was false whenever the tool, not the chemistry, was the
+  problem. Without RDKit installed the button stayed enabled and gave that
+  same answer (the 0.2.0 notes said the button is disabled in that case; it
+  never was), an endpoint whose components are all context-only got it too,
+  and a substructure search that stopped early discarded an already-computed
+  mapping and reported it as no shared substructure — on a symmetric
+  host–guest pair, about 4 clicks in 10. Each case now says what happened:
+  a missing RDKit names the `chemvas[rdkit]` extra to install, a stopped
+  search says to try again, an empty endpoint is named, and only a genuinely
+  empty comparison keeps the no-shared-substructure sentence.
 
 ## [0.3.0] - 2026-08-13
 
