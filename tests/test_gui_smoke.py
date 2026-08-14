@@ -73,6 +73,10 @@ if QApplication is not None:
     from chemvas.ui.mark_item_access import mark_center_for
     from chemvas.ui.move_access import move_atoms_for
     from chemvas.ui.pick_radius_access import atom_pick_radius_for
+    from chemvas.ui.renderer_style_access import (
+        renderer_bold_bond_width_for,
+        renderer_bond_line_width_for,
+    )
     from chemvas.ui.scene_decoration_access import (
         add_arrow_for,
         add_mark_for,
@@ -1451,6 +1455,92 @@ class GuiShortcutSmokeTest(unittest.TestCase):
                 ),
                 f"after update, bold strip corner ({c0.x()}, {c0.y()}) has no mitre partner",
             )
+
+    def test_benzene_bold_ring_strips_thicken_inward_with_sharp_mitres(self) -> None:
+        # Ring bold doubles once thickened away from the inner double line
+        # (outward) while bold singles thickened inward, so at every benzene
+        # vertex the two strips met on a slanted shared edge that cut the
+        # corner off and left a white wedge where the sharp point belongs.
+        canvas = active_canvas_for_window(self.window)
+        add_benzene_ring_for(canvas, QPointF(0.0, 0.0))
+        transform = canvas.services.scene_operations.scene_transform_controller
+        bond_ids = [
+            bond_id
+            for bond_id, bond in enumerate(canvas.model.bonds)
+            if bond is not None
+        ]
+        for bond_id in bond_ids:
+            transform.apply_bond_style(
+                bond_id, "bold_in", canvas.model.bonds[bond_id].order
+            )
+
+        atom_ids = sorted(
+            {canvas.model.bonds[bond_id].a for bond_id in bond_ids}
+            | {canvas.model.bonds[bond_id].b for bond_id in bond_ids}
+        )
+        center_x = sum(canvas.model.atoms[i].x for i in atom_ids) / len(atom_ids)
+        center_y = sum(canvas.model.atoms[i].y for i in atom_ids) / len(atom_ids)
+        base_width = renderer_bond_line_width_for(canvas)
+        bold_width = renderer_bold_bond_width_for(canvas)
+        # Adjacent hexagon edges meet at 120 degrees, so each mitre corner sits
+        # on the radial bisector at offset / sin(60 degrees) from the vertex.
+        outer_reach = (base_width / 2.0) / math.sin(math.pi / 3.0)
+        inner_reach = (bold_width - base_width / 2.0) / math.sin(math.pi / 3.0)
+
+        vertex_bonds: dict[int, list[int]] = {}
+        for bond_id in bond_ids:
+            bond = canvas.model.bonds[bond_id]
+            vertex_bonds.setdefault(bond.a, []).append(bond_id)
+            vertex_bonds.setdefault(bond.b, []).append(bond_id)
+
+        for atom_id, adjacent in sorted(vertex_bonds.items()):
+            self.assertEqual(len(adjacent), 2)
+            atom = canvas.model.atoms[atom_id]
+            radial = math.hypot(atom.x - center_x, atom.y - center_y)
+            ux = (atom.x - center_x) / radial
+            uy = (atom.y - center_y) / radial
+            corner_sets = []
+            for bond_id in adjacent:
+                polygons = [
+                    item
+                    for item in bond_items_for_id(canvas, bond_id)
+                    if hasattr(item, "polygon")
+                ]
+                self.assertEqual(len(polygons), 1)
+                points = [
+                    polygons[0].mapToScene(point) for point in polygons[0].polygon()
+                ]
+                near = [
+                    p
+                    for p in points
+                    if math.hypot(p.x() - atom.x, p.y() - atom.y) < 8.0
+                ]
+                self.assertEqual(len(near), 2)
+                corner_sets.append(near)
+            for c0 in corner_sets[0]:
+                self.assertTrue(
+                    any(
+                        math.hypot(c0.x() - c1.x(), c0.y() - c1.y()) < 1e-6
+                        for c1 in corner_sets[1]
+                    ),
+                    f"bold strip corner ({c0.x()}, {c0.y()}) has no mitre partner",
+                )
+            # Both shared corners lie on the radial bisector: a sharp point
+            # just outside the vertex and an inner point toward the ring
+            # centre, proving both strips thicken inward and mitre cleanly.
+            reaches = []
+            for corner in corner_sets[0]:
+                along = (corner.x() - atom.x) * ux + (corner.y() - atom.y) * uy
+                perp = (corner.x() - atom.x) * uy - (corner.y() - atom.y) * ux
+                self.assertLess(
+                    abs(perp),
+                    1e-6,
+                    f"corner ({corner.x()}, {corner.y()}) is off the vertex bisector",
+                )
+                reaches.append(along)
+            reaches.sort()
+            self.assertAlmostEqual(reaches[0], -inner_reach, delta=1e-6)
+            self.assertAlmostEqual(reaches[1], outer_reach, delta=1e-6)
 
     def test_dotted_bond_tool_draws_new_bond_and_converts_plain_double_short_segment(
         self,

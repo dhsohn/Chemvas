@@ -187,9 +187,15 @@ class BondGeometryPlanService:
         )
         bold_segment = segments[bold_index]
         other_segment = segments[1 - bold_index]
-        bold_normal = normal_away_from_parallel_segment(
-            bold_segment, other_segment, *normal
-        )
+        if ring_center is not None and bold_index == 0:
+            # The ring normal points at the ring centre, so the strip thickens
+            # inward like bold singles; thickening away from the inner line
+            # would leave a white wedge where strips mitre at a shared vertex.
+            bold_normal = normal
+        else:
+            bold_normal = normal_away_from_parallel_segment(
+                bold_segment, other_segment, *normal
+            )
         endpoint_ids = (
             (bond.a, bond.b) if ring_center is not None and bold_index == 0 else None
         )

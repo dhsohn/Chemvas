@@ -122,6 +122,11 @@ class BondGraphicsDrawService:
             bold_index = (
                 1 if ring_center is not None and variant == DOUBLE_STYLE_OUTER else 0
             )
+            if ring_center is not None and bold_index == 0:
+                # Must match _bold_double_primitives: ring bold strips thicken
+                # inward along the ring normal, and the mitre intersects this
+                # neighbour normal, so a mismatch would skew the shared corner.
+                return normal
             pair = (outer_seg, inner_seg)
             return normal_away_from_parallel_segment(
                 pair[bold_index], pair[1 - bold_index], *normal
