@@ -90,6 +90,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   search says to try again, an empty endpoint is named, and only a genuinely
   empty comparison keeps the no-shared-substructure sentence.
 
+### Removed
+- **Per-shape arrow icon renderer**: `MainWindowArrowIconRenderer` painted the
+  arrow previews, presets, and the width/head controls until the toolbar-icon
+  unification moved all of them to the shared SVG design set. That change
+  dropped every call into the class but kept constructing it, so a second
+  source of arrow icon geometry stayed in the tree and drifted — it still drew
+  the equilibrium arrow with two full heads after the canvas moved to harpoons.
+  The module, its construction, and its tests are gone, and the module now sits
+  on the list production code may not import again. No icon changes appearance.
+
 ## [0.3.0] - 2026-08-13
 
 ### Changed

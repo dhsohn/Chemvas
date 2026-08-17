@@ -9,7 +9,6 @@ from PyQt6.QtGui import (
     QPolygonF,
 )
 
-from chemvas.ui.main_window_arrow_icon_renderer import MainWindowArrowIconRenderer
 from chemvas.ui.main_window_bond_icon_renderer import MainWindowBondIconRenderer
 from chemvas.ui.main_window_design_icon_renderer import (
     draw_design_icon,
@@ -68,13 +67,6 @@ class MainWindowIconFactory:
             stroke_regular=self.STROKE_REGULAR,
             stroke_molecule=self.STROKE_MOLECULE,
             icon_size=self.ICON_SIZE,
-        )
-        self._arrow_icons = MainWindowArrowIconRenderer(
-            icon_pen=self._icon_pen,
-            stroke_thin=self.STROKE_THIN,
-            stroke_active=self.STROKE_ACTIVE,
-            icon_content_min=self.ICON_CONTENT_MIN,
-            icon_center=self.ICON_CENTER,
         )
         self._utility_icons = MainWindowUtilityIconRenderer(
             icon_pen=self._icon_pen,
