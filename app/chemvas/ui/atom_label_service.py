@@ -163,6 +163,9 @@ class AtomLabelService:
         element, h_count = split
         if h_count <= 0:
             return self._token_anchor_layout(atom_id, text)
+        atom = atom_for_id(self.canvas, atom_id)
+        if atom is not None and atom.explicit_label:
+            return text, None, False, None
         # Put the hydrogens on the open side of the atom, quantised to the
         # dominant axis. A vertical open side (both bonds of a vertex rising,
         # or a flat C-NH-C chain) stacks the H on its own line under/over the
@@ -290,6 +293,7 @@ class AtomLabelService:
         record: bool = True,
         allow_merge: bool = True,
         show_carbon: bool = False,
+        literal_label: bool | None = None,
     ) -> None:
         text = text.strip()
         show_carbon = bool(show_carbon)
@@ -308,7 +312,11 @@ class AtomLabelService:
                 clear_last_smiles_input_for(self.canvas)
         existing_item = atom_items_for(self.canvas).get(atom_id)
         show_label = bool(text)
-        explicit_label = False
+        explicit_label = (
+            bool(before_explicit_label and text == before_element)
+            if literal_label is None
+            else bool(literal_label)
+        )
         if atom.element.upper() == "C":
             if show_carbon and show_label:
                 explicit_label = True

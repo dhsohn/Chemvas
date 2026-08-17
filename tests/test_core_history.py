@@ -234,6 +234,7 @@ class _FakeCanvas:
         record=False,
         allow_merge=False,
         show_carbon=False,
+        literal_label=None,
     ) -> None:
         self.calls.append(
             (
@@ -244,6 +245,7 @@ class _FakeCanvas:
                 record,
                 allow_merge,
                 show_carbon,
+                literal_label,
             )
         )
 
@@ -1933,11 +1935,30 @@ class HistoryCommandTest(unittest.TestCase):
 
         self.assertEqual(
             canvas.calls[0],
-            ("add_or_update_atom_label", 5, "C", False, False, False, False),
+            ("add_or_update_atom_label", 5, "C", False, False, False, False, False),
         )
         self.assertEqual(
             canvas.calls[1],
-            ("add_or_update_atom_label", 5, "N", False, False, False, True),
+            ("add_or_update_atom_label", 5, "N", False, False, False, True, True),
+        )
+
+    def test_change_atom_label_command_restores_noncarbon_literal_intent(self) -> None:
+        canvas = _FakeCanvas()
+        command = ChangeAtomLabelCommand(
+            atom_id=5,
+            before_element="OH",
+            after_element="N",
+            before_explicit_label=True,
+            after_explicit_label=False,
+            before_smiles_input=None,
+            after_smiles_input=None,
+        )
+
+        command.undo(canvas)
+
+        self.assertEqual(
+            canvas.calls[0],
+            ("add_or_update_atom_label", 5, "OH", False, False, False, True, True),
         )
 
     def test_change_atom_label_command_prefers_atom_label_service_when_available(
@@ -1973,6 +1994,7 @@ class HistoryCommandTest(unittest.TestCase):
                         "record": False,
                         "allow_merge": False,
                         "show_carbon": False,
+                        "literal_label": False,
                     },
                 )
             ],

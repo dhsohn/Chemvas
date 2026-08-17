@@ -98,6 +98,8 @@ BOOTSTRAP_LEGACY_COMPOSITION_MODULES = frozenset(
     {
         "chemvas.bootstrap.application",
         "chemvas.bootstrap.calculation_bundle",
+        "chemvas.bootstrap.document_composition",
+        "chemvas.bootstrap.document_layout_check",
         "chemvas.bootstrap.document_patch",
         "chemvas.bootstrap.document_render",
         "chemvas.bootstrap.file_open",

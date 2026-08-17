@@ -58,6 +58,32 @@ def test_root_metadata_exits_zero_without_importing_qt(
         assert expected_output in result.stdout
 
 
+def test_root_help_lists_compose_document(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setattr(sys, "argv", ["chemvas", "--help"])
+
+    with pytest.raises(SystemExit) as error:
+        application.main()
+
+    assert error.value.code == 0
+    assert "compose-document" in _help_commands(capsys.readouterr().out)
+
+
+def test_root_help_lists_check_layout(
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    monkeypatch.setattr(sys, "argv", ["chemvas", "--help"])
+
+    with pytest.raises(SystemExit) as error:
+        application.main()
+
+    assert error.value.code == 0
+    assert "check-layout" in _help_commands(capsys.readouterr().out)
+
+
 def test_root_help_inventory_matches_dispatched_headless_commands(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
@@ -73,6 +99,8 @@ def test_root_help_inventory_matches_dispatched_headless_commands(
     )
     assert set(application.HEADLESS_SUBCOMMANDS) == (
         application.DOCUMENT_PATCH_COMMANDS
+        | application.DOCUMENT_COMPOSITION_COMMANDS
+        | application.DOCUMENT_LAYOUT_COMMANDS
         | application.DOCUMENT_RENDER_COMMANDS
         | application.CALCULATION_BUNDLE_COMMANDS
     )

@@ -670,6 +670,7 @@ class ChangeAtomLabelCommand(HistoryCommand):
                 record=False,
                 allow_merge=False,
                 show_carbon=explicit_label,
+                literal_label=explicit_label,
             )
             set_last_smiles_input_for(canvas, smiles_input)
             release_scene_rect_snapshot(scene_rect_snapshot)
@@ -685,6 +686,7 @@ class ChangeAtomLabelCommand(HistoryCommand):
                     record=False,
                     allow_merge=False,
                     show_carbon=rollback_explicit_label,
+                    literal_label=rollback_explicit_label,
                 ),
             )
             run_rollback_step(

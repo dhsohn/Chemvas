@@ -193,7 +193,15 @@ class ScenePasteApplyLogicTest(unittest.TestCase):
                     "record": False,
                     "allow_merge": False,
                     "show_carbon": True,
-                }
+                },
+                {
+                    "atom_id": 1,
+                    "element": "O",
+                    "clear_smiles": False,
+                    "record": False,
+                    "allow_merge": False,
+                    "literal_label": True,
+                },
             ],
         )
         self.assertEqual(canvas.add_bond_calls, [(0, 1, 2)])

@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-08-17
+
+### Added
+- **Public headless document composer**: `chemvas compose-document` compiles a
+  strict, bounded Composition v1 manifest into a canonical, reopenable Chemvas
+  document and publishes it atomically without replacing an existing output.
+- **Deterministic layout diagnostics**: `chemvas check-layout` reports bounded,
+  read-only note overlap, note/shape-border collision, and sheet-clipping
+  warnings with stable persisted item indices and source hashes.
+- **Structured note styles and electronic annotations**: headless composition
+  accepts sanitized structured text styles and authoritative formal-charge and
+  radical annotations, deriving consistent linked visual marks before
+  publication.
+
 ### Changed
 - The README hero image and example now show `examples/template2.chemvas`
   (the C–P bond cleavage scheme); fixed a title typo in that document
@@ -439,7 +453,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `.chemvas` document type (double-clicking a file opens it in Chemvas), and a
   Linux `.desktop` entry with an `application/x-chemvas` MIME type.
 
-[Unreleased]: https://github.com/dhsohn/Chemvas/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/dhsohn/Chemvas/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/dhsohn/Chemvas/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/dhsohn/Chemvas/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/dhsohn/Chemvas/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/dhsohn/Chemvas/releases/tag/v0.1.0
