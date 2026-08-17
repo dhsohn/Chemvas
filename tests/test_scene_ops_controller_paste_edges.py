@@ -42,17 +42,20 @@ class _RecordingFakeCanvas(_FakeCanvas):
         record: bool = False,
         allow_merge: bool = False,
         show_carbon: bool = False,
+        literal_label: bool | None = None,
     ) -> None:
-        self.atom_label_calls.append(
-            {
-                "atom_id": atom_id,
-                "element": element,
-                "clear_smiles": clear_smiles,
-                "record": record,
-                "allow_merge": allow_merge,
-                "show_carbon": show_carbon,
-            }
-        )
+        call = {
+            "atom_id": atom_id,
+            "element": element,
+            "clear_smiles": clear_smiles,
+            "record": record,
+            "allow_merge": allow_merge,
+        }
+        if show_carbon:
+            call["show_carbon"] = True
+        if literal_label is not None:
+            call["literal_label"] = literal_label
+        self.atom_label_calls.append(call)
         super().add_or_update_atom_label(
             atom_id,
             element,
@@ -60,6 +63,7 @@ class _RecordingFakeCanvas(_FakeCanvas):
             record=record,
             allow_merge=allow_merge,
             show_carbon=show_carbon,
+            literal_label=literal_label,
         )
 
     def select_note(self, item, additive: bool = True) -> None:

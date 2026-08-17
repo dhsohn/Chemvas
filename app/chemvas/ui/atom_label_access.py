@@ -64,6 +64,7 @@ def add_or_update_atom_label(
     record: bool = True,
     allow_merge: bool = True,
     show_carbon: bool = False,
+    literal_label: bool | None = None,
     include_default_kwargs: bool = True,
 ) -> None:
     if include_default_kwargs:
@@ -73,6 +74,8 @@ def add_or_update_atom_label(
             "allow_merge": allow_merge,
             "show_carbon": show_carbon,
         }
+        if literal_label is not None:
+            kwargs["literal_label"] = literal_label
     else:
         kwargs = {}
         if not clear_smiles:
@@ -83,6 +86,8 @@ def add_or_update_atom_label(
             kwargs["allow_merge"] = False
         if show_carbon:
             kwargs["show_carbon"] = True
+        if literal_label is not None:
+            kwargs["literal_label"] = literal_label
     atom_label_service(canvas).add_or_update_atom_label(atom_id, text, **kwargs)
 
 

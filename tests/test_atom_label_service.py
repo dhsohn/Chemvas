@@ -628,6 +628,26 @@ class AtomLabelServiceTest(unittest.TestCase):
         # The anchored N glyph sits on the bottom line, hydrogens on top.
         self.assertGreater(anchor.center().y(), item.sceneBoundingRect().center().y())
 
+    def test_explicit_oh_with_a_vertical_bond_stays_literal_and_horizontal(
+        self,
+    ) -> None:
+        canvas = _FakeCanvas()
+        canvas.model = MoleculeModel(
+            atoms={
+                1: Atom("C", 0.0, -20.0),
+                2: Atom("OH", 0.0, 0.0, explicit_label=True),
+            },
+            bonds=[Bond(1, 2, 1, style="single")],
+        )
+        service = _atom_label_service(canvas)
+
+        service.add_or_update_atom_label(2, "OH", record=False)
+
+        item = canvas.atom_items[2]
+        self.assertEqual(item.toPlainText(), "OH")
+        self.assertIsNone(item.anchor_scene_rect())
+        self.assertTrue(canvas.model.atoms[2].explicit_label)
+
     def test_nh2_with_a_vertical_bond_stacks_hydrogens_below(self) -> None:
         # A single bond arriving from straight above leaves the open side below;
         # the H2 stacks under the N instead of picking a horizontal side.

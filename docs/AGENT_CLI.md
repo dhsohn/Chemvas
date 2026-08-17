@@ -7,6 +7,82 @@ common theme is narrow contracts that fail closed instead of guessing.
 User-facing detail (GUI, file format, shortcuts) is in
 [REFERENCE.md](REFERENCE.md).
 
+## Headless document composition
+
+An agent can create a canonical, reopenable Chemvas v7 document from the smaller
+public Composition v1 contract instead of constructing internal document state:
+
+```bash
+chemvas compose-document scheme.json --output scheme.chemvas
+```
+
+A minimal composition is:
+
+```json
+{
+  "format": "chemvas-document-composition",
+  "version": 1,
+  "atoms": [
+    {"id": 0, "element": "O", "x": 72.0, "y": 72.0,
+     "explicit_label": true, "formal_charge": -1},
+    {"id": 1, "element": "P", "x": 92.0, "y": 72.0,
+     "formal_charge": 1}
+  ],
+  "bonds": [{"a": 0, "b": 1, "order": 1}],
+  "notes": [
+    {"text": "Condition", "x": 64.0, "y": 108.0,
+     "style": {"font_size": 12, "font_weight": 700,
+               "italic": false, "color": "#245caa"}}
+  ]
+}
+```
+
+Atom IDs must be contiguous and ordered from zero. Optional atom fields are
+`color`, `explicit_label`, `formal_charge`, and `radical_electrons`; Chemvas
+derives linked visual charge/radical marks from those annotations and rejects a
+candidate whose electronic semantics are inconsistent. Bonds accept the normal
+Chemvas order/style/color contract. The manifest can also contain bounded
+`notes`, `arrows`, `shapes`, `ring_fills`, and documented canvas `settings`.
+Canvas settings start from the live A4 landscape defaults; the global text size
+is limited to the same 6–96 pt range as interactive note editing. Structured
+note style accepts only `font_size` (6–96 pt), `font_weight`
+(100–900), `italic`, and hexadecimal `color`; text is escaped and converted to
+safe canonical span HTML by Chemvas rather than accepting arbitrary HTML.
+
+The command rejects duplicate JSON keys, non-finite numbers, unknown keys,
+invalid graph references, unsupported styles, and inputs larger than 1 MiB. It
+builds and validates the complete candidate in memory, refuses an existing or
+symlink output, and publishes one new canonical file atomically. Standard output
+is a deterministic JSON report with the output SHA-256, document version, and
+atom/bond counts. Existing source drawings are not inputs to this command and
+are never modified.
+
+## Headless layout diagnostics
+
+An agent can restore a document into the real offscreen canvas and request
+read-only layout warnings:
+
+```bash
+chemvas check-layout scheme.chemvas > layout-report.json
+```
+
+The current v1 checker reports these stable warning codes:
+
+- `text-text-overlap` for intersecting visible note glyph paths;
+- `text-shape-border-overlap` when note text crosses the painted shape border;
+- `outside-sheet` when a visible note or shape extends beyond the sheet.
+
+The report includes the exact source SHA-256, document version, deterministic
+warning counts, persisted note/shape indices, and rounded intersection bounds.
+The checker does not move objects, write history, normalize, or save the source.
+Before starting Qt it conservatively rejects a document whose potential
+note-pair, note–shape, and outside-sheet work exceeds 10,000 units, so the
+complete deterministic warning report remains bounded.
+Exit status is `0` for a valid clean document, `1` for a valid document with one
+or more warnings, and `2` for invalid input or bootstrap/resource failure. It is
+a diagnostic gate, not an automatic layout engine, and currently does not claim
+atom-label or arrow–structure collision coverage.
+
 ## Headless document rendering
 
 An agent can render the complete drawing through the same figure-export path as

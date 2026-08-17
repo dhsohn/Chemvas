@@ -2049,12 +2049,14 @@ def test_change_atom_label_command_compensates_smiles_failure_after_label_mutati
         record,
         allow_merge,
         show_carbon,
+        literal_label,
     ) -> None:
         assert not clear_smiles
         assert not record
         assert not allow_merge
+        assert literal_label is show_carbon
         canvas.element = element
-        canvas.explicit_label = show_carbon
+        canvas.explicit_label = literal_label
 
     def apply_smiles(_canvas, value) -> None:
         nonlocal smiles_failed

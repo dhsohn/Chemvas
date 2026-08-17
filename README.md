@@ -46,7 +46,7 @@ explore the document shown above.
 | **Drawing** | bonds, rings, arrows, brackets, atom labels — with ChemDraw-compatible shortcuts | [REFERENCE](docs/REFERENCE.md) |
 | **Figure export** | plain SVG / PDF / PNG / TIFF, outlined glyphs, deterministic physical sizing | [REFERENCE](docs/REFERENCE.md#figure-export) |
 | **Chemistry I/O** | SMILES import, `.mol` interchange, 2D→3D `.xyz`, Molecule Info *(RDKit)* | [REFERENCE](docs/REFERENCE.md#chemistry-io) |
-| **Agent CLI** | headless render / inspect / hash-gated Graph Patch, no Qt window | [AGENT_CLI](docs/AGENT_CLI.md) |
+| **Agent CLI** | headless compose / layout-check / render / inspect / hash-gated Graph Patch, no Qt window | [AGENT_CLI](docs/AGENT_CLI.md) |
 | **Calculation handoff** | elementary steps, reviewed precomplexes, one `machine.json` per step | [AGENT_CLI](docs/AGENT_CLI.md#calculation-states-and-elementary-steps) |
 
 Documents are `.chemvas` files (JSON, version 7 contract) with autosave and

@@ -64,7 +64,8 @@ def apply_paste_payload(
         annotation = atom_state.get("annotation")
         if isinstance(annotation, dict):
             set_atom_annotation(new_atom_id, annotation)
-        if element.upper() == "C" and bool(atom_state.get("explicit_label", False)):
+        explicit_label = bool(atom_state.get("explicit_label", False))
+        if element.upper() == "C" and explicit_label:
             add_or_update_atom_label(
                 new_atom_id,
                 element,
@@ -72,6 +73,15 @@ def apply_paste_payload(
                 record=False,
                 allow_merge=False,
                 show_carbon=True,
+            )
+        elif explicit_label:
+            add_or_update_atom_label(
+                new_atom_id,
+                element,
+                clear_smiles=False,
+                record=False,
+                allow_merge=False,
+                literal_label=True,
             )
 
     for bond_state in bonds:

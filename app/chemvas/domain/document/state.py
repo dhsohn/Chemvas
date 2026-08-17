@@ -1173,7 +1173,7 @@ def _validate_settings_state(settings: Mapping[str, object]) -> None:
     if type(settings.get("orbital_phase_enabled")) is not bool:
         raise ValueError("Invalid Chemvas file.")
     text_font_size = settings.get("text_font_size")
-    if not _is_int(text_font_size) or text_font_size < 6:
+    if not _is_int(text_font_size) or not 6 <= text_font_size <= 96:
         raise ValueError("Invalid Chemvas file.")
     if (
         not _is_int(settings.get("text_font_weight"))

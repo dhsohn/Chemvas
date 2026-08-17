@@ -20,6 +20,8 @@ IGNORED_STDERR_SUBSTRINGS = (
 
 STARTUP_DOCUMENT_SUFFIXES = frozenset((".chemvas", ".svg"))
 DOCUMENT_PATCH_COMMANDS = frozenset(("apply-patch", "inspect-document"))
+DOCUMENT_COMPOSITION_COMMANDS = frozenset(("compose-document",))
+DOCUMENT_LAYOUT_COMMANDS = frozenset(("check-layout",))
 DOCUMENT_RENDER_COMMANDS = frozenset(("render-document",))
 CALCULATION_BUNDLE_COMMANDS = frozenset(
     (
@@ -35,6 +37,8 @@ CALCULATION_BUNDLE_COMMANDS = frozenset(
 HEADLESS_SUBCOMMAND_HELP = (
     ("apply-patch", "validate or apply a Chemvas graph patch"),
     ("attach-plan", "embed a calculation plan in a new document"),
+    ("compose-document", "create a Chemvas document from a strict composition"),
+    ("check-layout", "report deterministic layout collisions without editing"),
     ("generate-precomplex", "generate bounded endpoint precomplex candidates"),
     ("inspect", "inspect connected structures as JSON"),
     ("inspect-document", "inspect the complete chemical graph as JSON"),
@@ -124,6 +128,18 @@ def main() -> None:
     if len(sys.argv) > 1 and sys.argv[1] == "--version":
         sys.stdout.write(f"chemvas {__version__}\n")
         raise SystemExit(0)
+
+    if len(sys.argv) > 1 and sys.argv[1] in DOCUMENT_COMPOSITION_COMMANDS:
+        from chemvas.bootstrap.document_composition import run
+
+        raise SystemExit(run(sys.argv[1:]))
+
+    if len(sys.argv) > 1 and sys.argv[1] in DOCUMENT_LAYOUT_COMMANDS:
+        from chemvas.bootstrap.document_layout_check import run
+
+        with _filtered_stderr():
+            result = run(sys.argv[1:])
+        raise SystemExit(result)
 
     if len(sys.argv) > 1 and sys.argv[1] in DOCUMENT_PATCH_COMMANDS:
         from chemvas.bootstrap.document_patch import run

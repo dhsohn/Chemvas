@@ -1318,9 +1318,12 @@ class _FakeCanvas:
         record: bool = False,
         allow_merge: bool = False,
         show_carbon: bool = False,
+        literal_label: bool | None = None,
     ) -> None:
         self.model.atoms[atom_id].element = element
-        self.model.atoms[atom_id].explicit_label = show_carbon
+        self.model.atoms[atom_id].explicit_label = (
+            show_carbon if literal_label is None else literal_label
+        )
 
     def position_label(self, item: QGraphicsItem, x: float, y: float) -> None:
         set_rect = getattr(item, "setRect", None)
