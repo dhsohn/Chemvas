@@ -130,14 +130,14 @@ class CanvasArrowBuildService:
         nx = -dy / length
         ny = dx / length
         offset = bond_spacing_px_for(self.canvas) * 1.5
-        start_up = QPointF(start.x() + nx * offset, start.y() + ny * offset)
-        end_up = QPointF(end.x() + nx * offset, end.y() + ny * offset)
-        start_down = QPointF(start.x() - nx * offset, start.y() - ny * offset)
-        end_down = QPointF(end.x() - nx * offset, end.y() - ny * offset)
+        forward_start = QPointF(start.x() - nx * offset, start.y() - ny * offset)
+        forward_end = QPointF(end.x() - nx * offset, end.y() - ny * offset)
+        reverse_start = QPointF(end.x() + nx * offset, end.y() + ny * offset)
+        reverse_end = QPointF(start.x() + nx * offset, start.y() + ny * offset)
 
         path = QPainterPath()
-        path.addPath(self.build_single_head_arrow(start_up, end_up).path())
-        path.addPath(self.build_single_head_arrow(end_down, start_down).path())
+        self.add_harpoon(path, forward_start, forward_end)
+        self.add_harpoon(path, reverse_start, reverse_end)
 
         item = NoSelectPathItem(path)
         item.setPen(self.arrow_pen())
@@ -145,8 +145,18 @@ class CanvasArrowBuildService:
         item.setData(2, {"start": start, "end": end, "control": None, "double": False})
         return item
 
+    def add_harpoon(self, path: QPainterPath, start: QPointF, end: QPointF) -> None:
+        path.moveTo(start)
+        path.lineTo(end)
+        self.add_arrow_head(path, start, end, double=False, half=True)
+
     def add_arrow_head(
-        self, path: QPainterPath, start: QPointF, end: QPointF, double: bool
+        self,
+        path: QPainterPath,
+        start: QPointF,
+        end: QPointF,
+        double: bool,
+        half: bool = False,
     ) -> None:
         angle = math.atan2(end.y() - start.y(), end.x() - start.x())
         head_len = bond_length_px_for(self.canvas) * self.settings.arrow_head_scale
@@ -159,13 +169,20 @@ class CanvasArrowBuildService:
             dx = math.cos(angle + math.pi / 2) * offset
             dy = math.sin(angle + math.pi / 2) * offset
             tip = QPointF(end.x() + dx, end.y() + dy) if double else end
-            left = QPointF(
-                tip.x() - head_len * math.cos(angle - head_angle),
-                tip.y() - head_len * math.sin(angle - head_angle),
-            )
             right = QPointF(
                 tip.x() - head_len * math.cos(angle + head_angle),
                 tip.y() - head_len * math.sin(angle + head_angle),
+            )
+            # A half head keeps the barb on the side the line was offset toward,
+            # so an equilibrium pair carries both barbs on the outside and reads
+            # as the conventional harpoon arrow rather than two full heads.
+            if half:
+                path.moveTo(right)
+                path.lineTo(tip)
+                continue
+            left = QPointF(
+                tip.x() - head_len * math.cos(angle - head_angle),
+                tip.y() - head_len * math.sin(angle - head_angle),
             )
             path.moveTo(left)
             path.lineTo(tip)

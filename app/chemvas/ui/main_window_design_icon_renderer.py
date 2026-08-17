@@ -150,7 +150,9 @@ _SVG_BY_NAME: dict[str, str] = {
     ),
     # --- Arrow previews ---
     "arrow_reaction": '<line x1="0" y1="12" x2="24" y2="12"/><line x1="19.92" y1="13.9" x2="24" y2="12"/><line x1="19.92" y1="10.1" x2="24" y2="12"/>',
-    "arrow_equilibrium": '<line x1="0" y1="7" x2="24" y2="7"/><line x1="19.92" y1="8.9" x2="24" y2="7"/><line x1="19.92" y1="5.1" x2="24" y2="7"/><line x1="24" y1="17" x2="0" y2="17"/><line x1="4.08" y1="15.1" x2="0" y2="17"/><line x1="4.08" y1="18.9" x2="0" y2="17"/>',
+    # Equilibrium keeps one barb per line, on the outside of the pair, so the
+    # icon matches the harpoon arrow the canvas draws.
+    "arrow_equilibrium": '<line x1="0" y1="7" x2="24" y2="7"/><line x1="19.92" y1="5.1" x2="24" y2="7"/><line x1="24" y1="17" x2="0" y2="17"/><line x1="4.08" y1="18.9" x2="0" y2="17"/>',
     "arrow_resonance": '<line x1="0" y1="12" x2="24" y2="12"/><line x1="19.92" y1="13.9" x2="24" y2="12"/><line x1="19.92" y1="10.1" x2="24" y2="12"/><line x1="4.08" y1="10.1" x2="0" y2="12"/><line x1="4.08" y1="13.9" x2="0" y2="12"/>',
     "arrow_curved_single": '<path d="M1 19 Q12 0 23 12"/><line x1="18.7" y1="10.66" x2="23" y2="12"/><line x1="21.26" y1="7.85" x2="23" y2="12"/>',
     "arrow_curved_double": '<path d="M1 19 Q12 0 23 12"/><line x1="18.7" y1="10.66" x2="23" y2="12"/><line x1="21.26" y1="7.85" x2="23" y2="12"/><line x1="1.62" y1="14.54" x2="1" y2="19"/><line x1="4.81" y1="16.61" x2="1" y2="19"/>',
