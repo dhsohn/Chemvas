@@ -1,3 +1,4 @@
+import math
 import os
 import unittest
 from types import SimpleNamespace
@@ -202,6 +203,53 @@ class CanvasArrowBuildServiceTest(unittest.TestCase):
         self.assertFalse(equilibrium.path().isEmpty())
         self.assertGreater(equilibrium.path().boundingRect().height(), 8.0)
         self.assertGreater(equilibrium.path().boundingRect().width(), 9.0)
+
+    def test_build_equilibrium_item_draws_outward_facing_harpoons(self) -> None:
+        service, _ = self._make_service()
+        start = QPointF(0.0, 0.0)
+        end = QPointF(10.0, 0.0)
+
+        path = service.build_equilibrium_item(start, end).path()
+
+        # Two harpoons, each a shaft (move + line) and one barb (move + line).
+        # A full arrow head would add a second barb segment to every line.
+        self.assertEqual(path.elementCount(), 8)
+        forward_barb, forward_tip = path.elementAt(2), path.elementAt(3)
+        reverse_barb, reverse_tip = path.elementAt(6), path.elementAt(7)
+        # The forward harpoon runs start -> end along the upper line and the
+        # reverse one runs back along the lower line.
+        self.assertAlmostEqual(forward_tip.x, 10.0)
+        self.assertAlmostEqual(reverse_tip.x, 0.0)
+        self.assertLess(forward_tip.y, reverse_tip.y)
+        # Both barbs stay outside the pair instead of filling the gap.
+        self.assertLess(forward_barb.y, forward_tip.y)
+        self.assertGreater(reverse_barb.y, reverse_tip.y)
+
+    def test_build_equilibrium_item_keeps_barbs_outward_when_drawn_diagonally(
+        self,
+    ) -> None:
+        service, _ = self._make_service()
+        start = QPointF(-3.0, 2.0)
+        end = QPointF(4.0, -6.0)
+
+        path = service.build_equilibrium_item(start, end).path()
+
+        dx = end.x() - start.x()
+        dy = end.y() - start.y()
+        length = math.hypot(dx, dy)
+
+        def offset_from_axis(element) -> float:
+            """Signed distance from the drag axis, positive on the reverse side."""
+            return (
+                (element.x - start.x()) * -dy + (element.y - start.y()) * dx
+            ) / length
+
+        forward_shaft = offset_from_axis(path.elementAt(1))
+        reverse_shaft = offset_from_axis(path.elementAt(5))
+        self.assertLess(forward_shaft, 0.0)
+        self.assertGreater(reverse_shaft, 0.0)
+        self.assertLess(offset_from_axis(path.elementAt(2)), forward_shaft)
+        self.assertGreater(offset_from_axis(path.elementAt(6)), reverse_shaft)
 
     def test_add_arrow_head_supports_double_offset_heads(self) -> None:
         service, _ = self._make_service()

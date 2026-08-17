@@ -34,6 +34,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   changing the label stored in the document.
 
 ### Fixed
+- The **Equilibrium** arrow now draws the conventional harpoon pair (⇌): one
+  barb per line, both on the outside of the pair, with the forward arrow on
+  top. Each line previously carried a full arrow head (⇄), which denotes two
+  separate opposing reactions rather than an equilibrium. Documents saved
+  earlier re-render with the corrected arrow; the stored file format and the
+  arrow's `equilibrium` kind are unchanged.
 - External JSON inputs now reject duplicate object keys and non-standard numeric
   constants instead of silently accepting a parser-dependent interpretation.
   This applies consistently to Chemvas documents, Calculation Plans, graph
