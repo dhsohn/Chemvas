@@ -2834,12 +2834,18 @@ def test_main_window_icon_factory_delegates_bond_drawing_to_renderer() -> None:
     assert "dotted_bond_pen()" not in factory_source
 
 
-def test_main_window_icon_factory_delegates_arrow_drawing_to_renderer() -> None:
+def test_main_window_arrow_icons_use_only_static_design_mapping() -> None:
     factory = APP_ROOT / "chemvas" / "ui" / "main_window_icon_factory.py"
     factory_source = factory.read_text(encoding="utf-8")
 
-    # Arrow previews/presets/controls now render through the shared SVG design
-    # icon set rather than the per-shape QPainter renderer.
+    # Arrow previews/presets/controls render through the shared SVG design icon
+    # set. The per-shape QPainter renderer they used to delegate to is gone, so
+    # arrow icon geometry has one source instead of two.
+    assert not (
+        APP_ROOT / "chemvas" / "ui" / "main_window_arrow_icon_renderer.py"
+    ).exists()
+    assert "MainWindowArrowIconRenderer" not in factory_source
+    assert 'self._design_icon(f"arrow_{kind}"' in factory_source
     assert "def draw_arrow_head" not in factory_source
     assert "quadTo(15, 6, 24, 15)" not in factory_source
 

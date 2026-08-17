@@ -62,6 +62,7 @@ REMOVED_COMPATIBILITY_MODULES = frozenset(
         "chemvas.ui.label_layout_logic",
         "chemvas.ui.main_window",
         "chemvas.ui.main_window_app",
+        "chemvas.ui.main_window_arrow_icon_renderer",
         "chemvas.ui.main_window_bootstrap",
         "chemvas.ui.main_window_services",
         "chemvas.ui.main_window_template_icon_renderer",
