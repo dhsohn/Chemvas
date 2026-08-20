@@ -28,42 +28,13 @@ class CanvasStyleController:
     def _set_text_style(self, name: str, value: Any) -> None:
         set_text_style_for(self.canvas, name, value)
 
-    def set_selection_color(self, color: QColor) -> None:
-        if color.isValid():
-            selection_style_state_for(self.canvas).color = color
-
-    def set_selection_stroke_delta(self, delta: float) -> None:
-        selection_style_state_for(self.canvas).stroke_delta = max(0.1, float(delta))
-
-    def get_selection_stroke_delta(self) -> float:
-        return float(selection_style_state_for(self.canvas).stroke_delta)
-
     def suspend_selection_outline(self, suspend: bool) -> None:
         selection_style_state_for(self.canvas).suspend_outline = bool(suspend)
-
-    def set_text_font(self, font: QFont) -> None:
-        self._set_text_style("text_font_family", font.family())
-        self._apply_text_style_to_selected()
-
-    def set_text_weight(self, weight: int) -> None:
-        self._set_text_style("text_font_weight", max(1, min(1000, int(weight))))
-        self._apply_text_style_to_selected()
-
-    def get_text_weight(self) -> int:
-        return int(self.text_style.text_font_weight)
-
-    def set_text_italic(self, enabled: bool) -> None:
-        self._set_text_style("text_italic", bool(enabled))
-        self._apply_text_style_to_selected()
 
     def set_text_color(self, color: QColor) -> None:
         if color.isValid():
             self._set_text_style("text_color", color)
             self._apply_text_style_to_selected()
-
-    def get_text_font(self) -> QFont:
-        style = self.text_style
-        return QFont(style.text_font_family, style.text_font_size)
 
     def apply_text_preset_acs(self) -> None:
         self._set_text_style("text_font_family", "Arial")
@@ -118,42 +89,15 @@ class CanvasStyleController:
             self._set_text_style("text_alignment", mapping[alignment])
             self._apply_text_style_to_selected()
 
-    def set_text_line_spacing(self, spacing: float) -> None:
-        self._set_text_style("text_line_spacing", max(0.8, float(spacing)))
-        self._apply_text_style_to_selected()
-
-    def set_note_box_enabled(self, enabled: bool) -> None:
-        self._set_text_style("note_box_enabled", bool(enabled))
-        self._apply_text_style_to_selected()
-
     def set_note_box_color(self, color: QColor) -> None:
         if color.isValid():
             self._set_text_style("note_box_color", color)
             self._apply_text_style_to_selected()
 
-    def set_note_box_alpha(self, alpha: float) -> None:
-        self._set_text_style("note_box_alpha", max(0.0, min(1.0, float(alpha))))
-        self._apply_text_style_to_selected()
-
-    def get_note_box_alpha(self) -> float:
-        return self.text_style.note_box_alpha
-
-    def set_note_border_enabled(self, enabled: bool) -> None:
-        self._set_text_style("note_border_enabled", bool(enabled))
-        self._apply_text_style_to_selected()
-
     def set_note_border_color(self, color: QColor) -> None:
         if color.isValid():
             self._set_text_style("note_border_color", color)
             self._apply_text_style_to_selected()
-
-    def set_note_border_width(self, width: float) -> None:
-        self._set_text_style("note_border_width", max(0.5, float(width)))
-        self._apply_text_style_to_selected()
-
-    def set_note_padding(self, padding: float) -> None:
-        self._set_text_style("note_padding", max(2.0, float(padding)))
-        self._apply_text_style_to_selected()
 
 
 __all__ = ["CanvasStyleController"]
