@@ -48,6 +48,7 @@ if QApplication is not None:
         last_smiles_input_for,
         set_last_smiles_input_for,
     )
+    from chemvas.ui.canvas_text_style_state import set_text_style_for
     from chemvas.ui.canvas_tool_settings_state import (
         set_tool_setting_for,
         tool_settings_state_for,
@@ -312,7 +313,7 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
         tool_mode_controller.set_arrow_line_width(3.6)
         tool_mode_controller.set_arrow_head_scale(0.55)
         tool_mode_controller.set_orbital_phase_enabled(True)
-        style_controller.set_text_size(18)
+        set_text_style_for(active_canvas_for_window(self.window), "text_font_size", 18)
         style_controller.set_text_weight(saved_weight)
         style_controller.set_text_italic(True)
         canvas_services_for(
@@ -331,7 +332,7 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
         tool_mode_controller.set_arrow_line_width(1.1)
         tool_mode_controller.set_arrow_head_scale(0.2)
         tool_mode_controller.set_orbital_phase_enabled(False)
-        style_controller.set_text_size(10)
+        set_text_style_for(active_canvas_for_window(self.window), "text_font_size", 10)
         style_controller.set_text_weight(24)
         style_controller.set_text_italic(False)
         clear_scene_for(active_canvas_for_window(self.window))

@@ -45,10 +45,6 @@ class CanvasStyleController:
         self._set_text_style("text_font_family", font.family())
         self._apply_text_style_to_selected()
 
-    def set_text_size(self, size: int) -> None:
-        self._set_text_style("text_font_size", max(6, int(size)))
-        self._apply_text_style_to_selected()
-
     def set_text_weight(self, weight: int) -> None:
         self._set_text_style("text_font_weight", max(1, min(1000, int(weight))))
         self._apply_text_style_to_selected()
@@ -68,9 +64,6 @@ class CanvasStyleController:
     def get_text_font(self) -> QFont:
         style = self.text_style
         return QFont(style.text_font_family, style.text_font_size)
-
-    def get_text_size(self) -> int:
-        return self.text_style.text_font_size
 
     def apply_text_preset_acs(self) -> None:
         self._set_text_style("text_font_family", "Arial")
