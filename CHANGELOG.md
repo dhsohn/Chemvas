@@ -7,12 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-08-20
+
 ### Fixed
-- `chemvas compose-document` reported a wrongly typed canvas settings value —
-  such as `"bond_length_px": null` — with a Python traceback and exit status 1
-  instead of the documented `chemvas: error:` message and exit status 2. The
-  merged settings are now validated by the canonical document rules before any
-  value is used, so every invalid settings value gets the same clean rejection.
+- `chemvas compose-document` crashed with a Python traceback and exit status 1
+  on a wrongly typed `bond_length_px` canvas setting — `null`, a list, an
+  object, or an integer beyond float range. That one value feeds the
+  electronic-mark distance arithmetic before the document rules examine it;
+  every other settings key was already refused cleanly. The merged settings are
+  now validated by those rules before any value is used, so `bond_length_px` is
+  refused the same way, with a `chemvas: error:` message and exit status 2.
 
 ## [0.4.0] - 2026-08-17
 
@@ -465,7 +469,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `.chemvas` document type (double-clicking a file opens it in Chemvas), and a
   Linux `.desktop` entry with an `application/x-chemvas` MIME type.
 
-[Unreleased]: https://github.com/dhsohn/Chemvas/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/dhsohn/Chemvas/compare/v0.4.1...HEAD
+[0.4.1]: https://github.com/dhsohn/Chemvas/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/dhsohn/Chemvas/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/dhsohn/Chemvas/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/dhsohn/Chemvas/compare/v0.1.0...v0.2.0
