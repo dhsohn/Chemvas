@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- The source distribution no longer ships the test tree, and the release gate
+  now verifies the sdist's contents the way it already verified the wheel.
+  Every published sdist carried 300+ `test_*.py` files without `conftest.py`
+  and the other support modules the default packaging glob skipped, so the
+  shipped tests could never be collected. The wheel — what `pip install
+  chemvas` installs — is unchanged.
+
 ## [0.4.1] - 2026-08-20
 
 ### Fixed

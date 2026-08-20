@@ -1,8 +1,21 @@
 from __future__ import annotations
 
 import argparse
+import tarfile
 from pathlib import Path
 from zipfile import ZipFile
+
+SDIST_ALLOWED_TOP_LEVEL = frozenset(
+    (
+        "LICENSE",
+        "MANIFEST.in",
+        "PKG-INFO",
+        "README.md",
+        "app",
+        "pyproject.toml",
+        "setup.cfg",
+    )
+)
 
 
 def verify_wheel(path: Path) -> None:
@@ -81,11 +94,48 @@ def verify_wheel(path: Path) -> None:
             raise ValueError(f"wheel console entry point is not {expected_entry_point}")
 
 
+def verify_sdist(path: Path) -> None:
+    with tarfile.open(path, "r:gz") as sdist:
+        names = frozenset(member.name for member in sdist.getmembers())
+        roots = {name.partition("/")[0] for name in names}
+        if len(roots) != 1:
+            raise ValueError(
+                f"expected one sdist root directory, found {sorted(roots)}"
+            )
+        root = next(iter(roots))
+        entries = {
+            name.removeprefix(f"{root}/").partition("/")[0]
+            for name in names
+            if name != root
+        }
+        unexpected = entries - SDIST_ALLOWED_TOP_LEVEL
+        if unexpected:
+            raise ValueError(f"unexpected sdist entries: {sorted(unexpected)}")
+        required = {
+            f"{root}/pyproject.toml",
+            f"{root}/PKG-INFO",
+            f"{root}/LICENSE",
+            f"{root}/README.md",
+            f"{root}/app/chemvas/__init__.py",
+        }
+        missing = required - names
+        if missing:
+            raise ValueError(f"sdist is missing required files: {sorted(missing)}")
+
+
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Verify the Chemvas wheel contract")
-    parser.add_argument("wheel", type=Path)
+    parser = argparse.ArgumentParser(
+        description="Verify the Chemvas distribution contracts"
+    )
+    parser.add_argument("distributions", type=Path, nargs="+")
     args = parser.parse_args()
-    verify_wheel(args.wheel)
+    for distribution in args.distributions:
+        if distribution.name.endswith(".whl"):
+            verify_wheel(distribution)
+        elif distribution.name.endswith(".tar.gz"):
+            verify_sdist(distribution)
+        else:
+            raise ValueError(f"unsupported distribution artifact: {distribution}")
 
 
 if __name__ == "__main__":
