@@ -1504,8 +1504,6 @@ class CanvasViewAdditionalTest(unittest.TestCase):
 
         style_controller.set_text_font(QFont("Courier New", 14))
         self.assertEqual(text_style.text_font_family, "Courier New")
-        style_controller.set_text_size(2)
-        self.assertEqual(style_controller.get_text_size(), 6)
         style_controller.set_text_weight(150)
         self.assertEqual(style_controller.get_text_weight(), 150)
         style_controller.set_text_weight(0)
@@ -1516,6 +1514,7 @@ class CanvasViewAdditionalTest(unittest.TestCase):
         self.assertEqual(text_style.text_color.name(), "#ff00aa")
         style_controller.set_text_color(QColor())
         self.assertEqual(text_style.text_color.name(), "#ff00aa")
+        set_text_style_for(style_view, "text_font_size", 6)
         font = style_controller.get_text_font()
         self.assertEqual(font.family(), "Courier New")
         self.assertEqual(font.pointSize(), 6)

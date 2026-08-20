@@ -23,6 +23,7 @@ if QApplication is not None:
         ts_bracket_items_for,
     )
     from chemvas.ui.canvas_service_access import canvas_services_for
+    from chemvas.ui.canvas_text_style_state import set_text_style_for
     from chemvas.ui.main_window_ports import (
         active_canvas_for_window,
         services_for_window,
@@ -90,7 +91,7 @@ class SceneItemRestoreTest(unittest.TestCase):
         style_controller = canvas_services_for(
             active_canvas_for_window(self.window)
         ).scene_operations.style_controller
-        style_controller.set_text_size(19)
+        set_text_style_for(active_canvas_for_window(self.window), "text_font_size", 19)
         style_controller.set_text_weight(63)
         style_controller.set_text_italic(True)
         state = {"kind": "note", "text": "Mechanism", "x": 18.0, "y": -12.0}
