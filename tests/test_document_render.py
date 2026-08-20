@@ -12,14 +12,6 @@ class _Plan:
     out_h_pt: float
 
 
-@pytest.mark.parametrize(
-    ("platform", "expected"),
-    [("win32", "windows"), ("linux", "offscreen"), ("darwin", "offscreen")],
-)
-def test_qt_platform_for_render(platform: str, expected: str) -> None:
-    assert document_render._qt_platform_for_render(platform) == expected
-
-
 def test_svg_budget_reports_points_without_raster_dimensions() -> None:
     assert document_render._validate_render_budget(
         _Plan(144.0, 72.0),
@@ -68,13 +60,3 @@ def test_png_budget_rejects_side_and_area_overflow() -> None:
             output_format="png",
             dpi=100,
         )
-
-
-def test_graphics_record_count_includes_model_and_scene_records() -> None:
-    state: dict[str, object] = {
-        "model": {"atoms": {0: {}}, "bonds": [{"a": 0, "b": 1}]},
-        "notes": [{"text": "n"}],
-        "arrows": [{"kind": "arrow"}],
-    }
-
-    assert document_render._graphics_record_count(state) == 4

@@ -10,9 +10,10 @@ from dataclasses import asdict, replace
 from datetime import UTC, datetime
 from decimal import Decimal
 from pathlib import Path
-from typing import Any, TypedDict
+from typing import TypedDict
 
 from chemvas import __version__
+from chemvas.bootstrap.document_cli_shared import json_text
 from chemvas.core.document_io import (
     atomic_create_bytes,
     create_document,
@@ -81,7 +82,7 @@ def run(argv: list[str]) -> int:
     try:
         if args.command == "inspect":
             payload = _inspect(Path(args.document))
-            sys.stdout.write(_json_text(payload))
+            sys.stdout.write(json_text(payload))
             return 0
         if args.command == "attach-plan":
             result = _attach_plan(
@@ -89,15 +90,15 @@ def run(argv: list[str]) -> int:
                 plan_path=Path(args.plan),
                 output=Path(args.output),
             )
-            sys.stdout.write(_json_text(result))
+            sys.stdout.write(json_text(result))
             return 0
         if args.command == "inspect-plan":
             payload = _inspect_plan(Path(args.document))
-            sys.stdout.write(_json_text(payload))
+            sys.stdout.write(json_text(payload))
             return 0
         if args.command == "inspect-precomplex":
             payload = _inspect_precomplex(Path(args.document), step_id=args.step)
-            sys.stdout.write(_json_text(payload))
+            sys.stdout.write(json_text(payload))
             return 0
         if args.command == "generate-precomplex":
             result = _generate_precomplex(
@@ -106,7 +107,7 @@ def run(argv: list[str]) -> int:
                 step_id=args.step,
                 output=Path(args.output),
             )
-            sys.stdout.write(_json_text(result))
+            sys.stdout.write(json_text(result))
             return 0
         if args.command == "select-precomplex":
             result = _select_precomplex(
@@ -117,7 +118,7 @@ def run(argv: list[str]) -> int:
                 reviewer=args.reviewer,
                 output=Path(args.output),
             )
-            sys.stdout.write(_json_text(result))
+            sys.stdout.write(json_text(result))
             return 0
         if args.command == "pack-step":
             artifact = _pack_step(
@@ -125,7 +126,7 @@ def run(argv: list[str]) -> int:
                 step_id=args.step,
                 output=Path(args.output),
             )
-            sys.stdout.write(_json_text(artifact))
+            sys.stdout.write(json_text(artifact))
             return 0
     except (OSError, ValueError) as exc:
         parser.exit(2, f"chemvas: error: {exc}\n")
@@ -219,7 +220,7 @@ def _attach_plan(
     output_document = create_document(state, CANVAS_FILE_VERSION)
     atomic_create_bytes(
         output,
-        _json_text(output_document.payload).encode("utf-8"),
+        json_text(output_document.payload).encode("utf-8"),
     )
     report = calculation_plan_report(output_document.state)
     return {
@@ -408,7 +409,7 @@ def _select_precomplex(
     state_payload = dict(document.state)
     state_payload["calculation_plan"] = calculation_plan_to_state(validated_plan)
     output_document = create_document(state_payload, CANVAS_FILE_VERSION)
-    atomic_create_bytes(output, _json_text(output_document.payload).encode("utf-8"))
+    atomic_create_bytes(output, json_text(output_document.payload).encode("utf-8"))
     return {
         "format": "chemvas-precomplex-selection",
         "version": 1,
@@ -568,7 +569,7 @@ def _generate_precomplex(
     state_payload = dict(document.state)
     state_payload["calculation_plan"] = calculation_plan_to_state(validated_plan)
     output_document = create_document(state_payload, CANVAS_FILE_VERSION)
-    atomic_create_bytes(output, _json_text(output_document.payload).encode("utf-8"))
+    atomic_create_bytes(output, json_text(output_document.payload).encode("utf-8"))
     return {
         "format": "chemvas-precomplex-generation",
         "version": 1,
@@ -991,7 +992,7 @@ def _pack_step(
             "data": payload,
         },
     }
-    atomic_create_bytes(output, _json_text(observation).encode("utf-8"))
+    atomic_create_bytes(output, json_text(observation).encode("utf-8"))
     return observation
 
 
@@ -1589,10 +1590,6 @@ def _validate_calculation_artifacts(
 
 def _sha256(content: bytes) -> str:
     return hashlib.sha256(content).hexdigest()
-
-
-def _json_text(payload: Any) -> str:
-    return json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
 
 
 __all__ = ["run"]
