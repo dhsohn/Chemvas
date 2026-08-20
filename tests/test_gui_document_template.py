@@ -306,16 +306,15 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
         tool_mode_controller = canvas_services_for(
             active_canvas_for_window(self.window)
         ).input.tool_mode_controller
-        style_controller = canvas_services_for(
-            active_canvas_for_window(self.window)
-        ).scene_operations.style_controller
         geometry_controller.set_bond_length(28.0)
         tool_mode_controller.set_arrow_line_width(3.6)
         tool_mode_controller.set_arrow_head_scale(0.55)
         tool_mode_controller.set_orbital_phase_enabled(True)
         set_text_style_for(active_canvas_for_window(self.window), "text_font_size", 18)
-        style_controller.set_text_weight(saved_weight)
-        style_controller.set_text_italic(True)
+        set_text_style_for(
+            active_canvas_for_window(self.window), "text_font_weight", saved_weight
+        )
+        set_text_style_for(active_canvas_for_window(self.window), "text_italic", True)
         canvas_services_for(
             active_canvas_for_window(self.window)
         ).interaction.note_controller.create_text_note(QPointF(30.0, 15.0), "Styled")
@@ -333,8 +332,10 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
         tool_mode_controller.set_arrow_head_scale(0.2)
         tool_mode_controller.set_orbital_phase_enabled(False)
         set_text_style_for(active_canvas_for_window(self.window), "text_font_size", 10)
-        style_controller.set_text_weight(24)
-        style_controller.set_text_italic(False)
+        set_text_style_for(
+            active_canvas_for_window(self.window), "text_font_weight", 24
+        )
+        set_text_style_for(active_canvas_for_window(self.window), "text_italic", False)
         clear_scene_for(active_canvas_for_window(self.window))
 
         restore_canvas_state_for(active_canvas_for_window(self.window), state)

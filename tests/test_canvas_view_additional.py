@@ -159,7 +159,6 @@ if QApplication is not None:
     from chemvas.ui.selection_service_bundle import build_selection_services
     from chemvas.ui.selection_style_state import (
         SelectionStyleState,
-        selection_style_state_for,
     )
     from chemvas.ui.structure_build_access import (
         add_benzene_template_for,
@@ -1438,7 +1437,7 @@ class CanvasViewAdditionalTest(unittest.TestCase):
         )
         self.assertEqual(atom_pick_radius_for(radius_view), 6.4)
 
-    def test_style_and_text_setting_helpers_clamp_values_and_apply_presets(
+    def test_style_and_text_setting_helpers_guard_inputs_and_apply_presets(
         self,
     ) -> None:
         note_controller = SimpleNamespace(apply_text_style_to_selected=mock.Mock())
@@ -1490,34 +1489,16 @@ class CanvasViewAdditionalTest(unittest.TestCase):
 
         tool_mode_controller.set_curved_symmetry(True)
         self.assertTrue(tool_mode_controller.get_curved_symmetry())
-        style_controller.set_selection_color(QColor("#abcdef"))
-        self.assertEqual(selection_style_state_for(style_view).color.name(), "#abcdef")
-        style_controller.set_selection_color(QColor())
-        self.assertEqual(selection_style_state_for(style_view).color.name(), "#abcdef")
-        style_controller.set_selection_stroke_delta(-5.0)
-        self.assertEqual(style_controller.get_selection_stroke_delta(), 0.1)
 
         tool_mode_controller.set_orbital_snap_enabled(True)
         self.assertTrue(tool_mode_controller.get_orbital_snap_enabled())
         tool_mode_controller.set_orbital_snap_step(0)
         self.assertEqual(tool_mode_controller.get_orbital_snap_step(), 1)
 
-        style_controller.set_text_font(QFont("Courier New", 14))
-        self.assertEqual(text_style.text_font_family, "Courier New")
-        style_controller.set_text_weight(150)
-        self.assertEqual(style_controller.get_text_weight(), 150)
-        style_controller.set_text_weight(0)
-        self.assertEqual(style_controller.get_text_weight(), 1)
-        style_controller.set_text_italic(True)
-        self.assertTrue(text_style.text_italic)
         style_controller.set_text_color(QColor("#ff00aa"))
         self.assertEqual(text_style.text_color.name(), "#ff00aa")
         style_controller.set_text_color(QColor())
         self.assertEqual(text_style.text_color.name(), "#ff00aa")
-        set_text_style_for(style_view, "text_font_size", 6)
-        font = style_controller.get_text_font()
-        self.assertEqual(font.family(), "Courier New")
-        self.assertEqual(font.pointSize(), 6)
 
         style_controller.apply_text_preset_acs()
         self.assertEqual(text_style.text_font_family, "Arial")
@@ -1543,34 +1524,22 @@ class CanvasViewAdditionalTest(unittest.TestCase):
         self.assertEqual(text_style.text_alignment, Qt.AlignmentFlag.AlignHCenter)
         style_controller.set_text_alignment("bad")
         self.assertEqual(text_style.text_alignment, Qt.AlignmentFlag.AlignHCenter)
-        style_controller.set_text_line_spacing(0.2)
-        self.assertEqual(text_style.text_line_spacing, 0.8)
         tool_mode_controller.set_atom_symbol(" N ")
         self.assertEqual(tool_mode_controller.get_atom_symbol(), "N")
-        style_controller.set_note_box_enabled(False)
-        self.assertFalse(text_style.note_box_enabled)
         style_controller.set_note_box_color(QColor("#00ff00"))
         self.assertEqual(text_style.note_box_color.name(), "#00ff00")
         style_controller.set_note_box_color(QColor())
         self.assertEqual(text_style.note_box_color.name(), "#00ff00")
-        style_controller.set_note_box_alpha(3.0)
-        self.assertEqual(style_controller.get_note_box_alpha(), 1.0)
-        style_controller.set_note_border_enabled(False)
-        self.assertFalse(text_style.note_border_enabled)
         style_controller.set_note_border_color(QColor("#445566"))
         self.assertEqual(text_style.note_border_color.name(), "#445566")
         style_controller.set_note_border_color(QColor())
         self.assertEqual(text_style.note_border_color.name(), "#445566")
-        style_controller.set_note_border_width(0.1)
-        self.assertEqual(text_style.note_border_width, 0.5)
-        style_controller.set_note_padding(1.0)
-        self.assertEqual(text_style.note_padding, 2.0)
         tool_mode_controller.set_snap_angle_step(22)
         self.assertEqual(tool_settings_state_for(style_view).snap_angle_step, 22)
         style_view.services.tool_controller.set_active.assert_called_with("bond")
         style_view.refresh_selection_outline.assert_called_once_with()
         self.assertGreaterEqual(
-            note_controller.apply_text_style_to_selected.call_count, 14
+            note_controller.apply_text_style_to_selected.call_count, 7
         )
 
     def test_note_selection_and_text_style_helpers_update_boxes_and_focus(self) -> None:

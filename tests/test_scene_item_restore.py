@@ -88,12 +88,11 @@ class SceneItemRestoreTest(unittest.TestCase):
     def test_create_scene_item_from_state_restores_note_style_and_last_text(
         self,
     ) -> None:
-        style_controller = canvas_services_for(
-            active_canvas_for_window(self.window)
-        ).scene_operations.style_controller
         set_text_style_for(active_canvas_for_window(self.window), "text_font_size", 19)
-        style_controller.set_text_weight(63)
-        style_controller.set_text_italic(True)
+        set_text_style_for(
+            active_canvas_for_window(self.window), "text_font_weight", 63
+        )
+        set_text_style_for(active_canvas_for_window(self.window), "text_italic", True)
         state = {"kind": "note", "text": "Mechanism", "x": 18.0, "y": -12.0}
 
         item = create_scene_item_from_state(
