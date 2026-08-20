@@ -37,6 +37,27 @@ def test_composition_rejects_canvas_font_size_above_supported_limit() -> None:
         compose_document_state(composition)
 
 
+@pytest.mark.parametrize(
+    "bond_length_px",
+    [
+        None,
+        [20.0],
+        {"px": 20.0},
+        "20",
+        True,
+        pytest.param(10**400, id="int-beyond-float-range"),
+    ],
+)
+def test_composition_rejects_non_numeric_settings_value(
+    bond_length_px: object,
+) -> None:
+    composition = _composition()
+    composition["settings"] = {"bond_length_px": bond_length_px}
+
+    with pytest.raises(ValueError, match="Invalid Chemvas file"):
+        compose_document_state(composition)
+
+
 def test_composition_fails_if_electronic_marks_do_not_match_annotations(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

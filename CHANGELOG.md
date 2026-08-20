@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- `chemvas compose-document` reported a wrongly typed canvas settings value —
+  such as `"bond_length_px": null` — with a Python traceback and exit status 1
+  instead of the documented `chemvas: error:` message and exit status 2. The
+  merged settings are now validated by the canonical document rules before any
+  value is used, so every invalid settings value gets the same clean rejection.
+
 ## [0.4.0] - 2026-08-17
 
 ### Added
@@ -46,6 +53,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   reverse their displayed groups when necessary (`CF3` → `F3C`, `OTs` → `TsO`,
   `Ph3P` → `PPh3`). This keeps attached bond lines at full length without
   changing the label stored in the document.
+- Document validation now bounds the global `text_font_size` setting to the
+  6–96 pt range that interactive editing has always enforced; the reader
+  previously accepted any size of 6 pt or larger. No Chemvas-written document
+  is affected, since no editing path could store a larger value. *(This entry
+  was added after the 0.4.0 release to document a change that shipped in it.)*
 
 ### Fixed
 - The **Equilibrium** arrow now draws the conventional harpoon pair (⇌): one

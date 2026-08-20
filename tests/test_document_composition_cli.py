@@ -169,6 +169,24 @@ def test_compose_document_builds_scene_objects_and_structured_note_style(
     assert state["settings"]["text_font_size"] == 15
 
 
+def test_compose_document_rejects_wrongly_typed_settings_value_cleanly(
+    tmp_path: Path,
+) -> None:
+    composition = _composition()
+    composition["settings"] = {"bond_length_px": None}
+    request = tmp_path / "scheme.json"
+    request.write_text(json.dumps(composition), encoding="utf-8")
+    output = tmp_path / "scheme.chemvas"
+
+    result = _run("compose-document", str(request), "--output", str(output))
+
+    assert result.returncode == 2
+    assert result.stderr.startswith("chemvas: error:")
+    assert "Traceback" not in result.stderr
+    assert result.stdout == ""
+    assert not output.exists()
+
+
 def test_read_composition_enforces_size_limit_during_the_read(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,

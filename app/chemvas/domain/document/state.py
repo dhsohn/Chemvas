@@ -688,7 +688,7 @@ def _validate_canvas_state(state: Mapping[str, object], *, version: int) -> None
     settings = state.get("settings")
     if not isinstance(settings, Mapping):
         raise ValueError("Invalid Chemvas file.")
-    _validate_settings_state(settings)
+    validate_settings_state(settings)
     last_smiles_input = state.get("last_smiles_input")
     if last_smiles_input is not None and not isinstance(last_smiles_input, str):
         raise ValueError("Invalid Chemvas file.")
@@ -1151,7 +1151,7 @@ def _validated_scene_state_list(states: object) -> list[Mapping[str, object]]:
     return validated
 
 
-def _validate_settings_state(settings: Mapping[str, object]) -> None:
+def validate_settings_state(settings: Mapping[str, object]) -> None:
     keys = set(settings)
     if keys != SETTINGS_KEYS:
         raise ValueError("Invalid Chemvas file.")
