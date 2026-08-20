@@ -21,6 +21,7 @@ from chemvas.domain.document.state import (
     VALID_ARROW_KINDS,
     VALID_SHAPE_KINDS,
     VALID_SHAPE_STROKES,
+    validate_settings_state,
 )
 from chemvas.features.annotations import sanitize_note_html
 from chemvas.features.calculation_bundle import inspect_components
@@ -228,6 +229,9 @@ def _settings(value: object) -> dict[str, object]:
     if not set(overrides) <= _SETTINGS_ALLOWED:
         raise ValueError("settings has unknown keys")
     settings.update(overrides)
+    # Overridden values feed the mark-distance arithmetic before the final
+    # document validation runs, so they must be proven valid here first.
+    validate_settings_state(settings)
     return settings
 
 
