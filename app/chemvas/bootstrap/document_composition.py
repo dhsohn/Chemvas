@@ -2,11 +2,11 @@ from __future__ import annotations
 
 import argparse
 import hashlib
-import json
 import sys
 from pathlib import Path
 from typing import Any, cast
 
+from chemvas.bootstrap.document_cli_shared import json_text
 from chemvas.core.document_io import atomic_create_bytes
 from chemvas.domain.document import (
     CANVAS_FILE_VERSION,
@@ -33,7 +33,7 @@ def run(argv: list[str]) -> int:
             dict[str, Any],
             normalize_json_numbers(build_document_payload(state, CANVAS_FILE_VERSION)),
         )
-        output_bytes = _json_text(payload).encode("utf-8")
+        output_bytes = json_text(payload).encode("utf-8")
         atomic_create_bytes(output, output_bytes)
         model = cast(dict[str, object], state["model"])
         report = {
@@ -47,7 +47,7 @@ def run(argv: list[str]) -> int:
             "bond_count": len(cast(list[object], model["bonds"])),
             "written": True,
         }
-        sys.stdout.write(_json_text(report))
+        sys.stdout.write(json_text(report))
         return 0
     except (OSError, ValueError) as exc:
         parser.exit(2, f"chemvas: error: {exc}\n")
@@ -94,10 +94,6 @@ def _validate_output(path: Path) -> None:
         raise ValueError(f"output path already exists: {path}")
     if not path.parent.is_dir():
         raise ValueError(f"output parent directory does not exist: {path.parent}")
-
-
-def _json_text(payload: object) -> str:
-    return json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
 
 
 __all__ = ["MAX_COMPOSITION_BYTES", "run"]

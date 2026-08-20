@@ -2,11 +2,11 @@ from __future__ import annotations
 
 import argparse
 import hashlib
-import json
 import sys
 from pathlib import Path
 from typing import Any, cast
 
+from chemvas.bootstrap.document_cli_shared import json_text
 from chemvas.core.document_io import atomic_create_bytes, read_exact_document
 from chemvas.domain.document import build_document_payload, normalize_json_numbers
 from chemvas.domain.json_io import strict_json_loads
@@ -35,7 +35,7 @@ def run(argv: list[str]) -> int:
         else:
             parser.error("a command is required")
             return 2
-        sys.stdout.write(_json_text(report))
+        sys.stdout.write(json_text(report))
         return 0
     except (OSError, ValueError) as exc:
         parser.exit(2, f"chemvas: error: {exc}\n")
@@ -114,7 +114,7 @@ def _apply_patch(
             )
         ),
     )
-    candidate_bytes = _json_text(payload).encode("utf-8")
+    candidate_bytes = json_text(payload).encode("utf-8")
     candidate_hash = _sha256(candidate_bytes)
     report = _patch_report(
         result,
@@ -191,10 +191,6 @@ def _validate_new_output(source: Path, output: Path) -> None:
 
 def _sha256(content: bytes) -> str:
     return hashlib.sha256(content).hexdigest()
-
-
-def _json_text(payload: object) -> str:
-    return json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
 
 
 __all__ = ["MAX_PATCH_BYTES", "run"]

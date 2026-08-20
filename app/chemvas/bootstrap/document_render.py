@@ -2,8 +2,6 @@ from __future__ import annotations
 
 import argparse
 import hashlib
-import json
-import os
 import sys
 import tempfile
 from collections.abc import Mapping
@@ -11,10 +9,15 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Protocol, cast
 
+from chemvas.bootstrap.document_cli_shared import (
+    MAX_DOCUMENT_BYTES,
+    MAX_GRAPHICS_RECORDS,
+    graphics_record_count,
+    json_text,
+    offscreen_canvas,
+)
 from chemvas.core.document_io import atomic_create_bytes, read_exact_document
 
-MAX_DOCUMENT_BYTES = 8 * 1024 * 1024
-MAX_GRAPHICS_RECORDS = 20_000
 MAX_OUTPUT_BYTES = 64 * 1024 * 1024
 MAX_VECTOR_DIMENSION_POINTS = 14_400.0
 MAX_RASTER_DIMENSION_PIXELS = 10_000
@@ -36,10 +39,6 @@ class _RenderedDocument:
     height_pixels: int | None
 
 
-def _qt_platform_for_render(platform: str | None = None) -> str:
-    return "windows" if (platform or sys.platform) == "win32" else "offscreen"
-
-
 def run(argv: list[str]) -> int:
     parser = _argument_parser()
     args = parser.parse_args(argv)
@@ -53,7 +52,7 @@ def run(argv: list[str]) -> int:
             background=str(args.background),
             dpi=int(args.dpi),
         )
-        sys.stdout.write(_json_text(report))
+        sys.stdout.write(json_text(report))
         return 0
     except (OSError, RuntimeError, ValueError) as exc:
         parser.exit(2, f"chemvas: error: {exc}\n")
@@ -105,7 +104,7 @@ def _render_document(
     if len(source_bytes) > MAX_DOCUMENT_BYTES:
         raise ValueError(f"input document exceeds the {MAX_DOCUMENT_BYTES}-byte limit")
     state = cast(Mapping[str, object], document.state)
-    graphics_records = _graphics_record_count(state)
+    graphics_records = graphics_record_count(state)
     if graphics_records > MAX_GRAPHICS_RECORDS:
         raise ValueError(
             "input document exceeds the "
@@ -161,30 +160,6 @@ def _validate_source_size(source: Path) -> None:
         raise ValueError(f"input document exceeds the {MAX_DOCUMENT_BYTES}-byte limit")
 
 
-def _graphics_record_count(state: Mapping[str, object]) -> int:
-    model = state.get("model")
-    if not isinstance(model, Mapping):
-        raise ValueError("Invalid Chemvas file.")
-    atoms = model.get("atoms")
-    bonds = model.get("bonds")
-    if not isinstance(atoms, Mapping) or not isinstance(bonds, list):
-        raise ValueError("Invalid Chemvas file.")
-    total = len(atoms) + len(bonds)
-    for key in (
-        "ring_fills",
-        "notes",
-        "marks",
-        "arrows",
-        "ts_brackets",
-        "shapes",
-        "orbitals",
-    ):
-        records = state.get(key, [])
-        if isinstance(records, list):
-            total += len(records)
-    return total
-
-
 def _render_offscreen(
     state: dict[str, Any],
     *,
@@ -192,34 +167,7 @@ def _render_offscreen(
     background: str,
     dpi: int,
 ) -> _RenderedDocument:
-    previous_qt_platform = os.environ.get("QT_QPA_PLATFORM")
-    os.environ["QT_QPA_PLATFORM"] = _qt_platform_for_render()
-    try:
-        from PyQt6.QtCore import QEvent
-        from PyQt6.QtWidgets import QApplication
-
-        from chemvas.adapters.qt.renderer import Renderer
-        from chemvas.ui.canvas_service_access import canvas_services_for
-        from chemvas.ui.canvas_view import CanvasView
-
-        existing_application = QApplication.instance()
-        if existing_application is not None and not isinstance(
-            existing_application, QApplication
-        ):
-            raise RuntimeError("render-document requires a QApplication instance")
-        application = existing_application or QApplication(["chemvas-render-document"])
-    finally:
-        if previous_qt_platform is None:
-            os.environ.pop("QT_QPA_PLATFORM", None)
-        else:
-            os.environ["QT_QPA_PLATFORM"] = previous_qt_platform
-    restore_quit_on_last_window = application.quitOnLastWindowClosed()
-    application.setQuitOnLastWindowClosed(False)
-    canvas = None
-    try:
-        canvas = CanvasView(renderer=Renderer())
-        service = canvas_services_for(canvas).document.canvas_document_session_service
-        service.apply_state(state)
+    with offscreen_canvas(state, command="render-document") as (_, service):
         plan = cast(_ExportPlan, service.plan_figure_export())
         width_pixels, height_pixels = _validate_render_budget(
             plan,
@@ -250,11 +198,6 @@ def _render_offscreen(
             width_pixels=width_pixels,
             height_pixels=height_pixels,
         )
-    finally:
-        if canvas is not None:
-            canvas.deleteLater()
-            application.sendPostedEvents(canvas, QEvent.Type.DeferredDelete)
-        application.setQuitOnLastWindowClosed(restore_quit_on_last_window)
 
 
 def _validate_render_budget(
@@ -301,13 +244,7 @@ def _sha256(content: bytes) -> str:
     return hashlib.sha256(content).hexdigest()
 
 
-def _json_text(payload: object) -> str:
-    return json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
-
-
 __all__ = [
-    "MAX_DOCUMENT_BYTES",
-    "MAX_GRAPHICS_RECORDS",
     "MAX_OUTPUT_BYTES",
     "MAX_RASTER_DIMENSION_PIXELS",
     "MAX_RASTER_PIXELS",
