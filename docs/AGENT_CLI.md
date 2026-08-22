@@ -152,7 +152,9 @@ and refuses to replace an existing file or symlink.
 
 Graph Patch v1 deliberately does not delete atoms or edit charge/radical annotations,
 arrows, groups, or Calculation Plans. It makes no chemical or mechanistic inference;
-use the GUI or a separately reviewed plan update for those semantics.
+use the GUI or a separately reviewed plan update for those semantics. `remove_bond`
+keeps both endpoint atoms in place even when the removal leaves them bond-less —
+unlike the GUI, whose bond delete also removes such newly bare endpoints.
 
 ## Headless structure inspection
 

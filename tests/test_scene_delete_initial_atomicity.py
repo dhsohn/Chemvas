@@ -1425,6 +1425,47 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
         self.assertEqual(tool._commands, [])
         self.assertIsNone(tool._delete_session)
 
+    def test_delete_session_bond_erase_removes_orphaned_endpoints_and_undo_restores(
+        self,
+    ) -> None:
+        canvas = self._new_canvas()
+        atom_a = canvas.services.structure.canvas_atom_mutation_service.add_atom(
+            "C", 0.0, 0.0
+        )
+        atom_b = canvas.services.structure.canvas_atom_mutation_service.add_atom(
+            "C", 20.0, 0.0
+        )
+        bond_id = canvas.services.structure.canvas_bond_mutation_service.add_bond(
+            atom_a, atom_b
+        )
+        add_bond_graphics_for(canvas, bond_id)
+
+        session = canvas.services.scene_operations.scene_delete_controller.begin_delete_tool_session()
+        command = session.delete_bond(bond_id)
+        self.assertIsNotNone(command)
+        assert command is not None
+        # The orphaned endpoints are gone; a follow-up erase within the same
+        # gesture must observe that instead of double-deleting.
+        self.assertIsNone(session.delete_atom(atom_a))
+        self.assertNotIn(atom_a, session.live_atom_ids)
+        self.assertNotIn(atom_b, session.live_atom_ids)
+        session.commit(command)
+
+        self.assertNotIn(atom_a, canvas.model.atoms)
+        self.assertNotIn(atom_b, canvas.model.atoms)
+        self.assertIsNone(canvas.model.bonds[bond_id])
+        self.assertFalse(bond_items_for_id(canvas, bond_id))
+
+        canvas.services.history_service.undo()
+
+        self.assertIn(atom_a, canvas.model.atoms)
+        self.assertIn(atom_b, canvas.model.atoms)
+        restored_bond = canvas.model.bonds[bond_id]
+        self.assertIsNotNone(restored_bond)
+        assert restored_bond is not None
+        self.assertEqual((restored_bond.a, restored_bond.b), (atom_a, atom_b))
+        self.assertTrue(bond_items_for_id(canvas, bond_id))
+
     def test_delete_session_coalesces_large_selection_observers_to_one_commit(
         self,
     ) -> None:

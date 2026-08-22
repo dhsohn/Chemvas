@@ -103,16 +103,26 @@ def build_delete_selection_plan(
         if bond.a in selection.atom_ids or bond.b in selection.atom_ids:
             bonds_to_remove.add(bond_id)
 
+    atom_ids_to_remove = set(selection.atom_ids)
+    atom_ids_to_remove.update(
+        _orphaned_endpoint_atom_ids(
+            selection.bond_ids,
+            bonds=bonds,
+            bonds_to_remove=bonds_to_remove,
+            atom_ids_to_remove=atom_ids_to_remove,
+        )
+    )
+
     filtered_marks: list[QGraphicsItem] = []
     for item in selection.mark_items:
         data = item.data(1) or {}
         atom_id = data.get("atom_id")
-        if isinstance(atom_id, int) and atom_id in selection.atom_ids:
+        if isinstance(atom_id, int) and atom_id in atom_ids_to_remove:
             continue
         filtered_marks.append(item)
 
     mark_states_for_atoms: list[dict] = []
-    for atom_id in sorted(selection.atom_ids):
+    for atom_id in sorted(atom_ids_to_remove):
         for mark in marks_by_atom.get(atom_id, []):
             mark_states_for_atoms.append(mark_state_getter(mark))
 
@@ -127,7 +137,7 @@ def build_delete_selection_plan(
 
     return DeleteSelectionPlan(
         bond_ids_to_remove=sorted(bonds_to_remove, reverse=True),
-        atom_ids=sorted(selection.atom_ids),
+        atom_ids=sorted(atom_ids_to_remove),
         mark_states_for_atoms=mark_states_for_atoms,
         scene_items=scene_items,
         clear_handles=bool(
@@ -140,6 +150,37 @@ def build_delete_selection_plan(
         ),
         clear_smiles_input=bool(bonds_to_remove or selection.atom_ids),
     )
+
+
+def _orphaned_endpoint_atom_ids(
+    selected_bond_ids: set[int],
+    *,
+    bonds: Sequence[Bond | None],
+    bonds_to_remove: set[int],
+    atom_ids_to_remove: set[int],
+) -> set[int]:
+    """Endpoints of directly selected bonds left with no surviving bond.
+
+    Only bonds the user selected as bonds nominate their endpoints; bonds that
+    are swept in because a selected atom touches them keep plain atom-delete
+    semantics for their far endpoints.
+    """
+    candidates: set[int] = set()
+    for bond_id in selected_bond_ids:
+        if not (0 <= bond_id < len(bonds)):
+            continue
+        bond = bonds[bond_id]
+        if bond is not None:
+            candidates.update((bond.a, bond.b))
+    candidates -= atom_ids_to_remove
+    if not candidates:
+        return set()
+    surviving_bond_atoms: set[int] = set()
+    for bond_id, bond in enumerate(bonds):
+        if bond is None or bond_id in bonds_to_remove:
+            continue
+        surviving_bond_atoms.update((bond.a, bond.b))
+    return candidates - surviving_bond_atoms
 
 
 __all__ = [

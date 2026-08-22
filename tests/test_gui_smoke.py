@@ -2654,7 +2654,7 @@ class GuiShortcutSmokeTest(unittest.TestCase):
             restored_marks[0], mark_items_for(active_canvas_for_window(self.window))
         )
 
-    def test_delete_selected_items_single_bond_preserves_atoms_and_undo_restores_bond(
+    def test_delete_selected_items_single_bond_removes_orphaned_atoms_and_undo_restores(
         self,
     ) -> None:
         left = add_atom_for(active_canvas_for_window(self.window), "C", -20.0, 0.0)
@@ -2670,9 +2670,7 @@ class GuiShortcutSmokeTest(unittest.TestCase):
                 self.window
             ).services.scene_operations.scene_delete_controller.delete_selected_items()
         )
-        self.assertEqual(
-            set(active_canvas_for_window(self.window).model.atoms), {left, right}
-        )
+        self.assertEqual(set(active_canvas_for_window(self.window).model.atoms), set())
         self.assertIsNone(active_canvas_for_window(self.window).model.bonds[bond_id])
         self.assertFalse(
             bond_items_for_id(active_canvas_for_window(self.window), bond_id)
@@ -2680,6 +2678,9 @@ class GuiShortcutSmokeTest(unittest.TestCase):
 
         active_canvas_for_window(self.window).runtime_state.history_service.undo()
 
+        self.assertEqual(
+            set(active_canvas_for_window(self.window).model.atoms), {left, right}
+        )
         restored_bond = active_canvas_for_window(self.window).model.bonds[bond_id]
         self.assertIsNotNone(restored_bond)
         assert restored_bond is not None
@@ -2687,6 +2688,11 @@ class GuiShortcutSmokeTest(unittest.TestCase):
         self.assertTrue(
             bond_items_for_id(active_canvas_for_window(self.window), bond_id)
         )
+
+        active_canvas_for_window(self.window).runtime_state.history_service.redo()
+
+        self.assertEqual(set(active_canvas_for_window(self.window).model.atoms), set())
+        self.assertIsNone(active_canvas_for_window(self.window).model.bonds[bond_id])
 
     def test_color_preset_preserves_ring_fill_on_selected_ring(self) -> None:
         add_benzene_ring_for(active_canvas_for_window(self.window), QPointF(0.0, 0.0))
