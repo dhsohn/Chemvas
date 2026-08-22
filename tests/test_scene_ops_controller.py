@@ -205,8 +205,19 @@ class SceneOpsControllerTest(unittest.TestCase):
         self.assertTrue(controller.delete_selected_items())
         self.assertEqual(canvas.delete_bond_calls, [])
         self.assertEqual(len(canvas.pushed_commands), 1)
-        self.assertIsInstance(canvas.pushed_commands[0], DeleteBondCommand)
+        command = canvas.pushed_commands[0]
+        self.assertIsInstance(command, CompositeCommand)
+        self.assertIsInstance(command.commands[0], DeleteBondCommand)
+        self.assertEqual(
+            [
+                set(child.atom_states)
+                for child in command.commands[1:]
+                if isinstance(child, DeleteAtomsCommand)
+            ],
+            [{1}, {2}],
+        )
         self.assertEqual(canvas.remove_bond_calls, [0])
+        self.assertEqual(canvas.remove_atom_calls, [(1, True), (2, True)])
         self.assertEqual(sorted(canvas.redraw_connected_bonds_calls), [1, 2])
         self.assertEqual(canvas.suspend_selection_outline_calls, [True, False])
         self.assertEqual(canvas.update_selection_outline_calls, 1)
@@ -290,7 +301,7 @@ class SceneOpsControllerTest(unittest.TestCase):
         self.assertIsNone(last_smiles_input_for(canvas))
         self.assertEqual(canvas.remove_bond_calls, [0])
         self.assertEqual(sorted(canvas.redraw_connected_bonds_calls), [1, 2])
-        self.assertEqual(canvas.remove_atom_calls, [(1, True)])
+        self.assertEqual(canvas.remove_atom_calls, [(1, True), (2, True)])
 
         delete_bond_commands = [
             child for child in command.commands if isinstance(child, DeleteBondCommand)
@@ -304,7 +315,7 @@ class SceneOpsControllerTest(unittest.TestCase):
         ]
         self.assertEqual(len(delete_atom_commands), 1)
         atom_delete = delete_atom_commands[0]
-        self.assertEqual(set(atom_delete.atom_states), {1})
+        self.assertEqual(set(atom_delete.atom_states), {1, 2})
         self.assertEqual(
             atom_delete.mark_states,
             [
@@ -330,6 +341,57 @@ class SceneOpsControllerTest(unittest.TestCase):
         self.assertNotIn(handle_item, scene_delete.items)
         self.assertEqual(canvas.suspend_selection_outline_calls, [True, False])
         self.assertEqual(canvas.update_selection_outline_calls, 1)
+
+    def test_delete_bond_removes_only_orphaned_endpoint_atoms(self) -> None:
+        canvas = _FakeCanvas()
+        canvas.model = MoleculeModel(
+            atoms={
+                1: Atom("C", 0.0, 0.0),
+                2: Atom("C", 20.0, 0.0),
+                3: Atom("C", 40.0, 0.0),
+            },
+            bonds=[Bond(1, 2, 1), Bond(2, 3, 1)],
+            next_atom_id=4,
+        )
+        controller = scene_delete_controller_for(canvas)
+
+        command = controller.delete_bond(0, record=False)
+
+        self.assertIsInstance(command, CompositeCommand)
+        assert isinstance(command, CompositeCommand)
+        self.assertIsInstance(command.commands[0], DeleteBondCommand)
+        self.assertEqual(
+            [
+                set(child.atom_states)
+                for child in command.commands[1:]
+                if isinstance(child, DeleteAtomsCommand)
+            ],
+            [{1}],
+        )
+        self.assertEqual(canvas.remove_bond_calls, [0])
+        self.assertEqual(canvas.remove_atom_calls, [(1, True)])
+        self.assertEqual(set(canvas.model.atoms), {2, 3})
+
+    def test_delete_bond_removes_both_orphaned_endpoint_atoms(self) -> None:
+        canvas = _FakeCanvas()
+        canvas.model = MoleculeModel(
+            atoms={
+                1: Atom("C", 0.0, 0.0),
+                2: Atom("C", 20.0, 0.0),
+            },
+            bonds=[Bond(1, 2, 1)],
+            next_atom_id=3,
+        )
+        controller = scene_delete_controller_for(canvas)
+
+        command = controller.delete_bond(0, record=False)
+
+        self.assertIsInstance(command, CompositeCommand)
+        assert isinstance(command, CompositeCommand)
+        self.assertIsInstance(command.commands[0], DeleteBondCommand)
+        self.assertEqual(canvas.remove_atom_calls, [(1, True), (2, True)])
+        self.assertEqual(canvas.model.atoms, {})
+        self.assertIsNone(canvas.model.bonds[0])
 
     def test_delete_selected_items_pushes_single_scene_item_command(self) -> None:
         canvas = _FakeCanvas()

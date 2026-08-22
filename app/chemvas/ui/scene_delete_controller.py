@@ -323,6 +323,7 @@ class SceneDeleteTransactionSession:
         for pair in removed_pairs:
             candidate_ring_ids.update(self.ring_ids_by_bond_pair.get(pair, ()))
         removed_ring_items: list = []
+        removed_atom_ids: list[int] = []
         command = self.controller._delete_bond(
             bond_id,
             record=False,
@@ -330,11 +331,16 @@ class SceneDeleteTransactionSession:
             ring_bond_pairs=self.live_bond_pairs,
             ring_items=self._ring_items(candidate_ring_ids),
             remove_groups_for_ring_items=self._take_groups_for_items,
+            remove_groups_for_atoms=self._take_groups_for_atoms,
             removed_ring_items=removed_ring_items,
+            removed_atom_ids=removed_atom_ids,
         )
         if command is None:
             self._restore_bonds(removed_endpoints)
         else:
+            for atom_id in removed_atom_ids:
+                self.live_atom_ids.discard(atom_id)
+                self.atom_bond_ids.pop(atom_id, None)
             self._forget_ring_items(removed_ring_items)
             self.mutated = True
         return command
@@ -473,6 +479,11 @@ class SceneDeleteTransactionSession:
 
     def _take_groups_for_items(self, items: list) -> list[tuple[int, CanvasSceneGroup]]:
         return self._take_groups(items=items)
+
+    def _take_groups_for_atoms(
+        self, atom_ids: set[int]
+    ) -> list[tuple[int, CanvasSceneGroup]]:
+        return self._take_groups(atom_ids=atom_ids)
 
     def _forget_group(self, group_id: int) -> None:
         members = self.group_members_by_id.pop(group_id, None)
@@ -902,23 +913,9 @@ class SceneDeleteController:
         if removed_groups is None:
             removed_groups = self._remove_overlapping_groups(atom_ids={atom_id})
         before_smiles_input = last_smiles_input_for(self.canvas)
-        command = delete_atom_with_history(
+        command = self._atom_delete_command(
             atom_id,
-            bonds=self._bonds,
-            marks_by_atom=self.marks.by_atom,
             before_smiles_input=before_smiles_input,
-            current_smiles_input_getter=lambda: last_smiles_input_for(self.canvas),
-            clear_smiles_input=lambda: clear_last_smiles_input_for(self.canvas),
-            mark_state_getter=self._mark_state,
-            bond_state_getter=self._bond_state,
-            remove_bond_by_id=self._remove_bond,
-            redraw_connected_bonds=self._redraw_connected_bonds,
-            atom_state_getter=self._atom_state,
-            next_atom_id_getter=lambda: self._next_atom_id,
-            remove_atom_only=self._remove_atom,
-            atom_coords_3d_getter=lambda atom_id: atom_coords_3d_for(self.canvas).get(
-                atom_id
-            ),
             bond_ids=bond_ids,
         )
         command = self._with_broken_ring_cleanup(
@@ -939,6 +936,46 @@ class SceneDeleteController:
         with document_transaction(self.canvas, history_service=self.history):
             return self._delete_bond(bond_id, record=record)
 
+    def _atom_delete_command(
+        self,
+        atom_id: int,
+        *,
+        before_smiles_input,
+        bond_ids=None,
+    ) -> HistoryCommand:
+        return delete_atom_with_history(
+            atom_id,
+            bonds=self._bonds,
+            marks_by_atom=self.marks.by_atom,
+            before_smiles_input=before_smiles_input,
+            current_smiles_input_getter=lambda: last_smiles_input_for(self.canvas),
+            clear_smiles_input=lambda: clear_last_smiles_input_for(self.canvas),
+            mark_state_getter=self._mark_state,
+            bond_state_getter=self._bond_state,
+            remove_bond_by_id=self._remove_bond,
+            redraw_connected_bonds=self._redraw_connected_bonds,
+            atom_state_getter=self._atom_state,
+            next_atom_id_getter=lambda: self._next_atom_id,
+            remove_atom_only=self._remove_atom,
+            atom_coords_3d_getter=lambda atom_id: atom_coords_3d_for(self.canvas).get(
+                atom_id
+            ),
+            bond_ids=bond_ids,
+        )
+
+    def _orphaned_endpoint_atom_ids(
+        self, endpoint_atom_ids: tuple[int, ...]
+    ) -> list[int]:
+        orphaned: list[int] = []
+        for atom_id in endpoint_atom_ids:
+            if any(
+                bond is not None and atom_id in (bond.a, bond.b) for bond in self._bonds
+            ):
+                continue
+            if self._has_atom(atom_id):
+                orphaned.append(atom_id)
+        return orphaned
+
     def _delete_bond(
         self,
         bond_id: int,
@@ -948,12 +985,19 @@ class SceneDeleteController:
         ring_bond_pairs: set[tuple[int, int]] | None = None,
         ring_items: list | None = None,
         remove_groups_for_ring_items=None,
+        remove_groups_for_atoms=None,
         removed_ring_items: list | None = None,
+        removed_atom_ids: list | None = None,
     ) -> HistoryCommand | None:
         if not isinstance(bond_id, int):
             return None
         removed_groups: list[tuple[int, CanvasSceneGroup]] = []
         before_smiles_input = last_smiles_input_for(self.canvas)
+        bonds = self._bonds
+        bond = bonds[bond_id] if 0 <= bond_id < len(bonds) else None
+        endpoint_atom_ids = (
+            () if bond is None else tuple(dict.fromkeys((bond.a, bond.b)))
+        )
         bond_command = delete_bond_with_history(
             bond_id,
             bonds=self._bonds,
@@ -966,8 +1010,31 @@ class SceneDeleteController:
         )
         if bond_command is None:
             return None
+        command: HistoryCommand = bond_command
+        orphaned_atom_ids = self._orphaned_endpoint_atom_ids(endpoint_atom_ids)
+        if orphaned_atom_ids:
+            if remove_groups_for_atoms is None:
+                removed_groups.extend(
+                    self._remove_overlapping_groups(atom_ids=set(orphaned_atom_ids))
+                )
+            else:
+                removed_groups.extend(remove_groups_for_atoms(set(orphaned_atom_ids)))
+            atom_commands = [
+                self._atom_delete_command(
+                    atom_id,
+                    before_smiles_input=before_smiles_input,
+                    bond_ids=(),
+                )
+                for atom_id in orphaned_atom_ids
+            ]
+            # Session bookkeeping is synced by the caller through
+            # removed_atom_ids; rings referencing an orphaned endpoint are
+            # already broken because all of its bond pairs are gone.
+            if removed_atom_ids is not None:
+                removed_atom_ids.extend(orphaned_atom_ids)
+            command = CompositeCommand([bond_command, *atom_commands])
         command = self._with_broken_ring_cleanup(
-            bond_command,
+            command,
             removed_groups=removed_groups,
             atom_ids=ring_atom_ids,
             bond_pairs=ring_bond_pairs,

@@ -35,7 +35,8 @@ the [examples README](../examples/README.md) describes what each one contains.
 - **Atom labels** — elements, charges, radicals, and common alias labels
   (`Me`, `Et`, `OH`, `Ph`, `PPh3`, `OMe`, `Boc`, `CO2Me`, `t-Bu`, `tBu`,
   `i-Pr`, `CF3`, `OTs`, `Ts`, `OMs`, `Ms`, `OTf`, `Tf`, `Ns`, `OAc`, `Ac`).
-- **Editing** — select / move, an eraser tool (click or drag to erase),
+- **Editing** — select / move, an eraser tool (click or drag to erase; deleting
+  a bond also removes endpoint atoms left without any remaining bond),
   horizontal & vertical flip, perspective rotation, and delta-based undo/redo.
 - **Desktop menus** — standard File / Edit / View menus, including a
   **Canvas Size** dialog for the sheet size and orientation.
