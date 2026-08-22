@@ -2657,8 +2657,10 @@ class GuiShortcutSmokeTest(unittest.TestCase):
     def test_delete_selected_items_single_bond_removes_orphaned_atoms_and_undo_restores(
         self,
     ) -> None:
+        # Two implicit carbons: nothing keeps either endpoint visible, so the
+        # whole fragment vanishes with its only bond.
         left = add_atom_for(active_canvas_for_window(self.window), "C", -20.0, 0.0)
-        right = add_atom_for(active_canvas_for_window(self.window), "O", 20.0, 0.0)
+        right = add_atom_for(active_canvas_for_window(self.window), "C", 20.0, 0.0)
         bond_id = add_bond_for(active_canvas_for_window(self.window), left, right)
         add_bond_graphics_for(active_canvas_for_window(self.window), bond_id)
         bond_item = bond_items_for_id(active_canvas_for_window(self.window), bond_id)[0]

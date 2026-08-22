@@ -8,13 +8,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
-- Deleting a bond now also deletes any endpoint atom the deletion leaves
-  without a remaining bond, in the same undoable step. Erasing the only bond
-  of a two-atom fragment previously kept both atoms on the sheet; the eraser,
-  the Delete key on a hovered bond, a selected single bond, and bonds selected
-  inside a larger deletion now clean up their newly bond-less endpoints.
-  Deleting an atom still leaves its former neighbours in place, and undo
-  restores the removed atoms together with the bond.
+- Deleting a bond or an atom now also deletes the atoms the deletion leaves
+  invisible on the sheet. An endpoint or former neighbour that ends up with no
+  remaining bond disappears with the deletion, in the same undoable step —
+  unless a label or an attached charge/radical mark keeps it visible, in which
+  case it stays. Erasing the only bond of a two-carbon fragment previously
+  kept both atoms behind as invisible orphans; the eraser, the Delete key on a
+  hovered bond or atom, and selection deletes all clean up their newly bare
+  invisible atoms now, and undo restores them together with the deletion.
 - The source distribution no longer ships the test tree, and the release gate
   now verifies the sdist's contents the way it already verified the wheel.
   Every published sdist carried 300+ `test_*.py` files without `conftest.py`

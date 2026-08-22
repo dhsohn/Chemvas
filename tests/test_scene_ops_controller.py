@@ -214,10 +214,12 @@ class SceneOpsControllerTest(unittest.TestCase):
                 for child in command.commands[1:]
                 if isinstance(child, DeleteAtomsCommand)
             ],
-            [{1}, {2}],
+            [{1}],
         )
         self.assertEqual(canvas.remove_bond_calls, [0])
-        self.assertEqual(canvas.remove_atom_calls, [(1, True), (2, True)])
+        # The oxygen keeps its element label and survives orphaning.
+        self.assertEqual(canvas.remove_atom_calls, [(1, True)])
+        self.assertIn(2, canvas.model.atoms)
         self.assertEqual(sorted(canvas.redraw_connected_bonds_calls), [1, 2])
         self.assertEqual(canvas.suspend_selection_outline_calls, [True, False])
         self.assertEqual(canvas.update_selection_outline_calls, 1)
@@ -301,7 +303,8 @@ class SceneOpsControllerTest(unittest.TestCase):
         self.assertIsNone(last_smiles_input_for(canvas))
         self.assertEqual(canvas.remove_bond_calls, [0])
         self.assertEqual(sorted(canvas.redraw_connected_bonds_calls), [1, 2])
-        self.assertEqual(canvas.remove_atom_calls, [(1, True), (2, True)])
+        # The oxygen endpoint keeps its element label and survives orphaning.
+        self.assertEqual(canvas.remove_atom_calls, [(1, True)])
 
         delete_bond_commands = [
             child for child in command.commands if isinstance(child, DeleteBondCommand)
@@ -315,7 +318,7 @@ class SceneOpsControllerTest(unittest.TestCase):
         ]
         self.assertEqual(len(delete_atom_commands), 1)
         atom_delete = delete_atom_commands[0]
-        self.assertEqual(set(atom_delete.atom_states), {1, 2})
+        self.assertEqual(set(atom_delete.atom_states), {1})
         self.assertEqual(
             atom_delete.mark_states,
             [
@@ -392,6 +395,106 @@ class SceneOpsControllerTest(unittest.TestCase):
         self.assertEqual(canvas.remove_atom_calls, [(1, True), (2, True)])
         self.assertEqual(canvas.model.atoms, {})
         self.assertIsNone(canvas.model.bonds[0])
+
+    def test_delete_bond_keeps_labeled_endpoint_atom(self) -> None:
+        canvas = _FakeCanvas()
+        canvas.model = MoleculeModel(
+            atoms={
+                1: Atom("C", 0.0, 0.0),
+                2: Atom("O", 20.0, 0.0),
+            },
+            bonds=[Bond(1, 2, 1)],
+            next_atom_id=3,
+        )
+        controller = scene_delete_controller_for(canvas)
+
+        command = controller.delete_bond(0, record=False)
+
+        self.assertIsInstance(command, CompositeCommand)
+        self.assertEqual(canvas.remove_atom_calls, [(1, True)])
+        self.assertEqual(set(canvas.model.atoms), {2})
+
+    def test_delete_bond_keeps_marked_endpoint_atom(self) -> None:
+        canvas = _FakeCanvas()
+        canvas.model = MoleculeModel(
+            atoms={
+                1: Atom("C", 0.0, 0.0),
+                2: Atom("C", 20.0, 0.0),
+            },
+            bonds=[Bond(1, 2, 1)],
+            next_atom_id=3,
+        )
+        mark_item = _make_rect_item(
+            "mark",
+            data1={"atom_id": 2},
+            state={"kind": "mark", "atom_id": 2, "x": 24.0, "y": -4.0},
+        )
+        canvas.mark_registry.by_atom[2] = [mark_item]
+        controller = scene_delete_controller_for(canvas)
+
+        command = controller.delete_bond(0, record=False)
+
+        self.assertIsInstance(command, CompositeCommand)
+        self.assertEqual(canvas.remove_atom_calls, [(1, True)])
+        self.assertEqual(set(canvas.model.atoms), {2})
+
+    def test_delete_atom_removes_invisible_orphaned_neighbor(self) -> None:
+        canvas = _FakeCanvas()
+        canvas.model = MoleculeModel(
+            atoms={
+                1: Atom("C", 0.0, 0.0),
+                2: Atom("C", 20.0, 0.0),
+            },
+            bonds=[Bond(1, 2, 1)],
+            next_atom_id=3,
+        )
+        controller = scene_delete_controller_for(canvas)
+
+        command = controller.delete_atom(1, record=False)
+
+        self.assertIsInstance(command, CompositeCommand)
+        self.assertEqual(canvas.remove_bond_calls, [0])
+        self.assertEqual(canvas.remove_atom_calls, [(1, True), (2, True)])
+        self.assertEqual(canvas.model.atoms, {})
+
+    def test_delete_atom_keeps_labeled_orphaned_neighbor(self) -> None:
+        canvas = _FakeCanvas()
+        canvas.model = MoleculeModel(
+            atoms={
+                1: Atom("C", 0.0, 0.0),
+                2: Atom("O", 20.0, 0.0),
+            },
+            bonds=[Bond(1, 2, 1)],
+            next_atom_id=3,
+        )
+        controller = scene_delete_controller_for(canvas)
+
+        command = controller.delete_atom(1, record=False)
+
+        self.assertIsNotNone(command)
+        self.assertEqual(canvas.remove_atom_calls, [(1, True)])
+        self.assertEqual(set(canvas.model.atoms), {2})
+
+    def test_delete_atom_keeps_neighbor_that_still_has_bonds(self) -> None:
+        canvas = _FakeCanvas()
+        canvas.model = MoleculeModel(
+            atoms={
+                1: Atom("C", 0.0, 0.0),
+                2: Atom("C", 20.0, 0.0),
+                3: Atom("C", 40.0, 0.0),
+                4: Atom("C", 60.0, 0.0),
+            },
+            bonds=[Bond(1, 2, 1), Bond(2, 3, 1), Bond(3, 4, 1)],
+            next_atom_id=5,
+        )
+        controller = scene_delete_controller_for(canvas)
+
+        command = controller.delete_atom(2, record=False)
+
+        self.assertIsNotNone(command)
+        # Atom 1 loses its only bond and vanishes; atom 3 keeps the bond to 4.
+        self.assertEqual(canvas.remove_atom_calls, [(2, True), (1, True)])
+        self.assertEqual(set(canvas.model.atoms), {3, 4})
 
     def test_delete_selected_items_pushes_single_scene_item_command(self) -> None:
         canvas = _FakeCanvas()
