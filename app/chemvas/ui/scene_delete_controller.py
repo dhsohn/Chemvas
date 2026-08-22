@@ -15,6 +15,7 @@ from chemvas.core.history import (
 )
 from chemvas.domain.document import model_bond_pairs, ring_atom_ids_form_cycle
 from chemvas.ui.atom_coords_access import atom_coords_3d_for
+from chemvas.ui.atom_label_access import atom_has_visible_label_for
 from chemvas.ui.canvas_callback_state import CanvasCallbackState, callback_state_for
 from chemvas.ui.canvas_group_state import (
     CanvasSceneGroup,
@@ -294,6 +295,7 @@ class SceneDeleteTransactionSession:
         atom_was_live = atom_id in self.live_atom_ids
         self.live_atom_ids.discard(atom_id)
         removed_ring_items: list = []
+        removed_atom_ids: list[int] = []
         command = self.controller._delete_atom(
             atom_id,
             record=False,
@@ -303,7 +305,9 @@ class SceneDeleteTransactionSession:
             removed_groups=removed_groups,
             ring_items=self._ring_items(candidate_ring_ids),
             remove_groups_for_ring_items=self._take_groups_for_items,
+            remove_groups_for_atoms=self._take_groups_for_atoms,
             removed_ring_items=removed_ring_items,
+            removed_atom_ids=removed_atom_ids,
         )
         if command is None:
             if atom_was_live:
@@ -312,6 +316,9 @@ class SceneDeleteTransactionSession:
             self._restore_groups(removed_groups)
             return None
         self.atom_bond_ids.pop(atom_id, None)
+        for orphan_atom_id in removed_atom_ids:
+            self.live_atom_ids.discard(orphan_atom_id)
+            self.atom_bond_ids.pop(orphan_atom_id, None)
         self._forget_ring_items(removed_ring_items)
         self.mutated = True
         return command
@@ -906,17 +913,28 @@ class SceneDeleteController:
         removed_groups: list[tuple[int, CanvasSceneGroup]] | None = None,
         ring_items: list | None = None,
         remove_groups_for_ring_items=None,
+        remove_groups_for_atoms=None,
         removed_ring_items: list | None = None,
+        removed_atom_ids: list | None = None,
     ) -> HistoryCommand | None:
         if not isinstance(atom_id, int) or not self._has_atom(atom_id):
             return None
         if removed_groups is None:
             removed_groups = self._remove_overlapping_groups(atom_ids={atom_id})
         before_smiles_input = last_smiles_input_for(self.canvas)
+        neighbor_atom_ids = self._neighbor_atom_ids(atom_id, bond_ids=bond_ids)
         command = self._atom_delete_command(
             atom_id,
             before_smiles_input=before_smiles_input,
             bond_ids=bond_ids,
+        )
+        command = self._with_orphan_cleanup(
+            command,
+            candidate_atom_ids=neighbor_atom_ids,
+            before_smiles_input=before_smiles_input,
+            removed_groups=removed_groups,
+            remove_groups_for_atoms=remove_groups_for_atoms,
+            removed_atom_ids=removed_atom_ids,
         )
         command = self._with_broken_ring_cleanup(
             command,
@@ -963,18 +981,76 @@ class SceneDeleteController:
             bond_ids=bond_ids,
         )
 
-    def _orphaned_endpoint_atom_ids(
-        self, endpoint_atom_ids: tuple[int, ...]
+    def _removable_orphaned_atom_ids(
+        self, candidate_atom_ids: tuple[int, ...]
     ) -> list[int]:
-        orphaned: list[int] = []
-        for atom_id in endpoint_atom_ids:
+        removable: list[int] = []
+        for atom_id in candidate_atom_ids:
             if any(
                 bond is not None and atom_id in (bond.a, bond.b) for bond in self._bonds
             ):
                 continue
-            if self._has_atom(atom_id):
-                orphaned.append(atom_id)
-        return orphaned
+            if not self._has_atom(atom_id):
+                continue
+            # A label or an attached mark keeps the atom visible on the sheet,
+            # so orphaning must not delete it as a side effect.
+            if atom_has_visible_label_for(self.canvas, atom_id):
+                continue
+            if self.marks.by_atom.get(atom_id):
+                continue
+            removable.append(atom_id)
+        return removable
+
+    def _neighbor_atom_ids(self, atom_id: int, *, bond_ids=None) -> tuple[int, ...]:
+        bonds = self._bonds
+        candidate_bond_ids = (
+            range(len(bonds)) if bond_ids is None else sorted(set(bond_ids))
+        )
+        neighbors: dict[int, None] = {}
+        for bond_id in candidate_bond_ids:
+            if not (0 <= bond_id < len(bonds)):
+                continue
+            bond = bonds[bond_id]
+            if bond is None or atom_id not in (bond.a, bond.b):
+                continue
+            other = bond.b if bond.a == atom_id else bond.a
+            if other != atom_id:
+                neighbors[other] = None
+        return tuple(neighbors)
+
+    def _with_orphan_cleanup(
+        self,
+        command: HistoryCommand,
+        *,
+        candidate_atom_ids: tuple[int, ...],
+        before_smiles_input,
+        removed_groups: list[tuple[int, CanvasSceneGroup]],
+        remove_groups_for_atoms=None,
+        removed_atom_ids: list | None = None,
+    ) -> HistoryCommand:
+        orphaned_atom_ids = self._removable_orphaned_atom_ids(candidate_atom_ids)
+        if not orphaned_atom_ids:
+            return command
+        if remove_groups_for_atoms is None:
+            removed_groups.extend(
+                self._remove_overlapping_groups(atom_ids=set(orphaned_atom_ids))
+            )
+        else:
+            removed_groups.extend(remove_groups_for_atoms(set(orphaned_atom_ids)))
+        atom_commands = [
+            self._atom_delete_command(
+                atom_id,
+                before_smiles_input=before_smiles_input,
+                bond_ids=(),
+            )
+            for atom_id in orphaned_atom_ids
+        ]
+        # Session bookkeeping is synced by the caller through removed_atom_ids;
+        # rings referencing an orphaned atom are already broken because all of
+        # its bond pairs are gone.
+        if removed_atom_ids is not None:
+            removed_atom_ids.extend(orphaned_atom_ids)
+        return CompositeCommand([command, *atom_commands])
 
     def _delete_bond(
         self,
@@ -1010,29 +1086,14 @@ class SceneDeleteController:
         )
         if bond_command is None:
             return None
-        command: HistoryCommand = bond_command
-        orphaned_atom_ids = self._orphaned_endpoint_atom_ids(endpoint_atom_ids)
-        if orphaned_atom_ids:
-            if remove_groups_for_atoms is None:
-                removed_groups.extend(
-                    self._remove_overlapping_groups(atom_ids=set(orphaned_atom_ids))
-                )
-            else:
-                removed_groups.extend(remove_groups_for_atoms(set(orphaned_atom_ids)))
-            atom_commands = [
-                self._atom_delete_command(
-                    atom_id,
-                    before_smiles_input=before_smiles_input,
-                    bond_ids=(),
-                )
-                for atom_id in orphaned_atom_ids
-            ]
-            # Session bookkeeping is synced by the caller through
-            # removed_atom_ids; rings referencing an orphaned endpoint are
-            # already broken because all of its bond pairs are gone.
-            if removed_atom_ids is not None:
-                removed_atom_ids.extend(orphaned_atom_ids)
-            command = CompositeCommand([bond_command, *atom_commands])
+        command = self._with_orphan_cleanup(
+            bond_command,
+            candidate_atom_ids=endpoint_atom_ids,
+            before_smiles_input=before_smiles_input,
+            removed_groups=removed_groups,
+            remove_groups_for_atoms=remove_groups_for_atoms,
+            removed_atom_ids=removed_atom_ids,
+        )
         command = self._with_broken_ring_cleanup(
             command,
             removed_groups=removed_groups,
@@ -1137,6 +1198,9 @@ class SceneDeleteController:
                 bonds=self._bonds,
                 marks_by_atom=self.marks.by_atom,
                 mark_state_getter=self._mark_state,
+                atom_has_visible_label=lambda atom_id: atom_has_visible_label_for(
+                    self.canvas, atom_id
+                ),
             )
 
             if plan.single_bond_id is not None:

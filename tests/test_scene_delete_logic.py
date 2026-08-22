@@ -125,6 +125,7 @@ class SceneDeleteLogicTest(unittest.TestCase):
             bonds=[Bond(1, 2, 1)],
             marks_by_atom={},
             mark_state_getter=lambda item: {"kind": item.data(0)},
+            atom_has_visible_label=lambda atom_id: False,
         )
 
         self.assertEqual(plan.single_bond_id, 0)
@@ -142,6 +143,7 @@ class SceneDeleteLogicTest(unittest.TestCase):
             bonds=[None],
             marks_by_atom={},
             mark_state_getter=lambda item: {"kind": item.data(0)},
+            atom_has_visible_label=lambda atom_id: False,
         )
 
         self.assertEqual(plan.single_bond_id, None)
@@ -156,6 +158,7 @@ class SceneDeleteLogicTest(unittest.TestCase):
             bonds=[None, Bond(2, 3, 1)],
             marks_by_atom={},
             mark_state_getter=lambda item: {"kind": item.data(0)},
+            atom_has_visible_label=lambda atom_id: False,
         )
 
         self.assertEqual(plan.single_bond_id, None)
@@ -203,6 +206,7 @@ class SceneDeleteLogicTest(unittest.TestCase):
             bonds=[Bond(1, 2, 2)],
             marks_by_atom={1: [linked_mark, sibling_mark]},
             mark_state_getter=lambda item: dict(item.data(9) or {}),
+            atom_has_visible_label=lambda atom_id: atom_id == 2,
         )
 
         self.assertEqual(plan.single_bond_id, None)
@@ -223,36 +227,96 @@ class SceneDeleteLogicTest(unittest.TestCase):
         self.assertTrue(plan.clear_smiles_input)
         self.assertTrue(plan.has_work())
 
-    def test_build_delete_selection_plan_deletes_orphaned_endpoints_of_selected_bond(
+    def test_build_delete_selection_plan_deletes_invisible_orphaned_endpoints(
         self,
     ) -> None:
         bond_item = _make_rect_item("bond", data1=0)
         note_item = _make_note_item("Mechanism", 12.0, 18.0)
+        selection = classify_delete_selection([bond_item, note_item])
+
+        plan = build_delete_selection_plan(
+            selection,
+            bonds=[Bond(1, 2, 1), Bond(2, 3, 1)],
+            marks_by_atom={},
+            mark_state_getter=lambda item: dict(item.data(9) or {}),
+            atom_has_visible_label=lambda atom_id: False,
+        )
+
+        self.assertEqual(plan.single_bond_id, None)
+        self.assertEqual(plan.bond_ids_to_remove, [0])
+        self.assertEqual(plan.atom_ids, [1])
+        self.assertEqual(plan.scene_items, [note_item])
+        self.assertTrue(plan.clear_smiles_input)
+
+    def test_build_delete_selection_plan_keeps_marked_orphan_endpoint(self) -> None:
         orphan_mark = _make_rect_item(
             "mark",
             data1={"atom_id": 1},
             state={"kind": "mark", "atom_id": 1, "x": 4.0, "y": -5.0},
         )
-        selection = classify_delete_selection([bond_item, note_item, orphan_mark])
+        selection = classify_delete_selection(
+            [_make_rect_item("bond", data1=0), _make_note_item("Note", 12.0, 18.0)]
+        )
 
         plan = build_delete_selection_plan(
             selection,
             bonds=[Bond(1, 2, 1), Bond(2, 3, 1)],
             marks_by_atom={1: [orphan_mark]},
             mark_state_getter=lambda item: dict(item.data(9) or {}),
+            atom_has_visible_label=lambda atom_id: False,
         )
 
-        self.assertEqual(plan.single_bond_id, None)
+        self.assertEqual(plan.bond_ids_to_remove, [0])
+        self.assertEqual(plan.atom_ids, [])
+        self.assertEqual(plan.mark_states_for_atoms, [])
+
+    def test_build_delete_selection_plan_ignores_marks_deleted_with_the_selection(
+        self,
+    ) -> None:
+        orphan_mark = _make_rect_item(
+            "mark",
+            data1={"atom_id": 1},
+            state={"kind": "mark", "atom_id": 1, "x": 4.0, "y": -5.0},
+        )
+        selection = classify_delete_selection(
+            [_make_rect_item("bond", data1=0), orphan_mark]
+        )
+
+        plan = build_delete_selection_plan(
+            selection,
+            bonds=[Bond(1, 2, 1), Bond(2, 3, 1)],
+            marks_by_atom={1: [orphan_mark]},
+            mark_state_getter=lambda item: dict(item.data(9) or {}),
+            atom_has_visible_label=lambda atom_id: False,
+        )
+
+        # The selected mark dies with this deletion, so it cannot protect
+        # atom 1; the atom is removed and carries the mark state with it.
         self.assertEqual(plan.bond_ids_to_remove, [0])
         self.assertEqual(plan.atom_ids, [1])
         self.assertEqual(
             plan.mark_states_for_atoms,
             [{"kind": "mark", "atom_id": 1, "x": 4.0, "y": -5.0}],
         )
-        self.assertEqual(plan.scene_items, [note_item])
-        self.assertTrue(plan.clear_smiles_input)
+        self.assertNotIn(orphan_mark, plan.scene_items)
 
-    def test_build_delete_selection_plan_keeps_far_endpoint_of_atom_swept_bond(
+    def test_build_delete_selection_plan_keeps_labeled_orphan_endpoint(self) -> None:
+        selection = classify_delete_selection(
+            [_make_rect_item("bond", data1=0), _make_note_item("Note", 12.0, 18.0)]
+        )
+
+        plan = build_delete_selection_plan(
+            selection,
+            bonds=[Bond(1, 2, 1)],
+            marks_by_atom={},
+            mark_state_getter=lambda item: dict(item.data(9) or {}),
+            atom_has_visible_label=lambda atom_id: atom_id == 2,
+        )
+
+        self.assertEqual(plan.bond_ids_to_remove, [0])
+        self.assertEqual(plan.atom_ids, [1])
+
+    def test_build_delete_selection_plan_removes_invisible_far_endpoint_of_atom_swept_bond(
         self,
     ) -> None:
         selection = classify_delete_selection([_make_rect_item("atom", data1=1)])
@@ -262,10 +326,11 @@ class SceneDeleteLogicTest(unittest.TestCase):
             bonds=[Bond(1, 2, 1)],
             marks_by_atom={},
             mark_state_getter=lambda item: {"kind": item.data(0)},
+            atom_has_visible_label=lambda atom_id: False,
         )
 
         self.assertEqual(plan.bond_ids_to_remove, [0])
-        self.assertEqual(plan.atom_ids, [1])
+        self.assertEqual(plan.atom_ids, [1, 2])
 
     def test_build_delete_selection_plan_orphans_endpoint_shared_by_selected_bonds(
         self,
@@ -282,6 +347,7 @@ class SceneDeleteLogicTest(unittest.TestCase):
             bonds=[Bond(1, 2, 1), Bond(2, 3, 1)],
             marks_by_atom={},
             mark_state_getter=lambda item: {"kind": item.data(0)},
+            atom_has_visible_label=lambda atom_id: False,
         )
 
         self.assertEqual(plan.bond_ids_to_remove, [1, 0])
@@ -308,7 +374,9 @@ class SceneDeleteLogicTest(unittest.TestCase):
         self.assertTrue(controller.delete_selected_items())
         self.assertEqual(canvas.delete_bond_calls, [])
         self.assertEqual(canvas.remove_bond_calls, [0])
-        self.assertEqual(canvas.remove_atom_calls, [(1, True), (2, True)])
+        # The oxygen keeps its element label, so only the invisible carbon
+        # follows the bond out.
+        self.assertEqual(canvas.remove_atom_calls, [(1, True)])
         self.assertEqual(canvas.removed_scene_items, [])
         self.assertEqual(canvas.clear_handles_calls, 0)
         self.assertEqual(len(canvas.pushed_commands), 1)
@@ -321,8 +389,9 @@ class SceneDeleteLogicTest(unittest.TestCase):
                 for child in command.commands[1:]
                 if isinstance(child, DeleteAtomsCommand)
             ],
-            [{1}, {2}],
+            [{1}],
         )
+        self.assertIn(2, canvas.model.atoms)
 
     def test_delete_selected_items_rolls_back_scene_item_when_history_push_fails(
         self,
@@ -425,7 +494,8 @@ class SceneDeleteLogicTest(unittest.TestCase):
         self.assertIsInstance(command, CompositeCommand)
         self.assertEqual(canvas.clear_handles_calls, 1)
         self.assertEqual(canvas.remove_bond_calls, [0])
-        self.assertEqual(canvas.remove_atom_calls, [(1, True), (2, True)])
+        # The oxygen endpoint keeps its element label and survives orphaning.
+        self.assertEqual(canvas.remove_atom_calls, [(1, True)])
         self.assertIsNone(last_smiles_input_for(canvas))
 
         delete_bond_commands = [
@@ -439,7 +509,7 @@ class SceneDeleteLogicTest(unittest.TestCase):
         ]
         self.assertEqual(len(delete_atom_commands), 1)
         atom_delete = delete_atom_commands[0]
-        self.assertEqual(set(atom_delete.atom_states), {1, 2})
+        self.assertEqual(set(atom_delete.atom_states), {1})
         self.assertEqual(
             atom_delete.mark_states,
             [

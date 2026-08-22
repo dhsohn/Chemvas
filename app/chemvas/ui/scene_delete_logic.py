@@ -90,6 +90,7 @@ def build_delete_selection_plan(
     bonds: Sequence[Bond | None],
     marks_by_atom: Mapping[int, Sequence[QGraphicsItem]],
     mark_state_getter: Callable[[QGraphicsItem], dict],
+    atom_has_visible_label: Callable[[int], bool],
 ) -> DeleteSelectionPlan:
     if selection.has_single_bond_only():
         bond_id = next(iter(selection.bond_ids))
@@ -105,11 +106,13 @@ def build_delete_selection_plan(
 
     atom_ids_to_remove = set(selection.atom_ids)
     atom_ids_to_remove.update(
-        _orphaned_endpoint_atom_ids(
-            selection.bond_ids,
+        _removable_orphaned_atom_ids(
             bonds=bonds,
             bonds_to_remove=bonds_to_remove,
             atom_ids_to_remove=atom_ids_to_remove,
+            marks_by_atom=marks_by_atom,
+            selected_mark_item_ids={id(item) for item in selection.mark_items},
+            atom_has_visible_label=atom_has_visible_label,
         )
     )
 
@@ -152,21 +155,24 @@ def build_delete_selection_plan(
     )
 
 
-def _orphaned_endpoint_atom_ids(
-    selected_bond_ids: set[int],
+def _removable_orphaned_atom_ids(
     *,
     bonds: Sequence[Bond | None],
     bonds_to_remove: set[int],
     atom_ids_to_remove: set[int],
+    marks_by_atom: Mapping[int, Sequence[QGraphicsItem]],
+    selected_mark_item_ids: set[int],
+    atom_has_visible_label: Callable[[int], bool],
 ) -> set[int]:
-    """Endpoints of directly selected bonds left with no surviving bond.
+    """Atoms this deletion orphans that nothing keeps visible on the sheet.
 
-    Only bonds the user selected as bonds nominate their endpoints; bonds that
-    are swept in because a selected atom touches them keep plain atom-delete
-    semantics for their far endpoints.
+    Every removed bond nominates its endpoints; an endpoint survives when it
+    keeps a surviving bond, is already being deleted, or stays visible through
+    a label or a mark. Marks selected for this same deletion cannot protect —
+    they die with it, so counting them would leave an invisible orphan behind.
     """
     candidates: set[int] = set()
-    for bond_id in selected_bond_ids:
+    for bond_id in bonds_to_remove:
         if not (0 <= bond_id < len(bonds)):
             continue
         bond = bonds[bond_id]
@@ -180,7 +186,15 @@ def _orphaned_endpoint_atom_ids(
         if bond is None or bond_id in bonds_to_remove:
             continue
         surviving_bond_atoms.update((bond.a, bond.b))
-    return candidates - surviving_bond_atoms
+    return {
+        atom_id
+        for atom_id in candidates - surviving_bond_atoms
+        if not atom_has_visible_label(atom_id)
+        and not any(
+            id(mark) not in selected_mark_item_ids
+            for mark in marks_by_atom.get(atom_id, ())
+        )
+    }
 
 
 __all__ = [
