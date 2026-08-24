@@ -100,53 +100,6 @@ CANVAS_STATE_PROPERTIES = (
     "selection_outlines",
 )
 
-REMOVED_CANVAS_VIEW_SETTING_PROPERTIES = (
-    "atom_symbol",
-    "active_bond_style",
-    "active_bond_order",
-    "snap_angle_step",
-    "mark_kind",
-    "active_arrow_type",
-    "active_bracket_type",
-    "active_orbital_type",
-    "orbital_phase_enabled",
-    "arrow_line_width",
-    "arrow_head_scale",
-    "text_font_family",
-    "text_font_size",
-    "text_font_weight",
-    "text_italic",
-    "text_color",
-    "text_alignment",
-    "text_line_spacing",
-    "note_box_enabled",
-    "note_box_color",
-    "note_box_alpha",
-    "note_border_enabled",
-    "note_border_color",
-    "note_border_width",
-    "note_padding",
-)
-
-REMOVED_CANVAS_VIEW_HOVER_PROPERTIES = (
-    "hover_items",
-    "hover_atom_id",
-    "hover_bond_id",
-)
-
-REMOVED_CANVAS_VIEW_SELECTION_PROPERTIES = ("selection_outlines",)
-
-REMOVED_CANVAS_VIEW_SMILES_PROPERTIES = ("last_smiles_input",)
-
-REMOVED_CANVAS_VIEW_ATOM_COORDS_PROPERTIES = ("atom_coords_3d",)
-
-REMOVED_CANVAS_VIEW_ATOM_GRAPHICS_PROPERTIES = (
-    "atom_items",
-    "atom_dots",
-)
-
-REMOVED_CANVAS_VIEW_BOND_GRAPHICS_PROPERTIES = ("bond_items",)
-
 REMOVED_CANVAS_VIEW_HIT_SELECTION_WRAPPERS = (
     "scene_pos_from_event",
     "item_at_scene_pos",
@@ -246,17 +199,6 @@ def _direct_canvas_collaborator_violations(source: str) -> list[tuple[int, str]]
     return violations
 
 
-def _canvas_view_state_property_assignments(
-    property_names: tuple[str, ...],
-) -> list[str]:
-    properties = APP_ROOT / "chemvas" / "ui" / "canvas_view_state_properties.py"
-    if not properties.exists():
-        return []
-    names_pattern = "|".join(re.escape(name) for name in property_names)
-    pattern = re.compile(rf"^\s+(?:{names_pattern})\s*=")
-    return _matching_lines(pattern, [properties])
-
-
 def test_production_code_does_not_reach_into_canvas_private_members() -> None:
     pattern = re.compile(
         r"\b(?:canvas|self\.canvas)\._"
@@ -299,63 +241,6 @@ def test_canvas_view_event_overrides_route_to_attached_service_ports() -> None:
     )
 
     assert _matching_lines(pattern, [canvas_view]) == []
-
-
-def test_canvas_view_setting_state_properties_stay_removed() -> None:
-    assert (
-        _canvas_view_state_property_assignments(REMOVED_CANVAS_VIEW_SETTING_PROPERTIES)
-        == []
-    )
-
-
-def test_canvas_view_hover_state_properties_stay_removed() -> None:
-    assert (
-        _canvas_view_state_property_assignments(REMOVED_CANVAS_VIEW_HOVER_PROPERTIES)
-        == []
-    )
-
-
-def test_canvas_view_selection_state_properties_stay_removed() -> None:
-    assert (
-        _canvas_view_state_property_assignments(
-            REMOVED_CANVAS_VIEW_SELECTION_PROPERTIES
-        )
-        == []
-    )
-
-
-def test_canvas_view_smiles_state_properties_stay_removed() -> None:
-    assert (
-        _canvas_view_state_property_assignments(REMOVED_CANVAS_VIEW_SMILES_PROPERTIES)
-        == []
-    )
-
-
-def test_canvas_view_atom_coords_state_properties_stay_removed() -> None:
-    assert (
-        _canvas_view_state_property_assignments(
-            REMOVED_CANVAS_VIEW_ATOM_COORDS_PROPERTIES
-        )
-        == []
-    )
-
-
-def test_canvas_view_atom_graphics_state_properties_stay_removed() -> None:
-    assert (
-        _canvas_view_state_property_assignments(
-            REMOVED_CANVAS_VIEW_ATOM_GRAPHICS_PROPERTIES
-        )
-        == []
-    )
-
-
-def test_canvas_view_bond_graphics_state_properties_stay_removed() -> None:
-    assert (
-        _canvas_view_state_property_assignments(
-            REMOVED_CANVAS_VIEW_BOND_GRAPHICS_PROPERTIES
-        )
-        == []
-    )
 
 
 def test_canvas_view_state_properties_mixin_removed_from_app_code() -> None:
@@ -3589,53 +3474,6 @@ def test_mark_registry_accessor_does_not_read_legacy_canvas_marks_attr() -> None
     assert _matching_lines(pattern, [mark_registry]) == []
 
 
-def test_canvas_state_lookup_does_not_read_legacy_private_state_attrs() -> None:
-    state_lookup = APP_ROOT / "chemvas" / "ui" / "canvas_state_lookup.py"
-    pattern = re.compile(
-        r"\blegacy_name\b|f\"_\{name\}\"|getattr\(\s*canvas\s*,\s*[^)]*legacy"
-    )
-
-    assert _matching_lines(pattern, [state_lookup]) == []
-
-
-def test_canvas_state_lookup_does_not_promote_legacy_private_state_to_public_attrs() -> (
-    None
-):
-    state_lookup = APP_ROOT / "chemvas" / "ui" / "canvas_state_lookup.py"
-    pattern = re.compile(r"\bsetattr\(\s*canvas\s*,\s*public_name\s*,")
-
-    assert _matching_lines(pattern, [state_lookup]) == []
-
-
-def test_canvas_state_lookup_prefers_runtime_state_over_public_state_aliases() -> None:
-    state_lookup = APP_ROOT / "chemvas" / "ui" / "canvas_state_lookup.py"
-    tree = ast.parse(state_lookup.read_text(encoding="utf-8"))
-    function = next(
-        node
-        for node in ast.walk(tree)
-        if isinstance(node, ast.FunctionDef) and node.name == "canvas_state_object"
-    )
-    getattr_lines: list[tuple[str, int]] = []
-
-    for node in ast.walk(function):
-        if not isinstance(node, ast.Call):
-            continue
-        if not isinstance(node.func, ast.Name) or node.func.id != "getattr":
-            continue
-        if len(node.args) < 2:
-            continue
-        target, attr = node.args[:2]
-        if isinstance(target, ast.Name) and target.id == "canvas":
-            if isinstance(attr, ast.Constant) and attr.value == "runtime_state":
-                getattr_lines.append(("runtime_state", node.lineno))
-            elif isinstance(attr, ast.Name) and attr.id == "public_name":
-                getattr_lines.append(("public_name", node.lineno))
-
-    runtime_line = next(line for name, line in getattr_lines if name == "runtime_state")
-    public_line = next(line for name, line in getattr_lines if name == "public_name")
-    assert runtime_line < public_line
-
-
 def test_state_accessors_do_not_refresh_existing_state_from_canvas_attrs() -> None:
     pattern = re.compile(
         r"if state is not None:\s*"
@@ -4179,19 +4017,43 @@ def _canvas_runtime_state_field_names() -> set[str]:
 # Functions whose name looks like a state accessor but which are not one, with
 # the reason each is exempt from reading CanvasRuntimeState.
 NON_RUNTIME_STATE_ACCESSORS = {
-    # The surviving canvas_state_object seam: this accessor still creates its
-    # state and attaches it to the canvas. Converting it belongs to that seam's
-    # own slice, together with the transaction kernel's private copies of the lookup.
-    "document_metadata_state_for",
     # Setter, not an accessor.
-    "set_sheet_setup_state_for",
+    "sheet_setup_state.py:set_sheet_setup_state_for",
     # Whole-canvas snapshot/restore helpers, not a single state field.
-    "snapshot_canvas_state_for",
-    "restore_canvas_state_for",
+    "canvas_window_access.py:snapshot_canvas_state_for",
+    "canvas_window_access.py:restore_canvas_state_for",
     # Applies a captured insert session; does not resolve a container field.
-    "apply_insert_session_state_for",
+    "insert_session_access.py:apply_insert_session_state_for",
     # Serializes one scene item's state, not canvas state.
-    "scene_item_state_for",
+    "scene_item_state_serialization.py:scene_item_state_for",
+}
+
+EXPECTED_RUNTIME_STATE_ACCESSORS = {
+    "atom_coords_access.py:atom_coords_3d_state_for",
+    "canvas_atom_graphics_state.py:atom_graphics_state_for",
+    "canvas_bond_graphics_state.py:bond_graphics_state_for",
+    "canvas_calculation_plan_state.py:calculation_plan_state_for",
+    "canvas_callback_state.py:callback_state_for",
+    "canvas_document_metadata_state.py:document_metadata_state_for",
+    "canvas_graph_state.py:graph_state_for",
+    "canvas_group_state.py:group_state_for",
+    "canvas_history_state.py:history_state_for",
+    "canvas_hover_state.py:hover_state_for",
+    "canvas_insert_state.py:insert_state_for",
+    "canvas_mark_registry.py:mark_registry_for",
+    "canvas_rotation_state.py:rotation_state_for",
+    "canvas_scene_items_state.py:scene_items_state_for",
+    "canvas_smiles_input_state.py:smiles_input_state_for",
+    "canvas_text_style_state.py:text_style_state_for",
+    "canvas_tool_settings_state.py:tool_settings_state_for",
+    "handle_state.py:handle_state_for",
+    "input_view_access.py:input_view_state_for",
+    "scene_clipboard_state.py:scene_clipboard_state_for",
+    "selection_info_state.py:selection_info_state_for",
+    "selection_outline_state.py:selection_outline_state_for",
+    "selection_style_state.py:selection_style_state_for",
+    "sheet_setup_state.py:sheet_setup_state_for",
+    "spatial_index_state.py:spatial_index_state_for",
 }
 
 
@@ -4222,11 +4084,12 @@ def test_state_accessors_read_the_runtime_container_directly() -> None:
                 continue
             if not accessor_name.search(node.name):
                 continue
-            if node.name in NON_RUNTIME_STATE_ACCESSORS:
+            accessor_key = f"{path.name}:{node.name}"
+            if accessor_key in NON_RUNTIME_STATE_ACCESSORS:
                 continue
             body = ast.get_source_segment(source, node) or ""
             names = {match.group("name") for match in runtime_read.finditer(body)}
-            checked.append(f"{path.name}:{node.name}")
+            checked.append(accessor_key)
             if not names:
                 violations.append(
                     f"{path.name}:{node.name} does not read the runtime container"
@@ -4243,10 +4106,10 @@ def test_state_accessors_read_the_runtime_container_directly() -> None:
                 )
 
     assert violations == []
-    # A floor, not an exact count: adding an accessor is fine, but one renamed
-    # out of the `*_state_for` pattern would otherwise leave the enumeration
-    # silently instead of being reported.
-    assert len(checked) >= 24, checked
+    # Keep the inventory exact: a renamed, deleted, or newly introduced state
+    # accessor must update this boundary deliberately instead of falling out of
+    # the name-based enumeration unnoticed.
+    assert set(checked) == EXPECTED_RUNTIME_STATE_ACCESSORS
 
 
 def test_ensure_canvas_state_stays_removed() -> None:

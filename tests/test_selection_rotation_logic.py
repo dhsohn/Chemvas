@@ -4,14 +4,16 @@ import unittest
 from chemvas.domain.document import Atom, Bond
 from chemvas.features.selection import (
     rotated_atom_positions,
-    selected_rotation_atom_ids,
+    selected_atom_ids_with_bond_endpoints,
 )
 from PyQt6.QtCore import QPointF
 
 
 class SelectionRotationLogicTest(unittest.TestCase):
-    def test_selected_rotation_atom_ids_expands_valid_bonds_only(self) -> None:
-        atom_ids = selected_rotation_atom_ids(
+    def test_selected_atom_ids_with_bond_endpoints_expands_valid_bonds_only(
+        self,
+    ) -> None:
+        atom_ids = selected_atom_ids_with_bond_endpoints(
             {1},
             {0, 1, 3, 9},
             bonds=[Bond(2, 3, 1), None, Bond(7, 8, 1), Bond(3, 4, 1)],

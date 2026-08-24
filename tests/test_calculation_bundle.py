@@ -1,7 +1,15 @@
 from __future__ import annotations
 
+from itertools import combinations
+
 import pytest
-from chemvas.domain.document import Atom, Bond, MoleculeModel, serialize_model_state
+from chemvas.domain.document import (
+    Atom,
+    Bond,
+    MoleculeModel,
+    connected_atom_components,
+    serialize_model_state,
+)
 from chemvas.features.calculation_bundle import (
     inspect_components,
     select_component,
@@ -44,6 +52,31 @@ def test_inspect_components_uses_stable_atom_id_order_and_annotation_totals() ->
     assert components[0].bond_count == 1
     assert components[0].radical_electrons == 1
     assert components[1].formal_charge == -1
+
+
+def test_component_inspection_matches_domain_for_every_graph_through_four_nodes() -> (
+    None
+):
+    for node_count in range(5):
+        node_ids = tuple(range(node_count))
+        possible_bonds = tuple(combinations(node_ids, 2))
+        for mask in range(1 << len(possible_bonds)):
+            bond_pairs = tuple(
+                pair for index, pair in enumerate(possible_bonds) if mask & (1 << index)
+            )
+            model = MoleculeModel(
+                atoms={
+                    atom_id: Atom("C", float(atom_id), 0.0)
+                    for atom_id in reversed(node_ids)
+                },
+                bonds=[Bond(first, second) for first, second in reversed(bond_pairs)],
+            )
+
+            inspected = inspect_components(_state(model, []))
+
+            assert tuple(component.atom_ids for component in inspected) == (
+                connected_atom_components(node_ids, bond_pairs)
+            )
 
 
 @pytest.mark.parametrize(

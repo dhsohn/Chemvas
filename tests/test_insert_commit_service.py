@@ -447,6 +447,81 @@ class InsertCommitServiceTest(unittest.TestCase):
             ],
         )
 
+    def test_apply_smiles_commit_plan_preserves_explicit_none_history_predecessor(
+        self,
+    ) -> None:
+        canvas = _FakeCanvas()
+        plan = SmilesCommitPlan(
+            offset=(0.0, 0.0),
+            atoms=[SmilesAtomPlacement(0, "C", 0.0, 0.0, "#111111", False)],
+            bonds=[],
+        )
+
+        applied = apply_smiles_commit_plan(
+            canvas,
+            plan,
+            before_smiles_input=None,
+            after_smiles_input="after",
+        )
+
+        self.assertTrue(applied)
+        self.assertIsNone(canvas.record_calls[0]["before_smiles_input"])
+
+    def test_apply_smiles_commit_plan_restores_explicit_none_on_abort(self) -> None:
+        canvas = _FakeCanvas()
+        plan = SmilesCommitPlan(
+            offset=(0.0, 0.0),
+            atoms=[SmilesAtomPlacement(0, "C", 0.0, 0.0, "#111111", False)],
+            bonds=[],
+        )
+
+        with mock.patch(
+            "chemvas.ui.insert_smiles_commit_service.set_inserted_atom_metadata_for",
+            return_value=False,
+        ):
+            applied = apply_smiles_commit_plan(
+                canvas,
+                plan,
+                before_smiles_input=None,
+                after_smiles_input="after",
+            )
+
+        self.assertFalse(applied)
+        self.assertIsNone(last_smiles_input_for(canvas))
+        self.assertEqual(canvas.record_calls, [])
+
+    def test_apply_smiles_commit_plan_restores_explicit_none_when_capture_fails(
+        self,
+    ) -> None:
+        canvas = _FakeCanvas()
+        original_error = RuntimeError("renderer style failed")
+
+        class PoisonedRenderer:
+            @property
+            def style(self):
+                set_last_smiles_input_for(canvas, "poisoned")
+                raise original_error
+
+        canvas.renderer = PoisonedRenderer()
+        plan = SmilesCommitPlan(
+            offset=(0.0, 0.0),
+            atoms=[SmilesAtomPlacement(0, "C", 0.0, 0.0, "#111111", False)],
+            bonds=[],
+        )
+
+        with self.assertRaises(RuntimeError) as raised:
+            apply_smiles_commit_plan(
+                canvas,
+                plan,
+                before_smiles_input=None,
+                after_smiles_input="after",
+            )
+
+        self.assertIs(raised.exception, original_error)
+        self.assertIsNone(last_smiles_input_for(canvas))
+        self.assertEqual(canvas.model.atoms, {})
+        self.assertEqual(canvas.record_calls, [])
+
     def test_apply_smiles_commit_plan_adds_annotation_marks_to_history(self) -> None:
         canvas = _FakeCanvas()
         plan = SmilesCommitPlan(
@@ -775,15 +850,13 @@ class InsertCommitServiceTest(unittest.TestCase):
         )
         self.assertEqual(canvas.labels, [])
 
-    def test_service_wrapper_delegates_to_module_functions(self) -> None:
+    def test_service_apply_smiles_commit_delegates_to_the_canonical_function(
+        self,
+    ) -> None:
         canvas = _FakeCanvas()
         service = InsertCommitService(canvas)
 
-        self.assertFalse(
-            service.apply_smiles_commit_plan(
-                None, before_smiles_input="before", after_smiles_input="after"
-            )
-        )
+        self.assertFalse(service.apply_smiles_commit(None, after_smiles_input="after"))
 
     def test_service_template_wrappers_rewrite_cursor_delegate_and_handle_none_merge_seed(
         self,
@@ -803,7 +876,7 @@ class InsertCommitServiceTest(unittest.TestCase):
         resolution = TemplateInsertResolution(plan=plan, points=_points(6, start=0.0))
 
         with mock.patch(
-            "chemvas.ui.insert_commit_service.apply_template_commit_resolution",
+            "chemvas.ui.insert_commit_service._apply_template_commit_resolution",
             return_value=True,
         ) as patched:
             applied = service.apply_template_commit(
@@ -818,21 +891,6 @@ class InsertCommitServiceTest(unittest.TestCase):
         self.assertEqual(called_request.cursor_pos, (9.0, 10.0))
         self.assertEqual(patched.call_args.kwargs["before_smiles_input"], "before")
         self.assertEqual(service.bond_merge_seed(None), [])
-
-        with mock.patch(
-            "chemvas.ui.insert_commit_service.apply_template_commit_resolution",
-            return_value=False,
-        ) as patched:
-            self.assertFalse(
-                service.apply_template_commit_resolution(
-                    request,
-                    plan,
-                    resolution,
-                    before_smiles_input="old",
-                    after_smiles_input="new",
-                )
-            )
-        self.assertEqual(patched.call_args.kwargs["after_smiles_input"], "new")
 
     def test_apply_smiles_commit_plan_rejects_duplicate_and_unknown_bond_sources(
         self,
@@ -905,6 +963,35 @@ class InsertCommitServiceTest(unittest.TestCase):
         self.assertEqual(canvas.model.next_atom_id, 0)
         self.assertEqual(last_smiles_input_for(canvas), "before")
         self.assertEqual(canvas.record_calls, [])
+
+    def test_apply_smiles_commit_does_not_retry_a_failed_canonical_abort(self) -> None:
+        canvas = _FakeCanvas()
+        plan = SmilesCommitPlan(
+            offset=(0.0, 0.0),
+            atoms=[SmilesAtomPlacement(0, "C", 0.0, 0.0, "#111111", False)],
+            bonds=[],
+        )
+
+        with (
+            mock.patch(
+                "chemvas.ui.insert_smiles_commit_service.set_inserted_atom_metadata_for",
+                return_value=False,
+            ),
+            mock.patch(
+                "chemvas.ui.structure_build_committer.StructureBuildCommitter."
+                "abort_recorded_change",
+                side_effect=RuntimeError("abort failed"),
+            ) as abort,
+            self.assertRaisesRegex(RuntimeError, "abort failed"),
+        ):
+            apply_smiles_commit_plan(
+                canvas,
+                plan,
+                before_smiles_input="before",
+                after_smiles_input="after",
+            )
+
+        abort.assert_called_once()
 
     def test_apply_template_commit_resolution_rejects_bond_generators_without_bond_id(
         self,

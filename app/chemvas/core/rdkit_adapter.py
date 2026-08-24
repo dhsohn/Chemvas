@@ -73,9 +73,6 @@ class RDKitAdapter:
     def smiles_to_2d(self, smiles: str, scale: float = 40.0) -> MoleculeModel | None:
         return self._import_helper.smiles_to_2d(smiles, scale=scale)
 
-    def model_to_rdkit_with_map(self, model: MoleculeModel):
-        return self.model_to_rdkit_with_map_strict_labels(model)
-
     def model_to_rdkit_with_map_tolerant(self, model: MoleculeModel):
         return self._conversion_helper.model_to_rdkit_with_map_tolerant(model)
 
@@ -85,26 +82,6 @@ class RDKitAdapter:
     def model_to_rdkit_strict_labels(self, model: MoleculeModel):
         return self._conversion_helper.model_to_rdkit_strict_labels(model)
 
-    def model_to_rdkit(self, model: MoleculeModel):
-        return self.model_to_rdkit_strict_labels(model)
-
-    def model_to_rdkit_tolerant(self, model: MoleculeModel):
-        return self._conversion_helper.model_to_rdkit_tolerant(model)
-
-    def suggest_atom_correspondence(
-        self,
-        model: MoleculeModel,
-        reactant_atom_ids: frozenset[int] | set[int],
-        product_atom_ids: frozenset[int] | set[int],
-    ) -> list[tuple[int, int]] | None:
-        result = self.suggest_atom_correspondence_result(
-            model,
-            reactant_atom_ids,
-            product_atom_ids,
-        )
-        self.last_error = result.error
-        return result.value
-
     def suggest_atom_correspondence_result(
         self,
         model: MoleculeModel,
@@ -112,7 +89,7 @@ class RDKitAdapter:
         product_atom_ids: frozenset[int] | set[int],
     ) -> RDKitResult[list[tuple[int, int]]]:
         return self._call_with_result(
-            lambda: self._conversion_helper.suggest_atom_correspondence(
+            lambda: self._conversion_helper._suggest_atom_correspondence(
                 model, reactant_atom_ids, product_atom_ids
             ),
             fallback_error="Failed to suggest an atom correspondence.",
@@ -139,9 +116,6 @@ class RDKitAdapter:
             model,
             atom_annotations=atom_annotations,
         )
-
-    def model_to_3d_coords(self, model: MoleculeModel):
-        return self._conversion_helper.model_to_3d_coords(model)
 
     def model_to_3d_scene(
         self,
@@ -235,9 +209,6 @@ class RDKitAdapter:
 
     def get_name_from_smiles(self, smiles: str) -> str | None:
         return self._import_helper.get_name_from_smiles(smiles)
-
-    def model_to_3d(self, model: MoleculeModel):
-        return self.model_to_3d_coords(model)
 
     def _call_with_result(self, callback, *, fallback_error: str):
         self.last_error = None

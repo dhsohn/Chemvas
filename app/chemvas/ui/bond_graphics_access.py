@@ -15,31 +15,12 @@ def add_bond_graphics_for(canvas, bond_id: int) -> None:
     bond_renderer_for(canvas).add_bond_graphics(bond_id)
 
 
-def _bond_renderer_method(canvas, name: str):
-    renderer = bond_renderer_for(canvas)
-    method = getattr(renderer, name, None)
-    return method if callable(method) else None
-
-
-def _renderer_method(canvas, renderer_name: str):
-    method = _bond_renderer_method(canvas, renderer_name)
-    if method is not None:
-        return method
-    return None
-
-
 def parallel_bond_segments_for(canvas, *args):
-    method = _renderer_method(canvas, "parallel_bond_segments")
-    if method is not None:
-        return method(*args)
-    return []
+    return bond_renderer_for(canvas).parallel_bond_segments(*args)
 
 
 def ring_double_segments_for(canvas, *args):
-    method = _renderer_method(canvas, "ring_double_segments")
-    if method is not None:
-        return method(*args)
-    return None
+    return bond_renderer_for(canvas).ring_double_segments(*args)
 
 
 def line_normal_components(

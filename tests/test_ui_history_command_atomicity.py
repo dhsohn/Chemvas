@@ -22,6 +22,7 @@ from chemvas.ui.history_commands import (
     MoveItemsCommand,
     UngroupSceneItemsCommand,
     UpdateSceneItemCommand,
+    _active_handle_position_snapshots,
 )
 from chemvas.ui.transactions.document import (
     DocumentSavepoint,
@@ -226,7 +227,7 @@ class _Canvas:
 
 
 def _install_scene_runtime_state(canvas: _Canvas) -> None:
-    canvas.scene_items_state = SimpleNamespace(
+    canvas.runtime_state.scene_items_state = SimpleNamespace(
         selected_notes=[],
         ring_items=[],
         note_items=[],
@@ -236,17 +237,32 @@ def _install_scene_runtime_state(canvas: _Canvas) -> None:
         shape_items=[],
         orbital_items=[],
     )
-    canvas.mark_registry = SimpleNamespace(by_atom={})
-    canvas.handle_state = SimpleNamespace(active_handles=[], target=None)
-    canvas.selection_style_state = SimpleNamespace(selected_items=[])
-    canvas.selection_outline_state = SimpleNamespace(outlines=[])
-    canvas.selection_info_state = SimpleNamespace(
+    canvas.runtime_state.mark_registry = SimpleNamespace(by_atom={})
+    canvas.runtime_state.handle_state = SimpleNamespace(active_handles=[], target=None)
+    canvas.runtime_state.selection_style_state = SimpleNamespace(selected_items=[])
+    canvas.runtime_state.selection_outline_state = SimpleNamespace(outlines=[])
+    canvas.runtime_state.selection_info_state = SimpleNamespace(
         signature=(frozenset({1}), frozenset()),
         pending_signature=None,
         cache=("before", "selection"),
         rdkit_warmup_pending=False,
         last_interaction_time=1.0,
     )
+
+
+def test_active_handle_snapshots_ignore_plain_canvas_state_aliases() -> None:
+    runtime_handle = _RawStateSceneItem("runtime-handle")
+    public_handle = _RawStateSceneItem("public-handle")
+    canvas = _Canvas()
+    canvas.runtime_state.handle_state = SimpleNamespace(
+        active_handles=[runtime_handle],
+    )
+    canvas.handle_state = SimpleNamespace(active_handles=[public_handle])
+
+    snapshots = _active_handle_position_snapshots(canvas)
+
+    assert snapshots == [(runtime_handle, runtime_handle.pos())]
+    assert _active_handle_position_snapshots(canvas.handle_state) == []
 
 
 def _restore_scene_item(canvas: _Canvas, item: _SceneItem) -> None:
@@ -261,16 +277,16 @@ def _persistent_outline_failure(canvas: _Canvas):
     old_outline = _SceneItem("old-outline")
     canvas.scene().attach(old_outline)
     outlines = [old_outline]
-    canvas.selection_outline_state.outlines = outlines
+    canvas.runtime_state.selection_outline_state.outlines = outlines
     partial_outlines: list[_SceneItem] = []
 
     def refresh_then_fail(_canvas) -> None:
-        for outline in list(canvas.selection_outline_state.outlines):
+        for outline in list(canvas.runtime_state.selection_outline_state.outlines):
             canvas.scene().detach(outline)
         partial = _SceneItem(f"partial-{len(partial_outlines)}")
         partial_outlines.append(partial)
         canvas.scene().attach(partial)
-        canvas.selection_outline_state.outlines = [partial]
+        canvas.runtime_state.selection_outline_state.outlines = [partial]
         raise RuntimeError("persistent outline rebuild failure")
 
     return old_outline, outlines, partial_outlines, refresh_then_fail
@@ -282,7 +298,7 @@ def _assert_original_outline_restored(
     outlines: list[_SceneItem],
     partial_outlines: list[_SceneItem],
 ) -> None:
-    assert canvas.selection_outline_state.outlines is outlines
+    assert canvas.runtime_state.selection_outline_state.outlines is outlines
     assert outlines == [old_outline]
     assert old_outline.scene() is canvas.scene()
     assert all(partial.scene() is None for partial in partial_outlines)
@@ -370,7 +386,7 @@ def test_exact_scene_snapshot_restores_ring_data_container_and_polygon_identity(
     atom_ids = [7, 8, 9]
     ring = _RingLikeItem(atom_ids)
     canvas.scene().attach(ring)
-    canvas.scene_items_state = SimpleNamespace(ring_items=[ring])
+    canvas.runtime_state.scene_items_state = SimpleNamespace(ring_items=[ring])
     snapshot = DocumentSavepoint.capture(canvas)
 
     atom_ids[:] = [99]
@@ -784,9 +800,9 @@ def test_exact_runtime_collector_reports_list_mark_and_selection_info_failures()
     list_state = ListState()
     registry = MarkRegistry()
     selection_info = SelectionInfo()
-    canvas.scene_items_state = list_state
-    canvas.mark_registry = registry
-    canvas.selection_info_state = selection_info
+    canvas.runtime_state.scene_items_state = list_state
+    canvas.runtime_state.mark_registry = registry
+    canvas.runtime_state.selection_info_state = selection_info
     snapshot = capture_scene_runtime(canvas, strict=True)
 
     list_state.note_items.append("mutated")
@@ -815,6 +831,24 @@ def test_exact_runtime_restore_preserves_preblocked_scene_signal_state() -> None
 
     assert errors == []
     assert canvas.scene().signalsBlocked() is True
+
+
+def test_scene_runtime_capture_ignores_plain_canvas_state_aliases() -> None:
+    canvas = _Canvas()
+    runtime_note_items = ["runtime-before"]
+    public_note_items = ["public-before"]
+    canvas.runtime_state.scene_items_state = SimpleNamespace(
+        note_items=runtime_note_items,
+    )
+    canvas.scene_items_state = SimpleNamespace(note_items=public_note_items)
+    snapshot = capture_scene_runtime(canvas, strict=True)
+
+    runtime_note_items.append("runtime-after")
+    public_note_items.append("public-after")
+
+    assert restore_scene_runtime(snapshot, collect_errors=True) == []
+    assert runtime_note_items == ["runtime-before"]
+    assert public_note_items == ["public-before", "public-after"]
 
 
 def test_history_topology_depths_scale_linearly_for_1k_2k_4k_chains() -> None:
@@ -1267,21 +1301,21 @@ def test_note_remove_failure_restores_collections_selection_and_container_identi
     selected_notes = [note]
     selected_style_items = [note]
     outlines = [_SceneItem("outline")]
-    canvas.scene_items_state.note_items = note_items
-    canvas.scene_items_state.selected_notes = selected_notes
-    canvas.selection_style_state.selected_items = selected_style_items
-    canvas.selection_outline_state.outlines = outlines
+    canvas.runtime_state.scene_items_state.note_items = note_items
+    canvas.runtime_state.scene_items_state.selected_notes = selected_notes
+    canvas.runtime_state.selection_style_state.selected_items = selected_style_items
+    canvas.runtime_state.selection_outline_state.outlines = outlines
     before_order = canvas.scene().items()
-    before_info = vars(canvas.selection_info_state).copy()
+    before_info = vars(canvas.runtime_state.selection_info_state).copy()
 
     def remove_after_registration_mutation(_canvas, item) -> None:
         note_items.remove(item)
         selected_notes.remove(item)
         item.setSelected(False)
-        canvas.selection_style_state.selected_items = []
-        canvas.selection_outline_state.outlines = []
-        canvas.selection_info_state.signature = None
-        canvas.selection_info_state.cache = ("mutated", "selection")
+        canvas.runtime_state.selection_style_state.selected_items = []
+        canvas.runtime_state.selection_outline_state.outlines = []
+        canvas.runtime_state.selection_info_state.signature = None
+        canvas.runtime_state.selection_info_state.cache = ("mutated", "selection")
         raise RuntimeError("note remove failed before detach")
 
     command = DeleteSceneItemsCommand([], [note])
@@ -1300,14 +1334,17 @@ def test_note_remove_failure_restores_collections_selection_and_container_identi
 
     assert canvas.scene().items() == before_order
     assert note.isSelected()
-    assert canvas.scene_items_state.note_items is note_items
+    assert canvas.runtime_state.scene_items_state.note_items is note_items
     assert note_items == [other, note]
-    assert canvas.scene_items_state.selected_notes is selected_notes
+    assert canvas.runtime_state.scene_items_state.selected_notes is selected_notes
     assert selected_notes == [note]
-    assert canvas.selection_style_state.selected_items is selected_style_items
+    assert (
+        canvas.runtime_state.selection_style_state.selected_items
+        is selected_style_items
+    )
     assert selected_style_items == [note]
-    assert canvas.selection_outline_state.outlines is outlines
-    assert vars(canvas.selection_info_state) == before_info
+    assert canvas.runtime_state.selection_outline_state.outlines is outlines
+    assert vars(canvas.runtime_state.selection_info_state) == before_info
 
 
 def test_note_remove_failure_restores_selection_child_visual_state() -> None:
@@ -1319,8 +1356,8 @@ def test_note_remove_failure_restores_selection_child_visual_state() -> None:
     canvas.scene().attach(selection_box)
     selected_notes = [note]
     note_items = [note]
-    canvas.scene_items_state.selected_notes = selected_notes
-    canvas.scene_items_state.note_items = note_items
+    canvas.runtime_state.scene_items_state.selected_notes = selected_notes
+    canvas.runtime_state.scene_items_state.note_items = note_items
 
     def remove_after_selection_box_mutation(_canvas, item) -> None:
         selected_notes.remove(item)
@@ -1346,9 +1383,9 @@ def test_note_remove_failure_restores_selection_child_visual_state() -> None:
     ):
         command.redo(canvas)
 
-    assert canvas.scene_items_state.selected_notes is selected_notes
+    assert canvas.runtime_state.scene_items_state.selected_notes is selected_notes
     assert selected_notes == [note]
-    assert canvas.scene_items_state.note_items is note_items
+    assert canvas.runtime_state.scene_items_state.note_items is note_items
     assert note_items == [note]
     assert selection_box.isVisible()
     assert selection_box.rect_value == "before-rect"
@@ -1367,8 +1404,8 @@ def test_mark_remove_failure_restores_registry_nested_lists_and_mapping_identity
     mark_items = [mark]
     marks_for_atom = [mark]
     by_atom = {7: marks_for_atom}
-    canvas.scene_items_state.mark_items = mark_items
-    canvas.mark_registry.by_atom = by_atom
+    canvas.runtime_state.scene_items_state.mark_items = mark_items
+    canvas.runtime_state.mark_registry.by_atom = by_atom
 
     def remove_after_registry_mutation(_canvas, item) -> None:
         mark_items.remove(item)
@@ -1390,9 +1427,9 @@ def test_mark_remove_failure_restores_registry_nested_lists_and_mapping_identity
     ):
         command.undo(canvas)
 
-    assert canvas.scene_items_state.mark_items is mark_items
+    assert canvas.runtime_state.scene_items_state.mark_items is mark_items
     assert mark_items == [mark]
-    assert canvas.mark_registry.by_atom is by_atom
+    assert canvas.runtime_state.mark_registry.by_atom is by_atom
     assert by_atom[7] is marks_for_atom
     assert marks_for_atom == [mark]
     assert mark.scene() is canvas.scene()
@@ -1411,23 +1448,23 @@ def test_handle_target_remove_failure_restores_handles_scene_order_and_container
     for item in (target, first_handle, second_handle, other):
         canvas.scene().attach(item)
     target_collection = [target]
-    setattr(canvas.scene_items_state, collection_name, target_collection)
+    setattr(canvas.runtime_state.scene_items_state, collection_name, target_collection)
     active_handles = [first_handle, second_handle]
-    canvas.handle_state.active_handles = active_handles
-    canvas.handle_state.target = target
+    canvas.runtime_state.handle_state.active_handles = active_handles
+    canvas.runtime_state.handle_state.target = target
     selected_style_items = [target]
-    canvas.selection_style_state.selected_items = selected_style_items
+    canvas.runtime_state.selection_style_state.selected_items = selected_style_items
     before_order = canvas.scene().items()
 
     def remove_after_handle_clear(_canvas, item) -> None:
         target_collection.remove(item)
         canvas.scene().detach(first_handle)
         canvas.scene().detach(second_handle)
-        canvas.handle_state.active_handles = []
-        canvas.handle_state.target = None
+        canvas.runtime_state.handle_state.active_handles = []
+        canvas.runtime_state.handle_state.target = None
         target.pen_value = "normal"
         target.original_pen = None
-        canvas.selection_style_state.selected_items = []
+        canvas.runtime_state.selection_style_state.selected_items = []
         raise RuntimeError("target remove failed before detach")
 
     command = DeleteSceneItemsCommand([], [target])
@@ -1445,12 +1482,18 @@ def test_handle_target_remove_failure_restores_handles_scene_order_and_container
         command.redo(canvas)
 
     assert canvas.scene().items() == before_order
-    assert getattr(canvas.scene_items_state, collection_name) is target_collection
+    assert (
+        getattr(canvas.runtime_state.scene_items_state, collection_name)
+        is target_collection
+    )
     assert target_collection == [target]
-    assert canvas.handle_state.active_handles is active_handles
+    assert canvas.runtime_state.handle_state.active_handles is active_handles
     assert active_handles == [first_handle, second_handle]
-    assert canvas.handle_state.target is target
-    assert canvas.selection_style_state.selected_items is selected_style_items
+    assert canvas.runtime_state.handle_state.target is target
+    assert (
+        canvas.runtime_state.selection_style_state.selected_items
+        is selected_style_items
+    )
     assert selected_style_items == [target]
     assert target.pen_value == "highlight"
     assert target.original_pen == "normal"
@@ -1982,19 +2025,19 @@ def test_update_scene_item_restores_old_outline_objects_when_refresh_rebuild_fai
     old_outline = _SceneItem("old-outline")
     canvas.scene().attach(old_outline)
     outlines = [old_outline]
-    canvas.selection_outline_state.outlines = outlines
+    canvas.runtime_state.selection_outline_state.outlines = outlines
     partial_outlines: list[_SceneItem] = []
 
     def apply_state(_canvas, _item, state) -> None:
         canvas.value = state["value"]
 
     def refresh_then_fail(_canvas) -> None:
-        for outline in list(canvas.selection_outline_state.outlines):
+        for outline in list(canvas.runtime_state.selection_outline_state.outlines):
             canvas.scene().detach(outline)
         partial = _SceneItem(f"partial-{len(partial_outlines)}")
         partial_outlines.append(partial)
         canvas.scene().attach(partial)
-        canvas.selection_outline_state.outlines = [partial]
+        canvas.runtime_state.selection_outline_state.outlines = [partial]
         raise RuntimeError("outline rebuild failed after clear")
 
     command = UpdateSceneItemCommand("item", {"value": 1}, {"value": 2})
@@ -2012,7 +2055,7 @@ def test_update_scene_item_restores_old_outline_objects_when_refresh_rebuild_fai
         command.redo(canvas)
 
     assert canvas.value == 1
-    assert canvas.selection_outline_state.outlines is outlines
+    assert canvas.runtime_state.selection_outline_state.outlines is outlines
     assert outlines == [old_outline]
     assert canvas.scene().items() == [old_outline]
     assert all(partial.scene() is None for partial in partial_outlines)

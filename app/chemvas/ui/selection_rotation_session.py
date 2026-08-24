@@ -8,7 +8,7 @@ from PyQt6.QtCore import QPointF
 
 from chemvas.features.selection import (
     bounding_box_center_for_atoms,
-    selected_rotation_atom_ids,
+    selected_atom_ids_with_bond_endpoints,
 )
 from chemvas.ui.atom_coords_access import (
     atom_coords_3d_for,
@@ -236,7 +236,7 @@ def begin_selection_rotation_session(
             atom_ids,
             ports.selected_scene_items(),
         )
-        rotation_atom_ids = selected_rotation_atom_ids(
+        rotation_atom_ids = selected_atom_ids_with_bond_endpoints(
             explicit_atom_ids,
             bond_ids,
             bonds=ports.bonds,

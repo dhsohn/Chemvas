@@ -59,6 +59,13 @@ if TYPE_CHECKING:
     from chemvas.ui.canvas_view import CanvasView
 
 
+class _UnsetBeforeSmilesInput:
+    pass
+
+
+_UNSET_BEFORE_SMILES_INPUT = _UnsetBeforeSmilesInput()
+
+
 def _add_build_rollback_note(
     original_error: BaseException,
     cleanup_error: BaseException,
@@ -85,10 +92,15 @@ class StructureBuildCommitter:
     def begin_recorded_change(
         self,
         *,
-        before_smiles_input: str | None = None,
+        before_smiles_input: str | None | _UnsetBeforeSmilesInput = (
+            _UNSET_BEFORE_SMILES_INPUT
+        ),
     ) -> StructureBuildHistorySnapshot:
-        if before_smiles_input is None:
-            before_smiles_input = last_smiles_input_for(self.canvas)
+        resolved_before_smiles_input = (
+            last_smiles_input_for(self.canvas)
+            if isinstance(before_smiles_input, _UnsetBeforeSmilesInput)
+            else before_smiles_input
+        )
         history_service = history_service_for_access(self.canvas)
         smiles_authority = capture_smiles_input_restore_authority(self.canvas)
         before_next_atom_id = insert_next_atom_id_for(self.canvas)
@@ -105,7 +117,7 @@ class StructureBuildCommitter:
             )
         except Exception as error:
             capture_baseline = StructureBuildHistorySnapshot(
-                before_smiles_input=before_smiles_input,
+                before_smiles_input=resolved_before_smiles_input,
                 before_next_atom_id=before_next_atom_id,
                 before_bond_count=before_bond_count,
                 before_scene_items=before_scene_items,
@@ -125,7 +137,7 @@ class StructureBuildCommitter:
                 )
             except Exception as model_cleanup_error:
                 cleanup_errors.append(model_cleanup_error)
-            smiles_result = smiles_authority.restore(before_smiles_input)
+            smiles_result = smiles_authority.restore(resolved_before_smiles_input)
             cleanup_errors.extend(smiles_result.errors)
             if not smiles_result.authoritative and not smiles_result.errors:
                 cleanup_errors.append(
@@ -140,7 +152,7 @@ class StructureBuildCommitter:
             raise
 
         snapshot = StructureBuildHistorySnapshot(
-            before_smiles_input=before_smiles_input,
+            before_smiles_input=resolved_before_smiles_input,
             before_next_atom_id=before_next_atom_id,
             before_bond_count=before_bond_count,
             before_scene_items=before_scene_items,
@@ -224,6 +236,7 @@ class StructureBuildCommitter:
         self,
         snapshot: StructureBuildHistorySnapshot,
         *,
+        added_scene_items: list | None = None,
         original_error: BaseException | None = None,
     ) -> None:
         """Best-effort rollback for a recorded build.
@@ -237,7 +250,12 @@ class StructureBuildCommitter:
 
         cleanup_errors: list[BaseException] = []
         try:
-            cleanup_errors.extend(self._remove_new_scene_items(snapshot))
+            cleanup_errors.extend(
+                self._remove_new_scene_items(
+                    snapshot,
+                    added_scene_items=added_scene_items,
+                )
+            )
         except Exception as error:
             cleanup_errors.append(error)
         try:
@@ -332,7 +350,10 @@ class StructureBuildCommitter:
         return merged
 
     def _remove_new_scene_items(
-        self, snapshot: StructureBuildHistorySnapshot
+        self,
+        snapshot: StructureBuildHistorySnapshot,
+        *,
+        added_scene_items: list | None = None,
     ) -> list[BaseException]:
         errors: list[BaseException] = []
         try:
@@ -340,7 +361,11 @@ class StructureBuildCommitter:
         except AttributeError:
             scene_item_controller = None
         canonical_remove = getattr(scene_item_controller, "remove_scene_item", None)
-        for item in reversed(self._new_scene_items_since(snapshot)):
+        new_scene_items = self._merged_added_scene_items(
+            snapshot,
+            added_scene_items,
+        )
+        for item in reversed(new_scene_items or []):
             if callable(canonical_remove):
                 try:
                     remove_scene_item(self.canvas, item)

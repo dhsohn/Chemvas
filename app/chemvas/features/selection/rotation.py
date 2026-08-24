@@ -1,29 +1,11 @@
 from __future__ import annotations
 
 import math
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Iterable, Mapping
 
 from PyQt6.QtCore import QPointF
 
-from chemvas.domain.document import Atom, Bond
-
-
-def selected_rotation_atom_ids(
-    atom_ids: Iterable[int],
-    bond_ids: Iterable[int],
-    *,
-    bonds: Sequence[Bond | None],
-) -> set[int]:
-    expanded = set(atom_ids)
-    for bond_id in bond_ids:
-        if not (0 <= bond_id < len(bonds)):
-            continue
-        bond = bonds[bond_id]
-        if bond is None:
-            continue
-        expanded.add(bond.a)
-        expanded.add(bond.b)
-    return expanded
+from chemvas.domain.document import Atom
 
 
 def rotated_atom_positions(
@@ -49,4 +31,4 @@ def rotated_atom_positions(
     return rotated
 
 
-__all__ = ["rotated_atom_positions", "selected_rotation_atom_ids"]
+__all__ = ["rotated_atom_positions"]

@@ -13,9 +13,11 @@ from chemvas.features.insertion import (
     TemplateInsertResolution,
 )
 from chemvas.ui.canvas_smiles_input_state import last_smiles_input_for
-from chemvas.ui.insert_smiles_commit_service import apply_smiles_commit_plan
+from chemvas.ui.insert_smiles_commit_service import (
+    apply_smiles_commit_plan as _apply_smiles_commit_plan,
+)
 from chemvas.ui.insert_template_commit_service import (
-    apply_template_commit_resolution,
+    apply_template_commit_resolution as _apply_template_commit_resolution,
 )
 from chemvas.ui.insert_template_commit_service import (
     bond_merge_seed as template_bond_merge_seed,
@@ -37,26 +39,12 @@ class InsertCommitService:
         before_smiles_input: str | None = None,
         after_smiles_input: str | None,
     ) -> bool:
-        return apply_smiles_commit_plan(
+        return _apply_smiles_commit_plan(
             self.canvas,
             plan,
             before_smiles_input=last_smiles_input_for(self.canvas)
             if before_smiles_input is None
             else before_smiles_input,
-            after_smiles_input=after_smiles_input,
-        )
-
-    def apply_smiles_commit_plan(
-        self,
-        plan: SmilesCommitPlan | None,
-        *,
-        before_smiles_input: str | None,
-        after_smiles_input: str | None,
-    ) -> bool:
-        return apply_smiles_commit_plan(
-            self.canvas,
-            plan,
-            before_smiles_input=before_smiles_input,
             after_smiles_input=after_smiles_input,
         )
 
@@ -78,7 +66,7 @@ class InsertCommitService:
                 ring_style=request.ring_style,
                 atom_id=request.atom_id,
             )
-        return apply_template_commit_resolution(
+        return _apply_template_commit_resolution(
             self.canvas,
             request,
             plan,
@@ -90,33 +78,10 @@ class InsertCommitService:
             bond_exists=self.bond_exists,
         )
 
-    def apply_template_commit_resolution(
-        self,
-        request: TemplateInsertRequest,
-        plan: TemplateInsertPlan,
-        resolution: TemplateInsertResolution | None,
-        *,
-        before_smiles_input: str | None,
-        after_smiles_input: str | None = None,
-    ) -> bool:
-        return apply_template_commit_resolution(
-            self.canvas,
-            request,
-            plan,
-            resolution,
-            before_smiles_input=before_smiles_input,
-            after_smiles_input=after_smiles_input,
-            bond_exists=self.bond_exists,
-        )
-
     def bond_merge_seed(self, bond_id: int | None) -> list[tuple[int, float, float]]:
         if bond_id is None:
             return []
         return template_bond_merge_seed(self.canvas, bond_id)
 
 
-__all__ = [
-    "InsertCommitService",
-    "apply_smiles_commit_plan",
-    "apply_template_commit_resolution",
-]
+__all__ = ["InsertCommitService"]

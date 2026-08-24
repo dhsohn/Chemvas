@@ -14,13 +14,6 @@ def selection_service_from_canvas(canvas):
     return selection_service_for_access(canvas)
 
 
-def optional_selection_service_from_canvas(canvas):
-    try:
-        return selection_service_from_canvas(canvas)
-    except AttributeError:
-        return None
-
-
 def _selection_service_method_for(canvas, name: str):
     return optional_canvas_service_method(canvas, selection_service_for_access, name)
 
@@ -100,7 +93,6 @@ def select_single_structure_item_for(canvas, item) -> bool:
 
 __all__ = [
     "clear_note_selection_for",
-    "optional_selection_service_from_canvas",
     "refresh_selection_outline_for",
     "select_note_for",
     "select_single_structure_item_for",

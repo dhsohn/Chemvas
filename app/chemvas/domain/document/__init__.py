@@ -15,7 +15,9 @@ from .calculation_plan import (
     CalculationStepEndpoint,
     calculation_plan_from_state,
     calculation_plan_to_state,
+    included_atom_ids,
 )
+from .graph import connected_atom_components
 from .model import Atom, Bond, MoleculeModel
 from .state import (
     CANVAS_FILE_VERSION,
@@ -70,8 +72,10 @@ __all__ = [
     "build_document_payload",
     "calculation_plan_from_state",
     "calculation_plan_to_state",
+    "connected_atom_components",
     "deserialize_model_state",
     "extract_document_state",
+    "included_atom_ids",
     "is_document_number",
     "is_hex_color",
     "model_bond_pairs",

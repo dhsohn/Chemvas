@@ -4,30 +4,24 @@ from collections import deque
 from collections.abc import Iterable, Mapping, Sequence
 from typing import Any
 
+from chemvas.domain.document import connected_atom_components
+
 
 def connected_components_for_nodes(
     atom_ids: set[int],
     adjacency: Mapping[int, Iterable[int]],
 ) -> list[set[int]]:
-    if not atom_ids:
-        return []
-    remaining = set(atom_ids)
-    components = []
-    while remaining:
-        start = remaining.pop()
-        stack = [start]
-        comp = {start}
-        while stack:
-            current = stack.pop()
-            for neighbor in adjacency.get(current, ()):
-                if neighbor not in atom_ids:
-                    continue
-                if neighbor in remaining:
-                    remaining.remove(neighbor)
-                    comp.add(neighbor)
-                    stack.append(neighbor)
-        components.append(comp)
-    return components
+    return [
+        set(component)
+        for component in connected_atom_components(
+            atom_ids,
+            (
+                (atom_id, neighbor)
+                for atom_id in atom_ids
+                for neighbor in adjacency.get(atom_id, ())
+            ),
+        )
+    ]
 
 
 def reachable_component_without_edge(

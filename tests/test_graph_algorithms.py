@@ -1,5 +1,7 @@
+from itertools import combinations
 from types import SimpleNamespace
 
+from chemvas.domain.document import connected_atom_components
 from chemvas.ui.graph_algorithms import (
     adjacency_for_bonds,
     connected_components_for_nodes,
@@ -12,6 +14,33 @@ from chemvas.ui.graph_algorithms import (
 
 def _bond(a: int, b: int) -> SimpleNamespace:
     return SimpleNamespace(a=a, b=b)
+
+
+def _union_find_components(
+    nodes: tuple[int, ...], edges: tuple[tuple[int, int], ...]
+) -> tuple[tuple[int, ...], ...]:
+    parents = list(nodes)
+
+    def root(node: int) -> int:
+        while parents[node] != node:
+            parents[node] = parents[parents[node]]
+            node = parents[node]
+        return node
+
+    for first, second in edges:
+        first_root = root(first)
+        second_root = root(second)
+        if first_root != second_root:
+            parents[second_root] = first_root
+    groups: dict[int, list[int]] = {}
+    for node in nodes:
+        groups.setdefault(root(node), []).append(node)
+    return tuple(
+        sorted(
+            (tuple(group) for group in groups.values()),
+            key=lambda component: component[0],
+        )
+    )
 
 
 def test_find_rings_returns_ordered_single_ring_for_simple_cycle() -> None:
@@ -107,12 +136,35 @@ def test_connected_components_for_nodes_filters_to_requested_atom_ids() -> None:
         5: {4},
     }
 
-    components = {
-        frozenset(component)
-        for component in connected_components_for_nodes({1, 2, 4, 9}, adjacency)
-    }
+    components = connected_components_for_nodes({1, 2, 4, 9}, adjacency)
 
-    assert components == {frozenset({1, 2}), frozenset({4}), frozenset({9})}
+    assert components == [{1, 2}, {4}, {9}]
+
+
+def test_domain_and_ui_components_match_every_undirected_graph_through_five_nodes() -> (
+    None
+):
+    for node_count in range(6):
+        nodes = tuple(range(node_count))
+        possible_edges = tuple(combinations(nodes, 2))
+        for mask in range(1 << len(possible_edges)):
+            edges = tuple(
+                edge for index, edge in enumerate(possible_edges) if mask & (1 << index)
+            )
+            expected = _union_find_components(nodes, edges)
+            adjacency = {node: set() for node in nodes}
+            for first, second in edges:
+                adjacency[first].add(second)
+                adjacency[second].add(first)
+
+            canonical = connected_atom_components(reversed(nodes), reversed(edges))
+            ui_components = connected_components_for_nodes(set(nodes), adjacency)
+
+            assert canonical == expected
+            assert (
+                tuple(tuple(sorted(component)) for component in ui_components)
+                == expected
+            )
 
 
 def test_reachability_helpers_can_skip_one_direct_edge() -> None:

@@ -1,10 +1,32 @@
 from __future__ import annotations
 
-from typing import Any
+from collections.abc import Callable
+from typing import Any, Protocol
 
 from PyQt6.QtCore import QObject, pyqtSignal
 
-from chemvas.features.insertion import model_with_atom_annotations
+from chemvas.features.insertion import (
+    Molecule3DScene,
+    MoleculeIdentifiers,
+    RDKitResult,
+    model_with_atom_annotations,
+)
+
+
+class Preview3DAdapter(Protocol):
+    last_error: str | None
+
+    def is_loaded(self) -> bool: ...
+
+    def preload(self) -> bool: ...
+
+    def compute_identifiers(self, model: Any) -> MoleculeIdentifiers: ...
+
+    def model_to_3d_scene_result(
+        self,
+        model: Any,
+        atom_annotations: Any = None,
+    ) -> RDKitResult[Molecule3DScene]: ...
 
 
 class Preview3DWorker(QObject):
@@ -13,11 +35,11 @@ class Preview3DWorker(QObject):
     def __init__(
         self,
         request_id: int,
-        rdkit_adapter: Any,
+        rdkit_adapter: Preview3DAdapter | None,
         model: Any,
         atom_annotations: Any,
         *,
-        rdkit_adapter_factory=None,
+        rdkit_adapter_factory: Callable[[], Preview3DAdapter] | None = None,
     ) -> None:
         super().__init__()
         self._request_id = request_id
@@ -40,6 +62,7 @@ class Preview3DWorker(QObject):
             else self._rdkit
         )
         try:
+            assert rdkit is not None
             identifier_model = model_with_atom_annotations(
                 self._model, self._atom_annotations
             )
@@ -49,23 +72,11 @@ class Preview3DWorker(QObject):
             smiles = identifiers.smiles
             inchi = identifiers.inchi
             inchikey = identifiers.inchikey
-            result_method = getattr(rdkit, "model_to_3d_scene_result", None)
-            if callable(result_method):
-                result = result_method(
-                    self._model, atom_annotations=self._atom_annotations
-                )
-                scene = result.value
-                error = result.error
-            else:
-                scene = rdkit.model_to_3d_scene(
-                    self._model,
-                    atom_annotations=self._atom_annotations,
-                )
-                if scene is None:
-                    error = (
-                        getattr(rdkit, "last_error", None)
-                        or "Failed to build 3D preview."
-                    )
+            result = rdkit.model_to_3d_scene_result(
+                self._model, atom_annotations=self._atom_annotations
+            )
+            scene = result.value
+            error = result.error
         except Exception as exc:
             error = str(exc) or "Failed to build 3D preview."
         self.finished.emit(
@@ -73,4 +84,4 @@ class Preview3DWorker(QObject):
         )
 
 
-__all__ = ["Preview3DWorker"]
+__all__ = ["Preview3DAdapter", "Preview3DWorker"]

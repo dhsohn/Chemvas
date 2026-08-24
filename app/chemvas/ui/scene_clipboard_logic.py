@@ -14,6 +14,7 @@ from chemvas.domain.document import (
     validate_clipboard_selection_payload,
 )
 from chemvas.domain.json_io import strict_json_loads
+from chemvas.features.selection import selected_atom_ids_with_bond_endpoints
 
 CLIPBOARD_SELECTION_FORMAT = "chemvas-selection"
 MAX_CLIPBOARD_SELECTION_PAYLOAD_BYTES = 8 * 1024 * 1024
@@ -25,23 +26,6 @@ def _item_in_scene(item: QGraphicsItem, scene) -> bool:
         return item.scene() is scene
     except RuntimeError:
         return False
-
-
-def _selection_atom_ids(
-    explicit_atom_ids: set[int],
-    selected_bond_ids: set[int],
-    bonds: Sequence[Bond | None],
-) -> set[int]:
-    atom_ids = set(explicit_atom_ids)
-    for bond_id in selected_bond_ids:
-        if not (0 <= bond_id < len(bonds)):
-            continue
-        bond = bonds[bond_id]
-        if bond is None:
-            continue
-        atom_ids.add(bond.a)
-        atom_ids.add(bond.b)
-    return atom_ids
 
 
 def _serialize_atoms(
@@ -166,7 +150,11 @@ def build_selection_clipboard_payload(
 ) -> dict | None:
     if type(version) is not int or version != CLIPBOARD_SELECTION_VERSION:
         raise ValueError("Unsupported Chemvas clipboard selection version.")
-    atom_ids = _selection_atom_ids(explicit_atom_ids, selected_bond_ids, bonds)
+    atom_ids = selected_atom_ids_with_bond_endpoints(
+        explicit_atom_ids,
+        selected_bond_ids,
+        bonds=bonds,
+    )
     atoms = _serialize_atoms(atom_ids, atom_state_getter)
     serialized_bonds = _serialize_bonds(atom_ids, bonds, bond_state_getter)
     rings = _serialize_rings(ring_items, atom_ids, scene, scene_item_state_getter)

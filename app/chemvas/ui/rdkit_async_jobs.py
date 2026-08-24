@@ -3,17 +3,28 @@ from __future__ import annotations
 import contextlib
 import logging
 import os
+from collections.abc import Callable
 from pathlib import Path
+from typing import Any, Protocol
 
 from PyQt6.QtCore import QObject, QThread, pyqtSignal, pyqtSlot
 
 from chemvas.core.document_io import atomic_write_text, atomic_write_via_temp
+from chemvas.features.insertion import RDKitResult
 from chemvas.ui.rdkit_export_job_state import (
     RDKitExportJob,
     rdkit_export_job_registry,
 )
 
 logger = logging.getLogger(__name__)
+
+
+class XYZExportAdapter(Protocol):
+    def model_to_xyz_block_result(
+        self,
+        model: Any,
+        atom_annotations: Any = None,
+    ) -> RDKitResult[str]: ...
 
 
 class XYZExportWorker(QObject):
@@ -23,12 +34,12 @@ class XYZExportWorker(QObject):
 
     def __init__(
         self,
-        rdkit_adapter,
-        model,
-        atom_annotations,
+        rdkit_adapter: XYZExportAdapter | None,
+        model: Any,
+        atom_annotations: Any,
         path: str,
         *,
-        rdkit_adapter_factory=None,
+        rdkit_adapter_factory: Callable[[], XYZExportAdapter] | None = None,
     ) -> None:
         super().__init__()
         self._rdkit = rdkit_adapter
@@ -45,19 +56,12 @@ class XYZExportWorker(QObject):
             else self._rdkit
         )
         try:
-            result_method = getattr(rdkit, "model_to_xyz_block_result", None)
-            if callable(result_method):
-                result = result_method(
-                    self._model, atom_annotations=self._atom_annotations
-                )
-                xyz_block = result.value
-                error = result.error
-            else:
-                xyz_block = rdkit.model_to_xyz_block(
-                    self._model,
-                    atom_annotations=self._atom_annotations,
-                )
-                error = getattr(rdkit, "last_error", None)
+            assert rdkit is not None
+            result = rdkit.model_to_xyz_block_result(
+                self._model, atom_annotations=self._atom_annotations
+            )
+            xyz_block = result.value
+            error = result.error
             if xyz_block is None:
                 message = error or "Failed to export 3D XYZ."
                 self.result = (False, message)
@@ -167,13 +171,13 @@ def xyz_export_coordinator() -> XYZExportCoordinator:
 def export_xyz_in_thread(
     owner: QObject,
     *,
-    rdkit_adapter,
-    model,
-    atom_annotations,
+    rdkit_adapter: XYZExportAdapter,
+    model: Any,
+    atom_annotations: Any,
     path: str,
-    on_success,
-    on_error,
-    rdkit_adapter_factory=None,
+    on_success: Callable[[str], None],
+    on_error: Callable[[str], None],
+    rdkit_adapter_factory: Callable[[], XYZExportAdapter] | None = None,
 ) -> None:
     coordinator = xyz_export_coordinator()
     job = coordinator.registry.reserve(

@@ -21,7 +21,6 @@ from chemvas.domain.transactions import (
     add_recovery_error_note as _add_rollback_error_note,
 )
 from chemvas.ui.canvas_scene_items_state import SCENE_ITEM_COLLECTION_ATTRS
-from chemvas.ui.canvas_state_lookup import canvas_state_object
 from chemvas.ui.scene_item_access import (
     create_scene_item_from_state as _create_scene_item_from_state,
 )
@@ -48,24 +47,17 @@ def _snapshot_attribute(
     return getattr(target, name, _MISSING_SNAPSHOT_ATTRIBUTE)
 
 
-def _snapshot_canvas_state_object(
+def _snapshot_runtime_state_object(
     canvas,
     name: str,
     *,
     strict: bool,
 ) -> object | None:
-    if not strict:
-        return canvas_state_object(canvas, name)
-    public_name = name[1:] if name.startswith("_") else name
-    runtime_state = _snapshot_attribute(canvas, "runtime_state", strict=True)
-    if runtime_state is not _MISSING_SNAPSHOT_ATTRIBUTE and runtime_state is not None:
-        state = _snapshot_attribute(runtime_state, public_name, strict=True)
-        if state is not _MISSING_SNAPSHOT_ATTRIBUTE and state is not None:
-            return state
-    state = _snapshot_attribute(canvas, public_name, strict=True)
-    if state is _MISSING_SNAPSHOT_ATTRIBUTE:
+    runtime_state = _snapshot_attribute(canvas, "runtime_state", strict=strict)
+    if runtime_state is _MISSING_SNAPSHOT_ATTRIBUTE or runtime_state is None:
         return None
-    return state
+    state = _snapshot_attribute(runtime_state, name, strict=strict)
+    return None if state is _MISSING_SNAPSHOT_ATTRIBUTE else state
 
 
 def run_rollback_step(
@@ -419,7 +411,7 @@ def _bond_primitive_graphics_snapshots(
     strict: bool = False,
     bond_ids: frozenset[int] | None = None,
 ) -> tuple[BondPrimitiveGraphicsSnapshot, ...]:
-    state = _snapshot_canvas_state_object(
+    state = _snapshot_runtime_state_object(
         canvas,
         "bond_graphics_state",
         strict=strict,
@@ -453,7 +445,7 @@ def capture_atom_primitive_graphics(
     strict: bool = False,
     atom_ids: frozenset[int] | None = None,
 ) -> tuple[BondPrimitiveGraphicsSnapshot, ...]:
-    state = _snapshot_canvas_state_object(
+    state = _snapshot_runtime_state_object(
         canvas,
         "atom_graphics_state",
         strict=strict,
@@ -945,7 +937,7 @@ def capture_scene_runtime(
             )
 
     list_attributes: list[_ListAttributeSnapshot] = []
-    scene_items_state = _snapshot_canvas_state_object(
+    scene_items_state = _snapshot_runtime_state_object(
         canvas,
         "scene_items_state",
         strict=strict,
@@ -958,7 +950,7 @@ def capture_scene_runtime(
         )
         if snapshot is not None:
             list_attributes.append(snapshot)
-    handle_state = _snapshot_canvas_state_object(
+    handle_state = _snapshot_runtime_state_object(
         canvas,
         "handle_state",
         strict=strict,
@@ -970,7 +962,7 @@ def capture_scene_runtime(
     )
     if handle_snapshot is not None:
         list_attributes.append(handle_snapshot)
-    selection_style_state = _snapshot_canvas_state_object(
+    selection_style_state = _snapshot_runtime_state_object(
         canvas,
         "selection_style_state",
         strict=strict,
@@ -986,7 +978,7 @@ def capture_scene_runtime(
     )
     if selected_items_snapshot is not None:
         list_attributes.append(selected_items_snapshot)
-    selection_outline_state = _snapshot_canvas_state_object(
+    selection_outline_state = _snapshot_runtime_state_object(
         canvas,
         "selection_outline_state",
         strict=strict,
@@ -999,7 +991,7 @@ def capture_scene_runtime(
     if outlines_snapshot is not None:
         list_attributes.append(outlines_snapshot)
 
-    selection_info_state = _snapshot_canvas_state_object(
+    selection_info_state = _snapshot_runtime_state_object(
         canvas,
         "selection_info_state",
         strict=strict,
@@ -1049,7 +1041,7 @@ def capture_scene_runtime(
         selection_visuals=selection_visuals,
         list_attributes=list_attributes,
         mark_registry=_mark_registry_snapshot(
-            _snapshot_canvas_state_object(
+            _snapshot_runtime_state_object(
                 canvas,
                 "mark_registry",
                 strict=strict,
@@ -1075,18 +1067,6 @@ def _item_parent(item, *, strict: bool = False):
     try:
         return parent_method()
     except RuntimeError:
-        if strict:
-            raise
-        return None
-
-
-def _item_z_value(item, *, strict: bool = False) -> float | None:
-    z_method = _snapshot_attribute(item, "zValue", strict=strict)
-    if not callable(z_method):
-        return None
-    try:
-        return float(z_method())
-    except (RuntimeError, TypeError, ValueError):
         if strict:
             raise
         return None

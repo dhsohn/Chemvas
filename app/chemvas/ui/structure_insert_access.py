@@ -41,7 +41,6 @@ from chemvas.ui.history_canvas_access import (
 )
 from chemvas.ui.history_recording_access import record_additions_for
 from chemvas.ui.scene_item_access import remove_item_from_canvas_scene
-from chemvas.ui.selection_style_access import restore_selection_from_ids_for
 from chemvas.ui.structure_mutation_access import (
     add_atom_for,
     add_benzene_ring_for,
@@ -193,12 +192,6 @@ def add_insert_ring_from_points_for(
         elements=elements,
         merge=merge,
     )
-
-
-def restore_insert_selection_from_ids_for(
-    canvas, atom_ids: set[int], bond_ids: set[int]
-) -> None:
-    restore_selection_from_ids_for(canvas, atom_ids, bond_ids)
 
 
 def rollback_insert_mutation_for(
@@ -403,7 +396,6 @@ __all__ = [
     "insert_next_atom_id_for",
     "new_insert_bond_ids_from",
     "record_insert_additions_for",
-    "restore_insert_selection_from_ids_for",
     "rollback_insert_mutation_for",
     "set_inserted_atom_annotation_for",
     "set_inserted_atom_metadata_for",

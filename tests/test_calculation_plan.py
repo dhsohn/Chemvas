@@ -16,6 +16,7 @@ from chemvas.domain.document import (
     calculation_plan_from_state,
     calculation_plan_to_state,
     extract_document_state,
+    included_atom_ids,
     model_bond_pairs,
     serialize_model_state,
     serialize_settings,
@@ -25,10 +26,14 @@ from chemvas.features.calculation_bundle import (
     calculation_plan_report,
     calculation_step_by_id,
     correspondence_readiness,
+    fill_correspondence_gaps,
     path_precheck,
     require_step_ready,
     select_calculation_state,
     validate_calculation_plan,
+)
+from chemvas.features.calculation_bundle import (
+    included_atom_ids as feature_included_atom_ids,
 )
 
 
@@ -126,6 +131,78 @@ def _plan(*, complete_mapping: bool = True) -> dict[str, object]:
             }
         ],
     }
+
+
+def test_feature_reexports_the_domain_included_atom_id_policy() -> None:
+    state = CalculationState(
+        "R01",
+        0,
+        1,
+        (
+            CalculationStateMember((7, 2), "included"),
+            CalculationStateMember((9,), "context_only"),
+        ),
+    )
+
+    assert feature_included_atom_ids is included_atom_ids
+    assert included_atom_ids(state) == {2, 7}
+
+
+def test_correspondence_gap_fill_preserves_all_mapping_safety_policies() -> None:
+    original = {0: None, 1: 11, 99: 10}
+    atom_elements = {
+        0: "C",
+        1: "O",
+        2: "N",
+        3: "C",
+        10: "C",
+        11: "O",
+        12: "C",
+        13: "N",
+        90: "C",
+    }
+
+    filled, applied = fill_correspondence_gaps(
+        original,
+        (
+            (0, 10),  # an inactive stashed mapping must not reserve product 10
+            (1, 12),  # never overwrite an existing mapping
+            (2, 10),  # never reuse the product accepted for reactant 0
+            (2, 12),  # never map different elements
+            (2, 13),
+            (3, 90),  # ignore candidates outside the active product endpoint
+        ),
+        active_reactant_ids={0, 1, 2, 3},
+        active_product_ids={10, 11, 12, 13},
+        replaceable_reactant_ids={0, 1, 2, 3},
+        atom_elements=atom_elements,
+    )
+
+    assert original == {0: None, 1: 11, 99: 10}
+    assert filled == {0: 10, 1: 11, 2: 13, 99: 10}
+    assert applied == 2
+
+
+def test_correspondence_gap_fill_only_changes_explicitly_replaceable_gaps() -> None:
+    preserved, preserved_count = fill_correspondence_gaps(
+        {0: None},
+        ((0, 0),),
+        active_reactant_ids={0},
+        active_product_ids={0},
+        replaceable_reactant_ids=set(),
+    )
+    replaced, replaced_count = fill_correspondence_gaps(
+        {0: None},
+        ((0, 0),),
+        active_reactant_ids={0},
+        active_product_ids={0},
+        replaceable_reactant_ids={0},
+    )
+
+    assert preserved == {0: None}
+    assert preserved_count == 0
+    assert replaced == {0: 0}
+    assert replaced_count == 1
 
 
 def test_v7_document_round_trips_calculation_plan_v2_and_v6_rejects_it() -> None:

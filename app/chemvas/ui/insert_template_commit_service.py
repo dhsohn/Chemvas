@@ -75,7 +75,11 @@ def apply_template_commit_resolution(
 
     points = [QPointF(x, y) for x, y in resolution.points]
     committer = StructureBuildCommitter(canvas)
-    snapshot = committer.begin_recorded_change(before_smiles_input=before_smiles_input)
+    snapshot = (
+        committer.begin_recorded_change()
+        if before_smiles_input is None
+        else committer.begin_recorded_change(before_smiles_input=before_smiles_input)
+    )
 
     try:
         if plan.generator in {

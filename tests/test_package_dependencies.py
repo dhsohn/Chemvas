@@ -5,6 +5,7 @@ import os
 import subprocess
 import sys
 from dataclasses import dataclass
+from functools import cache
 from pathlib import Path
 
 CHEMVAS_ROOT = Path(__file__).resolve().parents[1] / "app" / "chemvas"
@@ -160,7 +161,8 @@ def _resolved_from_module(
     return ".".join(parts)
 
 
-def _import_edges() -> list[ImportEdge]:
+@cache
+def _import_edges() -> tuple[ImportEdge, ...]:
     module_paths = {
         _module_name(path): path for path in sorted(CHEMVAS_ROOT.rglob("*.py"))
     }
@@ -192,7 +194,28 @@ def _import_edges() -> list[ImportEdge]:
             for dependency in dependencies:
                 if dependency:
                     edges.append(ImportEdge(source, dependency, path, node.lineno))
-    return edges
+    return tuple(edges)
+
+
+def _feature_public_api_violations(
+    edges: tuple[ImportEdge, ...],
+) -> tuple[ImportEdge, ...]:
+    violations: list[ImportEdge] = []
+    for edge in edges:
+        dependency_parts = edge.dependency.split(".")
+        if len(dependency_parts) <= 3 or dependency_parts[:2] != [
+            "chemvas",
+            "features",
+        ]:
+            continue
+
+        feature_package = ".".join(dependency_parts[:3])
+        if edge.source == feature_package or edge.source.startswith(
+            f"{feature_package}."
+        ):
+            continue
+        violations.append(edge)
+    return tuple(violations)
 
 
 def _layer(module: str) -> str | None:
@@ -213,6 +236,13 @@ def test_target_layer_packages_exist() -> None:
         for path in CHEMVAS_ROOT.iterdir()
         if path.is_dir() and (path / "__init__.py").is_file()
     } >= TARGET_LAYERS
+
+
+def test_import_edge_inventory_is_cached_and_immutable() -> None:
+    edges = _import_edges()
+
+    assert isinstance(edges, tuple)
+    assert _import_edges() is edges
 
 
 def test_target_layer_dependency_direction() -> None:
@@ -418,48 +448,35 @@ def test_concrete_adapters_are_known_only_by_adapters_and_bootstrap() -> None:
     assert violations == []
 
 
-def test_cross_feature_imports_use_package_public_api() -> None:
-    violations: list[str] = []
-    for edge in _import_edges():
-        source_parts = edge.source.split(".")
-        dependency_parts = edge.dependency.split(".")
-        if len(source_parts) < 3 or source_parts[:2] != ["chemvas", "features"]:
-            continue
-        if (
-            len(dependency_parts) <= 3
-            or dependency_parts[:2] != ["chemvas", "features"]
-            or dependency_parts[2] == source_parts[2]
-        ):
-            continue
-        violations.append(_formatted(edge))
-
-    assert violations == []
-
-
-def test_export_callers_use_feature_public_api() -> None:
-    export_package = "chemvas.features.export"
+def test_feature_callers_use_package_public_api() -> None:
     violations = [
-        _formatted(edge)
-        for edge in _import_edges()
-        if not (
-            edge.source == export_package
-            or edge.source.startswith(f"{export_package}.")
-        )
-        and edge.dependency.startswith(f"{export_package}.")
+        _formatted(edge) for edge in _feature_public_api_violations(_import_edges())
     ]
 
     assert violations == []
 
 
-def test_hover_callers_use_feature_public_api() -> None:
-    hover_package = "chemvas.features.hover"
-    violations = [
-        _formatted(edge)
-        for edge in _import_edges()
-        if not (
-            edge.source == hover_package or edge.source.startswith(f"{hover_package}.")
-        )
-        and edge.dependency.startswith(f"{hover_package}.")
-    ]
+def test_feature_public_api_guard_rejects_internal_module_imports() -> None:
+    path = CHEMVAS_ROOT / "adapters" / "qt" / "renderer.py"
+    public_import = ImportEdge(
+        source="chemvas.adapters.qt.renderer",
+        dependency="chemvas.features.rendering",
+        path=path,
+        line=8,
+    )
+    private_import = ImportEdge(
+        source="chemvas.adapters.qt.renderer",
+        dependency="chemvas.features.rendering.acs1996_style",
+        path=path,
+        line=8,
+    )
+    same_feature_import = ImportEdge(
+        source="chemvas.features.rendering.bond_geometry",
+        dependency="chemvas.features.rendering.bond_style",
+        path=CHEMVAS_ROOT / "features" / "rendering" / "bond_geometry.py",
+        line=10,
+    )
 
-    assert violations == []
+    assert _feature_public_api_violations(
+        (public_import, private_import, same_feature_import)
+    ) == (private_import,)

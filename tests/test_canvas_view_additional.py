@@ -108,9 +108,8 @@ if QApplication is not None:
         record_bond_update_for,
     )
     from chemvas.ui.move_access import shift_selection_outlines_for
-    from chemvas.ui.note_item_access import update_note_box_for
     from chemvas.ui.note_selection_box import update_note_selection_box_for
-    from chemvas.ui.pick_radius_access import atom_pick_radius_for
+    from chemvas.ui.pick_radius_access import atom_pick_radius_for, bond_pick_radius_for
     from chemvas.ui.scene_decoration_access import (
         add_arrow_for,
         add_mark_for,
@@ -1427,15 +1426,19 @@ class CanvasViewAdditionalTest(unittest.TestCase):
             ring_item, color, alpha=0.5
         )
 
-    def test_pick_radius_and_nearest_hit_helpers_cover_missing_and_success_paths(
-        self,
-    ) -> None:
+    def test_pick_radius_helpers_require_the_canonical_renderer_style(self) -> None:
         radius_view = SimpleNamespace(
             renderer=SimpleNamespace(
                 style=SimpleNamespace(bond_line_width=1.0, bond_length_px=20.0)
             )
         )
         self.assertEqual(atom_pick_radius_for(radius_view), 6.4)
+        self.assertEqual(bond_pick_radius_for(radius_view), 10.56)
+
+        with self.assertRaises(AttributeError):
+            atom_pick_radius_for(SimpleNamespace())
+        with self.assertRaises(AttributeError):
+            bond_pick_radius_for(SimpleNamespace(renderer=SimpleNamespace()))
 
     def test_style_and_text_setting_helpers_guard_inputs_and_apply_presets(
         self,
@@ -1632,7 +1635,7 @@ class CanvasViewAdditionalTest(unittest.TestCase):
 
         set_text_style_for(note_view, "note_box_enabled", False)
         set_text_style_for(note_view, "note_border_enabled", False)
-        update_note_box_for(note_view, item)
+        canvas_services_for(note_view).interaction.note_controller.update_note_box(item)
         self.assertFalse(item.data(20).isVisible())
 
     def test_find_bond_near_uses_hit_testing_service(self) -> None:
