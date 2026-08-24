@@ -4213,3 +4213,32 @@ def test_write_only_tool_setting_surfaces_stay_removed() -> None:
     pattern = re.compile(r"\b(?:curved_symmetry|TOOL_SETTING_ATTRS)\b")
 
     assert _matching_lines(pattern, _app_python_files()) == []
+
+
+def test_access_ports_without_a_production_caller_stay_removed() -> None:
+    """Ten ``*_access`` wrappers only the tests ever called.
+
+    Each one forwarded to a service the production code already reaches
+    directly, so the wrapper was a second door nobody walked through.
+    ``bold_bond_width_for`` is not ``renderer_bold_bond_width_for``, which is
+    live and stays.
+    """
+    removed_ports = (
+        "rebuild_graphics_for",
+        "scale_qpoints_to_bond_length",
+        "mark_offset_from_click_for",
+        "visible_label_rect_for_atom_for",
+        "mark_clearance_for_kind_for",
+        "label_cut_radius_for_atom_for",
+        "build_selected_structure_payload_for",
+        "selection_signature_for",
+        "add_benzene_template_for",
+        "bold_bond_width_for",
+        "clear_canvas_scene_item_map",
+        "clear_canvas_scene_item_list_map",
+    )
+    pattern = re.compile(
+        rf"\b(?:{'|'.join(re.escape(name) for name in removed_ports)})\b"
+    )
+
+    assert _matching_lines(pattern, _app_python_files()) == []

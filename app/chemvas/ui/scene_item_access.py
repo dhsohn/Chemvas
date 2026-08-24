@@ -226,14 +226,6 @@ def clear_scene_item_list_map(scene, item_map: dict) -> dict:
     return {}
 
 
-def clear_canvas_scene_item_map(canvas, item_map: dict) -> dict:
-    return clear_scene_item_map(canvas_scene_for(canvas), item_map)
-
-
-def clear_canvas_scene_item_list_map(canvas, item_map: dict) -> dict:
-    return clear_scene_item_list_map(canvas_scene_for(canvas), item_map)
-
-
 __all__ = [
     "add_item_to_canvas_scene",
     "apply_scene_item_state",
@@ -243,8 +235,6 @@ __all__ = [
     "canvas_scene_for",
     "canvas_scene_for_item_operation",
     "clear_canvas_scene",
-    "clear_canvas_scene_item_list_map",
-    "clear_canvas_scene_item_map",
     "clear_scene_item_list_map",
     "clear_scene_item_map",
     "create_scene_item_from_state",

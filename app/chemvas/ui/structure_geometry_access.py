@@ -10,7 +10,6 @@ from chemvas.core.template_geometry import (
     cyclohexane_chair_points,
     regular_ring_radius,
     ring_points,
-    scale_points_to_bond_length,
 )
 from chemvas.features.insertion import ring_polygon_points_for_bond
 from chemvas.ui.canvas_model_access import (
@@ -54,19 +53,6 @@ def template_geometry_result(
         return None
     points, merge = result
     return qpoints_from_pairs(points), merge
-
-
-def scale_qpoints_to_bond_length(
-    points: list[QPointF],
-    center: QPointF,
-    bond_length: float,
-) -> list[QPointF]:
-    scaled = scale_points_to_bond_length(
-        point_pairs(points),
-        (center.x(), center.y()),
-        bond_length,
-    )
-    return qpoints_from_pairs(scaled)
 
 
 def atom_point_for(canvas, atom_id: int) -> QPointF:
@@ -265,7 +251,6 @@ __all__ = [
     "regular_ring_radius_for",
     "ring_points_for",
     "ring_polygon_points_for_bond_for",
-    "scale_qpoints_to_bond_length",
     "sprout_bond_endpoint_for",
     "template_geometry_result",
     "template_points_for_bond_for",

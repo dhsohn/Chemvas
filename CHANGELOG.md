@@ -55,6 +55,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   everywhere. The `curved_symmetry` field, which nothing ever read, and the
   unused `TOOL_SETTING_ATTRS` tuple went with them; the four snap fields the
   handle code still reads stayed.
+- **Ten `*_access` ports with no production caller.** `rebuild_graphics_for`,
+  `scale_qpoints_to_bond_length`, `mark_offset_from_click_for`,
+  `visible_label_rect_for_atom_for`, `mark_clearance_for_kind_for`,
+  `label_cut_radius_for_atom_for`, `build_selected_structure_payload_for`,
+  `selection_signature_for`, `add_benzene_template_for` and
+  `bold_bond_width_for` each forwarded to a service the application already
+  reaches directly, so the wrapper was a second door nobody used. Two scene
+  helpers, `clear_canvas_scene_item_map` and
+  `clear_canvas_scene_item_list_map`, lost their only production caller with
+  `rebuild_graphics_for` and went too. The live
+  `renderer_bold_bond_width_for` — a different function with a similar name —
+  is untouched.
 
 ## [0.4.1] - 2026-08-20
 

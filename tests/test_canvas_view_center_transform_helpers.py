@@ -53,7 +53,6 @@ if QApplication is not None:
         qpoints_from_pairs,
         regular_ring_radius_for,
         ring_points_for,
-        scale_qpoints_to_bond_length,
         template_geometry_result,
     )
 
@@ -252,19 +251,10 @@ class CanvasViewCenterTransformHelpersTest(unittest.TestCase):
         chair_points = cyclohexane_chair_points_for(view, QPointF(0.0, 0.0))
         boat_points = cyclohexane_boat_points_for(view, QPointF(0.0, 0.0))
         ring_points = ring_points_for(view, QPointF(0.0, 0.0), 6)
-        scaled_points = scale_qpoints_to_bond_length(
-            [QPointF(0.0, 0.0), QPointF(10.0, 0.0)],
-            QPointF(5.0, 0.0),
-            20.0,
-        )
 
         self.assertTrue(all(isinstance(point, QPointF) for point in chair_points))
         self.assertTrue(all(isinstance(point, QPointF) for point in boat_points))
         self.assertEqual(len(ring_points), 6)
-        self.assertEqual(
-            [(point.x(), point.y()) for point in scaled_points],
-            [(-5.0, 0.0), (15.0, 0.0)],
-        )
 
     def test_template_geometry_helpers_cover_none_result_and_pair_conversions(
         self,

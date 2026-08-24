@@ -1,10 +1,6 @@
 import os
 import unittest
-from types import SimpleNamespace
 from unittest import mock
-
-from tests.runtime_services import canvas_runtime_services
-from tests.runtime_state import canvas_runtime_state
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -14,19 +10,6 @@ except ModuleNotFoundError:
     QApplication = None
 
 if QApplication is not None:
-    from chemvas.ui.canvas_atom_graphics_state import (
-        CanvasAtomGraphicsState,
-        atom_dots_for,
-        atom_items_for,
-        set_atom_dots_for,
-        set_atom_items_for,
-    )
-    from chemvas.ui.canvas_bond_graphics_state import (
-        CanvasBondGraphicsState,
-        bond_items_for,
-        set_bond_items_for,
-    )
-    from chemvas.ui.canvas_model_access import rebuild_graphics_for
     from chemvas.ui.scene_item_access import (
         clear_scene_item_list_map,
         clear_scene_item_map,
@@ -47,42 +30,6 @@ class CanvasViewSceneOpsRebuildTest(unittest.TestCase):
     def setUpClass(cls) -> None:
         cls.app = QApplication.instance() or QApplication([])
         cls.app.setQuitOnLastWindowClosed(False)
-
-    def test_rebuild_graphics_removes_scene_items_and_rerenders_model(self) -> None:
-        bond_a = object()
-        bond_b = object()
-        atom_label = object()
-        atom_dot = object()
-        scene = _FakeScene()
-        view = SimpleNamespace(
-            scene=lambda: scene,
-            services=canvas_runtime_services(
-                structure_build_service=SimpleNamespace(render_model=mock.Mock())
-            ),
-            runtime_state=canvas_runtime_state(
-                atom_graphics_state=CanvasAtomGraphicsState(),
-                bond_graphics_state=CanvasBondGraphicsState(),
-            ),
-        )
-        set_atom_items_for(view, {3: atom_label})
-        set_atom_dots_for(view, {4: atom_dot})
-        set_bond_items_for(view, {1: [bond_a, bond_b], 2: []})
-
-        rebuild_graphics_for(view)
-
-        self.assertEqual(
-            scene.removeItem.call_args_list,
-            [
-                mock.call(bond_a),
-                mock.call(bond_b),
-                mock.call(atom_label),
-                mock.call(atom_dot),
-            ],
-        )
-        self.assertEqual(bond_items_for(view), {})
-        self.assertEqual(atom_items_for(view), {})
-        self.assertEqual(atom_dots_for(view), {})
-        view.services.structure.structure_build_service.render_model.assert_called_once_with()
 
     def test_scene_item_clear_helpers_remove_items_and_return_empty_maps(self) -> None:
         scene = _FakeScene()

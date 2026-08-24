@@ -23,13 +23,13 @@ if QApplication is not None:
     from chemvas.ui.canvas_scene_decoration_build_service import (
         CanvasSceneDecorationBuildService,
     )
+    from chemvas.ui.canvas_service_ports import mark_scene_service_for_access
     from chemvas.ui.canvas_tool_settings_state import CanvasToolSettingsState
     from chemvas.ui.graphics_items import AtomDotItem, AtomLabelItem
     from chemvas.ui.mark_item_access import (
         build_mark_item_for,
         mark_center_for,
         mark_center_for_pointer_for,
-        mark_offset_from_click_for,
         mark_selection_radius_for,
         remove_mark_item_for,
         remove_marks_for_atom_for,
@@ -130,7 +130,9 @@ class CanvasViewMarkHelperTest(unittest.TestCase):
             CanvasMarkSceneService(view)
         )
 
-        offset = mark_offset_from_click_for(view, 7, QPointF(10.0, 20.0), kind="minus")
+        offset = mark_scene_service_for_access(view).mark_offset_from_click(
+            7, QPointF(10.0, 20.0), kind="minus"
+        )
 
         expected = 12.5 / math.sqrt(2.0)
         self.assertAlmostEqual(offset.x(), expected)
@@ -163,7 +165,9 @@ class CanvasViewMarkHelperTest(unittest.TestCase):
             CanvasMarkSceneService(view)
         )
 
-        offset = mark_offset_from_click_for(view, 7, QPointF(13.0, 24.0))
+        offset = mark_scene_service_for_access(view).mark_offset_from_click(
+            7, QPointF(13.0, 24.0)
+        )
 
         self.assertAlmostEqual(offset.x(), 6.0)
         self.assertAlmostEqual(offset.y(), 8.0)
@@ -239,10 +243,6 @@ class CanvasViewMarkHelperTest(unittest.TestCase):
             ),
             mark_item,
         )
-        self.assertEqual(
-            mark_offset_from_click_for(view, 7, QPointF(12.0, 13.0), kind="minus"),
-            offset,
-        )
         remove_mark_item_for(view, mark_item)
         remove_marks_for_atom_for(view, 7)
         self.assertEqual(
@@ -252,9 +252,6 @@ class CanvasViewMarkHelperTest(unittest.TestCase):
 
         scene_service.add_mark_for_atom.assert_called_once_with(
             7, QPointF(12.0, 13.0), kind="minus", record=False
-        )
-        scene_service.mark_offset_from_click.assert_called_once_with(
-            7, QPointF(12.0, 13.0), kind="minus"
         )
         scene_service.remove_mark_item.assert_called_once_with(mark_item)
         scene_service.remove_marks_for_atom.assert_called_once_with(7)

@@ -53,15 +53,6 @@ def remove_marks_for_atom_for(canvas, atom_id: int) -> None:
         return
 
 
-def mark_offset_from_click_for(
-    canvas, atom_id: int, click_pos, *, kind: str | None = None
-):
-    mark_offset_from_click = _mark_scene_method(canvas, "mark_offset_from_click")
-    if mark_offset_from_click is not None:
-        return mark_offset_from_click(atom_id, click_pos, kind=kind)
-    return click_pos
-
-
 def mark_center_for_pointer_for(canvas, pos, atom_id: int | None, *, kind: str | None):
     mark_center_for_pointer = _mark_scene_method(canvas, "mark_center_for_pointer")
     if mark_center_for_pointer is not None:
@@ -97,7 +88,6 @@ __all__ = [
     "mark_center_for",
     "mark_center_for_pointer_for",
     "mark_kinds_by_atom_for",
-    "mark_offset_from_click_for",
     "mark_selection_radius_for",
     "remove_mark_item_for",
     "remove_marks_for_atom_for",

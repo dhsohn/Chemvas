@@ -6,7 +6,6 @@ from chemvas.ui.renderer_style_access import (
     atom_font_for,
     atom_label_offset_px_for,
     bold_bond_pen_for,
-    bold_bond_width_for,
     bond_color_for,
     bond_length_pt_for,
     bond_length_px_for,
@@ -69,7 +68,6 @@ def test_renderer_style_accessors_return_renderer_style_values() -> None:
     assert atom_font_for(canvas) == "atom-font"
     assert atom_label_offset_px_for(canvas) == 2.5
     assert bold_bond_pen_for(canvas) == "bold-pen"
-    assert bold_bond_width_for(canvas) == 4.0
     assert bond_color_for(canvas) == "#222222"
     assert bond_length_pt_for(canvas) == 18.0
     assert bond_length_px_for(canvas) == 24.0

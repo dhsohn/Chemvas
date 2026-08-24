@@ -160,7 +160,6 @@ if QApplication is not None:
         SelectionStyleState,
     )
     from chemvas.ui.structure_build_access import (
-        add_benzene_template_for,
         fuse_benzene_to_bond_for,
         fuse_chair_to_bond_for,
         fuse_regular_ring_to_bond_for,
@@ -1062,24 +1061,6 @@ class CanvasViewAdditionalTest(unittest.TestCase):
         build_service.build_orbital_items.assert_called_once_with(
             QPointF(45.0, 46.0), "sp2"
         )
-
-    def test_add_benzene_template_uses_viewport_scene_center(self) -> None:
-        center = QPointF(12.0, 13.0)
-        structure_build_service = mock.Mock()
-        view = SimpleNamespace(
-            services=canvas_runtime_services(
-                structure_build_service=structure_build_service
-            ),
-            viewport=lambda: SimpleNamespace(
-                rect=lambda: SimpleNamespace(center=lambda: QPointF(2.0, 3.0))
-            ),
-            mapToScene=mock.Mock(return_value=center),
-        )
-
-        add_benzene_template_for(view)
-
-        view.mapToScene.assert_called_once()
-        structure_build_service.add_benzene_ring.assert_called_once_with(center)
 
     def test_insert_controller_public_api_methods_are_callable(self) -> None:
         insert_controller = mock.Mock()

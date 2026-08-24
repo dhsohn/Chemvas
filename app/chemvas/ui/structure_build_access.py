@@ -2,18 +2,12 @@ from __future__ import annotations
 
 from chemvas.ui.canvas_service_access import optional_canvas_service_method
 from chemvas.ui.canvas_service_ports import structure_build_service_for_access
-from chemvas.ui.input_view_access import viewport_center_scene_pos_for
 
 
 def _service_method(canvas, name: str):
     return optional_canvas_service_method(
         canvas, structure_build_service_for_access, name
     )
-
-
-def add_benzene_template_for(canvas) -> None:
-    center = viewport_center_scene_pos_for(canvas)
-    structure_build_service_for_access(canvas).add_benzene_ring(center)
 
 
 def sprout_bond_from_atom_for(
@@ -67,7 +61,6 @@ def fuse_chair_to_bond_for(canvas, bond_id: int, *, mirrored: bool = False) -> N
 
 
 __all__ = [
-    "add_benzene_template_for",
     "fuse_benzene_to_bond_for",
     "fuse_chair_to_bond_for",
     "fuse_regular_ring_to_bond_for",

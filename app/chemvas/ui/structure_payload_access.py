@@ -50,13 +50,6 @@ def build_selected_3d_conversion_payload_for(
     )
 
 
-def build_selected_structure_payload_for(
-    canvas,
-) -> tuple[MoleculeModel, dict[int, dict[str, int]], tuple[float, float, float, float]]:
-    atom_ids, bond_ids = selected_structure_ids_for(canvas, require_non_empty=True)
-    return build_structure_payload_for(canvas, atom_ids, bond_ids)
-
-
 def build_structure_payload_for(
     canvas,
     atom_ids: set[int],
@@ -78,6 +71,5 @@ def build_structure_payload_for(
 __all__ = [
     "build_3d_conversion_payload_for",
     "build_selected_3d_conversion_payload_for",
-    "build_selected_structure_payload_for",
     "build_structure_payload_for",
 ]

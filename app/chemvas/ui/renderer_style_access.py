@@ -63,10 +63,6 @@ def bond_spacing_px_for(canvas: Any) -> float:
     return renderer_style_for(canvas).bond_spacing_px
 
 
-def bold_bond_width_for(canvas: Any) -> float:
-    return renderer_style_for(canvas).bold_bond_width
-
-
 def hash_spacing_px_for(canvas: Any) -> float:
     return renderer_style_for(canvas).hash_spacing_px
 
@@ -112,7 +108,6 @@ __all__ = [
     "atom_font_for",
     "atom_label_offset_px_for",
     "bold_bond_pen_for",
-    "bold_bond_width_for",
     "bond_color_for",
     "bond_length_pt_for",
     "bond_length_px_for",
