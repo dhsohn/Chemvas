@@ -14,7 +14,6 @@ class MainWindowTabAssembly:
 def build_canvas_tab_assembly(
     parent,
     *,
-    on_canvas_tab_moved: Callable,
     on_canvas_tab_changed: Callable,
     on_canvas_tab_close_requested: Callable,
 ) -> MainWindowTabAssembly:
@@ -22,7 +21,6 @@ def build_canvas_tab_assembly(
     canvas_tabs.setObjectName("canvasTabs")
     canvas_tabs.setTabPosition(QTabWidget.TabPosition.South)
     canvas_tabs.setDocumentMode(False)
-    canvas_tabs.setMovable(True)
     canvas_tabs.setTabsClosable(True)
     tab_bar = canvas_tabs.tabBar()
     assert tab_bar is not None
@@ -31,7 +29,6 @@ def build_canvas_tab_assembly(
     # Single-document-per-window model: each window holds one canvas and the tab
     # strip is hidden. "New canvas" / "open" spawn separate windows instead.
     tab_bar.setVisible(False)
-    tab_bar.tabMoved.connect(on_canvas_tab_moved)
     canvas_tabs.currentChanged.connect(on_canvas_tab_changed)
     canvas_tabs.tabCloseRequested.connect(on_canvas_tab_close_requested)
     canvas_tabs.setParent(parent)

@@ -9,9 +9,6 @@ class MainWindowCanvasTabUIService:
     ) -> None:
         self._close_canvas_tab_for_window = close_canvas_tab_for_window
 
-    def on_canvas_tab_moved(self, window, from_index: int, to_index: int) -> None:
-        del window, from_index, to_index
-
     def close_canvas_tab(self, window, index: int) -> None:
         self._close_canvas_tab_for_window(window, index)
 

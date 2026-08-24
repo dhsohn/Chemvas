@@ -32,7 +32,6 @@ class MainWindowTabSetupTest(unittest.TestCase):
         self.addCleanup(window.close)
         assembly = build_canvas_tab_assembly(
             window,
-            on_canvas_tab_moved=mock.Mock(),
             on_canvas_tab_changed=mock.Mock(),
             on_canvas_tab_close_requested=mock.Mock(),
         )
@@ -44,7 +43,7 @@ class MainWindowTabSetupTest(unittest.TestCase):
             assembly.canvas_tabs.tabPosition(), QTabWidget.TabPosition.South
         )
         self.assertFalse(assembly.canvas_tabs.documentMode())
-        self.assertTrue(assembly.canvas_tabs.isMovable())
+        self.assertFalse(assembly.canvas_tabs.isMovable())
         self.assertTrue(assembly.canvas_tabs.tabsClosable())
         self.assertFalse(assembly.canvas_tabs.tabBar().expanding())
         self.assertFalse(assembly.canvas_tabs.tabBar().drawBase())

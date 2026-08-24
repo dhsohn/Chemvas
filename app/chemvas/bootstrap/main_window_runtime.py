@@ -39,9 +39,6 @@ def build_main_window_runtime(
     ui_refs = MainWindowUiReferences()
     services = build_services()
 
-    def on_canvas_tab_moved(from_index: int, to_index: int) -> None:
-        services.canvas_tab_ui_service.on_canvas_tab_moved(window, from_index, to_index)
-
     def on_canvas_tab_changed(index: int) -> None:
         services.active_canvas_ui_service.on_canvas_tab_changed(window, index)
 
@@ -50,7 +47,6 @@ def build_main_window_runtime(
 
     tab_assembly = build_tabs(
         window,
-        on_canvas_tab_moved=on_canvas_tab_moved,
         on_canvas_tab_changed=on_canvas_tab_changed,
         on_canvas_tab_close_requested=on_canvas_tab_close_requested,
     )

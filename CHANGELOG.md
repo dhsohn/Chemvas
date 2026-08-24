@@ -88,6 +88,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `_try_restore_observer_ports`, `viewport_center_scene_pos_for`,
   `renderer_bold_bond_width_for`, `CANVAS_TEMPLATE_TOOL_FIELDS`,
   `CANVAS_TEMPLATE_TEXT_FIELDS`, `has_design_icon` — are untouched.
+- **The QMenu population path in `MainWindowToolRoutingService`.** Nothing in
+  the application called `populate_template_menu`, `populate_arrow_menu`, or
+  `populate_palette_menu`: the context bar page factories draw the same
+  template, arrow, and palette entries directly. Following the cascade to its
+  fixed point also retired `add_menu_action`, `palette_icon`,
+  `template_entries`, `acs_color_palette`,
+  `activate_arrow_type_from_menu`, `activate_arrow_preset_from_menu`, and the
+  stranded `build_template_entries`. `apply_color_preset` and
+  `apply_ring_fill_preset` stay — the panel toolbar routes through them — as do
+  `ARROW_MENU_SPECS`, `ARROW_PRESET_SPECS`, `COLOR_PALETTE_SPECS`,
+  `icon_arrow_preview` and `icon_template_preview`.
+- **The canvas tab reorder wiring.** Each window holds a single canvas and the
+  tab strip is hidden, so `tabMoved` was connected to a handler that discarded
+  its arguments. The handler, the closure and parameter that carried it, and
+  the `setMovable(True)` call are gone: canvas tabs are no longer marked
+  movable. Nothing was reorderable in practice, since the strip is not drawn.
 
 ## [0.4.1] - 2026-08-20
 

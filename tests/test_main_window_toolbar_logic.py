@@ -4,7 +4,6 @@ from chemvas.ui.main_window_toolbar_logic import (
     arrow_preset_from_label,
     arrow_type_from_label,
     bond_style_from_label,
-    build_template_entries,
     orbital_type_from_label,
     tool_action_key_for_canvas_state,
     tool_display_name,
@@ -12,31 +11,6 @@ from chemvas.ui.main_window_toolbar_logic import (
 
 
 class MainWindowToolbarLogicTest(unittest.TestCase):
-    def test_build_template_entries_preserves_ring_size_and_style(self) -> None:
-        calls: list[tuple[int, str]] = []
-        entries = dict(
-            build_template_entries(
-                lambda ring_size, *, style: calls.append((ring_size, style))
-            )
-        )
-
-        entries["Benzene"]()
-        entries["Cyclopropane"]()
-        entries["Cycloheptane"]()
-        entries["Cyclooctane"]()
-        entries["Cyclohexane (Chair)"]()
-
-        self.assertEqual(
-            calls,
-            [
-                (6, "benzene"),
-                (3, "regular"),
-                (7, "regular"),
-                (8, "regular"),
-                (6, "chair"),
-            ],
-        )
-
     def test_mapping_helpers_use_expected_defaults(self) -> None:
         self.assertEqual(bond_style_from_label("Bold"), ("bold_in", 1))
         self.assertEqual(bond_style_from_label("Unknown"), ("single", 1))

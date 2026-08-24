@@ -4319,3 +4319,42 @@ def test_unused_members_stay_removed_from_their_defining_modules() -> None:
         violations.extend(_matching_lines(pattern, [ui_root / file_name]))
 
     assert violations == []
+
+
+def test_menu_population_path_stays_removed_from_tool_routing_service() -> None:
+    """Nothing in the application built these menus.
+
+    The context bar page factories draw the same template, arrow, and palette
+    entries directly, so the QMenu path had no caller. Following the cascade to
+    its fixed point also retired the entry builders and the two arrow menu
+    activators. ``apply_color_preset`` and ``apply_ring_fill_preset`` stay:
+    the panel toolbar routes through them.
+    """
+    service = APP_ROOT / "chemvas" / "ui" / "main_window_tool_routing_service.py"
+    method_names = (
+        "populate_template_menu",
+        "populate_arrow_menu",
+        "populate_palette_menu",
+        "add_menu_action",
+        "palette_icon",
+        "template_entries",
+        "acs_color_palette",
+        "activate_arrow_type_from_menu",
+        "activate_arrow_preset_from_menu",
+    )
+    names = "|".join(re.escape(name) for name in method_names)
+    pattern = re.compile(rf"^\s*def (?:{names})\b")
+
+    assert _matching_lines(pattern, [service]) == []
+
+
+def test_canvas_tab_reorder_wiring_stays_removed() -> None:
+    """Reordering canvas tabs was a dead direction.
+
+    Each window holds one canvas and the tab strip is hidden, so the tabs were
+    marked movable and the move signal was connected to a handler that
+    discarded its arguments.
+    """
+    pattern = re.compile(r"\b(?:on_canvas_tab_moved|tabMoved)\b")
+
+    assert _matching_lines(pattern, _app_python_files()) == []
