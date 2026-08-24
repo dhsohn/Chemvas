@@ -155,15 +155,6 @@ class CanvasGraphService:
     def bond_exists(self, a_id: int, b_id: int) -> bool:
         return self.bond_id_between(a_id, b_id) is not None
 
-    def atom_bond_order_sum(self, atom_id: int) -> int:
-        total = 0
-        for bond in bonds_for(self.canvas):
-            if bond is None:
-                continue
-            if bond.a == atom_id or bond.b == atom_id:
-                total += max(1, int(bond.order or 1))
-        return total
-
     def rebuild_bond_adjacency(self) -> None:
         self.graph.atom_neighbors, self.graph.atom_bond_ids = (
             build_bond_adjacency_index(

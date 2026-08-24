@@ -67,6 +67,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `rebuild_graphics_for` and went too. The live
   `renderer_bold_bond_width_for` — a different function with a similar name —
   is untouched.
+- **Six service methods only the tests called.**
+  `CanvasGraphService.atom_bond_order_sum`,
+  `CanvasGeometryController.ring_for_bond`,
+  `DeleteSelectionPlan.has_work`, `MainWindowStatusService.zoom_status_tip`,
+  `MainWindowState.reset_canvas_name_counter`, and the
+  `_snapshot_canvas_scene` module function are gone. The private helpers and
+  neighbours they sat next to — `_ring_items_for_bond`, `has_zoom_label`,
+  `_DetachedSceneSnapshot.capture` — are live and stay. The module-level
+  `reset_rdkit_export_job_state_for_tests` wrapper went too; it was a second
+  name for `RDKitExportJobRegistry.reset_for_tests`, which stays.
 
 ## [0.4.1] - 2026-08-20
 

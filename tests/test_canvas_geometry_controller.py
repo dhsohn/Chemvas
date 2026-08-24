@@ -58,27 +58,6 @@ class CanvasGeometryControllerTest(unittest.TestCase):
         cls.app = QApplication.instance() or QApplication([])
         cls.app.setQuitOnLastWindowClosed(False)
 
-    def test_ring_for_bond_handles_invalid_none_missing_and_matching_cases(
-        self,
-    ) -> None:
-        ring_item = _FakeRingItem([1, 2, 3])
-        canvas = SimpleNamespace(
-            model=SimpleNamespace(bonds=[Bond(1, 2, 1), None, Bond(4, 5, 1)]),
-            runtime_state=canvas_runtime_state(
-                scene_items_state=CanvasSceneItemsState()
-            ),
-        )
-        set_scene_item_collection_for(
-            canvas, "ring_items", [_FakeRingItem("bad"), ring_item]
-        )
-        controller = CanvasGeometryController(canvas)
-
-        self.assertIsNone(controller.ring_for_bond(-1))
-        self.assertIsNone(controller.ring_for_bond(1))
-        self.assertIsNone(controller.ring_for_bond(2))
-        self.assertIsNone(controller.ring_for_bond(9))
-        self.assertIs(controller.ring_for_bond(0), ring_item)
-
     def test_ring_center_helpers_skip_invalid_and_missing_atoms(self) -> None:
         ring_item = _FakeRingItem([1, 2, 3])
         canvas = SimpleNamespace(

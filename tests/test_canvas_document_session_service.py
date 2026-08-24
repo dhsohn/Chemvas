@@ -21,7 +21,7 @@ from chemvas.ui.canvas_bond_graphics_state import bond_items_for_id
 from chemvas.ui.canvas_calculation_plan_state import CanvasCalculationPlanState
 from chemvas.ui.canvas_document_session_service import (
     CanvasDocumentSessionService,
-    _snapshot_canvas_scene,
+    _DetachedSceneSnapshot,
 )
 from chemvas.ui.canvas_group_state import CanvasGroupState
 from chemvas.ui.canvas_history_service import CanvasHistoryService
@@ -1028,7 +1028,7 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
         scene = QGraphicsScene()
         scene.addRect(0.0, 0.0, 10.0, 10.0)
         canvas = QGraphicsView(scene)
-        snapshot = _snapshot_canvas_scene(canvas)
+        snapshot = _DetachedSceneSnapshot.capture(canvas)
         self.assertIsNotNone(snapshot)
 
         snapshot.detach()

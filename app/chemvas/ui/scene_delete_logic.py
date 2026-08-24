@@ -45,11 +45,6 @@ class DeleteSelectionPlan:
     clear_handles: bool = False
     clear_smiles_input: bool = False
 
-    def has_work(self) -> bool:
-        return self.single_bond_id is not None or bool(
-            self.bond_ids_to_remove or self.atom_ids or self.scene_items
-        )
-
 
 def classify_delete_selection(items: Sequence[QGraphicsItem]) -> DeleteSelectionBuckets:
     buckets = DeleteSelectionBuckets()

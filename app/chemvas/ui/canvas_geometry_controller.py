@@ -6,7 +6,7 @@ from functools import partial
 
 from PyQt6.QtCore import QPointF, QRectF
 from PyQt6.QtGui import QFontMetricsF
-from PyQt6.QtWidgets import QGraphicsPolygonItem, QGraphicsTextItem
+from PyQt6.QtWidgets import QGraphicsTextItem
 
 from chemvas.core.history import (
     CompositeCommand,
@@ -33,7 +33,6 @@ from chemvas.ui.canvas_geometry_logic import (
 from chemvas.ui.canvas_model_access import (
     atom_for_id,
     atoms_for,
-    bond_for_id,
     has_atoms_for,
     rescale_model_for,
 )
@@ -123,14 +122,6 @@ class CanvasGeometryController:
             sum_z = sum(c[2] for c in coords)
             count = len(coords)
             return (sum_x / count, sum_y / count, sum_z / count)
-        return None
-
-    def ring_for_bond(self, bond_id: int) -> QGraphicsPolygonItem | None:
-        bond = bond_for_id(self.canvas, bond_id)
-        if bond is None:
-            return None
-        for ring_item, _ in self._ring_items_for_bond(bond):
-            return ring_item
         return None
 
     def label_rect_for_atom(self, atom_id: int) -> QRectF | None:

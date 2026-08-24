@@ -4242,3 +4242,37 @@ def test_access_ports_without_a_production_caller_stay_removed() -> None:
     )
 
     assert _matching_lines(pattern, _app_python_files()) == []
+
+
+def test_service_methods_only_the_tests_called_stay_removed() -> None:
+    """Six methods whose only callers lived in the test suite.
+
+    Each ban is scoped to the module that defined the method, because the
+    bare names collide with live surfaces elsewhere.
+    """
+    ui_root = APP_ROOT / "chemvas" / "ui"
+    scoped_bans = {
+        "canvas_graph_service.py": ("atom_bond_order_sum",),
+        "canvas_geometry_controller.py": ("ring_for_bond",),
+        "scene_delete_logic.py": ("has_work",),
+        "main_window_status_service.py": ("zoom_status_tip",),
+        "main_window_state.py": ("reset_canvas_name_counter",),
+        "canvas_document_session_service.py": ("_snapshot_canvas_scene",),
+    }
+    violations: list[str] = []
+    for file_name, method_names in scoped_bans.items():
+        names = "|".join(re.escape(name) for name in method_names)
+        pattern = re.compile(rf"^\s*def (?:{names})\b")
+        violations.extend(_matching_lines(pattern, [ui_root / file_name]))
+
+    assert violations == []
+
+
+def test_duplicate_rdkit_export_reset_wrapper_stays_removed() -> None:
+    """The module-level wrapper duplicated ``RDKitExportJobRegistry.reset_for_tests``.
+
+    The class method stays; only the second name for it is gone.
+    """
+    pattern = re.compile(r"\breset_rdkit_export_job_state_for_tests\b")
+
+    assert _matching_lines(pattern, _app_python_files()) == []

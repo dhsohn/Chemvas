@@ -1323,7 +1323,6 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
         )
         self.assertTrue(cached_service.bond_exists(1, 2))
         self.assertFalse(cached_service.bond_exists(2, 3))
-        self.assertEqual(CanvasGraphService(cached_view).atom_bond_order_sum(1), 6)
 
         nx, ny, length = line_normal_components(0.0, 0.0, 10.0, 0.0)
         self.assertEqual((nx, ny, length), (0.0, 1.0, 10.0))
