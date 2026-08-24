@@ -65,11 +65,6 @@ TOOLBAR_MENU_BUTTON_STYLE = _flat_toolbutton_style(
     )
 )
 
-# Segmented flat toggle buttons used inside the context options bar.
-CONTEXT_SEGMENT_STYLE = _flat_toolbutton_style(
-    extra=("QToolButton { padding: 0px 10px; font-size: 13px;}")
-)
-
 # Outlined action button used inside the context options bar (e.g. Apply).
 CONTEXT_ACTION_BUTTON_STYLE = (
     "QToolButton {"
@@ -123,7 +118,6 @@ __all__ = [
     "CONTEXT_BAR_BUTTON_HEIGHT",
     "CONTEXT_BAR_CONTENT_HEIGHT",
     "CONTEXT_BAR_ICON_SIZE",
-    "CONTEXT_SEGMENT_STYLE",
     "SMILES_RENDER_BUTTON_STYLE",
     "TOOLBAR_BUTTON_SIZE",
     "TOOLBAR_BUTTON_STYLE",

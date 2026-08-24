@@ -4,6 +4,7 @@ import re
 from collections.abc import Mapping
 from dataclasses import dataclass
 
+from .graph import connected_atom_components
 from .precomplex import (
     NO_PRECOMPLEX_JSON,
     canonicalize_precomplex_state,
@@ -99,7 +100,10 @@ def calculation_plan_from_state(
     ):
         raise ValueError("Invalid Chemvas calculation plan.")
 
-    components = _connected_components(atom_ids, bond_pairs)
+    components = {
+        frozenset(component)
+        for component in connected_atom_components(atom_ids, bond_pairs)
+    }
     states = _parse_states(value.get("states"), components)
     steps = _parse_steps(value.get("steps"), states, atom_ids)
     referenced_state_ids = {
@@ -384,8 +388,8 @@ def _parse_correspondence(
 ) -> list[CalculationAtomCorrespondence]:
     if not isinstance(value, list):
         raise ValueError(f"Step {step_id} atom correspondence must be a list.")
-    reactant_included = _included_atom_ids(reactant_state)
-    product_included = _included_atom_ids(product_state)
+    reactant_included = included_atom_ids(reactant_state)
+    product_included = included_atom_ids(product_state)
     seen_reactant: set[int] = set()
     seen_product: set[int] = set()
     entries: list[CalculationAtomCorrespondence] = []
@@ -419,7 +423,7 @@ def _parse_correspondence(
     return entries
 
 
-def _included_atom_ids(state: CalculationState) -> set[int]:
+def included_atom_ids(state: CalculationState) -> set[int]:
     return {
         atom_id
         for member in state.members
@@ -463,31 +467,6 @@ def _sorted_atom_ids(value: object) -> tuple[int, ...]:
     return tuple(value)
 
 
-def _connected_components(
-    atom_ids: set[int],
-    bond_pairs: set[tuple[int, int]],
-) -> set[frozenset[int]]:
-    adjacency: dict[int, set[int]] = {atom_id: set() for atom_id in atom_ids}
-    for a, b in bond_pairs:
-        if a in adjacency and b in adjacency:
-            adjacency[a].add(b)
-            adjacency[b].add(a)
-    remaining = set(atom_ids)
-    components: set[frozenset[int]] = set()
-    while remaining:
-        stack = [min(remaining)]
-        component: set[int] = set()
-        while stack:
-            atom_id = stack.pop()
-            if atom_id in component:
-                continue
-            component.add(atom_id)
-            stack.extend(adjacency[atom_id] - component)
-        remaining -= component
-        components.add(frozenset(component))
-    return components
-
-
 __all__ = [
     "CALCULATION_INCLUSIONS",
     "CALCULATION_PLAN_FORMAT",
@@ -503,4 +482,5 @@ __all__ = [
     "CalculationStepEndpoint",
     "calculation_plan_from_state",
     "calculation_plan_to_state",
+    "included_atom_ids",
 ]

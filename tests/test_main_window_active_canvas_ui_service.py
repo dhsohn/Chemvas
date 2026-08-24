@@ -39,7 +39,6 @@ class _FakeWindow:
         self.canvas_tabs.addTab(self.canvas_b, "Canvas 2")
         self.canvas_tabs.setCurrentIndex(0)
         self._last_canvas_tab_index = 0
-        self._suspend_canvas_tab_reactions = False
         self.preview_3d = _FakePreview3D()
         self._atom_input = mock.Mock()
         self.sync_tool_actions_from_canvas = mock.Mock()
@@ -52,14 +51,6 @@ class _FakeWindow:
     @property
     def atom_input(self):
         return self._atom_input
-
-    @property
-    def tab_reactions_suspended(self) -> bool:
-        return bool(self._suspend_canvas_tab_reactions)
-
-    @tab_reactions_suspended.setter
-    def tab_reactions_suspended(self, suspended: bool) -> None:
-        self._suspend_canvas_tab_reactions = bool(suspended)
 
     @property
     def last_canvas_tab_index(self) -> int:
@@ -129,9 +120,6 @@ class MainWindowActiveCanvasUIServiceTest(unittest.TestCase):
         self.atom_input_for_window = mock.Mock(
             side_effect=lambda window: window.atom_input
         )
-        self.tab_reactions_suspended_for_window = mock.Mock(
-            side_effect=lambda window: window.tab_reactions_suspended
-        )
         self.set_last_canvas_tab_index_for_window = mock.Mock(
             side_effect=lambda window, index: setattr(
                 window, "last_canvas_tab_index", index
@@ -150,7 +138,6 @@ class MainWindowActiveCanvasUIServiceTest(unittest.TestCase):
             tab_refs_for_window=self.tab_refs_for_window,
             preview_for_window=self.preview_for_window,
             atom_input_for_window=self.atom_input_for_window,
-            tab_reactions_suspended_for_window=self.tab_reactions_suspended_for_window,
             set_last_canvas_tab_index_for_window=self.set_last_canvas_tab_index_for_window,
             refresh_document_chrome_for_window=self.refresh_document_chrome_for_window,
         )
@@ -347,22 +334,19 @@ class MainWindowActiveCanvasUIServiceTest(unittest.TestCase):
         self._assert_canvas_callbacks(self.window.canvas_a, active=False)
         self._assert_canvas_callbacks(self.window.canvas_b, active=True)
 
-    def test_on_canvas_tab_changed_ignores_suspended_invalid_and_non_canvas_targets(
+    def test_on_canvas_tab_changed_ignores_invalid_and_non_canvas_targets(
         self,
     ) -> None:
         other_widget = QWidget()
         other_index = self.window.canvas_tabs.insertTab(2, other_widget, "Other")
 
         self.service.on_canvas_tab_changed(self.window, -1)
-        self.window.tab_reactions_suspended = True
-        self.service.on_canvas_tab_changed(self.window, 0)
-        self.window.tab_reactions_suspended = False
         self.service.on_canvas_tab_changed(self.window, other_index)
 
         self.window.refresh_active_canvas_ui.assert_not_called()
         self.assertEqual(self.window.last_canvas_tab_index, 0)
-        self.assertEqual(self.status_service.refresh_status_context.call_count, 3)
-        self.assertEqual(self.context_bar_service.refresh_window.call_count, 3)
+        self.assertEqual(self.status_service.refresh_status_context.call_count, 2)
+        self.assertEqual(self.context_bar_service.refresh_window.call_count, 2)
 
     def test_on_canvas_tab_changed_tracks_last_canvas_tab_index_and_refreshes_ui(
         self,

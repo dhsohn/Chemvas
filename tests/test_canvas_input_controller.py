@@ -163,7 +163,6 @@ class _Canvas(QGraphicsView):
         )
         self._ring_for_bond = mock.Mock(return_value=None)
         self.delete_ring = mock.Mock()
-        self._shortcut_modifiers = CanvasInputController.shortcut_modifiers
         self.model = SimpleNamespace(
             atoms={
                 7: Atom("C", 0.0, 0.0),

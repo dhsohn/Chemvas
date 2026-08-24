@@ -1397,6 +1397,14 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
         ).redraw_connected_bonds(1, skip_bond_id=3)
         renderer.redraw_connected_bonds.assert_called_once_with(1, skip_bond_id=3)
 
+        incomplete_renderer_view = SimpleNamespace(
+            bond_renderer=SimpleNamespace(),
+        )
+        with self.assertRaises(AttributeError):
+            parallel_bond_segments_for(incomplete_renderer_view)
+        with self.assertRaises(AttributeError):
+            ring_double_segments_for(incomplete_renderer_view)
+
         color = object()
         pen_and_brush_item = _FakePenBrushItem(Qt.BrushStyle.SolidPattern)
         brush_only_item = _FakeBrushOnlyItem(Qt.BrushStyle.SolidPattern)

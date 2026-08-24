@@ -23,7 +23,6 @@ class MainWindowActiveCanvasUIService:
         tab_refs_for_window,
         preview_for_window,
         atom_input_for_window,
-        tab_reactions_suspended_for_window,
         set_last_canvas_tab_index_for_window,
         refresh_document_chrome_for_window,
     ) -> None:
@@ -38,7 +37,6 @@ class MainWindowActiveCanvasUIService:
         self._tab_refs_for_window = tab_refs_for_window
         self._preview_for_window = preview_for_window
         self._atom_input_for_window = atom_input_for_window
-        self._tab_reactions_suspended_for_window = tab_reactions_suspended_for_window
         self._set_last_canvas_tab_index_for_window = (
             set_last_canvas_tab_index_for_window
         )
@@ -122,8 +120,6 @@ class MainWindowActiveCanvasUIService:
         self._context_bar.refresh_window(window)
 
     def _on_canvas_tab_changed(self, window, index: int) -> None:
-        if self._tab_reactions_suspended_for_window(window):
-            return
         if index < 0:
             return
         tab_refs = self._tab_refs_for_window(window)

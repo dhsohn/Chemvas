@@ -78,14 +78,6 @@ def all_canvases_for_window(window):
     return tab_references_for_window(window).all_canvases()
 
 
-def tab_reactions_suspended_for_window(window) -> bool:
-    return bool(window.runtime_state.tab_reactions_suspended)
-
-
-def set_tab_reactions_suspended_for_window(window, suspended: bool) -> None:
-    window.runtime_state.tab_reactions_suspended = bool(suspended)
-
-
 def set_last_canvas_tab_index_for_window(window, index: int) -> None:
     window.runtime_state.last_canvas_tab_index = index
 
@@ -375,12 +367,10 @@ __all__ = [
     "set_context_bar_page_override_for_window",
     "set_last_canvas_tab_index_for_window",
     "set_sheet_setup_for_window",
-    "set_tab_reactions_suspended_for_window",
     "set_zoom_percent_for_window",
     "sheet_orientation_for_window",
     "sheet_size_for_window",
     "style_controller_for_window",
-    "tab_reactions_suspended_for_window",
     "tab_references_for_window",
     "tool_action_for_window",
     "tool_actions_for_window",

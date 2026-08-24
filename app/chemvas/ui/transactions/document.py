@@ -85,13 +85,11 @@ def _capture_optional_attribute(
     return getattr(target, name, default)
 
 
-def _capture_canvas_state_object(canvas, name: str) -> object | None:
+def _capture_runtime_state_object(canvas, name: str) -> object | None:
     runtime_state = _capture_optional_attribute(canvas, "runtime_state")
-    if runtime_state is not None:
-        state = _capture_optional_attribute(runtime_state, name)
-        if state is not None:
-            return state
-    return _capture_optional_attribute(canvas, name)
+    if runtime_state is None:
+        return None
+    return _capture_optional_attribute(runtime_state, name)
 
 
 _DELETE_MUTATED_RUNTIME_FIELDS = (
@@ -243,7 +241,7 @@ class DocumentSavepoint:
             if name == "history_state" and history_service is None:
                 runtime_states[name] = None
                 continue
-            state = _capture_canvas_state_object(canvas, name)
+            state = _capture_runtime_state_object(canvas, name)
             runtime_states[name] = state
             append(state)
         groups = _capture_optional_attribute(

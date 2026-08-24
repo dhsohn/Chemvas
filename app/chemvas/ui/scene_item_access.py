@@ -93,11 +93,6 @@ def canvas_scene_for_item_operation(canvas):
         raise
 
 
-def add_item_to_scene(scene, item):
-    scene.addItem(item)
-    return item
-
-
 def item_is_unavailable_for_scene_operation(item) -> bool:
     return item is None or (isinstance(item, QGraphicsItem) and sip.isdeleted(item))
 
@@ -241,7 +236,6 @@ def clear_canvas_scene_item_list_map(canvas, item_map: dict) -> dict:
 
 __all__ = [
     "add_item_to_canvas_scene",
-    "add_item_to_scene",
     "apply_scene_item_state",
     "attach_scene_item",
     "attached_canvas_scene_items",

@@ -151,8 +151,12 @@ class StructureBuildService:
         *,
         before_smiles_input: str | None = None,
     ) -> list:
-        snapshot = self.committer.begin_recorded_change(
-            before_smiles_input=before_smiles_input
+        snapshot = (
+            self.committer.begin_recorded_change()
+            if before_smiles_input is None
+            else self.committer.begin_recorded_change(
+                before_smiles_input=before_smiles_input
+            )
         )
         try:
             added_scene_items = action()
@@ -176,8 +180,12 @@ class StructureBuildService:
         *,
         before_smiles_input: str | None = None,
     ) -> bool:
-        snapshot = self.committer.begin_recorded_change(
-            before_smiles_input=before_smiles_input
+        snapshot = (
+            self.committer.begin_recorded_change()
+            if before_smiles_input is None
+            else self.committer.begin_recorded_change(
+                before_smiles_input=before_smiles_input
+            )
         )
         try:
             if not action():

@@ -26,6 +26,7 @@ from .hit import (
     choose_preferred_structure_hit,
     nearest_ring_atom_id,
     padded_rect_contains_point,
+    selected_atom_ids_with_bond_endpoints,
     selection_hit_matches,
     structure_hit_is_selected,
 )
@@ -38,7 +39,7 @@ from .outline import (
     selection_path_for_object_item,
 )
 from .press import SelectionPressContext, SelectionPressDecision, plan_selection_press
-from .rotation import rotated_atom_positions, selected_rotation_atom_ids
+from .rotation import rotated_atom_positions
 from .rotation_geometry import (
     ROTATION_DRAG_SENSITIVITY,
     Coords3D,
@@ -97,7 +98,7 @@ __all__ = [
     "rigid_rotation_angles_from_drag",
     "rotate_point_around_axis",
     "rotated_atom_positions",
-    "selected_rotation_atom_ids",
+    "selected_atom_ids_with_bond_endpoints",
     "selection_hit_matches",
     "selection_line_stroke_path",
     "selection_path_for_bond_item",

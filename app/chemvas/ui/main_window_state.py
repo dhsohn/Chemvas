@@ -10,7 +10,6 @@ class MainWindowState:
     context_bar_page_override: str | None = None
     canvas_name_counter: int = 0
     last_canvas_tab_index: int = 0
-    tab_reactions_suspended: bool = False
 
     def clear_context_bar_page_override(self) -> None:
         self.context_bar_page_override = None

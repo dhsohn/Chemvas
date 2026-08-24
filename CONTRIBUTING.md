@@ -150,10 +150,9 @@ in `tests/runtime_services.py` when they need a partial runtime.
 State works the same way. A `<name>_state_for(canvas)` accessor reads its field off
 `canvas.runtime_state` and does not create state on the canvas on first access.
 `SheetSetupState` is the sole owner of sheet size, orientation, and rect; those values
-are not mirrored onto the canvas. One hold-out, `document_metadata_state_for`, still
-goes through the older `canvas_state_object` path and may attach;
-`NON_RUNTIME_STATE_ACCESSORS` in the boundary test records it. A double therefore
-needs its own partial container —
+are not mirrored onto the canvas. `document_metadata_state_for` follows the same
+direct-container rule; the former `canvas_state_object` fallback has been removed.
+A double therefore needs its own partial container —
 build it with `tests/runtime_state.canvas_runtime_state(**states)`, which checks the
 names against the real `CanvasRuntimeState`:
 

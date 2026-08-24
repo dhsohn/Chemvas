@@ -34,10 +34,9 @@ if QObject is not None:
 class XYZExportWorkerTest(unittest.TestCase):
     def test_run_writes_xyz_and_emits_success_and_finished(self) -> None:
         rdkit = SimpleNamespace(
-            model_to_xyz_block=mock.Mock(
-                return_value="1\nChemvas XYZ export\nC 0.0 0.0 0.0\n"
+            model_to_xyz_block_result=mock.Mock(
+                return_value=RDKitResult("1\nChemvas XYZ export\nC 0.0 0.0 0.0\n")
             ),
-            last_error=None,
         )
         signals = {"succeeded": [], "failed": [], "finished": 0}
 
@@ -57,7 +56,7 @@ class XYZExportWorkerTest(unittest.TestCase):
                 "1\nChemvas XYZ export\nC 0.0 0.0 0.0\n",
             )
 
-        rdkit.model_to_xyz_block.assert_called_once_with(
+        rdkit.model_to_xyz_block_result.assert_called_once_with(
             "model", atom_annotations={"annotations": True}
         )
         self.assertEqual(signals["succeeded"], [str(path)])
@@ -66,8 +65,9 @@ class XYZExportWorkerTest(unittest.TestCase):
 
     def test_run_emits_rdkit_error_when_conversion_returns_none(self) -> None:
         rdkit = SimpleNamespace(
-            model_to_xyz_block=mock.Mock(return_value=None),
-            last_error="unsupported label",
+            model_to_xyz_block_result=mock.Mock(
+                return_value=RDKitResult(None, "unsupported label")
+            ),
         )
         signals = {"succeeded": [], "failed": [], "finished": 0}
 
@@ -113,21 +113,24 @@ class XYZExportWorkerTest(unittest.TestCase):
         cases = (
             (
                 SimpleNamespace(
-                    model_to_xyz_block=mock.Mock(return_value=None), last_error=None
+                    model_to_xyz_block_result=mock.Mock(
+                        return_value=RDKitResult(None),
+                    ),
+                    last_error="stale adapter error",
                 ),
                 "Failed to export 3D XYZ.",
             ),
             (
                 SimpleNamespace(
-                    model_to_xyz_block=mock.Mock(side_effect=RuntimeError()),
-                    last_error=None,
+                    model_to_xyz_block_result=mock.Mock(side_effect=RuntimeError()),
                 ),
                 "Failed to export 3D XYZ.",
             ),
             (
                 SimpleNamespace(
-                    model_to_xyz_block=mock.Mock(side_effect=RuntimeError("boom")),
-                    last_error=None,
+                    model_to_xyz_block_result=mock.Mock(
+                        side_effect=RuntimeError("boom")
+                    ),
                 ),
                 "boom",
             ),
@@ -388,14 +391,15 @@ from pathlib import Path
 
 from PyQt6.QtCore import QCoreApplication, QObject, QTimer
 
+from chemvas.features.insertion import RDKitResult
 from chemvas.ui.rdkit_async_jobs import export_xyz_in_thread
 from chemvas.ui.rdkit_export_job_state import active_rdkit_export_jobs
 
 
 class SlowAdapter:
-    def model_to_xyz_block(self, model, atom_annotations=None):
+    def model_to_xyz_block_result(self, model, atom_annotations=None):
         time.sleep(0.2)
-        return "0\ncompleted after owner close\n"
+        return RDKitResult("0\ncompleted after owner close\n")
 
 
 app = QCoreApplication([])

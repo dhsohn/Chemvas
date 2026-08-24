@@ -37,6 +37,7 @@ from chemvas.domain.document import (
 from chemvas.features.calculation_bundle import (
     calculation_state_by_id,
     correspondence_readiness,
+    fill_correspondence_gaps,
     identity_correspondence,
     included_atom_ids,
     inspect_components,
@@ -641,37 +642,47 @@ class CalculationStepDialog(QDialog):
         product_state: CalculationState,
     ) -> None:
         active_reactant_ids = included_atom_ids(reactant_state)
-        used_product_ids = {
-            product_atom_id
-            for reactant_atom_id, product_atom_id in self._mapping_by_reactant.items()
-            if reactant_atom_id in active_reactant_ids and type(product_atom_id) is int
+        active_product_ids = included_atom_ids(product_state)
+        candidates = tuple(
+            (entry.reactant_atom_id, entry.product_atom_id)
+            for entry in identity_correspondence(reactant_state, product_state)
+        )
+        replaceable_reactant_ids = {
+            reactant_atom_id
+            for reactant_atom_id, _product_atom_id in candidates
+            if reactant_atom_id not in self._mapping_by_reactant
         }
-        for entry in identity_correspondence(reactant_state, product_state):
-            atom_id = entry.reactant_atom_id
-            if atom_id in self._mapping_by_reactant:
-                continue
-            if entry.product_atom_id not in used_product_ids:
-                self._mapping_by_reactant[atom_id] = entry.product_atom_id
-                used_product_ids.add(entry.product_atom_id)
-            else:
-                self._mapping_by_reactant[atom_id] = None
+        seeded = dict(self._mapping_by_reactant)
+        for reactant_atom_id in replaceable_reactant_ids:
+            seeded[reactant_atom_id] = None
+        self._mapping_by_reactant, _applied = fill_correspondence_gaps(
+            seeded,
+            candidates,
+            active_reactant_ids=active_reactant_ids,
+            active_product_ids=active_product_ids,
+            replaceable_reactant_ids=replaceable_reactant_ids,
+        )
 
     def _map_identical_atom_ids(self) -> None:
         reactant_state, _reactant_endpoint = self._build_endpoint("reactant")
         product_state, _product_endpoint = self._build_endpoint("product")
         active_reactant_ids = included_atom_ids(reactant_state)
-        used_product_ids = {
-            product_atom_id
-            for reactant_atom_id, product_atom_id in self._mapping_by_reactant.items()
-            if reactant_atom_id in active_reactant_ids and type(product_atom_id) is int
+        active_product_ids = included_atom_ids(product_state)
+        replaceable_reactant_ids = {
+            atom_id
+            for atom_id in active_reactant_ids
+            if self._mapping_by_reactant.get(atom_id) is None
         }
-        for entry in identity_correspondence(reactant_state, product_state):
-            if self._mapping_by_reactant.get(entry.reactant_atom_id) is not None:
-                continue
-            if entry.product_atom_id in used_product_ids:
-                continue
-            self._mapping_by_reactant[entry.reactant_atom_id] = entry.product_atom_id
-            used_product_ids.add(entry.product_atom_id)
+        self._mapping_by_reactant, _applied = fill_correspondence_gaps(
+            self._mapping_by_reactant,
+            (
+                (entry.reactant_atom_id, entry.product_atom_id)
+                for entry in identity_correspondence(reactant_state, product_state)
+            ),
+            active_reactant_ids=active_reactant_ids,
+            active_product_ids=active_product_ids,
+            replaceable_reactant_ids=replaceable_reactant_ids,
+        )
         self._refresh_mapping_table()
 
     def _clear_active_mappings(self) -> None:
@@ -699,32 +710,19 @@ class CalculationStepDialog(QDialog):
             )
             return
         suggestions = result.value
-        used_product_ids = {
-            product_atom_id
-            for reactant_atom_id, product_atom_id in self._mapping_by_reactant.items()
-            if reactant_atom_id in reactant_ids and type(product_atom_id) is int
+        replaceable_reactant_ids = {
+            atom_id
+            for atom_id in reactant_ids
+            if self._mapping_by_reactant.get(atom_id) is None
         }
-        applied = 0
-        for reactant_atom_id, product_atom_id in suggestions:
-            # Only fill gaps: never overwrite a mapping the researcher already
-            # set, keep the same-element rule, and never reuse a product atom.
-            if (
-                reactant_atom_id not in reactant_ids
-                or product_atom_id not in product_ids
-            ):
-                continue
-            if self._mapping_by_reactant.get(reactant_atom_id) is not None:
-                continue
-            if product_atom_id in used_product_ids:
-                continue
-            if (
-                self._atom_elements[reactant_atom_id]
-                != self._atom_elements[product_atom_id]
-            ):
-                continue
-            self._mapping_by_reactant[reactant_atom_id] = product_atom_id
-            used_product_ids.add(product_atom_id)
-            applied += 1
+        self._mapping_by_reactant, applied = fill_correspondence_gaps(
+            self._mapping_by_reactant,
+            suggestions,
+            active_reactant_ids=reactant_ids,
+            active_product_ids=product_ids,
+            replaceable_reactant_ids=replaceable_reactant_ids,
+            atom_elements=self._atom_elements,
+        )
         self._refresh_mapping_table()
         if applied:
             note = (

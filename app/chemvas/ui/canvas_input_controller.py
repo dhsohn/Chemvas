@@ -12,6 +12,7 @@ from chemvas.ui.input_view_access import (
     focused_scene_item_for,
     reset_view_transform_for,
     reset_zoom_for,
+    shortcut_modifiers_for,
     should_override_chemdraw_shortcut_for,
     zoom_in_for,
     zoom_out_for,
@@ -57,15 +58,6 @@ class CanvasInputController:
     @property
     def atom_labels(self):
         return atom_label_service(self.canvas)
-
-    @staticmethod
-    def shortcut_modifiers(event) -> Qt.KeyboardModifier:
-        mask = (
-            Qt.KeyboardModifier.ShiftModifier
-            | Qt.KeyboardModifier.ControlModifier
-            | Qt.KeyboardModifier.AltModifier
-        )
-        return event.modifiers() & mask
 
     def key_press_event(self, event) -> None:
         focus_item = focused_scene_item_for(self.canvas)
@@ -114,7 +106,7 @@ class CanvasInputController:
             reset_zoom_for(self.canvas)
             event.accept()
             return
-        if self.shortcut_modifiers(event) == Qt.KeyboardModifier.NoModifier:
+        if shortcut_modifiers_for(event) == Qt.KeyboardModifier.NoModifier:
             if event.key() == Qt.Key.Key_F5:
                 reset_zoom_for(self.canvas)
                 event.accept()

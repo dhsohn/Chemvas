@@ -23,7 +23,6 @@ from chemvas.ui.main_window_theme import (
     CONTEXT_ACTION_BUTTON_STYLE,
     CONTEXT_BAR_BUTTON_HEIGHT,
     CONTEXT_BAR_ICON_SIZE,
-    CONTEXT_SEGMENT_STYLE,
     TOOLBAR_BUTTON_SIZE,
     TOOLBAR_BUTTON_STYLE,
 )
@@ -142,24 +141,6 @@ def icon_button(
     button.setCheckable(checkable)
     button.setStyleSheet(_ICON_BUTTON_STYLE)
     button.setCursor(Qt.CursorShape.PointingHandCursor)
-    return button
-
-
-def segment_button(
-    text: str,
-    tooltip: str,
-    *,
-    checkable: bool = False,
-) -> QToolButton:
-    button = QToolButton()
-    button.setText(text)
-    button.setToolTip(tooltip)
-    button.setStatusTip(tooltip)
-    button.setFixedHeight(CONTEXT_BAR_BUTTON_HEIGHT)
-    button.setCheckable(checkable)
-    button.setAutoRaise(True)
-    button.setCursor(Qt.CursorShape.PointingHandCursor)
-    button.setStyleSheet(CONTEXT_SEGMENT_STYLE)
     return button
 
 
@@ -402,6 +383,5 @@ __all__ = [
     "icon_button",
     "new_context_page",
     "rotate_angle_input",
-    "segment_button",
     "slider_dropdown_button",
 ]

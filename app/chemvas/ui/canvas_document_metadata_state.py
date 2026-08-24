@@ -3,9 +3,8 @@ from __future__ import annotations
 import hashlib
 import json
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, cast
 
-from chemvas.ui.canvas_state_lookup import canvas_state_object
 from chemvas.ui.main_window_path_logic import is_canonical_saved_document_path
 
 
@@ -17,12 +16,10 @@ class CanvasDocumentMetadataState:
 
 
 def document_metadata_state_for(canvas: Any) -> CanvasDocumentMetadataState:
-    state = canvas_state_object(canvas, "document_metadata_state")
-    if isinstance(state, CanvasDocumentMetadataState):
-        return state
-    state = CanvasDocumentMetadataState()
-    canvas.document_metadata_state = state
-    return state
+    return cast(
+        CanvasDocumentMetadataState,
+        canvas.runtime_state.document_metadata_state,
+    )
 
 
 def canonical_document_digest(state: dict) -> str:

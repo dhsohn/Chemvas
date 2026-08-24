@@ -8,7 +8,13 @@ from chemvas.domain.atom_aliases import (
     alias_attachments_for_atom,
     modeled_atom_formal_charge,
 )
-from chemvas.domain.document import Atom, Bond, MoleculeModel, deserialize_model_state
+from chemvas.domain.document import (
+    Atom,
+    Bond,
+    MoleculeModel,
+    connected_atom_components,
+    deserialize_model_state,
+)
 
 from .model import CalculationStateSelection, ComponentSelection, ComponentSummary
 
@@ -25,7 +31,7 @@ def inspect_components(state: Mapping[str, object]) -> tuple[ComponentSummary, .
     model.atom_annotations = annotations
     return tuple(
         _component_summary(model, index, atom_ids)
-        for index, atom_ids in enumerate(_connected_components(model))
+        for index, atom_ids in enumerate(_component_atom_ids(model))
     )
 
 
@@ -33,7 +39,7 @@ def select_component(
     state: Mapping[str, object], component_index: int
 ) -> ComponentSelection:
     model, annotations = _model_and_annotations(state)
-    components = _connected_components(model)
+    components = _component_atom_ids(model)
     if not components:
         raise ValueError("The Chemvas document contains no chemical structure.")
     if component_index < 0 or component_index >= len(components):
@@ -76,7 +82,7 @@ def select_components(
     component_atom_ids: Sequence[Sequence[int]],
 ) -> CalculationStateSelection:
     model, annotations = _model_and_annotations(state)
-    components = _connected_components(model)
+    components = _component_atom_ids(model)
     component_index_by_atoms = {
         tuple(atom_ids): index for index, atom_ids in enumerate(components)
     }
@@ -213,29 +219,11 @@ def _normalize_annotation(values: Mapping[str, int]) -> dict[str, int]:
     return normalized
 
 
-def _connected_components(model: MoleculeModel) -> list[tuple[int, ...]]:
-    adjacency: dict[int, set[int]] = {atom_id: set() for atom_id in model.atoms}
-    for bond in model.bonds:
-        if bond is None or bond.a not in adjacency or bond.b not in adjacency:
-            continue
-        adjacency[bond.a].add(bond.b)
-        adjacency[bond.b].add(bond.a)
-
-    remaining = set(model.atoms)
-    components: list[tuple[int, ...]] = []
-    while remaining:
-        start = min(remaining)
-        stack = [start]
-        component: set[int] = set()
-        while stack:
-            atom_id = stack.pop()
-            if atom_id in component:
-                continue
-            component.add(atom_id)
-            stack.extend(sorted(adjacency[atom_id] - component, reverse=True))
-        remaining -= component
-        components.append(tuple(sorted(component)))
-    return components
+def _component_atom_ids(model: MoleculeModel) -> tuple[tuple[int, ...], ...]:
+    return connected_atom_components(
+        model.atoms,
+        ((bond.a, bond.b) for bond in model.bonds if bond is not None),
+    )
 
 
 def _component_summary(

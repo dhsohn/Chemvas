@@ -4,6 +4,8 @@ from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from typing import Literal
 
+from chemvas.domain.document import Bond
+
 StructureKind = Literal["atom", "bond", "ring", "other"]
 Point2D = tuple[float, float]
 
@@ -53,6 +55,24 @@ class SelectionHitRequest:
     bond_atom_ids: tuple[int, int] | None = None
     ring_atom_ids: tuple[int, ...] = ()
     item_is_selected: bool = False
+
+
+def selected_atom_ids_with_bond_endpoints(
+    atom_ids: Iterable[int],
+    bond_ids: Iterable[int],
+    *,
+    bonds: Sequence[Bond | None],
+) -> set[int]:
+    expanded = set(atom_ids)
+    for bond_id in bond_ids:
+        if not (0 <= bond_id < len(bonds)):
+            continue
+        bond = bonds[bond_id]
+        if bond is None:
+            continue
+        expanded.add(bond.a)
+        expanded.add(bond.b)
+    return expanded
 
 
 def build_selection_snapshot(
@@ -193,6 +213,7 @@ __all__ = [
     "choose_preferred_structure_hit",
     "nearest_ring_atom_id",
     "padded_rect_contains_point",
+    "selected_atom_ids_with_bond_endpoints",
     "selection_hit_matches",
     "structure_hit_is_selected",
 ]

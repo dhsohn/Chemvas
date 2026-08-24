@@ -129,10 +129,6 @@ class RDKitConversionHelper:
     def model_to_rdkit_with_map_strict_labels(self, model: MoleculeModel):
         return self._build_rdkit_mol_with_map(model, strict_labels=True)
 
-    def model_to_rdkit_tolerant(self, model: MoleculeModel):
-        mol, _ = self.adapter.model_to_rdkit_with_map_tolerant(model)
-        return mol
-
     @staticmethod
     def _submodel(
         model: MoleculeModel, atom_ids: frozenset[int] | set[int]
@@ -158,7 +154,7 @@ class RDKitConversionHelper:
             },
         )
 
-    def suggest_atom_correspondence(
+    def _suggest_atom_correspondence(
         self,
         model: MoleculeModel,
         reactant_atom_ids: frozenset[int] | set[int],
@@ -1131,27 +1127,6 @@ class RDKitConversionHelper:
             mol_atom_count=base_atom_count,
             xyz_atom_count=mol_h.GetNumAtoms(),
         )
-
-    def model_to_3d_coords(self, model: MoleculeModel):
-        rdkit = self.adapter._load_rdkit()
-        if rdkit == (None, None):
-            self.adapter.last_error = "RDKit is not available in this environment."
-            return None
-        Chem, AllChem = rdkit
-        mol, atom_map = self.adapter.model_to_rdkit_with_map_strict_labels(model)
-        if mol is None or atom_map is None:
-            if self.adapter.last_error is None:
-                self.adapter.last_error = "Failed to build RDKit molecule."
-            return None
-        mol_h = self.adapter._embed_3d_molecule(mol, Chem, AllChem)
-        if mol_h is None:
-            return None
-        conf = mol_h.GetConformer()
-        coords = {}
-        for atom_id, rd_idx in atom_map.items():
-            pos = conf.GetAtomPosition(rd_idx)
-            coords[atom_id] = (pos.x, pos.y, pos.z)
-        return coords
 
     def model_to_3d_scene(
         self,

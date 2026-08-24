@@ -32,7 +32,7 @@ if QApplication is not None:
         CanvasTextStyleState,
         set_text_style_for,
     )
-    from chemvas.ui.note_item_access import apply_note_style_for, update_note_box_for
+    from chemvas.ui.note_item_access import apply_note_style_for
 
 
 class _FakeNoteController:
@@ -140,7 +140,7 @@ class CanvasViewNoteWrapperContractTest(unittest.TestCase):
         controller.begin_note_edit(item)
         controller.apply_text_style_to_selected()
         apply_note_style_for(view, item)
-        update_note_box_for(view, item)
+        controller.update_note_box(item)
 
         self.assertEqual(
             fake_controller.calls,

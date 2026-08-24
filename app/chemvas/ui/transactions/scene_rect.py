@@ -102,16 +102,6 @@ def set_explicit_view_scene_rect(
     setattr(view, _VIEW_EXPLICIT_ATTRIBUTE, True)
 
 
-def set_inherited_view_scene_rect(view) -> None:
-    """Return a view to Qt's default scene-rect inheritance mode."""
-
-    getter, setter = _resolve_rect_ports(view, None, None)
-    if not callable(getter) or not callable(setter):
-        raise AttributeError("Inherited view rect requires sceneRect/setSceneRect")
-    setter(QRectF())
-    setattr(view, _VIEW_EXPLICIT_ATTRIBUTE, False)
-
-
 @dataclass(slots=True)
 class _SceneRectTracker:
     """Per-scene growth bookkeeping, stored on the scene itself."""
@@ -699,6 +689,5 @@ __all__ = [
     "scene_rect_is_automatic",
     "set_explicit_scene_rect",
     "set_explicit_view_scene_rect",
-    "set_inherited_view_scene_rect",
     "view_scene_rect_is_explicit",
 ]

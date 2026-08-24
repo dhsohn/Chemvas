@@ -21,6 +21,7 @@ if QApplication is not None:
         Molecule3DBond,
         Molecule3DScene,
         MoleculeIdentifiers,
+        RDKitResult,
     )
     from chemvas.domain.document import MoleculeModel
     from chemvas.ui.main_window_palette import PALETTE
@@ -88,7 +89,7 @@ class SequencedAdapter:
     def __init__(self, responses) -> None:
         self._responses = list(responses)
         self.calls = []
-        self.last_error = None
+        self.last_error = "stale adapter error"
 
     def compute_props(self, model):
         return None, None, None
@@ -96,11 +97,10 @@ class SequencedAdapter:
     def compute_identifiers(self, model):
         return MoleculeIdentifiers()
 
-    def model_to_3d_scene(self, model, atom_annotations=None):
+    def model_to_3d_scene_result(self, model, atom_annotations=None):
         self.calls.append((model, atom_annotations))
         scene, error = self._responses.pop(0)
-        self.last_error = error
-        return scene
+        return RDKitResult(scene, error)
 
 
 class AnnotatedIdentifierAdapter(SequencedAdapter):
@@ -255,6 +255,7 @@ class Preview3DRecoveryTest(unittest.TestCase):
             self.assertEqual(len(adapter.calls), 1)
             self.assertIsNone(preview._scene)
             self.assertEqual(preview._message, "Temporary 3D failure")
+            self.assertEqual(adapter.last_error, "stale adapter error")
             self.assertIsNone(preview._current_signature)
 
             preview.refresh_selected_from_canvas(canvas)

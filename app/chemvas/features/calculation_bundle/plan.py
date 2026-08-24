@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from dataclasses import asdict, dataclass
 from typing import cast
 
@@ -15,6 +15,7 @@ from chemvas.domain.document import (
     calculation_plan_from_state,
     calculation_plan_to_state,
     deserialize_model_state,
+    included_atom_ids,
     model_bond_pairs,
 )
 from chemvas.domain.document.precomplex import precomplex_state_from_json
@@ -285,15 +286,6 @@ def require_step_ready(plan: CalculationPlan, step: CalculationStep) -> None:
         )
 
 
-def included_atom_ids(state: CalculationState) -> set[int]:
-    return {
-        atom_id
-        for member in state.members
-        if member.inclusion == "included"
-        for atom_id in member.component_atom_ids
-    }
-
-
 def _included_component_count(state: CalculationState) -> int:
     return sum(member.inclusion == "included" for member in state.members)
 
@@ -417,6 +409,44 @@ def identity_correspondence(
     return tuple(CalculationAtomCorrespondence(atom_id, atom_id) for atom_id in common)
 
 
+def fill_correspondence_gaps(
+    mapping_by_reactant: Mapping[int, int | None],
+    candidates: Iterable[tuple[int, int]],
+    *,
+    active_reactant_ids: set[int],
+    active_product_ids: set[int],
+    replaceable_reactant_ids: set[int],
+    atom_elements: Mapping[int, str] | None = None,
+) -> tuple[dict[int, int | None], int]:
+    """Fill safe active-endpoint gaps without mutating the supplied mapping."""
+
+    filled = dict(mapping_by_reactant)
+    used_product_ids = {
+        product_atom_id
+        for reactant_atom_id, product_atom_id in filled.items()
+        if reactant_atom_id in active_reactant_ids and type(product_atom_id) is int
+    }
+    applied = 0
+    for reactant_atom_id, product_atom_id in candidates:
+        if (
+            reactant_atom_id not in active_reactant_ids
+            or product_atom_id not in active_product_ids
+            or reactant_atom_id not in replaceable_reactant_ids
+            or filled.get(reactant_atom_id) is not None
+            or product_atom_id in used_product_ids
+        ):
+            continue
+        if (
+            atom_elements is not None
+            and atom_elements[reactant_atom_id] != atom_elements[product_atom_id]
+        ):
+            continue
+        filled[reactant_atom_id] = product_atom_id
+        used_product_ids.add(product_atom_id)
+        applied += 1
+    return filled, applied
+
+
 def member(
     component_atom_ids: tuple[int, ...], inclusion: str
 ) -> CalculationStateMember:
@@ -454,6 +484,7 @@ __all__ = [
     "calculation_state_by_id",
     "calculation_step_by_id",
     "correspondence_readiness",
+    "fill_correspondence_gaps",
     "identity_correspondence",
     "included_atom_ids",
     "member",

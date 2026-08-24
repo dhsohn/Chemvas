@@ -18,7 +18,6 @@ from chemvas.ui.main_window_toolbar_styles import (
     CONTEXT_BAR_BUTTON_HEIGHT,
     CONTEXT_BAR_CONTENT_HEIGHT,
     CONTEXT_BAR_ICON_SIZE,
-    CONTEXT_SEGMENT_STYLE,
     SMILES_RENDER_BUTTON_STYLE,
     TOOLBAR_BUTTON_SIZE,
     TOOLBAR_BUTTON_STYLE,
@@ -33,7 +32,6 @@ def test_theme_module_reexports_split_style_contract() -> None:
     assert main_window_theme.MAIN_WINDOW_STYLESHEET is MAIN_WINDOW_STYLESHEET
     assert main_window_theme.TOOLBAR_BUTTON_STYLE is TOOLBAR_BUTTON_STYLE
     assert main_window_theme.TOOLBAR_MENU_BUTTON_STYLE is TOOLBAR_MENU_BUTTON_STYLE
-    assert main_window_theme.CONTEXT_SEGMENT_STYLE is CONTEXT_SEGMENT_STYLE
     assert main_window_theme.SMILES_RENDER_BUTTON_STYLE is SMILES_RENDER_BUTTON_STYLE
     assert main_window_theme.TOOLBAR_THICKNESS == TOOLBAR_THICKNESS
     assert main_window_theme.TOOLBAR_BUTTON_SIZE == TOOLBAR_BUTTON_SIZE
@@ -91,7 +89,6 @@ def test_toolbar_styles_keep_expected_selectors() -> None:
     assert "padding: 2px" in main_window_chrome_stylesheet(PALETTE)
     assert "QToolButton:checked" in TOOLBAR_BUTTON_STYLE
     assert "QToolButton::menu-button" in TOOLBAR_MENU_BUTTON_STYLE
-    assert "font-size: 13px" in CONTEXT_SEGMENT_STYLE
     assert "QToolButton#smiles_render_button" in SMILES_RENDER_BUTTON_STYLE
     assert PALETTE["checked_bg"] in TOOLBAR_BUTTON_STYLE
     assert PALETTE["accent_pressed"] in SMILES_RENDER_BUTTON_STYLE

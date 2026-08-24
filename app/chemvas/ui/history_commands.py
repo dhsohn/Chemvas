@@ -89,8 +89,6 @@ def _restore_group_state(snapshot: _GroupStateSnapshot) -> None:
 def _active_handle_position_snapshots(canvas) -> list[tuple[object, object]]:
     runtime_state = getattr(canvas, "runtime_state", None)
     handle_state = getattr(runtime_state, "handle_state", None)
-    if handle_state is None:
-        handle_state = getattr(canvas, "handle_state", None)
     handles = getattr(handle_state, "active_handles", ())
     snapshots: list[tuple[object, object]] = []
     for handle in handles:

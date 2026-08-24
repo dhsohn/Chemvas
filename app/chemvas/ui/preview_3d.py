@@ -23,7 +23,7 @@ from chemvas.ui.preview_3d_painter import (
 )
 from chemvas.ui.preview_3d_renderer import status_badge_width
 from chemvas.ui.preview_3d_state import preview_payload_signature, preview_status_badge
-from chemvas.ui.preview_3d_worker import Preview3DWorker
+from chemvas.ui.preview_3d_worker import Preview3DAdapter, Preview3DWorker
 from chemvas.ui.structure_payload_access import build_selected_3d_conversion_payload_for
 
 
@@ -34,7 +34,7 @@ def _mouse_interaction_active() -> bool:
 class Preview3D(QWidget):
     def __init__(
         self,
-        rdkit_adapter: RDKitAdapter | None = None,
+        rdkit_adapter: Preview3DAdapter | None = None,
         *,
         interaction_active: Callable[[], bool] | None = None,
     ) -> None:
@@ -77,10 +77,10 @@ class Preview3D(QWidget):
         self.setMouseTracking(True)
 
     @property
-    def rdkit_adapter(self) -> Any:
+    def rdkit_adapter(self) -> Preview3DAdapter:
         return self._rdkit
 
-    def set_rdkit_adapter(self, rdkit_adapter: Any) -> None:
+    def set_rdkit_adapter(self, rdkit_adapter: Preview3DAdapter) -> None:
         self._rdkit = rdkit_adapter
 
     @property
@@ -202,19 +202,11 @@ class Preview3D(QWidget):
                 return
             self._start_preview_worker()
             return
-        result_method = getattr(self._rdkit, "model_to_3d_scene_result", None)
-        if callable(result_method):
-            result = result_method(
-                self._pending_model, atom_annotations=self._pending_annotations
-            )
-            scene = result.value
-            error = result.error
-        else:
-            scene = self._rdkit.model_to_3d_scene(
-                self._pending_model,
-                atom_annotations=self._pending_annotations,
-            )
-            error = getattr(self._rdkit, "last_error", None)
+        result = self._rdkit.model_to_3d_scene_result(
+            self._pending_model, atom_annotations=self._pending_annotations
+        )
+        scene = result.value
+        error = result.error
         if scene is None:
             self.clear_preview(error or "Failed to build 3D preview.")
             return

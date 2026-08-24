@@ -66,6 +66,10 @@ def _service_double(**overrides):
     return SimpleNamespace(**defaults)
 
 
+def _renderer_double():
+    return SimpleNamespace(style=SimpleNamespace(bond_length_px=20.0))
+
+
 @unittest.skipUnless(
     QApplication is not None, "PyQt6 is required for canvas hit testing service tests"
 )
@@ -89,6 +93,7 @@ class CanvasHitTestingServiceTest(unittest.TestCase):
     def test_item_lookup_prefers_atom_and_falls_back_to_nearby_bond(self) -> None:
         atom_item = _FakeItem("atom")
         canvas = SimpleNamespace(
+            renderer=_renderer_double(),
             scene=lambda: _FakeScene(
                 [
                     _FakeItem("selection_outline"),
@@ -110,6 +115,7 @@ class CanvasHitTestingServiceTest(unittest.TestCase):
 
         nearby_bond_graphic = _FakeItem("bond_graphic")
         fallback_canvas = SimpleNamespace(
+            renderer=_renderer_double(),
             scene=lambda: _FakeScene([_FakeItem("note_box"), _FakeItem("other")]),
             runtime_state=canvas_runtime_state(
                 bond_graphics_state=CanvasBondGraphicsState()
@@ -124,6 +130,7 @@ class CanvasHitTestingServiceTest(unittest.TestCase):
         )
 
         empty_fallback_canvas = SimpleNamespace(
+            renderer=_renderer_double(),
             scene=lambda: _FakeScene([_FakeItem("note_box"), _FakeItem("other")]),
             runtime_state=canvas_runtime_state(
                 bond_graphics_state=CanvasBondGraphicsState()
@@ -142,9 +149,10 @@ class CanvasHitTestingServiceTest(unittest.TestCase):
     ) -> None:
         atom_item = _FakeItem("atom")
         canvas = SimpleNamespace(
+            renderer=_renderer_double(),
             runtime_state=canvas_runtime_state(
                 bond_graphics_state=CanvasBondGraphicsState()
-            )
+            ),
         )
         set_bond_items_for(canvas, {})
         canvas.scene = mock.Mock(

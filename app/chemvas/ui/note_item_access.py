@@ -1,14 +1,9 @@
 from __future__ import annotations
 
-from chemvas.ui.canvas_service_access import optional_canvas_service_method
 from chemvas.ui.canvas_service_ports import note_controller_for_access
 
 COMMITTED_NOTE_TEXT_ROLE = 0xC001
 COMMITTED_NOTE_HTML_ROLE = 0xC002
-
-
-def _note_controller_method(canvas, name: str):
-    return optional_canvas_service_method(canvas, note_controller_for_access, name)
 
 
 def new_note_item_for(canvas):
@@ -69,15 +64,7 @@ def set_committed_note_html_for(item, html: str) -> None:
 
 
 def apply_note_style_for(canvas, item) -> None:
-    method = _note_controller_method(canvas, "apply_note_style")
-    if method is not None:
-        method(item)
-
-
-def update_note_box_for(canvas, item) -> None:
-    method = _note_controller_method(canvas, "update_note_box")
-    if method is not None:
-        method(item)
+    note_controller_for_access(canvas).apply_note_style(item)
 
 
 __all__ = [
@@ -89,5 +76,4 @@ __all__ = [
     "new_note_item_for",
     "set_committed_note_html_for",
     "set_committed_note_text_for",
-    "update_note_box_for",
 ]
