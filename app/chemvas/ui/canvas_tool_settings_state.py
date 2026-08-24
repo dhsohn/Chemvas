@@ -22,27 +22,9 @@ class CanvasToolSettingsState:
     arrow_line_width: float = 1.0
     arrow_head_scale: float = 0.3
     curved_snap: bool = False
-    curved_symmetry: bool = False
     curved_snap_step: float = 0.15
     orbital_snap_enabled: bool = False
     orbital_snap_step: int = 15
-
-
-TOOL_SETTING_ATTRS = (
-    "atom_symbol",
-    "active_bond_style",
-    "active_bond_order",
-    "snap_angle_step",
-    "mark_kind",
-    "active_arrow_type",
-    "active_bracket_type",
-    "active_orbital_type",
-    "active_shape_type",
-    "active_shape_stroke",
-    "orbital_phase_enabled",
-    "arrow_line_width",
-    "arrow_head_scale",
-)
 
 
 def tool_settings_state_for(canvas: Any) -> CanvasToolSettingsState:

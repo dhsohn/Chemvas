@@ -193,7 +193,6 @@ class CanvasViewCenterTransformHelpersTest(unittest.TestCase):
                     active_bond_order=1,
                     active_arrow_type="reaction",
                     active_orbital_type="p",
-                    curved_snap_step=0.25,
                 ),
             ),
         )
@@ -225,8 +224,6 @@ class CanvasViewCenterTransformHelpersTest(unittest.TestCase):
         tool_mode_controller.set_bond_style("double", 2)
         tool_mode_controller.set_arrow_type("curved")
         tool_mode_controller.set_orbital_type("sp2")
-        tool_mode_controller.set_curved_snap(1)
-        tool_mode_controller.set_curved_snap_step(0.01)
 
         settings = tool_settings_state_for(view)
         self.assertEqual(
@@ -234,8 +231,6 @@ class CanvasViewCenterTransformHelpersTest(unittest.TestCase):
         )
         self.assertEqual(settings.active_arrow_type, "curved")
         self.assertEqual(settings.active_orbital_type, "sp2")
-        self.assertTrue(tool_mode_controller.get_curved_snap())
-        self.assertEqual(tool_mode_controller.get_curved_snap_step(), 0.05)
         self.assertEqual(
             view.services.tool_controller.set_active.call_args_list,
             [mock.call("bond"), mock.call("arrow"), mock.call("orbital")],

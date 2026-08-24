@@ -4174,3 +4174,42 @@ def test_tool_context_bond_id_from_event_port_stays_removed() -> None:
     pattern = re.compile(r"^\s+def bond_id_from_event\b")
 
     assert _matching_lines(pattern, [tool_context]) == []
+
+
+def test_unreachable_snap_setting_accessors_stay_removed() -> None:
+    """No menu, toolbar, or context bar ever called these.
+
+    The curved-arrow and orbital snap fields they wrote stay on
+    ``CanvasToolSettingsState`` because the handle mutation code still reads
+    them, and ``snap_angle_step`` is still written through the generic
+    ``set_tool_setting_for``.
+    """
+    controller = APP_ROOT / "chemvas" / "ui" / "canvas_tool_mode_controller.py"
+    accessor_names = (
+        "set_curved_snap",
+        "get_curved_snap",
+        "set_curved_snap_step",
+        "get_curved_snap_step",
+        "set_curved_symmetry",
+        "get_curved_symmetry",
+        "set_orbital_snap_enabled",
+        "get_orbital_snap_enabled",
+        "set_orbital_snap_step",
+        "get_orbital_snap_step",
+        "set_snap_angle_step",
+    )
+    names = "|".join(re.escape(name) for name in accessor_names)
+    pattern = re.compile(rf"^\s+def (?:{names})\b")
+
+    assert _matching_lines(pattern, [controller]) == []
+
+
+def test_write_only_tool_setting_surfaces_stay_removed() -> None:
+    """``curved_symmetry`` was never read and ``TOOL_SETTING_ATTRS`` never used.
+
+    The field only ever fed its own accessor pair, and the tuple had no
+    consumer at all.
+    """
+    pattern = re.compile(r"\b(?:curved_symmetry|TOOL_SETTING_ATTRS)\b")
+
+    assert _matching_lines(pattern, _app_python_files()) == []

@@ -44,6 +44,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `HandleOverlayService`) and `ToolContext.bond_id_from_event` (the
   identically named hit-testing service method stays, because the right-click
   context menu uses it). Nothing changes on the sheet.
+- **Eleven snap-setting accessors with no caller.** `CanvasToolModeController`
+  exposed setters and getters for curved-arrow snapping, curved-arrow
+  symmetry, orbital-handle snapping, and the bond snap angle, but no menu,
+  toolbar, context bar, or shortcut ever called any of them. Two consequences
+  are real, though both were already the state of the shipped application:
+  curved-arrow midpoint snapping and orbital rotate-handle angle snapping are
+  now permanently off — they defaulted to off and had no interface to turn on —
+  and bond-angle snapping stays fixed at 30°, which is what it was set to
+  everywhere. The `curved_symmetry` field, which nothing ever read, and the
+  unused `TOOL_SETTING_ATTRS` tuple went with them; the four snap fields the
+  handle code still reads stayed.
 
 ## [0.4.1] - 2026-08-20
 

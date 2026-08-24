@@ -1490,14 +1490,6 @@ class CanvasViewAdditionalTest(unittest.TestCase):
         )
         text_style = text_style_state_for(style_view)
 
-        tool_mode_controller.set_curved_symmetry(True)
-        self.assertTrue(tool_mode_controller.get_curved_symmetry())
-
-        tool_mode_controller.set_orbital_snap_enabled(True)
-        self.assertTrue(tool_mode_controller.get_orbital_snap_enabled())
-        tool_mode_controller.set_orbital_snap_step(0)
-        self.assertEqual(tool_mode_controller.get_orbital_snap_step(), 1)
-
         style_controller.set_text_color(QColor("#ff00aa"))
         self.assertEqual(text_style.text_color.name(), "#ff00aa")
         style_controller.set_text_color(QColor())
@@ -1537,10 +1529,6 @@ class CanvasViewAdditionalTest(unittest.TestCase):
         self.assertEqual(text_style.note_border_color.name(), "#445566")
         style_controller.set_note_border_color(QColor())
         self.assertEqual(text_style.note_border_color.name(), "#445566")
-        tool_mode_controller.set_snap_angle_step(22)
-        self.assertEqual(tool_settings_state_for(style_view).snap_angle_step, 22)
-        style_view.services.tool_controller.set_active.assert_called_with("bond")
-        style_view.refresh_selection_outline.assert_called_once_with()
         self.assertGreaterEqual(
             note_controller.apply_text_style_to_selected.call_count, 7
         )
