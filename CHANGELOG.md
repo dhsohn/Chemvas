@@ -35,6 +35,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   gone, and the modules join the list production code may not import again.
   `main_window_icon_geometry.py` and the two icon fill tokens the renderers
   were the last readers of went with them. No icon changes appearance.
+- **Two tools that were never registered.** `TransformTool` and `EditBondTool`
+  were complete `Tool` subclasses, but neither name appears in the tool
+  registry `ToolController` builds, so no toolbar button, shortcut, or menu
+  could ever activate them — only the tests constructed them. Both classes and
+  the helpers they were the last caller of are gone:
+  `show_orbital_handles_for` (the live rotate handles still come from
+  `HandleOverlayService`) and `ToolContext.bond_id_from_event` (the
+  identically named hit-testing service method stays, because the right-click
+  context menu uses it). Nothing changes on the sheet.
 
 ## [0.4.1] - 2026-08-20
 

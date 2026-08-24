@@ -4140,3 +4140,37 @@ def test_ensure_canvas_state_stays_removed() -> None:
     pattern = re.compile(r"\bensure_canvas_state\b")
 
     assert _matching_lines(pattern, _app_python_files()) == []
+
+
+def test_unregistered_transform_and_edit_bond_tools_stay_removed() -> None:
+    """Neither tool was ever a key in ``ToolController.tools``.
+
+    They could only be built by hand, so nothing in the running application
+    could reach them.
+    """
+    pattern = re.compile(r"\b(?:TransformTool|EditBondTool)\b")
+
+    assert _matching_lines(pattern, _app_python_files()) == []
+
+
+def test_orbital_handle_overlay_access_wrapper_stays_removed() -> None:
+    """Only ``TransformTool`` called it.
+
+    The live rotate-handle path goes through ``HandleOverlayService`` and
+    ``CanvasHandleController`` instead.
+    """
+    pattern = re.compile(r"\bshow_orbital_handles_for\b")
+
+    assert _matching_lines(pattern, _app_python_files()) == []
+
+
+def test_tool_context_bond_id_from_event_port_stays_removed() -> None:
+    """``EditBondTool`` was the only caller of the ``ToolContext`` port.
+
+    The identically named ``CanvasHitTestingService`` method stays: the
+    right-click context menu still routes through it.
+    """
+    tool_context = APP_ROOT / "chemvas" / "ui" / "tool_context.py"
+    pattern = re.compile(r"^\s+def bond_id_from_event\b")
+
+    assert _matching_lines(pattern, [tool_context]) == []

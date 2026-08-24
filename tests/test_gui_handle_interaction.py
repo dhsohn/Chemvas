@@ -16,11 +16,11 @@ if QApplication is not None:
     from chemvas.bootstrap.main_window import build_main_window
     from chemvas.ui.canvas_scene_items_state import orbital_items_for
     from chemvas.ui.canvas_service_access import canvas_services_for
+    from chemvas.ui.canvas_service_ports import handle_overlay_service_for_access
     from chemvas.ui.canvas_tool_settings_state import set_tool_setting_for
     from chemvas.ui.handle_overlay_access import (
         clear_handles_for,
         show_curved_handles_for,
-        show_orbital_handles_for,
     )
     from chemvas.ui.handle_state import active_handles_for, handle_target_for
     from chemvas.ui.main_window_ports import (
@@ -65,7 +65,9 @@ class GuiHandleInteractionTest(unittest.TestCase):
         add_orbital_for(active_canvas_for_window(self.window), QPointF(0.0, 0.0))
         orbital = orbital_items_for(active_canvas_for_window(self.window))[0]
 
-        show_orbital_handles_for(active_canvas_for_window(self.window), orbital)
+        handle_overlay_service_for_access(
+            active_canvas_for_window(self.window)
+        ).show_orbital_handles(orbital)
 
         self.assertEqual(
             len(active_handles_for(active_canvas_for_window(self.window))), 2

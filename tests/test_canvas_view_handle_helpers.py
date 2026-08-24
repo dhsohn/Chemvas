@@ -23,6 +23,7 @@ except ModuleNotFoundError:
 
 if QApplication is not None:
     from chemvas.ui.canvas_handle_controller import CanvasHandleController
+    from chemvas.ui.canvas_service_ports import handle_overlay_service_for_access
     from chemvas.ui.canvas_tool_settings_state import CanvasToolSettingsState
     from chemvas.ui.curved_arrow_path_service import CurvedArrowPathService
     from chemvas.ui.handle_mutation_access import (
@@ -36,7 +37,6 @@ if QApplication is not None:
     from chemvas.ui.handle_overlay_access import (
         clear_handles_for,
         show_curved_handles_for,
-        show_orbital_handles_for,
     )
     from chemvas.ui.handle_overlay_service import HandleOverlayService
     from chemvas.ui.handle_state import CanvasHandleState
@@ -228,7 +228,7 @@ class CanvasViewHandleHelpersTest(unittest.TestCase):
         center_item = _FakeGraphicsItem()
         center_item.setData(1, {"center": QPointF(10.0, 20.0), "base_handle_dist": 7.0})
 
-        show_orbital_handles_for(view, center_item)
+        handle_overlay_service_for_access(view).show_orbital_handles(center_item)
 
         self.assertEqual(len(view.runtime_state.handle_state.active_handles), 2)
         self.assertIs(view.runtime_state.handle_state.target, center_item)
@@ -248,7 +248,7 @@ class CanvasViewHandleHelpersTest(unittest.TestCase):
         fallback_item = _FakeGraphicsItem(rect=QRectF(0.0, 0.0, 20.0, 10.0))
         fallback_item.setData(1, {})
 
-        show_orbital_handles_for(view, fallback_item)
+        handle_overlay_service_for_access(view).show_orbital_handles(fallback_item)
 
         self.assertEqual(
             [

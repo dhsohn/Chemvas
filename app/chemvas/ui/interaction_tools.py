@@ -3,16 +3,7 @@ from __future__ import annotations
 from PyQt6.QtCore import QEvent, Qt
 from PyQt6.QtGui import QTextCursor
 
-from chemvas.core.tool_overlay_logic import (
-    activate_tool_no_drag,
-    clear_temporary_tool_overlay,
-)
-from chemvas.ui.handle_overlay_access import (
-    clear_handles_for,
-    show_curved_handles_for,
-    show_orbital_handles_for,
-    show_shape_handles_for,
-)
+from chemvas.core.tool_overlay_logic import activate_tool_no_drag
 from chemvas.ui.renderer_style_access import bond_length_px_for
 from chemvas.ui.scene_decoration_access import add_mark_for, add_mark_for_atom_for
 from chemvas.ui.selection_service_access import (
@@ -21,54 +12,6 @@ from chemvas.ui.selection_service_access import (
     toggle_note_selection_for,
 )
 from chemvas.ui.tool_base import Tool
-
-
-class TransformTool(Tool):
-    def __init__(self, canvas, *, context=None) -> None:
-        super().__init__("transform", canvas, context=context)
-        self._active_handle = None
-
-    def activate(self) -> None:
-        activate_tool_no_drag(self.canvas)
-
-    def deactivate(self) -> None:
-        clear_temporary_tool_overlay(
-            self.canvas,
-            clear_handles=True,
-            clear_handles_callback=lambda: clear_handles_for(self.canvas),
-        )
-        self._active_handle = None
-
-    def on_mouse_press(self, event) -> bool:
-        if event.button() != Qt.MouseButton.LeftButton:
-            return False
-        item = self.context.item_at_event(event)
-        if item is None:
-            clear_temporary_tool_overlay(
-                self.canvas,
-                clear_handles=True,
-                clear_handles_callback=lambda: clear_handles_for(self.canvas),
-            )
-            self._active_handle = None
-            return True
-        if item.data(0) == "handle":
-            self._active_handle = item
-            return True
-        self._active_handle = None
-        kind = item.data(0)
-        if kind == "orbital":
-            show_orbital_handles_for(self.canvas, item)
-        elif kind in {"curved_single", "curved_double"}:
-            show_curved_handles_for(self.canvas, item)
-        elif kind == "shape":
-            show_shape_handles_for(self.canvas, item)
-        else:
-            clear_temporary_tool_overlay(
-                self.canvas,
-                clear_handles=True,
-                clear_handles_callback=lambda: clear_handles_for(self.canvas),
-            )
-        return True
 
 
 class MarkTool(Tool):
@@ -150,4 +93,4 @@ class NoteTool(Tool):
         return False
 
 
-__all__ = ["MarkTool", "NoteTool", "TransformTool"]
+__all__ = ["MarkTool", "NoteTool"]

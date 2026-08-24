@@ -13,7 +13,6 @@ def _hit_testing_port(**overrides):
         item_at_event=mock.Mock(),
         find_atom_near=mock.Mock(),
         find_bond_near=mock.Mock(),
-        bond_id_from_event=mock.Mock(),
     )
     defaults.update(overrides)
     return SimpleNamespace(**defaults)
@@ -97,7 +96,6 @@ def test_tool_context_delegates_hit_testing_ports_to_injected_service() -> None:
         item_at_event=mock.Mock(return_value=item),
         find_atom_near=mock.Mock(return_value=7),
         find_bond_near=mock.Mock(return_value=5),
-        bond_id_from_event=mock.Mock(return_value=2),
     )
     context = ToolContext(
         object(),
@@ -114,13 +112,11 @@ def test_tool_context_delegates_hit_testing_ports_to_injected_service() -> None:
     assert context.item_at_event(event) is item
     assert context.find_atom_near(1.0, 2.0, 6.0) == 7
     assert context.find_bond_near(pos, 8.0) == 5
-    assert context.bond_id_from_event(event) == 2
     hit_testing.scene_pos_from_event.assert_called_once_with(event)
     hit_testing.item_at_scene_pos.assert_called_once_with(pos)
     hit_testing.item_at_event.assert_called_once_with(event)
     hit_testing.find_atom_near.assert_called_once_with(1.0, 2.0, 6.0)
     hit_testing.find_bond_near.assert_called_once_with(pos, 8.0)
-    hit_testing.bond_id_from_event.assert_called_once_with(event)
 
 
 def test_tool_context_delegates_selection_ports_to_injected_controller() -> None:
@@ -272,9 +268,6 @@ def test_tool_context_does_not_fallback_to_canvas_facade_when_ports_are_injected
         find_bond_near=mock.Mock(
             side_effect=AssertionError("canvas facade should not be used")
         ),
-        bond_id_from_event=mock.Mock(
-            side_effect=AssertionError("canvas facade should not be used")
-        ),
         toggle_item_selection=mock.Mock(
             side_effect=AssertionError("canvas facade should not be used")
         ),
@@ -309,7 +302,6 @@ def test_tool_context_does_not_fallback_to_canvas_facade_when_ports_are_injected
         item_at_event=mock.Mock(return_value=item),
         find_atom_near=mock.Mock(return_value=None),
         find_bond_near=mock.Mock(return_value=None),
-        bond_id_from_event=mock.Mock(return_value=3),
     )
     selection = _selection_port(
         toggle_item_selection=mock.Mock(return_value=True),
@@ -340,7 +332,6 @@ def test_tool_context_does_not_fallback_to_canvas_facade_when_ports_are_injected
     assert context.item_at_event(object()) is item
     assert context.find_atom_near(1.0, 2.0, 3.0) is None
     assert context.find_bond_near(pos, 4.0) is None
-    assert context.bond_id_from_event(object()) == 3
     assert context.toggle_item_selection(item)
     assert context.preferred_structure_hit_at_scene_pos(pos) is hit
     assert context.preferred_structure_item_at_scene_pos(pos) is item
@@ -356,7 +347,6 @@ def test_tool_context_does_not_fallback_to_canvas_facade_when_ports_are_injected
     canvas.item_at_event.assert_not_called()
     canvas.find_atom_near.assert_not_called()
     canvas.find_bond_near.assert_not_called()
-    canvas.bond_id_from_event.assert_not_called()
     canvas.toggle_item_selection.assert_not_called()
     canvas.preferred_structure_hit_at_scene_pos.assert_not_called()
     canvas.preferred_structure_item_at_scene_pos.assert_not_called()
@@ -378,7 +368,6 @@ def test_tool_context_does_not_use_canvas_fallbacks_when_ports_are_missing() -> 
         item_at_event=mock.Mock(return_value=item),
         find_atom_near=mock.Mock(return_value=7),
         find_bond_near=mock.Mock(return_value=5),
-        bond_id_from_event=mock.Mock(return_value=2),
         toggle_item_selection=mock.Mock(return_value=True),
         preferred_structure_hit_at_scene_pos=mock.Mock(return_value=hit),
         preferred_structure_item_at_scene_pos=mock.Mock(return_value=item),
@@ -401,7 +390,6 @@ def test_tool_context_does_not_use_canvas_fallbacks_when_ports_are_missing() -> 
     assert context.item_at_event(object()) is None
     assert context.find_atom_near(1.0, 2.0, 6.0) is None
     assert context.find_bond_near(pos, 8.0) is None
-    assert context.bond_id_from_event(object()) is None
     assert not context.toggle_item_selection(item)
     assert context.preferred_structure_hit_at_scene_pos(pos) is None
     assert context.preferred_structure_item_at_scene_pos(pos) is None
@@ -415,7 +403,6 @@ def test_tool_context_does_not_use_canvas_fallbacks_when_ports_are_missing() -> 
     canvas.item_at_event.assert_not_called()
     canvas.find_atom_near.assert_not_called()
     canvas.find_bond_near.assert_not_called()
-    canvas.bond_id_from_event.assert_not_called()
     canvas.toggle_item_selection.assert_not_called()
     canvas.preferred_structure_hit_at_scene_pos.assert_not_called()
     canvas.preferred_structure_item_at_scene_pos.assert_not_called()
