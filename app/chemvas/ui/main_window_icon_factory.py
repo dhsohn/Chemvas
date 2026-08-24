@@ -1,24 +1,12 @@
 from __future__ import annotations
 
-from PyQt6.QtCore import QPointF, Qt
-from PyQt6.QtGui import (
-    QBrush,
-    QColor,
-    QIcon,
-    QPen,
-    QPolygonF,
-)
+from PyQt6.QtGui import QIcon
 
-from chemvas.ui.main_window_bond_icon_renderer import MainWindowBondIconRenderer
 from chemvas.ui.main_window_design_icon_renderer import (
     draw_design_icon,
     has_design_icon,
 )
-from chemvas.ui.main_window_icon_canvas_style import MainWindowIconCanvasStyle
 from chemvas.ui.main_window_icon_pixmap_factory import MainWindowIconPixmapFactory
-from chemvas.ui.main_window_palette import PALETTE
-from chemvas.ui.main_window_tool_icon_renderer import MainWindowToolIconRenderer
-from chemvas.ui.main_window_utility_icon_renderer import MainWindowUtilityIconRenderer
 
 _TEMPLATE_ICON_BY_LABEL: dict[str, str] = {
     "Benzene": "template_benzene",
@@ -34,91 +22,9 @@ _TEMPLATE_ICON_BY_LABEL: dict[str, str] = {
 
 class MainWindowIconFactory:
     ICON_SIZE = 30
-    ICON_CONTENT_MIN = 5
-    ICON_CONTENT_MAX = 25
-    ICON_CENTER = ICON_SIZE // 2
 
-    STROKE_COLOR = PALETTE["icon"]
-    MUTED_STROKE_COLOR = PALETTE["icon_muted"]
-    PALE_FILL_COLOR = PALETTE["icon_pale_fill"]
-    ACCENT_FILL_COLOR = PALETTE["icon_accent_fill"]
-
-    # Stroke weights are kept in a tight band so every icon reads as one set.
-    # Line work converges on ~1.8; only bond/ring glyphs stay a touch heavier
-    # (molecule) so they echo the canvas bond weight.
-    STROKE_FINE = 1.7
-    STROKE_THIN = 1.8
-    STROKE_REGULAR = 1.8
-    STROKE_MOLECULE = 2.0
-    STROKE_ACTIVE = 2.0
-
-    def __init__(self, window, *, canvas_style=None) -> None:
+    def __init__(self, window) -> None:
         self._pixmap_icons = MainWindowIconPixmapFactory(default_size=self.ICON_SIZE)
-        self._canvas_style = (
-            MainWindowIconCanvasStyle(window) if canvas_style is None else canvas_style
-        )
-        self._bond_icons = MainWindowBondIconRenderer(
-            canvas_style=self._canvas_style,
-            icon_pen=self._icon_pen,
-            renderer_icon_pen=self._renderer_icon_pen,
-            icon_brush=self._icon_brush,
-            stroke_active=self.STROKE_ACTIVE,
-            stroke_thin=self.STROKE_THIN,
-            stroke_regular=self.STROKE_REGULAR,
-            stroke_molecule=self.STROKE_MOLECULE,
-            icon_size=self.ICON_SIZE,
-        )
-        self._utility_icons = MainWindowUtilityIconRenderer(
-            icon_pen=self._icon_pen,
-            icon_brush=self._icon_brush,
-            stroke_thin=self.STROKE_THIN,
-            stroke_regular=self.STROKE_REGULAR,
-        )
-        self._tool_icons = MainWindowToolIconRenderer(
-            icon_pen=self._icon_pen,
-            icon_brush=self._icon_brush,
-            stroke_fine=self.STROKE_FINE,
-            stroke_thin=self.STROKE_THIN,
-            stroke_regular=self.STROKE_REGULAR,
-            stroke_molecule=self.STROKE_MOLECULE,
-            stroke_active=self.STROKE_ACTIVE,
-            icon_content_min=self.ICON_CONTENT_MIN,
-            icon_content_max=self.ICON_CONTENT_MAX,
-            icon_center=self.ICON_CENTER,
-            pale_fill_color=self.PALE_FILL_COLOR,
-            accent_fill_color=self.ACCENT_FILL_COLOR,
-        )
-
-    def _icon_color(self, color=None) -> QColor:
-        return QColor(self.STROKE_COLOR if color is None else color)
-
-    def _icon_pen(
-        self,
-        width: float | None = None,
-        *,
-        color=None,
-        style: Qt.PenStyle | None = None,
-    ) -> QPen:
-        pen = QPen(self._icon_color(color))
-        pen.setWidthF(self.STROKE_THIN if width is None else width)
-        if style is not None:
-            pen.setStyle(style)
-        pen.setCapStyle(Qt.PenCapStyle.RoundCap)
-        pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
-        return pen
-
-    def _icon_brush(self, color=None) -> QBrush:
-        return QBrush(self._icon_color(color))
-
-    def _renderer_icon_pen(self, pen: QPen) -> QPen:
-        icon_pen = QPen(pen)
-        icon_pen.setColor(self._icon_color())
-        icon_pen.setCapStyle(Qt.PenCapStyle.RoundCap)
-        icon_pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
-        return icon_pen
-
-    def make_icon(self, painter_fn, size: int | None = None) -> QIcon:
-        return self._pixmap_icons.make_icon(painter_fn, size=size)
 
     # Logical sizes the design icons are actually displayed at: 16px in the
     # context options bar, 18px in the toolbars, plus the 30px base. Rendering an
@@ -167,9 +73,6 @@ class MainWindowIconFactory:
     def icon_note(self) -> QIcon:
         return self.make_design_icon("note")
 
-    def icon_font(self) -> QIcon:
-        return self.make_design_icon("font")
-
     def icon_text_bold(self) -> QIcon:
         return self.make_design_icon("text_bold")
 
@@ -197,19 +100,6 @@ class MainWindowIconFactory:
     def icon_align_right(self) -> QIcon:
         return self.make_design_icon("align_right")
 
-    def benzene_icon_inner_segments(
-        self,
-        polygon: QPolygonF,
-        center: QPointF,
-        *,
-        spacing_scale: float = 1.0,
-    ) -> list[tuple[QPointF, QPointF]]:
-        return self._bond_icons.benzene_icon_inner_segments(
-            polygon,
-            center,
-            spacing_scale=spacing_scale,
-        )
-
     def icon_ring(self) -> QIcon:
         return self.make_design_icon("benzene")
 
@@ -218,33 +108,6 @@ class MainWindowIconFactory:
 
     def icon_eraser(self) -> QIcon:
         return self.make_design_icon("eraser")
-
-    def icon_undo(self) -> QIcon:
-        return self.make_design_icon("undo")
-
-    def icon_redo(self) -> QIcon:
-        return self.make_design_icon("redo")
-
-    def icon_save(self) -> QIcon:
-        return self.make_design_icon("save")
-
-    def icon_open(self) -> QIcon:
-        return self.make_design_icon("open")
-
-    def icon_preview_panel(self) -> QIcon:
-        return self.make_design_icon("panel_right")
-
-    def icon_add_canvas(self) -> QIcon:
-        return self.make_design_icon("canvas")
-
-    def icon_setup_sheet(self) -> QIcon:
-        return self.make_design_icon("sheet")
-
-    def icon_templates(self) -> QIcon:
-        return self.make_design_icon("templates")
-
-    def icon_info(self) -> QIcon:
-        return self.make_design_icon("info")
 
     def icon_bond_double(self) -> QIcon:
         return self.make_design_icon("bond_double")
@@ -260,9 +123,6 @@ class MainWindowIconFactory:
 
     def icon_bond_dotted(self) -> QIcon:
         return self.make_design_icon("bond_dotted")
-
-    def icon_bond_length(self) -> QIcon:
-        return self.make_design_icon("bond_length")
 
     def icon_arrow_preview(self, kind: str) -> QIcon:
         return self._design_icon(f"arrow_{kind}", "arrow_reaction")
@@ -320,9 +180,6 @@ class MainWindowIconFactory:
 
     def icon_shape_stroke(self, style: str) -> QIcon:
         return self._design_icon(f"stroke_{style}", "stroke_solid")
-
-    def icon_move(self) -> QIcon:
-        return self.make_design_icon("move")
 
     def icon_color(self) -> QIcon:
         return self.make_design_icon("color")

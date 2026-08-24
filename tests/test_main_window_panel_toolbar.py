@@ -64,17 +64,9 @@ class _HarnessWindow(QMainWindow):
         self.apply_color_preset = mock.Mock()
         self.apply_ring_fill_preset = mock.Mock()
         self._icon_factory = SimpleNamespace(
-            icon_bond_length=self._blank_icon,
             icon_flip_h=self._blank_icon,
             icon_flip_v=self._blank_icon,
             icon_rotate=self._blank_icon,
-            icon_save=self._blank_icon,
-            icon_open=self._blank_icon,
-            icon_preview_panel=self._blank_icon,
-            icon_add_canvas=self._blank_icon,
-            icon_setup_sheet=self._blank_icon,
-            icon_undo=self._blank_icon,
-            icon_redo=self._blank_icon,
             icon_color=self._blank_icon,
             icon_ring_fill=self._blank_icon,
             icon_orbital=self._blank_icon,

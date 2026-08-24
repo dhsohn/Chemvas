@@ -1,23 +1,18 @@
-import math
 import os
 import unittest
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 try:
-    from PyQt6.QtCore import QPointF, QSize, Qt
-    from PyQt6.QtGui import QColor, QPainter, QPen, QPixmap, QPolygonF
+    from PyQt6.QtCore import QSize
+    from PyQt6.QtGui import QColor, QPainter, QPixmap
     from PyQt6.QtWidgets import QApplication
 except ModuleNotFoundError:
     QApplication = None
-    QPointF = None
     QSize = None
-    Qt = None
     QColor = None
     QPainter = None
-    QPen = None
     QPixmap = None
-    QPolygonF = None
 
 if QApplication is not None:
     from chemvas.bootstrap.main_window import build_main_window
@@ -26,8 +21,6 @@ if QApplication is not None:
         _TEMPLATE_ICON_BY_LABEL,
         MainWindowIconFactory,
     )
-    from chemvas.ui.main_window_icon_geometry import benzene_icon_polygon
-    from chemvas.ui.main_window_ports import active_canvas_for_window
 
 
 def _opaque_bounds(image) -> tuple[int, int, int, int] | None:
@@ -60,41 +53,6 @@ class MainWindowIconGeometryTest(unittest.TestCase):
         self.window.close()
         self.app.processEvents()
 
-    def test_ring_icon_inner_bond_matches_canvas_spacing_and_orientation(self) -> None:
-        center = QPointF(15.0, 15.0)
-        outer = benzene_icon_polygon(center, 10.0)
-        base_segments = self.factory.benzene_icon_inner_segments(outer, center)
-        inner_segments = self.factory.benzene_icon_inner_segments(
-            outer, center, spacing_scale=0.92
-        )
-
-        self.assertEqual(len(base_segments), 3)
-        self.assertEqual(len(inner_segments), 3)
-
-        base_start, base_end = base_segments[0]
-        start, end = inner_segments[0]
-        self.assertAlmostEqual(start.x(), end.x(), places=2)
-        self.assertGreater(start.y(), outer[0].y())
-        self.assertLess(end.y(), outer[1].y())
-
-        outer_mid_x = (outer[0].x() + outer[1].x()) / 2.0
-        base_inner_mid_x = (base_start.x() + base_end.x()) / 2.0
-        inner_mid_x = (start.x() + end.x()) / 2.0
-        icon_bond_length = math.hypot(
-            outer[1].x() - outer[0].x(), outer[1].y() - outer[0].y()
-        )
-        expected_base_spacing = icon_bond_length * (
-            active_canvas_for_window(self.window).renderer.style.bond_spacing_px
-            * 1.1
-            / active_canvas_for_window(self.window).renderer.style.bond_length_px
-        )
-
-        self.assertAlmostEqual(
-            outer_mid_x - base_inner_mid_x, expected_base_spacing, places=2
-        )
-        self.assertGreater(outer_mid_x - inner_mid_x, outer_mid_x - base_inner_mid_x)
-        self.assertGreater(inner_mid_x, center.x())
-
     def test_ring_icon_fills_toolbar_icon_size_more_like_canvas_preview(self) -> None:
         pixmap = self.factory.icon_ring().pixmap(26, 26)
         image = pixmap.toImage()
@@ -104,97 +62,44 @@ class MainWindowIconGeometryTest(unittest.TestCase):
         self.assertGreaterEqual(max_x - min_x + 1, 16)
         self.assertGreaterEqual(max_y - min_y + 1, 18)
 
-    def test_canvas_dependent_wedge_icon_renders_non_empty_bounds(self) -> None:
-        bounds = _opaque_bounds(self.factory.icon_bond_wedge().pixmap(30, 30).toImage())
-        self.assertIsNotNone(bounds)
-
-    def test_canvas_dependent_icons_can_render_from_injected_style_port(self) -> None:
-        class _FakeStyle:
-            def bond_length_px(self) -> float:
-                return 20.0
-
-            def bond_pen(self) -> QPen:
-                pen = QPen()
-                pen.setWidthF(1.5)
-                return pen
-
-            def bold_bond_pen(self) -> QPen:
-                pen = QPen()
-                pen.setWidthF(5.0)
-                return pen
-
-            def dotted_bond_pen(self) -> QPen:
-                pen = QPen()
-                pen.setWidthF(2.0)
-                pen.setStyle(Qt.PenStyle.DotLine)
-                return pen
-
-            def hash_spacing_px(self) -> float:
-                return 4.0
-
-            def ring_double_inner_segment(
-                self, start: QPointF, end: QPointF, center: QPointF
-            ):
-                return (start.x() + 1.0, start.y(), end.x() + 1.0, end.y())
-
-        factory = MainWindowIconFactory(object(), canvas_style=_FakeStyle())
-
+    def test_bond_glyph_icons_render_non_empty_bounds(self) -> None:
         for icon in (
-            factory.icon_bond_bold(),
-            factory.icon_bond_wedge(),
-            factory.icon_bond_hash(),
-            factory.icon_bond_dotted(),
-            factory.icon_ring(),
+            self.factory.icon_bond(),
+            self.factory.icon_bond_bold(),
+            self.factory.icon_bond_wedge(),
+            self.factory.icon_bond_hash(),
+            self.factory.icon_bond_dotted(),
+            self.factory.icon_ring(),
         ):
             self.assertIsNotNone(_opaque_bounds(icon.pixmap(30, 30).toImage()))
-
-    def test_benzene_inner_segments_handle_short_and_zero_length_polygons(self) -> None:
-        center = QPointF(15.0, 15.0)
-
-        self.assertEqual(
-            self.factory.benzene_icon_inner_segments(QPolygonF([center]), center), []
-        )
-        self.assertEqual(
-            self.factory.benzene_icon_inner_segments(
-                QPolygonF([center, center]), center
-            ),
-            [],
-        )
 
     def test_basic_toolbar_icons_render_non_empty_bounds(self) -> None:
         for icon in (
             self.factory.icon_select(),
-            self.factory.icon_add_canvas(),
-            self.factory.icon_info(),
-            self.factory.icon_preview_panel(),
+            self.factory.icon_text(),
+            self.factory.icon_note(),
+            self.factory.icon_eraser(),
             self.factory.icon_bond_double(),
             self.factory.icon_bond_triple(),
             self.factory.icon_orbital(),
-            self.factory.icon_move(),
+            self.factory.icon_shape(),
             self.factory.icon_perspective(),
         ):
             self.assertIsNotNone(_opaque_bounds(icon.pixmap(30, 30).toImage()))
 
-    def test_shared_icon_size_and_pen_helpers_stay_consistent(self) -> None:
+    def test_shared_icon_size_stays_consistent(self) -> None:
         expected_size = QSize(self.factory.ICON_SIZE, self.factory.ICON_SIZE)
         for icon in (
             self.factory.icon_ring(),
-            self.factory.icon_save(),
-            self.factory.icon_setup_sheet(),
+            self.factory.icon_ring_fill(),
+            self.factory.icon_eraser(),
             self.factory.icon_arrow(),
             self.factory.icon_color(),
             self.factory.icon_select(),
-            self.factory.icon_templates(),
+            self.factory.icon_ts_bracket(),
             self.factory.icon_perspective(),
         ):
             self.assertIn(expected_size, icon.availableSizes())
-
-        default_pen = self.factory._icon_pen()
-        active_pen = self.factory._icon_pen(self.factory.STROKE_ACTIVE)
-        self.assertEqual(default_pen.color().name(), self.factory.STROKE_COLOR)
-        self.assertAlmostEqual(default_pen.widthF(), self.factory.STROKE_THIN)
-        self.assertEqual(active_pen.color().name(), self.factory.STROKE_COLOR)
-        self.assertAlmostEqual(active_pen.widthF(), self.factory.STROKE_ACTIVE)
 
     def test_arrow_preview_matrix_renders_special_cases(self) -> None:
         for kind in (

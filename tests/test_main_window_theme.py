@@ -52,7 +52,6 @@ def test_stylesheet_uses_shared_palette_values() -> None:
 def test_palette_exposes_design_system_shell_tokens() -> None:
     assert PALETTE["icon"] == "#2f2f2c"
     assert PALETTE["icon_muted"] == "#8c8c87"
-    assert PALETTE["icon_pale_fill"] == "#ededeb"
     assert PALETTE["checked_bg"] == "#d6ece7"
     assert PALETTE["checked_border"] == "#5fb3a6"
     assert PALETTE["checked_text"] == "#0b5750"

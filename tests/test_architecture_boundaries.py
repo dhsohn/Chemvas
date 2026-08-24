@@ -2662,18 +2662,23 @@ def test_main_window_document_and_icon_services_do_not_use_context_facade() -> N
     assert _matching_lines(pattern, paths) == []
 
 
-def test_main_window_icon_factory_delegates_canvas_style_access_to_port() -> None:
+def test_main_window_icon_factory_reads_no_canvas_style() -> None:
     factory = APP_ROOT / "chemvas" / "ui" / "main_window_icon_factory.py"
-    port = APP_ROOT / "chemvas" / "ui" / "main_window_icon_canvas_style.py"
     factory_source = factory.read_text(encoding="utf-8")
-    port_source = port.read_text(encoding="utf-8")
 
+    # Every icon now comes from the shared SVG design set, so the factory has no
+    # canvas-derived pen or spacing to read. The port that used to fetch them is
+    # gone with its last caller instead of staying as a second style source.
+    assert not (
+        APP_ROOT / "chemvas" / "ui" / "main_window_icon_canvas_style.py"
+    ).exists()
+    assert "MainWindowIconCanvasStyle" not in factory_source
+    assert "canvas_style" not in factory_source
     assert "window.canvas" not in factory_source
     assert "self.window" not in factory_source
     assert "renderer_style_access" not in factory_source
     assert "ring_double_segments_for" not in factory_source
     assert "from chemvas.domain.document import Atom" not in factory_source
-    assert "self._window.canvas" not in port_source
 
 
 def test_main_window_icon_factory_delegates_hidpi_icon_rendering_to_pixmap_factory() -> (
@@ -2688,20 +2693,27 @@ def test_main_window_icon_factory_delegates_hidpi_icon_rendering_to_pixmap_facto
     assert "devicePixelRatio()" not in factory_source
 
 
-def test_main_window_icon_factory_delegates_pure_geometry_to_helper() -> None:
+def test_main_window_icon_geometry_helper_stays_removed() -> None:
     factory = APP_ROOT / "chemvas" / "ui" / "main_window_icon_factory.py"
     factory_source = factory.read_text(encoding="utf-8")
 
-    assert "from chemvas.ui.main_window_icon_geometry import" not in factory_source
+    assert not (APP_ROOT / "chemvas" / "ui" / "main_window_icon_geometry.py").exists()
+    assert "main_window_icon_geometry" not in factory_source
+    assert "def regular_icon_polygon" not in factory_source
     assert "def benzene_icon_polygon" not in factory_source
     assert "def template_preview_ring_sides" not in factory_source
     assert "def chair_icon_points" not in factory_source
 
 
-def test_main_window_icon_factory_delegates_bond_drawing_to_renderer() -> None:
+def test_main_window_bond_icons_use_only_static_design_mapping() -> None:
     factory = APP_ROOT / "chemvas" / "ui" / "main_window_icon_factory.py"
     factory_source = factory.read_text(encoding="utf-8")
 
+    assert not (
+        APP_ROOT / "chemvas" / "ui" / "main_window_bond_icon_renderer.py"
+    ).exists()
+    assert "MainWindowBondIconRenderer" not in factory_source
+    assert "benzene_icon_inner_segments" not in factory_source
     for icon_name in (
         "bond",
         "bond_double",
@@ -2711,9 +2723,9 @@ def test_main_window_icon_factory_delegates_bond_drawing_to_renderer() -> None:
         "benzene",
         "bond_bold",
         "bond_dotted",
-        "bond_length",
     ):
         assert f'self.make_design_icon("{icon_name}")' in factory_source
+    assert "def icon_bond_length(" not in factory_source
     assert "bold_bond_pen()" not in factory_source
     assert "hash_spacing_px()" not in factory_source
     assert "dotted_bond_pen()" not in factory_source
@@ -2743,28 +2755,24 @@ def test_main_window_template_icons_use_only_static_design_mapping() -> None:
         APP_ROOT / "chemvas" / "ui" / "main_window_template_icon_renderer.py"
     ).exists()
     assert "_TEMPLATE_ICON_BY_LABEL" in factory_source
+    assert "def icon_templates(" not in factory_source
     assert "template_preview_ring_polygon" not in factory_source
     assert "template_preview_ring_sides" not in factory_source
     assert "chair_icon_points" not in factory_source
 
 
-def test_main_window_icon_factory_delegates_utility_drawing_to_renderer() -> None:
+def test_main_window_utility_icon_accessors_stay_removed() -> None:
     factory = APP_ROOT / "chemvas" / "ui" / "main_window_icon_factory.py"
-    utility_icons = APP_ROOT / "chemvas" / "ui" / "main_window_utility_icon_renderer.py"
     factory_source = factory.read_text(encoding="utf-8")
-    utility_icons_source = utility_icons.read_text(encoding="utf-8")
 
-    for icon_name in (
-        "undo",
-        "redo",
-        "save",
-        "open",
-        "panel_right",
-        "canvas",
-        "sheet",
-        "info",
-    ):
-        assert f'self.make_design_icon("{icon_name}")' in factory_source
+    # The window chrome takes these actions from the menus, not from toolbar
+    # icons, so nothing called the utility accessors after the SVG cutover. They
+    # went with their renderer; a caller that needs one adds it back next to the
+    # design icon it renders, not as a second painting path.
+    assert not (
+        APP_ROOT / "chemvas" / "ui" / "main_window_utility_icon_renderer.py"
+    ).exists()
+    assert "MainWindowUtilityIconRenderer" not in factory_source
     for icon_name in (
         "undo",
         "redo",
@@ -2775,17 +2783,25 @@ def test_main_window_icon_factory_delegates_utility_drawing_to_renderer() -> Non
         "setup_sheet",
         "info",
     ):
-        assert f"def draw_{icon_name}" in utility_icons_source
+        assert f"def icon_{icon_name}(" not in factory_source
+
+    # The text style bar reaches its font control through the context bar spec
+    # tables, so the accessor went the same way as the utility ones.
+    assert "def icon_font(" not in factory_source
 
     assert "drawRect(7, 8, 10, 12)" not in factory_source
     assert "drawLine(QPointF(15.0, 5.0), QPointF(15.0, 17.5))" not in factory_source
     assert "drawEllipse(7, 7, 16, 16)" not in factory_source
 
 
-def test_main_window_icon_factory_delegates_tool_drawing_to_renderer() -> None:
+def test_main_window_tool_icons_use_only_static_design_mapping() -> None:
     factory = APP_ROOT / "chemvas" / "ui" / "main_window_icon_factory.py"
     factory_source = factory.read_text(encoding="utf-8")
 
+    assert not (
+        APP_ROOT / "chemvas" / "ui" / "main_window_tool_icon_renderer.py"
+    ).exists()
+    assert "MainWindowToolIconRenderer" not in factory_source
     for icon_name in (
         "atom",
         "flip_h",
@@ -2803,7 +2819,10 @@ def test_main_window_icon_factory_delegates_tool_drawing_to_renderer() -> None:
         "ring_fill",
     ):
         assert f'self.make_design_icon("{icon_name}")' in factory_source
-    assert factory_source.count('self.make_design_icon("move")') >= 2
+    # `icon_select` is the one accessor left drawing the move glyph; the
+    # `icon_move` alias that duplicated it had no caller and is gone.
+    assert factory_source.count('self.make_design_icon("move")') == 1
+    assert "def icon_move(" not in factory_source
     # Orbital and bracket previews now resolve to shared SVG design icons.
 
     assert "QPainterPath" not in factory_source
