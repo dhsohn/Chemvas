@@ -23,6 +23,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   shipped tests could never be collected. The wheel — what `pip install
   chemvas` installs — is unchanged.
 
+### Removed
+- **The last three hand-painted icon renderers.** `MainWindowBondIconRenderer`,
+  `MainWindowUtilityIconRenderer` and `MainWindowToolIconRenderer` drew the
+  toolbar icons until the SVG design set took over, and
+  `MainWindowIconCanvasStyle` was the port that fed the bond one. Like the
+  arrow renderer retired before them, the cutover dropped every call into the
+  three classes but kept constructing them, so a second source of icon geometry
+  stayed in the tree with nothing reading it. The modules, their construction,
+  their tests, and the twelve icon accessors that no longer had a caller are
+  gone, and the modules join the list production code may not import again.
+  `main_window_icon_geometry.py` and the two icon fill tokens the renderers
+  were the last readers of went with them. No icon changes appearance.
+
 ## [0.4.1] - 2026-08-20
 
 ### Fixed

@@ -20,8 +20,6 @@ PALETTE = {
     "text_faint": "#9b9b96",
     "icon": "#2f2f2c",
     "icon_muted": "#8c8c87",
-    "icon_pale_fill": "#ededeb",
-    "icon_accent_fill": "#d3d3ce",
     "hover": "#ededeb",
     "pressed": "#e2e2df",
     "scrollbar": "#cfcfc9",
