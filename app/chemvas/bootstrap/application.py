@@ -48,7 +48,6 @@ HEADLESS_SUBCOMMAND_HELP = (
     ("render-document", "render a document to SVG or PNG"),
     ("select-precomplex", "review and select a precomplex endpoint pair"),
 )
-HEADLESS_SUBCOMMANDS = tuple(command for command, _help in HEADLESS_SUBCOMMAND_HELP)
 
 
 def _should_filter_stderr(platform: str | None = None) -> bool:

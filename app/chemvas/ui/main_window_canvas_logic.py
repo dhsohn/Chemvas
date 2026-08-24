@@ -30,8 +30,6 @@ CANVAS_TEMPLATE_TEXT_FIELDS = (
     "text_italic",
 )
 
-CANVAS_TEMPLATE_FIELDS = CANVAS_TEMPLATE_TOOL_FIELDS + CANVAS_TEMPLATE_TEXT_FIELDS
-
 
 def resolve_active_canvas(
     current_widget,
@@ -120,7 +118,6 @@ def bind_active_canvas_callbacks(
 
 
 __all__ = [
-    "CANVAS_TEMPLATE_FIELDS",
     "CANVAS_TEMPLATE_TEXT_FIELDS",
     "CANVAS_TEMPLATE_TOOL_FIELDS",
     "active_canvas_index",

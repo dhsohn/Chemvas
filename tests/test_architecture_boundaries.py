@@ -4276,3 +4276,46 @@ def test_duplicate_rdkit_export_reset_wrapper_stays_removed() -> None:
     pattern = re.compile(r"\breset_rdkit_export_job_state_for_tests\b")
 
     assert _matching_lines(pattern, _app_python_files()) == []
+
+
+def test_exports_and_constants_without_a_reader_stay_removed() -> None:
+    """Names nothing imported, iterated, or read.
+
+    ``compute_identifiers_for`` is the access wrapper, not the live
+    ``compute_identifiers`` on the adapter.
+    """
+    removed_names = (
+        "compute_identifiers_for",
+        "TEXT_STYLE_ATTRS",
+        "CANVAS_TEMPLATE_FIELDS",
+        "DESIGN_ICON_NAMES",
+        "HEADLESS_SUBCOMMANDS",
+        "hash_bond_width",
+        "wedge_width_px",
+    )
+    pattern = re.compile(
+        rf"\b(?:{'|'.join(re.escape(name) for name in removed_names)})\b"
+    )
+
+    assert _matching_lines(pattern, _app_python_files()) == []
+
+
+def test_unused_members_stay_removed_from_their_defining_modules() -> None:
+    """Three members whose bare names collide with live surfaces.
+
+    ``_restore_observer_ports`` is not ``_try_restore_observer_ports`` and
+    ``viewport_center`` is not ``viewport_center_scene_pos_for``; both
+    survivors are live.
+    """
+    ui_root = APP_ROOT / "chemvas" / "ui"
+    scoped_bans = {
+        "scene_delete_controller.py": ("_restore_observer_ports",),
+        "structure_build_service.py": ("latest_bond_id", "viewport_center"),
+    }
+    violations: list[str] = []
+    for file_name, method_names in scoped_bans.items():
+        names = "|".join(re.escape(name) for name in method_names)
+        pattern = re.compile(rf"^\s*def (?:{names})\b")
+        violations.extend(_matching_lines(pattern, [ui_root / file_name]))
+
+    assert violations == []

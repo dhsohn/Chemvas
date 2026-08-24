@@ -43,10 +43,6 @@ def compute_props_for(canvas: Any, model):
     return rdkit_adapter_for(canvas).compute_props(model)
 
 
-def compute_identifiers_for(canvas: Any, model):
-    return rdkit_adapter_for(canvas).compute_identifiers(model)
-
-
 def suggest_atom_correspondence_result_for(
     canvas: Any,
     model,
@@ -61,7 +57,6 @@ def suggest_atom_correspondence_result_for(
 
 
 __all__ = [
-    "compute_identifiers_for",
     "compute_props_for",
     "model_to_mol_block_for",
     "model_to_xyz_block_for",

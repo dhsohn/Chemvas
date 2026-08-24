@@ -77,6 +77,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `_DetachedSceneSnapshot.capture` — are live and stay. The module-level
   `reset_rdkit_export_job_state_for_tests` wrapper went too; it was a second
   name for `RDKitExportJobRegistry.reset_for_tests`, which stays.
+- **Exports and members nothing reads.** `compute_identifiers_for` (the access
+  wrapper, not the live `compute_identifiers`), `TEXT_STYLE_ATTRS`,
+  `CANVAS_TEMPLATE_FIELDS`, `DESIGN_ICON_NAMES`, `HEADLESS_SUBCOMMANDS`,
+  `SceneDeleteController._restore_observer_ports`,
+  `StructureBuildService.latest_bond_id` and `.viewport_center`, and the
+  `hash_bond_width` and `wedge_width_px` fields on `ACS1996Style`. None of the
+  ten had a reader; the two style fields in particular never reached the
+  renderer, so no drawn bond changes. The similarly named survivors —
+  `_try_restore_observer_ports`, `viewport_center_scene_pos_for`,
+  `renderer_bold_bond_width_for`, `CANVAS_TEMPLATE_TOOL_FIELDS`,
+  `CANVAS_TEMPLATE_TEXT_FIELDS`, `has_design_icon` — are untouched.
 
 ## [0.4.1] - 2026-08-20
 

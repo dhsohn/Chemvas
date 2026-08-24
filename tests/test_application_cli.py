@@ -94,10 +94,11 @@ def test_root_help_inventory_matches_dispatched_headless_commands(
         application.main()
 
     assert error.value.code == 0
-    assert _help_commands(capsys.readouterr().out) == set(
-        application.HEADLESS_SUBCOMMANDS
-    )
-    assert set(application.HEADLESS_SUBCOMMANDS) == (
+    dispatched_commands = {
+        command for command, _description in application.HEADLESS_SUBCOMMAND_HELP
+    }
+    assert _help_commands(capsys.readouterr().out) == dispatched_commands
+    assert dispatched_commands == (
         application.DOCUMENT_PATCH_COMMANDS
         | application.DOCUMENT_COMPOSITION_COMMANDS
         | application.DOCUMENT_LAYOUT_COMMANDS
