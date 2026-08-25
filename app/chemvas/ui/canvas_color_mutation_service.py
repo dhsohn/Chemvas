@@ -788,14 +788,11 @@ class CanvasColorMutationService:
         except Exception as error:
             if self._color_rollback_is_complete(error):
                 raise
-            try:
-                rollback()
-            except Exception as rollback_error:
-                _add_color_rollback_note(
-                    error,
-                    rollback_error,
-                    phase="restoring the bond color",
-                )
+            _run_color_rollback_step(
+                error,
+                "restoring the bond color",
+                rollback,
+            )
             raise
 
     def _apply_atom_item_graphic(self, item, color: QColor) -> None:
@@ -849,14 +846,11 @@ class CanvasColorMutationService:
         except Exception as error:
             if self._color_rollback_is_complete(error):
                 raise
-            try:
-                rollback()
-            except Exception as rollback_error:
-                _add_color_rollback_note(
-                    error,
-                    rollback_error,
-                    phase="restoring the atom color",
-                )
+            _run_color_rollback_step(
+                error,
+                "restoring the atom color",
+                rollback,
+            )
             raise
 
     def _apply_ring_structure_color(self, item, color: QColor) -> None:
