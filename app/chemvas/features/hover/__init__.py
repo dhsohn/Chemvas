@@ -89,7 +89,6 @@ def plan_structure_hover_update(
 
 
 __all__ = [
-    "HoverAction",
     "HoverState",
     "HoverUpdatePlan",
     "plan_structure_hover_update",

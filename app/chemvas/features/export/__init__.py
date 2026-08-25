@@ -19,7 +19,6 @@ from .dialog import (
     suffix_for_format,
 )
 from .plan import (
-    MM_PER_INCH,
     POINTS_PER_INCH,
     ExportPlan,
     build_export_plan,
@@ -48,7 +47,6 @@ __all__ = [
     "EXPORT_FORMATS",
     "EXPORT_SCOPES",
     "EXPORT_SIZES",
-    "MM_PER_INCH",
     "POINTS_PER_INCH",
     "ExportPlan",
     "build_export_plan",

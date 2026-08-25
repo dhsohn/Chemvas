@@ -1320,18 +1320,44 @@ def test_production_canvas_service_container_lookup_is_canonical() -> None:
     assert violations == []
 
 
-def test_simple_canvas_access_helpers_delegate_service_lookup_to_ports() -> None:
-    access_paths = [
-        APP_ROOT / "chemvas" / "ui" / "canvas_model_access.py",
-        APP_ROOT / "chemvas" / "ui" / "canvas_scene_reset_access.py",
-        APP_ROOT / "chemvas" / "ui" / "insert_session_access.py",
-        APP_ROOT / "chemvas" / "ui" / "note_item.py",
-        APP_ROOT / "chemvas" / "ui" / "note_item_access.py",
-        APP_ROOT / "chemvas" / "ui" / "selection_highlight_styler.py",
-    ]
-    forbidden = re.compile(r"\bcanvas_services_for\b|\bcanvas\.services\.")
+CANVAS_SERVICE_CONTAINER_RESOLVERS = (
+    # Defines canvas_services_for and re-exports it.
+    "app/chemvas/ui/canvas_service_access.py",
+    # Ports modules: the documented owners of container resolution.
+    "app/chemvas/ui/canvas_service_ports.py",
+    "app/chemvas/ui/canvas_view_ports.py",
+    "app/chemvas/ui/main_window_ports.py",
+)
 
-    assert _matching_lines(forbidden, access_paths) == []
+
+def test_only_container_resolvers_reach_the_canvas_service_bundle() -> None:
+    """Nothing but the resolver modules may resolve the canvas service bundle.
+
+    Eighteen rules used to spell this out one target module at a time, which
+    left every module they did not name -- including any *_access.py added
+    later -- free to call canvas_services_for. The ban is repo-wide with an
+    explicit exemption list instead, so a new module is guarded on arrival and
+    a new resolver has to be argued for here.
+    """
+    pattern = re.compile(r"\bcanvas_services_for\b|\bcanvas\.services\.")
+    repo_root = APP_ROOT.parents[0]
+    exempt = {repo_root / relative for relative in CANVAS_SERVICE_CONTAINER_RESOLVERS}
+    guarded = [path for path in _app_python_files() if path not in exempt]
+
+    assert sorted(exempt - set(_app_python_files())) == []
+    assert _matching_lines(pattern, guarded) == []
+
+
+def test_structure_build_access_keeps_the_ring_template_catalog_out() -> None:
+    access = APP_ROOT / "chemvas" / "ui" / "structure_build_access.py"
+    pattern = re.compile(
+        r"add_structure_template_for"
+        r"|\b_REGULAR_RING_TEMPLATES\b"
+        r"|\b_HETERO_RING_TEMPLATES\b"
+        r"|\b_SERVICE_TEMPLATE_METHODS\b"
+    )
+
+    assert _matching_lines(pattern, [access]) == []
 
 
 def test_canvas_service_ports_keep_simple_service_accessors_consolidated() -> None:
@@ -1375,138 +1401,6 @@ def test_note_committed_text_private_state_stays_inside_note_item() -> None:
     assert _matching_lines(forbidden, paths) == []
 
 
-def test_history_canvas_access_delegates_service_lookup_to_history_ports() -> None:
-    access = APP_ROOT / "chemvas" / "ui" / "history_canvas_access.py"
-    forbidden = re.compile(r"\bcanvas_services_for\b|\bcanvas\.services\.")
-
-    assert _matching_lines(forbidden, [access]) == []
-
-
-def test_structure_mutation_access_delegates_service_lookup_to_structure_ports() -> (
-    None
-):
-    access = APP_ROOT / "chemvas" / "ui" / "structure_mutation_access.py"
-    forbidden = re.compile(r"\bcanvas_services_for\b|\bcanvas\.services\.")
-
-    assert _matching_lines(forbidden, [access]) == []
-
-
-def test_ring_fill_scene_access_delegates_service_lookup_to_ring_fill_ports() -> None:
-    access = APP_ROOT / "chemvas" / "ui" / "canvas_ring_fill_scene_access.py"
-    forbidden = re.compile(r"\bcanvas_services_for\b|\bcanvas\.services\.")
-
-    assert _matching_lines(forbidden, [access]) == []
-
-
-def test_structure_build_access_delegates_service_lookup_to_structure_build_ports() -> (
-    None
-):
-    access = APP_ROOT / "chemvas" / "ui" / "structure_build_access.py"
-    forbidden = re.compile(
-        r"\bcanvas_services_for\b"
-        r"|\bcanvas\.services\."
-        r"|\b_REGULAR_RING_TEMPLATES\b"
-        r"|\b_HETERO_RING_TEMPLATES\b"
-        r"|\b_SERVICE_TEMPLATE_METHODS\b"
-    )
-
-    assert "add_structure_template_for" not in access.read_text(encoding="utf-8")
-    assert _matching_lines(forbidden, [access]) == []
-
-
-def test_structure_insert_access_delegates_service_lookup_to_structure_insert_ports() -> (
-    None
-):
-    access = APP_ROOT / "chemvas" / "ui" / "structure_insert_access.py"
-    forbidden = re.compile(r"\bcanvas_services_for\b|\bcanvas\.services\.")
-
-    assert _matching_lines(forbidden, [access]) == []
-
-
-def test_scene_decoration_access_delegates_service_lookup_to_scene_decoration_ports() -> (
-    None
-):
-    access = APP_ROOT / "chemvas" / "ui" / "scene_decoration_access.py"
-    forbidden = re.compile(r"\bcanvas_services_for\b|\bcanvas\.services\.")
-
-    assert _matching_lines(forbidden, [access]) == []
-
-
-def test_mark_item_access_delegates_service_lookup_to_scene_decoration_ports() -> None:
-    access = APP_ROOT / "chemvas" / "ui" / "mark_item_access.py"
-    forbidden = re.compile(r"\bcanvas_services_for\b|\bcanvas\.services\.")
-
-    assert _matching_lines(forbidden, [access]) == []
-
-
-def test_scene_decoration_build_access_delegates_service_lookup_to_scene_decoration_ports() -> (
-    None
-):
-    access = APP_ROOT / "chemvas" / "ui" / "scene_decoration_build_access.py"
-    forbidden = re.compile(r"\bcanvas_services_for\b|\bcanvas\.services\.")
-
-    assert _matching_lines(forbidden, [access]) == []
-
-
-def test_handle_mutation_access_delegates_service_lookup_to_handle_mutation_ports() -> (
-    None
-):
-    access = APP_ROOT / "chemvas" / "ui" / "handle_mutation_access.py"
-    forbidden = re.compile(r"\bcanvas_services_for\b|\bcanvas\.services\.")
-
-    assert _matching_lines(forbidden, [access]) == []
-
-
-def test_handle_overlay_access_delegates_service_lookup_to_handle_overlay_ports() -> (
-    None
-):
-    access = APP_ROOT / "chemvas" / "ui" / "handle_overlay_access.py"
-    forbidden = re.compile(r"\bcanvas_services_for\b|\bcanvas\.services\.")
-
-    assert _matching_lines(forbidden, [access]) == []
-
-
-def test_history_recording_access_delegates_service_lookup_to_history_recording_ports() -> (
-    None
-):
-    access = APP_ROOT / "chemvas" / "ui" / "history_recording_access.py"
-    forbidden = re.compile(r"\bcanvas_services_for\b|\bcanvas\.services\.")
-
-    assert _matching_lines(forbidden, [access]) == []
-
-
-def test_canvas_window_access_delegates_service_lookup_to_canvas_window_ports() -> None:
-    access = APP_ROOT / "chemvas" / "ui" / "canvas_window_access.py"
-    forbidden = re.compile(r"\bcanvas_services_for\b|\bcanvas\.services\.")
-
-    assert _matching_lines(forbidden, [access]) == []
-
-
-def test_move_access_delegates_service_lookup_to_move_ports() -> None:
-    access = APP_ROOT / "chemvas" / "ui" / "move_access.py"
-    forbidden = re.compile(r"\bcanvas_services_for\b|\bcanvas\.services\.")
-
-    assert _matching_lines(forbidden, [access]) == []
-
-
-def test_geometry_access_helpers_delegate_service_lookup_to_geometry_ports() -> None:
-    access_paths = [
-        APP_ROOT / "chemvas" / "ui" / "bond_graphics_access.py",
-        APP_ROOT / "chemvas" / "ui" / "bond_label_geometry_access.py",
-        APP_ROOT / "chemvas" / "ui" / "canvas_geometry_access.py",
-    ]
-    forbidden = re.compile(r"\bcanvas_services_for\b|\bcanvas\.services\.")
-
-    assert _matching_lines(forbidden, access_paths) == []
-
-
-def test_selection_service_access_delegates_service_lookup_to_selection_ports() -> None:
-    access = APP_ROOT / "chemvas" / "ui" / "selection_service_access.py"
-    forbidden = re.compile(r"\bcanvas_services_for\b|\bcanvas\.services\.")
-
-    assert _matching_lines(forbidden, [access]) == []
-
-
 def test_export_render_service_dispatches_to_format_specific_renderers() -> None:
     service = APP_ROOT / "chemvas" / "features" / "export" / "service.py"
     forbidden_device_types = re.compile(
@@ -1516,23 +1410,9 @@ def test_export_render_service_dispatches_to_format_specific_renderers() -> None
     assert _matching_lines(forbidden_device_types, [service]) == []
 
 
-def test_scene_item_access_delegates_service_lookup_to_scene_item_ports() -> None:
-    access = APP_ROOT / "chemvas" / "ui" / "scene_item_access.py"
-    forbidden = re.compile(r"\bcanvas_services_for\b|\bcanvas\.services\.")
-
-    assert _matching_lines(forbidden, [access]) == []
-
-
 def test_scene_item_access_delegates_scene_storage_to_scene_state() -> None:
     access = APP_ROOT / "chemvas" / "ui" / "scene_item_access.py"
     forbidden = re.compile(r"\bcanvas\.scene\(")
-
-    assert _matching_lines(forbidden, [access]) == []
-
-
-def test_atom_label_access_delegates_service_lookup_to_atom_label_ports() -> None:
-    access = APP_ROOT / "chemvas" / "ui" / "atom_label_access.py"
-    forbidden = re.compile(r"\bcanvas_services_for\b|\bcanvas\.services\.")
 
     assert _matching_lines(forbidden, [access]) == []
 
@@ -2132,172 +2012,365 @@ def test_graph_service_fallback_resolution_is_centralized() -> None:
     assert _matching_lines(pattern, paths) == []
 
 
-def test_selection_highlight_styler_does_not_use_context_facade() -> None:
-    removed_context = APP_ROOT / "chemvas" / "ui" / "selection_highlight_context.py"
-    styler = APP_ROOT / "chemvas" / "ui" / "selection_highlight_styler.py"
-    pattern = re.compile(
-        r"\bSelectionHighlightContext\b|\bselection_highlight_context_for\b|self\.context\b"
-    )
+# Each row is one removed per-service context facade: the context module that
+# must stay deleted (None where an earlier row already covers it), the modules
+# that must not name it, and every pattern that row bans. Rows carry their own
+# patterns rather than deriving them from the module name -- the class names
+# are not mechanically derivable (canvas_chemdraw_shortcut_context.py ->
+# CanvasChemDrawShortcutContext) and several rows ban extra service-lookup
+# spellings that only apply to that one module.
+CONTEXT_FACADE_RULES: tuple[
+    tuple[str | None, tuple[str, ...], tuple[str, ...]], ...
+] = (
+    (
+        "selection_highlight_context.py",
+        ("selection_highlight_styler.py",),
+        (
+            r"\bSelectionHighlightContext\b",
+            r"\bselection_highlight_context_for\b",
+            r"self\.context\b",
+        ),
+    ),
+    (
+        "curved_arrow_path_context.py",
+        ("curved_arrow_path_service.py",),
+        (
+            r"\bCurvedArrowPathContext\b",
+            r"\bcurved_arrow_path_context_for\b",
+            r"self\.context\b",
+        ),
+    ),
+    (
+        "canvas_ring_fill_scene_context.py",
+        ("canvas_ring_fill_scene_service.py",),
+        (
+            r"\bCanvasRingFillSceneContext\b",
+            r"\bcanvas_ring_fill_scene_context_for\b",
+            r"self\.context\b",
+        ),
+    ),
+    (
+        "canvas_scene_decoration_build_context.py",
+        ("canvas_scene_decoration_build_service.py",),
+        (
+            r"\bCanvasSceneDecorationBuildContext\b",
+            r"\bcanvas_scene_decoration_build_context_for\b",
+            r"self\.context\b",
+        ),
+    ),
+    (
+        "canvas_scene_reset_context.py",
+        ("canvas_scene_reset_service.py",),
+        (
+            r"\bCanvasSceneResetContext\b",
+            r"\bcanvas_scene_reset_context_for\b",
+            r"self\.context\b",
+            r"\bcanvas_hit_testing_service_for\b",
+        ),
+    ),
+    (
+        "canvas_note_context.py",
+        ("canvas_note_controller.py",),
+        (
+            r"\bCanvasNoteContext\b",
+            r"\bcanvas_note_context_for\b",
+            r"self\.context\b",
+            r"\bselection_controller_for\b",
+            r"\bnote_controller_for\b",
+        ),
+    ),
+    (
+        "canvas_color_mutation_context.py",
+        ("canvas_color_mutation_service.py",),
+        (
+            r"\bCanvasColorMutationContext\b",
+            r"\bcanvas_color_mutation_context_for\b",
+            r"self\.context\b",
+            r"\bresolve_canvas_graph_service\b",
+            r"canvas_service_for\([^,\n]+,\s*\"canvas_graph_service\"",
+        ),
+    ),
+    (
+        "scene_decoration_context.py",
+        ("scene_decoration_service.py",),
+        (
+            r"\bSceneDecorationContext\b",
+            r"\bscene_decoration_context_for\b",
+            r"self\.context\b",
+        ),
+    ),
+    (
+        "canvas_mark_scene_context.py",
+        ("canvas_mark_scene_service.py",),
+        (
+            r"\bCanvasMarkSceneContext\b",
+            r"\bcanvas_mark_scene_context_for\b",
+            r"self\.context\b",
+        ),
+    ),
+    (
+        "canvas_document_session_context.py",
+        ("canvas_document_session_service.py",),
+        (
+            r"\bCanvasDocumentSessionContext\b",
+            r"\bcanvas_document_session_context_for\b",
+            r"self\.context\b",
+            r"\bcanvas_hit_testing_service_for\b",
+            r"\bresolve_canvas_graph_service\b",
+            r"canvas_service_for\([^,\n]+,\s*\"structure_build_service\"",
+            r"\bdef _structure_build_service\b",
+        ),
+    ),
+    (
+        "handle_mutation_context.py",
+        ("handle_mutation_service.py",),
+        (
+            r"\bHandleMutationContext\b",
+            r"\bhandle_mutation_context_for\b",
+            r"self\.context\b",
+        ),
+    ),
+    (
+        "canvas_move_context.py",
+        ("canvas_move_controller.py",),
+        (
+            r"\bCanvasMoveContext\b",
+            r"\bcanvas_move_context_for\b",
+            r"self\.context\b",
+            r"\bcanvas_hit_testing_service_for\b",
+        ),
+    ),
+    (
+        "canvas_geometry_context.py",
+        ("canvas_geometry_controller.py",),
+        (
+            r"\bCanvasGeometryContext\b",
+            r"\bcanvas_geometry_context_for\b",
+            r"self\.context\b",
+            r"\bcanvas_hit_testing_service_for\b",
+        ),
+    ),
+    (
+        "structure_build_context.py",
+        ("structure_build_service.py",),
+        (
+            r"\bStructureBuildContext\b",
+            r"\bstructure_build_context_for\b",
+            r"self\.context\b",
+            r"self\.geometry\b",
+        ),
+    ),
+    (
+        "structure_insert_context.py",
+        (
+            "structure_insert_access.py",
+            "structure_build_committer.py",
+            "insert_commit_service.py",
+        ),
+        (
+            r"\bStructureInsertContext\b",
+            r"\bstructure_insert_context_for\b",
+            r"self\.context\b",
+            r"canvas_service_for\([^,\n]+,\s*\"canvas_graph_service\"",
+        ),
+    ),
+    (
+        "insert_context.py",
+        ("insert_controller.py",),
+        (
+            r"\bInsertContext\b",
+            r"\binsert_context_for\b",
+            r"self\.context\b",
+            r"\bcanvas_hit_testing_service_for\b",
+            r"\bresolve_canvas_graph_service\b",
+            r"canvas_service_for\([^,\n]+,\s*\"structure_build_service\"",
+            r"\bdef _structure_build_service\b",
+            r"return InsertController\(",
+        ),
+    ),
+    (
+        "main_window_workbook_context.py",
+        ("main_window_canvas_document_service.py",),
+        (
+            r"\bMainWindowWorkbookContext\b",
+            r"\bmain_window_workbook_context_for\b",
+            r"self\.context\b",
+            r"\bwindow\.add_canvas\(",
+            r"\bwindow\.canvas_tabs\b",
+            r"\bwindow\.canvas_tab_entries\(",
+            r"\bwindow\.reset_canvas_name_counter\(",
+            r"\bwindow\.active_canvas_tab_index\(",
+            r"\bwindow\.canvas_count\(",
+            r"window\.refresh_active_canvas_ui\(\)",
+            r"\bwindow\.canvas\b",
+        ),
+    ),
+    (
+        "scene_item_context.py",
+        ("scene_item_controller.py",),
+        (
+            r"\bSceneItemContext\b",
+            r"\bscene_item_context_for\b",
+            r"self\.context\b",
+            r"\bresolve_canvas_graph_service\b",
+            r"canvas_service_for\([^,\n]+,\s*\"canvas_graph_service\"",
+        ),
+    ),
+    (
+        "canvas_handle_context.py",
+        ("canvas_handle_controller.py",),
+        (
+            r"\bCanvasHandleContext\b",
+            r"\bcanvas_handle_context_for\b",
+            r"self\.context\b",
+        ),
+    ),
+    (
+        "handle_overlay_context.py",
+        ("handle_overlay_service.py",),
+        (
+            r"\bHandleOverlayContext\b",
+            r"\bhandle_overlay_context_for\b",
+            r"self\.context\b",
+        ),
+    ),
+    (
+        "selection_rotation_context.py",
+        ("selection_rotation_controller.py", "selection_rotation_access.py"),
+        (
+            r"\bSelectionRotationContext\b",
+            r"\bselection_rotation_context_for\b",
+            r"self\.context\b",
+            r"\bmove_controller_for\b",
+            r"canvas_service_for\([^,\n]+,\s*\"canvas_graph_service\"",
+        ),
+    ),
+    (
+        "canvas_atom_mutation_context.py",
+        ("canvas_atom_mutation_service.py",),
+        (
+            r"\bCanvasAtomMutationContext\b",
+            r"\bcanvas_atom_mutation_context_for\b",
+            r"self\.context\b",
+            r"\bcanvas_hit_testing_service_for\b",
+        ),
+    ),
+    (
+        "canvas_bond_mutation_context.py",
+        ("canvas_bond_mutation_service.py",),
+        (
+            r"\bCanvasBondMutationContext\b",
+            r"\bcanvas_bond_mutation_context_for\b",
+            r"self\.context\b",
+            r"\bcanvas_hit_testing_service_for\b",
+        ),
+    ),
+    (
+        "bond_render_context.py",
+        ("bond_renderer.py",),
+        (
+            r"\bBondRenderContext\b",
+            r"\bbond_render_context_for\b",
+            r"self\.context\b",
+        ),
+    ),
+    (
+        "canvas_input_context.py",
+        ("canvas_input_controller.py",),
+        (
+            r"\bCanvasInputContext\b",
+            r"\bcanvas_input_context_for\b",
+            r"self\.context\b",
+        ),
+    ),
+    (
+        "canvas_pointer_context.py",
+        ("canvas_pointer_controller.py",),
+        (
+            r"\bCanvasPointerContext\b",
+            r"\bcanvas_pointer_context_for\b",
+            r"self\.context\b",
+        ),
+    ),
+    (
+        # Same removed module as the row above; the perspective controller is
+        # allowed its own self.context, so only the facade names are banned.
+        None,
+        ("perspective_tool_controller.py",),
+        (
+            r"\bCanvasPointerContext\b",
+            r"\bcanvas_pointer_context_for\b",
+        ),
+    ),
+    (
+        "canvas_hit_testing_context.py",
+        ("canvas_hit_testing_service.py",),
+        (
+            r"\bCanvasHitTestingContext\b",
+            r"\bcanvas_hit_testing_context_for\b",
+            r"self\.context\b",
+        ),
+    ),
+    (
+        "canvas_chemdraw_shortcut_context.py",
+        ("canvas_chemdraw_shortcut_service.py",),
+        (
+            r"\bCanvasChemDrawShortcutContext\b",
+            r"\bcanvas_chemdraw_shortcut_context_for\b",
+            r"self\.context\b",
+        ),
+    ),
+    (
+        "canvas_history_recording_context.py",
+        (
+            "canvas_history_recording_service.py",
+            "canvas_document_state.py",
+            "insert_smiles_transaction.py",
+        ),
+        (
+            r"\bCanvasHistoryRecordingContext\b",
+            r"\bcanvas_history_recording_context_for\b",
+            r"self\.context\b",
+        ),
+    ),
+    (
+        "atom_label_context.py",
+        ("atom_label_service.py",),
+        (
+            r"\bAtomLabelContext\b",
+            r"\batom_label_context_for\b",
+            r"self\.context\b",
+            r"\bmove_controller_for\b",
+        ),
+    ),
+)
 
-    assert not removed_context.exists()
-    assert _matching_lines(pattern, [styler]) == []
 
+def test_removed_context_facades_stay_out_of_their_modules() -> None:
+    """Thirty rules said this thirty times, one service at a time.
 
-def test_curved_arrow_path_service_does_not_use_context_facade() -> None:
-    removed_context = APP_ROOT / "chemvas" / "ui" / "curved_arrow_path_context.py"
-    service = APP_ROOT / "chemvas" / "ui" / "curved_arrow_path_service.py"
-    pattern = re.compile(
-        r"\bCurvedArrowPathContext\b|\bcurved_arrow_path_context_for\b|self\.context\b"
-    )
+    Every row is checked and every violation collected before the assert, so a
+    failure names the module and line that brought a facade back rather than
+    stopping at the first row.
+    """
+    ui_root = APP_ROOT / "chemvas" / "ui"
+    resurrected: list[str] = []
+    missing_targets: list[str] = []
+    violations: list[str] = []
 
-    assert not removed_context.exists()
-    assert _matching_lines(pattern, [service]) == []
+    for removed_context, targets, banned in CONTEXT_FACADE_RULES:
+        if removed_context is not None and (ui_root / removed_context).exists():
+            resurrected.append(removed_context)
+        paths = [ui_root / target for target in targets]
+        missing_targets.extend(target.name for target in paths if not target.exists())
+        pattern = re.compile("|".join(banned))
+        violations.extend(
+            _matching_lines(pattern, [path for path in paths if path.exists()])
+        )
 
-
-def test_ring_fill_scene_service_does_not_use_context_facade() -> None:
-    removed_context = APP_ROOT / "chemvas" / "ui" / "canvas_ring_fill_scene_context.py"
-    service = APP_ROOT / "chemvas" / "ui" / "canvas_ring_fill_scene_service.py"
-    pattern = re.compile(
-        r"\bCanvasRingFillSceneContext\b|\bcanvas_ring_fill_scene_context_for\b|self\.context\b"
-    )
-
-    assert not removed_context.exists()
-    assert _matching_lines(pattern, [service]) == []
-
-
-def test_scene_decoration_build_service_does_not_use_context_facade() -> None:
-    removed_context = (
-        APP_ROOT / "chemvas" / "ui" / "canvas_scene_decoration_build_context.py"
-    )
-    service = APP_ROOT / "chemvas" / "ui" / "canvas_scene_decoration_build_service.py"
-    pattern = re.compile(
-        r"\bCanvasSceneDecorationBuildContext\b|\bcanvas_scene_decoration_build_context_for\b|self\.context\b"
-    )
-
-    assert not removed_context.exists()
-    assert _matching_lines(pattern, [service]) == []
-
-
-def test_scene_reset_service_does_not_use_context_facade() -> None:
-    removed_context = APP_ROOT / "chemvas" / "ui" / "canvas_scene_reset_context.py"
-    service = APP_ROOT / "chemvas" / "ui" / "canvas_scene_reset_service.py"
-    pattern = re.compile(
-        r"\bCanvasSceneResetContext\b"
-        r"|\bcanvas_scene_reset_context_for\b"
-        r"|self\.context\b"
-        r"|\bcanvas_hit_testing_service_for\b"
-    )
-
-    assert not removed_context.exists()
-    assert _matching_lines(pattern, [service]) == []
-
-
-def test_canvas_note_controller_does_not_use_context_facade() -> None:
-    removed_context = APP_ROOT / "chemvas" / "ui" / "canvas_note_context.py"
-    controller = APP_ROOT / "chemvas" / "ui" / "canvas_note_controller.py"
-    pattern = re.compile(
-        r"\bCanvasNoteContext\b"
-        r"|\bcanvas_note_context_for\b"
-        r"|self\.context\b"
-        r"|\bselection_controller_for\b"
-        r"|\bnote_controller_for\b"
-    )
-
-    assert not removed_context.exists()
-    assert _matching_lines(pattern, [controller]) == []
-
-
-def test_canvas_color_mutation_service_does_not_use_context_facade() -> None:
-    removed_context = APP_ROOT / "chemvas" / "ui" / "canvas_color_mutation_context.py"
-    service = APP_ROOT / "chemvas" / "ui" / "canvas_color_mutation_service.py"
-    pattern = re.compile(
-        r"\bCanvasColorMutationContext\b"
-        r"|\bcanvas_color_mutation_context_for\b"
-        r"|self\.context\b"
-        r"|\bresolve_canvas_graph_service\b"
-        r"|canvas_service_for\([^,\n]+,\s*\"canvas_graph_service\""
-    )
-
-    assert not removed_context.exists()
-    assert _matching_lines(pattern, [service]) == []
-
-
-def test_scene_decoration_service_does_not_use_context_facade() -> None:
-    removed_context = APP_ROOT / "chemvas" / "ui" / "scene_decoration_context.py"
-    service = APP_ROOT / "chemvas" / "ui" / "scene_decoration_service.py"
-    pattern = re.compile(
-        r"\bSceneDecorationContext\b|\bscene_decoration_context_for\b|self\.context\b"
-    )
-
-    assert not removed_context.exists()
-    assert _matching_lines(pattern, [service]) == []
-
-
-def test_canvas_mark_scene_service_does_not_use_context_facade() -> None:
-    removed_context = APP_ROOT / "chemvas" / "ui" / "canvas_mark_scene_context.py"
-    service = APP_ROOT / "chemvas" / "ui" / "canvas_mark_scene_service.py"
-    pattern = re.compile(
-        r"\bCanvasMarkSceneContext\b|\bcanvas_mark_scene_context_for\b|self\.context\b"
-    )
-
-    assert not removed_context.exists()
-    assert _matching_lines(pattern, [service]) == []
-
-
-def test_canvas_document_session_service_does_not_use_context_facade() -> None:
-    removed_context = APP_ROOT / "chemvas" / "ui" / "canvas_document_session_context.py"
-    service = APP_ROOT / "chemvas" / "ui" / "canvas_document_session_service.py"
-    pattern = re.compile(
-        r"\bCanvasDocumentSessionContext\b"
-        r"|\bcanvas_document_session_context_for\b"
-        r"|self\.context\b"
-        r"|\bcanvas_hit_testing_service_for\b"
-        r"|\bresolve_canvas_graph_service\b"
-        r"|canvas_service_for\([^,\n]+,\s*\"structure_build_service\""
-        r"|\bdef _structure_build_service\b"
-    )
-
-    assert not removed_context.exists()
-    assert _matching_lines(pattern, [service]) == []
-
-
-def test_handle_mutation_service_does_not_use_context_facade() -> None:
-    removed_context = APP_ROOT / "chemvas" / "ui" / "handle_mutation_context.py"
-    service = APP_ROOT / "chemvas" / "ui" / "handle_mutation_service.py"
-    pattern = re.compile(
-        r"\bHandleMutationContext\b|\bhandle_mutation_context_for\b|self\.context\b"
-    )
-
-    assert not removed_context.exists()
-    assert _matching_lines(pattern, [service]) == []
-
-
-def test_canvas_move_controller_does_not_use_context_facade() -> None:
-    removed_context = APP_ROOT / "chemvas" / "ui" / "canvas_move_context.py"
-    controller = APP_ROOT / "chemvas" / "ui" / "canvas_move_controller.py"
-    pattern = re.compile(
-        r"\bCanvasMoveContext\b"
-        r"|\bcanvas_move_context_for\b"
-        r"|self\.context\b"
-        r"|\bcanvas_hit_testing_service_for\b"
-    )
-
-    assert not removed_context.exists()
-    assert _matching_lines(pattern, [controller]) == []
-
-
-def test_canvas_geometry_controller_does_not_use_context_facade() -> None:
-    removed_context = APP_ROOT / "chemvas" / "ui" / "canvas_geometry_context.py"
-    controller = APP_ROOT / "chemvas" / "ui" / "canvas_geometry_controller.py"
-    pattern = re.compile(
-        r"\bCanvasGeometryContext\b"
-        r"|\bcanvas_geometry_context_for\b"
-        r"|self\.context\b"
-        r"|\bcanvas_hit_testing_service_for\b"
-    )
-
-    assert not removed_context.exists()
-    assert _matching_lines(pattern, [controller]) == []
+    assert resurrected == []
+    assert missing_targets == []
+    assert violations == []
 
 
 def test_canvas_model_access_does_not_use_hit_testing_registry() -> None:
@@ -2514,17 +2587,6 @@ def test_sheet_setup_values_exist_only_in_the_runtime_state() -> None:
     assert violations == []
 
 
-def test_structure_build_service_does_not_use_context_facade() -> None:
-    removed_context = APP_ROOT / "chemvas" / "ui" / "structure_build_context.py"
-    service = APP_ROOT / "chemvas" / "ui" / "structure_build_service.py"
-    pattern = re.compile(
-        r"\bStructureBuildContext\b|\bstructure_build_context_for\b|self\.context\b|self\.geometry\b"
-    )
-
-    assert not removed_context.exists()
-    assert _matching_lines(pattern, [service]) == []
-
-
 def test_structure_build_service_delegates_bond_building() -> None:
     service = APP_ROOT / "chemvas" / "ui" / "structure_build_service.py"
     pattern = re.compile(
@@ -2588,64 +2650,6 @@ def test_structure_growth_build_service_uses_explicit_actions_instead_of_owner_f
     forbidden = re.compile(r"\bself\.owner\b|\bStructureGrowthBuildService\(self\)")
 
     assert _matching_lines(forbidden, [service, growth]) == []
-
-
-def test_structure_insert_flow_does_not_use_context_facade() -> None:
-    removed_context = APP_ROOT / "chemvas" / "ui" / "structure_insert_context.py"
-    paths = [
-        APP_ROOT / "chemvas" / "ui" / "structure_insert_access.py",
-        APP_ROOT / "chemvas" / "ui" / "structure_build_committer.py",
-        APP_ROOT / "chemvas" / "ui" / "insert_commit_service.py",
-    ]
-    pattern = re.compile(
-        r"\bStructureInsertContext\b"
-        r"|\bstructure_insert_context_for\b"
-        r"|self\.context\b"
-        r"|canvas_service_for\([^,\n]+,\s*\"canvas_graph_service\""
-    )
-
-    assert not removed_context.exists()
-    assert _matching_lines(pattern, paths) == []
-
-
-def test_insert_controller_does_not_use_context_facade() -> None:
-    removed_context = APP_ROOT / "chemvas" / "ui" / "insert_context.py"
-    controller = APP_ROOT / "chemvas" / "ui" / "insert_controller.py"
-    pattern = re.compile(
-        r"\bInsertContext\b"
-        r"|\binsert_context_for\b"
-        r"|self\.context\b"
-        r"|\bcanvas_hit_testing_service_for\b"
-        r"|\bresolve_canvas_graph_service\b"
-        r"|canvas_service_for\([^,\n]+,\s*\"structure_build_service\""
-        r"|\bdef _structure_build_service\b"
-        r"|return InsertController\("
-    )
-
-    assert not removed_context.exists()
-    assert _matching_lines(pattern, [controller]) == []
-
-
-def test_main_window_canvas_document_service_does_not_use_context_facade() -> None:
-    removed_context = APP_ROOT / "chemvas" / "ui" / "main_window_workbook_context.py"
-    service = APP_ROOT / "chemvas" / "ui" / "main_window_canvas_document_service.py"
-    source = service.read_text(encoding="utf-8")
-    pattern = re.compile(
-        r"\bMainWindowWorkbookContext\b"
-        r"|\bmain_window_workbook_context_for\b"
-        r"|self\.context\b"
-        r"|\bwindow\.add_canvas\("
-        r"|\bwindow\.canvas_tabs\b"
-        r"|\bwindow\.canvas_tab_entries\("
-        r"|\bwindow\.reset_canvas_name_counter\("
-        r"|\bwindow\.active_canvas_tab_index\("
-        r"|\bwindow\.canvas_count\("
-    )
-
-    assert not removed_context.exists()
-    assert "window.refresh_active_canvas_ui()" not in source
-    assert re.search(r"\bwindow\.canvas\b", source) is None
-    assert _matching_lines(pattern, [service]) == []
 
 
 def test_main_window_document_and_icon_services_do_not_use_context_facade() -> None:
@@ -2847,21 +2851,6 @@ def test_main_window_canvas_tab_services_do_not_use_context_facade() -> None:
     assert _matching_lines(pattern, paths) == []
 
 
-def test_scene_item_controller_does_not_use_context_facade() -> None:
-    removed_context = APP_ROOT / "chemvas" / "ui" / "scene_item_context.py"
-    controller = APP_ROOT / "chemvas" / "ui" / "scene_item_controller.py"
-    pattern = re.compile(
-        r"\bSceneItemContext\b"
-        r"|\bscene_item_context_for\b"
-        r"|self\.context\b"
-        r"|\bresolve_canvas_graph_service\b"
-        r"|canvas_service_for\([^,\n]+,\s*\"canvas_graph_service\""
-    )
-
-    assert not removed_context.exists()
-    assert _matching_lines(pattern, [controller]) == []
-
-
 def test_scene_item_controller_delegates_lifecycle_registry_work_to_service() -> None:
     controller = APP_ROOT / "chemvas" / "ui" / "scene_item_controller.py"
     lifecycle_service = APP_ROOT / "chemvas" / "ui" / "scene_item_lifecycle_service.py"
@@ -2894,7 +2883,11 @@ def test_scene_ops_controller_context_facade_removed() -> None:
     assert _matching_lines(pattern, _app_python_files()) == []
 
 
-def test_clipboard_details_live_in_scene_clipboard_controller() -> None:
+def test_scene_ops_controller_module_stays_removed() -> None:
+    """Three byte-identical rules -- named after clipboard details, delete
+    details and transform details -- all asserted only this one thing: the
+    scene_ops_controller module is gone. Named for what it actually asserts.
+    """
     controller = APP_ROOT / "chemvas" / "ui" / "scene_ops_controller.py"
 
     assert not controller.exists()
@@ -2919,100 +2912,11 @@ def test_scene_clipboard_controller_delegates_copy_paste_workflows_to_services()
         assert forbidden not in controller_source
 
 
-def test_delete_details_live_in_scene_delete_controller() -> None:
-    controller = APP_ROOT / "chemvas" / "ui" / "scene_ops_controller.py"
-
-    assert not controller.exists()
-
-
-def test_transform_details_live_in_scene_transform_controller() -> None:
-    controller = APP_ROOT / "chemvas" / "ui" / "scene_ops_controller.py"
-
-    assert not controller.exists()
-
-
-def test_canvas_handle_controller_does_not_use_context_facade() -> None:
-    removed_context = APP_ROOT / "chemvas" / "ui" / "canvas_handle_context.py"
-    controller = APP_ROOT / "chemvas" / "ui" / "canvas_handle_controller.py"
-    pattern = re.compile(
-        r"\bCanvasHandleContext\b|\bcanvas_handle_context_for\b|self\.context\b"
-    )
-
-    assert not removed_context.exists()
-    assert _matching_lines(pattern, [controller]) == []
-
-
-def test_handle_overlay_service_does_not_use_context_facade() -> None:
-    removed_context = APP_ROOT / "chemvas" / "ui" / "handle_overlay_context.py"
-    service = APP_ROOT / "chemvas" / "ui" / "handle_overlay_service.py"
-    pattern = re.compile(
-        r"\bHandleOverlayContext\b|\bhandle_overlay_context_for\b|self\.context\b"
-    )
-
-    assert not removed_context.exists()
-    assert _matching_lines(pattern, [service]) == []
-
-
-def test_selection_rotation_controller_does_not_use_context_facade() -> None:
-    removed_context = APP_ROOT / "chemvas" / "ui" / "selection_rotation_context.py"
-    controller = APP_ROOT / "chemvas" / "ui" / "selection_rotation_controller.py"
-    access = APP_ROOT / "chemvas" / "ui" / "selection_rotation_access.py"
-    pattern = re.compile(
-        r"\bSelectionRotationContext\b"
-        r"|\bselection_rotation_context_for\b"
-        r"|self\.context\b"
-        r"|\bmove_controller_for\b"
-        r"|canvas_service_for\([^,\n]+,\s*\"canvas_graph_service\""
-    )
-
-    assert not removed_context.exists()
-    assert _matching_lines(pattern, [controller, access]) == []
-
-
 def test_selection_rotation_planarity_owns_planar_graph_helpers() -> None:
     access = APP_ROOT / "chemvas" / "ui" / "selection_rotation_access.py"
     access_source = access.read_text(encoding="utf-8")
 
     assert "edge_has_reachable_alternative_path" not in access_source
-
-
-def test_canvas_atom_mutation_service_does_not_use_context_facade() -> None:
-    removed_context = APP_ROOT / "chemvas" / "ui" / "canvas_atom_mutation_context.py"
-    service = APP_ROOT / "chemvas" / "ui" / "canvas_atom_mutation_service.py"
-    pattern = re.compile(
-        r"\bCanvasAtomMutationContext\b"
-        r"|\bcanvas_atom_mutation_context_for\b"
-        r"|self\.context\b"
-        r"|\bcanvas_hit_testing_service_for\b"
-    )
-
-    assert not removed_context.exists()
-    assert _matching_lines(pattern, [service]) == []
-
-
-def test_canvas_bond_mutation_service_does_not_use_context_facade() -> None:
-    removed_context = APP_ROOT / "chemvas" / "ui" / "canvas_bond_mutation_context.py"
-    service = APP_ROOT / "chemvas" / "ui" / "canvas_bond_mutation_service.py"
-    pattern = re.compile(
-        r"\bCanvasBondMutationContext\b"
-        r"|\bcanvas_bond_mutation_context_for\b"
-        r"|self\.context\b"
-        r"|\bcanvas_hit_testing_service_for\b"
-    )
-
-    assert not removed_context.exists()
-    assert _matching_lines(pattern, [service]) == []
-
-
-def test_bond_renderer_does_not_use_context_facade() -> None:
-    removed_context = APP_ROOT / "chemvas" / "ui" / "bond_render_context.py"
-    renderer = APP_ROOT / "chemvas" / "ui" / "bond_renderer.py"
-    pattern = re.compile(
-        r"\bBondRenderContext\b|\bbond_render_context_for\b|self\.context\b"
-    )
-
-    assert not removed_context.exists()
-    assert _matching_lines(pattern, [renderer]) == []
 
 
 def test_bond_line_geometry_delegates_special_glyph_geometry() -> None:
@@ -3077,35 +2981,6 @@ def test_selection_style_access_does_not_reexport_selection_info() -> None:
     assert _matching_lines(re.compile(r"\bemit_selection_info_for\b"), [access]) == []
 
 
-def test_canvas_input_controller_does_not_use_context_facade() -> None:
-    removed_context = APP_ROOT / "chemvas" / "ui" / "canvas_input_context.py"
-    controller = APP_ROOT / "chemvas" / "ui" / "canvas_input_controller.py"
-    pattern = re.compile(
-        r"\bCanvasInputContext\b|\bcanvas_input_context_for\b|self\.context\b"
-    )
-
-    assert not removed_context.exists()
-    assert _matching_lines(pattern, [controller]) == []
-
-
-def test_canvas_pointer_flow_does_not_use_context_facade() -> None:
-    removed_context = APP_ROOT / "chemvas" / "ui" / "canvas_pointer_context.py"
-    pointer_controller = APP_ROOT / "chemvas" / "ui" / "canvas_pointer_controller.py"
-    pointer_context_pattern = re.compile(
-        r"\bCanvasPointerContext\b|\bcanvas_pointer_context_for\b|self\.context\b"
-    )
-    perspective_controller = (
-        APP_ROOT / "chemvas" / "ui" / "perspective_tool_controller.py"
-    )
-    removed_context_pattern = re.compile(
-        r"\bCanvasPointerContext\b|\bcanvas_pointer_context_for\b"
-    )
-
-    assert not removed_context.exists()
-    assert _matching_lines(pointer_context_pattern, [pointer_controller]) == []
-    assert _matching_lines(removed_context_pattern, [perspective_controller]) == []
-
-
 def test_canvas_pointer_controller_uses_injected_ports() -> None:
     pointer_controller = APP_ROOT / "chemvas" / "ui" / "canvas_pointer_controller.py"
     pattern = re.compile(
@@ -3148,61 +3023,6 @@ def test_perspective_tool_controller_requires_injected_tool_context() -> None:
     assert "hit_testing_service=" not in source
     assert "selection_controller=" not in source
     assert "context or" not in source
-
-
-def test_canvas_hit_testing_service_does_not_use_context_facade() -> None:
-    removed_context = APP_ROOT / "chemvas" / "ui" / "canvas_hit_testing_context.py"
-    service = APP_ROOT / "chemvas" / "ui" / "canvas_hit_testing_service.py"
-    pattern = re.compile(
-        r"\bCanvasHitTestingContext\b|\bcanvas_hit_testing_context_for\b|self\.context\b"
-    )
-
-    assert not removed_context.exists()
-    assert _matching_lines(pattern, [service]) == []
-
-
-def test_canvas_chemdraw_shortcut_service_does_not_use_context_facade() -> None:
-    removed_context = (
-        APP_ROOT / "chemvas" / "ui" / "canvas_chemdraw_shortcut_context.py"
-    )
-    service = APP_ROOT / "chemvas" / "ui" / "canvas_chemdraw_shortcut_service.py"
-    pattern = re.compile(
-        r"\bCanvasChemDrawShortcutContext\b|\bcanvas_chemdraw_shortcut_context_for\b|self\.context\b"
-    )
-
-    assert not removed_context.exists()
-    assert _matching_lines(pattern, [service]) == []
-
-
-def test_canvas_history_recording_flow_does_not_use_context_facade() -> None:
-    removed_context = (
-        APP_ROOT / "chemvas" / "ui" / "canvas_history_recording_context.py"
-    )
-    paths = [
-        APP_ROOT / "chemvas" / "ui" / "canvas_history_recording_service.py",
-        APP_ROOT / "chemvas" / "ui" / "canvas_document_state.py",
-        APP_ROOT / "chemvas" / "ui" / "insert_smiles_transaction.py",
-    ]
-    pattern = re.compile(
-        r"\bCanvasHistoryRecordingContext\b|\bcanvas_history_recording_context_for\b|self\.context\b"
-    )
-
-    assert not removed_context.exists()
-    assert _matching_lines(pattern, paths) == []
-
-
-def test_atom_label_service_does_not_use_context_facade() -> None:
-    removed_context = APP_ROOT / "chemvas" / "ui" / "atom_label_context.py"
-    service = APP_ROOT / "chemvas" / "ui" / "atom_label_service.py"
-    pattern = re.compile(
-        r"\bAtomLabelContext\b"
-        r"|\batom_label_context_for\b"
-        r"|self\.context\b"
-        r"|\bmove_controller_for\b"
-    )
-
-    assert not removed_context.exists()
-    assert _matching_lines(pattern, [service]) == []
 
 
 def test_production_code_does_not_use_canvas_instance_attrs_helper() -> None:
@@ -3412,76 +3232,24 @@ def test_callback_state_accessor_is_strict_runtime_owned() -> None:
     assert fallback_pattern.search(getter_source) is None
 
 
-def test_tool_settings_state_accessor_does_not_read_legacy_canvas_attrs() -> None:
-    tool_settings_state = APP_ROOT / "chemvas" / "ui" / "canvas_tool_settings_state.py"
+def test_state_accessors_do_not_read_legacy_canvas_mirror_vocabulary() -> None:
+    """No module may mirror or re-sync state off raw canvas attributes.
+
+    Eight per-module copies of this ban guarded eight state accessors. None of
+    these names has ever been defined anywhere in this repository's history --
+    they only ever appeared inside this test file -- so a repo-wide ban is the
+    honest shape: it covers the eight original modules and every module added
+    since, which the per-module copies did not.
+    """
     pattern = re.compile(
-        r"\bcanvas_state_mirror\b|\brefresh_state_from_canvas_attrs\b|\bsync_canvas_attrs\b|\bsync_canvas_attr\b"
+        r"\bcanvas_state_mirror\b"
+        r"|\brefresh_state_from_canvas_attrs\b"
+        r"|\brefresh_state_from_canvas_attr_map\b"
+        r"|\bsync_canvas_attrs\b"
+        r"|\bsync_canvas_attr\b"
     )
 
-    assert _matching_lines(pattern, [tool_settings_state]) == []
-
-
-def test_smiles_input_state_accessor_does_not_read_legacy_canvas_attrs() -> None:
-    smiles_input_state = APP_ROOT / "chemvas" / "ui" / "canvas_smiles_input_state.py"
-    pattern = re.compile(
-        r"\bcanvas_state_mirror\b|\brefresh_state_from_canvas_attrs\b|\bsync_canvas_attrs\b|\bsync_canvas_attr\b"
-    )
-
-    assert _matching_lines(pattern, [smiles_input_state]) == []
-
-
-def test_text_style_state_accessor_does_not_read_legacy_canvas_attrs() -> None:
-    text_style_state = APP_ROOT / "chemvas" / "ui" / "canvas_text_style_state.py"
-    pattern = re.compile(
-        r"\bcanvas_state_mirror\b|\brefresh_state_from_canvas_attrs\b|\bsync_canvas_attrs\b|\bsync_canvas_attr\b"
-    )
-
-    assert _matching_lines(pattern, [text_style_state]) == []
-
-
-def test_atom_coords_state_accessor_does_not_read_legacy_canvas_attrs() -> None:
-    atom_coords_access = APP_ROOT / "chemvas" / "ui" / "atom_coords_access.py"
-    pattern = re.compile(
-        r"\bcanvas_state_mirror\b|\brefresh_state_from_canvas_attrs\b|\bsync_canvas_attrs\b|\bsync_canvas_attr\b"
-    )
-
-    assert _matching_lines(pattern, [atom_coords_access]) == []
-
-
-def test_atom_graphics_state_accessor_does_not_read_legacy_canvas_attrs() -> None:
-    atom_graphics_state = APP_ROOT / "chemvas" / "ui" / "canvas_atom_graphics_state.py"
-    pattern = re.compile(
-        r"\bcanvas_state_mirror\b|\brefresh_state_from_canvas_attrs\b|\bsync_canvas_attrs\b|\bsync_canvas_attr\b"
-    )
-
-    assert _matching_lines(pattern, [atom_graphics_state]) == []
-
-
-def test_bond_graphics_state_accessor_does_not_read_legacy_canvas_attrs() -> None:
-    bond_graphics_state = APP_ROOT / "chemvas" / "ui" / "canvas_bond_graphics_state.py"
-    pattern = re.compile(
-        r"\bcanvas_state_mirror\b|\brefresh_state_from_canvas_attrs\b|\bsync_canvas_attrs\b|\bsync_canvas_attr\b"
-    )
-
-    assert _matching_lines(pattern, [bond_graphics_state]) == []
-
-
-def test_scene_items_state_accessor_does_not_read_legacy_canvas_attrs() -> None:
-    scene_items_state = APP_ROOT / "chemvas" / "ui" / "canvas_scene_items_state.py"
-    pattern = re.compile(
-        r"\bcanvas_state_mirror\b|\brefresh_state_from_canvas_attrs\b|\bsync_canvas_attrs\b|\bsync_canvas_attr\b"
-    )
-
-    assert _matching_lines(pattern, [scene_items_state]) == []
-
-
-def test_selection_outline_state_accessor_does_not_read_legacy_canvas_attrs() -> None:
-    selection_outline_state = APP_ROOT / "chemvas" / "ui" / "selection_outline_state.py"
-    pattern = re.compile(
-        r"\bcanvas_state_mirror\b|\brefresh_state_from_canvas_attr_map\b|\bsync_canvas_attr\b"
-    )
-
-    assert _matching_lines(pattern, [selection_outline_state]) == []
+    assert _matching_lines(pattern, _app_python_files()) == []
 
 
 def test_mark_registry_accessor_does_not_read_legacy_canvas_marks_attr() -> None:
@@ -3636,14 +3404,19 @@ def test_removed_tools_facade_stays_absent() -> None:
 
 
 def test_production_code_imports_concrete_tool_modules_not_tools_reexport() -> None:
-    pattern = re.compile(r"\bfrom ui\.tools import\b|\bimport ui\.tools\b")
-    paths = [
-        path
-        for path in _app_python_files()
-        if path != APP_ROOT / "chemvas" / "ui" / "tools.py"
-    ]
+    # The exemption this used to carry named chemvas/ui/tools.py, which an
+    # earlier pass deleted; _app_python_files() cannot yield a file that is not
+    # there, so the filter excluded nothing. Without it the ban also covers the
+    # module itself, should it ever come back.
+    #
+    # The package-qualified spelling is the one production would actually
+    # write: `chemvas` is the single top-level package, so a bare `ui.tools`
+    # import would raise ImportError before this rule could object to it.
+    pattern = re.compile(
+        r"\bfrom (?:chemvas\.)?ui\.tools import\b|\bimport (?:chemvas\.)?ui\.tools\b"
+    )
 
-    assert _matching_lines(pattern, paths) == []
+    assert _matching_lines(pattern, _app_python_files()) == []
 
 
 def test_graph_algorithms_are_canvas_free() -> None:
@@ -4284,6 +4057,118 @@ def test_duplicate_rdkit_export_reset_wrapper_stays_removed() -> None:
     pattern = re.compile(r"\breset_rdkit_export_job_state_for_tests\b")
 
     assert _matching_lines(pattern, _app_python_files()) == []
+
+
+REMOVED_PACKAGE_ROOT_EXPORTS: dict[str, tuple[str, ...]] = {
+    "chemvas/domain/document/__init__.py": (
+        "CALCULATION_INCLUSIONS",
+        "CALCULATION_PLAN_FORMAT",
+        "CALCULATION_PLAN_VERSION",
+        "CALCULATION_ROLES",
+        "SUPPORTED_FILE_VERSIONS",
+        "CalculationEndpointPrecomplex",
+    ),
+    "chemvas/features/calculation_bundle/__init__.py": (
+        "PathPrecheck",
+        "StepReadiness",
+    ),
+    "chemvas/features/document_composition/__init__.py": (
+        "COMPOSITION_FORMAT",
+        "COMPOSITION_VERSION",
+        "MAX_BONDS",
+    ),
+    "chemvas/features/document_patch/__init__.py": (
+        "DOCUMENT_PATCH_FORMAT",
+        "DOCUMENT_PATCH_VERSION",
+    ),
+    "chemvas/features/export/__init__.py": ("MM_PER_INCH",),
+    "chemvas/features/hover/__init__.py": ("HoverAction",),
+    "chemvas/features/insertion/__init__.py": (
+        "SmilesPreviewPlan",
+        "SmilesPreviewSnapshot",
+        "TemplatePreviewPlan",
+        "ring_polygon_points_for_atoms",
+        "snapshot_smiles_preview_geometry",
+    ),
+    "chemvas/features/rendering/__init__.py": (
+        "BOLD_DOUBLE_STYLES",
+        "BOLD_DOUBLE_STYLE_SEQUENCE",
+        "DEFAULT_BOLD_OUT_LENGTH_SCALE",
+        "DOTTED_DOUBLE_STYLES",
+        "DOTTED_DOUBLE_STYLE_SEQUENCE",
+        "DOUBLE_STYLE_SEQUENCE",
+    ),
+    "chemvas/features/selection/__init__.py": (
+        "LineStrokePathBuilder",
+        "PenWidthGetter",
+        "ROTATION_DRAG_SENSITIVITY",
+        "RotatePointAroundAxis",
+    ),
+    "chemvas/features/session/__init__.py": (
+        "RestorePlan",
+        "SESSION_SCHEMA_VERSION",
+    ),
+}
+
+
+def _package_root_surface(path: Path) -> set[str]:
+    """Names a package root hands out.
+
+    That is every name it binds by importing from one of its own submodules,
+    every name it lists for lazy import, and every name in ``__all__`` --
+    ``from package import name`` works through any of the three. Names defined
+    in the package root itself and used only there are not a surface, which is
+    why this reads bindings rather than grepping for the word.
+    """
+    surface: set[str] = set()
+    for node in ast.parse(path.read_text(encoding="utf-8")).body:
+        if isinstance(node, ast.ImportFrom) and node.level >= 1:
+            surface.update(alias.asname or alias.name for alias in node.names)
+            continue
+        targets: list[ast.expr] = []
+        if isinstance(node, ast.Assign):
+            targets = list(node.targets)
+        elif isinstance(node, ast.AnnAssign):
+            targets = [node.target]
+        if not any(
+            isinstance(target, ast.Name) and target.id in {"__all__", "_LAZY_EXPORTS"}
+            for target in targets
+        ):
+            continue
+        value = node.value
+        if isinstance(value, (ast.List, ast.Tuple, ast.Set)):
+            entries: list[ast.expr] = list(value.elts)
+        elif isinstance(value, ast.Dict):
+            entries = [key for key in value.keys if key is not None]
+        else:
+            continue
+        surface.update(
+            entry.value
+            for entry in entries
+            if isinstance(entry, ast.Constant) and isinstance(entry.value, str)
+        )
+    return surface
+
+
+def test_package_root_exports_without_a_reader_stay_removed() -> None:
+    """Names these package roots re-exported that nothing imported.
+
+    Each was checked against the whole repository -- every tracked file, no
+    path or extension filter -- and appeared only in its own package root and
+    the submodule that defines it. The definitions stay; only the public
+    package-level export went, so this is scoped to the roots.
+    """
+    violations: list[str] = []
+
+    for relative, names in sorted(REMOVED_PACKAGE_ROOT_EXPORTS.items()):
+        root = APP_ROOT / relative
+        if not root.exists():
+            violations.append(f"{relative}: package root is missing")
+            continue
+        surface = _package_root_surface(root)
+        violations.extend(f"{relative}: {name}" for name in names if name in surface)
+
+    assert violations == []
 
 
 def test_exports_and_constants_without_a_reader_stay_removed() -> None:

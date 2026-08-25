@@ -32,8 +32,6 @@ from .hit import (
 )
 from .outline import (
     ARROW_OBJECT_KINDS,
-    LineStrokePathBuilder,
-    PenWidthGetter,
     selection_line_stroke_path,
     selection_path_for_bond_item,
     selection_path_for_object_item,
@@ -41,9 +39,7 @@ from .outline import (
 from .press import SelectionPressContext, SelectionPressDecision, plan_selection_press
 from .rotation import rotated_atom_positions
 from .rotation_geometry import (
-    ROTATION_DRAG_SENSITIVITY,
     Coords3D,
-    RotatePointAroundAxis,
     axis_rotated_coords,
     center_for_coords_3d,
     dominant_axis_angle_from_drag,
@@ -57,14 +53,10 @@ from .rotation_geometry import (
 
 __all__ = [
     "ARROW_OBJECT_KINDS",
-    "ROTATION_DRAG_SENSITIVITY",
     "ActiveToolReference",
     "AtomHitCandidate",
     "BondHitCandidate",
     "Coords3D",
-    "LineStrokePathBuilder",
-    "PenWidthGetter",
-    "RotatePointAroundAxis",
     "SelectionHitRequest",
     "SelectionPressContext",
     "SelectionPressDecision",

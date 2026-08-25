@@ -9,11 +9,9 @@ from .autosave import (
     snapshot_unless_quitting,
 )
 from .logic import (
-    SESSION_SCHEMA_VERSION,
     DocDescriptor,
     DocEntry,
     RestoredDoc,
-    RestorePlan,
     SessionManifest,
     entries_to_restore,
     is_consumable,
@@ -25,10 +23,8 @@ from .logic import (
 )
 
 __all__ = [
-    "SESSION_SCHEMA_VERSION",
     "DocDescriptor",
     "DocEntry",
-    "RestorePlan",
     "RestoredDoc",
     "SessionManifest",
     "entries_to_restore",
