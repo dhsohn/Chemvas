@@ -17,6 +17,9 @@ from chemvas.ui.transactions.object_graph_snapshot import (
 from chemvas.ui.transactions.object_graph_snapshot import (
     SceneItemExactSnapshot as _SceneItemExactSnapshot,
 )
+from chemvas.ui.transactions.object_graph_snapshot import (
+    collect_restore_errors,
+)
 from chemvas.ui.transactions.scene_rect import (
     SceneRectSnapshot,
     scene_rect_is_automatic,
@@ -31,18 +34,6 @@ from chemvas.ui.transactions.scene_runtime import (
 )
 
 _MISSING_RENDERER_STYLE = object()
-
-
-def _collect_restore_errors(
-    operation,
-    destination: list[BaseException],
-) -> None:
-    try:
-        result = operation()
-    except Exception as exc:
-        destination.append(exc)
-        return
-    destination.extend(result)
 
 
 def _add_delete_rollback_note(
@@ -407,9 +398,9 @@ class DocumentSavepoint:
         *,
         secondary_errors: list[BaseException] | None = None,
     ) -> None:
-        _collect_restore_errors(self.containers.restore, errors)
+        collect_restore_errors(self.containers.restore, errors)
         for snapshot in self.objects:
-            _collect_restore_errors(snapshot.restore, errors)
+            collect_restore_errors(snapshot.restore, errors)
         try:
             self.canvas.model = self.canvas_model
         except Exception as exc:
@@ -431,7 +422,7 @@ class DocumentSavepoint:
             # pre-transaction primitive snapshots below stay authoritative
             # over anything it produces.
             self._refresh_bond_geometry(secondary_errors)
-        _collect_restore_errors(
+        collect_restore_errors(
             lambda: restore_primitive_graphics(
                 self.atom_primitive_graphics,
             ),
@@ -440,7 +431,7 @@ class DocumentSavepoint:
         # Restore each captured scene item once after canonical redraw so its
         # exact primitive state is the final writer.
         for scene_item in self.scene_items:
-            _collect_restore_errors(scene_item.restore, errors)
+            collect_restore_errors(scene_item.restore, errors)
         if self.renderer_style is not _MISSING_RENDERER_STYLE:
             try:
                 assert self.renderer is not None

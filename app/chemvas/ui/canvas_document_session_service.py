@@ -85,6 +85,9 @@ from chemvas.ui.transactions.object_graph_snapshot import (
 from chemvas.ui.transactions.object_graph_snapshot import (
     ObjectStateSnapshot as _ObjectStateSnapshot,
 )
+from chemvas.ui.transactions.object_graph_snapshot import (
+    collect_restore_errors,
+)
 from chemvas.ui.transactions.scene_rect import (
     SceneRectSnapshot,
     SceneRectStateSnapshot,
@@ -129,15 +132,6 @@ def _add_scene_recovery_note(
         f"Document scene recovery also failed while {phase}: "
         f"{type(secondary_error).__name__}: {secondary_error}"
     )
-
-
-def _collect_errors(operation, destination: list[BaseException]) -> None:
-    try:
-        result = operation()
-    except Exception as exc:
-        destination.append(exc)
-        return
-    destination.extend(result)
 
 
 @dataclass(slots=True)
@@ -431,9 +425,9 @@ class _CanvasRollbackSnapshot:
             canvas.model = self.model
         except Exception as exc:
             errors.append(exc)
-        _collect_errors(self.containers.restore, errors)
+        collect_restore_errors(self.containers.restore, errors)
         for snapshot in self.object_states:
-            _collect_errors(snapshot.restore, errors)
+            collect_restore_errors(snapshot.restore, errors)
         if self.scene is not None:
             try:
                 self.scene.restore()
@@ -443,9 +437,9 @@ class _CanvasRollbackSnapshot:
         # registries even while scene signals are blocked. Those registries
         # are rollback authority too, so make the captured object state the
         # final silent writer after every scene-side operation.
-        _collect_errors(self.containers.restore, errors)
+        collect_restore_errors(self.containers.restore, errors)
         for snapshot in self.object_states:
-            _collect_errors(snapshot.restore, errors)
+            collect_restore_errors(snapshot.restore, errors)
         return errors
 
     def commit_replacement(self) -> None:

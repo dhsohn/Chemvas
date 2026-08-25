@@ -14,6 +14,24 @@ _UNAVAILABLE_SCENE_ITEM_DATA = object()
 _MISSING_ATTRIBUTE = object()
 
 
+def collect_restore_errors(
+    operation,
+    destination: list[BaseException],
+) -> None:
+    """Run one snapshot restore and append what it reports or raises.
+
+    Both savepoints that drive the snapshots defined here restore the same
+    way: a restore returns its own error list, and a restore that raises
+    instead counts as one error.
+    """
+    try:
+        result = operation()
+    except Exception as exc:
+        destination.append(exc)
+        return
+    destination.extend(result)
+
+
 def _exact_value_matches(actual: object, expected: object) -> bool:
     if actual is expected:
         return True
@@ -332,4 +350,5 @@ __all__ = [
     "ContainerGraphSnapshot",
     "ObjectStateSnapshot",
     "SceneItemExactSnapshot",
+    "collect_restore_errors",
 ]
