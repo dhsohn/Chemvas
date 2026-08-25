@@ -230,12 +230,10 @@ def build_main_window_services() -> MainWindowServices:
         close_canvas_tab_for_window=document_action_service.close_canvas_tab,
     )
     tool_routing_service = MainWindowToolRoutingService(
-        insert_controller_for_window=insert_controller_for_window,
         tool_mode_controller_for_window=tool_mode_controller_for_window,
         color_mutation_service_for_window=color_mutation_service_for_window,
         color_tool_for_window=color_tool_for_window,
         selected_scene_items_for_window=selected_scene_items_for_window,
-        icon_factory_for_window=icon_factory_for_window,
         tool_state_service=tool_state_service,
         context_page_state_service=context_page_state_service,
     )

@@ -19,7 +19,6 @@ from chemvas.ui.main_window_canvas_logic import (
     active_canvas_index,
     active_canvas_tab_index,
     bind_active_canvas_callbacks,
-    canvas_name_counter,
     copy_canvas_template_settings,
     resolve_active_canvas,
 )
@@ -143,14 +142,6 @@ class MainWindowCanvasLogicTest(unittest.TestCase):
         self.assertIsNone(callback_state_for(inactive_canvas).tool_change)
         self.assertIsNone(callback_state_for(inactive_canvas).zoom)
         self.assertIsNone(history_state_for(inactive_canvas).change_callback)
-
-    def test_canvas_name_counter_tracks_default_canvas_names(self) -> None:
-        self.assertEqual(canvas_name_counter([]), 0)
-        self.assertEqual(
-            canvas_name_counter(["Canvas draft", "Canvas 2", "Canvas 9"]), 9
-        )
-        self.assertEqual(canvas_name_counter(["Reactant", "Canvas 2", "Canvas 9"]), 9)
-        self.assertEqual(canvas_name_counter(["Result 1"], prefix="Result"), 1)
 
 
 if __name__ == "__main__":

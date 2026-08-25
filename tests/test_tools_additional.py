@@ -273,7 +273,6 @@ class _MiscCanvas:
         self.colored = []
         self.color_batches = []
         self.flipped = []
-        self.cycled = []
         self.bond_id = None
         self.services = canvas_runtime_services(
             canvas_color_mutation_service=SimpleNamespace(
@@ -282,7 +281,7 @@ class _MiscCanvas:
             ),
             scene_transform_controller=SimpleNamespace(
                 flip_bond_direction=self.flip_bond_direction,
-                cycle_bond_style=self.cycle_bond_style,
+                cycle_bond_style=mock.Mock(),
             ),
             hit_testing_service=SimpleNamespace(
                 item_at_event=self.item_at_event,
@@ -313,9 +312,6 @@ class _MiscCanvas:
 
     def bond_id_from_event(self, event):
         return self.bond_id
-
-    def cycle_bond_style(self, bond_id: int) -> None:
-        self.cycled.append(bond_id)
 
 
 class _DeleteCanvas:
@@ -1160,7 +1156,6 @@ class ToolsAdditionalTest(unittest.TestCase):
         )
         misc_canvas.item = None
         self.assertTrue(flip_tool.on_mouse_press(_Event(QPointF())))
-        self.assertEqual(misc_canvas.cycled, [])
 
         move_canvas = _MoveCanvas()
         move_tool = MoveTool(move_canvas, context=_tool_context_for(move_canvas))

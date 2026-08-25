@@ -68,7 +68,6 @@ if QApplication is not None:
     )
     from chemvas.ui.canvas_scene_reset_access import clear_scene_for
     from chemvas.ui.canvas_service_access import canvas_services_for
-    from chemvas.ui.canvas_service_ports import handle_overlay_service_for_access
     from chemvas.ui.canvas_smiles_input_state import CanvasSmilesInputState
     from chemvas.ui.canvas_style_controller import CanvasStyleController
     from chemvas.ui.canvas_text_style_state import (
@@ -800,11 +799,9 @@ class CanvasViewAdditionalTest(unittest.TestCase):
         )
 
         clear_handles_for(view)
-        handle_overlay_service_for_access(view).show_orbital_handles(item)
         show_curved_handles_for(view, item)
 
         handle_overlay_service.clear_handles.assert_called_once_with()
-        handle_overlay_service.show_orbital_handles.assert_called_once_with(item)
         handle_overlay_service.show_curved_handles.assert_called_once_with(item)
 
     def test_handle_mutation_access_delegates_to_service(self) -> None:

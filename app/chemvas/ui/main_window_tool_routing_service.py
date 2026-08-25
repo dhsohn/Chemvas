@@ -8,21 +8,17 @@ class MainWindowToolRoutingService:
     def __init__(
         self,
         *,
-        insert_controller_for_window,
         tool_mode_controller_for_window,
         color_mutation_service_for_window,
         color_tool_for_window,
         selected_scene_items_for_window,
-        icon_factory_for_window,
         tool_state_service,
         context_page_state_service,
     ) -> None:
-        self._insert_controller_for_window = insert_controller_for_window
         self._tool_mode_controller_for_window = tool_mode_controller_for_window
         self._color_mutation_service_for_window = color_mutation_service_for_window
         self._color_tool_for_window = color_tool_for_window
         self._selected_scene_items_for_window = selected_scene_items_for_window
-        self._icon_factory_for_window = icon_factory_for_window
         self._tool_state = tool_state_service
         self._context_page_state = context_page_state_service
 

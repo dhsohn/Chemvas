@@ -4216,12 +4216,16 @@ def test_write_only_tool_setting_surfaces_stay_removed() -> None:
 
 
 def test_access_ports_without_a_production_caller_stay_removed() -> None:
-    """Ten ``*_access`` wrappers only the tests ever called.
+    """Wrappers and helpers only the tests ever called.
 
-    Each one forwarded to a service the production code already reaches
-    directly, so the wrapper was a second door nobody walked through.
-    ``bold_bond_width_for`` is not ``renderer_bold_bond_width_for``, which is
-    live and stays.
+    Each ``*_access`` wrapper forwarded to a service the production code
+    already reaches directly, so it was a second door nobody walked through.
+    The rest lost their last caller with those wrappers: the scene item map
+    helpers and ``remove_scene_items`` under ``rebuild_graphics_for``, and
+    ``build_template_entries`` under the retired menu population path.
+    ``bold_bond_width_for`` is not ``renderer_bold_bond_width_for`` and
+    ``remove_scene_items`` is not ``remove_scene_item``; both survivors are
+    live and stay.
     """
     removed_ports = (
         "rebuild_graphics_for",
@@ -4236,6 +4240,10 @@ def test_access_ports_without_a_production_caller_stay_removed() -> None:
         "bold_bond_width_for",
         "clear_canvas_scene_item_map",
         "clear_canvas_scene_item_list_map",
+        "clear_scene_item_map",
+        "clear_scene_item_list_map",
+        "remove_scene_items",
+        "build_template_entries",
     )
     pattern = re.compile(
         rf"\b(?:{'|'.join(re.escape(name) for name in removed_ports)})\b"
@@ -4305,12 +4313,15 @@ def test_unused_members_stay_removed_from_their_defining_modules() -> None:
 
     ``_restore_observer_ports`` is not ``_try_restore_observer_ports`` and
     ``viewport_center`` is not ``viewport_center_scene_pos_for``; both
-    survivors are live.
+    survivors are live. The free ``canvas_name_counter`` helper is likewise not
+    ``MainWindowState.canvas_name_counter``, the counter field the window still
+    increments, so that ban is scoped to the module that defined the helper.
     """
     ui_root = APP_ROOT / "chemvas" / "ui"
     scoped_bans = {
         "scene_delete_controller.py": ("_restore_observer_ports",),
         "structure_build_service.py": ("latest_bond_id", "viewport_center"),
+        "main_window_canvas_logic.py": ("canvas_name_counter",),
     }
     violations: list[str] = []
     for file_name, method_names in scoped_bans.items():

@@ -40,11 +40,6 @@ class MainWindowToolRoutingServiceTest(unittest.TestCase):
 
     def setUp(self) -> None:
         self.window = build_main_window()
-        self.insert_controller_for_window = mock.Mock(
-            return_value=active_canvas_for_window(
-                self.window
-            ).services.structure.insert_controller,
-        )
         self.tool_mode_controller_for_window = mock.Mock(
             return_value=active_canvas_for_window(
                 self.window
@@ -57,18 +52,13 @@ class MainWindowToolRoutingServiceTest(unittest.TestCase):
         )
         self.color_tool_for_window = mock.Mock(return_value=None)
         self.selected_scene_items_for_window = mock.Mock(return_value=[])
-        self.icon_factory_for_window = mock.Mock(
-            side_effect=lambda window: window.ui_references.require_icon_factory(),
-        )
         self.tool_state_service = mock.Mock()
         self.context_page_state_service = mock.Mock()
         self.service = MainWindowToolRoutingService(
-            insert_controller_for_window=self.insert_controller_for_window,
             tool_mode_controller_for_window=self.tool_mode_controller_for_window,
             color_mutation_service_for_window=self.color_mutation_service_for_window,
             color_tool_for_window=self.color_tool_for_window,
             selected_scene_items_for_window=self.selected_scene_items_for_window,
-            icon_factory_for_window=self.icon_factory_for_window,
             tool_state_service=self.tool_state_service,
             context_page_state_service=self.context_page_state_service,
         )

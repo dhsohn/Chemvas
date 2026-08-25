@@ -72,11 +72,6 @@ def remove_scene_item(canvas, item) -> None:
     scene_item_controller(canvas).remove_scene_item(item)
 
 
-def remove_scene_items(scene, items) -> None:
-    for item in items:
-        scene.removeItem(item)
-
-
 def add_item_to_canvas_scene(canvas, item):
     canvas_scene_for(canvas).addItem(item)
     return item
@@ -215,17 +210,6 @@ def destroy_scene_item_group(canvas, group) -> None:
     canvas_scene_for(canvas).destroyItemGroup(group)
 
 
-def clear_scene_item_map(scene, item_map: dict) -> dict:
-    remove_scene_items(scene, item_map.values())
-    return {}
-
-
-def clear_scene_item_list_map(scene, item_map: dict) -> dict:
-    for items in item_map.values():
-        remove_scene_items(scene, items)
-    return {}
-
-
 __all__ = [
     "add_item_to_canvas_scene",
     "apply_scene_item_state",
@@ -235,8 +219,6 @@ __all__ = [
     "canvas_scene_for",
     "canvas_scene_for_item_operation",
     "clear_canvas_scene",
-    "clear_scene_item_list_map",
-    "clear_scene_item_map",
     "create_scene_item_from_state",
     "create_scene_item_group",
     "destroy_scene_item_group",
@@ -250,7 +232,6 @@ __all__ = [
     "remove_item_from_canvas_scene",
     "remove_items_from_canvas_scene",
     "remove_scene_item",
-    "remove_scene_items",
     "restore_arrow_from_state",
     "restore_mark_from_state",
     "restore_note_from_state",
