@@ -6,6 +6,7 @@ from typing import Any, cast
 
 from chemvas.domain.document import (
     CANVAS_FILE_VERSION,
+    SETTINGS_KEYS,
     VALID_ARROW_KINDS,
     VALID_BOND_ORDERS,
     VALID_BOND_STYLES,
@@ -64,30 +65,6 @@ _SHAPE_REQUIRED = frozenset(
 )
 _SHAPE_ALLOWED = _SHAPE_REQUIRED | {"fill", "fill_alpha"}
 _RING_REQUIRED = frozenset(("atom_ids", "color", "alpha"))
-_SETTINGS_ALLOWED = frozenset(
-    (
-        "bond_length_px",
-        "arrow_line_width",
-        "arrow_head_scale",
-        "orbital_phase_enabled",
-        "text_font_family",
-        "text_font_size",
-        "text_font_weight",
-        "text_italic",
-        "text_color",
-        "text_alignment",
-        "text_line_spacing",
-        "note_box_enabled",
-        "note_box_color",
-        "note_box_alpha",
-        "note_border_enabled",
-        "note_border_color",
-        "note_border_width",
-        "note_padding",
-        "sheet_size",
-        "sheet_orientation",
-    )
-)
 _DEFAULT_BOND_STYLE = {1: "single", 2: "double", 3: "triple"}
 
 
@@ -226,7 +203,10 @@ def _settings(value: object) -> dict[str, object]:
     if value is None:
         return settings
     overrides = _mapping(value, "settings")
-    if not set(overrides) <= _SETTINGS_ALLOWED:
+    # A composition may override any subset; the document contract itself
+    # requires the full key set, which `validate_settings_state` enforces
+    # below once the defaults have been filled in.
+    if not set(overrides) <= SETTINGS_KEYS:
         raise ValueError("settings has unknown keys")
     settings.update(overrides)
     # Overridden values feed the mark-distance arithmetic before the final
