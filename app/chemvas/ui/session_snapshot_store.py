@@ -288,9 +288,13 @@ class SessionSnapshotStore:
         return None
 
     def _read_state(self, path: Path) -> dict | None:
+        # Same narrowing as _read_manifest: a missing or unreadable file raises
+        # OSError, a corrupt or schema-invalid payload raises ValueError, and
+        # either means this entry is not recoverable. A programming error must
+        # not be mistaken for a corrupt document and drop it from the restore.
         try:
             return read_document(path).state
-        except Exception:
+        except (OSError, ValueError):
             return None
 
     def _manifest_path(self, session_dir: Path) -> Path:

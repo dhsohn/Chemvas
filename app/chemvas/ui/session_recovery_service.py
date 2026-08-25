@@ -178,7 +178,13 @@ class SessionRecoveryService:
         mark_quitting()
         try:
             self._store.mark_clean_exit()
-        except Exception:
+        except OSError:
+            # Unwritable or full app-data is the one failure this can hit: the
+            # manifest read already returns None for anything it cannot parse,
+            # and the write is the atomic text writer. Quitting must not abort,
+            # and the consequence is conservative — without the flag the next
+            # launch treats this session as a crash and offers the work back.
+            # Anything else here is a bug and now propagates.
             pass
 
     def _show_recovered_note(self, window, count: int) -> None:
