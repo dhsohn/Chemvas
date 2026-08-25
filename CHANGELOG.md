@@ -65,6 +65,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   first.
 
 ### Fixed
+- The headless commands that create a new file — `compose-document`,
+  `patch-document`, `render-document` and the calculation bundle writers — no
+  longer close a file descriptor they have already handed away when the write
+  fails. `atomic_create_bytes` gives the staging descriptor to `os.fdopen`,
+  which closes it on its way out, and the failure path then closed it a second
+  time with the resulting `EBADF` swallowed, so nothing surfaced. Had the
+  process opened another file in between, that second close would have landed
+  on the new file instead. The owner is now unambiguous: the handover has its
+  own failure path, the one case where the descriptor is still ours, and
+  nothing after it touches the number. Two tests cover the two sides; the
+  first fails on the previous code. Saving from the editor goes through a
+  different writer and was never affected.
 - A failed ungroup now names the operation it was rolling back, instead of
   the opposite one. When a recovery step fails, a note attached to the error
   says which recovery was attempted; the ungroup command had both of its

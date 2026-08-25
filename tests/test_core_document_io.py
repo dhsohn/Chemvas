@@ -115,6 +115,80 @@ class DocumentIOTest(unittest.TestCase):
             self.assertEqual(path.read_bytes(), b"first")
             self.assertEqual(list(path.parent.glob(f".{path.name}.staging-*")), [])
 
+    def test_failed_publish_closes_no_descriptor_it_no_longer_owns(self) -> None:
+        # The staging file object closes the descriptor on its way out, so a
+        # second close in the failure path would land on a number the process
+        # may already have handed to an unrelated file.
+        real_close = os.close
+        closed_while_invalid: list[int] = []
+
+        def recording_close(fd: int) -> None:
+            try:
+                os.fstat(fd)
+            except OSError:
+                closed_while_invalid.append(fd)
+                return
+            real_close(fd)
+
+        def failing_link(source, target) -> None:
+            raise OSError("injected link failure")
+
+        real_fdopen = os.fdopen
+        handles: list = []
+
+        def recording_fdopen(fd, *args, **kwargs):
+            handle = real_fdopen(fd, *args, **kwargs)
+            handles.append(handle)
+            return handle
+
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "new.bin"
+            with (
+                mock.patch("os.close", recording_close),
+                mock.patch("os.fdopen", recording_fdopen),
+                mock.patch("os.link", failing_link),
+                self.assertRaisesRegex(OSError, "injected link failure"),
+            ):
+                atomic_create_bytes(path, b"payload")
+
+            self.assertEqual(closed_while_invalid, [])
+            # The other half of the same question: the staging file object has
+            # to have closed it, so a leak is a failure here too.
+            self.assertEqual([handle.closed for handle in handles], [True])
+            self.assertFalse(path.exists())
+            self.assertEqual(list(path.parent.glob(f".{path.name}.staging-*")), [])
+
+    def test_failed_handover_closes_the_descriptor_it_still_owns(self) -> None:
+        # The one case where the descriptor is still ours: os.fdopen never took
+        # it. Nothing else can close it, so this path has to.
+        real_close = os.close
+        closed_while_valid: list[int] = []
+
+        def recording_close(fd: int) -> None:
+            try:
+                os.fstat(fd)
+            except OSError:
+                real_close(fd)
+                return
+            closed_while_valid.append(fd)
+            real_close(fd)
+
+        def failing_fdopen(fd, *args, **kwargs):
+            raise OSError("injected handover failure")
+
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "new.bin"
+            with (
+                mock.patch("os.close", recording_close),
+                mock.patch("os.fdopen", failing_fdopen),
+                self.assertRaisesRegex(OSError, "injected handover failure"),
+            ):
+                atomic_create_bytes(path, b"payload")
+
+            self.assertEqual(len(closed_while_valid), 1)
+            self.assertFalse(path.exists())
+            self.assertEqual(list(path.parent.glob(f".{path.name}.staging-*")), [])
+
     def test_create_document_wraps_state_in_chemvas_payload(self) -> None:
         state = _canvas_state()
         state["last_smiles_input"] = "CCO"
