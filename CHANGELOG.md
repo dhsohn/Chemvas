@@ -8,6 +8,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
+- Removed five scene-access helpers that only the test suite ever called.
+  Internal change only — no drawing, saving or exporting path reached any of
+  them. Four of them wrapped a graphics-scene call the production code never
+  made through this module: the whole-scene clear — which is not the live
+  scene reset the document session, the canvas lifecycle and the SMILES insert
+  all go through — the two item-group calls, and the canvas-scoped "can this
+  item be added" probe. The fifth is the scene-scoped half of that probe: it
+  lost its last caller with the probe and went in the same pass. The
+  similarly named "is this item in the scene" pair stays, because the colour
+  mutation service, the edit tools and the history commands still call it. A
+  boundary test pins all five as removed, scoped to the module that defined
+  them because the bare names read as prefixes of live surfaces elsewhere.
 - Removed twelve orphaned glyphs from the design-icon SVG table. Internal
   change only — every icon the window, toolbars and context bars name still
   renders, checked by rebuilding the full reachable set (literal calls, the

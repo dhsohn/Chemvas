@@ -88,35 +88,6 @@ def item_is_unavailable_for_scene_operation(item) -> bool:
     return item is None or (isinstance(item, QGraphicsItem) and sip.isdeleted(item))
 
 
-def item_can_be_added_to_scene(scene, item) -> bool:
-    if item_is_unavailable_for_scene_operation(item):
-        return False
-    if scene is None:
-        return False
-    scene_method = getattr(item, "scene", None)
-    if not callable(scene_method):
-        return True
-    try:
-        return scene_method() is not scene
-    except RuntimeError:
-        if isinstance(item, QGraphicsItem) and sip.isdeleted(item):
-            return False
-        raise
-
-
-def item_can_be_added_to_canvas_scene(canvas, item) -> bool:
-    if item_is_unavailable_for_scene_operation(item):
-        return False
-    return item_can_be_added_to_scene(
-        canvas_scene_for_item_operation(canvas),
-        item,
-    )
-
-
-def clear_canvas_scene(canvas) -> None:
-    canvas_scene_for(canvas).clear()
-
-
 def item_is_in_scene(scene, item) -> bool:
     if item_is_unavailable_for_scene_operation(item):
         return False
@@ -209,14 +180,6 @@ def attached_canvas_scene_items(canvas, items) -> list:
     return attached_items
 
 
-def create_scene_item_group(canvas, items):
-    return canvas_scene_for(canvas).createItemGroup(items)
-
-
-def destroy_scene_item_group(canvas, group) -> None:
-    canvas_scene_for(canvas).destroyItemGroup(group)
-
-
 __all__ = [
     "add_item_to_canvas_scene",
     "apply_scene_item_state",
@@ -225,12 +188,7 @@ __all__ = [
     "bond_ids_for_ring_item",
     "canvas_scene_for",
     "canvas_scene_for_item_operation",
-    "clear_canvas_scene",
     "create_scene_item_from_state",
-    "create_scene_item_group",
-    "destroy_scene_item_group",
-    "item_can_be_added_to_canvas_scene",
-    "item_can_be_added_to_scene",
     "item_is_in_canvas_scene",
     "item_is_in_scene",
     "item_is_unavailable_for_scene_operation",

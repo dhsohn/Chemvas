@@ -4074,6 +4074,36 @@ def test_service_methods_only_the_tests_called_stay_removed() -> None:
     assert violations == []
 
 
+def test_scene_access_helpers_only_the_tests_called_stay_removed() -> None:
+    """Five scene-access helpers whose only callers lived in the test suite.
+
+    Four of them wrapped a ``QGraphicsScene`` call the production code never
+    made through this module: the whole-scene ``clear`` -- which is not
+    ``canvas_scene_reset_access.clear_scene_for``, the live reset the document
+    session, the lifecycle and the SMILES insert all go through -- the two item
+    group calls, and the canvas-scoped "can this be added" probe.
+    ``item_can_be_added_to_scene`` lost its last caller with that probe: it is
+    not ``item_is_in_scene``, whose canvas wrapper the colour mutation service,
+    the edit tools and the history commands still call.
+
+    The ban is scoped to the defining module because the bare names read as
+    prefixes of live surfaces elsewhere -- ``SceneItemAttachPlan`` spells its
+    own live ``item_can_be_added`` in ``transactions/scene_item_attach.py``.
+    """
+    scene_item_access = APP_ROOT / "chemvas" / "ui" / "scene_item_access.py"
+    removed_helpers = (
+        "clear_canvas_scene",
+        "create_scene_item_group",
+        "destroy_scene_item_group",
+        "item_can_be_added_to_canvas_scene",
+        "item_can_be_added_to_scene",
+    )
+    names = "|".join(re.escape(name) for name in removed_helpers)
+    pattern = re.compile(rf"^\s*def (?:{names})\b")
+
+    assert _matching_lines(pattern, [scene_item_access]) == []
+
+
 def test_duplicate_rdkit_export_reset_wrapper_stays_removed() -> None:
     """The module-level wrapper duplicated ``RDKitExportJobRegistry.reset_for_tests``.
 
