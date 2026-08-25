@@ -293,6 +293,58 @@ def _run_history_rollback_step(
         _add_history_rollback_note(original_error, rollback_error)
 
 
+def _restore_atom_states(
+    canvas,
+    atom_states: dict[int, dict],
+    atom_coords_3d: dict[int, tuple[float, float, float]] | None,
+) -> None:
+    for atom_id, state in atom_states.items():
+        _history_canvas_port().restore_atom_from_state_for_history(
+            canvas, atom_id, state
+        )
+    if atom_coords_3d:
+        _history_canvas_port().set_atom_positions_for_history(
+            canvas,
+            {},
+            update_selection=False,
+            coords_3d=atom_coords_3d,
+        )
+
+
+# Only the atom-state and 3-D coordinate steps are shared between the add and
+# delete atom commands. The projection restore that precedes them in the delete
+# command and the mark restore that follows stay at their own call sites, so
+# each compensation order still reads top to bottom where it is written.
+def _restore_atom_states_best_effort(
+    canvas,
+    original_error: BaseException,
+    atom_states: dict[int, dict],
+    atom_coords_3d: dict[int, tuple[float, float, float]] | None,
+) -> None:
+    port = _history_canvas_port()
+    for atom_id, state in atom_states.items():
+        _run_history_rollback_step(
+            original_error,
+            lambda atom_id=atom_id, state=state: (
+                port.restore_atom_from_state_for_history(
+                    canvas,
+                    atom_id,
+                    state,
+                )
+            ),
+        )
+    if atom_coords_3d:
+        _run_history_rollback_step(
+            original_error,
+            lambda: port.set_atom_positions_for_history(
+                canvas,
+                {},
+                update_selection=False,
+                coords_3d=atom_coords_3d,
+            ),
+        )
+
+
 def _compensate_completed_nonexact_commands(
     original_error: BaseException,
     completed: list[HistoryCommand],
@@ -753,38 +805,13 @@ class AddAtomsCommand(HistoryCommand):
         canvas,
         original_error: BaseException,
     ) -> None:
-        # Not shared with `DeleteAtomsCommand._restore_deleted_state_best_effort`
-        # even though the atom and coordinate steps match: that one interleaves
-        # a projection restore before them and a mark restore after them, so a
-        # shared body needs two hooks, and the compensation order -- the thing
-        # this code exists to get right -- would be readable only by following
-        # them. Factoring it out was measured at 36 net lines added.
-        port = _history_canvas_port()
         # Normalize every atom owned by this command first. A failing port
         # call may have mutated the current atom before raising, so tracking
         # only calls that returned successfully is insufficient.
         self._remove_atoms_best_effort(canvas, original_error)
-        for atom_id, state in self.atom_states.items():
-            _run_history_rollback_step(
-                original_error,
-                lambda atom_id=atom_id, state=state: (
-                    port.restore_atom_from_state_for_history(
-                        canvas,
-                        atom_id,
-                        state,
-                    )
-                ),
-            )
-        if self.atom_coords_3d:
-            _run_history_rollback_step(
-                original_error,
-                lambda: port.set_atom_positions_for_history(
-                    canvas,
-                    {},
-                    update_selection=False,
-                    coords_3d=self.atom_coords_3d,
-                ),
-            )
+        _restore_atom_states_best_effort(
+            canvas, original_error, self.atom_states, self.atom_coords_3d
+        )
         _run_history_rollback_step(
             original_error,
             lambda: setattr(canvas.model, "next_atom_id", self.after_next_atom_id),
@@ -827,20 +854,7 @@ class AddAtomsCommand(HistoryCommand):
     def redo(self, canvas) -> None:
         transaction = _capture_history_transaction(canvas)
         try:
-            # Not shared with `DeleteAtomsCommand.undo`, for the same reason as
-            # the rollback pair: that one interleaves projection and mark
-            # restores into this sequence.
-            for atom_id, state in self.atom_states.items():
-                _history_canvas_port().restore_atom_from_state_for_history(
-                    canvas, atom_id, state
-                )
-            if self.atom_coords_3d:
-                _history_canvas_port().set_atom_positions_for_history(
-                    canvas,
-                    {},
-                    update_selection=False,
-                    coords_3d=self.atom_coords_3d,
-                )
+            _restore_atom_states(canvas, self.atom_states, self.atom_coords_3d)
             canvas.model.next_atom_id = self.after_next_atom_id
             _set_last_smiles_input(canvas, self.after_smiles_input)
             _release_history_transaction(canvas, transaction)
@@ -889,9 +903,6 @@ class DeleteAtomsCommand(HistoryCommand):
         canvas,
         original_error: BaseException,
     ) -> None:
-        # Not shared with `AddAtomsCommand._restore_atoms_best_effort`; see the
-        # note there. The projection and mark steps below are the reason, and
-        # each sits at a fixed point in this order rather than at the end.
         self._remove_atoms_best_effort(canvas, original_error)
         port = _history_canvas_port()
         if self.restore_projection_state:
@@ -903,27 +914,9 @@ class DeleteAtomsCommand(HistoryCommand):
                     self.before_projection_anchor_2d,
                 ),
             )
-        for atom_id, state in self.atom_states.items():
-            _run_history_rollback_step(
-                original_error,
-                lambda atom_id=atom_id, state=state: (
-                    port.restore_atom_from_state_for_history(
-                        canvas,
-                        atom_id,
-                        state,
-                    )
-                ),
-            )
-        if self.atom_coords_3d:
-            _run_history_rollback_step(
-                original_error,
-                lambda: port.set_atom_positions_for_history(
-                    canvas,
-                    {},
-                    update_selection=False,
-                    coords_3d=self.atom_coords_3d,
-                ),
-            )
+        _restore_atom_states_best_effort(
+            canvas, original_error, self.atom_states, self.atom_coords_3d
+        )
         if self.remove_marks:
             for mark_state in self.mark_states:
                 _run_history_rollback_step(
@@ -971,24 +964,13 @@ class DeleteAtomsCommand(HistoryCommand):
     def undo(self, canvas) -> None:
         transaction = _capture_history_transaction(canvas)
         try:
-            # Not shared with `AddAtomsCommand.redo`; see the note there.
             if self.restore_projection_state:
                 _history_canvas_port().restore_projection_state_for_history(
                     canvas,
                     self.before_projection_center_3d,
                     self.before_projection_anchor_2d,
                 )
-            for atom_id, state in self.atom_states.items():
-                _history_canvas_port().restore_atom_from_state_for_history(
-                    canvas, atom_id, state
-                )
-            if self.atom_coords_3d:
-                _history_canvas_port().set_atom_positions_for_history(
-                    canvas,
-                    {},
-                    update_selection=False,
-                    coords_3d=self.atom_coords_3d,
-                )
+            _restore_atom_states(canvas, self.atom_states, self.atom_coords_3d)
             if self.remove_marks:
                 for mark_state in self.mark_states:
                     _history_canvas_port().restore_mark_from_state_for_history(

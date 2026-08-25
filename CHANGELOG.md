@@ -35,34 +35,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and the other support modules the default packaging glob skipped, so the
   shipped tests could never be collected. The wheel — what `pip install
   chemvas` installs — is unchanged.
-- Gave seven more duplicated algorithms one owner each, and deliberately left
-  two where they were. Internal housekeeping again; nothing about the
-  application behaves differently. The bond-cycle cache is the part worth
-  naming: two functions answered "is this bond in a ring?" with identical
-  code and both wrote the answer into the same cache, so the rule for when a
-  cached answer goes stale was written twice and could have been changed on
-  one side only. Folded the same way: three depth-first reachability walks,
-  the capture-and-roll-back scaffold the group and ungroup history commands
-  each spelled out twice, the pair of scene-item detach helpers, the
-  eleven-key fingerprint that pins a reaction precomplex to the geometry it
-  was built from, the ring-fill polygon rebuild the move controller kept a
-  private copy of, and the scene-item pool reset the preview and hover
-  renderers each spelled out. Each merge was checked against the code it
-  replaced
-  over the inputs that would expose a difference — random graphs, injected
-  rollback failures, deleted scene objects — and none of them changed an
-  answer. Architecture tests now fail if any of the six is written a second
-  time, and were checked against the tree from before each merge to confirm
-  they report the copies that were really there.
+- Gave eight more duplicated algorithms one owner each, and deliberately left
+  one where it was. Internal housekeeping again; nothing about the application
+  behaves differently. The bond-cycle cache is the part worth naming: two
+  functions answered "is this bond in a ring?" with identical code and both
+  wrote the answer into the same cache, so the rule for when a cached answer
+  goes stale was written twice and could have been changed on one side only.
+  Folded the same way: three depth-first reachability walks, the
+  capture-and-roll-back scaffold the group and ungroup history commands each
+  spelled out twice, the pair of scene-item detach helpers, the eleven-key
+  fingerprint that pins a reaction precomplex to the geometry it was built
+  from, the ring-fill polygon rebuild the move controller kept a private copy
+  of, the scene-item pool reset the preview and hover renderers each spelled
+  out, and the atom-state restore the add-atoms and delete-atoms history
+  commands each wrote twice. Each merge was checked against the code it
+  replaced over the inputs that would expose a difference — random graphs,
+  injected rollback failures, deleted scene objects — and none of them changed
+  an answer. Architecture tests pin six of the eight and fail if one of those
+  is written a second time; they were checked against the tree from before
+  each merge to confirm they report the copies that were really there.
 
-  What did not merge is now recorded at both of its sites. The restore-atoms
-  blocks in the history commands and the shared tail of the atom and bond
-  delete paths were each written as a shared helper, measured at 36 and 24
-  net lines longer than the copies, and reverted. A fourth copy of the
-  scene-item pool reset stays in `features.selection.handles`, which is in a
-  layer that never imports `ui` and so cannot reach the owner. Both precomplex
-  geometry checks were kept even though the second cannot fail when reached
-  through the first, because the other caller reaches it without the first.
+  What did not merge is recorded at both of its sites: the shared tail of the
+  atom and bond delete paths was written as a shared helper, measured at 24
+  net lines longer than the copies, and reverted. A fourth scene-item pool
+  reset stays in `features.selection.handles`, which is in a layer that never
+  imports `ui` and so cannot reach the owner, and says so where it sits. Both
+  precomplex geometry checks were kept even though the second cannot fail when
+  reached through the first, because the other caller reaches it without the
+  first.
 
 ### Fixed
 - A failed ungroup now names the operation it was rolling back, instead of
