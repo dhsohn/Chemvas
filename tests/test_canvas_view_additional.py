@@ -3,6 +3,8 @@ import unittest
 from types import SimpleNamespace
 from unittest import mock
 
+from chemvas.core.history import HistoryCommand
+
 from tests.runtime_services import canvas_runtime_services
 from tests.runtime_state import canvas_runtime_state
 
@@ -210,7 +212,7 @@ def _document_graph_service():
     return SimpleNamespace(rebuild_bond_adjacency=mock.Mock())
 
 
-class _FakeCommand:
+class _FakeCommand(HistoryCommand):
     def __init__(self) -> None:
         self.undo_calls = 0
         self.redo_calls = 0
@@ -669,6 +671,9 @@ class CanvasViewAdditionalTest(unittest.TestCase):
                 callback_state=CanvasCallbackState(tool_change=callback),
                 insert_state=SimpleNamespace(template_active=True, smiles_active=False),
             ),
+        )
+        view.services.selection.selection_controller = SimpleNamespace(
+            update_selection_outline=view.refresh_selection_outline
         )
         view.services.input.tool_mode_controller = CanvasToolModeController(
             view,

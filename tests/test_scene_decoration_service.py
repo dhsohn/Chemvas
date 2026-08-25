@@ -88,6 +88,9 @@ class SceneDecorationServiceTest(unittest.TestCase):
         build_service = SimpleNamespace(
             build_mark_item=mock.Mock(side_effect=[text_mark, None]),
             set_mark_center=set_mark_center,
+            # Inverse of this double's set_mark_center, so serializing the new
+            # mark reads back the centre add_mark was given.
+            mark_center=lambda item: item.pos(),
         )
 
         def _attach(item) -> None:

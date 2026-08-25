@@ -23,6 +23,10 @@ class _PreviewWindow(Protocol):
     def hide(self) -> None: ...
 
 
+class _Preview3D(Protocol):
+    def shutdown(self) -> None: ...
+
+
 class _UiReferences(Protocol):
     @property
     def preview_window(self) -> _PreviewWindow | None: ...
@@ -42,7 +46,7 @@ class MainWindowRuntime(Protocol):
     def services(self) -> _WindowServices: ...
 
     @property
-    def preview_3d(self) -> object: ...
+    def preview_3d(self) -> _Preview3D: ...
 
 
 WindowFinalizer = Callable[[object], None]
@@ -90,9 +94,7 @@ class MainWindow(QMainWindow):
         preview_window = self._ui_refs.preview_window
         if preview_window is not None:
             preview_window.hide()
-        shutdown_preview = getattr(self._preview_3d, "shutdown", None)
-        if callable(shutdown_preview):
-            shutdown_preview()
+        self._preview_3d.shutdown()
         self._forget_window(self)
         # Defer a session refresh: it runs only if the app keeps running (a
         # standalone window close drops the closed document from the restore

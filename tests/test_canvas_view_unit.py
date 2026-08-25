@@ -113,7 +113,8 @@ class _FakeNoteCanvas:
                 remove_scene_item=self.removed_items.append
             ),
             selection_controller=SimpleNamespace(
-                update_note_selection_box=self.record_note_selection_box_updated
+                update_note_selection_box=self.record_note_selection_box_updated,
+                update_selection_outline=mock.Mock(),
             ),
         )
         self.services.interaction.note_controller = CanvasNoteController(
@@ -673,7 +674,19 @@ class CanvasViewUnitTest(unittest.TestCase):
         self.assertTrue(uses_compact_label_hit_shape_for(SimpleNamespace(), "C"))
         self.assertTrue(uses_compact_label_hit_shape_for(SimpleNamespace(), "Cl"))
         self.assertFalse(uses_compact_label_hit_shape_for(SimpleNamespace(), "CH3"))
-        self.assertEqual(implicit_carbon_dot_brush_for(SimpleNamespace()).alpha(), 0)
+        transparent = QColor(0, 0, 0, 0)
+        self.assertEqual(
+            implicit_carbon_dot_brush_for(
+                SimpleNamespace(
+                    services=canvas_runtime_services(
+                        atom_label_service=SimpleNamespace(
+                            implicit_carbon_dot_brush=lambda: transparent
+                        )
+                    )
+                )
+            ).alpha(),
+            0,
+        )
         self.assertEqual(clipboard_paste_offset(2, 20.0), (36.0, 36.0))
 
     def test_structure_payload_logic_helpers_cover_selection_expansion_and_annotations(

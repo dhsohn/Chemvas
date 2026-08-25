@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from chemvas.ui.canvas_service_access import optional_canvas_service_method
 from chemvas.ui.canvas_service_ports import (
     mark_scene_service_for_access,
     scene_decoration_build_service_for_access,
@@ -8,56 +7,30 @@ from chemvas.ui.canvas_service_ports import (
 from chemvas.ui.pick_radius_access import atom_pick_radius_for
 
 
-def _decoration_build_method(canvas, name: str):
-    return optional_canvas_service_method(
-        canvas, scene_decoration_build_service_for_access, name
-    )
-
-
-def _mark_scene_method(canvas, name: str):
-    return optional_canvas_service_method(canvas, mark_scene_service_for_access, name)
-
-
 def build_mark_item_for(canvas, kind: str):
-    build_mark_item = _decoration_build_method(canvas, "build_mark_item")
-    if build_mark_item is not None:
-        return build_mark_item(kind)
-    return None
+    return scene_decoration_build_service_for_access(canvas).build_mark_item(kind)
 
 
 def mark_center_for(canvas, item):
-    mark_center = _decoration_build_method(canvas, "mark_center")
-    if mark_center is not None:
-        return mark_center(item)
-    return item.pos()
+    return scene_decoration_build_service_for_access(canvas).mark_center(item)
 
 
 def set_mark_center_for(canvas, item, center) -> None:
-    set_mark_center = _decoration_build_method(canvas, "set_mark_center")
-    if set_mark_center is not None:
-        set_mark_center(item, center)
-        return
+    scene_decoration_build_service_for_access(canvas).set_mark_center(item, center)
 
 
 def remove_mark_item_for(canvas, item) -> None:
-    remove_mark_item = _mark_scene_method(canvas, "remove_mark_item")
-    if remove_mark_item is not None:
-        remove_mark_item(item)
-        return
+    mark_scene_service_for_access(canvas).remove_mark_item(item)
 
 
 def remove_marks_for_atom_for(canvas, atom_id: int) -> None:
-    remove_marks_for_atom = _mark_scene_method(canvas, "remove_marks_for_atom")
-    if remove_marks_for_atom is not None:
-        remove_marks_for_atom(atom_id)
-        return
+    mark_scene_service_for_access(canvas).remove_marks_for_atom(atom_id)
 
 
 def mark_center_for_pointer_for(canvas, pos, atom_id: int | None, *, kind: str | None):
-    mark_center_for_pointer = _mark_scene_method(canvas, "mark_center_for_pointer")
-    if mark_center_for_pointer is not None:
-        return mark_center_for_pointer(pos, atom_id, kind=kind)
-    return pos
+    return mark_scene_service_for_access(canvas).mark_center_for_pointer(
+        pos, atom_id, kind=kind
+    )
 
 
 def mark_selection_radius_for(canvas) -> float:

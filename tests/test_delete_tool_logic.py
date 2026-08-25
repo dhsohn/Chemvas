@@ -69,6 +69,11 @@ class _Canvas:
             scene_item_controller=SimpleNamespace(
                 remove_scene_item=self.remove_scene_item
             ),
+            # Serializing a mark's state asks the build service where its
+            # centre is; for a non-text item the real one answers item.pos().
+            scene_decoration_build_service=SimpleNamespace(
+                mark_center=lambda item: item.pos()
+            ),
         )
 
     def delete_atom(self, atom_id: int, record: bool = True):

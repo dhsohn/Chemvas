@@ -215,13 +215,13 @@ def serialize_model_state_with_warnings(
         "next_atom_id": max(int(model.next_atom_id), max(atoms, default=-1) + 1),
     }
     atom_annotations = _serialized_atom_annotations(
-        getattr(model, "atom_annotations", {}), atoms.keys()
+        model.atom_annotations, atoms.keys()
     )
     if atom_annotations:
         state["atom_annotations"] = atom_annotations
     _record_atom_annotation_serialization_repairs(
         warning_counts,
-        getattr(model, "atom_annotations", {}),
+        model.atom_annotations,
         atoms.keys(),
     )
     return state, _model_serialization_warnings(warning_counts)

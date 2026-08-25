@@ -47,7 +47,7 @@ from tests.runtime_services import canvas_runtime_services
 from tests.runtime_state import canvas_runtime_state
 
 
-class _RecorderCommand:
+class _RecorderCommand(HistoryCommand):
     def __init__(self, name: str, log: list[str]) -> None:
         self.name = name
         self.log = log

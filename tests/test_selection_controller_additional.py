@@ -263,6 +263,12 @@ def _make_canvas(**overrides):
     services.graph_service = graph_service
     services.hit_testing_service = hit_testing_service
     services.tool_controller = tool_controller
+    if not hasattr(services.selection, "selection_controller"):
+        # The structure service clears note selection through this port; the
+        # controller under test is created after the canvas, so stand in for it.
+        services.selection_controller = SimpleNamespace(
+            clear_note_selection=mock.Mock()
+        )
     canvas.services = services
     canvas.selection_info_callback = selection_info_callback
     return canvas

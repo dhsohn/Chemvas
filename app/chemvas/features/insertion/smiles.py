@@ -123,8 +123,7 @@ def plan_smiles_commit(
         )
     marks = []
     annotations: dict[int, dict[str, int]] = {}
-    atom_annotations = getattr(model, "atom_annotations", {})
-    for atom_id, annotation in atom_annotations.items():
+    for atom_id, annotation in model.atom_annotations.items():
         atom = model.atoms.get(atom_id)
         if atom is None:
             continue

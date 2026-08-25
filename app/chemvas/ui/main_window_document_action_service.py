@@ -501,16 +501,13 @@ class MainWindowDocumentActionService:
     def _activate_open_document(self, window, canvas: CanvasView, path: str) -> None:
         """Bring the window already showing ``path`` to the front and select its
         tab, then note it — used instead of opening a duplicate."""
-        tab_references = getattr(window, "tab_references", None)
-        if tab_references is not None:
-            tab_references.canvas_tabs.setCurrentWidget(canvas)
-        for method_name in ("show", "raise_", "activateWindow"):
-            method = getattr(window, method_name, None)
-            if callable(method):
-                method()
-        status_bar = getattr(window, "statusBar", None)
-        if callable(status_bar):
-            status_bar().showMessage(f"Already open: {path}", 4000)
+        # ``window`` comes from find_open_document, which only yields windows
+        # that carry tab_references; it is always a real MainWindow.
+        window.tab_references.canvas_tabs.setCurrentWidget(canvas)
+        window.show()
+        window.raise_()
+        window.activateWindow()
+        window.statusBar().showMessage(f"Already open: {path}", 4000)
 
     def close_canvas_tab(self, window, index: int) -> bool:
         tab_refs = window.tab_references

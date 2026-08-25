@@ -573,22 +573,13 @@ class CanvasColorMutationService:
 
     @staticmethod
     def _mark_color_rollback_complete(error: BaseException) -> None:
-        with contextlib.suppress(BaseException):
-            namespace = object.__getattribute__(error, "__dict__")
-            if isinstance(namespace, dict):
-                dict.__setitem__(
-                    namespace,
-                    "_chemvas_color_rollback_complete",
-                    True,
-                )
+        # BaseException always carries an instance __dict__, so this cannot fail
+        # -- including for a subclass that declares __slots__.
+        error._chemvas_color_rollback_complete = True  # type: ignore[attr-defined]
 
     @staticmethod
     def _color_rollback_is_complete(error: BaseException) -> bool:
-        with contextlib.suppress(BaseException):
-            namespace = object.__getattribute__(error, "__dict__")
-            if isinstance(namespace, dict):
-                return dict.get(namespace, "_chemvas_color_rollback_complete") is True
-        return False
+        return getattr(error, "_chemvas_color_rollback_complete", False) is True
 
     def _rollback_commands(
         self,

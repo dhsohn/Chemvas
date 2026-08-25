@@ -77,7 +77,8 @@ class _FakeCanvas:
                 apply_note_style=self.record_note_style_applied
             ),
             selection_controller=SimpleNamespace(
-                update_note_selection_box=self.record_note_selection_box_updated
+                update_note_selection_box=self.record_note_selection_box_updated,
+                update_selection_outline=lambda: None,
             ),
             scene_decoration_build_service=SimpleNamespace(
                 build_mark_item=self.record_build_mark_item,

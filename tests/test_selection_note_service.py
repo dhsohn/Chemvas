@@ -53,6 +53,13 @@ class SelectionNoteServiceTest(unittest.TestCase):
                 ),
                 text_style_state=CanvasTextStyleState(note_padding=6.0),
             ),
+            # Note-selection changes refresh the selection outline through the
+            # selection controller port.
+            services=canvas_runtime_services(
+                selection_controller=SimpleNamespace(
+                    update_selection_outline=mock.Mock()
+                )
+            ),
         )
         set_selected_notes_for(canvas, [note_a])
         service = SelectionNoteService(canvas)
@@ -83,6 +90,13 @@ class SelectionNoteServiceTest(unittest.TestCase):
                 ),
                 text_style_state=CanvasTextStyleState(note_padding=6.0),
             ),
+            # Note-selection changes refresh the selection outline through the
+            # selection controller port.
+            services=canvas_runtime_services(
+                selection_controller=SimpleNamespace(
+                    update_selection_outline=mock.Mock()
+                )
+            ),
         )
         set_selected_notes_for(canvas, [])
         service = SelectionNoteService(canvas)
@@ -110,6 +124,13 @@ class SelectionNoteServiceTest(unittest.TestCase):
                 ),
                 text_style_state=CanvasTextStyleState(note_padding=6.0),
             ),
+            # Note-selection changes refresh the selection outline through the
+            # selection controller port.
+            services=canvas_runtime_services(
+                selection_controller=SimpleNamespace(
+                    update_selection_outline=mock.Mock()
+                )
+            ),
         )
         set_selected_notes_for(canvas, [note_a, note_b])
         service = SelectionNoteService(canvas)
@@ -132,6 +153,13 @@ class SelectionNoteServiceTest(unittest.TestCase):
                     color=QColor("#1f5eff"), stroke_delta=0.8
                 ),
                 text_style_state=CanvasTextStyleState(note_padding=6.0),
+            ),
+            # Note-selection changes refresh the selection outline through the
+            # selection controller port.
+            services=canvas_runtime_services(
+                selection_controller=SimpleNamespace(
+                    update_selection_outline=mock.Mock()
+                )
             ),
         )
 

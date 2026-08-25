@@ -103,6 +103,9 @@ class RDKitAdapter:
     def compute_identifiers(self, model: MoleculeModel) -> MoleculeIdentifiers:
         return self._import_helper.compute_identifiers(model)
 
+    # These two forward to the helper that calls back through them, so the pair
+    # is a seam, not a delegation: patching them on the adapter is how the
+    # conversion tests substitute a molecule without a working RDKit.
     def _embed_3d_molecule(self, mol, Chem, AllChem):
         return self._conversion_helper._embed_3d_molecule(mol, Chem, AllChem)
 

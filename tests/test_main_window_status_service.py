@@ -192,7 +192,7 @@ def test_refresh_status_context_uses_injected_zoom_port() -> None:
     service.update_sheet_status_label = mock.Mock()
     service.update_selection_status_label = mock.Mock()
     service.update_zoom_label = mock.Mock()
-    window = object()
+    window = SimpleNamespace(statusBar=mock.Mock(return_value=mock.Mock()))
 
     service.refresh_status_context(window)
 

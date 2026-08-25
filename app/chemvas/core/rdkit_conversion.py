@@ -38,7 +38,7 @@ class RDKitConversionHelper:
         Chem, _ = rdkit
         rw = Chem.RWMol()
         adjacency = self._build_model_adjacency(model)
-        atom_annotations = getattr(model, "atom_annotations", None)
+        atom_annotations = model.atom_annotations
         atom_map = {}
         invalid_labels: list[str] = []
         for atom_id in sorted(model.atoms):
@@ -133,6 +133,8 @@ class RDKitConversionHelper:
     def _submodel(
         model: MoleculeModel, atom_ids: frozenset[int] | set[int]
     ) -> MoleculeModel:
+        # atom_ids comes from a caller, not from a component walk, so an id that
+        # is no longer in the model is reachable here.
         atoms = {
             atom_id: model.atoms[atom_id]
             for atom_id in atom_ids
@@ -143,7 +145,7 @@ class RDKitConversionHelper:
             for bond in model.bonds
             if bond is not None and bond.a in atoms and bond.b in atoms
         ]
-        annotations = getattr(model, "atom_annotations", {})
+        annotations = model.atom_annotations
         return MoleculeModel(
             atoms=dict(atoms),
             bonds=list(bonds),
@@ -425,11 +427,14 @@ class RDKitConversionHelper:
     def _component_sort_key(
         model: MoleculeModel, atom_ids: set[int]
     ) -> tuple[float, float, int]:
-        xs = [model.atoms[atom_id].x for atom_id in atom_ids if atom_id in model.atoms]
-        ys = [model.atoms[atom_id].y for atom_id in atom_ids if atom_id in model.atoms]
-        center_x = (min(xs) + max(xs)) * 0.5 if xs else 0.0
-        center_y = (min(ys) + max(ys)) * 0.5 if ys else 0.0
-        return center_x, center_y, min(atom_ids) if atom_ids else -1
+        # Every component comes from _model_components, which seeds from
+        # model.atoms and walks an adjacency built over the same keys: the ids
+        # are always live and a component is never empty.
+        xs = [model.atoms[atom_id].x for atom_id in atom_ids]
+        ys = [model.atoms[atom_id].y for atom_id in atom_ids]
+        center_x = (min(xs) + max(xs)) * 0.5
+        center_y = (min(ys) + max(ys)) * 0.5
+        return center_x, center_y, min(atom_ids)
 
     def _model_components(self, model: MoleculeModel) -> list[set[int]]:
         adjacency = self._build_model_adjacency(model)
@@ -461,9 +466,7 @@ class RDKitConversionHelper:
     ) -> tuple[MoleculeModel, dict[int, dict[str, int]]]:
         component_model = MoleculeModel()
         active_annotations = (
-            atom_annotations
-            if atom_annotations is not None
-            else getattr(model, "atom_annotations", {})
+            atom_annotations if atom_annotations is not None else model.atom_annotations
         )
         id_map: dict[int, int] = {}
         for old_id in sorted(atom_ids):

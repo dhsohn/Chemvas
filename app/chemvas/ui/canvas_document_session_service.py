@@ -919,8 +919,9 @@ class CanvasDocumentSessionService:
             unit_scale=unit_scale,
             target_width_pt=target_width_pt,
         )
-        if plan is None:
-            raise ValueError("There is nothing to export.")
+        # content_bounds already rejected an empty or degenerate rect, which is
+        # the only way build_export_plan returns None.
+        assert plan is not None
         return plan
 
     def _figure_export_parameters(

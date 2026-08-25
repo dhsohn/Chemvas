@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from chemvas.features.annotations import DEFAULT_BRACKET_KIND
-from chemvas.ui.canvas_service_access import optional_canvas_service_method
 from chemvas.ui.canvas_service_ports import (
     mark_scene_service_for_access,
     scene_decoration_build_service_for_access,
@@ -9,23 +8,8 @@ from chemvas.ui.canvas_service_ports import (
 )
 
 
-def _decoration_service_method(canvas, name: str):
-    return optional_canvas_service_method(
-        canvas, scene_decoration_service_for_access, name
-    )
-
-
-def _build_service_method(canvas, name: str):
-    return optional_canvas_service_method(
-        canvas, scene_decoration_build_service_for_access, name
-    )
-
-
 def add_arrow_for(canvas, start, end, kind: str):
-    method = _decoration_service_method(canvas, "add_arrow")
-    if method is not None:
-        return method(start, end, kind)
-    return None
+    return scene_decoration_service_for_access(canvas).add_arrow(start, end, kind)
 
 
 def add_mark_for(
@@ -37,10 +21,9 @@ def add_mark_for(
     offset=None,
     record: bool = True,
 ):
-    method = _decoration_service_method(canvas, "add_mark")
-    if method is not None:
-        return method(pos, kind=kind, atom_id=atom_id, offset=offset, record=record)
-    return None
+    return scene_decoration_service_for_access(canvas).add_mark(
+        pos, kind=kind, atom_id=atom_id, offset=offset, record=record
+    )
 
 
 def add_mark_for_atom_for(
@@ -51,55 +34,46 @@ def add_mark_for_atom_for(
     kind: str | None = None,
     record: bool = True,
 ):
-    method = optional_canvas_service_method(
-        canvas, mark_scene_service_for_access, "add_mark_for_atom"
+    return mark_scene_service_for_access(canvas).add_mark_for_atom(
+        atom_id, click_pos, kind=kind, record=record
     )
-    if method is not None:
-        return method(atom_id, click_pos, kind=kind, record=record)
-    return None
 
 
 def preview_arrow_for(canvas, start, end, kind: str):
-    method = _build_service_method(canvas, "preview_arrow")
-    if method is not None:
-        return method(start, end, kind)
-    return None
+    return scene_decoration_build_service_for_access(canvas).preview_arrow(
+        start, end, kind
+    )
 
 
 def add_ts_bracket_for(canvas, rect, bracket_kind: str = DEFAULT_BRACKET_KIND):
-    method = _decoration_service_method(canvas, "add_ts_bracket")
-    if method is not None:
-        return method(rect, bracket_kind=bracket_kind)
-    return None
+    return scene_decoration_service_for_access(canvas).add_ts_bracket(
+        rect, bracket_kind=bracket_kind
+    )
 
 
 def add_ts_bracket_from_points_for(
     canvas, start, end, bracket_kind: str = DEFAULT_BRACKET_KIND
 ):
-    rect_from_points = _build_service_method(canvas, "ts_bracket_rect_from_points")
-    if rect_from_points is not None:
-        return add_ts_bracket_for(
-            canvas, rect_from_points(start, end), bracket_kind=bracket_kind
-        )
-    return None
+    rect = scene_decoration_build_service_for_access(
+        canvas
+    ).ts_bracket_rect_from_points(start, end)
+    return add_ts_bracket_for(canvas, rect, bracket_kind=bracket_kind)
 
 
 def preview_ts_bracket_for(
     canvas, start, end, bracket_kind: str = DEFAULT_BRACKET_KIND
 ):
-    method = _build_service_method(canvas, "preview_ts_bracket")
-    if method is not None:
-        return method(start, end, bracket_kind)
-    return None
+    return scene_decoration_build_service_for_access(canvas).preview_ts_bracket(
+        start, end, bracket_kind
+    )
 
 
 def add_shape_for(
     canvas, rect, *, shape_kind: str | None = None, stroke_style: str | None = None
 ):
-    method = _decoration_service_method(canvas, "add_shape")
-    if method is not None:
-        return method(rect, shape_kind=shape_kind, stroke_style=stroke_style)
-    return None
+    return scene_decoration_service_for_access(canvas).add_shape(
+        rect, shape_kind=shape_kind, stroke_style=stroke_style
+    )
 
 
 def add_shape_from_points_for(
@@ -110,15 +84,15 @@ def add_shape_from_points_for(
     shape_kind: str | None = None,
     stroke_style: str | None = None,
 ):
-    rect_from_points = _build_service_method(canvas, "shape_rect_from_points")
-    if rect_from_points is not None:
-        return add_shape_for(
-            canvas,
-            rect_from_points(start, end),
-            shape_kind=shape_kind,
-            stroke_style=stroke_style,
-        )
-    return None
+    rect = scene_decoration_build_service_for_access(canvas).shape_rect_from_points(
+        start, end
+    )
+    return add_shape_for(
+        canvas,
+        rect,
+        shape_kind=shape_kind,
+        stroke_style=stroke_style,
+    )
 
 
 def preview_shape_for(
@@ -129,17 +103,13 @@ def preview_shape_for(
     shape_kind: str | None = None,
     stroke_style: str | None = None,
 ):
-    method = _build_service_method(canvas, "preview_shape")
-    if method is not None:
-        return method(start, end, shape_kind or "circle", stroke_style or "solid")
-    return None
+    return scene_decoration_build_service_for_access(canvas).preview_shape(
+        start, end, shape_kind or "circle", stroke_style or "solid"
+    )
 
 
 def add_orbital_for(canvas, center):
-    method = _decoration_service_method(canvas, "add_orbital")
-    if method is not None:
-        return method(center)
-    return None
+    return scene_decoration_service_for_access(canvas).add_orbital(center)
 
 
 __all__ = [
