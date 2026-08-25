@@ -299,10 +299,7 @@ class MainWindowStatusService:
         return TOOL_HINTS.get(key, f"{tool_display_name(key)}: ready")
 
     def show_active_tool_hint(self, window) -> None:
-        status_bar = window.statusBar() if hasattr(window, "statusBar") else None
-        if status_bar is None:
-            return
-        status_bar.showMessage(self.active_tool_hint_text(window))
+        window.statusBar().showMessage(self.active_tool_hint_text(window))
 
     def active_sheet_status_text(self, window) -> str:
         canvas_count = self._canvas_count_for_window(window)
