@@ -43,9 +43,8 @@ def run(argv: list[str]) -> int:
     parser = _argument_parser()
     args = parser.parse_args(argv)
     try:
-        if args.command != "render-document":
-            parser.error("a command is required")
-            return 2
+        # add_subparsers(required=True) with one registered subparser: argparse
+        # has already exited for a missing or unknown command.
         report = _render_document(
             Path(args.document),
             output=Path(args.output),
