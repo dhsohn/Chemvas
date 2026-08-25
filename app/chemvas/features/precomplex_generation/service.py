@@ -3,10 +3,10 @@ from __future__ import annotations
 import hashlib
 import json
 import math
-import re
 from collections.abc import Mapping
 from dataclasses import replace
 
+from chemvas.domain.document.precomplex import SHA256_HEX_RE
 from chemvas.domain.document.precomplex_profile import (
     CURRENT_PROFILE_ID,
     precomplex_placement_profile,
@@ -24,7 +24,6 @@ from .model import (
     Vector3,
 )
 
-_SHA256_RE = re.compile(r"[0-9a-f]{64}\Z")
 _EPSILON = 1e-12
 
 
@@ -245,9 +244,9 @@ def _validate_request(
     components: tuple[ComponentGeometry, ...],
 ) -> None:
     profile = precomplex_placement_profile(request.profile)
-    if _SHA256_RE.fullmatch(request.source_sha256) is None:
+    if SHA256_HEX_RE.fullmatch(request.source_sha256) is None:
         raise ValueError("Precomplex source_sha256 must be lowercase SHA-256 hex.")
-    if _SHA256_RE.fullmatch(request.plan_sha256) is None:
+    if SHA256_HEX_RE.fullmatch(request.plan_sha256) is None:
         raise ValueError("Precomplex plan_sha256 must be lowercase SHA-256 hex.")
     if request.side not in {"reactant", "product"}:
         raise ValueError("Precomplex side must be reactant or product.")
