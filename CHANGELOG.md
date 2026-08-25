@@ -35,6 +35,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and the other support modules the default packaging glob skipped, so the
   shipped tests could never be collected. The wheel — what `pip install
   chemvas` installs — is unchanged.
+- Gave six more duplicated algorithms one owner each, and deliberately left
+  three where they were. Internal housekeeping again; nothing about the
+  application behaves differently. The bond-cycle cache is the part worth
+  naming: two functions answered "is this bond in a ring?" with identical
+  code and both wrote the answer into the same cache, so the rule for when a
+  cached answer goes stale was written twice and could have been changed on
+  one side only. Folded the same way: three depth-first reachability walks,
+  the capture-and-roll-back scaffold the group and ungroup history commands
+  each spelled out twice, the pair of scene-item detach helpers, the
+  eleven-key fingerprint that pins a reaction precomplex to the geometry it
+  was built from, and the ring-fill polygon rebuild the move controller kept
+  a private copy of. Each merge was checked against the code it replaced
+  over the inputs that would expose a difference — random graphs, injected
+  rollback failures, deleted scene objects — and none of them changed an
+  answer.
+
+  What did not merge is now recorded at both of its sites. The restore-atoms
+  blocks in the history commands and the shared tail of the atom and bond
+  delete paths were each written as a shared helper, measured at 36 and 24
+  net lines longer than the copies, and reverted. The four scene-item pool
+  resets sit in layers that cannot import one another. Both precomplex
+  geometry checks were kept even though the second cannot fail when reached
+  through the first, because the other caller reaches it without the first.
+
+### Fixed
+- A failed ungroup now names the operation it was rolling back, instead of
+  the opposite one. When a recovery step fails, a note attached to the error
+  says which recovery was attempted; the ungroup command had both of its
+  directions backwards, reporting "after grouping" when it had been
+  ungrouping and "after ungrouping" when undo had put the groups back. The
+  wording had been copied from the grouping command, where redo does group
+  and undo does ungroup, so it followed the undo/redo slot rather than the
+  operation. Only the text changes — no recovery step was added, removed or
+  reordered.
 
 ### Removed
 - **The capture path's dormant non-strict mode.** `capture_scene_runtime` and
