@@ -3412,76 +3412,24 @@ def test_callback_state_accessor_is_strict_runtime_owned() -> None:
     assert fallback_pattern.search(getter_source) is None
 
 
-def test_tool_settings_state_accessor_does_not_read_legacy_canvas_attrs() -> None:
-    tool_settings_state = APP_ROOT / "chemvas" / "ui" / "canvas_tool_settings_state.py"
+def test_state_accessors_do_not_read_legacy_canvas_mirror_vocabulary() -> None:
+    """No module may mirror or re-sync state off raw canvas attributes.
+
+    Eight per-module copies of this ban guarded eight state accessors. None of
+    these names has ever been defined anywhere in this repository's history --
+    they only ever appeared inside this test file -- so a repo-wide ban is the
+    honest shape: it covers the eight original modules and every module added
+    since, which the per-module copies did not.
+    """
     pattern = re.compile(
-        r"\bcanvas_state_mirror\b|\brefresh_state_from_canvas_attrs\b|\bsync_canvas_attrs\b|\bsync_canvas_attr\b"
+        r"\bcanvas_state_mirror\b"
+        r"|\brefresh_state_from_canvas_attrs\b"
+        r"|\brefresh_state_from_canvas_attr_map\b"
+        r"|\bsync_canvas_attrs\b"
+        r"|\bsync_canvas_attr\b"
     )
 
-    assert _matching_lines(pattern, [tool_settings_state]) == []
-
-
-def test_smiles_input_state_accessor_does_not_read_legacy_canvas_attrs() -> None:
-    smiles_input_state = APP_ROOT / "chemvas" / "ui" / "canvas_smiles_input_state.py"
-    pattern = re.compile(
-        r"\bcanvas_state_mirror\b|\brefresh_state_from_canvas_attrs\b|\bsync_canvas_attrs\b|\bsync_canvas_attr\b"
-    )
-
-    assert _matching_lines(pattern, [smiles_input_state]) == []
-
-
-def test_text_style_state_accessor_does_not_read_legacy_canvas_attrs() -> None:
-    text_style_state = APP_ROOT / "chemvas" / "ui" / "canvas_text_style_state.py"
-    pattern = re.compile(
-        r"\bcanvas_state_mirror\b|\brefresh_state_from_canvas_attrs\b|\bsync_canvas_attrs\b|\bsync_canvas_attr\b"
-    )
-
-    assert _matching_lines(pattern, [text_style_state]) == []
-
-
-def test_atom_coords_state_accessor_does_not_read_legacy_canvas_attrs() -> None:
-    atom_coords_access = APP_ROOT / "chemvas" / "ui" / "atom_coords_access.py"
-    pattern = re.compile(
-        r"\bcanvas_state_mirror\b|\brefresh_state_from_canvas_attrs\b|\bsync_canvas_attrs\b|\bsync_canvas_attr\b"
-    )
-
-    assert _matching_lines(pattern, [atom_coords_access]) == []
-
-
-def test_atom_graphics_state_accessor_does_not_read_legacy_canvas_attrs() -> None:
-    atom_graphics_state = APP_ROOT / "chemvas" / "ui" / "canvas_atom_graphics_state.py"
-    pattern = re.compile(
-        r"\bcanvas_state_mirror\b|\brefresh_state_from_canvas_attrs\b|\bsync_canvas_attrs\b|\bsync_canvas_attr\b"
-    )
-
-    assert _matching_lines(pattern, [atom_graphics_state]) == []
-
-
-def test_bond_graphics_state_accessor_does_not_read_legacy_canvas_attrs() -> None:
-    bond_graphics_state = APP_ROOT / "chemvas" / "ui" / "canvas_bond_graphics_state.py"
-    pattern = re.compile(
-        r"\bcanvas_state_mirror\b|\brefresh_state_from_canvas_attrs\b|\bsync_canvas_attrs\b|\bsync_canvas_attr\b"
-    )
-
-    assert _matching_lines(pattern, [bond_graphics_state]) == []
-
-
-def test_scene_items_state_accessor_does_not_read_legacy_canvas_attrs() -> None:
-    scene_items_state = APP_ROOT / "chemvas" / "ui" / "canvas_scene_items_state.py"
-    pattern = re.compile(
-        r"\bcanvas_state_mirror\b|\brefresh_state_from_canvas_attrs\b|\bsync_canvas_attrs\b|\bsync_canvas_attr\b"
-    )
-
-    assert _matching_lines(pattern, [scene_items_state]) == []
-
-
-def test_selection_outline_state_accessor_does_not_read_legacy_canvas_attrs() -> None:
-    selection_outline_state = APP_ROOT / "chemvas" / "ui" / "selection_outline_state.py"
-    pattern = re.compile(
-        r"\bcanvas_state_mirror\b|\brefresh_state_from_canvas_attr_map\b|\bsync_canvas_attr\b"
-    )
-
-    assert _matching_lines(pattern, [selection_outline_state]) == []
+    assert _matching_lines(pattern, _app_python_files()) == []
 
 
 def test_mark_registry_accessor_does_not_read_legacy_canvas_marks_attr() -> None:
