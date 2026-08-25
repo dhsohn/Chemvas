@@ -7,30 +7,20 @@ from chemvas.features.selection import (
 )
 from chemvas.ui.canvas_graph_state import graph_state_for
 from chemvas.ui.canvas_model_access import bond_for_id, bonds_for
-from chemvas.ui.graph_algorithms import edge_has_reachable_alternative_path
+from chemvas.ui.graph_index_operations import cached_bond_in_cycle
 
 
 def bond_in_cycle_for(canvas, bond_id: int) -> bool:
-    graph = graph_state_for(canvas)
-    cached = graph.bond_cycle_cache.get(bond_id)
-    if cached is not None and cached[0] == graph.graph_version:
-        return cached[1]
-    bond = bond_for_id(canvas, bond_id)
-    if bond is None:
-        graph.bond_cycle_cache[bond_id] = (graph.graph_version, False)
-        return False
-    shared = graph.atom_bond_ids.get(bond.a, set()) & graph.atom_bond_ids.get(
-        bond.b, set()
+    # `CanvasGraphService.bond_in_cycle` is the same call with the service's
+    # own graph state. This module keeps a second entry point rather than
+    # reaching the service, because `test_architecture_boundaries` bans both a
+    # canvas-to-graph-service lookup helper and a local `CanvasGraphService`
+    # construction outside the service module. Only the body is shared.
+    return cached_bond_in_cycle(
+        graph_state_for(canvas),
+        bond_id,
+        lambda candidate_id: bond_for_id(canvas, candidate_id),
     )
-    has_alt_between = any(other_id != bond_id for other_id in shared)
-    in_cycle = edge_has_reachable_alternative_path(
-        bond.a,
-        bond.b,
-        graph.atom_neighbors,
-        skip_direct_edge=not has_alt_between,
-    )
-    graph.bond_cycle_cache[bond_id] = (graph.graph_version, in_cycle)
-    return in_cycle
 
 
 def atom_in_planar_system_for(canvas, atom_id: int, *, bond_in_cycle=None) -> bool:

@@ -16,6 +16,9 @@ from __future__ import annotations
 from collections.abc import Callable, Iterable, MutableMapping, Sequence
 from typing import Any
 
+from chemvas.ui.canvas_graph_state import CanvasGraphState
+from chemvas.ui.graph_algorithms import edge_has_reachable_alternative_path
+
 
 def ensure_neighbor_entry(
     atom_neighbors: MutableMapping[int, set[int]],
@@ -200,6 +203,41 @@ def bond_sets_for_atom_ids(
     return internal, boundary
 
 
+def cached_bond_in_cycle(
+    graph: CanvasGraphState,
+    bond_id: int,
+    bond_for_id: Callable[[int], Any],
+) -> bool:
+    """Whether ``bond_id`` lies on a cycle, memoized against ``graph_version``.
+
+    This is the only writer of ``graph.bond_cycle_cache``. The graph service
+    and the rotation planarity helpers both route here, so one entry cannot be
+    written under one notion of freshness and read under another.
+    """
+
+    cached = graph.bond_cycle_cache.get(bond_id)
+    if cached is not None and cached[0] == graph.graph_version:
+        return cached[1]
+    bond = bond_for_id(bond_id)
+    if bond is None:
+        graph.bond_cycle_cache[bond_id] = (graph.graph_version, False)
+        return False
+    shared = graph.atom_bond_ids.get(bond.a, set()) & graph.atom_bond_ids.get(
+        bond.b, set()
+    )
+    # A second bond between the same two atoms is itself the alternative path,
+    # so the direct edge only has to be blocked when this bond is the only one.
+    has_alt_between = any(other_id != bond_id for other_id in shared)
+    in_cycle = edge_has_reachable_alternative_path(
+        bond.a,
+        bond.b,
+        graph.atom_neighbors,
+        skip_direct_edge=not has_alt_between,
+    )
+    graph.bond_cycle_cache[bond_id] = (graph.graph_version, in_cycle)
+    return in_cycle
+
+
 __all__ = [
     "add_bond_to_atom_index",
     "add_neighbor_edge",
@@ -207,6 +245,7 @@ __all__ = [
     "bond_matches_atoms",
     "bond_sets_for_atom_ids",
     "build_bond_adjacency_index",
+    "cached_bond_in_cycle",
     "ensure_bond_index_entry",
     "ensure_neighbor_entry",
     "first_matching_bond_id",
