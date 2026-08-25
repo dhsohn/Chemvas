@@ -221,7 +221,7 @@ class InsertSmilesService:
         if center_xy is None:
             self.insert_state.smiles_preview_model = None
             return
-        next_state = begin_smiles_insert_state(self._session_state(), smiles, center_xy)
+        next_state = begin_smiles_insert_state(smiles, center_xy)
         if next_state is None:
             self.insert_state.smiles_preview_model = None
             return

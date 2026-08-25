@@ -24,6 +24,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   chemvas` installs — is unchanged.
 
 ### Removed
+- **The capture path's dormant non-strict mode.** `capture_scene_runtime` and
+  `capture_atom_primitive_graphics` declared `strict=False`, but all 18 call
+  sites in the tree — twelve in production, six in the tests — pass
+  `strict=True`, so the lenient half never ran. Nothing changes today; what
+  goes is a mode that, had anything ever selected it, would have swallowed a
+  capture failure in silence: `contextlib.suppress(Exception)` around a child
+  or geometry read, `continue` past an item whose accessor raised, and
+  assignments blanking the parent, stacking-depth, signal-blocking and focus
+  port pairs. Each produced a partial snapshot that undo would then restore
+  from, with nothing recorded to say a field was missing. The parameter is gone
+  from the ten capture-side functions and the strict arm is now
+  unconditional. Carrying that removal one step further,
+  `_verify_scene_membership` was left holding a `strict` it never read, and
+  `_direct_scene_remove` and `_direct_scene_add`, whose only reads forwarded
+  it there, followed; four restore-side call sites drop the argument. What
+  remains of the restore side keeps its flag — there it is genuinely dynamic,
+  strict during a normal restore and best-effort while a rollback is already
+  unwinding — so `_item_parent` and `_item_is_attached_to_scene` still take
+  `strict=errors is not None`. The scene-item helpers keep the flag for a
+  different reason: the rollback inside `create_scene_items_atomically` reads
+  the scene leniently, by omitting the argument, so that a scene which can no
+  longer answer does not mask the failure already being unwound.
+- **Five parameters their functions never read.**
+  `tool_action_key_for_canvas_state` branches on the active tool alone, so
+  `active_bond_style` and `mark_kind` go, and the toolbar sync no longer looks
+  up the tool settings to supply them. That lookup was the last caller of the
+  `tool_settings_for_window` window port, so the port goes as well, together
+  with the constructor parameter carrying it into the tool state service and
+  the composition-root wiring behind it. `tool_settings_state_for`, the
+  canvas-level accessor it wrapped, is untouched and still read directly
+  wherever the tool settings are actually needed. `begin_template_insert` and
+  `begin_smiles_insert` ignored the session state they were handed and built a
+  fresh one; their `cancel_*` siblings do read it and keep theirs.
+  `apply_pasted_perspective_for_canvas` took a `projection_anchor_2d` it never
+  used, taking the anchor from the canvas rotation state instead — the
+  identically named field, and `projection_center_3d`, are both still read. The
+  rotation preview's `restore` took the in-flight exception and ignored it; the
+  rollback note it feeds is still added by the caller. No behaviour changes.
 - **The last three hand-painted icon renderers.** `MainWindowBondIconRenderer`,
   `MainWindowUtilityIconRenderer` and `MainWindowToolIconRenderer` drew the
   toolbar icons until the SVG design set took over, and

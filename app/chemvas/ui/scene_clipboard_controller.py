@@ -114,13 +114,10 @@ class SceneClipboardController:
             restore_bond_from_state=self._restore_bond,
             create_scene_item_from_state=self._create_scene_item_from_state,
             select_pasted_content=self.select_pasted_content,
-            apply_perspective=lambda coords, center, anchor: (
-                apply_pasted_perspective_for_canvas(
-                    self.canvas,
-                    coords,
-                    center,
-                    anchor,
-                )
+            # The anchor the callback protocol carries is unused: the target
+            # frame's anchor comes from the canvas rotation state.
+            apply_perspective=lambda coords, center, _anchor: (
+                apply_pasted_perspective_for_canvas(self.canvas, coords, center)
             ),
         )
 

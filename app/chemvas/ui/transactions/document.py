@@ -277,7 +277,6 @@ class DocumentSavepoint:
 
         scene_runtime = capture_scene_runtime(
             canvas,
-            strict=True,
             detail_items=(None if move_scope is None else move_scope.scene_items),
             detail_bond_ids=(None if move_scope is None else move_scope.bond_ids),
         )
@@ -302,7 +301,6 @@ class DocumentSavepoint:
 
         atom_primitive_graphics = capture_atom_primitive_graphics(
             canvas,
-            strict=True,
             atom_ids=(None if move_scope is None else move_scope.atom_ids),
         )
 

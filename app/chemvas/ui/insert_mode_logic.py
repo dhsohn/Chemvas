@@ -24,7 +24,6 @@ def clear_insert_session() -> InsertSessionState:
 
 
 def begin_template_insert(
-    state: InsertSessionState,
     ring_size: int,
     ring_style: str | None = "regular",
 ) -> InsertSessionState | None:
@@ -47,7 +46,6 @@ def cancel_template_insert(state: InsertSessionState) -> InsertSessionState:
 
 
 def begin_smiles_insert(
-    state: InsertSessionState,
     smiles: str,
     center: Point2D | None,
 ) -> InsertSessionState | None:

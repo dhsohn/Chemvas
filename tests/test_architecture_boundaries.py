@@ -4369,3 +4369,78 @@ def test_canvas_tab_reorder_wiring_stays_removed() -> None:
     pattern = re.compile(r"\b(?:on_canvas_tab_moved|tabMoved)\b")
 
     assert _matching_lines(pattern, _app_python_files()) == []
+
+
+def _unread_strict_parameters(source: str) -> list[tuple[int, str]]:
+    """Functions declaring a ``strict`` parameter their body never loads."""
+
+    def parameters(node: ast.FunctionDef | ast.AsyncFunctionDef | ast.Lambda):
+        args = node.args
+        declared = [*args.posonlyargs, *args.args, *args.kwonlyargs]
+        if args.vararg is not None:
+            declared.append(args.vararg)
+        if args.kwarg is not None:
+            declared.append(args.kwarg)
+        return {argument.arg for argument in declared}
+
+    dead: list[tuple[int, str]] = []
+    for node in ast.walk(ast.parse(source)):
+        if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        if "strict" not in parameters(node):
+            continue
+        loads = 0
+        pending: list[ast.AST] = list(node.body)
+        while pending:
+            child = pending.pop()
+            if isinstance(
+                child, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)
+            ) and "strict" in parameters(child):
+                # A nested scope rebinding the name reads its own parameter.
+                continue
+            if (
+                isinstance(child, ast.Name)
+                and child.id == "strict"
+                and isinstance(child.ctx, ast.Load)
+            ):
+                loads += 1
+            pending.extend(ast.iter_child_nodes(child))
+        if loads == 0:
+            dead.append((node.lineno, node.name))
+    return dead
+
+
+def test_no_production_function_declares_an_unread_strict_parameter() -> None:
+    """A ``strict`` flag must be read by the function that declares it.
+
+    A flag nobody reads is a promise the function does not keep: every call
+    site picks a mode the body then ignores. The rule is also what drives such
+    a removal to its fixed point, because a function whose only ``strict``
+    read was forwarding it to such a callee becomes a violation itself once
+    the callee's parameter goes. Forwarding counts as a read, so the
+    ``_scene_items_*`` chain and the restore-side helpers that genuinely
+    switch on the flag all pass.
+    """
+    violations = [
+        f"{path.relative_to(APP_ROOT.parents[0])}:{line_no}: {name}"
+        for path in _app_python_files()
+        for line_no, name in _unread_strict_parameters(path.read_text(encoding="utf-8"))
+    ]
+
+    assert violations == []
+
+
+def test_window_tool_settings_port_stays_removed() -> None:
+    """The window-level tool-settings lookup lost its only reason to exist.
+
+    ``tool_action_key_for_canvas_state`` branches on the active tool alone, so
+    the toolbar sync stopped reading the tool settings, the tool state service
+    stopped being handed the port, and the port itself stopped having a
+    caller. The bare name is safe to ban outright: the live surfaces are
+    ``tool_settings_state_for`` and the ``tool_settings_state`` runtime field,
+    neither of which contains it, and ``tool_actions_for_window`` and
+    ``tool_action_for_window`` are different ports that stay.
+    """
+    pattern = re.compile(r"\b_?tool_settings_for_window\b")
+
+    assert _matching_lines(pattern, _app_python_files()) == []

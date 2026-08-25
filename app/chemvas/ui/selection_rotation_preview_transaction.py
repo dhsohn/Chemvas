@@ -92,7 +92,7 @@ class _RotationPreviewAuthority:
         sync_atom_scene_items_for(canvas, set(self.atom_ids))
         self.controller.refresh_atom_geometry(set(self.atom_ids))
 
-    def restore(self, original_error: BaseException | None = None) -> None:
+    def restore(self) -> None:
         """Revert the document to the gesture-start coordinates."""
 
         canvas = self.controller.canvas

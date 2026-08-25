@@ -75,9 +75,7 @@ class InsertTemplateService:
     def begin_ring_template_insert(
         self, ring_size: int, style: str = "regular"
     ) -> None:
-        next_state = begin_template_insert_state(
-            self._session_state(), ring_size, style
-        )
+        next_state = begin_template_insert_state(ring_size, style)
         if next_state is None:
             return
         if self.insert_state.smiles_active:

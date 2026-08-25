@@ -386,7 +386,7 @@ class UpdateSceneItemCommand(HistoryCommand):
     after_state: dict
 
     def _apply(self, canvas, state: dict, rollback_state: dict) -> None:
-        runtime_snapshot = capture_scene_runtime(canvas, strict=True)
+        runtime_snapshot = capture_scene_runtime(canvas)
         scene_rect_snapshot = capture_scene_rect_snapshot(runtime_snapshot.scene)
         try:
             _apply_scene_item_state(canvas, self.item, state)
@@ -489,7 +489,7 @@ class GroupSceneItemsCommand(HistoryCommand):
 
     def redo(self, canvas) -> None:
         snapshot = _group_state_snapshot(canvas)
-        runtime_snapshot = capture_scene_runtime(canvas, strict=True)
+        runtime_snapshot = capture_scene_runtime(canvas)
         previous_group_id = self.group_id
         scene_rect_snapshot = capture_scene_rect_snapshot(runtime_snapshot.scene)
         try:
@@ -533,7 +533,7 @@ class GroupSceneItemsCommand(HistoryCommand):
 
     def undo(self, canvas) -> None:
         snapshot = _group_state_snapshot(canvas)
-        runtime_snapshot = capture_scene_runtime(canvas, strict=True)
+        runtime_snapshot = capture_scene_runtime(canvas)
         scene_rect_snapshot = capture_scene_rect_snapshot(runtime_snapshot.scene)
         try:
             if self.group_id is not None:
@@ -572,7 +572,7 @@ class UngroupSceneItemsCommand(HistoryCommand):
 
     def redo(self, canvas) -> None:
         snapshot = _group_state_snapshot(canvas)
-        runtime_snapshot = capture_scene_runtime(canvas, strict=True)
+        runtime_snapshot = capture_scene_runtime(canvas)
         scene_rect_snapshot = capture_scene_rect_snapshot(runtime_snapshot.scene)
         try:
             for group_id, _ in self.removed:
@@ -604,7 +604,7 @@ class UngroupSceneItemsCommand(HistoryCommand):
 
     def undo(self, canvas) -> None:
         snapshot = _group_state_snapshot(canvas)
-        runtime_snapshot = capture_scene_runtime(canvas, strict=True)
+        runtime_snapshot = capture_scene_runtime(canvas)
         scene_rect_snapshot = capture_scene_rect_snapshot(runtime_snapshot.scene)
         try:
             for group_id, group in self.removed:
@@ -657,7 +657,7 @@ class ChangeAtomLabelCommand(HistoryCommand):
         rollback_explicit_label: bool,
         rollback_smiles_input: str | None,
     ) -> None:
-        runtime_snapshot = capture_scene_runtime(canvas, strict=True)
+        runtime_snapshot = capture_scene_runtime(canvas)
         scene_rect_snapshot = capture_scene_rect_snapshot(runtime_snapshot.scene)
         try:
             add_or_update_atom_label(

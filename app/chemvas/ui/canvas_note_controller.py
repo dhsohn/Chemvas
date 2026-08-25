@@ -582,7 +582,7 @@ class CanvasNoteController:
         )
 
     def _deselect_note_atomically(self, item: QGraphicsTextItem) -> None:
-        runtime_snapshot = capture_scene_runtime(self.canvas, strict=True)
+        runtime_snapshot = capture_scene_runtime(self.canvas)
         try:
             self._deselect_note(item)
         except Exception as original_error:
@@ -593,7 +593,7 @@ class CanvasNoteController:
         self,
         item: QGraphicsTextItem,
     ) -> SceneRuntimeSnapshot:
-        runtime_snapshot = capture_scene_runtime(self.canvas, strict=True)
+        runtime_snapshot = capture_scene_runtime(self.canvas)
         try:
             self._deselect_note(item)
             remove_scene_item(self.canvas, item)

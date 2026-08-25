@@ -15,14 +15,12 @@ class MainWindowToolStateService:
         *,
         tool_mode_controller_for_window,
         active_tool_name_for_window,
-        tool_settings_for_window,
         tool_actions_for_window,
         tool_action_for_window,
         status_service,
     ) -> None:
         self._tool_mode_controller_for_window = tool_mode_controller_for_window
         self._active_tool_name_for_window = active_tool_name_for_window
-        self._tool_settings_for_window = tool_settings_for_window
         self._tool_actions_for_window = tool_actions_for_window
         self._tool_action_for_window = tool_action_for_window
         self._status = status_service
@@ -38,12 +36,7 @@ class MainWindowToolStateService:
         if not self._tool_actions_for_window(window):
             return
         active = self._active_tool_name_for_window(window)
-        settings = self._tool_settings_for_window(window)
-        action_key = tool_action_key_for_canvas_state(
-            active,
-            active_bond_style=settings.active_bond_style,
-            mark_kind=settings.mark_kind,
-        )
+        action_key = tool_action_key_for_canvas_state(active)
         action = (
             self._tool_action_for_window(window, action_key)
             if action_key is not None

@@ -77,9 +77,6 @@ def tool_display_name(tool: str) -> str:
 
 def tool_action_key_for_canvas_state(
     active_tool: str | None,
-    *,
-    active_bond_style: str,
-    mark_kind: str,
 ) -> str | None:
     if active_tool == "bond":
         return "bond"

@@ -28,45 +28,10 @@ class MainWindowToolbarLogicTest(unittest.TestCase):
     def test_tool_action_key_for_canvas_state_handles_bond_mark_and_regular_tools(
         self,
     ) -> None:
-        self.assertEqual(
-            tool_action_key_for_canvas_state(
-                "bond",
-                active_bond_style="hash",
-                mark_kind="plus",
-            ),
-            "bond",
-        )
-        self.assertEqual(
-            tool_action_key_for_canvas_state(
-                "bond",
-                active_bond_style="bold_out",
-                mark_kind="plus",
-            ),
-            "bond",
-        )
-        self.assertEqual(
-            tool_action_key_for_canvas_state(
-                "mark",
-                active_bond_style="single",
-                mark_kind="minus",
-            ),
-            "mark",
-        )
-        self.assertEqual(
-            tool_action_key_for_canvas_state(
-                "perspective",
-                active_bond_style="single",
-                mark_kind="plus",
-            ),
-            "perspective",
-        )
-        self.assertIsNone(
-            tool_action_key_for_canvas_state(
-                None,
-                active_bond_style="single",
-                mark_kind="plus",
-            )
-        )
+        self.assertEqual(tool_action_key_for_canvas_state("bond"), "bond")
+        self.assertEqual(tool_action_key_for_canvas_state("mark"), "mark")
+        self.assertEqual(tool_action_key_for_canvas_state("perspective"), "perspective")
+        self.assertIsNone(tool_action_key_for_canvas_state(None))
 
 
 if __name__ == "__main__":
