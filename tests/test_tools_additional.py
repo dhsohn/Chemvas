@@ -443,6 +443,9 @@ class _MoveCanvas:
                 item_at_event=self.item_at_event,
                 scene_pos_from_event=lambda event: event.position(),
             ),
+            selection_controller=SimpleNamespace(
+                update_selection_outline=self._update_selection_outline
+            ),
         )
 
     def setDragMode(self, mode) -> None:

@@ -95,6 +95,13 @@ def _document_services(
         hit_testing_service=SimpleNamespace(
             mark_spatial_index_dirty=mark_spatial_index_dirty
         ),
+        # The real CanvasSceneResetService.clear_scene walks the insert
+        # controller on its way through the reset steps.
+        insert_controller=SimpleNamespace(
+            clear_template_preview=mock.Mock(),
+            clear_smiles_preview=mock.Mock(),
+            apply_insert_session_state=mock.Mock(),
+        ),
     )
 
 

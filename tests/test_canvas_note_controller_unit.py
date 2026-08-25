@@ -535,7 +535,8 @@ class CanvasNoteControllerUnitTest(unittest.TestCase):
                 remove_scene_item=canvas.removed_items.append
             ),
             selection_controller=SimpleNamespace(
-                update_note_selection_box=canvas.updated_boxes.append
+                update_note_selection_box=canvas.updated_boxes.append,
+                update_selection_outline=mock.Mock(),
             ),
         )
         _attach_history_service(canvas)
@@ -585,7 +586,8 @@ class CanvasNoteControllerUnitTest(unittest.TestCase):
                 remove_scene_item=canvas.removed_items.append
             ),
             selection_controller=SimpleNamespace(
-                update_note_selection_box=canvas.updated_boxes.append
+                update_note_selection_box=canvas.updated_boxes.append,
+                update_selection_outline=mock.Mock(),
             ),
         )
         _attach_history_service(canvas)
@@ -629,7 +631,8 @@ class CanvasNoteControllerUnitTest(unittest.TestCase):
                 restore_scene_item=canvas.restored_items.append,
             ),
             selection_controller=SimpleNamespace(
-                update_note_selection_box=canvas.updated_boxes.append
+                update_note_selection_box=canvas.updated_boxes.append,
+                update_selection_outline=mock.Mock(),
             ),
         )
         history = _attach_history_service(canvas)
@@ -749,7 +752,8 @@ class CanvasNoteControllerUnitTest(unittest.TestCase):
                 remove_scene_item=canvas.removed_items.append
             ),
             selection_controller=SimpleNamespace(
-                update_note_selection_box=canvas.updated_boxes.append
+                update_note_selection_box=canvas.updated_boxes.append,
+                update_selection_outline=mock.Mock(),
             ),
         )
         _attach_history_service(canvas)
@@ -784,7 +788,8 @@ class CanvasNoteControllerUnitTest(unittest.TestCase):
         set_selected_notes_for(canvas, [])
         canvas.push_command = canvas.commands.append
         canvas.services.selection.selection_controller = SimpleNamespace(
-            update_note_selection_box=canvas.updated_boxes.append
+            update_note_selection_box=canvas.updated_boxes.append,
+            update_selection_outline=mock.Mock(),
         )
         _attach_history_service(canvas)
         controller = _note_controller(canvas)

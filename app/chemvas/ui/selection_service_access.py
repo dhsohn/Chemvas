@@ -1,49 +1,31 @@
 from __future__ import annotations
 
 from chemvas.features.selection import structure_hit_is_selected
-from chemvas.ui.canvas_service_access import optional_canvas_service_method
 from chemvas.ui.canvas_service_ports import selection_service_for_access
 from chemvas.ui.selection_scene_access import (
     clear_scene_selection_for,
     set_scene_items_selected_for,
 )
-from chemvas.ui.selection_structure_targets import structure_selection_targets_for_item
 
 
 def selection_service_from_canvas(canvas):
     return selection_service_for_access(canvas)
 
 
-def _selection_service_method_for(canvas, name: str):
-    return optional_canvas_service_method(canvas, selection_service_for_access, name)
-
-
 def refresh_selection_outline_for(canvas) -> None:
-    update_selection_outline = _selection_service_method_for(
-        canvas, "update_selection_outline"
-    )
-    if update_selection_outline is not None:
-        update_selection_outline()
+    selection_service_for_access(canvas).update_selection_outline()
 
 
 def select_note_for(canvas, item, *, additive: bool = False) -> None:
-    select_note = _selection_service_method_for(canvas, "select_note")
-    if select_note is not None:
-        select_note(item, additive=additive)
+    selection_service_for_access(canvas).select_note(item, additive=additive)
 
 
 def toggle_note_selection_for(canvas, item) -> None:
-    toggle_note_selection = _selection_service_method_for(
-        canvas, "toggle_note_selection"
-    )
-    if toggle_note_selection is not None:
-        toggle_note_selection(item)
+    selection_service_for_access(canvas).toggle_note_selection(item)
 
 
 def clear_note_selection_for(canvas) -> None:
-    clear_note_selection = _selection_service_method_for(canvas, "clear_note_selection")
-    if clear_note_selection is not None:
-        clear_note_selection()
+    selection_service_for_access(canvas).clear_note_selection()
 
 
 def structure_item_is_selected_for(
@@ -65,28 +47,16 @@ def structure_item_is_selected_for(
     )
 
 
-def _selection_targets_method_for(canvas):
-    return _selection_service_method_for(canvas, "selection_targets_for_item")
-
-
 def selection_targets_for_item_for(canvas, item) -> list:
-    targets_for_item = _selection_targets_method_for(canvas)
-    if targets_for_item is not None:
-        return [
-            target for target in (targets_for_item(item) or []) if target is not None
-        ]
-    return structure_selection_targets_for_item(canvas, item)
+    targets = selection_service_for_access(canvas).selection_targets_for_item(item)
+    return [target for target in (targets or []) if target is not None]
 
 
 def select_single_structure_item_for(canvas, item) -> bool:
-    uses_controller_targets = _selection_targets_method_for(canvas) is not None
-    if not uses_controller_targets and item is not None:
-        clear_scene_selection_for(canvas)
     targets = selection_targets_for_item_for(canvas, item)
     if not targets:
         return False
-    if uses_controller_targets:
-        clear_scene_selection_for(canvas)
+    clear_scene_selection_for(canvas)
     set_scene_items_selected_for(canvas, targets, True, block_signals=False)
     return True
 

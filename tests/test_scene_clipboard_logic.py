@@ -831,7 +831,14 @@ class _FakeCanvas:
             rotation_state=CanvasRotationState(),
         )
         self.history_service = SimpleNamespace(push=mock.Mock())
-        self.services = canvas_runtime_services(history_service=self.history_service)
+        self.services = canvas_runtime_services(
+            history_service=self.history_service,
+            # Serializing a mark's state asks the build service where its
+            # centre is; for a non-text item the real one answers item.pos().
+            scene_decoration_build_service=SimpleNamespace(
+                mark_center=lambda item: item.pos()
+            ),
+        )
 
     def scene(self) -> QGraphicsScene:
         return self._scene

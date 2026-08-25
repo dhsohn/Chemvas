@@ -1,41 +1,26 @@
 from __future__ import annotations
 
-from chemvas.ui.canvas_service_access import optional_canvas_service_method
 from chemvas.ui.canvas_service_ports import insert_controller_for_access
 
 
-def _insert_controller_method(canvas, name: str):
-    return optional_canvas_service_method(canvas, insert_controller_for_access, name)
-
-
 def cancel_smiles_insert_for(canvas) -> None:
-    method = _insert_controller_method(canvas, "cancel_smiles_insert")
-    if method is not None:
-        method()
+    insert_controller_for_access(canvas).cancel_smiles_insert()
 
 
 def clear_smiles_preview_for(canvas) -> None:
-    method = _insert_controller_method(canvas, "clear_smiles_preview")
-    if method is not None:
-        method()
+    insert_controller_for_access(canvas).clear_smiles_preview()
 
 
 def cancel_template_insert_for(canvas) -> None:
-    method = _insert_controller_method(canvas, "cancel_template_insert")
-    if method is not None:
-        method()
+    insert_controller_for_access(canvas).cancel_template_insert()
 
 
 def clear_template_preview_for(canvas) -> None:
-    method = _insert_controller_method(canvas, "clear_template_preview")
-    if method is not None:
-        method()
+    insert_controller_for_access(canvas).clear_template_preview()
 
 
 def apply_insert_session_state_for(canvas, state) -> None:
-    method = _insert_controller_method(canvas, "apply_insert_session_state")
-    if method is not None:
-        method(state)
+    insert_controller_for_access(canvas).apply_insert_session_state(state)
 
 
 __all__ = [

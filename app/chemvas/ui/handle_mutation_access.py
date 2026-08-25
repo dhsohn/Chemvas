@@ -12,19 +12,12 @@ from chemvas.features.selection import (
 from chemvas.features.selection import (
     default_curved_control as default_curved_control_helper,
 )
-from chemvas.ui.canvas_service_access import optional_canvas_service_method
 from chemvas.ui.canvas_service_ports import (
     curved_arrow_path_service_for_access,
     handle_mutation_service_for_access,
 )
 from chemvas.ui.canvas_tool_settings_state import tool_settings_state_for
 from chemvas.ui.renderer_style_access import bond_length_px_for
-
-
-def _mutation_service_method(canvas, name: str):
-    return optional_canvas_service_method(
-        canvas, handle_mutation_service_for_access, name
-    )
 
 
 def orbital_snap_enabled_for(canvas) -> bool:
@@ -45,37 +38,27 @@ def curved_snap_distance_for(canvas) -> float:
 
 
 def update_orbital_scale_for(canvas, item, pos) -> None:
-    method = _mutation_service_method(canvas, "update_orbital_scale")
-    if method is not None:
-        method(item, pos)
+    handle_mutation_service_for_access(canvas).update_orbital_scale(item, pos)
 
 
 def update_orbital_rotate_for(canvas, item, pos) -> None:
-    method = _mutation_service_method(canvas, "update_orbital_rotate")
-    if method is not None:
-        method(item, pos)
+    handle_mutation_service_for_access(canvas).update_orbital_rotate(item, pos)
 
 
 def update_curved_control_for(canvas, item, pos) -> None:
-    method = _mutation_service_method(canvas, "update_curved_control")
-    if method is not None:
-        method(item, pos)
+    handle_mutation_service_for_access(canvas).update_curved_control(item, pos)
 
 
 def update_curved_endpoint_for(canvas, item, pos, endpoint: str) -> None:
-    method = _mutation_service_method(canvas, "update_curved_endpoint")
-    if method is not None:
-        method(item, pos, endpoint)
+    handle_mutation_service_for_access(canvas).update_curved_endpoint(
+        item, pos, endpoint
+    )
 
 
 def set_curved_arrow_path_for(canvas, item, start, end, control, double: bool) -> None:
-    method = optional_canvas_service_method(
-        canvas,
-        curved_arrow_path_service_for_access,
-        "set_curved_arrow_path",
+    curved_arrow_path_service_for_access(canvas).set_curved_arrow_path(
+        item, start, end, control, double
     )
-    if method is not None:
-        method(item, start, end, control, double)
 
 
 def default_curved_control_for(canvas, start, end):

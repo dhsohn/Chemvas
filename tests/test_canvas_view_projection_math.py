@@ -605,6 +605,10 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
                 hit_testing_service=SimpleNamespace(
                     mark_spatial_index_dirty=mock.Mock()
                 ),
+                # set_bond_length refreshes the selection outline on its way out.
+                selection_controller=SimpleNamespace(
+                    update_selection_outline=mock.Mock()
+                ),
             ),
         )
         set_scene_item_collection_for(view, "ring_items", [ring_item])

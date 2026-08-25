@@ -227,6 +227,10 @@ class RendererCanvasTailCoverageTest(unittest.TestCase):
                     mark_spatial_index_dirty=mock.Mock()
                 ),
                 structure_build_service=SimpleNamespace(render_model=mock.Mock()),
+                # set_bond_length refreshes the selection outline on its way out.
+                selection_controller=SimpleNamespace(
+                    update_selection_outline=mock.Mock()
+                ),
             ),
         )
 

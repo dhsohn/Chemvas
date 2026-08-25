@@ -1183,6 +1183,11 @@ class _FakeCanvas:
             atom_label_service=SimpleNamespace(
                 add_or_update_atom_label=self.add_or_update_atom_label,
                 position_label=self.position_label,
+                # Same body as the real AtomLabelService.atom_item_for_id.
+                atom_item_for_id=lambda atom_id: (
+                    atom_items_for(self).get(atom_id)
+                    or atom_dots_for(self).get(atom_id)
+                ),
             ),
             canvas_atom_mutation_service=SimpleNamespace(
                 add_atom=self.add_atom,
@@ -1197,7 +1202,10 @@ class _FakeCanvas:
                 trim_bonds_to_length=self._trim_bonds_to_length,
             ),
             scene_decoration_build_service=SimpleNamespace(
-                set_mark_center=self.set_mark_center
+                set_mark_center=self.set_mark_center,
+                # Inverse of this double's set_mark_center, which is what
+                # serializing a mark's state reads back.
+                mark_center=lambda item: item.pos(),
             ),
             hit_testing_service=SimpleNamespace(
                 mark_spatial_index_dirty=self.mark_spatial_index_dirty
