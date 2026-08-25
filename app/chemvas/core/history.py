@@ -753,6 +753,12 @@ class AddAtomsCommand(HistoryCommand):
         canvas,
         original_error: BaseException,
     ) -> None:
+        # Not shared with `DeleteAtomsCommand._restore_deleted_state_best_effort`
+        # even though the atom and coordinate steps match: that one interleaves
+        # a projection restore before them and a mark restore after them, so a
+        # shared body needs two hooks, and the compensation order -- the thing
+        # this code exists to get right -- would be readable only by following
+        # them. Factoring it out was measured at 36 net lines added.
         port = _history_canvas_port()
         # Normalize every atom owned by this command first. A failing port
         # call may have mutated the current atom before raising, so tracking
@@ -821,6 +827,9 @@ class AddAtomsCommand(HistoryCommand):
     def redo(self, canvas) -> None:
         transaction = _capture_history_transaction(canvas)
         try:
+            # Not shared with `DeleteAtomsCommand.undo`, for the same reason as
+            # the rollback pair: that one interleaves projection and mark
+            # restores into this sequence.
             for atom_id, state in self.atom_states.items():
                 _history_canvas_port().restore_atom_from_state_for_history(
                     canvas, atom_id, state
@@ -880,6 +889,9 @@ class DeleteAtomsCommand(HistoryCommand):
         canvas,
         original_error: BaseException,
     ) -> None:
+        # Not shared with `AddAtomsCommand._restore_atoms_best_effort`; see the
+        # note there. The projection and mark steps below are the reason, and
+        # each sits at a fixed point in this order rather than at the end.
         self._remove_atoms_best_effort(canvas, original_error)
         port = _history_canvas_port()
         if self.restore_projection_state:
@@ -959,6 +971,7 @@ class DeleteAtomsCommand(HistoryCommand):
     def undo(self, canvas) -> None:
         transaction = _capture_history_transaction(canvas)
         try:
+            # Not shared with `AddAtomsCommand.redo`; see the note there.
             if self.restore_projection_state:
                 _history_canvas_port().restore_projection_state_for_history(
                     canvas,
