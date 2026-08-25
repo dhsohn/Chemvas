@@ -1327,8 +1327,6 @@ CANVAS_SERVICE_CONTAINER_RESOLVERS = (
     "app/chemvas/ui/canvas_service_ports.py",
     "app/chemvas/ui/canvas_view_ports.py",
     "app/chemvas/ui/main_window_ports.py",
-    # CLI bootstrap that has to build its own canvas before any port exists.
-    "app/chemvas/bootstrap/document_cli_shared.py",
 )
 
 
@@ -3410,7 +3408,13 @@ def test_production_code_imports_concrete_tool_modules_not_tools_reexport() -> N
     # earlier pass deleted; _app_python_files() cannot yield a file that is not
     # there, so the filter excluded nothing. Without it the ban also covers the
     # module itself, should it ever come back.
-    pattern = re.compile(r"\bfrom ui\.tools import\b|\bimport ui\.tools\b")
+    #
+    # The package-qualified spelling is the one production would actually
+    # write: `chemvas` is the single top-level package, so a bare `ui.tools`
+    # import would raise ImportError before this rule could object to it.
+    pattern = re.compile(
+        r"\bfrom (?:chemvas\.)?ui\.tools import\b|\bimport (?:chemvas\.)?ui\.tools\b"
+    )
 
     assert _matching_lines(pattern, _app_python_files()) == []
 

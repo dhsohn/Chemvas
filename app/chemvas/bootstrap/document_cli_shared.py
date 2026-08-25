@@ -65,7 +65,9 @@ def offscreen_canvas(
         from PyQt6.QtWidgets import QApplication
 
         from chemvas.adapters.qt.renderer import Renderer
-        from chemvas.ui.canvas_service_access import canvas_services_for
+        from chemvas.ui.canvas_service_ports import (
+            canvas_window_document_session_service,
+        )
         from chemvas.ui.canvas_view import CanvasView
 
         existing = QApplication.instance()
@@ -88,7 +90,7 @@ def offscreen_canvas(
     canvas = None
     try:
         canvas = CanvasView(renderer=Renderer())
-        service = canvas_services_for(canvas).document.canvas_document_session_service
+        service = canvas_window_document_session_service(canvas)
         service.apply_state(state)
         yield canvas, service
     finally:

@@ -254,8 +254,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   repository did — each name was checked against every tracked file with no
   path or extension filter, and appeared only in the package root that
   re-exported it and the module that defines it. The definitions all stay
-  where they are and keep their own module's `__all__`; only the package-level
-  re-export goes. Gone from `chemvas.domain.document`:
+  where they are and stay importable from the module that defines them; only
+  the package-level re-export goes. Gone from `chemvas.domain.document`:
   `CALCULATION_INCLUSIONS`, `CALCULATION_PLAN_FORMAT`,
   `CALCULATION_PLAN_VERSION`, `CALCULATION_ROLES`, `SUPPORTED_FILE_VERSIONS`
   and `CalculationEndpointPrecomplex`. From `chemvas.features.rendering`:
