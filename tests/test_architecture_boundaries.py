@@ -5380,12 +5380,17 @@ def _ring_polygon_rebuilders(source: str) -> list[tuple[int, str]]:
 
     Two independent marks, either of which is enough: the function reads the
     ring-atom-ids role, or it resolves atoms by id. Both sit next to a
-    ``setPolygon``, and a rebuild cannot avoid both -- it has to learn which
-    atoms the ring names, and it has to find them.
+    ``setPolygon``, and a rebuild that has to learn which atoms the ring
+    names and then go find them hits at least one of them.
 
     Not caught: setting a polygon that arrives already built, which is what
     ``history_canvas_access`` restores and what ``canvas_model_access``
-    rescales.
+    rescales. Also not caught: a rebuild handed both answers instead of
+    working them out -- the ring's atom ids as an argument, so nothing reads
+    ``data(2)``, and a mapping to look them up in, so nothing calls
+    ``atom_for_id``. Widening either mark to reach that would sweep in every
+    function that indexes atoms next to a ``setPolygon``, so the rule stays
+    narrow and the escape stays written down.
     """
     tree = ast.parse(source)
     role_reads = _ring_atom_role_reads(tree)
