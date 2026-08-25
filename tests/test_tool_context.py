@@ -384,20 +384,37 @@ def test_tool_context_does_not_use_canvas_fallbacks_when_ports_are_missing() -> 
         scene_transform_controller=_scene_transform_port(),
     )
 
-    with pytest.raises(AttributeError, match="scene_pos_from_event"):
-        context.scene_pos_from_event(object())
-    assert context.item_at_scene_pos(pos) is None
-    assert context.item_at_event(object()) is None
-    assert context.find_atom_near(1.0, 2.0, 6.0) is None
-    assert context.find_bond_near(pos, 8.0) is None
-    assert not context.toggle_item_selection(item)
-    assert context.preferred_structure_hit_at_scene_pos(pos) is None
-    assert context.preferred_structure_item_at_scene_pos(pos) is None
-    assert not context.selection_hit_test(pos)
-    assert not context.select_structure_for_item(item)
-    assert not context.select_single_structure_item(item)
-    assert context.selected_scene_items(excluded_kinds=set()) == []
-    assert context.current_atom_symbol() == ""
+    # An unwired port is a wiring bug, not a reason to fall back to the canvas:
+    # every accessor raises, and none of them reaches the canvas facade.
+    for call, expected in (
+        (lambda: context.scene_pos_from_event(object()), "scene_pos_from_event"),
+        (lambda: context.item_at_scene_pos(pos), "item_at_scene_pos"),
+        (lambda: context.item_at_event(object()), "item_at_event"),
+        (lambda: context.find_atom_near(1.0, 2.0, 6.0), "find_atom_near"),
+        (lambda: context.find_bond_near(pos, 8.0), "find_bond_near"),
+        (lambda: context.toggle_item_selection(item), "toggle_item_selection"),
+        (
+            lambda: context.preferred_structure_hit_at_scene_pos(pos),
+            "preferred_structure_hit_at_scene_pos",
+        ),
+        (
+            lambda: context.preferred_structure_item_at_scene_pos(pos),
+            "preferred_structure_item_at_scene_pos",
+        ),
+        (lambda: context.selection_hit_test(pos), "selection_hit_test"),
+        (lambda: context.select_structure_for_item(item), "select_structure_for_item"),
+        (
+            lambda: context.select_single_structure_item(item),
+            "select_single_structure_item",
+        ),
+        (
+            lambda: context.selected_scene_items(excluded_kinds=set()),
+            "selected_scene_items",
+        ),
+        (lambda: context.current_atom_symbol(), "atom_symbol_provider"),
+    ):
+        with pytest.raises(AttributeError, match=expected):
+            call()
     canvas.scene_pos_from_event.assert_not_called()
     canvas.item_at_scene_pos.assert_not_called()
     canvas.item_at_event.assert_not_called()
@@ -408,37 +425,6 @@ def test_tool_context_does_not_use_canvas_fallbacks_when_ports_are_missing() -> 
     canvas.preferred_structure_item_at_scene_pos.assert_not_called()
     canvas.selection_hit_test.assert_not_called()
     canvas.select_structure_for_item.assert_not_called()
-
-
-def test_tool_context_composes_item_at_event_from_hit_testing_ports_before_canvas_fallback() -> (
-    None
-):
-    event = object()
-    pos = QPointF(5.0, 6.0)
-    item = object()
-    canvas = SimpleNamespace(
-        item_at_event=mock.Mock(
-            side_effect=AssertionError("canvas facade should not be used")
-        ),
-    )
-    hit_testing = SimpleNamespace(
-        scene_pos_from_event=mock.Mock(return_value=pos),
-        item_at_scene_pos=mock.Mock(return_value=item),
-    )
-    context = ToolContext(
-        canvas,
-        hit_testing_service=hit_testing,
-        selection_controller=_selection_port(),
-        note_controller=_note_port(),
-        handle_controller=_handle_port(),
-        selection_rotation_controller=_selection_rotation_port(),
-        scene_transform_controller=_scene_transform_port(),
-    )
-
-    assert context.item_at_event(event) is item
-    hit_testing.scene_pos_from_event.assert_called_once_with(event)
-    hit_testing.item_at_scene_pos.assert_called_once_with(pos)
-    canvas.item_at_event.assert_not_called()
 
 
 def test_tool_context_delegates_note_ports_to_injected_controller() -> None:
@@ -515,6 +501,7 @@ def test_tool_context_delegates_delete_gesture_session_lifecycle() -> None:
         delete_scene_item=mock.Mock(),
         commit=mock.Mock(),
         rollback=mock.Mock(return_value=[rollback_error]),
+        active=False,
     )
     delete_controller = SimpleNamespace(
         begin_delete_tool_session=mock.Mock(return_value=session),
@@ -554,92 +541,6 @@ def test_tool_context_requires_delete_gesture_session_port() -> None:
 
     with pytest.raises(AttributeError, match="begin_delete_tool_session"):
         context.begin_delete_tool_session()
-
-
-@pytest.mark.parametrize(
-    ("session", "error_type", "message"),
-    [
-        (None, RuntimeError, "returned no session"),
-        (
-            SimpleNamespace(commit=mock.Mock(), rollback=mock.Mock()),
-            AttributeError,
-            "delete_atom",
-        ),
-    ],
-)
-def test_tool_context_rejects_incomplete_delete_gesture_sessions(
-    session,
-    error_type,
-    message: str,
-) -> None:
-    context = ToolContext(
-        object(),
-        hit_testing_service=_hit_testing_port(),
-        selection_controller=_selection_port(),
-        note_controller=_note_port(),
-        handle_controller=_handle_port(),
-        selection_rotation_controller=_selection_rotation_port(),
-        scene_delete_controller=SimpleNamespace(
-            begin_delete_tool_session=mock.Mock(return_value=session),
-        ),
-        scene_transform_controller=_scene_transform_port(),
-    )
-
-    with pytest.raises(error_type, match=message):
-        context.begin_delete_tool_session()
-
-    if session is not None:
-        session.rollback.assert_called_once_with()
-
-
-def test_tool_context_rejected_delete_session_restores_guard_and_observers() -> None:
-    group_callback = object()
-    outline_callback = object()
-    runtime = SimpleNamespace(
-        active=True,
-        guard_depth=1,
-        group_callback=None,
-        outline_callback=None,
-        rollback_calls=0,
-    )
-
-    class IncompleteSession:
-        delete_bond = staticmethod(lambda _bond_id: None)
-        delete_ring = staticmethod(lambda _item: None)
-        delete_scene_item = staticmethod(lambda _item, _state: None)
-        commit = staticmethod(lambda _command=None: None)
-
-        @staticmethod
-        def rollback() -> list[BaseException]:
-            runtime.rollback_calls += 1
-            runtime.active = False
-            runtime.guard_depth = 0
-            runtime.group_callback = group_callback
-            runtime.outline_callback = outline_callback
-            return []
-
-    session = IncompleteSession()
-    context = ToolContext(
-        object(),
-        hit_testing_service=_hit_testing_port(),
-        selection_controller=_selection_port(),
-        note_controller=_note_port(),
-        handle_controller=_handle_port(),
-        selection_rotation_controller=_selection_rotation_port(),
-        scene_delete_controller=SimpleNamespace(
-            begin_delete_tool_session=mock.Mock(return_value=session),
-        ),
-        scene_transform_controller=_scene_transform_port(),
-    )
-
-    with pytest.raises(AttributeError, match="delete_atom"):
-        context.begin_delete_tool_session()
-
-    assert runtime.rollback_calls == 1
-    assert runtime.active is False
-    assert runtime.guard_depth == 0
-    assert runtime.group_callback is group_callback
-    assert runtime.outline_callback is outline_callback
 
 
 def test_tool_context_marks_persistently_active_rollback_incomplete() -> None:
