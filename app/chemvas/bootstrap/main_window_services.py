@@ -65,7 +65,6 @@ from chemvas.ui.main_window_ports import (
     tool_action_for_window,
     tool_actions_for_window,
     tool_mode_controller_for_window,
-    tool_settings_for_window,
     undo_action_for_window,
     zoom_in_for_window,
     zoom_out_for_window,
@@ -118,7 +117,6 @@ def build_main_window_services() -> MainWindowServices:
     tool_state_service = MainWindowToolStateService(
         tool_mode_controller_for_window=tool_mode_controller_for_window,
         active_tool_name_for_window=active_tool_name_for_window,
-        tool_settings_for_window=tool_settings_for_window,
         tool_actions_for_window=tool_actions_for_window,
         tool_action_for_window=tool_action_for_window,
         status_service=status_service,

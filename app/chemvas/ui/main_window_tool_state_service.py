@@ -15,14 +15,12 @@ class MainWindowToolStateService:
         *,
         tool_mode_controller_for_window,
         active_tool_name_for_window,
-        tool_settings_for_window,
         tool_actions_for_window,
         tool_action_for_window,
         status_service,
     ) -> None:
         self._tool_mode_controller_for_window = tool_mode_controller_for_window
         self._active_tool_name_for_window = active_tool_name_for_window
-        self._tool_settings_for_window = tool_settings_for_window
         self._tool_actions_for_window = tool_actions_for_window
         self._tool_action_for_window = tool_action_for_window
         self._status = status_service

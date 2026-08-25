@@ -13,10 +13,7 @@ except ModuleNotFoundError:
 if QApplication is not None:
     try:
         from chemvas.bootstrap.main_window import build_main_window
-        from chemvas.ui.canvas_tool_settings_state import (
-            set_tool_setting_for,
-            tool_settings_state_for,
-        )
+        from chemvas.ui.canvas_tool_settings_state import set_tool_setting_for
         from chemvas.ui.main_window_ports import (
             active_canvas_for_window,
             services_for_window,
@@ -54,11 +51,6 @@ class MainWindowToolStateServiceTest(unittest.TestCase):
                 active_canvas_for_window(window)
             ),
         )
-        self.tool_settings_for_window = mock.Mock(
-            side_effect=lambda window: tool_settings_state_for(
-                active_canvas_for_window(window)
-            ),
-        )
         self.tool_actions_for_window = mock.Mock(
             side_effect=lambda window: window.ui_references.tool_actions,
         )
@@ -73,7 +65,6 @@ class MainWindowToolStateServiceTest(unittest.TestCase):
         self.service = MainWindowToolStateService(
             tool_mode_controller_for_window=self.tool_mode_controller_for_window,
             active_tool_name_for_window=self.active_tool_name_for_window,
-            tool_settings_for_window=self.tool_settings_for_window,
             tool_actions_for_window=self.tool_actions_for_window,
             tool_action_for_window=self.tool_action_for_window,
             status_service=self.status_service,
@@ -169,9 +160,6 @@ class MainWindowToolStateServiceTest(unittest.TestCase):
             self.window.ui_references.tool_actions["perspective"].isChecked()
         )
         self.assertEqual(self.active_tool_name_for_window.call_count, 3)
-        # The action key depends on the active tool alone, so the sync no
-        # longer reads the tool settings to resolve it.
-        self.assertEqual(self.tool_settings_for_window.call_count, 0)
         self.assertEqual(self.tool_actions_for_window.call_count, 3)
         self.assertEqual(self.tool_action_for_window.call_count, 3)
 

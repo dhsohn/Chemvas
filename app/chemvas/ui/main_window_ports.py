@@ -306,12 +306,6 @@ def next_canvas_name_for_window(window, prefix: str = "Canvas") -> str:
     return window.runtime_state.next_canvas_name(prefix)
 
 
-def tool_settings_for_window(window):
-    from chemvas.ui.canvas_tool_settings_state import tool_settings_state_for
-
-    return tool_settings_state_for(active_canvas_for_window(window))
-
-
 def color_tool_for_window(window):
     return getattr(
         _active_canvas_services_for_window(window).tool_controller, "tools", {}
@@ -375,7 +369,6 @@ __all__ = [
     "tool_action_for_window",
     "tool_actions_for_window",
     "tool_mode_controller_for_window",
-    "tool_settings_for_window",
     "ui_references_for_window",
     "undo_action_for_window",
     "ungroup_selection_for_window",

@@ -4428,3 +4428,19 @@ def test_no_production_function_declares_an_unread_strict_parameter() -> None:
     ]
 
     assert violations == []
+
+
+def test_window_tool_settings_port_stays_removed() -> None:
+    """The window-level tool-settings lookup lost its only reason to exist.
+
+    ``tool_action_key_for_canvas_state`` branches on the active tool alone, so
+    the toolbar sync stopped reading the tool settings, the tool state service
+    stopped being handed the port, and the port itself stopped having a
+    caller. The bare name is safe to ban outright: the live surfaces are
+    ``tool_settings_state_for`` and the ``tool_settings_state`` runtime field,
+    neither of which contains it, and ``tool_actions_for_window`` and
+    ``tool_action_for_window`` are different ports that stay.
+    """
+    pattern = re.compile(r"\b_?tool_settings_for_window\b")
+
+    assert _matching_lines(pattern, _app_python_files()) == []
