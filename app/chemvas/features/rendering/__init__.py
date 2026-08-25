@@ -3,7 +3,6 @@
 from .acs1996_style import ACS1996Style
 from .bond_dotted import dotted_bond_dot_centers
 from .bond_geometry import (
-    DEFAULT_BOLD_OUT_LENGTH_SCALE,
     LineSegment,
     bold_double_strip_geometry,
     bold_out_scale,
@@ -25,19 +24,14 @@ from .bond_stereo import (
 )
 from .bond_style import (
     BOLD_BOND_STYLES,
-    BOLD_DOUBLE_STYLE_SEQUENCE,
-    BOLD_DOUBLE_STYLES,
     BOLD_STYLE_CENTER,
     BOLD_STYLE_DEFAULT,
     BOLD_STYLE_OUTER,
     DOTTED_DOUBLE_STYLE_DEFAULT,
     DOTTED_DOUBLE_STYLE_OUTER,
-    DOTTED_DOUBLE_STYLE_SEQUENCE,
-    DOTTED_DOUBLE_STYLES,
     DOUBLE_STYLE_CENTER,
     DOUBLE_STYLE_DEFAULT,
     DOUBLE_STYLE_OUTER,
-    DOUBLE_STYLE_SEQUENCE,
     PLAIN_DOUBLE_STYLES,
     STANDARD_BOND_STYLES,
     base_plain_double_style_for_dotted_variant,
@@ -58,20 +52,14 @@ from .bond_style import (
 
 __all__ = [
     "BOLD_BOND_STYLES",
-    "BOLD_DOUBLE_STYLES",
-    "BOLD_DOUBLE_STYLE_SEQUENCE",
     "BOLD_STYLE_CENTER",
     "BOLD_STYLE_DEFAULT",
     "BOLD_STYLE_OUTER",
-    "DEFAULT_BOLD_OUT_LENGTH_SCALE",
-    "DOTTED_DOUBLE_STYLES",
     "DOTTED_DOUBLE_STYLE_DEFAULT",
     "DOTTED_DOUBLE_STYLE_OUTER",
-    "DOTTED_DOUBLE_STYLE_SEQUENCE",
     "DOUBLE_STYLE_CENTER",
     "DOUBLE_STYLE_DEFAULT",
     "DOUBLE_STYLE_OUTER",
-    "DOUBLE_STYLE_SEQUENCE",
     "PLAIN_DOUBLE_STYLES",
     "STANDARD_BOND_STYLES",
     "ACS1996Style",

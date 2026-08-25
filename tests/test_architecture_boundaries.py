@@ -4055,6 +4055,118 @@ def test_duplicate_rdkit_export_reset_wrapper_stays_removed() -> None:
     assert _matching_lines(pattern, _app_python_files()) == []
 
 
+REMOVED_PACKAGE_ROOT_EXPORTS: dict[str, tuple[str, ...]] = {
+    "chemvas/domain/document/__init__.py": (
+        "CALCULATION_INCLUSIONS",
+        "CALCULATION_PLAN_FORMAT",
+        "CALCULATION_PLAN_VERSION",
+        "CALCULATION_ROLES",
+        "SUPPORTED_FILE_VERSIONS",
+        "CalculationEndpointPrecomplex",
+    ),
+    "chemvas/features/calculation_bundle/__init__.py": (
+        "PathPrecheck",
+        "StepReadiness",
+    ),
+    "chemvas/features/document_composition/__init__.py": (
+        "COMPOSITION_FORMAT",
+        "COMPOSITION_VERSION",
+        "MAX_BONDS",
+    ),
+    "chemvas/features/document_patch/__init__.py": (
+        "DOCUMENT_PATCH_FORMAT",
+        "DOCUMENT_PATCH_VERSION",
+    ),
+    "chemvas/features/export/__init__.py": ("MM_PER_INCH",),
+    "chemvas/features/hover/__init__.py": ("HoverAction",),
+    "chemvas/features/insertion/__init__.py": (
+        "SmilesPreviewPlan",
+        "SmilesPreviewSnapshot",
+        "TemplatePreviewPlan",
+        "ring_polygon_points_for_atoms",
+        "snapshot_smiles_preview_geometry",
+    ),
+    "chemvas/features/rendering/__init__.py": (
+        "BOLD_DOUBLE_STYLES",
+        "BOLD_DOUBLE_STYLE_SEQUENCE",
+        "DEFAULT_BOLD_OUT_LENGTH_SCALE",
+        "DOTTED_DOUBLE_STYLES",
+        "DOTTED_DOUBLE_STYLE_SEQUENCE",
+        "DOUBLE_STYLE_SEQUENCE",
+    ),
+    "chemvas/features/selection/__init__.py": (
+        "LineStrokePathBuilder",
+        "PenWidthGetter",
+        "ROTATION_DRAG_SENSITIVITY",
+        "RotatePointAroundAxis",
+    ),
+    "chemvas/features/session/__init__.py": (
+        "RestorePlan",
+        "SESSION_SCHEMA_VERSION",
+    ),
+}
+
+
+def _package_root_surface(path: Path) -> set[str]:
+    """Names a package root hands out.
+
+    That is every name it binds by importing from one of its own submodules,
+    every name it lists for lazy import, and every name in ``__all__`` --
+    ``from package import name`` works through any of the three. Names defined
+    in the package root itself and used only there are not a surface, which is
+    why this reads bindings rather than grepping for the word.
+    """
+    surface: set[str] = set()
+    for node in ast.parse(path.read_text(encoding="utf-8")).body:
+        if isinstance(node, ast.ImportFrom) and node.level >= 1:
+            surface.update(alias.asname or alias.name for alias in node.names)
+            continue
+        targets: list[ast.expr] = []
+        if isinstance(node, ast.Assign):
+            targets = list(node.targets)
+        elif isinstance(node, ast.AnnAssign):
+            targets = [node.target]
+        if not any(
+            isinstance(target, ast.Name) and target.id in {"__all__", "_LAZY_EXPORTS"}
+            for target in targets
+        ):
+            continue
+        value = node.value
+        if isinstance(value, (ast.List, ast.Tuple, ast.Set)):
+            entries: list[ast.expr] = list(value.elts)
+        elif isinstance(value, ast.Dict):
+            entries = [key for key in value.keys if key is not None]
+        else:
+            continue
+        surface.update(
+            entry.value
+            for entry in entries
+            if isinstance(entry, ast.Constant) and isinstance(entry.value, str)
+        )
+    return surface
+
+
+def test_package_root_exports_without_a_reader_stay_removed() -> None:
+    """Names these package roots re-exported that nothing imported.
+
+    Each was checked against the whole repository -- every tracked file, no
+    path or extension filter -- and appeared only in its own package root and
+    the submodule that defines it. The definitions stay; only the public
+    package-level export went, so this is scoped to the roots.
+    """
+    violations: list[str] = []
+
+    for relative, names in sorted(REMOVED_PACKAGE_ROOT_EXPORTS.items()):
+        root = APP_ROOT / relative
+        if not root.exists():
+            violations.append(f"{relative}: package root is missing")
+            continue
+        surface = _package_root_surface(root)
+        violations.extend(f"{relative}: {name}" for name in names if name in surface)
+
+    assert violations == []
+
+
 def test_exports_and_constants_without_a_reader_stay_removed() -> None:
     """Names nothing imported, iterated, or read.
 

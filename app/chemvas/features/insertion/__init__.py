@@ -16,8 +16,6 @@ from .smiles import (
     SmilesCommitPlan,
     SmilesMarkPlacement,
     SmilesPreviewGeometry,
-    SmilesPreviewPlan,
-    SmilesPreviewSnapshot,
     annotation_mark_direction,
     annotation_mark_kinds,
     build_smiles_preview_geometry,
@@ -26,7 +24,6 @@ from .smiles import (
     plan_smiles_commit,
     plan_smiles_preview_update,
     smiles_preview_center,
-    snapshot_smiles_preview_geometry,
 )
 from .structure_payload import (
     build_3d_conversion_payload,
@@ -49,7 +46,6 @@ from .template import (
 )
 from .template_preview import (
     TemplatePreviewGeometry,
-    TemplatePreviewPlan,
     build_benzene_template_preview_geometry,
     build_template_preview_geometry,
     plan_template_preview_update,
@@ -58,7 +54,6 @@ from .template_preview import (
 if TYPE_CHECKING:
     from .ring_occupancy import (
         point_inside_any_ring,
-        ring_polygon_points_for_atoms,
         ring_polygon_points_for_bond,
     )
     from .structure_growth import (
@@ -81,7 +76,6 @@ _LAZY_EXPORTS: dict[str, str] = {
     "other_atom_id_from_bond_result": ".structure_growth",
     "point_inside_any_ring": ".ring_occupancy",
     "resolve_bond_placement_context": ".structure_growth",
-    "ring_polygon_points_for_atoms": ".ring_occupancy",
     "ring_polygon_points_for_bond": ".ring_occupancy",
 }
 
@@ -110,14 +104,11 @@ __all__ = [
     "SmilesCommitPlan",
     "SmilesMarkPlacement",
     "SmilesPreviewGeometry",
-    "SmilesPreviewPlan",
-    "SmilesPreviewSnapshot",
     "TemplateInsertPlan",
     "TemplateInsertRequest",
     "TemplateInsertResolution",
     "TemplatePointResolvers",
     "TemplatePreviewGeometry",
-    "TemplatePreviewPlan",
     "alternating_ring_bond_specs",
     "annotation_mark_direction",
     "annotation_mark_kinds",
@@ -145,8 +136,6 @@ __all__ = [
     "point_inside_any_ring",
     "resolve_bond_placement_context",
     "resolve_template_insert",
-    "ring_polygon_points_for_atoms",
     "ring_polygon_points_for_bond",
     "smiles_preview_center",
-    "snapshot_smiles_preview_geometry",
 ]

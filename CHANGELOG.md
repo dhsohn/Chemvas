@@ -246,6 +246,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   its arguments. The handler, the closure and parameter that carried it, and
   the `setMovable(True)` call are gone: canvas tabs are no longer marked
   movable. Nothing was reorderable in practice, since the strip is not drawn.
+- **Thirty-two names off the public import surface of ten packages.** This
+  narrows what `chemvas` offers to importers, so it is an API reduction rather
+  than housekeeping: code outside this repository that did
+  `from chemvas.features.rendering import DOUBLE_STYLE_SEQUENCE` has to import
+  it from `chemvas.features.rendering.bond_style` now. Nothing inside the
+  repository did — each name was checked against every tracked file with no
+  path or extension filter, and appeared only in the package root that
+  re-exported it and the module that defines it. The definitions all stay
+  where they are and keep their own module's `__all__`; only the package-level
+  re-export goes. Gone from `chemvas.domain.document`:
+  `CALCULATION_INCLUSIONS`, `CALCULATION_PLAN_FORMAT`,
+  `CALCULATION_PLAN_VERSION`, `CALCULATION_ROLES`, `SUPPORTED_FILE_VERSIONS`
+  and `CalculationEndpointPrecomplex`. From `chemvas.features.rendering`:
+  `BOLD_DOUBLE_STYLES`, `BOLD_DOUBLE_STYLE_SEQUENCE`,
+  `DEFAULT_BOLD_OUT_LENGTH_SCALE`, `DOTTED_DOUBLE_STYLES`,
+  `DOTTED_DOUBLE_STYLE_SEQUENCE` and `DOUBLE_STYLE_SEQUENCE`. From
+  `chemvas.features.insertion`: `SmilesPreviewPlan`, `SmilesPreviewSnapshot`,
+  `TemplatePreviewPlan`, `snapshot_smiles_preview_geometry` and the lazily
+  loaded `ring_polygon_points_for_atoms`, which also leaves the lazy-export
+  table. From `chemvas.features.selection`: `LineStrokePathBuilder`,
+  `PenWidthGetter`, `ROTATION_DRAG_SENSITIVITY` and `RotatePointAroundAxis`.
+  From `chemvas.features.document_composition`: `COMPOSITION_FORMAT`,
+  `COMPOSITION_VERSION` and `MAX_BONDS`. From
+  `chemvas.features.calculation_bundle`: `PathPrecheck` and `StepReadiness`.
+  From `chemvas.features.document_patch`: `DOCUMENT_PATCH_FORMAT` and
+  `DOCUMENT_PATCH_VERSION`. From `chemvas.features.session`: `RestorePlan` and
+  `SESSION_SCHEMA_VERSION`. From `chemvas.features.export`: `MM_PER_INCH`.
+  From `chemvas.features.hover`: `HoverAction`, whose `Literal` alias stays in
+  the package root because the hover plan's own annotation reads it.
+  `VALID_ARROW_KINDS`, `normalize_3d` and `SHA256_HEX_RE` are untouched: each
+  has a reader, and each was put where it is on purpose.
 
 ## [0.4.1] - 2026-08-20
 
