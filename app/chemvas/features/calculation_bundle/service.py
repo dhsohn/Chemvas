@@ -50,11 +50,8 @@ def select_component(
 
     atom_ids = components[component_index]
     selected_ids = set(atom_ids)
-    atoms = {
-        atom_id: _copy_atom(model.atoms[atom_id])
-        for atom_id in atom_ids
-        if atom_id in model.atoms
-    }
+    # atom_ids is one component of model.atoms, so every id is live.
+    atoms = {atom_id: _copy_atom(model.atoms[atom_id]) for atom_id in atom_ids}
     bonds: list[Bond | None] = [
         _copy_bond(bond)
         for bond in model.bonds
