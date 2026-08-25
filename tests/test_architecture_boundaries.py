@@ -4533,7 +4533,7 @@ DOCUMENT_STATE_MODULE = "app/chemvas/domain/document/state.py"
 def test_arrow_kinds_are_listed_in_one_module() -> None:
     """The seven arrow kind strings are spelled out exactly once.
 
-    Six modules used to list them. A seventh kind added to the schema but
+    Seven modules used to list them. An eighth kind added to the schema but
     missed in one of the copies is silent: the document validates it while a
     scene, an outline, an attach route, or a tool treats it as something else.
     Supersets are fine as long as they union the schema's frozenset instead of
