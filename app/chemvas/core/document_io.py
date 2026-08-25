@@ -128,9 +128,21 @@ def atomic_create_bytes(path: PathType, content: bytes) -> None:
         dir=output.parent,
     )
     staging = Path(raw_staging)
+    # Handing the descriptor to os.fdopen transfers ownership: from here the
+    # file object closes it on both the normal and the exceptional exit, so
+    # nothing below may close it again. Only the handover itself can leave the
+    # descriptor ours to close.
+    try:
+        handle = os.fdopen(fd, "wb")
+    except BaseException:
+        os.close(fd)
+        with contextlib.suppress(OSError):
+            staging.unlink()
+        raise
+
     published = False
     try:
-        with os.fdopen(fd, "wb") as handle:
+        with handle:
             handle.write(content)
             handle.flush()
             os.fsync(handle.fileno())
@@ -145,8 +157,6 @@ def atomic_create_bytes(path: PathType, content: bytes) -> None:
             staging.unlink()
         _fsync_directory(output.parent)
     except BaseException:
-        with contextlib.suppress(OSError):
-            os.close(fd)
         if not published:
             with contextlib.suppress(OSError):
                 staging.unlink()
