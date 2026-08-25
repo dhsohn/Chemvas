@@ -1,10 +1,5 @@
 """Bond rendering policy and Qt geometry primitives."""
 
-# The 3-D unit-vector helper belongs to the selection package's 3-D math, which
-# owns Coords3D and the rotate-around-axis helpers. Rendering is otherwise 2-D
-# and only re-exports it so bond geometry callers keep one import.
-from chemvas.features.selection import normalize_3d
-
 from .acs1996_style import ACS1996Style
 from .bond_dotted import dotted_bond_dot_centers
 from .bond_geometry import (
@@ -15,6 +10,7 @@ from .bond_geometry import (
     extend_segment,
     line_intersection,
     normal_away_from_parallel_segment,
+    normalize_3d,
     offset_segment,
     scale_segment,
     strip_corners,

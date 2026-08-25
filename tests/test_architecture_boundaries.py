@@ -4608,9 +4608,10 @@ def test_no_production_function_only_forwards_to_getattr() -> None:
 def test_normalize_3d_has_one_production_owner() -> None:
     """The 3-D unit-vector helper is defined once and re-exported.
 
-    Bond geometry used to carry its own copy, epsilon and all. Rendering now
-    re-exports the selection package's implementation, which is an import, not
-    a second ``def``.
+    Rotation geometry used to carry its own copy, epsilon and all. Selection
+    now re-exports the bond geometry implementation, which is an import, not a
+    second ``def``. Bond geometry owns it because that module imports no Qt,
+    while the selection package does; the edge only runs the cheap direction.
     """
     owners = [
         path
@@ -4623,7 +4624,7 @@ def test_normalize_3d_has_one_production_owner() -> None:
     ]
 
     assert owners == [
-        APP_ROOT / "chemvas" / "features" / "selection" / "rotation_geometry.py"
+        APP_ROOT / "chemvas" / "features" / "rendering" / "bond_geometry.py"
     ]
 
 

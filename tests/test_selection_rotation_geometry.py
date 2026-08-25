@@ -15,15 +15,16 @@ from chemvas.features.selection import (
 )
 
 
-def test_rendering_reexports_the_selection_normalize_3d() -> None:
-    """Bond geometry callers import it from `features.rendering`.
+def test_selection_reexports_the_bond_geometry_normalize_3d() -> None:
+    """Rotation callers import it from `features.selection`.
 
-    The selection package owns the implementation; this keeps the rendering
-    import path a re-export of the same object rather than a second copy.
+    Bond geometry owns the implementation so that `features.rendering` stays
+    importable without Qt; this keeps the selection import path a re-export of
+    the same object rather than a second copy.
     """
     from chemvas.features.rendering import normalize_3d as rendering_normalize_3d
 
-    assert rendering_normalize_3d is normalize_3d
+    assert normalize_3d is rendering_normalize_3d
 
 
 def test_normalize_and_center_for_coords_3d_cover_empty_and_valid_inputs() -> None:

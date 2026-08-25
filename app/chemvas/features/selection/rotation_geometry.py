@@ -3,16 +3,14 @@ from __future__ import annotations
 import math
 from collections.abc import Callable
 
+# The 3-D unit-vector helper lives with bond geometry, which is Qt-free.
+# Selection already depends on Qt, so importing it in this direction keeps
+# `chemvas.features.rendering` importable without PyQt6.
+from chemvas.features.rendering.bond_geometry import normalize_3d
+
 Coords3D = tuple[float, float, float]
 RotatePointAroundAxis = Callable[[Coords3D, Coords3D, Coords3D, float], Coords3D]
 ROTATION_DRAG_SENSITIVITY = 0.005
-
-
-def normalize_3d(dx: float, dy: float, dz: float) -> Coords3D | None:
-    length = math.sqrt(dx * dx + dy * dy + dz * dz)
-    if length <= 1e-9:
-        return None
-    return dx / length, dy / length, dz / length
 
 
 def center_for_coords_3d(

@@ -9,6 +9,18 @@ Point2D = tuple[float, float]
 DEFAULT_BOLD_OUT_LENGTH_SCALE = 1.1
 
 
+def normalize_3d(dx: float, dy: float, dz: float) -> tuple[float, float, float] | None:
+    """Unit vector of ``(dx, dy, dz)``, or ``None`` for a degenerate length.
+
+    Bond geometry owns it so this module stays free of Qt: the selection
+    package imports it from here, and nothing here imports selection.
+    """
+    length = math.sqrt(dx * dx + dy * dy + dz * dz)
+    if length <= 1e-9:
+        return None
+    return (dx / length, dy / length, dz / length)
+
+
 def scale_segment(
     x1: float, y1: float, x2: float, y2: float, scale: float
 ) -> LineSegment:
@@ -176,6 +188,7 @@ __all__ = [
     "extend_segment",
     "line_intersection",
     "normal_away_from_parallel_segment",
+    "normalize_3d",
     "offset_segment",
     "scale_segment",
     "strip_corners",
