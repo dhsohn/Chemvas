@@ -51,9 +51,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   commands each wrote twice. Each merge was checked against the code it
   replaced over the inputs that would expose a difference — random graphs,
   injected rollback failures, deleted scene objects — and none of them changed
-  an answer. Architecture tests pin six of the eight and fail if one of those
-  is written a second time; they were checked against the tree from before
-  each merge to confirm they report the copies that were really there.
+  an answer. Architecture tests pin all eight and fail if one of them is
+  written a second time; they were checked against the tree from before each
+  merge to confirm they report the copies that were really there.
 
   What did not merge is recorded at both of its sites: the shared tail of the
   atom and bond delete paths was written as a shared helper, measured at 24

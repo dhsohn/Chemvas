@@ -5430,3 +5430,243 @@ def test_ring_fill_polygons_are_rebuilt_in_one_place() -> None:
     assert [rebuilder.rsplit(":", 2)[0] for rebuilder in rebuilders] == [
         RING_FILL_SCENE_SERVICE_MODULE
     ]
+
+
+SCENE_ITEM_POOL_RESET_MODULES = [
+    "app/chemvas/features/selection/handles.py",
+    "app/chemvas/ui/preview_scene_renderer.py",
+]
+SCENE_ITEM_POOL_RESET_BODIES = ["clear_handle_items", "clear_scene_items"]
+LOOP_NODES = (
+    ast.For,
+    ast.AsyncFor,
+    ast.While,
+    ast.ListComp,
+    ast.SetComp,
+    ast.GeneratorExp,
+    ast.DictComp,
+)
+
+
+def _parameter_names(node: ast.FunctionDef | ast.AsyncFunctionDef) -> set[str]:
+    """Every name the function is handed, however the signature spells it."""
+    arguments = node.args
+    declared = [
+        *arguments.posonlyargs,
+        *arguments.args,
+        *arguments.kwonlyargs,
+    ]
+    if arguments.vararg is not None:
+        declared.append(arguments.vararg)
+    if arguments.kwarg is not None:
+        declared.append(arguments.kwarg)
+    return {argument.arg for argument in declared}
+
+
+def _reads_an_item_scene(node: ast.AST) -> bool:
+    """True when something inside ``node`` asks an item which scene it is in.
+
+    ``item.scene()`` is the spelling in the tree. ``getattr(item, "scene")``
+    reaches the same bound method with the name moved into a string, and a
+    rule in this file has already been slipped past by exactly that move, so
+    both count.
+    """
+    for child in ast.walk(node):
+        if not isinstance(child, ast.Call):
+            continue
+        if (
+            isinstance(child.func, ast.Attribute)
+            and child.func.attr == "scene"
+            and not child.args
+            and not child.keywords
+        ):
+            return True
+        if (
+            isinstance(child.func, ast.Name)
+            and child.func.id == "getattr"
+            and len(child.args) >= 2
+            and isinstance(child.args[1], ast.Constant)
+            and child.args[1].value == "scene"
+        ):
+            return True
+    return False
+
+
+def _looped_scene_detach_names(node: ast.AST) -> set[str]:
+    """The names ``removeItem`` is called on from inside a loop in ``node``.
+
+    Every loop node counts, so re-spelling the plain ``for item in items`` as
+    ``for item in tuple(items)``, as an index-driven ``while``, or as a
+    comprehension run for its side effect does not move the call out of
+    reach.
+    """
+    names: set[str] = set()
+    for child in ast.walk(node):
+        if not isinstance(child, LOOP_NODES):
+            continue
+        for inner in ast.walk(child):
+            if (
+                isinstance(inner, ast.Call)
+                and isinstance(inner.func, ast.Attribute)
+                and inner.func.attr == "removeItem"
+                and isinstance(inner.func.value, ast.Name)
+            ):
+                names.add(inner.func.value.id)
+    return names
+
+
+def _scene_item_pool_resets(source: str) -> list[tuple[int, str]]:
+    """Functions handed a scene and a pool that empty the pool against it.
+
+    Two marks, and the first is what keeps the rule narrow: ``removeItem`` is
+    called from inside a loop on a name the function was *handed*. A function
+    that goes and resolves its own scene is asking a different question, so
+    ``ui.insert_smiles_service``, ``ui.calculation_mapping_highlight`` and
+    ``core.tool_overlay_logic`` are all out, and ``ui.scene_item_access`` is
+    out twice over -- it needs a canvas, and ``_canvas_scoped_detachers``
+    above owns that rule. Reaching the scene through ``self`` is out for the
+    same reason, which is what keeps
+    ``ui.canvas_document_session_service.restore`` from being swept in.
+
+    The escapes, in order of how likely they are:
+
+    * A re-duplication that resolves its own scene instead of taking one --
+      ``calculation_mapping_highlight._remove_items`` is already almost this
+      loop written that way, differing in that it finds its own scene and
+      clears the pool in place. Dropping the parameter mark to reach it also
+      sweeps in ``insert_smiles_service``'s pre-clear detach, so the rule
+      would need a third and fourth owner spelled out to stay green and would
+      stop meaning "two owners". The mark stays and the escape is written
+      down here.
+    * A reset that detaches unconditionally, never asking an item which scene
+      it is in. That is a different and less careful function: the ask is
+      what survives an item whose C++ object Qt has already deleted.
+    * A reset that reaches ``removeItem`` through a name it computes at run
+      time, or that parks the scene on an object first and loops over that.
+    """
+    resets: list[tuple[int, str]] = []
+    for node in ast.walk(ast.parse(source)):
+        if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        handed = _parameter_names(node)
+        detached = _looped_scene_detach_names(node) & handed
+        if detached and _reads_an_item_scene(node):
+            resets.append((node.lineno, node.name))
+    return sorted(resets)
+
+
+def test_scene_item_pool_reset_has_one_owner_per_layer() -> None:
+    """Two functions empty a pool of scene items, one per layer.
+
+    ``ui.hover_rendering.clear_hover_items`` and
+    ``ui.bond_preview_renderer.clear_bond_preview_items`` each spelled the
+    same six-line loop as ``ui.preview_scene_renderer.clear_scene_items``;
+    both delegate to it now and compose the empty pool their own caller
+    reassigns.
+
+    ``features.selection.handles.clear_handle_items`` keeps its copy on
+    purpose: the ``features`` layer never imports ``ui``, and no Qt-aware
+    home exists that both layers can reach. Two entries is the rule -- a
+    third anywhere, or a second inside either layer, is a duplicate.
+    """
+    resets = [
+        f"{path.relative_to(APP_ROOT.parents[0])}:{line_no}: {name}"
+        for path in _app_python_files()
+        for line_no, name in _scene_item_pool_resets(path.read_text(encoding="utf-8"))
+    ]
+
+    assert [
+        reset.rsplit(":", 2)[0] for reset in resets
+    ] == SCENE_ITEM_POOL_RESET_MODULES
+    assert [
+        reset.rsplit(": ", 1)[1] for reset in resets
+    ] == SCENE_ITEM_POOL_RESET_BODIES
+
+
+CORE_HISTORY_MODULE = "app/chemvas/core/history.py"
+RESTORE_ATOM_STATE_PORT_CALL = "restore_atom_from_state_for_history"
+SET_ATOM_POSITIONS_PORT_CALL = "set_atom_positions_for_history"
+RESTORE_ATOM_STATES_BODIES = [
+    "_restore_atom_states",
+    "_restore_atom_states_best_effort",
+]
+
+
+def _imported_name_aliases(tree: ast.AST) -> dict[str, str]:
+    """Local binding -> imported name, for every ``as`` rename in the module.
+
+    ``ui.history_commands`` already imports
+    ``set_atom_positions_for_history as _set_atom_positions_for_history``, so
+    a rule that matched the call site's spelling would miss a copy that
+    renamed its import the same way.
+    """
+    aliases: dict[str, str] = {}
+    for node in ast.walk(tree):
+        if not isinstance(node, (ast.Import, ast.ImportFrom)):
+            continue
+        for alias in node.names:
+            if alias.asname is not None:
+                aliases[alias.asname] = alias.name.rsplit(".", 1)[-1]
+    return aliases
+
+
+def _restore_atoms_steps(source: str) -> list[tuple[int, str]]:
+    """Functions that restore saved atom states and then place the atoms in 3-D.
+
+    Both port calls, in one function. Nothing about the loop is read, so a
+    comprehension run for its side effect, a renamed loop variable, an
+    index-driven ``while`` or a rewritten ``if self.atom_coords_3d`` guard
+    are all the same duplicate to this rule, and a copy that reaches the port
+    through ``port.`` rather than ``_history_canvas_port()`` is too.
+
+    Deliberately not caught: ``_remove_atoms_best_effort``, which the two
+    commands still spell out twice because they genuinely differ on
+    ``remove_marks``; ``MoveAtomsCommand._apply`` and ``_compensate``, which
+    place atoms in 3-D without restoring any saved state.
+
+    The escapes: half a copy -- restoring the atom states without the
+    coordinate block, or the reverse -- is not two calls and is not caught.
+    Neither is a copy that reaches either port method through a name it
+    computes at run time, since the rule reads the spelling in the tree.
+    Requiring only one of the two calls would flag six live functions that
+    move atoms for other reasons, so the pair is the mark.
+    """
+    tree = ast.parse(source)
+    aliases = _imported_name_aliases(tree)
+    steps: list[tuple[int, str]] = []
+    for node in ast.walk(tree):
+        if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        called = {aliases.get(name, name) for name in _called_function_names(node)}
+        if {RESTORE_ATOM_STATE_PORT_CALL, SET_ATOM_POSITIONS_PORT_CALL} <= called:
+            steps.append((node.lineno, node.name))
+    return sorted(steps)
+
+
+def test_restore_atoms_steps_have_one_owner_per_failure_mode() -> None:
+    """Two helpers restore atom states and their 3-D coordinates.
+
+    ``AddAtomsCommand`` and ``DeleteAtomsCommand`` each wrote the sequence
+    twice -- once for the straight path, once for the best-effort rollback --
+    for four regions, byte-identical within each pair.
+    ``_restore_atom_states`` and
+    ``_restore_atom_states_best_effort`` own them now; the two entries are
+    the two failure modes, not two copies, because only the rollback one
+    wraps each step in ``_run_history_rollback_step``.
+
+    The projection restore that precedes the sequence in the delete command
+    and the mark restore that follows it stay at their own call sites, so a
+    fifth copy would most likely appear there -- inlined back into a command
+    method to put the compensation order in one place again.
+    """
+    steps = [
+        f"{path.relative_to(APP_ROOT.parents[0])}:{line_no}: {name}"
+        for path in _app_python_files()
+        for line_no, name in _restore_atoms_steps(path.read_text(encoding="utf-8"))
+    ]
+
+    assert [step.rsplit(":", 2)[0] for step in steps] == [
+        CORE_HISTORY_MODULE,
+        CORE_HISTORY_MODULE,
+    ]
+    assert [step.rsplit(": ", 1)[1] for step in steps] == RESTORE_ATOM_STATES_BODIES
