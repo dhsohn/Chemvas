@@ -24,6 +24,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   chemvas` installs — is unchanged.
 
 ### Removed
+- **The capture path's dormant non-strict mode.** `capture_scene_runtime` and
+  `capture_atom_primitive_graphics` declared `strict=False`, but all 18 call
+  sites in the tree — twelve in production, six in the tests — pass
+  `strict=True`, so the lenient half never ran. Nothing changes today; what
+  goes is a mode that, had anything ever selected it, would have swallowed a
+  capture failure in silence: `contextlib.suppress(Exception)` around a child
+  or geometry read, `continue` past an item whose accessor raised, and
+  assignments blanking the parent, stacking-depth, signal-blocking and focus
+  port pairs. Each produced a partial snapshot that undo would then restore
+  from, with nothing recorded to say a field was missing. The parameter is gone
+  from the ten capture-side functions and the strict arm is now
+  unconditional. The restore side keeps its flag — there it is genuinely
+  dynamic, strict during a normal restore and best-effort while a rollback is
+  already unwinding — and so do the scene-item helpers the paste path reaches
+  leniently.
+- **Five parameters their functions never read.**
+  `tool_action_key_for_canvas_state` branches on the active tool alone, so
+  `active_bond_style` and `mark_kind` go, and the toolbar sync no longer looks
+  up the tool settings to supply them. `begin_template_insert` and
+  `begin_smiles_insert` ignored the session state they were handed and built a
+  fresh one; their `cancel_*` siblings do read it and keep theirs.
+  `apply_pasted_perspective_for_canvas` took a `projection_anchor_2d` it never
+  used, taking the anchor from the canvas rotation state instead — the
+  identically named field, and `projection_center_3d`, are both still read. The
+  rotation preview's `restore` took the in-flight exception and ignored it; the
+  rollback note it feeds is still added by the caller. No behaviour changes.
 - **The last three hand-painted icon renderers.** `MainWindowBondIconRenderer`,
   `MainWindowUtilityIconRenderer` and `MainWindowToolIconRenderer` drew the
   toolbar icons until the SVG design set took over, and
