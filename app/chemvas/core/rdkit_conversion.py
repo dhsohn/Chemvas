@@ -133,6 +133,8 @@ class RDKitConversionHelper:
     def _submodel(
         model: MoleculeModel, atom_ids: frozenset[int] | set[int]
     ) -> MoleculeModel:
+        # atom_ids comes from a caller, not from a component walk, so an id that
+        # is no longer in the model is reachable here.
         atoms = {
             atom_id: model.atoms[atom_id]
             for atom_id in atom_ids
