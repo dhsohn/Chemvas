@@ -6,7 +6,7 @@ from collections.abc import Callable
 # The 3-D unit-vector helper lives with bond geometry, which is Qt-free.
 # Selection already depends on Qt, so importing it in this direction keeps
 # `chemvas.features.rendering` importable without PyQt6.
-from chemvas.features.rendering.bond_geometry import normalize_3d
+from chemvas.features.rendering import normalize_3d
 
 Coords3D = tuple[float, float, float]
 RotatePointAroundAxis = Callable[[Coords3D, Coords3D, Coords3D, float], Coords3D]
