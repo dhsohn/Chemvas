@@ -9,7 +9,6 @@ from chemvas.ui.main_window_palette import PALETTE
 _ICON_COLOR = PALETTE["icon"]
 
 _SVG_BY_NAME: dict[str, str] = {
-    "select": '<path d="M14 4 L5 13 L9 13 L8 20 L19 9 L13 9 Z"/>',
     "bond": '<line x1="5" y1="17" x2="19" y2="7"/>',
     "bond_double": '<line x1="4" y1="15" x2="18" y2="5"/><line x1="6" y1="19" x2="20" y2="9"/>',
     "bond_triple": (
@@ -62,7 +61,6 @@ _SVG_BY_NAME: dict[str, str] = {
         '<g transform="translate(12 12) skewX(-14) translate(-12 -12)">'
         '<path d="M5 4 H19 M12 4 V20"/></g>'
     ),
-    "font": '<path d="M2.5 18 6 5 9.5 18 M4 13.2 H8"/><circle cx="16.2" cy="14.6" r="3.4"/><path d="M19.6 11.4 V18"/>',
     "text_bold": '<path d="M7.5 5 V19 M7.5 5 H13 C16.5 5 16.5 11.5 13 11.5 H7.5 M7.5 11.5 H14 C17.8 11.5 17.8 19 14 19 H7.5"/><path d="M9.3 5 V19"/>',
     "text_italic": '<path d="M10 5 H17 M7 19 H14 M14.5 5 L9.5 19"/>',
     "text_superscript": '<path d="M5 16.5 11 10 M5 10 11 16.5"/><path d="M14 8.4 C14 6.6 18.6 6.6 18.6 8.9 C18.6 10.8 14 11.1 14 12.6 H18.8"/>',
@@ -76,26 +74,6 @@ _SVG_BY_NAME: dict[str, str] = {
         '<circle cx="12" cy="12" r="1.4" fill="currentColor" stroke="none"/>'
         '<ellipse cx="12" cy="12" rx="9.5" ry="4" transform="rotate(45 12 12)"/>'
         '<ellipse cx="12" cy="12" rx="9.5" ry="4" transform="rotate(-45 12 12)"/>'
-    ),
-    "undo": '<path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5a5.5 5.5 0 0 1-5.5 5.5H11"/>',
-    "redo": '<path d="m15 14 5-5-5-5"/><path d="M20 9H9.5A5.5 5.5 0 0 0 4 14.5A5.5 5.5 0 0 0 9.5 20H13"/>',
-    "save": (
-        '<path d="M15.2 3a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/>'
-        '<path d="M17 21v-7a1 1 0 0 0-1-1H8a1 1 0 0 0-1 1v7"/>'
-        '<path d="M7 3v4a1 1 0 0 0 1 1h7"/>'
-    ),
-    "open": (
-        '<path d="m6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.54 6a2 2 0 0 1-1.95 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2"/>'
-    ),
-    "panel_right": '<rect width="18" height="18" x="3" y="3" rx="2"/><path d="M15 3v18"/>',
-    "canvas": (
-        '<path d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z"/>'
-        '<path d="M14 2v5a1 1 0 0 0 1 1h5"/>'
-        '<path d="M9 15h6"/><path d="M12 18v-6"/>'
-    ),
-    "sheet": (
-        '<path d="M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z"/>'
-        '<path d="M14 2v5a1 1 0 0 0 1 1h5"/>'
     ),
     "flip_h": (
         '<path d="m3 7 5 5-5 5V7"/><path d="m21 7-5 5 5 5V7"/>'
@@ -126,7 +104,6 @@ _SVG_BY_NAME: dict[str, str] = {
         'c1 1 1 2.5 0 3.4L13 21"/>'
         '<path d="M22 21H7"/><path d="m5 11 9 9"/>'
     ),
-    "info": '<circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/>',
     "move": (
         '<path d="M12 2v20"/><path d="m15 19-3 3-3-3"/><path d="m19 9 3 3-3 3"/>'
         '<path d="M2 12h20"/><path d="m5 9-3 3 3 3"/><path d="m9 5 3-3 3 3"/>'
@@ -140,14 +117,8 @@ _SVG_BY_NAME: dict[str, str] = {
         '<polygon points="12,3 20.56,9.22 17.29,19.28 6.71,19.28 3.44,9.22" '
         'fill="#ededeb" stroke-width="2"/>'
     ),
-    "templates": '<polygon points="0.04,19.08 3.97,9.35 14.46,9.35 23.96,4.92 20.03,14.65 9.54,14.65"/>',
     "bond_bold": '<line x1="5" y1="17" x2="19" y2="7" stroke-width="3.6"/>',
     "bond_dotted": '<line x1="5" y1="17" x2="19" y2="7" stroke-dasharray="0.1 3.4"/>',
-    "bond_length": (
-        '<line x1="3" y1="12" x2="21" y2="12"/>'
-        '<line x1="3" y1="8" x2="3" y2="16"/>'
-        '<line x1="21" y1="8" x2="21" y2="16"/>'
-    ),
     # --- Arrow previews ---
     "arrow_reaction": '<line x1="0" y1="12" x2="24" y2="12"/><line x1="19.92" y1="13.9" x2="24" y2="12"/><line x1="19.92" y1="10.1" x2="24" y2="12"/>',
     # Equilibrium keeps one barb per line, on the outside of the pair, so the

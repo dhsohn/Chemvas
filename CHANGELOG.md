@@ -8,6 +8,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
+- Removed twelve orphaned glyphs from the design-icon SVG table. Internal
+  change only — every icon the window, toolbars and context bars name still
+  renders, checked by rebuilding the full reachable set (literal calls, the
+  template label table, and every dynamically built arrow/preset/orbital/
+  bracket/shape/stroke name expanded over its actual value domain) and by an
+  offscreen render of all 79 spec-named icons. Eleven of the glyphs lost their
+  last consumer when the utility icon accessors went; the twelfth, "select",
+  turned out never to have had one — the select tool's accessor has always
+  drawn the move glyph. A boundary test pins all twelve as removed.
 - Replaced seven lambdas in the structure-growth action record with the bound
   methods they wrapped. Internal change only — every field forwarded its
   arguments unchanged, measured by calling each field through the record

@@ -2798,6 +2798,31 @@ def test_main_window_utility_icon_accessors_stay_removed() -> None:
     assert "drawEllipse(7, 7, 16, 16)" not in factory_source
 
 
+def test_design_icon_orphan_glyphs_stay_removed() -> None:
+    renderer = APP_ROOT / "chemvas" / "ui" / "main_window_design_icon_renderer.py"
+    renderer_source = renderer.read_text(encoding="utf-8")
+
+    # These glyphs lost their last consumer when the twelve utility icon
+    # accessors went (PR #146) — except "select", which no caller ever named:
+    # icon_select has always drawn the move glyph. A caller that needs one of
+    # these adds the glyph back together with the accessor that renders it.
+    for glyph_name in (
+        "select",
+        "bond_length",
+        "canvas",
+        "font",
+        "info",
+        "open",
+        "panel_right",
+        "redo",
+        "save",
+        "sheet",
+        "templates",
+        "undo",
+    ):
+        assert f'"{glyph_name}":' not in renderer_source
+
+
 def test_main_window_tool_icons_use_only_static_design_mapping() -> None:
     factory = APP_ROOT / "chemvas" / "ui" / "main_window_icon_factory.py"
     factory_source = factory.read_text(encoding="utf-8")
