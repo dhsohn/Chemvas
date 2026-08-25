@@ -343,6 +343,9 @@ def clear_bond_preview_items(
     scene: QGraphicsScene,
     items: Sequence[QGraphicsItem],
 ) -> list[QGraphicsItem]:
+    # Not shared with the identical loops in `ui.hover_rendering`,
+    # `ui.preview_scene_renderer` and `features.selection.handles`: see
+    # the note in `ui.hover_rendering.clear_hover_items`.
     for item in items:
         try:
             if item.scene() is scene:

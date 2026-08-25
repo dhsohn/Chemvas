@@ -20,6 +20,9 @@ from chemvas.ui.graphics_items import NoSelectLineItem
 
 
 def clear_scene_items(scene: QGraphicsScene, items: list[QGraphicsItem]) -> None:
+    # Not shared with the identical loops in `ui.hover_rendering`,
+    # `ui.bond_preview_renderer` and `features.selection.handles`: see
+    # the note in `ui.hover_rendering.clear_hover_items`.
     for item in items:
         try:
             if item.scene() is scene:

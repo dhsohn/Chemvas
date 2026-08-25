@@ -12,6 +12,10 @@ def clear_handle_items(
     scene: QGraphicsScene,
     handles: Sequence[QGraphicsItem],
 ) -> list[QGraphicsItem]:
+    # Not shared with the identical loops in `ui.hover_rendering`,
+    # `ui.preview_scene_renderer` and `ui.bond_preview_renderer`: this
+    # module is in the `features` layer, which never imports `ui`, and
+    # no Qt-aware home exists that all four can reach.
     for handle in handles:
         try:
             if handle.scene() is scene:
