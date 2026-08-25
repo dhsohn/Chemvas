@@ -591,7 +591,7 @@ class UngroupSceneItemsCommand(HistoryCommand):
         _run_group_state_transaction(
             canvas,
             apply_change,
-            outline_rollback_note="refreshing the selection outline after grouping",
+            outline_rollback_note="refreshing the selection outline after ungrouping",
         )
 
     def undo(self, canvas) -> None:
@@ -602,7 +602,7 @@ class UngroupSceneItemsCommand(HistoryCommand):
         _run_group_state_transaction(
             canvas,
             apply_change,
-            outline_rollback_note=("refreshing the selection outline after ungrouping"),
+            outline_rollback_note="refreshing the selection outline after grouping",
         )
 
 

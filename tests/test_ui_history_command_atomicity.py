@@ -2293,6 +2293,63 @@ def test_ungroup_command_rolls_back_when_second_group_mutates_then_raises(
     assert _group_snapshot(canvas) == before
 
 
+@pytest.mark.parametrize(
+    ("command_kind", "method_name", "operation"),
+    [
+        ("group", "redo", "grouping"),
+        ("group", "undo", "ungrouping"),
+        ("ungroup", "redo", "ungrouping"),
+        ("ungroup", "undo", "grouping"),
+    ],
+)
+def test_group_rollback_note_names_the_operation_not_the_history_slot(
+    command_kind: str,
+    method_name: str,
+    operation: str,
+) -> None:
+    """The note describes what was rolled back, not which slot ran it.
+
+    `redo` on an ungroup command ungroups, and its `undo` groups again, so
+    reading the wording off the slot name gets both of them backwards.
+    """
+
+    canvas = _group_canvas()
+    state = group_state_for(canvas)
+    group = CanvasSceneGroup({1}, [])
+    state.groups[1] = group
+    if command_kind == "group":
+        command = GroupSceneItemsCommand(
+            {1},
+            [],
+            absorbed=[(1, group)],
+            group_id=1 if method_name == "undo" else None,
+        )
+    else:
+        command = UngroupSceneItemsCommand([(1, group)])
+
+    def fail(*_args, **_kwargs):
+        raise RuntimeError("primary failure")
+
+    with (
+        mock.patch("chemvas.ui.history_commands.remove_group_for", side_effect=fail),
+        mock.patch("chemvas.ui.history_commands.restore_group_for", side_effect=fail),
+        mock.patch(
+            "chemvas.ui.history_commands.refresh_selection_outline_for_canvas",
+            side_effect=RuntimeError("outline refresh failed"),
+        ),
+        pytest.raises(RuntimeError, match="primary failure") as raised,
+    ):
+        getattr(command, method_name)(canvas)
+
+    outline_notes = [
+        note for note in raised.value.__notes__ if "selection outline" in note
+    ]
+    assert outline_notes == [
+        "Transaction recovery also encountered an error during refreshing the "
+        f"selection outline after {operation}: RuntimeError: outline refresh failed"
+    ]
+
+
 def test_ungroup_command_restores_exact_outline_runtime_after_persistent_refresh_failure() -> (
     None
 ):
