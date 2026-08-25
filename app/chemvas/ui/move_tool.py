@@ -19,7 +19,7 @@ from chemvas.ui.tool_base import Tool
 
 # Every arrow kind the document schema knows, plus the structure and annotation
 # items a direct drag can move.
-DRAGGABLE_ITEM_KINDS = VALID_ARROW_KINDS | frozenset(
+_DRAGGABLE_ITEM_KINDS = VALID_ARROW_KINDS | frozenset(
     {
         "atom",
         "bond",
@@ -127,7 +127,7 @@ class MoveTool(SelectionDragMixin, Tool):
         if item is None:
             return True
         kind = item.data(0)
-        if kind not in DRAGGABLE_ITEM_KINDS:
+        if kind not in _DRAGGABLE_ITEM_KINDS:
             return True
         start_pos = self.context.scene_pos_from_event(event)
         self._begin_drag_transaction()
