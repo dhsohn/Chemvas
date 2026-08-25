@@ -3,7 +3,6 @@ from __future__ import annotations
 from typing import Any
 
 from PyQt6.QtCore import QPointF, QRectF
-from PyQt6.QtGui import QPolygonF
 
 from chemvas.domain.document import VALID_ARROW_KINDS
 from chemvas.features.annotations import normalized_shape_kind, shape_path
@@ -20,6 +19,7 @@ from chemvas.ui.canvas_bond_graphics_state import bond_items_for_id
 from chemvas.ui.canvas_graph_state import graph_state_for
 from chemvas.ui.canvas_mark_registry import mark_registry_for
 from chemvas.ui.canvas_model_access import atom_for_id, bond_for_id, bonds_for
+from chemvas.ui.canvas_ring_fill_scene_service import rebuild_ring_fill_polygons
 from chemvas.ui.canvas_scene_items_state import ring_items_for
 from chemvas.ui.handle_state import active_handles_for, handle_target_for
 from chemvas.ui.mark_item_access import mark_center_for
@@ -209,25 +209,15 @@ class CanvasMoveController:
         *,
         affected_ring_items: tuple[Any, ...] | None = None,
     ) -> None:
-        ring_items = (
+        # A ring fill is a polygon over its atoms, so moving them refits it
+        # rather than translating it; the deltas are the caller's, not ours.
+        rebuild_ring_fill_polygons(
+            self.canvas,
+            atom_ids,
             ring_items_for(self.canvas)
             if affected_ring_items is None
-            else affected_ring_items
+            else affected_ring_items,
         )
-        for ring_item in ring_items:
-            ring_atom_ids = ring_item.data(2)
-            if not isinstance(ring_atom_ids, list):
-                continue
-            if not any(atom_id in atom_ids for atom_id in ring_atom_ids):
-                continue
-            points = []
-            for atom_id in ring_atom_ids:
-                atom = atom_for_id(self.canvas, atom_id)
-                if atom is None:
-                    continue
-                points.append(QPointF(atom.x, atom.y))
-            if len(points) >= 3:
-                ring_item.setPolygon(QPolygonF(points))
 
     def move_atom(self, atom_id: int, dx: float, dy: float) -> None:
         atom = atom_for_id(self.canvas, atom_id)
