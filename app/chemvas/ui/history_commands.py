@@ -480,6 +480,57 @@ class DeleteSceneItemsCommand(HistoryCommand):
         )
 
 
+def _run_group_state_transaction(
+    canvas,
+    apply_change,
+    *,
+    outline_rollback_note: str,
+    on_rollback=None,
+) -> None:
+    """The capture / apply / roll-back scaffold every group command shares.
+
+    The rollback order is the contract, and it is the reason this exists once
+    rather than four times: group state first, then the command's own
+    compensation, then the selection outline, then the absolute scene/runtime
+    snapshot, and the scene rect last. Failures inside those steps are
+    recorded as notes on the original error in that same order.
+    """
+
+    snapshot = _group_state_snapshot(canvas)
+    runtime_snapshot = capture_scene_runtime(canvas)
+    scene_rect_snapshot = capture_scene_rect_snapshot(runtime_snapshot.scene)
+    try:
+        apply_change()
+        # The dashed group box is part of the selection outline; without a
+        # refresh, undo/redo would leave a stale box (and its hit-test area).
+        refresh_selection_outline_for_canvas(canvas)
+        release_scene_rect_snapshot(scene_rect_snapshot)
+    except Exception as original_error:
+        run_rollback_step(
+            original_error,
+            "restoring group state",
+            lambda: _restore_group_state(snapshot),
+        )
+        if on_rollback is not None:
+            on_rollback()
+        run_rollback_step(
+            original_error,
+            outline_rollback_note,
+            lambda: refresh_selection_outline_for_canvas(canvas),
+        )
+        run_rollback_step(
+            original_error,
+            "restoring the absolute scene/runtime snapshot",
+            partial(
+                restore_scene_runtime,
+                runtime_snapshot,
+                original_error=original_error,
+            ),
+        )
+        restore_scene_rect_snapshot(scene_rect_snapshot, original_error)
+        raise
+
+
 @dataclass
 class GroupSceneItemsCommand(HistoryCommand):
     atom_ids: set[int]
@@ -488,11 +539,9 @@ class GroupSceneItemsCommand(HistoryCommand):
     group_id: int | None = None
 
     def redo(self, canvas) -> None:
-        snapshot = _group_state_snapshot(canvas)
-        runtime_snapshot = capture_scene_runtime(canvas)
         previous_group_id = self.group_id
-        scene_rect_snapshot = capture_scene_rect_snapshot(runtime_snapshot.scene)
-        try:
+
+        def apply_change() -> None:
             for absorbed_id, _ in self.absorbed:
                 remove_group_for(canvas, absorbed_id)
             if self.group_id is None:
@@ -503,67 +552,31 @@ class GroupSceneItemsCommand(HistoryCommand):
                     self.group_id,
                     CanvasSceneGroup(set(self.atom_ids), list(self.items)),
                 )
-            # The dashed group box is part of the selection outline; without a
-            # refresh, undo/redo would leave a stale box (and its hit-test area).
-            refresh_selection_outline_for_canvas(canvas)
-            release_scene_rect_snapshot(scene_rect_snapshot)
-        except Exception as original_error:
-            run_rollback_step(
-                original_error,
-                "restoring group state",
-                lambda: _restore_group_state(snapshot),
-            )
+
+        def restore_group_id() -> None:
+            # Only this command mints an id, so only this command has one to
+            # give back when the mint half-succeeded.
             self.group_id = previous_group_id
-            run_rollback_step(
-                original_error,
-                "refreshing the selection outline after grouping",
-                lambda: refresh_selection_outline_for_canvas(canvas),
-            )
-            run_rollback_step(
-                original_error,
-                "restoring the absolute scene/runtime snapshot",
-                partial(
-                    restore_scene_runtime,
-                    runtime_snapshot,
-                    original_error=original_error,
-                ),
-            )
-            restore_scene_rect_snapshot(scene_rect_snapshot, original_error)
-            raise
+
+        _run_group_state_transaction(
+            canvas,
+            apply_change,
+            outline_rollback_note="refreshing the selection outline after grouping",
+            on_rollback=restore_group_id,
+        )
 
     def undo(self, canvas) -> None:
-        snapshot = _group_state_snapshot(canvas)
-        runtime_snapshot = capture_scene_runtime(canvas)
-        scene_rect_snapshot = capture_scene_rect_snapshot(runtime_snapshot.scene)
-        try:
+        def apply_change() -> None:
             if self.group_id is not None:
                 remove_group_for(canvas, self.group_id)
             for absorbed_id, group in self.absorbed:
                 restore_group_for(canvas, absorbed_id, group)
-            refresh_selection_outline_for_canvas(canvas)
-            release_scene_rect_snapshot(scene_rect_snapshot)
-        except Exception as original_error:
-            run_rollback_step(
-                original_error,
-                "restoring group state",
-                lambda: _restore_group_state(snapshot),
-            )
-            run_rollback_step(
-                original_error,
-                "refreshing the selection outline after ungrouping",
-                lambda: refresh_selection_outline_for_canvas(canvas),
-            )
-            run_rollback_step(
-                original_error,
-                "restoring the absolute scene/runtime snapshot",
-                partial(
-                    restore_scene_runtime,
-                    runtime_snapshot,
-                    original_error=original_error,
-                ),
-            )
-            restore_scene_rect_snapshot(scene_rect_snapshot, original_error)
-            raise
+
+        _run_group_state_transaction(
+            canvas,
+            apply_change,
+            outline_rollback_note="refreshing the selection outline after ungrouping",
+        )
 
 
 @dataclass
@@ -571,68 +584,26 @@ class UngroupSceneItemsCommand(HistoryCommand):
     removed: list[tuple[int, CanvasSceneGroup]]
 
     def redo(self, canvas) -> None:
-        snapshot = _group_state_snapshot(canvas)
-        runtime_snapshot = capture_scene_runtime(canvas)
-        scene_rect_snapshot = capture_scene_rect_snapshot(runtime_snapshot.scene)
-        try:
+        def apply_change() -> None:
             for group_id, _ in self.removed:
                 remove_group_for(canvas, group_id)
-            refresh_selection_outline_for_canvas(canvas)
-            release_scene_rect_snapshot(scene_rect_snapshot)
-        except Exception as original_error:
-            run_rollback_step(
-                original_error,
-                "restoring group state",
-                lambda: _restore_group_state(snapshot),
-            )
-            run_rollback_step(
-                original_error,
-                "refreshing the selection outline after grouping",
-                lambda: refresh_selection_outline_for_canvas(canvas),
-            )
-            run_rollback_step(
-                original_error,
-                "restoring the absolute scene/runtime snapshot",
-                partial(
-                    restore_scene_runtime,
-                    runtime_snapshot,
-                    original_error=original_error,
-                ),
-            )
-            restore_scene_rect_snapshot(scene_rect_snapshot, original_error)
-            raise
+
+        _run_group_state_transaction(
+            canvas,
+            apply_change,
+            outline_rollback_note="refreshing the selection outline after ungrouping",
+        )
 
     def undo(self, canvas) -> None:
-        snapshot = _group_state_snapshot(canvas)
-        runtime_snapshot = capture_scene_runtime(canvas)
-        scene_rect_snapshot = capture_scene_rect_snapshot(runtime_snapshot.scene)
-        try:
+        def apply_change() -> None:
             for group_id, group in self.removed:
                 restore_group_for(canvas, group_id, group)
-            refresh_selection_outline_for_canvas(canvas)
-            release_scene_rect_snapshot(scene_rect_snapshot)
-        except Exception as original_error:
-            run_rollback_step(
-                original_error,
-                "restoring group state",
-                lambda: _restore_group_state(snapshot),
-            )
-            run_rollback_step(
-                original_error,
-                "refreshing the selection outline after ungrouping",
-                lambda: refresh_selection_outline_for_canvas(canvas),
-            )
-            run_rollback_step(
-                original_error,
-                "restoring the absolute scene/runtime snapshot",
-                partial(
-                    restore_scene_runtime,
-                    runtime_snapshot,
-                    original_error=original_error,
-                ),
-            )
-            restore_scene_rect_snapshot(scene_rect_snapshot, original_error)
-            raise
+
+        _run_group_state_transaction(
+            canvas,
+            apply_change,
+            outline_rollback_note="refreshing the selection outline after grouping",
+        )
 
 
 @dataclass

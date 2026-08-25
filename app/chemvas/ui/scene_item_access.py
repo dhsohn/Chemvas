@@ -142,40 +142,51 @@ def item_is_in_canvas_scene(canvas, item) -> bool:
     )
 
 
-def remove_item_from_canvas_scene(canvas, item) -> bool:
+def _detach_item_from_canvas_scene(
+    canvas, item, *, unresolved: bool | None
+) -> bool | None:
+    """Detach ``item`` from the canvas scene, tolerating a deleted C++ object.
+
+    ``unresolved`` is the answer for "cannot tell": either the canvas has no
+    scene to detach from, or the item's own C++ object is already gone, so
+    whether it was ever attached here is unknowable. The two wrappers below
+    differ in nothing else.
+    """
+
     if item is None:
         return False
     scene = optional_canvas_scene_for(canvas)
     if scene is None:
-        return False
-    item_scene = None
-    scene_method = getattr(item, "scene", None)
-    if callable(scene_method):
-        try:
-            item_scene = scene_method()
-        except RuntimeError:
-            return False
-        if item_scene is not scene:
-            return False
-    scene.removeItem(item)
-    return True
-
-
-def remove_attached_item_from_canvas_scene(canvas, item) -> bool | None:
-    if item is None:
-        return False
-    scene = optional_canvas_scene_for(canvas)
-    if scene is None:
-        return None
+        return unresolved
     scene_method = getattr(item, "scene", None)
     if callable(scene_method):
         try:
             if scene_method() is not scene:
                 return False
         except RuntimeError:
-            return None
+            return unresolved
     scene.removeItem(item)
     return True
+
+
+def remove_item_from_canvas_scene(canvas, item) -> bool:
+    """Detach if attached here. "Cannot tell" is reported as not detached."""
+
+    return _detach_item_from_canvas_scene(canvas, item, unresolved=False) is True
+
+
+def remove_attached_item_from_canvas_scene(canvas, item) -> bool | None:
+    """Detach if attached here, answering ``None`` when that is unknowable.
+
+    The third answer is load-bearing at exactly one caller:
+    ``SceneItemLifecycleService.remove_scene_item`` treats ``None`` as "stop"
+    and ``False`` as "carry on". A ``False`` item was provably never in this
+    scene, so the ring-fill bond geometry can safely be refreshed against it; a
+    ``None`` item may have been, and reading it would raise. Do not collapse
+    this to ``bool``.
+    """
+
+    return _detach_item_from_canvas_scene(canvas, item, unresolved=None)
 
 
 def remove_items_from_canvas_scene(canvas, items) -> None:

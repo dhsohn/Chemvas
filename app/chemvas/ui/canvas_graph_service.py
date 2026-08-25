@@ -17,7 +17,6 @@ from chemvas.ui.canvas_model_access import (
 from chemvas.ui.graph_algorithms import (
     adjacency_for_bonds,
     connected_components_for_nodes,
-    edge_has_reachable_alternative_path,
     reachable_component_without_edge,
     reachable_from,
 )
@@ -27,6 +26,7 @@ from chemvas.ui.graph_index_operations import (
     bond_id_between_indexed_atoms,
     bond_sets_for_atom_ids,
     build_bond_adjacency_index,
+    cached_bond_in_cycle,
     ensure_bond_index_entry,
     ensure_neighbor_entry,
     remove_bond_from_atom_index,
@@ -185,27 +185,11 @@ class CanvasGraphService:
         )
 
     def bond_in_cycle(self, bond_id: int) -> bool:
-        cached = self.graph.bond_cycle_cache.get(bond_id)
-        if cached is not None and cached[0] == self.graph.graph_version:
-            return cached[1]
-        bond = bond_for_id(self.canvas, bond_id)
-        if bond is None:
-            self.graph.bond_cycle_cache[bond_id] = (self.graph.graph_version, False)
-            return False
-        start = bond.a
-        target = bond.b
-        shared = self.graph.atom_bond_ids.get(
-            start, set()
-        ) & self.graph.atom_bond_ids.get(target, set())
-        has_alt_between = any(other_id != bond_id for other_id in shared)
-        in_cycle = edge_has_reachable_alternative_path(
-            start,
-            target,
-            self.graph.atom_neighbors,
-            skip_direct_edge=not has_alt_between,
+        return cached_bond_in_cycle(
+            self.graph,
+            bond_id,
+            lambda candidate_id: bond_for_id(self.canvas, candidate_id),
         )
-        self.graph.bond_cycle_cache[bond_id] = (self.graph.graph_version, in_cycle)
-        return in_cycle
 
     def bond_is_rotatable(self, bond_id: int) -> bool:
         bond = bond_for_id(self.canvas, bond_id)

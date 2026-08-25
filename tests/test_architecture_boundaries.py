@@ -4788,3 +4788,885 @@ def test_color_rollback_notes_go_through_the_step_helper() -> None:
     violations = _inline_color_rollback_handlers(module.read_text(encoding="utf-8"))
 
     assert violations == []
+
+
+# --- Single-owner pins for the merged algorithm implementations -------------
+#
+# Six implementations that used to exist two, three or four times over now
+# exist once. Each rule below bans the *shape* of the duplicate rather than
+# any phrasing of it, and each was replayed against the tree from before its
+# merge to confirm it reports the copies that were really there.
+
+
+def _called_function_names(node: ast.AST) -> set[str]:
+    """Every name called anywhere inside ``node``, plain or as an attribute."""
+    names: set[str] = set()
+    for child in ast.walk(node):
+        if not isinstance(child, ast.Call):
+            continue
+        if isinstance(child.func, ast.Name):
+            names.add(child.func.id)
+        elif isinstance(child.func, ast.Attribute):
+            names.add(child.func.attr)
+    return names
+
+
+WORKLIST_TAKE_METHODS = frozenset({"pop", "popleft"})
+WORKLIST_PUT_METHODS = frozenset({"append", "appendleft", "extend"})
+GRAPH_ALGORITHMS_MODULE = "app/chemvas/ui/graph_algorithms.py"
+
+
+def _drained_worklist_name(node: ast.While) -> str | None:
+    """The worklist a ``while`` loop runs until empty, if it is written as one.
+
+    ``while stack:`` and ``while len(stack) > 0:`` are the same loop, so both
+    spellings answer with the name.
+    """
+    test = node.test
+    if isinstance(test, ast.Name):
+        return test.id
+    if isinstance(test, ast.Compare) and len(test.ops) == 1:
+        for side in (test.left, test.comparators[0]):
+            if (
+                isinstance(side, ast.Call)
+                and isinstance(side.func, ast.Name)
+                and side.func.id == "len"
+                and len(side.args) == 1
+                and isinstance(side.args[0], ast.Name)
+            ):
+                return side.args[0].id
+    return None
+
+
+def _method_calls_on_name(node: ast.AST, name: str) -> set[str]:
+    """The method names called on the local variable ``name`` inside ``node``."""
+    return {
+        child.func.attr
+        for child in ast.walk(node)
+        if isinstance(child, ast.Call)
+        and isinstance(child.func, ast.Attribute)
+        and isinstance(child.func.value, ast.Name)
+        and child.func.value.id == name
+    }
+
+
+def _iterates_a_neighbour_mapping(node: ast.AST) -> bool:
+    """True when something inside ``node`` loops over ``mapping[x]``/``.get(x)``.
+
+    That is what separates a graph walk from a worklist over a tree of
+    objects, which reaches its next items by calling a method on the item.
+    """
+    for child in ast.walk(node):
+        if not isinstance(child, (ast.For, ast.AsyncFor, ast.comprehension)):
+            continue
+        source = child.iter
+        if isinstance(source, ast.Subscript) and isinstance(source.value, ast.Name):
+            return True
+        if (
+            isinstance(source, ast.Call)
+            and isinstance(source.func, ast.Attribute)
+            and source.func.attr == "get"
+            and isinstance(source.func.value, ast.Name)
+        ):
+            return True
+    return False
+
+
+def _marks_a_visited_set(node: ast.AST, worklist: str) -> bool:
+    """True when ``node`` calls ``.add`` on some set other than the worklist."""
+    return any(
+        isinstance(child, ast.Call)
+        and isinstance(child.func, ast.Attribute)
+        and child.func.attr == "add"
+        and isinstance(child.func.value, ast.Name)
+        and child.func.value.id != worklist
+        for child in ast.walk(node)
+    )
+
+
+def _loop_nested_while_loops(tree: ast.AST) -> set[int]:
+    """``id()`` of every ``while`` that sits inside another loop."""
+    nested: set[int] = set()
+    for node in ast.walk(tree):
+        if not isinstance(node, (ast.For, ast.AsyncFor, ast.While)):
+            continue
+        for child in ast.walk(node):
+            if child is not node and isinstance(child, ast.While):
+                nested.add(id(child))
+    return nested
+
+
+def _seeded_reachability_walks(source: str) -> list[int]:
+    """Line numbers of every seeded depth-or-breadth-first reachability walk.
+
+    The shape, not the wording: a ``while`` loop that drains a worklist, takes
+    from it, puts back into it, marks a separate visited set, and reaches its
+    next candidates through a neighbour mapping. List or ``deque``, ``pop`` or
+    ``popleft``, ``adjacency[x]`` or ``adjacency.get(x)`` all read the same.
+
+    Deliberately out of scope, so that this stays a rule about the one walk
+    that was merged rather than a ban on graph code:
+
+    * a walk nested inside another loop. Those enumerate components or roots
+      -- ``domain.document.graph``, ``selection_rotation_planarity``,
+      ``core.rdkit_conversion`` and the spanning forest in this same module --
+      which is a different question from "what does this seed reach".
+    * a walk that records where it has been in a dict rather than a set, the
+      way the shortest-cycle search in this module records predecessors.
+    * a recursive walk, which has no worklist to drain.
+    """
+    tree = ast.parse(source)
+    nested = _loop_nested_while_loops(tree)
+    walks: list[int] = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.While) or id(node) in nested:
+            continue
+        worklist = _drained_worklist_name(node)
+        if worklist is None:
+            continue
+        methods = _method_calls_on_name(node, worklist)
+        if not (methods & WORKLIST_TAKE_METHODS):
+            continue
+        if not (methods & WORKLIST_PUT_METHODS):
+            continue
+        if not _marks_a_visited_set(node, worklist):
+            continue
+        if not _iterates_a_neighbour_mapping(node):
+            continue
+        walks.append(node.lineno)
+    return walks
+
+
+def test_seeded_graph_reachability_is_walked_in_one_place() -> None:
+    """One seeded reachability walk exists under ``app/``.
+
+    ``graph_algorithms`` spelled the same walk three times -- reach a
+    component, answer whether an edge has an alternative path, reach a set of
+    seeds -- and the three disagreed about when the target check runs and
+    whether the search may stop early. ``_walk_reachable`` is now the only
+    one, and a second copy anywhere is what this catches.
+    """
+    walks = [
+        f"{path.relative_to(APP_ROOT.parents[0])}:{line_no}"
+        for path in _app_python_files()
+        for line_no in _seeded_reachability_walks(path.read_text(encoding="utf-8"))
+    ]
+
+    assert [walk.rsplit(":", 1)[0] for walk in walks] == [GRAPH_ALGORITHMS_MODULE]
+
+
+BOND_CYCLE_CACHE = "bond_cycle_cache"
+BOND_CYCLE_CACHE_MUTATORS = frozenset(
+    {"clear", "pop", "popitem", "setdefault", "update"}
+)
+GRAPH_INDEX_OPERATIONS_MODULE = "app/chemvas/ui/graph_index_operations.py"
+CANVAS_GRAPH_STATE_MODULE = "app/chemvas/ui/canvas_graph_state.py"
+CYCLE_SEARCH_HELPER = "edge_has_reachable_alternative_path"
+
+
+def _is_bond_cycle_cache(node: ast.expr) -> bool:
+    return isinstance(node, ast.Attribute) and node.attr == BOND_CYCLE_CACHE
+
+
+def _bond_cycle_cache_writes(source: str) -> list[int]:
+    """Line numbers where something writes the bond-cycle cache.
+
+    A write is an assignment to the attribute or to a slot of it, or a call to
+    one of the mapping methods that mutate. Reads -- ``.get``, ``in``,
+    subscripting on the right-hand side -- are not writes, because the point of
+    the pin is that one place decides what freshness means.
+    """
+    writes: list[int] = []
+    for node in ast.walk(ast.parse(source)):
+        targets: list[ast.expr] = []
+        if isinstance(node, ast.Assign):
+            targets = list(node.targets)
+        elif isinstance(node, (ast.AnnAssign, ast.AugAssign)):
+            targets = [node.target]
+        for target in targets:
+            if _is_bond_cycle_cache(target) or (
+                isinstance(target, ast.Subscript) and _is_bond_cycle_cache(target.value)
+            ):
+                writes.append(node.lineno)
+        if (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
+            and node.func.attr in BOND_CYCLE_CACHE_MUTATORS
+            and _is_bond_cycle_cache(node.func.value)
+        ):
+            writes.append(node.lineno)
+    return sorted(set(writes))
+
+
+def test_bond_cycle_cache_has_one_writer() -> None:
+    """Only ``cached_bond_in_cycle`` writes entries into the bond-cycle cache.
+
+    The graph service and the rotation planarity helper each used to compute
+    the answer and store it, so the rule that an entry is valid while
+    ``graph_version`` is unchanged was written down twice and could drift on
+    one side. ``canvas_graph_state`` still appears because it declares the
+    field and empties it when the graph changes; that is the state owner
+    resetting its own slot, not a second author of entries.
+
+    What escapes: a writer that reaches the mapping through a local alias
+    (``cache = graph.bond_cycle_cache``), because the attribute is no longer
+    named at the write.
+    """
+    writers = sorted(
+        {
+            f"{path.relative_to(APP_ROOT.parents[0])}"
+            for path in _app_python_files()
+            if _bond_cycle_cache_writes(path.read_text(encoding="utf-8"))
+        }
+    )
+
+    assert writers == [CANVAS_GRAPH_STATE_MODULE, GRAPH_INDEX_OPERATIONS_MODULE]
+
+
+def _modules_using(name: str) -> list[str]:
+    """Modules that import or call ``name``, however they spell the import."""
+    users: list[str] = []
+    for path in _app_python_files():
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        used = False
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ImportFrom) and any(
+                alias.name == name for alias in node.names
+            ):
+                used = True
+            elif (
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Name)
+                and node.func.id == name
+            ):
+                used = True
+            elif (
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Attribute)
+                and node.func.attr == name
+            ):
+                used = True
+        if used:
+            users.append(str(path.relative_to(APP_ROOT.parents[0])))
+    return sorted(users)
+
+
+def test_cycle_membership_is_decided_in_one_module() -> None:
+    """One module turns the alternative-path search into "is this bond cyclic".
+
+    That search is the whole of ``bond_in_cycle``; a second consumer of it is
+    a second implementation of the question, cache or no cache. Importing it
+    under another name still counts, because the import is read rather than
+    the call.
+
+    What escapes: reaching the function off its module rather than by name
+    (``getattr(graph_algorithms, "...")``), because then neither an import of
+    the name nor a call spelling it appears in the tree.
+    """
+    assert _modules_using(CYCLE_SEARCH_HELPER) == [GRAPH_INDEX_OPERATIONS_MODULE]
+
+
+HISTORY_COMMANDS_MODULE = "app/chemvas/ui/history_commands.py"
+GROUP_TRANSACTION_HELPER = "_run_group_state_transaction"
+GROUP_COMMAND_CLASSES = ("GroupSceneItemsCommand", "UngroupSceneItemsCommand")
+GROUP_STATE_CALLS = frozenset(
+    {
+        "_group_state_snapshot",
+        "_restore_group_state",
+        "group_state_for",
+        "remove_group_for",
+        "restore_group_for",
+        "set_group_for",
+    }
+)
+SCENE_RUNTIME_CAPTURE = "capture_scene_runtime"
+
+
+def _group_rollback_scaffolds(source: str) -> list[tuple[int, str]]:
+    """Functions that capture the scene runtime *and* touch group state.
+
+    That pair is what a group rollback scaffold is: the runtime snapshot is
+    the thing being protected, group state is what is being changed. A
+    re-inlined copy has to do both however it names its locals, so the pin
+    does not depend on the copy calling ``_group_state_snapshot``.
+    """
+    scaffolds: list[tuple[int, str]] = []
+    for node in ast.walk(ast.parse(source)):
+        if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        called = _called_function_names(node)
+        if SCENE_RUNTIME_CAPTURE in called and called & GROUP_STATE_CALLS:
+            scaffolds.append((node.lineno, node.name))
+    return scaffolds
+
+
+def _group_command_scaffold_routing(source: str) -> dict[str, bool]:
+    """For each group command's ``redo``/``undo``, whether it calls the scaffold."""
+    routing: dict[str, bool] = {}
+    for node in ast.walk(ast.parse(source)):
+        if not isinstance(node, ast.ClassDef) or node.name not in GROUP_COMMAND_CLASSES:
+            continue
+        for member in node.body:
+            if not isinstance(member, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                continue
+            if member.name not in ("redo", "undo"):
+                continue
+            routing[f"{node.name}.{member.name}"] = (
+                GROUP_TRANSACTION_HELPER in _called_function_names(member)
+            )
+    return routing
+
+
+def test_group_commands_share_one_rollback_scaffold() -> None:
+    """One function owns the group capture / apply / roll-back order.
+
+    ``GroupSceneItemsCommand`` and ``UngroupSceneItemsCommand`` spelled it in
+    both ``redo`` and ``undo``: four copies of an ordering -- group state,
+    then the command's own compensation, then the outline, then the runtime
+    snapshot, then the scene rect -- that only reads correctly when all four
+    agree, and two of them did not.
+
+    Only functions that capture the scene runtime count, so a group command
+    that mutates state with no rollback at all is a different defect and is
+    not caught here.
+    """
+    history_commands = APP_ROOT / "chemvas" / "ui" / "history_commands.py"
+    source = history_commands.read_text(encoding="utf-8")
+
+    scaffolds = [name for _line_no, name in _group_rollback_scaffolds(source)]
+
+    assert scaffolds == [GROUP_TRANSACTION_HELPER]
+
+
+def test_every_group_command_slot_routes_through_the_scaffold() -> None:
+    """All four group command slots reach the scaffold rather than their own."""
+    history_commands = APP_ROOT / "chemvas" / "ui" / "history_commands.py"
+    routing = _group_command_scaffold_routing(
+        history_commands.read_text(encoding="utf-8")
+    )
+
+    assert routing == {
+        "GroupSceneItemsCommand.redo": True,
+        "GroupSceneItemsCommand.undo": True,
+        "UngroupSceneItemsCommand.redo": True,
+        "UngroupSceneItemsCommand.undo": True,
+    }
+
+
+SCENE_ITEM_ACCESS_MODULE = "app/chemvas/ui/scene_item_access.py"
+CANVAS_SCENE_RESOLVERS = frozenset(
+    {
+        "canvas_scene_for",
+        "canvas_scene_for_item_operation",
+        "optional_canvas_scene_for",
+    }
+)
+CANVAS_DETACH_BODY = "_detach_item_from_canvas_scene"
+TRI_STATE_DETACH_WRAPPER = "remove_attached_item_from_canvas_scene"
+
+
+def _canvas_scoped_detachers(source: str) -> list[tuple[int, str]]:
+    """Functions that resolve the canvas's own scene and then detach from it.
+
+    The scene-scoped clears in ``preview_scene_renderer`` -- which the
+    ``hover_rendering`` and ``bond_preview_renderer`` pool resets delegate to
+    -- and in ``features.selection.handles`` are a different function and stay
+    out: they are handed a scene rather than resolving one from a canvas.
+    """
+    detachers: list[tuple[int, str]] = []
+    for node in ast.walk(ast.parse(source)):
+        if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        called = _called_function_names(node)
+        if "removeItem" in called and called & CANVAS_SCENE_RESOLVERS:
+            detachers.append((node.lineno, node.name))
+    return detachers
+
+
+def test_canvas_scoped_scene_detach_has_one_body() -> None:
+    """One function detaches an item from the canvas's own scene.
+
+    Two wrappers used to spell the same fifteen lines, differing only in what
+    they answer when the canvas has no scene or the item's C++ object is gone.
+    Both now pass that answer to ``_detach_item_from_canvas_scene`` as
+    ``unresolved``.
+    """
+    detachers = [
+        f"{path.relative_to(APP_ROOT.parents[0])}:{line_no}: {name}"
+        for path in _app_python_files()
+        for line_no, name in _canvas_scoped_detachers(path.read_text(encoding="utf-8"))
+    ]
+
+    assert [detacher.rsplit(":", 2)[0] for detacher in detachers] == [
+        SCENE_ITEM_ACCESS_MODULE
+    ]
+    assert [detacher.rsplit(": ", 1)[1] for detacher in detachers] == [
+        CANVAS_DETACH_BODY
+    ]
+
+
+def _return_annotation_names(
+    node: ast.FunctionDef | ast.AsyncFunctionDef,
+) -> frozenset[str]:
+    """The leaf names of a return annotation, with ``None`` spelled as a name.
+
+    ``bool | None``, ``None | bool`` and ``Optional[bool]`` all answer
+    ``{"bool", "None"}``; a bare ``bool`` answers ``{"bool"}``.
+    """
+    names: set[str] = set()
+    annotation = node.returns
+    if annotation is None:
+        return frozenset()
+    for child in ast.walk(annotation):
+        if isinstance(child, ast.Name) and child.id != "Optional":
+            names.add(child.id)
+        elif isinstance(child, ast.Constant) and child.value is None:
+            names.add("None")
+    return frozenset(names)
+
+
+def test_attached_scene_detach_keeps_its_third_answer() -> None:
+    """The tri-state detach result stays a tri-state.
+
+    ``SceneItemLifecycleService.remove_scene_item`` reads ``None`` as "stop"
+    and ``False`` as "carry on": a ``False`` item was provably never in this
+    scene, so ring-fill bond geometry can be refreshed against it, while a
+    ``None`` item may have been and reading it would raise. Narrowing either
+    signature to ``bool`` would start refreshing geometry against dead items,
+    and the merged body is exactly where that narrowing would look harmless.
+    """
+    scene_item_access = APP_ROOT / "chemvas" / "ui" / "scene_item_access.py"
+    tree = ast.parse(scene_item_access.read_text(encoding="utf-8"))
+    annotations = {
+        node.name: _return_annotation_names(node)
+        for node in ast.walk(tree)
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+        and node.name in {CANVAS_DETACH_BODY, TRI_STATE_DETACH_WRAPPER}
+    }
+
+    assert annotations == {
+        CANVAS_DETACH_BODY: frozenset({"bool", "None"}),
+        TRI_STATE_DETACH_WRAPPER: frozenset({"bool", "None"}),
+    }
+
+
+SOURCE_GEOMETRY_KEY_MEMBERS = frozenset(
+    {
+        "rdkit_version",
+        "rdkit_formal_charge",
+        "rdkit_radical_electrons",
+        "electron_count",
+        "geometry_embedding",
+        "geometry_random_seed",
+        "geometry_optimization_policy",
+        "geometry_optimization_result",
+        "mol_atom_count",
+        "xyz_atom_count",
+        "atom_map",
+    }
+)
+CALCULATION_BUNDLE_MODULE = "app/chemvas/bootstrap/calculation_bundle.py"
+PRECOMPLEX_SCHEMA_MODULE = "app/chemvas/domain/document/precomplex.py"
+
+
+def _dict_literal_key_sets(tree: ast.AST) -> list[tuple[int, frozenset[str]]]:
+    """Every mapping whose string keys the source spells out, with its line.
+
+    A ``{...}`` display and a ``dict(...)`` call with keywords are the same
+    mapping written two ways, so both count. A comprehension does not: its
+    keys come from somewhere else, and that somewhere is where they are
+    spelled -- which ``_string_set_literals`` reads.
+    """
+    key_sets: list[tuple[int, frozenset[str]]] = []
+    for node in ast.walk(tree):
+        keys: list[str] = []
+        if isinstance(node, ast.Dict):
+            keys = [
+                key.value
+                for key in node.keys
+                if isinstance(key, ast.Constant) and isinstance(key.value, str)
+            ]
+        elif (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Name)
+            and node.func.id == "dict"
+        ):
+            keys = [keyword.arg for keyword in node.keywords if keyword.arg is not None]
+        else:
+            continue
+        if keys:
+            key_sets.append((node.lineno, frozenset(keys)))
+    return key_sets
+
+
+def _modules_spelling_out(members: frozenset[str]) -> list[str]:
+    """Modules that write every one of ``members`` out as keys or as strings."""
+    owners: list[str] = []
+    for path in _app_python_files():
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        spellings = _dict_literal_key_sets(tree) + _string_set_literals(tree)
+        for line_no, spelled in sorted(spellings, key=lambda entry: entry[0]):
+            if members <= spelled:
+                owners.append(f"{path.relative_to(APP_ROOT.parents[0])}:{line_no}")
+    return owners
+
+
+def test_precomplex_source_geometry_keys_are_spelled_twice_on_purpose() -> None:
+    """The eleven geometry keys appear once as a fingerprint, once as a schema.
+
+    ``calculation_bundle`` wrote the fingerprint out three times -- store it,
+    then rebuild it at each of two reproducibility checks -- so a twelfth
+    field added to ``CalculationArtifacts`` and pasted into two of the three
+    would leave a bundle claiming a reproducibility it does not have.
+    ``_source_geometry_fingerprint`` produces it now.
+
+    ``domain.document.precomplex._validate_source_geometry`` is the second
+    entry and is not a copy: it checks a *stored* mapping against the schema
+    rather than reproducing one from artifacts, and it lives in the layer that
+    owns the document format. Two entries is the rule; a third anywhere, or a
+    second inside either module, is a duplicate.
+
+    Both the mapping and the bare list of names count, because rebuilding the
+    fingerprint through ``{name: getattr(artifacts, name) for name in NAMES}``
+    is the same duplicate with the keys moved one line up.
+    """
+    owners = _modules_spelling_out(SOURCE_GEOMETRY_KEY_MEMBERS)
+
+    assert [owner.rsplit(":", 1)[0] for owner in owners] == [
+        CALCULATION_BUNDLE_MODULE,
+        PRECOMPLEX_SCHEMA_MODULE,
+    ]
+
+
+RING_FILL_SCENE_SERVICE_MODULE = "app/chemvas/ui/canvas_ring_fill_scene_service.py"
+RING_ATOM_IDS_ITEM_ROLE = 2
+
+
+def _ring_atom_role_reads(tree: ast.AST) -> set[int]:
+    """``id()`` of every call that reads a scene item's ring-atom-ids role.
+
+    ``item.data(2)`` is the spelling in the tree today; a module-level
+    constant bound to ``2`` and passed by name is the same read, so both
+    resolve. ``data(1)`` and the rest do not, which is what keeps the mark and
+    handle payload readers out of this.
+    """
+    role_names = {
+        target.id
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Assign)
+        and isinstance(node.value, ast.Constant)
+        and node.value.value == RING_ATOM_IDS_ITEM_ROLE
+        for target in node.targets
+        if isinstance(target, ast.Name)
+    }
+    reads: set[int] = set()
+    for node in ast.walk(tree):
+        if not (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
+            and node.func.attr == "data"
+            and len(node.args) == 1
+            and not node.keywords
+        ):
+            continue
+        argument = node.args[0]
+        if isinstance(argument, ast.Constant) and argument.value == (
+            RING_ATOM_IDS_ITEM_ROLE
+        ):
+            reads.add(id(node))
+        elif isinstance(argument, ast.Name) and argument.id in role_names:
+            reads.add(id(node))
+    return reads
+
+
+def _ring_polygon_rebuilders(source: str) -> list[tuple[int, str]]:
+    """Functions that re-fit a ring polygon to the atoms it is drawn over.
+
+    Two independent marks, either of which is enough: the function reads the
+    ring-atom-ids role, or it resolves atoms by id. Both sit next to a
+    ``setPolygon``, and a rebuild that has to learn which atoms the ring
+    names and then go find them hits at least one of them.
+
+    Not caught: setting a polygon that arrives already built, which is what
+    ``history_canvas_access`` restores and what ``canvas_model_access``
+    rescales. Also not caught: a rebuild handed both answers instead of
+    working them out -- the ring's atom ids as an argument, so nothing reads
+    ``data(2)``, and a mapping to look them up in, so nothing calls
+    ``atom_for_id``. Widening either mark to reach that would sweep in every
+    function that indexes atoms next to a ``setPolygon``, so the rule stays
+    narrow and the escape stays written down.
+    """
+    tree = ast.parse(source)
+    role_reads = _ring_atom_role_reads(tree)
+    rebuilders: list[tuple[int, str]] = []
+    for node in ast.walk(tree):
+        if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        called = _called_function_names(node)
+        if "setPolygon" not in called:
+            continue
+        reads_role = any(id(child) in role_reads for child in ast.walk(node))
+        if reads_role or "atom_for_id" in called:
+            rebuilders.append((node.lineno, node.name))
+    return rebuilders
+
+
+def test_ring_fill_polygons_are_rebuilt_in_one_place() -> None:
+    """One function refits ring-fill polygons to their atoms.
+
+    ``CanvasMoveController.move_rings_for_atoms`` and
+    ``CanvasRingFillSceneService.update_ring_fills_for_atoms`` carried the same
+    fourteen lines. The service owns ring-fill scene items, so
+    ``rebuild_ring_fill_polygons`` lives there and the move controller calls
+    it; the two entry points stay because the move controller is deliberately
+    service-free.
+    """
+    rebuilders = [
+        f"{path.relative_to(APP_ROOT.parents[0])}:{line_no}: {name}"
+        for path in _app_python_files()
+        for line_no, name in _ring_polygon_rebuilders(path.read_text(encoding="utf-8"))
+    ]
+
+    assert [rebuilder.rsplit(":", 2)[0] for rebuilder in rebuilders] == [
+        RING_FILL_SCENE_SERVICE_MODULE
+    ]
+
+
+SCENE_ITEM_POOL_RESET_MODULES = [
+    "app/chemvas/features/selection/handles.py",
+    "app/chemvas/ui/preview_scene_renderer.py",
+]
+SCENE_ITEM_POOL_RESET_BODIES = ["clear_handle_items", "clear_scene_items"]
+LOOP_NODES = (
+    ast.For,
+    ast.AsyncFor,
+    ast.While,
+    ast.ListComp,
+    ast.SetComp,
+    ast.GeneratorExp,
+    ast.DictComp,
+)
+
+
+def _parameter_names(node: ast.FunctionDef | ast.AsyncFunctionDef) -> set[str]:
+    """Every name the function is handed, however the signature spells it."""
+    arguments = node.args
+    declared = [
+        *arguments.posonlyargs,
+        *arguments.args,
+        *arguments.kwonlyargs,
+    ]
+    if arguments.vararg is not None:
+        declared.append(arguments.vararg)
+    if arguments.kwarg is not None:
+        declared.append(arguments.kwarg)
+    return {argument.arg for argument in declared}
+
+
+def _reads_an_item_scene(node: ast.AST) -> bool:
+    """True when something inside ``node`` asks an item which scene it is in.
+
+    ``item.scene()`` is the spelling in the tree. ``getattr(item, "scene")``
+    reaches the same bound method with the name moved into a string, and a
+    rule in this file has already been slipped past by exactly that move, so
+    both count.
+    """
+    for child in ast.walk(node):
+        if not isinstance(child, ast.Call):
+            continue
+        if (
+            isinstance(child.func, ast.Attribute)
+            and child.func.attr == "scene"
+            and not child.args
+            and not child.keywords
+        ):
+            return True
+        if (
+            isinstance(child.func, ast.Name)
+            and child.func.id == "getattr"
+            and len(child.args) >= 2
+            and isinstance(child.args[1], ast.Constant)
+            and child.args[1].value == "scene"
+        ):
+            return True
+    return False
+
+
+def _looped_scene_detach_names(node: ast.AST) -> set[str]:
+    """The names ``removeItem`` is called on from inside a loop in ``node``.
+
+    Every loop node counts, so re-spelling the plain ``for item in items`` as
+    ``for item in tuple(items)``, as an index-driven ``while``, or as a
+    comprehension run for its side effect does not move the call out of
+    reach.
+    """
+    names: set[str] = set()
+    for child in ast.walk(node):
+        if not isinstance(child, LOOP_NODES):
+            continue
+        for inner in ast.walk(child):
+            if (
+                isinstance(inner, ast.Call)
+                and isinstance(inner.func, ast.Attribute)
+                and inner.func.attr == "removeItem"
+                and isinstance(inner.func.value, ast.Name)
+            ):
+                names.add(inner.func.value.id)
+    return names
+
+
+def _scene_item_pool_resets(source: str) -> list[tuple[int, str]]:
+    """Functions handed a scene and a pool that empty the pool against it.
+
+    Two marks, and the first is what keeps the rule narrow: ``removeItem`` is
+    called from inside a loop on a name the function was *handed*. A function
+    that goes and resolves its own scene is asking a different question, so
+    ``ui.insert_smiles_service``, ``ui.calculation_mapping_highlight`` and
+    ``core.tool_overlay_logic`` are all out, and ``ui.scene_item_access`` is
+    out twice over -- it needs a canvas, and ``_canvas_scoped_detachers``
+    above owns that rule. Reaching the scene through ``self`` is out for the
+    same reason, which is what keeps
+    ``ui.canvas_document_session_service.restore`` from being swept in.
+
+    The escapes, in order of how likely they are:
+
+    * A re-duplication that resolves its own scene instead of taking one --
+      ``calculation_mapping_highlight._remove_items`` is already almost this
+      loop written that way, differing in that it finds its own scene and
+      clears the pool in place. Dropping the parameter mark to reach it also
+      sweeps in ``insert_smiles_service``'s pre-clear detach, so the rule
+      would need a third and fourth owner spelled out to stay green and would
+      stop meaning "two owners". The mark stays and the escape is written
+      down here.
+    * A reset that detaches unconditionally, never asking an item which scene
+      it is in. That is a different and less careful function: the ask is
+      what survives an item whose C++ object Qt has already deleted.
+    * A reset that reaches ``removeItem`` through a name it computes at run
+      time, or that parks the scene on an object first and loops over that.
+    """
+    resets: list[tuple[int, str]] = []
+    for node in ast.walk(ast.parse(source)):
+        if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        handed = _parameter_names(node)
+        detached = _looped_scene_detach_names(node) & handed
+        if detached and _reads_an_item_scene(node):
+            resets.append((node.lineno, node.name))
+    return sorted(resets)
+
+
+def test_scene_item_pool_reset_has_one_owner_per_layer() -> None:
+    """Two functions empty a pool of scene items, one per layer.
+
+    ``ui.hover_rendering.clear_hover_items`` and
+    ``ui.bond_preview_renderer.clear_bond_preview_items`` each spelled the
+    same six-line loop as ``ui.preview_scene_renderer.clear_scene_items``;
+    both delegate to it now and compose the empty pool their own caller
+    reassigns.
+
+    ``features.selection.handles.clear_handle_items`` keeps its copy on
+    purpose: the ``features`` layer never imports ``ui``, and no Qt-aware
+    home exists that both layers can reach. Two entries is the rule -- a
+    third anywhere, or a second inside either layer, is a duplicate.
+    """
+    resets = [
+        f"{path.relative_to(APP_ROOT.parents[0])}:{line_no}: {name}"
+        for path in _app_python_files()
+        for line_no, name in _scene_item_pool_resets(path.read_text(encoding="utf-8"))
+    ]
+
+    assert [
+        reset.rsplit(":", 2)[0] for reset in resets
+    ] == SCENE_ITEM_POOL_RESET_MODULES
+    assert [
+        reset.rsplit(": ", 1)[1] for reset in resets
+    ] == SCENE_ITEM_POOL_RESET_BODIES
+
+
+CORE_HISTORY_MODULE = "app/chemvas/core/history.py"
+RESTORE_ATOM_STATE_PORT_CALL = "restore_atom_from_state_for_history"
+SET_ATOM_POSITIONS_PORT_CALL = "set_atom_positions_for_history"
+RESTORE_ATOM_STATES_BODIES = [
+    "_restore_atom_states",
+    "_restore_atom_states_best_effort",
+]
+
+
+def _imported_name_aliases(tree: ast.AST) -> dict[str, str]:
+    """Local binding -> imported name, for every ``as`` rename in the module.
+
+    ``ui.history_commands`` already imports
+    ``set_atom_positions_for_history as _set_atom_positions_for_history``, so
+    a rule that matched the call site's spelling would miss a copy that
+    renamed its import the same way.
+    """
+    aliases: dict[str, str] = {}
+    for node in ast.walk(tree):
+        if not isinstance(node, (ast.Import, ast.ImportFrom)):
+            continue
+        for alias in node.names:
+            if alias.asname is not None:
+                aliases[alias.asname] = alias.name.rsplit(".", 1)[-1]
+    return aliases
+
+
+def _restore_atoms_steps(source: str) -> list[tuple[int, str]]:
+    """Functions that restore saved atom states and then place the atoms in 3-D.
+
+    Both port calls, in one function. Nothing about the loop is read, so a
+    comprehension run for its side effect, a renamed loop variable, an
+    index-driven ``while`` or a rewritten ``if self.atom_coords_3d`` guard
+    are all the same duplicate to this rule, and a copy that reaches the port
+    through ``port.`` rather than ``_history_canvas_port()`` is too.
+
+    Deliberately not caught: ``_remove_atoms_best_effort``, which the two
+    commands still spell out twice because they genuinely differ on
+    ``remove_marks``; ``MoveAtomsCommand._apply`` and ``_compensate``, which
+    place atoms in 3-D without restoring any saved state.
+
+    The escapes: half a copy -- restoring the atom states without the
+    coordinate block, or the reverse -- is not two calls and is not caught.
+    Neither is a copy that reaches either port method through a name it
+    computes at run time, since the rule reads the spelling in the tree.
+    Requiring only one of the two calls would flag six live functions that
+    move atoms for other reasons, so the pair is the mark.
+    """
+    tree = ast.parse(source)
+    aliases = _imported_name_aliases(tree)
+    steps: list[tuple[int, str]] = []
+    for node in ast.walk(tree):
+        if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        called = {aliases.get(name, name) for name in _called_function_names(node)}
+        if {RESTORE_ATOM_STATE_PORT_CALL, SET_ATOM_POSITIONS_PORT_CALL} <= called:
+            steps.append((node.lineno, node.name))
+    return sorted(steps)
+
+
+def test_restore_atoms_steps_have_one_owner_per_failure_mode() -> None:
+    """Two helpers restore atom states and their 3-D coordinates.
+
+    ``AddAtomsCommand`` and ``DeleteAtomsCommand`` each wrote the sequence
+    twice -- once for the straight path, once for the best-effort rollback --
+    for four regions, byte-identical within each pair.
+    ``_restore_atom_states`` and
+    ``_restore_atom_states_best_effort`` own them now; the two entries are
+    the two failure modes, not two copies, because only the rollback one
+    wraps each step in ``_run_history_rollback_step``.
+
+    The projection restore that precedes the sequence in the delete command
+    and the mark restore that follows it stay at their own call sites, so a
+    fifth copy would most likely appear there -- inlined back into a command
+    method to put the compensation order in one place again.
+    """
+    steps = [
+        f"{path.relative_to(APP_ROOT.parents[0])}:{line_no}: {name}"
+        for path in _app_python_files()
+        for line_no, name in _restore_atoms_steps(path.read_text(encoding="utf-8"))
+    ]
+
+    assert [step.rsplit(":", 2)[0] for step in steps] == [
+        CORE_HISTORY_MODULE,
+        CORE_HISTORY_MODULE,
+    ]
+    assert [step.rsplit(": ", 1)[1] for step in steps] == RESTORE_ATOM_STATES_BODIES

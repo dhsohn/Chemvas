@@ -12,6 +12,10 @@ def clear_handle_items(
     scene: QGraphicsScene,
     handles: Sequence[QGraphicsItem],
 ) -> list[QGraphicsItem]:
+    # Not shared with `ui.preview_scene_renderer.clear_scene_items`, which
+    # the three `ui` copies of this loop now delegate to: this module is in
+    # the `features` layer, which never imports `ui`, and no Qt-aware home
+    # exists that both layers can reach.
     for handle in handles:
         try:
             if handle.scene() is scene:

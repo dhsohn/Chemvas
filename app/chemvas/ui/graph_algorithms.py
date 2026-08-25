@@ -24,26 +24,54 @@ def connected_components_for_nodes(
     ]
 
 
+def _walk_reachable(
+    seed_atom_ids: Iterable[int],
+    adjacency: Mapping[int, Iterable[int]],
+    *,
+    blocked_edge: tuple[int, int] | None = None,
+    stop_at_atom_id: int | None = None,
+) -> tuple[set[int], bool]:
+    """The one depth-first reachability walk the public helpers below share.
+
+    ``stop_at_atom_id`` is compared *after* the visited check on purpose: a
+    seed atom counts as already visited, so asking whether an atom reaches
+    itself answers ``False`` and returns before the caller can read a stale
+    ``True``.  ``MoleculeModel.add_bond`` rejects ``a == b``, so no bond can
+    ask that question today, but the answer is part of this contract and the
+    guard in the model is what keeps it unreachable.
+
+    Stopping early is the point of ``stop_at_atom_id``: an existence question
+    must not pay for the rest of the component.
+    """
+
+    visited = set(seed_atom_ids)
+    stack = list(visited)
+    blocked = None if blocked_edge is None else set(blocked_edge)
+    while stack:
+        current = stack.pop()
+        for neighbor in adjacency.get(current, ()):
+            if blocked is not None and {current, neighbor} == blocked:
+                continue
+            if neighbor in visited:
+                continue
+            if neighbor == stop_at_atom_id:
+                return visited, True
+            visited.add(neighbor)
+            stack.append(neighbor)
+    return visited, False
+
+
 def reachable_component_without_edge(
     start_atom_id: int,
     adjacency: Mapping[int, Iterable[int]],
     *,
     blocked_edge: tuple[int, int] | None = None,
 ) -> set[int]:
-    visited = {start_atom_id}
-    stack = [start_atom_id]
-    while stack:
-        current = stack.pop()
-        for neighbor in adjacency.get(current, ()):
-            if blocked_edge is not None and {
-                current,
-                neighbor,
-            } == set(blocked_edge):
-                continue
-            if neighbor in visited:
-                continue
-            visited.add(neighbor)
-            stack.append(neighbor)
+    visited, _found = _walk_reachable(
+        (start_atom_id,),
+        adjacency,
+        blocked_edge=blocked_edge,
+    )
     return visited
 
 
@@ -54,24 +82,13 @@ def edge_has_reachable_alternative_path(
     *,
     skip_direct_edge: bool,
 ) -> bool:
-    blocked_edge = (start_atom_id, target_atom_id) if skip_direct_edge else None
-    visited = {start_atom_id}
-    stack = [start_atom_id]
-    while stack:
-        current = stack.pop()
-        for neighbor in adjacency.get(current, ()):
-            if blocked_edge is not None and {
-                current,
-                neighbor,
-            } == set(blocked_edge):
-                continue
-            if neighbor in visited:
-                continue
-            if neighbor == target_atom_id:
-                return True
-            visited.add(neighbor)
-            stack.append(neighbor)
-    return False
+    _visited, found = _walk_reachable(
+        (start_atom_id,),
+        adjacency,
+        blocked_edge=(start_atom_id, target_atom_id) if skip_direct_edge else None,
+        stop_at_atom_id=target_atom_id,
+    )
+    return found
 
 
 def adjacency_for_bonds(bonds: Iterable[Any]) -> dict[int, set[int]]:
@@ -89,15 +106,7 @@ def reachable_from(
 ) -> set[int]:
     if not atom_ids:
         return set()
-    visited = set(atom_ids)
-    stack = list(atom_ids)
-    while stack:
-        current = stack.pop()
-        for neighbor in adjacency.get(current, ()):
-            if neighbor in visited:
-                continue
-            visited.add(neighbor)
-            stack.append(neighbor)
+    visited, _found = _walk_reachable(atom_ids, adjacency)
     return visited
 
 

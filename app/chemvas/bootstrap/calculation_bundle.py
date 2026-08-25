@@ -768,6 +768,34 @@ def _precomplex_basis_sha256(
     return _sha256(canonical.encode("ascii"))
 
 
+def _source_geometry_fingerprint(
+    artifacts: CalculationArtifacts,
+) -> dict[str, object]:
+    """The eleven fields that pin a precomplex to the geometry it was built on.
+
+    Written once into the endpoint state, then rebuilt and compared at every
+    later reproducibility check, so all of the spellings have to agree. A field
+    added on one side only would let a bundle claim reproducibility it does not
+    have. `domain.document.precomplex._validate_source_geometry` names the same
+    keys, but it validates a stored value against the schema instead of
+    reproducing one from artifacts, so it stays a separate check.
+    """
+
+    return {
+        "rdkit_version": artifacts.rdkit_version,
+        "rdkit_formal_charge": artifacts.rdkit_formal_charge,
+        "rdkit_radical_electrons": artifacts.rdkit_radical_electrons,
+        "electron_count": artifacts.electron_count,
+        "geometry_embedding": artifacts.geometry_embedding,
+        "geometry_random_seed": artifacts.geometry_random_seed,
+        "geometry_optimization_policy": artifacts.geometry_optimization_policy,
+        "geometry_optimization_result": artifacts.geometry_optimization_result,
+        "mol_atom_count": artifacts.mol_atom_count,
+        "xyz_atom_count": artifacts.xyz_atom_count,
+        "atom_map": [asdict(entry) for entry in artifacts.atom_map],
+    }
+
+
 def _precomplex_endpoint_state(
     *,
     side: str,
@@ -791,19 +819,7 @@ def _precomplex_endpoint_state(
         "radius_provenance": radius_provenance_for(profile.id),
         "environment": dict(environment),
         "contacts": [asdict(contact) for contact in contacts],
-        "source_geometry": {
-            "rdkit_version": artifacts.rdkit_version,
-            "rdkit_formal_charge": artifacts.rdkit_formal_charge,
-            "rdkit_radical_electrons": artifacts.rdkit_radical_electrons,
-            "electron_count": artifacts.electron_count,
-            "geometry_embedding": artifacts.geometry_embedding,
-            "geometry_random_seed": artifacts.geometry_random_seed,
-            "geometry_optimization_policy": artifacts.geometry_optimization_policy,
-            "geometry_optimization_result": artifacts.geometry_optimization_result,
-            "mol_atom_count": artifacts.mol_atom_count,
-            "xyz_atom_count": artifacts.xyz_atom_count,
-            "atom_map": [asdict(entry) for entry in artifacts.atom_map],
-        },
+        "source_geometry": _source_geometry_fingerprint(artifacts),
         "candidates": [
             _precomplex_candidate_state(candidate) for candidate in candidates
         ],
@@ -1018,24 +1034,17 @@ def _reviewed_precomplex_artifacts(
         raise ValueError(
             f"Step {step.id} {side} reviewed precomplex is stale for this graph or plan."
         )
-    expected_source_geometry = {
-        "rdkit_version": current.rdkit_version,
-        "rdkit_formal_charge": current.rdkit_formal_charge,
-        "rdkit_radical_electrons": current.rdkit_radical_electrons,
-        "electron_count": current.electron_count,
-        "geometry_embedding": current.geometry_embedding,
-        "geometry_random_seed": current.geometry_random_seed,
-        "geometry_optimization_policy": current.geometry_optimization_policy,
-        "geometry_optimization_result": current.geometry_optimization_result,
-        "mol_atom_count": current.mol_atom_count,
-        "xyz_atom_count": current.xyz_atom_count,
-        "atom_map": [asdict(entry) for entry in current.atom_map],
-    }
-    if state.get("source_geometry") != expected_source_geometry:
+    if state.get("source_geometry") != _source_geometry_fingerprint(current):
         raise ValueError(
             f"Step {step.id} {side} reviewed precomplex no longer matches the "
             "current RDKit geometry identity or provenance. Regenerate and review it."
         )
+    # `_require_reproducible_precomplex` compares the same fingerprint against
+    # the same state again, so from here it can no longer fail on that field.
+    # The repeat is deliberate: the other caller reaches it without this check,
+    # and dropping this one would report the failure in the other one's wording
+    # ("precomplex" rather than "reviewed precomplex") and only after its
+    # profile check had run first.
     _require_reproducible_precomplex(
         state=state,
         calculation_state=calculation_state_by_id(plan, endpoint.state_id),
@@ -1086,20 +1095,7 @@ def _require_reproducible_precomplex(
     if not isinstance(profile_id, str):
         raise ValueError(f"Step {step.id} {side} precomplex profile is invalid.")
     profile = precomplex_placement_profile(profile_id)
-    expected_source_geometry = {
-        "rdkit_version": current.rdkit_version,
-        "rdkit_formal_charge": current.rdkit_formal_charge,
-        "rdkit_radical_electrons": current.rdkit_radical_electrons,
-        "electron_count": current.electron_count,
-        "geometry_embedding": current.geometry_embedding,
-        "geometry_random_seed": current.geometry_random_seed,
-        "geometry_optimization_policy": current.geometry_optimization_policy,
-        "geometry_optimization_result": current.geometry_optimization_result,
-        "mol_atom_count": current.mol_atom_count,
-        "xyz_atom_count": current.xyz_atom_count,
-        "atom_map": [asdict(entry) for entry in current.atom_map],
-    }
-    if state.get("source_geometry") != expected_source_geometry:
+    if state.get("source_geometry") != _source_geometry_fingerprint(current):
         raise ValueError(
             f"Step {step.id} {side} precomplex no longer matches the current "
             "RDKit geometry identity or provenance. Regenerate and review it."

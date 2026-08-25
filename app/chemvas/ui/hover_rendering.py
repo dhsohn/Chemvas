@@ -12,17 +12,14 @@ from PyQt6.QtWidgets import (
     QGraphicsTextItem,
 )
 
+from chemvas.ui.preview_scene_renderer import clear_scene_items
+
 
 def clear_hover_items(
     scene: QGraphicsScene,
     items: Sequence[QGraphicsItem],
 ) -> None:
-    for item in items:
-        try:
-            if item.scene() is scene:
-                scene.removeItem(item)
-        except RuntimeError:
-            pass
+    clear_scene_items(scene, items)
 
 
 def build_atom_hover_indicator(

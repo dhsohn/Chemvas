@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QColor, QPen
@@ -19,7 +19,10 @@ from chemvas.features.insertion import (
 from chemvas.ui.graphics_items import NoSelectLineItem
 
 
-def clear_scene_items(scene: QGraphicsScene, items: list[QGraphicsItem]) -> None:
+def clear_scene_items(scene: QGraphicsScene, items: Sequence[QGraphicsItem]) -> None:
+    # The one scene-scoped pool reset in `ui`; `ui.hover_rendering` and
+    # `ui.bond_preview_renderer` delegate here and compose the empty pool
+    # their own caller reassigns, as `clear_smiles_preview` below does.
     for item in items:
         try:
             if item.scene() is scene:

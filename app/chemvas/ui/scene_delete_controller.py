@@ -924,6 +924,11 @@ class SceneDeleteController:
             before_smiles_input=before_smiles_input,
             bond_ids=bond_ids,
         )
+        # The tail from here matches `_delete_bond`'s apart from
+        # `candidate_atom_ids`, and stays a copy on purpose: every other value
+        # in it is a parameter of this method, so a shared helper has to take
+        # twelve keywords and both call sites have to spell them out. Extracting
+        # it was measured at 24 net lines added.
         command = self._with_orphan_cleanup(
             command,
             candidate_atom_ids=neighbor_atom_ids,
@@ -1082,6 +1087,8 @@ class SceneDeleteController:
         )
         if bond_command is None:
             return None
+        # The tail from here matches `_delete_atom`'s apart from
+        # `candidate_atom_ids`; see the note there for why it is not shared.
         command = self._with_orphan_cleanup(
             bond_command,
             candidate_atom_ids=endpoint_atom_ids,
