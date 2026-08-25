@@ -4453,31 +4453,93 @@ def test_window_tool_settings_port_stays_removed() -> None:
 # second definition of the same thing appears anywhere under app/.
 
 
+_SET_BUILDERS = frozenset({"set", "frozenset"})
+
+
+def _split_call_strings(node: ast.expr) -> list[str] | None:
+    """The words of a literal ``"a b c".split()``, else ``None``.
+
+    A whitespace-separated string is a set of strings written without the
+    quotes and commas, so the pins have to read it as one.
+    """
+    if not isinstance(node, ast.Call) or node.keywords or len(node.args) > 1:
+        return None
+    function = node.func
+    if not isinstance(function, ast.Attribute) or function.attr != "split":
+        return None
+    subject = function.value
+    if not isinstance(subject, ast.Constant) or not isinstance(subject.value, str):
+        return None
+    separators: list[str] = []
+    for argument in node.args:
+        if not isinstance(argument, ast.Constant):
+            return None
+        if not isinstance(argument.value, str):
+            return None
+        separators.append(argument.value)
+    return subject.value.split(*separators)
+
+
+def _string_collection_value(node: ast.expr) -> tuple[str, ...] | None:
+    """The strings a single expression spells out, else ``None``."""
+    entries: tuple[object, ...]
+    if isinstance(node, (ast.Set, ast.Tuple, ast.List)):
+        try:
+            evaluated = ast.literal_eval(node)
+        except (ValueError, TypeError, SyntaxError):
+            return None
+        if not isinstance(evaluated, (set, frozenset, tuple, list)):
+            return None
+        entries = tuple(evaluated)
+    else:
+        words = _split_call_strings(node)
+        if words is None:
+            return None
+        entries = tuple(words)
+    strings = tuple(entry for entry in entries if isinstance(entry, str))
+    if not strings or len(strings) != len(entries):
+        return None
+    return strings
+
+
+def _set_builder_argument(node: ast.AST) -> ast.expr | None:
+    """The single argument of a ``set(...)``/``frozenset(...)`` call."""
+    if not isinstance(node, ast.Call) or node.keywords or len(node.args) != 1:
+        return None
+    if not isinstance(node.func, ast.Name) or node.func.id not in _SET_BUILDERS:
+        return None
+    return node.args[0]
+
+
 def _string_set_literals(tree: ast.AST) -> list[tuple[int, frozenset[str]]]:
-    """Every set/frozenset literal of plain strings, with its line number."""
+    """Every literal collection of plain strings, with its line number.
+
+    A duplicated set of strings is the same duplicate however it is spelled,
+    so a set display, a bare tuple and a bare list all count, as does
+    ``set(...)`` or ``frozenset(...)`` wrapping any of them or wrapping a
+    literal ``"a b c".split()``. A wrapped literal is reported once, at the
+    call, so a module that writes ``frozenset((...))`` stays one owner rather
+    than becoming two.
+
+    What still escapes: a collection assembled at runtime — from a dict's
+    keys or values, a comprehension, a concatenation of names, or a string
+    split on a computed separator — because none of those spell the members
+    where the source can be read.
+    """
+    wrapped = {
+        id(argument)
+        for node in ast.walk(tree)
+        if (argument := _set_builder_argument(node)) is not None
+    }
     literals: list[tuple[int, frozenset[str]]] = []
     for node in ast.walk(tree):
-        candidate: ast.expr | None = None
-        if isinstance(node, ast.Set):
-            candidate = node
-        elif (
-            isinstance(node, ast.Call)
-            and isinstance(node.func, ast.Name)
-            and node.func.id == "frozenset"
-            and len(node.args) == 1
-        ):
-            candidate = node.args[0]
-        if candidate is None:
+        if not isinstance(node, ast.expr) or id(node) in wrapped:
             continue
-        try:
-            value = ast.literal_eval(candidate)
-        except (ValueError, TypeError, SyntaxError):
+        argument = _set_builder_argument(node)
+        entries = _string_collection_value(node if argument is None else argument)
+        if entries is None:
             continue
-        if not isinstance(value, (set, frozenset, tuple, list)):
-            continue
-        if not value or not all(isinstance(entry, str) for entry in value):
-            continue
-        literals.append((node.lineno, frozenset(value)))
+        literals.append((node.lineno, frozenset(entries)))
     return literals
 
 
