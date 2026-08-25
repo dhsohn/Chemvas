@@ -8,6 +8,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
+- Merged modules whose only production caller was a single other module into
+  that caller. Internal structure only — nothing about how the application
+  draws, saves or exports a document changes. The five main-window stylesheet
+  sections (window chrome, canvas tabs, scrollbars, form controls and the
+  status bar) each lived in their own module and were read only by the module
+  that concatenated them, so they now sit in it; the stylesheet the window is
+  given is byte-for-byte the string it was before, checked against the shipped
+  palette and against a substituted one so the check covers the section
+  functions and not just the cached constant.
 - Removed guards that defended against states the code cannot reach, and
   narrowed two that were hiding real failures. Nothing about drawing, saving
   or exporting a document changes when the application is wired correctly —
