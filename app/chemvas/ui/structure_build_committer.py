@@ -7,7 +7,16 @@ from PyQt6.QtCore import QPointF
 
 from chemvas.domain.transactions import restore_snapshot
 from chemvas.ui.atom_label_access import add_or_update_atom_label, atom_label_service
-from chemvas.ui.canvas_model_access import atom_for_id, atoms_for, bonds_for
+from chemvas.ui.bond_graphics_access import add_bond_graphics_for
+from chemvas.ui.canvas_model_access import (
+    atom_for_id,
+    atoms_for,
+    bond_count_for,
+    bond_for_id,
+    bond_ids_from,
+    bonds_for,
+    next_atom_id_for,
+)
 from chemvas.ui.canvas_ring_fill_scene_access import create_ring_fill_item_for
 from chemvas.ui.canvas_scene_items_state import (
     SCENE_ITEM_COLLECTION_ATTRS,
@@ -42,18 +51,11 @@ from chemvas.ui.scene_item_access import (
     remove_scene_item,
 )
 from chemvas.ui.structure_insert_access import (
-    add_insert_atom_for,
-    add_insert_bond_for,
-    add_insert_bond_graphics_for,
     ensure_insert_carbon_dot_for,
-    insert_atom_for_id,
-    insert_bond_count_for,
-    insert_bond_for_id,
-    insert_next_atom_id_for,
-    new_insert_bond_ids_from,
     record_insert_additions_for,
     rollback_insert_mutation_for,
 )
+from chemvas.ui.structure_mutation_access import add_atom_for, add_bond_for
 
 if TYPE_CHECKING:
     from chemvas.ui.canvas_view import CanvasView
@@ -103,8 +105,8 @@ class StructureBuildCommitter:
         )
         history_service = history_service_for_access(self.canvas)
         smiles_authority = capture_smiles_input_restore_authority(self.canvas)
-        before_next_atom_id = insert_next_atom_id_for(self.canvas)
-        before_bond_count = insert_bond_count_for(self.canvas)
+        before_next_atom_id = next_atom_id_for(self.canvas)
+        before_bond_count = bond_count_for(self.canvas)
         before_scene_items = self._scene_item_snapshot()
         try:
             # Exact capture crosses live extension getters (for example the
@@ -412,16 +414,16 @@ class StructureBuildCommitter:
         return errors
 
     def add_bond_graphics(self, bond_id: int) -> None:
-        add_insert_bond_graphics_for(self.canvas, bond_id)
+        add_bond_graphics_for(self.canvas, bond_id)
 
     def add_atom(self, element: str, x: float, y: float) -> int:
-        return add_insert_atom_for(self.canvas, element, x, y)
+        return add_atom_for(self.canvas, element, x, y)
 
     def add_bond(
         self, a_id: int, b_id: int, order: int = 1, *, style: str = "single"
     ) -> int:
-        bond_id = add_insert_bond_for(self.canvas, a_id, b_id, order)
-        bond = insert_bond_for_id(self.canvas, bond_id)
+        bond_id = add_bond_for(self.canvas, a_id, b_id, order)
+        bond = bond_for_id(self.canvas, bond_id)
         if bond is not None:
             bond.style = style
         return bond_id
@@ -430,7 +432,7 @@ class StructureBuildCommitter:
         return first_matching_bond_id(bonds_for(self.canvas), a_id, b_id)
 
     def add_bond_graphics_range(self, start_bond_id: int) -> None:
-        for bond_id in new_insert_bond_ids_from(self.canvas, start_bond_id):
+        for bond_id in bond_ids_from(self.canvas, start_bond_id):
             self.add_bond_graphics(bond_id)
 
     def add_atom_label(
@@ -451,7 +453,7 @@ class StructureBuildCommitter:
     def label_non_carbon_atoms(self, atom_ids: list[int], elements: list[str]) -> None:
         for atom_id, element in zip(atom_ids, elements, strict=False):
             if element != "C":
-                atom = insert_atom_for_id(self.canvas, atom_id)
+                atom = atom_for_id(self.canvas, atom_id)
                 if atom is None:
                     continue
                 add_or_update_atom_label(
@@ -485,7 +487,7 @@ class StructureBuildCommitter:
             element = elements[idx] if elements else "C"
             atom_ids.append(self.add_atom_with_merge(point, element, merge))
         resolved_bond_orders = self.resolved_ring_bond_orders(atom_ids, bond_orders)
-        bonds_start = insert_bond_count_for(self.canvas)
+        bonds_start = bond_count_for(self.canvas)
         for index in range(len(atom_ids)):
             order = resolved_bond_orders[index]
             a_id = atom_ids[index]
@@ -579,9 +581,7 @@ class StructureBuildCommitter:
         for index, order in enumerate(bond_orders):
             a_id = atom_ids[index]
             b_id = atom_ids[(index + 1) % len(atom_ids)]
-            existing_bond = insert_bond_for_id(
-                self.canvas, self.bond_id_between(a_id, b_id)
-            )
+            existing_bond = bond_for_id(self.canvas, self.bond_id_between(a_id, b_id))
             if existing_bond is not None:
                 if existing_bond.order >= 2:
                     double_count += 1
@@ -595,7 +595,7 @@ class StructureBuildCommitter:
         atom_ids = []
         for point, element in zip(points, elements, strict=False):
             atom_ids.append(self.add_atom(element, point.x(), point.y()))
-        bonds_start = insert_bond_count_for(self.canvas)
+        bonds_start = bond_count_for(self.canvas)
         for index, order in enumerate(bonds):
             self.add_bond(atom_ids[index], atom_ids[index + 1], order)
         self.add_bond_graphics_range(bonds_start)

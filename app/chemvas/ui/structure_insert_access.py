@@ -4,7 +4,6 @@ from typing import Any
 
 from chemvas.ui.atom_coords_access import pop_atom_coords_3d_for
 from chemvas.ui.atom_label_access import add_or_update_atom_label, atom_label_service
-from chemvas.ui.bond_graphics_access import add_bond_graphics_for
 from chemvas.ui.canvas_atom_graphics_state import (
     atom_dots_for,
     atom_items_for,
@@ -41,58 +40,21 @@ from chemvas.ui.history_canvas_access import (
 )
 from chemvas.ui.history_recording_access import record_additions_for
 from chemvas.ui.scene_item_access import remove_item_from_canvas_scene
-from chemvas.ui.structure_mutation_access import (
-    add_atom_for,
-    add_benzene_ring_for,
-    add_bond_for,
-)
-
-
-def insert_next_atom_id_for(canvas) -> int:
-    return next_atom_id_for(canvas)
-
-
-def insert_bond_count_for(canvas) -> int:
-    return bond_count_for(canvas)
-
-
-def add_insert_atom_for(canvas, element: str, x: float, y: float) -> int:
-    return add_atom_for(canvas, element, x, y)
-
-
-def add_insert_bond_for(canvas, a_id: int, b_id: int, order: int = 1) -> int:
-    return add_bond_for(canvas, a_id, b_id, order)
-
-
-def insert_atom_for_id(canvas, atom_id: int):
-    return atom_for_id(canvas, atom_id)
-
-
-def insert_bond_for_id(canvas, bond_id: int | None):
-    return bond_for_id(canvas, bond_id)
-
-
-def new_insert_bond_ids_from(canvas, start: int) -> range:
-    return bond_ids_from(canvas, start)
-
-
-def add_insert_bond_graphics_for(canvas, bond_id: int) -> None:
-    add_bond_graphics_for(canvas, bond_id)
 
 
 def has_insert_mutation_since_for(
     canvas, before_next_atom_id: int, before_bond_count: int
 ) -> bool:
     return (
-        insert_next_atom_id_for(canvas) != before_next_atom_id
-        or insert_bond_count_for(canvas) != before_bond_count
+        next_atom_id_for(canvas) != before_next_atom_id
+        or bond_count_for(canvas) != before_bond_count
     )
 
 
 def set_inserted_atom_metadata_for(
     canvas, atom_id: int, *, color: str | None, explicit_label: bool
 ) -> bool:
-    atom = insert_atom_for_id(canvas, atom_id)
+    atom = atom_for_id(canvas, atom_id)
     if atom is None:
         return False
     atom.color = color
@@ -103,7 +65,7 @@ def set_inserted_atom_metadata_for(
 def set_inserted_atom_annotation_for(
     canvas, atom_id: int, annotation: dict[str, int] | None
 ) -> bool:
-    if insert_atom_for_id(canvas, atom_id) is None:
+    if atom_for_id(canvas, atom_id) is None:
         return False
     set_atom_annotation_for(canvas, atom_id, annotation)
     return True
@@ -112,29 +74,12 @@ def set_inserted_atom_annotation_for(
 def set_inserted_bond_metadata_for(
     canvas, bond_id: int, *, style: str, color: str | None
 ) -> bool:
-    bond = insert_bond_for_id(canvas, bond_id)
+    bond = bond_for_id(canvas, bond_id)
     if bond is None:
         return False
     bond.style = style
     bond.color = color
     return True
-
-
-def add_insert_benzene_ring_for(
-    canvas,
-    center,
-    *,
-    attach_atom_id: int | None = None,
-    attach_bond_id: int | None = None,
-    before_smiles_input: str | None = None,
-):
-    return add_benzene_ring_for(
-        canvas,
-        center,
-        attach_atom_id=attach_atom_id,
-        attach_bond_id=attach_bond_id,
-        before_smiles_input=before_smiles_input,
-    )
 
 
 def ensure_insert_carbon_dot_for(canvas, atom_id: int) -> None:
@@ -381,20 +326,11 @@ def _rebuild_insert_graph_directly(
 
 __all__ = [
     "add_atom_with_merge_for",
-    "add_insert_atom_for",
-    "add_insert_benzene_ring_for",
-    "add_insert_bond_for",
-    "add_insert_bond_graphics_for",
     "add_insert_ring_from_points_for",
     "add_or_update_insert_atom_label_for",
     "ensure_insert_carbon_dot_for",
     "has_insert_mutation_since_for",
-    "insert_atom_for_id",
-    "insert_bond_count_for",
     "insert_bond_exists_for",
-    "insert_bond_for_id",
-    "insert_next_atom_id_for",
-    "new_insert_bond_ids_from",
     "record_insert_additions_for",
     "rollback_insert_mutation_for",
     "set_inserted_atom_annotation_for",

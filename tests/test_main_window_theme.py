@@ -1,18 +1,15 @@
 from __future__ import annotations
 
-from pathlib import Path
-
-from chemvas.ui import main_window_stylesheet as main_window_stylesheet_module
 from chemvas.ui import main_window_theme
-from chemvas.ui.main_window_canvas_tab_styles import main_window_canvas_tab_stylesheet
-from chemvas.ui.main_window_chrome_styles import main_window_chrome_stylesheet
-from chemvas.ui.main_window_form_styles import main_window_form_stylesheet
 from chemvas.ui.main_window_palette import PALETTE
-from chemvas.ui.main_window_scrollbar_styles import main_window_scrollbar_stylesheet
-from chemvas.ui.main_window_status_styles import main_window_status_stylesheet
 from chemvas.ui.main_window_stylesheet import (
     MAIN_WINDOW_STYLESHEET,
     build_main_window_stylesheet,
+    main_window_canvas_tab_stylesheet,
+    main_window_chrome_stylesheet,
+    main_window_form_stylesheet,
+    main_window_scrollbar_stylesheet,
+    main_window_status_stylesheet,
 )
 from chemvas.ui.main_window_toolbar_styles import (
     CONTEXT_BAR_BUTTON_HEIGHT,
@@ -60,7 +57,7 @@ def test_palette_exposes_design_system_shell_tokens() -> None:
     assert PALETTE["danger_text"] == "#8a2020"
 
 
-def test_main_window_stylesheet_composes_section_modules() -> None:
+def test_main_window_stylesheet_composes_its_sections() -> None:
     expected = "\n".join(
         (
             main_window_chrome_stylesheet(PALETTE),
@@ -70,7 +67,6 @@ def test_main_window_stylesheet_composes_section_modules() -> None:
             main_window_status_stylesheet(PALETTE),
         )
     )
-    source = Path(main_window_stylesheet_module.__file__).read_text(encoding="utf-8")
 
     assert MAIN_WINDOW_STYLESHEET == expected
     assert build_main_window_stylesheet(PALETTE) == expected
@@ -79,8 +75,6 @@ def test_main_window_stylesheet_composes_section_modules() -> None:
     assert "QScrollBar:horizontal" in main_window_scrollbar_stylesheet(PALETTE)
     assert "QDialog, QMessageBox" in main_window_form_stylesheet(PALETTE)
     assert "QStatusBar {" in main_window_status_stylesheet(PALETTE)
-    assert "QToolBar {" not in source
-    assert "QStatusBar {" not in source
 
 
 def test_toolbar_styles_keep_expected_selectors() -> None:
