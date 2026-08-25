@@ -35,14 +35,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   port pairs. Each produced a partial snapshot that undo would then restore
   from, with nothing recorded to say a field was missing. The parameter is gone
   from the ten capture-side functions and the strict arm is now
-  unconditional. The restore side keeps its flag — there it is genuinely
-  dynamic, strict during a normal restore and best-effort while a rollback is
-  already unwinding — and so do the scene-item helpers the paste path reaches
-  leniently.
+  unconditional. Carrying that removal one step further,
+  `_verify_scene_membership` was left holding a `strict` it never read, and
+  `_direct_scene_remove` and `_direct_scene_add`, whose only reads forwarded
+  it there, followed; four restore-side call sites drop the argument. What
+  remains of the restore side keeps its flag — there it is genuinely dynamic,
+  strict during a normal restore and best-effort while a rollback is already
+  unwinding — so `_item_parent` and `_item_is_attached_to_scene` still take
+  `strict=errors is not None`, as do the scene-item helpers the paste path
+  reaches leniently.
 - **Five parameters their functions never read.**
   `tool_action_key_for_canvas_state` branches on the active tool alone, so
   `active_bond_style` and `mark_kind` go, and the toolbar sync no longer looks
-  up the tool settings to supply them. `begin_template_insert` and
+  up the tool settings to supply them. That lookup was the last caller of the
+  `tool_settings_for_window` window port, so the port goes as well, together
+  with the constructor parameter carrying it into the tool state service and
+  the composition-root wiring behind it. `tool_settings_state_for`, the
+  canvas-level accessor it wrapped, is untouched and still read directly
+  wherever the tool settings are actually needed. `begin_template_insert` and
   `begin_smiles_insert` ignored the session state they were handed and built a
   fresh one; their `cancel_*` siblings do read it and keep theirs.
   `apply_pasted_perspective_for_canvas` took a `projection_anchor_2d` it never
