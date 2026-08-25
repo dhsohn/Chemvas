@@ -247,7 +247,6 @@ class SceneItemExactSnapshot:
             data_values=tuple(values),
             primitive_graphics=BondPrimitiveGraphicsSnapshot.capture(
                 item,
-                strict=True,
             ),
         )
 

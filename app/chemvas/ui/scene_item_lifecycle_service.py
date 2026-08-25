@@ -98,7 +98,6 @@ class SceneItemLifecycleService:
         ring_runtime = (
             capture_scene_runtime(
                 self.canvas,
-                strict=True,
                 scene_override=scene,
             )
             if kind == "ring"

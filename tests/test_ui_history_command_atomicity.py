@@ -803,7 +803,7 @@ def test_exact_runtime_collector_reports_list_mark_and_selection_info_failures()
     canvas.runtime_state.scene_items_state = list_state
     canvas.runtime_state.mark_registry = registry
     canvas.runtime_state.selection_info_state = selection_info
-    snapshot = capture_scene_runtime(canvas, strict=True)
+    snapshot = capture_scene_runtime(canvas)
 
     list_state.note_items.append("mutated")
     registry.by_atom[7].append("mutated")
@@ -824,7 +824,7 @@ def test_exact_runtime_collector_reports_list_mark_and_selection_info_failures()
 def test_exact_runtime_restore_preserves_preblocked_scene_signal_state() -> None:
     canvas = _Canvas()
     canvas.scene().blockSignals(True)
-    snapshot = capture_scene_runtime(canvas, strict=True)
+    snapshot = capture_scene_runtime(canvas)
     canvas.scene().blockSignals(False)
 
     errors = restore_scene_runtime(snapshot, collect_errors=True)
@@ -841,7 +841,7 @@ def test_scene_runtime_capture_ignores_plain_canvas_state_aliases() -> None:
         note_items=runtime_note_items,
     )
     canvas.scene_items_state = SimpleNamespace(note_items=public_note_items)
-    snapshot = capture_scene_runtime(canvas, strict=True)
+    snapshot = capture_scene_runtime(canvas)
 
     runtime_note_items.append("runtime-after")
     public_note_items.append("public-after")
@@ -917,7 +917,7 @@ def test_actual_qt_runtime_consumers_restore_parent_topology_and_z_value(
         peer.setZValue(-2.0)
 
     if restore_path == "runtime":
-        snapshot = capture_scene_runtime(canvas, strict=True)
+        snapshot = capture_scene_runtime(canvas)
         corrupt_topology_and_z()
         assert restore_scene_runtime(snapshot, collect_errors=True) == []
     elif restore_path == "delete":
@@ -966,7 +966,6 @@ def test_actual_qt_selection_callback_cannot_repollute_restored_z_value() -> Non
     QGraphicsItem.setSelected(item, True)
     snapshot = capture_scene_runtime(
         SimpleNamespace(scene=lambda: scene),
-        strict=True,
     )
 
     QGraphicsItem.setSelected(item, False)
@@ -1004,7 +1003,6 @@ def test_actual_qt_selected_restore_cannot_leave_captured_false_peer_selected() 
     QGraphicsItem.setSelected(selected, True)
     snapshot = capture_scene_runtime(
         SimpleNamespace(scene=lambda: scene),
-        strict=True,
     )
     assert [state.item for state in snapshot.selected_states] == [
         unselected_peer,

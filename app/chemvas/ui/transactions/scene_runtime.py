@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import contextlib
 from collections.abc import Callable
 from dataclasses import dataclass
 from functools import partial
@@ -39,8 +38,6 @@ _UNAVAILABLE_ITEM_VALUE = object()
 def _snapshot_attribute(
     target: object,
     name: str,
-    *,
-    strict: bool,
 ) -> object:
     """Read an optional production capture field."""
 
@@ -50,13 +47,11 @@ def _snapshot_attribute(
 def _snapshot_runtime_state_object(
     canvas,
     name: str,
-    *,
-    strict: bool,
 ) -> object | None:
-    runtime_state = _snapshot_attribute(canvas, "runtime_state", strict=strict)
+    runtime_state = _snapshot_attribute(canvas, "runtime_state")
     if runtime_state is _MISSING_SNAPSHOT_ATTRIBUTE or runtime_state is None:
         return None
-    state = _snapshot_attribute(runtime_state, name, strict=strict)
+    state = _snapshot_attribute(runtime_state, name)
     return None if state is _MISSING_SNAPSHOT_ATTRIBUTE else state
 
 
@@ -155,10 +150,10 @@ def _scene_items_and_getter_from_scene(
 ) -> tuple[list | None, Callable[[], Any] | None]:
     if scene is None:
         return None, None
-    items_method = _snapshot_attribute(scene, "items", strict=strict)
+    items_method = _snapshot_attribute(scene, "items")
     if not callable(items_method):
         complete_scene_api = all(
-            callable(_snapshot_attribute(scene, method_name, strict=strict))
+            callable(_snapshot_attribute(scene, method_name))
             for method_name in (
                 "addItem",
                 "removeItem",
@@ -334,7 +329,7 @@ def _restore_primitive_graphics_property(
         setter = getattr(QGraphicsItem, setter_name)
         setter(item, value)
         return
-    setter = _snapshot_attribute(item, setter_name, strict=True)
+    setter = _snapshot_attribute(item, setter_name)
     if not callable(setter):
         raise RuntimeError(f"primitive graphics restore cannot call {setter_name}")
     setter(value)
@@ -350,27 +345,20 @@ class BondPrimitiveGraphicsSnapshot:
     def capture(
         cls,
         item: object,
-        *,
-        strict: bool = False,
     ) -> BondPrimitiveGraphicsSnapshot | None:
         if graphics_item_is_deleted(item):
             return None
         properties: list[tuple[str, object]] = []
         for getter_name, setter_name in _BOND_PRIMITIVE_GRAPHICS_PROPERTIES:
-            getter = _snapshot_attribute(item, getter_name, strict=strict)
-            setter = _snapshot_attribute(item, setter_name, strict=strict)
+            getter = _snapshot_attribute(item, getter_name)
+            setter = _snapshot_attribute(item, setter_name)
             if not callable(getter) or not callable(setter):
                 continue
-            try:
-                value = getter()
-            except RuntimeError:
-                if strict:
-                    raise
-                continue
+            value = getter()
             properties.append((setter_name, value))
         direct_attribute_values: list[tuple[str, object]] = []
         for name in _ATOM_GRAPHICS_DIRECT_ATTRIBUTES:
-            value = _snapshot_attribute(item, name, strict=strict)
+            value = _snapshot_attribute(item, name)
             if value is _MISSING_SNAPSHOT_ATTRIBUTE:
                 continue
             direct_attribute_values.append((name, value))
@@ -408,15 +396,13 @@ class BondPrimitiveGraphicsSnapshot:
 def _bond_primitive_graphics_snapshots(
     canvas,
     *,
-    strict: bool = False,
     bond_ids: frozenset[int] | None = None,
 ) -> tuple[BondPrimitiveGraphicsSnapshot, ...]:
     state = _snapshot_runtime_state_object(
         canvas,
         "bond_graphics_state",
-        strict=strict,
     )
-    mapping = _snapshot_attribute(state, "bond_items", strict=strict)
+    mapping = _snapshot_attribute(state, "bond_items")
     if not isinstance(mapping, dict):
         return ()
     snapshots: list[BondPrimitiveGraphicsSnapshot] = []
@@ -432,7 +418,6 @@ def _bond_primitive_graphics_snapshots(
             seen.add(id(item))
             snapshot = BondPrimitiveGraphicsSnapshot.capture(
                 item,
-                strict=strict,
             )
             if snapshot is not None:
                 snapshots.append(snapshot)
@@ -442,17 +427,15 @@ def _bond_primitive_graphics_snapshots(
 def capture_atom_primitive_graphics(
     canvas,
     *,
-    strict: bool = False,
     atom_ids: frozenset[int] | None = None,
 ) -> tuple[BondPrimitiveGraphicsSnapshot, ...]:
     state = _snapshot_runtime_state_object(
         canvas,
         "atom_graphics_state",
-        strict=strict,
     )
     mappings = (
-        _snapshot_attribute(state, "atom_items", strict=strict),
-        _snapshot_attribute(state, "atom_dots", strict=strict),
+        _snapshot_attribute(state, "atom_items"),
+        _snapshot_attribute(state, "atom_dots"),
     )
     snapshots: list[BondPrimitiveGraphicsSnapshot] = []
     seen: set[int] = set()
@@ -467,7 +450,6 @@ def capture_atom_primitive_graphics(
             seen.add(id(item))
             snapshot = BondPrimitiveGraphicsSnapshot.capture(
                 item,
-                strict=strict,
             )
             if snapshot is not None:
                 snapshots.append(snapshot)
@@ -552,8 +534,6 @@ class SceneRuntimeSnapshot:
 
 def _scene_item_topology_snapshots(
     items: list,
-    *,
-    strict: bool = False,
 ) -> list[_SceneItemTopologySnapshot]:
     """Capture every item's topology ports before any transaction mutation.
 
@@ -571,41 +551,28 @@ def _scene_item_topology_snapshots(
         parent_getter: object = _base_graphics_item_port(item, "parentItem")
         parent_setter: object = _base_graphics_item_port(item, "setParentItem")
         if parent_getter is None:
-            parent_getter = _snapshot_attribute(item, "parentItem", strict=strict)
+            parent_getter = _snapshot_attribute(item, "parentItem")
         if parent_setter is None:
-            parent_setter = _snapshot_attribute(item, "setParentItem", strict=strict)
+            parent_setter = _snapshot_attribute(item, "setParentItem")
         parent_ports_present = (
             parent_getter is not _MISSING_SNAPSHOT_ATTRIBUTE
             or parent_setter is not _MISSING_SNAPSHOT_ATTRIBUTE
         )
-        if strict and (
-            parent_getter is not _MISSING_SNAPSHOT_ATTRIBUTE
-            and not callable(parent_getter)
+        if parent_getter is not _MISSING_SNAPSHOT_ATTRIBUTE and not callable(
+            parent_getter
         ):
             raise RuntimeError(
                 "live scene item does not expose a callable parent getter"
             )
-        if strict and (
-            parent_setter is not _MISSING_SNAPSHOT_ATTRIBUTE
-            and not callable(parent_setter)
+        if parent_setter is not _MISSING_SNAPSHOT_ATTRIBUTE and not callable(
+            parent_setter
         ):
             raise RuntimeError(
                 "live scene item does not expose a callable parent setter"
             )
         if callable(parent_getter):
-            try:
-                parent = parent_getter()
-            except RuntimeError:
-                if strict:
-                    raise
-                parent_getter = None
-                parent_setter = None
-                parent = None
-        elif (
-            strict
-            and parent_ports_present
-            and parent_setter is not _MISSING_SNAPSHOT_ATTRIBUTE
-        ):
+            parent = parent_getter()
+        elif parent_ports_present and parent_setter is not _MISSING_SNAPSHOT_ATTRIBUTE:
             raise RuntimeError(
                 "live scene item does not expose a readable parent contract"
             )
@@ -618,44 +585,32 @@ def _scene_item_topology_snapshots(
         z_setter: object = _base_graphics_item_port(item, "setZValue")
         stack_before: object = _base_graphics_item_port(item, "stackBefore")
         if z_getter is None:
-            z_getter = _snapshot_attribute(item, "zValue", strict=strict)
+            z_getter = _snapshot_attribute(item, "zValue")
         if z_setter is None:
-            z_setter = _snapshot_attribute(item, "setZValue", strict=strict)
+            z_setter = _snapshot_attribute(item, "setZValue")
         if stack_before is None:
-            stack_before = _snapshot_attribute(item, "stackBefore", strict=strict)
+            stack_before = _snapshot_attribute(item, "stackBefore")
         z_ports_present = (
             z_getter is not _MISSING_SNAPSHOT_ATTRIBUTE
             or z_setter is not _MISSING_SNAPSHOT_ATTRIBUTE
         )
-        if strict and (
-            z_getter is not _MISSING_SNAPSHOT_ATTRIBUTE and not callable(z_getter)
-        ):
+        if z_getter is not _MISSING_SNAPSHOT_ATTRIBUTE and not callable(z_getter):
             raise RuntimeError(
                 "live scene item does not expose a callable stacking-depth getter"
             )
-        if strict and (
-            z_setter is not _MISSING_SNAPSHOT_ATTRIBUTE and not callable(z_setter)
-        ):
+        if z_setter is not _MISSING_SNAPSHOT_ATTRIBUTE and not callable(z_setter):
             raise RuntimeError(
                 "live scene item does not expose a callable stacking-depth setter"
             )
-        if strict and (
-            stack_before is not _MISSING_SNAPSHOT_ATTRIBUTE
-            and not callable(stack_before)
+        if stack_before is not _MISSING_SNAPSHOT_ATTRIBUTE and not callable(
+            stack_before
         ):
             raise RuntimeError(
                 "live scene item does not expose a callable sibling-stacking setter"
             )
         if callable(z_getter):
-            try:
-                z_value = float(cast(Any, z_getter()))
-            except (RuntimeError, TypeError, ValueError):
-                if strict:
-                    raise
-                z_getter = None
-                z_setter = None
-                z_value = None
-        elif strict and z_ports_present and z_setter is not _MISSING_SNAPSHOT_ATTRIBUTE:
+            z_value = float(cast(Any, z_getter()))
+        elif z_ports_present and z_setter is not _MISSING_SNAPSHOT_ATTRIBUTE:
             raise RuntimeError(
                 "live scene item does not expose a readable stacking-depth contract"
             )
@@ -694,12 +649,10 @@ def _scene_item_topology_snapshots(
 def _list_attribute_snapshot(
     owner: object | None,
     attribute: str,
-    *,
-    strict: bool = False,
 ) -> _ListAttributeSnapshot | None:
     if owner is None:
         return None
-    value = _snapshot_attribute(owner, attribute, strict=strict)
+    value = _snapshot_attribute(owner, attribute)
     if not isinstance(value, list):
         return None
     return _ListAttributeSnapshot(owner, attribute, value, list(value))
@@ -707,12 +660,10 @@ def _list_attribute_snapshot(
 
 def _mark_registry_snapshot(
     registry: object | None,
-    *,
-    strict: bool = False,
 ) -> _MarkRegistrySnapshot | None:
     if registry is None:
         return None
-    mapping = _snapshot_attribute(registry, "by_atom", strict=strict)
+    mapping = _snapshot_attribute(registry, "by_atom")
     if not isinstance(mapping, dict):
         return None
     entries: list[tuple[object, object, list | None]] = []
@@ -723,8 +674,6 @@ def _mark_registry_snapshot(
 
 def _selection_visual_snapshots(
     items: list,
-    *,
-    strict: bool = False,
 ) -> list[_SelectionVisualSnapshot]:
     snapshots: list[_SelectionVisualSnapshot] = []
     pending = list(items)
@@ -736,69 +685,42 @@ def _selection_visual_snapshots(
         seen.add(id(item))
         if graphics_item_is_deleted(item):
             continue
-        child_items = _snapshot_attribute(item, "childItems", strict=strict)
+        child_items = _snapshot_attribute(item, "childItems")
         if callable(child_items):
-            if strict:
-                pending.extend(child_items())
-            else:
-                with contextlib.suppress(Exception):
-                    pending.extend(child_items())
-        pen_method = _snapshot_attribute(item, "pen", strict=strict)
-        data_method = _snapshot_attribute(item, "data", strict=strict)
+            pending.extend(child_items())
+        pen_method = _snapshot_attribute(item, "pen")
+        data_method = _snapshot_attribute(item, "data")
         if not callable(pen_method):
             continue
-        try:
-            pen = pen_method()
-            data_6 = (
-                data_method(6) if callable(data_method) else _UNAVAILABLE_ITEM_VALUE
-            )
-        except Exception:
-            if strict:
-                raise
-            continue
+        pen = pen_method()
+        data_6 = data_method(6) if callable(data_method) else _UNAVAILABLE_ITEM_VALUE
         snapshots.append(_SelectionVisualSnapshot(item, pen, data_6))
     return snapshots
 
 
 def _visibility_snapshots(
     items: list,
-    *,
-    strict: bool = False,
 ) -> list[_VisibilitySnapshot]:
     snapshots: list[_VisibilitySnapshot] = []
     for item in items:
         if graphics_item_is_deleted(item):
             continue
-        data_method = _snapshot_attribute(item, "data", strict=strict)
+        data_method = _snapshot_attribute(item, "data")
         if not callable(data_method):
             continue
-        try:
-            kind = data_method(0)
-        except RuntimeError:
-            if strict:
-                raise
-            continue
+        kind = data_method(0)
         if kind not in {"note_box", "note_select"}:
             continue
-        is_visible = _snapshot_attribute(item, "isVisible", strict=strict)
+        is_visible = _snapshot_attribute(item, "isVisible")
         if not callable(is_visible):
             continue
-        try:
-            visible = bool(is_visible())
-        except RuntimeError:
-            if strict:
-                raise
-            continue
+        visible = bool(is_visible())
         values: list[object] = []
         for method_name in ("rect", "pen", "brush"):
-            method = _snapshot_attribute(item, method_name, strict=strict)
+            method = _snapshot_attribute(item, method_name)
             value: object = _UNAVAILABLE_ITEM_VALUE
             if callable(method):
-                if strict:
-                    value = method()
-                else:
-                    with contextlib.suppress(Exception):
-                        value = method()
+                value = method()
             values.append(value)
         snapshots.append(_VisibilitySnapshot(item, visible, *values))
     return snapshots
@@ -807,7 +729,6 @@ def _visibility_snapshots(
 def capture_scene_runtime(
     canvas,
     *,
-    strict: bool = False,
     scene_override: object = _MISSING_SNAPSHOT_ATTRIBUTE,
     detail_items: tuple[object, ...] | None = None,
     detail_bond_ids: frozenset[int] | None = None,
@@ -825,67 +746,47 @@ def capture_scene_runtime(
     if scene_override is not _MISSING_SNAPSHOT_ATTRIBUTE:
         scene = scene_override
     else:
-        scene_method = _snapshot_attribute(canvas, "scene", strict=strict)
+        scene_method = _snapshot_attribute(canvas, "scene")
         if scene_method is _MISSING_SNAPSHOT_ATTRIBUTE or not callable(scene_method):
             scene = None
         else:
-            try:
-                scene = scene_method()
-            except (AttributeError, RuntimeError):
-                if strict:
-                    raise
-                scene = None
+            scene = scene_method()
     scene_items, scene_items_getter = _scene_items_and_getter_from_scene(
         scene,
-        strict=strict,
+        strict=True,
     )
     scene_signals_blocked = None
     signals_blocked_getter = _snapshot_attribute(
         scene,
         "signalsBlocked",
-        strict=strict,
     )
     block_signals_setter = _snapshot_attribute(
         scene,
         "blockSignals",
-        strict=strict,
     )
     signal_ports_present = (
         signals_blocked_getter is not _MISSING_SNAPSHOT_ATTRIBUTE
         or block_signals_setter is not _MISSING_SNAPSHOT_ATTRIBUTE
     )
     if callable(signals_blocked_getter) and callable(block_signals_setter):
-        try:
-            scene_signals_blocked = bool(signals_blocked_getter())
-        except (AttributeError, RuntimeError):
-            if strict:
-                raise
-            signals_blocked_getter = None
-            block_signals_setter = None
-    elif strict and signal_ports_present:
+        scene_signals_blocked = bool(signals_blocked_getter())
+    elif signal_ports_present:
         raise RuntimeError(
             "live scene does not expose a complete signal-blocking contract"
         )
     else:
         signals_blocked_getter = None
         block_signals_setter = None
-    focus_item_getter = _snapshot_attribute(scene, "focusItem", strict=strict)
-    focus_item_setter = _snapshot_attribute(scene, "setFocusItem", strict=strict)
+    focus_item_getter = _snapshot_attribute(scene, "focusItem")
+    focus_item_setter = _snapshot_attribute(scene, "setFocusItem")
     focus_item = None
     focus_ports_present = (
         focus_item_getter is not _MISSING_SNAPSHOT_ATTRIBUTE
         or focus_item_setter is not _MISSING_SNAPSHOT_ATTRIBUTE
     )
     if callable(focus_item_getter) and callable(focus_item_setter):
-        if strict:
-            focus_item = focus_item_getter()
-        else:
-            try:
-                focus_item = focus_item_getter()
-            except (AttributeError, RuntimeError):
-                focus_item_getter = None
-                focus_item_setter = None
-    elif strict and focus_ports_present:
+        focus_item = focus_item_getter()
+    elif focus_ports_present:
         raise RuntimeError("live scene does not expose a complete focus contract")
     else:
         focus_item_getter = None
@@ -906,32 +807,27 @@ def capture_scene_runtime(
         detail_scope_items = []
     topology_states = _scene_item_topology_snapshots(
         detail_scope_items,
-        strict=strict,
     )
     selected_states: list[_SceneSelectionSnapshot] = []
     for item in detail_scope_items:
         if graphics_item_is_deleted(item):
             continue
-        is_selected = _snapshot_attribute(item, "isSelected", strict=strict)
-        set_selected = _snapshot_attribute(item, "setSelected", strict=strict)
+        is_selected = _snapshot_attribute(item, "isSelected")
+        set_selected = _snapshot_attribute(item, "setSelected")
         item_selection_access_present = (
             is_selected is not _MISSING_SNAPSHOT_ATTRIBUTE
             or set_selected is not _MISSING_SNAPSHOT_ATTRIBUTE
         )
         if callable(is_selected) and callable(set_selected):
-            try:
-                selected_states.append(
-                    _SceneSelectionSnapshot(
-                        item=item,
-                        selected=bool(is_selected()),
-                        getter=is_selected,
-                        setter=set_selected,
-                    )
+            selected_states.append(
+                _SceneSelectionSnapshot(
+                    item=item,
+                    selected=bool(is_selected()),
+                    getter=is_selected,
+                    setter=set_selected,
                 )
-            except (AttributeError, RuntimeError):
-                if strict:
-                    raise
-        elif strict and item_selection_access_present:
+            )
+        elif item_selection_access_present:
             raise RuntimeError(
                 "live scene item does not expose a complete selection contract"
             )
@@ -940,53 +836,44 @@ def capture_scene_runtime(
     scene_items_state = _snapshot_runtime_state_object(
         canvas,
         "scene_items_state",
-        strict=strict,
     )
     for attribute in SCENE_ITEM_COLLECTION_ATTRS:
         snapshot = _list_attribute_snapshot(
             scene_items_state,
             attribute,
-            strict=strict,
         )
         if snapshot is not None:
             list_attributes.append(snapshot)
     handle_state = _snapshot_runtime_state_object(
         canvas,
         "handle_state",
-        strict=strict,
     )
     handle_snapshot = _list_attribute_snapshot(
         handle_state,
         "active_handles",
-        strict=strict,
     )
     if handle_snapshot is not None:
         list_attributes.append(handle_snapshot)
     selection_style_state = _snapshot_runtime_state_object(
         canvas,
         "selection_style_state",
-        strict=strict,
     )
     selected_items_snapshot = _list_attribute_snapshot(
         selection_style_state,
         "selected_items",
-        strict=strict,
     )
     selection_visuals = _selection_visual_snapshots(
         selected_items_snapshot.contents if selected_items_snapshot is not None else [],
-        strict=strict,
     )
     if selected_items_snapshot is not None:
         list_attributes.append(selected_items_snapshot)
     selection_outline_state = _snapshot_runtime_state_object(
         canvas,
         "selection_outline_state",
-        strict=strict,
     )
     outlines_snapshot = _list_attribute_snapshot(
         selection_outline_state,
         "outlines",
-        strict=strict,
     )
     if outlines_snapshot is not None:
         list_attributes.append(outlines_snapshot)
@@ -994,7 +881,6 @@ def capture_scene_runtime(
     selection_info_state = _snapshot_runtime_state_object(
         canvas,
         "selection_info_state",
-        strict=strict,
     )
     selection_info_values: dict[str, object] = {}
     if selection_info_state is not None:
@@ -1008,13 +894,12 @@ def capture_scene_runtime(
             value = _snapshot_attribute(
                 selection_info_state,
                 attribute,
-                strict=strict,
             )
             if value is _MISSING_SNAPSHOT_ATTRIBUTE:
                 continue
             selection_info_values[attribute] = value
 
-    handle_target = _snapshot_attribute(handle_state, "target", strict=strict)
+    handle_target = _snapshot_attribute(handle_state, "target")
     if handle_target is _MISSING_SNAPSHOT_ATTRIBUTE:
         handle_target = None
 
@@ -1036,7 +921,6 @@ def capture_scene_runtime(
         selected_states=selected_states,
         visibility_states=_visibility_snapshots(
             detail_scope_items,
-            strict=strict,
         ),
         selection_visuals=selection_visuals,
         list_attributes=list_attributes,
@@ -1044,9 +928,7 @@ def capture_scene_runtime(
             _snapshot_runtime_state_object(
                 canvas,
                 "mark_registry",
-                strict=strict,
             ),
-            strict=strict,
         ),
         handle_state=handle_state,
         handle_target=handle_target,
@@ -1054,14 +936,13 @@ def capture_scene_runtime(
         selection_info_values=selection_info_values,
         bond_primitive_graphics=_bond_primitive_graphics_snapshots(
             canvas,
-            strict=strict,
             bond_ids=detail_bond_ids,
         ),
     )
 
 
 def _item_parent(item, *, strict: bool = False):
-    parent_method = _snapshot_attribute(item, "parentItem", strict=strict)
+    parent_method = _snapshot_attribute(item, "parentItem")
     if not callable(parent_method):
         return None
     try:
@@ -1079,7 +960,7 @@ def _verify_scene_membership(
     attached: bool,
     strict: bool = False,
 ) -> None:
-    scene_method = _snapshot_attribute(item, "scene", strict=strict)
+    scene_method = _snapshot_attribute(item, "scene")
     if not callable(scene_method):
         return
     try:
@@ -1092,7 +973,7 @@ def _verify_scene_membership(
 
 
 def _direct_scene_remove(scene, item, *, strict: bool = False) -> None:
-    remove_item = _snapshot_attribute(scene, "removeItem", strict=strict)
+    remove_item = _snapshot_attribute(scene, "removeItem")
     if callable(remove_item):
         try:
             result = remove_item(item)
@@ -1107,7 +988,7 @@ def _direct_scene_remove(scene, item, *, strict: bool = False) -> None:
             strict=strict,
         )
         return
-    detach = _snapshot_attribute(scene, "detach", strict=strict)
+    detach = _snapshot_attribute(scene, "detach")
     if callable(detach):
         try:
             result = detach(item)
@@ -1126,7 +1007,7 @@ def _direct_scene_remove(scene, item, *, strict: bool = False) -> None:
 
 
 def _direct_scene_add(scene, item, *, strict: bool = False) -> None:
-    add_item = _snapshot_attribute(scene, "addItem", strict=strict)
+    add_item = _snapshot_attribute(scene, "addItem")
     if callable(add_item):
         try:
             result = add_item(item)
@@ -1141,7 +1022,7 @@ def _direct_scene_add(scene, item, *, strict: bool = False) -> None:
             strict=strict,
         )
         return
-    attach = _snapshot_attribute(scene, "attach", strict=strict)
+    attach = _snapshot_attribute(scene, "attach")
     if callable(attach):
         try:
             result = attach(item)
@@ -1165,7 +1046,7 @@ def _item_is_attached_to_scene(
     *,
     strict: bool = False,
 ) -> bool:
-    scene_method = _snapshot_attribute(item, "scene", strict=strict)
+    scene_method = _snapshot_attribute(item, "scene")
     if not callable(scene_method):
         return False
     try:
@@ -1792,12 +1673,12 @@ def _restore_mark_registry(snapshot: _MarkRegistrySnapshot) -> None:
 
 
 def _restore_selection_visual(snapshot: _SelectionVisualSnapshot) -> None:
-    set_pen = _snapshot_attribute(snapshot.item, "setPen", strict=True)
+    set_pen = _snapshot_attribute(snapshot.item, "setPen")
     if callable(set_pen):
         set_pen(snapshot.pen)
     if snapshot.data_6 is _UNAVAILABLE_ITEM_VALUE:
         return
-    set_data = _snapshot_attribute(snapshot.item, "setData", strict=True)
+    set_data = _snapshot_attribute(snapshot.item, "setData")
     if callable(set_data):
         set_data(6, snapshot.data_6)
 
@@ -1810,10 +1691,10 @@ def _restore_visibility(snapshot: _VisibilitySnapshot) -> None:
     ):
         if value is _UNAVAILABLE_ITEM_VALUE:
             continue
-        method = _snapshot_attribute(snapshot.item, method_name, strict=True)
+        method = _snapshot_attribute(snapshot.item, method_name)
         if callable(method):
             method(value)
-    set_visible = _snapshot_attribute(snapshot.item, "setVisible", strict=True)
+    set_visible = _snapshot_attribute(snapshot.item, "setVisible")
     if callable(set_visible):
         set_visible(snapshot.visible)
 
@@ -1968,7 +1849,6 @@ def capture_scene_rect_snapshot(scene) -> SceneRectSnapshot | None:
     items_bounding_rect = _snapshot_attribute(
         scene,
         "itemsBoundingRect",
-        strict=True,
     )
     snapshot = SceneRectSnapshot.capture(scene)
     if snapshot is not None:
@@ -2011,7 +1891,7 @@ def mutate_existing_scene_items_atomically(
     *,
     unknown_was_attached: bool,
 ) -> None:
-    runtime_snapshot = capture_scene_runtime(canvas, strict=True)
+    runtime_snapshot = capture_scene_runtime(canvas)
     snapshots = [
         (item, _scene_item_membership(canvas, item))
         for item in items
@@ -2046,7 +1926,7 @@ def mutate_existing_scene_items_atomically(
 
 def create_scene_items_atomically(canvas, states: list[dict], items: list) -> None:
     original_items = list(items)
-    runtime_snapshot = capture_scene_runtime(canvas, strict=True)
+    runtime_snapshot = capture_scene_runtime(canvas)
     scene_before = (
         list(runtime_snapshot.scene_items)
         if runtime_snapshot.scene_items is not None
