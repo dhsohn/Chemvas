@@ -348,7 +348,7 @@ class SelectionRotationController:
                 if pushed:
                     preview.release()
                 else:
-                    preview.restore(original_error)
+                    preview.restore()
                 state.clear_session()
             except Exception as cleanup_error:
                 _add_rotation_finalization_rollback_note(

@@ -225,7 +225,6 @@ def apply_pasted_perspective_for_canvas(
     canvas,
     coords_3d: dict[int, tuple[float, float, float]],
     projection_center_3d: tuple[float, float, float] | None,
-    projection_anchor_2d: tuple[float, float] | None,
 ) -> None:
     rotation = rotation_state_for(canvas)
     target_center = rotation.projection_center_3d

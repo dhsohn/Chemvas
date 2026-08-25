@@ -15,13 +15,7 @@ class InsertModeLogicTest(unittest.TestCase):
     def test_begin_template_insert_normalizes_style_and_clears_smiles_state(
         self,
     ) -> None:
-        state = InsertSessionState(
-            smiles_active=True,
-            smiles_text="CCO",
-            smiles_center=(10.0, 20.0),
-        )
-
-        next_state = begin_template_insert(state, 6, " Chair ")
+        next_state = begin_template_insert(6, " Chair ")
 
         assert next_state is not None
         self.assertTrue(next_state.template_active)
@@ -32,10 +26,8 @@ class InsertModeLogicTest(unittest.TestCase):
         self.assertIsNone(next_state.smiles_center)
 
     def test_begin_template_insert_rejects_invalid_inputs(self) -> None:
-        state = InsertSessionState()
-
-        self.assertIsNone(begin_template_insert(state, 2, "regular"))
-        self.assertIsNone(begin_template_insert(state, 6, "weird"))
+        self.assertIsNone(begin_template_insert(2, "regular"))
+        self.assertIsNone(begin_template_insert(6, "weird"))
 
     def test_cancel_template_insert_preserves_smiles_state(self) -> None:
         state = InsertSessionState(
@@ -57,13 +49,7 @@ class InsertModeLogicTest(unittest.TestCase):
         self.assertEqual(next_state.smiles_center, (4.0, 6.0))
 
     def test_begin_smiles_insert_strips_text_and_clears_template_state(self) -> None:
-        state = InsertSessionState(
-            template_active=True,
-            template_ring_size=6,
-            template_ring_style="benzene",
-        )
-
-        next_state = begin_smiles_insert(state, "  NCCO  ", (1.5, 2.5))
+        next_state = begin_smiles_insert("  NCCO  ", (1.5, 2.5))
 
         assert next_state is not None
         self.assertFalse(next_state.template_active)
@@ -74,10 +60,8 @@ class InsertModeLogicTest(unittest.TestCase):
         self.assertEqual(next_state.smiles_center, (1.5, 2.5))
 
     def test_begin_smiles_insert_rejects_blank_text_or_missing_center(self) -> None:
-        state = InsertSessionState()
-
-        self.assertIsNone(begin_smiles_insert(state, "   ", (0.0, 0.0)))
-        self.assertIsNone(begin_smiles_insert(state, "CC", None))
+        self.assertIsNone(begin_smiles_insert("   ", (0.0, 0.0)))
+        self.assertIsNone(begin_smiles_insert("CC", None))
 
     def test_cancel_smiles_insert_preserves_template_state(self) -> None:
         state = InsertSessionState(

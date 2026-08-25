@@ -169,7 +169,9 @@ class MainWindowToolStateServiceTest(unittest.TestCase):
             self.window.ui_references.tool_actions["perspective"].isChecked()
         )
         self.assertEqual(self.active_tool_name_for_window.call_count, 3)
-        self.assertEqual(self.tool_settings_for_window.call_count, 3)
+        # The action key depends on the active tool alone, so the sync no
+        # longer reads the tool settings to resolve it.
+        self.assertEqual(self.tool_settings_for_window.call_count, 0)
         self.assertEqual(self.tool_actions_for_window.call_count, 3)
         self.assertEqual(self.tool_action_for_window.call_count, 3)
 
