@@ -38,7 +38,7 @@ Still image of a region:
 
 ```bash
 # interactive crosshair → saves a PNG to ~/Desktop
-screencapture -i ~/Desktop/hero.png
+screencapture -i ~/Desktop/demo.png
 ```
 
 Or press <kbd>⌘</kbd><kbd>⇧</kbd><kbd>4</kbd> and drag. Move the result here — over

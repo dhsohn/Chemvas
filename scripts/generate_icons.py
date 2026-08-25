@@ -5,7 +5,7 @@ Single source of truth: ``app/chemvas/assets/icon/chemvas.svg``. Everything else
 (runtime PNGs, the macOS ``.icns`` bundle icon, the Windows ``.ico``) is derived
 from it, so edits to the mark only need to touch the SVG followed by a re-run:
 
-    QT_QPA_PLATFORM=offscreen .venv/bin/python scripts/generate_icons.py
+    QT_QPA_PLATFORM=offscreen python scripts/generate_icons.py
 
 Rasterisation goes through Qt's own SVG renderer (the same one the app uses for
 toolbar glyphs) so the shipped icon matches what Qt would draw. ``.icns`` packing
