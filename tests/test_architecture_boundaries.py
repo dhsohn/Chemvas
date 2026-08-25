@@ -4444,3 +4444,238 @@ def test_window_tool_settings_port_stays_removed() -> None:
     pattern = re.compile(r"\b_?tool_settings_for_window\b")
 
     assert _matching_lines(pattern, _app_python_files()) == []
+
+
+# --- Single-owner pins for constants and helpers that were duplicated -------
+#
+# Each rule below is a pattern ban, not an assertion that a phrasing exists:
+# it names the one module allowed to own a value or a shape and fails if a
+# second definition of the same thing appears anywhere under app/.
+
+
+def _string_set_literals(tree: ast.AST) -> list[tuple[int, frozenset[str]]]:
+    """Every set/frozenset literal of plain strings, with its line number."""
+    literals: list[tuple[int, frozenset[str]]] = []
+    for node in ast.walk(tree):
+        candidate: ast.expr | None = None
+        if isinstance(node, ast.Set):
+            candidate = node
+        elif (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Name)
+            and node.func.id == "frozenset"
+            and len(node.args) == 1
+        ):
+            candidate = node.args[0]
+        if candidate is None:
+            continue
+        try:
+            value = ast.literal_eval(candidate)
+        except (ValueError, TypeError, SyntaxError):
+            continue
+        if not isinstance(value, (set, frozenset, tuple, list)):
+            continue
+        if not value or not all(isinstance(entry, str) for entry in value):
+            continue
+        literals.append((node.lineno, frozenset(value)))
+    return literals
+
+
+def _modules_listing(members: frozenset[str]) -> list[str]:
+    """Modules with a string-collection literal containing every member."""
+    owners: list[str] = []
+    for path in _app_python_files():
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for line_no, literal in _string_set_literals(tree):
+            if members <= literal:
+                owners.append(f"{path.relative_to(APP_ROOT.parents[0])}:{line_no}")
+    return owners
+
+
+ARROW_KIND_MEMBERS = frozenset(
+    {
+        "arrow",
+        "equilibrium",
+        "resonance",
+        "curved_single",
+        "curved_double",
+        "inhibit",
+        "dotted",
+    }
+)
+DOCUMENT_SETTINGS_KEY_MEMBERS = frozenset(
+    {
+        "bond_length_px",
+        "arrow_line_width",
+        "arrow_head_scale",
+        "orbital_phase_enabled",
+        "text_font_family",
+        "text_font_size",
+        "text_font_weight",
+        "text_italic",
+        "text_color",
+        "text_alignment",
+        "text_line_spacing",
+        "note_box_enabled",
+        "note_box_color",
+        "note_box_alpha",
+        "note_border_enabled",
+        "note_border_color",
+        "note_border_width",
+        "note_padding",
+        "sheet_size",
+        "sheet_orientation",
+    }
+)
+DOCUMENT_STATE_MODULE = "app/chemvas/domain/document/state.py"
+
+
+def test_arrow_kinds_are_listed_in_one_module() -> None:
+    """The seven arrow kind strings are spelled out exactly once.
+
+    Six modules used to list them. A seventh kind added to the schema but
+    missed in one of the copies is silent: the document validates it while a
+    scene, an outline, an attach route, or a tool treats it as something else.
+    Supersets are fine as long as they union the schema's frozenset instead of
+    relisting the members.
+    """
+    owners = _modules_listing(ARROW_KIND_MEMBERS)
+
+    assert [owner.rsplit(":", 1)[0] for owner in owners] == [DOCUMENT_STATE_MODULE]
+
+
+def test_document_settings_keys_are_listed_in_one_module() -> None:
+    """The twenty document-settings keys are spelled out exactly once."""
+    owners = _modules_listing(DOCUMENT_SETTINGS_KEY_MEMBERS)
+
+    assert [owner.rsplit(":", 1)[0] for owner in owners] == [DOCUMENT_STATE_MODULE]
+
+
+def _parameter_named_getattr_wrappers(source: str) -> list[tuple[int, str]]:
+    """Functions that are only ``return getattr(<params or None>)``.
+
+    Scoped to wrappers whose arguments are all the function's own parameters
+    (or a literal ``None`` default), because that is a wrapper the builtin
+    already provides. Helpers that substitute a module-private sentinel are a
+    different function and are deliberately not matched.
+    """
+    wrappers: list[tuple[int, str]] = []
+    for node in ast.walk(ast.parse(source)):
+        if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        if len(node.body) != 1:
+            continue
+        statement = node.body[0]
+        if not isinstance(statement, ast.Return):
+            continue
+        call = statement.value
+        if not (
+            isinstance(call, ast.Call)
+            and isinstance(call.func, ast.Name)
+            and call.func.id == "getattr"
+            and not call.keywords
+            and len(call.args) == 3
+        ):
+            continue
+        parameters = {
+            argument.arg
+            for argument in (
+                node.args.posonlyargs + node.args.args + node.args.kwonlyargs
+            )
+        }
+        if all(
+            (isinstance(argument, ast.Name) and argument.id in parameters)
+            or (isinstance(argument, ast.Constant) and argument.value is None)
+            for argument in call.args
+        ):
+            wrappers.append((node.lineno, node.name))
+    return wrappers
+
+
+def test_no_production_function_only_forwards_to_getattr() -> None:
+    """A wrapper that forwards every argument to getattr is getattr."""
+    violations = [
+        f"{path.relative_to(APP_ROOT.parents[0])}:{line_no}: {name}"
+        for path in _app_python_files()
+        for line_no, name in _parameter_named_getattr_wrappers(
+            path.read_text(encoding="utf-8")
+        )
+    ]
+
+    assert violations == []
+
+
+def test_normalize_3d_has_one_production_owner() -> None:
+    """The 3-D unit-vector helper is defined once and re-exported.
+
+    Bond geometry used to carry its own copy, epsilon and all. Rendering now
+    re-exports the selection package's implementation, which is an import, not
+    a second ``def``.
+    """
+    owners = [
+        path
+        for path in _app_python_files()
+        if re.search(
+            r"^def normalize_3d\b",
+            path.read_text(encoding="utf-8"),
+            re.MULTILINE,
+        )
+    ]
+
+    assert owners == [
+        APP_ROOT / "chemvas" / "features" / "selection" / "rotation_geometry.py"
+    ]
+
+
+def test_sha256_hex_pattern_is_compiled_in_one_module() -> None:
+    """One module compiles the 64-hex-digit hash pattern."""
+    pattern = re.compile(r"re\.compile\(\s*r?[\"\']\[0-9a-f\]\{64\}")
+    owners = sorted(
+        {
+            match.rsplit(":", 2)[0]
+            for match in _matching_lines(pattern, _app_python_files())
+        }
+    )
+
+    assert owners == ["app/chemvas/domain/document/precomplex.py"]
+
+
+def _inline_color_rollback_handlers(source: str) -> list[int]:
+    """Except-handlers that add a colour rollback note themselves.
+
+    ``_run_color_rollback_step`` is the one place that catches a failing
+    rollback and annotates the original error; anywhere else doing it inline
+    is that helper written out longhand.
+    """
+    tree = ast.parse(source)
+    helper_lines = {
+        node.lineno
+        for node in ast.walk(tree)
+        if isinstance(node, ast.FunctionDef) and node.name == "_run_color_rollback_step"
+    }
+    helper_bodies = {
+        inner
+        for node in ast.walk(tree)
+        if isinstance(node, ast.FunctionDef) and node.lineno in helper_lines
+        for inner in ast.walk(node)
+    }
+    violations: list[int] = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.ExceptHandler) or node in helper_bodies:
+            continue
+        for inner in ast.walk(node):
+            if (
+                isinstance(inner, ast.Call)
+                and isinstance(inner.func, ast.Name)
+                and inner.func.id == "_add_color_rollback_note"
+            ):
+                violations.append(inner.lineno)
+    return sorted(set(violations))
+
+
+def test_color_rollback_notes_go_through_the_step_helper() -> None:
+    """No handler expands ``_run_color_rollback_step`` by hand."""
+    module = APP_ROOT / "chemvas" / "ui" / "canvas_color_mutation_service.py"
+    violations = _inline_color_rollback_handlers(module.read_text(encoding="utf-8"))
+
+    assert violations == []
