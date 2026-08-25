@@ -1320,18 +1320,46 @@ def test_production_canvas_service_container_lookup_is_canonical() -> None:
     assert violations == []
 
 
-def test_simple_canvas_access_helpers_delegate_service_lookup_to_ports() -> None:
-    access_paths = [
-        APP_ROOT / "chemvas" / "ui" / "canvas_model_access.py",
-        APP_ROOT / "chemvas" / "ui" / "canvas_scene_reset_access.py",
-        APP_ROOT / "chemvas" / "ui" / "insert_session_access.py",
-        APP_ROOT / "chemvas" / "ui" / "note_item.py",
-        APP_ROOT / "chemvas" / "ui" / "note_item_access.py",
-        APP_ROOT / "chemvas" / "ui" / "selection_highlight_styler.py",
-    ]
-    forbidden = re.compile(r"\bcanvas_services_for\b|\bcanvas\.services\.")
+CANVAS_SERVICE_CONTAINER_RESOLVERS = (
+    # Defines canvas_services_for and re-exports it.
+    "app/chemvas/ui/canvas_service_access.py",
+    # Ports modules: the documented owners of container resolution.
+    "app/chemvas/ui/canvas_service_ports.py",
+    "app/chemvas/ui/canvas_view_ports.py",
+    "app/chemvas/ui/main_window_ports.py",
+    # CLI bootstrap that has to build its own canvas before any port exists.
+    "app/chemvas/bootstrap/document_cli_shared.py",
+)
 
-    assert _matching_lines(forbidden, access_paths) == []
+
+def test_only_container_resolvers_reach_the_canvas_service_bundle() -> None:
+    """Nothing but the resolver modules may resolve the canvas service bundle.
+
+    Eighteen rules used to spell this out one target module at a time, which
+    left every module they did not name -- including any *_access.py added
+    later -- free to call canvas_services_for. The ban is repo-wide with an
+    explicit exemption list instead, so a new module is guarded on arrival and
+    a new resolver has to be argued for here.
+    """
+    pattern = re.compile(r"\bcanvas_services_for\b|\bcanvas\.services\.")
+    repo_root = APP_ROOT.parents[0]
+    exempt = {repo_root / relative for relative in CANVAS_SERVICE_CONTAINER_RESOLVERS}
+    guarded = [path for path in _app_python_files() if path not in exempt]
+
+    assert sorted(exempt - set(_app_python_files())) == []
+    assert _matching_lines(pattern, guarded) == []
+
+
+def test_structure_build_access_keeps_the_ring_template_catalog_out() -> None:
+    access = APP_ROOT / "chemvas" / "ui" / "structure_build_access.py"
+    pattern = re.compile(
+        r"add_structure_template_for"
+        r"|\b_REGULAR_RING_TEMPLATES\b"
+        r"|\b_HETERO_RING_TEMPLATES\b"
+        r"|\b_SERVICE_TEMPLATE_METHODS\b"
+    )
+
+    assert _matching_lines(pattern, [access]) == []
 
 
 def test_canvas_service_ports_keep_simple_service_accessors_consolidated() -> None:
@@ -1375,138 +1403,6 @@ def test_note_committed_text_private_state_stays_inside_note_item() -> None:
     assert _matching_lines(forbidden, paths) == []
 
 
-def test_history_canvas_access_delegates_service_lookup_to_history_ports() -> None:
-    access = APP_ROOT / "chemvas" / "ui" / "history_canvas_access.py"
-    forbidden = re.compile(r"\bcanvas_services_for\b|\bcanvas\.services\.")
-
-    assert _matching_lines(forbidden, [access]) == []
-
-
-def test_structure_mutation_access_delegates_service_lookup_to_structure_ports() -> (
-    None
-):
-    access = APP_ROOT / "chemvas" / "ui" / "structure_mutation_access.py"
-    forbidden = re.compile(r"\bcanvas_services_for\b|\bcanvas\.services\.")
-
-    assert _matching_lines(forbidden, [access]) == []
-
-
-def test_ring_fill_scene_access_delegates_service_lookup_to_ring_fill_ports() -> None:
-    access = APP_ROOT / "chemvas" / "ui" / "canvas_ring_fill_scene_access.py"
-    forbidden = re.compile(r"\bcanvas_services_for\b|\bcanvas\.services\.")
-
-    assert _matching_lines(forbidden, [access]) == []
-
-
-def test_structure_build_access_delegates_service_lookup_to_structure_build_ports() -> (
-    None
-):
-    access = APP_ROOT / "chemvas" / "ui" / "structure_build_access.py"
-    forbidden = re.compile(
-        r"\bcanvas_services_for\b"
-        r"|\bcanvas\.services\."
-        r"|\b_REGULAR_RING_TEMPLATES\b"
-        r"|\b_HETERO_RING_TEMPLATES\b"
-        r"|\b_SERVICE_TEMPLATE_METHODS\b"
-    )
-
-    assert "add_structure_template_for" not in access.read_text(encoding="utf-8")
-    assert _matching_lines(forbidden, [access]) == []
-
-
-def test_structure_insert_access_delegates_service_lookup_to_structure_insert_ports() -> (
-    None
-):
-    access = APP_ROOT / "chemvas" / "ui" / "structure_insert_access.py"
-    forbidden = re.compile(r"\bcanvas_services_for\b|\bcanvas\.services\.")
-
-    assert _matching_lines(forbidden, [access]) == []
-
-
-def test_scene_decoration_access_delegates_service_lookup_to_scene_decoration_ports() -> (
-    None
-):
-    access = APP_ROOT / "chemvas" / "ui" / "scene_decoration_access.py"
-    forbidden = re.compile(r"\bcanvas_services_for\b|\bcanvas\.services\.")
-
-    assert _matching_lines(forbidden, [access]) == []
-
-
-def test_mark_item_access_delegates_service_lookup_to_scene_decoration_ports() -> None:
-    access = APP_ROOT / "chemvas" / "ui" / "mark_item_access.py"
-    forbidden = re.compile(r"\bcanvas_services_for\b|\bcanvas\.services\.")
-
-    assert _matching_lines(forbidden, [access]) == []
-
-
-def test_scene_decoration_build_access_delegates_service_lookup_to_scene_decoration_ports() -> (
-    None
-):
-    access = APP_ROOT / "chemvas" / "ui" / "scene_decoration_build_access.py"
-    forbidden = re.compile(r"\bcanvas_services_for\b|\bcanvas\.services\.")
-
-    assert _matching_lines(forbidden, [access]) == []
-
-
-def test_handle_mutation_access_delegates_service_lookup_to_handle_mutation_ports() -> (
-    None
-):
-    access = APP_ROOT / "chemvas" / "ui" / "handle_mutation_access.py"
-    forbidden = re.compile(r"\bcanvas_services_for\b|\bcanvas\.services\.")
-
-    assert _matching_lines(forbidden, [access]) == []
-
-
-def test_handle_overlay_access_delegates_service_lookup_to_handle_overlay_ports() -> (
-    None
-):
-    access = APP_ROOT / "chemvas" / "ui" / "handle_overlay_access.py"
-    forbidden = re.compile(r"\bcanvas_services_for\b|\bcanvas\.services\.")
-
-    assert _matching_lines(forbidden, [access]) == []
-
-
-def test_history_recording_access_delegates_service_lookup_to_history_recording_ports() -> (
-    None
-):
-    access = APP_ROOT / "chemvas" / "ui" / "history_recording_access.py"
-    forbidden = re.compile(r"\bcanvas_services_for\b|\bcanvas\.services\.")
-
-    assert _matching_lines(forbidden, [access]) == []
-
-
-def test_canvas_window_access_delegates_service_lookup_to_canvas_window_ports() -> None:
-    access = APP_ROOT / "chemvas" / "ui" / "canvas_window_access.py"
-    forbidden = re.compile(r"\bcanvas_services_for\b|\bcanvas\.services\.")
-
-    assert _matching_lines(forbidden, [access]) == []
-
-
-def test_move_access_delegates_service_lookup_to_move_ports() -> None:
-    access = APP_ROOT / "chemvas" / "ui" / "move_access.py"
-    forbidden = re.compile(r"\bcanvas_services_for\b|\bcanvas\.services\.")
-
-    assert _matching_lines(forbidden, [access]) == []
-
-
-def test_geometry_access_helpers_delegate_service_lookup_to_geometry_ports() -> None:
-    access_paths = [
-        APP_ROOT / "chemvas" / "ui" / "bond_graphics_access.py",
-        APP_ROOT / "chemvas" / "ui" / "bond_label_geometry_access.py",
-        APP_ROOT / "chemvas" / "ui" / "canvas_geometry_access.py",
-    ]
-    forbidden = re.compile(r"\bcanvas_services_for\b|\bcanvas\.services\.")
-
-    assert _matching_lines(forbidden, access_paths) == []
-
-
-def test_selection_service_access_delegates_service_lookup_to_selection_ports() -> None:
-    access = APP_ROOT / "chemvas" / "ui" / "selection_service_access.py"
-    forbidden = re.compile(r"\bcanvas_services_for\b|\bcanvas\.services\.")
-
-    assert _matching_lines(forbidden, [access]) == []
-
-
 def test_export_render_service_dispatches_to_format_specific_renderers() -> None:
     service = APP_ROOT / "chemvas" / "features" / "export" / "service.py"
     forbidden_device_types = re.compile(
@@ -1516,23 +1412,9 @@ def test_export_render_service_dispatches_to_format_specific_renderers() -> None
     assert _matching_lines(forbidden_device_types, [service]) == []
 
 
-def test_scene_item_access_delegates_service_lookup_to_scene_item_ports() -> None:
-    access = APP_ROOT / "chemvas" / "ui" / "scene_item_access.py"
-    forbidden = re.compile(r"\bcanvas_services_for\b|\bcanvas\.services\.")
-
-    assert _matching_lines(forbidden, [access]) == []
-
-
 def test_scene_item_access_delegates_scene_storage_to_scene_state() -> None:
     access = APP_ROOT / "chemvas" / "ui" / "scene_item_access.py"
     forbidden = re.compile(r"\bcanvas\.scene\(")
-
-    assert _matching_lines(forbidden, [access]) == []
-
-
-def test_atom_label_access_delegates_service_lookup_to_atom_label_ports() -> None:
-    access = APP_ROOT / "chemvas" / "ui" / "atom_label_access.py"
-    forbidden = re.compile(r"\bcanvas_services_for\b|\bcanvas\.services\.")
 
     assert _matching_lines(forbidden, [access]) == []
 
