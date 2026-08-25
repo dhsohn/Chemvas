@@ -1,8 +1,9 @@
 # Screenshots & demo media
 
-The README's hero image is **`demo.png`** (already in place — a reaction scheme plus
-several organocatalyst structures). The items below are optional extras you can add
-later to enrich the README.
+The README's hero image is **`demo.png`** (already in place — the C–P bond cleavage
+reaction scheme under KOtBu / THF from
+[`examples/template2.chemvas`](../../examples/template2.chemvas), shown on the
+canvas). The items below are optional extras you can add later to enrich the README.
 
 ## Branding images (generated)
 
@@ -12,7 +13,7 @@ Open Graph card) are generated from the app icon by
 Regenerate both after editing the mark or the wordmark strings:
 
 ```bash
-QT_QPA_PLATFORM=offscreen .venv/bin/python scripts/generate_branding_images.py
+QT_QPA_PLATFORM=offscreen python scripts/generate_branding_images.py
 ```
 
 `social-preview.png` isn't referenced from the README — upload it once under
@@ -37,11 +38,11 @@ Still image of a region:
 
 ```bash
 # interactive crosshair → saves a PNG to ~/Desktop
-screencapture -i ~/Desktop/hero.png
+screencapture -i ~/Desktop/demo.png
 ```
 
-Or press <kbd>⌘</kbd><kbd>⇧</kbd><kbd>4</kbd> and drag. Move the result here as
-`docs/images/hero.png`.
+Or press <kbd>⌘</kbd><kbd>⇧</kbd><kbd>4</kbd> and drag. Move the result here — over
+`demo.png` if it is a new hero, otherwise under one of the filenames above.
 
 For a short GIF, [Kap](https://getkap.co) (free, open source) is the easiest — record
 the window, export as GIF. From the command line you can also record a `.mov` with

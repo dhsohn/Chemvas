@@ -7,8 +7,9 @@ assignees: ''
 ---
 
 **What problem does this solve?**
-Describe the use case or the gap you're hitting (e.g. "I need to export to MOL so I
-can open my structure in another tool").
+Describe the use case or the gap you're hitting (e.g. "I need to export a whole
+scheme as a multi-molecule SDF so I can hand every structure to another tool in
+one file").
 
 **Proposed solution**
 What you'd like Chemvas to do.

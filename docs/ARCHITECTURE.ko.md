@@ -39,6 +39,7 @@
 - **Ports 모듈** (`*_ports.py`): 서비스 컨테이너(`canvas_services_for` / window 비공개 저장소)를 해석할 수 있는 유일한 모듈. 그 외 모든 코드는 협력자를 주입받거나 port를 호출한다. 생산 코드의 port는 canonical `CanvasRuntimeServices` API만 사용한다. 응집된 그룹은 묶어서 유지하고 `graph_service`, `tool_controller`, `hover`, `atom_label_service` 같은 단일 runtime은 직접 보관한다. 평면 서비스 별칭과 duck-typed 생산 adapter는 삭제되었고, 집중 테스트는 `tests/runtime_services.py`로 부분 canonical runtime을 만든다.
 - **서비스와 컨트롤러**: `chemvas.ui.canvas_services.py`에서 캔버스당 한 번, 명시적 키워드 주입으로 조립된다 — 서비스 내부의 서비스 로케이터 금지, 누락된 배선을 숨기는 `=None` 협력자 기본값 금지. 조립은 응집된 그룹은 `CanvasRuntimeServices`의 bundle로 보관하고, runtime이 하나면 단일 멤버 bundle을 만들지 않고 직접 보관한다. 기존 graph/tool wrapper bundle과 builder 주입 composer 계층은 삭제되었다.
 - **core는 UI 및 Qt와 분리된다**: `app/chemvas/core`는 모듈 수준에서 `ui`를 import하지 않는다(`chemvas.core.history.py`의 지연 해석 프로토콜 구현만 예외). 또한 Qt를 import하지 않으며, 구체 Qt 렌더링은 `chemvas.adapters.qt.renderer`에 둔다. 새로운 core-to-Qt 의존성은 금지한다.
+- **RDKit은 선택적이다**: 앱 시작 경로에서 절대 하드 import가 되어서는 안 된다. RDKit이 필요한 기능은 그것이 없을 때 우아하게 축소되거나 명확한 메시지와 함께 실패한다 — `chemvas.core.rdkit_adapter` 참조. 아래 3D 제약은 이 규칙이 export 동작에 대해 무엇을 뜻하는지를 적은 것이고, 규칙 자체는 일반적이다.
 
 이 규칙들은 `tests/test_architecture_boundaries.py`가 강제한다. 신규 규칙은
 의존성 계약이나 일반 패턴 금지로 작성한다. 일부 전환기 검사는 아직 제거된

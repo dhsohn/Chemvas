@@ -16,9 +16,8 @@
 
 ## Checklist
 
-- [ ] `python -m ruff check .` passes
-- [ ] `python -m mypy` passes
-- [ ] Affected tests pass (`QT_QPA_PLATFORM=offscreen python -m pytest tests/test_<area>.py`)
+- [ ] `make check` passes — the whole local gate: lint, formatting, mypy, the
+      file-isolated test suite, and the `machine.json` conformance check
 - [ ] Added/updated tests for the change
 - [ ] Did not cross an architecture boundary (`tests/test_architecture_boundaries.py` still passes) — see [CONTRIBUTING.md](../CONTRIBUTING.md)
 - [ ] Updated `CHANGELOG.md` (under `Unreleased`) if user-visible

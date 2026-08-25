@@ -5,7 +5,7 @@ Both reuse the benzene mark from the app icon and add the "Chemvas" wordmark +
 tagline with QPainter, on the brand teal so they read the same in GitHub's light
 and dark themes. Run after changing the mark or the strings below:
 
-    QT_QPA_PLATFORM=offscreen .venv/bin/python scripts/generate_branding_images.py
+    QT_QPA_PLATFORM=offscreen python scripts/generate_branding_images.py
 
 The wordmark uses the host's system sans; the generated PNGs are committed so
 contributors don't need to reproduce the font. Outputs land in docs/images/.
