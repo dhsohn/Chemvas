@@ -2802,10 +2802,11 @@ def test_design_icon_orphan_glyphs_stay_removed() -> None:
     renderer = APP_ROOT / "chemvas" / "ui" / "main_window_design_icon_renderer.py"
     renderer_source = renderer.read_text(encoding="utf-8")
 
-    # These glyphs lost their last consumer when the twelve utility icon
-    # accessors went (PR #146) — except "select", which no caller ever named:
-    # icon_select has always drawn the move glyph. A caller that needs one of
-    # these adds the glyph back together with the accessor that renders it.
+    # Eleven of these lost their last consumer when twelve icon accessors
+    # went (PR #146); "select" never had one, because icon_select has always
+    # drawn the move glyph. A caller that needs one adds the glyph back
+    # together with the accessor that renders it. The key is matched however
+    # it is quoted, so a re-add cannot slip past on quote style alone.
     for glyph_name in (
         "select",
         "bond_length",
@@ -2820,7 +2821,8 @@ def test_design_icon_orphan_glyphs_stay_removed() -> None:
         "templates",
         "undo",
     ):
-        assert f'"{glyph_name}":' not in renderer_source
+        quoted = re.compile("[\"']" + re.escape(glyph_name) + "[\"']\\s*:")
+        assert not quoted.search(renderer_source)
 
 
 def test_main_window_tool_icons_use_only_static_design_mapping() -> None:

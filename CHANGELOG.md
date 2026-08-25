@@ -33,7 +33,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   renders, checked by rebuilding the full reachable set (literal calls, the
   template label table, and every dynamically built arrow/preset/orbital/
   bracket/shape/stroke name expanded over its actual value domain) and by an
-  offscreen render of all 79 spec-named icons. Eleven of the glyphs lost their
+  offscreen render of every surviving icon accessor and every glyph the
+  table still holds. Eleven of the glyphs lost their
   last consumer when the utility icon accessors went; the twelfth, "select",
   turned out never to have had one — the select tool's accessor has always
   drawn the move glyph. A boundary test pins all twelve as removed.
