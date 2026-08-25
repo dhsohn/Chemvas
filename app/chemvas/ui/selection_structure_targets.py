@@ -2,23 +2,21 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
+from chemvas.domain.document import VALID_ARROW_KINDS
 from chemvas.ui.canvas_atom_graphics_state import visible_atom_item_for
 from chemvas.ui.canvas_bond_graphics_state import bond_items_for_id
 
-STRUCTURE_OVERLAY_KINDS = {
-    "arrow",
-    "equilibrium",
-    "resonance",
-    "curved_single",
-    "curved_double",
-    "inhibit",
-    "dotted",
-    "ts_bracket",
-    "shape",
-    "orbital",
-    "note",
-    "mark",
-}
+# Every arrow kind the document schema knows, plus the standalone annotation
+# items a structure selection pulls in alongside it.
+STRUCTURE_OVERLAY_KINDS = VALID_ARROW_KINDS | frozenset(
+    {
+        "ts_bracket",
+        "shape",
+        "orbital",
+        "note",
+        "mark",
+    }
+)
 
 
 def structure_selection_targets_for_item(

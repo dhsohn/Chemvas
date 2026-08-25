@@ -8,10 +8,6 @@ from chemvas.ui.canvas_scene_state import canvas_scene_for, optional_canvas_scen
 from chemvas.ui.canvas_service_ports import scene_item_controller_for_access
 
 
-def _optional_item_attribute(item: object, name: str) -> object | None:
-    return getattr(item, name, None)
-
-
 def scene_item_controller(canvas):
     return scene_item_controller_for_access(canvas)
 
@@ -97,7 +93,7 @@ def item_can_be_added_to_scene(scene, item) -> bool:
         return False
     if scene is None:
         return False
-    scene_method = _optional_item_attribute(item, "scene")
+    scene_method = getattr(item, "scene", None)
     if not callable(scene_method):
         return True
     try:
@@ -126,7 +122,7 @@ def item_is_in_scene(scene, item) -> bool:
         return False
     if scene is None:
         return False
-    scene_method = _optional_item_attribute(item, "scene")
+    scene_method = getattr(item, "scene", None)
     if not callable(scene_method):
         return False
     try:

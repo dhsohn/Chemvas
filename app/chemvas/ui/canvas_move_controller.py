@@ -5,6 +5,7 @@ from typing import Any
 from PyQt6.QtCore import QPointF, QRectF
 from PyQt6.QtGui import QPolygonF
 
+from chemvas.domain.document import VALID_ARROW_KINDS
 from chemvas.features.annotations import normalized_shape_kind, shape_path
 from chemvas.ui.atom_coords_access import (
     atom_coords_3d_for_id,
@@ -23,6 +24,16 @@ from chemvas.ui.canvas_scene_items_state import ring_items_for
 from chemvas.ui.handle_state import active_handles_for, handle_target_for
 from chemvas.ui.mark_item_access import mark_center_for
 from chemvas.ui.selection_service_access import refresh_selection_outline_for
+
+# Every arrow kind the document schema knows, plus the annotation items that
+# move by a plain moveBy with their stored geometry patched afterwards.
+_MOVE_BY_ITEM_KINDS = VALID_ARROW_KINDS | frozenset(
+    {
+        "ts_bracket",
+        "orbital",
+        "note",
+    }
+)
 
 
 class CanvasMoveController:
@@ -90,18 +101,7 @@ class CanvasMoveController:
                 item.setPath(
                     shape_path(new_rect, normalized_shape_kind(data.get("shape_kind")))
                 )
-        elif kind in {
-            "arrow",
-            "equilibrium",
-            "resonance",
-            "curved_single",
-            "curved_double",
-            "inhibit",
-            "dotted",
-            "ts_bracket",
-            "orbital",
-            "note",
-        }:
+        elif kind in _MOVE_BY_ITEM_KINDS:
             item.moveBy(dx, dy)
             if kind == "orbital":
                 data = item.data(1) or {}

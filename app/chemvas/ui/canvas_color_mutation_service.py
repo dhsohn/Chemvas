@@ -88,15 +88,11 @@ def _graphics_item_is_deleted(item: object) -> bool:
     return isinstance(item, QGraphicsItem) and sip.isdeleted(item)
 
 
-def _optional_live_capture_attribute(item: object, name: str) -> object | None:
-    return getattr(item, name, None)
-
-
 def _graphics_item_data_for_capture(item: object, role: int) -> object:
     if _graphics_item_is_deleted(item):
         return _DELETED_GRAPHICS_ITEM
     try:
-        data = _optional_live_capture_attribute(item, "data")
+        data = getattr(item, "data", None)
         return data(role) if callable(data) else None
     except Exception:
         if _graphics_item_is_deleted(item):
@@ -108,7 +104,7 @@ def _captured_graphics_brush(item: object) -> QBrush | None:
     if _graphics_item_is_deleted(item):
         return None
     try:
-        brush = _optional_live_capture_attribute(item, "brush")
+        brush = getattr(item, "brush", None)
         if not callable(brush):
             return None
         value = brush()
@@ -128,7 +124,7 @@ def _captured_graphics_pen(item: object) -> QPen | None:
     if _graphics_item_is_deleted(item):
         return None
     try:
-        pen = _optional_live_capture_attribute(item, "pen")
+        pen = getattr(item, "pen", None)
         if not callable(pen):
             return None
         value = pen()
