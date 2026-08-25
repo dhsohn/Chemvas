@@ -64,19 +64,13 @@ def open_new_window(
         initialize_window(window)
     if reference_window is not None:
         _cascade(window, reference_window)
-    show = getattr(window, "show", None)
-    if callable(show):
-        show()
+    window.show()
     return window
 
 
 def _cascade(window: Any, reference_window: Any, *, offset: int = 32) -> None:
-    geometry = getattr(reference_window, "geometry", None)
-    move = getattr(window, "move", None)
-    if not (callable(geometry) and callable(move)):
-        return
-    reference_geometry = geometry()
-    move(reference_geometry.x() + offset, reference_geometry.y() + offset)
+    reference_geometry = reference_window.geometry()
+    window.move(reference_geometry.x() + offset, reference_geometry.y() + offset)
 
 
 __all__ = [
