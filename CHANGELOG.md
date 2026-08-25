@@ -9,10 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - Removed guards that defended against states the code cannot reach, and
-  narrowed two that were hiding real failures. Nothing about drawing, saving,
-  exporting or recovering a document changes when the application is wired
-  correctly — but when it is *not*, several operations that used to do nothing
-  quietly now fail loudly. The internal service ports (roughly fifty calls
+  narrowed two that were hiding real failures. Nothing about drawing, saving
+  or exporting a document changes when the application is wired correctly —
+  but when it is *not*, several operations that used to do nothing quietly now
+  fail loudly. Session recovery keeps skipping a document it cannot read; the
+  set of read failures it recognises is unchanged, and one it never recognised
+  is now covered (see Fixed). The internal service ports (roughly fifty calls
   across eleven modules), the tool context's ports, the window and 3D-preview
   ports and the main window's status bar were all reached through capability
   probes that returned "missing" and let the caller substitute a silent
@@ -94,6 +96,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   first.
 
 ### Fixed
+- Opening a document whose numbers are too large for the decimal parser now
+  reports it as an invalid file instead of raising a bare arithmetic error.
+  Reading a `.chemvas` file promises exactly two failures — the file could not
+  be read, or it is not a valid Chemvas file — but a number with an exponent
+  past the decimal limit escaped as `InvalidOperation`, which is neither. On
+  the File menu that surfaced as a generic failure; in session recovery, which
+  runs before the window exists and skips documents it cannot read, it would
+  have aborted the launch, and kept aborting it, since the recorded session is
+  only pruned after a recovery finishes.
 - The headless commands that create a new file — `compose-document`,
   `patch-document`, `render-document` and the calculation bundle writers — no
   longer close a file descriptor they have already handed away when the write

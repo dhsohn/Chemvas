@@ -458,7 +458,11 @@ class _FakeCanvas:
         self.services = canvas_runtime_services(
             history_service=self.history_service,
             # Serializing a mark's state asks the build service where its
-            # centre is; for a non-text item the real one answers item.pos().
+            # centre is. The marks here are text items, for which the real
+            # service answers pos() plus the bounding-rect centre -- this
+            # double answers pos() alone, which is what the removed silent
+            # arm did. These tests assert clipboard payload plumbing, not
+            # mark geometry, so the offset does not reach an assertion.
             scene_decoration_build_service=SimpleNamespace(
                 mark_center=lambda item: item.pos()
             ),

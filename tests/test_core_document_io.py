@@ -115,6 +115,30 @@ class DocumentIOTest(unittest.TestCase):
             self.assertEqual(path.read_bytes(), b"first")
             self.assertEqual(list(path.parent.glob(f".{path.name}.staging-*")), [])
 
+    def test_reading_rejects_a_number_decimal_refuses_to_parse(self) -> None:
+        # strict_json_loads parses floats as Decimal, which raises
+        # InvalidOperation -- an ArithmeticError, not a ValueError -- for an
+        # exponent past MAX_EMAX. Session recovery reads documents before the
+        # window exists and treats ValueError as "skip this one", so anything
+        # else escaping here aborts startup.
+        payload = json.dumps(
+            {
+                "type": CHEMVAS_FILE_TYPE,
+                "version": CANVAS_FILE_VERSION,
+                "state": _canvas_state(),
+            }
+        )
+        oversized = payload.replace(
+            '"version"', '"x": 1e99999999999999999999, "version"', 1
+        )
+
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "oversized.chemvas"
+            path.write_text(oversized, encoding="utf-8")
+
+            with self.assertRaisesRegex(ValueError, "Invalid Chemvas file"):
+                read_document(path)
+
     def test_failed_publish_closes_no_descriptor_it_no_longer_owns(self) -> None:
         # The staging file object closes the descriptor on its way out, so a
         # second close in the failure path would land on a number the process
