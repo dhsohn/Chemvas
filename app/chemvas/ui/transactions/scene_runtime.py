@@ -958,7 +958,6 @@ def _verify_scene_membership(
     item,
     *,
     attached: bool,
-    strict: bool = False,
 ) -> None:
     scene_method = _snapshot_attribute(item, "scene")
     if not callable(scene_method):
@@ -972,7 +971,7 @@ def _verify_scene_membership(
         raise RuntimeError(f"scene restore failed to {action} an item")
 
 
-def _direct_scene_remove(scene, item, *, strict: bool = False) -> None:
+def _direct_scene_remove(scene, item) -> None:
     remove_item = _snapshot_attribute(scene, "removeItem")
     if callable(remove_item):
         try:
@@ -985,7 +984,6 @@ def _direct_scene_remove(scene, item, *, strict: bool = False) -> None:
             scene,
             item,
             attached=False,
-            strict=strict,
         )
         return
     detach = _snapshot_attribute(scene, "detach")
@@ -1000,13 +998,12 @@ def _direct_scene_remove(scene, item, *, strict: bool = False) -> None:
             scene,
             item,
             attached=False,
-            strict=strict,
         )
         return
     raise RuntimeError("scene does not provide a direct item-removal operation")
 
 
-def _direct_scene_add(scene, item, *, strict: bool = False) -> None:
+def _direct_scene_add(scene, item) -> None:
     add_item = _snapshot_attribute(scene, "addItem")
     if callable(add_item):
         try:
@@ -1019,7 +1016,6 @@ def _direct_scene_add(scene, item, *, strict: bool = False) -> None:
             scene,
             item,
             attached=True,
-            strict=strict,
         )
         return
     attach = _snapshot_attribute(scene, "attach")
@@ -1034,7 +1030,6 @@ def _direct_scene_add(scene, item, *, strict: bool = False) -> None:
             scene,
             item,
             attached=True,
-            strict=strict,
         )
         return
     raise RuntimeError("scene does not provide a direct item-add operation")
@@ -1315,7 +1310,6 @@ def _restore_scene_contents(
                     _direct_scene_remove,
                     scene,
                     item,
-                    strict=errors is not None,
                 ),
                 default=False,
                 errors=errors,
@@ -1358,7 +1352,6 @@ def _restore_scene_contents(
                     _direct_scene_add,
                     scene,
                     item,
-                    strict=errors is not None,
                 ),
                 default=False,
                 errors=errors,
@@ -1384,7 +1377,6 @@ def _restore_scene_contents(
                         _direct_scene_add,
                         scene,
                         item,
-                        strict=errors is not None,
                     ),
                     default=False,
                     errors=errors,
@@ -1465,7 +1457,7 @@ def _restore_expected_scene_membership(
         try:
             if _item_is_attached_to_scene(scene, item, strict=True):
                 return
-            _direct_scene_add(scene, item, strict=True)
+            _direct_scene_add(scene, item)
         except Exception as restore_error:
             errors.append(restore_error)
 
