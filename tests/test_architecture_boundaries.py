@@ -5058,6 +5058,10 @@ def test_cycle_membership_is_decided_in_one_module() -> None:
     a second implementation of the question, cache or no cache. Importing it
     under another name still counts, because the import is read rather than
     the call.
+
+    What escapes: reaching the function off its module rather than by name
+    (``getattr(graph_algorithms, "...")``), because then neither an import of
+    the name nor a call spelling it appears in the tree.
     """
     assert _modules_using(CYCLE_SEARCH_HELPER) == [GRAPH_INDEX_OPERATIONS_MODULE]
 
