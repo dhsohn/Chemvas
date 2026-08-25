@@ -42,8 +42,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   remains of the restore side keeps its flag — there it is genuinely dynamic,
   strict during a normal restore and best-effort while a rollback is already
   unwinding — so `_item_parent` and `_item_is_attached_to_scene` still take
-  `strict=errors is not None`, as do the scene-item helpers the paste path
-  reaches leniently.
+  `strict=errors is not None`. The scene-item helpers keep the flag for a
+  different reason: the rollback inside `create_scene_items_atomically` reads
+  the scene leniently, by omitting the argument, so that a scene which can no
+  longer answer does not mask the failure already being unwound.
 - **Five parameters their functions never read.**
   `tool_action_key_for_canvas_state` branches on the active tool alone, so
   `active_bond_style` and `mark_kind` go, and the toolbar sync no longer looks

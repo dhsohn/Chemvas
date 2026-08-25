@@ -13,7 +13,6 @@ except ModuleNotFoundError:
 if QApplication is not None:
     try:
         from chemvas.bootstrap.main_window import build_main_window
-        from chemvas.ui.canvas_tool_settings_state import set_tool_setting_for
         from chemvas.ui.main_window_ports import (
             active_canvas_for_window,
             services_for_window,
@@ -135,9 +134,6 @@ class MainWindowToolStateServiceTest(unittest.TestCase):
         active_canvas_for_window(
             self.window
         ).services.tool_controller.active = SimpleNamespace(name="bond")
-        set_tool_setting_for(
-            active_canvas_for_window(self.window), "active_bond_style", "hash"
-        )
         self.service.sync_tool_actions_from_canvas(self.window)
         self.assertTrue(self.window.ui_references.tool_actions["bond"].isChecked())
 
@@ -145,9 +141,6 @@ class MainWindowToolStateServiceTest(unittest.TestCase):
         active_canvas_for_window(
             self.window
         ).services.tool_controller.active = SimpleNamespace(name="mark")
-        set_tool_setting_for(
-            active_canvas_for_window(self.window), "mark_kind", "minus"
-        )
         self.service.sync_tool_actions_from_canvas(self.window)
         self.assertTrue(self.window.ui_references.tool_actions["mark"].isChecked())
 
