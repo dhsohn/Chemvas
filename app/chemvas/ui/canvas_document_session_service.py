@@ -85,6 +85,9 @@ from chemvas.ui.transactions.object_graph_snapshot import (
 from chemvas.ui.transactions.object_graph_snapshot import (
     ObjectStateSnapshot as _ObjectStateSnapshot,
 )
+from chemvas.ui.transactions.object_graph_snapshot import (
+    collect_restore_errors,
+)
 from chemvas.ui.transactions.scene_rect import (
     SceneRectSnapshot,
     SceneRectStateSnapshot,
@@ -119,15 +122,6 @@ _DOCUMENT_MUTATED_RUNTIME_FIELDS = (
 )
 
 
-def _capture_optional_attribute(
-    target: object,
-    name: str,
-    *,
-    default: object = None,
-) -> object:
-    return getattr(target, name, default)
-
-
 def _add_scene_recovery_note(
     original_error: BaseException,
     secondary_error: BaseException,
@@ -138,15 +132,6 @@ def _add_scene_recovery_note(
         f"Document scene recovery also failed while {phase}: "
         f"{type(secondary_error).__name__}: {secondary_error}"
     )
-
-
-def _collect_errors(operation, destination: list[BaseException]) -> None:
-    try:
-        result = operation()
-    except Exception as exc:
-        destination.append(exc)
-        return
-    destination.extend(result)
 
 
 @dataclass(slots=True)
@@ -179,7 +164,7 @@ class _DetachedSceneSnapshot:
 
     @classmethod
     def capture(cls, canvas) -> _DetachedSceneSnapshot | None:
-        scene_method = _capture_optional_attribute(canvas, "scene")
+        scene_method = getattr(canvas, "scene", None)
         scene = scene_method() if callable(scene_method) else None
         if scene is None:
             return None
@@ -440,9 +425,9 @@ class _CanvasRollbackSnapshot:
             canvas.model = self.model
         except Exception as exc:
             errors.append(exc)
-        _collect_errors(self.containers.restore, errors)
+        collect_restore_errors(self.containers.restore, errors)
         for snapshot in self.object_states:
-            _collect_errors(snapshot.restore, errors)
+            collect_restore_errors(snapshot.restore, errors)
         if self.scene is not None:
             try:
                 self.scene.restore()
@@ -452,9 +437,9 @@ class _CanvasRollbackSnapshot:
         # registries even while scene signals are blocked. Those registries
         # are rollback authority too, so make the captured object state the
         # final silent writer after every scene-side operation.
-        _collect_errors(self.containers.restore, errors)
+        collect_restore_errors(self.containers.restore, errors)
         for snapshot in self.object_states:
-            _collect_errors(snapshot.restore, errors)
+            collect_restore_errors(snapshot.restore, errors)
         return errors
 
     def commit_replacement(self) -> None:
@@ -714,10 +699,10 @@ class CanvasDocumentSessionService:
             object_states.append(snapshot)
             return snapshot
 
-        runtime_state = _capture_optional_attribute(self.canvas, "runtime_state")
+        runtime_state = getattr(self.canvas, "runtime_state", None)
         if runtime_state is not None:
             for name in _DOCUMENT_MUTATED_RUNTIME_FIELDS:
-                append_snapshot(_capture_optional_attribute(runtime_state, name))
+                append_snapshot(getattr(runtime_state, name, None))
 
         append_snapshot(
             renderer_for(self.canvas),
@@ -728,24 +713,24 @@ class CanvasDocumentSessionService:
             names=("settings", "scene_items"),
         )
 
-        model = _capture_optional_attribute(self.canvas, "model")
+        model = getattr(self.canvas, "model", None)
         append_snapshot(
             model,
             names=("atoms", "bonds", "next_atom_id", "atom_annotations"),
         )
-        atoms = _capture_optional_attribute(model, "atoms")
+        atoms = getattr(model, "atoms", None)
         if isinstance(atoms, dict):
             for atom in tuple(atoms.values()):
                 append_snapshot(atom)
-        bonds = _capture_optional_attribute(model, "bonds")
+        bonds = getattr(model, "bonds", None)
         if isinstance(bonds, (list, tuple)):
             for bond in tuple(bonds):
                 if bond is not None:
                     append_snapshot(bond)
 
         selection_info = selection_info_state_for(self.canvas)
-        status_callback = _capture_optional_attribute(selection_info, "callback")
-        status_cache = _capture_optional_attribute(selection_info, "cache")
+        status_callback = getattr(selection_info, "callback", None)
+        status_cache = getattr(selection_info, "cache", None)
         status_publication = _DocumentStatusPublication(
             callback=status_callback if callable(status_callback) else None,
             cache=(

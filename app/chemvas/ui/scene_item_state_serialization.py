@@ -11,6 +11,7 @@ from PyQt6.QtWidgets import (
     QGraphicsTextItem,
 )
 
+from chemvas.domain.document import VALID_ARROW_KINDS
 from chemvas.features.annotations import (
     DEFAULT_BRACKET_KIND,
     normalized_bracket_kind,
@@ -23,15 +24,8 @@ from chemvas.ui.canvas_model_access import atom_annotation_for, atom_for_id
 
 MarkCenterGetter = Callable[[Any], QPointF]
 
-ARROW_KINDS = {
-    "arrow",
-    "equilibrium",
-    "resonance",
-    "curved_single",
-    "curved_double",
-    "inhibit",
-    "dotted",
-}
+# The document schema owns the arrow kinds; the scene layer reads the same set.
+ARROW_KINDS = VALID_ARROW_KINDS
 
 
 def embedded_scene_item_state(item) -> dict:

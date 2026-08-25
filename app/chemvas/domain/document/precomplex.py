@@ -15,7 +15,8 @@ from .precomplex_profile import precomplex_placement_profile, radius_provenance_
 MAX_ATOMS = 2000
 MAX_XYZ_BYTES = 512_000
 NO_PRECOMPLEX_JSON = '{"kind":"none"}'
-_SHA256_RE = re.compile(r"[0-9a-f]{64}\Z")
+# Public because precomplex generation validates the same hashes against it.
+SHA256_HEX_RE = re.compile(r"[0-9a-f]{64}\Z")
 _CANDIDATE_ID_RE = re.compile(r"pc-[0-9a-f]{64}\Z")
 _CONFORMER_ID_RE = re.compile(r"conf-[0-9a-f]{64}\Z")
 
@@ -481,7 +482,7 @@ def _validate_selection(value: object, candidates: Mapping[str, str]) -> None:
 
 
 def _sha256(value: object, label: str) -> str:
-    if not isinstance(value, str) or _SHA256_RE.fullmatch(value) is None:
+    if not isinstance(value, str) or SHA256_HEX_RE.fullmatch(value) is None:
         raise ValueError(f"Invalid endpoint precomplex {label}.")
     return value
 

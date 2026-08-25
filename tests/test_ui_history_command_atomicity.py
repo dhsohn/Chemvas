@@ -466,6 +466,12 @@ def test_exact_scene_rect_restore_runs_after_transient_renderer_geometry() -> No
 
 
 def test_exact_scene_restore_reports_missing_bond_renderer_contract() -> None:
+    # Constructing a QGraphicsScene without a QApplication is undefined; this
+    # was the one scene test in the file missing the guard its neighbours use,
+    # and it segfaulted whenever it ran without an earlier test happening to
+    # leave an application alive.
+    app = QApplication.instance() or QApplication([])
+    app.setQuitOnLastWindowClosed(False)
     scene = QGraphicsScene()
     canvas = SimpleNamespace(
         scene=lambda: scene,

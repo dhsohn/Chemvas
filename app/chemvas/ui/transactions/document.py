@@ -17,6 +17,9 @@ from chemvas.ui.transactions.object_graph_snapshot import (
 from chemvas.ui.transactions.object_graph_snapshot import (
     SceneItemExactSnapshot as _SceneItemExactSnapshot,
 )
+from chemvas.ui.transactions.object_graph_snapshot import (
+    collect_restore_errors,
+)
 from chemvas.ui.transactions.scene_rect import (
     SceneRectSnapshot,
     scene_rect_is_automatic,
@@ -31,18 +34,6 @@ from chemvas.ui.transactions.scene_runtime import (
 )
 
 _MISSING_RENDERER_STYLE = object()
-
-
-def _collect_restore_errors(
-    operation,
-    destination: list[BaseException],
-) -> None:
-    try:
-        result = operation()
-    except Exception as exc:
-        destination.append(exc)
-        return
-    destination.extend(result)
 
 
 def _add_delete_rollback_note(
@@ -76,20 +67,11 @@ class MoveGestureScope:
     scene_items: tuple[Any, ...]
 
 
-def _capture_optional_attribute(
-    target: object,
-    name: str,
-    *,
-    default: object = None,
-) -> object:
-    return getattr(target, name, default)
-
-
 def _capture_runtime_state_object(canvas, name: str) -> object | None:
-    runtime_state = _capture_optional_attribute(canvas, "runtime_state")
+    runtime_state = getattr(canvas, "runtime_state", None)
     if runtime_state is None:
         return None
-    return _capture_optional_attribute(runtime_state, name)
+    return getattr(runtime_state, name, None)
 
 
 _DELETE_MUTATED_RUNTIME_FIELDS = (
@@ -115,7 +97,7 @@ _DELETE_MUTATED_RUNTIME_FIELDS = (
 
 
 def _delete_scene_for_capture(canvas) -> object | None:
-    scene_method = _capture_optional_attribute(canvas, "scene")
+    scene_method = getattr(canvas, "scene", None)
     if not callable(scene_method):
         return None
     return scene_method()
@@ -126,7 +108,7 @@ def _delete_scene_items_for_capture(
 ) -> tuple[object, ...]:
     if scene is None:
         return ()
-    items = _capture_optional_attribute(scene, "items")
+    items = getattr(scene, "items", None)
     if not callable(items):
         return ()
     return tuple(items())
@@ -163,10 +145,7 @@ class DocumentSavepoint:
     ) -> DocumentSavepoint:
         containers = _ContainerGraphSnapshot()
 
-        notify_history_change_value = _capture_optional_attribute(
-            history_service,
-            "notify_change",
-        )
+        notify_history_change_value = getattr(history_service, "notify_change", None)
         notify_history_change = (
             notify_history_change_value
             if callable(notify_history_change_value)
@@ -197,18 +176,14 @@ class DocumentSavepoint:
             objects.append(snapshot)
             return snapshot
 
-        model = _capture_optional_attribute(canvas, "model")
+        model = getattr(canvas, "model", None)
         try:
             renderer = renderer_for(canvas)
         except AttributeError:
             # Savepoints also support deliberately model-only/headless canvases.
             renderer = None
         renderer_style = (
-            _capture_optional_attribute(
-                renderer,
-                "style",
-                default=_MISSING_RENDERER_STYLE,
-            )
+            getattr(renderer, "style", _MISSING_RENDERER_STYLE)
             if renderer is not None
             else _MISSING_RENDERER_STYLE
         )
@@ -216,13 +191,13 @@ class DocumentSavepoint:
             model,
             names=("next_atom_id", "atom_annotations", "atoms", "bonds"),
         )
-        atoms = _capture_optional_attribute(model, "atoms")
+        atoms = getattr(model, "atoms", None)
         if isinstance(atoms, dict):
             for atom_id, atom in tuple(atoms.items()):
                 if move_scope is not None and atom_id not in move_scope.atom_ids:
                     continue
                 append(atom)
-        bonds = _capture_optional_attribute(model, "bonds")
+        bonds = getattr(model, "bonds", None)
         if isinstance(bonds, (list, tuple)):
             for bond_id, bond in enumerate(tuple(bonds)):
                 if move_scope is not None and bond_id not in move_scope.bond_ids:
@@ -244,14 +219,11 @@ class DocumentSavepoint:
             state = _capture_runtime_state_object(canvas, name)
             runtime_states[name] = state
             append(state)
-        groups = _capture_optional_attribute(
-            runtime_states["group_state"],
-            "groups",
-        )
+        groups = getattr(runtime_states["group_state"], "groups", None)
         if isinstance(groups, dict):
             for group in groups.values():
                 append(group)
-        append(_capture_optional_attribute(history_service, "state"))
+        append(getattr(history_service, "state", None))
 
         # Lightweight test canvases use this list as their history stack.
         # Capturing it also makes a mutate-then-raise fake push transactional.
@@ -286,9 +258,8 @@ class DocumentSavepoint:
             for scene_item in scene_runtime.scene_items or ():
                 capture_scene_item(scene_item)
 
-            registered_ring_items = _capture_optional_attribute(
-                runtime_states["scene_items_state"],
-                "ring_items",
+            registered_ring_items = getattr(
+                runtime_states["scene_items_state"], "ring_items", None
             )
             if isinstance(registered_ring_items, (list, tuple)):
                 for scene_item in registered_ring_items:
@@ -309,10 +280,7 @@ class DocumentSavepoint:
         scene_rect_snapshot: SceneRectSnapshot | None = None
         scene_items_bounding_rect_getter = None
         if scene is not None:
-            items_bounding_rect = _capture_optional_attribute(
-                scene,
-                "itemsBoundingRect",
-            )
+            items_bounding_rect = getattr(scene, "itemsBoundingRect", None)
             scene_items_bounding_rect_getter = (
                 items_bounding_rect if callable(items_bounding_rect) else None
             )
@@ -402,10 +370,7 @@ class DocumentSavepoint:
                 # A savepoint also supports model-only/headless canvases, where
                 # there is no bond graphics collaborator to refresh.
                 return
-            bonds = (
-                _capture_optional_attribute(self.canvas_model, "bonds", default=())
-                or ()
-            )
+            bonds = getattr(self.canvas_model, "bonds", ()) or ()
             for bond_id, bond in enumerate(cast(Any, bonds)):
                 if bond is None:
                     continue
@@ -433,9 +398,9 @@ class DocumentSavepoint:
         *,
         secondary_errors: list[BaseException] | None = None,
     ) -> None:
-        _collect_restore_errors(self.containers.restore, errors)
+        collect_restore_errors(self.containers.restore, errors)
         for snapshot in self.objects:
-            _collect_restore_errors(snapshot.restore, errors)
+            collect_restore_errors(snapshot.restore, errors)
         try:
             self.canvas.model = self.canvas_model
         except Exception as exc:
@@ -457,7 +422,7 @@ class DocumentSavepoint:
             # pre-transaction primitive snapshots below stay authoritative
             # over anything it produces.
             self._refresh_bond_geometry(secondary_errors)
-        _collect_restore_errors(
+        collect_restore_errors(
             lambda: restore_primitive_graphics(
                 self.atom_primitive_graphics,
             ),
@@ -466,7 +431,7 @@ class DocumentSavepoint:
         # Restore each captured scene item once after canonical redraw so its
         # exact primitive state is the final writer.
         for scene_item in self.scene_items:
-            _collect_restore_errors(scene_item.restore, errors)
+            collect_restore_errors(scene_item.restore, errors)
         if self.renderer_style is not _MISSING_RENDERER_STYLE:
             try:
                 assert self.renderer is not None

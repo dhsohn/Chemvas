@@ -10,6 +10,11 @@ DEFAULT_BOLD_OUT_LENGTH_SCALE = 1.1
 
 
 def normalize_3d(dx: float, dy: float, dz: float) -> tuple[float, float, float] | None:
+    """Unit vector of ``(dx, dy, dz)``, or ``None`` for a degenerate length.
+
+    Bond geometry owns it so this module stays free of Qt: the selection
+    package imports it from here, and nothing here imports selection.
+    """
     length = math.sqrt(dx * dx + dy * dy + dz * dz)
     if length <= 1e-9:
         return None

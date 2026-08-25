@@ -35,7 +35,6 @@ if QApplication is not None:
     from chemvas.features.rendering import (
         bold_out_scale,
         extend_segment,
-        normalize_3d,
         scale_segment,
         trim_segment,
     )
@@ -570,8 +569,6 @@ class BondRendererUnitTest(unittest.TestCase):
         self.renderer.geometry_updater._reset_item_origin(line)
 
         self.assertEqual((line.pos().x(), line.pos().y()), (0.0, 0.0))
-        self.assertIsNone(normalize_3d(0.0, 0.0, 0.0))
-        self.assertEqual(normalize_3d(0.0, 3.0, 4.0), (0.0, 0.6, 0.8))
         self.assertEqual(scale_segment(0.0, 0.0, 10.0, 0.0, 1.0), (0.0, 0.0, 10.0, 0.0))
         scaled = scale_segment(0.0, 0.0, 10.0, 0.0, 1.2)
         self.assertAlmostEqual(scaled[0], -1.0)

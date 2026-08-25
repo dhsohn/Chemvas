@@ -14,27 +14,20 @@ from __future__ import annotations
 import inspect
 from collections.abc import Callable
 from dataclasses import dataclass, field
+from functools import partial
 from typing import Any, cast
 
 from PyQt6.QtCore import QRectF
 from PyQt6.QtWidgets import QGraphicsItem, QGraphicsTextItem
 
+from chemvas.domain.document import VALID_ARROW_KINDS
 from chemvas.ui.canvas_mark_registry import mark_registry_for
 from chemvas.ui.canvas_scene_items_state import scene_items_state_for
 from chemvas.ui.scene_item_access import item_is_unavailable_for_scene_operation
 from chemvas.ui.transactions.scene_rect import SceneRectSnapshot
 
-ARROW_KINDS = frozenset(
-    {
-        "arrow",
-        "equilibrium",
-        "resonance",
-        "curved_single",
-        "curved_double",
-        "inhibit",
-        "dotted",
-    }
-)
+# The document schema owns the arrow kinds; attach routing reads the same set.
+ARROW_KINDS = VALID_ARROW_KINDS
 
 _KIND_COLLECTION = {
     "ring": "ring_items",
@@ -59,6 +52,22 @@ def _add_attach_rollback_note(
         f"Scene-item attach recovery also failed while {phase}: "
         f"{type(rollback_error).__name__}: {rollback_error}"
     )
+
+
+def _run_attach_rollback_step(
+    original_error: BaseException | None,
+    phase: str,
+    description: str,
+    operation: Callable[[], object],
+) -> None:
+    try:
+        operation()
+    except Exception as rollback_error:
+        _add_attach_rollback_note(
+            original_error,
+            rollback_error,
+            phase=f"{description} after {phase}",
+        )
 
 
 def _optional_callable(target, name: str):
@@ -408,15 +417,7 @@ class SceneItemAttachSnapshot:
         *,
         phase: str,
     ) -> None:
-        def step(description: str, operation: Callable[[], object]) -> None:
-            try:
-                operation()
-            except Exception as rollback_error:
-                _add_attach_rollback_note(
-                    original_error,
-                    rollback_error,
-                    phase=f"{description} after {phase}",
-                )
+        step = partial(_run_attach_rollback_step, original_error, phase)
 
         collection_name = self.collection_name
         collection = self.collection
@@ -481,16 +482,7 @@ class SceneItemAttachSnapshot:
         restore_scene_rect: bool = True,
     ) -> None:
         ports = self.attach_ports
-
-        def step(description: str, operation: Callable[[], object]) -> None:
-            try:
-                operation()
-            except Exception as rollback_error:
-                _add_attach_rollback_note(
-                    original_error,
-                    rollback_error,
-                    phase=f"{description} after {phase}",
-                )
+        step = partial(_run_attach_rollback_step, original_error, phase)
 
         if ports is not None:
             step("detaching the item", lambda: ports.remove_item(self.item))

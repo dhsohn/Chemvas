@@ -4444,3 +4444,347 @@ def test_window_tool_settings_port_stays_removed() -> None:
     pattern = re.compile(r"\b_?tool_settings_for_window\b")
 
     assert _matching_lines(pattern, _app_python_files()) == []
+
+
+# --- Single-owner pins for constants and helpers that were duplicated -------
+#
+# Each rule below is a pattern ban, not an assertion that a phrasing exists:
+# it names the one module allowed to own a value or a shape and fails if a
+# second definition of the same thing appears anywhere under app/.
+
+
+_SET_BUILDERS = frozenset({"set", "frozenset"})
+
+
+def _split_call_strings(node: ast.expr) -> list[str] | None:
+    """The words of a literal ``"a b c".split()``, else ``None``.
+
+    A whitespace-separated string is a set of strings written without the
+    quotes and commas, so the pins have to read it as one.
+    """
+    if not isinstance(node, ast.Call) or node.keywords or len(node.args) > 1:
+        return None
+    function = node.func
+    if not isinstance(function, ast.Attribute) or function.attr != "split":
+        return None
+    subject = function.value
+    if not isinstance(subject, ast.Constant) or not isinstance(subject.value, str):
+        return None
+    separators: list[str] = []
+    for argument in node.args:
+        if not isinstance(argument, ast.Constant):
+            return None
+        if not isinstance(argument.value, str):
+            return None
+        separators.append(argument.value)
+    return subject.value.split(*separators)
+
+
+def _string_collection_value(node: ast.expr) -> tuple[str, ...] | None:
+    """The strings a single expression spells out, else ``None``."""
+    entries: tuple[object, ...]
+    if isinstance(node, (ast.Set, ast.Tuple, ast.List)):
+        try:
+            evaluated = ast.literal_eval(node)
+        except (ValueError, TypeError, SyntaxError):
+            return None
+        if not isinstance(evaluated, (set, frozenset, tuple, list)):
+            return None
+        entries = tuple(evaluated)
+    else:
+        words = _split_call_strings(node)
+        if words is None:
+            return None
+        entries = tuple(words)
+    strings = tuple(entry for entry in entries if isinstance(entry, str))
+    if not strings or len(strings) != len(entries):
+        return None
+    return strings
+
+
+def _set_builder_argument(node: ast.AST) -> ast.expr | None:
+    """The single argument of a ``set(...)``/``frozenset(...)`` call."""
+    if not isinstance(node, ast.Call) or node.keywords or len(node.args) != 1:
+        return None
+    if not isinstance(node.func, ast.Name) or node.func.id not in _SET_BUILDERS:
+        return None
+    return node.args[0]
+
+
+def _string_set_literals(tree: ast.AST) -> list[tuple[int, frozenset[str]]]:
+    """Every literal collection of plain strings, with its line number.
+
+    A duplicated set of strings is the same duplicate however it is spelled,
+    so a set display, a bare tuple and a bare list all count, as does
+    ``set(...)`` or ``frozenset(...)`` wrapping any of them or wrapping a
+    literal ``"a b c".split()``. A wrapped literal is reported once, at the
+    call, so a module that writes ``frozenset((...))`` stays one owner rather
+    than becoming two.
+
+    What still escapes: a collection assembled at runtime — from a dict's
+    keys or values, a comprehension, a concatenation of names, or a string
+    split on a computed separator — because none of those spell the members
+    where the source can be read.
+    """
+    wrapped = {
+        id(argument)
+        for node in ast.walk(tree)
+        if (argument := _set_builder_argument(node)) is not None
+    }
+    literals: list[tuple[int, frozenset[str]]] = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.expr) or id(node) in wrapped:
+            continue
+        argument = _set_builder_argument(node)
+        entries = _string_collection_value(node if argument is None else argument)
+        if entries is None:
+            continue
+        literals.append((node.lineno, frozenset(entries)))
+    return literals
+
+
+def _modules_listing(members: frozenset[str]) -> list[str]:
+    """Modules with a string-collection literal containing every member."""
+    owners: list[str] = []
+    for path in _app_python_files():
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for line_no, literal in _string_set_literals(tree):
+            if members <= literal:
+                owners.append(f"{path.relative_to(APP_ROOT.parents[0])}:{line_no}")
+    return owners
+
+
+ARROW_KIND_MEMBERS = frozenset(
+    {
+        "arrow",
+        "equilibrium",
+        "resonance",
+        "curved_single",
+        "curved_double",
+        "inhibit",
+        "dotted",
+    }
+)
+DOCUMENT_SETTINGS_KEY_MEMBERS = frozenset(
+    {
+        "bond_length_px",
+        "arrow_line_width",
+        "arrow_head_scale",
+        "orbital_phase_enabled",
+        "text_font_family",
+        "text_font_size",
+        "text_font_weight",
+        "text_italic",
+        "text_color",
+        "text_alignment",
+        "text_line_spacing",
+        "note_box_enabled",
+        "note_box_color",
+        "note_box_alpha",
+        "note_border_enabled",
+        "note_border_color",
+        "note_border_width",
+        "note_padding",
+        "sheet_size",
+        "sheet_orientation",
+    }
+)
+DOCUMENT_STATE_MODULE = "app/chemvas/domain/document/state.py"
+
+
+def test_arrow_kinds_are_listed_in_one_module() -> None:
+    """The seven arrow kind strings are spelled out exactly once.
+
+    Seven modules used to list them. An eighth kind added to the schema but
+    missed in one of the copies is silent: the document validates it while a
+    scene, an outline, an attach route, or a tool treats it as something else.
+    Supersets are fine as long as they union the schema's frozenset instead of
+    relisting the members.
+    """
+    owners = _modules_listing(ARROW_KIND_MEMBERS)
+
+    assert [owner.rsplit(":", 1)[0] for owner in owners] == [DOCUMENT_STATE_MODULE]
+
+
+def test_document_settings_keys_are_listed_in_one_module() -> None:
+    """The twenty document-settings keys are spelled out exactly once."""
+    owners = _modules_listing(DOCUMENT_SETTINGS_KEY_MEMBERS)
+
+    assert [owner.rsplit(":", 1)[0] for owner in owners] == [DOCUMENT_STATE_MODULE]
+
+
+def _spells_out_its_value(node: ast.expr) -> bool:
+    """True when the source spells the expression's value out in full."""
+    try:
+        ast.literal_eval(node)
+    except (ValueError, TypeError, SyntaxError):
+        return False
+    return True
+
+
+def _body_after_docstring(
+    node: ast.FunctionDef | ast.AsyncFunctionDef,
+) -> list[ast.stmt]:
+    """The function's statements, with a leading docstring dropped."""
+    first = node.body[0]
+    if (
+        isinstance(first, ast.Expr)
+        and isinstance(first.value, ast.Constant)
+        and isinstance(first.value.value, str)
+    ):
+        return node.body[1:]
+    return node.body
+
+
+def _getattr_forwarding_wrappers(source: str) -> list[tuple[int, str]]:
+    """Functions whose whole body forwards to ``getattr``.
+
+    The builtin already is that function, so the wrapper buys a name and
+    nothing else. The attribute may arrive as a parameter or be hardcoded as a
+    string, the default may be a parameter or any value the source spells out,
+    and the two- and three-argument forms both count. A docstring above the
+    ``return`` does not change the shape.
+
+    Deliberately not matched, because each is a different function rather than
+    a pass-through:
+
+    * a helper that passes a module-private sentinel as the default. The
+      caller cannot spell that value, so "no such attribute" comes back
+      distinguishable from "the attribute is None".
+    * a wrapper whose target is not one of its own parameters, which reads a
+      fixed object instead of forwarding the caller's.
+    """
+    wrappers: list[tuple[int, str]] = []
+    for node in ast.walk(ast.parse(source)):
+        if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        body = _body_after_docstring(node)
+        if len(body) != 1:
+            continue
+        statement = body[0]
+        if not isinstance(statement, ast.Return):
+            continue
+        call = statement.value
+        if not (
+            isinstance(call, ast.Call)
+            and isinstance(call.func, ast.Name)
+            and call.func.id == "getattr"
+            and not call.keywords
+            and len(call.args) in (2, 3)
+        ):
+            continue
+        parameters = {
+            argument.arg
+            for argument in (
+                node.args.posonlyargs + node.args.args + node.args.kwonlyargs
+            )
+        }
+        target, attribute, *default = call.args
+        if not isinstance(target, ast.Name) or target.id not in parameters:
+            continue
+        if isinstance(attribute, ast.Name):
+            if attribute.id not in parameters:
+                continue
+        elif not (
+            isinstance(attribute, ast.Constant) and isinstance(attribute.value, str)
+        ):
+            continue
+        if default:
+            fallback = default[0]
+            if isinstance(fallback, ast.Name):
+                if fallback.id not in parameters:
+                    continue
+            elif not _spells_out_its_value(fallback):
+                continue
+        wrappers.append((node.lineno, node.name))
+    return wrappers
+
+
+def test_no_production_function_only_forwards_to_getattr() -> None:
+    """A wrapper whose whole body forwards to getattr is getattr."""
+    violations = [
+        f"{path.relative_to(APP_ROOT.parents[0])}:{line_no}: {name}"
+        for path in _app_python_files()
+        for line_no, name in _getattr_forwarding_wrappers(
+            path.read_text(encoding="utf-8")
+        )
+    ]
+
+    assert violations == []
+
+
+def test_normalize_3d_has_one_production_owner() -> None:
+    """The 3-D unit-vector helper is defined once and re-exported.
+
+    Rotation geometry used to carry its own copy, epsilon and all. Selection
+    now re-exports the bond geometry implementation, which is an import, not a
+    second ``def``. Bond geometry owns it because that module imports no Qt,
+    while the selection package does; the edge only runs the cheap direction.
+    """
+    owners = [
+        path
+        for path in _app_python_files()
+        if re.search(
+            r"^def normalize_3d\b",
+            path.read_text(encoding="utf-8"),
+            re.MULTILINE,
+        )
+    ]
+
+    assert owners == [
+        APP_ROOT / "chemvas" / "features" / "rendering" / "bond_geometry.py"
+    ]
+
+
+def test_sha256_hex_pattern_is_compiled_in_one_module() -> None:
+    """One module compiles the 64-hex-digit hash pattern."""
+    pattern = re.compile(r"re\.compile\(\s*r?[\"\']\[0-9a-f\]\{64\}")
+    owners = sorted(
+        {
+            match.rsplit(":", 2)[0]
+            for match in _matching_lines(pattern, _app_python_files())
+        }
+    )
+
+    assert owners == ["app/chemvas/domain/document/precomplex.py"]
+
+
+def _inline_color_rollback_handlers(source: str) -> list[int]:
+    """Except-handlers that add a colour rollback note themselves.
+
+    ``_run_color_rollback_step`` is the one place that catches a failing
+    rollback and annotates the original error; anywhere else doing it inline
+    is that helper written out longhand.
+    """
+    tree = ast.parse(source)
+    helper_lines = {
+        node.lineno
+        for node in ast.walk(tree)
+        if isinstance(node, ast.FunctionDef) and node.name == "_run_color_rollback_step"
+    }
+    helper_bodies = {
+        inner
+        for node in ast.walk(tree)
+        if isinstance(node, ast.FunctionDef) and node.lineno in helper_lines
+        for inner in ast.walk(node)
+    }
+    violations: list[int] = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.ExceptHandler) or node in helper_bodies:
+            continue
+        for inner in ast.walk(node):
+            if (
+                isinstance(inner, ast.Call)
+                and isinstance(inner.func, ast.Name)
+                and inner.func.id == "_add_color_rollback_note"
+            ):
+                violations.append(inner.lineno)
+    return sorted(set(violations))
+
+
+def test_color_rollback_notes_go_through_the_step_helper() -> None:
+    """No handler expands ``_run_color_rollback_step`` by hand."""
+    module = APP_ROOT / "chemvas" / "ui" / "canvas_color_mutation_service.py"
+    violations = _inline_color_rollback_handlers(module.read_text(encoding="utf-8"))
+
+    assert violations == []

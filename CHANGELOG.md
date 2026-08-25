@@ -8,6 +8,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
+- Gave duplicated constants and helpers one owner each. This is internal
+  housekeeping and changes nothing about how the application behaves. The
+  arrow kinds are the part worth naming: the same seven strings were spelled
+  out in seven modules besides the schema, so adding a kind to the document
+  schema and missing one of the copies would have been silent — the document
+  would accept the new kind while a scene, an outline, an attach route or a
+  tool went on treating it as something else. All seven now read the schema's
+  set, and the four supersets union it instead of relisting the members.
+  Folded in the same way: the document-settings allowlist, a second copy of
+  `normalize_3d`, a twice-compiled SHA-256 pattern, five one-line `getattr`
+  wrappers (dropped in favour of the builtin), and three rollback helpers that
+  had been pasted out longhand. Architecture tests now fail if any of them is
+  written a second time.
 - Deleting a bond or an atom now also deletes the atoms the deletion leaves
   invisible on the sheet. An endpoint or former neighbour that ends up with no
   remaining bond disappears with the deletion, in the same undoable step —
