@@ -76,7 +76,6 @@ if QApplication is not None:
         center_for_coords_3d,
         flatten_planar_fragments_for,
         fragment_plane_normal_for,
-        normalize_3d,
         planar_fragment_components_for,
         rotate_point_around_axis_for,
         rotation_scale_for_coords_for,
@@ -707,10 +706,7 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
 
         same_view.push_command.assert_not_called()
 
-    def test_normalize_project_unproject_and_current_coords_3d_helpers(self) -> None:
-        self.assertIsNone(normalize_3d(0.0, 0.0, 0.0))
-        self.assertEqual(normalize_3d(0.0, 3.0, 4.0), (0.0, 0.6, 0.8))
-
+    def test_project_unproject_and_current_coords_3d_helpers(self) -> None:
         no_projection_view = SimpleNamespace(
             runtime_state=canvas_runtime_state(rotation_state=CanvasRotationState())
         )

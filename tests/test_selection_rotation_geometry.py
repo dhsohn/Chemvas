@@ -15,6 +15,17 @@ from chemvas.features.selection import (
 )
 
 
+def test_rendering_reexports_the_selection_normalize_3d() -> None:
+    """Bond geometry callers import it from `features.rendering`.
+
+    The selection package owns the implementation; this keeps the rendering
+    import path a re-export of the same object rather than a second copy.
+    """
+    from chemvas.features.rendering import normalize_3d as rendering_normalize_3d
+
+    assert rendering_normalize_3d is normalize_3d
+
+
 def test_normalize_and_center_for_coords_3d_cover_empty_and_valid_inputs() -> None:
     assert normalize_3d(0.0, 0.0, 0.0) is None
     assert normalize_3d(0.0, 3.0, 4.0) == (0.0, 0.6, 0.8)
