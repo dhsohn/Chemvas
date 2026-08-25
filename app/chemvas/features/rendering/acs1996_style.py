@@ -16,10 +16,8 @@ class ACS1996Style:
     # bond preview consume this value as-is — keep any emphasis factor folded
     # in here rather than multiplying at the call sites.
     bold_bond_width: float = 3.3
-    hash_bond_width: float = 1.3
     bond_spacing_px: float = 4.4
     hash_spacing_px: float = 3.0
-    wedge_width_px: float = 8.0
     atom_label_offset_px: float = 0.0
     font_family: str = "Arial"
     font_size_pt: int = 12

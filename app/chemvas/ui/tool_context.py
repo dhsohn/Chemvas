@@ -117,11 +117,6 @@ class ToolContext:
             self.hit_testing_service, "find_bond_near", pos, max_dist, default=None
         )
 
-    def bond_id_from_event(self, event) -> int | None:
-        return self._call_port(
-            self.hit_testing_service, "bond_id_from_event", event, default=None
-        )
-
     def toggle_item_selection(self, item) -> bool:
         return bool(
             self._call_port(

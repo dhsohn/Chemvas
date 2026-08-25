@@ -30,18 +30,14 @@ if QApplication is not None:
         CanvasAtomGraphicsState,
         set_atom_items_for,
     )
-    from chemvas.ui.canvas_geometry_access import (
-        label_cut_radius_for_atom_for,
-        mark_clearance_for_kind_for,
-        mark_target_distance_for_atom_for,
-        visible_label_rect_for_atom_for,
-    )
+    from chemvas.ui.canvas_geometry_access import mark_target_distance_for_atom_for
     from chemvas.ui.canvas_geometry_controller import CanvasGeometryController
     from chemvas.ui.canvas_rotation_state import CanvasRotationState
     from chemvas.ui.canvas_scene_items_state import (
         CanvasSceneItemsState,
         set_scene_item_collection_for,
     )
+    from chemvas.ui.canvas_service_ports import geometry_controller_for_access
 
 
 class _FakeLabelItem:
@@ -100,10 +96,12 @@ class CanvasViewLabelGeometryHelperTest(unittest.TestCase):
         set_atom_items_for(view, {1: _FakeLabelItem(QRectF(-1.0, -1.0, 2.0, 2.0))})
         self._bind_geometry_controller(view)
 
-        radius = label_cut_radius_for_atom_for(view, 1)
+        radius = geometry_controller_for_access(view).label_cut_radius_for_atom(1)
         self.assertAlmostEqual(radius, (math.sqrt(2.0) + 0.03) * 0.6)
 
-        self.assertIsNone(label_cut_radius_for_atom_for(view, 2))
+        self.assertIsNone(
+            geometry_controller_for_access(view).label_cut_radius_for_atom(2)
+        )
         empty_view = SimpleNamespace(
             model=view.model,
             renderer=view.renderer,
@@ -113,7 +111,9 @@ class CanvasViewLabelGeometryHelperTest(unittest.TestCase):
         )
         set_atom_items_for(empty_view, {})
         self._bind_geometry_controller(empty_view)
-        self.assertIsNone(label_cut_radius_for_atom_for(empty_view, 1))
+        self.assertIsNone(
+            geometry_controller_for_access(empty_view).label_cut_radius_for_atom(1)
+        )
 
     def test_mark_target_distance_for_atom_uses_expanded_visible_label_rect(
         self,
@@ -332,17 +332,11 @@ class CanvasViewLabelGeometryHelperTest(unittest.TestCase):
         ring_center_3d_for_bond_for(view, bond)
         label_rect_for_atom_for(view, 4)
         trim_line_for_labels_for(view, 1, 2, 0.0, 0.0, 3.0, 4.0)
-        visible_label_rect_for_atom_for(view, 5)
-        label_cut_radius_for_atom_for(view, 6)
-        mark_clearance_for_kind_for(view, "plus")
         mark_target_distance_for_atom_for(view, 7, 1.0, 0.0, "minus")
 
         controller.ring_center_for_bond.assert_called_once_with(bond)
         controller.ring_center_3d_for_bond.assert_called_once_with(bond)
         controller.label_rect_for_atom.assert_called_once_with(4)
-        controller.visible_label_rect_for_atom.assert_called_once_with(5)
-        controller.label_cut_radius_for_atom.assert_called_once_with(6)
-        controller.mark_clearance_for_kind.assert_called_once_with("plus")
         controller.mark_target_distance_for_atom.assert_called_once_with(
             7, 1.0, 0.0, "minus"
         )

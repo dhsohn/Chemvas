@@ -70,27 +70,6 @@ class FlipTool(Tool):
         return True
 
 
-class EditBondTool(Tool):
-    def __init__(self, canvas, *, context=None) -> None:
-        super().__init__("edit_bond", canvas, context=context)
-
-    def activate(self) -> None:
-        activate_tool_no_drag(self.canvas)
-
-    def on_mouse_press(self, event) -> bool:
-        if event.button() != Qt.MouseButton.LeftButton:
-            return False
-        item = self.context.item_at_event(event)
-        bond_id = None
-        if item is not None and item.data(0) == "bond":
-            bond_id = item.data(1)
-        if not isinstance(bond_id, int):
-            bond_id = self.context.bond_id_from_event(event)
-        if isinstance(bond_id, int):
-            self.context.cycle_bond_style(bond_id)
-        return True
-
-
 class DeleteTool(Tool):
     def __init__(self, canvas, *, context=None) -> None:
         super().__init__("delete", canvas, context=context)
@@ -244,4 +223,4 @@ class DeleteTool(Tool):
         self._changed = True
 
 
-__all__ = ["ColorTool", "DeleteTool", "EditBondTool", "FlipTool"]
+__all__ = ["ColorTool", "DeleteTool", "FlipTool"]

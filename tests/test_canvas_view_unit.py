@@ -64,7 +64,6 @@ if QApplication is not None:
     from chemvas.ui.selection_collection_access import (
         selected_bond_atom_ids_for,
         selected_structure_ids_for,
-        selection_signature_for,
         selection_snapshot_for,
         selection_target_item,
     )
@@ -91,7 +90,6 @@ if QApplication is not None:
     )
     from chemvas.ui.structure_payload_access import (
         build_3d_conversion_payload_for,
-        build_selected_structure_payload_for,
         build_structure_payload_for,
     )
 
@@ -486,27 +484,6 @@ class CanvasViewUnitTest(unittest.TestCase):
                 require_non_empty=True,
             )
 
-        selected_payload_scene = SimpleNamespace(
-            selectedItems=lambda: (_FakeItem("atom", 5), _FakeItem("bond", 6))
-        )
-        selected_payload_view = SimpleNamespace(
-            scene=lambda: selected_payload_scene,
-            model=SimpleNamespace(atoms={}, bonds=[]),
-            runtime_state=canvas_runtime_state(mark_registry=CanvasMarkRegistry()),
-        )
-        with mock.patch(
-            "chemvas.ui.structure_payload_access.build_structure_payload_state",
-            return_value=("payload", {}, (0.0, 0.0, 1.0, 1.0)),
-        ) as build_structure:
-            self.assertEqual(
-                build_selected_structure_payload_for(selected_payload_view),
-                ("payload", {}, (0.0, 0.0, 1.0, 1.0)),
-            )
-        build_structure.assert_called_once()
-        self.assertEqual(
-            build_structure.call_args.args, (selected_payload_view.model, {5}, {6}, {})
-        )
-
         payload_view = SimpleNamespace(
             runtime_state=canvas_runtime_state(mark_registry=CanvasMarkRegistry())
         )
@@ -698,9 +675,6 @@ class CanvasViewUnitTest(unittest.TestCase):
         self.assertFalse(uses_compact_label_hit_shape_for(SimpleNamespace(), "CH3"))
         self.assertEqual(implicit_carbon_dot_brush_for(SimpleNamespace()).alpha(), 0)
         self.assertEqual(clipboard_paste_offset(2, 20.0), (36.0, 36.0))
-        self.assertEqual(
-            selection_signature_for({1, 2}, {3}), (frozenset({1, 2}), frozenset({3}))
-        )
 
     def test_structure_payload_logic_helpers_cover_selection_expansion_and_annotations(
         self,

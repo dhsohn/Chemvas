@@ -91,7 +91,6 @@ if QApplication is not None:
     from chemvas.ui.handle_overlay_access import (
         clear_handles_for,
         show_curved_handles_for,
-        show_orbital_handles_for,
     )
     from chemvas.ui.history_canvas_access import (
         apply_atom_color_for_history,
@@ -160,7 +159,6 @@ if QApplication is not None:
         SelectionStyleState,
     )
     from chemvas.ui.structure_build_access import (
-        add_benzene_template_for,
         fuse_benzene_to_bond_for,
         fuse_chair_to_bond_for,
         fuse_regular_ring_to_bond_for,
@@ -801,11 +799,9 @@ class CanvasViewAdditionalTest(unittest.TestCase):
         )
 
         clear_handles_for(view)
-        show_orbital_handles_for(view, item)
         show_curved_handles_for(view, item)
 
         handle_overlay_service.clear_handles.assert_called_once_with()
-        handle_overlay_service.show_orbital_handles.assert_called_once_with(item)
         handle_overlay_service.show_curved_handles.assert_called_once_with(item)
 
     def test_handle_mutation_access_delegates_to_service(self) -> None:
@@ -1062,24 +1058,6 @@ class CanvasViewAdditionalTest(unittest.TestCase):
         build_service.build_orbital_items.assert_called_once_with(
             QPointF(45.0, 46.0), "sp2"
         )
-
-    def test_add_benzene_template_uses_viewport_scene_center(self) -> None:
-        center = QPointF(12.0, 13.0)
-        structure_build_service = mock.Mock()
-        view = SimpleNamespace(
-            services=canvas_runtime_services(
-                structure_build_service=structure_build_service
-            ),
-            viewport=lambda: SimpleNamespace(
-                rect=lambda: SimpleNamespace(center=lambda: QPointF(2.0, 3.0))
-            ),
-            mapToScene=mock.Mock(return_value=center),
-        )
-
-        add_benzene_template_for(view)
-
-        view.mapToScene.assert_called_once()
-        structure_build_service.add_benzene_ring.assert_called_once_with(center)
 
     def test_insert_controller_public_api_methods_are_callable(self) -> None:
         insert_controller = mock.Mock()
@@ -1490,14 +1468,6 @@ class CanvasViewAdditionalTest(unittest.TestCase):
         )
         text_style = text_style_state_for(style_view)
 
-        tool_mode_controller.set_curved_symmetry(True)
-        self.assertTrue(tool_mode_controller.get_curved_symmetry())
-
-        tool_mode_controller.set_orbital_snap_enabled(True)
-        self.assertTrue(tool_mode_controller.get_orbital_snap_enabled())
-        tool_mode_controller.set_orbital_snap_step(0)
-        self.assertEqual(tool_mode_controller.get_orbital_snap_step(), 1)
-
         style_controller.set_text_color(QColor("#ff00aa"))
         self.assertEqual(text_style.text_color.name(), "#ff00aa")
         style_controller.set_text_color(QColor())
@@ -1537,10 +1507,6 @@ class CanvasViewAdditionalTest(unittest.TestCase):
         self.assertEqual(text_style.note_border_color.name(), "#445566")
         style_controller.set_note_border_color(QColor())
         self.assertEqual(text_style.note_border_color.name(), "#445566")
-        tool_mode_controller.set_snap_angle_step(22)
-        self.assertEqual(tool_settings_state_for(style_view).snap_angle_step, 22)
-        style_view.services.tool_controller.set_active.assert_called_with("bond")
-        style_view.refresh_selection_outline.assert_called_once_with()
         self.assertGreaterEqual(
             note_controller.apply_text_style_to_selected.call_count, 7
         )

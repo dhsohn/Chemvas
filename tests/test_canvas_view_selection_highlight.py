@@ -23,6 +23,7 @@ except ModuleNotFoundError:
 
 if QApplication is not None:
     from chemvas.ui.canvas_handle_controller import CanvasHandleController
+    from chemvas.ui.canvas_service_ports import handle_overlay_service_for_access
     from chemvas.ui.canvas_tool_settings_state import CanvasToolSettingsState
     from chemvas.ui.curved_arrow_path_service import CurvedArrowPathService
     from chemvas.ui.handle_mutation_access import (
@@ -34,7 +35,6 @@ if QApplication is not None:
     from chemvas.ui.handle_overlay_access import (
         clear_handles_for,
         show_curved_handles_for,
-        show_orbital_handles_for,
     )
     from chemvas.ui.handle_overlay_service import HandleOverlayService
     from chemvas.ui.handle_state import CanvasHandleState
@@ -200,7 +200,7 @@ class CanvasViewSelectionHighlightTest(unittest.TestCase):
         _attach_handle_services(view)
         view.clear_handles = lambda: clear_handles_for(view)
 
-        show_orbital_handles_for(view, item)
+        handle_overlay_service_for_access(view).show_orbital_handles(item)
 
         handle_state = view.runtime_state.handle_state
         self.assertEqual(len(handle_state.active_handles), 2)
@@ -240,7 +240,7 @@ class CanvasViewSelectionHighlightTest(unittest.TestCase):
         _attach_handle_services(view)
         view.clear_handles = lambda: clear_handles_for(view)
 
-        show_orbital_handles_for(view, orbital)
+        handle_overlay_service_for_access(view).show_orbital_handles(orbital)
         handle_state = view.runtime_state.handle_state
         first_handles = list(handle_state.active_handles)
 

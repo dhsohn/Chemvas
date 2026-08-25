@@ -120,12 +120,6 @@ def selected_structure_ids_for(
     return atom_ids, bond_ids
 
 
-def selection_signature_for(
-    atom_ids: set[int], bond_ids: set[int]
-) -> tuple[frozenset[int], frozenset[int]]:
-    return frozenset(atom_ids), frozenset(bond_ids)
-
-
 def selection_target_item(item) -> bool:
     return item.data(0) not in {
         "selection_outline",
@@ -315,7 +309,6 @@ __all__ = [
     "selected_scene_items_for",
     "selected_structure_ids_for",
     "selection_items_for_copy_for",
-    "selection_signature_for",
     "selection_snapshot_for",
     "selection_status_count_for",
     "selection_status_item_identity",

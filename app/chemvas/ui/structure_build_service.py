@@ -16,7 +16,6 @@ from chemvas.ui.canvas_model_access import (
     bonds_for,
 )
 from chemvas.ui.canvas_ring_fill_scene_access import create_ring_fill_item_for
-from chemvas.ui.input_view_access import viewport_center_scene_pos_for
 from chemvas.ui.structure_benzene_build_service import StructureBenzeneBuildService
 from chemvas.ui.structure_bond_build_service import StructureBondBuildService
 from chemvas.ui.structure_build_committer import StructureBuildCommitter
@@ -70,9 +69,6 @@ class StructureBuildService:
             structure_growth_build_actions_for(self)
         )
 
-    def viewport_center(self) -> QPointF:
-        return viewport_center_scene_pos_for(self.canvas)
-
     def regular_ring_radius(self, n: int) -> float:
         return regular_ring_radius_for(self.canvas, n)
 
@@ -105,9 +101,6 @@ class StructureBuildService:
     @property
     def bond_count(self) -> int:
         return bond_count_for(self.canvas)
-
-    def latest_bond_id(self, offset: int = 1) -> int:
-        return self.bond_count - offset
 
     def has_atom(self, atom_id: int | None) -> bool:
         return atom_for_id(self.canvas, atom_id) is not None

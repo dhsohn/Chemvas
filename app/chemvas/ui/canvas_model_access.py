@@ -6,20 +6,8 @@ from typing import Any
 from PyQt6.QtCore import QPointF
 from PyQt6.QtGui import QPolygonF
 
-from chemvas.ui.canvas_atom_graphics_state import (
-    atom_dots_for,
-    atom_items_for,
-    set_atom_dots_for,
-    set_atom_items_for,
-)
-from chemvas.ui.canvas_bond_graphics_state import bond_items_for, set_bond_items_for
 from chemvas.ui.canvas_model_state import model_for, set_model_for
 from chemvas.ui.canvas_scene_items_state import ring_items_for
-from chemvas.ui.canvas_service_ports import structure_build_service_for_access
-from chemvas.ui.scene_item_access import (
-    clear_canvas_scene_item_list_map,
-    clear_canvas_scene_item_map,
-)
 
 
 def atoms_for(canvas: Any) -> Any:
@@ -191,19 +179,6 @@ def rescale_model_for(canvas, scale: float) -> None:
         ring_item.setPolygon(scaled)
 
 
-def rebuild_graphics_for(canvas) -> None:
-    set_bond_items_for(
-        canvas, clear_canvas_scene_item_list_map(canvas, bond_items_for(canvas))
-    )
-    set_atom_items_for(
-        canvas, clear_canvas_scene_item_map(canvas, atom_items_for(canvas))
-    )
-    set_atom_dots_for(
-        canvas, clear_canvas_scene_item_map(canvas, atom_dots_for(canvas))
-    )
-    structure_build_service_for_access(canvas).render_model()
-
-
 __all__ = [
     "add_atom_to_model_for",
     "add_bond_to_model_for",
@@ -223,7 +198,6 @@ __all__ = [
     "has_bond_slot_for",
     "model_for",
     "next_atom_id_for",
-    "rebuild_graphics_for",
     "remove_atom_direct_for",
     "required_atom_for",
     "rescale_model_for",

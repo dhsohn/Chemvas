@@ -184,47 +184,11 @@ class CanvasToolModeController:
     def get_arrow_head_scale(self) -> float:
         return self.settings.arrow_head_scale
 
-    def set_curved_snap(self, enabled: bool) -> None:
-        tool_settings_state_for(self.canvas).curved_snap = bool(enabled)
-
-    def get_curved_snap(self) -> bool:
-        return tool_settings_state_for(self.canvas).curved_snap
-
-    def set_curved_snap_step(self, step: float) -> None:
-        tool_settings_state_for(self.canvas).curved_snap_step = max(0.05, float(step))
-
-    def get_curved_snap_step(self) -> float:
-        return tool_settings_state_for(self.canvas).curved_snap_step
-
-    def set_curved_symmetry(self, enabled: bool) -> None:
-        tool_settings_state_for(self.canvas).curved_symmetry = bool(enabled)
-
-    def get_curved_symmetry(self) -> bool:
-        return tool_settings_state_for(self.canvas).curved_symmetry
-
-    def set_orbital_snap_enabled(self, enabled: bool) -> None:
-        tool_settings_state_for(self.canvas).orbital_snap_enabled = bool(enabled)
-
-    def get_orbital_snap_enabled(self) -> bool:
-        return tool_settings_state_for(self.canvas).orbital_snap_enabled
-
-    def set_orbital_snap_step(self, step: int) -> None:
-        tool_settings_state_for(self.canvas).orbital_snap_step = max(1, int(step))
-
-    def get_orbital_snap_step(self) -> int:
-        return tool_settings_state_for(self.canvas).orbital_snap_step
-
     def set_atom_symbol(self, symbol: str) -> None:
         set_tool_setting_for(self.canvas, "atom_symbol", symbol.strip())
 
     def get_atom_symbol(self) -> str:
         return self.settings.atom_symbol
-
-    def set_snap_angle_step(self, step: int) -> None:
-        self._cancel_active_insert_modes()
-        set_tool_setting_for(self.canvas, "snap_angle_step", step)
-        self._set_active_tool("bond")
-        refresh_selection_outline_for(self.canvas)
 
 
 __all__ = ["CanvasToolModeController"]

@@ -219,9 +219,6 @@ def _svg_document(name: str, color: str) -> str:
     )
 
 
-DESIGN_ICON_NAMES = frozenset(_SVG_BY_NAME)
-
-
 def has_design_icon(name: str) -> bool:
     return name in _SVG_BY_NAME
 
@@ -238,4 +235,4 @@ def draw_design_icon(
     renderer.render(painter, QRectF(pad, pad, size * 0.8, size * 0.8))
 
 
-__all__ = ["DESIGN_ICON_NAMES", "draw_design_icon", "has_design_icon"]
+__all__ = ["draw_design_icon", "has_design_icon"]

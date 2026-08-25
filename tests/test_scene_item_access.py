@@ -7,8 +7,6 @@ from chemvas.ui.scene_item_access import (
     attached_canvas_scene_items,
     bond_ids_for_ring_item,
     clear_canvas_scene,
-    clear_canvas_scene_item_list_map,
-    clear_canvas_scene_item_map,
     create_scene_item_from_state,
     create_scene_item_group,
     destroy_scene_item_group,
@@ -276,23 +274,6 @@ class SceneItemAccessTest(unittest.TestCase):
         clear_canvas_scene(canvas)
 
         self.assertEqual(scene.clear_calls, 1)
-
-    def test_canvas_scene_item_map_helpers_remove_items_and_return_empty_maps(
-        self,
-    ) -> None:
-        scene = _Scene()
-        canvas = _Canvas()
-        canvas.scene = lambda: scene
-        first = object()
-        second = object()
-        label = object()
-
-        self.assertEqual(
-            clear_canvas_scene_item_list_map(canvas, {1: [first], 2: [second]}), {}
-        )
-        self.assertEqual(clear_canvas_scene_item_map(canvas, {3: label}), {})
-
-        self.assertEqual(scene.removed_items, [first, second, label])
 
     def test_item_is_in_canvas_scene_handles_attached_detached_and_deleted_items(
         self,

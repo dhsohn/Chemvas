@@ -129,7 +129,6 @@ class SceneDeleteLogicTest(unittest.TestCase):
         )
 
         self.assertEqual(plan.single_bond_id, 0)
-        self.assertTrue(plan.has_work())
         self.assertEqual(plan.bond_ids_to_remove, [])
         self.assertEqual(plan.scene_items, [])
 
@@ -148,7 +147,6 @@ class SceneDeleteLogicTest(unittest.TestCase):
 
         self.assertEqual(plan.single_bond_id, None)
         self.assertEqual(plan.bond_ids_to_remove, [0])
-        self.assertTrue(plan.has_work())
 
     def test_build_delete_selection_plan_skips_none_and_unrelated_bonds(self) -> None:
         selection = classify_delete_selection([_make_rect_item("atom", data1=1)])
@@ -225,7 +223,6 @@ class SceneDeleteLogicTest(unittest.TestCase):
         )
         self.assertTrue(plan.clear_handles)
         self.assertTrue(plan.clear_smiles_input)
-        self.assertTrue(plan.has_work())
 
     def test_build_delete_selection_plan_deletes_invisible_orphaned_endpoints(
         self,

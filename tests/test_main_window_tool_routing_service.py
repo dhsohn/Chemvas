@@ -6,7 +6,7 @@ from unittest import mock
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 try:
-    from PyQt6.QtWidgets import QApplication, QMenu
+    from PyQt6.QtWidgets import QApplication
 except ModuleNotFoundError:
     QApplication = None
 
@@ -40,11 +40,6 @@ class MainWindowToolRoutingServiceTest(unittest.TestCase):
 
     def setUp(self) -> None:
         self.window = build_main_window()
-        self.insert_controller_for_window = mock.Mock(
-            return_value=active_canvas_for_window(
-                self.window
-            ).services.structure.insert_controller,
-        )
         self.tool_mode_controller_for_window = mock.Mock(
             return_value=active_canvas_for_window(
                 self.window
@@ -57,18 +52,13 @@ class MainWindowToolRoutingServiceTest(unittest.TestCase):
         )
         self.color_tool_for_window = mock.Mock(return_value=None)
         self.selected_scene_items_for_window = mock.Mock(return_value=[])
-        self.icon_factory_for_window = mock.Mock(
-            side_effect=lambda window: window.ui_references.require_icon_factory(),
-        )
         self.tool_state_service = mock.Mock()
         self.context_page_state_service = mock.Mock()
         self.service = MainWindowToolRoutingService(
-            insert_controller_for_window=self.insert_controller_for_window,
             tool_mode_controller_for_window=self.tool_mode_controller_for_window,
             color_mutation_service_for_window=self.color_mutation_service_for_window,
             color_tool_for_window=self.color_tool_for_window,
             selected_scene_items_for_window=self.selected_scene_items_for_window,
-            icon_factory_for_window=self.icon_factory_for_window,
             tool_state_service=self.tool_state_service,
             context_page_state_service=self.context_page_state_service,
         )
@@ -80,103 +70,7 @@ class MainWindowToolRoutingServiceTest(unittest.TestCase):
         self.window.close()
         self.app.processEvents()
 
-    def test_template_entries_and_template_menu_preserve_ring_size_and_style(
-        self,
-    ) -> None:
-        with mock.patch.object(
-            active_canvas_for_window(self.window).services.structure.insert_controller,
-            "begin_ring_template_insert",
-        ) as begin_insert:
-            entries = dict(self.service.template_entries(self.window))
-            entries["Benzene"]()
-            entries["Cyclopropane"]()
-            entries["Cycloheptane"]()
-            entries["Cyclooctane"]()
-            entries["Cyclohexane (Chair)"]()
-
-        self.assertEqual(begin_insert.call_args_list[0].args, (6,))
-        self.assertEqual(begin_insert.call_args_list[0].kwargs, {"style": "benzene"})
-        self.assertEqual(begin_insert.call_args_list[1].args, (3,))
-        self.assertEqual(begin_insert.call_args_list[1].kwargs, {"style": "regular"})
-        self.assertEqual(begin_insert.call_args_list[2].args, (7,))
-        self.assertEqual(begin_insert.call_args_list[2].kwargs, {"style": "regular"})
-        self.assertEqual(begin_insert.call_args_list[3].args, (8,))
-        self.assertEqual(begin_insert.call_args_list[3].kwargs, {"style": "regular"})
-        self.assertEqual(begin_insert.call_args_list[4].args, (6,))
-        self.assertEqual(begin_insert.call_args_list[4].kwargs, {"style": "chair"})
-
-        menu = QMenu()
-        self.service.populate_template_menu(self.window, menu)
-        self.assertEqual(
-            [action.text() for action in menu.actions()],
-            [
-                "Benzene",
-                "Cyclopropane",
-                "Cyclobutane",
-                "Cyclopentane",
-                "Cyclohexane (Chair)",
-                "Cyclohexane (Chair, flipped)",
-                "Cycloheptane",
-                "Cyclooctane",
-            ],
-        )
-        self.assertEqual(self.insert_controller_for_window.call_count, 2)
-
-    def test_arrow_menu_helpers_route_type_and_preset_through_injected_state_services(
-        self,
-    ) -> None:
-        self.service.activate_arrow_type_from_menu(self.window, "Reaction")
-        self.service.activate_arrow_preset_from_menu(self.window, "Bold")
-        menu = QMenu()
-        self.service.populate_arrow_menu(self.window, menu)
-        preset_menu = next(
-            action.menu() for action in menu.actions() if action.menu() is not None
-        )
-        menu.actions()[0].trigger()
-        preset_menu.actions()[0].trigger()
-
-        self.assertEqual(
-            self.context_page_state_service.set_tool_with_status.call_args_list,
-            [
-                mock.call(self.window, "arrow"),
-                mock.call(self.window, "arrow"),
-                mock.call(self.window, "arrow"),
-                mock.call(self.window, "arrow"),
-            ],
-        )
-        self.assertEqual(
-            self.tool_state_service.set_arrow_type.call_args_list,
-            [
-                mock.call(self.window, "Reaction"),
-                mock.call(self.window, "Reaction"),
-            ],
-        )
-        self.assertEqual(
-            self.tool_state_service.set_arrow_preset.call_args_list,
-            [
-                mock.call(self.window, "Bold"),
-                mock.call(self.window, "Default"),
-            ],
-        )
-        self.assertNotIn("Settings...", [action.text() for action in menu.actions()])
-
-    def test_palette_menu_and_color_presets_route_selected_items(self) -> None:
-        palette_calls = []
-        menu = QMenu()
-        self.service.populate_palette_menu(
-            self.window, menu, lambda value: palette_calls.append(value)
-        )
-        palette = self.service.acs_color_palette()
-        self.assertEqual(
-            [action.text() for action in menu.actions()],
-            [label for label, _ in palette],
-        )
-        self.assertIn(("Yellow", "#f4d06f"), palette)
-        self.assertIn(("Blue", "#2f6ed3"), palette)
-        self.assertIn(("Red", "#d84a3a"), palette)
-        menu.actions()[0].trigger()
-        self.assertEqual(palette_calls, ["#000000"])
-
+    def test_color_and_ring_fill_presets_route_selected_items(self) -> None:
         color_tool = SimpleNamespace(set_color=mock.Mock())
         self.color_tool_for_window.return_value = color_tool
         selected_items = [

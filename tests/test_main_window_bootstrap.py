@@ -17,7 +17,6 @@ from tests.runtime_services import canvas_runtime_services
 
 class _FakeWindow:
     def __init__(self) -> None:
-        self.on_canvas_tab_moved = mock.Mock()
         self.on_canvas_tab_changed = mock.Mock()
         self.setWindowTitle = mock.Mock()
         self.resize = mock.Mock()
@@ -77,7 +76,6 @@ def test_bootstrap_main_window_initializes_runtime_references_and_services() -> 
             add_canvas=mock.Mock(),
         ),
         canvas_tab_ui_service=SimpleNamespace(
-            on_canvas_tab_moved=mock.Mock(),
             close_canvas_tab=mock.Mock(),
         ),
     )
@@ -101,17 +99,12 @@ def test_bootstrap_main_window_initializes_runtime_references_and_services() -> 
     build_tabs.assert_called_once()
     assert build_tabs.call_args.args == (window,)
     tab_callbacks = build_tabs.call_args.kwargs
-    tab_callbacks["on_canvas_tab_moved"](2, 1)
     tab_callbacks["on_canvas_tab_changed"](3)
     tab_callbacks["on_canvas_tab_close_requested"](4)
-    services.canvas_tab_ui_service.on_canvas_tab_moved.assert_called_once_with(
-        window, 2, 1
-    )
     services.active_canvas_ui_service.on_canvas_tab_changed.assert_called_once_with(
         window, 3
     )
     services.canvas_tab_ui_service.close_canvas_tab.assert_called_once_with(window, 4)
-    window.on_canvas_tab_moved.assert_not_called()
     window.on_canvas_tab_changed.assert_not_called()
     assert isinstance(runtime.state, MainWindowState)
     assert isinstance(runtime.ui_refs, MainWindowUiReferences)

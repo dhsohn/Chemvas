@@ -35,6 +35,75 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   gone, and the modules join the list production code may not import again.
   `main_window_icon_geometry.py` and the two icon fill tokens the renderers
   were the last readers of went with them. No icon changes appearance.
+- **Two tools that were never registered.** `TransformTool` and `EditBondTool`
+  were complete `Tool` subclasses, but neither name appears in the tool
+  registry `ToolController` builds, so no toolbar button, shortcut, or menu
+  could ever activate them — only the tests constructed them. Both classes and
+  the helpers they were the last caller of are gone:
+  `show_orbital_handles_for` (the live rotate handles still come from
+  `HandleOverlayService`) and `ToolContext.bond_id_from_event` (the
+  identically named hit-testing service method stays, because the right-click
+  context menu uses it). Nothing changes on the sheet.
+- **Eleven snap-setting accessors with no caller.** `CanvasToolModeController`
+  exposed setters and getters for curved-arrow snapping, curved-arrow
+  symmetry, orbital-handle snapping, and the bond snap angle, but no menu,
+  toolbar, context bar, or shortcut ever called any of them. Two consequences
+  are real, though both were already the state of the shipped application:
+  curved-arrow midpoint snapping and orbital rotate-handle angle snapping are
+  now permanently off — they defaulted to off and had no interface to turn on —
+  and bond-angle snapping stays fixed at 30°, which is what it was set to
+  everywhere. The `curved_symmetry` field, which nothing ever read, and the
+  unused `TOOL_SETTING_ATTRS` tuple went with them; the four snap fields the
+  handle code still reads stayed.
+- **Ten `*_access` ports with no production caller.** `rebuild_graphics_for`,
+  `scale_qpoints_to_bond_length`, `mark_offset_from_click_for`,
+  `visible_label_rect_for_atom_for`, `mark_clearance_for_kind_for`,
+  `label_cut_radius_for_atom_for`, `build_selected_structure_payload_for`,
+  `selection_signature_for`, `add_benzene_template_for` and
+  `bold_bond_width_for` each forwarded to a service the application already
+  reaches directly, so the wrapper was a second door nobody used. Two scene
+  helpers, `clear_canvas_scene_item_map` and
+  `clear_canvas_scene_item_list_map`, lost their only production caller with
+  `rebuild_graphics_for` and went too. The live
+  `renderer_bold_bond_width_for` — a different function with a similar name —
+  is untouched.
+- **Six service methods only the tests called.**
+  `CanvasGraphService.atom_bond_order_sum`,
+  `CanvasGeometryController.ring_for_bond`,
+  `DeleteSelectionPlan.has_work`, `MainWindowStatusService.zoom_status_tip`,
+  `MainWindowState.reset_canvas_name_counter`, and the
+  `_snapshot_canvas_scene` module function are gone. The private helpers and
+  neighbours they sat next to — `_ring_items_for_bond`, `has_zoom_label`,
+  `_DetachedSceneSnapshot.capture` — are live and stay. The module-level
+  `reset_rdkit_export_job_state_for_tests` wrapper went too; it was a second
+  name for `RDKitExportJobRegistry.reset_for_tests`, which stays.
+- **Exports and members nothing reads.** `compute_identifiers_for` (the access
+  wrapper, not the live `compute_identifiers`), `TEXT_STYLE_ATTRS`,
+  `CANVAS_TEMPLATE_FIELDS`, `DESIGN_ICON_NAMES`, `HEADLESS_SUBCOMMANDS`,
+  `SceneDeleteController._restore_observer_ports`,
+  `StructureBuildService.latest_bond_id` and `.viewport_center`, and the
+  `hash_bond_width` and `wedge_width_px` fields on `ACS1996Style`. None of the
+  ten had a reader; the two style fields in particular never reached the
+  renderer, so no drawn bond changes. The similarly named survivors —
+  `_try_restore_observer_ports`, `viewport_center_scene_pos_for`,
+  `renderer_bold_bond_width_for`, `CANVAS_TEMPLATE_TOOL_FIELDS`,
+  `CANVAS_TEMPLATE_TEXT_FIELDS`, `has_design_icon` — are untouched.
+- **The QMenu population path in `MainWindowToolRoutingService`.** Nothing in
+  the application called `populate_template_menu`, `populate_arrow_menu`, or
+  `populate_palette_menu`: the context bar page factories draw the same
+  template, arrow, and palette entries directly. Following the cascade to its
+  fixed point also retired `add_menu_action`, `palette_icon`,
+  `template_entries`, `acs_color_palette`,
+  `activate_arrow_type_from_menu`, `activate_arrow_preset_from_menu`, and the
+  stranded `build_template_entries`. `apply_color_preset` and
+  `apply_ring_fill_preset` stay — the panel toolbar routes through them — as do
+  `ARROW_MENU_SPECS`, `ARROW_PRESET_SPECS`, `COLOR_PALETTE_SPECS`,
+  `icon_arrow_preview` and `icon_template_preview`.
+- **The canvas tab reorder wiring.** Each window holds a single canvas and the
+  tab strip is hidden, so `tabMoved` was connected to a handler that discarded
+  its arguments. The handler, the closure and parameter that carried it, and
+  the `setMovable(True)` call are gone: canvas tabs are no longer marked
+  movable. Nothing was reorderable in practice, since the strip is not drawn.
 
 ## [0.4.1] - 2026-08-20
 

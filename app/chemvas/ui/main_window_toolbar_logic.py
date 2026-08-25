@@ -1,9 +1,5 @@
 from __future__ import annotations
 
-from collections.abc import Callable
-
-from chemvas.ui.main_window_config import TEMPLATE_ENTRY_SPECS
-
 BOND_STYLE_BY_LABEL: dict[str, tuple[str, int]] = {
     "Single": ("single", 1),
     "Double": ("double", 2),
@@ -59,21 +55,6 @@ TOOL_DISPLAY_NAMES: dict[str, str] = {
 }
 
 
-def build_template_entries(
-    begin_ring_template_insert: Callable[..., None],
-) -> list[tuple[str, Callable[..., None]]]:
-    return [
-        (
-            label,
-            lambda ring_size=ring_size, style=style: begin_ring_template_insert(
-                ring_size,
-                style=style,
-            ),
-        )
-        for label, ring_size, style in TEMPLATE_ENTRY_SPECS
-    ]
-
-
 def bond_style_from_label(value: str) -> tuple[str, int]:
     return BOND_STYLE_BY_LABEL.get(value, ("single", 1))
 
@@ -111,7 +92,6 @@ __all__ = [
     "arrow_preset_from_label",
     "arrow_type_from_label",
     "bond_style_from_label",
-    "build_template_entries",
     "orbital_type_from_label",
     "tool_action_key_for_canvas_state",
     "tool_display_name",

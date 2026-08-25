@@ -28,7 +28,6 @@ def test_main_window_tab_references_resolve_active_canvas_tabs_and_names() -> No
     window = QMainWindow()
     assembly = build_canvas_tab_assembly(
         window,
-        on_canvas_tab_moved=mock.Mock(),
         on_canvas_tab_changed=mock.Mock(),
         on_canvas_tab_close_requested=mock.Mock(),
     )

@@ -213,10 +213,6 @@ class SceneDeleteTransactionSession:
             suspended=False,
         )
 
-    def _restore_observer_ports(self) -> None:
-        errors, _restored = self._try_restore_observer_ports()
-        self._raise_observer_errors(errors)
-
     @staticmethod
     def _add_observer_error_notes(
         primary_error: BaseException,

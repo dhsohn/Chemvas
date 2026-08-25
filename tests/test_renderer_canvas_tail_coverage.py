@@ -30,7 +30,6 @@ if QApplication is not None:
         set_bond_items_for,
     )
     from chemvas.ui.canvas_geometry_controller import CanvasGeometryController
-    from chemvas.ui.canvas_graph_service import CanvasGraphService
     from chemvas.ui.canvas_graph_state import CanvasGraphState, graph_state_for
     from chemvas.ui.canvas_rotation_state import CanvasRotationState
     from chemvas.ui.canvas_scene_items_state import CanvasSceneItemsState
@@ -297,16 +296,6 @@ class RendererCanvasTailCoverageTest(unittest.TestCase):
         self.assertEqual(
             average_bond_length_for_atoms_for(average_view, {1, 2}, coords), 10.0
         )
-
-        order_view = SimpleNamespace(
-            model=SimpleNamespace(bonds=[Bond(1, 2, 2), Bond(3, 4, 3), None]),
-            runtime_state=canvas_runtime_state(graph_state=CanvasGraphState()),
-        )
-        order_view.services = canvas_runtime_services(
-            graph_service=CanvasGraphService(order_view)
-        )
-        self.assertEqual(CanvasGraphService(order_view).atom_bond_order_sum(1), 2)
-        self.assertEqual(CanvasGraphService(order_view).atom_bond_order_sum(99), 0)
 
 
 if __name__ == "__main__":

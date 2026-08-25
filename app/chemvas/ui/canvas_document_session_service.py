@@ -388,10 +388,6 @@ class _DetachedSceneSnapshot:
             self.scene_rect_state_snapshot.release()
 
 
-def _snapshot_canvas_scene(canvas) -> _DetachedSceneSnapshot | None:
-    return _DetachedSceneSnapshot.capture(canvas)
-
-
 @dataclass(slots=True)
 class _DocumentStatusPublication:
     callback: Callable[[str, str], object] | None

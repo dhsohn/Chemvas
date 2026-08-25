@@ -9,7 +9,6 @@ try:
     from PyQt6.QtGui import QIcon
     from PyQt6.QtWidgets import (
         QApplication,
-        QMenu,
         QToolBar,
         QToolButton,
     )
@@ -327,48 +326,6 @@ class MainWindowToolbarActionsTest(unittest.TestCase):
                 self.assertIsNotNone(widget)
                 self.assertTrue(widget.isVisible())
 
-    def test_template_entries_and_template_menu_preserve_ring_size_and_style(
-        self,
-    ) -> None:
-        tool_routing_service = services_for_window(self.window).tool_routing_service
-        with mock.patch.object(
-            active_canvas_for_window(self.window).services.structure.insert_controller,
-            "begin_ring_template_insert",
-        ) as begin_insert:
-            entries = dict(tool_routing_service.template_entries(self.window))
-            entries["Benzene"]()
-            entries["Cyclopropane"]()
-            entries["Cycloheptane"]()
-            entries["Cyclooctane"]()
-            entries["Cyclohexane (Chair)"]()
-
-        self.assertEqual(begin_insert.call_args_list[0].args, (6,))
-        self.assertEqual(begin_insert.call_args_list[0].kwargs, {"style": "benzene"})
-        self.assertEqual(begin_insert.call_args_list[1].args, (3,))
-        self.assertEqual(begin_insert.call_args_list[1].kwargs, {"style": "regular"})
-        self.assertEqual(begin_insert.call_args_list[2].args, (7,))
-        self.assertEqual(begin_insert.call_args_list[2].kwargs, {"style": "regular"})
-        self.assertEqual(begin_insert.call_args_list[3].args, (8,))
-        self.assertEqual(begin_insert.call_args_list[3].kwargs, {"style": "regular"})
-        self.assertEqual(begin_insert.call_args_list[4].args, (6,))
-        self.assertEqual(begin_insert.call_args_list[4].kwargs, {"style": "chair"})
-
-        menu = QMenu()
-        tool_routing_service.populate_template_menu(self.window, menu)
-        self.assertEqual(
-            [action.text() for action in menu.actions()],
-            [
-                "Benzene",
-                "Cyclopropane",
-                "Cyclobutane",
-                "Cyclopentane",
-                "Cyclohexane (Chair)",
-                "Cyclohexane (Chair, flipped)",
-                "Cycloheptane",
-                "Cyclooctane",
-            ],
-        )
-
     def test_ring_action_shows_template_icon_buttons_and_routes_current_canvas(
         self,
     ) -> None:
@@ -517,43 +474,7 @@ class MainWindowToolbarActionsTest(unittest.TestCase):
         self.assertFalse(hasattr(self.window, "build_tool_actions"))
         self.assertFalse(hasattr(self.window, "new_tool_action"))
 
-    def test_arrow_menu_helpers_route_type_and_preset_through_existing_methods(
-        self,
-    ) -> None:
-        tool_routing_service = services_for_window(self.window).tool_routing_service
-        tool_routing_service.activate_arrow_type_from_menu(self.window, "Curved Double")
-        tool_routing_service.activate_arrow_preset_from_menu(self.window, "Bold")
-        settings = tool_settings_state_for(active_canvas_for_window(self.window))
-
-        self.assertEqual(settings.active_arrow_type, "curved_double")
-        self.assertEqual(settings.arrow_line_width, 2.2)
-        self.assertEqual(settings.arrow_head_scale, 0.4)
-
-        menu = QMenu()
-        tool_routing_service.populate_arrow_menu(self.window, menu)
-        preset_menu = next(
-            action.menu() for action in menu.actions() if action.menu() is not None
-        )
-        menu.actions()[0].trigger()
-        preset_menu.actions()[0].trigger()
-
-        self.assertEqual(settings.active_arrow_type, "reaction")
-        self.assertEqual(settings.arrow_line_width, 1.2)
-        self.assertEqual(settings.arrow_head_scale, 0.3)
-        self.assertEqual(
-            [action.text() for action in menu.actions() if action.menu() is None],
-            [
-                "Reaction",
-                "Equilibrium",
-                "Resonance",
-                "Curved Single",
-                "Curved Double",
-                "Inhibition",
-                "Dotted",
-            ],
-        )
-
-    def test_text_preset_and_palette_menu_helpers_delegate_correctly(self) -> None:
+    def test_text_preset_helpers_delegate_correctly(self) -> None:
         text_style_service = services_for_window(self.window).text_style_service
         with (
             mock.patch.object(
@@ -583,19 +504,6 @@ class MainWindowToolbarActionsTest(unittest.TestCase):
         acs.assert_called_once_with()
         paper_thin.assert_called_once_with()
         paper_bold.assert_called_once_with()
-
-        palette_calls = []
-        menu = QMenu()
-        tool_routing_service = services_for_window(self.window).tool_routing_service
-        tool_routing_service.populate_palette_menu(
-            self.window, menu, lambda value: palette_calls.append(value)
-        )
-        self.assertEqual(
-            [action.text() for action in menu.actions()],
-            [label for label, _ in tool_routing_service.acs_color_palette()],
-        )
-        menu.actions()[0].trigger()
-        self.assertEqual(palette_calls, ["#000000"])
 
     def test_apply_color_and_ring_fill_presets_filter_selected_items_and_update_color_tool(
         self,

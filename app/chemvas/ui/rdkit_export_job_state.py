@@ -196,10 +196,6 @@ def active_rdkit_export_jobs() -> tuple[RDKitExportJob, ...]:
     return _EXPORT_JOB_REGISTRY.active_jobs()
 
 
-def reset_rdkit_export_job_state_for_tests() -> None:
-    _EXPORT_JOB_REGISTRY.reset_for_tests()
-
-
 __all__ = [
     "RDKitExportJob",
     "RDKitExportJobRegistry",
@@ -208,5 +204,4 @@ __all__ = [
     "normalized_export_target_path",
     "rdkit_export_job_registry",
     "rdkit_export_jobs_for",
-    "reset_rdkit_export_job_state_for_tests",
 ]

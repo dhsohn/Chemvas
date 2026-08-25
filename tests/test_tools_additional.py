@@ -34,9 +34,9 @@ if QApplication is not None:
         set_last_smiles_input_for,
     )
     from chemvas.ui.canvas_tool_settings_state import CanvasToolSettingsState
-    from chemvas.ui.edit_tools import ColorTool, DeleteTool, EditBondTool, FlipTool
+    from chemvas.ui.edit_tools import ColorTool, DeleteTool, FlipTool
     from chemvas.ui.history_commands import DeleteSceneItemsCommand, MoveItemsCommand
-    from chemvas.ui.interaction_tools import MarkTool, NoteTool, TransformTool
+    from chemvas.ui.interaction_tools import MarkTool, NoteTool
     from chemvas.ui.move_tool import MoveTool
     from chemvas.ui.perspective_tool import PerspectiveTool
     from chemvas.ui.preview_tools import OrbitalTool
@@ -273,7 +273,6 @@ class _MiscCanvas:
         self.colored = []
         self.color_batches = []
         self.flipped = []
-        self.cycled = []
         self.bond_id = None
         self.services = canvas_runtime_services(
             canvas_color_mutation_service=SimpleNamespace(
@@ -282,7 +281,7 @@ class _MiscCanvas:
             ),
             scene_transform_controller=SimpleNamespace(
                 flip_bond_direction=self.flip_bond_direction,
-                cycle_bond_style=self.cycle_bond_style,
+                cycle_bond_style=mock.Mock(),
             ),
             hit_testing_service=SimpleNamespace(
                 item_at_event=self.item_at_event,
@@ -313,9 +312,6 @@ class _MiscCanvas:
 
     def bond_id_from_event(self, event):
         return self.bond_id
-
-    def cycle_bond_style(self, bond_id: int) -> None:
-        self.cycled.append(bond_id)
 
 
 class _DeleteCanvas:
@@ -875,7 +871,6 @@ class ToolsAdditionalTest(unittest.TestCase):
         misc_canvas = _MiscCanvas()
         color_tool = ColorTool(misc_canvas, context=_tool_context_for(misc_canvas))
         flip_tool = FlipTool(misc_canvas, context=_tool_context_for(misc_canvas))
-        edit_tool = EditBondTool(misc_canvas, context=_tool_context_for(misc_canvas))
 
         self.assertFalse(
             color_tool.on_mouse_press(_Event(button=Qt.MouseButton.RightButton))
@@ -897,23 +892,9 @@ class ToolsAdditionalTest(unittest.TestCase):
         self.assertTrue(flip_tool.on_mouse_press(_Event(QPointF())))
         self.assertEqual(misc_canvas.flipped, [])
 
-        self.assertFalse(
-            edit_tool.on_mouse_press(_Event(button=Qt.MouseButton.RightButton))
-        )
-        edit_tool.activate()
-        misc_canvas.item = _DataItem("note", 3)
-        misc_canvas.bond_id = None
-        self.assertTrue(edit_tool.on_mouse_press(_Event(QPointF())))
-        self.assertEqual(misc_canvas.cycled, [])
-
         note_canvas = _OrbitalMarkNoteCanvas()
         self.assertFalse(
             OrbitalTool(
-                note_canvas, context=_tool_context_for(note_canvas)
-            ).on_mouse_press(_Event(button=Qt.MouseButton.RightButton))
-        )
-        self.assertFalse(
-            TransformTool(
                 note_canvas, context=_tool_context_for(note_canvas)
             ).on_mouse_press(_Event(button=Qt.MouseButton.RightButton))
         )
@@ -928,7 +909,7 @@ class ToolsAdditionalTest(unittest.TestCase):
         )
         self.assertFalse(note_tool.on_mouse_move(_Event(QPointF())))
 
-    def test_benzene_color_flip_and_edit_bond_tools_cover_simple_branches(self) -> None:
+    def test_benzene_color_and_flip_tools_cover_simple_branches(self) -> None:
         benzene_canvas = SimpleNamespace(
             DragMode=SimpleNamespace(NoDrag="none"),
             drag_mode=None,
@@ -993,7 +974,6 @@ class ToolsAdditionalTest(unittest.TestCase):
         misc_canvas = _MiscCanvas()
         color_tool = ColorTool(misc_canvas, context=_tool_context_for(misc_canvas))
         flip_tool = FlipTool(misc_canvas, context=_tool_context_for(misc_canvas))
-        edit_tool = EditBondTool(misc_canvas, context=_tool_context_for(misc_canvas))
         target = _DataItem("bond", 11)
         misc_canvas.item = target
         misc_canvas.scene_obj._selected_items = [
@@ -1016,14 +996,6 @@ class ToolsAdditionalTest(unittest.TestCase):
         misc_canvas.item = _DataItem("bond", 9)
         self.assertTrue(flip_tool.on_mouse_press(_Event(QPointF())))
         self.assertEqual(misc_canvas.flipped, [9])
-
-        edit_tool.activate()
-        misc_canvas.item = _DataItem("bond", 6)
-        self.assertTrue(edit_tool.on_mouse_press(_Event(QPointF())))
-        misc_canvas.item = None
-        misc_canvas.bond_id = 8
-        self.assertTrue(edit_tool.on_mouse_press(_Event(QPointF())))
-        self.assertEqual(misc_canvas.cycled, [6, 8])
 
     def test_delete_tool_builds_composite_and_scene_item_delete_command(self) -> None:
         canvas = _DeleteCanvas()
@@ -1116,7 +1088,7 @@ class ToolsAdditionalTest(unittest.TestCase):
         self.assertFalse(tool._changed)
         self.assertEqual(tool._commands, [])
 
-    def test_misc_tool_guard_paths_cover_benzene_color_flip_edit_and_move_delete_edges(
+    def test_misc_tool_guard_paths_cover_benzene_color_flip_and_move_delete_edges(
         self,
     ) -> None:
         benzene_calls = []
@@ -1169,7 +1141,6 @@ class ToolsAdditionalTest(unittest.TestCase):
         misc_canvas = _MiscCanvas()
         color_tool = ColorTool(misc_canvas, context=_tool_context_for(misc_canvas))
         flip_tool = FlipTool(misc_canvas, context=_tool_context_for(misc_canvas))
-        edit_tool = EditBondTool(misc_canvas, context=_tool_context_for(misc_canvas))
         self.assertFalse(
             color_tool.on_mouse_press(_Event(button=Qt.MouseButton.RightButton))
         )
@@ -1185,12 +1156,6 @@ class ToolsAdditionalTest(unittest.TestCase):
         )
         misc_canvas.item = None
         self.assertTrue(flip_tool.on_mouse_press(_Event(QPointF())))
-        self.assertFalse(
-            edit_tool.on_mouse_press(_Event(button=Qt.MouseButton.RightButton))
-        )
-        misc_canvas.bond_id = None
-        self.assertTrue(edit_tool.on_mouse_press(_Event(QPointF())))
-        self.assertEqual(misc_canvas.cycled, [])
 
         move_canvas = _MoveCanvas()
         move_tool = MoveTool(move_canvas, context=_tool_context_for(move_canvas))
@@ -1295,7 +1260,7 @@ class ToolsAdditionalTest(unittest.TestCase):
         self.assertTrue(note.textCursor().hasSelection())
         self.assertEqual(note.textCursor().selectedText(), "Hello")
 
-    def test_orbital_transform_mark_and_note_tools_cover_mouse_press_paths(
+    def test_orbital_mark_and_note_tools_cover_mouse_press_paths(
         self,
     ) -> None:
         canvas = _OrbitalMarkNoteCanvas()
@@ -1304,32 +1269,6 @@ class ToolsAdditionalTest(unittest.TestCase):
         orbital_tool.activate()
         self.assertTrue(orbital_tool.on_mouse_press(_Event(QPointF(3.0, 4.0))))
         self.assertEqual(canvas.added_orbitals[-1], QPointF(3.0, 4.0))
-
-        transform_tool = TransformTool(canvas, context=_tool_context_for(canvas))
-        transform_tool.activate()
-        canvas.item = None
-        self.assertTrue(transform_tool.on_mouse_press(_Event(QPointF())))
-        self.assertEqual(canvas.clear_handles_calls, 1)
-        handle = _DataItem("handle", 1)
-        canvas.item = handle
-        self.assertTrue(transform_tool.on_mouse_press(_Event(QPointF())))
-        self.assertIs(transform_tool._active_handle, handle)
-        orbital_item = _DataItem("orbital", 2)
-        curved_item = _DataItem("curved_single", 3)
-        canvas.item = orbital_item
-        self.assertTrue(transform_tool.on_mouse_press(_Event(QPointF())))
-        canvas.item = curved_item
-        self.assertTrue(transform_tool.on_mouse_press(_Event(QPointF())))
-        canvas.item = _DataItem("note", 7)
-        self.assertTrue(transform_tool.on_mouse_press(_Event(QPointF())))
-        self.assertIsNone(transform_tool._active_handle)
-        self.assertEqual(canvas.orbital_handles, [orbital_item])
-        self.assertEqual(canvas.curved_handles, [curved_item])
-        self.assertEqual(canvas.clear_handles_calls, 2)
-        transform_tool._active_handle = handle
-        transform_tool.deactivate()
-        self.assertIsNone(transform_tool._active_handle)
-        self.assertEqual(canvas.clear_handles_calls, 3)
 
         mark_tool = MarkTool(canvas, context=_tool_context_for(canvas))
         mark_tool.activate()

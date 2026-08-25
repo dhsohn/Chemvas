@@ -30,8 +30,6 @@ CANVAS_TEMPLATE_TEXT_FIELDS = (
     "text_italic",
 )
 
-CANVAS_TEMPLATE_FIELDS = CANVAS_TEMPLATE_TOOL_FIELDS + CANVAS_TEMPLATE_TEXT_FIELDS
-
 
 def resolve_active_canvas(
     current_widget,
@@ -66,19 +64,6 @@ def active_canvas_index(
         if canvas is active_canvas:
             return canvas_index
     return 0
-
-
-def canvas_name_counter(canvas_names: Sequence[object], prefix: str = "Canvas") -> int:
-    marker = f"{prefix} "
-    counter = 0
-    for name in canvas_names:
-        text = str(name)
-        if not text.startswith(marker):
-            continue
-        suffix = text[len(marker) :]
-        if suffix.isdigit():
-            counter = max(counter, int(suffix))
-    return counter
 
 
 def copy_canvas_template_settings(canvas, template) -> None:
@@ -120,13 +105,11 @@ def bind_active_canvas_callbacks(
 
 
 __all__ = [
-    "CANVAS_TEMPLATE_FIELDS",
     "CANVAS_TEMPLATE_TEXT_FIELDS",
     "CANVAS_TEMPLATE_TOOL_FIELDS",
     "active_canvas_index",
     "active_canvas_tab_index",
     "bind_active_canvas_callbacks",
-    "canvas_name_counter",
     "copy_canvas_template_settings",
     "resolve_active_canvas",
 ]

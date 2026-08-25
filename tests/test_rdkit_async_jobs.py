@@ -23,8 +23,8 @@ if QObject is not None:
     from chemvas.ui.rdkit_async_jobs import XYZExportWorker, export_xyz_in_thread
     from chemvas.ui.rdkit_export_job_state import (
         normalized_export_target_path,
+        rdkit_export_job_registry,
         rdkit_export_jobs_for,
-        reset_rdkit_export_job_state_for_tests,
     )
 
 
@@ -224,12 +224,12 @@ class _FakeWorker:
 )
 class ExportXYZInThreadTest(unittest.TestCase):
     def setUp(self) -> None:
-        reset_rdkit_export_job_state_for_tests()
+        rdkit_export_job_registry().reset_for_tests()
         _FakeThread.instances.clear()
         _FakeWorker.instances.clear()
 
     def tearDown(self) -> None:
-        reset_rdkit_export_job_state_for_tests()
+        rdkit_export_job_registry().reset_for_tests()
 
     def test_export_xyz_in_thread_wires_worker_and_cleans_finished_jobs(self) -> None:
         owner = QObject()

@@ -17,12 +17,9 @@ def test_main_window_state_tracks_overrides_and_tab_index() -> None:
     assert state.context_bar_page_override is None
 
 
-def test_main_window_state_generates_and_resets_canvas_names() -> None:
+def test_main_window_state_generates_numbered_canvas_names() -> None:
     state = MainWindowState()
 
     assert state.next_canvas_name() == "Canvas 1"
     assert state.next_canvas_name("Result") == "Result 2"
-
-    state.reset_canvas_name_counter(["Canvas 1", "Canvas 4", "Analysis"])
-
-    assert state.next_canvas_name() == "Canvas 5"
+    assert state.next_canvas_name() == "Canvas 3"

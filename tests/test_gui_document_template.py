@@ -58,6 +58,7 @@ if QApplication is not None:
         save_canvas_to_file_for,
         snapshot_canvas_state_for,
     )
+    from chemvas.ui.main_window_config import TEMPLATE_ENTRY_SPECS
     from chemvas.ui.main_window_ports import (
         active_canvas_for_window,
         preview_for_window,
@@ -146,12 +147,17 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
         QTest.qWait(10)
 
     def _template_handler(self, label: str):
-        entries = dict(
-            services_for_window(self.window).tool_routing_service.template_entries(
-                self.window
-            )
+        ring_size, style = next(
+            (spec_ring_size, spec_style)
+            for spec_label, spec_ring_size, spec_style in TEMPLATE_ENTRY_SPECS
+            if spec_label == label
         )
-        return entries[label]
+        insert_controller = active_canvas_for_window(
+            self.window
+        ).services.structure.insert_controller
+        return lambda: insert_controller.begin_ring_template_insert(
+            ring_size, style=style
+        )
 
     def _document_actions(self):
         return services_for_window(self.window).document_action_service

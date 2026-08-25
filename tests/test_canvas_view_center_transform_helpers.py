@@ -53,7 +53,6 @@ if QApplication is not None:
         qpoints_from_pairs,
         regular_ring_radius_for,
         ring_points_for,
-        scale_qpoints_to_bond_length,
         template_geometry_result,
     )
 
@@ -193,7 +192,6 @@ class CanvasViewCenterTransformHelpersTest(unittest.TestCase):
                     active_bond_order=1,
                     active_arrow_type="reaction",
                     active_orbital_type="p",
-                    curved_snap_step=0.25,
                 ),
             ),
         )
@@ -225,8 +223,6 @@ class CanvasViewCenterTransformHelpersTest(unittest.TestCase):
         tool_mode_controller.set_bond_style("double", 2)
         tool_mode_controller.set_arrow_type("curved")
         tool_mode_controller.set_orbital_type("sp2")
-        tool_mode_controller.set_curved_snap(1)
-        tool_mode_controller.set_curved_snap_step(0.01)
 
         settings = tool_settings_state_for(view)
         self.assertEqual(
@@ -234,8 +230,6 @@ class CanvasViewCenterTransformHelpersTest(unittest.TestCase):
         )
         self.assertEqual(settings.active_arrow_type, "curved")
         self.assertEqual(settings.active_orbital_type, "sp2")
-        self.assertTrue(tool_mode_controller.get_curved_snap())
-        self.assertEqual(tool_mode_controller.get_curved_snap_step(), 0.05)
         self.assertEqual(
             view.services.tool_controller.set_active.call_args_list,
             [mock.call("bond"), mock.call("arrow"), mock.call("orbital")],
@@ -257,19 +251,10 @@ class CanvasViewCenterTransformHelpersTest(unittest.TestCase):
         chair_points = cyclohexane_chair_points_for(view, QPointF(0.0, 0.0))
         boat_points = cyclohexane_boat_points_for(view, QPointF(0.0, 0.0))
         ring_points = ring_points_for(view, QPointF(0.0, 0.0), 6)
-        scaled_points = scale_qpoints_to_bond_length(
-            [QPointF(0.0, 0.0), QPointF(10.0, 0.0)],
-            QPointF(5.0, 0.0),
-            20.0,
-        )
 
         self.assertTrue(all(isinstance(point, QPointF) for point in chair_points))
         self.assertTrue(all(isinstance(point, QPointF) for point in boat_points))
         self.assertEqual(len(ring_points), 6)
-        self.assertEqual(
-            [(point.x(), point.y()) for point in scaled_points],
-            [(-5.0, 0.0), (15.0, 0.0)],
-        )
 
     def test_template_geometry_helpers_cover_none_result_and_pair_conversions(
         self,

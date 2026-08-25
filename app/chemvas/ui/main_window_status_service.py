@@ -270,9 +270,6 @@ class MainWindowStatusService:
             "zoom": self.zoom_label.text() if self.zoom_label is not None else "",
         }
 
-    def zoom_status_tip(self) -> str:
-        return self.zoom_label.statusTip() if self.zoom_label is not None else ""
-
     def has_zoom_label(self) -> bool:
         return self.zoom_label is not None
 

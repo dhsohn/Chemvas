@@ -4140,3 +4140,232 @@ def test_ensure_canvas_state_stays_removed() -> None:
     pattern = re.compile(r"\bensure_canvas_state\b")
 
     assert _matching_lines(pattern, _app_python_files()) == []
+
+
+def test_unregistered_transform_and_edit_bond_tools_stay_removed() -> None:
+    """Neither tool was ever a key in ``ToolController.tools``.
+
+    They could only be built by hand, so nothing in the running application
+    could reach them.
+    """
+    pattern = re.compile(r"\b(?:TransformTool|EditBondTool)\b")
+
+    assert _matching_lines(pattern, _app_python_files()) == []
+
+
+def test_orbital_handle_overlay_access_wrapper_stays_removed() -> None:
+    """Only ``TransformTool`` called it.
+
+    The live rotate-handle path goes through ``HandleOverlayService`` and
+    ``CanvasHandleController`` instead.
+    """
+    pattern = re.compile(r"\bshow_orbital_handles_for\b")
+
+    assert _matching_lines(pattern, _app_python_files()) == []
+
+
+def test_tool_context_bond_id_from_event_port_stays_removed() -> None:
+    """``EditBondTool`` was the only caller of the ``ToolContext`` port.
+
+    The identically named ``CanvasHitTestingService`` method stays: the
+    right-click context menu still routes through it.
+    """
+    tool_context = APP_ROOT / "chemvas" / "ui" / "tool_context.py"
+    pattern = re.compile(r"^\s+def bond_id_from_event\b")
+
+    assert _matching_lines(pattern, [tool_context]) == []
+
+
+def test_unreachable_snap_setting_accessors_stay_removed() -> None:
+    """No menu, toolbar, or context bar ever called these.
+
+    The curved-arrow and orbital snap fields they wrote stay on
+    ``CanvasToolSettingsState`` because the handle mutation code still reads
+    them, and ``snap_angle_step`` is still written through the generic
+    ``set_tool_setting_for``.
+    """
+    controller = APP_ROOT / "chemvas" / "ui" / "canvas_tool_mode_controller.py"
+    accessor_names = (
+        "set_curved_snap",
+        "get_curved_snap",
+        "set_curved_snap_step",
+        "get_curved_snap_step",
+        "set_curved_symmetry",
+        "get_curved_symmetry",
+        "set_orbital_snap_enabled",
+        "get_orbital_snap_enabled",
+        "set_orbital_snap_step",
+        "get_orbital_snap_step",
+        "set_snap_angle_step",
+    )
+    names = "|".join(re.escape(name) for name in accessor_names)
+    pattern = re.compile(rf"^\s+def (?:{names})\b")
+
+    assert _matching_lines(pattern, [controller]) == []
+
+
+def test_write_only_tool_setting_surfaces_stay_removed() -> None:
+    """``curved_symmetry`` was never read and ``TOOL_SETTING_ATTRS`` never used.
+
+    The field only ever fed its own accessor pair, and the tuple had no
+    consumer at all.
+    """
+    pattern = re.compile(r"\b(?:curved_symmetry|TOOL_SETTING_ATTRS)\b")
+
+    assert _matching_lines(pattern, _app_python_files()) == []
+
+
+def test_access_ports_without_a_production_caller_stay_removed() -> None:
+    """Wrappers and helpers only the tests ever called.
+
+    Each ``*_access`` wrapper forwarded to a service the production code
+    already reaches directly, so it was a second door nobody walked through.
+    The rest lost their last caller with those wrappers: the scene item map
+    helpers and ``remove_scene_items`` under ``rebuild_graphics_for``, and
+    ``build_template_entries`` under the retired menu population path.
+    ``bold_bond_width_for`` is not ``renderer_bold_bond_width_for`` and
+    ``remove_scene_items`` is not ``remove_scene_item``; both survivors are
+    live and stay.
+    """
+    removed_ports = (
+        "rebuild_graphics_for",
+        "scale_qpoints_to_bond_length",
+        "mark_offset_from_click_for",
+        "visible_label_rect_for_atom_for",
+        "mark_clearance_for_kind_for",
+        "label_cut_radius_for_atom_for",
+        "build_selected_structure_payload_for",
+        "selection_signature_for",
+        "add_benzene_template_for",
+        "bold_bond_width_for",
+        "clear_canvas_scene_item_map",
+        "clear_canvas_scene_item_list_map",
+        "clear_scene_item_map",
+        "clear_scene_item_list_map",
+        "remove_scene_items",
+        "build_template_entries",
+    )
+    pattern = re.compile(
+        rf"\b(?:{'|'.join(re.escape(name) for name in removed_ports)})\b"
+    )
+
+    assert _matching_lines(pattern, _app_python_files()) == []
+
+
+def test_service_methods_only_the_tests_called_stay_removed() -> None:
+    """Six methods whose only callers lived in the test suite.
+
+    Each ban is scoped to the module that defined the method, because the
+    bare names collide with live surfaces elsewhere.
+    """
+    ui_root = APP_ROOT / "chemvas" / "ui"
+    scoped_bans = {
+        "canvas_graph_service.py": ("atom_bond_order_sum",),
+        "canvas_geometry_controller.py": ("ring_for_bond",),
+        "scene_delete_logic.py": ("has_work",),
+        "main_window_status_service.py": ("zoom_status_tip",),
+        "main_window_state.py": ("reset_canvas_name_counter",),
+        "canvas_document_session_service.py": ("_snapshot_canvas_scene",),
+    }
+    violations: list[str] = []
+    for file_name, method_names in scoped_bans.items():
+        names = "|".join(re.escape(name) for name in method_names)
+        pattern = re.compile(rf"^\s*def (?:{names})\b")
+        violations.extend(_matching_lines(pattern, [ui_root / file_name]))
+
+    assert violations == []
+
+
+def test_duplicate_rdkit_export_reset_wrapper_stays_removed() -> None:
+    """The module-level wrapper duplicated ``RDKitExportJobRegistry.reset_for_tests``.
+
+    The class method stays; only the second name for it is gone.
+    """
+    pattern = re.compile(r"\breset_rdkit_export_job_state_for_tests\b")
+
+    assert _matching_lines(pattern, _app_python_files()) == []
+
+
+def test_exports_and_constants_without_a_reader_stay_removed() -> None:
+    """Names nothing imported, iterated, or read.
+
+    ``compute_identifiers_for`` is the access wrapper, not the live
+    ``compute_identifiers`` on the adapter.
+    """
+    removed_names = (
+        "compute_identifiers_for",
+        "TEXT_STYLE_ATTRS",
+        "CANVAS_TEMPLATE_FIELDS",
+        "DESIGN_ICON_NAMES",
+        "HEADLESS_SUBCOMMANDS",
+        "hash_bond_width",
+        "wedge_width_px",
+    )
+    pattern = re.compile(
+        rf"\b(?:{'|'.join(re.escape(name) for name in removed_names)})\b"
+    )
+
+    assert _matching_lines(pattern, _app_python_files()) == []
+
+
+def test_unused_members_stay_removed_from_their_defining_modules() -> None:
+    """Three members whose bare names collide with live surfaces.
+
+    ``_restore_observer_ports`` is not ``_try_restore_observer_ports`` and
+    ``viewport_center`` is not ``viewport_center_scene_pos_for``; both
+    survivors are live. The free ``canvas_name_counter`` helper is likewise not
+    ``MainWindowState.canvas_name_counter``, the counter field the window still
+    increments, so that ban is scoped to the module that defined the helper.
+    """
+    ui_root = APP_ROOT / "chemvas" / "ui"
+    scoped_bans = {
+        "scene_delete_controller.py": ("_restore_observer_ports",),
+        "structure_build_service.py": ("latest_bond_id", "viewport_center"),
+        "main_window_canvas_logic.py": ("canvas_name_counter",),
+    }
+    violations: list[str] = []
+    for file_name, method_names in scoped_bans.items():
+        names = "|".join(re.escape(name) for name in method_names)
+        pattern = re.compile(rf"^\s*def (?:{names})\b")
+        violations.extend(_matching_lines(pattern, [ui_root / file_name]))
+
+    assert violations == []
+
+
+def test_menu_population_path_stays_removed_from_tool_routing_service() -> None:
+    """Nothing in the application built these menus.
+
+    The context bar page factories draw the same template, arrow, and palette
+    entries directly, so the QMenu path had no caller. Following the cascade to
+    its fixed point also retired the entry builders and the two arrow menu
+    activators. ``apply_color_preset`` and ``apply_ring_fill_preset`` stay:
+    the panel toolbar routes through them.
+    """
+    service = APP_ROOT / "chemvas" / "ui" / "main_window_tool_routing_service.py"
+    method_names = (
+        "populate_template_menu",
+        "populate_arrow_menu",
+        "populate_palette_menu",
+        "add_menu_action",
+        "palette_icon",
+        "template_entries",
+        "acs_color_palette",
+        "activate_arrow_type_from_menu",
+        "activate_arrow_preset_from_menu",
+    )
+    names = "|".join(re.escape(name) for name in method_names)
+    pattern = re.compile(rf"^\s*def (?:{names})\b")
+
+    assert _matching_lines(pattern, [service]) == []
+
+
+def test_canvas_tab_reorder_wiring_stays_removed() -> None:
+    """Reordering canvas tabs was a dead direction.
+
+    Each window holds one canvas and the tab strip is hidden, so the tabs were
+    marked movable and the move signal was connected to a handler that
+    discarded its arguments.
+    """
+    pattern = re.compile(r"\b(?:on_canvas_tab_moved|tabMoved)\b")
+
+    assert _matching_lines(pattern, _app_python_files()) == []

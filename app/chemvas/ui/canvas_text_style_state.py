@@ -25,24 +25,6 @@ class CanvasTextStyleState:
     note_padding: float = 6.0
 
 
-TEXT_STYLE_ATTRS = (
-    "text_font_family",
-    "text_font_size",
-    "text_font_weight",
-    "text_italic",
-    "text_color",
-    "text_alignment",
-    "text_line_spacing",
-    "note_box_enabled",
-    "note_box_color",
-    "note_box_alpha",
-    "note_border_enabled",
-    "note_border_color",
-    "note_border_width",
-    "note_padding",
-)
-
-
 def text_style_state_for(canvas: Any) -> CanvasTextStyleState:
     return cast(CanvasTextStyleState, canvas.runtime_state.text_style_state)
 

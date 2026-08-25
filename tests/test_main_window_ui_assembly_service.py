@@ -90,16 +90,6 @@ class _HarnessWindow(QMainWindow):
     def _blank_icon(self) -> QIcon:
         return QIcon()
 
-    def populate_template_menu(self, menu: QMenu) -> None:
-        menu.addAction("Template")
-
-    def populate_arrow_menu(self, menu: QMenu) -> None:
-        menu.addAction("Arrow")
-
-    def populate_palette_menu(self, menu: QMenu, callback) -> None:
-        action = menu.addAction("Black")
-        action.triggered.connect(lambda checked=False: callback("#000000"))
-
 
 @unittest.skipUnless(
     QApplication is not None, "PyQt6 is required for main window UI assembly tests"
