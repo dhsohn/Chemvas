@@ -83,20 +83,23 @@ two environment-specific jobs are not part of `make check`.
 
 ## Architecture conventions (read this before restructuring)
 
-Chemvas is migrating from the flat `app/chemvas/core` and `app/chemvas/ui`
-packages to the feature-oriented boundaries in
-[`ADR 0001`](docs/adr/0001-feature-oriented-modularization.md). Existing UI code
-still uses small `*_ports`, `*_access`, `*_state`, `*_service`,
-`*_controller`, and `*_logic` modules to keep `CanvasView` and `MainWindow`
-thin. Treat that convention as a constraint for legacy code, not as a template
-that every new feature must reproduce.
+The rules themselves are normative in
+[`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — the ports / access / state /
+service discipline for the flat `app/chemvas/ui` package, what `core` may
+import, and how transaction and recovery ownership is divided (Korean mirror:
+[`docs/ARCHITECTURE.ko.md`](docs/ARCHITECTURE.ko.md)). The target package
+boundaries and dependency direction are decided in
+[`ADR 0001`](docs/adr/0001-feature-oriented-modularization.md). Read both before
+moving code; what follows is the contributor's-eye view.
 
-**These boundaries are enforced by [`tests/test_architecture_boundaries.py`](tests/test_architecture_boundaries.py).**
-It scans the source with AST + regex and fails if forbidden patterns reappear. If
-you try to "simplify" by collapsing these modules or reaching into internals, that
-test will tell you no.
+**Those boundaries are enforced by
+[`tests/test_architecture_boundaries.py`](tests/test_architecture_boundaries.py)
+and [`tests/test_package_dependencies.py`](tests/test_package_dependencies.py).**
+They scan the source with AST + regex and fail if a forbidden pattern reappears.
+If you try to "simplify" by collapsing these modules or reaching into internals,
+they will tell you no.
 
-### The module roles
+### The module roles, by example
 
 Using the atom-label feature as a worked example:
 
@@ -108,7 +111,20 @@ Using the atom-label feature as a worked example:
 | `*_state` | Owns runtime state in a dedicated object instead of as private attrs on the window/canvas. | `main_window_state.py` (`MainWindowState`) |
 | `*_logic` | Pure, Qt-free helpers (parsing, geometry, layout) that are easy to unit-test. | `chemvas.features.annotations` label layout API |
 
-### The rules the boundary test enforces
+A focused test that needs only part of the runtime builds that part rather than
+hanging state or services off a double by hand:
+
+```python
+canvas = SimpleNamespace(
+    runtime_state=canvas_runtime_state(graph_state=CanvasGraphState()),
+)
+```
+
+`tests/runtime_state.canvas_runtime_state(**states)` checks the field names
+against the real `CanvasRuntimeState`, and `tests/runtime_services.py` does the
+same for a partial `CanvasRuntimeServices`.
+
+### What the boundary tests will stop you doing
 
 - **No reaching into private members.** Don't write `canvas._foo`,
   `getattr(canvas, "_foo")`, or `setattr(canvas, "_foo", ...)` from production code.
@@ -119,7 +135,7 @@ Using the atom-label feature as a worked example:
   `window.services`, or `window.canvas_tabs`. Collaborators are passed in (look at how
   `chemvas.bootstrap.main_window_services` wires them) so each service is testable in isolation.
 - **`window.canvas` / `window.canvas_tabs` stay off the shell surface.** Outside
-  that file, use the canvas/tab reference ports.
+  `app/chemvas/shell/main_window.py`, use the canvas/tab reference ports.
 - **Removed facades stay removed.** The boundary test lists many old god-object method
   names (e.g. `set_bond_style`, `export_figure`, `bind_active_canvas`) that must not be
   reintroduced on `MainWindow`. Add behavior to the appropriate service instead.
@@ -142,37 +158,6 @@ Using the atom-label feature as a worked example:
 When migrating legacy code, preserve its existing access rules until the whole
 feature owns a public API and the corresponding legacy architecture checks can
 be retired.
-
-Production service lookup accepts only `CanvasRuntimeServices`; it does not adapt
-flat or duck-typed service bags. Focused legacy UI tests use the test-only builder
-in `tests/runtime_services.py` when they need a partial runtime.
-
-State works the same way. A `<name>_state_for(canvas)` accessor reads its field off
-`canvas.runtime_state` and does not create state on the canvas on first access.
-`SheetSetupState` is the sole owner of sheet size, orientation, and rect; those values
-are not mirrored onto the canvas. `document_metadata_state_for` follows the same
-direct-container rule; the former `canvas_state_object` fallback has been removed.
-A double therefore needs its own partial container —
-build it with `tests/runtime_state.canvas_runtime_state(**states)`, which checks the
-names against the real `CanvasRuntimeState`:
-
-```python
-canvas = SimpleNamespace(
-    runtime_state=canvas_runtime_state(graph_state=CanvasGraphState()),
-)
-```
-
-### Core vs UI
-
-- `app/chemvas/core/` is transitional chemistry/model/IO code. It must not import
-  the UI or Qt. Concrete renderer integration belongs in `chemvas.adapters.qt`;
-  do not add framework dependencies to core.
-- `app/chemvas/ui/` is the PyQt6 layer described above.
-- `app/chemvas/shell/main_window.py` owns the thin Qt window; runtime/service
-  assembly, document opening, and startup live in `app/chemvas/bootstrap/`.
-- **RDKit is optional.** It must never become a hard import at app startup. Features
-  that need it should degrade gracefully (or fail with a clear message) when it's
-  absent — see `chemvas.core.rdkit_adapter` (recorded transitional adapter debt).
 
 ## Pull requests
 

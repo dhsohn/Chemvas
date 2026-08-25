@@ -45,7 +45,7 @@ chemvas
 | **드로잉** | 결합·링·화살표·bracket·원자 라벨 — ChemDraw 호환 단축키 지원 | [REFERENCE](docs/REFERENCE.md) |
 | **Figure export** | plain SVG / PDF / PNG / TIFF, 글리프 아웃라인, 결정론적 물리 크기 | [REFERENCE](docs/REFERENCE.md#figure-export) |
 | **화학 I/O** | SMILES import, `.mol` 상호운용, 2D→3D `.xyz`, Molecule Info *(RDKit)* | [REFERENCE](docs/REFERENCE.md#chemistry-io) |
-| **Agent CLI** | headless 렌더 / 검사 / hash-gated Graph Patch, Qt 창 없음 | [AGENT_CLI](docs/AGENT_CLI.md) |
+| **Agent CLI** | headless 문서 구성 / 레이아웃 점검 / 렌더 / 검사 / hash-gated Graph Patch, Qt 창 없음 | [AGENT_CLI](docs/AGENT_CLI.md) |
 | **계산 handoff** | elementary step, 검토된 precomplex, step당 `machine.json` 하나 | [AGENT_CLI](docs/AGENT_CLI.md#calculation-states-and-elementary-steps) |
 
 문서는 `.chemvas` 파일(JSON, version 7 계약)이며 자동저장·크래시 복구를
