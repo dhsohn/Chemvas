@@ -34,15 +34,6 @@ def _semantic_value_matches(actual: object, expected: object) -> bool:
         return False
 
 
-def _capture_optional_attribute(
-    target: object,
-    name: str,
-    *,
-    default: object = None,
-) -> object:
-    return getattr(target, name, default)
-
-
 @dataclass(slots=True)
 class _ContainerState:
     target: object
@@ -232,7 +223,7 @@ class SceneItemExactSnapshot:
                 containers.capture(value)
                 values.append((role, value))
         else:
-            data = _capture_optional_attribute(item, "data")
+            data = getattr(item, "data", None)
             if not callable(data):
                 data = None
         if not isinstance(item, QGraphicsItem) and callable(data):
@@ -260,7 +251,7 @@ class SceneItemExactSnapshot:
                     errors.append(exc)
         else:
             try:
-                setter = _capture_optional_attribute(self.item, "setData")
+                setter = getattr(self.item, "setData", None)
             except Exception as exc:
                 errors.append(exc)
                 setter = None
@@ -291,7 +282,7 @@ class SceneItemExactSnapshot:
                     errors.append(exc)
         else:
             try:
-                data_getter = _capture_optional_attribute(self.item, "data")
+                data_getter = getattr(self.item, "data", None)
             except Exception as exc:
                 errors.append(exc)
                 data_getter = None
@@ -313,10 +304,7 @@ class SceneItemExactSnapshot:
                     else setter_name[3:4].lower() + setter_name[4:]
                 )
                 try:
-                    getter = _capture_optional_attribute(
-                        primitive.item,
-                        getter_name,
-                    )
+                    getter = getattr(primitive.item, getter_name, None)
                     if not callable(getter) or not _semantic_value_matches(
                         getter(),
                         expected,
