@@ -49,7 +49,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   a private copy of. Each merge was checked against the code it replaced
   over the inputs that would expose a difference — random graphs, injected
   rollback failures, deleted scene objects — and none of them changed an
-  answer.
+  answer. Architecture tests now fail if any of the six is written a second
+  time, and were checked against the tree from before each merge to confirm
+  they report the copies that were really there.
 
   What did not merge is now recorded at both of its sites. The restore-atoms
   blocks in the history commands and the shared tail of the atom and bond
