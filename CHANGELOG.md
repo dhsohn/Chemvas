@@ -17,6 +17,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   given is byte-for-byte the string it was before, checked against the shipped
   palette and against a substituted one so the check covers the section
   functions and not just the cached constant.
+  In the same pass, nine functions in the insert access module that renamed
+  another module's function and forwarded their own arguments to it unchanged
+  are gone, and their callers now name the function they were always reaching.
+  One of those callers had been importing the same function twice, once under
+  each name.
 - Removed guards that defended against states the code cannot reach, and
   narrowed two that were hiding real failures. Nothing about drawing, saving
   or exporting a document changes when the application is wired correctly —

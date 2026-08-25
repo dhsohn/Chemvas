@@ -10,6 +10,14 @@ from chemvas.features.insertion import (
     TemplateInsertRequest,
     TemplateInsertResolution,
 )
+from chemvas.ui.bond_graphics_access import add_bond_graphics_for
+from chemvas.ui.canvas_model_access import (
+    atom_for_id,
+    bond_count_for,
+    bond_for_id,
+    bond_ids_from,
+    next_atom_id_for,
+)
 from chemvas.ui.canvas_service_ports import history_service_for_access
 from chemvas.ui.canvas_smiles_input_state import set_last_smiles_input_for
 from chemvas.ui.history_canvas_access import (
@@ -23,18 +31,11 @@ from chemvas.ui.insert_commit_rollback import (
 from chemvas.ui.structure_build_committer import StructureBuildCommitter
 from chemvas.ui.structure_insert_access import (
     add_atom_with_merge_for,
-    add_insert_benzene_ring_for,
-    add_insert_bond_for,
-    add_insert_bond_graphics_for,
     add_insert_ring_from_points_for,
     has_insert_mutation_since_for,
-    insert_atom_for_id,
-    insert_bond_count_for,
     insert_bond_exists_for,
-    insert_bond_for_id,
-    insert_next_atom_id_for,
-    new_insert_bond_ids_from,
 )
+from chemvas.ui.structure_mutation_access import add_benzene_ring_for, add_bond_for
 
 if TYPE_CHECKING:
     from chemvas.ui.canvas_view import CanvasView
@@ -104,15 +105,15 @@ def apply_template_commit_resolution(
             atom_ids: list[int] = []
             for point in points:
                 atom_ids.append(add_atom_with_merge_for(canvas, point, "C", merge))
-            bonds_start = insert_bond_count_for(canvas)
+            bonds_start = bond_count_for(canvas)
             for index in range(len(atom_ids)):
                 a_id = atom_ids[index]
                 b_id = atom_ids[(index + 1) % len(atom_ids)]
                 if insert_bond_exists_for(canvas, a_id, b_id, bond_exists=bond_exists):
                     continue
-                add_insert_bond_for(canvas, a_id, b_id)
-            for new_bond_id in new_insert_bond_ids_from(canvas, bonds_start):
-                add_insert_bond_graphics_for(canvas, new_bond_id)
+                add_bond_for(canvas, a_id, b_id)
+            for new_bond_id in bond_ids_from(canvas, bonds_start):
+                add_bond_graphics_for(canvas, new_bond_id)
             committer.add_ring_fill(points, atom_ids)
         else:
             set_last_smiles_input_for(canvas, after_smiles_input)
@@ -137,8 +138,8 @@ def _apply_benzene_template_commit(
     after_smiles_input: str | None,
 ) -> bool:
     center = QPointF(*request.cursor_pos)
-    before_next_atom_id = insert_next_atom_id_for(canvas)
-    before_bond_count = insert_bond_count_for(canvas)
+    before_next_atom_id = next_atom_id_for(canvas)
+    before_bond_count = bond_count_for(canvas)
     smiles_authority = capture_smiles_input_restore_authority(canvas)
     exact_transaction = None
     try:
@@ -150,7 +151,7 @@ def _apply_benzene_template_commit(
             history_service=history_service_for_access(canvas),
         )
         set_last_smiles_input_for(canvas, after_smiles_input)
-        add_insert_benzene_ring_for(
+        add_benzene_ring_for(
             canvas,
             center,
             attach_atom_id=plan.atom_id,
@@ -189,18 +190,18 @@ def _apply_benzene_template_commit(
 
 
 def bond_merge_seed(canvas: CanvasView, bond_id: int) -> list[tuple[int, float, float]]:
-    bond = insert_bond_for_id(canvas, bond_id)
+    bond = bond_for_id(canvas, bond_id)
     if bond is None:
         return []
-    atom_a = insert_atom_for_id(canvas, bond.a)
-    atom_b = insert_atom_for_id(canvas, bond.b)
+    atom_a = atom_for_id(canvas, bond.a)
+    atom_b = atom_for_id(canvas, bond.b)
     if atom_a is None or atom_b is None:
         return []
     return [(bond.a, atom_a.x, atom_a.y), (bond.b, atom_b.x, atom_b.y)]
 
 
 def atom_merge_seed(canvas: CanvasView, atom_id: int) -> list[tuple[int, float, float]]:
-    atom = insert_atom_for_id(canvas, atom_id)
+    atom = atom_for_id(canvas, atom_id)
     if atom is None:
         return []
     return [(atom_id, atom.x, atom.y)]
