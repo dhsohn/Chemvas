@@ -3406,14 +3406,13 @@ def test_removed_tools_facade_stays_absent() -> None:
 
 
 def test_production_code_imports_concrete_tool_modules_not_tools_reexport() -> None:
+    # The exemption this used to carry named chemvas/ui/tools.py, which an
+    # earlier pass deleted; _app_python_files() cannot yield a file that is not
+    # there, so the filter excluded nothing. Without it the ban also covers the
+    # module itself, should it ever come back.
     pattern = re.compile(r"\bfrom ui\.tools import\b|\bimport ui\.tools\b")
-    paths = [
-        path
-        for path in _app_python_files()
-        if path != APP_ROOT / "chemvas" / "ui" / "tools.py"
-    ]
 
-    assert _matching_lines(pattern, paths) == []
+    assert _matching_lines(pattern, _app_python_files()) == []
 
 
 def test_graph_algorithms_are_canvas_free() -> None:
