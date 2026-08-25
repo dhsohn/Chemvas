@@ -3,19 +3,15 @@ from __future__ import annotations
 from collections.abc import Sequence
 
 from chemvas.core.history import CompositeCommand, HistoryCommand, SetSmilesInputCommand
+from chemvas.domain.document import VALID_ARROW_KINDS
 from chemvas.ui.history_commands import DeleteSceneItemsCommand
 from chemvas.ui.scene_item_access import remove_scene_item
 from chemvas.ui.scene_item_state import scene_item_state_for
 
-DELETE_SCENE_ITEM_KINDS = frozenset(
+# Every arrow kind the document schema knows, plus the standalone annotation
+# items the delete tool erases the same way.
+DELETE_SCENE_ITEM_KINDS = VALID_ARROW_KINDS | frozenset(
     {
-        "arrow",
-        "equilibrium",
-        "resonance",
-        "curved_single",
-        "curved_double",
-        "inhibit",
-        "dotted",
         "orbital",
         "ts_bracket",
         "shape",

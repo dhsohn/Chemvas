@@ -19,22 +19,14 @@ from typing import Any, cast
 from PyQt6.QtCore import QRectF
 from PyQt6.QtWidgets import QGraphicsItem, QGraphicsTextItem
 
+from chemvas.domain.document import VALID_ARROW_KINDS
 from chemvas.ui.canvas_mark_registry import mark_registry_for
 from chemvas.ui.canvas_scene_items_state import scene_items_state_for
 from chemvas.ui.scene_item_access import item_is_unavailable_for_scene_operation
 from chemvas.ui.transactions.scene_rect import SceneRectSnapshot
 
-ARROW_KINDS = frozenset(
-    {
-        "arrow",
-        "equilibrium",
-        "resonance",
-        "curved_single",
-        "curved_double",
-        "inhibit",
-        "dotted",
-    }
-)
+# The document schema owns the arrow kinds; attach routing reads the same set.
+ARROW_KINDS = VALID_ARROW_KINDS
 
 _KIND_COLLECTION = {
     "ring": "ring_items",

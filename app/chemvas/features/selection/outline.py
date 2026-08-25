@@ -12,18 +12,13 @@ from PyQt6.QtWidgets import (
     QGraphicsTextItem,
 )
 
+from chemvas.domain.document import VALID_ARROW_KINDS
+
 PenWidthGetter = Callable[[QPen], float]
 LineStrokePathBuilder = Callable[[QPointF, QPointF, float], QPainterPath]
 
-ARROW_OBJECT_KINDS = {
-    "arrow",
-    "equilibrium",
-    "resonance",
-    "curved_single",
-    "curved_double",
-    "inhibit",
-    "dotted",
-}
+# The document schema owns the arrow kinds; outlines read the same set.
+ARROW_OBJECT_KINDS = VALID_ARROW_KINDS
 
 
 def _default_width_for_pen(pen: QPen) -> float:

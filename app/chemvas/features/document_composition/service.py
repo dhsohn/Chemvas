@@ -6,6 +6,7 @@ from typing import Any, cast
 
 from chemvas.domain.document import (
     CANVAS_FILE_VERSION,
+    VALID_ARROW_KINDS,
     VALID_BOND_ORDERS,
     VALID_BOND_STYLES,
     Atom,
@@ -18,7 +19,6 @@ from chemvas.domain.document import (
     serialize_settings,
 )
 from chemvas.domain.document.state import (
-    VALID_ARROW_KINDS,
     VALID_SHAPE_KINDS,
     VALID_SHAPE_STROKES,
     validate_settings_state,
