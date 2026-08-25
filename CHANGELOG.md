@@ -8,6 +8,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
+- Corrected the module docstring on the graph index operations. Documentation
+  only, nothing about the code changed — it called the whole module "pure"
+  without saying what that meant, which read as side-effect-free even though
+  the index helpers mutate in place the mapping they are handed. The docstring
+  now says what "pure" is about here, namely what the module reaches (no Qt,
+  no drawing surface, no document model), and names the one operation that
+  takes the whole graph state and writes a cache on it, with the reason its
+  cache and its version have to arrive together.
 - Removed five scene-access helpers that only the test suite ever called.
   Internal change only — no drawing, saving or exporting path reached any of
   them. Four of them wrapped a graphics-scene call the production code never
