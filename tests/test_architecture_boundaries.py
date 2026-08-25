@@ -4613,21 +4613,55 @@ def test_document_settings_keys_are_listed_in_one_module() -> None:
     assert [owner.rsplit(":", 1)[0] for owner in owners] == [DOCUMENT_STATE_MODULE]
 
 
-def _parameter_named_getattr_wrappers(source: str) -> list[tuple[int, str]]:
-    """Functions that are only ``return getattr(<params or None>)``.
+def _spells_out_its_value(node: ast.expr) -> bool:
+    """True when the source spells the expression's value out in full."""
+    try:
+        ast.literal_eval(node)
+    except (ValueError, TypeError, SyntaxError):
+        return False
+    return True
 
-    Scoped to wrappers whose arguments are all the function's own parameters
-    (or a literal ``None`` default), because that is a wrapper the builtin
-    already provides. Helpers that substitute a module-private sentinel are a
-    different function and are deliberately not matched.
+
+def _body_after_docstring(
+    node: ast.FunctionDef | ast.AsyncFunctionDef,
+) -> list[ast.stmt]:
+    """The function's statements, with a leading docstring dropped."""
+    first = node.body[0]
+    if (
+        isinstance(first, ast.Expr)
+        and isinstance(first.value, ast.Constant)
+        and isinstance(first.value.value, str)
+    ):
+        return node.body[1:]
+    return node.body
+
+
+def _getattr_forwarding_wrappers(source: str) -> list[tuple[int, str]]:
+    """Functions whose whole body forwards to ``getattr``.
+
+    The builtin already is that function, so the wrapper buys a name and
+    nothing else. The attribute may arrive as a parameter or be hardcoded as a
+    string, the default may be a parameter or any value the source spells out,
+    and the two- and three-argument forms both count. A docstring above the
+    ``return`` does not change the shape.
+
+    Deliberately not matched, because each is a different function rather than
+    a pass-through:
+
+    * a helper that passes a module-private sentinel as the default. The
+      caller cannot spell that value, so "no such attribute" comes back
+      distinguishable from "the attribute is None".
+    * a wrapper whose target is not one of its own parameters, which reads a
+      fixed object instead of forwarding the caller's.
     """
     wrappers: list[tuple[int, str]] = []
     for node in ast.walk(ast.parse(source)):
         if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             continue
-        if len(node.body) != 1:
+        body = _body_after_docstring(node)
+        if len(body) != 1:
             continue
-        statement = node.body[0]
+        statement = body[0]
         if not isinstance(statement, ast.Return):
             continue
         call = statement.value
@@ -4636,7 +4670,7 @@ def _parameter_named_getattr_wrappers(source: str) -> list[tuple[int, str]]:
             and isinstance(call.func, ast.Name)
             and call.func.id == "getattr"
             and not call.keywords
-            and len(call.args) == 3
+            and len(call.args) in (2, 3)
         ):
             continue
         parameters = {
@@ -4645,21 +4679,33 @@ def _parameter_named_getattr_wrappers(source: str) -> list[tuple[int, str]]:
                 node.args.posonlyargs + node.args.args + node.args.kwonlyargs
             )
         }
-        if all(
-            (isinstance(argument, ast.Name) and argument.id in parameters)
-            or (isinstance(argument, ast.Constant) and argument.value is None)
-            for argument in call.args
+        target, attribute, *default = call.args
+        if not isinstance(target, ast.Name) or target.id not in parameters:
+            continue
+        if isinstance(attribute, ast.Name):
+            if attribute.id not in parameters:
+                continue
+        elif not (
+            isinstance(attribute, ast.Constant) and isinstance(attribute.value, str)
         ):
-            wrappers.append((node.lineno, node.name))
+            continue
+        if default:
+            fallback = default[0]
+            if isinstance(fallback, ast.Name):
+                if fallback.id not in parameters:
+                    continue
+            elif not _spells_out_its_value(fallback):
+                continue
+        wrappers.append((node.lineno, node.name))
     return wrappers
 
 
 def test_no_production_function_only_forwards_to_getattr() -> None:
-    """A wrapper that forwards every argument to getattr is getattr."""
+    """A wrapper whose whole body forwards to getattr is getattr."""
     violations = [
         f"{path.relative_to(APP_ROOT.parents[0])}:{line_no}: {name}"
         for path in _app_python_files()
-        for line_no, name in _parameter_named_getattr_wrappers(
+        for line_no, name in _getattr_forwarding_wrappers(
             path.read_text(encoding="utf-8")
         )
     ]
