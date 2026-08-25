@@ -8,6 +8,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
+- Removed guards that defended against states the code cannot reach, and
+  narrowed two that were hiding real failures. Nothing about drawing, saving,
+  exporting or recovering a document changes when the application is wired
+  correctly — but when it is *not*, several operations that used to do nothing
+  quietly now fail loudly. The internal service ports (roughly fifty calls
+  across eleven modules), the tool context's ports, the window and 3D-preview
+  ports and the main window's status bar were all reached through capability
+  probes that returned "missing" and let the caller substitute a silent
+  default: a bond that was never sprouted, an arrow that was never added, a
+  window that was never raised to the front, a 3D preview whose worker was
+  never shut down. All of those were measured to resolve on a real assembled
+  canvas and window, so the probes only ever absorbed wiring mistakes. They now
+  raise where the mistake is, instead of producing a document that silently
+  lacks what was asked for.
+  Two swallows were narrowed rather than removed. A session snapshot that
+  cannot be read is still skipped when the file is missing or corrupt, but a
+  programming error in that path no longer masquerades as a corrupt document
+  and drops unsaved work from the crash-recovery list. A failure to record a
+  clean exit on quit is still tolerated when app-data is unwritable — the only
+  cause it can have, and one whose consequence is the conservative one of
+  offering recovery on the next launch — while anything else surfaces.
+  Also folded in: the delete-tool session's port validation and its unwind
+  (the session type makes every checked state impossible, while the rollback
+  that legitimately leaves a session live still reports itself and is still
+  retried), six defensive reads of a dataclass field that always exists, three
+  membership filters over ids that came from the model they were checked
+  against, a CLI subcommand check argparse had already made, a duplicated
+  "nothing to export" refusal, and a marker written into an exception's
+  dictionary through four layers of indirection that cannot fail.
 - Gave duplicated constants and helpers one owner each. This is internal
   housekeeping and changes nothing about how the application behaves. The
   arrow kinds are the part worth naming: the same seven strings were spelled
