@@ -6,11 +6,7 @@ from chemvas.ui.scene_item_access import (
     attach_scene_item,
     attached_canvas_scene_items,
     bond_ids_for_ring_item,
-    clear_canvas_scene,
     create_scene_item_from_state,
-    create_scene_item_group,
-    destroy_scene_item_group,
-    item_can_be_added_to_canvas_scene,
     item_is_in_canvas_scene,
     refresh_bond_geometry_for_ring_item,
     remove_attached_item_from_canvas_scene,
@@ -136,26 +132,14 @@ class _Controller:
 
 class _Scene:
     def __init__(self) -> None:
-        self.calls = []
         self.items = []
         self.removed_items = []
-        self.clear_calls = 0
 
     def addItem(self, item) -> None:
         self.items.append(item)
 
     def removeItem(self, item) -> None:
         self.removed_items.append(item)
-
-    def clear(self) -> None:
-        self.clear_calls += 1
-
-    def createItemGroup(self, items):
-        self.calls.append(("create_group", list(items)))
-        return ("group", tuple(items))
-
-    def destroyItemGroup(self, group) -> None:
-        self.calls.append(("destroy_group", group))
 
 
 class _SceneItem:
@@ -241,20 +225,6 @@ class SceneItemAccessTest(unittest.TestCase):
         with self.assertRaises(AttributeError):
             attach_scene_item(canvas, item)
 
-    def test_scene_group_helpers_delegate_to_scene(self) -> None:
-        scene = _Scene()
-        canvas = _Canvas()
-        canvas.scene = lambda: scene
-        items = [object(), object()]
-
-        group = create_scene_item_group(canvas, items)
-        destroy_scene_item_group(canvas, group)
-
-        self.assertEqual(group, ("group", tuple(items)))
-        self.assertEqual(
-            scene.calls, [("create_group", items), ("destroy_group", group)]
-        )
-
     def test_add_item_to_canvas_scene_adds_and_returns_item(self) -> None:
         scene = _Scene()
         canvas = _Canvas()
@@ -263,17 +233,7 @@ class SceneItemAccessTest(unittest.TestCase):
 
         self.assertIs(add_item_to_canvas_scene(canvas, item), item)
 
-        self.assertEqual(scene.calls, [])
         self.assertEqual(scene.items, [item])
-
-    def test_clear_canvas_scene_delegates_to_scene_clear(self) -> None:
-        scene = _Scene()
-        canvas = _Canvas()
-        canvas.scene = lambda: scene
-
-        clear_canvas_scene(canvas)
-
-        self.assertEqual(scene.clear_calls, 1)
 
     def test_item_is_in_canvas_scene_handles_attached_detached_and_deleted_items(
         self,
@@ -301,43 +261,6 @@ class SceneItemAccessTest(unittest.TestCase):
         sip.delete(deleted_qobject_canvas)
         self.assertFalse(
             item_is_in_canvas_scene(deleted_qobject_canvas, _SceneItem(scene))
-        )
-
-    def test_item_can_be_added_to_canvas_scene_distinguishes_attached_and_deleted_items(
-        self,
-    ) -> None:
-        scene = _Scene()
-        other_scene = _Scene()
-        canvas = _Canvas()
-        canvas.scene = lambda: scene
-        deleted_canvas = _Canvas()
-        deleted_canvas.scene = lambda: (_ for _ in ()).throw(RuntimeError("deleted"))
-
-        self.assertFalse(item_can_be_added_to_canvas_scene(canvas, _SceneItem(scene)))
-        self.assertTrue(
-            item_can_be_added_to_canvas_scene(canvas, _SceneItem(other_scene))
-        )
-        self.assertTrue(item_can_be_added_to_canvas_scene(canvas, object()))
-        self.assertFalse(item_can_be_added_to_canvas_scene(canvas, None))
-        self.assertFalse(item_can_be_added_to_canvas_scene(deleted_canvas, None))
-        with self.assertRaisesRegex(RuntimeError, "deleted"):
-            item_can_be_added_to_canvas_scene(canvas, _SceneItem(scene, raises=True))
-        with self.assertRaisesRegex(RuntimeError, "deleted"):
-            item_can_be_added_to_canvas_scene(deleted_canvas, _SceneItem(other_scene))
-
-        deleted_item = QGraphicsRectItem(QRectF(0.0, 0.0, 1.0, 1.0))
-        sip.delete(deleted_item)
-        self.assertFalse(item_can_be_added_to_canvas_scene(canvas, deleted_item))
-        self.assertFalse(
-            item_can_be_added_to_canvas_scene(deleted_canvas, deleted_item)
-        )
-        deleted_qobject_canvas = QObject()
-        sip.delete(deleted_qobject_canvas)
-        self.assertFalse(
-            item_can_be_added_to_canvas_scene(
-                deleted_qobject_canvas,
-                _SceneItem(other_scene),
-            )
         )
 
     def test_remove_item_from_canvas_scene_removes_only_attached_items(self) -> None:

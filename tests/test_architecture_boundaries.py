@@ -2798,6 +2798,33 @@ def test_main_window_utility_icon_accessors_stay_removed() -> None:
     assert "drawEllipse(7, 7, 16, 16)" not in factory_source
 
 
+def test_design_icon_orphan_glyphs_stay_removed() -> None:
+    renderer = APP_ROOT / "chemvas" / "ui" / "main_window_design_icon_renderer.py"
+    renderer_source = renderer.read_text(encoding="utf-8")
+
+    # Eleven of these lost their last consumer when twelve icon accessors
+    # went (PR #146); "select" never had one, because icon_select has always
+    # drawn the move glyph. A caller that needs one adds the glyph back
+    # together with the accessor that renders it. The key is matched however
+    # it is quoted, so a re-add cannot slip past on quote style alone.
+    for glyph_name in (
+        "select",
+        "bond_length",
+        "canvas",
+        "font",
+        "info",
+        "open",
+        "panel_right",
+        "redo",
+        "save",
+        "sheet",
+        "templates",
+        "undo",
+    ):
+        quoted = re.compile("[\"']" + re.escape(glyph_name) + "[\"']\\s*:")
+        assert not quoted.search(renderer_source)
+
+
 def test_main_window_tool_icons_use_only_static_design_mapping() -> None:
     factory = APP_ROOT / "chemvas" / "ui" / "main_window_icon_factory.py"
     factory_source = factory.read_text(encoding="utf-8")
@@ -4047,6 +4074,36 @@ def test_service_methods_only_the_tests_called_stay_removed() -> None:
         violations.extend(_matching_lines(pattern, [ui_root / file_name]))
 
     assert violations == []
+
+
+def test_scene_access_helpers_only_the_tests_called_stay_removed() -> None:
+    """Five scene-access helpers whose only callers lived in the test suite.
+
+    Four of them wrapped a ``QGraphicsScene`` call the production code never
+    made through this module: the whole-scene ``clear`` -- which is not
+    ``canvas_scene_reset_access.clear_scene_for``, the live reset the document
+    session, the lifecycle and the SMILES insert all go through -- the two item
+    group calls, and the canvas-scoped "can this be added" probe.
+    ``item_can_be_added_to_scene`` lost its last caller with that probe: it is
+    not ``item_is_in_scene``, whose canvas wrapper the colour mutation service,
+    the edit tools and the history commands still call.
+
+    The ban is scoped to the defining module because the bare names read as
+    prefixes of live surfaces elsewhere -- ``SceneItemAttachPlan`` spells its
+    own live ``item_can_be_added`` in ``transactions/scene_item_attach.py``.
+    """
+    scene_item_access = APP_ROOT / "chemvas" / "ui" / "scene_item_access.py"
+    removed_helpers = (
+        "clear_canvas_scene",
+        "create_scene_item_group",
+        "destroy_scene_item_group",
+        "item_can_be_added_to_canvas_scene",
+        "item_can_be_added_to_scene",
+    )
+    names = "|".join(re.escape(name) for name in removed_helpers)
+    pattern = re.compile(rf"^\s*def (?:{names})\b")
+
+    assert _matching_lines(pattern, [scene_item_access]) == []
 
 
 def test_duplicate_rdkit_export_reset_wrapper_stays_removed() -> None:

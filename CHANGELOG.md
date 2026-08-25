@@ -8,6 +8,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Changed
+- Corrected the module docstring on the graph index operations. Documentation
+  only, nothing about the code changed — it called the whole module "pure"
+  without saying what that meant, which read as side-effect-free even though
+  the index helpers mutate in place the mapping they are handed. The docstring
+  now says what "pure" is about here, namely what the module reaches (no Qt,
+  no drawing surface, no document model), and names the one operation that
+  takes the whole graph state and writes a cache on it, with the reason its
+  cache and its version have to arrive together.
+- Removed five scene-access helpers that only the test suite ever called.
+  Internal change only — no drawing, saving or exporting path reached any of
+  them. Four of them wrapped a graphics-scene call the production code never
+  made through this module: the whole-scene clear — which is not the live
+  scene reset the document session, the canvas lifecycle and the SMILES insert
+  all go through — the two item-group calls, and the canvas-scoped "can this
+  item be added" probe. The fifth is the scene-scoped half of that probe: it
+  lost its last caller with the probe and went in the same pass. The
+  similarly named "is this item in the scene" pair stays, because the colour
+  mutation service, the edit tools and the history commands still call it. A
+  boundary test pins all five as removed, scoped to the module that defined
+  them because the bare names read as prefixes of live surfaces elsewhere.
+- Removed twelve orphaned glyphs from the design-icon SVG table. Internal
+  change only — every icon the window, toolbars and context bars name still
+  renders, checked by rebuilding the full reachable set (literal calls, the
+  template label table, and every dynamically built arrow/preset/orbital/
+  bracket/shape/stroke name expanded over its actual value domain) and by an
+  offscreen render of every surviving icon accessor and every glyph the
+  table still holds. Eleven of the glyphs lost their
+  last consumer when the utility icon accessors went; the twelfth, "select",
+  turned out never to have had one — the select tool's accessor has always
+  drawn the move glyph. A boundary test pins all twelve as removed.
+- Replaced seven lambdas in the structure-growth action record with the bound
+  methods they wrapped. Internal change only — every field forwarded its
+  arguments unchanged, measured by calling each field through the record
+  before and after with the same inputs. The other ten fields stay lambdas on
+  purpose: tests rebind those methods on the service after it is built, and
+  the lambdas are what let the record see the rebinding; a comment above the
+  record now says which half is which and why.
 - Merged modules whose only production caller was a single other module into
   that caller. Internal structure only — nothing about how the application
   draws, saves or exports a document changes. The five main-window stylesheet

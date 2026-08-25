@@ -1,5 +1,20 @@
 """Pure operations on the derived atom-neighbor / atom-bond indexes.
 
+Pure here means unwired, not side-effect-free: importing this module pulls in
+no Qt and no drawing surface, directly or transitively, and the bonds it reads
+arrive as the sequences and ``bond_for_id`` callables its callers hand in. It
+names no document type of its own, though ``graph_algorithms`` brings the
+document package into the import closure. Writing is ordinary -- ``ensure_*``
+and ``add_*`` add keys to the index mapping they are given, and ``remove_*``
+mutates the sets stored in it, all in place.
+
+``cached_bond_in_cycle`` is the one operation handed the whole
+``CanvasGraphState`` rather than a single index, and the one that writes a
+cache on it. An entry in ``bond_cycle_cache`` is fresh only for the
+``graph_version`` stored beside it, so the two have to arrive together;
+separate arguments would let a caller pair a cache with a version that is not
+its own.
+
 Consistency contract (shared by every consumer):
 
 - The indexes are derived state; the bond list on the model is the truth.
