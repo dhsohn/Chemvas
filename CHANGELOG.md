@@ -94,6 +94,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   precomplex geometry checks were kept even though the second cannot fail when
   reached through the first, because the other caller reaches it without the
   first.
+- The pull-request checklist now asks for one command, `make check`, instead of
+  three hand-listed ones. `python -m ruff check .`, `python -m mypy` and a
+  narrowed pytest run leave out `ruff format --check` and the `machine.json`
+  conformance check, so a contributor could tick every box and still not have
+  run the gate. In the same pass: `wheel` left `[build-system].requires`
+  (setuptools carries `bdist_wheel` itself, and both build sites go through
+  `python -m build`), the CI test job runs pytest directly rather than through
+  a coverage wrapper that had no threshold and whose uploaded artifact nothing
+  read, and the feature-request template stopped offering MOL export — which
+  ships — as its example of a missing feature.
+- The contributing guide no longer restates the architecture discipline in its
+  own words. `docs/ARCHITECTURE.md` is the normative text, `CONTRIBUTING.md`
+  keeps the worked example, the list of patterns the boundary tests reject, and
+  the steps for migrating a feature, and points at the rest.
 
 ### Fixed
 - Opening a document whose numbers are too large for the decimal parser now
@@ -106,7 +120,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   have aborted the launch, and kept aborting it, since the recorded session is
   only pruned after a recovery finishes.
 - The headless commands that create a new file — `compose-document`,
-  `patch-document`, `render-document` and the calculation bundle writers — no
+  `apply-patch`, `render-document` and the calculation bundle writers — no
   longer close a file descriptor they have already handed away when the write
   fails. `atomic_create_bytes` gives the staging descriptor to `os.fdopen`,
   which closes it on its way out, and the failure path then closed it a second
@@ -126,6 +140,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   and undo does ungroup, so it followed the undo/redo slot rather than the
   operation. Only the text changes — no recovery step was added, removed or
   reordered.
+- The Korean README's Agent CLI row now lists document composition and the
+  layout check next to render, inspect and the hash-gated Graph Patch. Both
+  `compose-document` and `check-layout` ship and the English README names them,
+  so a reader of `README.ko.md` alone had no way to learn the CLI can build a
+  document or report layout collisions without editing one.
+- Two documented facts that were no longer true: `docs/images/README.md`
+  described the README hero as a reaction scheme plus several organocatalyst
+  structures, while the image in place is the C–P bond cleavage scheme under
+  KOtBu / THF from `examples/template2.chemvas`; and the entry above about the
+  atomic file writers named a `patch-document` command, which has never
+  existed — the command is `apply-patch`.
 
 ### Removed
 - **The capture path's dormant non-strict mode.** `capture_scene_runtime` and
@@ -467,99 +492,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   spectators stay editable on both endpoints — and only disables the other
   side; it never clears an existing selection, so changing the role back
   restores it.
-
-### Changed
-- **Canonical Chemvas document extension**: the desktop Open and Save As
-  dialogs and startup argument dispatch now advertise and recognize Chemvas
-  documents only as `.chemvas`, not the old `.json` filename alias. Rename any
-  Chemvas documents that still end in `.json` to `.chemvas` before upgrading;
-  JSON request, inspection, patch, and machine-artifact files used by headless
-  commands are unaffected.
-- **Cited, immutable precomplex radius profile**: new request format v2 requires
-  `chemvas-rigid-precomplex-placement/2`, whose complete supported-element
-  radius table uses Cordero (2008) Table 2 covalent radii and Alvarez (2013)
-  Table 1 van der Waals radii with exact dataset, DOI, selector, and table-hash
-  provenance. Frozen request/profile v1 remains byte-reproducible for existing
-  documents. Generation, inspection, deterministic regeneration, endpoint-pair
-  validation, and `machine.json` now route and report the persisted profile;
-  mixed profiles or altered provenance fail closed. The scores remain geometric
-  heuristics requiring researcher review and downstream optimization.
-- **Canvas atom-id labels now color by mapping state**: while the Calculation
-  dialog is open, an atom's id label takes the blue reactant or orange product
-  tint only once that atom is actually mapped; every unmapped atom stays gray.
-  Mapping progress is visible on the drawing at a glance.
-- **Mapping rings removed from the canvas**: the blue/orange rings that framed
-  the selected correspondence pair (drawn on row selection and while hovering
-  dropdown candidates) are gone — they read as clutter over the structure.
-  The mapping-state label colors above carry that information instead.
-- **Mapping markers on the canvas lost their R/P letters**: while picking an
-  atom correspondence, the rings around the selected reactant and product
-  atoms no longer float an "R"/"P" letter beside the atom — the letters sat
-  awkwardly over the drawing. Solid blue still means reactant and dashed
-  orange still means product.
-- **Mapping UI grays out what cannot be mapped**: in the Calculation dialog's
-  atom correspondence, a reactant row with no same-element product candidate
-  reads muted until the counterpart component joins the product endpoint; a
-  product candidate already mapped by another row shows muted in the other
-  dropdowns (picking it still just flags the duplicate); and atoms of
-  components that sit out of the step entirely now get gray id labels on the
-  canvas instead of no label.
-- **Locked endpoints in the Calculation dialog look locked**: when including a
-  component as the step's reactant (or product) disables its opposite
-  endpoint, the locked inclusion and role dropdowns are now visibly muted
-  (gray background, faint text) instead of only being unclickable, and both
-  carry the explanation tooltip.
-
-### Fixed
-- **Colouring a ring that contains a dotted double bond did nothing**: picking a
-  colour on a ring — clicking its fill with the colour tool, or recolouring a
-  selection that holds the ring but not that bond's own line — failed silently
-  when any bond in the ring used the dotted double style. Nothing was recoloured
-  and the attempt still consumed a step of undo history. A dotted double bond is
-  drawn as two graphics items and recolouring the ring correctly restyles both,
-  but an internal check counted the second item as an unrelated object being
-  changed and aborted the whole operation. Rings recolour normally now, at any
-  bond style.
-- **Terminal spam when opening menus under Wayland/WSLg**: Qt's Wayland backend
-  prints `This plugin supports grabbing the mouse only for popup windows` to
-  the terminal every time a menu opens. The startup stderr filter — previously
-  macOS-only — now also runs on Linux and drops this known-harmless line.
-- **Molecule Info title hidden behind the header buttons**: unless the window
-  was stretched wide, the SMILES/InChI/InChIKey/Export 3D buttons reached over
-  the painted "Molecule Info" heading and covered it. The buttons are now sized
-  to their labels, which leaves the full title visible at the window's default
-  width, and on narrower windows the title and subtitle elide at the button row
-  instead of running underneath it.
-- **Atom-correspondence dropdown could not be scrolled**: when a structure has
-  many same-element atoms, the product-atom dropdown in the Calculation dialog
-  showed every candidate in one over-tall popup with no scrollbar, so the lower
-  atoms ran off-screen and the mouse wheel had nothing to scroll. The popup is
-  now capped to a visible window with a working scrollbar.
-- **Crash while using the Calculation dialog with an IME**: clicking a table
-  cell in **Calculation ▸ Edit States and Steps...** while an input-method
-  composition (e.g. Korean) was active could crash the whole app on Wayland,
-  including WSLg. Qt reacts to a composition event by starting or focusing a
-  cell editor — for cells hosting the embedded combo boxes it focuses the
-  combo before even consulting the edit triggers — and the Wayland text
-  input re-delivers the composition event on every such focus change, so
-  the two recursed until the stack overflowed. The dialog tables take no
-  text input at all: direct cell editing is now disabled and both tables
-  ignore composition events outright, for item and widget cells alike.
-  Unsaved work from a crashed session was already restored by autosave
-  recovery.
-
-### Removed
-- **Painted "well" behind the modal tool buttons**: the top toolbar no longer
-  draws the inset tray that grouped the pick-one mode tools apart from the
-  flip/rotate command buttons. The decoration read poorly in practice, so the
-  toolbar is back to a flat bar; buttons, actions, and shortcuts are unchanged.
-- **Single-species `pack` command**: the Calculation Bundle v1 directory export
-  (`source.chemvas`, `structure.mol`, `geometry.xyz`, `atom_map.json`,
-  `manifest.json`) had no remaining consumer. Machine handoff of geometries now
-  happens exclusively through the elementary-step `machine.json` written by
-  `pack-step`; `inspect` remains the headless structure inventory.
-
-### Added
 - **Single-file elementary-step artifact**: `inspect-plan` reports stable
   source-mapping, electronic-state, and component-count blockers, while
   `pack-step` atomically writes one non-overwriting `machine.json` using
@@ -630,6 +562,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   window instead of creating a second, independently-editable copy.
 
 ### Changed
+- **Canonical Chemvas document extension**: the desktop Open and Save As
+  dialogs and startup argument dispatch now advertise and recognize Chemvas
+  documents only as `.chemvas`, not the old `.json` filename alias. Rename any
+  Chemvas documents that still end in `.json` to `.chemvas` before upgrading;
+  JSON request, inspection, patch, and machine-artifact files used by headless
+  commands are unaffected.
+- **Cited, immutable precomplex radius profile**: new request format v2 requires
+  `chemvas-rigid-precomplex-placement/2`, whose complete supported-element
+  radius table uses Cordero (2008) Table 2 covalent radii and Alvarez (2013)
+  Table 1 van der Waals radii with exact dataset, DOI, selector, and table-hash
+  provenance. Frozen request/profile v1 remains byte-reproducible for existing
+  documents. Generation, inspection, deterministic regeneration, endpoint-pair
+  validation, and `machine.json` now route and report the persisted profile;
+  mixed profiles or altered provenance fail closed. The scores remain geometric
+  heuristics requiring researcher review and downstream optimization.
+- **Canvas atom-id labels now color by mapping state**: while the Calculation
+  dialog is open, an atom's id label takes the blue reactant or orange product
+  tint only once that atom is actually mapped; every unmapped atom stays gray.
+  Mapping progress is visible on the drawing at a glance.
+- **Mapping rings removed from the canvas**: the blue/orange rings that framed
+  the selected correspondence pair (drawn on row selection and while hovering
+  dropdown candidates) are gone — they read as clutter over the structure.
+  The mapping-state label colors above carry that information instead.
+- **Mapping markers on the canvas lost their R/P letters**: while picking an
+  atom correspondence, the rings around the selected reactant and product
+  atoms no longer float an "R"/"P" letter beside the atom — the letters sat
+  awkwardly over the drawing. Solid blue still means reactant and dashed
+  orange still means product.
+- **Mapping UI grays out what cannot be mapped**: in the Calculation dialog's
+  atom correspondence, a reactant row with no same-element product candidate
+  reads muted until the counterpart component joins the product endpoint; a
+  product candidate already mapped by another row shows muted in the other
+  dropdowns (picking it still just flags the duplicate); and atoms of
+  components that sit out of the step entirely now get gray id labels on the
+  canvas instead of no label.
+- **Locked endpoints in the Calculation dialog look locked**: when including a
+  component as the step's reactant (or product) disables its opposite
+  endpoint, the locked inclusion and role dropdowns are now visibly muted
+  (gray background, faint text) instead of only being unclickable, and both
+  carry the explanation tooltip.
 - Slimmed the top toolbar down to drawing controls: the Save / Open / New
   Canvas / Molecule Info / Undo / Redo buttons and the file dropdown moved into
   the new menu bar, leaving the tool well, flip/rotate, and the SMILES
@@ -657,6 +629,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the loose one-shot command buttons beside them (flip and rotate).
 
 ### Fixed
+- **Colouring a ring that contains a dotted double bond did nothing**: picking a
+  colour on a ring — clicking its fill with the colour tool, or recolouring a
+  selection that holds the ring but not that bond's own line — failed silently
+  when any bond in the ring used the dotted double style. Nothing was recoloured
+  and the attempt still consumed a step of undo history. A dotted double bond is
+  drawn as two graphics items and recolouring the ring correctly restyles both,
+  but an internal check counted the second item as an unrelated object being
+  changed and aborted the whole operation. Rings recolour normally now, at any
+  bond style.
+- **Terminal spam when opening menus under Wayland/WSLg**: Qt's Wayland backend
+  prints `This plugin supports grabbing the mouse only for popup windows` to
+  the terminal every time a menu opens. The startup stderr filter — previously
+  macOS-only — now also runs on Linux and drops this known-harmless line.
+- **Molecule Info title hidden behind the header buttons**: unless the window
+  was stretched wide, the SMILES/InChI/InChIKey/Export 3D buttons reached over
+  the painted "Molecule Info" heading and covered it. The buttons are now sized
+  to their labels, which leaves the full title visible at the window's default
+  width, and on narrower windows the title and subtitle elide at the button row
+  instead of running underneath it.
+- **Atom-correspondence dropdown could not be scrolled**: when a structure has
+  many same-element atoms, the product-atom dropdown in the Calculation dialog
+  showed every candidate in one over-tall popup with no scrollbar, so the lower
+  atoms ran off-screen and the mouse wheel had nothing to scroll. The popup is
+  now capped to a visible window with a working scrollbar.
+- **Crash while using the Calculation dialog with an IME**: clicking a table
+  cell in **Calculation ▸ Edit States and Steps...** while an input-method
+  composition (e.g. Korean) was active could crash the whole app on Wayland,
+  including WSLg. Qt reacts to a composition event by starting or focusing a
+  cell editor — for cells hosting the embedded combo boxes it focuses the
+  combo before even consulting the edit triggers — and the Wayland text
+  input re-delivers the composition event on every such focus change, so
+  the two recursed until the stack overflowed. The dialog tables take no
+  text input at all: direct cell editing is now disabled and both tables
+  ignore composition events outright, for item and widget cells alike.
+  Unsaved work from a crashed session was already restored by autosave
+  recovery.
 - Windows headless document rendering now uses the native Qt platform without
   showing a window, preventing labels from turning into boxes when `offscreen`
   is selected only after the process has started.
@@ -674,6 +682,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   that occurs when a selected ring is restored through its atom graphics, so
   releasing the left mouse button commits instead of reporting a false global
   authority change.
+
+### Removed
+- **Painted "well" behind the modal tool buttons**: the top toolbar no longer
+  draws the inset tray that grouped the pick-one mode tools apart from the
+  flip/rotate command buttons. The decoration read poorly in practice, so the
+  toolbar is back to a flat bar; buttons, actions, and shortcuts are unchanged.
+- **Single-species `pack` command**: the Calculation Bundle v1 directory export
+  (`source.chemvas`, `structure.mol`, `geometry.xyz`, `atom_map.json`,
+  `manifest.json`) had no remaining consumer. Machine handoff of geometries now
+  happens exclusively through the elementary-step `machine.json` written by
+  `pack-step`; `inspect` remains the headless structure inventory.
 
 ## [0.1.0] - 2026-07-13
 
