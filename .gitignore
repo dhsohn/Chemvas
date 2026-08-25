@@ -3,9 +3,12 @@ __pycache__/
 *.pyc
 .pytest_cache/
 .ruff_cache/
+.mypy_cache/
 .coverage
 .coverage.*
-htmlcov/
 *.pyo
 *.pyd
 *.egg-info/
+.venv/
+build/
+dist/
