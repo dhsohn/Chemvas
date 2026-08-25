@@ -12,23 +12,14 @@ from PyQt6.QtWidgets import (
     QGraphicsTextItem,
 )
 
+from chemvas.ui.preview_scene_renderer import clear_scene_items
+
 
 def clear_hover_items(
     scene: QGraphicsScene,
     items: Sequence[QGraphicsItem],
 ) -> None:
-    # Not shared with the identical loops in `ui.preview_scene_renderer`,
-    # `ui.bond_preview_renderer` and `features.selection.handles`: the
-    # four sit in layers that cannot import one another (`features`
-    # never imports `ui`), and each returns the empty pool its own
-    # caller reassigns. `ui.scene_item_access` owns the canvas-scoped
-    # detach, which is a different question -- it needs a canvas.
-    for item in items:
-        try:
-            if item.scene() is scene:
-                scene.removeItem(item)
-        except RuntimeError:
-            pass
+    clear_scene_items(scene, items)
 
 
 def build_atom_hover_indicator(

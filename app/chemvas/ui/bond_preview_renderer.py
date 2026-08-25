@@ -24,6 +24,7 @@ from chemvas.features.rendering import (
     plain_double_preview_segments,
 )
 from chemvas.ui.graphics_items import NoSelectLineItem
+from chemvas.ui.preview_scene_renderer import clear_scene_items
 
 
 def _set_line_segments(items: Sequence, segments: Sequence[LineSegment]) -> bool:
@@ -343,15 +344,7 @@ def clear_bond_preview_items(
     scene: QGraphicsScene,
     items: Sequence[QGraphicsItem],
 ) -> list[QGraphicsItem]:
-    # Not shared with the identical loops in `ui.hover_rendering`,
-    # `ui.preview_scene_renderer` and `features.selection.handles`: see
-    # the note in `ui.hover_rendering.clear_hover_items`.
-    for item in items:
-        try:
-            if item.scene() is scene:
-                scene.removeItem(item)
-        except RuntimeError:
-            pass
+    clear_scene_items(scene, items)
     return []
 
 

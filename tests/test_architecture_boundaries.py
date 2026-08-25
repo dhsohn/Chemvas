@@ -5164,11 +5164,10 @@ TRI_STATE_DETACH_WRAPPER = "remove_attached_item_from_canvas_scene"
 def _canvas_scoped_detachers(source: str) -> list[tuple[int, str]]:
     """Functions that resolve the canvas's own scene and then detach from it.
 
-    The scene-scoped clears in ``hover_rendering``, ``preview_scene_renderer``,
-    ``bond_preview_renderer`` and ``features.selection.handles`` are a
-    different function and stay out: they are handed a scene rather than
-    resolving one from a canvas, and the commit that merged this pair records
-    why they are not merged with each other either.
+    The scene-scoped clears in ``preview_scene_renderer`` -- which the
+    ``hover_rendering`` and ``bond_preview_renderer`` pool resets delegate to
+    -- and in ``features.selection.handles`` are a different function and stay
+    out: they are handed a scene rather than resolving one from a canvas.
     """
     detachers: list[tuple[int, str]] = []
     for node in ast.walk(ast.parse(source)):
