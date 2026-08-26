@@ -116,13 +116,19 @@ class SceneDecorationServiceTest(unittest.TestCase):
         )
         service = _scene_decoration_service(canvas)
 
-        item = service.add_mark(
-            QPointF(4.0, 5.0),
-            kind="minus",
-            atom_id=7,
-            offset=QPointF(1.5, -2.5),
-            record=True,
-        )
+        with mock.patch(
+            "chemvas.ui.scene_decoration_service.emit_selection_info_for"
+        ) as emit_info:
+            item = service.add_mark(
+                QPointF(4.0, 5.0),
+                kind="minus",
+                atom_id=7,
+                offset=QPointF(1.5, -2.5),
+                record=True,
+            )
+        # An atom-bound mark changes the selection formula readout; the add
+        # must refresh it in place.
+        emit_info.assert_called_once_with(canvas)
 
         self.assertIs(item, text_mark)
         self.assertEqual(item.data(0), "mark")
@@ -318,10 +324,15 @@ class SceneDecorationServiceTest(unittest.TestCase):
             scene_item_controller=_FakeSceneItemController(canvas),
         )
 
-        with mock.patch(
-            "chemvas.ui.transactions.scene_runtime._scene_items_snapshot",
-            side_effect=AssertionError("bulk mark add scanned the whole scene"),
-        ) as scene_scan:
+        with (
+            mock.patch(
+                "chemvas.ui.transactions.scene_runtime._scene_items_snapshot",
+                side_effect=AssertionError("bulk mark add scanned the whole scene"),
+            ) as scene_scan,
+            mock.patch(
+                "chemvas.ui.scene_decoration_service.emit_selection_info_for"
+            ),
+        ):
             service = _scene_decoration_service(canvas)
             for atom_id in range(200):
                 service.add_mark(

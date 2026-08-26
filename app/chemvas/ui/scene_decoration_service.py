@@ -23,6 +23,7 @@ from chemvas.ui.scene_item_access import (
     remove_scene_item,
 )
 from chemvas.ui.scene_item_restore import create_orbital_item_from_state
+from chemvas.ui.selection_info_access import emit_selection_info_for
 from chemvas.ui.scene_item_state import (
     arrow_state_dict_for,
     mark_state_dict_for,
@@ -71,6 +72,11 @@ class SceneDecorationService:
             set_mark_center_for(self.canvas, item, pos)
             if record:
                 self._push_add_scene_item(item, mark_state_dict_for(self.canvas, item))
+        if atom_id is not None:
+            # An atom-bound mark changes the selection formula readout without
+            # changing the selection itself; refresh it here or it stays stale
+            # until the next selection change.
+            emit_selection_info_for(self.canvas)
         return item
 
     def add_arrow(self, start: QPointF, end: QPointF, kind: str):

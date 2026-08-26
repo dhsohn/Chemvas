@@ -1346,6 +1346,27 @@ class RDKitAdapterTest(unittest.TestCase):
         self.assertEqual(mw, 32.042)
         self.assertEqual(smiles, "CO")
 
+    @unittest.skipUnless(_RealChem is not None, "RDKit is required for smoke tests")
+    def test_compute_props_accounts_for_formal_charge_annotations(self) -> None:
+        # Charged species must not be reported as their neutralized skeleton:
+        # implicit hydrogens complete to the annotated charge, not to neutral
+        # valence. Methoxide is CH3O-, not CH4O.
+        adapter = RDKitAdapter()
+        model = MoleculeModel()
+        carbon = model.add_atom("C", 0.0, 0.0)
+        oxygen = model.add_atom("O", 40.0, 0.0)
+        model.add_bond(carbon, oxygen, 1)
+
+        neutral_formula, neutral_mw, _ = adapter.compute_props(model)
+        model.atom_annotations = {oxygen: {"formal_charge": -1}}
+        charged_formula, charged_mw, _ = adapter.compute_props(model)
+
+        self.assertEqual(neutral_formula, "CH4O")
+        self.assertEqual(charged_formula, "CH3O-")
+        assert neutral_mw is not None
+        assert charged_mw is not None
+        self.assertLess(charged_mw, neutral_mw)
+
     def test_compute_props_returns_none_triplet_on_descriptor_error(self) -> None:
         chem = _FakeChem({}, add_hs_result=SimpleNamespace())
         adapter = RDKitAdapter()

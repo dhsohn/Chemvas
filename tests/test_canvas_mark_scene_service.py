@@ -23,6 +23,7 @@ if QPointF is not None:
         set_scene_item_collection_for,
     )
     from chemvas.ui.canvas_tool_settings_state import CanvasToolSettingsState
+    from chemvas.ui.selection_info_state import SelectionInfoState
 
     from tests.runtime_state import canvas_runtime_state
 
@@ -126,6 +127,7 @@ class CanvasMarkSceneServiceTest(unittest.TestCase):
             runtime_state=canvas_runtime_state(
                 mark_registry=CanvasMarkRegistry({4: [atom_mark], 9: [atom_mark_2]}),
                 scene_items_state=CanvasSceneItemsState(),
+                selection_info_state=SelectionInfoState(),
             ),
         )
         set_scene_item_collection_for(
@@ -133,8 +135,11 @@ class CanvasMarkSceneServiceTest(unittest.TestCase):
         )
         service = CanvasMarkSceneService(canvas)
 
-        service.remove_mark_item(atom_mark)
-        service.remove_marks_for_atom(9)
+        with mock.patch(
+            "chemvas.ui.canvas_mark_scene_service.emit_selection_info_for"
+        ) as emit_info:
+            service.remove_mark_item(atom_mark)
+            service.remove_marks_for_atom(9)
 
         self.assertEqual(mark_items_for(canvas), [free_mark])
         self.assertEqual(mark_registry_for(canvas).by_atom, {})
@@ -142,6 +147,9 @@ class CanvasMarkSceneServiceTest(unittest.TestCase):
             scene.removeItem.call_args_list,
             [mock.call(atom_mark), mock.call(atom_mark_2)],
         )
+        # Removing atom-bound marks changes the selection formula readout; both
+        # removal paths must refresh it.
+        self.assertEqual(emit_info.call_args_list, [mock.call(canvas)] * 2)
 
     def test_remove_mark_item_and_remove_marks_for_atom_cover_no_registry_matches(
         self,
@@ -154,12 +162,18 @@ class CanvasMarkSceneServiceTest(unittest.TestCase):
             runtime_state=canvas_runtime_state(
                 mark_registry=CanvasMarkRegistry({5: [foreign_mark]}),
                 scene_items_state=CanvasSceneItemsState(),
+                selection_info_state=SelectionInfoState(),
             ),
         )
         set_scene_item_collection_for(canvas, "mark_items", [])
         service = CanvasMarkSceneService(canvas)
 
-        service.remove_mark_item(loose_mark)
+        with mock.patch(
+            "chemvas.ui.canvas_mark_scene_service.emit_selection_info_for"
+        ) as emit_info:
+            service.remove_mark_item(loose_mark)
+        # A mark with no atom binding cannot change the formula readout.
+        emit_info.assert_not_called()
         service.remove_mark_item(
             SimpleNamespace(data=lambda key: {1: {"atom_id": 6}}.get(key))
         )

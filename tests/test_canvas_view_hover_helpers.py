@@ -2,7 +2,7 @@ import unittest
 from types import SimpleNamespace
 from unittest import mock
 
-from chemvas.domain.document import Atom, Bond
+from chemvas.domain.document import Atom, Bond, MoleculeModel
 from chemvas.ui.bond_preview_access import bond_hover_endpoint_for
 from chemvas.ui.canvas_atom_graphics_state import CanvasAtomGraphicsState
 from chemvas.ui.canvas_mark_registry import CanvasMarkRegistry
@@ -83,10 +83,15 @@ class CanvasViewHoverHelperTest(unittest.TestCase):
             ),
         )
 
+        submodel = MoleculeModel()
+        first = submodel.add_atom("C", 0.0, 1.0)
+        second = submodel.add_atom("C", 2.0, 3.0)
+        submodel.add_bond(first, second, 1)
+
         with mock.patch(
-            "chemvas.ui.selection_info_access.build_submodel_state",
-            return_value=("submodel", None, None),
-        ) as build_submodel:
+            "chemvas.ui.structure_payload_access.build_structure_payload_for",
+            return_value=(submodel, {}, None),
+        ) as build_payload:
             emit_selection_info_for(loaded_view)
             emit_selection_info_for(loaded_view)
 
@@ -94,15 +99,15 @@ class CanvasViewHoverHelperTest(unittest.TestCase):
             callback.call_args_list,
             [mock.call("C2H6", "30.12"), mock.call("C2H6", "30.12")],
         )
+        # The payload is rebuilt per emit (it feeds the content signature); the
+        # RDKit recompute is what the unchanged-content cache must skip.
         self.assertEqual(rdkit.compute_props.call_count, 1)
-        build_submodel.assert_called_once()
+        self.assertEqual(build_payload.call_count, 2)
+        self.assertEqual(build_payload.call_args.args, (loaded_view, {1, 2}, {3}))
+        # Empty annotations must not wrap the submodel in a copy.
+        self.assertIs(rdkit.compute_props.call_args.args[0], submodel)
         self.assertEqual(
-            build_submodel.call_args.args, (loaded_view.model, {1, 2}, {3})
-        )
-        bounds_getter = build_submodel.call_args.kwargs["bounds_getter"]
-        self.assertEqual(bounds_getter({1}, include_labels=True), (0.0, 1.0, 0.0, 1.0))
-        self.assertEqual(
-            loaded_view.runtime_state.selection_info_state.signature,
+            loaded_view.runtime_state.selection_info_state.signature[:2],
             (frozenset({1, 2}), frozenset({3})),
         )
         self.assertEqual(
@@ -199,6 +204,123 @@ class CanvasViewHoverHelperTest(unittest.TestCase):
             pending_view.runtime_state.selection_info_state.rdkit_warmup_pending
         )
         self.assertEqual(pending_rdkit.compute_props.call_count, 0)
+
+    def test_emit_selection_info_passes_mark_annotations_to_compute_props(
+        self,
+    ) -> None:
+        # A drawn methoxide must read CH3O-, not the neutralized CH4O: the
+        # readout has to hand the mark-derived charge/radical annotations to
+        # compute_props the same way export and the 3D panel do.
+        callback = mock.Mock()
+        rdkit = mock.Mock()
+        rdkit.is_unavailable.return_value = False
+        rdkit.is_loaded.return_value = True
+        rdkit.compute_props.return_value = ("CH3O-", 31.034, None)
+
+        submodel = MoleculeModel()
+        carbon = submodel.add_atom("C", 0.0, 0.0)
+        oxygen = submodel.add_atom("O", 40.0, 0.0)
+        submodel.add_bond(carbon, oxygen, 1)
+        annotations = {oxygen: {"formal_charge": -1}}
+
+        view = SimpleNamespace(
+            rdkit=rdkit,
+            scene=lambda: _scene_with_selected(
+                _SelectedItem("atom", 1), _SelectedItem("atom", 2)
+            ),
+            runtime_state=canvas_runtime_state(
+                selection_info_state=SelectionInfoState(callback=callback),
+                rotation_state=CanvasRotationState(),
+            ),
+        )
+
+        with mock.patch(
+            "chemvas.ui.structure_payload_access.build_structure_payload_for",
+            return_value=(submodel, annotations, None),
+        ):
+            emit_selection_info_for(view)
+
+        computed_model = rdkit.compute_props.call_args.args[0]
+        self.assertEqual(
+            computed_model.atom_annotations, {oxygen: {"formal_charge": -1}}
+        )
+        self.assertEqual(computed_model.atoms, submodel.atoms)
+        callback.assert_called_once_with("CH3O-", "31.03")
+
+    def test_emit_selection_info_recomputes_when_marks_change_under_held_selection(
+        self,
+    ) -> None:
+        # Adding a minus mark to a selected atom changes the formula without
+        # changing the selected ids; an ids-only cache key would keep serving
+        # the neutral CH4O here.
+        callback = mock.Mock()
+        rdkit = mock.Mock()
+        rdkit.is_unavailable.return_value = False
+        rdkit.is_loaded.return_value = True
+        rdkit.compute_props.side_effect = [
+            ("CH4O", 32.042, None),
+            ("CH3O-", 31.034, None),
+        ]
+
+        def make_submodel() -> MoleculeModel:
+            submodel = MoleculeModel()
+            carbon = submodel.add_atom("C", 0.0, 0.0)
+            oxygen = submodel.add_atom("O", 40.0, 0.0)
+            submodel.add_bond(carbon, oxygen, 1)
+            return submodel
+
+        view = SimpleNamespace(
+            rdkit=rdkit,
+            scene=lambda: _scene_with_selected(
+                _SelectedItem("atom", 1), _SelectedItem("atom", 2)
+            ),
+            runtime_state=canvas_runtime_state(
+                selection_info_state=SelectionInfoState(callback=callback),
+                rotation_state=CanvasRotationState(),
+            ),
+        )
+
+        with mock.patch(
+            "chemvas.ui.structure_payload_access.build_structure_payload_for",
+            side_effect=[
+                (make_submodel(), {}, None),
+                (make_submodel(), {1: {"formal_charge": -1}}, None),
+            ],
+        ):
+            emit_selection_info_for(view)
+            emit_selection_info_for(view)
+
+        self.assertEqual(rdkit.compute_props.call_count, 2)
+        self.assertEqual(
+            callback.call_args_list,
+            [mock.call("CH4O", "32.04"), mock.call("CH3O-", "31.03")],
+        )
+
+    def test_emit_selection_info_blanks_a_selection_without_structure(self) -> None:
+        # A stale selection can reference ids the model no longer holds; the
+        # payload builder refuses it and the readout must blank, not crash.
+        callback = mock.Mock()
+        rdkit = mock.Mock()
+        rdkit.is_unavailable.return_value = False
+        rdkit.is_loaded.return_value = True
+
+        view = SimpleNamespace(
+            rdkit=rdkit,
+            scene=lambda: _scene_with_selected(_SelectedItem("atom", 42)),
+            runtime_state=canvas_runtime_state(
+                selection_info_state=SelectionInfoState(callback=callback),
+                rotation_state=CanvasRotationState(),
+            ),
+        )
+
+        with mock.patch(
+            "chemvas.ui.structure_payload_access.build_structure_payload_for",
+            side_effect=ValueError("There is no chemical structure to export."),
+        ):
+            emit_selection_info_for(view)
+
+        rdkit.compute_props.assert_not_called()
+        callback.assert_called_once_with("", "")
 
     def test_maybe_warm_rdkit_handles_loaded_unavailable_and_idle_paths(self) -> None:
         loaded_callback = mock.Mock()

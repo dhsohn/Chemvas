@@ -11,6 +11,7 @@ from chemvas.ui.canvas_scene_items_state import remove_scene_item_from_collectio
 from chemvas.ui.canvas_tool_settings_state import tool_settings_state_for
 from chemvas.ui.renderer_style_access import bond_length_px_for
 from chemvas.ui.scene_item_access import remove_item_from_canvas_scene
+from chemvas.ui.selection_info_access import emit_selection_info_for
 
 
 class CanvasMarkSceneService:
@@ -78,12 +79,18 @@ class CanvasMarkSceneService:
             if marks is not None and not marks:
                 self.marks.by_atom.pop(atom_id, None)
         remove_item_from_canvas_scene(self.canvas, item)
+        if isinstance(atom_id, int):
+            # Dropping an atom-bound mark changes the selection formula
+            # readout without changing the selection; refresh it here.
+            emit_selection_info_for(self.canvas)
 
     def remove_marks_for_atom(self, atom_id: int) -> None:
         marks = self.marks.pop_for_atom(atom_id)
         for item in list(marks):
             remove_scene_item_from_collection_for(self.canvas, "mark_items", item)
             remove_item_from_canvas_scene(self.canvas, item)
+        if marks:
+            emit_selection_info_for(self.canvas)
 
     def mark_center_for_pointer(
         self,
