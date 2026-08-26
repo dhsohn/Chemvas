@@ -7,16 +7,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-08-26
+
+**If you import from `chemvas` in your own code, read the Removed section
+first.** This release takes thirty-two names off the public import surface of
+nine packages, and it changes what deleting a bond or an atom leaves behind on
+the sheet. Everything else is bug fixes — see Fixed — and internal
+housekeeping.
+
+### Added
+- Six names joined the public import surface: `SETTINGS_KEYS`,
+  `VALID_ARROW_KINDS`, `connected_atom_components` and `included_atom_ids` on
+  `chemvas.domain.document`, `fill_correspondence_gaps` on
+  `chemvas.features.calculation_bundle`, and
+  `selected_atom_ids_with_bond_endpoints` on `chemvas.features.selection`,
+  which is the new name of a function listed under Removed. Nothing new was
+  written: most of these are names the consolidation work below moved to a
+  shared owner, which then had to be reachable from more than one module.
+
 ### Changed
 - Corrected the module docstring on the graph index operations. Documentation
   only, nothing about the code changed — it called the whole module "pure"
   without saying what that meant, which read as side-effect-free even though
   the index helpers mutate in place the mapping they are handed. The docstring
-  now says what "pure" is about here, namely what the module reaches (no Qt,
-  no drawing surface, no document model), and names the one operation that
-  takes the whole graph state and writes a cache on it, with the reason its
-  cache and its version have to arrive together.
-- Removed five scene-access helpers that only the test suite ever called.
+  now says what "pure" is about here, namely what the module reaches: no Qt
+  and no drawing surface, and no document type of its own — while recording
+  that a neighbour it calls does pull the document package into the import
+  closure. It also names the one operation that takes the whole graph state and
+  writes a cache on it, with the reason its cache and its version have to
+  arrive together.
+- Removed five scene-access helpers, four of them called only by the test
+  suite and the fifth stranded when those four went.
   Internal change only — no drawing, saving or exporting path reached any of
   them. Four of them wrapped a graphics-scene call the production code never
   made through this module: the whole-scene clear — which is not the live
@@ -32,27 +53,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   change only — every icon the window, toolbars and context bars name still
   renders, checked by rebuilding the full reachable set (literal calls, the
   template label table, and every dynamically built arrow/preset/orbital/
-  bracket/shape/stroke name expanded over its actual value domain) and by an
-  offscreen render of every surviving icon accessor and every glyph the
-  table still holds. Eleven of the glyphs lost their
-  last consumer when the utility icon accessors went; the twelfth, "select",
+  bracket/shape/stroke name expanded over its actual value domain). A render
+  cannot carry that claim on its own — a name the table no longer holds draws
+  the fallback glyph rather than raising — so the reachability rebuild is what
+  it rests on. Eleven of the glyphs lost their
+  last consumer when twelve icon accessors went; the twelfth, "select",
   turned out never to have had one — the select tool's accessor has always
   drawn the move glyph. A boundary test pins all twelve as removed.
-- Folded twenty-six per-module bans on a vocabulary this repository never had
-  into one repo-wide architecture rule. Test-only change; no production code
-  moved and no rule lost a name. Eleven spellings of "ask the canvas for a
-  service or a context by name" — `canvas_service_for` with its optional and
-  runtime variants, `resolve_canvas_graph_service`, the four context-cache
-  lookups, `tool_context_for_canvas` and `canvas_instance_attrs` — were banned
-  one target module at a time. Every blob in every ref was tokenised: not one
-  of the eleven has ever been written anywhere in this repository, in any
-  spelling, outside the rule file that bans them. Twenty-six copies of a ban on
-  a name that does not exist are twenty-six ways to miss the twenty-seventh
-  module, so the ban is repo-wide now. Five rules that carried nothing else are
-  gone into it, one of them a call-shape rule the word-anchored ban strictly
-  subsumes; the other twenty-one keep the alternatives that guard something,
-  and the context-cache rule keeps its check that the deleted module stays
-  deleted.
+- Folded the per-module bans on a vocabulary this repository never had into
+  one repo-wide architecture rule. Test-only change; no production code moved
+  and no rule lost a name. Eleven spellings of "ask the canvas for a service or
+  a context by name" — `canvas_service_for` with its optional, runtime and
+  optional-runtime variants, `resolve_canvas_graph_service`, the four
+  context-cache lookups, `tool_context_for_canvas` and `canvas_instance_attrs`
+  — were banned a target module at a time, though several of the rules carrying
+  them already scanned the whole tree. Every blob in every ref was tokenised:
+  not one of the eleven has ever been written anywhere in this repository, in
+  any spelling, outside the rule file that bans them and this entry. A ban
+  written one module at a time is a ban that can miss the next module, so it is
+  repo-wide now. Five rules that carried nothing else are gone into it, one of
+  them a call-shape rule the word-anchored ban strictly subsumes, and a sixth
+  was renamed: it never had anything to do with `tool_context_for_canvas`, and
+  its old title read as an instruction to write the name now banned. The rest
+  keep the alternatives that guard something, and the context-cache rule keeps
+  its check that the deleted module stays deleted.
   Verified by replaying the whole rule set before and after against a scratch
   copy of the tree, with no failure either way; by pulling every banned
   identifier mechanically out of both versions and confirming not one was lost;
@@ -63,8 +87,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   each of the twenty edited rules still guards and confirming each still fails;
   and, for the twenty-first, by resurrecting the deleted context-cache module.
   The file holds more identifiers with the same history of never having existed.
-  They stay: each sits in a rule alongside names that are real, and splitting the
-  ghost half out would break a rule that reads as one thought.
+  They stay: splitting the ghost half out of the rules that carry them would
+  break rules that read as one thought.
 - Replaced every lambda in the structure-growth action record with the bound
   method it wrapped, finishing a conversion that had stopped at seven of the
   seventeen fields. Internal change only — every field forwarded its
@@ -85,8 +109,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   that read any of them was the module that concatenated them, so they now sit
   in it; the theme test reads all five individually and follows them there.
   The stylesheet the window is given is byte-for-byte the string it was
-  before, checked against the shipped palette and against a substituted one so
-  the check covers the section functions and not just the cached constant.
+  before, and the theme test no longer reads the module's own source text to
+  prove the sections have left it.
   In the same pass, nine functions in the insert access module that renamed
   another module's function and forwarded their own arguments to it unchanged
   are gone, and their callers now name the function they were always reaching.
@@ -97,15 +121,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   or exporting a document changes when the application is wired correctly —
   but when it is *not*, several operations that used to do nothing quietly now
   fail loudly. Session recovery keeps skipping a document it cannot read; the
-  set of read failures it recognises is unchanged, and one it never recognised
-  is now covered (see Fixed). The internal service ports (roughly fifty calls
-  across eleven modules), the tool context's ports, the window and 3D-preview
+  set of failures it treats that way is narrower now, and one it never
+  recognised at all is covered (see Fixed). The internal service ports (across
+  ten modules), the tool context's ports, the window and 3D-preview
   ports and the main window's status bar were all reached through capability
   probes that returned "missing" and let the caller substitute a silent
   default: a bond that was never sprouted, an arrow that was never added, a
   window that was never raised to the front, a 3D preview whose worker was
   never shut down. All of those were measured to resolve on a real assembled
-  canvas and window, so the probes only ever absorbed wiring mistakes. They now
+  canvas and window when the change was made — no test pins the measurement —
+  so the probes only ever absorbed wiring mistakes. They now
   raise where the mistake is, instead of producing a document that silently
   lacks what was asked for.
   Two swallows were narrowed rather than removed. A session snapshot that
@@ -118,10 +143,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Also folded in: the delete-tool session's port validation and its unwind
   (the session type makes every checked state impossible, while the rollback
   that legitimately leaves a session live still reports itself and is still
-  retried), six defensive reads of a dataclass field that always exists, three
-  membership filters over ids that came from the model they were checked
-  against, a CLI subcommand check argparse had already made, a duplicated
-  "nothing to export" refusal, and a marker written into an exception's
+  retried), six defensive reads of a dataclass field that always exists (three
+  more like them remain where the object handed in is not always that
+  dataclass), three membership filters over ids that came from the model they
+  were checked against, a CLI subcommand check argparse had already made, a
+  "nothing to export" refusal duplicated in two modules, and a marker written
+  into an exception's
   dictionary through four layers of indirection that cannot fail.
 - Gave duplicated constants and helpers one owner each. This is internal
   housekeeping and changes nothing about how the application behaves. The
@@ -134,28 +161,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Folded in the same way: the document-settings allowlist, a second copy of
   `normalize_3d`, a twice-compiled SHA-256 pattern, five one-line `getattr`
   wrappers (dropped in favour of the builtin), and three rollback helpers that
-  had been pasted out longhand. Architecture tests now fail if any of them is
-  written a second time.
-- Deleting a bond or an atom now also deletes the atoms the deletion leaves
-  invisible on the sheet. An endpoint or former neighbour that ends up with no
+  had been pasted out longhand. Architecture tests fail if the arrow kinds, the
+  settings allowlist, the SHA-256 pattern, a second `normalize_3d` or a
+  function that only forwards to `getattr` is written again; of the rollback
+  helpers only the colour note has a pin.
+- Deleting a bond or an atom on the canvas now also deletes the atoms the
+  deletion leaves invisible on the sheet. An endpoint or former neighbour that
+  ends up with no
   remaining bond disappears with the deletion, in the same undoable step —
   unless a label or an attached charge/radical mark keeps it visible, in which
   case it stays. Erasing the only bond of a two-carbon fragment previously
   kept both atoms behind as invisible orphans; the eraser, the Delete key on a
-  hovered bond or atom, and selection deletes all clean up their newly bare
-  invisible atoms now, and undo restores them together with the deletion.
+  hovered bond or atom, and selection deletes — including Cut, which routes
+  through the same delete — all clean up their newly bare invisible atoms now,
+  and undo restores them together with the deletion. The headless
+  `apply-patch` is deliberately not part of this: its `remove_bond` still
+  leaves a bare atom, as `docs/AGENT_CLI.md` says it does.
 - The source distribution no longer ships the test tree, and the release gate
   now verifies the sdist's contents the way it already verified the wheel.
   Every published sdist carried 300+ `test_*.py` files without `conftest.py`
   and the other support modules the default packaging glob skipped, so the
   shipped tests could never be collected. The wheel — what `pip install
-  chemvas` installs — is unchanged.
+  chemvas` installs — never carried them and is unaffected by the packaging
+  change.
 - Gave eight more duplicated algorithms one owner each, and deliberately left
   one where it was. Internal housekeeping again; nothing about the application
   behaves differently. The bond-cycle cache is the part worth naming: two
   functions answered "is this bond in a ring?" with identical code and both
   wrote the answer into the same cache, so the rule for when a cached answer
   goes stale was written twice and could have been changed on one side only.
+  The survivor is `cached_bond_in_cycle`, which is new on that module.
   Folded the same way: three depth-first reachability walks, the
   capture-and-roll-back scaffold the group and ungroup history commands each
   spelled out twice, the pair of scene-item detach helpers, the eleven-key
@@ -188,6 +223,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   a coverage wrapper that had no threshold and whose uploaded artifact nothing
   read, and the feature-request template stopped offering MOL export — which
   ships — as its example of a missing feature.
+- Removed seventeen `CanvasStyleController` methods with no production caller.
+  Setters and getters for text size, selection colour and stroke delta, text
+  font, weight, italic and line spacing, and the note box's fill, alpha, border
+  and padding were all reachable only from the tests; the panels and context
+  bars that change those settings route elsewhere. Nothing on the sheet
+  changes.
+- Removed six `RDKitAdapter` methods that only the tests called —
+  `model_to_rdkit`, `model_to_rdkit_with_map`, `model_to_rdkit_tolerant`,
+  `suggest_atom_correspondence`, `model_to_3d_coords` and `model_to_3d` —
+  together with the `tab_reactions_suspended` field and the two ports that
+  carried it. SMILES insertion, MOL export and the 3D preview reach RDKit by
+  other methods that stay.
 - The contributing guide no longer restates the architecture discipline in its
   own words. `docs/ARCHITECTURE.md` is the normative text, `CONTRIBUTING.md`
   keeps the worked example, the list of patterns the boundary tests reject, and
@@ -204,12 +251,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the loader's nine call sites eight guard `ValueError` and its neighbours and
   one does not guard at all, while the range check that rejects an oversized
   coordinate named `OverflowError` — which is `decimal.Overflow`'s sibling
-  rather than its parent — around an `abs()` that raises the latter. So
-  `check-layout`,
-  `compose-document`, `apply-patch`, `attach-plan`, `generate-precomplex` and
-  `render-document` each exited with a Python traceback on some band of
-  oversized numbers while refusing others cleanly, and the same values could
-  escape when opening an editable SVG or pasting a selection. Both bounds now
+  rather than its parent — around an `abs()` that raises the latter. So every
+  headless subcommand that reads a document or a JSON input — `check-layout`,
+  `compose-document`, `apply-patch`, `attach-plan`, `generate-precomplex`,
+  `render-document` and the `inspect` family among them — exited with a Python
+  traceback on some band of oversized numbers while refusing others cleanly,
+  and the same values could escape when opening an editable SVG or pasting a
+  selection. Both bounds now
   reject the value the way a duplicate key or a `NaN` already was.
 - Session recovery no longer aborts the launch on a recorded document holding
   such a number. Recovery runs before the event loop starts and skips documents
@@ -243,17 +291,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `compose-document` and `check-layout` ship and the English README names them,
   so a reader of `README.ko.md` alone had no way to learn the CLI can build a
   document or report layout collisions without editing one.
-- Two documented facts that were no longer true: `docs/images/README.md`
-  described the README hero as a reaction scheme plus several organocatalyst
-  structures, while the image in place is the C–P bond cleavage scheme under
-  KOtBu / THF from `examples/template2.chemvas`; and the entry above about the
-  atomic file writers named a `patch-document` command, which has never
-  existed — the command is `apply-patch`.
+- Documentation that was no longer true: `docs/images/README.md` described the
+  README hero as a reaction scheme plus several organocatalyst structures,
+  while the image in place is the C–P bond cleavage scheme under KOtBu / THF
+  from `examples/template2.chemvas`, and it named the wrong capture file and
+  regeneration command alongside it.
 
 ### Removed
+- **The silent zero in the pick-radius accessors.** `atom_pick_radius_for`
+  and `bond_pick_radius_for` used to answer `0.0` when the canvas could not
+  supply a radius, which is a canvas on which nothing is clickable; both now
+  let the failure surface. Like the other guards removed here, this only
+  changes what happens when the application is wired wrongly.
 - **The capture path's dormant non-strict mode.** `capture_scene_runtime` and
-  `capture_atom_primitive_graphics` declared `strict=False`, but all 18 call
-  sites in the tree — twelve in production, six in the tests — pass
+  `capture_atom_primitive_graphics` declared `strict=False`, but all 19 call
+  sites in the tree — thirteen in production, six in the tests — pass
   `strict=True`, so the lenient half never ran. Nothing changes today; what
   goes is a mode that, had anything ever selected it, would have swallowed a
   capture failure in silence: `contextlib.suppress(Exception)` around a child
@@ -263,9 +315,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   from, with nothing recorded to say a field was missing. The parameter is gone
   from the ten capture-side functions and the strict arm is now
   unconditional. Carrying that removal one step further,
-  `_verify_scene_membership` was left holding a `strict` it never read, and
-  `_direct_scene_remove` and `_direct_scene_add`, whose only reads forwarded
-  it there, followed; four restore-side call sites drop the argument. What
+  `_verify_scene_membership` was left forwarding its `strict` to a helper that
+  ignores it, and `_direct_scene_remove` and `_direct_scene_add` only ever
+  passed it on to that same dead end, so all three lost the parameter; four
+  restore-side call sites drop the argument. What
   remains of the restore side keeps its flag — there it is genuinely dynamic,
   strict during a normal restore and best-effort while a rollback is already
   unwinding — so `_item_parent` and `_item_is_attached_to_scene` still take
@@ -273,7 +326,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   different reason: the rollback inside `create_scene_items_atomically` reads
   the scene leniently, by omitting the argument, so that a scene which can no
   longer answer does not mask the failure already being unwound.
-- **Five parameters their functions never read.**
+- **Five parameter names their functions never read**, over six removal
+  sites — two functions each lose the same session-state parameter.
   `tool_action_key_for_canvas_state` branches on the active tool alone, so
   `active_bond_style` and `mark_kind` go, and the toolbar sync no longer looks
   up the tool settings to supply them. That lookup was the last caller of the
@@ -296,7 +350,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   arrow renderer retired before them, the cutover dropped every call into the
   three classes but kept constructing them, so a second source of icon geometry
   stayed in the tree with nothing reading it. The modules, their construction,
-  their tests, and the twelve icon accessors that no longer had a caller are
+  their tests, and the twelve icon accessors that no longer had a production
+  caller are
   gone, and the modules join the list production code may not import again.
   `main_window_icon_geometry.py` and the two icon fill tokens the renderers
   were the last readers of went with them. No icon changes appearance.
@@ -311,7 +366,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   context menu uses it). Nothing changes on the sheet.
 - **Eleven snap-setting accessors with no caller.** `CanvasToolModeController`
   exposed setters and getters for curved-arrow snapping, curved-arrow
-  symmetry, orbital-handle snapping, and the bond snap angle, but no menu,
+  symmetry and orbital-handle snapping, and a setter for the bond snap angle
+  (which never had a getter), but no menu,
   toolbar, context bar, or shortcut ever called any of them. Two consequences
   are real, though both were already the state of the shipped application:
   curved-arrow midpoint snapping and orbital rotate-handle angle snapping are
@@ -326,8 +382,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `label_cut_radius_for_atom_for`, `build_selected_structure_payload_for`,
   `selection_signature_for`, `add_benzene_template_for` and
   `bold_bond_width_for` each forwarded to a service the application already
-  reaches directly, so the wrapper was a second door nobody used. Two scene
-  helpers, `clear_canvas_scene_item_map` and
+  reaches directly — except `selection_signature_for`, which is a pure
+  function, and `scale_qpoints_to_bond_length`, which wraps a domain function
+  in Qt point conversion — so the wrapper was a second door nobody used. Two
+  scene helpers, `clear_canvas_scene_item_map` and
   `clear_canvas_scene_item_list_map`, lost their only production caller with
   `rebuild_graphics_for` and went too. The live
   `renderer_bold_bond_width_for` — a different function with a similar name —
@@ -348,7 +406,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `SceneDeleteController._restore_observer_ports`,
   `StructureBuildService.latest_bond_id` and `.viewport_center`, and the
   `hash_bond_width` and `wedge_width_px` fields on `ACS1996Style`. None of the
-  ten had a reader; the two style fields in particular never reached the
+  ten had a production reader; the two style fields in particular never reached
+  the
   renderer, so no drawn bond changes. The similarly named survivors —
   `_try_restore_observer_ports`, `viewport_center_scene_pos_for`,
   `renderer_bold_bond_width_for`, `CANVAS_TEMPLATE_TOOL_FIELDS`,
@@ -369,37 +428,60 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   its arguments. The handler, the closure and parameter that carried it, and
   the `setMovable(True)` call are gone: canvas tabs are no longer marked
   movable. Nothing was reorderable in practice, since the strip is not drawn.
-- **Thirty-two names off the public import surface of ten packages.** This
+- **Thirty-two names off the public import surface of nine packages.** This
   narrows what `chemvas` offers to importers, so it is an API reduction rather
   than housekeeping: code outside this repository that did
   `from chemvas.features.rendering import DOUBLE_STYLE_SEQUENCE` has to import
   it from `chemvas.features.rendering.bond_style` now. Nothing inside the
-  repository did — each name was checked against every tracked file with no
-  path or extension filter, and appeared only in the package root that
-  re-exported it and the module that defines it. The definitions all stay
-  where they are and stay importable from the module that defines them; only
-  the package-level re-export goes. Gone from `chemvas.domain.document`:
-  `CALCULATION_INCLUSIONS`, `CALCULATION_PLAN_FORMAT`,
-  `CALCULATION_PLAN_VERSION`, `CALCULATION_ROLES`, `SUPPORTED_FILE_VERSIONS`
-  and `CalculationEndpointPrecomplex`. From `chemvas.features.rendering`:
-  `BOLD_DOUBLE_STYLES`, `BOLD_DOUBLE_STYLE_SEQUENCE`,
-  `DEFAULT_BOLD_OUT_LENGTH_SCALE`, `DOTTED_DOUBLE_STYLES`,
-  `DOTTED_DOUBLE_STYLE_SEQUENCE` and `DOUBLE_STYLE_SEQUENCE`. From
-  `chemvas.features.insertion`: `SmilesPreviewPlan`, `SmilesPreviewSnapshot`,
-  `TemplatePreviewPlan`, `snapshot_smiles_preview_geometry` and the lazily
-  loaded `ring_polygon_points_for_atoms`, which also leaves the lazy-export
-  table. From `chemvas.features.selection`: `LineStrokePathBuilder`,
-  `PenWidthGetter`, `ROTATION_DRAG_SENSITIVITY` and `RotatePointAroundAxis`.
-  From `chemvas.features.document_composition`: `COMPOSITION_FORMAT`,
-  `COMPOSITION_VERSION` and `MAX_BONDS`. From
-  `chemvas.features.calculation_bundle`: `PathPrecheck` and `StepReadiness`.
-  From `chemvas.features.document_patch`: `DOCUMENT_PATCH_FORMAT` and
-  `DOCUMENT_PATCH_VERSION`. From `chemvas.features.session`: `RestorePlan` and
-  `SESSION_SCHEMA_VERSION`. From `chemvas.features.export`: `MM_PER_INCH`.
-  From `chemvas.features.hover`: `HoverAction`, whose `Literal` alias stays in
-  the package root because the hover plan's own annotation reads it.
-  `VALID_ARROW_KINDS`, `normalize_3d` and `SHA256_HEX_RE` are untouched: each
-  has a reader, and each was put where it is on purpose.
+  repository did — each was checked against every tracked file with no path or
+  extension filter. Thirty-one appeared only in the package root that
+  re-exported them and the module that defines them, and those thirty-one stay
+  where they are and stay importable from the module named beside each below;
+  only the package-level re-export goes. The exception is
+  `selected_rotation_atom_ids`, which is not a re-export removal at all: it was
+  renamed to
+  `selected_atom_ids_with_bond_endpoints` and moved from
+  `features.selection.rotation` to `features.selection.hit`, so the old name
+  now resolves nowhere.
+  Gone from `chemvas.domain.document`: `CALCULATION_INCLUSIONS`,
+  `CALCULATION_PLAN_FORMAT`, `CALCULATION_PLAN_VERSION`, `CALCULATION_ROLES`
+  and `CalculationEndpointPrecomplex` (all in `.calculation_plan`), and
+  `SUPPORTED_FILE_VERSIONS` (in `.state`). From `chemvas.features.rendering`:
+  `BOLD_DOUBLE_STYLES`, `BOLD_DOUBLE_STYLE_SEQUENCE`, `DOTTED_DOUBLE_STYLES`,
+  `DOTTED_DOUBLE_STYLE_SEQUENCE` and `DOUBLE_STYLE_SEQUENCE` (in
+  `.bond_style`), and `DEFAULT_BOLD_OUT_LENGTH_SCALE` (in `.bond_geometry`).
+  From `chemvas.features.insertion`: `SmilesPreviewPlan`,
+  `SmilesPreviewSnapshot` and `snapshot_smiles_preview_geometry` (in
+  `.smiles`), `TemplatePreviewPlan` (in `.template_preview`), and the lazily
+  loaded `ring_polygon_points_for_atoms` (in `.ring_occupancy`), which also
+  leaves the lazy-export table. From `chemvas.features.selection`:
+  `LineStrokePathBuilder` and `PenWidthGetter` (in `.outline`),
+  `ROTATION_DRAG_SENSITIVITY` and `RotatePointAroundAxis` (in
+  `.rotation_geometry`), and the renamed `selected_rotation_atom_ids`. From
+  `chemvas.features.document_composition`: `COMPOSITION_FORMAT`,
+  `COMPOSITION_VERSION` and `MAX_BONDS` (in `.service`). From
+  `chemvas.features.calculation_bundle`: `PathPrecheck` and `StepReadiness` (in
+  `.plan`). From `chemvas.features.document_patch`: `DOCUMENT_PATCH_FORMAT` and
+  `DOCUMENT_PATCH_VERSION` (in `.service`). From `chemvas.features.session`:
+  `RestorePlan` and `SESSION_SCHEMA_VERSION` (in `.logic`). From
+  `chemvas.features.export`: `MM_PER_INCH` (in `.plan`).
+  `HoverAction` is a near miss worth naming: it left
+  `chemvas.features.hover`'s `__all__`, so `import *` no longer offers it, but
+  it is defined in that package root and stays importable by name.
+  `normalize_3d` and `SHA256_HEX_RE` are untouched: each has a reader, and each
+  was put where it is on purpose. `VALID_ARROW_KINDS` moved the other way and
+  is now public — see Added.
+- **The `chemvas.ui.canvas_state_lookup` module.** Its two production callers
+  were rewritten off it and the module was deleted. Both rewrites tightened
+  what they accept: the document-metadata accessor used to build and attach a
+  metadata state when the canvas had none and now reads the one the runtime
+  state carries, and the scene-runtime snapshot lookup dropped its fallback to
+  a public attribute of the same name along with its leading-underscore
+  stripping. As with the other guards removed here, a correctly wired canvas
+  sees no difference.
+- **The unused context-bar segment button.** `segment_button` and the
+  `CONTEXT_SEGMENT_STYLE` it painted with had no caller anywhere in the tree;
+  no context bar ever drew one.
 
 ## [0.4.1] - 2026-08-20
 
@@ -857,7 +939,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `.chemvas` document type (double-clicking a file opens it in Chemvas), and a
   Linux `.desktop` entry with an `application/x-chemvas` MIME type.
 
-[Unreleased]: https://github.com/dhsohn/Chemvas/compare/v0.4.1...HEAD
+[Unreleased]: https://github.com/dhsohn/Chemvas/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/dhsohn/Chemvas/compare/v0.4.1...v0.5.0
 [0.4.1]: https://github.com/dhsohn/Chemvas/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/dhsohn/Chemvas/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/dhsohn/Chemvas/compare/v0.2.0...v0.3.0
