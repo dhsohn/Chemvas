@@ -48,9 +48,7 @@ def _selection_signature(
             (atom_id, atom.element) for atom_id, atom in sorted(submodel.atoms.items())
         ),
         tuple(
-            (bond.a, bond.b, bond.order)
-            for bond in submodel.bonds
-            if bond is not None
+            (bond.a, bond.b, bond.order) for bond in submodel.bonds if bond is not None
         ),
         tuple(
             (atom_id, tuple(sorted(atom_annotations[atom_id].items())))
