@@ -348,9 +348,7 @@ class MainStderrFilterTest(unittest.TestCase):
         main_window_module.initialize_main_window_document = lambda window: None
 
         class FakeRecoveryService:
-            def restore_previous(
-                self, window, *, include_clean_session: bool = True
-            ) -> None:
+            def restore_previous(self, window) -> None:
                 events.append("restore")
 
             def start(self, app) -> None:

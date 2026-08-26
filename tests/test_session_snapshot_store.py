@@ -212,12 +212,9 @@ def test_clean_exit_drops_unsaved_untitled_docs(tmp_path, monkeypatch):
     assert result.docs == []
 
 
-def test_crash_is_recovered_even_when_clean_session_is_suppressed(
-    tmp_path, monkeypatch
-):
-    # The startup-file case (include_clean_session=False): the clean workspace is
-    # not reopened, but a crashed session's unsaved work must still be recovered
-    # rather than silently pruned.
+def test_crash_and_clean_session_are_both_restored(tmp_path, monkeypatch):
+    # Every launch restores crashed unsaved work plus the newest clean
+    # workspace; both consumed siblings are scheduled for deferred pruning.
     root = tmp_path / "sessions"
     saved = tmp_path / "kept.chemvas"
     write_document(saved, _valid_state("disk"), CANVAS_FILE_VERSION)
@@ -250,11 +247,10 @@ def test_crash_is_recovered_even_when_clean_session_is_suppressed(
     )
 
     _dead_pids(monkeypatch)
-    result = _store(root, "cur").consume_previous_sessions(include_clean_session=False)
+    result = _store(root, "cur").consume_previous_sessions()
 
     assert result.recovered_unsaved == 1
-    assert [doc.dirty for doc in result.docs] == [True]
-    assert result.docs[0].state["last_smiles_input"] == "unsaved"
+    assert sorted(doc.dirty for doc in result.docs) == [False, True]
     # Both siblings are scheduled for prune (deferred), not yet deleted.
     assert set(result.prune_ids) == {"clean-session", "crash-session"}
     assert (root / "clean-session").exists()

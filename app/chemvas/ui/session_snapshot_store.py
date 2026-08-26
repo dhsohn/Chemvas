@@ -181,14 +181,12 @@ class SessionSnapshotStore:
         manifest.clean_exit = True
         self._write_manifest(manifest)
 
-    def consume_previous_sessions(
-        self, *, include_clean_session: bool = True
-    ) -> RestoreResult:
+    def consume_previous_sessions(self) -> RestoreResult:
         """Reopen recoverable sibling sessions and delete every consumable one.
 
         Crashed sessions are always restored (unsaved work is never pruned
-        unrecovered); the newest clean session is reopened only when
-        ``include_clean_session`` is set. Live instances' sessions are untouched.
+        unrecovered) and the newest clean session is reopened for last-session
+        continuity. Live instances' sessions are untouched.
         """
         manifests: dict[str, SessionManifest] = {}
         order: dict[str, float] = {}
@@ -213,9 +211,7 @@ class SessionSnapshotStore:
             (session_id, manifests[session_id], order[session_id])
             for session_id in manifests
         ]
-        plan = plan_restore(
-            candidates, is_alive=_pid_alive, include_clean_session=include_clean_session
-        )
+        plan = plan_restore(candidates, is_alive=_pid_alive)
 
         result = RestoreResult()
         for session_id in plan.restore:
