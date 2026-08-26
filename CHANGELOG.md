@@ -8,6 +8,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- The 3D-rotate tool no longer swallows mouse releases that end no
+  rotation. Marquee-selecting on empty canvas with the tool active left
+  the dashed rubber-band rectangle stuck on screen until the next mouse
+  move, because every release was consumed before reaching the view.
 - SMILES insertion now rejects isotope labels instead of silently dropping
   them. The document model has no isotope representation, so inserting
   d2-ethanol (`CC([2H])([2H])O`) drew plain ethanol and `[13CH4]` drew

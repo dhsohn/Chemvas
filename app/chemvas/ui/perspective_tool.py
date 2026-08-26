@@ -92,8 +92,12 @@ class PerspectiveTool(Tool):
         return True
 
     def on_mouse_release(self, event) -> bool:
+        was_rotating = self._rotating
         self._commit_active_rotation()
-        return True
+        # A release that ends no rotation belongs to the base view: this
+        # tool's empty-canvas presses start a rubber-band marquee there, and
+        # swallowing the release would leave that marquee on screen.
+        return was_rotating
 
 
 __all__ = ["PerspectiveTool"]
