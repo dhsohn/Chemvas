@@ -43,17 +43,23 @@ class CanvasHitTestingService:
         )
 
     def item_at_scene_pos(self, pos: QPointF):
+        handle_item = None
+        atom_item = None
         bond_item = None
         ring_item = None
         other_item = None
         for item in scene_items_at_pos_for_canvas(self.canvas, pos):
-            if item.data(0) == "selection_outline":
-                continue
             kind = item.data(0)
+            if kind == "selection_outline":
+                continue
             if kind in {"note_box", "note_select"}:
                 continue
-            if kind == "atom":
-                return item
+            if kind == "handle" and handle_item is None:
+                handle_item = item
+                continue
+            if kind == "atom" and atom_item is None:
+                atom_item = item
+                continue
             if kind == "bond" and bond_item is None:
                 bond_item = item
                 continue
@@ -62,6 +68,14 @@ class CanvasHitTestingService:
                 continue
             if other_item is None:
                 other_item = item
+        if handle_item is not None:
+            # Handles are drawn above everything and exist only while the user
+            # is editing the selected item; letting the atom/near-bond
+            # priority below outrank them makes arrow endpoints and resize
+            # grips unreachable wherever they touch the structure.
+            return handle_item
+        if atom_item is not None:
+            return atom_item
         if bond_item is None:
             nearby_bond_id = self.find_bond_near(pos, bond_pick_radius_for(self.canvas))
             if nearby_bond_id is not None:

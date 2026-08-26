@@ -90,6 +90,40 @@ class CanvasHitTestingServiceTest(unittest.TestCase):
         )
         scene_pos_mapper.assert_called_once()
 
+    def test_item_lookup_returns_handle_before_structure(self) -> None:
+        # Handles are drawn above everything and exist only while the user is
+        # editing the selected item; the atom and near-bond priority must not
+        # hijack a press on one, or curved-arrow endpoints touching the
+        # structure become unreachable.
+        handle_item = _FakeItem("handle")
+        canvas = SimpleNamespace(
+            renderer=_renderer_double(),
+            scene=lambda: _FakeScene([_FakeItem("atom"), handle_item]),
+            runtime_state=canvas_runtime_state(
+                bond_graphics_state=CanvasBondGraphicsState()
+            ),
+        )
+        set_bond_items_for(canvas, {})
+        service = CanvasHitTestingService(canvas)
+        service.find_bond_near = mock.Mock(return_value=None)
+
+        self.assertIs(service.item_at_scene_pos(QPointF(0.0, 0.0)), handle_item)
+
+        near_bond_canvas = SimpleNamespace(
+            renderer=_renderer_double(),
+            scene=lambda: _FakeScene([handle_item]),
+            runtime_state=canvas_runtime_state(
+                bond_graphics_state=CanvasBondGraphicsState()
+            ),
+        )
+        set_bond_items_for(near_bond_canvas, {4: [_FakeItem("bond_graphic")]})
+        near_bond_service = CanvasHitTestingService(near_bond_canvas)
+        near_bond_service.find_bond_near = mock.Mock(return_value=4)
+
+        self.assertIs(
+            near_bond_service.item_at_scene_pos(QPointF(0.0, 0.0)), handle_item
+        )
+
     def test_item_lookup_prefers_atom_and_falls_back_to_nearby_bond(self) -> None:
         atom_item = _FakeItem("atom")
         canvas = SimpleNamespace(

@@ -8,6 +8,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- Transform handles can now be grabbed where they overlap the structure.
+  The press hit-test ranked atoms and nearby bonds above everything else,
+  so a curved-arrow endpoint handle sitting on an atom label — or within
+  the bond pick radius — could never be picked up: the click selected and
+  dragged the molecule instead. Handles now take priority, matching the
+  order they are drawn in.
 - The 3D-rotate tool no longer swallows mouse releases that end no
   rotation. Marquee-selecting on empty canvas with the tool active left
   the dashed rubber-band rectangle stuck on screen until the next mouse
