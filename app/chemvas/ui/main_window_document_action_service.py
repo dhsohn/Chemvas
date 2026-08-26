@@ -198,6 +198,28 @@ class MainWindowDocumentActionService:
             return self.save_canvas_as(window, canvas=canvas)
         return self.save_canvas_to_path(window, path, canvas=canvas)
 
+    def _confirm_normalized_overwrite(
+        self, parent, dialog_path: str, path: str, message_box
+    ) -> bool:
+        """Confirm replacing a file that suffix normalization retargeted.
+
+        The save dialog's own overwrite prompt covers the name the user typed;
+        when normalization then redirects the write to a different, existing
+        file, that file was never confirmed and would be replaced silently.
+        Compare path identity, not strings: the normalizers round-trip through
+        Path(), which can change separators without changing the target.
+        """
+        if Path(path) == Path(dialog_path) or not os.path.exists(path):
+            return True
+        choice = message_box.question(
+            parent,
+            "Confirm Overwrite",
+            f"{os.path.basename(path)} already exists.\nDo you want to replace it?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        return choice == QMessageBox.StandardButton.Yes
+
     def save_canvas_as(
         self,
         window,
@@ -205,8 +227,10 @@ class MainWindowDocumentActionService:
         canvas: CanvasView | None = None,
         file_dialog=None,
         resolve_save_as_path=None,
+        message_box=None,
     ) -> bool:
         file_dialog = QFileDialog if file_dialog is None else file_dialog
+        message_box = QMessageBox if message_box is None else message_box
         resolve_save_as_path = (
             default_resolve_save_as_path
             if resolve_save_as_path is None
@@ -220,6 +244,10 @@ class MainWindowDocumentActionService:
         )
         path = resolve_save_as_path(dialog_path)
         if path is None:
+            return False
+        if not self._confirm_normalized_overwrite(
+            window, dialog_path, path, message_box
+        ):
             return False
         return self.save_canvas_to_path(window, path, canvas=canvas)
 
@@ -244,6 +272,10 @@ class MainWindowDocumentActionService:
         )
         path = self.normalize_xyz_export_path(dialog_path)
         if path is None:
+            return
+        if not self._confirm_normalized_overwrite(
+            dialog_parent, dialog_path, path, message_box
+        ):
             return
         previous_status = window.statusBar().currentMessage()
 
@@ -296,6 +328,10 @@ class MainWindowDocumentActionService:
         path = self.normalize_mol_export_path(dialog_path)
         if path is None:
             return
+        if not self._confirm_normalized_overwrite(
+            dialog_parent, dialog_path, path, message_box
+        ):
+            return
 
         def report(message: str) -> None:
             if status_sink is not None:
@@ -330,6 +366,10 @@ class MainWindowDocumentActionService:
         )
         path = normalize_export_path(dialog_path, fmt)
         if path is None:
+            return
+        if not self._confirm_normalized_overwrite(
+            window, dialog_path, path, message_box
+        ):
             return
         try:
             self._document_session_service_for_window(window).export_figure(
