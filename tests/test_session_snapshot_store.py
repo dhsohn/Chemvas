@@ -556,3 +556,48 @@ def test_recently_created_unreadable_sibling_is_left_alone(tmp_path, monkeypatch
 
     assert result.docs == []
     assert starting.exists()
+
+
+def test_snapshot_with_an_uncomparable_number_is_skipped_not_fatal(
+    tmp_path, monkeypatch
+):
+    # A number past the arithmetic context's limit constructs fine and only
+    # fails when the range check takes its absolute value. Recovery runs before
+    # the event loop starts, and a recorded session is not pruned until a
+    # recovery finishes, so an arithmetic error escaping here aborts every
+    # launch.
+    root = tmp_path / "sessions"
+    prev = _store(root, "prev", pid=55)
+    prev.begin()
+    prev.save_documents(
+        [
+            DocDescriptor(
+                state=_valid_state("good"),
+                file_path=None,
+                display_name="Good",
+                dirty=True,
+            ),
+            DocDescriptor(
+                state=_valid_state("huge"),
+                file_path=None,
+                display_name="Huge",
+                dirty=True,
+            ),
+        ]
+    )
+    manifest = json.loads((root / "prev" / "session.json").read_text(encoding="utf-8"))
+    huge_snapshot = next(
+        entry["snapshot"]
+        for entry in manifest["docs"]
+        if entry["display_name"] == "Huge"
+    )
+    snapshot_path = root / "prev" / huge_snapshot
+    text = snapshot_path.read_text(encoding="utf-8")
+    assert "18.0" in text
+    snapshot_path.write_text(text.replace("18.0", "1e999999999", 1), encoding="utf-8")
+
+    _dead_pids(monkeypatch)
+    result = _store(root, "cur").consume_previous_sessions()
+
+    assert result.recovered_unsaved == 1
+    assert [doc.display_name for doc in result.docs] == ["Good"]

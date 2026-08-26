@@ -1536,7 +1536,12 @@ def _is_number(value: object) -> bool:
         if type(value) is int:
             return int(float_value) == value
         return True
-    except OverflowError:
+    except ArithmeticError:
+        # float() on an oversized int raises OverflowError, while the abs()
+        # in the range check above raises decimal.Overflow -- a sibling of that
+        # under ArithmeticError rather than a subclass, so naming only
+        # OverflowError left the Decimal path uncovered. Either way this is a
+        # value the document cannot carry, which is exactly what False says.
         return False
 
 
