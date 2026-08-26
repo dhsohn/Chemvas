@@ -40,6 +40,24 @@ class RDKitImportHelper:
                 "as abbreviation labels instead: " + ", ".join(shadowed) + "."
             )
             return None
+        # The document model has no isotope representation, so accepting the
+        # input would silently draw the unlabeled isotopologue — every formula,
+        # identifier, and export would then describe a different compound than
+        # the SMILES asked for.
+        isotopes = sorted(
+            {
+                f"{atom.GetIsotope()}{atom.GetSymbol()}"
+                for atom in mol.GetAtoms()
+                if atom.GetIsotope()
+            }
+        )
+        if isotopes:
+            self.adapter.last_error = (
+                "Cannot insert this SMILES: Chemvas cannot represent isotope "
+                "labels, so this would silently draw the unlabeled compound "
+                "instead: " + ", ".join(isotopes) + "."
+            )
+            return None
         mol = self._kekulized_import_mol(Chem, mol)
         AllChem.Compute2DCoords(mol)
 
