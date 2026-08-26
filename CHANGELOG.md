@@ -38,13 +38,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   last consumer when the utility icon accessors went; the twelfth, "select",
   turned out never to have had one — the select tool's accessor has always
   drawn the move glyph. A boundary test pins all twelve as removed.
-- Replaced seven lambdas in the structure-growth action record with the bound
-  methods they wrapped. Internal change only — every field forwarded its
+- Replaced every lambda in the structure-growth action record with the bound
+  method it wrapped, finishing a conversion that had stopped at seven of the
+  seventeen fields. Internal change only — every field forwarded its
   arguments unchanged, measured by calling each field through the record
-  before and after with the same inputs. The other ten fields stay lambdas on
-  purpose: tests rebind those methods on the service after it is built, and
-  the lambdas are what let the record see the rebinding; a comment above the
-  record now says which half is which and why.
+  before and after with the same inputs. The ten lambdas that remained were
+  load-bearing for the tests alone: nine tests in the structure-build suite
+  swap a method on an already-built service, and late binding is what let the
+  record see the swap. Those tests now rebuild the record through the same
+  production wiring function once their mocks are in place, so each still
+  asserts what it asserted before — that the growth path reaches the service
+  method of that name with those arguments. The comment that explained which
+  half of the record was which is gone with the split it described.
 - Merged modules whose only production caller was a single other module into
   that caller. Internal structure only — nothing about how the application
   draws, saves or exports a document changes. The five main-window stylesheet
