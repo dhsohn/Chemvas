@@ -165,7 +165,9 @@ class _FakeCanvas:
         bond_ids=None,
         redraw_bond_ids=None,
         update_selection=True,
+        rebuild_stale_bond_topology=False,
     ) -> None:
+        del rebuild_stale_bond_topology
         self.calls.append(
             (
                 "move_atoms",

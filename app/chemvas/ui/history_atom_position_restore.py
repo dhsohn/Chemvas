@@ -70,7 +70,7 @@ def set_atom_positions_for_history(
             None,
         )
         if callable(update_geometries):
-            update_geometries(atom_ids)
+            update_geometries(atom_ids, rebuild_stale_bond_topology=True)
         else:
             move_service.redraw_bonds_for_atoms(atom_ids)
         update_ring_fills_for_atoms_for(canvas, atom_ids)

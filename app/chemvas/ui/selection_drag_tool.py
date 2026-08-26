@@ -28,6 +28,7 @@ from chemvas.core.history import (
     HistoryCommand,
     MoveAtomsCommand,
 )
+from chemvas.ui.bond_renderer_access import update_bond_geometry_for
 from chemvas.ui.canvas_atom_graphics_state import atom_dots_for, atom_items_for
 from chemvas.ui.canvas_bond_graphics_state import bond_items_for_id
 from chemvas.ui.canvas_mark_registry import mark_registry_for
@@ -427,6 +428,7 @@ class SelectionDragMixin:
 
     def _commit_selection_drag(self) -> None:
         self._require_drag_token()
+        boundary_bond_ids = tuple(self._drag_boundary_bond_ids or ())
 
         def commit(owner: _DragTransactionToken) -> None:
             if self._suspended_outline:
@@ -446,6 +448,12 @@ class SelectionDragMixin:
             if self._drag_transaction is None:
                 self._reset_selection_drag_state()
             raise
+        # The gesture is over and the transaction no longer tracks the bond
+        # items: a boundary bond whose length change altered its derived
+        # hash-mark count may now rebuild instead of keeping the frozen
+        # mid-drag count.
+        for bond_id in boundary_bond_ids:
+            update_bond_geometry_for(self.canvas, bond_id, allow_topology_rebuild=True)
         self._reset_selection_drag_state()
 
 

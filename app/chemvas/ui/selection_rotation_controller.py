@@ -337,6 +337,19 @@ class SelectionRotationController:
             state.clear_session()
             preview.release()
             self._rotation_preview_authority = None
+            # The gesture is over and the preview transaction has released its
+            # item tracking: rebuild any bond whose projected length change
+            # altered its derived hash-mark count, then refresh the outline in
+            # case it referenced a replaced item.
+            if self.move_controller is not None:
+                update_geometries = getattr(
+                    self.move_controller,
+                    "update_bond_geometries_for_atoms",
+                    None,
+                )
+                if callable(update_geometries):
+                    update_geometries(rotated_atoms, rebuild_stale_bond_topology=True)
+                    refresh_selection_outline_for(self.canvas)
         except Exception as original_error:
             # Fail closed: close the session and surface the error. Before the
             # push commits, revert the document to the gesture start (the

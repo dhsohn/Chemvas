@@ -119,6 +119,10 @@ def move_atoms_for_history(
             bond_ids=bond_ids,
             redraw_bond_ids=redraw_bond_ids,
             update_selection=update_selection,
+            # History replay is a one-shot application: a boundary bond whose
+            # length change altered its derived hash-mark count must rebuild
+            # rather than keep the frozen mid-gesture count.
+            rebuild_stale_bond_topology=True,
         )
         _release_history_transaction_for_command(canvas, transaction)
     except Exception as original_error:

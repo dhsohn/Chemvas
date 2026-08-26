@@ -260,6 +260,7 @@ class _FakeSelectCanvas:
         self.moved_items = []
         self.shift_calls = []
         self.pushed_commands = []
+        self.bond_renderer = SimpleNamespace(update_bond_geometry=mock.Mock())
         self.history_service = SimpleNamespace(
             state=SimpleNamespace(
                 history=[],
@@ -397,8 +398,9 @@ class _FakeSelectCanvas:
         redraw_bond_ids=None,
         update_selection=True,
         affected_ring_items=None,
+        rebuild_stale_bond_topology=False,
     ) -> None:
-        del affected_ring_items
+        del affected_ring_items, rebuild_stale_bond_topology
         self.moved_atoms.append(
             (set(atom_ids), dx, dy, bond_ids, redraw_bond_ids, update_selection)
         )

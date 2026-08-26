@@ -8,6 +8,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- Hash (dashed stereo) bonds no longer keep a frozen mark count after a
+  gesture that changed their length. Dragging or rotating a selection
+  refreshes boundary bonds in place, deliberately reusing the existing
+  items mid-gesture — but nothing ever re-derived the count when the
+  gesture ended, so a stretched hash bond kept its original sparse marks
+  through commit, undo and redo, and figure exports, while reopening the
+  document rendered the same bond with the correct density. Gesture ends
+  and history replay now rebuild a bond whose derived count changed;
+  mid-gesture updates still reuse the existing items.
 - Transform handles can now be grabbed where they overlap the structure.
   The press hit-test ranked atoms and nearby bonds above everything else,
   so a curved-arrow endpoint handle sitting on an atom label — or within

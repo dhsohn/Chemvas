@@ -384,7 +384,10 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
 
         refresh_calls: list[int] = []
 
-        def mutate_then_fail_persistently(bond_id: int) -> None:
+        def mutate_then_fail_persistently(
+            bond_id: int, *, allow_topology_rebuild: bool = False
+        ) -> None:
+            del allow_topology_rebuild
             refresh_calls.append(bond_id)
             for index, item in enumerate(graphics_mapping.get(bond_id, ())):
                 delta = 9000.0 + len(refresh_calls) * 10.0 + index
@@ -516,10 +519,12 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
                 def mutate_then_fail_persistently(
                     bond_id: int,
                     *,
+                    allow_topology_rebuild: bool = False,
                     _refresh_calls=refresh_calls,
                     _graphics_mapping=graphics_mapping,
                     _history_operation=history_operation,
                 ) -> None:
+                    del allow_topology_rebuild
                     _refresh_calls.append(bond_id)
                     delta = 7000.0 + len(_refresh_calls) * 10.0
                     for item in _graphics_mapping.get(bond_id, ()):
