@@ -232,11 +232,13 @@ class _FakeAtom:
         *,
         formal_charge: int = 0,
         radical_electrons: int = 0,
+        isotope: int = 0,
     ) -> None:
         self._idx = idx
         self._symbol = symbol
         self._formal_charge = formal_charge
         self._radical_electrons = radical_electrons
+        self._isotope = isotope
 
     def GetIdx(self) -> int:
         return self._idx
@@ -249,6 +251,9 @@ class _FakeAtom:
 
     def GetNumRadicalElectrons(self) -> int:
         return self._radical_electrons
+
+    def GetIsotope(self) -> int:
+        return self._isotope
 
 
 class _FakeBond:
@@ -285,15 +290,18 @@ class _FakeMol:
         canonical_smiles: str | None = None,
         formal_charges: dict[int, int] | None = None,
         radical_electrons: dict[int, int] | None = None,
+        isotopes: dict[int, int] | None = None,
     ) -> None:
         formal_charges = formal_charges or {}
         radical_electrons = radical_electrons or {}
+        isotopes = isotopes or {}
         self._atoms = [
             _FakeAtom(
                 idx,
                 symbol,
                 formal_charge=formal_charges.get(idx, 0),
                 radical_electrons=radical_electrons.get(idx, 0),
+                isotope=isotopes.get(idx, 0),
             )
             for idx, symbol in enumerate(atom_symbols)
         ]
@@ -755,6 +763,37 @@ class RDKitAdapterTest(unittest.TestCase):
             model.atom_annotations,
             {0: {"formal_charge": 1}, 1: {"radical_electrons": 1}},
         )
+
+    def test_smiles_to_2d_rejects_isotope_labels(self) -> None:
+        # The document model has no isotope representation, so accepting the
+        # input would silently draw the unlabeled isotopologue; refuse it like
+        # the shadowed-symbol case and the MOL reader's mass-difference field.
+        fake_mol = _FakeMol(
+            atom_symbols=["C", "H"],
+            bonds=[(0, 1, 1.0)],
+            positions={0: (0.0, 0.0, 0.0), 1: (1.0, 0.0, 0.0)},
+            isotopes={1: 2},
+        )
+        adapter = RDKitAdapter()
+        adapter._rdkit = (_FakeChem({"C[2H]": fake_mol}), _FakeAllChem())
+
+        self.assertIsNone(adapter.smiles_to_2d("C[2H]", scale=20.0))
+        assert adapter.last_error is not None
+        self.assertIn("isotope", adapter.last_error)
+        self.assertIn("2H", adapter.last_error)
+
+    @unittest.skipUnless(_RealChem is not None, "RDKit is required for stereo tests")
+    def test_smiles_to_2d_rejects_isotope_labels_with_real_rdkit(self) -> None:
+        adapter = RDKitAdapter()
+
+        self.assertIsNone(adapter.smiles_to_2d("CC([2H])([2H])O"))
+        assert adapter.last_error is not None
+        self.assertIn("2H", adapter.last_error)
+        self.assertIsNone(adapter.smiles_to_2d("[13CH4]"))
+        assert adapter.last_error is not None
+        self.assertIn("13C", adapter.last_error)
+        # The unlabeled molecule still inserts.
+        self.assertIsNotNone(adapter.smiles_to_2d("CCO"))
 
     @unittest.skipUnless(
         _RealChem is not None, "RDKit is required for aromatic import tests"

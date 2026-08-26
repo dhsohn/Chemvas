@@ -8,6 +8,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- SMILES insertion now rejects isotope labels instead of silently dropping
+  them. The document model has no isotope representation, so inserting
+  d2-ethanol (`CC([2H])([2H])O`) drew plain ethanol and `[13CH4]` drew
+  plain methane — every formula, identifier, and export then described the
+  unlabeled compound with no warning. Isotope-bearing input now fails with
+  a message naming the offending labels, the same way the SMILES reader
+  already refuses alias-shadowed element symbols and the MOL reader
+  refuses the mass-difference field.
 - The selection formula/MW readout in the status bar now accounts for
   charge and radical marks. It used to compute on a bare copy of the
   selected atoms that dropped the mark layer, so a drawn methoxide read
