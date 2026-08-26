@@ -55,17 +55,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   deleted.
   Verified by replaying the whole rule set before and after against a scratch
   copy of the tree, with no failure either way; by pulling every banned
-  identifier mechanically out of both versions and confirming all 220 are still
-  banned, now at 256 sites instead of 276; by planting each of the eleven names
-  in each of the 49 name-and-module combinations the old rules covered and
+  identifier mechanically out of both versions and confirming not one was lost;
+  by planting each of the eleven names in every module an old rule named and
   confirming old and new both fail; by planting each of them in a module no old
   rule named, where `resolve_canvas_graph_service` and `tool_context_for_canvas`
   slip past every old rule and fail the new one; by planting a violation of what
   each of the twenty edited rules still guards and confirming each still fails;
   and, for the twenty-first, by resurrecting the deleted context-cache module.
-  The file holds forty more identifiers with the same history of never having
-  existed. They stay: each sits in a rule alongside names that are real, and
-  splitting the ghost half out would break a rule that reads as one thought.
+  The file holds more identifiers with the same history of never having existed.
+  They stay: each sits in a rule alongside names that are real, and splitting the
+  ghost half out would break a rule that reads as one thought.
 - Replaced every lambda in the structure-growth action record with the bound
   method it wrapped, finishing a conversion that had stopped at seven of the
   seventeen fields. Internal change only — every field forwarded its

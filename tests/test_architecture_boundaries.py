@@ -1880,7 +1880,7 @@ def test_canvas_services_uses_active_tool_reference_port() -> None:
     assert "tool_controller_holder" not in entrypoint
 
 
-def test_tool_implementations_use_tool_context_for_canvas_ports() -> None:
+def test_tool_implementations_do_not_reach_past_their_context() -> None:
     paths = [
         APP_ROOT / "chemvas" / "ui" / "edit_tools.py",
         APP_ROOT / "chemvas" / "ui" / "perspective_tool.py",
