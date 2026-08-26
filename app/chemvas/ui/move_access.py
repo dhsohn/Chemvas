@@ -29,6 +29,7 @@ def move_atoms_for(
     redraw_bond_ids: set[int] | None = None,
     update_selection: bool = True,
     affected_ring_items: tuple[object, ...] | None = None,
+    rebuild_stale_bond_topology: bool = False,
 ) -> None:
     move_service = move_service_from_canvas(canvas)
     if affected_ring_items is None:
@@ -39,6 +40,7 @@ def move_atoms_for(
             bond_ids=bond_ids,
             redraw_bond_ids=redraw_bond_ids,
             update_selection=update_selection,
+            rebuild_stale_bond_topology=rebuild_stale_bond_topology,
         )
     else:
         move_service.move_atoms(
@@ -49,6 +51,7 @@ def move_atoms_for(
             redraw_bond_ids=redraw_bond_ids,
             update_selection=update_selection,
             affected_ring_items=affected_ring_items,
+            rebuild_stale_bond_topology=rebuild_stale_bond_topology,
         )
 
 

@@ -253,7 +253,16 @@ class BondRenderer:
     ):
         return self.graphics_drawer.draw_hash_bond(x1, y1, x2, y2, a_id, b_id)
 
-    def update_bond_geometry(self, bond_id: int) -> None:
+    def update_bond_geometry(
+        self, bond_id: int, *, allow_topology_rebuild: bool = False
+    ) -> None:
+        if allow_topology_rebuild and self.geometry_updater.topology_is_stale(bond_id):
+            # A gesture or history step just finished: keeping the mid-gesture
+            # item identity would freeze a hash-mark count that reopening the
+            # document will not reproduce. Mid-gesture callers keep the
+            # default, because the drag transaction tracks the live items.
+            self.redraw_bond(bond_id)
+            return
         self.geometry_updater.update_bond_geometry(bond_id)
 
     def redraw_connected_bonds(

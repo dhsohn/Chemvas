@@ -470,6 +470,26 @@ class BondRendererUnitTest(unittest.TestCase):
         self.assertEqual((first.pos().x(), first.pos().y()), (2.0, -3.0))
         self.assertEqual(_geometry_signature([first]), first_before)
 
+    def test_hash_update_rebuilds_stale_topology_when_a_gesture_ends(self) -> None:
+        # Mid-gesture updates deliberately reuse the existing items (the test
+        # above pins that); a one-shot application passes
+        # allow_topology_rebuild=True so the frozen mid-gesture hash count
+        # does not survive into the committed document rendering.
+        canvas, renderer = _renderer_for_bond("hash", 1, ring=False)
+        self.assertEqual(len(canvas.bond_items[0]), 3)
+
+        canvas.model.atoms[1].x = 40.0
+        renderer.update_bond_geometry(0, allow_topology_rebuild=True)
+
+        self.assertEqual(len(canvas.bond_items[0]), 10)
+
+        # An unchanged length keeps the in-place path: same items, no churn.
+        items = canvas.bond_items[0]
+        item_ids = tuple(id(item) for item in items)
+        renderer.update_bond_geometry(0, allow_topology_rebuild=True)
+        self.assertIs(canvas.bond_items[0], items)
+        self.assertEqual(tuple(id(item) for item in items), item_ids)
+
     def test_update_rejects_malformed_topology_before_mutating_any_item(self) -> None:
         canvas, renderer = _renderer_for_bond("double", 2, ring=False)
         items = canvas.bond_items[0]

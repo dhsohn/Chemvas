@@ -146,6 +146,7 @@ class CanvasMoveController:
         redraw_bond_ids: set[int] | None = None,
         update_selection: bool = True,
         affected_ring_items: tuple[Any, ...] | None = None,
+        rebuild_stale_bond_topology: bool = False,
     ) -> None:
         if not atom_ids:
             return
@@ -159,7 +160,11 @@ class CanvasMoveController:
                         item.moveBy(dx, dy)
             if redraw_bond_ids:
                 for bond_id in redraw_bond_ids:
-                    update_bond_geometry_for(self.canvas, bond_id)
+                    update_bond_geometry_for(
+                        self.canvas,
+                        bond_id,
+                        allow_topology_rebuild=rebuild_stale_bond_topology,
+                    )
         else:
             self.redraw_bonds_for_atoms(atom_ids)
         if affected_ring_items is None:
@@ -178,11 +183,23 @@ class CanvasMoveController:
         for bond_id in self.bond_ids_for_atom_ids(atom_ids):
             self.redraw_bond(bond_id)
 
-    def update_bond_geometries_for_atoms(self, atom_ids: set[int]) -> None:
-        """Refresh coordinates in place when the graphics topology is unchanged."""
+    def update_bond_geometries_for_atoms(
+        self, atom_ids: set[int], *, rebuild_stale_bond_topology: bool = False
+    ) -> None:
+        """Refresh coordinates in place when the graphics topology is unchanged.
+
+        One-shot applications (history replay, gesture end) pass
+        ``rebuild_stale_bond_topology=True`` so a bond whose length change
+        altered its derived item count (hash marks) is rebuilt instead of
+        keeping the frozen mid-gesture count.
+        """
 
         for bond_id in self.bond_ids_for_atom_ids(atom_ids):
-            update_bond_geometry_for(self.canvas, bond_id)
+            update_bond_geometry_for(
+                self.canvas,
+                bond_id,
+                allow_topology_rebuild=rebuild_stale_bond_topology,
+            )
 
     def redraw_bond(self, bond_id: int) -> bool:
         return bond_renderer_for(self.canvas).redraw_bond(bond_id)

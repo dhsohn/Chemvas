@@ -50,6 +50,26 @@ class BondGeometryUpdateService:
             if expected_type is None or not isinstance(item, expected_type):
                 raise TypeError("bond graphics topology does not match geometry plan")
 
+    def topology_is_stale(self, bond_id: int) -> bool:
+        """True when a fresh build would not reproduce the current item count.
+
+        Hash-mark counts derive from bond length; the in-place update reuses
+        the existing items, so a length change during a gesture freezes the
+        count until something rebuilds the bond.
+        """
+        bond = bond_for_id(self.canvas, bond_id)
+        if bond is None:
+            return False
+        items = bond_items_for_id(self.canvas, bond_id)
+        if not items:
+            return False
+        a = atom_for_id(self.canvas, bond.a)
+        b = atom_for_id(self.canvas, bond.b)
+        if a is None or b is None:
+            return False
+        fresh = self.planner.primitives_for_bond(bond, a, b, topology_count=None)
+        return len(fresh) != len(items)
+
     def update_bond_geometry(self, bond_id: int) -> None:
         bond = bond_for_id(self.canvas, bond_id)
         if bond is None:
