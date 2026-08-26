@@ -59,6 +59,7 @@ if QApplication is not None:
     from chemvas.ui.handle_state import CanvasHandleState
     from chemvas.ui.history_commands import MoveItemsCommand, UpdateSceneItemCommand
     from chemvas.ui.move_tool import MoveTool
+    from chemvas.ui.perspective_tool import PerspectiveTool
     from chemvas.ui.preview_tools import ArrowTool, PreviewDragTool, TSBracketTool
     from chemvas.ui.scene_item_state import scene_item_state_for
     from chemvas.ui.select_tool import SelectTool
@@ -1922,6 +1923,23 @@ class ToolsUnitTest(unittest.TestCase):
         )
         self.assertFalse(tool.on_mouse_move(_FakeEvent(QPointF(1.0, 2.0))))
         self.assertFalse(tool.on_mouse_release(_FakeEvent(QPointF(1.0, 2.0))))
+
+    def test_perspective_release_falls_through_when_no_rotation_was_active(
+        self,
+    ) -> None:
+        context = mock.Mock()
+        tool = PerspectiveTool(SimpleNamespace(), context=context)
+
+        # No rotation begun: an empty-canvas press started a rubber-band
+        # marquee in the base view, and the release must reach the base
+        # handler to finalize it instead of being swallowed.
+        self.assertFalse(tool.on_mouse_release(_FakeEvent(QPointF(1.0, 2.0))))
+        context.end_selection_3d_rotation.assert_not_called()
+
+        tool._rotating = True
+        self.assertTrue(tool.on_mouse_release(_FakeEvent(QPointF(1.0, 2.0))))
+        context.end_selection_3d_rotation.assert_called_once_with()
+        self.assertFalse(tool._rotating)
 
 
 if __name__ == "__main__":

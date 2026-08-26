@@ -1230,7 +1230,9 @@ class ToolsAdditionalTest(unittest.TestCase):
         perspective_tool = PerspectiveTool(
             perspective_canvas, context=_tool_context_for(perspective_canvas)
         )
-        self.assertTrue(perspective_tool.on_mouse_release(_Event(QPointF())))
+        # No rotation active: the release falls through to the base view so
+        # the rubber-band marquee it may have started can finalize.
+        self.assertFalse(perspective_tool.on_mouse_release(_Event(QPointF())))
         self.assertEqual(perspective_canvas.end_calls, 0)
 
     def test_note_tool_click_collapses_selection_double_click_selects_word(
