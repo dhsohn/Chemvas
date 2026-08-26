@@ -8,6 +8,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- The selection formula/MW readout in the status bar now accounts for
+  charge and radical marks. It used to compute on a bare copy of the
+  selected atoms that dropped the mark layer, so a drawn methoxide read
+  CH4O / 32.04 — the neutralized skeleton with implicit hydrogens
+  completed to neutral valence — while the 3D panel showed the correct
+  CH3O- / 31.03 for the same selection. The readout now derives its
+  charge/radical annotations from the same mark layer that MOL/XYZ export
+  and the 3D panel read. Adding or removing an atom-bound mark refreshes
+  the readout immediately even when the selection itself is unchanged, and
+  the readout cache now keys on the selected content (elements, bond
+  orders, marks) rather than the selected ids alone, so a label or mark
+  edit under a held selection recomputes at the next refresh instead of
+  serving the old value.
 - Save As and the XYZ/MOL/figure export dialogs no longer overwrite an
   existing file silently when filename normalization changes the target.
   The dialog's own overwrite prompt checks the name as typed; appending or

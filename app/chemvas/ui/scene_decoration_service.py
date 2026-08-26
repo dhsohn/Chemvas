@@ -30,6 +30,7 @@ from chemvas.ui.scene_item_state import (
     shape_state_dict_for,
     ts_bracket_state_dict_for,
 )
+from chemvas.ui.selection_info_access import emit_selection_info_for
 from chemvas.ui.transactions.scene_item_attach import SceneItemAttachSnapshot
 from chemvas.ui.transactions.scene_runtime import (
     run_rollback_step,
@@ -71,6 +72,11 @@ class SceneDecorationService:
             set_mark_center_for(self.canvas, item, pos)
             if record:
                 self._push_add_scene_item(item, mark_state_dict_for(self.canvas, item))
+        if atom_id is not None:
+            # An atom-bound mark changes the selection formula readout without
+            # changing the selection itself; refresh it here or it stays stale
+            # until the next selection change.
+            emit_selection_info_for(self.canvas)
         return item
 
     def add_arrow(self, start: QPointF, end: QPointF, kind: str):
