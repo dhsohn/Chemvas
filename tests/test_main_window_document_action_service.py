@@ -1,3 +1,4 @@
+import contextlib
 import math
 import os
 import tempfile
@@ -314,6 +315,162 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
         save_canvas_to_path.assert_called_once_with(
             self.window, "/tmp/new-drawing.chemvas", canvas=None
         )
+
+    def test_save_canvas_as_confirms_overwrite_when_normalization_retargets(
+        self,
+    ) -> None:
+        # The dialog's own overwrite prompt covers the typed name only; when
+        # suffix normalization redirects the write to an existing .chemvas
+        # file, that file was never confirmed and must not be replaced
+        # silently.
+        with tempfile.TemporaryDirectory() as temp_dir:
+            existing = Path(temp_dir) / "aspirin.chemvas"
+            existing.write_text("sentinel")
+            for typed in ("aspirin", "aspirin.v2"):
+                with self.subTest(typed=typed):
+                    file_dialog = mock.Mock()
+                    file_dialog.getSaveFileName.return_value = (
+                        str(Path(temp_dir) / typed),
+                        "",
+                    )
+                    message_box = mock.Mock()
+                    message_box.question.return_value = QMessageBox.StandardButton.No
+
+                    with mock.patch.object(
+                        self.service, "save_canvas_to_path", return_value=True
+                    ) as save_canvas_to_path:
+                        self.assertFalse(
+                            self.service.save_canvas_as(
+                                self.window,
+                                file_dialog=file_dialog,
+                                resolve_save_as_path=resolve_save_as_path,
+                                message_box=message_box,
+                            )
+                        )
+                    save_canvas_to_path.assert_not_called()
+                    message_box.question.assert_called_once()
+
+                    message_box.question.return_value = QMessageBox.StandardButton.Yes
+                    with mock.patch.object(
+                        self.service, "save_canvas_to_path", return_value=True
+                    ) as save_canvas_to_path:
+                        self.assertTrue(
+                            self.service.save_canvas_as(
+                                self.window,
+                                file_dialog=file_dialog,
+                                resolve_save_as_path=resolve_save_as_path,
+                                message_box=message_box,
+                            )
+                        )
+                    save_canvas_to_path.assert_called_once_with(
+                        self.window, str(existing), canvas=None
+                    )
+
+    def test_save_canvas_as_does_not_reprompt_a_dialog_confirmed_path(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            existing = Path(temp_dir) / "confirmed.chemvas"
+            existing.write_text("sentinel")
+            file_dialog = mock.Mock()
+            file_dialog.getSaveFileName.return_value = (str(existing), "")
+            message_box = mock.Mock()
+
+            with mock.patch.object(
+                self.service, "save_canvas_to_path", return_value=True
+            ) as save_canvas_to_path:
+                self.assertTrue(
+                    self.service.save_canvas_as(
+                        self.window,
+                        file_dialog=file_dialog,
+                        resolve_save_as_path=resolve_save_as_path,
+                        message_box=message_box,
+                    )
+                )
+            save_canvas_to_path.assert_called_once_with(
+                self.window, str(existing), canvas=None
+            )
+            message_box.question.assert_not_called()
+
+    def test_export_paths_do_not_reprompt_a_dialog_confirmed_target(self) -> None:
+        # The normalizers round-trip through Path(), so the returned string can
+        # differ from the typed one (collapsed slashes here, backslashes on
+        # Windows) while naming the same file the dialog already confirmed —
+        # the guard must compare path identity, not strings.
+        with tempfile.TemporaryDirectory() as temp_dir:
+            existing = Path(temp_dir) / "target.xyz"
+            existing.write_text("sentinel")
+            file_dialog = mock.Mock()
+            file_dialog.getSaveFileName.return_value = (
+                f"{temp_dir}//./target.xyz",
+                "",
+            )
+            message_box = mock.Mock()
+            session_service = mock.Mock()
+
+            with mock.patch.object(
+                self.service,
+                "_document_session_service_for_window",
+                return_value=session_service,
+            ):
+                self.service.export_xyz(
+                    self.window,
+                    file_dialog=file_dialog,
+                    message_box=message_box,
+                )
+            message_box.question.assert_not_called()
+            session_service.export_xyz_async.assert_called_once()
+
+    def test_export_paths_confirm_overwrite_when_normalization_retargets(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            cases = (
+                ("target.xyz", "export_xyz", "export_xyz_async"),
+                ("target.mol", "export_mol", "export_mol"),
+                ("target.svg", "export_figure", "export_figure"),
+            )
+            for existing_name, method_name, session_method in cases:
+                with self.subTest(surface=method_name):
+                    existing = Path(temp_dir) / existing_name
+                    existing.write_text("sentinel")
+                    file_dialog = mock.Mock()
+                    file_dialog.getSaveFileName.return_value = (
+                        str(Path(temp_dir) / "target"),
+                        "",
+                    )
+                    message_box = mock.Mock()
+                    message_box.question.return_value = QMessageBox.StandardButton.No
+                    session_service = mock.Mock()
+
+                    with contextlib.ExitStack() as stack:
+                        stack.enter_context(
+                            mock.patch.object(
+                                self.service,
+                                "_document_session_service_for_window",
+                                return_value=session_service,
+                            )
+                        )
+                        if method_name == "export_figure":
+                            stack.enter_context(
+                                mock.patch(
+                                    "chemvas.ui.main_window_document_action_service."
+                                    "prompt_export_options",
+                                    return_value=SimpleNamespace(
+                                        fmt="svg",
+                                        scope="sheet",
+                                        dpi=300,
+                                        background="transparent",
+                                        sizing="bond",
+                                        editable_svg=False,
+                                    ),
+                                )
+                            )
+                        getattr(self.service, method_name)(
+                            self.window,
+                            file_dialog=file_dialog,
+                            message_box=message_box,
+                        )
+                    getattr(session_service, session_method).assert_not_called()
+                    message_box.question.assert_called_once()
 
     def test_load_canvas_dialog_advertises_only_public_document_suffixes(
         self,

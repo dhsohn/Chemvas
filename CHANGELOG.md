@@ -8,6 +8,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- Save As and the XYZ/MOL/figure export dialogs no longer overwrite an
+  existing file silently when filename normalization changes the target.
+  The dialog's own overwrite prompt checks the name as typed; appending or
+  replacing the extension afterwards (`aspirin` or `aspirin.v2` becoming
+  `aspirin.chemvas`) could redirect the write to a file the dialog never
+  asked about, and the atomic writer then replaced it without warning.
+  When normalization retargets the write to an existing file, Chemvas now
+  asks before replacing it; a path the dialog already confirmed is not
+  asked about twice.
 - The 3D conversion path no longer exports the enantiomer of the drawn
   molecule. The conformer that RDKit reads wedge/hash chirality from was
   built on raw canvas coordinates, whose y axis grows downward; RDKit
