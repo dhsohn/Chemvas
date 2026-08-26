@@ -29,6 +29,9 @@ from chemvas.ui.canvas_smiles_input_state import (
 from chemvas.ui.history_commands import AddSceneItemsCommand
 from chemvas.ui.insert_template_commit_service import apply_template_commit_resolution
 from chemvas.ui.structure_build_service import StructureBuildService
+from chemvas.ui.structure_growth_build_actions import (
+    structure_growth_build_actions_for,
+)
 from PyQt6.QtCore import QPointF
 
 from tests.runtime_services import canvas_runtime_services
@@ -311,6 +314,13 @@ def _service_for(canvas: _FakeCanvas) -> StructureBuildService:
         move_controller=canvas.services.interaction.move_controller,
         graph_service=canvas.services.graph_service,
     )
+
+
+def _rebind_growth_actions(service: StructureBuildService) -> None:
+    # The growth action record binds the service's methods when the service is
+    # constructed, so a test that swaps one out afterwards has to rebuild the
+    # record before the growth path can reach the replacement.
+    service.growth_builder.actions = structure_growth_build_actions_for(service)
 
 
 class StructureBuildServiceTest(unittest.TestCase):
@@ -1281,6 +1291,7 @@ class StructureBuildServiceTest(unittest.TestCase):
         service.sprout_bond_endpoint = Mock(return_value=QPointF(20.0, 0.0))
         service.add_bond_between_points = Mock(return_value=(3, 4))
         service.add_benzene_ring = Mock(return_value="ring")
+        _rebind_growth_actions(service)
 
         result = service.sprout_bond_from_atom(3, style="double", order=2, cyclic=True)
         ring = service.sprout_benzene_from_atom(3)
@@ -1314,6 +1325,7 @@ class StructureBuildServiceTest(unittest.TestCase):
         service.add_ring_from_points = Mock()
 
         service.sprout_bond_endpoint = Mock(return_value=None)
+        _rebind_growth_actions(service)
         self.assertIsNone(service.sprout_bond_from_atom(0, style="single", order=1))
         service.sprout_acetyl_from_atom(0)
         service.add_bond_between_points.assert_not_called()
@@ -1323,6 +1335,7 @@ class StructureBuildServiceTest(unittest.TestCase):
         set_last_smiles_input_for(canvas, "before")
         service.sprout_bond_endpoint = Mock(return_value=QPointF(20.0, 0.0))
         service.default_bond_endpoint = Mock(return_value=None)
+        _rebind_growth_actions(service)
         service.sprout_acetyl_from_atom(0)
         service.add_bond_between_points.assert_not_called()
         self.assertEqual(sorted(canvas.model.atoms), [0, 1])
@@ -1332,6 +1345,7 @@ class StructureBuildServiceTest(unittest.TestCase):
 
         service.regular_ring_points_for_bond = Mock(return_value=None)
         service.template_points_for_bond = Mock(return_value=None)
+        _rebind_growth_actions(service)
         service.fuse_regular_ring_to_bond(99, 6)
         service.fuse_regular_ring_to_bond(0, 6)
         service.fuse_chair_to_bond(99)
@@ -1352,6 +1366,7 @@ class StructureBuildServiceTest(unittest.TestCase):
             side_effect=[QPointF(20.0, 10.0), QPointF(20.0, -10.0)]
         )
         service.add_bond_between_points = Mock()
+        _rebind_growth_actions(service)
 
         service.sprout_acetyl_from_atom(0)
 
@@ -1408,6 +1423,7 @@ class StructureBuildServiceTest(unittest.TestCase):
             side_effect=[QPointF(20.0, 0.0), QPointF(20.0, 10.0)]
         )
         service.add_bond_between_points = Mock()
+        _rebind_growth_actions(service)
 
         service.sprout_dimethyl_from_atom(0)
 
@@ -1450,6 +1466,7 @@ class StructureBuildServiceTest(unittest.TestCase):
         service = _service_for(canvas)
         service.sprout_bond_endpoint = Mock(side_effect=[QPointF(20.0, 0.0), None])
         service.add_bond_between_points = Mock()
+        _rebind_growth_actions(service)
 
         service.sprout_dimethyl_from_atom(0)
 
@@ -1479,6 +1496,7 @@ class StructureBuildServiceTest(unittest.TestCase):
         service.committer.add_bond_graphics = Mock(
             side_effect=RuntimeError("graphics failed")
         )
+        _rebind_growth_actions(service)
 
         with self.assertRaisesRegex(RuntimeError, "graphics failed"):
             service.sprout_acetyl_from_atom(0)
@@ -1508,6 +1526,7 @@ class StructureBuildServiceTest(unittest.TestCase):
         )
         service = _service_for(canvas)
         service.add_benzene_ring = Mock(return_value="ring")
+        _rebind_growth_actions(service)
 
         self.assertEqual(service.fuse_benzene_to_bond(0), "ring")
         self.assertIsNone(service.fuse_benzene_to_bond(1))
@@ -1574,6 +1593,7 @@ class StructureBuildServiceTest(unittest.TestCase):
         service = _service_for(canvas)
         service.add_ring_from_points = Mock()
         service.regular_ring_points_for_atom = Mock(return_value=None)
+        _rebind_growth_actions(service)
 
         service.sprout_regular_ring_from_atom(7, 6)
 
@@ -1585,6 +1605,7 @@ class StructureBuildServiceTest(unittest.TestCase):
         service.regular_ring_points_for_atom = Mock(
             return_value=([QPointF(0.0, 0.0), QPointF(1.0, 1.0)], [(7, 1.0, 2.0)])
         )
+        _rebind_growth_actions(service)
         service.sprout_regular_ring_from_atom(7, 6)
 
         service.add_ring_from_points.assert_called_once_with(
@@ -1622,6 +1643,7 @@ class StructureBuildServiceTest(unittest.TestCase):
         service.cyclohexane_chair_points = Mock(
             return_value=[QPointF(1.0, 2.0), QPointF(3.0, -4.0)]
         )
+        _rebind_growth_actions(service)
 
         service.fuse_regular_ring_to_bond(0, 5)
         service.fuse_chair_to_bond(0, mirrored=True)
