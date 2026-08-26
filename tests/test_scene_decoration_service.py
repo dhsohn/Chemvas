@@ -329,9 +329,7 @@ class SceneDecorationServiceTest(unittest.TestCase):
                 "chemvas.ui.transactions.scene_runtime._scene_items_snapshot",
                 side_effect=AssertionError("bulk mark add scanned the whole scene"),
             ) as scene_scan,
-            mock.patch(
-                "chemvas.ui.scene_decoration_service.emit_selection_info_for"
-            ),
+            mock.patch("chemvas.ui.scene_decoration_service.emit_selection_info_for"),
         ):
             service = _scene_decoration_service(canvas)
             for atom_id in range(200):

@@ -23,7 +23,6 @@ from chemvas.ui.scene_item_access import (
     remove_scene_item,
 )
 from chemvas.ui.scene_item_restore import create_orbital_item_from_state
-from chemvas.ui.selection_info_access import emit_selection_info_for
 from chemvas.ui.scene_item_state import (
     arrow_state_dict_for,
     mark_state_dict_for,
@@ -31,6 +30,7 @@ from chemvas.ui.scene_item_state import (
     shape_state_dict_for,
     ts_bracket_state_dict_for,
 )
+from chemvas.ui.selection_info_access import emit_selection_info_for
 from chemvas.ui.transactions.scene_item_attach import SceneItemAttachSnapshot
 from chemvas.ui.transactions.scene_runtime import (
     run_rollback_step,
