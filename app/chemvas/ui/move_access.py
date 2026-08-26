@@ -32,27 +32,16 @@ def move_atoms_for(
     rebuild_stale_bond_topology: bool = False,
 ) -> None:
     move_service = move_service_from_canvas(canvas)
-    if affected_ring_items is None:
-        move_service.move_atoms(
-            atom_ids,
-            dx,
-            dy,
-            bond_ids=bond_ids,
-            redraw_bond_ids=redraw_bond_ids,
-            update_selection=update_selection,
-            rebuild_stale_bond_topology=rebuild_stale_bond_topology,
-        )
-    else:
-        move_service.move_atoms(
-            atom_ids,
-            dx,
-            dy,
-            bond_ids=bond_ids,
-            redraw_bond_ids=redraw_bond_ids,
-            update_selection=update_selection,
-            affected_ring_items=affected_ring_items,
-            rebuild_stale_bond_topology=rebuild_stale_bond_topology,
-        )
+    kwargs: dict[str, object] = {
+        "bond_ids": bond_ids,
+        "redraw_bond_ids": redraw_bond_ids,
+        "update_selection": update_selection,
+    }
+    if affected_ring_items is not None:
+        kwargs["affected_ring_items"] = affected_ring_items
+    if rebuild_stale_bond_topology:
+        kwargs["rebuild_stale_bond_topology"] = True
+    move_service.move_atoms(atom_ids, dx, dy, **kwargs)
 
 
 def shift_selection_outlines_for(canvas, dx: float, dy: float) -> None:
