@@ -204,3 +204,22 @@ def test_read_composition_enforces_size_limit_during_the_read(
 
     with pytest.raises(ValueError, match="exceeds"):
         document_composition._read_composition(request)
+
+
+def test_compose_document_refuses_a_number_it_cannot_parse_cleanly(
+    tmp_path: Path,
+) -> None:
+    poisoned = json.dumps(_composition()).replace(
+        "{", '{"scale": 1e99999999999999999999,', 1
+    )
+    request = tmp_path / "scheme.json"
+    request.write_text(poisoned, encoding="utf-8")
+    output = tmp_path / "scheme.chemvas"
+
+    result = _run("compose-document", str(request), "--output", str(output))
+
+    assert result.returncode == 2
+    assert result.stderr.startswith("chemvas: error:")
+    assert "Traceback" not in result.stderr
+    assert result.stdout == ""
+    assert not output.exists()

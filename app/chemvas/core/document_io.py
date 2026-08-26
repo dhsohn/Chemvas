@@ -115,11 +115,7 @@ def read_exact_document(path: PathType) -> tuple[bytes, ChemvasDocument]:
     source_bytes = Path(path).read_bytes()
     try:
         payload = strict_json_loads(source_bytes)
-    except (ValueError, RecursionError, UnicodeError, ArithmeticError) as exc:
-        # ArithmeticError covers decimal.InvalidOperation: strict_json_loads
-        # parses floats as Decimal, which refuses an exponent past MAX_EMAX
-        # rather than answering inf. That is a malformed file like any other,
-        # and callers are entitled to the one exception this promises.
+    except (ValueError, RecursionError, UnicodeError) as exc:
         raise ValueError("Invalid Chemvas file.") from exc
     return source_bytes, parse_document(payload)
 

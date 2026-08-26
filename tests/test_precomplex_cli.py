@@ -795,3 +795,35 @@ def test_removed_profile_candidate_ensemble_is_rejected_on_read(
 
     with pytest.raises(ValueError, match="Invalid Chemvas file"):
         read_document(removed)
+
+
+def test_generation_refuses_a_request_number_it_cannot_parse(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    source = tmp_path / "mechanism.chemvas"
+    _write_document_with_plan(source)
+    request_path = tmp_path / "unparsable-request.json"
+    request_path.write_text(
+        '{"format":"chemvas-precomplex-request","version":2,'
+        '"scale":1e99999999999999999999}',
+        encoding="utf-8",
+    )
+    output = tmp_path / "must-not-exist.chemvas"
+
+    with pytest.raises(SystemExit) as error:
+        cli.run(
+            [
+                "generate-precomplex",
+                str(source),
+                str(request_path),
+                "--step",
+                "S01",
+                "--output",
+                str(output),
+            ]
+        )
+
+    assert error.value.code == 2
+    assert "Invalid precomplex request JSON file" in capsys.readouterr().err
+    assert not output.exists()

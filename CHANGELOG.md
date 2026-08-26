@@ -194,15 +194,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the steps for migrating a feature, and points at the rest.
 
 ### Fixed
-- Opening a document whose numbers are too large for the decimal parser now
-  reports it as an invalid file instead of raising a bare arithmetic error.
-  Reading a `.chemvas` file promises exactly two failures — the file could not
-  be read, or it is not a valid Chemvas file — but a number with an exponent
-  past the decimal limit escaped as `InvalidOperation`, which is neither. On
-  the File menu that surfaced as a generic failure; in session recovery, which
-  runs before the window exists and skips documents it cannot read, it would
-  have aborted the launch, and kept aborting it, since the recorded session is
-  only pruned after a recovery finishes.
+- Every command that reads a JSON file now reports a number too large for the
+  decimal parser as malformed input instead of raising a bare arithmetic error.
+  `strict_json_loads` parses numbers as `Decimal`, which answers an exponent
+  past its limit with `InvalidOperation` — an `ArithmeticError`, and none of
+  its nine call sites guarded against one: eight catch `ValueError` and its
+  neighbours, and one does not guard at all. So `check-layout`,
+  `compose-document`, `apply-patch`, `attach-plan` and `generate-precomplex`
+  exited with a Python traceback on input that `render-document` refused
+  cleanly with `Invalid Chemvas file.`, and the same number could escape when
+  opening an editable SVG or pasting a selection. An unrepresentable number is
+  now rejected the way a duplicate key or a `NaN` already was, so the guards
+  that were there all along cover it.
+- Session recovery no longer aborts the launch on a recorded document holding
+  such a number. Recovery runs before the event loop starts and skips documents
+  it cannot read; this release narrowed that skip from any exception to
+  `OSError` and `ValueError`, which is what would have made an arithmetic error
+  fatal there rather than merely noisy. A recorded session is only pruned once
+  a recovery finishes, so the failure would have repeated on every launch.
 - The headless commands that create a new file — `compose-document`,
   `apply-patch`, `render-document` and the calculation bundle writers — no
   longer close a file descriptor they have already handed away when the write
