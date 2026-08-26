@@ -21,3 +21,16 @@ def test_strict_json_loads_rejects_nested_duplicate_keys() -> None:
 def test_strict_json_loads_rejects_nonstandard_numbers(constant: str) -> None:
     with pytest.raises(ValueError, match="non-standard JSON number"):
         strict_json_loads(f'{{"value":{constant}}}')
+
+
+@pytest.mark.parametrize(
+    "number",
+    ["1e99999999999999999999", "-1e99999999999999999999", "1e-99999999999999999999"],
+)
+def test_strict_json_loads_rejects_numbers_it_cannot_represent(number: str) -> None:
+    # Decimal raises InvalidOperation for these, which is an ArithmeticError.
+    # Every reader guards against ValueError and its neighbours but none names
+    # ArithmeticError, so an unrepresentable number has to arrive as a
+    # ValueError or it reaches the user as a traceback.
+    with pytest.raises(ValueError, match="JSON number is out of range"):
+        strict_json_loads(f'{{"value":{number}}}')

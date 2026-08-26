@@ -153,3 +153,17 @@ def test_inspect_subprocess_does_not_import_qt(
 
     assert completed.returncode == 0, completed.stderr
     assert json.loads(completed.stdout)["component_count"] == 1
+
+
+def test_attach_plan_refuses_a_plan_number_it_cannot_parse(tmp_path: Path) -> None:
+    source = tmp_path / "source.chemvas"
+    _write_source(source)
+    plan_path = tmp_path / "plan.json"
+    plan_path.write_text('{"steps": 1e99999999999999999999}', encoding="utf-8")
+    output = tmp_path / "mechanism.chemvas"
+
+    with pytest.raises(SystemExit) as error:
+        cli.run(["attach-plan", str(source), str(plan_path), "--output", str(output)])
+
+    assert error.value.code == 2
+    assert not output.exists()

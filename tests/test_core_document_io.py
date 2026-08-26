@@ -116,11 +116,12 @@ class DocumentIOTest(unittest.TestCase):
             self.assertEqual(list(path.parent.glob(f".{path.name}.staging-*")), [])
 
     def test_reading_rejects_a_number_decimal_refuses_to_parse(self) -> None:
-        # strict_json_loads parses floats as Decimal, which raises
-        # InvalidOperation -- an ArithmeticError, not a ValueError -- for an
-        # exponent past MAX_EMAX. Session recovery reads documents before the
-        # window exists and treats ValueError as "skip this one", so anything
-        # else escaping here aborts startup.
+        # strict_json_loads parses floats as Decimal, which answers an
+        # exponent past MAX_EMAX with InvalidOperation rather than inf. The
+        # loader turns that into a ValueError; this pins that the reader keeps
+        # reporting it as an invalid file. Session recovery reads documents
+        # before the window exists and treats ValueError as "skip this one",
+        # so an arithmetic error escaping here would abort startup instead.
         payload = json.dumps(
             {
                 "type": CHEMVAS_FILE_TYPE,

@@ -255,3 +255,18 @@ def test_headless_module_imports_neither_qt_nor_rdkit() -> None:
         text=True,
     )
     assert result.returncode == 0, result.stderr
+
+
+def test_apply_patch_refuses_a_patch_number_it_cannot_parse(tmp_path: Path) -> None:
+    source = tmp_path / "source.chemvas"
+    _write_source(source)
+    patch_path = tmp_path / "patch.json"
+    patch_path.write_text(
+        '{"format":"chemvas-graph-patch","scale":1e99999999999999999999}',
+        encoding="utf-8",
+    )
+
+    with pytest.raises(SystemExit) as error:
+        cli.run(["apply-patch", str(source), str(patch_path), "--dry-run"])
+
+    assert error.value.code == 2

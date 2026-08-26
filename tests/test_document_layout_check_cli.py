@@ -216,3 +216,20 @@ def test_check_layout_reports_note_outside_sheet(tmp_path: Path) -> None:
     }
     assert report["warnings"][0]["code"] == "outside-sheet"
     assert report["warnings"][0]["items"] == [{"index": 0, "kind": "note"}]
+
+
+def test_check_layout_refuses_a_document_whose_number_cannot_be_parsed(
+    tmp_path: Path,
+) -> None:
+    source = _compose(tmp_path, notes=[])
+    poisoned = source.read_text(encoding="utf-8").replace(
+        "{", '{"scale": 1e99999999999999999999,', 1
+    )
+    source.write_text(poisoned, encoding="utf-8")
+
+    result = _run("check-layout", str(source))
+
+    assert result.returncode == 2
+    assert result.stdout == ""
+    assert "Traceback" not in result.stderr
+    assert "Invalid Chemvas file." in result.stderr
