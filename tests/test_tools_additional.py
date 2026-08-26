@@ -27,6 +27,7 @@ if QApplication is not None:
     from chemvas.domain.document import Atom, Bond, MoleculeModel
     from chemvas.features.hover import HoverState
     from chemvas.ui.benzene_tool import BenzeneTool
+    from chemvas.ui.canvas_callback_state import CanvasCallbackState
     from chemvas.ui.canvas_hover_state import hover_state_for
     from chemvas.ui.canvas_rotation_state import CanvasRotationState
     from chemvas.ui.canvas_smiles_input_state import (
@@ -34,6 +35,7 @@ if QApplication is not None:
         set_last_smiles_input_for,
     )
     from chemvas.ui.canvas_tool_settings_state import CanvasToolSettingsState
+    from chemvas.ui.canvas_window_access import set_error_callback_for
     from chemvas.ui.edit_tools import ColorTool, DeleteTool, FlipTool
     from chemvas.ui.history_commands import DeleteSceneItemsCommand, MoveItemsCommand
     from chemvas.ui.interaction_tools import MarkTool, NoteTool
@@ -189,6 +191,7 @@ class _TextCanvas:
         self.find_atom_result = None
         self.tool_settings_state = CanvasToolSettingsState(atom_symbol="")
         self.runtime_state = canvas_runtime_state(
+            callback_state=CanvasCallbackState(),
             hover_preview_state=HoverState(),
             smiles_input_state=CanvasSmilesInputState(),
             tool_settings_state=self.tool_settings_state,
@@ -766,6 +769,37 @@ class ToolsAdditionalTest(unittest.TestCase):
         self.assertEqual(command.after_next_atom_id, 4)
         self.assertEqual(command.before_smiles_input, "before")
         self.assertEqual(command.after_smiles_input, "before")
+
+    def test_text_tool_refuses_to_clear_a_non_carbon_label(self) -> None:
+        # An empty label on a heteroatom would draw a bare skeleton vertex
+        # while the model and every export still carry the element; the
+        # input is refused with an error instead.
+        canvas = _TextCanvas()
+        errors: list[str] = []
+        set_error_callback_for(canvas, errors.append)
+        tool = TextTool(canvas, context=_tool_context_for(canvas))
+
+        hover_state_for(canvas).atom_id = 2  # the oxygen
+        canvas.tool_settings_state.atom_symbol = " "
+        with mock.patch.object(
+            text_tool_module.QInputDialog, "getText", return_value=("", True)
+        ):
+            self.assertTrue(tool.on_mouse_press(_Event(QPointF(2.0, 2.0))))
+
+        self.assertEqual(canvas.label_calls, [])
+        self.assertEqual(len(errors), 1)
+        self.assertIn("non-carbon", errors[0])
+
+        # Only the exact spelling "C" gets the carbon-dot fallback, so any
+        # other spelling — including lowercase "c" — must refuse too.
+        canvas.model.atoms[2].element = "c"
+        with mock.patch.object(
+            text_tool_module.QInputDialog, "getText", return_value=("", True)
+        ):
+            self.assertTrue(tool.on_mouse_press(_Event(QPointF(2.0, 2.0))))
+
+        self.assertEqual(canvas.label_calls, [])
+        self.assertEqual(len(errors), 2)
 
     def test_text_tool_handles_dialog_cancel_and_invalid_hover_bond_fallback(
         self,
