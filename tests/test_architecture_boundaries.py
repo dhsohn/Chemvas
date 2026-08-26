@@ -4122,16 +4122,22 @@ REMOVED_PACKAGE_ROOT_EXPORTS: dict[str, tuple[str, ...]] = {
 def _package_root_surface(path: Path) -> set[str]:
     """Names a package root hands out.
 
-    That is every name it binds by importing from one of its own submodules,
-    every name it lists for lazy import, and every name in ``__all__`` --
-    ``from package import name`` works through any of the three. Names defined
-    in the package root itself and used only there are not a surface, which is
-    why this reads bindings rather than grepping for the word.
+    That is every name a module-level import binds -- relative or absolute,
+    ``from`` or plain, aliased or not -- every name it lists for lazy import,
+    and every name in ``__all__``: ``from package import name`` works through
+    any of them, whatever the import's spelling. Names defined in the package
+    root itself and used only there are not a surface, which is why this reads
+    bindings rather than grepping for the word.
     """
     surface: set[str] = set()
     for node in ast.parse(path.read_text(encoding="utf-8")).body:
-        if isinstance(node, ast.ImportFrom) and node.level >= 1:
+        if isinstance(node, ast.ImportFrom):
             surface.update(alias.asname or alias.name for alias in node.names)
+            continue
+        if isinstance(node, ast.Import):
+            surface.update(
+                alias.asname or alias.name.partition(".")[0] for alias in node.names
+            )
             continue
         targets: list[ast.expr] = []
         if isinstance(node, ast.Assign):

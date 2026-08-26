@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- The package-root surface guard now reads every module-level import binding
+  — absolute and plain imports included, not only relative ones — so a
+  removed re-export resurrected under an absolute spelling fails the guard
+  the same way a relative one always did. Test change only; no import in any
+  package root changed.
+- Dropped an uncalled palette-menu method from the panel-toolbar test
+  harness. Nothing has reached it since the production menu path went; the
+  bans that keep that path removed are untouched.
+
 ## [0.5.0] - 2026-08-26
 
 **If you import from `chemvas` in your own code, read the Removed section

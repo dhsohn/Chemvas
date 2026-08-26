@@ -78,10 +78,6 @@ class _HarnessWindow(QMainWindow):
     def _blank_icon(self) -> QIcon:
         return QIcon()
 
-    def populate_palette_menu(self, menu, callback) -> None:
-        action = menu.addAction("Black")
-        action.triggered.connect(lambda checked=False: callback("#000000"))
-
 
 def _build_tool_actions(window, tool_group) -> dict[str, QAction]:
     actions: dict[str, QAction] = {}
