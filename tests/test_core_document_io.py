@@ -714,5 +714,41 @@ class DocumentIOTest(unittest.TestCase):
             self.assertEqual(path.read_text(encoding="utf-8"), "NEW")
 
 
+class DocumentNumberBoundsTest(unittest.TestCase):
+    def test_reading_rejects_numbers_past_either_decimal_bound(self) -> None:
+        # Decimal fails in two different places. The constructor refuses an
+        # exponent it cannot represent at all; a value inside that bound but
+        # past the arithmetic context's limit constructs quietly and raises the
+        # first time it goes through an arithmetic operation -- here the abs()
+        # in the range check. Both are ArithmeticError and neither is a
+        # ValueError, so a reader that lets either through hands its caller a
+        # traceback instead of the one exception it promises.
+        payload = json.dumps(
+            {
+                "type": CHEMVAS_FILE_TYPE,
+                "version": CANVAS_FILE_VERSION,
+                "state": _canvas_state(),
+            }
+        )
+        self.assertIn("18.0", payload)
+
+        for exponent in (
+            "1e1000",
+            "1e999999",
+            "1e1000000",
+            "1e999999999",
+            "1e99999999999999999999",
+        ):
+            with self.subTest(exponent=exponent):
+                with tempfile.TemporaryDirectory() as tmp:
+                    path = Path(tmp) / "oversized.chemvas"
+                    path.write_text(
+                        payload.replace("18.0", exponent, 1), encoding="utf-8"
+                    )
+
+                    with self.assertRaisesRegex(ValueError, "Invalid Chemvas file"):
+                        read_document(path)
+
+
 if __name__ == "__main__":
     unittest.main()
