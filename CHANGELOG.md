@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- The 3D conversion path no longer exports the enantiomer of the drawn
+  molecule. The conformer that RDKit reads wedge/hash chirality from was
+  built on raw canvas coordinates, whose y axis grows downward; RDKit
+  perceives depictions y-up, so every stereocenter came out with the
+  opposite absolute configuration — silently, because the wedge-vs-hash
+  difference survives a mirror flip. The conformer now negates y exactly
+  like the MOL writer always has. This corrects XYZ export, calculation
+  artifacts (both the geometry and its MOL block), the 3D preview, and
+  the MOL-export fallback used when a drawing contains abbreviation
+  labels, which previously disagreed with the plain MOL export of the
+  same drawing. A regression test now pins the absolute configuration of
+  both routes against each other and against fixed R/S references.
+
 ### Changed
 - The package-root surface guard now reads every module-level import binding
   — absolute and plain imports included, not only relative ones — so a

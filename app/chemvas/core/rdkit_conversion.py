@@ -953,7 +953,11 @@ class RDKitConversionHelper:
             conf = Chem.Conformer(mol.GetNumAtoms())
             for atom_idx in range(mol.GetNumAtoms()):
                 x, y = coord_map.get(atom_idx, (0.0, 0.0))
-                conf.SetAtomPosition(atom_idx, (x, y, 0.0))
+                # Canvas y grows downward; RDKit perceives wedge/hash chirality
+                # from a y-up depiction (same negation the molfile writer
+                # applies), so an unflipped y would tag every stereocenter as
+                # its enantiomer.
+                conf.SetAtomPosition(atom_idx, (x, -y, 0.0))
             mol.AddConformer(conf, assignId=True)
         except Exception:
             logger.debug(

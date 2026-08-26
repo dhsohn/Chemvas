@@ -6,6 +6,7 @@ from pathlib import Path
 from types import ModuleType, SimpleNamespace
 from unittest import mock
 
+from chemvas.core.molfile import write_molfile
 from chemvas.core.rdkit_adapter import RDKitAdapter
 from chemvas.domain.atom_aliases import ATOM_ALIAS_DEFINITIONS
 from chemvas.domain.document import Bond, MoleculeModel
@@ -2166,6 +2167,46 @@ class RDKitAdapterTest(unittest.TestCase):
         self.assertIn("@", wedge_smiles)
         self.assertIn("@", hash_smiles)
         self.assertNotEqual(wedge_smiles, hash_smiles)
+
+    @unittest.skipUnless(_RealChem is not None, "RDKit is required for stereo tests")
+    def test_conversion_path_preserves_drawn_absolute_configuration(self) -> None:
+        # Wedge-vs-hash difference survives a mirror flip, so this test pins the
+        # absolute configuration itself: the conversion conformer must sit in
+        # the same y-up frame the molfile writer documents, or every drawn
+        # stereocenter exports as its enantiomer while wedge != hash stays true.
+        adapter = RDKitAdapter()
+        for style, expected_cip in (("wedge", "R"), ("hash", "S")):
+            with self.subTest(style=style):
+                model = MoleculeModel()
+                center = model.add_atom("C", 0.0, 0.0)
+                fluorine = model.add_atom("F", 1.0, 0.0)
+                chlorine = model.add_atom("Cl", -1.0, 1.0)
+                bromine = model.add_atom("Br", -1.0, -1.0)
+                iodine = model.add_atom("I", 0.0, 1.5)
+                model.add_bond(center, fluorine, 1)
+                model.add_bond(center, chlorine, 1)
+                model.add_bond(center, bromine, 1)
+                model.add_bond(center, iodine, 1)
+                model.bonds[0].style = style
+
+                conversion_mol = adapter._build_conversion_rdkit_mol(model)
+                self.assertIsNotNone(conversion_mol)
+                _RealChem.AssignStereochemistry(
+                    conversion_mol, force=True, cleanIt=True
+                )
+                conversion_cip = (
+                    conversion_mol.GetAtomWithIdx(0).GetPropsAsDict().get("_CIPCode")
+                )
+
+                molfile_mol = _RealChem.MolFromMolBlock(write_molfile(model))
+                self.assertIsNotNone(molfile_mol)
+                _RealChem.AssignStereochemistry(molfile_mol, force=True, cleanIt=True)
+                molfile_cip = (
+                    molfile_mol.GetAtomWithIdx(0).GetPropsAsDict().get("_CIPCode")
+                )
+
+                self.assertEqual(molfile_cip, expected_cip)
+                self.assertEqual(conversion_cip, expected_cip)
 
     @unittest.skipUnless(
         _RealChem is not None, "RDKit is required for charge/radical tests"
