@@ -75,23 +75,6 @@ def test_plan_restore_recovers_every_crash_session_plus_newest_clean():
     assert set(plan.prune) == {"c_old", "c_new", "clean"}
 
 
-def test_plan_restore_suppresses_clean_session_but_still_recovers_crashes():
-    # This is the startup-file case: a P1 regression would drop the crash here.
-    crash = SessionManifest(pid=1, clean_exit=False)
-    clean = SessionManifest(pid=2, clean_exit=True)
-    candidates = [("crash", crash, 100.0), ("clean", clean, 200.0)]
-
-    plan = plan_restore(
-        candidates, is_alive=lambda pid: False, include_clean_session=False
-    )
-
-    assert plan.restore == ["crash"]  # crash recovered even though a file was opened
-    assert set(plan.prune) == {
-        "crash",
-        "clean",
-    }  # clean pruned (its files are safe on disk)
-
-
 def test_plan_restore_ignores_live_sessions():
     live = SessionManifest(pid=7, clean_exit=False)
 

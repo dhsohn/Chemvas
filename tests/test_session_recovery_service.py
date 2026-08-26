@@ -69,13 +69,9 @@ class _FakeStore:
         self.saved: list = []
         self.pruned: list = []
         self.clean_exit = False
-        self.include_clean_session: bool | None = None
         self.events: list[str] = []
 
-    def consume_previous_sessions(
-        self, *, include_clean_session: bool = True
-    ) -> RestoreResult:
-        self.include_clean_session = include_clean_session
+    def consume_previous_sessions(self) -> RestoreResult:
         return self._result
 
     def begin(self) -> None:
@@ -178,15 +174,6 @@ def test_restore_gives_each_doc_its_own_window_when_first_is_occupied():
     service.restore_previous(first)
 
     assert [canvas.window for canvas in doc_service.opened] == spawned  # never `first`
-
-
-def test_restore_previous_forwards_include_clean_session():
-    store = _FakeStore(RestoreResult())
-    service, _ = _service(store)
-
-    service.restore_previous(_FakeWindow("first"), include_clean_session=False)
-
-    assert store.include_clean_session is False
 
 
 def test_restore_previous_is_silent_when_nothing_to_recover():

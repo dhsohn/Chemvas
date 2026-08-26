@@ -77,20 +77,15 @@ class SessionRecoveryService:
         self._timer: QTimer | None = None
         self._pending_prune: list[str] = []
 
-    def restore_previous(
-        self, first_window, *, include_clean_session: bool = True
-    ) -> int:
+    def restore_previous(self, first_window) -> int:
         """Reopen the previous session's documents, reusing ``first_window``'s
         blank tab for the first one. Returns the count of recovered unsaved
         documents (a crash), which is also surfaced in the status bar.
 
-        ``include_clean_session`` is set False when the launch already has a
-        startup file: crashed work is still recovered, but a cleanly-closed
-        workspace is not dragged back on top of the requested document.
+        This runs on every launch; a startup file is then opened on top of the
+        restored workspace through the duplicate-open guard.
         """
-        result = self._store.consume_previous_sessions(
-            include_clean_session=include_clean_session
-        )
+        result = self._store.consume_previous_sessions()
         # Prune the consumed source sessions only after start() re-snapshots the
         # restored docs, so a crash mid-restore keeps the recoverable copies.
         self._pending_prune = result.prune_ids

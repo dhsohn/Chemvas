@@ -99,7 +99,6 @@ def plan_restore(
     candidates: Iterable[tuple[str, SessionManifest, float]],
     *,
     is_alive: Callable[[int], bool],
-    include_clean_session: bool = True,
 ) -> RestorePlan:
     """Decide which previous sessions to reopen and which to delete.
 
@@ -107,11 +106,10 @@ def plan_restore(
     sessions other than our own (``order_key`` sorts most-recent-last).
 
     *Every* crashed session (unclean + dead pid) is restored so unsaved work is
-    never pruned unrecovered — even when the user launched with a file. At most
-    one *clean* session is reopened (the newest, for last-session continuity),
-    and only when ``include_clean_session`` is set (a startup file suppresses it
-    so opening a document does not drag the whole previous workspace back).
-    Every consumable session is pruned; a live instance's session is untouched.
+    never pruned unrecovered, and at most one *clean* session is reopened (the
+    newest, for last-session continuity) — on every launch, including one that
+    opens a startup file on top of the restored workspace. Every consumable
+    session is pruned; a live instance's session is untouched.
     """
     consumable = [
         (sid, manifest, key)
@@ -122,15 +120,14 @@ def plan_restore(
     restore_items = [
         (sid, key) for (sid, manifest, key) in consumable if not manifest.clean_exit
     ]
-    if include_clean_session:
-        clean = [
-            (sid, manifest, key)
-            for (sid, manifest, key) in consumable
-            if manifest.clean_exit
-        ]
-        if clean:
-            sid, _manifest, key = max(clean, key=lambda item: item[2])
-            restore_items.append((sid, key))
+    clean = [
+        (sid, manifest, key)
+        for (sid, manifest, key) in consumable
+        if manifest.clean_exit
+    ]
+    if clean:
+        sid, _manifest, key = max(clean, key=lambda item: item[2])
+        restore_items.append((sid, key))
     restore_items.sort(key=lambda item: item[1], reverse=True)
     return RestorePlan(restore=[sid for (sid, _key) in restore_items], prune=prune)
 

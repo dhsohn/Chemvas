@@ -78,7 +78,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   both routes against each other and against fixed R/S references.
 
 ### Changed
-- The package-root surface guard now reads every module-level import binding
+- Removed the never-wired startup-file mode from the session-restore
+  layers. Three layers of docstrings and tests described a policy where
+  launching with a file suppresses reopening the cleanly-closed previous
+  workspace — but no production caller ever used it, and the launch path
+  has always restored the full workspace and then opened the requested
+  file on top, as its own comment says is intended. Launch behavior is
+  unchanged; the dead parameter, its docstring claims, and its pinning
+  tests are gone, so the documentation now says what the app does.
   — absolute and plain imports included, not only relative ones — so a
   removed re-export resurrected under an absolute spelling fails the guard
   the same way a relative one always did. Test change only; no import in any
