@@ -38,6 +38,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   last consumer when the utility icon accessors went; the twelfth, "select",
   turned out never to have had one — the select tool's accessor has always
   drawn the move glyph. A boundary test pins all twelve as removed.
+- Folded twenty-six per-module bans on a vocabulary this repository never had
+  into one repo-wide architecture rule. Test-only change; no production code
+  moved and no rule lost a name. Eleven spellings of "ask the canvas for a
+  service or a context by name" — `canvas_service_for` with its optional and
+  runtime variants, `resolve_canvas_graph_service`, the four context-cache
+  lookups, `tool_context_for_canvas` and `canvas_instance_attrs` — were banned
+  one target module at a time. Every blob in every ref was tokenised: not one
+  of the eleven has ever been written anywhere in this repository, in any
+  spelling, outside the rule file that bans them. Twenty-six copies of a ban on
+  a name that does not exist are twenty-six ways to miss the twenty-seventh
+  module, so the ban is repo-wide now. Five rules that carried nothing else are
+  gone into it, one of them a call-shape rule the word-anchored ban strictly
+  subsumes; the other twenty-one keep the alternatives that guard something,
+  and the context-cache rule keeps its check that the deleted module stays
+  deleted.
+  Verified by replaying the whole rule set before and after against a scratch
+  copy of the tree, with no failure either way; by pulling every banned
+  identifier mechanically out of both versions and confirming all 220 are still
+  banned, now at 256 sites instead of 276; by planting each of the eleven names
+  in each of the 49 name-and-module combinations the old rules covered and
+  confirming old and new both fail; by planting each of them in a module no old
+  rule named, where `resolve_canvas_graph_service` and `tool_context_for_canvas`
+  slip past every old rule and fail the new one; by planting a violation of what
+  each of the twenty edited rules still guards and confirming each still fails;
+  and, for the twenty-first, by resurrecting the deleted context-cache module.
+  The file holds forty more identifiers with the same history of never having
+  existed. They stay: each sits in a rule alongside names that are real, and
+  splitting the ghost half out would break a rule that reads as one thought.
 - Replaced every lambda in the structure-growth action record with the bound
   method it wrapped, finishing a conversion that had stopped at seven of the
   seventeen fields. Internal change only — every field forwarded its

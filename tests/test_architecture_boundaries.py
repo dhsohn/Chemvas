@@ -232,8 +232,7 @@ def test_canvas_view_keeps_hit_testing_and_selection_wrappers_removed() -> None:
 def test_canvas_view_event_overrides_route_to_attached_service_ports() -> None:
     canvas_view = APP_ROOT / "chemvas" / "ui" / "canvas_view.py"
     pattern = re.compile(
-        r"\bcanvas_service_for\b"
-        r"|\bfrom ui\.canvas_service_access\b"
+        r"\bfrom ui\.canvas_service_access\b"
         r"|\bself\.services\."
         r"|getattr\(\s*self\s*,\s*\"services\""
         r"|\binput_controller_for_view\b"
@@ -592,9 +591,7 @@ def test_main_window_context_page_state_service_uses_injected_services_and_publi
 
 def test_main_window_ports_use_services_bundle_accessor_without_string_lookup() -> None:
     path = APP_ROOT / "chemvas" / "ui" / "main_window_ports.py"
-    pattern = re.compile(
-        r"\bcanvas_service_for\b|canvas_service_for\(|\bwindow\.canvas\b"
-    )
+    pattern = re.compile(r"\bwindow\.canvas\b")
 
     assert _matching_lines(pattern, [path]) == []
 
@@ -739,8 +736,7 @@ def test_main_window_canvas_tab_ui_service_uses_injected_close_port() -> None:
 def test_main_window_text_style_service_uses_injected_style_controller_port() -> None:
     service = APP_ROOT / "chemvas" / "ui" / "main_window_text_style_service.py"
     pattern = re.compile(
-        r"\bcanvas_service_for\b"
-        r"|\bwindow\.canvas\b"
+        r"\bwindow\.canvas\b"
         r"|style_controller=None"
     )
 
@@ -750,8 +746,7 @@ def test_main_window_text_style_service_uses_injected_style_controller_port() ->
 def test_main_window_tool_state_service_uses_injected_tool_mode_port() -> None:
     service = APP_ROOT / "chemvas" / "ui" / "main_window_tool_state_service.py"
     pattern = re.compile(
-        r"\bcanvas_service_for\b"
-        r"|\bwindow\.canvas\b"
+        r"\bwindow\.canvas\b"
         r"|\bwindow\.tool_actions\b"
         r"|\bwindow\.refresh_status_context\("
         r"|\bwindow\.show_status_message\("
@@ -765,8 +760,7 @@ def test_main_window_tool_state_service_uses_injected_tool_mode_port() -> None:
 def test_main_window_tool_action_service_uses_injected_tool_mode_port() -> None:
     service = APP_ROOT / "chemvas" / "ui" / "main_window_tool_action_service.py"
     pattern = re.compile(
-        r"\bcanvas_service_for\b"
-        r"|\bwindow\.canvas\b"
+        r"\bwindow\.canvas\b"
         r"|\bwindow\.icon_factory\b"
         r"|\bwindow\.set_tool_with_status\("
         r"|\bwindow\.set_bond_style\("
@@ -781,8 +775,7 @@ def test_main_window_tool_action_service_uses_injected_tool_mode_port() -> None:
 def test_main_window_tool_routing_service_uses_injected_canvas_ports() -> None:
     service = APP_ROOT / "chemvas" / "ui" / "main_window_tool_routing_service.py"
     pattern = re.compile(
-        r"\bcanvas_service_for\b"
-        r"|\btool_for_name_for\b"
+        r"\btool_for_name_for\b"
         r"|\bselected_scene_items_for\b"
         r"|\bwindow\.canvas\b"
         r"|\bwindow\.icon_factory\b"
@@ -803,8 +796,7 @@ def test_main_window_context_bar_pages_use_injected_canvas_ports() -> None:
         APP_ROOT / "chemvas" / "ui" / "main_window_context_bar_pages.py",
     ]
     pattern = re.compile(
-        r"\bcanvas_service_for\b"
-        r"|\bwindow\.canvas\b"
+        r"\bwindow\.canvas\b"
         r"|\bwindow\.icon_factory\b"
         r"|\bwindow\.activate_bond_style_tool\("
         r"|\bwindow\.set_bond_length\("
@@ -842,9 +834,7 @@ def test_main_window_status_and_context_bar_use_active_tool_port() -> None:
 def test_main_window_active_canvas_ui_service_uses_injected_collaborators() -> None:
     service = APP_ROOT / "chemvas" / "ui" / "main_window_active_canvas_ui_service.py"
     pattern = re.compile(
-        r"\bcanvas_service_for\b"
-        r"|canvas_service_for\([^,\n]+,\s*\"tool_mode_controller\""
-        r"|\bwindow\.canvas\b"
+        r"\bwindow\.canvas\b"
         r"|\bwindow\.sync_tool_actions_from_canvas\(\)"
         r"|selection_info_callback=window\.handle_selection_info"
         r"|tool_change_callback=window\.sync_tool_actions_from_canvas"
@@ -920,9 +910,7 @@ def test_preview_3d_renderer_delegates_molecule_scene_drawing() -> None:
 def test_main_window_ui_assembly_service_uses_injected_canvas_service_ports() -> None:
     service = APP_ROOT / "chemvas" / "ui" / "main_window_ui_assembly_service.py"
     pattern = re.compile(
-        r"\bcanvas_service_for\b"
-        r"|\bcanvas_runtime_service_for\b"
-        r"|(?:scene_transform_controller|insert_controller|tool_mode_controller)=None"
+        r"(?:scene_transform_controller|insert_controller|tool_mode_controller)=None"
     )
 
     assert _matching_lines(pattern, [service]) == []
@@ -1046,8 +1034,7 @@ def test_main_window_document_action_service_uses_injected_canvas_service_ports(
     services = APP_ROOT / "chemvas" / "bootstrap" / "main_window_services.py"
     source = service.read_text(encoding="utf-8")
     pattern = re.compile(
-        r"\bcanvas_service_for\b"
-        r"|(?:document_session_service|geometry_controller)=None"
+        r"(?:document_session_service|geometry_controller)=None"
         r"|\bwindow\.canvas\b"
         r"|\bwindow\.save_canvas_as\("
         r"|\bwindow\.save_canvas_to_path\("
@@ -1179,23 +1166,11 @@ def test_history_collaborator_services_use_injected_history_port() -> None:
         APP_ROOT / "chemvas" / "ui" / "tool_context.py",
     ]
     pattern = re.compile(
-        r"\bcanvas_runtime_service_for\b"
-        r"|\bhistory_service\s+or\s+"
+        r"\bhistory_service\s+or\s+"
         r"|\bself\.history\s+or\s+"
     )
 
     assert _matching_lines(pattern, paths) == []
-
-
-def test_access_helpers_do_not_repeat_default_private_legacy_names_at_call_sites() -> (
-    None
-):
-    pattern = re.compile(
-        r"\b(?:canvas_service_for|canvas_context_for)\([^,\n]+,\s*"
-        r"\"(?P<name>[A-Za-z0-9_]+)\",\s*\"_(?P=name)\""
-    )
-
-    assert _matching_lines(pattern, _app_python_files()) == []
 
 
 def test_production_context_factories_use_default_public_context_keys() -> None:
@@ -1417,8 +1392,31 @@ def test_scene_item_access_delegates_scene_storage_to_scene_state() -> None:
     assert _matching_lines(forbidden, [access]) == []
 
 
-def test_required_canvas_service_lookup_helper_removed_from_production_code() -> None:
-    pattern = re.compile(r"\bcanvas_service_for\b")
+def test_production_code_does_not_resolve_collaborators_by_canvas_lookup() -> None:
+    """No module asks the canvas for a service or a context by name.
+
+    Eleven spellings of that idea were banned one target module at a time,
+    across twenty-six rules. None of these names has ever been written anywhere
+    in this repository's history -- they only ever appeared inside this test
+    file -- so a repo-wide ban is the honest shape: it covers every module the
+    per-module copies named and every module added since, which they did not.
+
+    ``canvas_services_for``, the resolver that does exist, is a different rule
+    with its own exemptions.
+    """
+    pattern = re.compile(
+        r"\bcanvas_service_for\b"
+        r"|\boptional_canvas_service_for\b"
+        r"|\bcanvas_runtime_service_for\b"
+        r"|\boptional_canvas_runtime_service_for\b"
+        r"|\bresolve_canvas_graph_service\b"
+        r"|\bcanvas_context_for\b"
+        r"|\bcanvas_context_cache_for\b"
+        r"|\bcontext_cache_for\b"
+        r"|\bruntime_context_for\b"
+        r"|\btool_context_for_canvas\b"
+        r"|\bcanvas_instance_attrs\b"
+    )
 
     assert _matching_lines(pattern, _app_python_files()) == []
 
@@ -1460,13 +1458,7 @@ def test_move_controller_collaborators_do_not_lookup_canvas_services() -> None:
         APP_ROOT / "chemvas" / "ui" / "atom_label_service.py",
         APP_ROOT / "chemvas" / "ui" / "selection_rotation_controller.py",
     ]
-    pattern = re.compile(
-        r"\bdef _move_controller\b"
-        r"|\b_move_controller\("
-        r"|canvas_service_for\([^,\n]+,\s*\"move_controller\""
-        r"|\bresolve_canvas_graph_service\b"
-        r"|canvas_service_for\([^,\n]+,\s*\"canvas_graph_service\""
-    )
+    pattern = re.compile(r"\bdef _move_controller\b|\b_move_controller\(")
 
     assert _matching_lines(pattern, paths) == []
 
@@ -1527,7 +1519,7 @@ def test_hover_refresh_consumers_do_not_lookup_legacy_refresh_helpers() -> None:
 def test_hover_controller_uses_injected_collaborators_without_service_lookup() -> None:
     module = APP_ROOT / "chemvas" / "ui" / "hover.py"
     pattern = re.compile(
-        r"\b(?:canvas_services_for|canvas_service_for|optional_canvas_service_for)\b"
+        r"\bcanvas_services_for\b"
         r"|getattr\([^,\n]+,\s*\"services\""
         r"|\b(?:selection_controller|hit_testing_service|insert_controller|"
         r"scene_decoration_build_service|mark_scene_service|"
@@ -1553,11 +1545,7 @@ def test_mutation_services_use_injected_graph_service() -> None:
         APP_ROOT / "chemvas" / "ui" / "canvas_bond_mutation_service.py",
         APP_ROOT / "chemvas" / "ui" / "canvas_color_mutation_service.py",
     ]
-    pattern = re.compile(
-        r"\bresolve_canvas_graph_service\b"
-        r"|canvas_service_for\([^,\n]+,\s*\"canvas_graph_service\""
-        r"|graph_service=None"
-    )
+    pattern = re.compile(r"graph_service=None")
 
     assert _matching_lines(pattern, paths) == []
 
@@ -1572,9 +1560,7 @@ def test_graph_collaborator_services_require_explicit_graph_service() -> None:
         APP_ROOT / "chemvas" / "ui" / "selection_rotation_controller.py",
     ]
     pattern = re.compile(
-        r"\bresolve_canvas_graph_service\b"
-        r"|canvas_service_for\([^,\n]+,\s*\"canvas_graph_service\""
-        r"|graph_service=None"
+        r"graph_service=None"
         r"|if self\.graph_service is None"
     )
 
@@ -1902,10 +1888,8 @@ def test_tool_implementations_use_tool_context_for_canvas_ports() -> None:
         APP_ROOT / "chemvas" / "ui" / "text_tool.py",
     ]
     pattern = re.compile(
-        r"\bcanvas_service_for\b"
-        r"|\bselected_scene_items_for\b"
+        r"\bselected_scene_items_for\b"
         r"|\bself\.canvas\.setDragMode\b"
-        r"|canvas_service_for\([^,\n]+,\s*\"(?:canvas_color_mutation_service|tool_mode_controller)\""
     )
 
     assert _matching_lines(pattern, paths) == []
@@ -1991,11 +1975,7 @@ def test_selection_graph_services_use_injected_graph_service() -> None:
         APP_ROOT / "chemvas" / "ui" / "selection_outline_service.py",
         APP_ROOT / "chemvas" / "ui" / "selection_structure_service.py",
     ]
-    pattern = re.compile(
-        r"\bresolve_canvas_graph_service\b"
-        r"|canvas_service_for\([^,\n]+,\s*\"canvas_graph_service\""
-        r"|graph_service=None"
-    )
+    pattern = re.compile(r"graph_service=None")
 
     assert _matching_lines(pattern, paths) == []
 
@@ -2595,7 +2575,6 @@ def test_structure_build_service_delegates_bond_building() -> None:
         r"|\brecord_bond_update_for\b"
         r"|\bbond_state_dict\b"
         r"|\bmove_controller_for\b"
-        r"|\bresolve_canvas_graph_service\b"
         r"|graph_service=None"
     )
 
@@ -2608,7 +2587,6 @@ def test_structure_bond_build_service_uses_injected_hit_testing_service() -> Non
         r"\bcanvas_hit_testing_service_for\b"
         r"|\bmove_controller_for\b"
         r"|\bdef find_atom_near\b"
-        r"|\bresolve_canvas_graph_service\b"
         r"|graph_service=None"
     )
 
@@ -3052,12 +3030,6 @@ def test_perspective_tool_controller_requires_injected_tool_context() -> None:
     assert "context or" not in source
 
 
-def test_production_code_does_not_use_canvas_instance_attrs_helper() -> None:
-    pattern = re.compile(r"\bcanvas_instance_attrs\b")
-
-    assert _matching_lines(pattern, _app_python_files()) == []
-
-
 def test_canvas_service_access_does_not_use_dynamic_private_attr_fallbacks() -> None:
     service_access = APP_ROOT / "chemvas" / "ui" / "canvas_service_access.py"
     pattern = re.compile(
@@ -3100,13 +3072,7 @@ def test_history_service_accessor_does_not_accept_direct_canvas_aliases() -> Non
 
 
 def test_generic_canvas_context_cache_is_removed() -> None:
-    removed_cache = APP_ROOT / "chemvas" / "ui" / "canvas_context_cache.py"
-    pattern = re.compile(
-        r"\bcanvas_context_cache_for\b|\bcanvas_context_for\b|\bcontext_cache_for\b|\bruntime_context_for\b"
-    )
-
-    assert not removed_cache.exists()
-    assert _matching_lines(pattern, _app_python_files()) == []
+    assert not (APP_ROOT / "chemvas" / "ui" / "canvas_context_cache.py").exists()
 
 
 def test_canvas_runtime_state_attach_does_not_mirror_runtime_services_to_canvas() -> (
@@ -3116,20 +3082,6 @@ def test_canvas_runtime_state_attach_does_not_mirror_runtime_services_to_canvas(
     pattern = re.compile(r"\bcanvas\.(?:history_service|contexts)\s*=")
 
     assert _matching_lines(pattern, [runtime_state]) == []
-
-
-def test_optional_canvas_service_lookup_helper_removed_from_production_code() -> None:
-    pattern = re.compile(r"\boptional_canvas_service_for\b")
-
-    assert _matching_lines(pattern, _app_python_files()) == []
-
-
-def test_runtime_service_lookup_helpers_removed_from_production_code() -> None:
-    pattern = re.compile(
-        r"\b(?:optional_canvas_runtime_service_for|canvas_runtime_service_for)\b"
-    )
-
-    assert _matching_lines(pattern, _app_python_files()) == []
 
 
 def test_production_code_does_not_store_service_collaborators_as_private_fields() -> (
@@ -3366,7 +3318,6 @@ def test_tool_base_does_not_read_canvas_services_directly() -> None:
         r"\bgetattr\(\s*canvas\s*,\s*\"services\""
         r"|\bcanvas\.services\b"
         r"|\bToolContext\("
-        r"|\btool_context_for_canvas\b"
     )
 
     assert _matching_lines(pattern, [tool_base]) == []
