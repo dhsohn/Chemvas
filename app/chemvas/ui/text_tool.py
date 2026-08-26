@@ -16,6 +16,7 @@ from chemvas.ui.atom_label_access import add_or_update_atom_label
 from chemvas.ui.canvas_hover_state import hover_state_for
 from chemvas.ui.canvas_model_access import atom_for_id, model_for, next_atom_id_for
 from chemvas.ui.canvas_smiles_input_state import last_smiles_input_for
+from chemvas.ui.canvas_window_access import notify_error_for
 from chemvas.ui.renderer_style_access import bond_length_px_for
 from chemvas.ui.scene_item_state import atom_state_dict_for
 from chemvas.ui.structure_mutation_access import add_atom_for
@@ -75,6 +76,20 @@ class TextTool(Tool):
             if not ok:
                 return True
             text = normalize_text_symbol(text)
+        if atom_id is not None and not text and existing_element != "C":
+            # An empty label would leave this atom drawn as a bare skeleton
+            # vertex while the model and every export still carry the
+            # element — the drawing and the chemistry would silently
+            # disagree. Refuse it like other unrepresentable input. The
+            # match is exact because the carbon-dot fallback that keeps a
+            # cleared atom findable is exact too: any other spelling would
+            # clear to nothing.
+            notify_error_for(
+                self.canvas,
+                "Cannot hide the symbol of a non-carbon atom. Enter C to "
+                "make it carbon, or delete the atom instead.",
+            )
+            return True
         created_atom = False
         if atom_id is None:
             if not text:

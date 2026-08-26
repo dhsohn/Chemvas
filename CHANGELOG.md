@@ -8,6 +8,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Fixed
+- The text tool refuses to clear the symbol of a non-carbon atom. Deleting
+  the prefilled symbol in the Atom Label dialog removed the label item but
+  kept the element, so the drawing showed a bare skeleton vertex —
+  indistinguishable from carbon — while SMILES, MOL, and every other
+  export still carried the heteroatom. The empty input now fails with a
+  message; entering C converts the atom, and clearing the label of a
+  carbon atom hides it exactly as before.
 - Hash (dashed stereo) bonds no longer keep a frozen mark count after a
   gesture that changed their length. Dragging or rotating a selection
   refreshes boundary bonds in place, deliberately reusing the existing
