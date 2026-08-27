@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.1] - 2026-08-27
+
+Bug fixes only — no name on the public import surface changed. The one
+change importers can feel is a narrowed signature, called out under
+Changed.
+
 ### Fixed
 - The text tool refuses to clear the symbol of a non-carbon atom. Deleting
   the prefilled symbol in the Atom Label dialog removed the label item but
@@ -85,7 +91,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   has always restored the full workspace and then opened the requested
   file on top, as its own comment says is intended. Launch behavior is
   unchanged; the dead parameter, its docstring claims, and its pinning
-  tests are gone, so the documentation now says what the app does.
+  tests are gone, so the documentation now says what the app does. If you
+  import `plan_restore` from `chemvas.features.session`, note that its
+  `include_clean_session` parameter is gone — passing it now raises
+  `TypeError`.
+- The package-root surface guard now reads every module-level import binding
   — absolute and plain imports included, not only relative ones — so a
   removed re-export resurrected under an absolute spelling fails the guard
   the same way a relative one always did. Test change only; no import in any
@@ -1026,7 +1036,8 @@ housekeeping.
   `.chemvas` document type (double-clicking a file opens it in Chemvas), and a
   Linux `.desktop` entry with an `application/x-chemvas` MIME type.
 
-[Unreleased]: https://github.com/dhsohn/Chemvas/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/dhsohn/Chemvas/compare/v0.5.1...HEAD
+[0.5.1]: https://github.com/dhsohn/Chemvas/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/dhsohn/Chemvas/compare/v0.4.1...v0.5.0
 [0.4.1]: https://github.com/dhsohn/Chemvas/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/dhsohn/Chemvas/compare/v0.3.0...v0.4.0
