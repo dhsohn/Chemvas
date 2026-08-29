@@ -164,6 +164,13 @@ mypy_path = "app"
 files = ["app/chemvas"]
 warn_unused_ignores = true
 check_untyped_defs = true
+# These four cost nothing to hold everywhere: the legacy ``chemvas.core`` and
+# ``chemvas.ui`` packages already satisfy them. Keeping them project-wide means
+# a new package inherits them instead of waiting to be listed below.
+disallow_subclassing_any = true
+extra_checks = true
+implicit_reexport = false
+strict_equality = true
 
 [[tool.mypy.overrides]]
 module = ["rdkit", "rdkit.*"]
@@ -182,13 +189,9 @@ module = [
 ]
 disallow_any_generics = true
 disallow_incomplete_defs = true
-disallow_subclassing_any = true
 disallow_untyped_calls = true
 disallow_untyped_decorators = true
 disallow_untyped_defs = true
-extra_checks = true
-implicit_reexport = false
-strict_equality = true
 warn_return_any = true
 
 # chemvas.core.rdkit_adapter carries a type: ignore for rdkit-stubs' missing
