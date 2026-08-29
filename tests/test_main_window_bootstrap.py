@@ -11,7 +11,6 @@ from chemvas.ui.main_window_ports import preview_for_window, services_for_window
 from chemvas.ui.main_window_state import MainWindowState
 from chemvas.ui.main_window_tab_references import MainWindowTabReferences
 from chemvas.ui.main_window_ui_references import MainWindowUiReferences
-
 from tests.runtime_services import canvas_runtime_services
 
 

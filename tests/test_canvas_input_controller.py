@@ -34,7 +34,6 @@ if QApplication is not None:
     )
     from chemvas.ui.input_view_access import input_view_state_for
     from chemvas.ui.input_view_state import InputViewState
-
     from tests.runtime_state import canvas_runtime_state
 
 

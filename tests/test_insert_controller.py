@@ -2,6 +2,8 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
+from PyQt6.QtCore import QPointF, QRectF
+
 from chemvas.core.history import (
     AddAtomsCommand,
     AddBondCommand,
@@ -41,8 +43,6 @@ from chemvas.ui.history_commands import AddSceneItemsCommand, DeleteSceneItemsCo
 from chemvas.ui.insert_controller import InsertController
 from chemvas.ui.insert_smiles_service import MAX_SMILES_INPUT_LENGTH
 from chemvas.ui.sheet_setup_state import SheetSetupState, sheet_setup_state_for
-from PyQt6.QtCore import QPointF, QRectF
-
 from tests.runtime_services import canvas_runtime_services
 from tests.runtime_state import canvas_runtime_state
 

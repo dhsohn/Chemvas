@@ -4,8 +4,9 @@ from types import SimpleNamespace
 from unittest import mock
 
 import pytest
-from chemvas.ui.main_window_status_service import MainWindowStatusService
 from PyQt6.QtWidgets import QApplication, QMainWindow
+
+from chemvas.ui.main_window_status_service import MainWindowStatusService
 
 
 @pytest.fixture(scope="module")

@@ -57,7 +57,6 @@ if QApplication is not None:
     )
     from chemvas.ui.scene_item_state import note_state_dict_for
     from chemvas.ui.structure_mutation_access import add_benzene_ring_for
-
     from tests.canvas_factory import build_canvas_view
 
 

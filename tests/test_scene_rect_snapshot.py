@@ -5,6 +5,14 @@ import pytest
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
+from PyQt6.QtCore import QRectF
+from PyQt6.QtWidgets import (
+    QApplication,
+    QGraphicsRectItem,
+    QGraphicsScene,
+    QGraphicsView,
+)
+
 from chemvas.ui.canvas_scene_items_state import CanvasSceneItemsState
 from chemvas.ui.transactions.scene_item_attach import (
     SceneItemAttachPorts,
@@ -23,14 +31,6 @@ from chemvas.ui.transactions.scene_runtime import (
     capture_scene_rect_snapshot,
     release_scene_rect_snapshot,
 )
-from PyQt6.QtCore import QRectF
-from PyQt6.QtWidgets import (
-    QApplication,
-    QGraphicsRectItem,
-    QGraphicsScene,
-    QGraphicsView,
-)
-
 from tests.runtime_state import canvas_runtime_state
 
 

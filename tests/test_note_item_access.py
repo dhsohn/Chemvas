@@ -18,7 +18,6 @@ from chemvas.ui.note_item_access import (
     committed_note_text_for,
     set_committed_note_text_for,
 )
-
 from tests.runtime_services import canvas_runtime_services
 
 

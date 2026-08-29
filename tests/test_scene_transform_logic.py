@@ -23,7 +23,6 @@ if QApplication is not None:
         group_items_for_flip_transform,
     )
     from chemvas.ui.scene_flip_state import flip_scene_item_state
-
     from tests.test_scene_ops_controller import (
         _FakeCanvas,
         _make_note_item,

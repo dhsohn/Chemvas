@@ -13,7 +13,6 @@ from chemvas.ui.canvas_atom_graphics_state import (
     set_atom_items_for,
     visible_atom_item_for,
 )
-
 from tests.runtime_state import canvas_runtime_state
 
 

@@ -1,11 +1,12 @@
 from __future__ import annotations
 
+from PyQt6.QtCore import QRectF
+
 from chemvas.ui.preview_3d_layout import (
     preview_footer_height,
     preview_footer_item_rects,
     preview_layout_rects,
 )
-from PyQt6.QtCore import QRectF
 
 
 def test_preview_footer_height_uses_row_minimum_and_gap() -> None:

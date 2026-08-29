@@ -1,11 +1,12 @@
 import unittest
 
+from PyQt6.QtCore import QPointF
+
 from chemvas.domain.document import Bond
 from chemvas.features.insertion import (
     point_inside_any_ring,
     ring_polygon_points_for_bond,
 )
-from PyQt6.QtCore import QPointF
 
 
 class _FakePolygon:

@@ -2,6 +2,8 @@ import unittest
 from types import SimpleNamespace
 from unittest import mock
 
+from PyQt6.QtCore import QPointF
+
 from chemvas.core.history import RestoreOutcome
 from chemvas.domain.document import Atom, Bond, MoleculeModel
 from chemvas.features.insertion import (
@@ -45,8 +47,6 @@ from chemvas.ui.structure_insert_access import (
     add_insert_ring_from_points_for,
     rollback_insert_mutation_for,
 )
-from PyQt6.QtCore import QPointF
-
 from tests.runtime_services import canvas_runtime_services
 from tests.runtime_state import canvas_runtime_state
 

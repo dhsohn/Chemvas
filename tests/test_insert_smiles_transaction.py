@@ -17,7 +17,6 @@ from chemvas.ui.canvas_smiles_input_state import (
 )
 from chemvas.ui.history_commands import DeleteSceneItemsCommand
 from chemvas.ui.insert_smiles_transaction import SmilesLoadTransactionBuilder
-
 from tests.runtime_state import canvas_runtime_state
 
 

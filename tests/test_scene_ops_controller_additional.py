@@ -22,7 +22,6 @@ if QApplication is not None:
         flip_bounds_for_item,
         flip_center_for_selection,
     )
-
     from tests.test_scene_ops_controller import (
         _FakeCanvas,
         _make_note_item,

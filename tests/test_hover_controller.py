@@ -9,13 +9,6 @@ import pytest
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from chemvas.domain.document import MoleculeModel
-from chemvas.features.hover import HoverState
-from chemvas.features.selection import StructureHit
-from chemvas.ui.canvas_insert_state import CanvasInsertState
-from chemvas.ui.canvas_tool_settings_state import CanvasToolSettingsState
-from chemvas.ui.hover import HoverController, build_hover_controller
-from chemvas.ui.sheet_setup_state import SheetSetupState
 from PyQt6.QtCore import QPointF, QRectF
 from PyQt6.QtWidgets import (
     QApplication,
@@ -25,6 +18,14 @@ from PyQt6.QtWidgets import (
     QGraphicsScene,
     QGraphicsTextItem,
 )
+
+from chemvas.domain.document import MoleculeModel
+from chemvas.features.hover import HoverState
+from chemvas.features.selection import StructureHit
+from chemvas.ui.canvas_insert_state import CanvasInsertState
+from chemvas.ui.canvas_tool_settings_state import CanvasToolSettingsState
+from chemvas.ui.hover import HoverController, build_hover_controller
+from chemvas.ui.sheet_setup_state import SheetSetupState
 
 
 @pytest.fixture(scope="module", autouse=True)

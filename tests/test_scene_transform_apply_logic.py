@@ -17,7 +17,6 @@ if QApplication is not None:
         apply_component_flip_transform,
         apply_standalone_flip_transform,
     )
-
     from tests.test_scene_ops_controller import _make_rect_item
 
 

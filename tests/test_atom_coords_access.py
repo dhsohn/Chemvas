@@ -12,7 +12,6 @@ from chemvas.ui.atom_coords_access import (
     set_atom_coords_3d_for_id,
 )
 from chemvas.ui.canvas_rotation_state import CanvasRotationState
-
 from tests.runtime_state import canvas_runtime_state
 
 

@@ -1,6 +1,8 @@
 from types import SimpleNamespace
 from unittest import mock
 
+from PyQt6.QtCore import QRectF
+
 from chemvas.ui.input_view_access import (
     device_pixel_ratio_for,
     focus_canvas_for,
@@ -13,7 +15,6 @@ from chemvas.ui.input_view_access import (
     update_viewport_for,
     viewport_center_scene_pos_for,
 )
-from PyQt6.QtCore import QRectF
 
 
 class _Rect:

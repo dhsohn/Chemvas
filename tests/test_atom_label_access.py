@@ -2,7 +2,6 @@ import unittest
 from types import SimpleNamespace
 
 from chemvas.ui.atom_label_access import add_or_update_atom_label, clear_atom_label_for
-
 from tests.runtime_services import canvas_runtime_services
 
 

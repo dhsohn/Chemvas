@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from PyQt6.QtGui import QColor
+
 from chemvas.domain.document import MoleculeModel
 from chemvas.features.insertion import Molecule3DAtom, Molecule3DBond, Molecule3DScene
 from chemvas.ui.main_window_palette import PALETTE
@@ -12,7 +14,6 @@ from chemvas.ui.preview_3d_state import (
     preview_payload_signature,
     preview_status_badge,
 )
-from PyQt6.QtGui import QColor
 
 
 def test_preview_payload_signature_captures_atoms_bonds_and_annotations() -> None:

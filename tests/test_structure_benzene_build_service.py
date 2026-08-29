@@ -1,12 +1,12 @@
 from unittest import mock
 from unittest.mock import Mock
 
+from PyQt6.QtCore import QPointF
+
 from chemvas.domain.document import Atom, Bond, MoleculeModel
 from chemvas.ui.canvas_scene_items_state import set_scene_item_collection_for
 from chemvas.ui.structure_benzene_build_service import StructureBenzeneBuildService
 from chemvas.ui.structure_build_committer import StructureBuildCommitter
-from PyQt6.QtCore import QPointF
-
 from tests.test_structure_build_service import _FakeCanvas, _FakeRingItem
 
 

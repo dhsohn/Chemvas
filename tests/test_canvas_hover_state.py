@@ -1,6 +1,7 @@
 from types import SimpleNamespace
 
 import pytest
+
 from chemvas.features.hover import HoverState
 from chemvas.ui.canvas_hover_state import hover_state_for
 

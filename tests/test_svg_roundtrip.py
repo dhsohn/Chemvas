@@ -167,10 +167,14 @@ class SvgRoundtripTest(unittest.TestCase):
             attributes = (
                 f'encoding="{CHEMVAS_SVG_ENCODING}"',
                 f'encoding="{CHEMVAS_SVG_ENCODING}" type="wrong" version="1"',
-                f'encoding="{CHEMVAS_SVG_ENCODING}" '
-                f'type="{CHEMVAS_SVG_PAYLOAD_TYPE}" version="999"',
-                f'encoding="{CHEMVAS_SVG_ENCODING}" '
-                f'type="{CHEMVAS_SVG_PAYLOAD_TYPE}" version="1" extra="x"',
+                (
+                    f'encoding="{CHEMVAS_SVG_ENCODING}" '
+                    f'type="{CHEMVAS_SVG_PAYLOAD_TYPE}" version="999"'
+                ),
+                (
+                    f'encoding="{CHEMVAS_SVG_ENCODING}" '
+                    f'type="{CHEMVAS_SVG_PAYLOAD_TYPE}" version="1" extra="x"'
+                ),
             )
             for source_attributes in attributes:
                 with self.subTest(attributes=source_attributes):

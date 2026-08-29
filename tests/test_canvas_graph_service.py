@@ -14,7 +14,6 @@ if QPointF is not None:
     from chemvas.domain.document import Atom, Bond
     from chemvas.ui.canvas_graph_service import CanvasGraphService
     from chemvas.ui.canvas_graph_state import CanvasGraphState, graph_state_for
-
     from tests.runtime_state import canvas_runtime_state
 
 

@@ -2,6 +2,9 @@ import unittest
 from types import SimpleNamespace
 from unittest import mock
 
+from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QColor
+
 from chemvas.domain.document import Atom, Bond, MoleculeModel
 from chemvas.ui.atom_coords_access import (
     CanvasAtomCoords3DState,
@@ -37,9 +40,6 @@ from chemvas.ui.canvas_tool_settings_state import (
 )
 from chemvas.ui.sheet_setup_access import sheet_setup_for
 from chemvas.ui.sheet_setup_state import SheetSetupState
-from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QColor
-
 from tests.runtime_services import canvas_runtime_services
 from tests.runtime_state import canvas_runtime_state
 

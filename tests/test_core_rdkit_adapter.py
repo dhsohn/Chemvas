@@ -21,7 +21,9 @@ _REAL_IMPORT = __import__
 _MISSING = object()
 
 
-def _block_rdkit_imports(name, globals=None, locals=None, fromlist=(), level=0):
+# This replaces the __import__ builtin, so its parameters must keep the exact
+# names the interpreter and importlib pass by keyword.
+def _block_rdkit_imports(name, globals=None, locals=None, fromlist=(), level=0):  # noqa: A002
     if name == "rdkit" or name.startswith("rdkit."):
         raise ImportError("blocked rdkit import")
     return _REAL_IMPORT(name, globals, locals, fromlist, level)

@@ -4,7 +4,6 @@ from types import SimpleNamespace
 from unittest import mock
 
 from chemvas.core.history import HistoryCommand
-
 from tests.runtime_services import canvas_runtime_services
 from tests.runtime_state import canvas_runtime_state
 
@@ -626,7 +625,7 @@ class CanvasViewAdditionalTest(unittest.TestCase):
         error_model.add_atom("C", 0.0, 0.0)
         error_view = SimpleNamespace(
             model=error_model,
-            scene=lambda: SimpleNamespace(selectedItems=lambda: []),
+            scene=lambda: SimpleNamespace(selectedItems=list),
             rdkit=SimpleNamespace(
                 model_to_xyz_block=mock.Mock(return_value=None),
                 last_error="RDKit export failed",

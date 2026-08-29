@@ -21,10 +21,10 @@ class _FakeWindow:
 
     def geometry(self):
         class _Geo:
-            def x(self_inner) -> int:
+            def x(self) -> int:
                 return 100
 
-            def y(self_inner) -> int:
+            def y(self) -> int:
                 return 50
 
         return _Geo()

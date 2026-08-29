@@ -24,7 +24,6 @@ if QPointF is not None:
     )
     from chemvas.ui.canvas_tool_settings_state import CanvasToolSettingsState
     from chemvas.ui.selection_info_state import SelectionInfoState
-
     from tests.runtime_state import canvas_runtime_state
 
 

@@ -3,10 +3,10 @@ from __future__ import annotations
 from types import SimpleNamespace
 from unittest import mock
 
-import chemvas.ui.canvas_view_setup as setup
 import pytest
-from chemvas.ui.canvas_callback_state import CanvasCallbackState, callback_state_for
 
+import chemvas.ui.canvas_view_setup as setup
+from chemvas.ui.canvas_callback_state import CanvasCallbackState, callback_state_for
 from tests.runtime_services import canvas_runtime_services
 
 

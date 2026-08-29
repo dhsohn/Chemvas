@@ -16,6 +16,8 @@ from unittest import mock
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 import pytest
+from PyQt6.QtWidgets import QApplication, QGraphicsRectItem, QGraphicsScene
+
 from chemvas.ui.atom_label_access import add_or_update_atom_label
 from chemvas.ui.canvas_history_service import CanvasHistoryService
 from chemvas.ui.canvas_model_access import bond_count_for, next_atom_id_for
@@ -26,8 +28,6 @@ from chemvas.ui.transactions.scene_rect import (
     SceneRectSnapshot,
     scene_rect_is_automatic,
 )
-from PyQt6.QtWidgets import QApplication, QGraphicsRectItem, QGraphicsScene
-
 from tests.canvas_factory import build_canvas_view
 
 
@@ -337,8 +337,9 @@ def test_failed_rotation_finalization_after_push_keeps_command_and_document(
 
 
 def test_moved_drag_gesture_pushes_one_command_and_round_trips(canvas) -> None:
-    from chemvas.ui.move_tool import MoveTool
     from PyQt6.QtCore import QPointF
+
+    from chemvas.ui.move_tool import MoveTool
 
     _record_molecule(canvas)
     drawn = _document_state(canvas)

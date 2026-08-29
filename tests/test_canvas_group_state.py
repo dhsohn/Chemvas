@@ -12,7 +12,6 @@ from chemvas.ui.canvas_group_state import (
     remove_group_for,
     restore_group_for,
 )
-
 from tests.runtime_state import canvas_runtime_state
 
 

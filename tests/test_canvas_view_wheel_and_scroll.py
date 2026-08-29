@@ -16,7 +16,6 @@ if QApplication is not None:
     from chemvas.ui.canvas_view import CanvasView
     from chemvas.ui.input_view_access import input_view_state_for
     from chemvas.ui.selection_info_state import selection_info_state_for
-
     from tests.canvas_factory import build_canvas_view
 
 

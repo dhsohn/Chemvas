@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import pytest
+
 from chemvas.features.document_composition import compose_document_state, service
 
 

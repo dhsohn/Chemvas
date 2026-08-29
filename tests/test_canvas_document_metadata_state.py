@@ -1,11 +1,11 @@
 from types import SimpleNamespace
 
 import pytest
+
 from chemvas.ui.canvas_document_metadata_state import (
     CanvasDocumentMetadataState,
     document_metadata_state_for,
 )
-
 from tests.runtime_state import canvas_runtime_state
 
 

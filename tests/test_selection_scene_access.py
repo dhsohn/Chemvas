@@ -7,6 +7,14 @@ from unittest import mock
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 import pytest
+from PyQt6 import sip
+from PyQt6.QtWidgets import (
+    QApplication,
+    QGraphicsRectItem,
+    QGraphicsScene,
+    QGraphicsView,
+)
+
 from chemvas.ui.canvas_scene_items_state import (
     CanvasSceneItemsState,
     set_selected_notes_for,
@@ -17,14 +25,6 @@ from chemvas.ui.selection_scene_access import (
     selected_scene_notes_for,
     set_scene_items_selected_for,
 )
-from PyQt6 import sip
-from PyQt6.QtWidgets import (
-    QApplication,
-    QGraphicsRectItem,
-    QGraphicsScene,
-    QGraphicsView,
-)
-
 from tests.runtime_state import canvas_runtime_state
 
 

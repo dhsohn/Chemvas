@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from unittest import mock
 
+from PyQt6.QtCore import QPointF
+
 from chemvas.features.insertion import (
     TemplateInsertRequest,
     plan_template_preview,
@@ -9,7 +11,6 @@ from chemvas.features.insertion import (
 from chemvas.ui.template_geometry_resolver_service import (
     TemplateGeometryResolverService,
 )
-from PyQt6.QtCore import QPointF
 
 
 def test_template_geometry_resolver_service_builds_template_resolvers() -> None:

@@ -4,6 +4,12 @@ from unittest import mock
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
+from PyQt6.QtCore import QPointF
+from PyQt6.QtWidgets import (
+    QApplication,
+    QGraphicsTextItem,
+)
+
 from chemvas.core.history import (
     AddAtomsCommand,
     AddBondCommand,
@@ -26,12 +32,6 @@ from chemvas.ui.canvas_view import CanvasView
 from chemvas.ui.graphics_items import AtomLabelItem
 from chemvas.ui.history_commands import MoveItemsCommand, UpdateSceneItemCommand
 from chemvas.ui.structure_mutation_access import add_atom_for, add_bond_for
-from PyQt6.QtCore import QPointF
-from PyQt6.QtWidgets import (
-    QApplication,
-    QGraphicsTextItem,
-)
-
 from tests.canvas_factory import build_canvas_view
 
 

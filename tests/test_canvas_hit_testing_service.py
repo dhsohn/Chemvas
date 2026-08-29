@@ -21,7 +21,6 @@ if QApplication is not None:
     from chemvas.ui.canvas_hit_testing_service import CanvasHitTestingService
     from chemvas.ui.canvas_hover_state import hover_state_for
     from chemvas.ui.spatial_index_state import CanvasSpatialIndexState
-
     from tests.runtime_state import canvas_runtime_state
 
 

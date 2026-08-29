@@ -14,7 +14,6 @@ if QApplication is not None:
     from chemvas.domain.document import Atom, Bond, MoleculeModel
     from chemvas.ui.history_commands import DeleteSceneItemsCommand
     from chemvas.ui.scene_delete_logic import DeleteSelectionPlan
-
     from tests.test_scene_ops_controller import _make_note_item, _make_rect_item
 
 

@@ -4,7 +4,6 @@ from types import SimpleNamespace
 
 import chemvas.ui.tool_controller_factory as tool_controller_factory
 from chemvas.ui.tool_controller_factory import build_tool_controller
-
 from tests.runtime_state import canvas_runtime_state
 
 

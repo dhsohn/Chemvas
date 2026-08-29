@@ -3,8 +3,9 @@ from __future__ import annotations
 from types import SimpleNamespace
 from unittest import mock
 
-import chemvas.ui.canvas_services as canvas_services
 import pytest
+
+import chemvas.ui.canvas_services as canvas_services
 from chemvas.ui.canvas_runtime_services import CanvasRuntimeServices
 from chemvas.ui.canvas_services import attach_canvas_services, build_canvas_services
 

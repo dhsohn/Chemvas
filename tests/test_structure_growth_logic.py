@@ -1,6 +1,8 @@
 import math
 import unittest
 
+from PyQt6.QtCore import QPointF
+
 from chemvas.domain.document import Atom, Bond
 from chemvas.features.insertion import (
     alternating_ring_bond_specs,
@@ -10,7 +12,6 @@ from chemvas.features.insertion import (
     other_atom_id_from_bond_result,
     resolve_bond_placement_context,
 )
-from PyQt6.QtCore import QPointF
 
 
 class StructureGrowthLogicTest(unittest.TestCase):

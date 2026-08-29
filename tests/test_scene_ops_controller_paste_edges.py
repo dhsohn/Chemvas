@@ -14,7 +14,6 @@ if QApplication is not None:
     from chemvas.ui.atom_coords_access import atom_coords_3d_for
     from chemvas.ui.bond_graphics_access import project_point_3d_for
     from chemvas.ui.canvas_rotation_state import rotation_state_for
-
     from tests.test_scene_ops_controller import (
         _FakeCanvas,
         _make_note_item,

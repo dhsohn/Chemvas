@@ -7,6 +7,16 @@ from unittest import mock
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 import pytest
+from PyQt6 import sip
+from PyQt6.QtCore import QObject, QRectF
+from PyQt6.QtWidgets import (
+    QApplication,
+    QGraphicsItem,
+    QGraphicsRectItem,
+    QGraphicsScene,
+    QGraphicsTextItem,
+)
+
 from chemvas.ui.canvas_group_state import (
     CanvasGroupState,
     CanvasSceneGroup,
@@ -36,16 +46,6 @@ from chemvas.ui.transactions.scene_runtime import (
     capture_scene_runtime,
     restore_scene_runtime,
 )
-from PyQt6 import sip
-from PyQt6.QtCore import QObject, QRectF
-from PyQt6.QtWidgets import (
-    QApplication,
-    QGraphicsItem,
-    QGraphicsRectItem,
-    QGraphicsScene,
-    QGraphicsTextItem,
-)
-
 from tests.runtime_state import canvas_runtime_state
 
 
@@ -2345,8 +2345,10 @@ def test_group_rollback_note_names_the_operation_not_the_history_slot(
         note for note in raised.value.__notes__ if "selection outline" in note
     ]
     assert outline_notes == [
-        "Transaction recovery also encountered an error during refreshing the "
-        f"selection outline after {operation}: RuntimeError: outline refresh failed"
+        (
+            "Transaction recovery also encountered an error during refreshing the "
+            f"selection outline after {operation}: RuntimeError: outline refresh failed"
+        )
     ]
 
 

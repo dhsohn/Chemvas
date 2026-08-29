@@ -10,7 +10,6 @@ from chemvas.ui.selection_rotation_session import (
     begin_selection_rotation_session,
     explicit_rotation_atom_ids_from_items,
 )
-
 from tests.runtime_state import canvas_runtime_state
 
 

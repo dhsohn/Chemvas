@@ -7,6 +7,14 @@ from unittest import mock
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
+from PyQt6 import sip
+from PyQt6.QtCore import QCoreApplication, QEvent, QPointF, QRectF
+from PyQt6.QtGui import QTransform
+from PyQt6.QtWidgets import (
+    QApplication,
+    QGraphicsRectItem,
+)
+
 from chemvas.core.history import RestoreOutcome
 from chemvas.domain.document import Atom, MoleculeModel
 from chemvas.ui.canvas_hover_state import hover_state_for
@@ -25,14 +33,6 @@ from chemvas.ui.insert_smiles_service import (
 )
 from chemvas.ui.selection_info_state import selection_info_state_for
 from chemvas.ui.selection_style_state import selection_style_state_for
-from PyQt6 import sip
-from PyQt6.QtCore import QCoreApplication, QEvent, QPointF, QRectF
-from PyQt6.QtGui import QTransform
-from PyQt6.QtWidgets import (
-    QApplication,
-    QGraphicsRectItem,
-)
-
 from tests.canvas_factory import build_canvas_view
 from tests.test_insert_controller import _FakeCanvas
 

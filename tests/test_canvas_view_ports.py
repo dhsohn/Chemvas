@@ -3,13 +3,13 @@ from __future__ import annotations
 from types import SimpleNamespace
 from unittest import mock
 
+from PyQt6.QtCore import QPointF
+
 from chemvas.ui.canvas_view_ports import (
     input_controller_for_view,
     pointer_controller_for_view,
     scene_pos_from_event_for_view,
 )
-from PyQt6.QtCore import QPointF
-
 from tests.runtime_services import canvas_runtime_services
 
 

@@ -5,7 +5,6 @@ from chemvas.ui.canvas_tool_settings_state import (
     set_tool_setting_for,
     tool_settings_state_for,
 )
-
 from tests.runtime_state import canvas_runtime_state
 
 

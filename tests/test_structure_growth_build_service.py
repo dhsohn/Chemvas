@@ -2,11 +2,12 @@ import unittest
 from types import SimpleNamespace
 from unittest import mock
 
+from PyQt6.QtCore import QPointF
+
 from chemvas.ui.structure_growth_build_service import (
     StructureGrowthBuildActions,
     StructureGrowthBuildService,
 )
-from PyQt6.QtCore import QPointF
 
 
 class _FakeOwner:

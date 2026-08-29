@@ -3,6 +3,7 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 import pytest
+
 from chemvas.ui.canvas_model_state import model_for, set_model_for
 
 

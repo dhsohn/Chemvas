@@ -7,6 +7,7 @@ from dataclasses import replace
 from pathlib import Path
 
 import pytest
+
 from chemvas.domain.document.precomplex_profile import (
     CURRENT_PROFILE_ID,
     precomplex_placement_profile,

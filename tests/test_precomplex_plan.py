@@ -4,6 +4,7 @@ import hashlib
 import json
 
 import pytest
+
 from chemvas.core.document_io import create_document
 from chemvas.domain.document import (
     CANVAS_FILE_VERSION,
@@ -18,7 +19,6 @@ from chemvas.features.calculation_bundle import (
     plan_with_replaced_step,
     validate_calculation_plan,
 )
-
 from tests.test_calculation_plan import _document_state, _plan
 
 

@@ -25,7 +25,6 @@ if QApplication is not None:
     from chemvas.ui.move_access import move_item_for
     from chemvas.ui.scene_group_operations import group_selection_for
     from chemvas.ui.selection_collection_access import selection_snapshot_for
-
     from tests.canvas_factory import build_canvas_view
 
 

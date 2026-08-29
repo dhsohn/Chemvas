@@ -6,6 +6,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+
 from chemvas.bootstrap import calculation_bundle as calculation_bundle_cli
 from chemvas.features.insertion import RDKitResult
 

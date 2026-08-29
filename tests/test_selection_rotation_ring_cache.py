@@ -15,7 +15,6 @@ if QApplication is not None:
     import chemvas.ui.canvas_ring_fill_scene_service as ring_fill_service
     import chemvas.ui.selection_rotation_preview_transaction as preview_transaction
     from chemvas.ui.canvas_lifecycle import schedule_canvas_deletion_for
-
     from tests.canvas_factory import build_canvas_view
 
 

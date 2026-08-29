@@ -15,15 +15,15 @@ from unittest import mock
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 import pytest
+from PyQt6.QtCore import QPointF
+from PyQt6.QtWidgets import QApplication
+
 from chemvas.ui.canvas_atom_graphics_state import atom_items_for
 from chemvas.ui.canvas_model_access import atoms_for
 from chemvas.ui.move_tool import MoveTool
 from chemvas.ui.select_all_access import select_all_scene_items_for
 from chemvas.ui.selection_collection_access import selection_snapshot_for
 from chemvas.ui.transactions.document import DocumentSavepoint, MoveGestureScope
-from PyQt6.QtCore import QPointF
-from PyQt6.QtWidgets import QApplication
-
 from tests.canvas_factory import build_canvas_view
 
 

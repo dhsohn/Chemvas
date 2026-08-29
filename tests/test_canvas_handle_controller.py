@@ -13,7 +13,6 @@ except ModuleNotFoundError:
 if QPointF is not None:
     from chemvas.ui.canvas_handle_controller import CanvasHandleController
     from chemvas.ui.canvas_tool_settings_state import CanvasToolSettingsState
-
     from tests.runtime_state import canvas_runtime_state
 
 
