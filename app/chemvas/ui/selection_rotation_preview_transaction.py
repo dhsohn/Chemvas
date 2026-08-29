@@ -14,6 +14,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+from chemvas.domain.transactions import add_recovery_error_note
 from chemvas.ui.atom_coords_access import (
     atom_coords_3d_for,
     set_atom_coords_3d_for_id,
@@ -27,15 +28,6 @@ if TYPE_CHECKING:
     from chemvas.ui.selection_rotation_controller import SelectionRotationController
 
 Coords3D = tuple[float, float, float]
-
-
-def _add_rotation_rollback_note(
-    original_error: BaseException,
-    rollback_error: BaseException,
-) -> None:
-    original_error.add_note(
-        f"Rotation preview rollback also failed: {rollback_error!r}"
-    )
 
 
 def _affected_ring_items(canvas, atom_ids: set[int]) -> list[object]:
@@ -74,7 +66,11 @@ class _RotationPreviewAuthority:
                 )
                 self._reapply_coords(previous)
             except Exception as rollback_error:
-                _add_rotation_rollback_note(original_error, rollback_error)
+                add_recovery_error_note(
+                    original_error,
+                    rollback_error,
+                    phase="reverting to the previous rotation preview frame",
+                )
             raise
 
     def _reapply_coords(

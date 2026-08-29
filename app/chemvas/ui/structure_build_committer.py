@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING, Any
 
 from PyQt6.QtCore import QPointF
 
-from chemvas.domain.transactions import restore_snapshot
+from chemvas.domain.transactions import add_recovery_error_note, restore_snapshot
 from chemvas.ui.atom_label_access import add_or_update_atom_label, atom_label_service
 from chemvas.ui.bond_graphics_access import add_bond_graphics_for
 from chemvas.ui.canvas_model_access import (
@@ -66,15 +66,6 @@ class _UnsetBeforeSmilesInput:
 
 
 _UNSET_BEFORE_SMILES_INPUT = _UnsetBeforeSmilesInput()
-
-
-def _add_build_rollback_note(
-    original_error: BaseException,
-    cleanup_error: BaseException,
-    *,
-    phase: str,
-) -> None:
-    original_error.add_note(f"{phase}: {cleanup_error!r}")
 
 
 @dataclass(slots=True)
@@ -146,10 +137,10 @@ class StructureBuildCommitter:
                     RuntimeError("build capture SMILES restore was non-authoritative")
                 )
             for recorded_cleanup_error in cleanup_errors:
-                _add_build_rollback_note(
+                add_recovery_error_note(
                     error,
                     recorded_cleanup_error,
-                    phase="Build capture rollback also failed",
+                    phase="rolling back the build capture",
                 )
             raise
 
@@ -172,10 +163,10 @@ class StructureBuildCommitter:
                 description="build initialization transaction",
             )
             for caught_rollback_error in restore_result.errors:
-                _add_build_rollback_note(
+                add_recovery_error_note(
                     error,
                     caught_rollback_error,
-                    phase="Build initialization rollback also failed",
+                    phase="rolling back the build initialization",
                 )
             raise
         return snapshot
@@ -212,10 +203,10 @@ class StructureBuildCommitter:
                     published_transaction,
                 )
             except Exception as cleanup_error:
-                _add_build_rollback_note(
+                add_recovery_error_note(
                     error,
                     cleanup_error,
-                    phase="Build publication snapshot release also failed",
+                    phase="releasing the build publication snapshot",
                 )
             raise
         else:
@@ -291,18 +282,18 @@ class StructureBuildCommitter:
             return
         if original_error is not None:
             for cleanup_error in cleanup_errors:
-                _add_build_rollback_note(
+                add_recovery_error_note(
                     original_error,
                     cleanup_error,
-                    phase="Rollback cleanup also failed",
+                    phase="cleaning up the recorded build",
                 )
             return
         first_error, *additional_errors = cleanup_errors
         for cleanup_error in additional_errors:
-            _add_build_rollback_note(
+            add_recovery_error_note(
                 first_error,
                 cleanup_error,
-                phase="Additional rollback cleanup failure",
+                phase="cleaning up the recorded build",
             )
         raise first_error
 

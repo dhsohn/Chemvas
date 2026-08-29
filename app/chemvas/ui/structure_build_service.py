@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from chemvas.domain.transactions import add_recovery_error_note
 from chemvas.features.insertion import (
     resolve_bond_placement_context,
 )
@@ -37,13 +38,6 @@ if TYPE_CHECKING:
     from PyQt6.QtCore import QPointF
 
     from chemvas.ui.canvas_view import CanvasView
-
-
-def _add_recorded_build_rollback_note(
-    original_error: BaseException,
-    rollback_error: BaseException,
-) -> None:
-    original_error.add_note(f"Recorded build rollback also failed: {rollback_error!r}")
 
 
 class StructureBuildService:
@@ -164,7 +158,11 @@ class StructureBuildService:
             try:
                 self.committer.abort_recorded_change(snapshot, original_error=error)
             except Exception as rollback_error:
-                _add_recorded_build_rollback_note(error, rollback_error)
+                add_recovery_error_note(
+                    error,
+                    rollback_error,
+                    phase="aborting the recorded build change",
+                )
             raise
         return added_scene_items
 
@@ -190,7 +188,11 @@ class StructureBuildService:
             try:
                 self.committer.abort_recorded_change(snapshot, original_error=error)
             except Exception as rollback_error:
-                _add_recorded_build_rollback_note(error, rollback_error)
+                add_recovery_error_note(
+                    error,
+                    rollback_error,
+                    phase="aborting the recorded build change",
+                )
             raise
         return True
 

@@ -4,6 +4,7 @@ import math
 from functools import partial
 from typing import TYPE_CHECKING
 
+from chemvas.domain.transactions import add_recovery_error_note, run_rollback_step
 from chemvas.features.rendering import style_for_existing_bond_overlay
 from chemvas.ui.canvas_model_access import bond_for_id
 from chemvas.ui.canvas_smiles_input_state import last_smiles_input_for
@@ -12,18 +13,9 @@ from chemvas.ui.renderer_style_access import bond_length_px_for
 from chemvas.ui.scene_item_state import bond_state_dict
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
-
     from PyQt6.QtCore import QPointF
 
     from chemvas.ui.structure_build_committer import StructureBuildCommitter
-
-
-def _add_bond_build_rollback_note(
-    original_error: BaseException,
-    message: str,
-) -> None:
-    original_error.add_note(message)
 
 
 class StructureBondBuildService:
@@ -95,9 +87,10 @@ class StructureBondBuildService:
             try:
                 self.committer.abort_recorded_change(snapshot, original_error=error)
             except Exception as rollback_error:
-                _add_bond_build_rollback_note(
+                add_recovery_error_note(
                     error,
-                    f"Bond build rollback also failed: {rollback_error!r}",
+                    rollback_error,
+                    phase="aborting the recorded bond build change",
                 )
             raise
 
@@ -135,46 +128,44 @@ class StructureBondBuildService:
                 before_smiles_input,
                 last_smiles_input_for(self.canvas),
             )
-        except Exception as caught_error:
-            original_error = caught_error
+        except Exception as original_error:
+            # A named function rather than a ``partial`` over
+            # ``self.move_controller.redraw_connected_bonds``: the rollback
+            # runner only protects what its callable does, so binding the port
+            # through ``partial`` would perform the attribute lookup outside
+            # the protected region and let a failing lookup mask the primary
+            # error. Looking it up in the body keeps it inside.
+            def redraw_bonds_connected_to(atom_id: int) -> None:
+                self.move_controller.redraw_connected_bonds(
+                    atom_id,
+                    skip_bond_id=bond_id,
+                )
 
-            def run_compensation(
-                phase: str,
-                operation: Callable[[], object],
-            ) -> None:
-                try:
-                    operation()
-                except Exception as rollback_error:
-                    _add_bond_build_rollback_note(
-                        original_error,
-                        "Existing-bond rollback also encountered an error while "
-                        f"{phase}: {type(rollback_error).__name__}: {rollback_error}",
-                    )
-
-            run_compensation(
+            run_rollback_step(
+                original_error,
                 "restoring the bond order",
                 lambda: setattr(bond, "order", before_state["order"]),
             )
-            run_compensation(
+            run_rollback_step(
+                original_error,
                 "restoring the bond style",
                 lambda: setattr(bond, "style", before_state["style"]),
             )
-            run_compensation(
+            run_rollback_step(
+                original_error,
                 "restoring the bond color",
                 lambda: setattr(bond, "color", before_state.get("color", bond.color)),
             )
-            run_compensation(
+            run_rollback_step(
+                original_error,
                 "redrawing the restored bond",
                 lambda: self.move_controller.redraw_bond(bond_id),
             )
             for atom_id in (bond.a, bond.b):
-                run_compensation(
+                run_rollback_step(
+                    original_error,
                     f"redrawing bonds connected to atom {atom_id}",
-                    partial(
-                        self.move_controller.redraw_connected_bonds,
-                        atom_id,
-                        skip_bond_id=bond_id,
-                    ),
+                    partial(redraw_bonds_connected_to, atom_id),
                 )
             raise
         return start_id, end_id

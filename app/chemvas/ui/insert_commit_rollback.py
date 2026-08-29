@@ -3,7 +3,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from chemvas.domain.transactions import RestoreOutcome, restore_snapshot
+from chemvas.domain.transactions import (
+    RestoreOutcome,
+    add_recovery_error_note,
+    restore_snapshot,
+)
 from chemvas.ui.canvas_smiles_input_state import (
     CanvasSmilesInputState,
     smiles_input_state_for,
@@ -42,13 +46,6 @@ def capture_smiles_input_restore_authority(
     canvas: object,
 ) -> SmilesInputRestoreAuthority:
     return SmilesInputRestoreAuthority.capture(canvas)
-
-
-def _add_insert_rollback_note(
-    original_error: BaseException,
-    rollback_error: BaseException,
-) -> None:
-    original_error.add_note(f"Insert rollback also failed: {rollback_error!r}")
 
 
 def rollback_insert_mutation(
@@ -93,7 +90,11 @@ def rollback_insert_mutation(
         return RestoreOutcome(authoritative=authoritative)
     if original_error is not None:
         for rollback_error in rollback_errors:
-            _add_insert_rollback_note(original_error, rollback_error)
+            add_recovery_error_note(
+                original_error,
+                rollback_error,
+                phase="rolling back the insert mutation",
+            )
         return RestoreOutcome(
             authoritative=authoritative,
             fallback_to_inverse=False,

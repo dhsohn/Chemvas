@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING
 from PyQt6.QtCore import QPointF
 from PyQt6.QtWidgets import QMessageBox
 
-from chemvas.domain.transactions import restore_snapshot
+from chemvas.domain.transactions import add_recovery_error_note, restore_snapshot
 from chemvas.features.insertion import (
     annotation_mark_direction,
     annotation_mark_kinds,
@@ -59,15 +59,6 @@ if TYPE_CHECKING:
     from chemvas.ui.transactions.document import DocumentSavepoint
 
 MAX_SMILES_INPUT_LENGTH = 1024
-
-
-def _add_smiles_load_rollback_note(
-    original_error: BaseException,
-    secondary_error: BaseException,
-    *,
-    phase: str,
-) -> None:
-    original_error.add_note(f"SMILES {phase} rollback also failed: {secondary_error!r}")
 
 
 def _detach_top_level_scene_items_before_clear(canvas) -> None:
@@ -370,10 +361,10 @@ class InsertSmilesService:
                 ),
             )
         for secondary_error in rollback_errors:
-            _add_smiles_load_rollback_note(
+            add_recovery_error_note(
                 original_error,
                 secondary_error,
-                phase="document",
+                phase="restoring the SMILES document transaction",
             )
 
 

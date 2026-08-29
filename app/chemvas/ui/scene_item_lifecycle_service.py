@@ -185,10 +185,14 @@ class SceneItemLifecycleService:
                 mark_atom_id=snapshot.mark_atom_id,
             ),
         )
+        # ``attach_ports.remove_item`` is resolved inside the callable rather
+        # than by ``partial``, which would look it up before the rollback step's
+        # ``try`` and let a missing port method escape and mask the primary
+        # error instead of becoming a note.
         run_rollback_step(
             original_error,
             "detaching a partially attached scene item",
-            partial(attach_ports.remove_item, item),
+            lambda: attach_ports.remove_item(item),
         )
         if ring_bond_ids:
             self._refresh_bond_geometry_best_effort(
