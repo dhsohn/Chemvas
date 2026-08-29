@@ -75,7 +75,7 @@ def resolve_text_tool_target(
 def build_created_atom_command(
     *,
     atom_id: int,
-    atom_state: dict,
+    atom_state: dict[str, object],
     before_next_atom_id: int,
     after_next_atom_id: int,
     before_smiles_input: str | None,

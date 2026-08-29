@@ -69,7 +69,7 @@ class MoveGestureScope:
     scene_items: tuple[Any, ...]
 
 
-def _capture_runtime_state_object(canvas, name: str) -> object | None:
+def _capture_runtime_state_object(canvas: object, name: str) -> object | None:
     runtime_state = getattr(canvas, "runtime_state", None)
     if runtime_state is None:
         return None
@@ -98,11 +98,14 @@ _DELETE_MUTATED_RUNTIME_FIELDS = (
 )
 
 
-def _delete_scene_for_capture(canvas) -> object | None:
+def _delete_scene_for_capture(canvas: object) -> object | None:
     scene_method = getattr(canvas, "scene", None)
     if not callable(scene_method):
         return None
-    return scene_method()
+    # ``getattr`` hands back Any; the scene is only ever handled opaquely from
+    # here on, so narrow it to object at the boundary instead of leaking Any.
+    scene: object = scene_method()
+    return scene
 
 
 def _delete_scene_items_for_capture(
@@ -139,9 +142,9 @@ class DocumentSavepoint:
     @classmethod
     def capture(
         cls,
-        canvas,
+        canvas: object,
         *,
-        history_service=None,
+        history_service: object | None = None,
         guard_scene_rect: bool = False,
         move_scope: MoveGestureScope | None = None,
     ) -> DocumentSavepoint:
@@ -521,9 +524,9 @@ class DocumentSavepoint:
 
 @contextmanager
 def document_transaction(
-    canvas,
+    canvas: object,
     *,
-    history_service=None,
+    history_service: object | None = None,
 ) -> Iterator[None]:
     snapshot = DocumentSavepoint.capture(
         canvas,

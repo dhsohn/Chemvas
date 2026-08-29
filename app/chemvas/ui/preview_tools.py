@@ -33,9 +33,8 @@ class PreviewDragTool(Tool):
         self._start_pos = None
 
     def _clear_preview(self) -> None:
-        self._preview_item = clear_temporary_tool_overlay(
-            self.canvas, preview_item=self._preview_item
-        )
+        clear_temporary_tool_overlay(self.canvas, preview_item=self._preview_item)
+        self._preview_item = None
 
     def _build_preview(self, current_pos):
         raise NotImplementedError

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, fields, is_dataclass
+from typing import TYPE_CHECKING, Any
 
 from PyQt6.QtWidgets import QGraphicsItem
 
@@ -9,13 +10,16 @@ from chemvas.ui.transactions.scene_runtime import (
     graphics_item_is_deleted,
 )
 
+if TYPE_CHECKING:
+    from collections.abc import Callable, Iterable
+
 _SCENE_ITEM_DATA_ROLES = (0, 1, 2, 6, 9, 20, 21, 22)
 _UNAVAILABLE_SCENE_ITEM_DATA = object()
 _MISSING_ATTRIBUTE = object()
 
 
 def collect_restore_errors(
-    operation,
+    operation: Callable[[], Iterable[BaseException]],
     destination: list[BaseException],
 ) -> None:
     """Run one snapshot restore and append what it reports or raises.
@@ -56,7 +60,11 @@ def _semantic_value_matches(actual: object, expected: object) -> bool:
 class _ContainerState:
     target: object
     kind: str
-    contents: tuple
+    # One field carries three shapes -- ``dict`` items, ``list`` elements, and
+    # ``set`` elements -- captured from an arbitrary object graph, so the
+    # element type is genuinely unknown. ``tuple[object, ...]`` would type the
+    # list/set shape but reject the item pairs ``dict.update`` consumes below.
+    contents: tuple[Any, ...]
 
 
 class ContainerGraphSnapshot:
