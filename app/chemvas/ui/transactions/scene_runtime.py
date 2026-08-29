@@ -17,6 +17,7 @@ from PyQt6.QtWidgets import (
 from chemvas.domain.transactions import (
     add_recovery_error_note as _add_rollback_error_note,
 )
+from chemvas.domain.transactions import run_rollback_step
 from chemvas.ui.canvas_scene_items_state import SCENE_ITEM_COLLECTION_ATTRS
 from chemvas.ui.scene_item_access import (
     create_scene_item_from_state as _create_scene_item_from_state,
@@ -56,24 +57,6 @@ def _snapshot_runtime_state_object(
         return None
     state = _snapshot_attribute(runtime_state, name)
     return None if state is _MISSING_SNAPSHOT_ATTRIBUTE else state
-
-
-def run_rollback_step(
-    original_error: BaseException,
-    phase: str,
-    operation: Callable[[], Any],
-    *,
-    default: Any = None,
-) -> Any:
-    try:
-        return operation()
-    except Exception as rollback_error:
-        _add_rollback_error_note(
-            original_error,
-            rollback_error,
-            phase=phase,
-        )
-        return default
 
 
 def _run_absolute_restore_step(

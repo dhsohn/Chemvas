@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING
 
 from PyQt6.QtWidgets import QGraphicsTextItem
 
+from chemvas.domain.transactions import run_rollback_step
 from chemvas.ui.canvas_tool_settings_state import tool_settings_state_for
 from chemvas.ui.history_commands import AddSceneItemsCommand
 from chemvas.ui.mark_item_access import build_mark_item_for, set_mark_center_for
@@ -30,9 +31,6 @@ from chemvas.ui.scene_item_state import (
 )
 from chemvas.ui.selection_info_access import emit_selection_info_for
 from chemvas.ui.transactions.scene_item_attach import SceneItemAttachSnapshot
-from chemvas.ui.transactions.scene_runtime import (
-    run_rollback_step,
-)
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterator

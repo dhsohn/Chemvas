@@ -17,6 +17,7 @@ from PyQt6.QtGui import (
 from PyQt6.QtWidgets import QGraphicsItem, QGraphicsRectItem, QGraphicsTextItem
 
 from chemvas.core.history import CompositeCommand, HistoryCommand
+from chemvas.domain.transactions import run_rollback_step
 from chemvas.ui.canvas_scene_items_state import (
     remove_selected_note_for,
     selected_notes_for,
@@ -53,7 +54,6 @@ from chemvas.ui.transactions.scene_runtime import (
     SceneRuntimeSnapshot,
     capture_scene_runtime,
     restore_scene_runtime,
-    run_rollback_step,
 )
 
 if TYPE_CHECKING:

@@ -66,7 +66,7 @@ end state is decided.
 
 - `CanvasHistoryService` is the sole owner of undo/redo stack policy and of the immutable `HistoryStackSnapshot` value. Exact top-level undo/redo operations capture one document savepoint; nested commands defer to that operation.
 - `chemvas.ui.transactions.document.DocumentSavepoint` is the public owner of whole-document capture, restore, verification, and release. It composes the lower-level object-graph, scene-runtime, and scene-rect primitives in the same package. `history_commands` owns command classes, not a private snapshot toolkit.
-- `chemvas.domain.transactions` owns only framework-free `RestoreOutcome` validation, recovery-note attachment, and the one-shot restore helper.
+- `chemvas.domain.transactions` owns only framework-free `RestoreOutcome` validation, recovery-note attachment, the best-effort rollback-step runner that attaches those notes, and the one-shot restore helper. `chemvas.core.history` and the `chemvas.ui` rollback call sites share that one runner.
 - A restore is applied once and verified once. If exact restoration cannot be established, history applies ADR 0002's conservative fail-closed stack policy and leaves durable recovery to autosave/session restore. The removed retry, authority-channel, compatibility-probing, and parallel stack-snapshot layers must not return.
 - Desktop document paths are canonical `.chemvas` paths. Startup, OS-open, File Open, Open Recent, and clean-session restoration reject or ignore `.json` drawing paths. An abnormal-session snapshot may recover current internal autosave state, but an unsupported original path is cleared so the recovered canvas is unbound and unsaved.
 
