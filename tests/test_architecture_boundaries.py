@@ -4648,47 +4648,6 @@ def test_sha256_hex_pattern_is_compiled_in_one_module() -> None:
     assert owners == ["app/chemvas/domain/document/precomplex.py"]
 
 
-def _inline_color_rollback_handlers(source: str) -> list[int]:
-    """Except-handlers that add a colour rollback note themselves.
-
-    ``_run_color_rollback_step`` is the one place that catches a failing
-    rollback and annotates the original error; anywhere else doing it inline
-    is that helper written out longhand.
-    """
-    tree = ast.parse(source)
-    helper_lines = {
-        node.lineno
-        for node in ast.walk(tree)
-        if isinstance(node, ast.FunctionDef) and node.name == "_run_color_rollback_step"
-    }
-    helper_bodies = {
-        inner
-        for node in ast.walk(tree)
-        if isinstance(node, ast.FunctionDef) and node.lineno in helper_lines
-        for inner in ast.walk(node)
-    }
-    violations: list[int] = []
-    for node in ast.walk(tree):
-        if not isinstance(node, ast.ExceptHandler) or node in helper_bodies:
-            continue
-        for inner in ast.walk(node):
-            if (
-                isinstance(inner, ast.Call)
-                and isinstance(inner.func, ast.Name)
-                and inner.func.id == "_add_color_rollback_note"
-            ):
-                violations.append(inner.lineno)
-    return sorted(set(violations))
-
-
-def test_color_rollback_notes_go_through_the_step_helper() -> None:
-    """No handler expands ``_run_color_rollback_step`` by hand."""
-    module = APP_ROOT / "chemvas" / "ui" / "canvas_color_mutation_service.py"
-    violations = _inline_color_rollback_handlers(module.read_text(encoding="utf-8"))
-
-    assert violations == []
-
-
 # --- Single-owner pins for the merged algorithm implementations -------------
 #
 # Six implementations that used to exist two, three or four times over now

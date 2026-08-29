@@ -24,6 +24,7 @@ from chemvas.domain.document import (
     deserialize_model_state,
     selection_payload_to_canvas_state,
 )
+from chemvas.domain.transactions import add_recovery_error_note
 from chemvas.ui.canvas_calculation_plan_state import set_calculation_plan_for
 from chemvas.ui.canvas_document_export_access import export_canvas_scene_for
 from chemvas.ui.canvas_document_state import (
@@ -121,18 +122,6 @@ _DOCUMENT_MUTATED_RUNTIME_FIELDS = (
     "scene_items_state",
     "smiles_input_state",
 )
-
-
-def _add_scene_recovery_note(
-    original_error: BaseException,
-    secondary_error: BaseException,
-    *,
-    phase: str,
-) -> None:
-    original_error.add_note(
-        f"Document scene recovery also failed while {phase}: "
-        f"{type(secondary_error).__name__}: {secondary_error}"
-    )
 
 
 @dataclass(slots=True)
@@ -389,7 +378,7 @@ class _DocumentStatusPublication:
         try:
             self.callback(*self.cache)
         except Exception as publication_error:
-            _add_scene_recovery_note(
+            add_recovery_error_note(
                 original_error,
                 publication_error,
                 phase="republishing the restored document selection status",
@@ -541,7 +530,7 @@ class CanvasDocumentSessionService:
             # canvas internally consistent and discard commands that no
             # longer describe it rather than exposing a partially applied
             # target or rollback state.
-            _add_scene_recovery_note(
+            add_recovery_error_note(
                 original_error,
                 rollback_error,
                 phase="restoring the previous document",
@@ -549,7 +538,7 @@ class CanvasDocumentSessionService:
             try:
                 clear_scene_for(self.canvas)
             except Exception as cleanup_error:
-                _add_scene_recovery_note(
+                add_recovery_error_note(
                     original_error,
                     cleanup_error,
                     phase="clearing an unrecoverable document scene",
@@ -557,7 +546,7 @@ class CanvasDocumentSessionService:
             try:
                 self._force_clear_history(history_snapshot)
             except Exception as cleanup_error:
-                _add_scene_recovery_note(
+                add_recovery_error_note(
                     original_error,
                     cleanup_error,
                     phase="clearing unrecoverable document history",
@@ -566,7 +555,7 @@ class CanvasDocumentSessionService:
             try:
                 self._restore_history_enabled(history_snapshot)
             except Exception as secondary_error:
-                _add_scene_recovery_note(
+                add_recovery_error_note(
                     original_error,
                     secondary_error,
                     phase="restoring the history enabled state",
@@ -639,7 +628,7 @@ class CanvasDocumentSessionService:
     ) -> None:
         restore_errors = rollback_snapshot.restore_live_state(self.canvas)
         for restore_error in restore_errors:
-            _add_scene_recovery_note(
+            add_recovery_error_note(
                 original_error,
                 restore_error,
                 phase="restoring the previous document scene",

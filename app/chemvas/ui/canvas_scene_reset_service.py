@@ -5,6 +5,7 @@ from typing import cast
 from PyQt6.QtWidgets import QGraphicsScene
 
 from chemvas.domain.document import MoleculeModel
+from chemvas.domain.transactions import add_recovery_error_note
 from chemvas.ui.atom_coords_access import clear_atom_coords_3d_for
 from chemvas.ui.canvas_atom_graphics_state import clear_atom_graphics_for
 from chemvas.ui.canvas_bond_graphics_state import clear_bond_graphics_for
@@ -31,16 +32,6 @@ from chemvas.ui.selection_outline_state import clear_selection_outlines_for
 from chemvas.ui.selection_style_state import selection_style_state_for
 
 _MISSING_ATTRIBUTE = object()
-
-
-def _add_reset_recovery_note(
-    original_error: BaseException,
-    recovery_error: BaseException,
-) -> None:
-    original_error.add_note(
-        "Scene reset recovery also failed with "
-        f"{type(recovery_error).__name__}: {recovery_error}"
-    )
 
 
 class CanvasSceneResetService:
@@ -234,7 +225,11 @@ class CanvasSceneResetService:
         if errors:
             original_error = errors[0]
             for recovery_error in errors[1:]:
-                _add_reset_recovery_note(original_error, recovery_error)
+                add_recovery_error_note(
+                    original_error,
+                    recovery_error,
+                    phase="resetting the scene",
+                )
             raise original_error
 
         if not callable(selection_callback) or self._empty_status_publication_active:

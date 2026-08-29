@@ -18,6 +18,7 @@ from chemvas.core.history import (
     HistoryCommand,
     UpdateAtomColorCommand,
 )
+from chemvas.domain.transactions import run_rollback_step
 from chemvas.ui.atom_label_access import implicit_carbon_dot_brush_for
 from chemvas.ui.bond_graphics_access import apply_color_to_bond_item_for
 from chemvas.ui.canvas_atom_graphics_state import (
@@ -138,33 +139,6 @@ def _captured_graphics_pen(item: object) -> QPen | None:
         raise
 
 
-def _add_color_rollback_note(
-    original_error: BaseException,
-    rollback_error: BaseException,
-    *,
-    phase: str,
-) -> None:
-    original_error.add_note(
-        "Color rollback also failed during "
-        f"{phase}: {type(rollback_error).__name__}: {rollback_error}"
-    )
-
-
-def _run_color_rollback_step(
-    original_error: BaseException,
-    phase: str,
-    operation: Callable[[], None],
-) -> None:
-    try:
-        operation()
-    except Exception as rollback_error:
-        _add_color_rollback_note(
-            original_error,
-            rollback_error,
-            phase=phase,
-        )
-
-
 def _close_failed_color_prepublication(
     original_error: BaseException,
     *,
@@ -172,7 +146,7 @@ def _close_failed_color_prepublication(
     runtime_phase: str,
 ) -> None:
     if runtime_rollback is not None:
-        _run_color_rollback_step(
+        run_rollback_step(
             original_error,
             runtime_phase,
             runtime_rollback,
@@ -229,13 +203,13 @@ def _apply_bond_color_in_place(canvas, bond_id: int, color: QColor | str) -> Non
         for bond_item in bond_items_for_id(canvas, bond_id):
             apply_color_to_bond_item_for(canvas, bond_item, color_value)
     except Exception as original_error:
-        _run_color_rollback_step(
+        run_rollback_step(
             original_error,
             "restoring the bond model color",
             lambda: setattr(bond, "color", before_color),
         )
         for restore in restores:
-            _run_color_rollback_step(
+            run_rollback_step(
                 original_error,
                 "restoring bond graphics",
                 restore,
@@ -313,7 +287,7 @@ class UpdateNoteColorCommand(HistoryCommand):
         try:
             state.apply(self.item)
         except Exception as original_error:
-            _run_color_rollback_step(
+            run_rollback_step(
                 original_error,
                 "restoring the prior note color state",
                 lambda: rollback_state.apply(self.item),
@@ -341,7 +315,7 @@ class _CommitPendingNoteEditCommand(HistoryCommand):
         try:
             state.apply(self.item)
         except Exception as original_error:
-            _run_color_rollback_step(
+            run_rollback_step(
                 original_error,
                 "restoring the prior pending-note state",
                 lambda: rollback_state.apply(self.item),
@@ -463,7 +437,7 @@ class CanvasColorMutationService:
             if self._color_rollback_is_complete(original_error):
                 raise
             if runtime_rollback is not None:
-                _run_color_rollback_step(
+                run_rollback_step(
                     original_error,
                     "restoring scene-item graphics",
                     runtime_rollback,
@@ -570,7 +544,7 @@ class CanvasColorMutationService:
             runtime_rollback = (
                 rollback if rollback is not None else lambda: command.undo(self.canvas)
             )
-            _run_color_rollback_step(
+            run_rollback_step(
                 error,
                 "restoring runtime after color history publication",
                 runtime_rollback,
@@ -599,7 +573,7 @@ class CanvasColorMutationService:
             def undo_command(command_to_undo: HistoryCommand = command) -> None:
                 command_to_undo.undo(self.canvas)
 
-            _run_color_rollback_step(
+            run_rollback_step(
                 original_error,
                 f"undoing {type(command).__name__}",
                 undo_command,
@@ -639,7 +613,7 @@ class CanvasColorMutationService:
                 self.history.push_many(commands)
         except Exception as error:
             if rollback is not None:
-                _run_color_rollback_step(
+                run_rollback_step(
                     error,
                     "restoring runtime after color command publication",
                     rollback,
@@ -751,7 +725,7 @@ class CanvasColorMutationService:
         except Exception as original_error:
             if self._color_rollback_is_complete(original_error):
                 raise
-            _run_color_rollback_step(
+            run_rollback_step(
                 original_error,
                 "restoring the original note runtime",
                 lambda: original_runtime.apply(item),
@@ -782,7 +756,7 @@ class CanvasColorMutationService:
         except Exception as error:
             if self._color_rollback_is_complete(error):
                 raise
-            _run_color_rollback_step(
+            run_rollback_step(
                 error,
                 "restoring the bond color",
                 rollback,
@@ -808,7 +782,7 @@ class CanvasColorMutationService:
             try:
                 self._apply_atom_item_graphic(item, color)
             except Exception as original_error:
-                _run_color_rollback_step(
+                run_rollback_step(
                     original_error,
                     "restoring orphan atom graphics",
                     rollback,
@@ -840,7 +814,7 @@ class CanvasColorMutationService:
         except Exception as error:
             if self._color_rollback_is_complete(error):
                 raise
-            _run_color_rollback_step(
+            run_rollback_step(
                 error,
                 "restoring the atom color",
                 rollback,
@@ -1113,7 +1087,7 @@ class CanvasColorMutationService:
                     return None
         except Exception as original_error:
             for restore in reversed(restores):
-                _run_color_rollback_step(
+                run_rollback_step(
                     original_error,
                     "unwinding a partially captured batch runtime",
                     restore,

@@ -9,7 +9,11 @@ from chemvas.core.history import (
     command_requires_exact_history_transaction,
     history_transaction_scope,
 )
-from chemvas.domain.transactions import RestoreOutcome, validate_restore_outcome
+from chemvas.domain.transactions import (
+    RestoreOutcome,
+    add_recovery_error_note,
+    validate_restore_outcome,
+)
 from chemvas.ui import history_canvas_access
 from chemvas.ui.canvas_history_state import CanvasHistoryState, history_state_for
 
@@ -26,18 +30,6 @@ class HistoryStackSnapshot:
     redo_stack: tuple[HistoryCommand, ...]
     enabled: bool
     limit: int
-
-
-def _add_history_recovery_note(
-    original_error: BaseException,
-    recovery_error: BaseException,
-    *,
-    phase: str,
-) -> None:
-    original_error.add_note(
-        f"History {phase} also encountered "
-        f"{type(recovery_error).__name__}: {recovery_error}"
-    )
 
 
 class CanvasHistoryService:
@@ -116,29 +108,29 @@ class CanvasHistoryService:
                 redo_stack=expected_redo,
             )
         except Exception as recovery_error:
-            _add_history_recovery_note(
+            add_recovery_error_note(
                 original_error,
                 recovery_error,
-                phase=phase,
+                phase=f"restoring the history stacks for {phase}",
             )
             try:
                 snapshot.state.history.clear()
                 snapshot.state.redo_stack.clear()
             except Exception as clear_error:
-                _add_history_recovery_note(
+                add_recovery_error_note(
                     original_error,
                     clear_error,
-                    phase=f"{phase} conservative stack clear",
+                    phase=f"clearing both history stacks conservatively for {phase}",
                 )
             if self.state is not snapshot.state:
                 try:
                     self.state.history.clear()
                     self.state.redo_stack.clear()
                 except Exception as clear_error:
-                    _add_history_recovery_note(
+                    add_recovery_error_note(
                         original_error,
                         clear_error,
-                        phase=f"{phase} current stack clear",
+                        phase=f"clearing the current history stacks for {phase}",
                     )
             return False
         return True
@@ -180,10 +172,10 @@ class CanvasHistoryService:
         try:
             self.notify_change()
         except Exception as notification_error:
-            _add_history_recovery_note(
+            add_recovery_error_note(
                 original_error,
                 notification_error,
-                phase="failure notification",
+                phase="notifying listeners of a failed history operation",
             )
 
     @staticmethod
@@ -220,17 +212,17 @@ class CanvasHistoryService:
                 )
             )
             for recovery_error in result.errors:
-                _add_history_recovery_note(
+                add_recovery_error_note(
                     original_error,
                     recovery_error,
-                    phase="document savepoint restore",
+                    phase="restoring the document savepoint",
                 )
             return result
         except Exception as recovery_error:
-            _add_history_recovery_note(
+            add_recovery_error_note(
                 original_error,
                 recovery_error,
-                phase="document savepoint restore",
+                phase="restoring the document savepoint",
             )
             return RestoreOutcome(
                 authoritative=False,

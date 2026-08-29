@@ -4,7 +4,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, cast
 
-from chemvas.domain.transactions import RestoreOutcome
+from chemvas.domain.transactions import RestoreOutcome, add_recovery_error_note
 from chemvas.ui.bond_renderer_access import bond_renderer_for
 from chemvas.ui.renderer_style_access import renderer_for
 from chemvas.ui.transactions.object_graph_snapshot import (
@@ -36,16 +36,6 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Iterator
 
 _MISSING_RENDERER_STYLE = object()
-
-
-def _add_delete_rollback_note(
-    original_error: BaseException,
-    secondary_error: BaseException,
-) -> None:
-    original_error.add_note(
-        "Delete rollback also encountered "
-        f"{type(secondary_error).__name__}: {secondary_error}"
-    )
 
 
 @dataclass(frozen=True)
@@ -543,7 +533,11 @@ def document_transaction(
         except Exception as caught_rollback_error:
             rollback_errors = (caught_rollback_error,)
         for secondary_error in rollback_errors:
-            _add_delete_rollback_note(original_error, secondary_error)
+            add_recovery_error_note(
+                original_error,
+                secondary_error,
+                phase="restoring the document savepoint",
+            )
         raise
 
 
