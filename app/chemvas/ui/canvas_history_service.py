@@ -12,6 +12,7 @@ from chemvas.core.history import (
 from chemvas.domain.transactions import (
     RestoreOutcome,
     add_recovery_error_note,
+    run_rollback_step,
     validate_restore_outcome,
 )
 from chemvas.ui import history_canvas_access
@@ -169,14 +170,17 @@ class CanvasHistoryService:
         self.notify_change()
 
     def _notify_failed_operation(self, original_error: BaseException) -> None:
-        try:
+        # ``notify_change`` is resolved inside this body, not bound into the
+        # rollback step's argument, so a subclass that drops it becomes a note
+        # instead of an AttributeError that escapes and masks the failure.
+        def notify_listeners() -> None:
             self.notify_change()
-        except Exception as notification_error:
-            add_recovery_error_note(
-                original_error,
-                notification_error,
-                phase="notifying listeners of a failed history operation",
-            )
+
+        run_rollback_step(
+            original_error,
+            "notifying listeners of a failed history operation",
+            notify_listeners,
+        )
 
     @staticmethod
     def _failure_stack_delta(
