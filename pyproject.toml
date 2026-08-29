@@ -177,8 +177,21 @@ module = ["rdkit", "rdkit.*"]
 ignore_missing_imports = true
 
 # New architectural owners are held to mypy's full strict profile. Legacy
-# ``chemvas.core`` / ``chemvas.ui`` modules remain on the project-wide gradual
-# settings until their feature slice moves behind one of these public APIs.
+# ``chemvas.core`` / ``chemvas.ui`` modules join it one at a time, as the work
+# to satisfy it produces real types rather than filler.
+#
+# Two of them will not join in this form, and that is a decision rather than a
+# backlog item. ``chemvas.core.history`` needs 69 annotations, 53 of which are
+# the same duck-typed ``canvas``; ``core`` is Qt-free by contract, so the only
+# value available is ``Any`` — which is exactly what ``HistoryCanvasPort``
+# already declares, deliberately, a few lines away. The rest of
+# ``chemvas.ui.transactions`` needs another 71 in the same shape, and narrowing
+# those to ``object`` breaks 32 call sites that reach the scene through
+# ``getattr``. Apart from six ``QRectF`` parameters in ``scene_rect``, promoting
+# either one buys 140 ``Any`` annotations, leaves the checking exactly as strong
+# as it is now, and labels two rollback kernels "strict" when nothing about them
+# is. Raising ``HistoryCanvasPort`` from ``Any`` to a real Protocol is the
+# prerequisite, not the promotion.
 [[tool.mypy.overrides]]
 module = [
     "chemvas.domain.*",
@@ -186,9 +199,8 @@ module = [
     "chemvas.shell.*",
     "chemvas.adapters.*",
     "chemvas.bootstrap.*",
-    # These five legacy modules are promoted individually because filling in
-    # their signatures was enough to satisfy strict; the rest of
-    # ``chemvas.core`` / ``chemvas.ui`` still needs body work first.
+    # Promoted individually: filling in their signatures was the whole job, and
+    # the types to fill in were real ones.
     "chemvas.core.tool_overlay_logic",
     "chemvas.core.bond_tool_logic",
     "chemvas.core.text_tool_logic",
@@ -205,6 +217,12 @@ warn_return_any = true
 # chemvas.core.rdkit_adapter carries a type: ignore for rdkit-stubs' missing
 # RDLogger.DisableLog. Without rdkit installed (CI) the module is Any and the
 # ignore would be flagged as unused, so skip that warning for this module only.
+#
+# That same asymmetry is why the three ``chemvas.core.rdkit_*`` modules are not
+# in the strict list. Promoting them needs 33 annotations, most of them on RDKit
+# objects. Naming those objects honestly only type-checks where RDKit is
+# installed; in the CI job that gates this repository they silently degrade to
+# ``Any``, so the gate would not be enforcing what the annotations claim.
 [[tool.mypy.overrides]]
 module = ["chemvas.core.rdkit_adapter"]
 warn_unused_ignores = false
