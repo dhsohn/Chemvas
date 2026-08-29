@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING
 
 from PyQt6.QtWidgets import QGraphicsItem
 
+from chemvas.domain.transactions import add_recovery_error_note
 from chemvas.ui.atom_coords_access import atom_coords_3d_for
 from chemvas.ui.canvas_model_access import atom_for_id, bond_count_for, next_atom_id_for
 from chemvas.ui.canvas_rotation_state import rotation_state_for
@@ -58,17 +59,6 @@ class SceneClipboardPasteCallbacks:
         ],
         None,
     ]
-
-
-def _add_clipboard_rollback_note(
-    original_error: BaseException,
-    cleanup_error: BaseException,
-    *,
-    phase: str,
-) -> None:
-    original_error.add_note(
-        f"Clipboard {phase} rollback also failed: {cleanup_error!r}"
-    )
 
 
 def paste_selection_from_clipboard_for_canvas(
@@ -158,10 +148,10 @@ def paste_selection_from_clipboard_for_canvas(
             try:
                 remove_scene_item(canvas, item)
             except Exception as cleanup_error:
-                _add_clipboard_rollback_note(
+                add_recovery_error_note(
                     error,
                     cleanup_error,
-                    phase="scene cleanup",
+                    phase="removing the pasted scene items",
                 )
         try:
             rollback_insert_mutation(
@@ -173,34 +163,34 @@ def paste_selection_from_clipboard_for_canvas(
                 original_error=error,
             )
         except Exception as cleanup_error:
-            _add_clipboard_rollback_note(
+            add_recovery_error_note(
                 error,
                 cleanup_error,
-                phase="mutation",
+                phase="rolling back the paste mutation",
             )
         try:
             restore_clipboard_selection_snapshot_for_canvas(canvas, selection_snapshot)
         except Exception as cleanup_error:
-            _add_clipboard_rollback_note(
+            add_recovery_error_note(
                 error,
                 cleanup_error,
-                phase="selection",
+                phase="restoring the selection from before the paste",
             )
         try:
             set_clipboard_paste_source_json_for(canvas, previous_source_json)
         except Exception as cleanup_error:
-            _add_clipboard_rollback_note(
+            add_recovery_error_note(
                 error,
                 cleanup_error,
-                phase="source",
+                phase="restoring the clipboard paste source",
             )
         try:
             set_clipboard_paste_count_for(canvas, previous_paste_count)
         except Exception as cleanup_error:
-            _add_clipboard_rollback_note(
+            add_recovery_error_note(
                 error,
                 cleanup_error,
-                phase="count",
+                phase="restoring the clipboard paste count",
             )
         try:
             restore_result = restore_history_transaction_for_history(
@@ -208,16 +198,16 @@ def paste_selection_from_clipboard_for_canvas(
                 exact_transaction,
             )
             for exact_restore_error in restore_result.errors:
-                _add_clipboard_rollback_note(
+                add_recovery_error_note(
                     error,
                     exact_restore_error,
-                    phase="exact",
+                    phase="restoring the exact paste transaction",
                 )
         except Exception as cleanup_error:
-            _add_clipboard_rollback_note(
+            add_recovery_error_note(
                 error,
                 cleanup_error,
-                phase="exact",
+                phase="restoring the exact paste transaction",
             )
         raise
 

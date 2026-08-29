@@ -14,6 +14,7 @@ from chemvas.core.history import (
 from chemvas.core.history import (
     restore_history_transaction_for_command as _restore_history_transaction_for_command,
 )
+from chemvas.domain.transactions import add_recovery_error_note
 from chemvas.ui.atom_coords_access import atom_coords_3d_for_id
 from chemvas.ui.bond_length_graphics_refresh import refresh_bond_length_graphics_for
 from chemvas.ui.canvas_model_access import atom_for_id
@@ -32,16 +33,6 @@ from chemvas.ui.transactions.document import DocumentSavepoint, MoveGestureScope
 
 if TYPE_CHECKING:
     from chemvas.domain.transactions import RestoreOutcome
-
-
-def _add_move_rollback_note(
-    original_error: BaseException,
-    rollback_error: BaseException,
-) -> None:
-    original_error.add_note(
-        "Move rollback also encountered "
-        f"{type(rollback_error).__name__}: {rollback_error}"
-    )
 
 
 def capture_history_transaction_for_history(
@@ -142,7 +133,11 @@ def move_atoms_for_history(
                 coords_3d=before_coords_3d or None,
             )
         except Exception as rollback_error:
-            _add_move_rollback_note(original_error, rollback_error)
+            add_recovery_error_note(
+                original_error,
+                rollback_error,
+                phase="restoring the atom positions from before the move",
+            )
         # The canonical setter is itself a multi-atom operation and can stop
         # after restoring only an early atom. The exact transaction snapshot
         # restores all model/3D/graphics/selection state independently of that
@@ -153,7 +148,11 @@ def move_atoms_for_history(
             original_error,
         )
         for exact_restore_error in restore_result.errors:
-            _add_move_rollback_note(original_error, exact_restore_error)
+            add_recovery_error_note(
+                original_error,
+                exact_restore_error,
+                phase="restoring the exact move transaction",
+            )
         raise
 
 

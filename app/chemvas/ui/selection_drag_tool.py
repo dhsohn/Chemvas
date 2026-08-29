@@ -27,6 +27,7 @@ from chemvas.core.history import (
     HistoryCommand,
     MoveAtomsCommand,
 )
+from chemvas.domain.transactions import add_recovery_error_note
 from chemvas.ui.bond_renderer_access import update_bond_geometry_for
 from chemvas.ui.canvas_atom_graphics_state import atom_dots_for, atom_items_for
 from chemvas.ui.canvas_bond_graphics_state import bond_items_for_id
@@ -55,18 +56,6 @@ if TYPE_CHECKING:
     from chemvas.ui.tool_context import ToolContext
 
 _DRAG_DELTA_EPSILON = 1e-6
-
-
-def _add_drag_rollback_note(
-    primary_error: BaseException,
-    rollback_error: BaseException,
-    *,
-    phase: str,
-) -> None:
-    primary_error.add_note(
-        "Selection drag recovery also encountered an error while "
-        f"{phase}: {type(rollback_error).__name__}: {rollback_error}"
-    )
 
 
 def atom_ids_with_bonds(canvas, atom_ids: set[int], bond_ids: set[int]) -> set[int]:
@@ -177,7 +166,7 @@ class SelectionDragMixin:
         except Exception as rollback_error:
             if original_error is None:
                 raise
-            _add_drag_rollback_note(
+            add_recovery_error_note(
                 original_error,
                 rollback_error,
                 phase="restoring the drag savepoint",
@@ -186,7 +175,7 @@ class SelectionDragMixin:
         rollback_errors = list(result.errors)
         if original_error is not None:
             for recovered_error in rollback_errors:
-                _add_drag_rollback_note(
+                add_recovery_error_note(
                     original_error,
                     recovered_error,
                     phase="restoring the drag savepoint",
@@ -209,7 +198,7 @@ class SelectionDragMixin:
                 try:
                     self._release_drag_transaction(token)
                 except Exception as cleanup_error:
-                    _add_drag_rollback_note(
+                    add_recovery_error_note(
                         original_error,
                         cleanup_error,
                         phase="releasing the drag savepoint",

@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING
 
 from PyQt6.QtCore import QRectF
 
+from chemvas.domain.transactions import add_recovery_error_note
 from chemvas.ui.input_view_access import (
     CanvasSceneRectStateSnapshot,
     set_scene_rect_for,
@@ -19,18 +20,6 @@ from chemvas.ui.sheet_setup_state import (
 
 if TYPE_CHECKING:
     from collections.abc import Callable
-
-
-def _add_sheet_setup_recovery_note(
-    original_error: BaseException,
-    rollback_error: BaseException,
-    *,
-    phase: str,
-) -> None:
-    original_error.add_note(
-        f"Sheet setup rollback also failed during {phase}: "
-        f"{type(rollback_error).__name__}: {rollback_error}"
-    )
 
 
 @dataclass(slots=True)
@@ -79,24 +68,24 @@ def _run_sheet_setup_transaction(canvas, operation: Callable[[], None]) -> None:
         operation()
     except Exception as original_error:
         for rollback_error in state_savepoint.restore():
-            _add_sheet_setup_recovery_note(
+            add_recovery_error_note(
                 original_error,
                 rollback_error,
-                phase="sheet state restore",
+                phase="restoring the sheet setup state",
             )
         try:
             rect_savepoint.restore()
         except Exception as rect_restore_error:
-            _add_sheet_setup_recovery_note(
+            add_recovery_error_note(
                 original_error,
                 rect_restore_error,
-                phase="scene/view rect restore",
+                phase="restoring the scene and view rects",
             )
         for rect_recovery_error in rect_savepoint.recovery_errors:
-            _add_sheet_setup_recovery_note(
+            add_recovery_error_note(
                 original_error,
                 rect_recovery_error,
-                phase="scene/view rect restore",
+                phase="restoring the scene and view rects",
             )
         raise
     rect_savepoint.release()

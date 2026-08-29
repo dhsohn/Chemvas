@@ -8,6 +8,7 @@ from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QTransform
 from PyQt6.QtWidgets import QGraphicsView
 
+from chemvas.domain.transactions import add_recovery_error_note
 from chemvas.ui.canvas_callback_state import callback_state_for
 from chemvas.ui.canvas_hover_state import hover_state_for
 from chemvas.ui.selection_info_state import selection_info_state_for
@@ -35,16 +36,6 @@ def input_view_state_for(canvas) -> InputViewState:
 
 def _capture_optional_attribute(target: object, name: str) -> object:
     return getattr(target, name, _MISSING_CAPTURE_ATTRIBUTE)
-
-
-def _add_scene_rect_recovery_note(
-    original_error: BaseException,
-    rollback_error: BaseException,
-) -> None:
-    original_error.add_note(
-        "Scene/view rect rollback also failed: "
-        f"{type(rollback_error).__name__}: {rollback_error}"
-    )
 
 
 @dataclass(slots=True)
@@ -197,10 +188,18 @@ def set_scene_rect_for(canvas, rect) -> None:
         try:
             snapshot.restore()
         except Exception as rollback_error:
-            _add_scene_rect_recovery_note(original_error, rollback_error)
+            add_recovery_error_note(
+                original_error,
+                rollback_error,
+                phase="restoring the scene and view rects",
+            )
         else:
             for recovered_error in snapshot.recovery_errors:
-                _add_scene_rect_recovery_note(original_error, recovered_error)
+                add_recovery_error_note(
+                    original_error,
+                    recovered_error,
+                    phase="restoring the scene and view rects",
+                )
         raise
 
 

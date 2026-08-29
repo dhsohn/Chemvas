@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING, Any
 
 from PyQt6.QtCore import QPointF
 
+from chemvas.domain.transactions import add_recovery_error_note
 from chemvas.features.selection import (
     bounding_box_center_for_atoms,
     selected_atom_ids_with_bond_endpoints,
@@ -67,16 +68,6 @@ class _SelectionRotationBeginSnapshot:
         for name, value in self.state_fields.items():
             setattr(self.state, name, _copied_state_value(value))
         set_atom_coords_3d_for(self.canvas, dict(self.coords_3d))
-
-
-def _add_rotation_begin_rollback_note(
-    original_error: BaseException,
-    rollback_error: BaseException,
-) -> None:
-    original_error.add_note(
-        "Selection-rotation begin rollback also encountered "
-        f"{type(rollback_error).__name__}: {rollback_error}"
-    )
 
 
 def explicit_rotation_atom_ids_from_items(
@@ -289,7 +280,11 @@ def begin_selection_rotation_session(
         try:
             snapshot.restore()
         except Exception as rollback_error:
-            _add_rotation_begin_rollback_note(original_error, rollback_error)
+            add_recovery_error_note(
+                original_error,
+                rollback_error,
+                phase="restoring the rotation state from before the gesture",
+            )
         raise
     if rotating:
         return True

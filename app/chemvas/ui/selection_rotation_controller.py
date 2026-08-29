@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from chemvas.domain.transactions import add_recovery_error_note
 from chemvas.features.selection import (
     axis_rotated_coords,
     dominant_axis_angle_from_drag,
@@ -46,15 +47,6 @@ if TYPE_CHECKING:
     from PyQt6.QtCore import QPointF
 
     from chemvas.ui.canvas_view import CanvasView
-
-
-def _add_rotation_finalization_rollback_note(
-    original_error: BaseException,
-    cleanup_error: BaseException,
-) -> None:
-    original_error.add_note(
-        f"Rotation finalization rollback also failed: {cleanup_error!r}"
-    )
 
 
 class SelectionRotationController:
@@ -364,8 +356,9 @@ class SelectionRotationController:
                     preview.restore()
                 state.clear_session()
             except Exception as cleanup_error:
-                _add_rotation_finalization_rollback_note(
+                add_recovery_error_note(
                     original_error,
                     cleanup_error,
+                    phase="closing the rotation session after a failed finalization",
                 )
             raise

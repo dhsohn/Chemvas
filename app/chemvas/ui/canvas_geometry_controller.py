@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import math
 from functools import partial
-from typing import TYPE_CHECKING
 
 from PyQt6.QtCore import QPointF, QRectF
 from PyQt6.QtGui import QFontMetricsF
@@ -14,7 +13,11 @@ from chemvas.core.history import (
     SetRingPolygonsCommand,
     UpdateBondLengthCommand,
 )
-from chemvas.domain.transactions import restore_snapshot
+from chemvas.domain.transactions import (
+    add_recovery_error_note,
+    restore_snapshot,
+    run_rollback_step,
+)
 from chemvas.ui.atom_coords_access import atom_coords_3d_for, current_atom_coords_3d_for
 from chemvas.ui.bond_length_graphics_refresh import refresh_bond_length_graphics_for
 from chemvas.ui.canvas_atom_graphics_state import atom_items_for
@@ -54,22 +57,6 @@ from chemvas.ui.renderer_style_access import (
     renderer_for,
     set_bond_length_for,
 )
-
-if TYPE_CHECKING:
-    from collections.abc import Callable
-
-
-def _add_bond_length_rollback_note(
-    original_error: BaseException,
-    rollback_error: BaseException,
-    *,
-    phase: str | None = None,
-) -> None:
-    detail = f" while {phase}" if phase is not None else ""
-    original_error.add_note(
-        "Bond-length rollback also encountered an error"
-        f"{detail}: {type(rollback_error).__name__}: {rollback_error}"
-    )
 
 
 class CanvasGeometryController:
@@ -357,20 +344,8 @@ class CanvasGeometryController:
         # Each compensation is independent so one persistently broken graphics
         # item cannot prevent the model, projection, and remaining items from
         # being restored as far as possible.
-        def run_compensation(
-            phase: str,
-            operation: Callable[[], object],
-        ) -> None:
-            try:
-                operation()
-            except Exception as rollback_error:
-                _add_bond_length_rollback_note(
-                    original_error,
-                    rollback_error,
-                    phase=phase,
-                )
-
-        run_compensation(
+        run_rollback_step(
+            original_error,
             "restoring projection state",
             lambda: restore_projection_state_for_history(
                 self.canvas,
@@ -378,7 +353,8 @@ class CanvasGeometryController:
                 projection_anchor_2d,
             ),
         )
-        run_compensation(
+        run_rollback_step(
+            original_error,
             "restoring atom positions",
             lambda: set_atom_positions_for_history(
                 self.canvas,
@@ -386,7 +362,8 @@ class CanvasGeometryController:
                 coords_3d=coords_3d or None,
             ),
         )
-        run_compensation(
+        run_rollback_step(
+            original_error,
             "restoring ring polygons",
             lambda: set_ring_polygons_for_history(
                 self.canvas,
@@ -394,13 +371,15 @@ class CanvasGeometryController:
                 ring_polygons,
             ),
         )
-        run_compensation(
+        run_rollback_step(
+            original_error,
             "restoring the bond length",
             lambda: restore_bond_length_for_history(self.canvas, old_length),
         )
         # Renderer.set_bond_length replaces the immutable style object. Restore
         # the exact original object so external style references remain valid.
-        run_compensation(
+        run_rollback_step(
+            original_error,
             "restoring the renderer style",
             lambda: setattr(renderer, "style", renderer_style),
         )
@@ -416,11 +395,13 @@ class CanvasGeometryController:
             atom.y = y
 
         for atom_id, (x, y) in positions.items():
-            run_compensation(
+            run_rollback_step(
+                original_error,
                 f"restoring raw atom {atom_id} coordinates",
                 partial(restore_raw_atom_position, atom_id, x, y),
             )
-        run_compensation(
+        run_rollback_step(
+            original_error,
             "reapplying projection state",
             lambda: restore_projection_state_for_history(
                 self.canvas,
@@ -428,7 +409,8 @@ class CanvasGeometryController:
                 projection_anchor_2d,
             ),
         )
-        run_compensation(
+        run_rollback_step(
+            original_error,
             "reapplying ring polygons",
             lambda: set_ring_polygons_for_history(
                 self.canvas,
@@ -436,13 +418,19 @@ class CanvasGeometryController:
                 ring_polygons,
             ),
         )
-        run_compensation(
+        run_rollback_step(
+            original_error,
             "refreshing bond-length graphics",
             lambda: refresh_bond_length_graphics_for(self.canvas),
         )
-        run_compensation(
+        # The port lookup belongs inside the protected callable: passing
+        # ``self.hit_testing_service.mark_spatial_index_dirty`` directly would
+        # resolve the attribute before the rollback runner's ``try``, so a
+        # failing lookup would escape and mask the primary error.
+        run_rollback_step(
+            original_error,
             "invalidating the spatial index",
-            self.hit_testing_service.mark_spatial_index_dirty,
+            lambda: self.hit_testing_service.mark_spatial_index_dirty(),
         )
         # Apply the exact container/scene/history snapshot last. In particular,
         # its canonical bond refresh now observes the directly restored Atom
@@ -457,7 +445,11 @@ class CanvasGeometryController:
             description="bond-length transaction",
         )
         for rollback_error in restore_result.errors:
-            _add_bond_length_rollback_note(original_error, rollback_error)
+            add_recovery_error_note(
+                original_error,
+                rollback_error,
+                phase="restoring the bond-length transaction",
+            )
 
     def _atom_coords_3d_for_positions(
         self, positions: dict[int, tuple[float, float]]
