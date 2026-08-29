@@ -13,6 +13,7 @@ from chemvas.core.history import (
     HistoryCommand,
 )
 from chemvas.domain.document import model_bond_pairs, ring_atom_ids_form_cycle
+from chemvas.domain.transactions import add_recovery_error_note
 from chemvas.ui.atom_coords_access import atom_coords_3d_for
 from chemvas.ui.atom_label_access import atom_has_visible_label_for
 from chemvas.ui.canvas_callback_state import CanvasCallbackState, callback_state_for
@@ -173,7 +174,8 @@ class SceneDeleteTransactionSession:
             if not restored:
                 all_ports_set = False
             errors.extend(
-                (f"{phase} {port.name}", setter_error) for setter_error in failures
+                (f"{phase} the {port.name} observer port", setter_error)
+                for setter_error in failures
             )
         if all_ports_set:
             self.observers_suspended = suspended
@@ -187,7 +189,8 @@ class SceneDeleteTransactionSession:
         if not errors:
             return
         _, primary_error = errors[0]
-        cls._add_observer_error_notes(primary_error, errors[1:])
+        for phase, observer_error in errors[1:]:
+            add_recovery_error_note(primary_error, observer_error, phase=phase)
         raise primary_error
 
     def _try_suspend_observers(
@@ -214,17 +217,6 @@ class SceneDeleteTransactionSession:
             suspended=False,
         )
 
-    @staticmethod
-    def _add_observer_error_notes(
-        primary_error: BaseException,
-        observer_errors: list[tuple[str, BaseException]],
-    ) -> None:
-        for phase, observer_error in observer_errors:
-            primary_error.add_note(
-                "Delete gesture observer synchronization also failed during "
-                f"{phase}: {type(observer_error).__name__}: {observer_error}"
-            )
-
     def _resume_and_sync_observers(self) -> list[tuple[str, BaseException]]:
         """Publish one final selection update without recursive intermediate work."""
 
@@ -238,8 +230,14 @@ class SceneDeleteTransactionSession:
         try:
             if not suspension_errors:
                 for phase, callback in (
-                    ("group selection", self.selection_group_callback),
-                    ("selection outline", self.selection_outline_callback),
+                    (
+                        "publishing the group selection observer update",
+                        self.selection_group_callback,
+                    ),
+                    (
+                        "publishing the selection outline observer update",
+                        self.selection_outline_callback,
+                    ),
                 ):
                     if not callable(callback):
                         continue
@@ -388,7 +386,8 @@ class SceneDeleteTransactionSession:
         observer_errors = self._resume_and_sync_observers()
         if observer_errors:
             _, primary_error = observer_errors[0]
-            self._add_observer_error_notes(primary_error, observer_errors[1:])
+            for phase, observer_error in observer_errors[1:]:
+                add_recovery_error_note(primary_error, observer_error, phase=phase)
             raise primary_error
         self.snapshot.release()
         self.active = False
@@ -891,7 +890,8 @@ class SceneDeleteController:
                         ("releasing the failed delete guard", release_error)
                     )
             session.active = False
-            session._add_observer_error_notes(original_error, cleanup_errors)
+            for phase, cleanup_error in cleanup_errors:
+                add_recovery_error_note(original_error, cleanup_error, phase=phase)
             raise
         return session
 
@@ -1161,11 +1161,11 @@ class SceneDeleteController:
         errors: list[tuple[str, BaseException]] = []
         actions = (
             (
-                "selection-outline resume",
+                "resuming the selection outline after a delete",
                 lambda: self._style_controller().suspend_selection_outline(False),
             ),
             (
-                "selection-outline refresh",
+                "refreshing the selection outline after a delete",
                 lambda: refresh_selection_outline_for(self.canvas),
             ),
         )
@@ -1175,17 +1175,6 @@ class SceneDeleteController:
             except Exception as exc:
                 errors.append((phase, exc))
         return errors
-
-    @staticmethod
-    def _add_cleanup_error_notes(
-        primary_error: BaseException,
-        cleanup_errors: list[tuple[str, BaseException]],
-    ) -> None:
-        for phase, cleanup_error in cleanup_errors:
-            primary_error.add_note(
-                "Delete selection cleanup also failed during "
-                f"{phase}: {type(cleanup_error).__name__}: {cleanup_error}"
-            )
 
     def _delete_selected_items(self) -> bool:
         items = selected_scene_items_for(
@@ -1259,10 +1248,12 @@ class SceneDeleteController:
         finally:
             cleanup_errors = self._selection_delete_cleanup_errors()
             if body_error is not None:
-                self._add_cleanup_error_notes(body_error, cleanup_errors)
+                for phase, cleanup_error in cleanup_errors:
+                    add_recovery_error_note(body_error, cleanup_error, phase=phase)
             elif cleanup_errors:
                 _, primary_error = cleanup_errors[0]
-                self._add_cleanup_error_notes(primary_error, cleanup_errors[1:])
+                for phase, cleanup_error in cleanup_errors[1:]:
+                    add_recovery_error_note(primary_error, cleanup_error, phase=phase)
                 raise primary_error
 
 

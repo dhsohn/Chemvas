@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from functools import wraps
 
+from chemvas.domain.transactions import run_rollback_step
 from chemvas.ui.canvas_atom_graphics_state import visible_atom_item_for
 from chemvas.ui.canvas_bond_graphics_state import bond_items_for_id
 from chemvas.ui.canvas_group_state import (
@@ -63,13 +64,17 @@ def _push_group_command(canvas, command) -> None:
     try:
         history.push(command)
     except Exception as original_error:
-        try:
+        # The ``undo`` attribute is looked up inside this body rather than in a
+        # ``partial`` argument, so a command without it becomes a note instead
+        # of an AttributeError that escapes and masks the push failure.
+        def undo_group_command() -> None:
             command.undo(canvas)
-        except Exception as rollback_error:
-            original_error.add_note(
-                "Group mutation rollback also encountered "
-                f"{type(rollback_error).__name__}: {rollback_error}"
-            )
+
+        run_rollback_step(
+            original_error,
+            "undoing a group mutation after its history push failed",
+            undo_group_command,
+        )
         raise
 
 

@@ -379,37 +379,48 @@ class CanvasNoteController:
             assert document is not None
             signals_blocked = document.signalsBlocked()
 
-            def restore_signal_state(primary_error: BaseException) -> None:
-                try:
-                    document.blockSignals(signals_blocked)
-                except Exception as secondary_error:
-                    primary_error.add_note(
-                        "Editing-note signal-state restore also encountered "
-                        f"{type(secondary_error).__name__}: {secondary_error}"
-                    )
+            # The Qt methods are looked up inside these bodies rather than bound
+            # through a ``partial`` argument, so a document or item that no
+            # longer offers them becomes a note instead of an AttributeError
+            # that escapes the rollback step and masks the primary failure.
+            def restore_blocked_signals() -> None:
+                document.blockSignals(signals_blocked)
+
+            def restore_snapshot_html() -> None:
+                item.setHtml(snapshot.html)
 
             try:
                 document.blockSignals(True)
             except Exception as block_error:
-                restore_signal_state(block_error)
-                try:
-                    item.setHtml(snapshot.html)
-                except Exception as html_error:
-                    block_error.add_note(
-                        "Unblocked editing-note HTML restore also encountered "
-                        f"{type(html_error).__name__}: {html_error}"
-                    )
+                run_rollback_step(
+                    block_error,
+                    "restoring an editing note's document signal state",
+                    restore_blocked_signals,
+                )
+                run_rollback_step(
+                    block_error,
+                    "restoring editing-note HTML without signal blocking",
+                    restore_snapshot_html,
+                )
                 raise
             try:
                 item.setHtml(snapshot.html)
             except Exception as html_error:
-                restore_signal_state(html_error)
+                run_rollback_step(
+                    html_error,
+                    "restoring an editing note's document signal state",
+                    restore_blocked_signals,
+                )
                 raise
             else:
                 try:
                     document.blockSignals(signals_blocked)
                 except Exception as signal_restore_error:
-                    restore_signal_state(signal_restore_error)
+                    run_rollback_step(
+                        signal_restore_error,
+                        "restoring an editing note's document signal state",
+                        restore_blocked_signals,
+                    )
                     raise
 
         run_rollback_step(

@@ -5528,3 +5528,169 @@ def test_restore_atoms_steps_have_one_owner_per_failure_mode() -> None:
         CORE_HISTORY_MODULE,
     ]
     assert [step.rsplit(": ", 1)[1] for step in steps] == RESTORE_ATOM_STATES_BODIES
+
+
+TRANSACTION_RECOVERY_MODULE = "app/chemvas/domain/transactions/recovery.py"
+CANONICAL_RECOVERY_NOTE = "add_recovery_error_note"
+ROLLBACK_RUNNER_BODIES = ["run_rollback_step"]
+
+
+def _exception_note_attachments(source: str) -> list[int]:
+    """Lines that attach a note to an exception.
+
+    ``BaseException.add_note`` takes exactly one positional-only argument, so
+    one positional argument and no keywords is the entire call shape and a
+    copy cannot spell it any other way. Nothing about the receiver is read: a
+    note put on a caught, re-raised, aliased or attribute-held error is the
+    same attachment to this rule, and so is one hidden inside a nested
+    closure, which is where the last two copies were found.
+
+    The limitation is the name, not the shape. Chemvas has one live
+    ``add_note`` collision -- the sticky-note canvases in ``tests`` answer
+    ``add_note(selected=...)`` -- and it stays out of range twice over,
+    because this rule reads production sources only and that API is
+    keyword-driven. A production note API that took a single positional
+    argument would be counted here and would have to be named something else.
+    """
+    lines: list[int] = []
+    for node in ast.walk(ast.parse(source)):
+        if not isinstance(node, ast.Call):
+            continue
+        called = node.func
+        if not isinstance(called, ast.Attribute) or called.attr != "add_note":
+            continue
+        if len(node.args) != 1 or node.keywords:
+            continue
+        lines.append(node.lineno)
+    return sorted(lines)
+
+
+def test_exception_notes_have_one_owner() -> None:
+    """One module attaches notes to exceptions.
+
+    Seven modules used to phrase their own "rollback also encountered ..."
+    sentence, so a reader chasing a secondary failure had to know which
+    subsystem wrote it. ``domain.transactions.recovery`` owns the wording
+    now; every other module reaches it through ``add_recovery_error_note`` or
+    ``run_rollback_step`` and supplies a phase instead.
+
+    The rule reads calls, not definitions, so re-adding a private
+    ``_add_..._note`` helper does not evade it -- the ``add_note`` inside the
+    helper is the violation. What it cannot see is a note attached through a
+    method name assembled at run time, or through ``BaseException.add_note``
+    fetched as an unbound attribute and called with two arguments.
+    """
+    owners = sorted(
+        {
+            str(path.relative_to(APP_ROOT.parents[0]))
+            for path in _app_python_files()
+            if _exception_note_attachments(path.read_text(encoding="utf-8"))
+        }
+    )
+
+    assert owners == [TRANSACTION_RECOVERY_MODULE]
+
+
+def _canonical_note_names(tree: ast.AST) -> set[str]:
+    """Local names bound to ``add_recovery_error_note`` in one module."""
+
+    names = {CANONICAL_RECOVERY_NOTE}
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.ImportFrom):
+            continue
+        for alias in node.names:
+            if alias.name == CANONICAL_RECOVERY_NOTE and alias.asname is not None:
+                names.add(alias.asname)
+    return names
+
+
+def _is_canonical_note_statement(statement: ast.stmt, names: set[str]) -> bool:
+    if isinstance(statement, ast.For) and not statement.orelse:
+        return len(statement.body) == 1 and _is_canonical_note_statement(
+            statement.body[0], names
+        )
+    if not isinstance(statement, ast.Expr) or not isinstance(statement.value, ast.Call):
+        return False
+    called = statement.value.func
+    return isinstance(called, ast.Name) and called.id in names
+
+
+def _handler_only_notes(handler: ast.ExceptHandler, names: set[str]) -> bool:
+    body = list(handler.body)
+    if body and isinstance(body[-1], ast.Return):
+        returned = body[-1].value
+        if returned is not None and not isinstance(returned, (ast.Constant, ast.Name)):
+            return False
+        body = body[:-1]
+    return bool(body) and all(
+        _is_canonical_note_statement(statement, names) for statement in body
+    )
+
+
+def _rollback_runners(source: str) -> list[tuple[int, str]]:
+    """Functions that are nothing but "run this, and note it if it fails".
+
+    The shape is the whole definition: an optional docstring, then one
+    ``try`` whose every handler does no more than call the canonical note
+    (any number of times, or once per iteration of a loop) and optionally
+    return a constant. That is ``run_rollback_step`` rewritten, which is why
+    the canonical one is the single expected match rather than an exclusion
+    -- if this detector ever stops recognizing it, the rule fails instead of
+    passing on an empty scan.
+
+    Deliberately not caught: the roughly thirty hand-written handlers that
+    call the canonical note as one step among several. They re-raise, restore
+    state, build a ``RestoreOutcome``, or run under a ``finally``, so they
+    are compensation written at its own call site, not a second runner. A
+    handler that grows past a bare note stops matching for the same reason,
+    which is the escape: a re-derived runner that also logs, or that returns
+    a computed value, reads as one of those and is missed.
+    """
+    tree = ast.parse(source)
+    names = _canonical_note_names(tree)
+    runners: list[tuple[int, str]] = []
+    for node in ast.walk(tree):
+        if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        body = node.body
+        opening = body[0]
+        if (
+            isinstance(opening, ast.Expr)
+            and isinstance(opening.value, ast.Constant)
+            and isinstance(opening.value.value, str)
+        ):
+            body = body[1:]
+        if len(body) != 1 or not isinstance(body[0], ast.Try):
+            continue
+        attempt = body[0]
+        if attempt.orelse or attempt.finalbody or not attempt.handlers:
+            continue
+        if all(_handler_only_notes(handler, names) for handler in attempt.handlers):
+            runners.append((node.lineno, node.name))
+    return sorted(runners)
+
+
+def test_rollback_runner_has_one_owner() -> None:
+    """One function runs a compensation step and notes its failure.
+
+    A single owner for the note wording does not stop a module from wrapping
+    it back up: ``canvas_history_service._notify_failed_operation`` had
+    already grown into a private ``run_rollback_step`` with its operation and
+    phase frozen in, and passed the note rule while doing it. Each such copy
+    re-decides what to swallow and whether to return, which is the policy the
+    canonical runner exists to hold.
+
+    The import alias is followed, because ``ui.history_commands`` already
+    imports the note as ``_add_rollback_error_note``; a copy that renamed its
+    import the same way would otherwise read as calling something else.
+    """
+    runners = [
+        f"{path.relative_to(APP_ROOT.parents[0])}:{line_no}: {name}"
+        for path in _app_python_files()
+        for line_no, name in _rollback_runners(path.read_text(encoding="utf-8"))
+    ]
+
+    assert [runner.rsplit(":", 2)[0] for runner in runners] == [
+        TRANSACTION_RECOVERY_MODULE
+    ]
+    assert [runner.rsplit(": ", 1)[1] for runner in runners] == ROLLBACK_RUNNER_BODIES

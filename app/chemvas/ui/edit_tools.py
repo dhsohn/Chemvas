@@ -6,6 +6,7 @@ from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QColor
 
 from chemvas.core.tool_overlay_logic import activate_tool_no_drag
+from chemvas.domain.transactions import add_recovery_error_note
 from chemvas.ui.canvas_smiles_input_state import last_smiles_input_for
 from chemvas.ui.delete_tool_logic import (
     build_delete_tool_history_command,
@@ -103,17 +104,6 @@ class DeleteTool(Tool):
         self._before_smiles_input = None
         self._delete_session = None
 
-    @staticmethod
-    def _add_rollback_error_notes(
-        primary_error: BaseException,
-        rollback_errors: list[BaseException],
-    ) -> None:
-        for rollback_error in rollback_errors:
-            primary_error.add_note(
-                "Delete tool rollback also encountered "
-                f"{type(rollback_error).__name__}: {rollback_error}"
-            )
-
     def _rollback_active_session(
         self, original_error: BaseException | None = None
     ) -> None:
@@ -138,11 +128,21 @@ class DeleteTool(Tool):
                 # and its command metadata so deactivate/new press can retry.
                 self._erasing = False
         if original_error is not None:
-            self._add_rollback_error_notes(original_error, rollback_errors)
+            for rollback_error in rollback_errors:
+                add_recovery_error_note(
+                    original_error,
+                    rollback_error,
+                    phase="rolling back a delete tool session",
+                )
             return
         if rollback_errors:
             primary_error = rollback_errors[0]
-            self._add_rollback_error_notes(primary_error, rollback_errors[1:])
+            for rollback_error in rollback_errors[1:]:
+                add_recovery_error_note(
+                    primary_error,
+                    rollback_error,
+                    phase="rolling back a delete tool session",
+                )
             raise primary_error
 
     def _finish_active_session(self, command=None) -> None:
