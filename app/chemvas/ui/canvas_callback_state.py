@@ -1,8 +1,10 @@
 from __future__ import annotations
 
-from collections.abc import Callable
 from dataclasses import dataclass
-from typing import cast
+from typing import TYPE_CHECKING, cast
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 
 @dataclass(slots=True)
@@ -15,7 +17,7 @@ class CanvasCallbackState:
 
 
 def callback_state_for(canvas) -> CanvasCallbackState:
-    return cast(CanvasCallbackState, canvas.runtime_state.callback_state)
+    return cast("CanvasCallbackState", canvas.runtime_state.callback_state)
 
 
 __all__ = ["CanvasCallbackState", "callback_state_for"]

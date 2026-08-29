@@ -59,7 +59,7 @@ def inspect_document_graph(state: Mapping[str, object]) -> dict[str, object]:
         selection = select_component(state, component.index)
         annotations.update(selection.model.atom_annotations)
     attached_marks: dict[int, list[str]] = {}
-    for raw_mark in cast(list[object], state.get("marks", [])):
+    for raw_mark in cast("list[object]", state.get("marks", [])):
         if not isinstance(raw_mark, Mapping):
             continue
         atom_id = _state_atom_id(raw_mark.get("atom_id"))
@@ -111,9 +111,9 @@ def inspect_document_graph(state: Mapping[str, object]) -> dict[str, object]:
             for component in components
         ],
         "dependencies": {
-            "ring_fill_count": len(cast(list[object], state.get("ring_fills", []))),
+            "ring_fill_count": len(cast("list[object]", state.get("ring_fills", []))),
             "attached_mark_count": sum(len(items) for items in attached_marks.values()),
-            "group_count": len(cast(list[object], state.get("groups", []))),
+            "group_count": len(cast("list[object]", state.get("groups", []))),
             "perspective_present": state.get("perspective") is not None,
             "calculation_plan_present": state.get("calculation_plan") is not None,
         },
@@ -137,7 +137,7 @@ def apply_document_patch(
 ) -> DocumentPatchResult:
     """Apply a strict graph patch to a private copy and validate all invariants."""
     operations = _validated_patch_operations(patch, source_sha256=source_sha256)
-    candidate = cast(dict[str, Any], deepcopy(dict(state)))
+    candidate = cast("dict[str, Any]", deepcopy(dict(state)))
     model = _document_model(candidate)
     # Resolve the dual mark/model representation before mutating anything so an
     # already-conflicting source cannot be laundered through a graph patch.
@@ -211,7 +211,7 @@ def _validated_patch_operations(
 def _apply_operation(
     state: dict[str, Any], model: MoleculeModel, operation: Mapping[str, object]
 ) -> dict[str, object]:
-    op = cast(str, operation["op"])
+    op = cast("str", operation["op"])
     if op == "add_atom":
         return _add_atom(model, operation)
     if op == "update_atom":
@@ -306,7 +306,7 @@ def _add_bond(
         operation.get("order"), operation.get("style"), operation.get("color")
     )
     bond_id = model.add_bond(a, b, order)
-    bond = cast(Bond, model.bonds[bond_id])
+    bond = cast("Bond", model.bonds[bond_id])
     bond.style = style
     bond.color = color
     return {"op": "add_bond", "a": a, "b": b}
@@ -358,9 +358,9 @@ def _remove_bond(
 
 
 def _move_ring_points(state: dict[str, Any], atom_id: int, x: float, y: float) -> None:
-    for ring in cast(list[dict[str, Any]], state.get("ring_fills", [])):
-        atom_ids = cast(list[object], ring.get("atom_ids", []))
-        points = cast(list[object], ring.get("points", []))
+    for ring in cast("list[dict[str, Any]]", state.get("ring_fills", [])):
+        atom_ids = cast("list[object]", ring.get("atom_ids", []))
+        points = cast("list[object]", ring.get("points", []))
         for index, raw_atom_id in enumerate(atom_ids):
             if _state_atom_id(raw_atom_id) == atom_id:
                 points[index] = [x, y]
@@ -369,10 +369,10 @@ def _move_ring_points(state: dict[str, Any], atom_id: int, x: float, y: float) -
 def _move_attached_marks(
     state: dict[str, Any], atom_id: int, dx: float, dy: float
 ) -> None:
-    for mark in cast(list[dict[str, Any]], state.get("marks", [])):
+    for mark in cast("list[dict[str, Any]]", state.get("marks", [])):
         if _state_atom_id(mark.get("atom_id")) == atom_id:
-            mark["x"] = float(cast(Any, mark["x"])) + dx
-            mark["y"] = float(cast(Any, mark["y"])) + dy
+            mark["x"] = float(cast("Any", mark["x"])) + dx
+            mark["y"] = float(cast("Any", mark["y"])) + dy
 
 
 def _move_perspective_coordinate(
@@ -395,7 +395,7 @@ def _document_model(state: Mapping[str, object]) -> MoleculeModel:
     model_state = state.get("model")
     if not isinstance(model_state, Mapping):
         raise ValueError("document state is missing its model")
-    return deserialize_model_state(cast(Mapping[str, object], model_state))
+    return deserialize_model_state(cast("Mapping[str, object]", model_state))
 
 
 def _counts(state: Mapping[str, object], model: MoleculeModel) -> dict[str, int]:
@@ -428,7 +428,7 @@ def _changes(
     if not isinstance(value, Mapping) or not value or not set(value) <= allowed:
         names = ", ".join(sorted(allowed))
         raise ValueError(f"{operation} changes must be a non-empty subset of: {names}")
-    return cast(Mapping[str, object], value)
+    return cast("Mapping[str, object]", value)
 
 
 def _require_exact_keys(
@@ -439,14 +439,14 @@ def _require_exact_keys(
 
 
 def _atom_id(value: object, field: str) -> int:
-    if type(value) is not int or cast(int, value) < 0:
+    if type(value) is not int or cast("int", value) < 0:
         raise ValueError(f"{field} must be a nonnegative integer")
-    return cast(int, value)
+    return cast("int", value)
 
 
 def _state_atom_id(value: object) -> int | None:
     if type(value) is int:
-        return cast(int, value)
+        return cast("int", value)
     if isinstance(value, str) and value.isdecimal():
         return int(value)
     return None
@@ -461,19 +461,19 @@ def _element(value: object) -> str:
 def _number(value: object, field: str) -> float:
     if not is_document_number(value):
         raise ValueError(f"{field} must be a finite JSON-safe number")
-    return float(cast(Any, value))
+    return float(cast("Any", value))
 
 
 def _color(value: object) -> str:
     if not is_hex_color(value):
         raise ValueError("color must be #rgb or #rrggbb hexadecimal")
-    return cast(str, value)
+    return cast("str", value)
 
 
 def _boolean(value: object, field: str) -> bool:
     if type(value) is not bool:
         raise ValueError(f"{field} must be a boolean")
-    return cast(bool, value)
+    return cast("bool", value)
 
 
 def _bond_values(
@@ -485,7 +485,7 @@ def _bond_values(
         raise ValueError("bond style is not supported")
     if style_value in {"wedge", "hash"} and order_value != 1:
         raise ValueError("wedge/hash bonds must have order 1")
-    return cast(int, order_value), style_value, _color(color_value)
+    return cast("int", order_value), style_value, _color(color_value)
 
 
 def _pair(a: int, b: int) -> tuple[int, int]:

@@ -2,22 +2,22 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from PyQt6.QtCore import QPointF
-from PyQt6.QtGui import QColor, QPainterPath
-from PyQt6.QtWidgets import (
-    QGraphicsItem,
-    QGraphicsTextItem,
-)
-
-from chemvas.features.selection import (
-    SelectionRect,
-    StructureHit,
-)
 from chemvas.ui.scene_group_operations import group_selection_targets_for
 from chemvas.ui.selection_collection_access import selected_ids_for
 from chemvas.ui.selection_scene_access import set_scene_items_selected_for
 
 if TYPE_CHECKING:
+    from PyQt6.QtCore import QPointF
+    from PyQt6.QtGui import QColor, QPainterPath
+    from PyQt6.QtWidgets import (
+        QGraphicsItem,
+        QGraphicsTextItem,
+    )
+
+    from chemvas.features.selection import (
+        SelectionRect,
+        StructureHit,
+    )
     from chemvas.ui.canvas_hit_testing_service import CanvasHitTestingService
     from chemvas.ui.canvas_view import CanvasView
     from chemvas.ui.selection_hit_test_service import SelectionHitTestService

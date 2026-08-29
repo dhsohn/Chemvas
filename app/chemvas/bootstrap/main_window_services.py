@@ -1,7 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Callable
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
 
 from chemvas.adapters.qt.renderer import Renderer
 from chemvas.bootstrap.window_registry import open_new_window
@@ -77,6 +76,9 @@ from chemvas.ui.main_window_tool_routing_service import MainWindowToolRoutingSer
 from chemvas.ui.main_window_tool_state_service import MainWindowToolStateService
 from chemvas.ui.main_window_ui_assembly_service import MainWindowUIAssemblyService
 
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
 
 def build_main_window_services() -> MainWindowServices:
     # The port module fronts existing Qt objects. Keep that dynamic seam at
@@ -87,9 +89,9 @@ def build_main_window_services() -> MainWindowServices:
         scene_transform_controller_for_window
     )
     active_canvas_or_none = cast(
-        Callable[[Any], Any | None], active_canvas_or_none_for_window
+        "Callable[[Any], Any | None]", active_canvas_or_none_for_window
     )
-    note_controller_for = cast(Callable[[Any], Any], note_controller_for_access)
+    note_controller_for = cast("Callable[[Any], Any]", note_controller_for_access)
 
     action_availability_service = MainWindowActionAvailabilityService(
         history_service_for_window=history_service_for_window,

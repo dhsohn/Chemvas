@@ -17,7 +17,7 @@ class CanvasDocumentMetadataState:
 
 def document_metadata_state_for(canvas: Any) -> CanvasDocumentMetadataState:
     return cast(
-        CanvasDocumentMetadataState,
+        "CanvasDocumentMetadataState",
         canvas.runtime_state.document_metadata_state,
     )
 

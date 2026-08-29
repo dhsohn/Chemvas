@@ -1,7 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Sequence
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from PyQt6.QtCore import QPointF, Qt
 from PyQt6.QtGui import QColor, QPen
@@ -13,6 +12,9 @@ from PyQt6.QtWidgets import (
 )
 
 from chemvas.ui.preview_scene_renderer import clear_scene_items
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
 
 
 def clear_hover_items(

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from chemvas.domain.document import MoleculeModel
+from typing import TYPE_CHECKING
+
 from chemvas.features.insertion import (
     build_3d_conversion_payload as build_3d_conversion_payload_state,
 )
@@ -11,6 +12,9 @@ from chemvas.ui.canvas_model_access import model_for
 from chemvas.ui.mark_item_access import mark_kinds_by_atom_for
 from chemvas.ui.selection_collection_access import selected_structure_ids_for
 from chemvas.ui.selection_geometry_access import bounds_for_atoms_for
+
+if TYPE_CHECKING:
+    from chemvas.domain.document import MoleculeModel
 
 
 def build_3d_conversion_payload_for(

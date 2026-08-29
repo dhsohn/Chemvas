@@ -1,10 +1,12 @@
 from __future__ import annotations
 
-from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
 
-from chemvas.domain.document import Bond
+if TYPE_CHECKING:
+    from collections.abc import Iterable, Sequence
+
+    from chemvas.domain.document import Bond
 
 StructureKind = Literal["atom", "bond", "ring", "other"]
 Point2D = tuple[float, float]

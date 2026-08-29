@@ -81,7 +81,8 @@ class CanvasSceneResetService:
                 scene.clear()  # type: ignore[attr-defined]
             except Exception:
                 if qt_items_before_clear is not None and (
-                    tuple(cast(QGraphicsScene, scene).items()) != qt_items_before_clear
+                    tuple(cast("QGraphicsScene", scene).items())
+                    != qt_items_before_clear
                 ):
                     mark_destructive_started()
                 raise

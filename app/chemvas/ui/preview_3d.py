@@ -1,8 +1,7 @@
 from __future__ import annotations
 
 import math
-from collections.abc import Callable
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from PyQt6.QtCore import QPointF, QRectF, Qt, QThread, QTimer
 from PyQt6.QtGui import QFont, QFontMetricsF, QIcon, QPainter
@@ -25,6 +24,9 @@ from chemvas.ui.preview_3d_renderer import status_badge_width
 from chemvas.ui.preview_3d_state import preview_payload_signature, preview_status_badge
 from chemvas.ui.preview_3d_worker import Preview3DAdapter, Preview3DWorker
 from chemvas.ui.structure_payload_access import build_selected_3d_conversion_payload_for
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 
 def _mouse_interaction_active() -> bool:

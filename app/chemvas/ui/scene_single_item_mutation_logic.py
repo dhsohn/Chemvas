@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Callable, Iterable, Mapping, Sequence
+from typing import TYPE_CHECKING
 
 from chemvas.core.history import (
     CompositeCommand,
@@ -8,9 +8,13 @@ from chemvas.core.history import (
     DeleteBondCommand,
     HistoryCommand,
 )
-from chemvas.domain.document import Bond
 from chemvas.features.rendering import cycle_plain_bond_style
 from chemvas.ui.history_commands import DeleteSceneItemsCommand
+
+if TYPE_CHECKING:
+    from collections.abc import Callable, Iterable, Mapping, Sequence
+
+    from chemvas.domain.document import Bond
 
 
 def delete_atom_with_history(

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from chemvas.ui.benzene_tool import BenzeneTool
 from chemvas.ui.bond_tool import BondTool
 from chemvas.ui.edit_tools import ColorTool, DeleteTool, FlipTool
@@ -9,8 +11,10 @@ from chemvas.ui.perspective_tool import PerspectiveTool
 from chemvas.ui.preview_tools import ArrowTool, OrbitalTool, ShapeTool, TSBracketTool
 from chemvas.ui.select_tool import SelectTool
 from chemvas.ui.text_tool import TextTool
-from chemvas.ui.tool_base import Tool
 from chemvas.ui.tool_context import ToolContext
+
+if TYPE_CHECKING:
+    from chemvas.ui.tool_base import Tool
 
 
 class ToolController:

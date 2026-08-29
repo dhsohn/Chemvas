@@ -1,15 +1,9 @@
 from __future__ import annotations
 
-from collections.abc import Callable
 from typing import TYPE_CHECKING
 
 from PyQt6.QtCore import QPointF
 
-from chemvas.features.insertion import (
-    TemplateInsertPlan,
-    TemplateInsertRequest,
-    TemplateInsertResolution,
-)
 from chemvas.ui.bond_graphics_access import add_bond_graphics_for
 from chemvas.ui.canvas_model_access import (
     atom_for_id,
@@ -38,6 +32,13 @@ from chemvas.ui.structure_insert_access import (
 from chemvas.ui.structure_mutation_access import add_benzene_ring_for, add_bond_for
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
+    from chemvas.features.insertion import (
+        TemplateInsertPlan,
+        TemplateInsertRequest,
+        TemplateInsertResolution,
+    )
     from chemvas.ui.canvas_view import CanvasView
 
 

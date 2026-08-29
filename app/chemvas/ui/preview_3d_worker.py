@@ -1,7 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Callable
-from typing import Any, Protocol
+from typing import TYPE_CHECKING, Any, Protocol
 
 from PyQt6.QtCore import QObject, pyqtSignal
 
@@ -11,6 +10,9 @@ from chemvas.features.insertion import (
     RDKitResult,
     model_with_atom_annotations,
 )
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 
 class Preview3DAdapter(Protocol):

@@ -3,8 +3,6 @@ from __future__ import annotations
 import math
 from typing import TYPE_CHECKING
 
-from PyQt6.QtCore import QPointF
-
 from chemvas.features.selection import (
     AtomHitCandidate,
     BondHitCandidate,
@@ -18,6 +16,8 @@ from chemvas.ui.pick_radius_access import atom_pick_radius_for, bond_pick_radius
 from chemvas.ui.renderer_style_access import bond_length_px_for
 
 if TYPE_CHECKING:
+    from PyQt6.QtCore import QPointF
+
     from chemvas.ui.canvas_hit_testing_service import CanvasHitTestingService
     from chemvas.ui.canvas_view import CanvasView
     from chemvas.ui.selection_structure_service import SelectionStructureService

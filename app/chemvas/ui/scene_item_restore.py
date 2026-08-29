@@ -48,7 +48,7 @@ def create_ring_item_from_state(
     *,
     ring_fill_brush_getter: RingFillBrushGetter,
 ) -> QGraphicsPolygonItem | None:
-    points = [QPointF(x, y) for x, y in cast(Any, ring_state.get("points", []))]
+    points = [QPointF(x, y) for x, y in cast("Any", ring_state.get("points", []))]
     if len(points) < 3:
         return None
     ring_item = NoSelectPolygonItem(QPolygonF(points))
@@ -84,8 +84,8 @@ def create_note_item_from_state(
     item.setData(0, "note")
     item.setPos(
         QPointF(
-            float(cast(Any, note_state.get("x", 0.0))),
-            float(cast(Any, note_state.get("y", 0.0))),
+            float(cast("Any", note_state.get("x", 0.0))),
+            float(cast("Any", note_state.get("y", 0.0))),
         )
     )
     note_style_applier(item)
@@ -138,15 +138,15 @@ def create_arrow_item_from_state(
     end = arrow_state.get("end")
     if start is None or end is None:
         return None
-    start_pt = QPointF(*cast(Any, start))
-    end_pt = QPointF(*cast(Any, end))
+    start_pt = QPointF(*cast("Any", start))
+    end_pt = QPointF(*cast("Any", end))
     item = build_arrow_item(start_pt, end_pt, kind)
     item.setData(0, kind)
     control = arrow_state.get("control")
     double = bool(arrow_state.get("double", False))
     data = {"start": start_pt, "end": end_pt, "control": None, "double": double}
     if kind in {"curved_single", "curved_double"} and control is not None:
-        control_pt = QPointF(*cast(Any, control))
+        control_pt = QPointF(*cast("Any", control))
         set_curved_arrow_path(item, start_pt, end_pt, control_pt, double)
         data["control"] = control_pt
     item.setData(2, data)
@@ -190,7 +190,7 @@ def create_orbital_item_from_state(
     center = orbital_state.get("center")
     if center is None:
         return None
-    center_point = QPointF(*cast(Any, center))
+    center_point = QPointF(*cast("Any", center))
     kind = str(orbital_state.get("orbital_kind", "s"))
     items = build_orbital_items(center_point, kind)
     if not items:
@@ -208,8 +208,8 @@ def create_orbital_item_from_state(
     )
     group.setData(2, {"kind": kind})
     group.setTransformOriginPoint(center_point)
-    group.setScale(float(cast(Any, orbital_state.get("scale", 1.0))))
-    group.setRotation(float(cast(Any, orbital_state.get("rotation", 0.0))))
+    group.setScale(float(cast("Any", orbital_state.get("scale", 1.0))))
+    group.setRotation(float(cast("Any", orbital_state.get("rotation", 0.0))))
     return group
 
 

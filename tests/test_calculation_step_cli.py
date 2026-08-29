@@ -5,7 +5,7 @@ import json
 import os
 import subprocess
 import sys
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pytest
 
@@ -20,6 +20,9 @@ from chemvas.domain.document import (
 )
 from chemvas.features.calculation_bundle import AtomMapEntry, CalculationArtifacts
 from tests.test_calculation_plan import _document_state, _plan
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 def _validate_common_machine(path: Path) -> None:

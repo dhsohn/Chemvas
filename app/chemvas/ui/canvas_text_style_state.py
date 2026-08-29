@@ -26,7 +26,7 @@ class CanvasTextStyleState:
 
 
 def text_style_state_for(canvas: Any) -> CanvasTextStyleState:
-    return cast(CanvasTextStyleState, canvas.runtime_state.text_style_state)
+    return cast("CanvasTextStyleState", canvas.runtime_state.text_style_state)
 
 
 def set_text_style_for(canvas: Any, name: str, value: Any) -> None:

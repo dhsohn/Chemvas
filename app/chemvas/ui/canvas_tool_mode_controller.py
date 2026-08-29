@@ -1,8 +1,7 @@
 from __future__ import annotations
 
-from collections.abc import Callable
 from functools import wraps
-from typing import Any, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar
 
 from chemvas.features.annotations import BRACKET_KIND_VALUES, SHAPE_KINDS, STROKE_STYLES
 from chemvas.ui.canvas_callback_state import callback_state_for
@@ -18,6 +17,9 @@ from chemvas.ui.scene_item_state import shape_state_dict_for
 from chemvas.ui.selection_collection_access import selected_scene_items_for
 from chemvas.ui.selection_service_access import refresh_selection_outline_for
 from chemvas.ui.transactions.document import document_transaction
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 
 def _atomic_shape_style_change(operation):

@@ -1,14 +1,18 @@
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
-
-from PyQt6.QtCore import QPointF
-from PyQt6.QtWidgets import QGraphicsItem
+from typing import TYPE_CHECKING
 
 from chemvas.core.history import HistoryCommand, SetAtomPositionsCommand
 from chemvas.ui.history_commands import UpdateSceneItemCommand
-from chemvas.ui.scene_flip_grouping import FlipAtomPositionMaps
+
+if TYPE_CHECKING:
+    from collections.abc import Callable, Mapping, Sequence
+
+    from PyQt6.QtCore import QPointF
+    from PyQt6.QtWidgets import QGraphicsItem
+
+    from chemvas.ui.scene_flip_grouping import FlipAtomPositionMaps
 
 
 @dataclass(slots=True)

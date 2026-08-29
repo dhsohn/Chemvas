@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 import math
-from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 from PyQt6.QtCore import QPointF
 
-from chemvas.domain.document import Atom, Bond
+if TYPE_CHECKING:
+    from collections.abc import Mapping, Sequence
+
+    from chemvas.domain.document import Atom, Bond
 
 
 @dataclass(frozen=True)

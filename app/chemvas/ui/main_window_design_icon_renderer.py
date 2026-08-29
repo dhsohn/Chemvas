@@ -1,10 +1,14 @@
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from PyQt6.QtCore import QByteArray, QRectF
-from PyQt6.QtGui import QPainter
 from PyQt6.QtSvg import QSvgRenderer
 
 from chemvas.ui.main_window_palette import PALETTE
+
+if TYPE_CHECKING:
+    from PyQt6.QtGui import QPainter
 
 _ICON_COLOR = PALETTE["icon"]
 

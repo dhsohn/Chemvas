@@ -1,19 +1,15 @@
 from __future__ import annotations
 
-from collections.abc import Callable, Sequence
-from typing import Protocol, cast
+from typing import TYPE_CHECKING, Protocol, cast
 
 from PyQt6.QtCore import QPointF
 from PyQt6.QtGui import QCursor
-from PyQt6.QtWidgets import QGraphicsItem, QGraphicsScene
 
-from chemvas.domain.document import Atom, Bond, MoleculeModel
 from chemvas.features.hover import (
     HoverState,
     HoverUpdatePlan,
     plan_structure_hover_update,
 )
-from chemvas.features.selection import StructureHit
 from chemvas.ui.bond_preview_access import (
     bond_hover_endpoint_for,
     build_bond_preview_items_for,
@@ -35,6 +31,14 @@ from chemvas.ui.hover_rendering import clear_hover_items
 from chemvas.ui.input_view_access import scene_pos_from_global_pos_for
 from chemvas.ui.renderer_style_access import bond_length_px_for
 from chemvas.ui.sheet_setup_access import scene_pos_in_sheet_for
+
+if TYPE_CHECKING:
+    from collections.abc import Callable, Sequence
+
+    from PyQt6.QtWidgets import QGraphicsItem, QGraphicsScene
+
+    from chemvas.domain.document import Atom, Bond, MoleculeModel
+    from chemvas.features.selection import StructureHit
 
 
 class _HoverCanvas(Protocol):
@@ -130,7 +134,7 @@ class HoverController:
 
     def clear_hover_highlight(self) -> None:
         state = self._state()
-        items = [cast(QGraphicsItem, item) for item in state.items]
+        items = [cast("QGraphicsItem", item) for item in state.items]
         clear_hover_items(self._scene(), items)
         state.items.clear()
         state.atom_id = None
@@ -260,10 +264,10 @@ class HoverController:
         return scene
 
     def _model(self) -> MoleculeModel:
-        return cast(MoleculeModel, model_for(self.canvas))
+        return cast("MoleculeModel", model_for(self.canvas))
 
     def _state(self) -> HoverState:
-        return cast(HoverState, _hover_state_for(self.canvas))
+        return cast("HoverState", _hover_state_for(self.canvas))
 
     def _atom_for_id(self, atom_id: int | None) -> Atom | None:
         if atom_id is None:

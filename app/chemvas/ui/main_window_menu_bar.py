@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 from PyQt6.QtCore import QUrl
 from PyQt6.QtGui import QAction, QDesktopServices, QKeySequence
@@ -10,7 +11,6 @@ from chemvas.branding import APP_NAME
 from chemvas.ui.calculation_step_dialog import edit_calculation_plan_for_window
 from chemvas.ui.main_window_about_dialog import GITHUB_URL, show_about_dialog
 from chemvas.ui.main_window_document_dialogs import prompt_sheet_setup
-from chemvas.ui.main_window_panel_toolbar import MainWindowPanelToolbarCallbacks
 from chemvas.ui.main_window_ports import (
     copy_selection_for_window,
     cut_selection_for_window,
@@ -29,6 +29,9 @@ from chemvas.ui.main_window_ports import (
     zoom_out_for_window,
 )
 from chemvas.ui.recent_menu import build_recent_menu
+
+if TYPE_CHECKING:
+    from chemvas.ui.main_window_panel_toolbar import MainWindowPanelToolbarCallbacks
 
 
 @dataclass(frozen=True)

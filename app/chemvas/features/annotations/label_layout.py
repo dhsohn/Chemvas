@@ -14,8 +14,11 @@ stored text; it only decides how to draw it.
 from __future__ import annotations
 
 import re
-from collections.abc import Callable
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 # A label like "NH", "OH", "NH2", "CH3": one element symbol followed by an
 # optional run of hydrogens. These get directional layout so the element sits on

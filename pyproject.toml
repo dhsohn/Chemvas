@@ -116,6 +116,7 @@ select = [
     "RUF022",
     "RUF046",
     "RUF100",
+    "TC",
     "TID",
     "UP",
 ]

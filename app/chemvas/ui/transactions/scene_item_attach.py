@@ -12,12 +12,10 @@ item's bounding rect on release so sequential attaches stay linear.
 from __future__ import annotations
 
 import inspect
-from collections.abc import Callable
 from dataclasses import dataclass, field
 from functools import partial
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
 
-from PyQt6.QtCore import QRectF
 from PyQt6.QtWidgets import QGraphicsItem, QGraphicsTextItem
 
 from chemvas.domain.document import VALID_ARROW_KINDS
@@ -25,6 +23,11 @@ from chemvas.ui.canvas_mark_registry import mark_registry_for
 from chemvas.ui.canvas_scene_items_state import scene_items_state_for
 from chemvas.ui.scene_item_access import item_is_unavailable_for_scene_operation
 from chemvas.ui.transactions.scene_rect import SceneRectSnapshot
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+    from PyQt6.QtCore import QRectF
 
 # The document schema owns the arrow kinds; attach routing reads the same set.
 ARROW_KINDS = VALID_ARROW_KINDS
@@ -245,7 +248,7 @@ class SceneItemAttachPorts:
             raise RuntimeError("scene item attach requires item flag ports")
         try:
             self.item_flags_setter(
-                cast(Any, self.item_flags)
+                cast("Any", self.item_flags)
                 | QGraphicsItem.GraphicsItemFlag.ItemIsSelectable
             )
         except TypeError as error:
@@ -355,7 +358,7 @@ class SceneItemAttachSnapshot:
                 else None
             )
             candidate_atom_id = (
-                cast(dict, metadata).get("atom_id")
+                cast("dict", metadata).get("atom_id")
                 if isinstance(metadata, dict)
                 else None
             )

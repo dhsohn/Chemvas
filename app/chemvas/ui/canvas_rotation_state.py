@@ -53,7 +53,7 @@ class CanvasRotationState:
 
 
 def rotation_state_for(canvas: Any) -> CanvasRotationState:
-    return cast(CanvasRotationState, canvas.runtime_state.rotation_state)
+    return cast("CanvasRotationState", canvas.runtime_state.rotation_state)
 
 
 __all__ = ["CanvasRotationState", "rotation_state_for"]

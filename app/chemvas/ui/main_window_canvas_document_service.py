@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from collections.abc import Callable
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -23,6 +22,8 @@ from chemvas.ui.main_window_canvas_logic import copy_canvas_template_settings
 from chemvas.ui.tab_title_logic import decorate_tab_title, window_title
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from chemvas.ui.canvas_view import CanvasView
 
 

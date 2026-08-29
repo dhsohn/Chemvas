@@ -17,7 +17,7 @@ class CanvasAtomCoords3DState:
 
 
 def atom_coords_3d_state_for(canvas: Any) -> CanvasAtomCoords3DState:
-    return cast(CanvasAtomCoords3DState, canvas.runtime_state.atom_coords_3d_state)
+    return cast("CanvasAtomCoords3DState", canvas.runtime_state.atom_coords_3d_state)
 
 
 def atom_coords_3d_for(canvas: Any) -> dict[int, AtomCoords3D]:

@@ -12,7 +12,10 @@ and a failing hook never propagates into the save path.
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 # The hook may return a value (snapshot_now reports success); the return is
 # ignored here.

@@ -1,8 +1,10 @@
 from __future__ import annotations
 
-from collections.abc import Callable, Sequence
 from dataclasses import dataclass
-from typing import Literal, cast
+from typing import TYPE_CHECKING, Literal, cast
+
+if TYPE_CHECKING:
+    from collections.abc import Callable, Sequence
 
 Point2D = tuple[float, float]
 TemplateRingStyle = Literal["regular", "benzene", "chair", "chair_flip", "boat"]
@@ -172,7 +174,7 @@ def _plan_template_insert(
 def normalize_template_ring_style(ring_style: str | None) -> TemplateRingStyle | None:
     normalized = (ring_style or "regular").strip().lower()
     if normalized in {"regular", "benzene", "chair", "chair_flip", "boat"}:
-        return cast(TemplateRingStyle, normalized)
+        return cast("TemplateRingStyle", normalized)
     return None
 
 

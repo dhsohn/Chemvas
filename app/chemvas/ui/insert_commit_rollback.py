@@ -10,10 +10,10 @@ from chemvas.ui.canvas_smiles_input_state import (
 )
 from chemvas.ui.history_canvas_access import restore_history_transaction_for_history
 from chemvas.ui.structure_insert_access import rollback_insert_mutation_for
-from chemvas.ui.transactions.document import DocumentSavepoint
 
 if TYPE_CHECKING:
     from chemvas.ui.canvas_view import CanvasView
+    from chemvas.ui.transactions.document import DocumentSavepoint
 
 
 @dataclass(frozen=True, slots=True)

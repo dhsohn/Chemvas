@@ -1,10 +1,13 @@
 from __future__ import annotations
 
-from collections.abc import Callable
+from typing import TYPE_CHECKING
 
 from chemvas.domain.document import VALID_ARROW_KINDS
 from chemvas.ui.canvas_atom_graphics_state import visible_atom_item_for
 from chemvas.ui.canvas_bond_graphics_state import bond_items_for_id
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 # Every arrow kind the document schema knows, plus the standalone annotation
 # items a structure selection pulls in alongside it.

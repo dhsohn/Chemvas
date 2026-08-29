@@ -2,13 +2,15 @@ from __future__ import annotations
 
 import contextlib
 import os
-from collections.abc import Callable
 from dataclasses import dataclass, field
 from itertools import count
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from uuid import uuid4
 from weakref import WeakKeyDictionary
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 
 @dataclass(slots=True)

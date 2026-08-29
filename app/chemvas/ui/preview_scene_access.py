@@ -1,9 +1,7 @@
 from __future__ import annotations
 
-from PyQt6.QtGui import QPen
-from PyQt6.QtWidgets import QGraphicsEllipseItem, QGraphicsItem, QGraphicsLineItem
+from typing import TYPE_CHECKING
 
-from chemvas.features.insertion import SmilesPreviewGeometry, TemplatePreviewGeometry
 from chemvas.ui.preview_scene_renderer import (
     apply_smiles_preview_geometry as apply_smiles_preview_geometry_helper,
 )
@@ -17,6 +15,15 @@ from chemvas.ui.preview_scene_renderer import (
     clear_template_preview as clear_template_preview_helper,
 )
 from chemvas.ui.scene_item_access import canvas_scene_for
+
+if TYPE_CHECKING:
+    from PyQt6.QtGui import QPen
+    from PyQt6.QtWidgets import QGraphicsEllipseItem, QGraphicsItem, QGraphicsLineItem
+
+    from chemvas.features.insertion import (
+        SmilesPreviewGeometry,
+        TemplatePreviewGeometry,
+    )
 
 
 def clear_smiles_preview_for(

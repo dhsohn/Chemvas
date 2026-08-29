@@ -1,15 +1,18 @@
 from __future__ import annotations
 
-from collections.abc import Sequence
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
 
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QImage, QPainter
-from PyQt6.QtWidgets import QGraphicsItem, QGraphicsScene
 
 from .painting import METERS_PER_INCH, paint_scene_region
 from .plan import POINTS_PER_INCH, ExportPlan
 from .scope import exported_scene
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
+
+    from PyQt6.QtWidgets import QGraphicsItem, QGraphicsScene
 
 
 def save_tiff_with_pillow(image: QImage, path: str, dpi: int) -> None:
@@ -26,7 +29,7 @@ def save_tiff_with_pillow(image: QImage, path: str, dpi: int) -> None:
     pil_image = Image.frombytes(
         "RGBA",
         (width, height),
-        bytes(cast(Any, data)),
+        bytes(cast("Any", data)),
         "raw",
         "RGBA",
         rgba.bytesPerLine(),

@@ -1,11 +1,13 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from PyQt6.QtGui import QColor
 
-from chemvas.features.insertion import Molecule3DScene
 from chemvas.ui.main_window_palette import PALETTE
+
+if TYPE_CHECKING:
+    from chemvas.features.insertion import Molecule3DScene
 
 PreviewStatusBadge = tuple[str, QColor, QColor, QColor]
 

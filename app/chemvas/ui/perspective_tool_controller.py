@@ -1,7 +1,11 @@
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from chemvas.ui.handle_overlay_access import clear_handles_for
-from chemvas.ui.tool_context import ToolContext
+
+if TYPE_CHECKING:
+    from chemvas.ui.tool_context import ToolContext
 
 
 class PerspectiveToolController:

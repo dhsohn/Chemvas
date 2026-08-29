@@ -2,9 +2,12 @@ from __future__ import annotations
 
 import hashlib
 import json
-from collections.abc import Mapping
 from dataclasses import dataclass
 from types import MappingProxyType
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping
 
 CURRENT_PROFILE_ID = "chemvas-rigid-precomplex-placement/2"
 

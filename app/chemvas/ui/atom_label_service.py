@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import math
-from collections.abc import Callable
 from typing import TYPE_CHECKING
 
 from PyQt6.QtCore import Qt
@@ -54,6 +53,8 @@ from chemvas.ui.scene_selectability import make_item_selectable
 from chemvas.ui.structure_geometry_access import connected_atom_unit_vectors_for
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from chemvas.ui.canvas_view import CanvasView
 
 

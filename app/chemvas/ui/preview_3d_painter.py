@@ -1,11 +1,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
-from PyQt6.QtCore import QRectF
 from PyQt6.QtGui import QColor, QFont, QFontMetricsF, QPainter
 
-from chemvas.core.rdkit_adapter import Molecule3DScene
 from chemvas.ui.main_window_palette import PALETTE
 from chemvas.ui.preview_3d_layout import (
     preview_footer_height,
@@ -28,6 +27,11 @@ from chemvas.ui.preview_3d_state import (
     preview_metadata_summary,
     preview_status_badge,
 )
+
+if TYPE_CHECKING:
+    from PyQt6.QtCore import QRectF
+
+    from chemvas.core.rdkit_adapter import Molecule3DScene
 
 
 @dataclass(frozen=True, slots=True)

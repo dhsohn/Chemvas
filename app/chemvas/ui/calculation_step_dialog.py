@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, replace
-from typing import Any, Protocol, cast
+from typing import TYPE_CHECKING, Any, Protocol, cast
 
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QBrush, QColor, QInputMethodEvent
@@ -44,7 +44,6 @@ from chemvas.features.calculation_bundle import (
     plan_with_replaced_step,
     structural_calculation_plan_for_document,
 )
-from chemvas.features.insertion import RDKitResult
 from chemvas.ui.calculation_mapping_highlight import CalculationMappingHighlighter
 from chemvas.ui.canvas_calculation_plan_state import set_calculation_plan_for
 from chemvas.ui.main_window_palette import PALETTE
@@ -54,6 +53,9 @@ from chemvas.ui.main_window_ports import (
     services_for_window,
 )
 from chemvas.ui.rdkit_adapter_access import suggest_atom_correspondence_result_for
+
+if TYPE_CHECKING:
+    from chemvas.features.insertion import RDKitResult
 
 _UNUSED = "unused"
 
@@ -145,7 +147,7 @@ class CalculationStepDialog(QDialog):
         raw_model = document_state.get("model")
         if not isinstance(raw_model, Mapping):
             raise ValueError("Invalid Chemvas document state: model is missing.")
-        model = deserialize_model_state(cast(Mapping[str, object], raw_model))
+        model = deserialize_model_state(cast("Mapping[str, object]", raw_model))
         self._atom_elements = {
             atom_id: atom.element for atom_id, atom in model.atoms.items()
         }
@@ -960,7 +962,7 @@ def _correspondence_suggester_for(
     raw_model = document_state.get("model")
     if not isinstance(raw_model, Mapping):
         return None
-    model = deserialize_model_state(cast(Mapping[str, object], raw_model))
+    model = deserialize_model_state(cast("Mapping[str, object]", raw_model))
 
     def suggest(
         reactant_atom_ids: frozenset[int],

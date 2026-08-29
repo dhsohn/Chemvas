@@ -112,7 +112,7 @@ class SelectionNoteService:
             current = selected_notes_for(self.canvas)
             selected = not all(note in current for note in notes)
         for note in notes:
-            self.set_note_selected(cast(QGraphicsTextItem, note), selected)
+            self.set_note_selected(cast("QGraphicsTextItem", note), selected)
         return selected
 
     def clear_note_selection(self) -> None:

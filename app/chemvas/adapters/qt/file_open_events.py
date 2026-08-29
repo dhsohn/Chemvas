@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
-from typing import cast
+from typing import TYPE_CHECKING, cast
 
 from PyQt6.QtCore import QEvent, QObject
-from PyQt6.QtGui import QFileOpenEvent
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+    from PyQt6.QtGui import QFileOpenEvent
 
 
 class FileOpenEventFilter(QObject):
@@ -16,7 +19,7 @@ class FileOpenEventFilter(QObject):
 
     def eventFilter(self, obj: QObject | None, event: QEvent | None) -> bool:
         if event is not None and event.type() == QEvent.Type.FileOpen:
-            path = cast(QFileOpenEvent, event).file()
+            path = cast("QFileOpenEvent", event).file()
             if path:
                 self._handler(path)
             return True

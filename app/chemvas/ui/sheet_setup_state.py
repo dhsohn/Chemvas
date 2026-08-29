@@ -20,7 +20,7 @@ class SheetSetupState:
 
 
 def sheet_setup_state_for(canvas: Any) -> SheetSetupState:
-    return cast(SheetSetupState, canvas.runtime_state.sheet_setup_state)
+    return cast("SheetSetupState", canvas.runtime_state.sheet_setup_state)
 
 
 def sheet_setup_values_for(canvas: Any) -> tuple[str, str]:

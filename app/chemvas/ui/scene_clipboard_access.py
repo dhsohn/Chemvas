@@ -1,9 +1,8 @@
 from __future__ import annotations
 
-from collections.abc import Callable, Collection, Mapping, Sequence
+from typing import TYPE_CHECKING
 
 from PyQt6.QtCore import QRectF
-from PyQt6.QtWidgets import QGraphicsItem
 
 from chemvas.domain.document import CLIPBOARD_SELECTION_VERSION, Bond
 from chemvas.features.export import (
@@ -20,6 +19,11 @@ from chemvas.ui.scene_clipboard_logic import build_selection_clipboard_payload
 from chemvas.ui.scene_clipboard_state import scene_clipboard_state_for
 from chemvas.ui.scene_clipboard_transaction_logic import visible_items_to_hide_for_copy
 from chemvas.ui.scene_item_access import canvas_scene_for
+
+if TYPE_CHECKING:
+    from collections.abc import Callable, Collection, Mapping, Sequence
+
+    from PyQt6.QtWidgets import QGraphicsItem
 
 
 def clipboard_paste_source_json_for(canvas) -> str | None:

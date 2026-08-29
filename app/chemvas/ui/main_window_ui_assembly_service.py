@@ -1,10 +1,8 @@
 from __future__ import annotations
 
-from collections.abc import Callable
+from typing import TYPE_CHECKING
 
 from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QIcon
-from PyQt6.QtWidgets import QToolButton
 
 from chemvas.ui.main_window_menu_bar import MainWindowMenuBarAssembly, build_menu_bar
 from chemvas.ui.main_window_panel_toolbar import (
@@ -18,6 +16,12 @@ from chemvas.ui.main_window_theme import (
 from chemvas.ui.main_window_toolbar_buttons import (
     MainWindowToolbarButtonFactory,
 )
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+    from PyQt6.QtGui import QIcon
+    from PyQt6.QtWidgets import QToolButton
 
 
 class MainWindowUIAssemblyService:

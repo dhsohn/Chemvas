@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import logging
 import math
-from collections.abc import Mapping
 from typing import TYPE_CHECKING
 
 from chemvas.domain.atom_aliases import (
@@ -14,6 +13,8 @@ from chemvas.features.calculation_bundle import AtomMapEntry, CalculationArtifac
 from chemvas.features.insertion import Molecule3DAtom, Molecule3DBond, Molecule3DScene
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping
+
     from chemvas.core.rdkit_adapter import RDKitAdapter
 
 logger = logging.getLogger(__name__)

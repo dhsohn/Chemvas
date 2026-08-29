@@ -1,11 +1,9 @@
 from __future__ import annotations
 
 import logging
+from typing import TYPE_CHECKING
 
 from PyQt6.QtCore import QRectF, pyqtSlot
-from PyQt6.QtGui import (
-    QPainter,
-)
 from PyQt6.QtWidgets import (
     QGraphicsView,
 )
@@ -30,6 +28,11 @@ from chemvas.ui.canvas_view_event_router import (
 )
 from chemvas.ui.canvas_view_setup import initialize_canvas_view
 from chemvas.ui.canvas_window_access import notify_error_for
+
+if TYPE_CHECKING:
+    from PyQt6.QtGui import (
+        QPainter,
+    )
 
 logger = logging.getLogger(__name__)
 

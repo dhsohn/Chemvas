@@ -30,12 +30,12 @@ def run(argv: list[str]) -> int:
         composition = _read_composition(request)
         state = compose_document_state(composition)
         payload = cast(
-            dict[str, Any],
+            "dict[str, Any]",
             normalize_json_numbers(build_document_payload(state, CANVAS_FILE_VERSION)),
         )
         output_bytes = json_text(payload).encode("utf-8")
         atomic_create_bytes(output, output_bytes)
-        model = cast(dict[str, object], state["model"])
+        model = cast("dict[str, object]", state["model"])
         report = {
             "format": "chemvas-document-composition-report",
             "version": 1,
@@ -43,8 +43,8 @@ def run(argv: list[str]) -> int:
             "output": str(output),
             "output_sha256": hashlib.sha256(output_bytes).hexdigest(),
             "chemvas_document_version": CANVAS_FILE_VERSION,
-            "atom_count": len(cast(dict[object, object], model["atoms"])),
-            "bond_count": len(cast(list[object], model["bonds"])),
+            "atom_count": len(cast("dict[object, object]", model["atoms"])),
+            "bond_count": len(cast("list[object]", model["bonds"])),
             "written": True,
         }
         sys.stdout.write(json_text(report))

@@ -1,6 +1,9 @@
 from __future__ import annotations
 
-from chemvas.ui.tool_context import ToolContext
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from chemvas.ui.tool_context import ToolContext
 
 
 class Tool:

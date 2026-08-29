@@ -1,12 +1,17 @@
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping, Sequence
+from typing import TYPE_CHECKING
 
 from PyQt6.QtCore import QPointF, QRectF
-from PyQt6.QtWidgets import QGraphicsItem
 
-from chemvas.domain.document import Atom
 from chemvas.ui.scene_item_state import ARROW_KINDS
+
+if TYPE_CHECKING:
+    from collections.abc import Callable, Mapping, Sequence
+
+    from PyQt6.QtWidgets import QGraphicsItem
+
+    from chemvas.domain.document import Atom
 
 
 def flip_point(point: QPointF, center: QPointF, horizontal: bool) -> QPointF:

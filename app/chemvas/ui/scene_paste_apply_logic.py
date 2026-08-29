@@ -1,7 +1,10 @@
 from __future__ import annotations
 
-from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from collections.abc import Callable, Sequence
 
 Coords2D = tuple[float, float]
 Coords3D = tuple[float, float, float]

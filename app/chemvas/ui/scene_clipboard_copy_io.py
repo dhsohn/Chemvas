@@ -1,18 +1,23 @@
 from __future__ import annotations
 
 import logging
-from collections.abc import Sequence
+from typing import TYPE_CHECKING
 
 from PyQt6.QtCore import QMimeData, Qt
 from PyQt6.QtGui import QImage, QPainter
-from PyQt6.QtWidgets import QGraphicsItem
 
 from chemvas.features.export import content_bounds
 from chemvas.ui.scene_clipboard_access import (
     render_canvas_scene_region,
     render_canvas_selection_vector_bytes,
 )
-from chemvas.ui.scene_clipboard_transaction_logic import ClipboardCopyPlan
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
+
+    from PyQt6.QtWidgets import QGraphicsItem
+
+    from chemvas.ui.scene_clipboard_transaction_logic import ClipboardCopyPlan
 
 logger = logging.getLogger(__name__)
 

@@ -3,18 +3,21 @@ from __future__ import annotations
 import contextlib
 import logging
 import os
-from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Protocol
+from typing import TYPE_CHECKING, Any, Protocol
 
 from PyQt6.QtCore import QObject, QThread, pyqtSignal, pyqtSlot
 
 from chemvas.core.document_io import atomic_write_text, atomic_write_via_temp
-from chemvas.features.insertion import RDKitResult
 from chemvas.ui.rdkit_export_job_state import (
     RDKitExportJob,
     rdkit_export_job_registry,
 )
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+    from chemvas.features.insertion import RDKitResult
 
 logger = logging.getLogger(__name__)
 

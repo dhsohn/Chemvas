@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import math
-from collections.abc import Callable
 from functools import partial
+from typing import TYPE_CHECKING
 
 from PyQt6.QtCore import QPointF, QRectF
 from PyQt6.QtGui import QFontMetricsF
@@ -54,6 +54,9 @@ from chemvas.ui.renderer_style_access import (
     renderer_for,
     set_bond_length_for,
 )
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 
 def _add_bond_length_rollback_note(

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import math
-from collections.abc import Mapping, Sequence
+from typing import TYPE_CHECKING
 
 from chemvas.core.template_geometry import (
     place_template_on_bond as project_template_on_bond,
@@ -12,7 +12,11 @@ from chemvas.core.template_geometry import (
 from chemvas.core.template_geometry import (
     regular_ring_points_for_bond as build_regular_ring_points_for_bond,
 )
-from chemvas.domain.document import Atom, Bond
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping, Sequence
+
+    from chemvas.domain.document import Atom, Bond
 
 Point = tuple[float, float]
 MergeEntry = tuple[int, float, float]

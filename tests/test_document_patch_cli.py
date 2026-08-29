@@ -4,7 +4,7 @@ import hashlib
 import json
 import subprocess
 import sys
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pytest
 
@@ -18,6 +18,9 @@ from chemvas.domain.document import (
     serialize_model_state,
     serialize_settings,
 )
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 def _state() -> dict[str, object]:

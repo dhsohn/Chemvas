@@ -3,8 +3,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from PyQt6.QtWidgets import QGraphicsItem
-
 from chemvas.features.selection import StructureHit
 from chemvas.ui.canvas_atom_graphics_state import visible_atom_item_for
 from chemvas.ui.canvas_bond_graphics_state import bond_items_for_id
@@ -18,6 +16,8 @@ from chemvas.ui.selection_structure_targets import (
 )
 
 if TYPE_CHECKING:
+    from PyQt6.QtWidgets import QGraphicsItem
+
     from chemvas.ui.canvas_view import CanvasView
 
 

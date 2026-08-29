@@ -1,7 +1,11 @@
 from __future__ import annotations
 
-from chemvas.ui.canvas_runtime_services import CanvasRuntimeServices
+from typing import TYPE_CHECKING
+
 from chemvas.ui.canvas_service_access import canvas_services_for
+
+if TYPE_CHECKING:
+    from chemvas.ui.canvas_runtime_services import CanvasRuntimeServices
 
 
 def _optional_canvas_services(canvas) -> CanvasRuntimeServices | None:

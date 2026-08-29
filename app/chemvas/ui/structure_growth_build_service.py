@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from collections.abc import Callable
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 from PyQt6.QtCore import QPointF
 
@@ -10,6 +10,9 @@ from chemvas.features.insertion import (
     mirrored_local_points,
     other_atom_id_from_bond_result,
 )
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 RingPoints = tuple[list[QPointF], list[tuple[int, float, float]]]
 

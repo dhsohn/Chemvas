@@ -3,15 +3,14 @@ from __future__ import annotations
 import hashlib
 import json
 import math
-from collections.abc import Mapping
 from dataclasses import replace
+from typing import TYPE_CHECKING
 
 from chemvas.domain.document.precomplex import SHA256_HEX_RE
 from chemvas.domain.document.precomplex_profile import (
     CURRENT_PROFILE_ID,
     precomplex_placement_profile,
 )
-from chemvas.features.calculation_bundle import CalculationArtifacts
 
 from .model import (
     CandidateTransform,
@@ -23,6 +22,11 @@ from .model import (
     ValidationMetrics,
     Vector3,
 )
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping
+
+    from chemvas.features.calculation_bundle import CalculationArtifacts
 
 _EPSILON = 1e-12
 

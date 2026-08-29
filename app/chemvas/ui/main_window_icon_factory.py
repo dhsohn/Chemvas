@@ -1,12 +1,15 @@
 from __future__ import annotations
 
-from PyQt6.QtGui import QIcon
+from typing import TYPE_CHECKING
 
 from chemvas.ui.main_window_design_icon_renderer import (
     draw_design_icon,
     has_design_icon,
 )
 from chemvas.ui.main_window_icon_pixmap_factory import MainWindowIconPixmapFactory
+
+if TYPE_CHECKING:
+    from PyQt6.QtGui import QIcon
 
 _TEMPLATE_ICON_BY_LABEL: dict[str, str] = {
     "Benzene": "template_benzene",

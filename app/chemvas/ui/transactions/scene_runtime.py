@@ -1,13 +1,11 @@
 from __future__ import annotations
 
-from collections.abc import Callable
 from dataclasses import dataclass
 from functools import partial
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
 
 from PyQt6 import sip
 from PyQt6.QtCore import QObject, QRectF, Qt
-from PyQt6.QtGui import QBrush, QColor, QFont, QPen, QPolygonF
 from PyQt6.QtWidgets import (
     QAbstractGraphicsShapeItem,
     QGraphicsEllipseItem,
@@ -30,6 +28,11 @@ from chemvas.ui.scene_item_access import (
     restore_scene_item as _restore_scene_item,
 )
 from chemvas.ui.transactions.scene_rect import SceneRectSnapshot
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+    from PyQt6.QtGui import QBrush, QColor, QFont, QPen, QPolygonF
 
 _MISSING_SNAPSHOT_ATTRIBUTE = object()
 _UNAVAILABLE_ITEM_VALUE = object()
@@ -293,29 +296,29 @@ def _restore_primitive_graphics_property(
     # it again would make the raw savepoint unable to repair the item.
     if isinstance(item, QGraphicsTextItem):
         if setter_name == "setFont":
-            item.setFont(cast(QFont, value))
+            item.setFont(cast("QFont", value))
             return
         if setter_name == "setDefaultTextColor":
-            item.setDefaultTextColor(cast(QColor, value))
+            item.setDefaultTextColor(cast("QColor", value))
             return
         if setter_name == "setHtml":
-            item.setHtml(cast(str, value))
+            item.setHtml(cast("str", value))
             return
         if setter_name == "setTextInteractionFlags":
-            item.setTextInteractionFlags(cast(Qt.TextInteractionFlag, value))
+            item.setTextInteractionFlags(cast("Qt.TextInteractionFlag", value))
             return
     if isinstance(item, QGraphicsEllipseItem) and setter_name == "setRect":
-        item.setRect(cast(QRectF, value))
+        item.setRect(cast("QRectF", value))
         return
     if isinstance(item, QGraphicsPolygonItem) and setter_name == "setPolygon":
-        item.setPolygon(cast(QPolygonF, value))
+        item.setPolygon(cast("QPolygonF", value))
         return
     if isinstance(item, QAbstractGraphicsShapeItem):
         if setter_name == "setPen":
-            item.setPen(cast(QPen, value))
+            item.setPen(cast("QPen", value))
             return
         if setter_name == "setBrush":
-            item.setBrush(cast(QBrush, value))
+            item.setBrush(cast("QBrush", value))
             return
     if isinstance(item, QGraphicsItem) and setter_name in {
         "setTransformOriginPoint",
@@ -609,7 +612,7 @@ def _scene_item_topology_snapshots(
                 "live scene item does not expose a callable sibling-stacking setter"
             )
         if callable(z_getter):
-            z_value = float(cast(Any, z_getter()))
+            z_value = float(cast("Any", z_getter()))
         elif z_ports_present and z_setter is not _MISSING_SNAPSHOT_ATTRIBUTE:
             raise RuntimeError(
                 "live scene item does not expose a readable stacking-depth contract"
@@ -624,7 +627,7 @@ def _scene_item_topology_snapshots(
         stacking_flags: QGraphicsItem.GraphicsItemFlag | None = None
         if flags_getter is not None and flags_setter is not None:
             stacking_flags = (
-                cast(QGraphicsItem.GraphicsItemFlag, flags_getter())
+                cast("QGraphicsItem.GraphicsItemFlag", flags_getter())
                 & _SCENE_STACKING_FLAG_MASK
             )
 
@@ -1126,7 +1129,7 @@ def _restore_scene_z_values(
         if getter is None or expected is None:
             continue
         try:
-            if float(cast(Any, getter())) == expected:
+            if float(cast("Any", getter())) == expected:
                 continue
             setter = state.z_setter
             if setter is None:
@@ -1134,7 +1137,7 @@ def _restore_scene_z_values(
                     "scene restore cannot repair a read-only item z value"
                 )
             setter(expected)
-            if float(cast(Any, getter())) != expected:
+            if float(cast("Any", getter())) != expected:
                 raise RuntimeError(
                     "scene restore did not restore an item's exact z value"
                 )
@@ -1154,12 +1157,12 @@ def _restore_scene_stacking_flags(
         if getter is None or setter is None or expected is None:
             continue
         try:
-            current = cast(QGraphicsItem.GraphicsItemFlag, getter())
+            current = cast("QGraphicsItem.GraphicsItemFlag", getter())
             if current & _SCENE_STACKING_FLAG_MASK == expected:
                 continue
             restored = (current & ~_SCENE_STACKING_FLAG_MASK) | expected
             setter(restored)
-            actual = cast(QGraphicsItem.GraphicsItemFlag, getter())
+            actual = cast("QGraphicsItem.GraphicsItemFlag", getter())
             if actual & _SCENE_STACKING_FLAG_MASK != expected:
                 raise RuntimeError(
                     "scene restore did not restore an item's stacking flags"
@@ -1181,13 +1184,13 @@ def _verify_scene_item_topology(
         if (
             z_getter is not None
             and state.z_value is not None
-            and float(cast(Any, z_getter())) != state.z_value
+            and float(cast("Any", z_getter())) != state.z_value
         ):
             raise RuntimeError("scene restore did not preserve an item's exact z value")
         flags_getter = state.flags_getter
         if flags_getter is not None and state.stacking_flags is not None:
             actual_flags = cast(
-                QGraphicsItem.GraphicsItemFlag,
+                "QGraphicsItem.GraphicsItemFlag",
                 flags_getter(),
             )
             if actual_flags & _SCENE_STACKING_FLAG_MASK != state.stacking_flags:

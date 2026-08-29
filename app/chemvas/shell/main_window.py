@@ -1,13 +1,15 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import Protocol
+from typing import TYPE_CHECKING, Protocol
 
 from PyQt6.QtCore import QTimer
-from PyQt6.QtGui import QCloseEvent
 from PyQt6.QtWidgets import QMainWindow
 
 from chemvas.features.session import snapshot_unless_quitting
+
+if TYPE_CHECKING:
+    from PyQt6.QtGui import QCloseEvent
 
 
 class _DocumentActionService(Protocol):

@@ -3,9 +3,8 @@ from __future__ import annotations
 import argparse
 import hashlib
 import sys
-from collections.abc import Mapping
 from pathlib import Path
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
 
 from chemvas.bootstrap.document_cli_shared import (
     MAX_DOCUMENT_BYTES,
@@ -16,6 +15,9 @@ from chemvas.bootstrap.document_cli_shared import (
 )
 from chemvas.core.document_io import ChemvasDocument, parse_document
 from chemvas.domain.json_io import strict_json_loads
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping
 
 MAX_LAYOUT_WORK_UNITS = 10_000
 
@@ -28,14 +30,14 @@ def run(argv: list[str]) -> int:
         _validate_source(source)
         source_bytes, document = _read_layout_document(source)
         graphics_records = graphics_record_count(
-            cast(Mapping[str, object], document.state)
+            cast("Mapping[str, object]", document.state)
         )
         if graphics_records > MAX_GRAPHICS_RECORDS:
             raise ValueError(
                 f"input document exceeds the {MAX_GRAPHICS_RECORDS}-graphics-record layout limit"
             )
         layout_work_units = _layout_work_units(
-            cast(Mapping[str, object], document.state)
+            cast("Mapping[str, object]", document.state)
         )
         if layout_work_units > MAX_LAYOUT_WORK_UNITS:
             raise ValueError(

@@ -1,8 +1,7 @@
 from __future__ import annotations
 
-from collections.abc import Callable
 from dataclasses import dataclass, fields
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from PyQt6.QtCore import QPointF
 
@@ -15,7 +14,11 @@ from chemvas.ui.atom_coords_access import (
     set_atom_coords_3d_for,
     set_atom_coords_3d_for_id,
 )
-from chemvas.ui.canvas_rotation_state import CanvasRotationState
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+    from chemvas.ui.canvas_rotation_state import CanvasRotationState
 
 Coords2D = tuple[float, float]
 Coords3D = tuple[float, float, float]

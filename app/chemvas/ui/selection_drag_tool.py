@@ -17,7 +17,6 @@ drags) keep the whole-document capture.
 
 from __future__ import annotations
 
-from collections.abc import Callable
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
@@ -51,6 +50,8 @@ from chemvas.ui.selection_service_access import refresh_selection_outline_for
 from chemvas.ui.selection_style_access import suspend_selection_outline_for
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from chemvas.ui.tool_context import ToolContext
 
 _DRAG_DELTA_EPSILON = 1e-6

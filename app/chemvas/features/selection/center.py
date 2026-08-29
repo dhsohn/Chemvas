@@ -1,10 +1,13 @@
 from __future__ import annotations
 
-from collections.abc import Collection, Mapping
+from typing import TYPE_CHECKING
 
 from PyQt6.QtCore import QPointF
 
-from chemvas.domain.document import Atom
+if TYPE_CHECKING:
+    from collections.abc import Collection, Mapping
+
+    from chemvas.domain.document import Atom
 
 
 def center_for_atoms(

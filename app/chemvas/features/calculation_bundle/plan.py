@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Mapping
 from dataclasses import asdict, dataclass
-from typing import cast
+from typing import TYPE_CHECKING, cast
 
 from chemvas.domain.document import (
     CalculationAtomCorrespondence,
@@ -20,8 +20,10 @@ from chemvas.domain.document import (
 )
 from chemvas.domain.document.precomplex import precomplex_state_from_json
 
-from .model import CalculationStateSelection, ComponentSummary
 from .service import inspect_components, select_components
+
+if TYPE_CHECKING:
+    from .model import CalculationStateSelection, ComponentSummary
 
 
 @dataclass(frozen=True)
@@ -457,7 +459,7 @@ def _document_model(document_state: Mapping[str, object]) -> MoleculeModel:
     model_state = document_state.get("model")
     if not isinstance(model_state, Mapping):
         raise ValueError("Invalid Chemvas document state: model is missing.")
-    return deserialize_model_state(cast(Mapping[str, object], model_state))
+    return deserialize_model_state(cast("Mapping[str, object]", model_state))
 
 
 def _bond_orders(

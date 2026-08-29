@@ -28,7 +28,7 @@ class CanvasToolSettingsState:
 
 
 def tool_settings_state_for(canvas: Any) -> CanvasToolSettingsState:
-    return cast(CanvasToolSettingsState, canvas.runtime_state.tool_settings_state)
+    return cast("CanvasToolSettingsState", canvas.runtime_state.tool_settings_state)
 
 
 def set_tool_setting_for(canvas: Any, name: str, value: Any) -> None:

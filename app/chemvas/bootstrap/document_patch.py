@@ -106,7 +106,7 @@ def _apply_patch(
         document_version=int(document.payload["version"]),
     )
     payload = cast(
-        dict[str, Any],
+        "dict[str, Any]",
         normalize_json_numbers(
             build_document_payload(
                 result.state,

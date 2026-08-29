@@ -1,10 +1,12 @@
 from __future__ import annotations
 
-from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
 
-from chemvas.core.history import HistoryCommand
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+    from chemvas.core.history import HistoryCommand
 
 
 @dataclass
@@ -17,7 +19,7 @@ class CanvasHistoryState:
 
 
 def history_state_for(canvas: Any) -> CanvasHistoryState:
-    return cast(CanvasHistoryState, canvas.runtime_state.history_state)
+    return cast("CanvasHistoryState", canvas.runtime_state.history_state)
 
 
 __all__ = ["CanvasHistoryState", "history_state_for"]

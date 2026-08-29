@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Sequence
+from typing import TYPE_CHECKING
 
 from PyQt6.QtCore import QPointF
 
@@ -21,6 +21,9 @@ from chemvas.ui.structure_geometry_access import (
     ring_points_for,
     template_points_for_bond_for,
 )
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
 
 
 class TemplateGeometryResolverService:

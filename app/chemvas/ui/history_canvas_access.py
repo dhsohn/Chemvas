@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from PyQt6.QtCore import QPointF
 from PyQt6.QtGui import QPolygonF
 
@@ -12,7 +14,6 @@ from chemvas.core.history import (
 from chemvas.core.history import (
     restore_history_transaction_for_command as _restore_history_transaction_for_command,
 )
-from chemvas.domain.transactions import RestoreOutcome
 from chemvas.ui.atom_coords_access import atom_coords_3d_for_id
 from chemvas.ui.bond_length_graphics_refresh import refresh_bond_length_graphics_for
 from chemvas.ui.canvas_model_access import atom_for_id
@@ -28,6 +29,9 @@ from chemvas.ui.move_access import move_atoms_for
 from chemvas.ui.renderer_style_access import set_bond_length_for
 from chemvas.ui.scene_item_access import restore_mark_from_state
 from chemvas.ui.transactions.document import DocumentSavepoint, MoveGestureScope
+
+if TYPE_CHECKING:
+    from chemvas.domain.transactions import RestoreOutcome
 
 
 def _add_move_rollback_note(

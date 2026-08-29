@@ -15,7 +15,7 @@ class CanvasSpatialIndexState:
 
 
 def spatial_index_state_for(canvas) -> CanvasSpatialIndexState:
-    return cast(CanvasSpatialIndexState, canvas.runtime_state.spatial_index_state)
+    return cast("CanvasSpatialIndexState", canvas.runtime_state.spatial_index_state)
 
 
 def has_fresh_spatial_index_for(

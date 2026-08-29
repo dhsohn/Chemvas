@@ -1,11 +1,13 @@
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from types import MappingProxyType
-from typing import Final
+from typing import TYPE_CHECKING, Final
 
-from chemvas.domain.document.model import MoleculeModel
+if TYPE_CHECKING:
+    from collections.abc import Mapping, Sequence
+
+    from chemvas.domain.document.model import MoleculeModel
 
 
 @dataclass(frozen=True)

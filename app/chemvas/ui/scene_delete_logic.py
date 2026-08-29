@@ -1,12 +1,16 @@
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
 
 from PyQt6.QtWidgets import QGraphicsItem, QGraphicsPolygonItem, QGraphicsTextItem
 
-from chemvas.domain.document import Bond
 from chemvas.ui.scene_item_state import ARROW_KINDS
+
+if TYPE_CHECKING:
+    from collections.abc import Callable, Mapping, Sequence
+
+    from chemvas.domain.document import Bond
 
 
 @dataclass(slots=True)

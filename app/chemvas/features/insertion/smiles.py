@@ -1,10 +1,12 @@
 from __future__ import annotations
 
-from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
 
-from chemvas.domain.document import MoleculeModel
+if TYPE_CHECKING:
+    from collections.abc import Callable, Iterable, Mapping, Sequence
+
+    from chemvas.domain.document import MoleculeModel
 
 Point2D = tuple[float, float]
 LineSegment = tuple[float, float, float, float]

@@ -11,7 +11,9 @@ class CanvasCalculationPlanState:
 
 
 def calculation_plan_state_for(canvas: Any) -> CanvasCalculationPlanState:
-    return cast(CanvasCalculationPlanState, canvas.runtime_state.calculation_plan_state)
+    return cast(
+        "CanvasCalculationPlanState", canvas.runtime_state.calculation_plan_state
+    )
 
 
 def calculation_plan_for(canvas: Any) -> dict[str, object] | None:

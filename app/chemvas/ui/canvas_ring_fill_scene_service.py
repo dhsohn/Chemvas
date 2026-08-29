@@ -1,7 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Iterable
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from PyQt6.QtCore import QPointF, Qt
 from PyQt6.QtGui import QPen, QPolygonF
@@ -11,6 +10,9 @@ from chemvas.ui.canvas_scene_items_state import ring_items_for
 from chemvas.ui.graphics_items import RING_FILL_Z_VALUE, NoSelectPolygonItem
 from chemvas.ui.renderer_style_access import ring_fill_brush_for
 from chemvas.ui.scene_selectability import make_item_selectable
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable
 
 
 def rebuild_ring_fill_polygons(
