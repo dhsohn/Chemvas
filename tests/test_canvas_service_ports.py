@@ -3,8 +3,8 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 import pytest
-from chemvas.ui import canvas_service_ports as ports
 
+from chemvas.ui import canvas_service_ports as ports
 from tests.runtime_services import canvas_runtime_services
 
 

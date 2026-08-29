@@ -92,7 +92,6 @@ if QApplication is not None:
         build_3d_conversion_payload_for,
         build_structure_payload_for,
     )
-
     from tests.canvas_factory import build_canvas_view
 
 

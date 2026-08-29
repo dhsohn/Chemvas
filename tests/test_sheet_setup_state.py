@@ -8,7 +8,6 @@ from chemvas.ui.sheet_setup_state import (
     sheet_setup_state_for,
     sheet_setup_values_for,
 )
-
 from tests.runtime_state import canvas_runtime_state
 
 

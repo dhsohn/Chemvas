@@ -13,7 +13,6 @@ from chemvas.ui.canvas_scene_items_state import (
     selected_notes_for,
     set_scene_item_collection_for,
 )
-
 from tests.runtime_state import canvas_runtime_state
 
 

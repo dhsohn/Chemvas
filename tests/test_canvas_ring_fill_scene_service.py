@@ -24,7 +24,6 @@ if QApplication is not None:
         CanvasSceneItemsState,
         set_scene_item_collection_for,
     )
-
     from tests.runtime_state import canvas_runtime_state
 else:
     CanvasRingFillSceneService = None

@@ -25,7 +25,6 @@ from chemvas.ui.main_window_canvas_logic import (
 from chemvas.ui.selection_info_state import SelectionInfoState, selection_info_state_for
 from chemvas.ui.sheet_setup_access import sheet_setup_for
 from chemvas.ui.sheet_setup_state import SheetSetupState
-
 from tests.runtime_state import canvas_runtime_state
 
 

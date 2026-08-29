@@ -23,9 +23,9 @@ from pathlib import Path
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PyQt6.QtCore import QRectF  # noqa: E402
-from PyQt6.QtGui import QGuiApplication, QImage, QPainter  # noqa: E402
-from PyQt6.QtSvg import QSvgRenderer  # noqa: E402
+from PyQt6.QtCore import QRectF
+from PyQt6.QtGui import QGuiApplication, QImage, QPainter
+from PyQt6.QtSvg import QSvgRenderer
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 ICON_DIR = REPO_ROOT / "app" / "chemvas" / "assets" / "icon"

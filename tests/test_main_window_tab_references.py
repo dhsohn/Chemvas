@@ -15,7 +15,6 @@ except ModuleNotFoundError:
 if QApplication is not None:
     from chemvas.ui.main_window_tab_references import MainWindowTabReferences
     from chemvas.ui.main_window_tab_setup import build_canvas_tab_assembly
-
     from tests.canvas_factory import build_canvas_view
 
 

@@ -6,6 +6,9 @@ import pytest
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
+from PyQt6.QtCore import QPointF, QRectF
+from PyQt6.QtWidgets import QApplication, QGraphicsScene, QGraphicsView
+
 from chemvas.ui.sheet_setup_access import (
     scene_pos_in_sheet_for,
     set_sheet_setup_for,
@@ -20,9 +23,6 @@ from chemvas.ui.transactions.scene_rect import (
     scene_rect_is_automatic,
     view_scene_rect_is_explicit,
 )
-from PyQt6.QtCore import QPointF, QRectF
-from PyQt6.QtWidgets import QApplication, QGraphicsScene, QGraphicsView
-
 from tests.runtime_state import canvas_runtime_state
 
 _APP = QApplication.instance() or QApplication([])

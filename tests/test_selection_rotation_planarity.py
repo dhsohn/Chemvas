@@ -8,7 +8,6 @@ from chemvas.ui.selection_rotation_planarity import (
     bond_in_cycle_for,
     flatten_planar_fragments_for,
 )
-
 from tests.runtime_state import canvas_runtime_state
 
 

@@ -2,6 +2,9 @@ import unittest
 from types import SimpleNamespace
 from unittest import mock
 
+from PyQt6.QtCore import QPointF
+from PyQt6.QtWidgets import QApplication
+
 from chemvas.domain.document import Atom, Bond, MoleculeModel
 from chemvas.ui.bond_preview_access import bond_hover_endpoint_for
 from chemvas.ui.canvas_atom_graphics_state import CanvasAtomGraphicsState
@@ -20,9 +23,6 @@ from chemvas.ui.structure_geometry_access import (
     default_bond_angle_for_vectors,
     default_bond_endpoint_for,
 )
-from PyQt6.QtCore import QPointF
-from PyQt6.QtWidgets import QApplication
-
 from tests.runtime_services import canvas_runtime_services
 from tests.runtime_state import canvas_runtime_state
 

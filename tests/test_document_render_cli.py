@@ -11,6 +11,10 @@ import pytest
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
+from PyQt6.QtCore import QEvent
+from PyQt6.QtGui import QImage
+from PyQt6.QtWidgets import QApplication
+
 from chemvas.bootstrap import document_render as cli
 from chemvas.core.document_io import write_document
 from chemvas.domain.document import (
@@ -21,9 +25,6 @@ from chemvas.domain.document import (
     serialize_model_state,
     serialize_settings,
 )
-from PyQt6.QtCore import QEvent
-from PyQt6.QtGui import QImage
-from PyQt6.QtWidgets import QApplication
 
 
 @pytest.fixture(scope="module", autouse=True)

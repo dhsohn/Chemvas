@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import pytest
+
 from chemvas.features.hover import (
     HoverState,
     HoverUpdatePlan,

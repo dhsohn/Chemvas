@@ -1,10 +1,10 @@
 from unittest import mock
 from unittest.mock import Mock
 
-from chemvas.ui.structure_bond_build_service import StructureBondBuildService
-from chemvas.ui.structure_build_committer import StructureBuildCommitter
 from PyQt6.QtCore import QPointF
 
+from chemvas.ui.structure_bond_build_service import StructureBondBuildService
+from chemvas.ui.structure_build_committer import StructureBuildCommitter
 from tests.test_structure_build_service import _FakeCanvas
 
 

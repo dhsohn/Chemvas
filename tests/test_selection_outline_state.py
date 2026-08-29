@@ -8,7 +8,6 @@ from chemvas.ui.selection_outline_state import (
     selection_outlines_for,
     set_selection_outlines_for,
 )
-
 from tests.runtime_state import canvas_runtime_state
 
 

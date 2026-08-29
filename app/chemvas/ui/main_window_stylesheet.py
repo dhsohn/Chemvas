@@ -5,15 +5,14 @@ from chemvas.ui.main_window_toolbar_styles import TOOLBAR_BUTTON_SIZE
 
 
 def main_window_chrome_stylesheet(palette) -> str:
-    _P = palette
     return f"""
             QMainWindow {{
-                background: {_P["surface_app"]};
+                background: {palette["surface_app"]};
             }}
             QToolBar {{
-                background: {_P["surface_bar"]};
+                background: {palette["surface_bar"]};
                 border: none;
-                border-bottom: 1px solid {_P["border"]};
+                border-bottom: 1px solid {palette["border"]};
                 spacing: 4px;
                 padding: 2px 4px;
             }}
@@ -21,12 +20,12 @@ def main_window_chrome_stylesheet(palette) -> str:
                 padding: 2px 4px;
             }}
             QToolBar#contextOptionsBar {{
-                background: {_P["surface_context"]};
-                border-bottom: 1px solid {_P["border"]};
+                background: {palette["surface_context"]};
+                border-bottom: 1px solid {palette["border"]};
                 padding: 0px 4px;
             }}
             QToolBar::separator {{
-                background: {_P["border"]};
+                background: {palette["border"]};
             }}
             QToolBar::separator:horizontal {{
                 width: 1px;
@@ -41,7 +40,7 @@ def main_window_chrome_stylesheet(palette) -> str:
             QToolBar QLabel#toolbarSectionLabel {{
                 background: transparent;
                 border: none;
-                color: {_P["text_faint"]};
+                color: {palette["text_faint"]};
                 font-size: 10px;
                 font-weight: 600;
                 letter-spacing: 0.8px;
@@ -53,68 +52,67 @@ def main_window_chrome_stylesheet(palette) -> str:
                 border: 1px solid transparent;
                 border-radius: 6px;
                 padding: 2px;
-                color: {_P["text"]};
+                color: {palette["text"]};
             }}
             QToolButton:hover {{
-                background: {_P["hover"]};
+                background: {palette["hover"]};
                 border-color: transparent;
             }}
             QToolButton:pressed {{
-                background: {_P["pressed"]};
+                background: {palette["pressed"]};
                 border-color: transparent;
             }}
             QToolButton:checked {{
-                background: {_P["checked_bg"]};
-                border-color: {_P["checked_border"]};
-                color: {_P["checked_text"]};
+                background: {palette["checked_bg"]};
+                border-color: {palette["checked_border"]};
+                color: {palette["checked_text"]};
             }}
             QToolButton:disabled {{
-                color: {_P["text_faint"]};
+                color: {palette["text_faint"]};
                 background: transparent;
                 border-color: transparent;
             }}
             QLabel, QCheckBox, QGroupBox, QTabBar, QToolButton {{
-                color: {_P["text"]};
+                color: {palette["text"]};
             }}
             QTabWidget::pane {{
-                border: 1px solid {_P["border"]};
-                background: {_P["surface_panel"]};
+                border: 1px solid {palette["border"]};
+                background: {palette["surface_panel"]};
             }}
             QTabBar::tab {{
-                background: {_P["surface_app"]};
+                background: {palette["surface_app"]};
                 padding: 6px 10px;
-                border: 1px solid {_P["border"]};
+                border: 1px solid {palette["border"]};
                 border-bottom: none;
                 margin-right: 2px;
-                color: {_P["text"]};
+                color: {palette["text"]};
             }}
             QTabBar::tab:selected {{
-                background: {_P["surface_canvas"]};
+                background: {palette["surface_canvas"]};
             }}
 """
 
 
 def main_window_canvas_tab_stylesheet(palette) -> str:
-    _P = palette
     return f"""
             QTabWidget#canvasTabs {{
-                background: {_P["surface_app"]};
+                background: {palette["surface_app"]};
             }}
             QTabWidget#canvasTabs::tab-bar {{
                 alignment: left;
                 left: 8px;
             }}
             QTabWidget#canvasTabs::pane {{
-                border: 1px solid {_P["border"]};
-                background: {_P["surface_canvas"]};
+                border: 1px solid {palette["border"]};
+                background: {palette["surface_canvas"]};
             }}
             QTabWidget#canvasTabs QTabBar {{
-                background: {_P["surface_app"]};
+                background: {palette["surface_app"]};
                 padding: 2px 6px 0 6px;
             }}
             QTabWidget#canvasTabs QTabBar::tab {{
                 background: transparent;
-                color: {_P["text_muted"]};
+                color: {palette["text_muted"]};
                 border: 1px solid transparent;
                 border-top: 2px solid transparent;
                 border-bottom-left-radius: 6px;
@@ -123,44 +121,43 @@ def main_window_canvas_tab_stylesheet(palette) -> str:
                 margin: 0 2px 0 0;
             }}
             QTabWidget#canvasTabs QTabBar::tab:hover:!selected {{
-                background: {_P["hover"]};
+                background: {palette["hover"]};
             }}
             QTabWidget#canvasTabs QTabBar::tab:selected {{
-                background: {_P["surface_canvas"]};
-                color: {_P["text"]};
-                border-color: {_P["border"]};
-                border-top-color: {_P["accent"]};
+                background: {palette["surface_canvas"]};
+                color: {palette["text"]};
+                border-color: {palette["border"]};
+                border-top-color: {palette["accent"]};
             }}
             QTabWidget#canvasTabs QTabBar QToolButton {{
                 background: transparent;
                 border: none;
                 border-radius: 8px;
-                color: {_P["text_muted"]};
+                color: {palette["text_muted"]};
                 padding: 4px 6px;
             }}
             QTabWidget#canvasTabs QTabBar QToolButton:hover {{
-                background: {_P["hover"]};
+                background: {palette["hover"]};
             }}
 """
 
 
 def main_window_scrollbar_stylesheet(palette) -> str:
-    _P = palette
     return f"""
             QScrollBar:horizontal {{
-                background: {_P["surface_app"]};
+                background: {palette["surface_app"]};
                 height: 10px;
                 margin: 0;
-                border-top: 1px solid {_P["border"]};
+                border-top: 1px solid {palette["border"]};
             }}
             QScrollBar::handle:horizontal {{
-                background: {_P["scrollbar"]};
-                border: 2px solid {_P["surface_app"]};
+                background: {palette["scrollbar"]};
+                border: 2px solid {palette["surface_app"]};
                 border-radius: 8px;
                 min-width: 36px;
             }}
             QScrollBar::handle:horizontal:hover {{
-                background: {_P["scrollbar_hover"]};
+                background: {palette["scrollbar_hover"]};
             }}
             QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {{
                 background: transparent;
@@ -175,22 +172,22 @@ def main_window_scrollbar_stylesheet(palette) -> str:
                 subcontrol-position: right;
             }}
             QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal {{
-                background: {_P["surface_app"]};
+                background: {palette["surface_app"]};
             }}
             QScrollBar:vertical {{
-                background: {_P["surface_app"]};
+                background: {palette["surface_app"]};
                 width: 10px;
                 margin: 0;
-                border-left: 1px solid {_P["border"]};
+                border-left: 1px solid {palette["border"]};
             }}
             QScrollBar::handle:vertical {{
-                background: {_P["scrollbar"]};
-                border: 2px solid {_P["surface_app"]};
+                background: {palette["scrollbar"]};
+                border: 2px solid {palette["surface_app"]};
                 border-radius: 8px;
                 min-height: 36px;
             }}
             QScrollBar::handle:vertical:hover {{
-                background: {_P["scrollbar_hover"]};
+                background: {palette["scrollbar_hover"]};
             }}
             QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{
                 background: transparent;
@@ -205,180 +202,178 @@ def main_window_scrollbar_stylesheet(palette) -> str:
                 subcontrol-position: bottom;
             }}
             QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {{
-                background: {_P["surface_app"]};
+                background: {palette["surface_app"]};
             }}
             QAbstractScrollArea::corner {{
-                background: {_P["surface_app"]};
-                border-top: 1px solid {_P["border"]};
-                border-left: 1px solid {_P["border"]};
+                background: {palette["surface_app"]};
+                border-top: 1px solid {palette["border"]};
+                border-left: 1px solid {palette["border"]};
             }}
 """
 
 
 def main_window_form_stylesheet(palette) -> str:
-    _P = palette
     return f"""
             QLineEdit, QComboBox, QSpinBox {{
-                background: {_P["surface_input"]};
-                border: 1px solid {_P["border_strong"]};
+                background: {palette["surface_input"]};
+                border: 1px solid {palette["border_strong"]};
                 border-radius: 8px;
                 padding: 4px 7px;
-                color: {_P["text"]};
-                selection-background-color: {_P["checked_bg"]};
-                selection-color: {_P["checked_text"]};
+                color: {palette["text"]};
+                selection-background-color: {palette["checked_bg"]};
+                selection-color: {palette["checked_text"]};
             }}
             QLineEdit:focus, QComboBox:focus, QSpinBox:focus, QDoubleSpinBox:focus {{
-                border-color: {_P["accent"]};
+                border-color: {palette["accent"]};
             }}
             QSpinBox, QDoubleSpinBox {{
-                background: {_P["surface_input"]};
-                border: 1px solid {_P["border_strong"]};
+                background: {palette["surface_input"]};
+                border: 1px solid {palette["border_strong"]};
                 border-radius: 8px;
                 padding: 2px 6px;
-                color: {_P["text"]};
+                color: {palette["text"]};
             }}
             QAbstractSpinBox::up-button, QAbstractSpinBox::down-button {{
-                background: {_P["surface_bar"]};
-                border-left: 1px solid {_P["border_strong"]};
+                background: {palette["surface_bar"]};
+                border-left: 1px solid {palette["border_strong"]};
                 width: 14px;
             }}
             QFrame#spinFrame {{
-                background: {_P["surface_input"]};
-                border: 1px solid {_P["border_strong"]};
+                background: {palette["surface_input"]};
+                border: 1px solid {palette["border_strong"]};
                 border-radius: 8px;
             }}
             QFrame#spinFrame QDoubleSpinBox {{
                 background: transparent;
                 border: none;
                 padding: 2px 6px;
-                color: {_P["text"]};
+                color: {palette["text"]};
             }}
             QToolButton#spinUpButton {{
-                background: {_P["surface_bar"]};
-                border-left: 1px solid {_P["border_strong"]};
-                border-bottom: 1px solid {_P["border_strong"]};
+                background: {palette["surface_bar"]};
+                border-left: 1px solid {palette["border_strong"]};
+                border-bottom: 1px solid {palette["border_strong"]};
             }}
             QToolButton#spinDownButton {{
-                background: {_P["surface_bar"]};
-                border-left: 1px solid {_P["border_strong"]};
+                background: {palette["surface_bar"]};
+                border-left: 1px solid {palette["border_strong"]};
             }}
             QComboBox QAbstractItemView {{
-                background: {_P["surface_input"]};
-                color: {_P["text"]};
-                border: 1px solid {_P["border_strong"]};
-                selection-background-color: {_P["checked_bg"]};
-                selection-color: {_P["checked_text"]};
+                background: {palette["surface_input"]};
+                color: {palette["text"]};
+                border: 1px solid {palette["border_strong"]};
+                selection-background-color: {palette["checked_bg"]};
+                selection-color: {palette["checked_text"]};
             }}
             QAbstractItemView {{
-                background: {_P["surface_input"]};
-                color: {_P["text"]};
-                border: 1px solid {_P["border_strong"]};
+                background: {palette["surface_input"]};
+                color: {palette["text"]};
+                border: 1px solid {palette["border_strong"]};
             }}
             QAbstractItemView::item {{
-                background: {_P["surface_input"]};
-                color: {_P["text"]};
+                background: {palette["surface_input"]};
+                color: {palette["text"]};
             }}
             QPushButton {{
-                color: {_P["text"]};
-                border: 1px solid {_P["border_strong"]};
+                color: {palette["text"]};
+                border: 1px solid {palette["border_strong"]};
                 border-radius: 8px;
                 padding: 5px 12px;
-                background: {_P["surface_input"]};
+                background: {palette["surface_input"]};
             }}
             QPushButton:hover {{
-                background: {_P["hover"]};
-                border-color: {_P["checked_border"]};
+                background: {palette["hover"]};
+                border-color: {palette["checked_border"]};
             }}
             QPushButton:pressed {{
-                background: {_P["pressed"]};
+                background: {palette["pressed"]};
             }}
             QMenu {{
-                background: {_P["surface_input"]};
-                border: 1px solid {_P["border"]};
+                background: {palette["surface_input"]};
+                border: 1px solid {palette["border"]};
                 border-radius: 8px;
                 padding: 5px 0;
             }}
             QMenu::item {{
                 padding: 6px 24px 6px 12px;
-                color: {_P["text"]};
+                color: {palette["text"]};
             }}
             QMenu::item:selected {{
-                background: {_P["hover"]};
+                background: {palette["hover"]};
                 border-radius: 4px;
             }}
             QMenu::separator {{
                 height: 1px;
-                background: {_P["border"]};
+                background: {palette["border"]};
                 margin: 4px 8px;
             }}
             QDialog, QMessageBox {{
-                background: {_P["surface_bar"]};
+                background: {palette["surface_bar"]};
             }}
             QDialog QLabel, QMessageBox QLabel {{
-                color: {_P["text"]};
+                color: {palette["text"]};
             }}
             QDialog QLineEdit, QMessageBox QLineEdit {{
-                background: {_P["surface_input"]};
-                border: 1px solid {_P["border_strong"]};
+                background: {palette["surface_input"]};
+                border: 1px solid {palette["border_strong"]};
                 border-radius: 8px;
                 padding: 3px 6px;
-                color: {_P["text"]};
+                color: {palette["text"]};
             }}
             QDialog QPushButton, QMessageBox QPushButton {{
-                background: {_P["surface_input"]};
-                border: 1px solid {_P["border_strong"]};
+                background: {palette["surface_input"]};
+                border: 1px solid {palette["border_strong"]};
                 border-radius: 8px;
                 padding: 5px 14px;
-                color: {_P["text"]};
+                color: {palette["text"]};
             }}
             QDialog QPushButton:hover, QMessageBox QPushButton:hover {{
-                background: {_P["hover"]};
-                border-color: {_P["checked_border"]};
+                background: {palette["hover"]};
+                border-color: {palette["checked_border"]};
             }}
             QDialog QPushButton:pressed, QMessageBox QPushButton:pressed {{
-                background: {_P["pressed"]};
+                background: {palette["pressed"]};
             }}
             QSlider::groove:horizontal {{
                 height: 4px;
-                background: {_P["border_strong"]};
+                background: {palette["border_strong"]};
                 border-radius: 2px;
             }}
             QSlider::handle:horizontal {{
                 width: 12px;
                 height: 12px;
-                background: {_P["accent"]};
+                background: {palette["accent"]};
                 border-radius: 8px;
                 margin: -5px 0;
             }}
             QSlider::handle:horizontal:hover {{
-                background: {_P["checked_text"]};
+                background: {palette["checked_text"]};
             }}
 """
 
 
 def main_window_status_stylesheet(palette) -> str:
-    _P = palette
     return f"""
             QStatusBar {{
-                background: {_P["surface_bar"]};
-                border-top: 1px solid {_P["border"]};
-                color: {_P["text_muted"]};
+                background: {palette["surface_bar"]};
+                border-top: 1px solid {palette["border"]};
+                color: {palette["text_muted"]};
                 padding: 2px 8px;
             }}
             QStatusBar[statusState="error"] {{
-                background: {_P["danger_bg"]};
-                border-top: 1px solid {_P["danger_border"]};
-                color: {_P["danger_text"]};
+                background: {palette["danger_bg"]};
+                border-top: 1px solid {palette["danger_border"]};
+                color: {palette["danger_text"]};
             }}
             QStatusBar QLabel {{
-                color: {_P["text_muted"]};
+                color: {palette["text_muted"]};
             }}
             QStatusBar QLabel#statusContextLabel {{
-                border-left: 1px solid {_P["border"]};
+                border-left: 1px solid {palette["border"]};
                 padding: 0 8px;
             }}
             QStatusBar QToolButton#statusZoomButton {{
-                color: {_P["text_muted"]};
+                color: {palette["text_muted"]};
                 background: transparent;
                 border: none;
                 border-radius: 4px;
@@ -388,26 +383,26 @@ def main_window_status_stylesheet(palette) -> str:
                 margin: 0;
             }}
             QStatusBar QToolButton#statusZoomButton:hover {{
-                background: {_P["hover"]};
-                color: {_P["text"]};
+                background: {palette["hover"]};
+                color: {palette["text"]};
             }}
             QStatusBar QToolButton#statusZoomButton:pressed {{
-                background: {_P["pressed"]};
+                background: {palette["pressed"]};
             }}
             QStatusBar QToolButton#statusZoomLabel {{
-                color: {_P["text"]};
+                color: {palette["text"]};
                 font-weight: 500;
             }}
             QStatusBar QToolButton#statusZoomLabel:hover {{
-                background: {_P["hover"]};
+                background: {palette["hover"]};
             }}
             QStatusBar QToolButton#statusZoomLabel:pressed {{
-                background: {_P["pressed"]};
+                background: {palette["pressed"]};
             }}
             QStatusBar QToolButton#statusZoomFitButton {{
-                color: {_P["text_muted"]};
+                color: {palette["text_muted"]};
                 background: transparent;
-                border: 1px solid {_P["border_strong"]};
+                border: 1px solid {palette["border_strong"]};
                 border-radius: 4px;
                 font-size: 12px;
                 font-weight: 500;
@@ -416,12 +411,12 @@ def main_window_status_stylesheet(palette) -> str:
                 margin: 0 0 0 3px;
             }}
             QStatusBar QToolButton#statusZoomFitButton:hover {{
-                background: {_P["hover"]};
-                color: {_P["text"]};
-                border-color: {_P["scrollbar_hover"]};
+                background: {palette["hover"]};
+                color: {palette["text"]};
+                border-color: {palette["scrollbar_hover"]};
             }}
             QStatusBar QToolButton#statusZoomFitButton:pressed {{
-                background: {_P["pressed"]};
+                background: {palette["pressed"]};
             }}
 """
 

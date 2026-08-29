@@ -1,5 +1,9 @@
 import unittest
 
+from PyQt6 import sip
+from PyQt6.QtCore import QObject, QRectF
+from PyQt6.QtWidgets import QGraphicsRectItem
+
 from chemvas.ui.scene_item_access import (
     add_item_to_canvas_scene,
     apply_scene_item_state,
@@ -21,10 +25,6 @@ from chemvas.ui.scene_item_access import (
     restore_scene_item,
     restore_ts_bracket_from_state,
 )
-from PyQt6 import sip
-from PyQt6.QtCore import QObject, QRectF
-from PyQt6.QtWidgets import QGraphicsRectItem
-
 from tests.runtime_services import canvas_runtime_services
 
 

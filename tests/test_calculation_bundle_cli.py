@@ -7,6 +7,7 @@ import sys
 from pathlib import Path
 
 import pytest
+
 from chemvas.bootstrap import calculation_bundle as cli
 from chemvas.core.document_io import write_document
 from chemvas.domain.document import (

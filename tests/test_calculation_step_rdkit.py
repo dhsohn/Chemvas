@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 
 import pytest
+
 from chemvas.bootstrap.calculation_bundle import run
 from chemvas.core.document_io import write_document
 from chemvas.domain.document import (
@@ -14,7 +15,6 @@ from chemvas.domain.document import (
     MoleculeModel,
     serialize_model_state,
 )
-
 from tests.test_calculation_plan import _document_state
 
 pytestmark = pytest.mark.skipif(

@@ -7,6 +7,7 @@ import sys
 from pathlib import Path
 
 import pytest
+
 from chemvas.bootstrap import document_patch as cli
 from chemvas.core.document_io import read_document, write_document
 from chemvas.domain.document import (

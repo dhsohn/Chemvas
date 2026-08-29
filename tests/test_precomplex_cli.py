@@ -6,6 +6,7 @@ from dataclasses import replace
 from pathlib import Path
 
 import pytest
+
 from chemvas.bootstrap import calculation_bundle as cli
 from chemvas.core.document_io import read_document
 from chemvas.domain.document import CANVAS_FILE_VERSION
@@ -13,7 +14,6 @@ from chemvas.domain.document.precomplex_profile import (
     CURRENT_PROFILE_ID,
     radius_provenance_for,
 )
-
 from tests.test_calculation_step_cli import _StateFakeAdapter, _write_document_with_plan
 
 

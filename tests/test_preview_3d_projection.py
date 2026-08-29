@@ -2,13 +2,14 @@ from __future__ import annotations
 
 import math
 
+from PyQt6.QtCore import QRectF
+
 from chemvas.features.insertion import Molecule3DAtom, Molecule3DBond, Molecule3DScene
 from chemvas.ui.preview_3d_projection import (
     preview_projection_rect,
     project_3d_scene,
     project_preview_scene,
 )
-from PyQt6.QtCore import QRectF
 
 
 def _scene() -> Molecule3DScene:

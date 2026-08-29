@@ -16,6 +16,8 @@ except ModuleNotFoundError:
     QApplication = None
 
 if QApplication is not None:
+    from PyQt6.QtGui import QTextCursor
+
     from chemvas.domain.document.state import _validate_note_states
     from chemvas.ui.canvas_history_service import CanvasHistoryService
     from chemvas.ui.canvas_history_state import CanvasHistoryState
@@ -40,7 +42,6 @@ if QApplication is not None:
     from chemvas.ui.scene_item_state_serialization import note_state_dict
     from chemvas.ui.selection_service_bundle import build_selection_services
     from chemvas.ui.selection_style_state import SelectionStyleState
-    from PyQt6.QtGui import QTextCursor
 
 
 def _history_service(push=None):

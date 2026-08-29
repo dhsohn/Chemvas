@@ -17,7 +17,6 @@ from chemvas.ui.canvas_scene_items_state import (
     set_scene_item_collection_for,
 )
 from chemvas.ui.selection_structure_service import SelectionStructureService
-
 from tests.runtime_services import canvas_runtime_services
 from tests.runtime_state import canvas_runtime_state
 

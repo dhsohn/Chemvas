@@ -3,6 +3,8 @@ from __future__ import annotations
 from types import SimpleNamespace
 from unittest import mock
 
+from PyQt6.QtCore import QPointF
+
 from chemvas.domain.document import Atom, Bond
 from chemvas.features.insertion import (
     TemplateInsertRequest,
@@ -12,8 +14,6 @@ from chemvas.features.insertion import (
 )
 from chemvas.ui.insert_mode_logic import InsertSessionState
 from chemvas.ui.insert_template_service import InsertTemplateService
-from PyQt6.QtCore import QPointF
-
 from tests.test_insert_controller import _FakeCanvas
 
 

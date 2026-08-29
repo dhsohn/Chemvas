@@ -11,7 +11,6 @@ except ModuleNotFoundError:
 
 if QApplication is not None:
     from chemvas.core.history import CompositeCommand
-
     from tests.test_scene_ops_controller import (
         _FakeCanvas,
         _make_rect_item,

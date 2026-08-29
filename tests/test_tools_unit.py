@@ -71,7 +71,6 @@ if QApplication is not None:
     )
     from chemvas.ui.tool_base import Tool
     from chemvas.ui.tool_context import ToolContext
-
     from tests.canvas_factory import build_canvas_view
 
 

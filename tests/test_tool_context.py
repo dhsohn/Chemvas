@@ -2,8 +2,9 @@ from types import SimpleNamespace
 from unittest import mock
 
 import pytest
-from chemvas.ui.tool_context import ToolContext
 from PyQt6.QtCore import QPointF
+
+from chemvas.ui.tool_context import ToolContext
 
 
 def _hit_testing_port(**overrides):

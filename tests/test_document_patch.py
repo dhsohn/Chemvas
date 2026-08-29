@@ -3,6 +3,7 @@ from __future__ import annotations
 from copy import deepcopy
 
 import pytest
+
 from chemvas.domain.document import (
     CANVAS_FILE_VERSION,
     Atom,

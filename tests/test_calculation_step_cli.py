@@ -8,6 +8,7 @@ import sys
 from pathlib import Path
 
 import pytest
+
 from chemvas.bootstrap import calculation_bundle as cli
 from chemvas.core.document_io import read_document, write_document
 from chemvas.domain.document import (
@@ -18,7 +19,6 @@ from chemvas.domain.document import (
     serialize_model_state,
 )
 from chemvas.features.calculation_bundle import AtomMapEntry, CalculationArtifacts
-
 from tests.test_calculation_plan import _document_state, _plan
 
 

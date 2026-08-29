@@ -8,9 +8,10 @@ from tests.runtime_services import canvas_runtime_services
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from chemvas.shell.main_window import MainWindow
 from PyQt6.QtGui import QCloseEvent
 from PyQt6.QtWidgets import QApplication
+
+from chemvas.shell.main_window import MainWindow
 
 
 def _window(*, confirm: bool, events: list[str]) -> MainWindow:

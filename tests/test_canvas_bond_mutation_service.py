@@ -12,7 +12,6 @@ from chemvas.ui.canvas_bond_graphics_state import (
     set_bond_items_for,
 )
 from chemvas.ui.canvas_bond_mutation_service import CanvasBondMutationService
-
 from tests.runtime_services import canvas_runtime_services
 from tests.runtime_state import canvas_runtime_state
 

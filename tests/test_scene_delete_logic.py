@@ -21,7 +21,6 @@ if QApplication is not None:
         build_delete_selection_plan,
         classify_delete_selection,
     )
-
     from tests.test_scene_ops_controller import (
         _FakeCanvas,
         _make_note_item,

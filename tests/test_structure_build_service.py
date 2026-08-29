@@ -3,6 +3,8 @@ from types import SimpleNamespace
 from unittest import mock
 from unittest.mock import Mock
 
+from PyQt6.QtCore import QPointF
+
 from chemvas.core.history import CompositeCommand, RestoreOutcome
 from chemvas.domain.document import Atom, Bond, MoleculeModel
 from chemvas.features.insertion import (
@@ -32,8 +34,6 @@ from chemvas.ui.structure_build_service import StructureBuildService
 from chemvas.ui.structure_growth_build_actions import (
     structure_growth_build_actions_for,
 )
-from PyQt6.QtCore import QPointF
-
 from tests.runtime_services import canvas_runtime_services
 from tests.runtime_state import canvas_runtime_state
 
@@ -355,7 +355,7 @@ class StructureBuildServiceTest(unittest.TestCase):
         canvas = _FakeCanvas()
         service = _service_for(canvas)
 
-        service.run_recorded_build(lambda: [], before_smiles_input="explicit")
+        service.run_recorded_build(list, before_smiles_input="explicit")
 
         self.assertEqual(
             canvas.record_calls,

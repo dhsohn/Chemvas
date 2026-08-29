@@ -1,6 +1,7 @@
 from decimal import Decimal
 
 import pytest
+
 from chemvas.domain.json_io import strict_json_loads
 
 

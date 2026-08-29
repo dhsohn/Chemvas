@@ -5,16 +5,16 @@ from types import SimpleNamespace
 from tests.runtime_services import canvas_runtime_services
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
-from chemvas.core.history import (  # noqa: E402
+from chemvas.core.history import (
     CompositeCommand,
     HistoryCommand,
     SetSmilesInputCommand,
 )
-from chemvas.ui.delete_tool_logic import (  # noqa: E402
+from chemvas.ui.delete_tool_logic import (
     build_delete_tool_history_command,
     erase_delete_tool_item,
 )
-from chemvas.ui.history_commands import DeleteSceneItemsCommand  # noqa: E402
+from chemvas.ui.history_commands import DeleteSceneItemsCommand
 
 
 class _Command(HistoryCommand):

@@ -11,13 +11,14 @@ except ModuleNotFoundError:
     QApplication = None
 
 if QApplication is not None:
+    from PyQt6.QtCore import QRectF
+
     from chemvas.ui.selection_outline_items import (
         selection_center_outline_items,
         selection_component_outline_item,
         selection_group_outline_item,
         selection_object_outline_item,
     )
-    from PyQt6.QtCore import QRectF
 
 
 @unittest.skipUnless(

@@ -2,11 +2,11 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import patch
 
+from PyQt6.QtCore import QRectF
+
 import chemvas.ui.scene_clipboard_access as access
 from chemvas.domain.document import CLIPBOARD_SELECTION_VERSION
 from chemvas.ui.scene_clipboard_state import SceneClipboardState
-from PyQt6.QtCore import QRectF
-
 from tests.runtime_state import canvas_runtime_state
 
 

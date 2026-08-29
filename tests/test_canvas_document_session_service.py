@@ -11,6 +11,14 @@ from tests.runtime_state import canvas_runtime_state
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
+from PyQt6.QtCore import QPointF, QRectF
+from PyQt6.QtWidgets import (
+    QApplication,
+    QGraphicsRectItem,
+    QGraphicsScene,
+    QGraphicsView,
+)
+
 from chemvas.adapters.qt.renderer import Renderer
 from chemvas.core.svg_roundtrip import extract_chemvas_document_from_svg
 from chemvas.domain.document import MoleculeModel, serialize_settings
@@ -46,14 +54,6 @@ from chemvas.ui.transactions.scene_rect import (
     set_explicit_scene_rect,
     set_explicit_view_scene_rect,
 )
-from PyQt6.QtCore import QPointF, QRectF
-from PyQt6.QtWidgets import (
-    QApplication,
-    QGraphicsRectItem,
-    QGraphicsScene,
-    QGraphicsView,
-)
-
 from tests.canvas_factory import build_canvas_view
 
 

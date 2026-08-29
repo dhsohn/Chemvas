@@ -26,7 +26,6 @@ from chemvas.ui.main_window_ports import (
     style_controller_for_window,
     tool_mode_controller_for_window,
 )
-
 from tests.runtime_services import canvas_runtime_services
 
 

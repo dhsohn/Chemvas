@@ -30,7 +30,6 @@ if QApplication is not None:
         set_selection_outlines_for,
     )
     from chemvas.ui.selection_style_state import SelectionStyleState
-
     from tests.test_selection_controller_additional import (
         _FakeCanvas,
         _FakeItem,

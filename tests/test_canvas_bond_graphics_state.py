@@ -10,7 +10,6 @@ from chemvas.ui.canvas_bond_graphics_state import (
     set_bond_items_for,
     set_bond_items_for_id,
 )
-
 from tests.runtime_state import canvas_runtime_state
 
 

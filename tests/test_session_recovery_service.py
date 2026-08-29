@@ -4,6 +4,8 @@ from types import SimpleNamespace
 from unittest import mock
 
 import pytest
+from PyQt6.QtWidgets import QApplication
+
 from chemvas.features.session import RestoredDoc
 from chemvas.ui.session_recovery_service import (
     AutosaveSnapshotError,
@@ -11,8 +13,6 @@ from chemvas.ui.session_recovery_service import (
     collect_open_documents,
 )
 from chemvas.ui.session_snapshot_store import RestoreResult
-from PyQt6.QtWidgets import QApplication
-
 from tests.runtime_services import canvas_runtime_services
 
 
@@ -102,7 +102,7 @@ def _service(
     store,
     *,
     extra_windows=None,
-    current_documents=lambda: [],
+    current_documents=list,
     open_windows=lambda: (),
     status_service=None,
 ):

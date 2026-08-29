@@ -20,7 +20,6 @@ from chemvas.ui.selection_service_access import (
     select_single_structure_item_for,
     selection_targets_for_item_for,
 )
-
 from tests.runtime_services import canvas_runtime_services
 from tests.runtime_state import canvas_runtime_state
 

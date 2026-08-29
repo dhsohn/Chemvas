@@ -9,6 +9,12 @@ from unittest import mock
 from tests.runtime_services import canvas_runtime_services
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+from PyQt6 import sip
+from PyQt6.QtWidgets import (
+    QApplication,
+    QGraphicsScene,
+)
+
 from chemvas.adapters.qt.renderer import Renderer
 from chemvas.domain.document import MoleculeModel
 from chemvas.features.hover import HoverState
@@ -63,12 +69,6 @@ from chemvas.ui.selection_style_state import (
     SelectionStyleState,
     selection_style_state_for,
 )
-from PyQt6 import sip
-from PyQt6.QtWidgets import (
-    QApplication,
-    QGraphicsScene,
-)
-
 from tests.canvas_factory import build_canvas_view
 from tests.runtime_state import canvas_runtime_state
 

@@ -20,7 +20,6 @@ if QApplication is not None:
             MainWindowActiveCanvasUIService,
         )
         from chemvas.ui.selection_info_state import selection_info_state_for
-
         from tests.canvas_factory import build_canvas_view
     except (ModuleNotFoundError, SyntaxError):
         CanvasView = None

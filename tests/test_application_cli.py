@@ -6,6 +6,7 @@ import sys
 from pathlib import Path
 
 import pytest
+
 from chemvas import __version__
 from chemvas.bootstrap import application
 

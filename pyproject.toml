@@ -38,9 +38,9 @@ dependencies = [
 dev = [
     "coverage[toml]>=7",
     "jsonschema>=4.23,<5",
-    "mypy>=1.19",
+    "mypy>=2.3,<3",
     "pytest>=8",
-    "ruff>=0.8",
+    "ruff>=0.16.2,<0.17",
 ]
 rdkit = [
     "rdkit>=2024.9",
@@ -86,16 +86,76 @@ skip_covered = true
 
 [tool.ruff]
 target-version = "py312"
+# The import root is app/, not the repository root. Declaring it keeps
+# first-party classification (and therefore I001 ordering) a property of this
+# file rather than of ruff's directory inference.
+src = ["app"]
 
 [tool.ruff.lint]
-select = ["E4", "E7", "E9", "F", "I", "B", "C901", "UP", "RUF012", "RUF021", "RUF022", "RUF046"]
+select = [
+    "A",
+    "B",
+    "C901",
+    "E4",
+    "E7",
+    "E9",
+    "F",
+    "FURB",
+    "G",
+    "I",
+    "ISC",
+    "N",
+    "PIE",
+    "PLE",
+    "PLR0912",
+    "PLR0913",
+    "PLR0915",
+    "RSE",
+    "RUF012",
+    "RUF021",
+    "RUF022",
+    "RUF046",
+    "RUF100",
+    "TID",
+    "UP",
+]
 
+# The four size limits are set to the largest value observed in the tree, so
+# they forbid getting worse without demanding a rewrite of what exists. Lower
+# them as the outliers shrink; never raise one to admit a new offender.
 [tool.ruff.lint.mccabe]
-max-complexity = 30
+max-complexity = 28
+
+[tool.ruff.lint.pylint]
+max-args = 20
+max-branches = 28
+max-statements = 100
+
+[tool.ruff.lint.pep8-naming]
+# Qt method names are camelCase, so an override must match them exactly, and
+# RDKit's module bindings keep their upstream capitalization. Neither is a
+# naming deviation this project can decide differently.
+extend-ignore-names = [
+    "*Event",
+    "AllChem",
+    "Chem",
+    "assignId",
+    "blockSignals",
+    "boundingRect",
+    "cleanIt",
+    "drawBackground",
+    "eventFilter",
+    "maxIters",
+    "scrollContentsBy",
+    "setFont",
+    "setPlainText",
+]
 
 [tool.ruff.lint.per-file-ignores]
 # RUF012: test doubles use mutable class attributes as shared recording state.
-"tests/*.py" = ["E402", "RUF012"]
+# N802: test doubles reproduce Qt's camelCase method names so the code under
+# test calls them exactly as it calls a real widget.
+"tests/*.py" = ["E402", "N802", "RUF012"]
 
 [tool.mypy]
 python_version = "3.12"

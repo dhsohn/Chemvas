@@ -1,12 +1,13 @@
 import math
 import unittest
 
+from PyQt6.QtCore import QPointF
+
 from chemvas.domain.document import Atom, Bond
 from chemvas.features.selection import (
     rotated_atom_positions,
     selected_atom_ids_with_bond_endpoints,
 )
-from PyQt6.QtCore import QPointF
 
 
 class SelectionRotationLogicTest(unittest.TestCase):

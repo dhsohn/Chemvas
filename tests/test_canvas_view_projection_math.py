@@ -82,7 +82,6 @@ if QApplication is not None:
         unproject_scene_point_3d_for,
     )
     from chemvas.ui.structure_mutation_access import add_atom_for, add_bond_for
-
     from tests.canvas_factory import build_canvas_view
 
 

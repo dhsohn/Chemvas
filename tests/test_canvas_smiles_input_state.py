@@ -7,7 +7,6 @@ from chemvas.ui.canvas_smiles_input_state import (
     set_last_smiles_input_for,
     smiles_input_state_for,
 )
-
 from tests.runtime_state import canvas_runtime_state
 
 

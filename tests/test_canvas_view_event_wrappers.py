@@ -20,7 +20,6 @@ if QApplication is not None:
     from chemvas.ui.canvas_view import CanvasView
     from chemvas.ui.canvas_window_access import set_error_callback_for
     from chemvas.ui.input_view_access import input_view_state_for
-
     from tests.canvas_factory import build_canvas_view
 
 

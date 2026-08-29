@@ -5,6 +5,8 @@ from unittest import mock
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
+from PyQt6.QtGui import QColor
+
 from chemvas.domain.document import Atom, Bond
 from chemvas.ui.atom_coords_access import (
     CanvasAtomCoords3DState,
@@ -20,8 +22,6 @@ from chemvas.ui.canvas_atom_graphics_state import (
 )
 from chemvas.ui.canvas_atom_mutation_service import CanvasAtomMutationService
 from chemvas.ui.canvas_graph_state import CanvasGraphState
-from PyQt6.QtGui import QColor
-
 from tests.runtime_services import canvas_runtime_services
 from tests.runtime_state import canvas_runtime_state
 

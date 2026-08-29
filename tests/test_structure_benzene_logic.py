@@ -1,9 +1,10 @@
 import unittest
 from unittest import mock
 
+from PyQt6.QtCore import QPointF
+
 from chemvas.domain.document import Atom, Bond
 from chemvas.ui.structure_benzene_logic import plan_benzene_ring_points
-from PyQt6.QtCore import QPointF
 
 
 class _FakePolygon:

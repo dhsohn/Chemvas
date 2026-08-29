@@ -7,11 +7,18 @@ from unittest import mock
 
 from chemvas.core.history import SetAtomPositionsCommand
 from chemvas.domain.document import Atom, Bond, MoleculeModel
-
 from tests.runtime_services import canvas_runtime_services
 from tests.runtime_state import canvas_runtime_state
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+
+from PyQt6 import sip
+from PyQt6.QtCore import QPointF
+from PyQt6.QtGui import QPolygonF
+from PyQt6.QtWidgets import (
+    QApplication,
+    QGraphicsPolygonItem,
+)
 
 from chemvas.ui.atom_coords_access import CanvasAtomCoords3DState
 from chemvas.ui.canvas_atom_graphics_state import visible_atom_item_for
@@ -26,14 +33,6 @@ from chemvas.ui.structure_mutation_access import (
     add_atom_for,
     add_bond_for,
 )
-from PyQt6 import sip
-from PyQt6.QtCore import QPointF
-from PyQt6.QtGui import QPolygonF
-from PyQt6.QtWidgets import (
-    QApplication,
-    QGraphicsPolygonItem,
-)
-
 from tests.canvas_factory import build_canvas_view
 
 

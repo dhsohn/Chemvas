@@ -49,7 +49,6 @@ if QApplication is not None:
         DocumentSavepoint,
         document_transaction,
     )
-
     from tests.canvas_factory import build_canvas_view
     from tests.test_scene_ops_controller import (
         _FakeCanvas,

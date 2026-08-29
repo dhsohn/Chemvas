@@ -1,6 +1,7 @@
 from types import SimpleNamespace
 
 import pytest
+
 from chemvas.domain.document import CANVAS_FILE_VERSION, CLIPBOARD_SELECTION_VERSION
 from chemvas.ui.canvas_format_access import (
     clipboard_selection_mime_for,

@@ -42,7 +42,6 @@ from chemvas.ui.history_commands import (
     MoveItemsCommand,
     UpdateSceneItemCommand,
 )
-
 from tests.runtime_services import canvas_runtime_services
 from tests.runtime_state import canvas_runtime_state
 

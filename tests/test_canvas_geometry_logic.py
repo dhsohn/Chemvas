@@ -1,13 +1,14 @@
 import math
 import unittest
 
+from PyQt6.QtCore import QPointF, QRectF
+
 from chemvas.ui.canvas_geometry_logic import (
     line_rect_clip_t,
     line_rect_intersections,
     ray_rect_exit_distance,
     segment_intersection_t,
 )
-from PyQt6.QtCore import QPointF, QRectF
 
 
 class CanvasGeometryLogicTest(unittest.TestCase):

@@ -16,7 +16,6 @@ if QApplication is not None:
     from chemvas.features.selection import StructureHit
     from chemvas.ui.selection_preference_service import SelectionPreferenceService
     from chemvas.ui.selection_structure_service import SelectionStructureService
-
     from tests.test_selection_controller_additional import _FakeItem, _make_canvas
 
 

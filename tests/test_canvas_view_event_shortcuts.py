@@ -18,7 +18,6 @@ if QApplication is not None:
         input_view_state_for,
         should_override_chemdraw_shortcut_for,
     )
-
     from tests.canvas_factory import build_canvas_view
 
 
