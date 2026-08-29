@@ -15,7 +15,7 @@ from chemvas.features.insertion import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
+    from collections.abc import Callable, Mapping
 
     from chemvas.domain.document import MoleculeModel
     from chemvas.features.calculation_bundle import CalculationArtifacts
@@ -216,7 +216,9 @@ class RDKitAdapter:
     def get_name_from_smiles(self, smiles: str) -> str | None:
         return self._import_helper.get_name_from_smiles(smiles)
 
-    def _call_with_result(self, callback, *, fallback_error: str):
+    def _call_with_result[T](
+        self, callback: Callable[[], T | None], *, fallback_error: str
+    ) -> RDKitResult[T]:
         self.last_error = None
         try:
             value = callback()
