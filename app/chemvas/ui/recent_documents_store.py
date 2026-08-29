@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import json
 import os
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 from chemvas.core.document_io import atomic_write_text
 from chemvas.ui.app_data_paths import recent_documents_file
@@ -20,6 +20,9 @@ from chemvas.ui.recent_documents_logic import (
     prune_missing,
     to_json,
 )
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 def _target(path: Path | None) -> Path:

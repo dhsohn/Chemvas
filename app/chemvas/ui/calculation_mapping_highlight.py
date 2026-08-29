@@ -1,7 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Iterable
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QBrush, QColor, QFont
@@ -12,6 +11,9 @@ from PyQt6.QtWidgets import (
 )
 
 from chemvas.ui.selection_style_access import atom_center_point_for
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable
 
 _REACTANT_COLOR = QColor("#0072B2")
 _PRODUCT_COLOR = QColor("#D55E00")

@@ -1,11 +1,15 @@
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping, Sequence
+from typing import TYPE_CHECKING
 
 from PyQt6.QtCore import QPointF
 
-from chemvas.domain.document import Atom, Bond
 from chemvas.features.insertion import point_inside_any_ring
+
+if TYPE_CHECKING:
+    from collections.abc import Callable, Mapping, Sequence
+
+    from chemvas.domain.document import Atom, Bond
 
 
 def plan_benzene_ring_points(

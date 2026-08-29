@@ -9,10 +9,7 @@ PDF and raster output all show identical glyphs.
 
 from __future__ import annotations
 
-from collections.abc import Sequence
-
-from PyQt6.QtCore import QRectF
-from PyQt6.QtWidgets import QGraphicsItem, QGraphicsScene
+from typing import TYPE_CHECKING
 
 from .plan import ExportPlan, build_export_plan
 from .raster import export_raster_file
@@ -28,6 +25,12 @@ from .vector import (
     render_pdf_bytes,
     render_svg_bytes,
 )
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
+
+    from PyQt6.QtCore import QRectF
+    from PyQt6.QtWidgets import QGraphicsItem, QGraphicsScene
 
 
 def _resolve_plan(

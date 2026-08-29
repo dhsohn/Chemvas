@@ -243,7 +243,7 @@ def _validated_editable_svg_payload(payload: dict[str, Any]) -> dict[str, Any]:
         parse_document(document)
     except ValueError as exc:
         raise ValueError("Invalid editable Chemvas SVG payload.") from exc
-    return cast(dict[str, Any], normalize_json_numbers(payload))
+    return cast("dict[str, Any]", normalize_json_numbers(payload))
 
 
 __all__ = [

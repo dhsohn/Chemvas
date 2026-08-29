@@ -7,6 +7,8 @@ from unittest import mock
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
+from typing import TYPE_CHECKING
+
 from PyQt6 import sip
 from PyQt6.QtCore import QCoreApplication, QEvent, QPointF, QRectF
 from PyQt6.QtGui import QTransform
@@ -25,7 +27,6 @@ from chemvas.ui.canvas_smiles_input_state import (
     last_smiles_input_for,
     set_last_smiles_input_for,
 )
-from chemvas.ui.canvas_view import CanvasView
 from chemvas.ui.input_view_access import set_scene_rect_for
 from chemvas.ui.insert_mode_logic import InsertSessionState
 from chemvas.ui.insert_smiles_service import (
@@ -35,6 +36,9 @@ from chemvas.ui.selection_info_state import selection_info_state_for
 from chemvas.ui.selection_style_state import selection_style_state_for
 from tests.canvas_factory import build_canvas_view
 from tests.test_insert_controller import _FakeCanvas
+
+if TYPE_CHECKING:
+    from chemvas.ui.canvas_view import CanvasView
 
 
 def _session_state(canvas: _FakeCanvas) -> InsertSessionState:

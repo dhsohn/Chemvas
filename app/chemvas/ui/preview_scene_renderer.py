@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+from typing import TYPE_CHECKING
 
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QColor, QPen
@@ -17,6 +17,9 @@ from chemvas.features.insertion import (
     build_smiles_preview_snapshot,
 )
 from chemvas.ui.graphics_items import NoSelectLineItem
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping, Sequence
 
 
 def clear_scene_items(scene: QGraphicsScene, items: Sequence[QGraphicsItem]) -> None:

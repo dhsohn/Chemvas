@@ -1,8 +1,10 @@
 from __future__ import annotations
 
-from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
 
 Point2D = tuple[float, float]
 LineSegment = tuple[float, float, float, float]

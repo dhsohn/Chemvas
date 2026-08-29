@@ -1,10 +1,14 @@
 from __future__ import annotations
 
-from collections.abc import Mapping
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 from chemvas.core.history import AddAtomsCommand
-from chemvas.domain.document import Atom, Bond, MoleculeModel
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping
+
+    from chemvas.domain.document import Atom, Bond, MoleculeModel
 
 Point2D = tuple[float, float]
 

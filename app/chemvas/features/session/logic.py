@@ -21,9 +21,11 @@ and does all IO, which keeps every rule below unit-testable.
 
 from __future__ import annotations
 
-from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from collections.abc import Callable, Iterable
 
 SESSION_SCHEMA_VERSION = 1
 JsonObject = dict[str, Any]

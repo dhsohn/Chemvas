@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pytest
 
@@ -16,6 +16,9 @@ from chemvas.domain.document import (
     serialize_model_state,
 )
 from tests.test_calculation_plan import _document_state
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 pytestmark = pytest.mark.skipif(
     importlib.util.find_spec("rdkit") is None,

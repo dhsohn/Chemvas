@@ -188,7 +188,7 @@ class RDKitImportHelper:
             from rdkit.Chem import Descriptors, rdMolDescriptors
 
             formula = rdMolDescriptors.CalcMolFormula(mol_h)
-            mw = cast(Any, Descriptors).MolWt(mol_h)
+            mw = cast("Any", Descriptors).MolWt(mol_h)
             smiles = Chem.MolToSmiles(mol, canonical=True)
         except Exception:
             return MoleculeIdentifiers()

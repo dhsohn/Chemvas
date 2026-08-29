@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from PyQt6.QtCore import QPointF
+from typing import TYPE_CHECKING
 
 from chemvas.features.selection import (
     clamp_curved_midpoint as clamp_curved_midpoint_helper,
@@ -19,6 +19,9 @@ from chemvas.ui.handle_mutation_access import (
     curved_snap_enabled_for,
 )
 from chemvas.ui.selection_highlight_styler import selection_highlight_styler_for
+
+if TYPE_CHECKING:
+    from PyQt6.QtCore import QPointF
 
 
 class CanvasHandleController:

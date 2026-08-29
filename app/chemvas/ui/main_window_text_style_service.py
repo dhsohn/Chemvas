@@ -1,9 +1,11 @@
 from __future__ import annotations
 
-from collections.abc import Callable
-from typing import Any, ClassVar
+from typing import TYPE_CHECKING, Any, ClassVar
 
 from PyQt6.QtWidgets import QColorDialog
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 
 class MainWindowTextStyleService:

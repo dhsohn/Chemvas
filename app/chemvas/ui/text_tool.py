@@ -100,7 +100,7 @@ class TextTool(Tool):
             created_atom = True
         if created_atom:
             add_or_update_atom_label(
-                self.canvas, atom_id, cast(str, text), show_carbon=True, record=False
+                self.canvas, atom_id, cast("str", text), show_carbon=True, record=False
             )
             atom_state = atom_state_dict_for(self.canvas, atom_id)
             command = build_created_atom_command(
@@ -114,7 +114,7 @@ class TextTool(Tool):
             self.context.push_history(command)
         else:
             add_or_update_atom_label(
-                self.canvas, atom_id, cast(str, text), show_carbon=True
+                self.canvas, atom_id, cast("str", text), show_carbon=True
             )
         return True
 

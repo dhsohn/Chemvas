@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import math
-from collections.abc import Callable
 from typing import TYPE_CHECKING
 
 from PyQt6.QtCore import QPointF, Qt
@@ -55,6 +54,8 @@ from chemvas.ui.selection_style_access import (
 )
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from chemvas.ui.canvas_view import CanvasView
 
 

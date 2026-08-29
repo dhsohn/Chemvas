@@ -1,7 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Sequence
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
 
 from PyQt6.QtCore import (
     QBuffer,
@@ -14,11 +13,15 @@ from PyQt6.QtCore import (
 )
 from PyQt6.QtGui import QPageSize, QPainter, QPdfWriter
 from PyQt6.QtSvg import QSvgGenerator
-from PyQt6.QtWidgets import QGraphicsItem, QGraphicsScene
 
 from .painting import paint_scene_region
 from .plan import POINTS_PER_INCH, ExportPlan
 from .scope import exported_scene
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
+
+    from PyQt6.QtWidgets import QGraphicsItem, QGraphicsScene
 
 
 def configure_svg_generator(
@@ -95,7 +98,7 @@ def render_svg_bytes(
                 painter.end()
     finally:
         buffer.close()
-    return bytes(cast(Any, buffer_data))
+    return bytes(cast("Any", buffer_data))
 
 
 def export_pdf_file(
@@ -147,7 +150,7 @@ def render_pdf_bytes(
                 painter.end()
     finally:
         buffer.close()
-    return bytes(cast(Any, buffer_data))
+    return bytes(cast("Any", buffer_data))
 
 
 __all__ = [

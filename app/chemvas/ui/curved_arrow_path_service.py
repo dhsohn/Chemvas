@@ -2,12 +2,12 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from PyQt6.QtCore import QPointF
 from PyQt6.QtGui import QPainterPath
 
 from chemvas.ui.scene_decoration_build_access import add_arrow_head_for
 
 if TYPE_CHECKING:
+    from PyQt6.QtCore import QPointF
     from PyQt6.QtWidgets import QGraphicsPathItem
 
     from chemvas.ui.canvas_view import CanvasView

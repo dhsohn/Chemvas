@@ -14,13 +14,15 @@ rescanning its siblings.
 
 from __future__ import annotations
 
-from collections.abc import Callable
 from contextlib import contextmanager
 from dataclasses import dataclass, field
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
 
 from PyQt6.QtCore import QObject, QRectF
 from PyQt6.QtWidgets import QGraphicsScene, QGraphicsView
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 _TRACKER_ATTRIBUTE = "_chemvas_scene_rect_tracker"
 _AUTOMATIC_ATTRIBUTE = "_chemvas_scene_rect_automatic"
@@ -120,10 +122,10 @@ def _quiet_rect_read(scene, getter: Callable[[], object]) -> QRectF:
     if isinstance(scene, QObject):
         previous = scene.blockSignals(True)
         try:
-            return QRectF(cast(Any, getter()))
+            return QRectF(cast("Any", getter()))
         finally:
             scene.blockSignals(previous)
-    return QRectF(cast(Any, getter()))
+    return QRectF(cast("Any", getter()))
 
 
 @contextmanager
@@ -363,7 +365,7 @@ class SceneRectSnapshot:
         if callable(authoritative_scene_bounds_getter):
             bounds = authoritative_scene_bounds_getter()
             if bounds is not None:
-                final_rect = final_rect.united(QRectF(cast(Any, bounds)))
+                final_rect = final_rect.united(QRectF(cast("Any", bounds)))
         tracker.pending_rect = QRectF(final_rect)
 
         view_refresh_rect = QRectF(final_rect)
@@ -379,7 +381,7 @@ class SceneRectSnapshot:
                 view_refresh_rect = view_refresh_rect.united(scene.itemsBoundingRect())
             elif callable(self.scene_items_bounding_rect_getter):
                 view_refresh_rect = view_refresh_rect.united(
-                    QRectF(cast(Any, self.scene_items_bounding_rect_getter()))
+                    QRectF(cast("Any", self.scene_items_bounding_rect_getter()))
                 )
         if view_refresh_rect != tracker.baseline_rect:
             with _internal_rect_write(tracker.scene, tracker):
@@ -391,7 +393,7 @@ class SceneRectSnapshot:
             if self.incremental_tracking:
                 released_rect = QRectF(tracker.pending_rect)
             else:
-                released_rect = QRectF(cast(Any, self.scene_rect_getter()))
+                released_rect = QRectF(cast("Any", self.scene_rect_getter()))
         setattr(tracker.scene, _AUTOMATIC_ATTRIBUTE, True)
         tracker.known_rect = QRectF(released_rect)
         tracker.pending_rect = QRectF(released_rect)
@@ -432,7 +434,7 @@ class SceneRectSnapshot:
         tracker = self.tracker
         with _internal_rect_write(tracker.scene, tracker):
             self.set_scene_rect_setter(QRectF())
-            restored_rect = QRectF(cast(Any, self.scene_rect_getter()))
+            restored_rect = QRectF(cast("Any", self.scene_rect_getter()))
         setattr(tracker.scene, _AUTOMATIC_ATTRIBUTE, True)
         # Qt may have lazily grown past the captured baseline; the live rect
         # after clearing the override is the new authority.
@@ -656,7 +658,7 @@ class ViewSceneRectStateSnapshot:
         )
         return cls(
             view=view,
-            rect=QRectF(cast(Any, scene_rect_getter())),
+            rect=QRectF(cast("Any", scene_rect_getter())),
             explicit=bool(explicit_value) if explicit_present else False,
             explicit_attribute_present=explicit_present,
             explicit_attribute_value=explicit_value,

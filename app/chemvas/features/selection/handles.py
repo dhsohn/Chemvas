@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 import math
-from collections.abc import Sequence
+from typing import TYPE_CHECKING
 
 from PyQt6.QtCore import QPointF, QRectF
 from PyQt6.QtGui import QBrush, QColor, QPen
 from PyQt6.QtWidgets import QGraphicsItem, QGraphicsRectItem, QGraphicsScene
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
 
 
 def clear_handle_items(

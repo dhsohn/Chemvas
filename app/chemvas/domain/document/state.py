@@ -193,8 +193,8 @@ def serialize_model_state_with_warnings(
         bond_state = bond_to_state(bond)
         if bond_state is None:
             continue
-        a = cast(int, bond_state["a"])
-        b = cast(int, bond_state["b"])
+        a = cast("int", bond_state["a"])
+        b = cast("int", bond_state["b"])
         if a == b or a not in atoms or b not in atoms:
             warning_counts["dropped_bonds"] = warning_counts.get("dropped_bonds", 0) + 1
             continue
@@ -344,7 +344,7 @@ def _normalized_atom_state(atom_state: StateDict) -> StateDict:
         atom_state["element"] = "C"
     for key in ("x", "y"):
         value = atom_state.get(key)
-        atom_state[key] = float(cast(Any, value)) if _is_number(value) else 0.0
+        atom_state[key] = float(cast("Any", value)) if _is_number(value) else 0.0
     if not _is_hex_color(atom_state.get("color")):
         atom_state["color"] = "#000000"
     atom_state["explicit_label"] = bool(atom_state.get("explicit_label"))
@@ -365,16 +365,16 @@ def _normalized_bond_state(bond_state: StateDict) -> StateDict:
 
 
 def deserialize_model_state(model_state: Mapping[str, object]) -> MoleculeModel:
-    atoms_state = cast(Mapping[object, Mapping[str, object]], model_state["atoms"])
-    bonds_state = cast(list[object], model_state["bonds"])
+    atoms_state = cast("Mapping[object, Mapping[str, object]]", model_state["atoms"])
+    bonds_state = cast("list[object]", model_state["bonds"])
     model = MoleculeModel()
     model.atoms = {
-        int(cast(Any, atom_id)): Atom(
-            element=cast(str, atom_data["element"]),
-            x=float(cast(Any, atom_data["x"])),
-            y=float(cast(Any, atom_data["y"])),
-            color=cast(str, atom_data["color"]),
-            explicit_label=cast(bool, atom_data["explicit_label"]),
+        int(cast("Any", atom_id)): Atom(
+            element=cast("str", atom_data["element"]),
+            x=float(cast("Any", atom_data["x"])),
+            y=float(cast("Any", atom_data["y"])),
+            color=cast("str", atom_data["color"]),
+            explicit_label=cast("bool", atom_data["explicit_label"]),
         )
         for atom_id, atom_data in atoms_state.items()
     }
@@ -384,24 +384,24 @@ def deserialize_model_state(model_state: Mapping[str, object]) -> MoleculeModel:
             raise ValueError("Chemvas model bonds must use the compact current form.")
         bonds.append(
             Bond(
-                a=int(cast(Any, bond_data["a"])),
-                b=int(cast(Any, bond_data["b"])),
-                order=int(cast(Any, bond_data["order"])),
-                style=cast(str, bond_data["style"]),
-                color=cast(str, bond_data["color"]),
+                a=int(cast("Any", bond_data["a"])),
+                b=int(cast("Any", bond_data["b"])),
+                order=int(cast("Any", bond_data["order"])),
+                style=cast("str", bond_data["style"]),
+                color=cast("str", bond_data["color"]),
             )
         )
     model.bonds = bonds
     model.next_atom_id = max(
-        int(cast(Any, model_state["next_atom_id"])),
+        int(cast("Any", model_state["next_atom_id"])),
         max(model.atoms, default=-1) + 1,
     )
     annotations_state = cast(
-        Mapping[object, Mapping[str, object]], model_state.get("atom_annotations", {})
+        "Mapping[object, Mapping[str, object]]", model_state.get("atom_annotations", {})
     )
     model.atom_annotations = {
-        int(cast(Any, atom_id)): {
-            key: int(cast(Any, value)) for key, value in annotation.items()
+        int(cast("Any", atom_id)): {
+            key: int(cast("Any", value)) for key, value in annotation.items()
         }
         for atom_id, annotation in annotations_state.items()
     }
@@ -463,12 +463,12 @@ def selection_payload_to_canvas_state(
     if not validate_clipboard_selection_payload(selection_payload):
         raise ValueError("Invalid clipboard payload.")
 
-    atoms = cast(list[Mapping[str, object]], selection_payload.get("atoms", []))
-    bonds = cast(list[Mapping[str, object]], selection_payload.get("bonds", []))
-    rings = cast(list[Mapping[str, object]], selection_payload.get("rings", []))
-    marks = cast(list[Mapping[str, object]], selection_payload.get("marks", []))
+    atoms = cast("list[Mapping[str, object]]", selection_payload.get("atoms", []))
+    bonds = cast("list[Mapping[str, object]]", selection_payload.get("bonds", []))
+    rings = cast("list[Mapping[str, object]]", selection_payload.get("rings", []))
+    marks = cast("list[Mapping[str, object]]", selection_payload.get("marks", []))
     scene_items = cast(
-        list[Mapping[str, object]], selection_payload.get("scene_items", [])
+        "list[Mapping[str, object]]", selection_payload.get("scene_items", [])
     )
 
     atom_states: dict[int, StateDict] = {}
@@ -483,7 +483,7 @@ def selection_payload_to_canvas_state(
             "explicit_label": atom_state["explicit_label"],
         }
         annotation = _normalized_atom_annotation(
-            cast(Mapping[str, object] | None, atom_state.get("annotation"))
+            cast("Mapping[str, object] | None", atom_state.get("annotation"))
         )
         if annotation:
             atom_annotations[atom_id] = annotation
@@ -581,13 +581,13 @@ def _clipboard_perspective_to_canvas_state(
     if not isinstance(perspective_state, Mapping):
         return None
     coords_entries = cast(
-        list[Mapping[str, object]], perspective_state["atom_coords_3d"]
+        "list[Mapping[str, object]]", perspective_state["atom_coords_3d"]
     )
     coords_3d = {
         _validated_clipboard_id(entry["atom_id"]): (
-            float(cast(Any, entry["coords"])[0]),
-            float(cast(Any, entry["coords"])[1]),
-            float(cast(Any, entry["coords"])[2]),
+            float(cast("Any", entry["coords"])[0]),
+            float(cast("Any", entry["coords"])[1]),
+            float(cast("Any", entry["coords"])[2]),
         )
         for entry in coords_entries
     }
@@ -597,10 +597,10 @@ def _clipboard_perspective_to_canvas_state(
     anchor = perspective_state.get("projection_anchor_2d")
     return {
         "atom_coords_3d": coords_3d,
-        "projection_center_3d": tuple(float(value) for value in cast(Any, center))
+        "projection_center_3d": tuple(float(value) for value in cast("Any", center))
         if center is not None
         else None,
-        "projection_anchor_2d": tuple(float(value) for value in cast(Any, anchor))
+        "projection_anchor_2d": tuple(float(value) for value in cast("Any", anchor))
         if anchor is not None
         else None,
     }
@@ -720,8 +720,8 @@ def _validate_model_state(
         _validate_atom_state(atom_state)
         atom_ids.add(atom_id)
         atom_positions[atom_id] = (
-            cast(int | float | Decimal, atom_state.get("x")),
-            cast(int | float | Decimal, atom_state.get("y")),
+            cast("int | float | Decimal", atom_state.get("x")),
+            cast("int | float | Decimal", atom_state.get("y")),
         )
 
     next_atom_id = model_state.get("next_atom_id")
@@ -864,7 +864,7 @@ def _validate_shape_fields(shape_state: Mapping[str, object], *, error: str) -> 
         raise ValueError(error)
     if "fill_alpha" in keys and (
         not _is_number(shape_state.get("fill_alpha"))
-        or not 0.0 <= cast(float, shape_state.get("fill_alpha")) <= 1.0
+        or not 0.0 <= cast("float", shape_state.get("fill_alpha")) <= 1.0
     ):
         raise ValueError(error)
 
@@ -922,7 +922,7 @@ def _validate_ring_fields(
     if color is not None and not _is_hex_color(color):
         raise ValueError(error)
     alpha = ring_state.get("alpha")
-    if not _is_number(alpha) or not 0.0 <= cast(float, alpha) <= 1.0:
+    if not _is_number(alpha) or not 0.0 <= cast("float", alpha) <= 1.0:
         raise ValueError(error)
 
 
@@ -1157,17 +1157,17 @@ def validate_settings_state(settings: Mapping[str, object]) -> None:
         raise ValueError("Invalid Chemvas file.")
     if (
         not _is_number(settings.get("bond_length_px"))
-        or cast(float, settings.get("bond_length_px")) <= 0
+        or cast("float", settings.get("bond_length_px")) <= 0
     ):
         raise ValueError("Invalid Chemvas file.")
     if (
         not _is_number(settings.get("arrow_line_width"))
-        or cast(float, settings.get("arrow_line_width")) < 0.5
+        or cast("float", settings.get("arrow_line_width")) < 0.5
     ):
         raise ValueError("Invalid Chemvas file.")
     if (
         not _is_number(settings.get("arrow_head_scale"))
-        or not 0.1 <= cast(float, settings.get("arrow_head_scale")) <= 0.8
+        or not 0.1 <= cast("float", settings.get("arrow_head_scale")) <= 0.8
     ):
         raise ValueError("Invalid Chemvas file.")
     if type(settings.get("orbital_phase_enabled")) is not bool:
@@ -1177,7 +1177,7 @@ def validate_settings_state(settings: Mapping[str, object]) -> None:
         raise ValueError("Invalid Chemvas file.")
     if (
         not _is_int(settings.get("text_font_weight"))
-        or not 1 <= cast(int, settings.get("text_font_weight")) <= 1000
+        or not 1 <= cast("int", settings.get("text_font_weight")) <= 1000
     ):
         raise ValueError("Invalid Chemvas file.")
     if type(settings.get("text_italic")) is not bool:
@@ -1194,7 +1194,7 @@ def validate_settings_state(settings: Mapping[str, object]) -> None:
         raise ValueError("Invalid Chemvas file.")
     if (
         not _is_number(settings.get("text_line_spacing"))
-        or cast(float, settings.get("text_line_spacing")) < 0.8
+        or cast("float", settings.get("text_line_spacing")) < 0.8
     ):
         raise ValueError("Invalid Chemvas file.")
     if type(settings.get("note_box_enabled")) is not bool:
@@ -1203,7 +1203,7 @@ def validate_settings_state(settings: Mapping[str, object]) -> None:
         raise ValueError("Invalid Chemvas file.")
     if (
         not _is_number(settings.get("note_box_alpha"))
-        or not 0.0 <= cast(float, settings.get("note_box_alpha")) <= 1.0
+        or not 0.0 <= cast("float", settings.get("note_box_alpha")) <= 1.0
     ):
         raise ValueError("Invalid Chemvas file.")
     if type(settings.get("note_border_enabled")) is not bool:
@@ -1212,12 +1212,12 @@ def validate_settings_state(settings: Mapping[str, object]) -> None:
         raise ValueError("Invalid Chemvas file.")
     if (
         not _is_number(settings.get("note_border_width"))
-        or cast(float, settings.get("note_border_width")) < 0.5
+        or cast("float", settings.get("note_border_width")) < 0.5
     ):
         raise ValueError("Invalid Chemvas file.")
     if (
         not _is_number(settings.get("note_padding"))
-        or cast(float, settings.get("note_padding")) < 2.0
+        or cast("float", settings.get("note_padding")) < 2.0
     ):
         raise ValueError("Invalid Chemvas file.")
     if not _is_valid_choice(settings.get("sheet_size"), VALID_SHEET_SIZES):
@@ -1283,8 +1283,8 @@ def _validate_clipboard_atoms(
         _validate_atom_annotation(atom_state.get("annotation", {}))
         atom_ids.add(atom_id)
         atom_positions[atom_id] = (
-            cast(int | float | Decimal, atom_state.get("x")),
-            cast(int | float | Decimal, atom_state.get("y")),
+            cast("int | float | Decimal", atom_state.get("x")),
+            cast("int | float | Decimal", atom_state.get("y")),
         )
     return atom_ids, atom_positions
 
@@ -1530,7 +1530,7 @@ def _is_number(value: object) -> bool:
             ):
                 return False
             return Decimal(str(float(decimal_value))) == decimal_value
-        float_value = float(cast(Any, value))
+        float_value = float(cast("Any", value))
         if not math.isfinite(float_value) or abs(float_value) > MAX_SAFE_NUMBER:
             return False
         if type(value) is int:

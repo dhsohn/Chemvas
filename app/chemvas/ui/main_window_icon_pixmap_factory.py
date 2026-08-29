@@ -1,9 +1,12 @@
 from __future__ import annotations
 
-from collections.abc import Callable
+from typing import TYPE_CHECKING
 
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QGuiApplication, QIcon, QPainter, QPixmap
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 
 class MainWindowIconPixmapFactory:

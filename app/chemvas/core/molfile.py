@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 import math
-from collections.abc import Iterable, Mapping, Sequence
+from typing import TYPE_CHECKING
 
 from chemvas.domain.atom_aliases import ATOM_ALIAS_DEFINITIONS
 from chemvas.domain.document import Bond, MoleculeModel
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable, Mapping, Sequence
 
 # Element symbols (Z = 1..118).
 _ELEMENTS = frozenset(

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import contextlib
-from collections.abc import Callable, Iterable, Iterator
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
@@ -49,6 +48,8 @@ from chemvas.ui.scene_item_state import (
 )
 
 if TYPE_CHECKING:
+    from collections.abc import Callable, Iterable, Iterator
+
     from chemvas.ui.canvas_view import CanvasView
 
 

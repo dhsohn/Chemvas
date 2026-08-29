@@ -1,11 +1,9 @@
 from __future__ import annotations
 
-from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from functools import partial
 from typing import TYPE_CHECKING
 
-from PyQt6.QtCore import QPointF, QRectF
 from PyQt6.QtWidgets import QGraphicsTextItem
 
 from chemvas.ui.canvas_tool_settings_state import tool_settings_state_for
@@ -37,6 +35,10 @@ from chemvas.ui.transactions.scene_runtime import (
 )
 
 if TYPE_CHECKING:
+    from collections.abc import Callable, Iterator
+
+    from PyQt6.QtCore import QPointF, QRectF
+
     from chemvas.ui.canvas_view import CanvasView
 
 

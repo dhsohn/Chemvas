@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from collections.abc import Callable
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 from PyQt6.QtCore import QRectF
 
@@ -16,6 +16,9 @@ from chemvas.ui.sheet_setup_state import (
     sheet_setup_state_for,
     sheet_setup_values_for,
 )
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 
 def _add_sheet_setup_recovery_note(

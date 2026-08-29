@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import time
-from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 # Selected ids plus the content the formula readout actually consumes
 # (elements, bond orders, mark-derived annotations): editing a selected
@@ -35,7 +37,7 @@ class SelectionInfoState:
 
 
 def selection_info_state_for(canvas: Any) -> SelectionInfoState:
-    return cast(SelectionInfoState, canvas.runtime_state.selection_info_state)
+    return cast("SelectionInfoState", canvas.runtime_state.selection_info_state)
 
 
 __all__ = [

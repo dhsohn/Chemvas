@@ -1,8 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Callable
-
-from PyQt6.QtCore import QPointF
+from typing import TYPE_CHECKING
 
 from chemvas.features.insertion import alternating_ring_bond_specs
 from chemvas.ui.canvas_model_access import atoms_for, bond_count_for, bonds_for
@@ -11,8 +9,14 @@ from chemvas.ui.canvas_scene_items_state import ring_items_for
 from chemvas.ui.renderer_style_access import bond_length_px_for
 from chemvas.ui.scene_item_access import attach_scene_item
 from chemvas.ui.structure_benzene_logic import plan_benzene_ring_points
-from chemvas.ui.structure_build_committer import StructureBuildCommitter
 from chemvas.ui.structure_geometry_logic import compute_free_benzene_ring_points
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+    from PyQt6.QtCore import QPointF
+
+    from chemvas.ui.structure_build_committer import StructureBuildCommitter
 
 
 class StructureBenzeneBuildService:

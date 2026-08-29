@@ -11,7 +11,7 @@ class CanvasAtomGraphicsState:
 
 
 def atom_graphics_state_for(canvas: Any) -> CanvasAtomGraphicsState:
-    return cast(CanvasAtomGraphicsState, canvas.runtime_state.atom_graphics_state)
+    return cast("CanvasAtomGraphicsState", canvas.runtime_state.atom_graphics_state)
 
 
 def atom_items_for(canvas: Any) -> dict[int, Any]:

@@ -1,10 +1,14 @@
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from PyQt6.QtCore import QRectF, Qt
 from PyQt6.QtGui import QPainter
-from PyQt6.QtWidgets import QGraphicsScene
 
-from .plan import ExportPlan
+if TYPE_CHECKING:
+    from PyQt6.QtWidgets import QGraphicsScene
+
+    from .plan import ExportPlan
 
 METERS_PER_INCH = 0.0254
 

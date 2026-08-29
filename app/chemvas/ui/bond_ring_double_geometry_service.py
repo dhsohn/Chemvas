@@ -1,8 +1,7 @@
 from __future__ import annotations
 
 import math
-
-from PyQt6.QtCore import QPointF
+from typing import TYPE_CHECKING
 
 from chemvas.features.rendering import (
     DOUBLE_STYLE_DEFAULT,
@@ -12,6 +11,9 @@ from chemvas.features.rendering import (
     trim_segment,
 )
 from chemvas.ui.renderer_style_access import renderer_bond_spacing_for
+
+if TYPE_CHECKING:
+    from PyQt6.QtCore import QPointF
 
 
 class BondRingDoubleGeometryService:

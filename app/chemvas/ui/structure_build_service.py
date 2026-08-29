@@ -1,9 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Callable
 from typing import TYPE_CHECKING
-
-from PyQt6.QtCore import QPointF
 
 from chemvas.features.insertion import (
     resolve_bond_placement_context,
@@ -35,6 +32,10 @@ from chemvas.ui.structure_growth_build_actions import structure_growth_build_act
 from chemvas.ui.structure_growth_build_service import StructureGrowthBuildService
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
+    from PyQt6.QtCore import QPointF
+
     from chemvas.ui.canvas_view import CanvasView
 
 

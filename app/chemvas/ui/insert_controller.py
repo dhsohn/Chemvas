@@ -4,10 +4,6 @@ from typing import TYPE_CHECKING
 
 from PyQt6.QtCore import QPointF
 
-from chemvas.features.insertion import (
-    TemplateInsertRequest,
-    TemplatePointResolvers,
-)
 from chemvas.ui.canvas_insert_state import CanvasInsertState, insert_state_for
 from chemvas.ui.insert_commit_service import InsertCommitService
 from chemvas.ui.insert_mode_logic import InsertSessionState
@@ -16,6 +12,10 @@ from chemvas.ui.insert_template_service import InsertTemplateService
 from chemvas.ui.sheet_setup_access import scene_pos_in_sheet_for
 
 if TYPE_CHECKING:
+    from chemvas.features.insertion import (
+        TemplateInsertRequest,
+        TemplatePointResolvers,
+    )
     from chemvas.ui.canvas_view import CanvasView
 
 

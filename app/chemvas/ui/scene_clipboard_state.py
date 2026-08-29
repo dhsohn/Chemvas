@@ -11,7 +11,7 @@ class SceneClipboardState:
 
 
 def scene_clipboard_state_for(canvas: Any) -> SceneClipboardState:
-    return cast(SceneClipboardState, canvas.runtime_state.scene_clipboard_state)
+    return cast("SceneClipboardState", canvas.runtime_state.scene_clipboard_state)
 
 
 __all__ = ["SceneClipboardState", "scene_clipboard_state_for"]

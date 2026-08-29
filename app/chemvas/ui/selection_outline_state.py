@@ -10,7 +10,7 @@ class SelectionOutlineState:
 
 
 def selection_outline_state_for(canvas: Any) -> SelectionOutlineState:
-    return cast(SelectionOutlineState, canvas.runtime_state.selection_outline_state)
+    return cast("SelectionOutlineState", canvas.runtime_state.selection_outline_state)
 
 
 def selection_outlines_for(canvas: Any) -> list[Any]:

@@ -1,10 +1,13 @@
 from __future__ import annotations
 
-from PyQt6.QtCore import QPointF
+from typing import TYPE_CHECKING
 
 from chemvas.ui.canvas_history_recording_service import (
     CanvasHistoryRecordingService,
 )
+
+if TYPE_CHECKING:
+    from PyQt6.QtCore import QPointF
 
 
 class _DeleteSessionRollbackErrors(list[BaseException]):

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Callable
+from typing import TYPE_CHECKING
 
 from PyQt6.QtCore import QPointF, QRectF, Qt
 from PyQt6.QtGui import QFont, QFontMetricsF, QPainterPath, QPen
@@ -23,6 +23,9 @@ from chemvas.features.annotations import (
     place_runs,
     split_hydride_label,
 )
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 
 def _scaled_font(base: QFont, scale: float) -> QFont:

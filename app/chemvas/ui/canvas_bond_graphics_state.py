@@ -10,7 +10,7 @@ class CanvasBondGraphicsState:
 
 
 def bond_graphics_state_for(canvas: Any) -> CanvasBondGraphicsState:
-    return cast(CanvasBondGraphicsState, canvas.runtime_state.bond_graphics_state)
+    return cast("CanvasBondGraphicsState", canvas.runtime_state.bond_graphics_state)
 
 
 def bond_items_for(canvas: Any) -> dict[int, list[Any]]:

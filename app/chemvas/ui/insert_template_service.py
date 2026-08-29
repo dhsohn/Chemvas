@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Callable
+from typing import TYPE_CHECKING
 
 from PyQt6.QtCore import QPointF
 
@@ -18,9 +18,7 @@ from chemvas.features.selection import (
     StructureHit,
     choose_preferred_structure_hit,
 )
-from chemvas.ui.canvas_insert_state import CanvasInsertState
 from chemvas.ui.canvas_model_access import atom_for_id, bond_for_id
-from chemvas.ui.insert_commit_service import InsertCommitService
 from chemvas.ui.insert_mode_logic import (
     InsertSessionState,
     build_template_insert_request,
@@ -46,6 +44,12 @@ from chemvas.ui.renderer_style_access import (
 from chemvas.ui.template_geometry_resolver_service import (
     TemplateGeometryResolverService,
 )
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+    from chemvas.ui.canvas_insert_state import CanvasInsertState
+    from chemvas.ui.insert_commit_service import InsertCommitService
 
 
 class InsertTemplateService:

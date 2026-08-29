@@ -4,7 +4,6 @@ from typing import TYPE_CHECKING
 
 from PyQt6.QtCore import QPointF
 
-from chemvas.features.insertion import SmilesCommitPlan
 from chemvas.ui.bond_graphics_access import add_bond_graphics_for
 from chemvas.ui.canvas_model_access import atom_for_id, bond_count_for, bond_ids_from
 from chemvas.ui.canvas_smiles_input_state import set_last_smiles_input_for
@@ -20,6 +19,7 @@ from chemvas.ui.structure_insert_access import (
 from chemvas.ui.structure_mutation_access import add_atom_for, add_bond_for
 
 if TYPE_CHECKING:
+    from chemvas.features.insertion import SmilesCommitPlan
     from chemvas.ui.canvas_view import CanvasView
 
 

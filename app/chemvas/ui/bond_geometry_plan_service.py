@@ -2,8 +2,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
-
-from PyQt6.QtGui import QPainterPath, QPolygonF
+from typing import TYPE_CHECKING
 
 from chemvas.features.rendering import (
     BOLD_BOND_STYLES,
@@ -21,6 +20,9 @@ from chemvas.ui.renderer_style_access import (
     renderer_bond_line_width_for,
     renderer_hash_spacing_for,
 )
+
+if TYPE_CHECKING:
+    from PyQt6.QtGui import QPainterPath, QPolygonF
 
 
 @dataclass(frozen=True, slots=True)

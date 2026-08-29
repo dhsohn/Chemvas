@@ -1,8 +1,7 @@
 from __future__ import annotations
 
-from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from PyQt6.QtCore import QSize, Qt
 from PyQt6.QtGui import QAction, QActionGroup, QFont
@@ -30,6 +29,9 @@ from chemvas.ui.main_window_theme import (
     TOOLBAR_THICKNESS,
 )
 from chemvas.ui.main_window_toolbar_buttons import CornerMenuToolButton
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 _NOTE_TOOL_MENU_BUTTON_STYLE = (
     TOOLBAR_BUTTON_STYLE

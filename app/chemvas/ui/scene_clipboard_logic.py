@@ -1,11 +1,7 @@
 from __future__ import annotations
 
 import contextlib
-from collections.abc import Callable, Mapping, Sequence
-from typing import cast
-
-from PyQt6.QtCore import QMimeData
-from PyQt6.QtWidgets import QGraphicsItem
+from typing import TYPE_CHECKING, cast
 
 from chemvas.domain.document import (
     CLIPBOARD_SELECTION_VERSION,
@@ -15,6 +11,12 @@ from chemvas.domain.document import (
 )
 from chemvas.domain.json_io import strict_json_loads
 from chemvas.features.selection import selected_atom_ids_with_bond_endpoints
+
+if TYPE_CHECKING:
+    from collections.abc import Callable, Mapping, Sequence
+
+    from PyQt6.QtCore import QMimeData
+    from PyQt6.QtWidgets import QGraphicsItem
 
 CLIPBOARD_SELECTION_FORMAT = "chemvas-selection"
 MAX_CLIPBOARD_SELECTION_PAYLOAD_BYTES = 8 * 1024 * 1024
@@ -218,7 +220,7 @@ def decode_clipboard_selection_payload(
         # content does not pass the same whitelist used for .chemvas files.
         if not validate_clipboard_selection_payload(payload):
             continue
-        return cast(dict, normalize_json_numbers(payload)), payload_json
+        return cast("dict", normalize_json_numbers(payload)), payload_json
     return None, None
 
 

@@ -1,8 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-
-from PyQt6.QtWidgets import QButtonGroup, QLineEdit, QToolButton, QWidget
+from typing import TYPE_CHECKING
 
 from chemvas.ui.main_window_context_bar_page_factories import (
     bond_label_for_state,
@@ -19,7 +18,11 @@ from chemvas.ui.main_window_context_bar_page_factories import (
     build_template_page,
     build_text_page,
 )
-from chemvas.ui.main_window_context_bar_widgets import BondLengthSpinBox
+
+if TYPE_CHECKING:
+    from PyQt6.QtWidgets import QButtonGroup, QLineEdit, QToolButton, QWidget
+
+    from chemvas.ui.main_window_context_bar_widgets import BondLengthSpinBox
 
 
 @dataclass(frozen=True)

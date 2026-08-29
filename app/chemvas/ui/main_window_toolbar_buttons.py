@@ -1,12 +1,15 @@
 from __future__ import annotations
 
-from collections.abc import Callable
+from typing import TYPE_CHECKING
 
 from PyQt6.QtCore import QPointF, Qt
 from PyQt6.QtGui import QColor, QIcon, QPainter, QPolygonF
 from PyQt6.QtWidgets import QToolButton
 
 from chemvas.ui.main_window_palette import PALETTE
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 
 class ArrowButton(QToolButton):

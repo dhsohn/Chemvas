@@ -1,10 +1,7 @@
 from __future__ import annotations
 
-from collections.abc import Callable
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
-
-from PyQt6.QtCore import QPointF
 
 from chemvas.features.insertion import (
     SmilesCommitPlan,
@@ -24,6 +21,10 @@ from chemvas.ui.insert_template_commit_service import (
 )
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
+    from PyQt6.QtCore import QPointF
+
     from chemvas.ui.canvas_view import CanvasView
 
 

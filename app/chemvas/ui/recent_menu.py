@@ -7,13 +7,16 @@ was built and prunes ones that have since been deleted.
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from typing import TYPE_CHECKING
 
 from PyQt6.QtGui import QAction
 from PyQt6.QtWidgets import QMenu, QWidget
 
 from chemvas.ui.recent_documents_logic import recent_menu_entries
 from chemvas.ui.recent_documents_store import clear_recent, load_recent
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 
 def build_recent_menu(

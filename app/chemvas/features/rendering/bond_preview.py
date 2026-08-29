@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 import math
-from collections.abc import Sequence
+from typing import TYPE_CHECKING
 
 from .bond_style import DOUBLE_STYLE_DEFAULT, DOUBLE_STYLE_OUTER
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
 
 LineSegment = tuple[float, float, float, float]
 

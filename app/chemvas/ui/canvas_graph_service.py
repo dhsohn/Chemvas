@@ -2,8 +2,6 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from PyQt6.QtCore import QPointF
-
 from chemvas.ui.canvas_graph_state import (
     CanvasGraphState,
     graph_state_for,
@@ -45,6 +43,8 @@ from chemvas.ui.graph_rotation_policy import (
 from chemvas.ui.renderer_style_access import bond_length_px_for
 
 if TYPE_CHECKING:
+    from PyQt6.QtCore import QPointF
+
     from chemvas.ui.canvas_view import CanvasView
 
 

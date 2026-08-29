@@ -5,11 +5,10 @@ import json
 import os
 import stat
 import tempfile
-from collections.abc import Callable
 from dataclasses import dataclass
 from os import PathLike
 from pathlib import Path
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
 
 from chemvas.domain.document import (
     build_document_payload,
@@ -17,6 +16,9 @@ from chemvas.domain.document import (
     normalize_json_numbers,
 )
 from chemvas.domain.json_io import strict_json_loads
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 PathType = str | PathLike[str]
 
@@ -37,15 +39,15 @@ def create_document(state: dict[str, Any], version: int) -> ChemvasDocument:
             "Failed to save: the document state did not pass validation. "
             "This is a Chemvas bug — please report it."
         ) from exc
-    normalized_payload = cast(dict[str, Any], normalize_json_numbers(payload))
-    normalized_state = cast(dict[str, Any], normalized_payload["state"])
+    normalized_payload = cast("dict[str, Any]", normalize_json_numbers(payload))
+    normalized_state = cast("dict[str, Any]", normalized_payload["state"])
     return ChemvasDocument(payload=normalized_payload, state=normalized_state)
 
 
 def parse_document(payload: object) -> ChemvasDocument:
     state = extract_document_state(payload)
-    normalized_payload = cast(dict[str, Any], normalize_json_numbers(payload))
-    normalized_state = cast(dict[str, Any], normalize_json_numbers(state))
+    normalized_payload = cast("dict[str, Any]", normalize_json_numbers(payload))
+    normalized_state = cast("dict[str, Any]", normalize_json_numbers(state))
     return ChemvasDocument(payload=normalized_payload, state=normalized_state)
 
 

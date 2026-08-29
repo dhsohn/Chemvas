@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import contextlib
-from collections.abc import Callable
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 # App-level registry for Chemvas's single-document-per-window model (like Word
 # or PowerPoint): "new canvas" and "open" each spawn their own top-level window

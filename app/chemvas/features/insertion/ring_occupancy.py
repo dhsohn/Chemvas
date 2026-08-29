@@ -1,12 +1,15 @@
 from __future__ import annotations
 
-from collections.abc import Sequence
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
 
 from PyQt6.QtCore import QPointF, Qt
-from PyQt6.QtWidgets import QGraphicsPolygonItem
 
-from chemvas.domain.document import Bond
+if TYPE_CHECKING:
+    from collections.abc import Sequence
+
+    from PyQt6.QtWidgets import QGraphicsPolygonItem
+
+    from chemvas.domain.document import Bond
 
 Point = tuple[float, float]
 
@@ -41,7 +44,7 @@ def ring_polygon_points_for_atoms(
             polygon = ring_item.polygon()
         except RuntimeError:
             continue
-        return [(point.x(), point.y()) for point in cast(Any, polygon)]
+        return [(point.x(), point.y()) for point in cast("Any", polygon)]
     return None
 
 

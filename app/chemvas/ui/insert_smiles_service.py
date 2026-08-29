@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Callable
+from typing import TYPE_CHECKING
 
 from PyQt6.QtCore import QPointF
 from PyQt6.QtWidgets import QMessageBox
@@ -15,7 +15,6 @@ from chemvas.features.insertion import (
     smiles_preview_center,
 )
 from chemvas.ui.bond_graphics_access import parallel_bond_segments_for
-from chemvas.ui.canvas_insert_state import CanvasInsertState
 from chemvas.ui.canvas_model_access import next_atom_id_for, set_model_for
 from chemvas.ui.canvas_scene_reset_access import clear_scene_for
 from chemvas.ui.canvas_smiles_input_state import set_last_smiles_input_for
@@ -26,7 +25,6 @@ from chemvas.ui.history_canvas_access import (
     restore_history_transaction_for_history,
 )
 from chemvas.ui.input_view_access import viewport_center_scene_pos_for
-from chemvas.ui.insert_commit_service import InsertCommitService
 from chemvas.ui.insert_mode_logic import InsertSessionState
 from chemvas.ui.insert_mode_logic import (
     begin_smiles_insert as begin_smiles_insert_state,
@@ -52,7 +50,13 @@ from chemvas.ui.renderer_style_access import (
 )
 from chemvas.ui.scene_decoration_access import add_mark_for_atom_for
 from chemvas.ui.scene_signal_blocking import blocked_scene_signals
-from chemvas.ui.transactions.document import DocumentSavepoint
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+    from chemvas.ui.canvas_insert_state import CanvasInsertState
+    from chemvas.ui.insert_commit_service import InsertCommitService
+    from chemvas.ui.transactions.document import DocumentSavepoint
 
 MAX_SMILES_INPUT_LENGTH = 1024
 

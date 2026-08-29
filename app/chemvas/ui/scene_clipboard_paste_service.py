@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from collections.abc import Callable
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 from PyQt6.QtWidgets import QGraphicsItem
 
@@ -35,6 +35,9 @@ from chemvas.ui.scene_clipboard_transaction_logic import (
 )
 from chemvas.ui.scene_item_access import remove_scene_item
 from chemvas.ui.scene_paste_apply_logic import apply_paste_payload
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 
 @dataclass(frozen=True, slots=True)

@@ -28,11 +28,14 @@ Consistency contract (shared by every consumer):
 
 from __future__ import annotations
 
-from collections.abc import Callable, Iterable, MutableMapping, Sequence
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from chemvas.ui.canvas_graph_state import CanvasGraphState
 from chemvas.ui.graph_algorithms import edge_has_reachable_alternative_path
+
+if TYPE_CHECKING:
+    from collections.abc import Callable, Iterable, MutableMapping, Sequence
+
+    from chemvas.ui.canvas_graph_state import CanvasGraphState
 
 
 def ensure_neighbor_entry(

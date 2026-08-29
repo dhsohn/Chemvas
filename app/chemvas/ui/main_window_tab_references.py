@@ -1,8 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-
-from PyQt6.QtWidgets import QTabWidget
+from typing import TYPE_CHECKING
 
 from chemvas.ui.canvas_view import CanvasView
 from chemvas.ui.main_window_canvas_logic import (
@@ -12,7 +11,11 @@ from chemvas.ui.main_window_canvas_logic import (
     active_canvas_tab_index as active_canvas_tab_index_for,
 )
 from chemvas.ui.main_window_canvas_logic import resolve_active_canvas
-from chemvas.ui.main_window_tab_setup import MainWindowTabAssembly
+
+if TYPE_CHECKING:
+    from PyQt6.QtWidgets import QTabWidget
+
+    from chemvas.ui.main_window_tab_setup import MainWindowTabAssembly
 
 
 @dataclass(slots=True)

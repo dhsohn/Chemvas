@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Callable
+from typing import TYPE_CHECKING
 
 from chemvas.ui.canvas_format_access import clipboard_selection_mime_for
 from chemvas.ui.input_view_access import device_pixel_ratio_for
@@ -16,6 +16,9 @@ from chemvas.ui.scene_clipboard_transaction_logic import (
     clipboard_copy_cache_values,
 )
 from chemvas.ui.selection_collection_access import selection_items_for_copy_for
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 
 def copy_selection_to_clipboard_for_canvas(

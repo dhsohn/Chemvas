@@ -2,8 +2,6 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from PyQt6.QtCore import QPointF
-
 from chemvas.features.selection import (
     SelectionHitRequest,
     SelectionRect,
@@ -16,6 +14,8 @@ from chemvas.ui.selection_outline_service import OBJECT_OVERLAY_KINDS
 from chemvas.ui.selection_outline_state import selection_outlines_for
 
 if TYPE_CHECKING:
+    from PyQt6.QtCore import QPointF
+
     from chemvas.ui.canvas_hit_testing_service import CanvasHitTestingService
     from chemvas.ui.canvas_view import CanvasView
     from chemvas.ui.selection_structure_service import SelectionStructureService

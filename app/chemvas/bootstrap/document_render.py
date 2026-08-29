@@ -4,10 +4,9 @@ import argparse
 import hashlib
 import sys
 import tempfile
-from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Protocol, cast
+from typing import TYPE_CHECKING, Any, Protocol, cast
 
 from chemvas.bootstrap.document_cli_shared import (
     MAX_DOCUMENT_BYTES,
@@ -17,6 +16,9 @@ from chemvas.bootstrap.document_cli_shared import (
     offscreen_canvas,
 )
 from chemvas.core.document_io import atomic_create_bytes, read_exact_document
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping
 
 MAX_OUTPUT_BYTES = 64 * 1024 * 1024
 MAX_VECTOR_DIMENSION_POINTS = 14_400.0
@@ -102,7 +104,7 @@ def _render_document(
     source_bytes, document = read_exact_document(source)
     if len(source_bytes) > MAX_DOCUMENT_BYTES:
         raise ValueError(f"input document exceeds the {MAX_DOCUMENT_BYTES}-byte limit")
-    state = cast(Mapping[str, object], document.state)
+    state = cast("Mapping[str, object]", document.state)
     graphics_records = graphics_record_count(state)
     if graphics_records > MAX_GRAPHICS_RECORDS:
         raise ValueError(
@@ -167,7 +169,7 @@ def _render_offscreen(
     dpi: int,
 ) -> _RenderedDocument:
     with offscreen_canvas(state, command="render-document") as (_, service):
-        plan = cast(_ExportPlan, service.plan_figure_export())
+        plan = cast("_ExportPlan", service.plan_figure_export())
         width_pixels, height_pixels = _validate_render_budget(
             plan,
             output_format=output_format,

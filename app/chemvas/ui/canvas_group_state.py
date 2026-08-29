@@ -18,7 +18,7 @@ class CanvasGroupState:
 
 
 def group_state_for(canvas: Any) -> CanvasGroupState:
-    return cast(CanvasGroupState, canvas.runtime_state.group_state)
+    return cast("CanvasGroupState", canvas.runtime_state.group_state)
 
 
 def clear_groups_for(canvas: Any) -> None:

@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 import os
-from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -35,8 +34,13 @@ if QApplication is not None:
         _MappingProductCombo,
     )
 
+from typing import TYPE_CHECKING
+
 from tests.test_calculation_plan import _document_state, _plan
 from tests.test_precomplex_cli import _generate_candidate_fixture
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 def _select_component(

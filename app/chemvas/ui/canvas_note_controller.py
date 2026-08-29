@@ -1,9 +1,8 @@
 from __future__ import annotations
 
-from collections.abc import Callable
 from dataclasses import dataclass
 from functools import partial
-from typing import cast
+from typing import TYPE_CHECKING, cast
 
 from PyQt6.QtCore import QPointF, QRectF, Qt
 from PyQt6.QtGui import (
@@ -18,7 +17,6 @@ from PyQt6.QtGui import (
 from PyQt6.QtWidgets import QGraphicsItem, QGraphicsRectItem, QGraphicsTextItem
 
 from chemvas.core.history import CompositeCommand, HistoryCommand
-from chemvas.ui.canvas_history_service import HistoryStackSnapshot
 from chemvas.ui.canvas_scene_items_state import (
     remove_selected_note_for,
     selected_notes_for,
@@ -57,6 +55,11 @@ from chemvas.ui.transactions.scene_runtime import (
     restore_scene_runtime,
     run_rollback_step,
 )
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+    from chemvas.ui.canvas_history_service import HistoryStackSnapshot
 
 _MISSING_CAPTURE_ATTRIBUTE = object()
 
@@ -942,7 +945,7 @@ class CanvasNoteController:
         cursor.select(QTextCursor.SelectionType.Document)
         block_format = QTextBlockFormat()
         height_type = cast(
-            int, QTextBlockFormat.LineHeightTypes.ProportionalHeight.value
+            "int", QTextBlockFormat.LineHeightTypes.ProportionalHeight.value
         )
         block_format.setLineHeight(int(style.text_line_spacing * 100), height_type)
         cursor.mergeBlockFormat(block_format)

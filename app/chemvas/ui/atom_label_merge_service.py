@@ -1,8 +1,7 @@
 from __future__ import annotations
 
-from typing import cast
+from typing import TYPE_CHECKING, cast
 
-from chemvas.domain.document import Bond
 from chemvas.features.rendering import STANDARD_BOND_STYLES
 from chemvas.ui.atom_coords_access import atom_coords_3d_for, pop_atom_coords_3d_for
 from chemvas.ui.canvas_atom_graphics_state import pop_atom_dot_for, pop_atom_item_for
@@ -21,6 +20,9 @@ from chemvas.ui.scene_item_access import (
     remove_items_from_canvas_scene,
 )
 from chemvas.ui.scene_item_state import atom_state_dict_for, bond_state_dict
+
+if TYPE_CHECKING:
+    from chemvas.domain.document import Bond
 
 
 class AtomLabelMergeService:
@@ -122,7 +124,7 @@ class AtomLabelMergeService:
             if keep_id is None:
                 pair_keep[key] = bond_id
                 continue
-            keep_bond = cast(Bond, bond_for_id(self.canvas, keep_id))
+            keep_bond = cast("Bond", bond_for_id(self.canvas, keep_id))
             if self._bond_rank(bond, bond_id) > self._bond_rank(keep_bond, keep_id):
                 duplicate_ids.add(keep_id)
                 pair_keep[key] = bond_id
@@ -132,7 +134,7 @@ class AtomLabelMergeService:
             self._delete_bond(bond_id, merge_info)
 
     def _delete_bond(self, bond_id: int, merge_info: dict) -> None:
-        bond = cast(Bond, bond_for_id(self.canvas, bond_id))
+        bond = cast("Bond", bond_for_id(self.canvas, bond_id))
         if bond_id not in merge_info["bond_before_states"]:
             merge_info["bond_before_states"][bond_id] = bond_state_dict(bond)
         remove_items_from_canvas_scene(

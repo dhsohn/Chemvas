@@ -1,16 +1,18 @@
 from __future__ import annotations
 
-from collections.abc import Iterator
 from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass, field
 from importlib import import_module
-from typing import Any, Protocol, cast
+from typing import TYPE_CHECKING, Any, Protocol, cast
 
 from chemvas.domain.transactions import (
     RestoreOutcome,
     validate_restore_outcome,
 )
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator
 
 
 class HistoryCommand:
@@ -130,7 +132,7 @@ class HistoryCanvasPort(Protocol):
 
 
 def _history_canvas_port() -> HistoryCanvasPort:
-    return cast(HistoryCanvasPort, import_module("chemvas.ui.history_canvas_access"))
+    return cast("HistoryCanvasPort", import_module("chemvas.ui.history_canvas_access"))
 
 
 def _set_last_smiles_input(canvas, value: str | None) -> None:

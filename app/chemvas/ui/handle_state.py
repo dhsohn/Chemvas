@@ -11,7 +11,7 @@ class CanvasHandleState:
 
 
 def handle_state_for(canvas) -> CanvasHandleState:
-    return cast(CanvasHandleState, canvas.runtime_state.handle_state)
+    return cast("CanvasHandleState", canvas.runtime_state.handle_state)
 
 
 def active_handles_for(canvas):

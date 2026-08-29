@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from collections.abc import Callable
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
@@ -14,6 +13,8 @@ from chemvas.ui.selection_preference_service import SelectionPreferenceService
 from chemvas.ui.selection_structure_service import SelectionStructureService
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from chemvas.ui.canvas_graph_service import CanvasGraphService
     from chemvas.ui.canvas_view import CanvasView
 

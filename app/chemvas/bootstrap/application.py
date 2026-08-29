@@ -3,11 +3,14 @@ from __future__ import annotations
 import os
 import sys
 import threading
-from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from chemvas import __version__
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator
 
 IGNORED_STDERR_SUBSTRINGS = (
     "TSM AdjustCapsLockLEDForKeyTransitionHandling",

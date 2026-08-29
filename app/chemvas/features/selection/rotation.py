@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 import math
-from collections.abc import Iterable, Mapping
+from typing import TYPE_CHECKING
 
-from PyQt6.QtCore import QPointF
+if TYPE_CHECKING:
+    from collections.abc import Iterable, Mapping
 
-from chemvas.domain.document import Atom
+    from PyQt6.QtCore import QPointF
+
+    from chemvas.domain.document import Atom
 
 
 def rotated_atom_positions(

@@ -15,7 +15,7 @@ class SelectionStyleState:
 
 
 def selection_style_state_for(canvas: Any) -> SelectionStyleState:
-    return cast(SelectionStyleState, canvas.runtime_state.selection_style_state)
+    return cast("SelectionStyleState", canvas.runtime_state.selection_style_state)
 
 
 __all__ = [

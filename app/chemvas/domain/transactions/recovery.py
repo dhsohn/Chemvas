@@ -1,8 +1,11 @@
 from __future__ import annotations
 
-from collections.abc import Callable
+from typing import TYPE_CHECKING
 
 from .outcome import RestoreOutcome, validate_restore_outcome
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 
 def add_recovery_error_note(

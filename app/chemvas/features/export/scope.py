@@ -1,10 +1,14 @@
 from __future__ import annotations
 
-from collections.abc import Iterator, Sequence
 from contextlib import contextmanager
+from typing import TYPE_CHECKING
 
 from PyQt6.QtCore import QRectF
-from PyQt6.QtWidgets import QGraphicsItem, QGraphicsScene
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator, Sequence
+
+    from PyQt6.QtWidgets import QGraphicsItem, QGraphicsScene
 
 # Transient overlays that must never appear in an exported figure. Mirrors the
 # exclusion set used by the clipboard copy path (``_selection_items_for_copy``).

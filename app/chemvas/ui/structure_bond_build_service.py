@@ -1,10 +1,8 @@
 from __future__ import annotations
 
 import math
-from collections.abc import Callable
 from functools import partial
-
-from PyQt6.QtCore import QPointF
+from typing import TYPE_CHECKING
 
 from chemvas.features.rendering import style_for_existing_bond_overlay
 from chemvas.ui.canvas_model_access import bond_for_id
@@ -12,7 +10,13 @@ from chemvas.ui.canvas_smiles_input_state import last_smiles_input_for
 from chemvas.ui.history_recording_access import record_bond_update_for
 from chemvas.ui.renderer_style_access import bond_length_px_for
 from chemvas.ui.scene_item_state import bond_state_dict
-from chemvas.ui.structure_build_committer import StructureBuildCommitter
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+    from PyQt6.QtCore import QPointF
+
+    from chemvas.ui.structure_build_committer import StructureBuildCommitter
 
 
 def _add_bond_build_rollback_note(

@@ -1,8 +1,7 @@
 from __future__ import annotations
 
 import math
-from collections.abc import Sequence
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
 
 from PyQt6.QtCore import QPointF, Qt
 from PyQt6.QtGui import QColor, QPen
@@ -25,6 +24,9 @@ from chemvas.features.rendering import (
 )
 from chemvas.ui.graphics_items import NoSelectLineItem
 from chemvas.ui.preview_scene_renderer import clear_scene_items
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
 
 
 def _set_line_segments(items: Sequence, segments: Sequence[LineSegment]) -> bool:
@@ -360,12 +362,12 @@ def add_bond_preview_items(
     added: list[QGraphicsItem] = []
     for item in items:
         if hasattr(item, "pen"):
-            pen_item = cast(Any, item)
+            pen_item = cast("Any", item)
             pen = QPen(pen_item.pen())
             pen.setColor(preview_color)
             pen_item.setPen(pen)
         if hasattr(item, "brush"):
-            brush_item = cast(Any, item)
+            brush_item = cast("Any", item)
             brush = brush_item.brush()
             if brush.style() != Qt.BrushStyle.NoBrush:
                 brush.setColor(preview_color)

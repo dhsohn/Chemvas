@@ -94,7 +94,7 @@ def compose_document_state(composition: object) -> dict[str, Any]:
         atoms,
         annotations,
         mark_distance=(
-            float(cast(Any, settings["bond_length_px"]))
+            float(cast("Any", settings["bond_length_px"]))
             * ELECTRONIC_MARK_DISTANCE_BOND_FRACTION
         ),
     )
@@ -140,7 +140,7 @@ def _atoms(
             x=_number(atom.get("x"), f"atom {index} x"),
             y=_number(atom.get("y"), f"atom {index} y"),
             color=color,
-            explicit_label=cast(bool, explicit_label),
+            explicit_label=cast("bool", explicit_label),
         )
         annotation = _atom_annotation(atom, index)
         if annotation:
@@ -167,7 +167,7 @@ def _bonds(raw_bonds: list[object], atoms: Mapping[int, Atom]) -> list[Bond | No
         order = bond.get("order")
         if type(order) is not int or order not in VALID_BOND_ORDERS:
             raise ValueError(f"bond {index} order must be 1, 2, or 3")
-        normalized_order = cast(int, order)
+        normalized_order = cast("int", order)
         style = bond.get("style", _DEFAULT_BOND_STYLE[normalized_order])
         if not isinstance(style, str) or style not in VALID_BOND_STYLES:
             raise ValueError(f"bond {index} style is not supported")
@@ -187,7 +187,7 @@ def _bonds(raw_bonds: list[object], atoms: Mapping[int, Atom]) -> list[Bond | No
 
 def _settings(value: object) -> dict[str, object]:
     settings = cast(
-        dict[str, object],
+        "dict[str, object]",
         serialize_settings(
             bond_length_px=20.0,
             arrow_line_width=1.5,
@@ -243,7 +243,7 @@ def _styled_note_html(text: str, value: object, index: int) -> str:
     declarations: list[str] = []
     if "font_size" in style:
         size = style["font_size"]
-        if type(size) is not int or not 6 <= cast(int, size) <= 96:
+        if type(size) is not int or not 6 <= cast("int", size) <= 96:
             raise ValueError(f"note {index} font_size must be an integer from 6 to 96")
         declarations.append(f"font-size:{size}pt")
     if "font_weight" in style:
@@ -398,12 +398,12 @@ def _atom_annotation(atom: Mapping[str, object], index: int) -> dict[str, int]:
     radical_electrons = atom.get("radical_electrons", 0)
     if type(formal_charge) is not int:
         raise ValueError(f"atom {index} formal_charge must be an integer")
-    if type(radical_electrons) is not int or cast(int, radical_electrons) < 0:
+    if type(radical_electrons) is not int or cast("int", radical_electrons) < 0:
         raise ValueError(
             f"atom {index} radical_electrons must be a nonnegative integer"
         )
     if (
-        abs(cast(int, formal_charge)) + cast(int, radical_electrons)
+        abs(cast("int", formal_charge)) + cast("int", radical_electrons)
         > MAX_ELECTRONIC_MARKS_PER_ATOM
     ):
         raise ValueError(
@@ -411,16 +411,16 @@ def _atom_annotation(atom: Mapping[str, object], index: int) -> dict[str, int]:
         )
     annotation: dict[str, int] = {}
     if formal_charge:
-        annotation["formal_charge"] = cast(int, formal_charge)
+        annotation["formal_charge"] = cast("int", formal_charge)
     if radical_electrons:
-        annotation["radical_electrons"] = cast(int, radical_electrons)
+        annotation["radical_electrons"] = cast("int", radical_electrons)
     return annotation
 
 
 def _mapping(value: object, name: str) -> Mapping[str, object]:
     if not isinstance(value, Mapping) or any(not isinstance(key, str) for key in value):
         raise ValueError(f"{name} must be a JSON object")
-    return cast(Mapping[str, object], value)
+    return cast("Mapping[str, object]", value)
 
 
 def _list(value: object, name: str, *, maximum: int) -> list[object]:
@@ -428,7 +428,7 @@ def _list(value: object, name: str, *, maximum: int) -> list[object]:
         raise ValueError(f"{name} must be a JSON array")
     if len(value) > maximum:
         raise ValueError(f"{name} may contain at most {maximum} entries")
-    return cast(list[object], value)
+    return cast("list[object]", value)
 
 
 def _keys(
@@ -443,21 +443,21 @@ def _keys(
 
 
 def _id(value: object, name: str) -> int:
-    if type(value) is not int or cast(int, value) < 0:
+    if type(value) is not int or cast("int", value) < 0:
         raise ValueError(f"{name} must be a nonnegative integer")
-    return cast(int, value)
+    return cast("int", value)
 
 
 def _number(value: object, name: str) -> float:
     if not is_document_number(value):
         raise ValueError(f"{name} must be a finite JSON-safe number")
-    return float(cast(Any, value))
+    return float(cast("Any", value))
 
 
 def _color(value: object, name: str) -> str:
     if not is_hex_color(value):
         raise ValueError(f"{name} must be hexadecimal")
-    return cast(str, value)
+    return cast("str", value)
 
 
 def _point(value: object, name: str) -> tuple[float, float]:

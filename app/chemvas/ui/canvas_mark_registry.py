@@ -26,7 +26,7 @@ class CanvasMarkRegistry:
 
 
 def mark_registry_for(canvas: Any) -> CanvasMarkRegistry:
-    return cast(CanvasMarkRegistry, canvas.runtime_state.mark_registry)
+    return cast("CanvasMarkRegistry", canvas.runtime_state.mark_registry)
 
 
 __all__ = ["CanvasMarkRegistry", "mark_registry_for"]

@@ -139,13 +139,13 @@ def _model_and_annotations(
     model_state = state.get("model")
     if not isinstance(model_state, Mapping):
         raise ValueError("Invalid Chemvas document state: model is missing.")
-    model = deserialize_model_state(cast(Mapping[str, object], model_state))
+    model = deserialize_model_state(cast("Mapping[str, object]", model_state))
     marks = state.get("marks", ())
     if not isinstance(marks, Sequence) or isinstance(marks, (str, bytes)):
         raise ValueError("Invalid Chemvas document state: marks are invalid.")
     annotations = _resolve_annotations(
         model,
-        cast(Sequence[object], marks),
+        cast("Sequence[object]", marks),
     )
     return model, annotations
 

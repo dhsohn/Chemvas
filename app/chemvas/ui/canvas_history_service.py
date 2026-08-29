@@ -1,8 +1,7 @@
 from __future__ import annotations
 
-from collections.abc import Iterable
 from dataclasses import dataclass
-from typing import cast
+from typing import TYPE_CHECKING, cast
 
 from chemvas.core.history import (
     HistoryCommand,
@@ -13,6 +12,9 @@ from chemvas.core.history import (
 from chemvas.domain.transactions import RestoreOutcome, validate_restore_outcome
 from chemvas.ui import history_canvas_access
 from chemvas.ui.canvas_history_state import CanvasHistoryState, history_state_for
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable
 
 
 @dataclass(frozen=True, slots=True)
@@ -329,7 +331,7 @@ class CanvasHistoryService:
             snapshot = self.capture_stack_snapshot()
             if not snapshot.history:
                 return
-            command = cast(HistoryCommand, snapshot.history[-1])
+            command = cast("HistoryCommand", snapshot.history[-1])
             if command_requires_exact_history_transaction(command):
                 self._apply_exact_command(snapshot, command, direction="undo")
                 self._commit_stack_delta(
@@ -363,7 +365,7 @@ class CanvasHistoryService:
             snapshot = self.capture_stack_snapshot()
             if not snapshot.redo_stack:
                 return
-            command = cast(HistoryCommand, snapshot.redo_stack[-1])
+            command = cast("HistoryCommand", snapshot.redo_stack[-1])
             if command_requires_exact_history_transaction(command):
                 self._apply_exact_command(snapshot, command, direction="redo")
                 self._commit_stack_delta(

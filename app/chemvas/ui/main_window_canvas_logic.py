@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Sequence
+from typing import TYPE_CHECKING
 
 from chemvas.ui.canvas_text_style_state import set_text_style_for, text_style_state_for
 from chemvas.ui.canvas_tool_settings_state import (
@@ -16,6 +16,9 @@ from chemvas.ui.canvas_window_access import (
 )
 from chemvas.ui.renderer_style_access import bond_length_px_for, set_bond_length_for
 from chemvas.ui.sheet_setup_access import set_sheet_setup_for, sheet_setup_for
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
 
 CANVAS_TEMPLATE_TOOL_FIELDS = (
     "arrow_line_width",

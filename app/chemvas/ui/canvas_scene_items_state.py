@@ -31,7 +31,7 @@ SCENE_ITEM_COLLECTION_ATTRS = (
 
 
 def scene_items_state_for(canvas: Any) -> CanvasSceneItemsState:
-    return cast(CanvasSceneItemsState, canvas.runtime_state.scene_items_state)
+    return cast("CanvasSceneItemsState", canvas.runtime_state.scene_items_state)
 
 
 def scene_item_collection_for(canvas: Any, name: str) -> list[Any]:

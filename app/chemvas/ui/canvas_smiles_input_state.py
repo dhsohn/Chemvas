@@ -10,7 +10,7 @@ class CanvasSmilesInputState:
 
 
 def smiles_input_state_for(canvas: Any) -> CanvasSmilesInputState:
-    return cast(CanvasSmilesInputState, canvas.runtime_state.smiles_input_state)
+    return cast("CanvasSmilesInputState", canvas.runtime_state.smiles_input_state)
 
 
 def last_smiles_input_for(canvas: Any) -> str | None:

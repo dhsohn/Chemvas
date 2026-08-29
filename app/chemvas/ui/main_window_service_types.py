@@ -3,31 +3,35 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
-from chemvas.ui.main_window_action_availability_service import (
-    MainWindowActionAvailabilityService,
-)
-from chemvas.ui.main_window_active_canvas_ui_service import (
-    MainWindowActiveCanvasUIService,
-)
-from chemvas.ui.main_window_canvas_document_service import (
-    MainWindowCanvasDocumentService,
-)
-from chemvas.ui.main_window_canvas_tab_ui_service import MainWindowCanvasTabUIService
-from chemvas.ui.main_window_context_bar_service import MainWindowContextBarService
-from chemvas.ui.main_window_context_page_state_service import (
-    MainWindowContextPageStateService,
-)
-from chemvas.ui.main_window_document_action_service import (
-    MainWindowDocumentActionService,
-)
-from chemvas.ui.main_window_panel_service import MainWindowPanelService
-from chemvas.ui.main_window_status_service import MainWindowStatusService
-from chemvas.ui.main_window_text_style_service import MainWindowTextStyleService
-from chemvas.ui.main_window_tool_action_service import MainWindowToolActionService
-from chemvas.ui.main_window_tool_routing_service import MainWindowToolRoutingService
-from chemvas.ui.main_window_tool_state_service import MainWindowToolStateService
-from chemvas.ui.main_window_ui_assembly_service import MainWindowUIAssemblyService
+if TYPE_CHECKING:
+    from chemvas.ui.main_window_action_availability_service import (
+        MainWindowActionAvailabilityService,
+    )
+    from chemvas.ui.main_window_active_canvas_ui_service import (
+        MainWindowActiveCanvasUIService,
+    )
+    from chemvas.ui.main_window_canvas_document_service import (
+        MainWindowCanvasDocumentService,
+    )
+    from chemvas.ui.main_window_canvas_tab_ui_service import (
+        MainWindowCanvasTabUIService,
+    )
+    from chemvas.ui.main_window_context_bar_service import MainWindowContextBarService
+    from chemvas.ui.main_window_context_page_state_service import (
+        MainWindowContextPageStateService,
+    )
+    from chemvas.ui.main_window_document_action_service import (
+        MainWindowDocumentActionService,
+    )
+    from chemvas.ui.main_window_panel_service import MainWindowPanelService
+    from chemvas.ui.main_window_status_service import MainWindowStatusService
+    from chemvas.ui.main_window_text_style_service import MainWindowTextStyleService
+    from chemvas.ui.main_window_tool_action_service import MainWindowToolActionService
+    from chemvas.ui.main_window_tool_routing_service import MainWindowToolRoutingService
+    from chemvas.ui.main_window_tool_state_service import MainWindowToolStateService
+    from chemvas.ui.main_window_ui_assembly_service import MainWindowUIAssemblyService
 
 
 @dataclass(slots=True)

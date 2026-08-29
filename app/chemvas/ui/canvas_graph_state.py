@@ -27,7 +27,7 @@ class CanvasGraphState:
 
 
 def graph_state_for(canvas: Any) -> CanvasGraphState:
-    return cast(CanvasGraphState, canvas.runtime_state.graph_state)
+    return cast("CanvasGraphState", canvas.runtime_state.graph_state)
 
 
 __all__ = ["CanvasGraphState", "graph_state_for"]

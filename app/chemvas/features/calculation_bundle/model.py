@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
-from chemvas.domain.document import MoleculeModel
+if TYPE_CHECKING:
+    from chemvas.domain.document import MoleculeModel
 
 
 @dataclass(frozen=True)

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass, field
-from typing import cast
+from typing import TYPE_CHECKING, cast
 
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QTransform
@@ -10,7 +10,6 @@ from PyQt6.QtWidgets import QGraphicsView
 
 from chemvas.ui.canvas_callback_state import callback_state_for
 from chemvas.ui.canvas_hover_state import hover_state_for
-from chemvas.ui.input_view_state import InputViewState
 from chemvas.ui.selection_info_state import selection_info_state_for
 from chemvas.ui.transactions.scene_rect import (
     SceneRectStateSnapshot,
@@ -18,6 +17,9 @@ from chemvas.ui.transactions.scene_rect import (
     set_explicit_scene_rect,
     set_explicit_view_scene_rect,
 )
+
+if TYPE_CHECKING:
+    from chemvas.ui.input_view_state import InputViewState
 
 # View magnification limits and the per-step multiplier shared by the toolbar
 # buttons and the Ctrl+= / Ctrl+- shortcuts. Ctrl+wheel uses a finer factor.
@@ -28,7 +30,7 @@ _MISSING_CAPTURE_ATTRIBUTE = object()
 
 
 def input_view_state_for(canvas) -> InputViewState:
-    return cast(InputViewState, canvas.runtime_state.input_view_state)
+    return cast("InputViewState", canvas.runtime_state.input_view_state)
 
 
 def _capture_optional_attribute(target: object, name: str) -> object:

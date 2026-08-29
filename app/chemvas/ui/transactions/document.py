@@ -1,9 +1,8 @@
 from __future__ import annotations
 
-from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
 
 from chemvas.domain.transactions import RestoreOutcome
 from chemvas.ui.bond_renderer_access import bond_renderer_for
@@ -32,6 +31,9 @@ from chemvas.ui.transactions.scene_runtime import (
     restore_scene_runtime,
     verify_scene_runtime_identity,
 )
+
+if TYPE_CHECKING:
+    from collections.abc import Callable, Iterator
 
 _MISSING_RENDERER_STYLE = object()
 
@@ -341,7 +343,7 @@ class DocumentSavepoint:
             try:
                 if (
                     self.renderer is None
-                    or cast(Any, self.renderer).style is not self.renderer_style
+                    or cast("Any", self.renderer).style is not self.renderer_style
                 ):
                     raise RuntimeError(
                         "document rollback renderer style was not restored"
@@ -371,7 +373,7 @@ class DocumentSavepoint:
                 # there is no bond graphics collaborator to refresh.
                 return
             bonds = getattr(self.canvas_model, "bonds", ()) or ()
-            for bond_id, bond in enumerate(cast(Any, bonds)):
+            for bond_id, bond in enumerate(cast("Any", bonds)):
                 if bond is None:
                     continue
                 if (
@@ -435,7 +437,7 @@ class DocumentSavepoint:
         if self.renderer_style is not _MISSING_RENDERER_STYLE:
             try:
                 assert self.renderer is not None
-                cast(Any, self.renderer).style = self.renderer_style
+                cast("Any", self.renderer).style = self.renderer_style
             except Exception as exc:
                 errors.append(exc)
 

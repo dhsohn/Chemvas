@@ -3,10 +3,10 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
-from PyQt6.QtGui import QAction
-from PyQt6.QtWidgets import QLineEdit
-
 if TYPE_CHECKING:
+    from PyQt6.QtGui import QAction
+    from PyQt6.QtWidgets import QLineEdit
+
     from chemvas.ui.main_window_icon_factory import MainWindowIconFactory
     from chemvas.ui.main_window_menu_bar import MainWindowMenuBarAssembly
     from chemvas.ui.main_window_panel_toolbar import MainWindowPanelToolbarAssembly

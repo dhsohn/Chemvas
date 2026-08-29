@@ -1,14 +1,11 @@
 from __future__ import annotations
 
 import threading
-from collections.abc import Mapping
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from chemvas.core.rdkit_conversion import RDKitConversionHelper
 from chemvas.core.rdkit_import import RDKitImportHelper
 from chemvas.domain.atom_aliases import alias_fragment_smiles
-from chemvas.domain.document import MoleculeModel
-from chemvas.features.calculation_bundle import CalculationArtifacts
 from chemvas.features.insertion import (
     Molecule3DAtom,
     Molecule3DBond,
@@ -16,6 +13,12 @@ from chemvas.features.insertion import (
     MoleculeIdentifiers,
     RDKitResult,
 )
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping
+
+    from chemvas.domain.document import MoleculeModel
+    from chemvas.features.calculation_bundle import CalculationArtifacts
 
 
 class RDKitAdapter:

@@ -1,8 +1,11 @@
 from __future__ import annotations
 
-from collections.abc import Callable, MutableMapping, Sequence
+from typing import TYPE_CHECKING
 
-from chemvas.domain.document import Bond
+if TYPE_CHECKING:
+    from collections.abc import Callable, MutableMapping, Sequence
+
+    from chemvas.domain.document import Bond
 
 
 def refresh_bond_graphics(

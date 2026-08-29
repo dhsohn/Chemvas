@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 import json
-from collections.abc import Iterable
 from decimal import Decimal
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable
 
 
 def strict_json_loads(source: str | bytes | bytearray) -> object:

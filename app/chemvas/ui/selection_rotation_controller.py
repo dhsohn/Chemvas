@@ -2,8 +2,6 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from PyQt6.QtCore import QPointF
-
 from chemvas.features.selection import (
     axis_rotated_coords,
     dominant_axis_angle_from_drag,
@@ -45,6 +43,8 @@ from chemvas.ui.selection_style_access import (
 )
 
 if TYPE_CHECKING:
+    from PyQt6.QtCore import QPointF
+
     from chemvas.ui.canvas_view import CanvasView
 
 
