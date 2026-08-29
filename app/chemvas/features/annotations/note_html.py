@@ -3,6 +3,7 @@ from __future__ import annotations
 import re
 from html import escape
 from html.parser import HTMLParser
+from typing import override
 
 SAFE_NOTE_HTML_TAGS = frozenset(
     (
@@ -146,6 +147,7 @@ class _NoteHtmlSanitizer(HTMLParser):
         self.parts: list[str] = []
         self._skip_depth = 0
 
+    @override
     def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         tag = tag.lower()
         if tag in SKIP_NOTE_HTML_CONTENT_TAGS:
@@ -156,6 +158,7 @@ class _NoteHtmlSanitizer(HTMLParser):
         attr_text = self._sanitized_attrs(tag, attrs)
         self.parts.append(f"<{tag}{attr_text}>")
 
+    @override
     def handle_startendtag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
         tag = tag.lower()
         if tag in SKIP_NOTE_HTML_CONTENT_TAGS:
@@ -168,6 +171,7 @@ class _NoteHtmlSanitizer(HTMLParser):
         else:
             self.parts.append(f"<{tag}{attr_text}></{tag}>")
 
+    @override
     def handle_endtag(self, tag: str) -> None:
         tag = tag.lower()
         if tag in SKIP_NOTE_HTML_CONTENT_TAGS:
@@ -182,6 +186,7 @@ class _NoteHtmlSanitizer(HTMLParser):
             return
         self.parts.append(f"</{tag}>")
 
+    @override
     def handle_data(self, data: str) -> None:
         if self._skip_depth:
             return

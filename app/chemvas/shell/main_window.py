@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from typing import TYPE_CHECKING, Protocol
+from typing import TYPE_CHECKING, Protocol, override
 
 from PyQt6.QtCore import QTimer
 from PyQt6.QtWidgets import QMainWindow
@@ -86,6 +86,7 @@ class MainWindow(QMainWindow):
     def runtime_state(self) -> object:
         return self._state
 
+    @override
     def closeEvent(self, event: QCloseEvent | None) -> None:
         if event is None:
             super().closeEvent(event)

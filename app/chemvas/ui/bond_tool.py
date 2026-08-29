@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import override
+
 from PyQt6.QtCore import QLineF, QPointF, Qt
 
 from chemvas.core.bond_tool_logic import (
@@ -45,9 +47,11 @@ class BondTool(Tool):
         self._preview_items: list = []
         self._preview_signature: str | None = None
 
+    @override
     def activate(self) -> None:
         activate_tool_no_drag(self.canvas)
 
+    @override
     def deactivate(self) -> None:
         self._clear_preview_items()
         self._start_pos = None
@@ -126,6 +130,7 @@ class BondTool(Tool):
         if selected_notes_for(self.canvas):
             clear_note_selection_for(self.canvas)
 
+    @override
     def on_mouse_press(self, event) -> bool:
         if event.button() != Qt.MouseButton.LeftButton:
             return False
@@ -159,6 +164,7 @@ class BondTool(Tool):
         self._set_preview_items(self._start_pos, self._start_pos)
         return True
 
+    @override
     def on_mouse_move(self, event) -> bool:
         if self._start_pos is None:
             return False
@@ -170,6 +176,7 @@ class BondTool(Tool):
         self._set_preview_items(self._start_pos, snapped)
         return True
 
+    @override
     def on_mouse_release(self, event) -> bool:
         if self._start_pos is None:
             return False

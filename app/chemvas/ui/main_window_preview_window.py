@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import override
 
 from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtWidgets import QLabel, QVBoxLayout, QWidget
@@ -37,6 +38,7 @@ class Preview3DWindow(QWidget):
         self._status_label.clear()
         self._status_label.setVisible(False)
 
+    @override
     def closeEvent(self, event) -> None:
         event.ignore()
         self.hide()

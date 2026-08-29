@@ -164,6 +164,12 @@ mypy_path = "app"
 files = ["app/chemvas"]
 warn_unused_ignores = true
 check_untyped_defs = true
+# A misspelled Qt handler (``mousePresssEvent``) raises nothing and warns
+# nothing: the base class simply keeps using its own implementation and the
+# feature is silently off. The same is true of a ``Tool`` hook, which falls back
+# to a base that returns ``False``. Requiring ``@override`` turns both into a
+# type error, because mypy then has to find the method being overridden.
+enable_error_code = ["explicit-override"]
 # These four cost nothing to hold everywhere: the legacy ``chemvas.core`` and
 # ``chemvas.ui`` packages already satisfy them. Keeping them project-wide means
 # a new package inherits them instead of waiting to be listed below.

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import override
+
 from PyQt6.QtCore import Qt
 
 from chemvas.core.perspective_drag_logic import resolve_perspective_drag_update
@@ -19,9 +21,11 @@ class PerspectiveTool(Tool):
         self._rotating = False
         self._axis_lock = None
 
+    @override
     def activate(self) -> None:
         self.context.set_rubber_band_drag_mode()
 
+    @override
     def deactivate(self) -> None:
         self._commit_active_rotation()
 
@@ -38,6 +42,7 @@ class PerspectiveTool(Tool):
         self._rotating = False
         self._axis_lock = None
 
+    @override
     def on_mouse_press(self, event) -> bool:
         if event.button() != Qt.MouseButton.LeftButton:
             return False
@@ -62,6 +67,7 @@ class PerspectiveTool(Tool):
             self._last_pos = None
         return self._rotating
 
+    @override
     def on_mouse_move(self, event) -> bool:
         if self._last_pos is None or not self._rotating:
             return self._rotating
@@ -91,6 +97,7 @@ class PerspectiveTool(Tool):
         self._last_pos = current
         return True
 
+    @override
     def on_mouse_release(self, event) -> bool:
         was_rotating = self._rotating
         self._commit_active_rotation()

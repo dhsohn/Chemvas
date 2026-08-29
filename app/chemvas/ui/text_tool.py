@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import cast
+from typing import cast, override
 
 from PyQt6.QtCore import QPointF, Qt
 from PyQt6.QtWidgets import QInputDialog
@@ -27,9 +27,11 @@ class TextTool(Tool):
     def __init__(self, canvas, *, context=None) -> None:
         super().__init__("text", canvas, context=context)
 
+    @override
     def activate(self) -> None:
         activate_tool_no_drag(self.canvas)
 
+    @override
     def on_mouse_press(self, event) -> bool:
         if event.button() != Qt.MouseButton.LeftButton:
             return False

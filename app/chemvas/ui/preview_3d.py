@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import math
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, override
 
 from PyQt6.QtCore import QPointF, QRectF, Qt, QThread, QTimer
 from PyQt6.QtGui import QFont, QFontMetricsF, QIcon, QPainter
@@ -300,15 +300,18 @@ class Preview3D(QWidget):
         self._sync_export_xyz_button()
         self._safe_update()
 
+    @override
     def resizeEvent(self, event) -> None:
         self._sync_export_xyz_button()
         super().resizeEvent(event)
 
+    @override
     def mousePressEvent(self, event) -> None:
         if event.button() == Qt.MouseButton.LeftButton:
             self._last_pos = QPointF(event.position())
         super().mousePressEvent(event)
 
+    @override
     def mouseMoveEvent(self, event) -> None:
         if self._last_pos is not None and event.buttons() & Qt.MouseButton.LeftButton:
             current = QPointF(event.position())
@@ -321,11 +324,13 @@ class Preview3D(QWidget):
             self.update()
         super().mouseMoveEvent(event)
 
+    @override
     def mouseReleaseEvent(self, event) -> None:
         if event.button() == Qt.MouseButton.LeftButton:
             self._last_pos = None
         super().mouseReleaseEvent(event)
 
+    @override
     def wheelEvent(self, event) -> None:
         delta = event.angleDelta().y()
         if delta:
@@ -333,6 +338,7 @@ class Preview3D(QWidget):
             self.update()
         super().wheelEvent(event)
 
+    @override
     def closeEvent(self, event) -> None:
         self.shutdown()
         super().closeEvent(event)
@@ -526,6 +532,7 @@ class Preview3D(QWidget):
         button.setText("Copied")
         QTimer.singleShot(1200, lambda b=button, t=label: b.setText(t))
 
+    @override
     def paintEvent(self, event) -> None:
         painter = QPainter(self)
         paint_preview_3d_panel(

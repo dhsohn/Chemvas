@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from functools import partial
-from typing import Any
+from typing import Any, override
 
 from chemvas.core.history import (
     HistoryCommand,
@@ -370,9 +370,11 @@ class MoveItemsCommand(HistoryCommand):
                     )
             raise
 
+    @override
     def undo(self, canvas) -> None:
         self._apply(canvas, -self.dx, -self.dy)
 
+    @override
     def redo(self, canvas) -> None:
         self._apply(canvas, self.dx, self.dy)
 
@@ -419,9 +421,11 @@ class UpdateSceneItemCommand(HistoryCommand):
             restore_scene_rect_snapshot(scene_rect_snapshot, original_error)
             raise
 
+    @override
     def undo(self, canvas) -> None:
         self._apply(canvas, self.before_state, self.after_state)
 
+    @override
     def redo(self, canvas) -> None:
         self._apply(canvas, self.after_state, self.before_state)
 
@@ -433,6 +437,7 @@ class AddSceneItemsCommand(HistoryCommand):
     item_states: list[dict]
     items: list = field(default_factory=list)
 
+    @override
     def redo(self, canvas) -> None:
         if not self.items:
             create_scene_items_atomically(canvas, self.item_states, self.items)
@@ -444,6 +449,7 @@ class AddSceneItemsCommand(HistoryCommand):
             unknown_was_attached=False,
         )
 
+    @override
     def undo(self, canvas) -> None:
         mutate_existing_scene_items_atomically(
             canvas,
@@ -460,6 +466,7 @@ class DeleteSceneItemsCommand(HistoryCommand):
     item_states: list[dict]
     items: list = field(default_factory=list)
 
+    @override
     def redo(self, canvas) -> None:
         mutate_existing_scene_items_atomically(
             canvas,
@@ -468,6 +475,7 @@ class DeleteSceneItemsCommand(HistoryCommand):
             unknown_was_attached=True,
         )
 
+    @override
     def undo(self, canvas) -> None:
         if not self.items:
             create_scene_items_atomically(canvas, self.item_states, self.items)
@@ -538,6 +546,7 @@ class GroupSceneItemsCommand(HistoryCommand):
     absorbed: list[tuple[int, CanvasSceneGroup]] = field(default_factory=list)
     group_id: int | None = None
 
+    @override
     def redo(self, canvas) -> None:
         previous_group_id = self.group_id
 
@@ -565,6 +574,7 @@ class GroupSceneItemsCommand(HistoryCommand):
             on_rollback=restore_group_id,
         )
 
+    @override
     def undo(self, canvas) -> None:
         def apply_change() -> None:
             if self.group_id is not None:
@@ -583,6 +593,7 @@ class GroupSceneItemsCommand(HistoryCommand):
 class UngroupSceneItemsCommand(HistoryCommand):
     removed: list[tuple[int, CanvasSceneGroup]]
 
+    @override
     def redo(self, canvas) -> None:
         def apply_change() -> None:
             for group_id, _ in self.removed:
@@ -594,6 +605,7 @@ class UngroupSceneItemsCommand(HistoryCommand):
             outline_rollback_note="refreshing the selection outline after ungrouping",
         )
 
+    @override
     def undo(self, canvas) -> None:
         def apply_change() -> None:
             for group_id, group in self.removed:
@@ -675,6 +687,7 @@ class ChangeAtomLabelCommand(HistoryCommand):
             restore_scene_rect_snapshot(scene_rect_snapshot, original_error)
             raise
 
+    @override
     def undo(self, canvas) -> None:
         self._apply(
             canvas,
@@ -686,6 +699,7 @@ class ChangeAtomLabelCommand(HistoryCommand):
             self.after_smiles_input,
         )
 
+    @override
     def redo(self, canvas) -> None:
         self._apply(
             canvas,

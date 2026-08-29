@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import override
+
 from PyQt6.QtCore import QEvent, Qt
 from PyQt6.QtGui import QTextCursor
 
@@ -18,9 +20,11 @@ class MarkTool(Tool):
     def __init__(self, canvas, *, context=None) -> None:
         super().__init__("mark", canvas, context=context)
 
+    @override
     def activate(self) -> None:
         activate_tool_no_drag(self.canvas)
 
+    @override
     def on_mouse_press(self, event) -> bool:
         if event.button() != Qt.MouseButton.LeftButton:
             return False
@@ -42,9 +46,11 @@ class NoteTool(Tool):
         super().__init__("note", canvas, context=context)
         self._active_handle = None
 
+    @override
     def activate(self) -> None:
         activate_tool_no_drag(self.canvas)
 
+    @override
     def on_mouse_press(self, event) -> bool:
         if event.button() != Qt.MouseButton.LeftButton:
             return False
@@ -85,9 +91,11 @@ class NoteTool(Tool):
             cursor.select(QTextCursor.SelectionType.WordUnderCursor)
         item.setTextCursor(cursor)
 
+    @override
     def on_mouse_move(self, event) -> bool:
         return False
 
+    @override
     def on_mouse_release(self, event) -> bool:
         self._active_handle = None
         return False

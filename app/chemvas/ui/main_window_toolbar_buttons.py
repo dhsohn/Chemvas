@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, override
 
 from PyQt6.QtCore import QPointF, Qt
 from PyQt6.QtGui import QColor, QIcon, QPainter, QPolygonF
@@ -19,6 +19,7 @@ class ArrowButton(QToolButton):
         self.setAutoRaise(True)
         self.setFocusPolicy(Qt.FocusPolicy.NoFocus)
 
+    @override
     def paintEvent(self, event) -> None:
         super().paintEvent(event)
         painter = QPainter(self)
@@ -44,6 +45,7 @@ class ArrowButton(QToolButton):
 
 
 class CornerMenuButton(QToolButton):
+    @override
     def paintEvent(self, event) -> None:
         super().paintEvent(event)
         painter = QPainter(self)
@@ -76,6 +78,7 @@ class CornerMenuToolButton(CornerMenuButton):
             and pos.y() >= self.height() - self._CORNER_ZONE
         )
 
+    @override
     def mousePressEvent(self, event) -> None:
         if self.menu() is not None and self._is_in_corner(event.position().toPoint()):
             self.showMenu()

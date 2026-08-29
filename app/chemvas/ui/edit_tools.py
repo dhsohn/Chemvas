@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import override
+
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QColor
 
@@ -19,6 +21,7 @@ class ColorTool(Tool):
         super().__init__("color", canvas, context=context)
         self._last_color: str | None = None
 
+    @override
     def activate(self) -> None:
         activate_tool_no_drag(self.canvas)
 
@@ -29,6 +32,7 @@ class ColorTool(Tool):
     def _apply_color_to_items(self, items, color: QColor) -> None:
         self.context.apply_color_to_items(items, color)
 
+    @override
     def on_mouse_press(self, event) -> bool:
         if event.button() != Qt.MouseButton.LeftButton:
             return False
@@ -55,9 +59,11 @@ class FlipTool(Tool):
     def __init__(self, canvas, *, context=None) -> None:
         super().__init__("flip", canvas, context=context)
 
+    @override
     def activate(self) -> None:
         activate_tool_no_drag(self.canvas)
 
+    @override
     def on_mouse_press(self, event) -> bool:
         if event.button() != Qt.MouseButton.LeftButton:
             return False
@@ -79,9 +85,11 @@ class DeleteTool(Tool):
         self._before_smiles_input: str | None = None
         self._delete_session = None
 
+    @override
     def activate(self) -> None:
         activate_tool_no_drag(self.canvas)
 
+    @override
     def deactivate(self) -> None:
         if self._delete_session is not None and self._changed:
             self._rollback_active_session()
@@ -154,6 +162,7 @@ class DeleteTool(Tool):
             self._rollback_active_session(original_error)
             raise
 
+    @override
     def on_mouse_press(self, event) -> bool:
         if event.button() != Qt.MouseButton.LeftButton:
             return False
@@ -173,6 +182,7 @@ class DeleteTool(Tool):
             raise
         return True
 
+    @override
     def on_mouse_move(self, event) -> bool:
         if not self._erasing:
             return False
@@ -181,6 +191,7 @@ class DeleteTool(Tool):
             return True
         return False
 
+    @override
     def on_mouse_release(self, event) -> bool:
         self._erasing = False
         if not self._changed:

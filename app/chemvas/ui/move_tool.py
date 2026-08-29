@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import time
+from typing import override
 
 from PyQt6.QtCore import QPointF, Qt
 
@@ -39,9 +40,11 @@ class MoveTool(SelectionDragMixin, Tool):
         self._drag_interval = 1.0 / 60.0
         self._last_drag_time = 0.0
 
+    @override
     def activate(self) -> None:
         activate_tool_no_drag(self.canvas)
 
+    @override
     def deactivate(self) -> None:
         self._cancel_active_interaction()
 
@@ -107,6 +110,7 @@ class MoveTool(SelectionDragMixin, Tool):
         self._drag_item = None
         self._reset_selection_drag_state()
 
+    @override
     def on_mouse_press(self, event) -> bool:
         if event.button() != Qt.MouseButton.LeftButton:
             return False
@@ -137,6 +141,7 @@ class MoveTool(SelectionDragMixin, Tool):
         self._total_delta = QPointF(0.0, 0.0)
         return True
 
+    @override
     def _apply_drag_delta(self, delta: QPointF) -> None:
         if not self._drag_delta_is_effective(delta):
             return
@@ -160,6 +165,7 @@ class MoveTool(SelectionDragMixin, Tool):
                 )
                 raise
 
+    @override
     def on_mouse_move(self, event) -> bool:
         if self._start_pos is None:
             return False
@@ -174,6 +180,7 @@ class MoveTool(SelectionDragMixin, Tool):
         self._start_pos = scene_pos
         return True
 
+    @override
     def on_mouse_release(self, event) -> bool:
         if self._start_pos is not None and (
             self._drag_selection or self._drag_item is not None

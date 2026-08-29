@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import time
+from typing import override
 
 from PyQt6.QtCore import Qt
 
@@ -33,9 +34,11 @@ class SelectTool(SelectionDragMixin, Tool):
         self._drag_interval = 1.0 / 60.0
         self._last_drag_time = 0.0
 
+    @override
     def activate(self) -> None:
         self.context.set_rubber_band_drag_mode()
 
+    @override
     def deactivate(self) -> None:
         self._cancel_active_interaction()
 
@@ -222,6 +225,7 @@ class SelectTool(SelectionDragMixin, Tool):
             return None
         return item
 
+    @override
     def on_mouse_press(self, event) -> bool:
         if event.button() != Qt.MouseButton.LeftButton:
             return False
@@ -317,6 +321,7 @@ class SelectTool(SelectionDragMixin, Tool):
                 return False
         return self._begin_selection_drag(atom_ids, selection_items, press_pos)
 
+    @override
     def on_mouse_move(self, event) -> bool:
         if self._active_handle is not None:
             scene_pos = self.context.scene_pos_from_event(event)
@@ -355,6 +360,7 @@ class SelectTool(SelectionDragMixin, Tool):
         self._start_pos = scene_pos
         return True
 
+    @override
     def on_mouse_release(self, event) -> bool:
         if self._active_handle is not None:
             self._commit_handle_drag()
