@@ -186,6 +186,14 @@ module = [
     "chemvas.shell.*",
     "chemvas.adapters.*",
     "chemvas.bootstrap.*",
+    # These five legacy modules are promoted individually because filling in
+    # their signatures was enough to satisfy strict; the rest of
+    # ``chemvas.core`` / ``chemvas.ui`` still needs body work first.
+    "chemvas.core.tool_overlay_logic",
+    "chemvas.core.bond_tool_logic",
+    "chemvas.core.text_tool_logic",
+    "chemvas.ui.transactions.document",
+    "chemvas.ui.transactions.object_graph_snapshot",
 ]
 disallow_any_generics = true
 disallow_incomplete_defs = true

@@ -1,12 +1,17 @@
 from __future__ import annotations
 
+from typing import TYPE_CHECKING, Any
 
-def bond_renderer_for(canvas):
+if TYPE_CHECKING:
+    from chemvas.ui.bond_renderer import BondRenderer
+
+
+def bond_renderer_for(canvas: Any) -> BondRenderer:
     return canvas.bond_renderer
 
 
 def update_bond_geometry_for(
-    canvas, bond_id: int, *, allow_topology_rebuild: bool = False
+    canvas: Any, bond_id: int, *, allow_topology_rebuild: bool = False
 ) -> None:
     renderer = bond_renderer_for(canvas)
     if allow_topology_rebuild:

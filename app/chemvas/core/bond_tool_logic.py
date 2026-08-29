@@ -2,6 +2,10 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from chemvas.domain.document import MoleculeModel
 
 
 @dataclass(frozen=True)
@@ -14,9 +18,9 @@ def resolve_bond_press_target(
     *,
     atom_id: int | None,
     item_kind: str | None,
-    item_bond_id,
-    nearby_bond_id,
-    hover_bond_id,
+    item_bond_id: object,
+    nearby_bond_id: object,
+    hover_bond_id: object,
 ) -> int | None:
     if atom_id is not None:
         return None
@@ -30,7 +34,7 @@ def resolve_bond_press_target(
 
 
 def resolve_bond_snap_target(
-    model,
+    model: MoleculeModel,
     *,
     pos: tuple[float, float],
     atom_id: int | None,
@@ -69,7 +73,7 @@ def resolve_bond_snap_target(
 
 
 def resolve_bond_endpoint_target(
-    model,
+    model: MoleculeModel,
     *,
     start: tuple[float, float],
     end: tuple[float, float],
