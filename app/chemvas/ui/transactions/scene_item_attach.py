@@ -13,12 +13,12 @@ from __future__ import annotations
 
 import inspect
 from dataclasses import dataclass, field
-from functools import partial
 from typing import TYPE_CHECKING, Any, cast
 
 from PyQt6.QtWidgets import QGraphicsItem, QGraphicsTextItem
 
 from chemvas.domain.document import VALID_ARROW_KINDS
+from chemvas.domain.transactions import run_rollback_step
 from chemvas.ui.canvas_mark_registry import mark_registry_for
 from chemvas.ui.canvas_scene_items_state import scene_items_state_for
 from chemvas.ui.scene_item_access import item_is_unavailable_for_scene_operation
@@ -41,36 +41,6 @@ _KIND_COLLECTION = {
     "orbital": "orbital_items",
     **{kind: "arrow_items" for kind in ARROW_KINDS},
 }
-
-
-def _add_attach_rollback_note(
-    original_error: BaseException | None,
-    rollback_error: BaseException,
-    *,
-    phase: str,
-) -> None:
-    if original_error is None:
-        raise rollback_error
-    original_error.add_note(
-        f"Scene-item attach recovery also failed while {phase}: "
-        f"{type(rollback_error).__name__}: {rollback_error}"
-    )
-
-
-def _run_attach_rollback_step(
-    original_error: BaseException | None,
-    phase: str,
-    description: str,
-    operation: Callable[[], object],
-) -> None:
-    try:
-        operation()
-    except Exception as rollback_error:
-        _add_attach_rollback_note(
-            original_error,
-            rollback_error,
-            phase=f"{description} after {phase}",
-        )
 
 
 def _optional_callable(target, name: str):
@@ -416,12 +386,8 @@ class SceneItemAttachSnapshot:
 
     def _restore_lightweight_registration(
         self,
-        original_error: BaseException | None,
-        *,
-        phase: str,
+        step: Callable[[str, Callable[[], object]], None],
     ) -> None:
-        step = partial(_run_attach_rollback_step, original_error, phase)
-
         collection_name = self.collection_name
         collection = self.collection
         if collection_name is not None:
@@ -485,7 +451,21 @@ class SceneItemAttachSnapshot:
         restore_scene_rect: bool = True,
     ) -> None:
         ports = self.attach_ports
-        step = partial(_run_attach_rollback_step, original_error, phase)
+
+        def step(description: str, operation: Callable[[], object]) -> None:
+            # ``original_error is None`` means this restore was not driven by an
+            # in-flight failure, so there is no primary exception to annotate and
+            # a failed compensation must surface as the failure itself. That is
+            # control flow, not note attachment, which is why it lives here
+            # instead of inside the shared recovery step.
+            if original_error is None:
+                operation()
+                return
+            run_rollback_step(
+                original_error,
+                f"{description} after {phase}",
+                operation,
+            )
 
         if ports is not None:
             step("detaching the item", lambda: ports.remove_item(self.item))
@@ -501,7 +481,7 @@ class SceneItemAttachSnapshot:
                     "restoring the text-interaction flags",
                     lambda: text_setter(self.text_interaction_flags),
                 )
-        self._restore_lightweight_registration(original_error, phase=phase)
+        self._restore_lightweight_registration(step)
         focus_setter = ports.focus_item_setter if ports is not None else None
         if focus_setter is not None:
             step(
@@ -520,15 +500,23 @@ class SceneItemAttachSnapshot:
         snapshot = self.scene_rect_snapshot
         if snapshot is None:
             return
-        try:
+
+        def restore_active_scene_rect() -> None:
+            # ``snapshot.active`` is read in here, not outside, so a guard that
+            # itself raises is noted rather than escaping past the step.
             if snapshot.active:
                 snapshot.restore()
-        except Exception as rollback_error:
-            _add_attach_rollback_note(
-                original_error,
-                rollback_error,
-                phase=f"restoring the scene rect after {phase}",
-            )
+
+        # Same raise-or-note decision as ``restore``: with no primary exception
+        # to annotate, a failed scene-rect restore is the failure.
+        if original_error is None:
+            restore_active_scene_rect()
+            return
+        run_rollback_step(
+            original_error,
+            f"restoring the scene rect after {phase}",
+            restore_active_scene_rect,
+        )
 
     def release(self) -> None:
         snapshot = self.scene_rect_snapshot

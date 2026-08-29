@@ -7,6 +7,7 @@ from chemvas.core.history import (
     HistoryCommand,
     UpdateBondCommand,
 )
+from chemvas.domain.transactions import run_rollback_step
 from chemvas.ui.atom_coords_access import atom_coords_3d_for
 from chemvas.ui.canvas_model_access import (
     atom_for_id,
@@ -35,13 +36,14 @@ class CanvasHistoryRecordingService:
         try:
             self.history.push(command)
         except Exception as original_error:
-            try:
-                command.undo(self.canvas)
-            except Exception as inverse_error:
-                original_error.add_note(
-                    "Recorded mutation inverse also failed: "
-                    f"{type(inverse_error).__name__}: {inverse_error}"
-                )
+            # ``command.undo`` is looked up inside the callable, so a command
+            # without an inverse is noted rather than escaping past the step and
+            # masking the push failure.
+            run_rollback_step(
+                original_error,
+                "inverting a recorded mutation that failed to publish",
+                lambda: command.undo(self.canvas),
+            )
             raise
 
     def record_additions(
