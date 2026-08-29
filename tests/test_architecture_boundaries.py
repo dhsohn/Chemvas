@@ -5551,7 +5551,7 @@ def test_restore_atoms_steps_have_one_owner_per_failure_mode() -> None:
     ``_restore_atom_states`` and
     ``_restore_atom_states_best_effort`` own them now; the two entries are
     the two failure modes, not two copies, because only the rollback one
-    wraps each step in ``_run_history_rollback_step``.
+    wraps each step in ``run_rollback_step``.
 
     The projection restore that precedes the sequence in the delete command
     and the mark restore that follows it stay at their own call sites, so a

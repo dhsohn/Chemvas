@@ -13,6 +13,7 @@ from chemvas.core.history import (
 from chemvas.domain.transactions import (
     add_recovery_error_note as _add_rollback_error_note,
 )
+from chemvas.domain.transactions import run_rollback_step
 from chemvas.ui.atom_coords_access import atom_coords_3d_for_id
 from chemvas.ui.atom_label_access import add_or_update_atom_label
 from chemvas.ui.canvas_group_state import (
@@ -52,7 +53,6 @@ from chemvas.ui.transactions.scene_runtime import (
     release_scene_rect_snapshot,
     restore_scene_rect_snapshot,
     restore_scene_runtime,
-    run_rollback_step,
 )
 
 _MISSING_SNAPSHOT_ATTRIBUTE = object()

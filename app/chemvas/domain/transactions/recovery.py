@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from .outcome import RestoreOutcome, validate_restore_outcome
 
@@ -20,6 +20,31 @@ def add_recovery_error_note(
         "Transaction recovery also encountered an error during "
         f"{phase}: {type(recovery_error).__name__}: {recovery_error}"
     )
+
+
+def run_rollback_step(
+    original_error: BaseException,
+    phase: str,
+    operation: Callable[[], Any],
+    *,
+    default: Any = None,
+) -> Any:
+    """Run one best-effort compensation step under an in-flight failure.
+
+    Cancellation signals must remain the primary exception, so a step that
+    raises is recorded as a note on *original_error* and the remaining
+    compensation continues with *default* in place of its result.
+    """
+
+    try:
+        return operation()
+    except Exception as rollback_error:
+        add_recovery_error_note(
+            original_error,
+            rollback_error,
+            phase=phase,
+        )
+        return default
 
 
 def restore_snapshot(
@@ -46,4 +71,4 @@ def restore_snapshot(
     )
 
 
-__all__ = ["add_recovery_error_note", "restore_snapshot"]
+__all__ = ["add_recovery_error_note", "restore_snapshot", "run_rollback_step"]
