@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, replace
-from typing import TYPE_CHECKING, Any, Protocol, cast
+from typing import TYPE_CHECKING, Any, Protocol, cast, override
 
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QBrush, QColor, QInputMethodEvent
@@ -111,6 +111,7 @@ class _NoInputMethodTableWidget(QTableWidget):
     entry point of that recursion for every cell kind.
     """
 
+    @override
     def inputMethodEvent(self, event: QInputMethodEvent | None) -> None:
         if event is not None:
             event.ignore()
@@ -869,6 +870,7 @@ class CalculationStepDialog(QDialog):
             f"{self._component_index_by_atom[atom_id]}"
         )
 
+    @override
     def accept(self) -> None:
         try:
             reactant_state, reactant_endpoint = self._build_endpoint("reactant")
@@ -950,6 +952,7 @@ class CalculationStepDialog(QDialog):
         self.result_plan_state = calculation_plan_to_state(plan)
         super().accept()
 
+    @override
     def done(self, result: int) -> None:
         if self._mapping_highlighter is not None:
             self._mapping_highlighter.clear_all()

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, override
 
 from PyQt6.QtCore import QPointF, QRectF, Qt
 from PyQt6.QtGui import QFont, QFontMetricsF, QPainterPath, QPen
@@ -85,6 +85,7 @@ class AtomDotItem(NoSelectEllipseItem):
         self.prepareGeometryChange()
         self._hit_padding = max(0.0, float(hit_padding))
 
+    @override
     def boundingRect(self):
         rect = super().boundingRect()
         if self._hit_padding <= 0.0:
@@ -96,6 +97,7 @@ class AtomDotItem(NoSelectEllipseItem):
             self._hit_padding,
         )
 
+    @override
     def shape(self) -> QPainterPath:
         path = QPainterPath()
         rect = self.rect()
@@ -232,6 +234,7 @@ class AtomLabelItem(NoSelectTextItem):
         rect = self._anchor_local_rect()
         return self.mapRectToScene(rect) if rect is not None else None
 
+    @override
     def setPlainText(self, text) -> None:
         self._raw_text = "" if text is None else str(text)
         super().setPlainText(self._raw_text)
@@ -239,6 +242,7 @@ class AtomLabelItem(NoSelectTextItem):
         self._stack = None
         self._relayout()
 
+    @override
     def setFont(self, font) -> None:
         super().setFont(font)
         self._relayout()
@@ -333,12 +337,14 @@ class AtomLabelItem(NoSelectTextItem):
             )
         return rect
 
+    @override
     def boundingRect(self):
         return self._base_rect().united(self._hit_rect())
 
     def export_scene_bounding_rect(self) -> QRectF:
         return self.mapRectToScene(self._base_rect())
 
+    @override
     def shape(self) -> QPainterPath:
         path = QPainterPath()
         hit_rect = self._hit_rect()
@@ -349,6 +355,7 @@ class AtomLabelItem(NoSelectTextItem):
             path.addRect(hit_rect)
         return path
 
+    @override
     def paint(self, painter, option, widget=None) -> None:
         if self._outline_mode:
             self._paint_outlined(painter)

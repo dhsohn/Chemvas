@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, cast, override
 
 from PyQt6.QtCore import QEvent, QObject
 
@@ -17,6 +17,7 @@ class FileOpenEventFilter(QObject):
         super().__init__()
         self._handler = handler
 
+    @override
     def eventFilter(self, obj: QObject | None, event: QEvent | None) -> bool:
         if event is not None and event.type() == QEvent.Type.FileOpen:
             path = cast("QFileOpenEvent", event).file()

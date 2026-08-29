@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+from typing import override
 
 from PyQt6.QtCore import QPointF, QRectF, Qt
 from PyQt6.QtGui import (
@@ -96,6 +97,7 @@ class _ChargeCircleMarkItem(NoSelectPathItem):
         super().__init__(path)
         self._hit_padding = max(0.0, float(hit_padding))
 
+    @override
     def boundingRect(self):
         rect = super().boundingRect()
         if self._hit_padding <= 0.0:
@@ -107,6 +109,7 @@ class _ChargeCircleMarkItem(NoSelectPathItem):
             self._hit_padding,
         )
 
+    @override
     def shape(self) -> QPainterPath:
         stroker = QPainterPathStroker()
         stroker.setWidth(max(self.pen().widthF(), self._hit_padding * 2.0))

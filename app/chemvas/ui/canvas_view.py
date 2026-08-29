@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, override
 
 from PyQt6.QtCore import QRectF, pyqtSlot
 from PyQt6.QtWidgets import (
@@ -61,11 +61,13 @@ class CanvasView(QGraphicsView):
     def handle_scene_selection_outline_changed(self) -> None:
         route_scene_selection_outline_changed(self)
 
+    @override
     def drawBackground(self, painter: QPainter | None, rect: QRectF) -> None:
         if painter is None:
             return
         draw_canvas_background_for(self, painter, rect)
 
+    @override
     def keyPressEvent(self, event) -> None:
         route_key_press_event(self, event, base_key_press_event=super().keyPressEvent)
 
@@ -95,6 +97,7 @@ class CanvasView(QGraphicsView):
         except Exception:
             pass
 
+    @override
     def mousePressEvent(self, event) -> None:
         try:
             route_mouse_press_event(
@@ -103,6 +106,7 @@ class CanvasView(QGraphicsView):
         except Exception:
             self._report_mouse_event_failure(event, "press")
 
+    @override
     def mouseDoubleClickEvent(self, event) -> None:
         try:
             route_mouse_double_click_event(
@@ -113,6 +117,7 @@ class CanvasView(QGraphicsView):
         except Exception:
             self._report_mouse_event_failure(event, "double-click")
 
+    @override
     def mouseMoveEvent(self, event) -> None:
         try:
             route_mouse_move_event(
@@ -121,6 +126,7 @@ class CanvasView(QGraphicsView):
         except Exception:
             self._report_mouse_event_failure(event, "move")
 
+    @override
     def mouseReleaseEvent(self, event) -> None:
         try:
             route_mouse_release_event(
@@ -129,17 +135,21 @@ class CanvasView(QGraphicsView):
         except Exception:
             self._report_mouse_event_failure(event, "release")
 
+    @override
     def viewportEvent(self, event) -> bool:
         return route_viewport_event(
             self, event, base_viewport_event=super().viewportEvent
         )
 
+    @override
     def wheelEvent(self, event) -> None:
         route_wheel_event(self, event, base_wheel_event=super().wheelEvent)
 
+    @override
     def event(self, event) -> bool:
         return route_event(self, event, base_event=super().event)
 
+    @override
     def scrollContentsBy(self, dx: int, dy: int) -> None:
         route_scroll_contents_by(
             self, dx, dy, base_scroll_contents_by=super().scrollContentsBy

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import override
+
 from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtWidgets import QApplication, QLabel, QToolButton
 
@@ -31,6 +33,7 @@ class _ZoomPercentButton(QToolButton):
             self._pending_single = False
             self._on_single()
 
+    @override
     def mouseReleaseEvent(self, event) -> None:
         super().mouseReleaseEvent(event)
         if self._suppress_release:
@@ -40,6 +43,7 @@ class _ZoomPercentButton(QToolButton):
             self._pending_single = True
             self._timer.start(QApplication.doubleClickInterval())
 
+    @override
     def mouseDoubleClickEvent(self, event) -> None:
         self._timer.stop()
         self._pending_single = False

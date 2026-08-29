@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import override
+
 from PyQt6.QtCore import QPointF, QSize, Qt
 from PyQt6.QtGui import QColor, QPainter, QPolygonF
 from PyQt6.QtWidgets import (
@@ -38,6 +40,7 @@ class _StepArrowButton(QToolButton):
         self.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
 
+    @override
     def paintEvent(self, event) -> None:
         super().paintEvent(event)
         painter = QPainter(self)

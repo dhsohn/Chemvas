@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import override
+
 from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QGraphicsItem, QGraphicsTextItem
 
@@ -27,6 +29,7 @@ class NoteItem(QGraphicsTextItem):
     def set_committed_html(self, html: str) -> None:
         self._last_html = str(html)
 
+    @override
     def focusOutEvent(self, event) -> None:
         super().focusOutEvent(event)
         note_controller_for_access(self._canvas).handle_note_focus_out(self)

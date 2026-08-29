@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import contextlib
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, override
 
 from PyQt6 import sip
 from PyQt6.QtCore import Qt
@@ -249,9 +249,11 @@ class UpdateBondColorCommand(HistoryCommand):
     before_color: str
     after_color: str
 
+    @override
     def undo(self, canvas) -> None:
         _apply_bond_color_in_place(canvas, self.bond_id, self.before_color)
 
+    @override
     def redo(self, canvas) -> None:
         _apply_bond_color_in_place(canvas, self.bond_id, self.after_color)
 
@@ -318,10 +320,12 @@ class UpdateNoteColorCommand(HistoryCommand):
             )
             raise
 
+    @override
     def undo(self, canvas) -> None:
         del canvas
         self._apply(self.before_state, self.after_state)
 
+    @override
     def redo(self, canvas) -> None:
         del canvas
         self._apply(self.after_state, self.before_state)
@@ -344,10 +348,12 @@ class _CommitPendingNoteEditCommand(HistoryCommand):
             )
             raise
 
+    @override
     def undo(self, canvas) -> None:
         del canvas
         self._apply(self.before_state, self.after_state)
 
+    @override
     def redo(self, canvas) -> None:
         del canvas
         self._apply(self.after_state, self.before_state)

@@ -4,7 +4,7 @@ from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass, field
 from importlib import import_module
-from typing import TYPE_CHECKING, Any, Protocol, cast
+from typing import TYPE_CHECKING, Any, Protocol, cast, override
 
 from chemvas.domain.transactions import (
     RestoreOutcome,
@@ -377,6 +377,7 @@ def _compensate_completed_nonexact_commands(
 class CompositeCommand(HistoryCommand):
     commands: list[HistoryCommand] = field(default_factory=list)
 
+    @override
     def undo(self, canvas) -> None:
         # A composite must apply atomically: if one child fails part-way, roll
         # the already-undone children forward again so the canvas is not left
@@ -442,6 +443,7 @@ class CompositeCommand(HistoryCommand):
             if active_token is not None:
                 _ACTIVE_HISTORY_TRANSACTION_CANVASES.reset(active_token)
 
+    @override
     def redo(self, canvas) -> None:
         transaction = (
             _capture_history_transaction(canvas)
@@ -509,6 +511,7 @@ class MoveAtomsCommand(HistoryCommand):
     bond_ids: set[int] | None = None
     redraw_bond_ids: set[int] | None = None
 
+    @override
     def undo(self, canvas) -> None:
         _history_canvas_port().move_atoms_for_history(
             canvas,
@@ -520,6 +523,7 @@ class MoveAtomsCommand(HistoryCommand):
             update_selection=True,
         )
 
+    @override
     def redo(self, canvas) -> None:
         _history_canvas_port().move_atoms_for_history(
             canvas,
@@ -610,6 +614,7 @@ class SetAtomPositionsCommand(HistoryCommand):
 
         _run_history_rollback_step(original_error, restore_positions)
 
+    @override
     def undo(self, canvas) -> None:
         transaction = _capture_history_transaction(canvas)
         try:
@@ -635,6 +640,7 @@ class SetAtomPositionsCommand(HistoryCommand):
                 )
             raise
 
+    @override
     def redo(self, canvas) -> None:
         transaction = _capture_history_transaction(canvas)
         try:
@@ -688,6 +694,7 @@ class SetRingPolygonsCommand(HistoryCommand):
                 ),
             )
 
+    @override
     def undo(self, canvas) -> None:
         transaction = _capture_history_transaction(canvas)
         try:
@@ -704,6 +711,7 @@ class SetRingPolygonsCommand(HistoryCommand):
                 self._compensate(canvas, self.after_polygons, exc)
             raise
 
+    @override
     def redo(self, canvas) -> None:
         transaction = _capture_history_transaction(canvas)
         try:
@@ -740,6 +748,7 @@ class UpdateBondLengthCommand(HistoryCommand):
             ),
         )
 
+    @override
     def undo(self, canvas) -> None:
         transaction = _capture_history_transaction(canvas)
         try:
@@ -754,6 +763,7 @@ class UpdateBondLengthCommand(HistoryCommand):
                 self._compensate(canvas, self.after_length, exc)
             raise
 
+    @override
     def redo(self, canvas) -> None:
         transaction = _capture_history_transaction(canvas)
         try:
@@ -774,9 +784,11 @@ class SetSmilesInputCommand(HistoryCommand):
     before_value: str | None
     after_value: str | None
 
+    @override
     def undo(self, canvas) -> None:
         _set_last_smiles_input(canvas, self.before_value)
 
+    @override
     def redo(self, canvas) -> None:
         _set_last_smiles_input(canvas, self.after_value)
 
@@ -838,6 +850,7 @@ class AddAtomsCommand(HistoryCommand):
             lambda: _set_last_smiles_input(canvas, self.before_smiles_input),
         )
 
+    @override
     def undo(self, canvas) -> None:
         transaction = _capture_history_transaction(canvas)
         try:
@@ -853,6 +866,7 @@ class AddAtomsCommand(HistoryCommand):
                 self._restore_atoms_best_effort(canvas, exc)
             raise
 
+    @override
     def redo(self, canvas) -> None:
         transaction = _capture_history_transaction(canvas)
         try:
@@ -963,6 +977,7 @@ class DeleteAtomsCommand(HistoryCommand):
             lambda: _set_last_smiles_input(canvas, self.after_smiles_input),
         )
 
+    @override
     def undo(self, canvas) -> None:
         transaction = _capture_history_transaction(canvas)
         try:
@@ -988,6 +1003,7 @@ class DeleteAtomsCommand(HistoryCommand):
                 self._restore_absent_state_best_effort(canvas, exc)
             raise
 
+    @override
     def redo(self, canvas) -> None:
         transaction = _capture_history_transaction(canvas)
         try:
@@ -1036,6 +1052,7 @@ class UpdateAtomColorCommand(HistoryCommand):
             ),
         )
 
+    @override
     def undo(self, canvas) -> None:
         try:
             _history_canvas_port().apply_atom_color_for_history(
@@ -1047,6 +1064,7 @@ class UpdateAtomColorCommand(HistoryCommand):
             self._compensate(canvas, self.atom_id, self.after_color, exc)
             raise
 
+    @override
     def redo(self, canvas) -> None:
         try:
             _history_canvas_port().apply_atom_color_for_history(
@@ -1109,6 +1127,7 @@ class AddBondCommand(HistoryCommand):
             lambda: _set_last_smiles_input(canvas, self.before_smiles_input),
         )
 
+    @override
     def undo(self, canvas) -> None:
         transaction = _capture_history_transaction(canvas)
         try:
@@ -1125,6 +1144,7 @@ class AddBondCommand(HistoryCommand):
                 self._restore_added_state_best_effort(canvas, exc)
             raise
 
+    @override
     def redo(self, canvas) -> None:
         transaction = _capture_history_transaction(canvas)
         try:
@@ -1185,6 +1205,7 @@ class DeleteBondCommand(HistoryCommand):
             lambda: _set_last_smiles_input(canvas, self.after_smiles_input),
         )
 
+    @override
     def undo(self, canvas) -> None:
         transaction = _capture_history_transaction(canvas)
         try:
@@ -1202,6 +1223,7 @@ class DeleteBondCommand(HistoryCommand):
                 self._restore_absent_state_best_effort(canvas, exc)
             raise
 
+    @override
     def redo(self, canvas) -> None:
         transaction = _capture_history_transaction(canvas)
         try:
@@ -1244,6 +1266,7 @@ class UpdateBondCommand(HistoryCommand):
             lambda: _set_last_smiles_input(canvas, smiles_input),
         )
 
+    @override
     def undo(self, canvas) -> None:
         transaction = _capture_history_transaction(canvas)
         try:
@@ -1266,6 +1289,7 @@ class UpdateBondCommand(HistoryCommand):
                 )
             raise
 
+    @override
     def redo(self, canvas) -> None:
         transaction = _capture_history_transaction(canvas)
         try:
