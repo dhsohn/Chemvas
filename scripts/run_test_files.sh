@@ -25,7 +25,11 @@ fi
 # starting hundreds of them for no gain. The slowest single file is the floor
 # regardless of how many run beside it.
 jobs="${CHECK_JOBS:-$(nproc 2>/dev/null || echo 4)}"
-if [[ "$jobs" -gt 8 ]]; then
+if [[ ! "$jobs" =~ ^[1-9][0-9]*$ ]]; then
+  echo "[tests] ERROR: CHECK_JOBS must be a positive integer." >&2
+  exit 2
+fi
+if [[ ${#jobs} -gt 1 || "$jobs" == "9" ]]; then
   jobs=8
 fi
 
@@ -38,10 +42,15 @@ export QT_QPA_PLATFORM=offscreen
 echo "[tests] $# files, $jobs at a time"
 
 status=0
-printf '%s\0' "$@" |
-  xargs -0 -P "$jobs" -n1 bash -c '
-    file="$1"
-    log="$logs/${file//\//_}.log"
+index=0
+for file in "$@"; do
+  printf '%s\0%s\0' "$index" "$file"
+  ((index += 1))
+done |
+  xargs -0 -P "$jobs" -n2 bash -c '
+    index="$1"
+    file="$2"
+    log="$logs/$index.log"
     if "$PYTHON" -m pytest -q "$file" >"$log" 2>&1; then
       printf "[tests] %s: %s\n" "$file" "$(tail -1 "$log")"
       rm -f "$log"

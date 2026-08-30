@@ -43,7 +43,11 @@ from chemvas.ui.main_window_path_logic import (
 from chemvas.ui.main_window_path_logic import (
     resolve_save_path as default_resolve_save_path,
 )
-from chemvas.ui.open_document_lookup import find_open_document
+from chemvas.ui.open_document_lookup import (
+    document_path_has_multiple_links,
+    find_open_document,
+    resolved_document_path,
+)
 from chemvas.ui.rdkit_export_job_state import rdkit_export_jobs_for
 from chemvas.ui.recent_documents_store import record_recent
 
@@ -153,8 +157,29 @@ class MainWindowDocumentActionService:
         # of the working directory at restore time.
         path = os.path.abspath(path)
         target = self._active_canvas_for_window(window) if canvas is None else canvas
+        owner = find_open_document(path, exclude_canvas=target)
+        if owner is not None:
+            message_box.warning(
+                window,
+                "Save Error",
+                "This file is already open in another Chemvas window.\n"
+                "Close that document before saving here.",
+            )
+            return False
+        if document_path_has_multiple_links(path):
+            message_box.warning(
+                window,
+                "Save Error",
+                "This file has multiple hard-link names.\n"
+                "Use Save As with a new path to preserve atomic saves.",
+            )
+            return False
+        # Atomic replacement of a symlink path would replace the link itself and
+        # leave its target unchanged. Write to the resolved destination instead;
+        # keep ``path`` as the user-facing document path and recent-file entry.
+        write_path = resolved_document_path(path)
         try:
-            warnings = save_canvas_to_file_for(target, path)
+            warnings = save_canvas_to_file_for(target, write_path)
         except Exception as exc:
             message_box.warning(window, "Save Error", f"Failed to save file:\n{exc}")
             return False

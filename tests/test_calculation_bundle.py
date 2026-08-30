@@ -16,6 +16,17 @@ from chemvas.features.calculation_bundle import (
     select_component,
     select_components,
 )
+from chemvas.features.calculation_bundle import service as calculation_bundle_service
+
+
+class _CountingBondList(list[Bond | None]):
+    def __init__(self, values: list[Bond | None]) -> None:
+        super().__init__(values)
+        self.iterations = 0
+
+    def __iter__(self):
+        self.iterations += 1
+        return super().__iter__()
 
 
 def _state(model: MoleculeModel, marks: list[dict[str, object]]) -> dict[str, object]:
@@ -78,6 +89,55 @@ def test_component_inspection_matches_domain_for_every_graph_through_four_nodes(
             assert tuple(component.atom_ids for component in inspected) == (
                 connected_atom_components(node_ids, bond_pairs)
             )
+
+
+def test_bonded_component_apis_precompute_bonds_and_alias_attachments_once(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    component_count = 64
+    atoms = {
+        atom_id: Atom(
+            "PPh3" if atom_id % 2 else "C",
+            float(atom_id),
+            0.0,
+        )
+        for atom_id in range(component_count * 2)
+    }
+    bonds = _CountingBondList(
+        [Bond(index * 2, index * 2 + 1) for index in range(component_count)]
+    )
+    model = MoleculeModel(atoms=atoms, bonds=bonds)
+    state = _state(model, [])
+    monkeypatch.setattr(
+        calculation_bundle_service,
+        "deserialize_model_state",
+        lambda _model_state: model,
+    )
+
+    bonds.iterations = 0
+    inspected = inspect_components(state)
+    assert len(inspected) == component_count
+    assert all(component.bond_count == 1 for component in inspected)
+    assert all(component.formal_charge == 1 for component in inspected)
+    assert bonds.iterations == 2
+
+    bonds.iterations = 0
+    selected = select_component(state, component_count - 1)
+    assert selected.summary.bond_count == 1
+    assert selected.summary.formal_charge == 1
+    assert selected.model.bonds == [
+        Bond((component_count - 1) * 2, (component_count - 1) * 2 + 1)
+    ]
+    assert bonds.iterations == 2
+
+    bonds.iterations = 0
+    selected_all = select_components(
+        state,
+        [(index * 2, index * 2 + 1) for index in range(component_count)],
+    )
+    assert selected_all.formal_charge == component_count
+    assert len(selected_all.model.bonds) == component_count
+    assert bonds.iterations == 2
 
 
 @pytest.mark.parametrize(

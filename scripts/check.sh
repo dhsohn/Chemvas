@@ -65,16 +65,9 @@ echo "[check] Tests"
 if [[ $# -gt 0 ]]; then
   files=("$@")
 else
-  # This script and both CI jobs list tests/ at depth 1, so a test file in a
-  # subdirectory would run nowhere at all. Refuse rather than skip it quietly.
-  mapfile -t nested < <(find tests -mindepth 2 -name 'test_*.py' | sort)
-  if [[ ${#nested[@]} -gt 0 ]]; then
-    echo "[check] ERROR: these test files sit below tests/ and never run:" >&2
-    printf '[check]   %s\n' "${nested[@]}" >&2
-    echo "[check] Move them into tests/, or teach this script and ci.yml to find them." >&2
-    exit 1
-  fi
-  mapfile -t files < <(find tests -maxdepth 1 -name 'test_*.py' | sort)
+  # Keep recursive discovery aligned with CI so a test remains part of the
+  # gate if its feature package places it below tests/.
+  mapfile -t files < <(find tests -name 'test_*.py' | sort)
 fi
 
 bash "$ROOT/scripts/run_test_files.sh" --python "$PYTHON" "${files[@]}"

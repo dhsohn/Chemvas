@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import hashlib
+import json
 from collections.abc import Iterable, Mapping
 from dataclasses import asdict, dataclass
 from typing import TYPE_CHECKING, cast
@@ -19,8 +21,12 @@ from chemvas.domain.document import (
     model_bond_pairs,
 )
 from chemvas.domain.document.precomplex import precomplex_state_from_json
+from chemvas.domain.document.precomplex_profile import (
+    precomplex_placement_profile,
+    radius_provenance_for,
+)
 
-from .service import inspect_components, select_components
+from .service import inspect_component_inventory, inspect_components, select_components
 
 if TYPE_CHECKING:
     from .model import CalculationStateSelection, ComponentSummary
@@ -128,7 +134,9 @@ def calculation_plan_report(
                 "reactant_state": step.reactant.state_id,
                 "product_state": step.product.state_id,
                 "readiness": asdict(step_readiness(plan, step)),
-                "path_precheck": asdict(path_precheck(plan, step)),
+                "path_precheck": asdict(
+                    path_precheck(plan, step, document_state=document_state)
+                ),
             }
             for step in plan.steps
         ],
@@ -203,7 +211,225 @@ def step_readiness(plan: CalculationPlan, step: CalculationStep) -> StepReadines
     )
 
 
-def path_precheck(plan: CalculationPlan, step: CalculationStep) -> PathPrecheck:
+class _ReviewedPrecomplexPairError(ValueError):
+    def __init__(self, blocking_reason: str, message: str) -> None:
+        super().__init__(message)
+        self.blocking_reason = blocking_reason
+
+
+def precomplex_basis_sha256(
+    document_state: Mapping[str, object],
+    plan: CalculationPlan,
+    *,
+    step_id: str,
+    side: str,
+    environment: Mapping[str, object],
+) -> str:
+    """Bind a precomplex to its chemical graph, plan, and environment."""
+    inventory = inspect_component_inventory(document_state)
+    plan_state = calculation_plan_to_state(plan)
+    plan_state["version"] = 2
+    raw_steps = plan_state.get("steps")
+    if not isinstance(raw_steps, list):
+        raise ValueError("Calculation Plan step serialization is invalid.")
+    for raw_step in raw_steps:
+        if not isinstance(raw_step, dict):
+            raise ValueError("Calculation Plan step serialization is invalid.")
+        for endpoint_side in ("reactant", "product"):
+            endpoint = raw_step.get(endpoint_side)
+            if not isinstance(endpoint, dict):
+                raise ValueError("Calculation Plan endpoint serialization is invalid.")
+            endpoint["precomplex"] = {"kind": "none"}
+    payload = {
+        "format": "chemvas-precomplex-basis",
+        "version": 2,
+        # Bind only calculation semantics: coordinates, graph/bond semantics,
+        # and resolved electronic annotations. Display color, explicit-label
+        # choice, next-id bookkeeping, and mark drawing coordinates do not
+        # invalidate a reviewed geometry.
+        "model": _precomplex_model_basis(inventory.model),
+        "calculation_plan": plan_state,
+        "step_id": step_id,
+        "side": side,
+        "environment": dict(environment),
+    }
+    canonical = json.dumps(
+        payload, sort_keys=True, separators=(",", ":"), ensure_ascii=True
+    )
+    return hashlib.sha256(canonical.encode("ascii")).hexdigest()
+
+
+def _precomplex_model_basis(model: MoleculeModel) -> dict[str, object]:
+    canonical_bonds: list[tuple[int, int, int, str]] = []
+    for bond in model.bonds:
+        if bond is None:
+            continue
+        # Wedge/hash point from the stored begin atom ``a`` toward ``b`` in
+        # rendering, MOL stereo flags, and RDKit BEGINWEDGE/BEGINDASH export.
+        if bond.style in {"wedge", "hash"}:
+            a, b = bond.a, bond.b
+        else:
+            a, b = min(bond.a, bond.b), max(bond.a, bond.b)
+        canonical_bonds.append((a, b, bond.order, bond.style))
+    canonical_bonds.sort()
+    return {
+        "atoms": {
+            atom_id: {
+                "element": atom.element,
+                "x": atom.x,
+                "y": atom.y,
+            }
+            for atom_id, atom in model.atoms.items()
+        },
+        "bonds": [
+            {
+                "a": a,
+                "b": b,
+                "order": order,
+                "style": style,
+            }
+            for a, b, order, style in canonical_bonds
+        ],
+        "atom_annotations": {
+            atom_id: dict(annotation)
+            for atom_id, annotation in model.atom_annotations.items()
+        },
+    }
+
+
+def validate_reviewed_precomplex_pair(
+    document_state: Mapping[str, object],
+    plan: CalculationPlan,
+    step: CalculationStep,
+) -> dict[str, object]:
+    """Require one atomic, profile-consistent review pair on the current basis."""
+    return _validate_reviewed_precomplex_pair(document_state, plan, step)
+
+
+def _validate_reviewed_precomplex_pair(
+    document_state: Mapping[str, object] | None,
+    plan: CalculationPlan,
+    step: CalculationStep,
+) -> dict[str, object]:
+    identities: list[tuple[object, object, object]] = []
+    profiles: list[tuple[str, object]] = []
+    generation_provenance: list[tuple[object, object]] = []
+    stale_sides: list[str] = []
+    for side, endpoint in (
+        ("reactant", step.reactant),
+        ("product", step.product),
+    ):
+        if endpoint.precomplex.kind != "candidate_ensemble":
+            raise _ReviewedPrecomplexPairError(
+                "multicomponent_precomplex_geometry_not_provided",
+                "Precomplex review pair is incomplete.",
+            )
+        state = precomplex_state_from_json(endpoint.precomplex.payload_json)
+        selection = state.get("selection")
+        if not isinstance(selection, Mapping):
+            raise _ReviewedPrecomplexPairError(
+                "multicomponent_precomplex_geometry_not_provided",
+                "Precomplex review pair is incomplete.",
+            )
+        identities.append(
+            (
+                selection.get("reviewer"),
+                selection.get("reviewed_at"),
+                selection.get("acceptance_statement"),
+            )
+        )
+        profile_id = state.get("profile")
+        if not isinstance(profile_id, str):
+            raise _ReviewedPrecomplexPairError(
+                "multicomponent_precomplex_review_pair_invalid",
+                "Precomplex review pair has an invalid profile.",
+            )
+        try:
+            profile = precomplex_placement_profile(profile_id)
+        except ValueError as exc:
+            raise _ReviewedPrecomplexPairError(
+                "multicomponent_precomplex_review_pair_invalid",
+                "Precomplex review pair has an invalid profile.",
+            ) from exc
+        persisted_provenance = state.get("radius_provenance")
+        if persisted_provenance != radius_provenance_for(profile.id):
+            raise _ReviewedPrecomplexPairError(
+                "multicomponent_precomplex_review_pair_invalid",
+                "Precomplex review pair has invalid placement profile provenance.",
+            )
+        profiles.append((profile.id, persisted_provenance))
+        generation_provenance.append(
+            (
+                state.get("source_document_sha256"),
+                state.get("environment"),
+            )
+        )
+        if document_state is not None:
+            environment = state.get("environment")
+            if not isinstance(environment, Mapping):
+                raise _ReviewedPrecomplexPairError(
+                    "multicomponent_precomplex_review_pair_invalid",
+                    "Precomplex review pair has invalid generation provenance.",
+                )
+            expected_basis = precomplex_basis_sha256(
+                document_state,
+                plan,
+                step_id=step.id,
+                side=side,
+                environment=environment,
+            )
+            if state.get("basis_sha256") != expected_basis:
+                stale_sides.append(side)
+    if identities[0] != identities[1]:
+        raise _ReviewedPrecomplexPairError(
+            "multicomponent_precomplex_review_pair_invalid",
+            "Precomplex endpoint reviews do not form one atomic pair.",
+        )
+    if profiles[0] != profiles[1]:
+        raise _ReviewedPrecomplexPairError(
+            "multicomponent_precomplex_review_pair_invalid",
+            "Precomplex endpoint reviews use different placement profiles.",
+        )
+    if generation_provenance[0] != generation_provenance[1]:
+        raise _ReviewedPrecomplexPairError(
+            "multicomponent_precomplex_review_pair_invalid",
+            "Precomplex endpoint reviews use different generation provenance.",
+        )
+    if stale_sides:
+        side = stale_sides[0]
+        raise _ReviewedPrecomplexPairError(
+            "multicomponent_precomplex_review_pair_stale",
+            f"Step {step.id} {side} reviewed precomplex is stale for this graph, plan, or environment.",
+        )
+    return {
+        "id": profiles[0][0],
+        "radius_provenance": radius_provenance_for(profiles[0][0]),
+    }
+
+
+def validate_reviewed_precomplex_pairs(
+    document_state: Mapping[str, object], plan: CalculationPlan
+) -> None:
+    """Reject any persisted reviewed selection that is not a current atomic pair."""
+    for step in plan.steps:
+        if any(
+            _endpoint_has_reviewed_precomplex(endpoint)
+            for endpoint in (step.reactant, step.product)
+        ):
+            validate_reviewed_precomplex_pair(document_state, plan, step)
+
+
+def path_precheck(
+    plan: CalculationPlan,
+    step: CalculationStep,
+    *,
+    document_state: Mapping[str, object] | None = None,
+) -> PathPrecheck:
+    """Report endpoint readiness, preserving the original ``(plan, step)`` API.
+
+    Callers that have the document should pass it by keyword so reviewed
+    precomplex freshness can also be checked against the current graph.
+    """
     reactant_state = calculation_state_by_id(plan, step.reactant.state_id)
     product_state = calculation_state_by_id(plan, step.product.state_id)
     source_mapping_complete = step_readiness(plan, step).ready_for_step_pack
@@ -214,10 +440,6 @@ def path_precheck(plan: CalculationPlan, step: CalculationStep) -> PathPrecheck:
     single_component_endpoints = (
         reactant_component_count == 1 and product_component_count == 1
     )
-    reviewed_precomplex_endpoints = all(
-        _endpoint_has_reviewed_precomplex(endpoint)
-        for endpoint in (step.reactant, step.product)
-    )
     blocking_reasons: list[str] = []
     if not source_mapping_complete:
         blocking_reasons.append("source_atom_mapping_incomplete")
@@ -225,8 +447,11 @@ def path_precheck(plan: CalculationPlan, step: CalculationStep) -> PathPrecheck:
         blocking_reasons.append("endpoint_charge_mismatch")
     if not multiplicity_matches:
         blocking_reasons.append("endpoint_multiplicity_mismatch")
-    if not single_component_endpoints and not reviewed_precomplex_endpoints:
-        blocking_reasons.append("multicomponent_precomplex_geometry_not_provided")
+    if not single_component_endpoints:
+        try:
+            _validate_reviewed_precomplex_pair(document_state, plan, step)
+        except _ReviewedPrecomplexPairError as exc:
+            blocking_reasons.append(exc.blocking_reason)
     return PathPrecheck(
         reactant_charge=reactant_state.charge,
         product_charge=product_state.charge,
@@ -492,9 +717,12 @@ __all__ = [
     "member",
     "path_precheck",
     "plan_with_replaced_step",
+    "precomplex_basis_sha256",
     "require_step_ready",
     "select_calculation_state",
     "step_readiness",
     "structural_calculation_plan_for_document",
     "validate_calculation_plan",
+    "validate_reviewed_precomplex_pair",
+    "validate_reviewed_precomplex_pairs",
 ]

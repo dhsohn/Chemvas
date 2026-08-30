@@ -13,6 +13,7 @@ from chemvas.domain.document import (
     serialize_model_state,
     serialize_settings,
 )
+from chemvas.features.calculation_bundle import service as calculation_bundle_service
 from chemvas.features.document_patch import (
     MAX_PATCH_OPERATIONS,
     apply_document_patch,
@@ -91,6 +92,35 @@ def test_inspection_is_sorted_and_exposes_agent_patch_contract() -> None:
         "update_bond",
         "remove_bond",
     ]
+
+
+def test_inspection_deserializes_once_for_many_components(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    state = _state(
+        MoleculeModel(
+            atoms={atom_id: Atom("C", float(atom_id), 0.0) for atom_id in range(64)}
+        )
+    )
+    original = calculation_bundle_service.deserialize_model_state
+    calls = 0
+
+    def counted_deserialize(model_state: dict[str, object]) -> MoleculeModel:
+        nonlocal calls
+        calls += 1
+        return original(model_state)
+
+    monkeypatch.setattr(
+        calculation_bundle_service,
+        "deserialize_model_state",
+        counted_deserialize,
+    )
+
+    report = inspect_document_graph(state)
+
+    assert report["atom_count"] == 64
+    assert len(report["components"]) == 64
+    assert calls == 1
 
 
 def test_patch_applies_ordered_graph_operations_without_mutating_source() -> None:

@@ -15,8 +15,8 @@ Policy summary (see :func:`should_persist` / :func:`entries_to_restore`):
 * An **unclean exit** (crash) resolved nothing, so we restore everything,
   including unsaved snapshots, and the caller surfaces a "recovered" note.
 
-No Qt and no filesystem here — the store injects a ``pid`` liveness predicate
-and does all IO, which keeps every rule below unit-testable.
+No Qt and no filesystem here — the store injects ``pid`` liveness and process
+identity predicates and does all IO, which keeps every rule below unit-testable.
 """
 
 from __future__ import annotations
@@ -28,6 +28,9 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Iterable
 
 SESSION_SCHEMA_VERSION = 1
+_DEVELOPMENT_SESSION_SCHEMA_VERSION = 2
+_MAX_PID = 4_294_967_295
+_MAX_PROCESS_IDENTITY_LENGTH = 256
 JsonObject = dict[str, Any]
 
 
@@ -56,6 +59,7 @@ class SessionManifest:
     pid: int
     clean_exit: bool
     docs: list[DocEntry] = field(default_factory=list)
+    process_identity: str | None = None
 
 
 @dataclass(frozen=True)
@@ -79,16 +83,44 @@ def needs_snapshot(*, dirty: bool) -> bool:
     return dirty
 
 
+def _unknown_process_identity(_pid: int) -> str | None:
+    return None
+
+
+def is_valid_process_identity(value: object) -> bool:
+    """Whether ``value`` is safe to use as an ownership comparison token."""
+    return (
+        isinstance(value, str)
+        and bool(value)
+        and value == value.strip()
+        and value.isprintable()
+        and len(value) <= _MAX_PROCESS_IDENTITY_LENGTH
+    )
+
+
 def is_consumable(
-    manifest: SessionManifest, *, is_alive: Callable[[int], bool]
+    manifest: SessionManifest,
+    *,
+    is_alive: Callable[[int], bool],
+    process_identity_for: Callable[[int], str | None] = _unknown_process_identity,
 ) -> bool:
     """Whether a *previous* session may be restored and then deleted.
 
-    True when it exited cleanly, or when its process is gone (a crash). A
-    not-clean session whose pid is still alive belongs to another running
-    instance — leave it be.
+    True when it exited cleanly, when its process is gone (a crash), or when
+    the live process at its pid has a different creation identity (pid reuse).
+    An identity-less legacy manifest or an identity lookup failure is treated
+    as still owned while the pid is live, so uncertainty never consumes
+    another instance's work.
     """
-    return manifest.clean_exit or not is_alive(manifest.pid)
+    if manifest.clean_exit or not is_alive(manifest.pid):
+        return True
+    if not is_valid_process_identity(manifest.process_identity):
+        return False
+    live_identity = process_identity_for(manifest.pid)
+    return (
+        is_valid_process_identity(live_identity)
+        and live_identity != manifest.process_identity
+    )
 
 
 @dataclass(frozen=True)
@@ -101,6 +133,7 @@ def plan_restore(
     candidates: Iterable[tuple[str, SessionManifest, float]],
     *,
     is_alive: Callable[[int], bool],
+    process_identity_for: Callable[[int], str | None] = _unknown_process_identity,
 ) -> RestorePlan:
     """Decide which previous sessions to reopen and which to delete.
 
@@ -116,7 +149,11 @@ def plan_restore(
     consumable = [
         (sid, manifest, key)
         for (sid, manifest, key) in candidates
-        if is_consumable(manifest, is_alive=is_alive)
+        if is_consumable(
+            manifest,
+            is_alive=is_alive,
+            process_identity_for=process_identity_for,
+        )
     ]
     prune = [sid for (sid, _manifest, _key) in consumable]
     restore_items = [
@@ -143,6 +180,12 @@ def entries_to_restore(manifest: SessionManifest) -> list[DocEntry]:
 
 
 def manifest_to_json(manifest: SessionManifest) -> JsonObject:
+    """Serialize the manifest in the v1 shape understood by older Chemvas.
+
+    Process identity is persisted by the store in a separate owner sidecar.
+    Keeping this file strictly v1-readable prevents an older concurrently
+    running binary from treating a live newer session as an unreadable orphan.
+    """
     return {
         "version": SESSION_SCHEMA_VERSION,
         "pid": manifest.pid,
@@ -160,18 +203,35 @@ def manifest_to_json(manifest: SessionManifest) -> JsonObject:
 
 
 def manifest_from_json(data: object) -> SessionManifest | None:
-    if (
-        not isinstance(data, dict)
-        or set(data) != {"version", "pid", "clean_exit", "docs"}
-        or type(data.get("version")) is not int
-        or data.get("version") != SESSION_SCHEMA_VERSION
-    ):
+    if not isinstance(data, dict) or type(data.get("version")) is not int:
+        return None
+    version = data.get("version")
+    if version == SESSION_SCHEMA_VERSION:
+        if set(data) != {"version", "pid", "clean_exit", "docs"}:
+            return None
+        process_identity = None
+    elif version == _DEVELOPMENT_SESSION_SCHEMA_VERSION:
+        if set(data) != {
+            "version",
+            "pid",
+            "process_identity",
+            "clean_exit",
+            "docs",
+        }:
+            return None
+        process_identity = data.get("process_identity")
+        if process_identity is not None and not is_valid_process_identity(
+            process_identity
+        ):
+            return None
+    else:
         return None
     pid = data.get("pid")
     clean_exit = data.get("clean_exit")
     raw_docs = data.get("docs")
     if (
         type(pid) is not int
+        or not 1 <= pid <= _MAX_PID
         or type(clean_exit) is not bool
         or not isinstance(raw_docs, list)
     ):
@@ -204,7 +264,12 @@ def manifest_from_json(data: object) -> SessionManifest | None:
                 snapshot=snapshot,
             )
         )
-    return SessionManifest(pid=pid, clean_exit=clean_exit, docs=docs)
+    return SessionManifest(
+        pid=pid,
+        clean_exit=clean_exit,
+        process_identity=process_identity,
+        docs=docs,
+    )
 
 
 __all__ = [
@@ -216,6 +281,7 @@ __all__ = [
     "SessionManifest",
     "entries_to_restore",
     "is_consumable",
+    "is_valid_process_identity",
     "manifest_from_json",
     "manifest_to_json",
     "needs_snapshot",

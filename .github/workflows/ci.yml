@@ -66,7 +66,7 @@ jobs:
         # rdkit-smoke job runs them instead. tests/test_ci_rdkit_coverage.py
         # pins the exclusions to those module-level gates in both directions.
         run: |
-          mapfile -t files < <(find tests -maxdepth 1 -name 'test_*.py' \
+          mapfile -t files < <(find tests -name 'test_*.py' \
             ! -name 'test_calculation_bundle_rdkit.py' \
             ! -name 'test_calculation_step_rdkit.py' \
             | sort)

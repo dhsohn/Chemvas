@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import argparse
 import hashlib
-import json
 import math
 import sys
 from collections.abc import Mapping
@@ -48,9 +47,11 @@ from chemvas.features.calculation_bundle import (
     calculation_step_by_id,
     inspect_components,
     path_precheck,
+    precomplex_basis_sha256,
     require_step_ready,
     select_calculation_state,
     validate_calculation_plan,
+    validate_reviewed_precomplex_pair,
 )
 from chemvas.features.precomplex_generation import (
     ContactRequest,
@@ -347,11 +348,17 @@ def _select_precomplex(
             or precomplex.get("kind") != "candidate_ensemble"
         ):
             raise ValueError(f"Step {step.id} has no {side} precomplex candidates.")
-        expected_basis = _precomplex_basis_sha256(
+        environment = precomplex.get("environment")
+        if not isinstance(environment, Mapping):
+            raise ValueError(
+                f"Step {step.id} has invalid {side} environment provenance."
+            )
+        expected_basis = precomplex_basis_sha256(
             document.state,
             plan,
             step_id=step.id,
             side=side,
+            environment=environment,
         )
         if precomplex.get("basis_sha256") != expected_basis:
             raise ValueError(
@@ -405,7 +412,7 @@ def _select_precomplex(
         }
     validated_plan = validate_calculation_plan(document.state, plan_state)
     validated_step = calculation_step_by_id(validated_plan, step.id)
-    _verify_precomplex_selection_pair(validated_step)
+    validate_reviewed_precomplex_pair(document.state, validated_plan, validated_step)
     state_payload = dict(document.state)
     state_payload["calculation_plan"] = calculation_plan_to_state(validated_plan)
     output_document = create_document(state_payload, CANVAS_FILE_VERSION)
@@ -419,43 +426,6 @@ def _select_precomplex(
         "reviewer": reviewer,
         "reviewed_at": reviewed_at,
         "selected": selected_ids,
-    }
-
-
-def _verify_precomplex_selection_pair(step: CalculationStep) -> dict[str, object]:
-    identities: list[tuple[object, object, object]] = []
-    profiles: list[tuple[str, object]] = []
-    for endpoint in (step.reactant, step.product):
-        state = precomplex_state_from_json(endpoint.precomplex.payload_json)
-        selection = state.get("selection")
-        if not isinstance(selection, Mapping):
-            raise ValueError("Precomplex review pair is incomplete.")
-        identities.append(
-            (
-                selection.get("reviewer"),
-                selection.get("reviewed_at"),
-                selection.get("acceptance_statement"),
-            )
-        )
-        profile_id = state.get("profile")
-        if not isinstance(profile_id, str):
-            raise ValueError("Precomplex review pair has an invalid profile.")
-        profile = precomplex_placement_profile(profile_id)
-        persisted_provenance = state.get("radius_provenance")
-        if persisted_provenance != radius_provenance_for(profile.id):
-            raise ValueError(
-                "Precomplex review pair has invalid placement profile provenance."
-            )
-        profiles.append((profile.id, persisted_provenance))
-    if identities[0] != identities[1]:
-        raise ValueError("Precomplex endpoint reviews do not form one atomic pair.")
-    if profiles[0] != profiles[1]:
-        raise ValueError(
-            "Precomplex endpoint reviews use different placement profiles."
-        )
-    return {
-        "id": profiles[0][0],
-        "radius_provenance": radius_provenance_for(profiles[0][0]),
     }
 
 
@@ -504,11 +474,12 @@ def _generate_precomplex(
             included_components,
             profile=profile_id,
         )
-        basis_sha256 = _precomplex_basis_sha256(
+        basis_sha256 = precomplex_basis_sha256(
             document.state,
             plan,
             step_id=step.id,
             side=side,
+            environment=environment,
         )
         candidates = generate_precomplex_candidates(
             PlacementRequest(
@@ -734,40 +705,6 @@ def _request_float(value: object, label: str) -> float:
     return number
 
 
-def _precomplex_basis_sha256(
-    document_state: Mapping[str, object],
-    plan: CalculationPlan,
-    *,
-    step_id: str,
-    side: str,
-) -> str:
-    plan_state = calculation_plan_to_state(plan)
-    plan_state["version"] = 2
-    raw_steps = plan_state.get("steps")
-    if not isinstance(raw_steps, list):
-        raise ValueError("Calculation Plan step serialization is invalid.")
-    for raw_step in raw_steps:
-        if not isinstance(raw_step, dict):
-            raise ValueError("Calculation Plan step serialization is invalid.")
-        for endpoint_side in ("reactant", "product"):
-            endpoint = raw_step.get(endpoint_side)
-            if not isinstance(endpoint, dict):
-                raise ValueError("Calculation Plan endpoint serialization is invalid.")
-            endpoint["precomplex"] = {"kind": "none"}
-    payload = {
-        "format": "chemvas-precomplex-basis",
-        "version": 1,
-        "model": document_state.get("model"),
-        "calculation_plan": plan_state,
-        "step_id": step_id,
-        "side": side,
-    }
-    canonical = json.dumps(
-        payload, sort_keys=True, separators=(",", ":"), ensure_ascii=True
-    )
-    return _sha256(canonical.encode("ascii"))
-
-
 def _source_geometry_fingerprint(
     artifacts: CalculationArtifacts,
 ) -> dict[str, object]:
@@ -870,7 +807,19 @@ def _pack_step(
     require_step_ready(plan, step)
     reactant_state = calculation_state_by_id(plan, step.reactant.state_id)
     product_state = calculation_state_by_id(plan, step.product.state_id)
-    precheck = path_precheck(plan, step)
+    precheck = path_precheck(plan, step, document_state=document.state)
+    if any(
+        reason
+        in {
+            "multicomponent_precomplex_review_pair_invalid",
+            "multicomponent_precomplex_review_pair_stale",
+        }
+        for reason in precheck.blocking_reasons
+    ):
+        # Report review-contract failures before invoking RDKit. Besides being
+        # cheaper, this keeps the CLI's blocking reason aligned with
+        # ``inspect-plan`` when electronic marks changed the reviewed basis.
+        validate_reviewed_precomplex_pair(document.state, plan, step)
     reactant_selection = select_calculation_state(document.state, reactant_state)
     product_selection = select_calculation_state(document.state, product_state)
 
@@ -897,7 +846,9 @@ def _pack_step(
     interaction_geometry_guarantee = "not_provided"
     placement_profile: dict[str, object] | None = None
     if reviewed_precomplex_pair:
-        placement_profile = _verify_precomplex_selection_pair(step)
+        placement_profile = validate_reviewed_precomplex_pair(
+            document.state, plan, step
+        )
         reactant_artifacts = _reviewed_precomplex_artifacts(
             document_state=document.state,
             plan=plan,
@@ -1024,11 +975,15 @@ def _reviewed_precomplex_artifacts(
     state = precomplex_state_from_json(endpoint.precomplex.payload_json)
     if state.get("kind") != "candidate_ensemble":
         raise ValueError(f"Step {step.id} has no reviewed {side} precomplex.")
-    expected_basis = _precomplex_basis_sha256(
+    environment = state.get("environment")
+    if not isinstance(environment, Mapping):
+        raise ValueError(f"Step {step.id} has invalid {side} environment provenance.")
+    expected_basis = precomplex_basis_sha256(
         document_state,
         plan,
         step_id=step.id,
         side=side,
+        environment=environment,
     )
     if state.get("basis_sha256") != expected_basis:
         raise ValueError(

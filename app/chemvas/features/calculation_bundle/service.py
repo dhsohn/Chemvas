@@ -2,10 +2,12 @@ from __future__ import annotations
 
 from collections import Counter
 from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
 from typing import cast
 
 from chemvas.domain.atom_aliases import (
-    alias_attachments_for_atom,
+    AliasAttachment,
+    alias_attachment_inventory,
     modeled_atom_formal_charge,
 )
 from chemvas.domain.document import (
@@ -16,7 +18,12 @@ from chemvas.domain.document import (
     deserialize_model_state,
 )
 
-from .model import CalculationStateSelection, ComponentSelection, ComponentSummary
+from .model import (
+    CalculationStateSelection,
+    ComponentInventory,
+    ComponentSelection,
+    ComponentSummary,
+)
 
 _CHARGE_MARKS = {
     "plus": 1,
@@ -26,12 +33,35 @@ _CHARGE_MARKS = {
 }
 
 
+@dataclass(frozen=True)
+class _GraphIndex:
+    components: tuple[tuple[int, ...], ...]
+    bond_counts: tuple[int, ...]
+    indexed_bonds: tuple[tuple[int, Bond], ...]
+    attachments_by_atom: Mapping[int, tuple[AliasAttachment, ...]]
+
+
 def inspect_components(state: Mapping[str, object]) -> tuple[ComponentSummary, ...]:
+    return inspect_component_inventory(state).components
+
+
+def inspect_component_inventory(state: Mapping[str, object]) -> ComponentInventory:
+    """Deserialize and annotate a document once for complete graph inspection."""
     model, annotations = _model_and_annotations(state)
     model.atom_annotations = annotations
-    return tuple(
-        _component_summary(model, index, atom_ids)
-        for index, atom_ids in enumerate(_component_atom_ids(model))
+    graph = _graph_index(model)
+    return ComponentInventory(
+        model=model,
+        components=tuple(
+            _component_summary(
+                model,
+                index,
+                atom_ids,
+                bond_count=graph.bond_counts[index],
+                attachments_by_atom=graph.attachments_by_atom,
+            )
+            for index, atom_ids in enumerate(graph.components)
+        ),
     )
 
 
@@ -39,23 +69,22 @@ def select_component(
     state: Mapping[str, object], component_index: int
 ) -> ComponentSelection:
     model, annotations = _model_and_annotations(state)
-    components = _component_atom_ids(model)
-    if not components:
+    graph = _graph_index(model)
+    if not graph.components:
         raise ValueError("The Chemvas document contains no chemical structure.")
-    if component_index < 0 or component_index >= len(components):
+    if component_index < 0 or component_index >= len(graph.components):
         raise ValueError(
             f"Component {component_index} does not exist; choose 0 to "
-            f"{len(components) - 1}."
+            f"{len(graph.components) - 1}."
         )
 
-    atom_ids = components[component_index]
-    selected_ids = set(atom_ids)
+    atom_ids = graph.components[component_index]
     # atom_ids is one component of model.atoms, so every id is live.
     atoms = {atom_id: _copy_atom(model.atoms[atom_id]) for atom_id in atom_ids}
     bonds: list[Bond | None] = [
         _copy_bond(bond)
-        for bond in model.bonds
-        if bond is not None and bond.a in selected_ids and bond.b in selected_ids
+        for index, bond in graph.indexed_bonds
+        if index == component_index
     ]
     selected_annotations = {
         atom_id: dict(annotations[atom_id])
@@ -70,7 +99,14 @@ def select_component(
     )
     return ComponentSelection(
         model=selected_model,
-        summary=_component_summary(model, component_index, atom_ids, annotations),
+        summary=_component_summary(
+            model,
+            component_index,
+            atom_ids,
+            annotations,
+            bond_count=graph.bond_counts[component_index],
+            attachments_by_atom=graph.attachments_by_atom,
+        ),
     )
 
 
@@ -79,9 +115,9 @@ def select_components(
     component_atom_ids: Sequence[Sequence[int]],
 ) -> CalculationStateSelection:
     model, annotations = _model_and_annotations(state)
-    components = _component_atom_ids(model)
+    graph = _graph_index(model)
     component_index_by_atoms = {
-        tuple(atom_ids): index for index, atom_ids in enumerate(components)
+        tuple(atom_ids): index for index, atom_ids in enumerate(graph.components)
     }
     requested = [tuple(atom_ids) for atom_ids in component_atom_ids]
     if not requested:
@@ -96,13 +132,14 @@ def select_components(
         ) from exc
 
     selected_ids = {atom_id for ids in requested for atom_id in ids}
+    selected_component_indices = set(component_indices)
     atoms = {
         atom_id: _copy_atom(model.atoms[atom_id]) for atom_id in sorted(selected_ids)
     }
     bonds: list[Bond | None] = [
         _copy_bond(bond)
-        for bond in model.bonds
-        if bond is not None and bond.a in selected_ids and bond.b in selected_ids
+        for index, bond in graph.indexed_bonds
+        if index in selected_component_indices
     ]
     selected_annotations = {
         atom_id: dict(annotations[atom_id])
@@ -123,6 +160,7 @@ def select_components(
                 model,
                 atom_id,
                 selected_annotations.get(atom_id),
+                graph.attachments_by_atom.get(atom_id, ()),
             )
             for atom_id in selected_ids
         ),
@@ -223,13 +261,39 @@ def _component_atom_ids(model: MoleculeModel) -> tuple[tuple[int, ...], ...]:
     )
 
 
+def _graph_index(model: MoleculeModel) -> _GraphIndex:
+    components = _component_atom_ids(model)
+    component_by_atom = {
+        atom_id: index
+        for index, atom_ids in enumerate(components)
+        for atom_id in atom_ids
+    }
+    bond_counts = [0] * len(components)
+    indexed_bonds: list[tuple[int, Bond]] = []
+    attachment_inventory = alias_attachment_inventory(model)
+    for bond in attachment_inventory.bonds:
+        first_component = component_by_atom.get(bond.a)
+        second_component = component_by_atom.get(bond.b)
+        if first_component is not None and first_component == second_component:
+            bond_counts[first_component] += 1
+            indexed_bonds.append((first_component, bond))
+    return _GraphIndex(
+        components=components,
+        bond_counts=tuple(bond_counts),
+        indexed_bonds=tuple(indexed_bonds),
+        attachments_by_atom=attachment_inventory.attachments_by_atom,
+    )
+
+
 def _component_summary(
     model: MoleculeModel,
     index: int,
     atom_ids: tuple[int, ...],
     annotations: Mapping[int, Mapping[str, int]] | None = None,
+    *,
+    bond_count: int,
+    attachments_by_atom: Mapping[int, tuple[AliasAttachment, ...]],
 ) -> ComponentSummary:
-    selected_ids = set(atom_ids)
     active_annotations = (
         annotations if annotations is not None else model.atom_annotations
     )
@@ -239,17 +303,14 @@ def _component_summary(
     return ComponentSummary(
         index=index,
         atom_ids=atom_ids,
-        bond_count=sum(
-            1
-            for bond in model.bonds
-            if bond is not None and bond.a in selected_ids and bond.b in selected_ids
-        ),
+        bond_count=bond_count,
         formula_labels=tuple(sorted(labels.items())),
         formal_charge=sum(
             _modeled_atom_formal_charge(
                 model,
                 atom_id,
                 active_annotations.get(atom_id),
+                attachments_by_atom.get(atom_id, ()),
             )
             for atom_id in atom_ids
         ),
@@ -265,12 +326,13 @@ def _modeled_atom_formal_charge(
     model: MoleculeModel,
     atom_id: int,
     annotation: Mapping[str, int] | None,
+    attachments: Sequence[AliasAttachment],
 ) -> int:
     return modeled_atom_formal_charge(
         model.atoms[atom_id].element,
         annotation,
         atom_id=atom_id,
-        attachments=alias_attachments_for_atom(model, atom_id),
+        attachments=attachments,
     )
 
 
@@ -294,4 +356,9 @@ def _copy_bond(bond: Bond) -> Bond:
     )
 
 
-__all__ = ["inspect_components", "select_component", "select_components"]
+__all__ = [
+    "inspect_component_inventory",
+    "inspect_components",
+    "select_component",
+    "select_components",
+]
