@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-08-30
+
 This release combines correctness fixes for document ownership, crash recovery,
 headless Calculation Plan validation, and the test gate with a consistency pass
 over the whole codebase — lint and type enforcement, one owner per convention,
@@ -22,7 +24,8 @@ precomplex freshness basis changed as described under Fixed.
   `ComponentInventory`, `inspect_component_inventory`,
   `precomplex_basis_sha256`, `validate_reviewed_precomplex_pair`, and
   `validate_reviewed_precomplex_pairs`. The `chemvas.features.session` package
-  root now exposes `is_valid_process_identity`.
+  root now exposes `is_valid_process_identity`, and the
+  `chemvas.domain.transactions` package root now exposes `run_rollback_step`.
 
 ### Fixed
 
@@ -38,8 +41,9 @@ precomplex freshness basis changed as described under Fixed.
   crashed session. The manifest remains strict version 1 for concurrent older
   binaries, while a separate owner sidecar carries the new identity; legacy or
   unreadable identity metadata retains the conservative PID-only policy. A
-  malformed or unreadable manifest is preserved instead of being age-pruned,
-  leaving its snapshots available for manual recovery.
+  malformed or unreadable manifest is preserved when the owner sidecar cannot
+  prove it orphaned; an old session is pruned only when valid owner evidence
+  proves that its process ended or its PID was reused.
 - Graph Patch refuses to publish a document when a reviewed precomplex pair
   becomes stale. `inspect-plan` now reports stale or non-atomic reviewed pairs as
   blocked with stable reasons, using the same validator as selection and
@@ -79,8 +83,8 @@ precomplex freshness basis changed as described under Fixed.
 
 - `RDKitAdapter.get_name_from_smiles` and the 18-entry SMILES-to-name
   table behind it. No production path called it.
-- Twenty-two other forwarding methods whose only callers were the tests
-  verifying the forwarding.
+- Twenty-two other forwarding methods that were unused outside tests and dead
+  forwarding chains.
 
 ## [0.5.1] - 2026-08-27
 
@@ -1111,7 +1115,8 @@ housekeeping.
   `.chemvas` document type (double-clicking a file opens it in Chemvas), and a
   Linux `.desktop` entry with an `application/x-chemvas` MIME type.
 
-[Unreleased]: https://github.com/dhsohn/Chemvas/compare/v0.5.1...HEAD
+[Unreleased]: https://github.com/dhsohn/Chemvas/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/dhsohn/Chemvas/compare/v0.5.1...v0.6.0
 [0.5.1]: https://github.com/dhsohn/Chemvas/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/dhsohn/Chemvas/compare/v0.4.1...v0.5.0
 [0.4.1]: https://github.com/dhsohn/Chemvas/compare/v0.4.0...v0.4.1
