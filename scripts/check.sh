@@ -58,25 +58,23 @@ echo "[check] Ruff format"
 echo "[check] mypy"
 "$PYTHON" -m mypy
 
-# Qt keeps global application state that does not fully reset between test
-# modules, so CI runs every test_*.py in its own pytest process and one shared
-# process is not the gate. Arguments narrow the loop to the given files.
-echo "[check] Tests, one process per file"
+# scripts/run_test_files.sh owns how the files are run — one pytest process
+# each, several at a time — so this script, the CI test job and the RDKit job
+# cannot drift apart on it. Arguments narrow the run to the given files.
+echo "[check] Tests"
 if [[ $# -gt 0 ]]; then
   files=("$@")
 else
+  # This script and both CI jobs list tests/ at depth 1, so a test file in a
+  # subdirectory would run nowhere at all. Refuse rather than skip it quietly.
+  mapfile -t nested < <(find tests -mindepth 2 -name 'test_*.py' | sort)
+  if [[ ${#nested[@]} -gt 0 ]]; then
+    echo "[check] ERROR: these test files sit below tests/ and never run:" >&2
+    printf '[check]   %s\n' "${nested[@]}" >&2
+    echo "[check] Move them into tests/, or teach this script and ci.yml to find them." >&2
+    exit 1
+  fi
   mapfile -t files < <(find tests -maxdepth 1 -name 'test_*.py' | sort)
 fi
-total="${#files[@]}"
-index=0
-log="$(mktemp)"
-trap 'rm -f "$log"' EXIT
-for f in "${files[@]}"; do
-  index=$((index + 1))
-  QT_QPA_PLATFORM=offscreen "$PYTHON" -m pytest -q "$f" > "$log" 2>&1 || {
-    echo "[check] FAILED in $f ($index/$total):" >&2
-    tail -30 "$log" >&2
-    exit 1
-  }
-  printf '[check] %3d/%d %s: %s\n' "$index" "$total" "$f" "$(tail -1 "$log")"
-done
+
+bash "$ROOT/scripts/run_test_files.sh" --python "$PYTHON" "${files[@]}"

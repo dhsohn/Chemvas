@@ -66,12 +66,11 @@ jobs:
         # rdkit-smoke job runs them instead. tests/test_ci_rdkit_coverage.py
         # pins the exclusions to those module-level gates in both directions.
         run: |
-          while IFS= read -r test_file; do
-            python -m pytest "$test_file"
-          done < <(find tests -maxdepth 1 -name 'test_*.py' \
+          mapfile -t files < <(find tests -maxdepth 1 -name 'test_*.py' \
             ! -name 'test_calculation_bundle_rdkit.py' \
             ! -name 'test_calculation_step_rdkit.py' \
             | sort)
+          bash scripts/run_test_files.sh --python python "${files[@]}"
 
   rdkit-smoke:
     name: RDKit smoke tests
@@ -99,20 +98,18 @@ jobs:
           PY
 
       - name: Run the RDKit-gated test files
-        # One pytest process per file, matching scripts/check.sh. This is the
-        # only job that installs RDKit, so every test file that gates tests on
-        # a real RDKit must be listed here or those tests run in no CI job at
-        # all; tests/test_ci_rdkit_coverage.py pins the list in both
-        # directions.
+        # Runs through scripts/run_test_files.sh, the same runner the gate and
+        # the main test job use, so "one pytest process per file" stays one
+        # implementation. This is the only job that installs RDKit, so every
+        # test file that gates tests on a real RDKit must be listed here or
+        # those tests run in no CI job at all; tests/test_ci_rdkit_coverage.py
+        # pins the list in both directions.
         run: |
-          for test_file in \
+          bash scripts/run_test_files.sh --python python \
             tests/test_calculation_bundle_rdkit.py \
             tests/test_calculation_step_rdkit.py \
             tests/test_core_molfile.py \
-            tests/test_core_rdkit_adapter.py \
-          ; do
-            QT_QPA_PLATFORM=offscreen python -m pytest "$test_file"
-          done
+            tests/test_core_rdkit_adapter.py
 
   package-smoke:
     name: Wheel smoke test
