@@ -4,22 +4,15 @@ from unittest import mock
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-try:
-    from PyQt6.QtWidgets import QApplication
-except ModuleNotFoundError:
-    QApplication = None
+from PyQt6.QtWidgets import QApplication
 
-if QApplication is not None:
-    from chemvas.bootstrap.main_window import build_main_window
-    from chemvas.ui.main_window_ports import (
-        active_canvas_for_window,
-        services_for_window,
-    )
-
-
-@unittest.skipUnless(
-    QApplication is not None, "PyQt6 is required for main window tests"
+from chemvas.bootstrap.main_window import build_main_window
+from chemvas.ui.main_window_ports import (
+    active_canvas_for_window,
+    services_for_window,
 )
+
+
 class MainWindowDialogActionsTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -140,7 +133,3 @@ class MainWindowDialogActionsTest(unittest.TestCase):
         self.assertFalse(hasattr(self.window, "show_status_message"))
         self.window.statusBar().showMessage("Saved")
         self.assertEqual(self.window.statusBar().currentMessage(), "Saved")
-
-
-if __name__ == "__main__":
-    unittest.main()

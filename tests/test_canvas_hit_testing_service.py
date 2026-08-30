@@ -5,23 +5,19 @@ from unittest import mock
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-try:
-    from PyQt6.QtCore import QPointF
-    from PyQt6.QtWidgets import QApplication
-except ModuleNotFoundError:
-    QApplication = None
+from PyQt6.QtCore import QPointF
+from PyQt6.QtWidgets import QApplication
 
-if QApplication is not None:
-    from chemvas.domain.document import Atom, Bond
-    from chemvas.features.hover import HoverState
-    from chemvas.ui.canvas_bond_graphics_state import (
-        CanvasBondGraphicsState,
-        set_bond_items_for,
-    )
-    from chemvas.ui.canvas_hit_testing_service import CanvasHitTestingService
-    from chemvas.ui.canvas_hover_state import hover_state_for
-    from chemvas.ui.spatial_index_state import CanvasSpatialIndexState
-    from tests.runtime_state import canvas_runtime_state
+from chemvas.domain.document import Atom, Bond
+from chemvas.features.hover import HoverState
+from chemvas.ui.canvas_bond_graphics_state import (
+    CanvasBondGraphicsState,
+    set_bond_items_for,
+)
+from chemvas.ui.canvas_hit_testing_service import CanvasHitTestingService
+from chemvas.ui.canvas_hover_state import hover_state_for
+from chemvas.ui.spatial_index_state import CanvasSpatialIndexState
+from tests.runtime_state import canvas_runtime_state
 
 
 class _FakeScene:
@@ -69,9 +65,6 @@ def _renderer_double():
     return SimpleNamespace(style=SimpleNamespace(bond_length_px=20.0))
 
 
-@unittest.skipUnless(
-    QApplication is not None, "PyQt6 is required for canvas hit testing service tests"
-)
 class CanvasHitTestingServiceTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -318,7 +311,3 @@ class CanvasHitTestingServiceTest(unittest.TestCase):
         service.find_bond_near.return_value = 2
         self.assertEqual(service.bond_id_from_event(object()), 2)
         service.find_bond_near.assert_called_with(QPointF(3.0, 4.0), 10.56)
-
-
-if __name__ == "__main__":
-    unittest.main()

@@ -7,19 +7,12 @@ from tests.runtime_services import canvas_runtime_services
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-try:
-    from PyQt6.QtCore import QPointF
-    from PyQt6.QtWidgets import QApplication, QGraphicsPathItem
-except ModuleNotFoundError:
-    QApplication = None
+from PyQt6.QtCore import QPointF
+from PyQt6.QtWidgets import QApplication, QGraphicsPathItem
 
-if QApplication is not None:
-    from chemvas.ui.curved_arrow_path_service import CurvedArrowPathService
+from chemvas.ui.curved_arrow_path_service import CurvedArrowPathService
 
 
-@unittest.skipUnless(
-    QApplication is not None, "PyQt6 is required for curved arrow path service tests"
-)
 class CurvedArrowPathServiceTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -47,7 +40,3 @@ class CurvedArrowPathServiceTest(unittest.TestCase):
         self.assertFalse(path_item.path().isEmpty())
         self.assertEqual(build_service.add_arrow_head.call_count, 2)
         self.assertEqual(path_item.pos(), QPointF())
-
-
-if __name__ == "__main__":
-    unittest.main()

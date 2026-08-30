@@ -5,18 +5,14 @@ from unittest import mock
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-try:
-    from PyQt6.QtCore import QPointF, QRectF
-    from PyQt6.QtWidgets import QApplication
-except ModuleNotFoundError:
-    QApplication = None
+from PyQt6.QtCore import QPointF, QRectF
+from PyQt6.QtWidgets import QApplication
 
-if QApplication is not None:
-    from chemvas.domain.document import Atom, Bond
-    from chemvas.features.selection import StructureHit
-    from chemvas.ui.selection_hit_test_service import SelectionHitTestService
-    from chemvas.ui.selection_structure_service import SelectionStructureService
-    from tests.test_selection_controller_additional import _FakeItem, _make_canvas
+from chemvas.domain.document import Atom, Bond
+from chemvas.features.selection import StructureHit
+from chemvas.ui.selection_hit_test_service import SelectionHitTestService
+from chemvas.ui.selection_structure_service import SelectionStructureService
+from tests.test_selection_controller_additional import _FakeItem, _make_canvas
 
 
 def _make_service(canvas, *, hit_testing_service=None, structure_service=None):
@@ -35,9 +31,6 @@ def _make_service(canvas, *, hit_testing_service=None, structure_service=None):
     )
 
 
-@unittest.skipUnless(
-    QApplication is not None, "PyQt6 is required for selection hit-test service tests"
-)
 class SelectionHitTestServiceTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:

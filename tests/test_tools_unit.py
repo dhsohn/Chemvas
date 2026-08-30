@@ -8,70 +8,66 @@ from tests.runtime_state import canvas_runtime_state
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-try:
-    from PyQt6.QtCore import QPointF, QRectF, Qt
-    from PyQt6.QtGui import QPolygonF
-    from PyQt6.QtWidgets import (
-        QApplication,
-        QGraphicsPolygonItem,
-        QGraphicsScene,
-    )
-except ModuleNotFoundError:
-    QApplication = None
+from PyQt6.QtCore import QPointF, QRectF, Qt
+from PyQt6.QtGui import QPolygonF
+from PyQt6.QtWidgets import (
+    QApplication,
+    QGraphicsPolygonItem,
+    QGraphicsScene,
+)
 
-if QApplication is not None:
-    import chemvas.ui.bond_tool as bond_tool_module
-    import chemvas.ui.canvas_move_controller as canvas_move_controller_module
-    import chemvas.ui.move_tool as move_tool_module
-    import chemvas.ui.select_tool as select_tool_module
-    import chemvas.ui.selection_drag_tool as selection_drag_tool_module
-    from chemvas.core.history import (
-        CompositeCommand,
-        MoveAtomsCommand,
-    )
-    from chemvas.domain.document import Atom, Bond
-    from chemvas.features.hover import HoverState
-    from chemvas.ui.bond_tool import BondTool
-    from chemvas.ui.canvas_atom_graphics_state import (
-        CanvasAtomGraphicsState,
-        atom_dots_for,
-        atom_items_for,
-        set_atom_dots_for,
-        set_atom_items_for,
-    )
-    from chemvas.ui.canvas_bond_graphics_state import (
-        CanvasBondGraphicsState,
-        bond_items_for,
-        set_bond_items_for,
-    )
-    from chemvas.ui.canvas_hover_state import hover_state_for
-    from chemvas.ui.canvas_mark_registry import CanvasMarkRegistry
-    from chemvas.ui.canvas_scene_items_state import (
-        CanvasSceneItemsState,
-        selected_notes_for,
-        set_scene_item_collection_for,
-        set_selected_notes_for,
-    )
-    from chemvas.ui.canvas_tool_settings_state import (
-        CanvasToolSettingsState,
-        set_tool_setting_for,
-    )
-    from chemvas.ui.handle_state import CanvasHandleState
-    from chemvas.ui.history_commands import MoveItemsCommand, UpdateSceneItemCommand
-    from chemvas.ui.move_tool import MoveTool
-    from chemvas.ui.perspective_tool import PerspectiveTool
-    from chemvas.ui.preview_tools import ArrowTool, PreviewDragTool, TSBracketTool
-    from chemvas.ui.scene_item_state import scene_item_state_for
-    from chemvas.ui.select_tool import SelectTool
-    from chemvas.ui.selection_drag_tool import independent_selection_items
-    from chemvas.ui.selection_outline_state import SelectionOutlineState
-    from chemvas.ui.selection_style_state import (
-        SelectionStyleState,
-        selection_style_state_for,
-    )
-    from chemvas.ui.tool_base import Tool
-    from chemvas.ui.tool_context import ToolContext
-    from tests.canvas_factory import build_canvas_view
+import chemvas.ui.bond_tool as bond_tool_module
+import chemvas.ui.canvas_move_controller as canvas_move_controller_module
+import chemvas.ui.move_tool as move_tool_module
+import chemvas.ui.select_tool as select_tool_module
+import chemvas.ui.selection_drag_tool as selection_drag_tool_module
+from chemvas.core.history import (
+    CompositeCommand,
+    MoveAtomsCommand,
+)
+from chemvas.domain.document import Atom, Bond
+from chemvas.features.hover import HoverState
+from chemvas.ui.bond_tool import BondTool
+from chemvas.ui.canvas_atom_graphics_state import (
+    CanvasAtomGraphicsState,
+    atom_dots_for,
+    atom_items_for,
+    set_atom_dots_for,
+    set_atom_items_for,
+)
+from chemvas.ui.canvas_bond_graphics_state import (
+    CanvasBondGraphicsState,
+    bond_items_for,
+    set_bond_items_for,
+)
+from chemvas.ui.canvas_hover_state import hover_state_for
+from chemvas.ui.canvas_mark_registry import CanvasMarkRegistry
+from chemvas.ui.canvas_scene_items_state import (
+    CanvasSceneItemsState,
+    selected_notes_for,
+    set_scene_item_collection_for,
+    set_selected_notes_for,
+)
+from chemvas.ui.canvas_tool_settings_state import (
+    CanvasToolSettingsState,
+    set_tool_setting_for,
+)
+from chemvas.ui.handle_state import CanvasHandleState
+from chemvas.ui.history_commands import MoveItemsCommand, UpdateSceneItemCommand
+from chemvas.ui.move_tool import MoveTool
+from chemvas.ui.perspective_tool import PerspectiveTool
+from chemvas.ui.preview_tools import ArrowTool, PreviewDragTool, TSBracketTool
+from chemvas.ui.scene_item_state import scene_item_state_for
+from chemvas.ui.select_tool import SelectTool
+from chemvas.ui.selection_drag_tool import independent_selection_items
+from chemvas.ui.selection_outline_state import SelectionOutlineState
+from chemvas.ui.selection_style_state import (
+    SelectionStyleState,
+    selection_style_state_for,
+)
+from chemvas.ui.tool_base import Tool
+from chemvas.ui.tool_context import ToolContext
+from tests.canvas_factory import build_canvas_view
 
 
 def _tool_context_for(canvas):
@@ -621,7 +617,6 @@ class _FakePreviewCanvas:
         self.add_ts_bracket_calls.append((QPointF(start), QPointF(end), bracket_kind))
 
 
-@unittest.skipUnless(QApplication is not None, "PyQt6 is required for tools tests")
 class ToolsUnitTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -1941,7 +1936,3 @@ class ToolsUnitTest(unittest.TestCase):
         self.assertTrue(tool.on_mouse_release(_FakeEvent(QPointF(1.0, 2.0))))
         context.end_selection_3d_rotation.assert_called_once_with()
         self.assertFalse(tool._rotating)
-
-
-if __name__ == "__main__":
-    unittest.main()

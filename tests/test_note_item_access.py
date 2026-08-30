@@ -7,11 +7,7 @@ import pytest
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-try:
-    from PyQt6.QtWidgets import QApplication, QGraphicsTextItem
-except ModuleNotFoundError:
-    QApplication = None
-    QGraphicsTextItem = None
+from PyQt6.QtWidgets import QApplication, QGraphicsTextItem
 
 from chemvas.ui.note_item_access import (
     apply_note_style_for,
@@ -55,8 +51,6 @@ def test_committed_note_text_rejects_objects_without_a_note_contract() -> None:
 
 
 def test_committed_note_text_uses_qgraphics_item_data_role() -> None:
-    if QApplication is None:
-        return
     app = QApplication.instance() or QApplication([])
     item = QGraphicsTextItem("Stable")
 

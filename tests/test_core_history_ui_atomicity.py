@@ -556,7 +556,3 @@ class CoreHistoryUiAtomicityTest(unittest.TestCase):
         self.assertFalse(service.push_many((mock.Mock(),)))
         self.assertEqual(state.history, [first, second])
         callback.assert_called_once_with()
-
-
-if __name__ == "__main__":
-    unittest.main()

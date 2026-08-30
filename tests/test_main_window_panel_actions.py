@@ -6,29 +6,22 @@ from unittest import mock
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-try:
-    from PyQt6.QtWidgets import QApplication, QLineEdit, QToolButton
-except ModuleNotFoundError:
-    QApplication = None
+from PyQt6.QtWidgets import QApplication, QLineEdit, QToolButton
 
-if QApplication is not None:
-    from chemvas.bootstrap.main_window import build_main_window
-    from chemvas.ui.canvas_atom_graphics_state import atom_items_for
-    from chemvas.ui.canvas_document_metadata_state import document_file_path_for
-    from chemvas.ui.canvas_history_state import history_state_for
-    from chemvas.ui.canvas_window_access import snapshot_canvas_state_for
-    from chemvas.ui.main_window_ports import (
-        active_canvas_for_window,
-        preview_for_window,
-        preview_window_for_window,
-        services_for_window,
-    )
-    from chemvas.ui.structure_mutation_access import add_atom_for
-
-
-@unittest.skipUnless(
-    QApplication is not None, "PyQt6 is required for main window tests"
+from chemvas.bootstrap.main_window import build_main_window
+from chemvas.ui.canvas_atom_graphics_state import atom_items_for
+from chemvas.ui.canvas_document_metadata_state import document_file_path_for
+from chemvas.ui.canvas_history_state import history_state_for
+from chemvas.ui.canvas_window_access import snapshot_canvas_state_for
+from chemvas.ui.main_window_ports import (
+    active_canvas_for_window,
+    preview_for_window,
+    preview_window_for_window,
+    services_for_window,
 )
+from chemvas.ui.structure_mutation_access import add_atom_for
+
+
 class MainWindowPanelActionsTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -399,7 +392,3 @@ class MainWindowPanelActionsTest(unittest.TestCase):
         active_canvas_for_window(self.window).flip_vertical.assert_not_called()
         insert_controller.begin_smiles_insert.assert_called_once_with("CCO")
         active_canvas_for_window(self.window).begin_smiles_insert.assert_not_called()
-
-
-if __name__ == "__main__":
-    unittest.main()

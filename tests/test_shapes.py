@@ -3,6 +3,10 @@ import unittest
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
+from PyQt6.QtCore import QPointF, QRectF, Qt
+from PyQt6.QtGui import QColor
+from PyQt6.QtWidgets import QApplication, QGraphicsPathItem
+
 from chemvas.domain.document import (
     CANVAS_FILE_VERSION,
     build_document_payload,
@@ -10,34 +14,22 @@ from chemvas.domain.document import (
     serialize_settings,
 )
 from chemvas.domain.document.state import _validate_shape_states
-
-try:
-    from PyQt6.QtCore import QPointF, QRectF, Qt
-    from PyQt6.QtGui import QColor
-    from PyQt6.QtWidgets import QApplication, QGraphicsPathItem
-except ModuleNotFoundError:
-    QApplication = None
-    QPointF = None
-    QRectF = None
-
-if QApplication is not None:
-    from chemvas.features.annotations import (
-        SHAPE_KINDS,
-        STROKE_STYLES,
-        normalized_shape_kind,
-        normalized_stroke_style,
-        pen_style_for_stroke,
-        shape_path,
-    )
-    from chemvas.features.selection import (
-        resized_shape_rect,
-        shape_resize_handle_positions,
-    )
-    from chemvas.ui.scene_item_restore import create_shape_item_from_state
-    from chemvas.ui.scene_item_state import shape_state_dict
+from chemvas.features.annotations import (
+    SHAPE_KINDS,
+    STROKE_STYLES,
+    normalized_shape_kind,
+    normalized_stroke_style,
+    pen_style_for_stroke,
+    shape_path,
+)
+from chemvas.features.selection import (
+    resized_shape_rect,
+    shape_resize_handle_positions,
+)
+from chemvas.ui.scene_item_restore import create_shape_item_from_state
+from chemvas.ui.scene_item_state import shape_state_dict
 
 
-@unittest.skipUnless(QApplication is not None, "PyQt6 required")
 class ShapeGeometryTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -68,7 +60,6 @@ class ShapeGeometryTest(unittest.TestCase):
         self.assertEqual(pen_style_for_stroke("none"), Qt.PenStyle.NoPen)
 
 
-@unittest.skipUnless(QApplication is not None, "PyQt6 required")
 class ShapeSerializationTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -131,7 +122,6 @@ class ShapeSerializationTest(unittest.TestCase):
         return item
 
 
-@unittest.skipUnless(QApplication is not None, "PyQt6 required")
 class ShapeResizeTest(unittest.TestCase):
     def test_eight_handles_at_corners_and_edges(self) -> None:
         positions = dict(shape_resize_handle_positions(QRectF(0.0, 0.0, 100.0, 60.0)))
@@ -256,7 +246,3 @@ class ShapeDocumentValidationTest(unittest.TestCase):
         }
         with self.assertRaises(ValueError):
             build_document_payload(state, CANVAS_FILE_VERSION)
-
-
-if __name__ == "__main__":
-    unittest.main()

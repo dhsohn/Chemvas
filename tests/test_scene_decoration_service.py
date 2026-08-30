@@ -8,19 +8,15 @@ from tests.runtime_state import canvas_runtime_state
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-try:
-    from PyQt6.QtCore import QPointF, QRectF
-    from PyQt6.QtWidgets import QApplication, QGraphicsScene, QGraphicsTextItem
-except ModuleNotFoundError:
-    QApplication = None
+from PyQt6.QtCore import QPointF, QRectF
+from PyQt6.QtWidgets import QApplication, QGraphicsScene, QGraphicsTextItem
 
-if QApplication is not None:
-    from chemvas.ui.canvas_mark_registry import CanvasMarkRegistry
-    from chemvas.ui.canvas_scene_items_state import CanvasSceneItemsState
-    from chemvas.ui.canvas_tool_settings_state import CanvasToolSettingsState
-    from chemvas.ui.history_commands import AddSceneItemsCommand
-    from chemvas.ui.scene_decoration_service import SceneDecorationService
-    from chemvas.ui.scene_item_lifecycle_service import SceneItemLifecycleService
+from chemvas.ui.canvas_mark_registry import CanvasMarkRegistry
+from chemvas.ui.canvas_scene_items_state import CanvasSceneItemsState
+from chemvas.ui.canvas_tool_settings_state import CanvasToolSettingsState
+from chemvas.ui.history_commands import AddSceneItemsCommand
+from chemvas.ui.scene_decoration_service import SceneDecorationService
+from chemvas.ui.scene_item_lifecycle_service import SceneItemLifecycleService
 
 
 class _FakeScene:
@@ -67,9 +63,6 @@ def _scene_decoration_service(canvas) -> SceneDecorationService:
     )
 
 
-@unittest.skipUnless(
-    QApplication is not None, "PyQt6 is required for scene decoration tests"
-)
 class SceneDecorationServiceTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -458,7 +451,3 @@ class SceneDecorationServiceTest(unittest.TestCase):
                 mock.call(QPointF(3.0, 4.0), "p"),
             ],
         )
-
-
-if __name__ == "__main__":
-    unittest.main()

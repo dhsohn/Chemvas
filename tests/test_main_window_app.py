@@ -76,7 +76,3 @@ class MainWindowAppRegistryTest(unittest.TestCase):
         register_window(_FakeWindow())
         reset_window_registry()
         self.assertEqual(open_windows(), ())
-
-
-if __name__ == "__main__":
-    unittest.main()

@@ -38,7 +38,3 @@ class BuildExportPlanTest(unittest.TestCase):
     def test_zero_content_returns_none(self):
         self.assertIsNone(build_export_plan(0.0, 0.0, 0.0, 40.0, margin=4.0))
         self.assertIsNone(build_export_plan(0.0, 0.0, 100.0, 0.0, margin=4.0))
-
-
-if __name__ == "__main__":
-    unittest.main()

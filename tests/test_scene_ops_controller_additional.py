@@ -3,38 +3,31 @@ import unittest
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-try:
-    from PyQt6.QtCore import QPointF, QRectF
-    from PyQt6.QtWidgets import QApplication
-except ModuleNotFoundError:
-    QApplication = None
+from PyQt6.QtCore import QPointF, QRectF
+from PyQt6.QtWidgets import QApplication
 
-if QApplication is not None:
-    from chemvas.core.history import (
-        CompositeCommand,
-        MoveAtomsCommand,
-        SetAtomPositionsCommand,
-    )
-    from chemvas.domain.document import Atom
-    from chemvas.ui.history_commands import MoveItemsCommand, UpdateSceneItemCommand
-    from chemvas.ui.scene_flip_geometry import (
-        center_for_flip_group,
-        flip_bounds_for_item,
-        flip_center_for_selection,
-    )
-    from tests.test_scene_ops_controller import (
-        _FakeCanvas,
-        _make_note_item,
-        _make_rect_item,
-        _make_ring_item,
-        scene_clipboard_controller_for,
-        scene_transform_controller_for,
-    )
-
-
-@unittest.skipUnless(
-    QApplication is not None, "PyQt6 is required for scene ops controller tests"
+from chemvas.core.history import (
+    CompositeCommand,
+    MoveAtomsCommand,
+    SetAtomPositionsCommand,
 )
+from chemvas.domain.document import Atom
+from chemvas.ui.history_commands import MoveItemsCommand, UpdateSceneItemCommand
+from chemvas.ui.scene_flip_geometry import (
+    center_for_flip_group,
+    flip_bounds_for_item,
+    flip_center_for_selection,
+)
+from tests.test_scene_ops_controller import (
+    _FakeCanvas,
+    _make_note_item,
+    _make_rect_item,
+    _make_ring_item,
+    scene_clipboard_controller_for,
+    scene_transform_controller_for,
+)
+
+
 class SceneOpsControllerAdditionalTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -521,7 +514,3 @@ class SceneOpsControllerAdditionalTest(unittest.TestCase):
         self.assertEqual(canvas.update_selection_outline_calls, 1)
         self.assertTrue(canvas._atom_item_for_id(0).isSelected())
         self.assertEqual(len(canvas.selected_notes), 1)
-
-
-if __name__ == "__main__":
-    unittest.main()

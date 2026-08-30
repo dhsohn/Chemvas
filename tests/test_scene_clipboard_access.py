@@ -171,7 +171,3 @@ class SceneClipboardAccessTest(unittest.TestCase):
         pdf_renderer.assert_called_once_with(
             scene, source=source, items=items, title="Chemvas selection"
         )
-
-
-if __name__ == "__main__":
-    unittest.main()

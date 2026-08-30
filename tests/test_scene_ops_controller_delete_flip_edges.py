@@ -3,26 +3,19 @@ import unittest
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-try:
-    from PyQt6.QtCore import QRectF
-    from PyQt6.QtWidgets import QApplication, QGraphicsItem, QGraphicsTextItem
-except ModuleNotFoundError:
-    QApplication = None
+from PyQt6.QtCore import QRectF
+from PyQt6.QtWidgets import QApplication, QGraphicsItem, QGraphicsTextItem
 
-if QApplication is not None:
-    from chemvas.core.history import CompositeCommand
-    from tests.test_scene_ops_controller import (
-        _FakeCanvas,
-        _make_rect_item,
-        _make_ring_item,
-        scene_delete_controller_for,
-        scene_transform_controller_for,
-    )
-
-
-@unittest.skipUnless(
-    QApplication is not None, "PyQt6 is required for scene ops controller tests"
+from chemvas.core.history import CompositeCommand
+from tests.test_scene_ops_controller import (
+    _FakeCanvas,
+    _make_rect_item,
+    _make_ring_item,
+    scene_delete_controller_for,
+    scene_transform_controller_for,
 )
+
+
 class SceneOpsControllerDeleteFlipEdgesTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -118,7 +111,3 @@ class SceneOpsControllerDeleteFlipEdgesTest(unittest.TestCase):
         self.assertEqual(
             mark_item.data(9), {"kind": "mark", "atom_id": None, "x": 2.0, "y": 2.0}
         )
-
-
-if __name__ == "__main__":
-    unittest.main()

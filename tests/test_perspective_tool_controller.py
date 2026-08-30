@@ -8,16 +8,12 @@ from tests.runtime_state import canvas_runtime_state
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-try:
-    from PyQt6.QtCore import QPointF, Qt
-except ModuleNotFoundError:
-    QPointF = None
+from PyQt6.QtCore import QPointF, Qt
 
-if QPointF is not None:
-    from chemvas.ui.canvas_rotation_state import CanvasRotationState
-    from chemvas.ui.perspective_tool import PerspectiveTool
-    from chemvas.ui.perspective_tool_controller import PerspectiveToolController
-    from chemvas.ui.tool_context import ToolContext
+from chemvas.ui.canvas_rotation_state import CanvasRotationState
+from chemvas.ui.perspective_tool import PerspectiveTool
+from chemvas.ui.perspective_tool_controller import PerspectiveToolController
+from chemvas.ui.tool_context import ToolContext
 
 
 class _Event:
@@ -161,9 +157,6 @@ def _tool_context_for(canvas, *, hit_testing_service=None, selection_controller=
     )
 
 
-@unittest.skipUnless(
-    QPointF is not None, "PyQt6 is required for perspective controller tests"
-)
 class PerspectiveToolControllerTest(unittest.TestCase):
     def test_begin_selection_rotation_reselects_structure_and_uses_bond_axis_hint(
         self,
@@ -311,9 +304,6 @@ class PerspectiveToolControllerTest(unittest.TestCase):
         self.assertIsNone(PerspectiveToolController.axis_hint_for_item(None))
 
 
-@unittest.skipUnless(
-    QPointF is not None, "PyQt6 is required for perspective tool tests"
-)
 class PerspectiveToolWrapperContractTest(unittest.TestCase):
     def test_on_mouse_press_delegates_rotation_entry_and_tracks_local_state(
         self,
@@ -529,7 +519,3 @@ class PerspectiveToolWrapperContractTest(unittest.TestCase):
         self.assertTrue(tool._rotating)
         self.assertEqual(tool._last_pos, new_event.position())
         self.assertIsNone(tool._axis_lock)
-
-
-if __name__ == "__main__":
-    unittest.main()

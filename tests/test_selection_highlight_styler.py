@@ -7,18 +7,14 @@ from tests.runtime_state import canvas_runtime_state
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-try:
-    from PyQt6.QtGui import QColor, QPainterPath, QPen
-    from PyQt6.QtWidgets import QApplication, QGraphicsItemGroup, QGraphicsPathItem
-except ModuleNotFoundError:
-    QApplication = None
+from PyQt6.QtGui import QColor, QPainterPath, QPen
+from PyQt6.QtWidgets import QApplication, QGraphicsItemGroup, QGraphicsPathItem
 
-if QApplication is not None:
-    from chemvas.ui.selection_highlight_styler import (
-        SelectionHighlightStyler,
-        selection_highlight_styler_for,
-    )
-    from chemvas.ui.selection_style_state import SelectionStyleState
+from chemvas.ui.selection_highlight_styler import (
+    SelectionHighlightStyler,
+    selection_highlight_styler_for,
+)
+from chemvas.ui.selection_style_state import SelectionStyleState
 
 
 def _path_item(color: str = "#111111", width: float = 1.5) -> QGraphicsPathItem:
@@ -33,9 +29,6 @@ def _path_item(color: str = "#111111", width: float = 1.5) -> QGraphicsPathItem:
     return item
 
 
-@unittest.skipUnless(
-    QApplication is not None, "PyQt6 is required for selection highlight styler tests"
-)
 class SelectionHighlightStylerTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -138,7 +131,3 @@ class SelectionHighlightStylerTest(unittest.TestCase):
         placeholder = object()
         canvas.services.scene_view.selection_highlight_styler = placeholder
         self.assertIs(selection_highlight_styler_for(canvas), placeholder)
-
-
-if __name__ == "__main__":
-    unittest.main()

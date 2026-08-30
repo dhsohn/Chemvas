@@ -4,30 +4,21 @@ from types import SimpleNamespace
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-try:
-    from PyQt6.QtGui import QColor, QPen
-    from PyQt6.QtWidgets import QApplication, QGraphicsEllipseItem, QGraphicsScene
-except ModuleNotFoundError:
-    QApplication = None
-    QGraphicsEllipseItem = None
-    QGraphicsScene = None
+from PyQt6.QtGui import QColor, QPen
+from PyQt6.QtWidgets import QApplication, QGraphicsEllipseItem, QGraphicsScene
 
-if QApplication is not None:
-    from chemvas.features.insertion import (
-        SmilesPreviewGeometry,
-        TemplatePreviewGeometry,
-    )
-    from chemvas.ui.preview_scene_renderer import (
-        apply_smiles_preview_geometry,
-        apply_template_preview_geometry,
-        clear_smiles_preview,
-        clear_template_preview,
-    )
-
-
-@unittest.skipUnless(
-    QApplication is not None, "PyQt6 is required for preview renderer tests"
+from chemvas.features.insertion import (
+    SmilesPreviewGeometry,
+    TemplatePreviewGeometry,
 )
+from chemvas.ui.preview_scene_renderer import (
+    apply_smiles_preview_geometry,
+    apply_template_preview_geometry,
+    clear_smiles_preview,
+    clear_template_preview,
+)
+
+
 class PreviewSceneRendererTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -296,7 +287,3 @@ class PreviewSceneRendererTest(unittest.TestCase):
         self.assertEqual(cleared_lines, [])
         self.assertEqual(cleared_dots, [])
         self.assertEqual(len(self.scene.items()), 0)
-
-
-if __name__ == "__main__":
-    unittest.main()

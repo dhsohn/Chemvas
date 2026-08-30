@@ -1203,7 +1203,3 @@ class SelectionRotationControllerTest(unittest.TestCase):
         self.assertEqual(canvas.pushed_commands, [])
         self.assertEqual(canvas.restore_selection_calls, [])
         self.assertEqual(canvas.selection_info_emits, 1)
-
-
-if __name__ == "__main__":
-    unittest.main()

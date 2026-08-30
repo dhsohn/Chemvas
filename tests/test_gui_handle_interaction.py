@@ -3,35 +3,28 @@ import unittest
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-try:
-    from PyQt6.QtCore import QPointF
-    from PyQt6.QtTest import QTest
-    from PyQt6.QtWidgets import QApplication
-except ModuleNotFoundError:
-    QApplication = None
-    QTest = None
-    QPointF = None
+from PyQt6.QtCore import QPointF
+from PyQt6.QtTest import QTest
+from PyQt6.QtWidgets import QApplication
 
-if QApplication is not None:
-    from chemvas.bootstrap.main_window import build_main_window
-    from chemvas.ui.canvas_scene_items_state import orbital_items_for
-    from chemvas.ui.canvas_service_access import canvas_services_for
-    from chemvas.ui.canvas_service_ports import handle_overlay_service_for_access
-    from chemvas.ui.canvas_tool_settings_state import set_tool_setting_for
-    from chemvas.ui.handle_overlay_access import (
-        clear_handles_for,
-        show_curved_handles_for,
-    )
-    from chemvas.ui.handle_state import active_handles_for, handle_target_for
-    from chemvas.ui.main_window_ports import (
-        active_canvas_for_window,
-        services_for_window,
-    )
-    from chemvas.ui.move_access import move_item_for
-    from chemvas.ui.scene_decoration_access import add_arrow_for, add_orbital_for
+from chemvas.bootstrap.main_window import build_main_window
+from chemvas.ui.canvas_scene_items_state import orbital_items_for
+from chemvas.ui.canvas_service_access import canvas_services_for
+from chemvas.ui.canvas_service_ports import handle_overlay_service_for_access
+from chemvas.ui.canvas_tool_settings_state import set_tool_setting_for
+from chemvas.ui.handle_overlay_access import (
+    clear_handles_for,
+    show_curved_handles_for,
+)
+from chemvas.ui.handle_state import active_handles_for, handle_target_for
+from chemvas.ui.main_window_ports import (
+    active_canvas_for_window,
+    services_for_window,
+)
+from chemvas.ui.move_access import move_item_for
+from chemvas.ui.scene_decoration_access import add_arrow_for, add_orbital_for
 
 
-@unittest.skipUnless(QApplication is not None, "PyQt6 is required for GUI handle tests")
 class GuiHandleInteractionTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -133,7 +126,3 @@ class GuiHandleInteractionTest(unittest.TestCase):
             len(active_handles_for(active_canvas_for_window(self.window))), 3
         )
         self.assertIs(handle_target_for(active_canvas_for_window(self.window)), curved)
-
-
-if __name__ == "__main__":
-    unittest.main()

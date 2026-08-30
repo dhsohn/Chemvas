@@ -7,36 +7,32 @@ from tests.runtime_services import canvas_runtime_services
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-try:
-    from PyQt6.QtCore import QPointF, QRectF, Qt
-    from PyQt6.QtGui import QBrush, QColor, QPainterPath, QPen, QPolygonF
-    from PyQt6.QtWidgets import (
-        QApplication,
-        QGraphicsLineItem,
-        QGraphicsPathItem,
-        QGraphicsPolygonItem,
-        QGraphicsScene,
-        QGraphicsTextItem,
-    )
-except ModuleNotFoundError:
-    QApplication = None
+from PyQt6.QtCore import QPointF, QRectF, Qt
+from PyQt6.QtGui import QBrush, QColor, QPainterPath, QPen, QPolygonF
+from PyQt6.QtWidgets import (
+    QApplication,
+    QGraphicsLineItem,
+    QGraphicsPathItem,
+    QGraphicsPolygonItem,
+    QGraphicsScene,
+    QGraphicsTextItem,
+)
 
-if QApplication is not None:
-    from chemvas.domain.document import Atom, Bond
-    from chemvas.ui.canvas_bond_graphics_state import set_bond_items_for
-    from chemvas.ui.selection_outline_service import SelectionOutlineService
-    from chemvas.ui.selection_outline_state import (
-        selection_outlines_for,
-        set_selection_outlines_for,
-    )
-    from chemvas.ui.selection_style_state import SelectionStyleState
-    from tests.test_selection_controller_additional import (
-        _FakeCanvas,
-        _FakeItem,
-        _FakeScene,
-        _FakeShapeItem,
-        _make_canvas,
-    )
+from chemvas.domain.document import Atom, Bond
+from chemvas.ui.canvas_bond_graphics_state import set_bond_items_for
+from chemvas.ui.selection_outline_service import SelectionOutlineService
+from chemvas.ui.selection_outline_state import (
+    selection_outlines_for,
+    set_selection_outlines_for,
+)
+from chemvas.ui.selection_style_state import SelectionStyleState
+from tests.test_selection_controller_additional import (
+    _FakeCanvas,
+    _FakeItem,
+    _FakeScene,
+    _FakeShapeItem,
+    _make_canvas,
+)
 
 
 def _outline_service(canvas):
@@ -63,9 +59,6 @@ def _outline_service(canvas):
     )
 
 
-@unittest.skipUnless(
-    QApplication is not None, "PyQt6 is required for selection outline service tests"
-)
 class SelectionOutlineServiceTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:

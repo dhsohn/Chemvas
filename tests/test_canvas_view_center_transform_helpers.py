@@ -8,58 +8,51 @@ from tests.runtime_state import canvas_runtime_state
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-try:
-    from PyQt6.QtCore import QPointF
-    from PyQt6.QtGui import QTransform
-    from PyQt6.QtWidgets import (
-        QApplication,
-        QGraphicsEllipseItem,
-        QGraphicsPolygonItem,
-        QGraphicsScene,
-        QGraphicsTextItem,
-    )
-except ModuleNotFoundError:
-    QApplication = None
-
-if QApplication is not None:
-    from chemvas.domain.document import Atom
-    from chemvas.features.selection import (
-        bounding_box_center_for_atoms,
-        center_for_atoms,
-    )
-    from chemvas.ui.canvas_atom_graphics_state import (
-        CanvasAtomGraphicsState,
-        set_atom_dots_for,
-        set_atom_items_for,
-    )
-    from chemvas.ui.canvas_callback_state import CanvasCallbackState
-    from chemvas.ui.canvas_insert_state import CanvasInsertState
-    from chemvas.ui.canvas_scene_items_state import CanvasSceneItemsState
-    from chemvas.ui.canvas_tool_mode_controller import CanvasToolModeController
-    from chemvas.ui.canvas_tool_settings_state import (
-        CanvasToolSettingsState,
-        tool_settings_state_for,
-    )
-    from chemvas.ui.history_canvas_access import set_ring_polygons_for_history
-    from chemvas.ui.input_view_access import update_view_transform_for
-    from chemvas.ui.input_view_state import InputViewState
-    from chemvas.ui.selection_geometry_access import bounds_for_atoms_for
-    from chemvas.ui.structure_geometry_access import (
-        _compute_bond_template_geometry_for,
-        cyclohexane_boat_points_for,
-        cyclohexane_chair_points_for,
-        point_pair,
-        point_pairs,
-        qpoints_from_pairs,
-        regular_ring_radius_for,
-        ring_points_for,
-        template_geometry_result,
-    )
-
-
-@unittest.skipUnless(
-    QApplication is not None, "PyQt6 is required for canvas view tests"
+from PyQt6.QtCore import QPointF
+from PyQt6.QtGui import QTransform
+from PyQt6.QtWidgets import (
+    QApplication,
+    QGraphicsEllipseItem,
+    QGraphicsPolygonItem,
+    QGraphicsScene,
+    QGraphicsTextItem,
 )
+
+from chemvas.domain.document import Atom
+from chemvas.features.selection import (
+    bounding_box_center_for_atoms,
+    center_for_atoms,
+)
+from chemvas.ui.canvas_atom_graphics_state import (
+    CanvasAtomGraphicsState,
+    set_atom_dots_for,
+    set_atom_items_for,
+)
+from chemvas.ui.canvas_callback_state import CanvasCallbackState
+from chemvas.ui.canvas_insert_state import CanvasInsertState
+from chemvas.ui.canvas_scene_items_state import CanvasSceneItemsState
+from chemvas.ui.canvas_tool_mode_controller import CanvasToolModeController
+from chemvas.ui.canvas_tool_settings_state import (
+    CanvasToolSettingsState,
+    tool_settings_state_for,
+)
+from chemvas.ui.history_canvas_access import set_ring_polygons_for_history
+from chemvas.ui.input_view_access import update_view_transform_for
+from chemvas.ui.input_view_state import InputViewState
+from chemvas.ui.selection_geometry_access import bounds_for_atoms_for
+from chemvas.ui.structure_geometry_access import (
+    _compute_bond_template_geometry_for,
+    cyclohexane_boat_points_for,
+    cyclohexane_chair_points_for,
+    point_pair,
+    point_pairs,
+    qpoints_from_pairs,
+    regular_ring_radius_for,
+    ring_points_for,
+    template_geometry_result,
+)
+
+
 class CanvasViewCenterTransformHelpersTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -339,7 +332,3 @@ class CanvasViewCenterTransformHelpersTest(unittest.TestCase):
                 ),
             ],
         )
-
-
-if __name__ == "__main__":
-    unittest.main()

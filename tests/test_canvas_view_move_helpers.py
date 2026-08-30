@@ -8,36 +8,32 @@ from tests.runtime_state import canvas_runtime_state
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-try:
-    from PyQt6.QtCore import QPointF, QRectF
-    from PyQt6.QtWidgets import QApplication
-except ModuleNotFoundError:
-    QApplication = None
+from PyQt6.QtCore import QPointF, QRectF
+from PyQt6.QtWidgets import QApplication
 
-if QApplication is not None:
-    from chemvas.domain.document import Atom, Bond
-    from chemvas.ui.atom_coords_access import (
-        CanvasAtomCoords3DState,
-        atom_coords_3d_for,
-        set_atom_coords_3d_for,
-    )
-    from chemvas.ui.canvas_atom_graphics_state import (
-        CanvasAtomGraphicsState,
-        set_atom_dots_for,
-        set_atom_items_for,
-    )
-    from chemvas.ui.canvas_bond_graphics_state import (
-        CanvasBondGraphicsState,
-        set_bond_items_for,
-    )
-    from chemvas.ui.canvas_mark_registry import CanvasMarkRegistry
-    from chemvas.ui.canvas_move_controller import CanvasMoveController
-    from chemvas.ui.canvas_scene_items_state import (
-        CanvasSceneItemsState,
-        set_scene_item_collection_for,
-    )
-    from chemvas.ui.handle_state import CanvasHandleState
-    from chemvas.ui.move_access import move_atoms_for, move_item_for
+from chemvas.domain.document import Atom, Bond
+from chemvas.ui.atom_coords_access import (
+    CanvasAtomCoords3DState,
+    atom_coords_3d_for,
+    set_atom_coords_3d_for,
+)
+from chemvas.ui.canvas_atom_graphics_state import (
+    CanvasAtomGraphicsState,
+    set_atom_dots_for,
+    set_atom_items_for,
+)
+from chemvas.ui.canvas_bond_graphics_state import (
+    CanvasBondGraphicsState,
+    set_bond_items_for,
+)
+from chemvas.ui.canvas_mark_registry import CanvasMarkRegistry
+from chemvas.ui.canvas_move_controller import CanvasMoveController
+from chemvas.ui.canvas_scene_items_state import (
+    CanvasSceneItemsState,
+    set_scene_item_collection_for,
+)
+from chemvas.ui.handle_state import CanvasHandleState
+from chemvas.ui.move_access import move_atoms_for, move_item_for
 
 
 class _FakeItem:
@@ -77,9 +73,6 @@ class _FakeRingItem:
         )
 
 
-@unittest.skipUnless(
-    QApplication is not None, "PyQt6 is required for canvas view tests"
-)
 class CanvasViewMoveHelpersTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -483,7 +476,3 @@ class CanvasViewMoveHelpersTest(unittest.TestCase):
             update_selection=True,
             affected_ring_items=affected_rings,
         )
-
-
-if __name__ == "__main__":
-    unittest.main()

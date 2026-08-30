@@ -4,17 +4,13 @@ import unittest
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-try:
-    from PyQt6.QtWidgets import QApplication
-except ModuleNotFoundError:
-    QApplication = None
+from PyQt6.QtWidgets import QApplication
 
-if QApplication is not None:
-    from chemvas.core.history import DeleteAtomsCommand, DeleteBondCommand
-    from chemvas.domain.document import Atom, Bond, MoleculeModel
-    from chemvas.ui.history_commands import DeleteSceneItemsCommand
-    from chemvas.ui.scene_delete_plan import DeleteSelectionPlan
-    from tests.test_scene_ops_controller import _make_note_item, _make_rect_item
+from chemvas.core.history import DeleteAtomsCommand, DeleteBondCommand
+from chemvas.domain.document import Atom, Bond, MoleculeModel
+from chemvas.ui.history_commands import DeleteSceneItemsCommand
+from chemvas.ui.scene_delete_plan import DeleteSelectionPlan
+from tests.test_scene_ops_controller import _make_note_item, _make_rect_item
 
 
 def _load_delete_apply_helper():
@@ -40,9 +36,6 @@ def _load_delete_apply_helper():
     return None
 
 
-@unittest.skipUnless(
-    QApplication is not None, "PyQt6 is required for scene delete apply logic tests"
-)
 class SceneDeleteApplyLogicTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -289,7 +282,3 @@ class _FakeDeleteCanvas:
 
     def clear_handles(self) -> None:
         self.clear_handles_calls += 1
-
-
-if __name__ == "__main__":
-    unittest.main()

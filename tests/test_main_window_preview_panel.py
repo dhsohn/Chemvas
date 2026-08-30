@@ -3,13 +3,9 @@ import unittest
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-try:
-    from PyQt6.QtWidgets import QApplication, QMainWindow, QWidget
-except ModuleNotFoundError:
-    QApplication = None
+from PyQt6.QtWidgets import QApplication, QMainWindow, QWidget
 
-if QApplication is not None:
-    from chemvas.ui.main_window_preview_window import build_preview_window
+from chemvas.ui.main_window_preview_window import build_preview_window
 
 
 class _HarnessWindow(QMainWindow):
@@ -18,9 +14,6 @@ class _HarnessWindow(QMainWindow):
         self.preview_widget = QWidget()
 
 
-@unittest.skipUnless(
-    QApplication is not None, "PyQt6 is required for preview panel tests"
-)
 class MainWindowPreviewPanelTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -52,7 +45,3 @@ class MainWindowPreviewPanelTest(unittest.TestCase):
         assembly.preview_window.close()
         self.app.processEvents()
         self.assertFalse(assembly.preview_window.isVisible())
-
-
-if __name__ == "__main__":
-    unittest.main()

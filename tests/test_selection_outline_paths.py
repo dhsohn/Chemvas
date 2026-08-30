@@ -3,41 +3,35 @@ import unittest
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-try:
-    from PyQt6.QtCore import QPointF, QRectF, Qt
-    from PyQt6.QtGui import QBrush, QColor, QPainterPath, QPen, QPolygonF
-    from PyQt6.QtWidgets import (
-        QApplication,
-        QGraphicsLineItem,
-        QGraphicsPathItem,
-        QGraphicsPolygonItem,
-        QGraphicsTextItem,
-    )
-except ModuleNotFoundError:
-    QApplication = None
-
-if QApplication is not None:
-    from chemvas.features.selection import (
-        selection_line_stroke_path,
-        selection_path_for_bond_item,
-        selection_path_for_object_item,
-    )
-
-    class EmptyShapeItem(QGraphicsPathItem):
-        def __init__(self) -> None:
-            super().__init__()
-            self.setPos(2.0, 3.0)
-
-        def shape(self) -> QPainterPath:
-            return QPainterPath()
-
-        def sceneBoundingRect(self) -> QRectF:
-            return QRectF(1.0, 2.0, 6.0, 7.0)
-
-
-@unittest.skipUnless(
-    QApplication is not None, "PyQt6 is required for selection outline path tests"
+from PyQt6.QtCore import QPointF, QRectF, Qt
+from PyQt6.QtGui import QBrush, QColor, QPainterPath, QPen, QPolygonF
+from PyQt6.QtWidgets import (
+    QApplication,
+    QGraphicsLineItem,
+    QGraphicsPathItem,
+    QGraphicsPolygonItem,
+    QGraphicsTextItem,
 )
+
+from chemvas.features.selection import (
+    selection_line_stroke_path,
+    selection_path_for_bond_item,
+    selection_path_for_object_item,
+)
+
+
+class EmptyShapeItem(QGraphicsPathItem):
+    def __init__(self) -> None:
+        super().__init__()
+        self.setPos(2.0, 3.0)
+
+    def shape(self) -> QPainterPath:
+        return QPainterPath()
+
+    def sceneBoundingRect(self) -> QRectF:
+        return QRectF(1.0, 2.0, 6.0, 7.0)
+
+
 class SelectionOutlinePathsTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -117,7 +111,3 @@ class SelectionOutlinePathsTest(unittest.TestCase):
                 EmptyShapeItem(), kind="orbital", pad=2.0
             ).isEmpty()
         )
-
-
-if __name__ == "__main__":
-    unittest.main()

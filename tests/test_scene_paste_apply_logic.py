@@ -3,26 +3,10 @@ import unittest
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-try:
-    from PyQt6.QtWidgets import QApplication
-except ModuleNotFoundError:
-    QApplication = None
+from PyQt6.QtWidgets import QApplication
 
-if QApplication is not None:
-    from tests.test_scene_ops_controller_paste_edges import _RecordingFakeCanvas
-
-    try:
-        from chemvas.ui.scene_paste_apply_logic import apply_paste_payload
-    except (
-        ImportError
-    ) as exc:  # pragma: no cover - contract test for upcoming helper API
-        apply_paste_payload = None
-        IMPORT_ERROR = str(exc)
-    else:  # pragma: no cover - trivial import branch
-        IMPORT_ERROR = ""
-else:
-    apply_paste_payload = None
-    IMPORT_ERROR = ""
+from chemvas.ui.scene_paste_apply_logic import apply_paste_payload
+from tests.test_scene_ops_controller_paste_edges import _RecordingFakeCanvas
 
 
 class _RecordingPasteCanvas(_RecordingFakeCanvas):
@@ -67,10 +51,6 @@ class _RecordingPasteCanvas(_RecordingFakeCanvas):
         )
 
 
-@unittest.skipIf(
-    QApplication is None or apply_paste_payload is None,
-    f"PyQt6 or the paste apply helper is unavailable: {IMPORT_ERROR}",
-)
 class ScenePasteApplyLogicTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -307,7 +287,3 @@ class ScenePasteApplyLogicTest(unittest.TestCase):
         self.assertEqual(canvas.add_bond_calls, [])
         self.assertEqual(canvas.restore_bond_calls, [])
         self.assertEqual(canvas.created_scene_item_states, [])
-
-
-if __name__ == "__main__":
-    unittest.main()

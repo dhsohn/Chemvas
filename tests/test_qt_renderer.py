@@ -3,16 +3,11 @@ import unittest
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-try:
-    from PyQt6.QtCore import Qt
-except ModuleNotFoundError:
-    Qt = None
+from PyQt6.QtCore import Qt
 
-if Qt is not None:
-    from chemvas.adapters.qt.renderer import Renderer
+from chemvas.adapters.qt.renderer import Renderer
 
 
-@unittest.skipUnless(Qt is not None, "PyQt6 is required for renderer tests")
 class RendererTest(unittest.TestCase):
     def test_bond_pens_use_round_caps_so_vertices_join_cleanly(self) -> None:
         renderer = Renderer()
@@ -38,7 +33,3 @@ class RendererTest(unittest.TestCase):
         self.assertAlmostEqual(renderer.bold_bond_pen().widthF(), 1.65)
         self.assertAlmostEqual(renderer.bond_spacing(), 2.2)
         self.assertEqual(renderer.atom_font().pointSize(), 6)
-
-
-if __name__ == "__main__":
-    unittest.main()

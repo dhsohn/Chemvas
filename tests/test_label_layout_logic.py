@@ -276,7 +276,3 @@ class PlaceHydrideStackTest(unittest.TestCase):
         self.assertAlmostEqual(element_box[0], 3.6)
         hydrogen_run = next(run for run in layout.runs if run.text == "H")
         self.assertAlmostEqual(hydrogen_run.x, 0.0)
-
-
-if __name__ == "__main__":
-    unittest.main()

@@ -5,18 +5,11 @@ from unittest import mock
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-try:
-    from PyQt6.QtGui import QColor
-except ModuleNotFoundError:
-    QColor = None
+from PyQt6.QtGui import QColor
 
-if QColor is not None:
-    from chemvas.ui.main_window_text_style_service import MainWindowTextStyleService
+from chemvas.ui.main_window_text_style_service import MainWindowTextStyleService
 
 
-@unittest.skipUnless(
-    QColor is not None, "PyQt6 is required for main window text style service tests"
-)
 class MainWindowTextStyleServiceTest(unittest.TestCase):
     def setUp(self) -> None:
         self.style_controller = mock.Mock()
@@ -69,7 +62,3 @@ class MainWindowTextStyleServiceTest(unittest.TestCase):
                 mock.call.apply_text_preset_paper_bold(),
             ],
         )
-
-
-if __name__ == "__main__":
-    unittest.main()

@@ -3,26 +3,17 @@ import unittest
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-try:
-    from PyQt6.QtTest import QTest
-    from PyQt6.QtWidgets import QApplication
-except ModuleNotFoundError:
-    QApplication = None
-    QTest = None
+from PyQt6.QtTest import QTest
+from PyQt6.QtWidgets import QApplication
 
-if QApplication is not None:
-    from chemvas.bootstrap.main_window import build_main_window
-    from chemvas.ui.main_window_ports import (
-        active_canvas_for_window,
-        preview_for_window,
-        services_for_window,
-    )
-
-
-@unittest.skipUnless(
-    QApplication is not None,
-    "PyQt6 and build_main_window are required for GUI canvas tab tests",
+from chemvas.bootstrap.main_window import build_main_window
+from chemvas.ui.main_window_ports import (
+    active_canvas_for_window,
+    preview_for_window,
+    services_for_window,
 )
+
+
 class MainWindowCanvasTabsTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -81,7 +72,3 @@ class MainWindowCanvasTabsTest(unittest.TestCase):
         QTest.qWait(10)
 
         self.assertIs(preview_for_window(self.window).rdkit_adapter, first_canvas.rdkit)
-
-
-if __name__ == "__main__":
-    unittest.main()

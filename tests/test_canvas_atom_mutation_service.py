@@ -419,7 +419,3 @@ class CanvasAtomMutationServiceTest(unittest.TestCase):
         atom_label.ensure_carbon_dot.assert_not_called()
         service.apply_atom_color.assert_called_once_with(5, "#123456")
         self.assertEqual(canvas.model.next_atom_id, 10)
-
-
-if __name__ == "__main__":
-    unittest.main()

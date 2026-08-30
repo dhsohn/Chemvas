@@ -82,7 +82,3 @@ class PerspectiveDragLogicTest(unittest.TestCase):
         self.assertEqual(update.delta_y, 4.0)
         self.assertEqual(update.axis_lock, "y")
         self.assertTrue(update.should_update)
-
-
-if __name__ == "__main__":
-    unittest.main()

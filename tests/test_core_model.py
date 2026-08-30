@@ -76,7 +76,3 @@ class MoleculeModelTest(unittest.TestCase):
         found = model.find_atom_near(10.0, 10.0, max_dist=1.0)
 
         self.assertIsNone(found)
-
-
-if __name__ == "__main__":
-    unittest.main()

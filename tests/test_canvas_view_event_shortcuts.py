@@ -4,21 +4,17 @@ from unittest import mock
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-try:
-    from PyQt6.QtCore import QEvent, Qt
-    from PyQt6.QtGui import QTransform
-    from PyQt6.QtWidgets import QApplication, QGraphicsView
-except ModuleNotFoundError:
-    QApplication = None
+from PyQt6.QtCore import QEvent, Qt
+from PyQt6.QtGui import QTransform
+from PyQt6.QtWidgets import QApplication, QGraphicsView
 
-if QApplication is not None:
-    from chemvas.ui.canvas_hover_state import hover_state_for
-    from chemvas.ui.canvas_view import CanvasView
-    from chemvas.ui.input_view_access import (
-        input_view_state_for,
-        should_override_chemdraw_shortcut_for,
-    )
-    from tests.canvas_factory import build_canvas_view
+from chemvas.ui.canvas_hover_state import hover_state_for
+from chemvas.ui.canvas_view import CanvasView
+from chemvas.ui.input_view_access import (
+    input_view_state_for,
+    should_override_chemdraw_shortcut_for,
+)
+from tests.canvas_factory import build_canvas_view
 
 
 class _FakeEvent:
@@ -54,9 +50,6 @@ class _FakeEvent:
         return self._gesture_type
 
 
-@unittest.skipUnless(
-    QApplication is not None, "PyQt6 is required for canvas view tests"
-)
 class CanvasViewEventShortcutTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -177,7 +170,3 @@ class CanvasViewEventShortcutTest(unittest.TestCase):
         self.assertFalse(
             should_override_chemdraw_shortcut_for(reject_view, reject_event)
         )
-
-
-if __name__ == "__main__":
-    unittest.main()

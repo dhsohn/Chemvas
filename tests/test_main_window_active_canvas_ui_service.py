@@ -5,28 +5,15 @@ from unittest import mock
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-try:
-    from PyQt6.QtWidgets import QApplication, QTabWidget, QWidget
-except ModuleNotFoundError:
-    QApplication = None
-    QTabWidget = None
-    QWidget = None
+from PyQt6.QtWidgets import QApplication, QTabWidget, QWidget
 
-if QApplication is not None:
-    try:
-        from chemvas.ui.canvas_callback_state import callback_state_for
-        from chemvas.ui.canvas_view import CanvasView
-        from chemvas.ui.main_window_active_canvas_ui_service import (
-            MainWindowActiveCanvasUIService,
-        )
-        from chemvas.ui.selection_info_state import selection_info_state_for
-        from tests.canvas_factory import build_canvas_view
-    except (ModuleNotFoundError, SyntaxError):
-        CanvasView = None
-        MainWindowActiveCanvasUIService = None
-else:
-    CanvasView = None
-    MainWindowActiveCanvasUIService = None
+from chemvas.ui.canvas_callback_state import callback_state_for
+from chemvas.ui.canvas_view import CanvasView
+from chemvas.ui.main_window_active_canvas_ui_service import (
+    MainWindowActiveCanvasUIService,
+)
+from chemvas.ui.selection_info_state import selection_info_state_for
+from tests.canvas_factory import build_canvas_view
 
 
 class _FakeWindow:
@@ -79,12 +66,6 @@ class _FakePreview3D:
         self.rdkit_adapter = adapter
 
 
-@unittest.skipUnless(
-    QApplication is not None
-    and CanvasView is not None
-    and MainWindowActiveCanvasUIService is not None,
-    "PyQt6 and an importable active canvas UI service are required for tests",
-)
 class MainWindowActiveCanvasUIServiceTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -361,7 +342,3 @@ class MainWindowActiveCanvasUIServiceTest(unittest.TestCase):
             self.window, update_zoom=False
         )
         self.context_bar_service.refresh_window.assert_called_once_with(self.window)
-
-
-if __name__ == "__main__":
-    unittest.main()

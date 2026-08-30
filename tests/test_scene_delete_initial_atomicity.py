@@ -6,122 +6,117 @@ from unittest import mock
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-try:
-    from PyQt6.QtCore import QPointF, Qt
-    from PyQt6.QtGui import QBrush, QColor, QPen, QTransform
-    from PyQt6.QtWidgets import QApplication
-except ModuleNotFoundError:
-    QApplication = None
+from PyQt6.QtCore import QPointF, Qt
+from PyQt6.QtGui import QBrush, QColor, QPen, QTransform
+from PyQt6.QtWidgets import QApplication
 
-if QApplication is not None:
-    from chemvas.core.history import (
-        CompositeCommand,
-        SetSmilesInputCommand,
-    )
-    from chemvas.domain.document import Atom, Bond, MoleculeModel
-    from chemvas.ui.atom_coords_access import atom_coords_3d_for
-    from chemvas.ui.bond_graphics_access import add_bond_graphics_for
-    from chemvas.ui.canvas_atom_graphics_state import atom_dots_for, atom_items_for
-    from chemvas.ui.canvas_bond_graphics_state import bond_items_for_id
-    from chemvas.ui.canvas_callback_state import callback_state_for
-    from chemvas.ui.canvas_group_state import (
-        group_state_for,
-        register_group_for,
-        remove_group_for,
-    )
-    from chemvas.ui.canvas_mark_registry import mark_registry_for
-    from chemvas.ui.canvas_scene_items_state import note_items_for, ring_items_for
-    from chemvas.ui.canvas_smiles_input_state import (
-        last_smiles_input_for,
-        set_last_smiles_input_for,
-    )
-    from chemvas.ui.canvas_view import CanvasView
-    from chemvas.ui.edit_tools import DeleteTool
-    from chemvas.ui.history_commands import UngroupSceneItemsCommand
-    from chemvas.ui.scene_item_state import (
-        atom_state_dict_for,
-        bond_state_dict,
-        mark_state_dict_for,
-    )
-    from chemvas.ui.selection_info_state import selection_info_state_for
-    from chemvas.ui.structure_mutation_access import add_benzene_ring_for
-    from chemvas.ui.transactions.document import (
-        DocumentSavepoint,
-        document_transaction,
-    )
-    from tests.canvas_factory import build_canvas_view
-    from tests.test_scene_ops_controller import (
-        _FakeCanvas,
-        _make_model_ring_item,
-        _make_note_item,
-        _make_rect_item,
-        _make_ring_item,
-        scene_delete_controller_for,
-    )
-
-    class _DeleteGestureEvent:
-        def __init__(
-            self,
-            *,
-            button=Qt.MouseButton.LeftButton,
-            buttons=Qt.MouseButton.LeftButton,
-        ) -> None:
-            self._button = button
-            self._buttons = buttons
-
-        def button(self):
-            return self._button
-
-        def buttons(self):
-            return self._buttons
-
-    class _FailingCallbackPorts:
-        def __init__(self, group_callback, outline_callback) -> None:
-            self._group_callback = group_callback
-            self._outline_callback = outline_callback
-            self.group_getter_failures = 0
-            self.group_setter_failures = 0
-            self.group_restore_setter_failures = 0
-            self.group_getter_reads = 0
-            self.outline_getter_reads = 0
-            self.group_setter_calls = 0
-            self.outline_setter_calls = 0
-            self.getter_error = AttributeError("group callback getter failed")
-            self.setter_error = AttributeError("group callback setter failed")
-
-        @property
-        def scene_selection_group(self):
-            self.group_getter_reads += 1
-            if self.group_getter_failures:
-                self.group_getter_failures -= 1
-                raise self.getter_error
-            return self._group_callback
-
-        @scene_selection_group.setter
-        def scene_selection_group(self, callback) -> None:
-            self.group_setter_calls += 1
-            if callback is not None and self.group_restore_setter_failures:
-                self.group_restore_setter_failures -= 1
-                raise self.setter_error
-            self._group_callback = callback
-            if self.group_setter_failures:
-                self.group_setter_failures -= 1
-                raise self.setter_error
-
-        @property
-        def scene_selection_outline(self):
-            self.outline_getter_reads += 1
-            return self._outline_callback
-
-        @scene_selection_outline.setter
-        def scene_selection_outline(self, callback) -> None:
-            self.outline_setter_calls += 1
-            self._outline_callback = callback
-
-
-@unittest.skipUnless(
-    QApplication is not None, "PyQt6 is required for delete atomicity tests"
+from chemvas.core.history import (
+    CompositeCommand,
+    SetSmilesInputCommand,
 )
+from chemvas.domain.document import Atom, Bond, MoleculeModel
+from chemvas.ui.atom_coords_access import atom_coords_3d_for
+from chemvas.ui.bond_graphics_access import add_bond_graphics_for
+from chemvas.ui.canvas_atom_graphics_state import atom_dots_for, atom_items_for
+from chemvas.ui.canvas_bond_graphics_state import bond_items_for_id
+from chemvas.ui.canvas_callback_state import callback_state_for
+from chemvas.ui.canvas_group_state import (
+    group_state_for,
+    register_group_for,
+    remove_group_for,
+)
+from chemvas.ui.canvas_mark_registry import mark_registry_for
+from chemvas.ui.canvas_scene_items_state import note_items_for, ring_items_for
+from chemvas.ui.canvas_smiles_input_state import (
+    last_smiles_input_for,
+    set_last_smiles_input_for,
+)
+from chemvas.ui.canvas_view import CanvasView
+from chemvas.ui.edit_tools import DeleteTool
+from chemvas.ui.history_commands import UngroupSceneItemsCommand
+from chemvas.ui.scene_item_state import (
+    atom_state_dict_for,
+    bond_state_dict,
+    mark_state_dict_for,
+)
+from chemvas.ui.selection_info_state import selection_info_state_for
+from chemvas.ui.structure_mutation_access import add_benzene_ring_for
+from chemvas.ui.transactions.document import (
+    DocumentSavepoint,
+    document_transaction,
+)
+from tests.canvas_factory import build_canvas_view
+from tests.test_scene_ops_controller import (
+    _FakeCanvas,
+    _make_model_ring_item,
+    _make_note_item,
+    _make_rect_item,
+    _make_ring_item,
+    scene_delete_controller_for,
+)
+
+
+class _DeleteGestureEvent:
+    def __init__(
+        self,
+        *,
+        button=Qt.MouseButton.LeftButton,
+        buttons=Qt.MouseButton.LeftButton,
+    ) -> None:
+        self._button = button
+        self._buttons = buttons
+
+    def button(self):
+        return self._button
+
+    def buttons(self):
+        return self._buttons
+
+
+class _FailingCallbackPorts:
+    def __init__(self, group_callback, outline_callback) -> None:
+        self._group_callback = group_callback
+        self._outline_callback = outline_callback
+        self.group_getter_failures = 0
+        self.group_setter_failures = 0
+        self.group_restore_setter_failures = 0
+        self.group_getter_reads = 0
+        self.outline_getter_reads = 0
+        self.group_setter_calls = 0
+        self.outline_setter_calls = 0
+        self.getter_error = AttributeError("group callback getter failed")
+        self.setter_error = AttributeError("group callback setter failed")
+
+    @property
+    def scene_selection_group(self):
+        self.group_getter_reads += 1
+        if self.group_getter_failures:
+            self.group_getter_failures -= 1
+            raise self.getter_error
+        return self._group_callback
+
+    @scene_selection_group.setter
+    def scene_selection_group(self, callback) -> None:
+        self.group_setter_calls += 1
+        if callback is not None and self.group_restore_setter_failures:
+            self.group_restore_setter_failures -= 1
+            raise self.setter_error
+        self._group_callback = callback
+        if self.group_setter_failures:
+            self.group_setter_failures -= 1
+            raise self.setter_error
+
+    @property
+    def scene_selection_outline(self):
+        self.outline_getter_reads += 1
+        return self._outline_callback
+
+    @scene_selection_outline.setter
+    def scene_selection_outline(self, callback) -> None:
+        self.outline_setter_calls += 1
+        self._outline_callback = callback
+
+
 class SceneDeleteInitialAtomicityTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -1868,7 +1863,3 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
         self.assertNotIn(ring, ring_items_for(canvas))
         self.assertEqual(session.rollback(), [])
         self.assertIn(ring, ring_items_for(canvas))
-
-
-if __name__ == "__main__":
-    unittest.main()

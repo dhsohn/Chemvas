@@ -8,40 +8,36 @@ from tests.runtime_state import canvas_runtime_state
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-try:
-    from PyQt6.QtCore import QPointF, QRect, QRectF, Qt
-    from PyQt6.QtGui import QColor, QFont
-    from PyQt6.QtWidgets import (
-        QApplication,
-        QGraphicsPathItem,
-        QGraphicsScene,
-        QGraphicsTextItem,
-        QMainWindow,
-    )
-except ModuleNotFoundError:
-    QApplication = None
+from PyQt6.QtCore import QPointF, QRect, QRectF, Qt
+from PyQt6.QtGui import QColor, QFont
+from PyQt6.QtWidgets import (
+    QApplication,
+    QGraphicsPathItem,
+    QGraphicsScene,
+    QGraphicsTextItem,
+    QMainWindow,
+)
 
-if QApplication is not None:
-    from chemvas.shell.toolbar_buttons import ArrowButton
-    from chemvas.ui.canvas_atom_graphics_state import CanvasAtomGraphicsState
-    from chemvas.ui.canvas_color_mutation_service import CanvasColorMutationService
-    from chemvas.ui.canvas_note_controller import CanvasNoteController
-    from chemvas.ui.canvas_ring_fill_scene_service import CanvasRingFillSceneService
-    from chemvas.ui.canvas_scene_items_state import (
-        CanvasSceneItemsState,
-        selected_notes_for,
-        set_selected_notes_for,
-    )
-    from chemvas.ui.canvas_text_style_state import CanvasTextStyleState
-    from chemvas.ui.handle_mutation_service import HandleMutationService
-    from chemvas.ui.main_window_panel_toolbar import MainWindowPanelToolbarCallbacks
-    from chemvas.ui.note_item_access import (
-        set_committed_note_html_for,
-        set_committed_note_text_for,
-    )
-    from chemvas.ui.scene_flip_state import flip_scene_item_state
-    from chemvas.ui.scene_item_restore import create_orbital_item_from_state
-    from chemvas.ui.scene_paste_apply_logic import apply_paste_payload
+from chemvas.shell.toolbar_buttons import ArrowButton
+from chemvas.ui.canvas_atom_graphics_state import CanvasAtomGraphicsState
+from chemvas.ui.canvas_color_mutation_service import CanvasColorMutationService
+from chemvas.ui.canvas_note_controller import CanvasNoteController
+from chemvas.ui.canvas_ring_fill_scene_service import CanvasRingFillSceneService
+from chemvas.ui.canvas_scene_items_state import (
+    CanvasSceneItemsState,
+    selected_notes_for,
+    set_selected_notes_for,
+)
+from chemvas.ui.canvas_text_style_state import CanvasTextStyleState
+from chemvas.ui.handle_mutation_service import HandleMutationService
+from chemvas.ui.main_window_panel_toolbar import MainWindowPanelToolbarCallbacks
+from chemvas.ui.note_item_access import (
+    set_committed_note_html_for,
+    set_committed_note_text_for,
+)
+from chemvas.ui.scene_flip_state import flip_scene_item_state
+from chemvas.ui.scene_item_restore import create_orbital_item_from_state
+from chemvas.ui.scene_paste_apply_logic import apply_paste_payload
 
 
 def _history_service(push=None):
@@ -96,9 +92,6 @@ class _NoteItem:
         return QRectF(self._rect)
 
 
-@unittest.skipUnless(
-    QApplication is not None, "PyQt6 is required for UI service tail coverage tests"
-)
 class UIServiceTailCoverageTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -471,7 +464,3 @@ class UIServiceTailCoverageTest(unittest.TestCase):
         add_or_update_atom_label.assert_not_called()
         self.assertEqual(result.atom_id_map, {5: 42})
         self.assertTrue(result.has_changes())
-
-
-if __name__ == "__main__":
-    unittest.main()

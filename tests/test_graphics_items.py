@@ -3,20 +3,13 @@ import unittest
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-try:
-    from PyQt6.QtCore import QRectF, Qt
-    from PyQt6.QtGui import QImage, QPainter, QPen
-    from PyQt6.QtWidgets import QApplication, QStyle, QStyleOptionGraphicsItem
-except ModuleNotFoundError:
-    QApplication = None
+from PyQt6.QtCore import QRectF, Qt
+from PyQt6.QtGui import QImage, QPainter, QPen
+from PyQt6.QtWidgets import QApplication, QStyle, QStyleOptionGraphicsItem
 
-if QApplication is not None:
-    from chemvas.ui.graphics_items import AtomDotItem, AtomLabelItem, NoSelectRectItem
+from chemvas.ui.graphics_items import AtomDotItem, AtomLabelItem, NoSelectRectItem
 
 
-@unittest.skipUnless(
-    QApplication is not None, "PyQt6 is required for graphics item tests"
-)
 class GraphicsItemsTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -111,7 +104,3 @@ class GraphicsItemsTest(unittest.TestCase):
                 for y in range(image.height())
             )
             self.assertTrue(non_empty, f"expected outlined pixels for {text!r}")
-
-
-if __name__ == "__main__":
-    unittest.main()

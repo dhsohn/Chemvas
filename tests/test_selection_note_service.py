@@ -8,28 +8,21 @@ from tests.runtime_state import canvas_runtime_state
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-try:
-    from PyQt6.QtGui import QColor
-    from PyQt6.QtWidgets import QApplication, QGraphicsScene, QGraphicsTextItem
-except ModuleNotFoundError:
-    QApplication = None
+from PyQt6.QtGui import QColor
+from PyQt6.QtWidgets import QApplication, QGraphicsScene, QGraphicsTextItem
 
-if QApplication is not None:
-    from chemvas.domain.document import MoleculeModel
-    from chemvas.ui.canvas_group_state import CanvasGroupState, register_group_for
-    from chemvas.ui.canvas_scene_items_state import (
-        CanvasSceneItemsState,
-        selected_notes_for,
-        set_selected_notes_for,
-    )
-    from chemvas.ui.canvas_text_style_state import CanvasTextStyleState
-    from chemvas.ui.selection_note_service import SelectionNoteService
-    from chemvas.ui.selection_style_state import SelectionStyleState
-
-
-@unittest.skipUnless(
-    QApplication is not None, "PyQt6 is required for selection note service tests"
+from chemvas.domain.document import MoleculeModel
+from chemvas.ui.canvas_group_state import CanvasGroupState, register_group_for
+from chemvas.ui.canvas_scene_items_state import (
+    CanvasSceneItemsState,
+    selected_notes_for,
+    set_selected_notes_for,
 )
+from chemvas.ui.canvas_text_style_state import CanvasTextStyleState
+from chemvas.ui.selection_note_service import SelectionNoteService
+from chemvas.ui.selection_style_state import SelectionStyleState
+
+
 class SelectionNoteServiceTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:

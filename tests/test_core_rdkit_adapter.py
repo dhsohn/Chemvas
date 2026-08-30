@@ -2784,7 +2784,3 @@ class WarmRdkitInBackgroundTest(unittest.TestCase):
             captured[0].last_error,
             "RDKit is not available in this environment.",
         )
-
-
-if __name__ == "__main__":
-    unittest.main()

@@ -4,15 +4,11 @@ from types import SimpleNamespace
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-try:
-    from PyQt6.QtCore import QPointF, QRectF
-except ModuleNotFoundError:
-    QPointF = None
+from PyQt6.QtCore import QPointF, QRectF
 
-if QPointF is not None:
-    from chemvas.domain.document import Atom
-    from chemvas.ui.scene_item_state import ts_bracket_rect_from_state
-    from chemvas.ui.scene_rotation_state import rotate_scene_item_state, rotated_point
+from chemvas.domain.document import Atom
+from chemvas.ui.scene_item_state import ts_bracket_rect_from_state
+from chemvas.ui.scene_rotation_state import rotate_scene_item_state, rotated_point
 
 
 def _rotate_state(item, before_state, *, transformed=None, atoms=None):
@@ -32,9 +28,6 @@ def _item(kind: str, *, bounding_rect: QRectF | None = None):
     return SimpleNamespace(data=lambda _key: kind, sceneBoundingRect=lambda: rect)
 
 
-@unittest.skipUnless(
-    QPointF is not None, "PyQt6 is required for scene rotation state tests"
-)
 class SceneRotationStateTest(unittest.TestCase):
     def test_rotated_point_rotates_clockwise_in_scene_coordinates(self) -> None:
         rotated = rotated_point(
@@ -123,7 +116,3 @@ class SceneRotationStateTest(unittest.TestCase):
     def test_rotate_state_ignores_empty_and_unknown_states(self) -> None:
         self.assertEqual(_rotate_state(_item("arrow"), {}), {})
         self.assertEqual(_rotate_state(_item("mystery"), {"kind": "mystery"}), {})
-
-
-if __name__ == "__main__":
-    unittest.main()

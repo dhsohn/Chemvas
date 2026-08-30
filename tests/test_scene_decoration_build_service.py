@@ -7,18 +7,14 @@ from tests.runtime_state import canvas_runtime_state
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-try:
-    from PyQt6.QtCore import QPointF, QRectF, Qt
-    from PyQt6.QtGui import QColor, QPen
-    from PyQt6.QtWidgets import QApplication, QGraphicsEllipseItem
-except ModuleNotFoundError:
-    QApplication = None
+from PyQt6.QtCore import QPointF, QRectF, Qt
+from PyQt6.QtGui import QColor, QPen
+from PyQt6.QtWidgets import QApplication, QGraphicsEllipseItem
 
-if QApplication is not None:
-    from chemvas.ui.canvas_scene_decoration_build_service import (
-        CanvasSceneDecorationBuildService,
-    )
-    from chemvas.ui.canvas_tool_settings_state import CanvasToolSettingsState
+from chemvas.ui.canvas_scene_decoration_build_service import (
+    CanvasSceneDecorationBuildService,
+)
+from chemvas.ui.canvas_tool_settings_state import CanvasToolSettingsState
 
 
 class _RecordingScene:
@@ -29,10 +25,6 @@ class _RecordingScene:
         self.items.append(item)
 
 
-@unittest.skipUnless(
-    QApplication is not None,
-    "PyQt6 is required for scene decoration build service tests",
-)
 class CanvasSceneDecorationBuildServiceTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -209,7 +201,3 @@ class CanvasSceneDecorationBuildServiceTest(unittest.TestCase):
         rect = item.data(1)["rect"]
         self.assertAlmostEqual(rect.width(), 36.0)
         self.assertAlmostEqual(rect.height(), 48.0)
-
-
-if __name__ == "__main__":
-    unittest.main()

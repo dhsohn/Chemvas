@@ -5,28 +5,17 @@ from unittest import mock
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-try:
-    from PyQt6.QtCore import QPointF, Qt
-    from PyQt6.QtGui import QBrush, QColor, QPolygonF
-    from PyQt6.QtWidgets import QApplication
-except ModuleNotFoundError:
-    QApplication = None
-    QPointF = None
-    Qt = None
-    QBrush = None
-    QColor = None
-    QPolygonF = None
+from PyQt6.QtCore import QPointF, Qt
+from PyQt6.QtGui import QBrush, QColor
+from PyQt6.QtWidgets import QApplication
 
-if QApplication is not None:
-    from chemvas.domain.document import Atom
-    from chemvas.ui.canvas_ring_fill_scene_service import CanvasRingFillSceneService
-    from chemvas.ui.canvas_scene_items_state import (
-        CanvasSceneItemsState,
-        set_scene_item_collection_for,
-    )
-    from tests.runtime_state import canvas_runtime_state
-else:
-    CanvasRingFillSceneService = None
+from chemvas.domain.document import Atom
+from chemvas.ui.canvas_ring_fill_scene_service import CanvasRingFillSceneService
+from chemvas.ui.canvas_scene_items_state import (
+    CanvasSceneItemsState,
+    set_scene_item_collection_for,
+)
+from tests.runtime_state import canvas_runtime_state
 
 
 class _FakeRingItem:
@@ -44,10 +33,6 @@ def _polygon_points(polygon) -> list[tuple[float, float]]:
     return [(round(point.x(), 6), round(point.y(), 6)) for point in polygon]
 
 
-@unittest.skipUnless(
-    QApplication is not None and CanvasRingFillSceneService is not None,
-    "PyQt6 and the ring fill scene service are required for tests",
-)
 class CanvasRingFillSceneServiceTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -130,7 +115,3 @@ class CanvasRingFillSceneServiceTest(unittest.TestCase):
         # Ring fills stack behind bonds/labels so an opaque pastel fill never
         # covers the structure.
         self.assertLess(item.zValue(), 0.0)
-
-
-if __name__ == "__main__":
-    unittest.main()

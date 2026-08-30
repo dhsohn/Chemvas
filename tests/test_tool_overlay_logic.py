@@ -111,7 +111,3 @@ class ToolOverlayLogicTest(unittest.TestCase):
 
         self.assertIsNone(result)
         self.assertEqual(canvas.scene_obj.removed_items, [])
-
-
-if __name__ == "__main__":
-    unittest.main()

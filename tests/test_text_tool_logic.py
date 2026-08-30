@@ -127,7 +127,3 @@ class TextToolLogicTest(unittest.TestCase):
         self.assertEqual(command.after_next_atom_id, 4)
         self.assertEqual(command.before_smiles_input, "before")
         self.assertEqual(command.after_smiles_input, "after")
-
-
-if __name__ == "__main__":
-    unittest.main()

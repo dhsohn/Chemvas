@@ -12,15 +12,10 @@ from chemvas.ui.canvas_bond_graphics_state import (
     set_bond_items_for,
 )
 from chemvas.ui.canvas_bond_mutation_service import CanvasBondMutationService
+from chemvas.ui.canvas_graph_service import CanvasGraphService
+from chemvas.ui.canvas_graph_state import CanvasGraphState
 from tests.runtime_services import canvas_runtime_services
 from tests.runtime_state import canvas_runtime_state
-
-try:
-    from chemvas.ui.canvas_graph_service import CanvasGraphService
-    from chemvas.ui.canvas_graph_state import CanvasGraphState
-except ModuleNotFoundError:
-    CanvasGraphService = None
-    CanvasGraphState = None
 
 
 class _FakeModel:
@@ -309,10 +304,6 @@ class CanvasBondMutationServiceStaleIndexTest(unittest.TestCase):
         self.assertEqual(len(model.bonds), 1)
         graph.bond_id_between_with_repair.assert_called_once_with(1, 2)
 
-    @unittest.skipUnless(
-        CanvasGraphService is not None and CanvasGraphState is not None,
-        "PyQt6 is required for canvas graph service tests",
-    )
     def test_trim_bonds_to_length_does_not_repair_trimmed_parallel_bond_indexes(
         self,
     ) -> None:
@@ -343,7 +334,3 @@ class CanvasBondMutationServiceStaleIndexTest(unittest.TestCase):
         self.assertEqual(graph_state.atom_neighbors, {1: set(), 2: set()})
         self.assertEqual(scene.removed_items, [item_0, item_1])
         hit_testing.mark_spatial_index_dirty.assert_called_once_with()
-
-
-if __name__ == "__main__":
-    unittest.main()

@@ -5,40 +5,26 @@ from unittest import mock
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-try:
-    from PyQt6.QtCore import QPointF, Qt
-    from PyQt6.QtGui import QColor, QPainterPath, QPen, QPolygonF
-    from PyQt6.QtWidgets import (
-        QApplication,
-        QGraphicsLineItem,
-        QGraphicsPathItem,
-        QGraphicsPolygonItem,
-        QGraphicsScene,
-        QGraphicsTextItem,
-    )
-except ModuleNotFoundError:
-    QApplication = None
-    Qt = None
-    QPainterPath = None
-    QGraphicsLineItem = None
-    QGraphicsPathItem = None
-    QGraphicsPolygonItem = None
-    QGraphicsScene = None
-    QGraphicsTextItem = None
-
-if QApplication is not None:
-    from chemvas.ui.bond_preview_renderer import (
-        add_bond_preview_items,
-        build_bond_preview_items,
-        clear_bond_preview_items,
-        update_bond_preview_items,
-    )
-    from chemvas.ui.graphics_items import NoSelectLineItem
-
-
-@unittest.skipUnless(
-    QApplication is not None, "PyQt6 is required for bond preview renderer tests"
+from PyQt6.QtCore import QPointF, Qt
+from PyQt6.QtGui import QColor, QPainterPath, QPen, QPolygonF
+from PyQt6.QtWidgets import (
+    QApplication,
+    QGraphicsLineItem,
+    QGraphicsPathItem,
+    QGraphicsPolygonItem,
+    QGraphicsScene,
+    QGraphicsTextItem,
 )
+
+from chemvas.ui.bond_preview_renderer import (
+    add_bond_preview_items,
+    build_bond_preview_items,
+    clear_bond_preview_items,
+    update_bond_preview_items,
+)
+from chemvas.ui.graphics_items import NoSelectLineItem
+
+
 class BondPreviewRendererTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -964,7 +950,3 @@ def _bond_renderer(**overrides):
     )
     methods.update(overrides)
     return SimpleNamespace(**methods)
-
-
-if __name__ == "__main__":
-    unittest.main()

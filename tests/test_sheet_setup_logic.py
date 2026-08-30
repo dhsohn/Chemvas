@@ -25,7 +25,3 @@ class SheetSetupLogicTest(unittest.TestCase):
     def test_sheet_dimensions_follow_orientation(self) -> None:
         self.assertEqual(sheet_dimensions_px("A4", "landscape"), (842.0, 595.0))
         self.assertEqual(sheet_dimensions_px("A4", "portrait"), (595.0, 842.0))
-
-
-if __name__ == "__main__":
-    unittest.main()

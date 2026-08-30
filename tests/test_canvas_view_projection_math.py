@@ -9,80 +9,76 @@ from tests.runtime_state import canvas_runtime_state
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-try:
-    from PyQt6.QtCore import QPointF, Qt
-    from PyQt6.QtGui import QPolygonF
-    from PyQt6.QtWidgets import QApplication
-except ModuleNotFoundError:
-    QApplication = None
+from PyQt6.QtCore import QPointF, Qt
+from PyQt6.QtGui import QPolygonF
+from PyQt6.QtWidgets import QApplication
 
-if QApplication is not None:
-    from chemvas.core.history import (
-        CompositeCommand,
-        SetAtomPositionsCommand,
-        SetRingPolygonsCommand,
-        UpdateBondLengthCommand,
-    )
-    from chemvas.domain.document import Atom, Bond
-    from chemvas.ui.atom_coords_access import (
-        CanvasAtomCoords3DState,
-        atom_coords_3d_for,
-        current_atom_coords_3d_for,
-        set_atom_coords_3d_for,
-    )
-    from chemvas.ui.bond_graphics_access import (
-        add_bond_graphics_for,
-        apply_color_to_bond_item_for,
-        bond_offset_unit_3d_for,
-        line_normal_components,
-        line_normal_for,
-        orient_normal_toward_target,
-        parallel_bond_segments_for,
-        project_point_3d_for,
-        ring_double_segments_for,
-    )
-    from chemvas.ui.bond_renderer_access import bond_renderer_for
-    from chemvas.ui.canvas_atom_graphics_state import (
-        CanvasAtomGraphicsState,
-        atom_dots_for,
-        atom_items_for,
-        set_atom_dots_for,
-        set_atom_items_for,
-    )
-    from chemvas.ui.canvas_bond_graphics_state import (
-        CanvasBondGraphicsState,
-        bond_items_for_id,
-    )
-    from chemvas.ui.canvas_geometry_controller import CanvasGeometryController
-    from chemvas.ui.canvas_graph_service import CanvasGraphService
-    from chemvas.ui.canvas_graph_state import CanvasGraphState
-    from chemvas.ui.canvas_mark_registry import CanvasMarkRegistry
-    from chemvas.ui.canvas_move_controller import CanvasMoveController
-    from chemvas.ui.canvas_rotation_state import CanvasRotationState
-    from chemvas.ui.canvas_scene_items_state import (
-        CanvasSceneItemsState,
-        set_scene_item_collection_for,
-    )
-    from chemvas.ui.graphics_items import AtomLabelItem
-    from chemvas.ui.history_commands import UpdateSceneItemCommand
-    from chemvas.ui.renderer_style_access import bond_length_px_for
-    from chemvas.ui.selection_rotation_access import (
-        apply_projected_atom_positions_for,
-        atom_in_planar_system_for,
-        average_bond_length_for_atoms_for,
-        bond_ids_for_atom_ids_for,
-        bond_ids_within_atom_ids_for,
-        bond_is_planar_fragment_edge_for,
-        center_for_coords_3d,
-        flatten_planar_fragments_for,
-        fragment_plane_normal_for,
-        planar_fragment_components_for,
-        rotate_point_around_axis_for,
-        rotation_scale_for_coords_for,
-        unproject_scene_point_3d_for,
-    )
-    from chemvas.ui.structure_mutation_access import add_atom_for, add_bond_for
-    from tests.canvas_factory import build_canvas_view
+from chemvas.core.history import (
+    CompositeCommand,
+    SetAtomPositionsCommand,
+    SetRingPolygonsCommand,
+    UpdateBondLengthCommand,
+)
+from chemvas.domain.document import Atom, Bond
+from chemvas.ui.atom_coords_access import (
+    CanvasAtomCoords3DState,
+    atom_coords_3d_for,
+    current_atom_coords_3d_for,
+    set_atom_coords_3d_for,
+)
+from chemvas.ui.bond_graphics_access import (
+    add_bond_graphics_for,
+    apply_color_to_bond_item_for,
+    bond_offset_unit_3d_for,
+    line_normal_components,
+    line_normal_for,
+    orient_normal_toward_target,
+    parallel_bond_segments_for,
+    project_point_3d_for,
+    ring_double_segments_for,
+)
+from chemvas.ui.bond_renderer_access import bond_renderer_for
+from chemvas.ui.canvas_atom_graphics_state import (
+    CanvasAtomGraphicsState,
+    atom_dots_for,
+    atom_items_for,
+    set_atom_dots_for,
+    set_atom_items_for,
+)
+from chemvas.ui.canvas_bond_graphics_state import (
+    CanvasBondGraphicsState,
+    bond_items_for_id,
+)
+from chemvas.ui.canvas_geometry_controller import CanvasGeometryController
+from chemvas.ui.canvas_graph_service import CanvasGraphService
+from chemvas.ui.canvas_graph_state import CanvasGraphState
+from chemvas.ui.canvas_mark_registry import CanvasMarkRegistry
+from chemvas.ui.canvas_move_controller import CanvasMoveController
+from chemvas.ui.canvas_rotation_state import CanvasRotationState
+from chemvas.ui.canvas_scene_items_state import (
+    CanvasSceneItemsState,
+    set_scene_item_collection_for,
+)
+from chemvas.ui.graphics_items import AtomLabelItem
+from chemvas.ui.history_commands import UpdateSceneItemCommand
+from chemvas.ui.renderer_style_access import bond_length_px_for
+from chemvas.ui.selection_rotation_access import (
+    apply_projected_atom_positions_for,
+    atom_in_planar_system_for,
+    average_bond_length_for_atoms_for,
+    bond_ids_for_atom_ids_for,
+    bond_ids_within_atom_ids_for,
+    bond_is_planar_fragment_edge_for,
+    center_for_coords_3d,
+    flatten_planar_fragments_for,
+    fragment_plane_normal_for,
+    planar_fragment_components_for,
+    rotate_point_around_axis_for,
+    rotation_scale_for_coords_for,
+    unproject_scene_point_3d_for,
+)
+from chemvas.ui.structure_mutation_access import add_atom_for, add_bond_for
+from tests.canvas_factory import build_canvas_view
 
 
 class _FakeRingItem:
@@ -162,9 +158,6 @@ class _FakeBrushOnlyItem:
         self.brush_updates.append(color)
 
 
-@unittest.skipUnless(
-    QApplication is not None, "PyQt6 is required for canvas view tests"
-)
 class CanvasViewProjectionMathTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -1417,7 +1410,3 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
         self.assertEqual(pen_and_brush_item.brush_updates, [color])
         self.assertEqual(brush_only_item.brush_updates, [color])
         self.assertEqual(no_brush_item.brush_updates, [])
-
-
-if __name__ == "__main__":
-    unittest.main()

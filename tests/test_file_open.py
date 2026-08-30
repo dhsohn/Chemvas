@@ -4,15 +4,11 @@ from pathlib import Path
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-try:
-    from PyQt6.QtCore import QEvent
-    from PyQt6.QtWidgets import QApplication
-except ModuleNotFoundError:
-    QApplication = None
+from PyQt6.QtCore import QEvent
+from PyQt6.QtWidgets import QApplication
 
-if QApplication is not None:
-    from chemvas.adapters.qt import FileOpenEventFilter
-    from chemvas.bootstrap.file_open import open_document
+from chemvas.adapters.qt import FileOpenEventFilter
+from chemvas.bootstrap.file_open import open_document
 
 
 class _FakeEvent:
@@ -27,9 +23,6 @@ class _FakeEvent:
         return self._path
 
 
-@unittest.skipUnless(
-    QApplication is not None, "PyQt6 is required for file-open filter tests"
-)
 class FileOpenEventFilterTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -66,9 +59,6 @@ class FileOpenEventFilterTest(unittest.TestCase):
         self.assertEqual(opened, [])
 
 
-@unittest.skipUnless(
-    QApplication is not None, "PyQt6 is required for open-document routing tests"
-)
 class OpenDocumentRoutingTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -142,7 +132,3 @@ class OpenDocumentRoutingTest(unittest.TestCase):
         # The file is already open, so we switch to its window — no duplicate.
         self.assertEqual(len(open_windows()), 1)
         self.assertIs(open_windows()[0], window)
-
-
-if __name__ == "__main__":
-    unittest.main()

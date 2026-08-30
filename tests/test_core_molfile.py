@@ -552,7 +552,3 @@ class MolfileParserErrorTest(unittest.TestCase):
         # Callers that already surface MolfileError for export failures can
         # reuse the same handling for import failures.
         self.assertTrue(issubclass(MolfileParseError, MolfileError))
-
-
-if __name__ == "__main__":
-    unittest.main()

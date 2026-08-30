@@ -3,26 +3,19 @@ import unittest
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-try:
-    from PyQt6.QtCore import QPointF
-    from PyQt6.QtWidgets import QApplication
-except ModuleNotFoundError:
-    QApplication = None
+from PyQt6.QtCore import QPointF
+from PyQt6.QtWidgets import QApplication
 
-if QApplication is not None:
-    from chemvas.core.history import SetAtomPositionsCommand
-    from chemvas.ui.history_commands import UpdateSceneItemCommand
-    from chemvas.ui.scene_flip_grouping import FlipAtomPositionMaps
-    from chemvas.ui.scene_transform_apply_logic import (
-        apply_component_flip_transform,
-        apply_standalone_flip_transform,
-    )
-    from tests.test_scene_ops_controller import _make_rect_item
-
-
-@unittest.skipUnless(
-    QApplication is not None, "PyQt6 is required for scene transform apply logic tests"
+from chemvas.core.history import SetAtomPositionsCommand
+from chemvas.ui.history_commands import UpdateSceneItemCommand
+from chemvas.ui.scene_flip_grouping import FlipAtomPositionMaps
+from chemvas.ui.scene_transform_apply_logic import (
+    apply_component_flip_transform,
+    apply_standalone_flip_transform,
 )
+from tests.test_scene_ops_controller import _make_rect_item
+
+
 class SceneTransformApplyLogicTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -140,7 +133,3 @@ class SceneTransformApplyLogicTest(unittest.TestCase):
         self.assertEqual(changed_command.after_state, {"kind": "note", "x": 7.0})
         self.assertIsNone(unchanged_command)
         self.assertEqual(applied_states, [(changed_item, {"kind": "note", "x": 7.0})])
-
-
-if __name__ == "__main__":
-    unittest.main()

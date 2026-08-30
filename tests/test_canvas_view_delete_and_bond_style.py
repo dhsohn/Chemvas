@@ -8,36 +8,32 @@ from tests.runtime_state import canvas_runtime_state
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-try:
-    from PyQt6.QtWidgets import QApplication
-except ModuleNotFoundError:
-    QApplication = None
+from PyQt6.QtWidgets import QApplication
 
-if QApplication is not None:
-    from chemvas.core.history import (
-        CompositeCommand,
-        DeleteAtomsCommand,
-        DeleteBondCommand,
-    )
-    from chemvas.domain.document import Atom, Bond
-    from chemvas.ui.atom_coords_access import CanvasAtomCoords3DState
-    from chemvas.ui.canvas_atom_graphics_state import CanvasAtomGraphicsState
-    from chemvas.ui.canvas_bond_graphics_state import (
-        CanvasBondGraphicsState,
-        bond_items_for,
-        set_bond_items_for,
-    )
-    from chemvas.ui.canvas_graph_state import CanvasGraphState
-    from chemvas.ui.canvas_group_state import CanvasGroupState
-    from chemvas.ui.canvas_mark_registry import CanvasMarkRegistry
-    from chemvas.ui.canvas_scene_items_state import CanvasSceneItemsState
-    from chemvas.ui.canvas_smiles_input_state import (
-        CanvasSmilesInputState,
-        last_smiles_input_for,
-    )
-    from chemvas.ui.history_commands import DeleteSceneItemsCommand
-    from chemvas.ui.scene_delete_controller import SceneDeleteController
-    from chemvas.ui.scene_transform_controller import SceneTransformController
+from chemvas.core.history import (
+    CompositeCommand,
+    DeleteAtomsCommand,
+    DeleteBondCommand,
+)
+from chemvas.domain.document import Atom, Bond
+from chemvas.ui.atom_coords_access import CanvasAtomCoords3DState
+from chemvas.ui.canvas_atom_graphics_state import CanvasAtomGraphicsState
+from chemvas.ui.canvas_bond_graphics_state import (
+    CanvasBondGraphicsState,
+    bond_items_for,
+    set_bond_items_for,
+)
+from chemvas.ui.canvas_graph_state import CanvasGraphState
+from chemvas.ui.canvas_group_state import CanvasGroupState
+from chemvas.ui.canvas_mark_registry import CanvasMarkRegistry
+from chemvas.ui.canvas_scene_items_state import CanvasSceneItemsState
+from chemvas.ui.canvas_smiles_input_state import (
+    CanvasSmilesInputState,
+    last_smiles_input_for,
+)
+from chemvas.ui.history_commands import DeleteSceneItemsCommand
+from chemvas.ui.scene_delete_controller import SceneDeleteController
+from chemvas.ui.scene_transform_controller import SceneTransformController
 
 
 class _FakeScene:
@@ -88,9 +84,6 @@ def _scene_transform_controller_for(view) -> SceneTransformController:
     )
 
 
-@unittest.skipUnless(
-    QApplication is not None, "PyQt6 is required for canvas view tests"
-)
 class CanvasViewDeleteAndBondStyleTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -449,7 +442,3 @@ class CanvasViewDeleteAndBondStyleTest(unittest.TestCase):
         transform_controller.flip_bond_direction.assert_called_once_with(3)
         transform_controller.apply_bond_style.assert_called_once_with(4, "double", 2)
         transform_controller.cycle_bond_style.assert_called_once_with(5)
-
-
-if __name__ == "__main__":
-    unittest.main()

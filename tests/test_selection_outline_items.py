@@ -3,27 +3,18 @@ import unittest
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-try:
-    from PyQt6.QtCore import QPointF, Qt
-    from PyQt6.QtGui import QColor, QPainterPath
-    from PyQt6.QtWidgets import QApplication
-except ModuleNotFoundError:
-    QApplication = None
+from PyQt6.QtCore import QPointF, QRectF, Qt
+from PyQt6.QtGui import QColor, QPainterPath
+from PyQt6.QtWidgets import QApplication
 
-if QApplication is not None:
-    from PyQt6.QtCore import QRectF
-
-    from chemvas.ui.selection_outline_items import (
-        selection_center_outline_items,
-        selection_component_outline_item,
-        selection_group_outline_item,
-        selection_object_outline_item,
-    )
-
-
-@unittest.skipUnless(
-    QApplication is not None, "PyQt6 is required for selection outline item tests"
+from chemvas.ui.selection_outline_items import (
+    selection_center_outline_items,
+    selection_component_outline_item,
+    selection_group_outline_item,
+    selection_object_outline_item,
 )
+
+
 class SelectionOutlineItemsTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -87,7 +78,3 @@ class SelectionOutlineItemsTest(unittest.TestCase):
         self.assertEqual(outer.brush().style(), Qt.BrushStyle.NoBrush)
         self.assertEqual(inner.pen().style(), Qt.PenStyle.NoPen)
         self.assertEqual(inner.brush().color().name(), "#ff4dc9")
-
-
-if __name__ == "__main__":
-    unittest.main()

@@ -24,7 +24,3 @@ class SelectionCenterLogicTest(unittest.TestCase):
         self.assertEqual(bbox_center, QPointF(3.0, 6.0))
         self.assertIsNone(center_for_atoms({99}, atoms=atoms))
         self.assertIsNone(bounding_box_center_for_atoms({99}, atoms=atoms))
-
-
-if __name__ == "__main__":
-    unittest.main()

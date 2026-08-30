@@ -8,31 +8,27 @@ from tests.runtime_state import canvas_runtime_state
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-try:
-    from PyQt6.QtCore import QPointF, Qt
-    from PyQt6.QtGui import QColor, QFont
-    from PyQt6.QtWidgets import (
-        QApplication,
-        QGraphicsItem,
-        QGraphicsRectItem,
-        QGraphicsScene,
-        QGraphicsTextItem,
-    )
-except ModuleNotFoundError:
-    QApplication = None
+from PyQt6.QtCore import QPointF, Qt
+from PyQt6.QtGui import QColor, QFont
+from PyQt6.QtWidgets import (
+    QApplication,
+    QGraphicsItem,
+    QGraphicsRectItem,
+    QGraphicsScene,
+    QGraphicsTextItem,
+)
 
-if QApplication is not None:
-    from chemvas.ui.canvas_note_controller import CanvasNoteController
-    from chemvas.ui.canvas_scene_items_state import (
-        CanvasSceneItemsState,
-        scene_item_collection_for,
-    )
-    from chemvas.ui.canvas_service_access import canvas_services_for
-    from chemvas.ui.canvas_text_style_state import (
-        CanvasTextStyleState,
-        set_text_style_for,
-    )
-    from chemvas.ui.note_item_access import apply_note_style_for
+from chemvas.ui.canvas_note_controller import CanvasNoteController
+from chemvas.ui.canvas_scene_items_state import (
+    CanvasSceneItemsState,
+    scene_item_collection_for,
+)
+from chemvas.ui.canvas_service_access import canvas_services_for
+from chemvas.ui.canvas_text_style_state import (
+    CanvasTextStyleState,
+    set_text_style_for,
+)
+from chemvas.ui.note_item_access import apply_note_style_for
 
 
 class _FakeNoteController:
@@ -102,9 +98,6 @@ def _make_canvas_note_view(scene: QGraphicsScene) -> SimpleNamespace:
     return view
 
 
-@unittest.skipUnless(
-    QApplication is not None, "PyQt6 is required for canvas view note tests"
-)
 class CanvasViewNoteWrapperContractTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:

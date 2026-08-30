@@ -8,40 +8,34 @@ from tests.runtime_state import canvas_runtime_state
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-try:
-    from PyQt6.QtCore import QPointF, Qt
-    from PyQt6.QtGui import QColor, QFont
-    from PyQt6.QtWidgets import QApplication, QGraphicsScene, QGraphicsTextItem
-except ModuleNotFoundError:
-    QApplication = None
+from PyQt6.QtCore import QPointF, Qt
+from PyQt6.QtGui import QColor, QFont, QTextCursor
+from PyQt6.QtWidgets import QApplication, QGraphicsScene, QGraphicsTextItem
 
-if QApplication is not None:
-    from PyQt6.QtGui import QTextCursor
-
-    from chemvas.domain.document.state import _validate_note_states
-    from chemvas.ui.canvas_history_service import CanvasHistoryService
-    from chemvas.ui.canvas_history_state import CanvasHistoryState
-    from chemvas.ui.canvas_note_controller import (
-        CanvasNoteController,
-        _EditingNoteSnapshot,
-    )
-    from chemvas.ui.canvas_scene_items_state import (
-        CanvasSceneItemsState,
-        note_items_for,
-        selected_notes_for,
-        set_selected_notes_for,
-    )
-    from chemvas.ui.canvas_text_style_state import (
-        CanvasTextStyleState,
-        set_text_style_for,
-    )
-    from chemvas.ui.history_commands import UpdateSceneItemCommand
-    from chemvas.ui.note_item import NoteItem
-    from chemvas.ui.note_item_access import committed_note_text_for
-    from chemvas.ui.scene_item_restore import create_note_item_from_state
-    from chemvas.ui.scene_item_state_serialization import note_state_dict
-    from chemvas.ui.selection_service_bundle import build_selection_services
-    from chemvas.ui.selection_style_state import SelectionStyleState
+from chemvas.domain.document.state import _validate_note_states
+from chemvas.ui.canvas_history_service import CanvasHistoryService
+from chemvas.ui.canvas_history_state import CanvasHistoryState
+from chemvas.ui.canvas_note_controller import (
+    CanvasNoteController,
+    _EditingNoteSnapshot,
+)
+from chemvas.ui.canvas_scene_items_state import (
+    CanvasSceneItemsState,
+    note_items_for,
+    selected_notes_for,
+    set_selected_notes_for,
+)
+from chemvas.ui.canvas_text_style_state import (
+    CanvasTextStyleState,
+    set_text_style_for,
+)
+from chemvas.ui.history_commands import UpdateSceneItemCommand
+from chemvas.ui.note_item import NoteItem
+from chemvas.ui.note_item_access import committed_note_text_for
+from chemvas.ui.scene_item_restore import create_note_item_from_state
+from chemvas.ui.scene_item_state_serialization import note_state_dict
+from chemvas.ui.selection_service_bundle import build_selection_services
+from chemvas.ui.selection_style_state import SelectionStyleState
 
 
 def _history_service(push=None):
@@ -78,9 +72,6 @@ def _selection_controller_for(canvas):
     ).selection_controller
 
 
-@unittest.skipUnless(
-    QApplication is not None, "PyQt6 is required for note controller tests"
-)
 class CanvasNoteControllerUnitTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -926,7 +917,3 @@ class CanvasNoteControllerUnitTest(unittest.TestCase):
         )
         controller.update_note_box.assert_called_once_with(item)
         selection_controller.update_note_selection_box.assert_called_once_with(item)
-
-
-if __name__ == "__main__":
-    unittest.main()

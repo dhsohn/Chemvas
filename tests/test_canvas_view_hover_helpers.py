@@ -44,9 +44,6 @@ def _scene_with_selected(*items):
     return SimpleNamespace(selectedItems=lambda: list(items))
 
 
-@unittest.skipUnless(
-    QApplication is not None, "PyQt6 is required for canvas view tests"
-)
 class CanvasViewHoverHelperTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:

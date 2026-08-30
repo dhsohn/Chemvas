@@ -86,7 +86,3 @@ class AtomLabelAccessTest(unittest.TestCase):
         clear_atom_label_for(canvas, 99)
 
         self.assertEqual(service_calls, [(1, "C", {"show_carbon": False})])
-
-
-if __name__ == "__main__":
-    unittest.main()

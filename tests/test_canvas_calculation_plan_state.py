@@ -2,24 +2,16 @@ from __future__ import annotations
 
 import os
 
-import pytest
-
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-try:
-    from PyQt6.QtWidgets import QApplication
-except ModuleNotFoundError:
-    QApplication = None
+from PyQt6.QtWidgets import QApplication
 
-if QApplication is not None:
-    from chemvas.adapters.qt.renderer import Renderer
-    from chemvas.ui.canvas_service_access import canvas_services_for
-    from chemvas.ui.canvas_view import CanvasView
-
+from chemvas.adapters.qt.renderer import Renderer
+from chemvas.ui.canvas_service_access import canvas_services_for
+from chemvas.ui.canvas_view import CanvasView
 from tests.test_calculation_plan import _document_state, _plan
 
 
-@pytest.mark.skipif(QApplication is None, reason="PyQt6 is required")
 def test_calculation_plan_survives_canvas_apply_snapshot_and_old_document_clear() -> (
     None
 ):
@@ -42,7 +34,6 @@ def test_calculation_plan_survives_canvas_apply_snapshot_and_old_document_clear(
     canvas.deleteLater()
 
 
-@pytest.mark.skipif(QApplication is None, reason="PyQt6 is required")
 def test_snapshot_omits_stale_plan_with_a_user_visible_warning() -> None:
     app = QApplication.instance() or QApplication([])
     app.setQuitOnLastWindowClosed(False)

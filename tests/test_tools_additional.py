@@ -8,43 +8,39 @@ from tests.runtime_state import canvas_runtime_state
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-try:
-    from PyQt6.QtCore import QEvent, QPointF, Qt
-    from PyQt6.QtGui import QTextCursor
-    from PyQt6.QtWidgets import QApplication, QGraphicsScene, QGraphicsTextItem
-except ModuleNotFoundError:
-    QApplication = None
+from PyQt6.QtCore import QEvent, QPointF, Qt
+from PyQt6.QtGui import QTextCursor
+from PyQt6.QtWidgets import QApplication, QGraphicsScene, QGraphicsTextItem
 
-if QApplication is not None:
-    import chemvas.ui.edit_tools as edit_tools_module
-    import chemvas.ui.perspective_tool as perspective_tool_module
-    import chemvas.ui.text_tool as text_tool_module
-    from chemvas.core.history import (
-        AddAtomsCommand,
-        CompositeCommand,
-        SetSmilesInputCommand,
-    )
-    from chemvas.domain.document import Atom, Bond, MoleculeModel
-    from chemvas.features.hover import HoverState
-    from chemvas.ui.benzene_tool import BenzeneTool
-    from chemvas.ui.canvas_callback_state import CanvasCallbackState
-    from chemvas.ui.canvas_hover_state import hover_state_for
-    from chemvas.ui.canvas_rotation_state import CanvasRotationState
-    from chemvas.ui.canvas_smiles_input_state import (
-        CanvasSmilesInputState,
-        set_last_smiles_input_for,
-    )
-    from chemvas.ui.canvas_tool_settings_state import CanvasToolSettingsState
-    from chemvas.ui.canvas_window_access import set_error_callback_for
-    from chemvas.ui.edit_tools import ColorTool, DeleteTool, FlipTool
-    from chemvas.ui.history_commands import DeleteSceneItemsCommand, MoveItemsCommand
-    from chemvas.ui.interaction_tools import MarkTool, NoteTool
-    from chemvas.ui.move_tool import MoveTool
-    from chemvas.ui.perspective_tool import PerspectiveTool
-    from chemvas.ui.preview_tools import OrbitalTool
-    from chemvas.ui.text_tool import TextTool
-    from chemvas.ui.tool_context import ToolContext
-    from chemvas.ui.tool_controller import ToolController
+import chemvas.ui.edit_tools as edit_tools_module
+import chemvas.ui.perspective_tool as perspective_tool_module
+import chemvas.ui.text_tool as text_tool_module
+from chemvas.core.history import (
+    AddAtomsCommand,
+    CompositeCommand,
+    SetSmilesInputCommand,
+)
+from chemvas.domain.document import Atom, Bond, MoleculeModel
+from chemvas.features.hover import HoverState
+from chemvas.ui.benzene_tool import BenzeneTool
+from chemvas.ui.canvas_callback_state import CanvasCallbackState
+from chemvas.ui.canvas_hover_state import hover_state_for
+from chemvas.ui.canvas_rotation_state import CanvasRotationState
+from chemvas.ui.canvas_smiles_input_state import (
+    CanvasSmilesInputState,
+    set_last_smiles_input_for,
+)
+from chemvas.ui.canvas_tool_settings_state import CanvasToolSettingsState
+from chemvas.ui.canvas_window_access import set_error_callback_for
+from chemvas.ui.edit_tools import ColorTool, DeleteTool, FlipTool
+from chemvas.ui.history_commands import DeleteSceneItemsCommand, MoveItemsCommand
+from chemvas.ui.interaction_tools import MarkTool, NoteTool
+from chemvas.ui.move_tool import MoveTool
+from chemvas.ui.perspective_tool import PerspectiveTool
+from chemvas.ui.preview_tools import OrbitalTool
+from chemvas.ui.text_tool import TextTool
+from chemvas.ui.tool_context import ToolContext
+from chemvas.ui.tool_controller import ToolController
 
 
 def _tool_context_for(canvas):
@@ -727,9 +723,6 @@ class _ToolControllerPreviewCanvas:
         self.clear_handles_calls += 1
 
 
-@unittest.skipUnless(
-    QApplication is not None, "PyQt6 is required for additional tools tests"
-)
 class ToolsAdditionalTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -1478,7 +1471,3 @@ class ToolsAdditionalTest(unittest.TestCase):
         self.assertIsNone(arrow_tool._preview_item)
         self.assertIsNone(arrow_tool._start_pos)
         self.assertEqual(len(canvas.scene_obj.removed_items), 1)
-
-
-if __name__ == "__main__":
-    unittest.main()

@@ -8,56 +8,52 @@ from tests.runtime_state import canvas_runtime_state
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-try:
-    from PyQt6 import sip
-    from PyQt6.QtCore import QCoreApplication, QEvent, QPointF, Qt
-    from PyQt6.QtGui import QBrush, QColor, QPolygonF, QTextCursor
-    from PyQt6.QtWidgets import (
-        QApplication,
-        QGraphicsEllipseItem,
-        QGraphicsPathItem,
-        QGraphicsPolygonItem,
-        QGraphicsScene,
-        QGraphicsTextItem,
-    )
-except ModuleNotFoundError:
-    QApplication = None
+from PyQt6 import sip
+from PyQt6.QtCore import QCoreApplication, QEvent, QPointF, Qt
+from PyQt6.QtGui import QBrush, QColor, QPolygonF, QTextCursor
+from PyQt6.QtWidgets import (
+    QApplication,
+    QGraphicsEllipseItem,
+    QGraphicsPathItem,
+    QGraphicsPolygonItem,
+    QGraphicsScene,
+    QGraphicsTextItem,
+)
 
-if QApplication is not None:
-    from chemvas.core.history import CompositeCommand, UpdateAtomColorCommand
-    from chemvas.domain.document import Atom, Bond
-    from chemvas.ui.bond_graphics_access import add_bond_graphics_for
-    from chemvas.ui.canvas_atom_graphics_state import (
-        CanvasAtomGraphicsState,
-        atom_dots_for,
-        atom_items_for,
-        set_atom_dots_for,
-        set_atom_items_for,
-    )
-    from chemvas.ui.canvas_bond_graphics_state import (
-        CanvasBondGraphicsState,
-        bond_items_for,
-        set_bond_items_for,
-    )
-    from chemvas.ui.canvas_color_mutation_service import (
-        CanvasColorMutationService,
-        UpdateBondColorCommand,
-        UpdateNoteColorCommand,
-    )
-    from chemvas.ui.canvas_lifecycle import schedule_canvas_deletion_for
-    from chemvas.ui.canvas_smiles_input_state import CanvasSmilesInputState
-    from chemvas.ui.graphics_items import AtomDotItem
-    from chemvas.ui.history_commands import UpdateSceneItemCommand
-    from chemvas.ui.note_item import NoteItem
-    from chemvas.ui.note_item_access import (
-        committed_note_html_for,
-        committed_note_text_for,
-        set_committed_note_html_for,
-        set_committed_note_text_for,
-    )
-    from chemvas.ui.scene_item_state import note_state_dict_for
-    from chemvas.ui.structure_mutation_access import add_benzene_ring_for
-    from tests.canvas_factory import build_canvas_view
+from chemvas.core.history import CompositeCommand, UpdateAtomColorCommand
+from chemvas.domain.document import Atom, Bond
+from chemvas.ui.bond_graphics_access import add_bond_graphics_for
+from chemvas.ui.canvas_atom_graphics_state import (
+    CanvasAtomGraphicsState,
+    atom_dots_for,
+    atom_items_for,
+    set_atom_dots_for,
+    set_atom_items_for,
+)
+from chemvas.ui.canvas_bond_graphics_state import (
+    CanvasBondGraphicsState,
+    bond_items_for,
+    set_bond_items_for,
+)
+from chemvas.ui.canvas_color_mutation_service import (
+    CanvasColorMutationService,
+    UpdateBondColorCommand,
+    UpdateNoteColorCommand,
+)
+from chemvas.ui.canvas_lifecycle import schedule_canvas_deletion_for
+from chemvas.ui.canvas_smiles_input_state import CanvasSmilesInputState
+from chemvas.ui.graphics_items import AtomDotItem
+from chemvas.ui.history_commands import UpdateSceneItemCommand
+from chemvas.ui.note_item import NoteItem
+from chemvas.ui.note_item_access import (
+    committed_note_html_for,
+    committed_note_text_for,
+    set_committed_note_html_for,
+    set_committed_note_text_for,
+)
+from chemvas.ui.scene_item_state import note_state_dict_for
+from chemvas.ui.structure_mutation_access import add_benzene_ring_for
+from tests.canvas_factory import build_canvas_view
 
 
 def _history_service(push=None):
@@ -144,9 +140,6 @@ class _FailOnceHistoryService:
             raise error
 
 
-@unittest.skipUnless(
-    QApplication is not None, "PyQt6 is required for canvas color mutation tests"
-)
 class CanvasColorMutationServiceTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -1176,7 +1169,3 @@ class CanvasColorMutationServiceTest(unittest.TestCase):
         service.apply_color_to_item.assert_called_once_with(
             atom_item, QColor("#123456")
         )
-
-
-if __name__ == "__main__":
-    unittest.main()

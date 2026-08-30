@@ -5,105 +5,94 @@ from unittest.mock import patch
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-try:
-    from PyQt6.QtCore import QEvent, QPointF, QRectF, Qt
-    from PyQt6.QtTest import QTest
-    from PyQt6.QtWidgets import (
-        QApplication,
-        QGraphicsPathItem,
-        QGraphicsTextItem,
-        QToolButton,
-    )
-except ModuleNotFoundError:
-    QApplication = None
-    QTest = None
-    Qt = None
-    QPointF = None
-    QRectF = None
-    QEvent = None
-    QGraphicsPathItem = None
-    QGraphicsTextItem = None
+from PyQt6.QtCore import QEvent, QPointF, QRectF, Qt
+from PyQt6.QtTest import QTest
+from PyQt6.QtWidgets import (
+    QApplication,
+    QGraphicsPathItem,
+    QGraphicsTextItem,
+    QToolButton,
+)
 
-if QApplication is not None:
-    from chemvas.bootstrap.main_window import build_main_window
-    from chemvas.core.history import MoveAtomsCommand
-    from chemvas.ui.atom_coords_access import (
-        atom_coords_3d_for,
-        current_atom_coords_3d_for,
-    )
-    from chemvas.ui.atom_label_access import (
-        add_or_update_atom_label,
-        clear_atom_label_for,
-    )
-    from chemvas.ui.bond_graphics_access import (
-        add_bond_graphics_for,
-        project_point_3d_for,
-        ring_center_3d_for_bond_for,
-    )
-    from chemvas.ui.bond_label_geometry_access import trim_line_for_labels_for
-    from chemvas.ui.bond_renderer_access import update_bond_geometry_for
-    from chemvas.ui.canvas_atom_graphics_state import (
-        atom_dots_for,
-        atom_items_for,
-        visible_atom_item_for,
-    )
-    from chemvas.ui.canvas_bond_graphics_state import bond_items_for, bond_items_for_id
-    from chemvas.ui.canvas_geometry_access import mark_target_distance_for_atom_for
-    from chemvas.ui.canvas_hover_state import hover_state_for
-    from chemvas.ui.canvas_insert_state import insert_state_for
-    from chemvas.ui.canvas_mark_registry import mark_registry_for
-    from chemvas.ui.canvas_rotation_state import rotation_state_for
-    from chemvas.ui.canvas_scene_items_state import (
-        arrow_items_for,
-        mark_items_for,
-        ring_items_for,
-        ts_bracket_items_for,
-    )
-    from chemvas.ui.canvas_scene_reset_access import clear_scene_for
-    from chemvas.ui.canvas_service_access import canvas_services_for
-    from chemvas.ui.canvas_tool_settings_state import tool_settings_state_for
-    from chemvas.ui.canvas_window_access import (
-        restore_canvas_state_for,
-        snapshot_canvas_state_for,
-    )
-    from chemvas.ui.main_window_ports import (
-        active_canvas_for_window,
-        services_for_window,
-    )
-    from chemvas.ui.mark_item_access import mark_center_for
-    from chemvas.ui.move_access import move_atoms_for
-    from chemvas.ui.pick_radius_access import atom_pick_radius_for
-    from chemvas.ui.renderer_style_access import (
-        renderer_bold_bond_width_for,
-        renderer_bond_line_width_for,
-    )
-    from chemvas.ui.scene_decoration_access import (
-        add_arrow_for,
-        add_mark_for,
-        add_mark_for_atom_for,
-        add_orbital_for,
-        add_ts_bracket_for,
-    )
-    from chemvas.ui.scene_item_state import scene_item_state_for
-    from chemvas.ui.selection_collection_access import selected_ids_for
-    from chemvas.ui.selection_outline_state import selection_outlines_for
-    from chemvas.ui.selection_rotation_access import (
-        center_for_coords_3d,
-        fragment_plane_normal_for,
-    )
-    from chemvas.ui.selection_style_access import selection_indicator_rect_for_atom_for
-    from chemvas.ui.structure_mutation_access import (
-        add_atom_for,
-        add_benzene_ring_for,
-        add_bond_between_points_for,
-        add_bond_for,
-    )
-
-    def refresh_hover_from_cursor_for_canvas(canvas) -> None:
-        canvas.services.hover.refresh()
+from chemvas.bootstrap.main_window import build_main_window
+from chemvas.core.history import MoveAtomsCommand
+from chemvas.ui.atom_coords_access import (
+    atom_coords_3d_for,
+    current_atom_coords_3d_for,
+)
+from chemvas.ui.atom_label_access import (
+    add_or_update_atom_label,
+    clear_atom_label_for,
+)
+from chemvas.ui.bond_graphics_access import (
+    add_bond_graphics_for,
+    project_point_3d_for,
+    ring_center_3d_for_bond_for,
+)
+from chemvas.ui.bond_label_geometry_access import trim_line_for_labels_for
+from chemvas.ui.bond_renderer_access import update_bond_geometry_for
+from chemvas.ui.canvas_atom_graphics_state import (
+    atom_dots_for,
+    atom_items_for,
+    visible_atom_item_for,
+)
+from chemvas.ui.canvas_bond_graphics_state import bond_items_for, bond_items_for_id
+from chemvas.ui.canvas_geometry_access import mark_target_distance_for_atom_for
+from chemvas.ui.canvas_hover_state import hover_state_for
+from chemvas.ui.canvas_insert_state import insert_state_for
+from chemvas.ui.canvas_mark_registry import mark_registry_for
+from chemvas.ui.canvas_rotation_state import rotation_state_for
+from chemvas.ui.canvas_scene_items_state import (
+    arrow_items_for,
+    mark_items_for,
+    ring_items_for,
+    ts_bracket_items_for,
+)
+from chemvas.ui.canvas_scene_reset_access import clear_scene_for
+from chemvas.ui.canvas_service_access import canvas_services_for
+from chemvas.ui.canvas_tool_settings_state import tool_settings_state_for
+from chemvas.ui.canvas_window_access import (
+    restore_canvas_state_for,
+    snapshot_canvas_state_for,
+)
+from chemvas.ui.main_window_ports import (
+    active_canvas_for_window,
+    services_for_window,
+)
+from chemvas.ui.mark_item_access import mark_center_for
+from chemvas.ui.move_access import move_atoms_for
+from chemvas.ui.pick_radius_access import atom_pick_radius_for
+from chemvas.ui.renderer_style_access import (
+    renderer_bold_bond_width_for,
+    renderer_bond_line_width_for,
+)
+from chemvas.ui.scene_decoration_access import (
+    add_arrow_for,
+    add_mark_for,
+    add_mark_for_atom_for,
+    add_orbital_for,
+    add_ts_bracket_for,
+)
+from chemvas.ui.scene_item_state import scene_item_state_for
+from chemvas.ui.selection_collection_access import selected_ids_for
+from chemvas.ui.selection_outline_state import selection_outlines_for
+from chemvas.ui.selection_rotation_access import (
+    center_for_coords_3d,
+    fragment_plane_normal_for,
+)
+from chemvas.ui.selection_style_access import selection_indicator_rect_for_atom_for
+from chemvas.ui.structure_mutation_access import (
+    add_atom_for,
+    add_benzene_ring_for,
+    add_bond_between_points_for,
+    add_bond_for,
+)
 
 
-@unittest.skipUnless(QApplication is not None, "PyQt6 is required for GUI smoke tests")
+def refresh_hover_from_cursor_for_canvas(canvas) -> None:
+    canvas.services.hover.refresh()
+
+
 class GuiShortcutSmokeTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -3581,7 +3570,3 @@ class GuiShortcutSmokeTest(unittest.TestCase):
         active_canvas_for_window(
             self.window
         ).services.interaction.selection_rotation_controller.end_selection_3d_rotation()
-
-
-if __name__ == "__main__":
-    unittest.main()

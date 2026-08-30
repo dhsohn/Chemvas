@@ -4,30 +4,26 @@ from types import SimpleNamespace
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-try:
-    from PyQt6.QtCore import QPointF, QRectF
-    from PyQt6.QtGui import QFont
-    from PyQt6.QtWidgets import QApplication, QGraphicsTextItem
-except ModuleNotFoundError:
-    QApplication = None
+from PyQt6.QtCore import QPointF, QRectF
+from PyQt6.QtGui import QFont
+from PyQt6.QtWidgets import QApplication, QGraphicsTextItem
 
-if QApplication is not None:
-    from chemvas.domain.document import Atom, Bond
-    from chemvas.ui.atom_coords_access import (
-        CanvasAtomCoords3DState,
-        atom_coords_3d_for,
-    )
-    from chemvas.ui.canvas_atom_graphics_state import (
-        CanvasAtomGraphicsState,
-        set_atom_items_for,
-    )
-    from chemvas.ui.canvas_geometry_controller import CanvasGeometryController
-    from chemvas.ui.canvas_rotation_state import CanvasRotationState
-    from chemvas.ui.canvas_scene_items_state import (
-        CanvasSceneItemsState,
-        set_scene_item_collection_for,
-    )
-    from tests.runtime_state import canvas_runtime_state
+from chemvas.domain.document import Atom, Bond
+from chemvas.ui.atom_coords_access import (
+    CanvasAtomCoords3DState,
+    atom_coords_3d_for,
+)
+from chemvas.ui.canvas_atom_graphics_state import (
+    CanvasAtomGraphicsState,
+    set_atom_items_for,
+)
+from chemvas.ui.canvas_geometry_controller import CanvasGeometryController
+from chemvas.ui.canvas_rotation_state import CanvasRotationState
+from chemvas.ui.canvas_scene_items_state import (
+    CanvasSceneItemsState,
+    set_scene_item_collection_for,
+)
+from tests.runtime_state import canvas_runtime_state
 
 
 class _FakeRingItem:
@@ -48,9 +44,6 @@ class _FakeLabelItem:
         return QRectF(self._rect)
 
 
-@unittest.skipUnless(
-    QApplication is not None, "PyQt6 is required for canvas geometry controller tests"
-)
 class CanvasGeometryControllerTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -248,7 +241,3 @@ class CanvasGeometryControllerTest(unittest.TestCase):
         self.assertEqual(
             controller.trim_line_for_labels(None, 2, 0.0, 0.0, 100.0, 0.0), (0.0, 0.02)
         )
-
-
-if __name__ == "__main__":
-    unittest.main()

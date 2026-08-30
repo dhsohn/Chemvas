@@ -7,16 +7,12 @@ from tests.runtime_state import canvas_runtime_state
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-try:
-    from PyQt6.QtCore import QPointF
-    from PyQt6.QtWidgets import QApplication
-except ModuleNotFoundError:
-    QApplication = None
+from PyQt6.QtCore import QPointF
+from PyQt6.QtWidgets import QApplication
 
-if QApplication is not None:
-    from chemvas.domain.document import Atom, Bond
-    from chemvas.ui.canvas_graph_service import CanvasGraphService
-    from chemvas.ui.canvas_graph_state import CanvasGraphState
+from chemvas.domain.document import Atom, Bond
+from chemvas.ui.canvas_graph_service import CanvasGraphService
+from chemvas.ui.canvas_graph_state import CanvasGraphState
 
 
 def _component_lookup(components: dict[tuple[int, int], set[int]]):
@@ -32,9 +28,6 @@ def _bind_graph_service(view) -> CanvasGraphService:
     return service
 
 
-@unittest.skipUnless(
-    QApplication is not None, "PyQt6 is required for canvas view tests"
-)
 class CanvasViewRotationAxisHelperTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -94,7 +87,3 @@ class CanvasViewRotationAxisHelperTest(unittest.TestCase):
         self.assertIsNone(
             service.preferred_rotation_side_for_bond(99, {1}, allow_fallback=True)
         )
-
-
-if __name__ == "__main__":
-    unittest.main()

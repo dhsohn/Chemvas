@@ -233,7 +233,3 @@ class DeleteToolLogicTest(unittest.TestCase):
                 after_smiles_input="after",
             )
         )
-
-
-if __name__ == "__main__":
-    unittest.main()

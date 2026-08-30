@@ -8,16 +8,12 @@ from tests.runtime_state import canvas_runtime_state
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-try:
-    from PyQt6.QtCore import QPointF, QRectF
-    from PyQt6.QtGui import QColor, QPainterPath, QPen
-    from PyQt6.QtWidgets import QApplication, QGraphicsEllipseItem, QGraphicsScene
-except ModuleNotFoundError:
-    QApplication = None
+from PyQt6.QtCore import QPointF, QRectF
+from PyQt6.QtGui import QColor, QPainterPath, QPen
+from PyQt6.QtWidgets import QApplication, QGraphicsEllipseItem, QGraphicsScene
 
-if QApplication is not None:
-    from chemvas.ui.handle_overlay_service import HandleOverlayService
-    from chemvas.ui.handle_state import CanvasHandleState
+from chemvas.ui.handle_overlay_service import HandleOverlayService
+from chemvas.ui.handle_state import CanvasHandleState
 
 
 class _FakeGraphicsItem:
@@ -51,9 +47,6 @@ class _FakeGraphicsItem:
         return QPainterPath(self._path)
 
 
-@unittest.skipUnless(
-    QApplication is not None, "PyQt6 is required for handle overlay service tests"
-)
 class HandleOverlayServiceTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -264,7 +257,3 @@ class HandleOverlayServiceTest(unittest.TestCase):
             ],
             ["curved_start", "curved_control", "curved_end"],
         )
-
-
-if __name__ == "__main__":
-    unittest.main()

@@ -1561,7 +1561,3 @@ class InsertControllerTest(unittest.TestCase):
         self.assertEqual(bond_merge_seed(canvas, 1), [])
         self.assertEqual(bond_merge_seed(canvas, 2), [])
         self.assertEqual(bond_merge_seed(canvas, 99), [])
-
-
-if __name__ == "__main__":
-    unittest.main()

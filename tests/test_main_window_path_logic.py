@@ -64,7 +64,3 @@ class MainWindowPathLogicTest(unittest.TestCase):
     def test_resolve_load_path_returns_none_when_load_dialog_is_cancelled(self) -> None:
         self.assertIsNone(resolve_load_path(""))
         self.assertIsNone(resolve_load_path(None))
-
-
-if __name__ == "__main__":
-    unittest.main()

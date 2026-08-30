@@ -40,7 +40,3 @@ class SelectionRotationLogicTest(unittest.TestCase):
         self.assertAlmostEqual(rotated[1][1], 1.0)
         self.assertAlmostEqual(rotated[2][0], 0.0)
         self.assertAlmostEqual(rotated[2][1], 0.0)
-
-
-if __name__ == "__main__":
-    unittest.main()

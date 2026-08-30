@@ -94,7 +94,3 @@ class StructureGrowthLogicTest(unittest.TestCase):
             alternating_ring_bond_specs([0, 1, 2, 3], first_order=1),
             [(0, 1, 1), (1, 2, 2), (2, 3, 1), (3, 0, 2)],
         )
-
-
-if __name__ == "__main__":
-    unittest.main()

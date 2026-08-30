@@ -3,39 +3,32 @@ import unittest
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-try:
-    from PyQt6.QtCore import Qt
-    from PyQt6.QtTest import QTest
-    from PyQt6.QtWidgets import QApplication
-except ModuleNotFoundError:
-    QApplication = None
-    QTest = None
-    Qt = None
+from PyQt6.QtCore import Qt
+from PyQt6.QtTest import QTest
+from PyQt6.QtWidgets import QApplication
 
-if QApplication is not None:
-    from chemvas.bootstrap.main_window import build_main_window
-    from chemvas.ui.canvas_mark_registry import mark_registry_for
-    from chemvas.ui.canvas_scene_items_state import (
-        arrow_items_for,
-        mark_items_for,
-        note_items_for,
-        orbital_items_for,
-        ts_bracket_items_for,
-    )
-    from chemvas.ui.canvas_service_access import canvas_services_for
-    from chemvas.ui.canvas_text_style_state import set_text_style_for
-    from chemvas.ui.main_window_ports import (
-        active_canvas_for_window,
-        services_for_window,
-    )
-    from chemvas.ui.mark_item_access import mark_center_for
-    from chemvas.ui.note_item_access import committed_note_text_for
-    from chemvas.ui.scene_item_access import create_scene_item_from_state
-    from chemvas.ui.scene_item_state import scene_item_state_for
-    from chemvas.ui.structure_mutation_access import add_atom_for
+from chemvas.bootstrap.main_window import build_main_window
+from chemvas.ui.canvas_mark_registry import mark_registry_for
+from chemvas.ui.canvas_scene_items_state import (
+    arrow_items_for,
+    mark_items_for,
+    note_items_for,
+    orbital_items_for,
+    ts_bracket_items_for,
+)
+from chemvas.ui.canvas_service_access import canvas_services_for
+from chemvas.ui.canvas_text_style_state import set_text_style_for
+from chemvas.ui.main_window_ports import (
+    active_canvas_for_window,
+    services_for_window,
+)
+from chemvas.ui.mark_item_access import mark_center_for
+from chemvas.ui.note_item_access import committed_note_text_for
+from chemvas.ui.scene_item_access import create_scene_item_from_state
+from chemvas.ui.scene_item_state import scene_item_state_for
+from chemvas.ui.structure_mutation_access import add_atom_for
 
 
-@unittest.skipUnless(QApplication is not None, "PyQt6 is required for GUI tests")
 class SceneItemRestoreTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -190,7 +183,3 @@ class SceneItemRestoreTest(unittest.TestCase):
         self.assertAlmostEqual(item.transformOriginPoint().y(), -11.0)
         self.assertAlmostEqual(item.scale(), 1.4)
         self.assertAlmostEqual(item.rotation(), 27.0)
-
-
-if __name__ == "__main__":
-    unittest.main()

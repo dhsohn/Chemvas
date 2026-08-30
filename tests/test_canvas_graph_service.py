@@ -5,21 +5,14 @@ from unittest import mock
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-try:
-    from PyQt6.QtCore import QPointF
-except ModuleNotFoundError:
-    QPointF = None
+from PyQt6.QtCore import QPointF
 
-if QPointF is not None:
-    from chemvas.domain.document import Atom, Bond
-    from chemvas.ui.canvas_graph_service import CanvasGraphService
-    from chemvas.ui.canvas_graph_state import CanvasGraphState, graph_state_for
-    from tests.runtime_state import canvas_runtime_state
+from chemvas.domain.document import Atom, Bond
+from chemvas.ui.canvas_graph_service import CanvasGraphService
+from chemvas.ui.canvas_graph_state import CanvasGraphState, graph_state_for
+from tests.runtime_state import canvas_runtime_state
 
 
-@unittest.skipUnless(
-    QPointF is not None, "PyQt6 is required for canvas graph service tests"
-)
 class CanvasGraphServiceTest(unittest.TestCase):
     @staticmethod
     def _make_atoms(*atom_ids: int):
@@ -450,7 +443,3 @@ class CanvasGraphServiceTest(unittest.TestCase):
         service = CanvasGraphService(canvas)
 
         self.assertIsNone(service.bond_id_between_with_repair(1, 2))
-
-
-if __name__ == "__main__":
-    unittest.main()

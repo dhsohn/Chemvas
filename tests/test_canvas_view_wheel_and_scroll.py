@@ -5,18 +5,14 @@ from unittest import mock
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-try:
-    from PyQt6.QtCore import QPoint, QPointF, Qt
-    from PyQt6.QtGui import QTransform
-    from PyQt6.QtWidgets import QApplication, QGraphicsView
-except ModuleNotFoundError:
-    QApplication = None
+from PyQt6.QtCore import QPoint, QPointF, Qt
+from PyQt6.QtGui import QTransform
+from PyQt6.QtWidgets import QApplication, QGraphicsView
 
-if QApplication is not None:
-    from chemvas.ui.canvas_view import CanvasView
-    from chemvas.ui.input_view_access import input_view_state_for
-    from chemvas.ui.selection_info_state import selection_info_state_for
-    from tests.canvas_factory import build_canvas_view
+from chemvas.ui.canvas_view import CanvasView
+from chemvas.ui.input_view_access import input_view_state_for
+from chemvas.ui.selection_info_state import selection_info_state_for
+from tests.canvas_factory import build_canvas_view
 
 
 class _FakeWheelEvent:
@@ -46,9 +42,6 @@ class _FakeWheelEvent:
         return QPointF(10.0, 10.0)
 
 
-@unittest.skipUnless(
-    QApplication is not None, "PyQt6 is required for canvas view tests"
-)
 class CanvasViewWheelAndScrollTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:

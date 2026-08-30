@@ -8,40 +8,36 @@ from tests.runtime_state import canvas_runtime_state
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-try:
-    from PyQt6.QtCore import QPointF, QRectF
-    from PyQt6.QtGui import QColor, QPainterPath, QPen
-    from PyQt6.QtWidgets import (
-        QApplication,
-        QGraphicsEllipseItem,
-        QGraphicsItemGroup,
-        QGraphicsPathItem,
-        QGraphicsScene,
-    )
-except ModuleNotFoundError:
-    QApplication = None
+from PyQt6.QtCore import QPointF, QRectF
+from PyQt6.QtGui import QColor, QPainterPath, QPen
+from PyQt6.QtWidgets import (
+    QApplication,
+    QGraphicsEllipseItem,
+    QGraphicsItemGroup,
+    QGraphicsPathItem,
+    QGraphicsScene,
+)
 
-if QApplication is not None:
-    from chemvas.ui.canvas_handle_controller import CanvasHandleController
-    from chemvas.ui.canvas_service_ports import handle_overlay_service_for_access
-    from chemvas.ui.canvas_tool_settings_state import CanvasToolSettingsState
-    from chemvas.ui.curved_arrow_path_service import CurvedArrowPathService
-    from chemvas.ui.handle_mutation_access import (
-        curved_midpoint_for,
-        update_curved_control_for,
-        update_curved_endpoint_for,
-        update_orbital_rotate_for,
-        update_orbital_scale_for,
-    )
-    from chemvas.ui.handle_mutation_service import HandleMutationService
-    from chemvas.ui.handle_overlay_access import (
-        clear_handles_for,
-        show_curved_handles_for,
-    )
-    from chemvas.ui.handle_overlay_service import HandleOverlayService
-    from chemvas.ui.handle_state import CanvasHandleState
-    from chemvas.ui.selection_highlight_styler import SelectionHighlightStyler
-    from chemvas.ui.selection_style_state import SelectionStyleState
+from chemvas.ui.canvas_handle_controller import CanvasHandleController
+from chemvas.ui.canvas_service_ports import handle_overlay_service_for_access
+from chemvas.ui.canvas_tool_settings_state import CanvasToolSettingsState
+from chemvas.ui.curved_arrow_path_service import CurvedArrowPathService
+from chemvas.ui.handle_mutation_access import (
+    curved_midpoint_for,
+    update_curved_control_for,
+    update_curved_endpoint_for,
+    update_orbital_rotate_for,
+    update_orbital_scale_for,
+)
+from chemvas.ui.handle_mutation_service import HandleMutationService
+from chemvas.ui.handle_overlay_access import (
+    clear_handles_for,
+    show_curved_handles_for,
+)
+from chemvas.ui.handle_overlay_service import HandleOverlayService
+from chemvas.ui.handle_state import CanvasHandleState
+from chemvas.ui.selection_highlight_styler import SelectionHighlightStyler
+from chemvas.ui.selection_style_state import SelectionStyleState
 
 
 class _RecordingScene(QGraphicsScene):
@@ -152,9 +148,6 @@ def _make_proxy(
     return view
 
 
-@unittest.skipUnless(
-    QApplication is not None, "PyQt6 is required for canvas view tests"
-)
 class CanvasViewHandleHelpersTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:

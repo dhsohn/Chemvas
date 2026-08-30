@@ -110,7 +110,3 @@ class TemplatePreviewLogicTest(unittest.TestCase):
         assert plan.geometry is not None
         self.assertEqual(plan.geometry.line_segments[0], (0.0, 0.0, 10.0, 0.0))
         self.assertEqual(plan.geometry.dot_rects[1], (8.5, -1.5, 3.0, 3.0))
-
-
-if __name__ == "__main__":
-    unittest.main()

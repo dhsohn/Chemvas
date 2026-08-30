@@ -3,30 +3,23 @@ import unittest
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-try:
-    from PyQt6.QtCore import QPointF
-    from PyQt6.QtTest import QTest
-    from PyQt6.QtWidgets import QApplication
-except ModuleNotFoundError:
-    QApplication = None
-    QTest = None
-    QPointF = None
+from PyQt6.QtCore import QPointF
+from PyQt6.QtTest import QTest
+from PyQt6.QtWidgets import QApplication
 
-if QApplication is not None:
-    from chemvas.bootstrap.main_window import build_main_window
-    from chemvas.ui.handle_mutation_access import update_curved_control_for
-    from chemvas.ui.main_window_ports import (
-        active_canvas_for_window,
-        services_for_window,
-    )
-    from chemvas.ui.mark_item_access import mark_center_for
-    from chemvas.ui.scene_decoration_access import add_arrow_for, add_mark_for_atom_for
-    from chemvas.ui.scene_item_access import apply_scene_item_state
-    from chemvas.ui.scene_item_state import scene_item_state_for
-    from chemvas.ui.structure_mutation_access import add_atom_for
+from chemvas.bootstrap.main_window import build_main_window
+from chemvas.ui.handle_mutation_access import update_curved_control_for
+from chemvas.ui.main_window_ports import (
+    active_canvas_for_window,
+    services_for_window,
+)
+from chemvas.ui.mark_item_access import mark_center_for
+from chemvas.ui.scene_decoration_access import add_arrow_for, add_mark_for_atom_for
+from chemvas.ui.scene_item_access import apply_scene_item_state
+from chemvas.ui.scene_item_state import scene_item_state_for
+from chemvas.ui.structure_mutation_access import add_atom_for
 
 
-@unittest.skipUnless(QApplication is not None, "PyQt6 is required for GUI tests")
 class SceneItemStateCodecTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -120,7 +113,3 @@ class SceneItemStateCodecTest(unittest.TestCase):
         self.assertEqual(restored_state["end"], updated_state["end"])
         self.assertEqual(restored_state["control"], updated_state["control"])
         self.assertTrue(restored_state["double"])
-
-
-if __name__ == "__main__":
-    unittest.main()

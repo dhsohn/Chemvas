@@ -339,7 +339,3 @@ class TemplateGeometryTest(unittest.TestCase):
         )
         assert far_polygon is not None
         self.assertGreater(sum(y for _, y in far_polygon) / len(far_polygon), 0.0)
-
-
-if __name__ == "__main__":
-    unittest.main()

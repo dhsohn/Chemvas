@@ -4,21 +4,16 @@ from unittest import mock
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-try:
-    from PyQt6.QtCore import QPointF
-    from PyQt6.QtGui import QPolygonF
-    from PyQt6.QtWidgets import QApplication, QGraphicsPolygonItem
-except ModuleNotFoundError:
-    QApplication = None
+from PyQt6.QtCore import QPointF
+from PyQt6.QtGui import QPolygonF
+from PyQt6.QtWidgets import QApplication, QGraphicsPolygonItem
 
-if QApplication is not None:
-    import chemvas.ui.canvas_ring_fill_scene_service as ring_fill_service
-    import chemvas.ui.selection_rotation_preview_transaction as preview_transaction
-    from chemvas.ui.canvas_lifecycle import schedule_canvas_deletion_for
-    from tests.canvas_factory import build_canvas_view
+import chemvas.ui.canvas_ring_fill_scene_service as ring_fill_service
+import chemvas.ui.selection_rotation_preview_transaction as preview_transaction
+from chemvas.ui.canvas_lifecycle import schedule_canvas_deletion_for
+from tests.canvas_factory import build_canvas_view
 
 
-@unittest.skipUnless(QApplication is not None, "PyQt6 is required")
 class SelectionRotationRingCacheTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -92,7 +87,3 @@ class SelectionRotationRingCacheTest(unittest.TestCase):
                 authority.release()
             schedule_canvas_deletion_for(canvas)
             self.app.processEvents()
-
-
-if __name__ == "__main__":
-    unittest.main()

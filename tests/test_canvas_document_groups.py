@@ -6,21 +6,16 @@ from tests.runtime_state import canvas_runtime_state
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-try:
-    from PyQt6.QtWidgets import QApplication
-except ModuleNotFoundError:
-    QApplication = None
 
-if QApplication is not None:
-    from chemvas.domain.document import Atom, MoleculeModel
-    from chemvas.ui.canvas_document_state import _snapshot_groups as snapshot_groups
-    from chemvas.ui.canvas_document_state import restore_document_groups
-    from chemvas.ui.canvas_group_state import (
-        CanvasGroupState,
-        group_state_for,
-        register_group_for,
-    )
-    from chemvas.ui.canvas_scene_items_state import CanvasSceneItemsState
+from chemvas.domain.document import Atom, MoleculeModel
+from chemvas.ui.canvas_document_state import _snapshot_groups as snapshot_groups
+from chemvas.ui.canvas_document_state import restore_document_groups
+from chemvas.ui.canvas_group_state import (
+    CanvasGroupState,
+    group_state_for,
+    register_group_for,
+)
+from chemvas.ui.canvas_scene_items_state import CanvasSceneItemsState
 
 
 class _SceneItem:
@@ -60,9 +55,6 @@ def _canvas_with_items(scene_obj):
     return canvas, note_item, arrow_item, mark_item
 
 
-@unittest.skipUnless(
-    QApplication is not None, "PyQt6 is required for document group tests"
-)
 class CanvasDocumentGroupsTest(unittest.TestCase):
     def test_snapshot_groups_maps_members_to_stable_references(self) -> None:
         scene_obj = object()
@@ -161,7 +153,3 @@ class CanvasDocumentGroupsTest(unittest.TestCase):
             members,
             sorted([([1], [id(restored_note)]), ([2], [id(restored_arrow)])]),
         )
-
-
-if __name__ == "__main__":
-    unittest.main()

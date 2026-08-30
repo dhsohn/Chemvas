@@ -4,39 +4,17 @@ from unittest import mock
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-try:
-    from PyQt6.QtCore import QPointF, QRectF, Qt
-    from PyQt6.QtGui import QColor
-    from PyQt6.QtWidgets import QApplication, QGraphicsPathItem
-except ModuleNotFoundError:
-    QApplication = None
-    QPointF = None
-    QRectF = None
-    Qt = None
-    QColor = None
+from PyQt6.QtCore import QPointF, QRectF, Qt
+from PyQt6.QtGui import QColor
+from PyQt6.QtWidgets import QApplication, QGraphicsPathItem
 
-if QApplication is not None:
-    try:
-        from chemvas.ui.canvas_scene_decoration_build_service import (
-            CanvasSceneDecorationBuildService,
-        )
-        from chemvas.ui.canvas_tool_settings_state import set_tool_setting_for
-        from chemvas.ui.canvas_view import CanvasView
-        from tests.canvas_factory import build_canvas_view
-    except SyntaxError:
-        CanvasSceneDecorationBuildService = None
-        CanvasView = None
-else:
-    CanvasSceneDecorationBuildService = None
-    CanvasView = None
-
-
-@unittest.skipUnless(
-    QApplication is not None
-    and CanvasSceneDecorationBuildService is not None
-    and CanvasView is not None,
-    "PyQt6 and scene decoration build service are required for tests",
+from chemvas.ui.canvas_scene_decoration_build_service import (
+    CanvasSceneDecorationBuildService,
 )
+from chemvas.ui.canvas_tool_settings_state import set_tool_setting_for
+from tests.canvas_factory import build_canvas_view
+
+
 class CanvasSceneDecorationBuildServiceTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -310,7 +288,3 @@ class CanvasSceneDecorationBuildServiceTest(unittest.TestCase):
         self.assertEqual(self.service.mark_center(plus), QPointF(10.0, 12.0))
         self.assertEqual(self.service.mark_center(radical), QPointF(14.0, 16.0))
         self.assertEqual(self.service.mark_center(circled_plus), QPointF(18.0, 20.0))
-
-
-if __name__ == "__main__":
-    unittest.main()

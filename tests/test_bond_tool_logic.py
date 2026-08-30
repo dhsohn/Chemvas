@@ -306,7 +306,3 @@ class BondToolLogicTest(unittest.TestCase):
                 )
 
                 self.assertPointAlmostEqual(target, expected)
-
-
-if __name__ == "__main__":
-    unittest.main()

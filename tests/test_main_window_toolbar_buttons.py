@@ -4,26 +4,19 @@ from unittest import mock
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-try:
-    from PyQt6.QtCore import QPoint, Qt
-    from PyQt6.QtGui import QAction, QIcon, QKeySequence, QPixmap
-    from PyQt6.QtTest import QTest
-    from PyQt6.QtWidgets import QApplication, QMainWindow, QMenu, QWidget
-except ModuleNotFoundError:
-    QApplication = None
+from PyQt6.QtCore import QPoint, Qt
+from PyQt6.QtGui import QAction, QIcon, QKeySequence, QPixmap
+from PyQt6.QtTest import QTest
+from PyQt6.QtWidgets import QApplication, QMainWindow, QMenu, QWidget
 
-if QApplication is not None:
-    from chemvas.shell.toolbar_buttons import (
-        ArrowButton,
-        CornerMenuButton,
-        CornerMenuToolButton,
-        MainWindowToolbarButtonFactory,
-    )
-
-
-@unittest.skipUnless(
-    QApplication is not None, "PyQt6 is required for toolbar button tests"
+from chemvas.shell.toolbar_buttons import (
+    ArrowButton,
+    CornerMenuButton,
+    CornerMenuToolButton,
+    MainWindowToolbarButtonFactory,
 )
+
+
 class MainWindowToolbarButtonsTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -108,7 +101,3 @@ class MainWindowToolbarButtonsTest(unittest.TestCase):
             self.app.processEvents()
             pixmap = widget.grab()
             self.assertFalse(pixmap.isNull())
-
-
-if __name__ == "__main__":
-    unittest.main()

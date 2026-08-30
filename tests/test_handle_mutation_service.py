@@ -8,17 +8,13 @@ from tests.runtime_state import canvas_runtime_state
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-try:
-    from PyQt6.QtCore import QPointF, QRectF
-    from PyQt6.QtGui import QPainterPath
-    from PyQt6.QtWidgets import QApplication
-except ModuleNotFoundError:
-    QApplication = None
+from PyQt6.QtCore import QPointF, QRectF
+from PyQt6.QtGui import QPainterPath
+from PyQt6.QtWidgets import QApplication
 
-if QApplication is not None:
-    from chemvas.ui.canvas_tool_settings_state import CanvasToolSettingsState
-    from chemvas.ui.curved_arrow_path_service import CurvedArrowPathService
-    from chemvas.ui.handle_mutation_service import HandleMutationService
+from chemvas.ui.canvas_tool_settings_state import CanvasToolSettingsState
+from chemvas.ui.curved_arrow_path_service import CurvedArrowPathService
+from chemvas.ui.handle_mutation_service import HandleMutationService
 
 
 class _FakeGraphicsItem:
@@ -61,9 +57,6 @@ class _FakeGraphicsItem:
         return QPointF(self._pos)
 
 
-@unittest.skipUnless(
-    QApplication is not None, "PyQt6 is required for handle mutation service tests"
-)
 class HandleMutationServiceTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -194,7 +187,3 @@ class HandleMutationServiceTest(unittest.TestCase):
         self.assertEqual(fallback_item.data(2)["control"], QPointF(6.3, 3.1))
         self.assertEqual(add_arrow_head.call_count, 2)
         canvas.refresh_selection_outline.assert_called_once_with()
-
-
-if __name__ == "__main__":
-    unittest.main()

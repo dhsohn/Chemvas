@@ -159,7 +159,3 @@ class ApplyPastePayloadHardeningTest(unittest.TestCase):
         # Only the valid bond survives; malformed siblings are skipped.
         self.assertEqual(model.added_bonds, [(100, 101, 2)])
         self.assertTrue(result.has_changes())
-
-
-if __name__ == "__main__":
-    unittest.main()

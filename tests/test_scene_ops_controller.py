@@ -8,69 +8,65 @@ from tests.runtime_state import canvas_runtime_state
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-try:
-    from PyQt6.QtCore import QPointF, QRectF
-    from PyQt6.QtGui import QBrush, QColor, QFont, QImage, QPolygonF
-    from PyQt6.QtWidgets import (
-        QApplication,
-        QGraphicsItem,
-        QGraphicsPolygonItem,
-        QGraphicsRectItem,
-        QGraphicsScene,
-        QGraphicsTextItem,
-    )
-except ModuleNotFoundError:
-    QApplication = None
+from PyQt6.QtCore import QPointF, QRectF
+from PyQt6.QtGui import QBrush, QColor, QFont, QImage, QPolygonF
+from PyQt6.QtWidgets import (
+    QApplication,
+    QGraphicsItem,
+    QGraphicsPolygonItem,
+    QGraphicsRectItem,
+    QGraphicsScene,
+    QGraphicsTextItem,
+)
 
-if QApplication is not None:
-    from chemvas.core.history import (
-        CompositeCommand,
-        DeleteAtomsCommand,
-        DeleteBondCommand,
-    )
-    from chemvas.domain.document import Atom, Bond, MoleculeModel
-    from chemvas.ui.atom_coords_access import (
-        CanvasAtomCoords3DState,
-        atom_coords_3d_for,
-    )
-    from chemvas.ui.canvas_atom_graphics_state import (
-        CanvasAtomGraphicsState,
-        atom_dots_for,
-        atom_items_for,
-        set_atom_dots_for,
-        set_atom_items_for,
-    )
-    from chemvas.ui.canvas_bond_graphics_state import (
-        CanvasBondGraphicsState,
-        bond_items_for,
-        set_bond_items_for,
-    )
-    from chemvas.ui.canvas_graph_state import CanvasGraphState
-    from chemvas.ui.canvas_group_state import CanvasGroupState
-    from chemvas.ui.canvas_mark_registry import CanvasMarkRegistry
-    from chemvas.ui.canvas_rotation_state import CanvasRotationState
-    from chemvas.ui.canvas_scene_items_state import (
-        SCENE_ITEM_COLLECTION_ATTRS,
-        CanvasSceneItemsState,
-        scene_item_collection_for,
-        set_scene_item_collection_for,
-    )
-    from chemvas.ui.canvas_smiles_input_state import (
-        CanvasSmilesInputState,
-        last_smiles_input_for,
-        set_last_smiles_input_for,
-    )
-    from chemvas.ui.graphics_items import AtomLabelItem
-    from chemvas.ui.history_commands import DeleteSceneItemsCommand
-    from chemvas.ui.scene_clipboard_controller import (
-        CLIPBOARD_PDF_MIME,
-        CLIPBOARD_SVG_MIME,
-        SceneClipboardController,
-    )
-    from chemvas.ui.scene_clipboard_state import SceneClipboardState
-    from chemvas.ui.scene_clipboard_transaction_logic import build_clipboard_copy_plan
-    from chemvas.ui.scene_delete_controller import SceneDeleteController
-    from chemvas.ui.scene_transform_controller import SceneTransformController
+from chemvas.core.history import (
+    CompositeCommand,
+    DeleteAtomsCommand,
+    DeleteBondCommand,
+)
+from chemvas.domain.document import Atom, Bond, MoleculeModel
+from chemvas.ui.atom_coords_access import (
+    CanvasAtomCoords3DState,
+    atom_coords_3d_for,
+)
+from chemvas.ui.canvas_atom_graphics_state import (
+    CanvasAtomGraphicsState,
+    atom_dots_for,
+    atom_items_for,
+    set_atom_dots_for,
+    set_atom_items_for,
+)
+from chemvas.ui.canvas_bond_graphics_state import (
+    CanvasBondGraphicsState,
+    bond_items_for,
+    set_bond_items_for,
+)
+from chemvas.ui.canvas_graph_state import CanvasGraphState
+from chemvas.ui.canvas_group_state import CanvasGroupState
+from chemvas.ui.canvas_mark_registry import CanvasMarkRegistry
+from chemvas.ui.canvas_rotation_state import CanvasRotationState
+from chemvas.ui.canvas_scene_items_state import (
+    SCENE_ITEM_COLLECTION_ATTRS,
+    CanvasSceneItemsState,
+    scene_item_collection_for,
+    set_scene_item_collection_for,
+)
+from chemvas.ui.canvas_smiles_input_state import (
+    CanvasSmilesInputState,
+    last_smiles_input_for,
+    set_last_smiles_input_for,
+)
+from chemvas.ui.graphics_items import AtomLabelItem
+from chemvas.ui.history_commands import DeleteSceneItemsCommand
+from chemvas.ui.scene_clipboard_controller import (
+    CLIPBOARD_PDF_MIME,
+    CLIPBOARD_SVG_MIME,
+    SceneClipboardController,
+)
+from chemvas.ui.scene_clipboard_state import SceneClipboardState
+from chemvas.ui.scene_clipboard_transaction_logic import build_clipboard_copy_plan
+from chemvas.ui.scene_delete_controller import SceneDeleteController
+from chemvas.ui.scene_transform_controller import SceneTransformController
 
 
 def _set_selectable(item: QGraphicsItem) -> QGraphicsItem:
@@ -166,9 +162,6 @@ def scene_transform_controller_for(canvas) -> SceneTransformController:
     )
 
 
-@unittest.skipUnless(
-    QApplication is not None, "PyQt6 is required for scene ops controller tests"
-)
 class SceneOpsControllerTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -1639,7 +1632,3 @@ class _FakeCanvas:
         if horizontal:
             return QPointF(center.x() - (point.x() - center.x()), point.y())
         return QPointF(point.x(), center.y() - (point.y() - center.y()))
-
-
-if __name__ == "__main__":
-    unittest.main()

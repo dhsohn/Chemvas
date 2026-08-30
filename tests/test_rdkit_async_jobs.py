@@ -10,27 +10,20 @@ from unittest import mock
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-try:
-    from PyQt6.QtCore import QObject
-except ModuleNotFoundError:
-    QObject = None
+from PyQt6.QtCore import QObject
 
-if QObject is not None:
-    from chemvas.domain.document import MoleculeModel
-    from chemvas.features.insertion import MoleculeIdentifiers, RDKitResult
-    from chemvas.ui import rdkit_async_jobs
-    from chemvas.ui.preview_3d_worker import Preview3DWorker
-    from chemvas.ui.rdkit_async_jobs import XYZExportWorker, export_xyz_in_thread
-    from chemvas.ui.rdkit_export_job_state import (
-        normalized_export_target_path,
-        rdkit_export_job_registry,
-        rdkit_export_jobs_for,
-    )
-
-
-@unittest.skipUnless(
-    QObject is not None, "PyQt6 is required for async RDKit export tests"
+from chemvas.domain.document import MoleculeModel
+from chemvas.features.insertion import MoleculeIdentifiers, RDKitResult
+from chemvas.ui import rdkit_async_jobs
+from chemvas.ui.preview_3d_worker import Preview3DWorker
+from chemvas.ui.rdkit_async_jobs import XYZExportWorker, export_xyz_in_thread
+from chemvas.ui.rdkit_export_job_state import (
+    normalized_export_target_path,
+    rdkit_export_job_registry,
+    rdkit_export_jobs_for,
 )
+
+
 class XYZExportWorkerTest(unittest.TestCase):
     def test_run_writes_xyz_and_emits_success_and_finished(self) -> None:
         rdkit = SimpleNamespace(
@@ -219,9 +212,6 @@ class _FakeWorker:
         self.run_called = True
 
 
-@unittest.skipUnless(
-    QObject is not None, "PyQt6 is required for async RDKit export tests"
-)
 class ExportXYZInThreadTest(unittest.TestCase):
     def setUp(self) -> None:
         rdkit_export_job_registry().reset_for_tests()
@@ -453,9 +443,6 @@ assert list(target.parent.glob(f".{target.name}.*.stage")) == []
         self.assertEqual(completed.returncode, 0, completed.stderr)
 
 
-@unittest.skipUnless(
-    QObject is not None, "PyQt6 is required for async RDKit preview tests"
-)
 class Preview3DWorkerTest(unittest.TestCase):
     def test_run_prefers_result_error_over_stale_adapter_error(self) -> None:
         rdkit = SimpleNamespace(
@@ -505,7 +492,3 @@ class Preview3DWorkerTest(unittest.TestCase):
                 )
             ],
         )
-
-
-if __name__ == "__main__":
-    unittest.main()

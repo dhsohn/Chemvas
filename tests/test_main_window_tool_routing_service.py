@@ -5,18 +5,14 @@ from unittest import mock
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-try:
-    from PyQt6.QtWidgets import QApplication
-except ModuleNotFoundError:
-    QApplication = None
+from PyQt6.QtWidgets import QApplication
 
-if QApplication is not None:
-    from chemvas.bootstrap.main_window import build_main_window
-    from chemvas.ui.main_window_ports import (
-        active_canvas_for_window,
-        services_for_window,
-    )
-    from chemvas.ui.main_window_tool_routing_service import MainWindowToolRoutingService
+from chemvas.bootstrap.main_window import build_main_window
+from chemvas.ui.main_window_ports import (
+    active_canvas_for_window,
+    services_for_window,
+)
+from chemvas.ui.main_window_tool_routing_service import MainWindowToolRoutingService
 
 
 class _FakeItem:
@@ -29,9 +25,6 @@ class _FakeItem:
         return None
 
 
-@unittest.skipUnless(
-    QApplication is not None, "PyQt6 is required for main window tool routing tests"
-)
 class MainWindowToolRoutingServiceTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -132,7 +125,3 @@ class MainWindowToolRoutingServiceTest(unittest.TestCase):
                 mock.call(self.window, excluded_kinds=set()),
             ],
         )
-
-
-if __name__ == "__main__":
-    unittest.main()

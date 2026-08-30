@@ -91,7 +91,3 @@ class MacosAppIdentityTest(unittest.TestCase):
             "an already-named bundle must not be renamed",
         )
         self.assertNotEqual(_current_bundle_name(), "SomethingElse")
-
-
-if __name__ == "__main__":
-    unittest.main()

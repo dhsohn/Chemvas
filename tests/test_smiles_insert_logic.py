@@ -238,7 +238,3 @@ class SmilesInsertLogicTest(unittest.TestCase):
         assert geometry is not None
         self.assertEqual(geometry.bond_segments, {1: ((-3.0, -1.0, 7.0, -1.0),)})
         resolver.assert_not_called()
-
-
-if __name__ == "__main__":
-    unittest.main()
