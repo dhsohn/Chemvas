@@ -13,14 +13,14 @@ if QApplication is not None:
     from chemvas.core.history import DeleteAtomsCommand, DeleteBondCommand
     from chemvas.domain.document import Atom, Bond, MoleculeModel
     from chemvas.ui.history_commands import DeleteSceneItemsCommand
-    from chemvas.ui.scene_delete_logic import DeleteSelectionPlan
+    from chemvas.ui.scene_delete_plan import DeleteSelectionPlan
     from tests.test_scene_ops_controller import _make_note_item, _make_rect_item
 
 
 def _load_delete_apply_helper():
     module_names = (
         "chemvas.ui.scene_delete_apply_logic",
-        "chemvas.ui.scene_delete_logic",
+        "chemvas.ui.scene_delete_plan",
     )
     helper_names = (
         "build_delete_apply_commands",

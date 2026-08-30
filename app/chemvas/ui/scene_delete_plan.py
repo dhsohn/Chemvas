@@ -1,3 +1,10 @@
+"""Delete-selection classification and planning over live Qt scene items.
+
+Formerly ``scene_delete_logic``. The module consumes ``QGraphicsItem``
+instances directly (isinstance checks, ``data()`` lookups), so the Qt-free
+``*_logic`` role contract never applied; the name now says what it is.
+"""
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
