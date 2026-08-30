@@ -2,7 +2,12 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from chemvas.features.insertion import alternating_ring_bond_specs
+from PyQt6.QtCore import QPointF
+
+from chemvas.features.insertion import (
+    alternating_ring_bond_specs,
+    point_inside_any_ring,
+)
 from chemvas.ui.canvas_model_access import atoms_for, bond_count_for, bonds_for
 from chemvas.ui.canvas_ring_fill_scene_access import create_ring_fill_item_for
 from chemvas.ui.canvas_scene_items_state import ring_items_for
@@ -13,8 +18,6 @@ from chemvas.ui.structure_geometry_logic import compute_free_benzene_ring_points
 
 if TYPE_CHECKING:
     from collections.abc import Callable
-
-    from PyQt6.QtCore import QPointF
 
     from chemvas.ui.structure_build_committer import StructureBuildCommitter
 
@@ -35,17 +38,26 @@ class StructureBenzeneBuildService:
     ) -> tuple[list[QPointF], list[tuple[int, float, float]]] | None:
         if self._has_unsupported_fuse_bond_order(attach_bond_id):
             return None
+        # plan_benzene_ring_points is a pure *_logic helper: it receives plain
+        # coordinates plus callbacks, and this service owns every Qt conversion.
         return plan_benzene_ring_points(
-            center,
+            (center.x(), center.y()),
             attach_atom_id=attach_atom_id,
             attach_bond_id=attach_bond_id,
             bonds=bonds_for(self.canvas),
             atoms=atoms_for(self.canvas),
-            ring_items=ring_items_for(self.canvas),
             bond_length=bond_length_px_for(self.canvas),
-            regular_ring_points_for_bond=regular_ring_points_for_bond,
+            center_inside_existing_ring=lambda: point_inside_any_ring(
+                center, ring_items=ring_items_for(self.canvas)
+            ),
+            regular_ring_points_for_bond=(
+                lambda ring_size, bond_id, point: regular_ring_points_for_bond(
+                    ring_size, bond_id, QPointF(point[0], point[1])
+                )
+            ),
             regular_ring_points_for_atom=regular_ring_points_for_atom,
             compute_free_points=compute_free_benzene_ring_points,
+            make_point=QPointF,
         )
 
     def add_benzene_ring(

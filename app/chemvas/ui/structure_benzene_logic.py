@@ -2,37 +2,35 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from PyQt6.QtCore import QPointF
-
-from chemvas.features.insertion import point_inside_any_ring
-
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping, Sequence
 
     from chemvas.domain.document import Atom, Bond
 
 
-def plan_benzene_ring_points(
-    center: QPointF,
+def plan_benzene_ring_points[PointT](
+    center: tuple[float, float],
     *,
     attach_atom_id: int | None,
     attach_bond_id: int | None,
     bonds: Sequence[Bond | None],
     atoms: Mapping[int, Atom],
-    ring_items: Sequence,
     bond_length: float,
+    center_inside_existing_ring: Callable[[], bool],
     regular_ring_points_for_bond: Callable[
-        [int, int, QPointF], tuple[list[QPointF], list[tuple[int, float, float]]] | None
+        [int, int, tuple[float, float]],
+        tuple[list[PointT], list[tuple[int, float, float]]] | None,
     ],
     regular_ring_points_for_atom: Callable[
-        [int, int], tuple[list[QPointF], list[tuple[int, float, float]]] | None
+        [int, int], tuple[list[PointT], list[tuple[int, float, float]]] | None
     ],
     compute_free_points: Callable[..., list[tuple[float, float]]],
-) -> tuple[list[QPointF], list[tuple[int, float, float]]] | None:
+    make_point: Callable[[float, float], PointT],
+) -> tuple[list[PointT], list[tuple[int, float, float]]] | None:
     if (
         attach_atom_id is None
         and attach_bond_id is None
-        and point_inside_any_ring(center, ring_items=ring_items)
+        and center_inside_existing_ring()
     ):
         return None
 
@@ -53,8 +51,8 @@ def plan_benzene_ring_points(
             return None
         return result
 
-    free_points = compute_free_points((center.x(), center.y()), bond_length=bond_length)
-    return [QPointF(x, y) for x, y in free_points], []
+    free_points = compute_free_points(center, bond_length=bond_length)
+    return [make_point(x, y) for x, y in free_points], []
 
 
 __all__ = ["plan_benzene_ring_points"]

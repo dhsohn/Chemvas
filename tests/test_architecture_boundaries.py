@@ -4012,7 +4012,7 @@ def test_service_methods_only_the_tests_called_stay_removed() -> None:
     scoped_bans = {
         "canvas_graph_service.py": ("atom_bond_order_sum",),
         "canvas_geometry_controller.py": ("ring_for_bond",),
-        "scene_delete_logic.py": ("has_work",),
+        "scene_delete_plan.py": ("has_work",),
         "main_window_status_service.py": ("zoom_status_tip",),
         "main_window_state.py": ("reset_canvas_name_counter",),
         "canvas_document_session_service.py": ("_snapshot_canvas_scene",),

@@ -1,19 +1,22 @@
 from __future__ import annotations
 
-from PyQt6.QtCore import QPointF, QRectF
+Point = tuple[float, float]
+"""A scene point as ``(x, y)``."""
+
+Rect = tuple[float, float, float, float]
+"""A scene rectangle as ``(left, top, right, bottom)``."""
 
 
-def line_rect_clip_t(
-    p1: QPointF, p2: QPointF, rect: QRectF
-) -> tuple[float, float] | None:
-    dx = p2.x() - p1.x()
-    dy = p2.y() - p1.y()
+def line_rect_clip_t(p1: Point, p2: Point, rect: Rect) -> tuple[float, float] | None:
+    left, top, right, bottom = rect
+    dx = p2[0] - p1[0]
+    dy = p2[1] - p1[1]
     p = [-dx, dx, -dy, dy]
     q = [
-        p1.x() - rect.left(),
-        rect.right() - p1.x(),
-        p1.y() - rect.top(),
-        rect.bottom() - p1.y(),
+        p1[0] - left,
+        right - p1[0],
+        p1[1] - top,
+        bottom - p1[1],
     ]
     u1 = 0.0
     u2 = 1.0
@@ -32,30 +35,27 @@ def line_rect_clip_t(
     return u1, u2
 
 
-def segment_intersection_t(
-    p1: QPointF, p2: QPointF, q1: QPointF, q2: QPointF
-) -> float | None:
-    r = QPointF(p2.x() - p1.x(), p2.y() - p1.y())
-    s = QPointF(q2.x() - q1.x(), q2.y() - q1.y())
-    denom = r.x() * s.y() - r.y() * s.x()
+def segment_intersection_t(p1: Point, p2: Point, q1: Point, q2: Point) -> float | None:
+    r = (p2[0] - p1[0], p2[1] - p1[1])
+    s = (q2[0] - q1[0], q2[1] - q1[1])
+    denom = r[0] * s[1] - r[1] * s[0]
     if abs(denom) < 1e-8:
         return None
-    q_p = QPointF(q1.x() - p1.x(), q1.y() - p1.y())
-    t = (q_p.x() * s.y() - q_p.y() * s.x()) / denom
-    u = (q_p.x() * r.y() - q_p.y() * r.x()) / denom
+    q_p = (q1[0] - p1[0], q1[1] - p1[1])
+    t = (q_p[0] * s[1] - q_p[1] * s[0]) / denom
+    u = (q_p[0] * r[1] - q_p[1] * r[0]) / denom
     if 0.0 <= t <= 1.0 and 0.0 <= u <= 1.0:
         return t
     return None
 
 
-def ray_rect_exit_distance(
-    origin: QPointF, direction: QPointF, rect: QRectF
-) -> float | None:
+def ray_rect_exit_distance(origin: Point, direction: Point, rect: Rect) -> float | None:
+    left, top, right, bottom = rect
     t_min = float("-inf")
     t_max = float("inf")
     for origin_value, direction_value, min_value, max_value in (
-        (origin.x(), direction.x(), rect.left(), rect.right()),
-        (origin.y(), direction.y(), rect.top(), rect.bottom()),
+        (origin[0], direction[0], left, right),
+        (origin[1], direction[1], top, bottom),
     ):
         if abs(direction_value) < 1e-8:
             if origin_value < min_value or origin_value > max_value:
@@ -74,11 +74,12 @@ def ray_rect_exit_distance(
     return max(0.0, t_max)
 
 
-def line_rect_intersections(p1: QPointF, p2: QPointF, rect: QRectF) -> list[float]:
-    top_left = rect.topLeft()
-    top_right = rect.topRight()
-    bottom_right = rect.bottomRight()
-    bottom_left = rect.bottomLeft()
+def line_rect_intersections(p1: Point, p2: Point, rect: Rect) -> list[float]:
+    left, top, right, bottom = rect
+    top_left = (left, top)
+    top_right = (right, top)
+    bottom_right = (right, bottom)
+    bottom_left = (left, bottom)
     edges = [
         (top_left, top_right),
         (top_right, bottom_right),
@@ -94,6 +95,8 @@ def line_rect_intersections(p1: QPointF, p2: QPointF, rect: QRectF) -> list[floa
 
 
 __all__ = [
+    "Point",
+    "Rect",
     "line_rect_clip_t",
     "line_rect_intersections",
     "ray_rect_exit_distance",

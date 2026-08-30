@@ -17,7 +17,7 @@ if QApplication is not None:
     from chemvas.domain.document import Atom, Bond, MoleculeModel
     from chemvas.ui.canvas_smiles_input_state import last_smiles_input_for
     from chemvas.ui.history_commands import DeleteSceneItemsCommand
-    from chemvas.ui.scene_delete_logic import (
+    from chemvas.ui.scene_delete_plan import (
         build_delete_selection_plan,
         classify_delete_selection,
     )
@@ -33,7 +33,7 @@ if QApplication is not None:
 @unittest.skipUnless(
     QApplication is not None, "PyQt6 is required for scene ops controller tests"
 )
-class SceneDeleteLogicTest(unittest.TestCase):
+class SceneDeletePlanTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         cls.app = QApplication.instance() or QApplication([])

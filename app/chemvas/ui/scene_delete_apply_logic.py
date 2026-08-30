@@ -9,7 +9,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Sequence
 
     from chemvas.domain.document import Bond
-    from chemvas.ui.scene_delete_logic import DeleteSelectionPlan
+    from chemvas.ui.scene_delete_plan import DeleteSelectionPlan
 
 
 def apply_delete_selection_plan(

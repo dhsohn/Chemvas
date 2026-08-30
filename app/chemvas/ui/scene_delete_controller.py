@@ -42,7 +42,7 @@ from chemvas.ui.history_commands import (
     UngroupSceneItemsCommand,
 )
 from chemvas.ui.scene_delete_apply_logic import apply_delete_selection_plan
-from chemvas.ui.scene_delete_logic import (
+from chemvas.ui.scene_delete_plan import (
     build_delete_selection_plan,
     classify_delete_selection,
 )
