@@ -61,10 +61,13 @@ development, run the file(s) you touched:
 QT_QPA_PLATFORM=offscreen python -m pytest tests/test_<area>.py
 ```
 
-> **Run the suite one file at a time.** Qt keeps global application state that does
-> not fully reset between test modules, so CI runs each `test_*.py` file in its own
-> pytest process. `make check` does the same; to narrow the loop to the files you
-> touched, pass them to the script directly:
+> **Give each test file its own pytest process.** Qt keeps global application
+> state that does not fully reset between test modules, so a single shared
+> process passes tests that CI would fail. `scripts/run_test_files.sh` is the one
+> place that rule lives: `make check` and both CI jobs call it, and it runs
+> several of those processes at once — concurrency between processes, never two
+> files in one. To narrow the run to the files you touched, pass them to the
+> gate directly:
 >
 > ```bash
 > bash scripts/check.sh tests/test_<area>.py
