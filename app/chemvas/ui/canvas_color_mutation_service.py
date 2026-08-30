@@ -232,7 +232,7 @@ class UpdateBondColorCommand(HistoryCommand):
         _apply_bond_color_in_place(canvas, self.bond_id, self.after_color)
 
 
-@dataclass
+@dataclass(kw_only=True)
 class _NoteColorState:
     html: str
     cursor_anchor: int

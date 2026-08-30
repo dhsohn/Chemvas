@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 from typing import Any, cast
 
 
-@dataclass(slots=True)
+@dataclass(slots=True, kw_only=True)
 class CanvasGraphState:
     atom_neighbors: dict[int, set[int]] = field(default_factory=dict)
     atom_bond_ids: dict[int, set[int]] = field(default_factory=dict)

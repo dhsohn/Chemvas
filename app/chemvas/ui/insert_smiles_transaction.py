@@ -37,7 +37,7 @@ if TYPE_CHECKING:
     from chemvas.ui.canvas_view import CanvasView
 
 
-@dataclass(slots=True)
+@dataclass(slots=True, kw_only=True)
 class SmilesLoadSnapshot:
     before_smiles_input: str | None
     before_next_atom_id: int

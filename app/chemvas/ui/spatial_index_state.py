@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 from typing import cast
 
 
-@dataclass(slots=True)
+@dataclass(slots=True, kw_only=True)
 class CanvasSpatialIndexState:
     dirty: bool = True
     cell_size: float = 0.0

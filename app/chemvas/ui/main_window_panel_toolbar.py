@@ -45,7 +45,7 @@ class MainWindowPanelToolbarAssembly:
     tool_actions: dict[str, QAction]
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class MainWindowPanelToolbarCallbacks:
     save_canvas: Callable[[object], Any]
     save_canvas_as: Callable[[object], Any]

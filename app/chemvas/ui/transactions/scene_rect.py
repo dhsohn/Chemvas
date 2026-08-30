@@ -104,7 +104,7 @@ def set_explicit_view_scene_rect(
     setattr(view, _VIEW_EXPLICIT_ATTRIBUTE, True)
 
 
-@dataclass(slots=True)
+@dataclass(slots=True, kw_only=True)
 class _SceneRectTracker:
     """Per-scene growth bookkeeping, stored on the scene itself."""
 
@@ -207,7 +207,7 @@ def _capture_view_scene_rect_updaters(scene) -> tuple[Callable[[QRectF], None], 
     return tuple(updaters)
 
 
-@dataclass(slots=True)
+@dataclass(slots=True, kw_only=True)
 class SceneRectSnapshot:
     """Nestable growth guard with O(1) successful child accumulation."""
 
@@ -501,7 +501,7 @@ class SceneRectSnapshot:
         self.active = False
 
 
-@dataclass(slots=True)
+@dataclass(slots=True, kw_only=True)
 class SceneRectStateSnapshot:
     """Exact scene rect/mode savepoint without opening a growth guard."""
 
@@ -623,7 +623,7 @@ class SceneRectStateSnapshot:
         self.active = False
 
 
-@dataclass(slots=True)
+@dataclass(slots=True, kw_only=True)
 class ViewSceneRectStateSnapshot:
     """Exact view rect/mode savepoint."""
 

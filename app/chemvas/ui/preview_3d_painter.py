@@ -34,7 +34,7 @@ if TYPE_CHECKING:
     from chemvas.core.rdkit_adapter import Molecule3DScene
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class Preview3DPaintState:
     scene: Molecule3DScene | None
     message: str

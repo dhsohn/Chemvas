@@ -14,7 +14,7 @@ Rect = tuple[float, float, float, float]
 SmilesPreviewAction = Literal["clear", "rebuild", "update"]
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class SmilesAtomPlacement:
     source_atom_id: int
     element: str
@@ -24,7 +24,7 @@ class SmilesAtomPlacement:
     explicit_label: bool
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class SmilesBondPlacement:
     source_bond_id: int
     source_a: int

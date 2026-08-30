@@ -414,11 +414,32 @@ class InsertCommitServiceTest(unittest.TestCase):
         plan = SmilesCommitPlan(
             offset=(1.0, 1.0),
             atoms=[
-                SmilesAtomPlacement(0, "C", 10.0, 20.0, "#111111", False),
-                SmilesAtomPlacement(1, "N", 30.0, 40.0, "#222222", True),
+                SmilesAtomPlacement(
+                    source_atom_id=0,
+                    element="C",
+                    x=10.0,
+                    y=20.0,
+                    color="#111111",
+                    explicit_label=False,
+                ),
+                SmilesAtomPlacement(
+                    source_atom_id=1,
+                    element="N",
+                    x=30.0,
+                    y=40.0,
+                    color="#222222",
+                    explicit_label=True,
+                ),
             ],
             bonds=[
-                SmilesBondPlacement(0, 0, 1, 2, "double", "#333333"),
+                SmilesBondPlacement(
+                    source_bond_id=0,
+                    source_a=0,
+                    source_b=1,
+                    order=2,
+                    style="double",
+                    color="#333333",
+                ),
             ],
         )
 
@@ -453,7 +474,16 @@ class InsertCommitServiceTest(unittest.TestCase):
         canvas = _FakeCanvas()
         plan = SmilesCommitPlan(
             offset=(0.0, 0.0),
-            atoms=[SmilesAtomPlacement(0, "C", 0.0, 0.0, "#111111", False)],
+            atoms=[
+                SmilesAtomPlacement(
+                    source_atom_id=0,
+                    element="C",
+                    x=0.0,
+                    y=0.0,
+                    color="#111111",
+                    explicit_label=False,
+                )
+            ],
             bonds=[],
         )
 
@@ -471,7 +501,16 @@ class InsertCommitServiceTest(unittest.TestCase):
         canvas = _FakeCanvas()
         plan = SmilesCommitPlan(
             offset=(0.0, 0.0),
-            atoms=[SmilesAtomPlacement(0, "C", 0.0, 0.0, "#111111", False)],
+            atoms=[
+                SmilesAtomPlacement(
+                    source_atom_id=0,
+                    element="C",
+                    x=0.0,
+                    y=0.0,
+                    color="#111111",
+                    explicit_label=False,
+                )
+            ],
             bonds=[],
         )
 
@@ -505,7 +544,16 @@ class InsertCommitServiceTest(unittest.TestCase):
         canvas.renderer = PoisonedRenderer()
         plan = SmilesCommitPlan(
             offset=(0.0, 0.0),
-            atoms=[SmilesAtomPlacement(0, "C", 0.0, 0.0, "#111111", False)],
+            atoms=[
+                SmilesAtomPlacement(
+                    source_atom_id=0,
+                    element="C",
+                    x=0.0,
+                    y=0.0,
+                    color="#111111",
+                    explicit_label=False,
+                )
+            ],
             bonds=[],
         )
 
@@ -527,7 +575,14 @@ class InsertCommitServiceTest(unittest.TestCase):
         plan = SmilesCommitPlan(
             offset=(0.0, 0.0),
             atoms=[
-                SmilesAtomPlacement(3, "N", 10.0, 20.0, "#111111", True),
+                SmilesAtomPlacement(
+                    source_atom_id=3,
+                    element="N",
+                    x=10.0,
+                    y=20.0,
+                    color="#111111",
+                    explicit_label=True,
+                ),
             ],
             bonds=[],
             marks=[
@@ -565,7 +620,14 @@ class InsertCommitServiceTest(unittest.TestCase):
         plan = SmilesCommitPlan(
             offset=(0.0, 0.0),
             atoms=[
-                SmilesAtomPlacement(3, "N", 10.0, 20.0, "#111111", True),
+                SmilesAtomPlacement(
+                    source_atom_id=3,
+                    element="N",
+                    x=10.0,
+                    y=20.0,
+                    color="#111111",
+                    explicit_label=True,
+                ),
             ],
             bonds=[],
             marks=[
@@ -809,8 +871,22 @@ class InsertCommitServiceTest(unittest.TestCase):
         plan = SmilesCommitPlan(
             offset=(0.0, 0.0),
             atoms=[
-                SmilesAtomPlacement(0, "C", 0.0, 0.0, "#111111", True),
-                SmilesAtomPlacement(1, "Cl", 10.0, 0.0, "#222222", False),
+                SmilesAtomPlacement(
+                    source_atom_id=0,
+                    element="C",
+                    x=0.0,
+                    y=0.0,
+                    color="#111111",
+                    explicit_label=True,
+                ),
+                SmilesAtomPlacement(
+                    source_atom_id=1,
+                    element="Cl",
+                    x=10.0,
+                    y=0.0,
+                    color="#222222",
+                    explicit_label=False,
+                ),
             ],
             bonds=[],
         )
@@ -899,8 +975,22 @@ class InsertCommitServiceTest(unittest.TestCase):
         duplicate_plan = SmilesCommitPlan(
             offset=(0.0, 0.0),
             atoms=[
-                SmilesAtomPlacement(7, "C", 0.0, 0.0, "#111111", False),
-                SmilesAtomPlacement(7, "N", 1.0, 1.0, "#222222", False),
+                SmilesAtomPlacement(
+                    source_atom_id=7,
+                    element="C",
+                    x=0.0,
+                    y=0.0,
+                    color="#111111",
+                    explicit_label=False,
+                ),
+                SmilesAtomPlacement(
+                    source_atom_id=7,
+                    element="N",
+                    x=1.0,
+                    y=1.0,
+                    color="#222222",
+                    explicit_label=False,
+                ),
             ],
             bonds=[],
         )
@@ -916,8 +1006,26 @@ class InsertCommitServiceTest(unittest.TestCase):
         invalid_bond_canvas = _FakeCanvas()
         invalid_bond_plan = SmilesCommitPlan(
             offset=(0.0, 0.0),
-            atoms=[SmilesAtomPlacement(0, "C", 0.0, 0.0, "#111111", False)],
-            bonds=[SmilesBondPlacement(0, 0, 99, 1, "solid", "#222222")],
+            atoms=[
+                SmilesAtomPlacement(
+                    source_atom_id=0,
+                    element="C",
+                    x=0.0,
+                    y=0.0,
+                    color="#111111",
+                    explicit_label=False,
+                )
+            ],
+            bonds=[
+                SmilesBondPlacement(
+                    source_bond_id=0,
+                    source_a=0,
+                    source_b=99,
+                    order=1,
+                    style="solid",
+                    color="#222222",
+                )
+            ],
         )
         self.assertFalse(
             apply_smiles_commit_plan(
@@ -942,11 +1050,32 @@ class InsertCommitServiceTest(unittest.TestCase):
         plan = SmilesCommitPlan(
             offset=(0.0, 0.0),
             atoms=[
-                SmilesAtomPlacement(atom_source, "C", 0.0, 0.0, "#111111", False),
-                SmilesAtomPlacement(other_source, "N", 1.0, 0.0, "#222222", True),
+                SmilesAtomPlacement(
+                    source_atom_id=atom_source,
+                    element="C",
+                    x=0.0,
+                    y=0.0,
+                    color="#111111",
+                    explicit_label=False,
+                ),
+                SmilesAtomPlacement(
+                    source_atom_id=other_source,
+                    element="N",
+                    x=1.0,
+                    y=0.0,
+                    color="#222222",
+                    explicit_label=True,
+                ),
             ],
             bonds=[
-                SmilesBondPlacement(0, bond_source, other_source, 1, "solid", "#333333")
+                SmilesBondPlacement(
+                    source_bond_id=0,
+                    source_a=bond_source,
+                    source_b=other_source,
+                    order=1,
+                    style="solid",
+                    color="#333333",
+                )
             ],
         )
 
@@ -968,7 +1097,16 @@ class InsertCommitServiceTest(unittest.TestCase):
         canvas = _FakeCanvas()
         plan = SmilesCommitPlan(
             offset=(0.0, 0.0),
-            atoms=[SmilesAtomPlacement(0, "C", 0.0, 0.0, "#111111", False)],
+            atoms=[
+                SmilesAtomPlacement(
+                    source_atom_id=0,
+                    element="C",
+                    x=0.0,
+                    y=0.0,
+                    color="#111111",
+                    explicit_label=False,
+                )
+            ],
             bonds=[],
         )
 

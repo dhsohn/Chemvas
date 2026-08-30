@@ -7,7 +7,7 @@ from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QColor, QFont
 
 
-@dataclass(slots=True)
+@dataclass(slots=True, kw_only=True)
 class CanvasTextStyleState:
     text_font_family: str = "Arial"
     text_font_size: int = 12

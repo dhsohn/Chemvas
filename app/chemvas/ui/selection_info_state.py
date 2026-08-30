@@ -21,7 +21,7 @@ SelectionSignature = tuple[
 PendingSelectionSignature = tuple[frozenset[int], frozenset[int]]
 
 
-@dataclass(slots=True)
+@dataclass(slots=True, kw_only=True)
 class SelectionInfoState:
     callback: Callable[[str, str], None] | None = None
     signature: SelectionSignature | None = None

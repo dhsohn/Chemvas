@@ -19,7 +19,7 @@ class RDKitExportOwnerState:
     job_ids: set[int] = field(default_factory=set)
 
 
-@dataclass(slots=True)
+@dataclass(slots=True, kw_only=True)
 class RDKitExportJob:
     job_id: int
     owner_state: RDKitExportOwnerState

@@ -6,7 +6,7 @@ from typing import Any, cast
 from chemvas.features.annotations import DEFAULT_BRACKET_KIND
 
 
-@dataclass(slots=True)
+@dataclass(slots=True, kw_only=True)
 class CanvasToolSettingsState:
     atom_symbol: str = "C"
     active_bond_style: str = "single"

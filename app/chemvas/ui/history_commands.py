@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 from dataclasses import dataclass, field
 from functools import partial
 from typing import Any, override
@@ -114,7 +115,7 @@ def _restore_active_handle_positions(
         )
 
 
-@dataclass(slots=True)
+@dataclass(slots=True, kw_only=True)
 class _MoveItemSnapshot:
     item: object
     state: dict
@@ -181,21 +182,17 @@ def _move_item_snapshot(canvas, item) -> _MoveItemSnapshot:
     position: object = _UNAVAILABLE_ITEM_VALUE
     position_method = getattr(item, "pos", None)
     if callable(position_method):
-        try:
+        with contextlib.suppress(RuntimeError):
             position = position_method()
-        except RuntimeError:
-            pass
 
     data_values: list[object] = []
     data_method = getattr(item, "data", None)
     for index in (1, 2):
         value: object = _UNAVAILABLE_ITEM_VALUE
         if callable(data_method):
-            try:
+            with contextlib.suppress(RuntimeError):
                 current = data_method(index)
                 value = dict(current) if isinstance(current, dict) else current
-            except RuntimeError:
-                pass
         data_values.append(value)
 
     atom_positions, atom_coords_3d = _model_move_snapshots(canvas, item)
@@ -611,7 +608,7 @@ class UngroupSceneItemsCommand(HistoryCommand):
         )
 
 
-@dataclass
+@dataclass(kw_only=True)
 class ChangeAtomLabelCommand(HistoryCommand):
     history_transaction_snapshot_covers_state = True
 

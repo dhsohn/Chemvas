@@ -90,7 +90,7 @@ class _NoteMutationSnapshot:
     interaction_flags: Qt.TextInteractionFlag
 
 
-@dataclass(slots=True)
+@dataclass(slots=True, kw_only=True)
 class _NoteBoxSnapshot:
     role: int
     box: QGraphicsRectItem | None
@@ -103,7 +103,9 @@ class _NoteBoxSnapshot:
     def capture(cls, item: QGraphicsTextItem, role: int) -> _NoteBoxSnapshot:
         box = item.data(role)
         if not isinstance(box, QGraphicsRectItem):
-            return cls(role, None, None, None, None, None)
+            return cls(
+                role=role, box=None, rect=None, pen=None, brush=None, visible=None
+            )
         return cls(
             role=role,
             box=box,
@@ -114,7 +116,7 @@ class _NoteBoxSnapshot:
         )
 
 
-@dataclass(slots=True)
+@dataclass(slots=True, kw_only=True)
 class _EditingNoteSnapshot:
     item: QGraphicsTextItem
     html: str

@@ -7,7 +7,7 @@ if TYPE_CHECKING:
     from chemvas.domain.document import MoleculeModel
 
 
-@dataclass(slots=True)
+@dataclass(slots=True, kw_only=True)
 class CanvasInsertState:
     smiles_active: bool = False
     smiles_preview_model: MoleculeModel | None = None

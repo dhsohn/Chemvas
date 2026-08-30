@@ -9,7 +9,7 @@ from chemvas.features.insertion import (
 )
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class InsertSessionState:
     template_active: bool = False
     template_ring_size: int | None = None

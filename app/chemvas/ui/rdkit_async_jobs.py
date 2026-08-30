@@ -107,10 +107,10 @@ class XYZExportCoordinator(QObject):
             logger.debug("Ignoring an XYZ export callback failure.", exc_info=True)
 
     def _publish_staging_file(self, job: RDKitExportJob) -> None:
-        atomic_write_via_temp(
-            job.target_path,
-            lambda final_tmp: os.replace(job.staging_path, final_tmp),
-        )
+        def _move_staging_file(final_tmp: Path) -> None:
+            job.staging_path.replace(final_tmp)
+
+        atomic_write_via_temp(job.target_path, _move_staging_file)
 
     @pyqtSlot(int, str)
     def _handle_success(self, job_id: int, staging_path: str) -> None:

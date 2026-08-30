@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from functools import partial
+from itertools import pairwise
 from typing import TYPE_CHECKING, Any, cast
 
 from PyQt6 import sip
@@ -456,7 +457,7 @@ class _SceneSelectionSnapshot:
     setter: Callable[[bool], object]
 
 
-@dataclass(slots=True)
+@dataclass(slots=True, kw_only=True)
 class _SceneItemTopologySnapshot:
     """Capture-bound parent/z/stacking authorities for one scene item."""
 
@@ -491,7 +492,7 @@ def _base_graphics_item_port(
     return partial(method, item)
 
 
-@dataclass(slots=True)
+@dataclass(slots=True, kw_only=True)
 class SceneRuntimeSnapshot:
     scene: object | None
     scene_items: list | None
@@ -1211,7 +1212,7 @@ def _restore_scene_stacking(
             continue
         sibling_groups.setdefault((id(state.parent), z_value), []).append(state)
     for siblings in sibling_groups.values():
-        for higher, lower in zip(siblings, siblings[1:], strict=False):
+        for higher, lower in pairwise(siblings):
             stack_before = lower.stack_before
             if not callable(stack_before):
                 continue

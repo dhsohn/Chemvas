@@ -68,7 +68,7 @@ class _UnsetBeforeSmilesInput:
 _UNSET_BEFORE_SMILES_INPUT = _UnsetBeforeSmilesInput()
 
 
-@dataclass(slots=True)
+@dataclass(slots=True, kw_only=True)
 class StructureBuildHistorySnapshot:
     before_smiles_input: str | None
     before_next_atom_id: int

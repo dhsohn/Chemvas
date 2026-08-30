@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 from typing import TYPE_CHECKING
 
 from PyQt6.QtCore import Qt
@@ -27,11 +28,9 @@ def clear_scene_items(scene: QGraphicsScene, items: Sequence[QGraphicsItem]) -> 
     # `ui.bond_preview_renderer` delegate here and compose the empty pool
     # their own caller reassigns, as `clear_smiles_preview` below does.
     for item in items:
-        try:
+        with contextlib.suppress(RuntimeError):
             if item.scene() is scene:
                 scene.removeItem(item)
-        except RuntimeError:
-            pass
 
 
 def clear_smiles_preview(

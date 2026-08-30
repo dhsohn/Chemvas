@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 from typing import TYPE_CHECKING, Any
 
 from PyQt6.QtCore import Qt
@@ -80,11 +81,9 @@ class CalculationMappingHighlighter:
             return
         scene = self._scene()
         for item in items:
-            try:
+            with contextlib.suppress(RuntimeError):
                 if scene is not None and item.scene() is scene:
                     scene.removeItem(item)
-            except RuntimeError:
-                pass
         items.clear()
 
     def _add_id_label(

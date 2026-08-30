@@ -16,7 +16,7 @@ if TYPE_CHECKING:
     )
 
 
-@dataclass(slots=True)
+@dataclass(slots=True, kw_only=True)
 class MainWindowUiReferences:
     icon_factory: MainWindowIconFactory | None = None
     tool_actions: dict[str, QAction] = field(default_factory=dict)

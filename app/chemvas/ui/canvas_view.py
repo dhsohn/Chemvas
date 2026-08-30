@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 import logging
 from typing import TYPE_CHECKING, override
 
@@ -76,26 +77,20 @@ class CanvasView(QGraphicsView):
         # as fatal (qFatal/SIGABRT). Perspective preserves its transaction and
         # local cursor on failure so a later pointer event can retry it; contain
         # the exception only at this outer Qt boundary.
-        try:
+        with contextlib.suppress(Exception):
             logger.exception("Canvas mouse-%s handling failed", phase)
-        except Exception:
-            pass
         try:
             notify_error_for(
                 self,
                 "The current interaction could not be completed. Try again.",
             )
         except Exception:
-            try:
+            with contextlib.suppress(Exception):
                 logger.exception("Canvas mouse-event error notification failed")
-            except Exception:
-                pass
-        try:
+        with contextlib.suppress(Exception):
             accept = getattr(event, "accept", None)
             if callable(accept):
                 accept()
-        except Exception:
-            pass
 
     @override
     def mousePressEvent(self, event) -> None:

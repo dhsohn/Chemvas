@@ -7,6 +7,7 @@ testable against a ``tmp_path``.
 
 from __future__ import annotations
 
+import contextlib
 import os
 import tempfile
 from pathlib import Path
@@ -69,10 +70,8 @@ def recent_documents_file() -> Path:
 
 def sessions_dir() -> Path:
     directory = app_data_dir() / "sessions"
-    try:
+    with contextlib.suppress(OSError):
         directory.mkdir(parents=True, exist_ok=True)
-    except OSError:
-        pass
     return directory
 
 

@@ -29,7 +29,7 @@ class TemplateInsertRequest:
     atom_id: int | None = None
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class TemplateInsertPlan:
     generator: TemplateGenerator
     ring_size: int
@@ -46,7 +46,7 @@ class TemplateInsertResolution:
     points: list[Point2D] | None
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class TemplatePointResolvers:
     regular_ring_radius: Callable[[int], float]
     ring_points: Callable[[Point2D, int, float | None], Sequence[Point2D]]

@@ -58,7 +58,7 @@ class RdkitIdleWarmupBridge(QObject):
             self.timer.stop()
 
 
-@dataclass(slots=True)
+@dataclass(slots=True, kw_only=True)
 class CanvasRuntimeState:
     # The canonical, complete state container. State accessors read their field
     # off it directly, and ``slots=True`` makes a renamed or misspelled field

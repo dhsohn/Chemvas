@@ -1614,7 +1614,9 @@ class HistoryCommandTest(unittest.TestCase):
     def test_position_and_polygon_commands_apply_history_ports(self) -> None:
         canvas = _FakeCanvas()
         atom_command = SetAtomPositionsCommand(
-            {1: (0.0, 0.0)}, {1: (2.0, 3.0)}, update_selection=False
+            before_positions={1: (0.0, 0.0)},
+            after_positions={1: (2.0, 3.0)},
+            update_selection=False,
         )
         ring = _FakeRingItem(canvas)
         ring_command = SetRingPolygonsCommand([ring], [[(0.0, 0.0)]], [[(1.0, 1.0)]])
@@ -1632,8 +1634,8 @@ class HistoryCommandTest(unittest.TestCase):
     def test_set_atom_positions_command_restores_projection_state(self) -> None:
         canvas = _FakeCanvas()
         command = SetAtomPositionsCommand(
-            {1: (0.0, 0.0)},
-            {1: (2.0, 3.0)},
+            before_positions={1: (0.0, 0.0)},
+            after_positions={1: (2.0, 3.0)},
             before_coords_3d={1: (0.0, 0.0, 0.0)},
             after_coords_3d={1: (2.0, 3.0, 4.0)},
             restore_projection_state=True,
@@ -1660,8 +1662,8 @@ class HistoryCommandTest(unittest.TestCase):
     ) -> None:
         canvas = _MinimalCanvas()
         command = SetAtomPositionsCommand(
-            {1: (0.0, 0.0)},
-            {1: (2.0, 3.0)},
+            before_positions={1: (0.0, 0.0)},
+            after_positions={1: (2.0, 3.0)},
             before_coords_3d={1: (0.0, 0.0, 0.0)},
             after_coords_3d={1: (2.0, 3.0, 4.0)},
             restore_projection_state=True,

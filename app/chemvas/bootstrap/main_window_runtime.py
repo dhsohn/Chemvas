@@ -17,7 +17,7 @@ if TYPE_CHECKING:
     from chemvas.ui.main_window_service_types import MainWindowServices
 
 
-@dataclass(slots=True)
+@dataclass(slots=True, kw_only=True)
 class MainWindowBootstrapRuntime:
     state: MainWindowState
     ui_refs: MainWindowUiReferences
