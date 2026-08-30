@@ -13,7 +13,7 @@ except ModuleNotFoundError:
     QApplication = None
 
 if QApplication is not None:
-    from chemvas.ui.main_window_icon_pixmap_factory import MainWindowIconPixmapFactory
+    from chemvas.shell.icon_pixmap_factory import MainWindowIconPixmapFactory
 
 
 def _opaque_pixel_count(image) -> int:

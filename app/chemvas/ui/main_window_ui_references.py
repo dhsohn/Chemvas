@@ -7,7 +7,7 @@ if TYPE_CHECKING:
     from PyQt6.QtGui import QAction
     from PyQt6.QtWidgets import QLineEdit
 
-    from chemvas.ui.main_window_icon_factory import MainWindowIconFactory
+    from chemvas.shell.icon_factory import MainWindowIconFactory
     from chemvas.ui.main_window_menu_bar import MainWindowMenuBarAssembly
     from chemvas.ui.main_window_panel_toolbar import MainWindowPanelToolbarAssembly
     from chemvas.ui.main_window_preview_window import (

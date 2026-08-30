@@ -19,6 +19,9 @@ except ModuleNotFoundError:
 
 if QApplication is not None:
     from chemvas.bootstrap.main_window import build_main_window
+    from chemvas.shell.theme import (
+        CONTEXT_BAR_BUTTON_HEIGHT,
+    )
     from chemvas.ui.main_window_context_bar_pages import (
         MainWindowContextBarPageBuilder,
         bond_label_for_state,
@@ -26,9 +29,6 @@ if QApplication is not None:
     from chemvas.ui.main_window_ports import (
         active_canvas_for_window,
         services_for_window,
-    )
-    from chemvas.ui.main_window_theme import (
-        CONTEXT_BAR_BUTTON_HEIGHT,
     )
 
 

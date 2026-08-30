@@ -18,13 +18,13 @@ except ModuleNotFoundError:
 if QApplication is not None:
     try:
         from chemvas.bootstrap.main_window import build_main_window
+        from chemvas.shell.theme import TOOLBAR_THICKNESS
         from chemvas.ui.canvas_insert_state import insert_state_for
         from chemvas.ui.canvas_tool_settings_state import tool_settings_state_for
         from chemvas.ui.main_window_ports import (
             active_canvas_for_window,
             services_for_window,
         )
-        from chemvas.ui.main_window_theme import TOOLBAR_THICKNESS
     except SyntaxError:
         build_main_window = None
 else:

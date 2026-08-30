@@ -1,10 +1,15 @@
 from __future__ import annotations
 
-from chemvas.ui.main_window_palette import PALETTE
-from chemvas.ui.main_window_toolbar_styles import TOOLBAR_BUTTON_SIZE
+from typing import TYPE_CHECKING
+
+from chemvas.shell.palette import PALETTE
+from chemvas.shell.toolbar_styles import TOOLBAR_BUTTON_SIZE
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping
 
 
-def main_window_chrome_stylesheet(palette) -> str:
+def main_window_chrome_stylesheet(palette: Mapping[str, str]) -> str:
     return f"""
             QMainWindow {{
                 background: {palette["surface_app"]};
@@ -93,7 +98,7 @@ def main_window_chrome_stylesheet(palette) -> str:
 """
 
 
-def main_window_canvas_tab_stylesheet(palette) -> str:
+def main_window_canvas_tab_stylesheet(palette: Mapping[str, str]) -> str:
     return f"""
             QTabWidget#canvasTabs {{
                 background: {palette["surface_app"]};
@@ -142,7 +147,7 @@ def main_window_canvas_tab_stylesheet(palette) -> str:
 """
 
 
-def main_window_scrollbar_stylesheet(palette) -> str:
+def main_window_scrollbar_stylesheet(palette: Mapping[str, str]) -> str:
     return f"""
             QScrollBar:horizontal {{
                 background: {palette["surface_app"]};
@@ -212,7 +217,7 @@ def main_window_scrollbar_stylesheet(palette) -> str:
 """
 
 
-def main_window_form_stylesheet(palette) -> str:
+def main_window_form_stylesheet(palette: Mapping[str, str]) -> str:
     return f"""
             QLineEdit, QComboBox, QSpinBox {{
                 background: {palette["surface_input"]};
@@ -352,7 +357,7 @@ def main_window_form_stylesheet(palette) -> str:
 """
 
 
-def main_window_status_stylesheet(palette) -> str:
+def main_window_status_stylesheet(palette: Mapping[str, str]) -> str:
     return f"""
             QStatusBar {{
                 background: {palette["surface_bar"]};
@@ -421,7 +426,7 @@ def main_window_status_stylesheet(palette) -> str:
 """
 
 
-def build_main_window_stylesheet(palette=PALETTE) -> str:
+def build_main_window_stylesheet(palette: Mapping[str, str] = PALETTE) -> str:
     return "\n".join(
         (
             main_window_chrome_stylesheet(palette),

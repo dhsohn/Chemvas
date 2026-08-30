@@ -6,7 +6,7 @@ from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QGuiApplication, QIcon, QPainter, QPixmap
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Callable, Iterable
 
 
 class MainWindowIconPixmapFactory:
@@ -30,7 +30,9 @@ class MainWindowIconPixmapFactory:
             return max(1.0, screen.devicePixelRatio())
         return 2.0
 
-    def _render_pixmap(self, painter_fn, size: int, dpr: float) -> QPixmap:
+    def _render_pixmap(
+        self, painter_fn: Callable[[QPainter], None], size: int, dpr: float
+    ) -> QPixmap:
         # Render into a HiDPI-backed pixmap so the painter keeps working in
         # logical coordinates while the bitmap stays crisp on Retina.
         pixmap = QPixmap(round(size * dpr), round(size * dpr))
@@ -56,26 +58,29 @@ class MainWindowIconPixmapFactory:
                     icon.addPixmap(pixmap, mode, state)
         return icon
 
-    def make_icon(self, painter_fn, size: int | None = None) -> QIcon:
+    def make_icon(
+        self, painter_fn: Callable[[QPainter], None], size: int | None = None
+    ) -> QIcon:
         size = self._default_size if size is None else size
         dpr = self._device_pixel_ratio()
         return self._icon_from_pixmaps([self._render_pixmap(painter_fn, size, dpr)])
 
     def make_sized_icon(
-        self, sized_painter_fn: Callable[[QPainter, int], None], sizes
+        self, sized_painter_fn: Callable[[QPainter, int], None], sizes: Iterable[int]
     ) -> QIcon:
         """Build a single QIcon holding a crisp pixmap for each requested logical
         size, so small toolbars/option bars get an exact render instead of a
         downscale of one large bitmap. ``sized_painter_fn`` receives the painter
         and the logical size it should render at."""
         dpr = self._device_pixel_ratio()
-        pixmaps = [
-            self._render_pixmap(
-                lambda painter, s=size: sized_painter_fn(painter, s), size, dpr
-            )
-            for size in sizes
-        ]
-        return self._icon_from_pixmaps(pixmaps)
+
+        def render_at(size: int) -> QPixmap:
+            def paint(painter: QPainter) -> None:
+                sized_painter_fn(painter, size)
+
+            return self._render_pixmap(paint, size, dpr)
+
+        return self._icon_from_pixmaps([render_at(size) for size in sizes])
 
 
 __all__ = ["MainWindowIconPixmapFactory"]

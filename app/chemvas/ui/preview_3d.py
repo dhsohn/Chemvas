@@ -9,7 +9,7 @@ from PyQt6.QtWidgets import QApplication, QToolButton, QWidget
 
 from chemvas.core.rdkit_adapter import Molecule3DScene, RDKitAdapter
 from chemvas.features.insertion import model_with_atom_annotations
-from chemvas.ui.main_window_palette import PALETTE
+from chemvas.shell.palette import PALETTE
 from chemvas.ui.preview_3d_interaction import (
     preview_drag_rotation,
     preview_zoom_for_wheel_delta,

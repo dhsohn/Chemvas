@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from chemvas.ui.main_window_palette import PALETTE
+from chemvas.shell.palette import PALETTE
 
 _P = PALETTE
 

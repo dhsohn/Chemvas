@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from chemvas.ui import main_window_theme
-from chemvas.ui.main_window_palette import PALETTE
-from chemvas.ui.main_window_stylesheet import (
+from chemvas.shell import theme
+from chemvas.shell.palette import PALETTE
+from chemvas.shell.stylesheet import (
     MAIN_WINDOW_STYLESHEET,
     build_main_window_stylesheet,
     main_window_canvas_tab_stylesheet,
@@ -11,7 +11,7 @@ from chemvas.ui.main_window_stylesheet import (
     main_window_scrollbar_stylesheet,
     main_window_status_stylesheet,
 )
-from chemvas.ui.main_window_toolbar_styles import (
+from chemvas.shell.toolbar_styles import (
     CONTEXT_BAR_BUTTON_HEIGHT,
     CONTEXT_BAR_CONTENT_HEIGHT,
     CONTEXT_BAR_ICON_SIZE,
@@ -25,17 +25,17 @@ from chemvas.ui.main_window_toolbar_styles import (
 
 
 def test_theme_module_reexports_split_style_contract() -> None:
-    assert main_window_theme.PALETTE is PALETTE
-    assert main_window_theme.MAIN_WINDOW_STYLESHEET is MAIN_WINDOW_STYLESHEET
-    assert main_window_theme.TOOLBAR_BUTTON_STYLE is TOOLBAR_BUTTON_STYLE
-    assert main_window_theme.TOOLBAR_MENU_BUTTON_STYLE is TOOLBAR_MENU_BUTTON_STYLE
-    assert main_window_theme.SMILES_RENDER_BUTTON_STYLE is SMILES_RENDER_BUTTON_STYLE
-    assert main_window_theme.TOOLBAR_THICKNESS == TOOLBAR_THICKNESS
-    assert main_window_theme.TOOLBAR_BUTTON_SIZE == TOOLBAR_BUTTON_SIZE
-    assert main_window_theme.TOOLBAR_ICON_SIZE == TOOLBAR_ICON_SIZE
-    assert main_window_theme.CONTEXT_BAR_BUTTON_HEIGHT == CONTEXT_BAR_BUTTON_HEIGHT
-    assert main_window_theme.CONTEXT_BAR_CONTENT_HEIGHT == CONTEXT_BAR_CONTENT_HEIGHT
-    assert main_window_theme.CONTEXT_BAR_ICON_SIZE == CONTEXT_BAR_ICON_SIZE
+    assert theme.PALETTE is PALETTE
+    assert theme.MAIN_WINDOW_STYLESHEET is MAIN_WINDOW_STYLESHEET
+    assert theme.TOOLBAR_BUTTON_STYLE is TOOLBAR_BUTTON_STYLE
+    assert theme.TOOLBAR_MENU_BUTTON_STYLE is TOOLBAR_MENU_BUTTON_STYLE
+    assert theme.SMILES_RENDER_BUTTON_STYLE is SMILES_RENDER_BUTTON_STYLE
+    assert theme.TOOLBAR_THICKNESS == TOOLBAR_THICKNESS
+    assert theme.TOOLBAR_BUTTON_SIZE == TOOLBAR_BUTTON_SIZE
+    assert theme.TOOLBAR_ICON_SIZE == TOOLBAR_ICON_SIZE
+    assert theme.CONTEXT_BAR_BUTTON_HEIGHT == CONTEXT_BAR_BUTTON_HEIGHT
+    assert theme.CONTEXT_BAR_CONTENT_HEIGHT == CONTEXT_BAR_CONTENT_HEIGHT
+    assert theme.CONTEXT_BAR_ICON_SIZE == CONTEXT_BAR_ICON_SIZE
 
 
 def test_stylesheet_uses_shared_palette_values() -> None:

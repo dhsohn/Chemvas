@@ -3,7 +3,7 @@ from __future__ import annotations
 from PyQt6.QtCore import QPointF, QRectF, Qt
 from PyQt6.QtGui import QColor, QFont, QFontMetricsF, QPainter, QPen
 
-from chemvas.ui.main_window_palette import PALETTE
+from chemvas.shell.palette import PALETTE
 from chemvas.ui.preview_3d_molecule_renderer import (
     draw_projected_scene,
     preview_element_color,

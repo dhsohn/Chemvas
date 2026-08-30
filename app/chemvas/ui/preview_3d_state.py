@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING, Any
 
 from PyQt6.QtGui import QColor
 
-from chemvas.ui.main_window_palette import PALETTE
+from chemvas.shell.palette import PALETTE
 
 if TYPE_CHECKING:
     from chemvas.features.insertion import Molecule3DScene

@@ -4,7 +4,7 @@ from PyQt6.QtGui import QColor
 
 from chemvas.domain.document import MoleculeModel
 from chemvas.features.insertion import Molecule3DAtom, Molecule3DBond, Molecule3DScene
-from chemvas.ui.main_window_palette import PALETTE
+from chemvas.shell.palette import PALETTE
 from chemvas.ui.preview_3d_state import (
     is_empty_preview_message,
     preview_empty_state_text,

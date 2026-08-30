@@ -6,21 +6,25 @@ from PyQt6.QtCore import QPointF, Qt
 from PyQt6.QtGui import QColor, QIcon, QPainter, QPolygonF
 from PyQt6.QtWidgets import QToolButton
 
-from chemvas.ui.main_window_palette import PALETTE
+from chemvas.shell.palette import PALETTE
 
 if TYPE_CHECKING:
     from collections.abc import Callable
 
+    from PyQt6.QtCore import QPoint
+    from PyQt6.QtGui import QCursor, QKeySequence, QMouseEvent, QPaintEvent
+    from PyQt6.QtWidgets import QWidget
+
 
 class ArrowButton(QToolButton):
-    def __init__(self, direction: str, parent=None) -> None:
+    def __init__(self, direction: str, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._direction = direction
         self.setAutoRaise(True)
         self.setFocusPolicy(Qt.FocusPolicy.NoFocus)
 
     @override
-    def paintEvent(self, event) -> None:
+    def paintEvent(self, event: QPaintEvent | None) -> None:
         super().paintEvent(event)
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
@@ -46,7 +50,7 @@ class ArrowButton(QToolButton):
 
 class CornerMenuButton(QToolButton):
     @override
-    def paintEvent(self, event) -> None:
+    def paintEvent(self, event: QPaintEvent | None) -> None:
         super().paintEvent(event)
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
@@ -72,15 +76,19 @@ class CornerMenuToolButton(CornerMenuButton):
 
     _CORNER_ZONE = 14
 
-    def _is_in_corner(self, pos) -> bool:
+    def _is_in_corner(self, pos: QPoint) -> bool:
         return (
             pos.x() >= self.width() - self._CORNER_ZONE
             and pos.y() >= self.height() - self._CORNER_ZONE
         )
 
     @override
-    def mousePressEvent(self, event) -> None:
-        if self.menu() is not None and self._is_in_corner(event.position().toPoint()):
+    def mousePressEvent(self, event: QMouseEvent | None) -> None:
+        if (
+            event is not None
+            and self.menu() is not None
+            and self._is_in_corner(event.position().toPoint())
+        ):
             self.showMenu()
             event.accept()
             return
@@ -95,12 +103,12 @@ class MainWindowToolbarButtonFactory:
         tooltip: str | None = None,
         status_tip: str | None = None,
         callback: Callable[[], None] | None = None,
-        shortcut=None,
+        shortcut: QKeySequence | QKeySequence.StandardKey | str | None = None,
         text: str | None = None,
         object_name: str | None = None,
         style_sheet: str | None = None,
         auto_raise: bool = True,
-        cursor=None,
+        cursor: QCursor | Qt.CursorShape | None = None,
     ) -> QToolButton:
         button = QToolButton()
         if icon is not None:

@@ -24,10 +24,10 @@ except ModuleNotFoundError:
     QApplication = None
 
 if QApplication is not None:
+    from chemvas.shell.theme import MAIN_WINDOW_STYLESHEET
+    from chemvas.shell.toolbar_buttons import ArrowButton, CornerMenuButton
     from chemvas.ui.main_window_config import TOOLBAR_TOOL_ACTION_ORDER
     from chemvas.ui.main_window_panel_toolbar import MainWindowPanelToolbarCallbacks
-    from chemvas.ui.main_window_theme import MAIN_WINDOW_STYLESHEET
-    from chemvas.ui.main_window_toolbar_buttons import ArrowButton, CornerMenuButton
     from chemvas.ui.main_window_ui_assembly_service import (
         MainWindowUIAssemblyService,
     )
