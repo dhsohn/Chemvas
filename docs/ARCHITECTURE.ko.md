@@ -46,7 +46,7 @@
 이름이나 구현 위치를 고정하고 있으므로, 각 feature 이전 시 패키지/공개 API
 계약으로 교체한 뒤 퇴역시킨다.
 
-이 규율의 알려진 트레이드오프(의도적으로 수용): 실재하는 간접 비용(ui LOC의 약 20%가 배선)과 캔버스 seam의 약한 정적 타이핑(`canvas: Any`). 하나의 불변식이 여러 작은 모듈에 걸칠 때는 일관성 계약을 소유 모듈 한 곳에 문서화해야 한다 — 파생 그래프 인덱스의 예로 `chemvas.ui.graph_index_operations.py`와 `CanvasGraphService.bond_id_between_with_repair` 패턴을 참고.
+이 규율의 알려진 트레이드오프(의도적으로 수용): 실재하는 간접 비용(ui LOC의 약 20%가 배선)과 캔버스 seam의 약한 정적 타이핑(`canvas: Any`). 하나의 불변식이 여러 작은 모듈에 걸칠 때는 일관성 계약을 소유 모듈 한 곳에 문서화해야 한다 — 파생 그래프 인덱스의 예로 `chemvas.features.graph` 패키지 독스트링과 `CanvasGraphService.bond_id_between_with_repair` 패턴을 참고.
 
 ## Feature Qt 마이그레이션 목록
 

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from chemvas.features.graph import cached_bond_in_cycle
 from chemvas.features.selection import (
     center_for_coords_3d,
     flatten_coords_to_plane,
@@ -7,7 +8,6 @@ from chemvas.features.selection import (
 )
 from chemvas.ui.canvas_graph_state import graph_state_for
 from chemvas.ui.canvas_model_access import bond_for_id, bonds_for
-from chemvas.ui.graph_index_operations import cached_bond_in_cycle
 
 
 def bond_in_cycle_for(canvas, bond_id: int) -> bool:

@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING, Any
 from PyQt6.QtCore import QPointF
 
 from chemvas.domain.transactions import add_recovery_error_note, restore_snapshot
+from chemvas.features.graph import find_rings, first_matching_bond_id
 from chemvas.ui.atom_label_access import add_or_update_atom_label, atom_label_service
 from chemvas.ui.bond_graphics_access import add_bond_graphics_for
 from chemvas.ui.canvas_model_access import (
@@ -31,8 +32,6 @@ from chemvas.ui.canvas_smiles_input_state import (
     clear_last_smiles_input_for,
     last_smiles_input_for,
 )
-from chemvas.ui.graph_algorithms import find_rings
-from chemvas.ui.graph_index_operations import first_matching_bond_id
 from chemvas.ui.history_canvas_access import (
     capture_history_transaction_for_history,
     release_history_transaction_for_history,

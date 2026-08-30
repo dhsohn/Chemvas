@@ -2,6 +2,30 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from chemvas.features.graph import (
+    add_bond_to_atom_index,
+    add_neighbor_edge,
+    adjacency_for_bonds,
+    axis_from_rotation_hint_policy,
+    bond_id_between_indexed_atoms,
+    bond_sets_for_atom_ids,
+    build_bond_adjacency_index,
+    cached_bond_in_cycle,
+    connected_components_for_nodes,
+    ensure_bond_index_entry,
+    ensure_neighbor_entry,
+    preferred_rotation_side_for_bond_policy,
+    reachable_component_without_edge,
+    reachable_from,
+    remove_bond_from_atom_index,
+    remove_neighbor_edge,
+)
+from chemvas.features.graph import (
+    bond_matches_atoms as graph_bond_matches_atoms,
+)
+from chemvas.features.graph import (
+    first_matching_bond_id as graph_first_matching_bond_id,
+)
 from chemvas.ui.canvas_graph_state import (
     CanvasGraphState,
     graph_state_for,
@@ -11,34 +35,6 @@ from chemvas.ui.canvas_model_access import (
     atoms_for,
     bond_for_id,
     bonds_for,
-)
-from chemvas.ui.graph_algorithms import (
-    adjacency_for_bonds,
-    connected_components_for_nodes,
-    reachable_component_without_edge,
-    reachable_from,
-)
-from chemvas.ui.graph_index_operations import (
-    add_bond_to_atom_index,
-    add_neighbor_edge,
-    bond_id_between_indexed_atoms,
-    bond_sets_for_atom_ids,
-    build_bond_adjacency_index,
-    cached_bond_in_cycle,
-    ensure_bond_index_entry,
-    ensure_neighbor_entry,
-    remove_bond_from_atom_index,
-    remove_neighbor_edge,
-)
-from chemvas.ui.graph_index_operations import (
-    bond_matches_atoms as graph_bond_matches_atoms,
-)
-from chemvas.ui.graph_index_operations import (
-    first_matching_bond_id as graph_first_matching_bond_id,
-)
-from chemvas.ui.graph_rotation_policy import (
-    axis_from_rotation_hint_policy,
-    preferred_rotation_side_for_bond_policy,
 )
 from chemvas.ui.renderer_style_access import bond_length_px_for
 

@@ -3,6 +3,10 @@ from __future__ import annotations
 from functools import wraps
 
 from chemvas.domain.transactions import run_rollback_step
+from chemvas.features.graph import (
+    adjacency_for_bonds,
+    connected_components_for_nodes,
+)
 from chemvas.ui.canvas_atom_graphics_state import visible_atom_item_for
 from chemvas.ui.canvas_bond_graphics_state import bond_items_for_id
 from chemvas.ui.canvas_group_state import (
@@ -15,10 +19,6 @@ from chemvas.ui.canvas_mark_registry import mark_registry_for
 from chemvas.ui.canvas_model_access import atoms_for, bonds_for
 from chemvas.ui.canvas_scene_items_state import remove_selected_note_for, ring_items_for
 from chemvas.ui.canvas_window_access import history_service_for_canvas
-from chemvas.ui.graph_algorithms import (
-    adjacency_for_bonds,
-    connected_components_for_nodes,
-)
 from chemvas.ui.history_commands import GroupSceneItemsCommand, UngroupSceneItemsCommand
 from chemvas.ui.note_selection_box import update_note_selection_box_for
 from chemvas.ui.renderer_style_access import bond_length_px_for

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from chemvas.features.graph import build_bond_adjacency_index
 from chemvas.ui.atom_coords_access import pop_atom_coords_3d_for
 from chemvas.ui.atom_label_access import add_or_update_atom_label, atom_label_service
 from chemvas.ui.canvas_atom_graphics_state import (
@@ -33,7 +34,6 @@ from chemvas.ui.canvas_service_ports import (
     structure_mutation_atom_service,
     structure_mutation_bond_service,
 )
-from chemvas.ui.graph_index_operations import build_bond_adjacency_index
 from chemvas.ui.history_canvas_access import (
     remove_atom_for_history,
     trim_bonds_for_history,

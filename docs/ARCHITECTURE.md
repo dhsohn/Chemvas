@@ -46,7 +46,7 @@ must be dependency contracts or general pattern bans. Some transitional checks s
 pin removed names or implementation locations; each feature migration replaces
 those checks with package/public-API contracts before retiring them.
 
-Known trade-offs of this discipline (accepted deliberately): a real indirection tax (~20% of ui LOC is wiring) and weak static typing at the canvas seam (`canvas: Any`). When an invariant spans several of these small modules (e.g. the derived graph index), the consistency contract must be written down in one owner module — see `chemvas.ui.graph_index_operations.py` and `CanvasGraphService.bond_id_between_with_repair` for the pattern.
+Known trade-offs of this discipline (accepted deliberately): a real indirection tax (~20% of ui LOC is wiring) and weak static typing at the canvas seam (`canvas: Any`). When an invariant spans several of these small modules (e.g. the derived graph index), the consistency contract must be written down in one owner module — see the `chemvas.features.graph` package docstring and `CanvasGraphService.bond_id_between_with_repair` for the pattern.
 
 ## Feature Qt Migration Inventory
 

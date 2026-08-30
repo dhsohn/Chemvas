@@ -1,29 +1,8 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
 from typing import Any, cast
 
-
-@dataclass(slots=True, kw_only=True)
-class CanvasGraphState:
-    atom_neighbors: dict[int, set[int]] = field(default_factory=dict)
-    atom_bond_ids: dict[int, set[int]] = field(default_factory=dict)
-    graph_version: int = 0
-    selection_component_cache_signature: tuple[frozenset[int], int] | None = None
-    selection_component_cache: list[set[int]] = field(default_factory=list)
-    bond_cycle_cache: dict[int, tuple[int, bool]] = field(default_factory=dict)
-
-    def bump_version(self) -> None:
-        self.graph_version += 1
-        self.selection_component_cache_signature = None
-
-    def reset(self) -> None:
-        self.atom_neighbors = {}
-        self.atom_bond_ids = {}
-        self.graph_version = 0
-        self.selection_component_cache_signature = None
-        self.selection_component_cache = []
-        self.bond_cycle_cache = {}
+from chemvas.features.graph import CanvasGraphState
 
 
 def graph_state_for(canvas: Any) -> CanvasGraphState:

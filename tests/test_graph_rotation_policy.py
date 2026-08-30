@@ -1,6 +1,6 @@
 from types import SimpleNamespace
 
-from chemvas.ui.graph_rotation_policy import (
+from chemvas.features.graph import (
     axis_from_rotation_hint_policy,
     preferred_rotation_side_for_bond_policy,
 )

@@ -1,11 +1,11 @@
-"""Pure operations on the derived atom-neighbor / atom-bond indexes.
+"""Derived graph state and the pure operations on its indexes.
 
-Pure here means unwired, not side-effect-free: importing this module pulls in
+Pure here means unwired, not side-effect-free: importing this package pulls in
 no Qt and no drawing surface, directly or transitively, and the bonds it reads
 arrive as the sequences and ``bond_for_id`` callables its callers hand in. It
-names no document type of its own, though ``graph_algorithms`` brings the
-document package into the import closure. Writing is ordinary -- ``ensure_*``
-and ``add_*`` add keys to the index mapping they are given, and ``remove_*``
+names no document type of its own, though ``algorithms`` brings the document
+package into the import closure. Writing is ordinary -- ``ensure_*`` and
+``add_*`` add keys to the index mapping they are given, and ``remove_*``
 mutates the sets stored in it, all in place.
 
 ``cached_bond_in_cycle`` is the one operation handed the whole
@@ -28,14 +28,46 @@ Consistency contract (shared by every consumer):
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
 
-from chemvas.ui.graph_algorithms import edge_has_reachable_alternative_path
+from chemvas.features.graph.algorithms import (
+    adjacency_for_bonds,
+    axis_from_rotation_hint_policy,
+    connected_components_for_nodes,
+    edge_has_reachable_alternative_path,
+    find_rings,
+    preferred_rotation_side_for_bond_policy,
+    reachable_component_without_edge,
+    reachable_from,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, MutableMapping, Sequence
 
-    from chemvas.ui.canvas_graph_state import CanvasGraphState
+    from chemvas.features.graph.algorithms import BondLike
+
+
+@dataclass(slots=True, kw_only=True)
+class CanvasGraphState:
+    atom_neighbors: dict[int, set[int]] = field(default_factory=dict)
+    atom_bond_ids: dict[int, set[int]] = field(default_factory=dict)
+    graph_version: int = 0
+    selection_component_cache_signature: tuple[frozenset[int], int] | None = None
+    selection_component_cache: list[set[int]] = field(default_factory=list)
+    bond_cycle_cache: dict[int, tuple[int, bool]] = field(default_factory=dict)
+
+    def bump_version(self) -> None:
+        self.graph_version += 1
+        self.selection_component_cache_signature = None
+
+    def reset(self) -> None:
+        self.atom_neighbors = {}
+        self.atom_bond_ids = {}
+        self.graph_version = 0
+        self.selection_component_cache_signature = None
+        self.selection_component_cache = []
+        self.bond_cycle_cache = {}
 
 
 def ensure_neighbor_entry(
@@ -102,14 +134,14 @@ def remove_bond_from_atom_index(
         bonds_b.discard(bond_id)
 
 
-def bond_matches_atoms(bond: Any, a_id: int, b_id: int) -> bool:
+def bond_matches_atoms(bond: BondLike | None, a_id: int, b_id: int) -> bool:
     if bond is None:
         return False
     return (bond.a == a_id and bond.b == b_id) or (bond.a == b_id and bond.b == a_id)
 
 
 def first_matching_bond_id(
-    bonds: Iterable[Any],
+    bonds: Iterable[BondLike | None],
     a_id: int,
     b_id: int,
     *,
@@ -125,11 +157,11 @@ def first_matching_bond_id(
 
 def bond_id_between_indexed_atoms(
     atom_bond_ids: MutableMapping[int, set[int]],
-    bonds: Iterable[Any],
+    bonds: Iterable[BondLike | None],
     a_id: int,
     b_id: int,
     *,
-    bond_for_id: Callable[[int], Any | None],
+    bond_for_id: Callable[[int], BondLike | None],
     skip_bond_id: int | None = None,
     scan_index_misses: bool = False,
 ) -> int | None:
@@ -166,7 +198,7 @@ def bond_id_between_indexed_atoms(
 
 def build_bond_adjacency_index(
     atom_ids: Iterable[int],
-    bonds: Iterable[Any],
+    bonds: Iterable[BondLike | None],
 ) -> tuple[dict[int, set[int]], dict[int, set[int]]]:
     atom_neighbors: dict[int, set[int]] = {atom_id: set() for atom_id in atom_ids}
     atom_bond_ids: dict[int, set[int]] = {atom_id: set() for atom_id in atom_ids}
@@ -183,9 +215,9 @@ def build_bond_adjacency_index(
 def bond_sets_for_atom_ids(
     atom_ids: set[int],
     atom_bond_ids: MutableMapping[int, set[int]],
-    bonds: Sequence[Any],
+    bonds: Sequence[BondLike | None],
     *,
-    bond_for_id: Callable[[int], Any | None],
+    bond_for_id: Callable[[int], BondLike | None],
 ) -> tuple[set[int], set[int]]:
     internal: set[int] = set()
     boundary: set[int] = set()
@@ -224,7 +256,7 @@ def bond_sets_for_atom_ids(
 def cached_bond_in_cycle(
     graph: CanvasGraphState,
     bond_id: int,
-    bond_for_id: Callable[[int], Any],
+    bond_for_id: Callable[[int], BondLike | None],
 ) -> bool:
     """Whether ``bond_id`` lies on a cycle, memoized against ``graph_version``.
 
@@ -257,16 +289,25 @@ def cached_bond_in_cycle(
 
 
 __all__ = [
+    "CanvasGraphState",
     "add_bond_to_atom_index",
     "add_neighbor_edge",
+    "adjacency_for_bonds",
+    "axis_from_rotation_hint_policy",
     "bond_id_between_indexed_atoms",
     "bond_matches_atoms",
     "bond_sets_for_atom_ids",
     "build_bond_adjacency_index",
     "cached_bond_in_cycle",
+    "connected_components_for_nodes",
+    "edge_has_reachable_alternative_path",
     "ensure_bond_index_entry",
     "ensure_neighbor_entry",
+    "find_rings",
     "first_matching_bond_id",
+    "preferred_rotation_side_for_bond_policy",
+    "reachable_component_without_edge",
+    "reachable_from",
     "remove_bond_from_atom_index",
     "remove_neighbor_edge",
 ]
