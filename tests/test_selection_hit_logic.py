@@ -260,7 +260,3 @@ class SelectionHitLogicTest(unittest.TestCase):
 
         self.assertTrue(selection_hit_matches(request))
         self.assertFalse(selection_hit_matches(miss_request))
-
-
-if __name__ == "__main__":
-    unittest.main()

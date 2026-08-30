@@ -490,7 +490,3 @@ class CanvasHistoryRecordingServiceTest(unittest.TestCase):
             after_smiles_input="same-smiles",
         )
         unchanged_canvas.push_command.assert_not_called()
-
-
-if __name__ == "__main__":
-    unittest.main()

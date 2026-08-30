@@ -7,30 +7,26 @@ from tests.runtime_services import canvas_runtime_services
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-try:
-    from PyQt6.QtCore import Qt
-    from PyQt6.QtGui import QAction, QIcon, QKeySequence, QPixmap
-    from PyQt6.QtWidgets import (
-        QApplication,
-        QLabel,
-        QLineEdit,
-        QMainWindow,
-        QMenu,
-        QToolBar,
-        QToolButton,
-        QWidget,
-    )
-except ModuleNotFoundError:
-    QApplication = None
+from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QAction, QIcon, QKeySequence, QPixmap
+from PyQt6.QtWidgets import (
+    QApplication,
+    QLabel,
+    QLineEdit,
+    QMainWindow,
+    QMenu,
+    QToolBar,
+    QToolButton,
+    QWidget,
+)
 
-if QApplication is not None:
-    from chemvas.shell.theme import MAIN_WINDOW_STYLESHEET
-    from chemvas.shell.toolbar_buttons import ArrowButton, CornerMenuButton
-    from chemvas.ui.main_window_config import TOOLBAR_TOOL_ACTION_ORDER
-    from chemvas.ui.main_window_panel_toolbar import MainWindowPanelToolbarCallbacks
-    from chemvas.ui.main_window_ui_assembly_service import (
-        MainWindowUIAssemblyService,
-    )
+from chemvas.shell.theme import MAIN_WINDOW_STYLESHEET
+from chemvas.shell.toolbar_buttons import ArrowButton, CornerMenuButton
+from chemvas.ui.main_window_config import TOOLBAR_TOOL_ACTION_ORDER
+from chemvas.ui.main_window_panel_toolbar import MainWindowPanelToolbarCallbacks
+from chemvas.ui.main_window_ui_assembly_service import (
+    MainWindowUIAssemblyService,
+)
 
 
 class _HarnessCanvas:
@@ -91,9 +87,6 @@ class _HarnessWindow(QMainWindow):
         return QIcon()
 
 
-@unittest.skipUnless(
-    QApplication is not None, "PyQt6 is required for main window UI assembly tests"
-)
 class MainWindowUIAssemblyServiceTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -591,7 +584,3 @@ class MainWindowUIAssemblyServiceTest(unittest.TestCase):
         self.service.apply_theme(window)
 
         self.assertEqual(window.styleSheet(), MAIN_WINDOW_STYLESHEET)
-
-
-if __name__ == "__main__":
-    unittest.main()

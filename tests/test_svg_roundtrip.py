@@ -705,7 +705,3 @@ class SvgRoundtripTest(unittest.TestCase):
                     self.assertEqual(
                         extract_chemvas_document_from_svg(path).state, state
                     )
-
-
-if __name__ == "__main__":
-    unittest.main()

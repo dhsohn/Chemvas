@@ -5,17 +5,13 @@ from unittest import mock
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-try:
-    from PyQt6.QtCore import QEvent, QPointF, Qt
-    from PyQt6.QtWidgets import QApplication, QGraphicsView
-except ModuleNotFoundError:
-    QApplication = None
+from PyQt6.QtCore import QEvent, QPointF, Qt
+from PyQt6.QtWidgets import QApplication, QGraphicsView
 
-if QApplication is not None:
-    from chemvas.ui.canvas_insert_state import insert_state_for
-    from chemvas.ui.canvas_pointer_controller import CanvasPointerController
-    from chemvas.ui.canvas_view import CanvasView
-    from tests.canvas_factory import build_canvas_view
+from chemvas.ui.canvas_insert_state import insert_state_for
+from chemvas.ui.canvas_pointer_controller import CanvasPointerController
+from chemvas.ui.canvas_view import CanvasView
+from tests.canvas_factory import build_canvas_view
 
 
 class _FakeEvent:
@@ -105,9 +101,6 @@ class _FakeMenu:
         self.exec_pos = pos
 
 
-@unittest.skipUnless(
-    QApplication is not None, "PyQt6 is required for canvas view tests"
-)
 class CanvasViewEventFallthroughTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -448,7 +441,3 @@ class CanvasViewEventFallthroughTest(unittest.TestCase):
             )
             base_event.assert_called_once()
             view.services.hover.refresh.assert_called_once_with()
-
-
-if __name__ == "__main__":
-    unittest.main()

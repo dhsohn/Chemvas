@@ -5,30 +5,21 @@ from unittest import mock
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-try:
-    from PyQt6.QtGui import QIcon
-    from PyQt6.QtWidgets import (
-        QApplication,
-        QToolBar,
-        QToolButton,
-    )
-except ModuleNotFoundError:
-    QApplication = None
+from PyQt6.QtGui import QIcon
+from PyQt6.QtWidgets import (
+    QApplication,
+    QToolBar,
+    QToolButton,
+)
 
-if QApplication is not None:
-    try:
-        from chemvas.bootstrap.main_window import build_main_window
-        from chemvas.shell.theme import TOOLBAR_THICKNESS
-        from chemvas.ui.canvas_insert_state import insert_state_for
-        from chemvas.ui.canvas_tool_settings_state import tool_settings_state_for
-        from chemvas.ui.main_window_ports import (
-            active_canvas_for_window,
-            services_for_window,
-        )
-    except SyntaxError:
-        build_main_window = None
-else:
-    build_main_window = None
+from chemvas.bootstrap.main_window import build_main_window
+from chemvas.shell.theme import TOOLBAR_THICKNESS
+from chemvas.ui.canvas_insert_state import insert_state_for
+from chemvas.ui.canvas_tool_settings_state import tool_settings_state_for
+from chemvas.ui.main_window_ports import (
+    active_canvas_for_window,
+    services_for_window,
+)
 
 
 class _FakeItem:
@@ -41,10 +32,6 @@ class _FakeItem:
         return None
 
 
-@unittest.skipUnless(
-    QApplication is not None and build_main_window is not None,
-    "PyQt6 and an importable build_main_window are required for main window tests",
-)
 class MainWindowToolbarActionsTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -564,7 +551,3 @@ class MainWindowToolbarActionsTest(unittest.TestCase):
             ["ring"],
         )
         self.assertEqual(apply_fill.call_args.args[1].name(), "#f4d06f")
-
-
-if __name__ == "__main__":
-    unittest.main()

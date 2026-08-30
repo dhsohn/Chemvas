@@ -166,7 +166,3 @@ class BondStyleLogicTest(unittest.TestCase):
             style_for_existing_bond_overlay("wedge", 1, "hash", 1),
             ("hash", 1),
         )
-
-
-if __name__ == "__main__":
-    unittest.main()

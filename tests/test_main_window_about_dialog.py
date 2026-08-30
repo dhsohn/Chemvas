@@ -4,18 +4,11 @@ from unittest import mock
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-try:
-    from PyQt6.QtWidgets import QApplication, QDialog, QLabel, QMainWindow, QPushButton
-except ModuleNotFoundError:
-    QApplication = None
+from PyQt6.QtWidgets import QApplication, QDialog, QLabel, QMainWindow, QPushButton
 
-if QApplication is not None:
-    from chemvas.ui.main_window_about_dialog import rdkit_status, show_about_dialog
+from chemvas.ui.main_window_about_dialog import rdkit_status, show_about_dialog
 
 
-@unittest.skipUnless(
-    QApplication is not None, "PyQt6 is required for about dialog tests"
-)
 class AboutDialogTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -71,7 +64,3 @@ class AboutDialogTest(unittest.TestCase):
         self.assertIn("RDKit", joined)
         self.assertIn("github.com/dhsohn/Chemvas", joined)
         self.assertIsNotNone(captured["close"])
-
-
-if __name__ == "__main__":
-    unittest.main()

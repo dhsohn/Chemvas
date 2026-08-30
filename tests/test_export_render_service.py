@@ -4,33 +4,26 @@ import unittest
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-try:
-    from PyQt6.QtCore import QLineF, Qt
-    from PyQt6.QtGui import QColor, QFont, QImage, QPen
-    from PyQt6.QtWidgets import (
-        QApplication,
-        QGraphicsLineItem,
-        QGraphicsRectItem,
-        QGraphicsScene,
-    )
-except ModuleNotFoundError:
-    QApplication = None
-
-if QApplication is not None:
-    from chemvas.features.export import (
-        collect_export_items,
-        content_bounds,
-        export_scene,
-        item_export_bounds,
-        render_scene_to_pdf_bytes,
-        render_scene_to_svg_bytes,
-    )
-    from chemvas.ui.graphics_items import AtomDotItem, AtomLabelItem
-
-
-@unittest.skipUnless(
-    QApplication is not None, "PyQt6 is required for export render tests"
+from PyQt6.QtCore import QLineF, Qt
+from PyQt6.QtGui import QColor, QFont, QImage, QPen
+from PyQt6.QtWidgets import (
+    QApplication,
+    QGraphicsLineItem,
+    QGraphicsRectItem,
+    QGraphicsScene,
 )
+
+from chemvas.features.export import (
+    collect_export_items,
+    content_bounds,
+    export_scene,
+    item_export_bounds,
+    render_scene_to_pdf_bytes,
+    render_scene_to_svg_bytes,
+)
+from chemvas.ui.graphics_items import AtomDotItem, AtomLabelItem
+
+
 class ExportRenderServiceTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -265,7 +258,3 @@ class ExportRenderServiceTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             with self.assertRaises(ValueError):
                 export_scene(scene, os.path.join(tmp, "x.bmp"), fmt="bmp", margin=4.0)
-
-
-if __name__ == "__main__":
-    unittest.main()

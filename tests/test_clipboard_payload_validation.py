@@ -431,7 +431,3 @@ class ClipboardPayloadValidationTest(unittest.TestCase):
             lambda p: p["scene_items"][0].__setitem__("kind", ["note"])
         )
         self._assert_rejected(lambda p: p["marks"][0].__setitem__("mark_kind", {}))
-
-
-if __name__ == "__main__":
-    unittest.main()

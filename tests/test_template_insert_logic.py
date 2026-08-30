@@ -355,7 +355,3 @@ class TemplateInsertLogicTest(unittest.TestCase):
         resolvers.chair_points.assert_not_called()
         resolvers.boat_points.assert_not_called()
         resolvers.template_points_for_bond.assert_not_called()
-
-
-if __name__ == "__main__":
-    unittest.main()

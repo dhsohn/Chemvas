@@ -219,7 +219,3 @@ class StructureGrowthBuildServiceTest(unittest.TestCase):
         owner.add_benzene_ring.assert_called_once_with(
             QPointF(9.0, 10.0), attach_bond_id=4
         )
-
-
-if __name__ == "__main__":
-    unittest.main()

@@ -52,7 +52,3 @@ class ExportDialogLogicTest(unittest.TestCase):
             str(Path("/work/mol.pdf")),
         )
         self.assertEqual(default_export_path("", "pdf"), "")
-
-
-if __name__ == "__main__":
-    unittest.main()

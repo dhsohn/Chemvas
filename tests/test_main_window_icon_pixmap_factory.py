@@ -5,15 +5,11 @@ import unittest
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-try:
-    from PyQt6.QtCore import Qt
-    from PyQt6.QtGui import QIcon, QPainter
-    from PyQt6.QtWidgets import QApplication
-except ModuleNotFoundError:
-    QApplication = None
+from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QIcon, QPainter
+from PyQt6.QtWidgets import QApplication
 
-if QApplication is not None:
-    from chemvas.shell.icon_pixmap_factory import MainWindowIconPixmapFactory
+from chemvas.shell.icon_pixmap_factory import MainWindowIconPixmapFactory
 
 
 def _opaque_pixel_count(image) -> int:
@@ -25,10 +21,6 @@ def _opaque_pixel_count(image) -> int:
     )
 
 
-@unittest.skipUnless(
-    QApplication is not None,
-    "PyQt6 is required for main window icon pixmap factory tests",
-)
 class MainWindowIconPixmapFactoryTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -103,7 +95,3 @@ class MainWindowIconPixmapFactoryTest(unittest.TestCase):
                     pixmap = icon.pixmap(20, 20, mode, state)
                     self.assertFalse(pixmap.isNull())
                     self.assertGreater(_opaque_pixel_count(pixmap.toImage()), 0)
-
-
-if __name__ == "__main__":
-    unittest.main()

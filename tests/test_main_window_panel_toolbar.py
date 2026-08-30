@@ -7,26 +7,22 @@ from tests.runtime_services import canvas_runtime_services
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-try:
-    from PyQt6.QtGui import QAction, QIcon
-    from PyQt6.QtWidgets import (
-        QApplication,
-        QLineEdit,
-        QMainWindow,
-        QToolButton,
-        QWidget,
-    )
-except ModuleNotFoundError:
-    QApplication = None
+from PyQt6.QtGui import QAction, QIcon
+from PyQt6.QtWidgets import (
+    QApplication,
+    QLineEdit,
+    QMainWindow,
+    QToolButton,
+    QWidget,
+)
 
-if QApplication is not None:
-    from chemvas.shell.theme import TOOLBAR_ICON_SIZE
-    from chemvas.ui.main_window_config import TOOLBAR_TOOL_ACTION_ORDER
-    from chemvas.ui.main_window_panel_toolbar import (
-        MainWindowPanelToolbarCallbacks,
-        build_panel_toolbar,
-    )
-    from chemvas.ui.main_window_ui_assembly_service import MainWindowUIAssemblyService
+from chemvas.shell.theme import TOOLBAR_ICON_SIZE
+from chemvas.ui.main_window_config import TOOLBAR_TOOL_ACTION_ORDER
+from chemvas.ui.main_window_panel_toolbar import (
+    MainWindowPanelToolbarCallbacks,
+    build_panel_toolbar,
+)
+from chemvas.ui.main_window_ui_assembly_service import MainWindowUIAssemblyService
 
 
 class _HarnessCanvas:
@@ -89,9 +85,6 @@ def _build_tool_actions(window, tool_group) -> dict[str, QAction]:
     return actions
 
 
-@unittest.skipUnless(
-    QApplication is not None, "PyQt6 is required for panel toolbar tests"
-)
 class MainWindowPanelToolbarTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -292,7 +285,3 @@ class MainWindowPanelToolbarTest(unittest.TestCase):
         window.canvas.scene_transform_controller.flip_selected_items.assert_has_calls(
             [mock.call(horizontal=True), mock.call(horizontal=False)]
         )
-
-
-if __name__ == "__main__":
-    unittest.main()

@@ -4,43 +4,38 @@ import json
 import os
 from types import SimpleNamespace
 
-import pytest
-
 from chemvas.bootstrap import calculation_bundle as calculation_bundle_cli
 from chemvas.features.insertion import RDKitResult
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-try:
-    from PyQt6.QtCore import Qt
-    from PyQt6.QtGui import QInputMethodEvent
-    from PyQt6.QtWidgets import (
-        QAbstractItemView,
-        QApplication,
-        QDialog,
-        QLineEdit,
-    )
-except ModuleNotFoundError:
-    QApplication = None
-
-if QApplication is not None:
-    from chemvas.features.calculation_bundle import (
-        calculation_plan_for_document,
-        step_readiness,
-    )
-    from chemvas.ui.calculation_step_dialog import (
-        CalculationStepDialog,
-        _correspondence_suggester_for,
-        _MappingProductCombo,
-    )
-
 from typing import TYPE_CHECKING
 
+from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QInputMethodEvent
+from PyQt6.QtWidgets import (
+    QAbstractItemView,
+    QApplication,
+    QDialog,
+    QLineEdit,
+)
+
+from chemvas.features.calculation_bundle import (
+    calculation_plan_for_document,
+    step_readiness,
+)
+from chemvas.ui.calculation_step_dialog import (
+    CalculationStepDialog,
+    _correspondence_suggester_for,
+    _MappingProductCombo,
+)
 from tests.test_calculation_plan import _document_state, _plan
 from tests.test_precomplex_cli import _generate_candidate_fixture
 
 if TYPE_CHECKING:
     from pathlib import Path
+
+    import pytest
 
 
 def _select_component(
@@ -74,7 +69,6 @@ def _set_mapping(
     combo.setCurrentIndex(index)
 
 
-@pytest.mark.skipif(QApplication is None, reason="PyQt6 is required")
 def test_dialog_assigns_roles_in_one_document_and_saves_draft_mapping() -> None:
     app = QApplication.instance() or QApplication([])
     app.setQuitOnLastWindowClosed(False)
@@ -101,7 +95,6 @@ def test_dialog_assigns_roles_in_one_document_and_saves_draft_mapping() -> None:
     dialog.deleteLater()
 
 
-@pytest.mark.skipif(QApplication is None, reason="PyQt6 is required")
 def test_dialog_maps_separately_drawn_endpoints_and_becomes_step_ready() -> None:
     app = QApplication.instance() or QApplication([])
     app.setQuitOnLastWindowClosed(False)
@@ -132,7 +125,6 @@ def test_dialog_maps_separately_drawn_endpoints_and_becomes_step_ready() -> None
     dialog.deleteLater()
 
 
-@pytest.mark.skipif(QApplication is None, reason="PyQt6 is required")
 def test_dialog_preserves_mapping_across_inclusion_toggle_and_respects_unmapped() -> (
     None
 ):
@@ -172,7 +164,6 @@ def test_dialog_preserves_mapping_across_inclusion_toggle_and_respects_unmapped(
     dialog.deleteLater()
 
 
-@pytest.mark.skipif(QApplication is None, reason="PyQt6 is required")
 def test_dialog_loads_existing_mapping_exactly_and_allows_removing_one() -> None:
     app = QApplication.instance() or QApplication([])
     app.setQuitOnLastWindowClosed(False)
@@ -198,7 +189,6 @@ def test_dialog_loads_existing_mapping_exactly_and_allows_removing_one() -> None
     dialog.deleteLater()
 
 
-@pytest.mark.skipif(QApplication is None, reason="PyQt6 is required")
 def test_dialog_rejects_duplicate_product_mapping(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -230,7 +220,6 @@ def test_dialog_rejects_duplicate_product_mapping(
     dialog.deleteLater()
 
 
-@pytest.mark.skipif(QApplication is None, reason="PyQt6 is required")
 def test_new_mode_rejects_existing_step_id(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -254,7 +243,6 @@ def test_new_mode_rejects_existing_step_id(
     dialog.deleteLater()
 
 
-@pytest.mark.skipif(QApplication is None, reason="PyQt6 is required")
 def test_dialog_preserves_product_atom_id_zero() -> None:
     app = QApplication.instance() or QApplication([])
     app.setQuitOnLastWindowClosed(False)
@@ -278,7 +266,6 @@ def test_dialog_preserves_product_atom_id_zero() -> None:
     dialog.deleteLater()
 
 
-@pytest.mark.skipif(QApplication is None, reason="PyQt6 is required")
 def test_dialog_does_not_replace_explicit_unmapped_when_id_becomes_shared() -> None:
     app = QApplication.instance() or QApplication([])
     app.setQuitOnLastWindowClosed(False)
@@ -295,7 +282,6 @@ def test_dialog_does_not_replace_explicit_unmapped_when_id_becomes_shared() -> N
     dialog.deleteLater()
 
 
-@pytest.mark.skipif(QApplication is None, reason="PyQt6 is required")
 def test_dialog_identity_seed_ignores_inactive_stashed_mapping() -> None:
     app = QApplication.instance() or QApplication([])
     app.setQuitOnLastWindowClosed(False)
@@ -317,7 +303,6 @@ def test_dialog_identity_seed_ignores_inactive_stashed_mapping() -> None:
     dialog.deleteLater()
 
 
-@pytest.mark.skipif(QApplication is None, reason="PyQt6 is required")
 def test_dialog_clear_and_identity_buttons_update_active_mappings() -> None:
     app = QApplication.instance() or QApplication([])
     app.setQuitOnLastWindowClosed(False)
@@ -338,7 +323,6 @@ def test_dialog_clear_and_identity_buttons_update_active_mappings() -> None:
     dialog.deleteLater()
 
 
-@pytest.mark.skipif(QApplication is None, reason="PyQt6 is required")
 def test_dialog_rejects_context_only_component_with_reactive_role(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -364,7 +348,6 @@ def test_dialog_rejects_context_only_component_with_reactive_role(
     dialog.deleteLater()
 
 
-@pytest.mark.skipif(QApplication is None, reason="PyQt6 is required")
 def test_reactant_role_disables_product_side_and_reenables_on_role_change() -> None:
     app = QApplication.instance() or QApplication([])
     app.setQuitOnLastWindowClosed(False)
@@ -398,7 +381,6 @@ def test_reactant_role_disables_product_side_and_reenables_on_role_change() -> N
     dialog.deleteLater()
 
 
-@pytest.mark.skipif(QApplication is None, reason="PyQt6 is required")
 def test_catalyst_included_on_both_sides_is_never_cleared() -> None:
     app = QApplication.instance() or QApplication([])
     app.setQuitOnLastWindowClosed(False)
@@ -420,7 +402,6 @@ def test_catalyst_included_on_both_sides_is_never_cleared() -> None:
     dialog.deleteLater()
 
 
-@pytest.mark.skipif(QApplication is None, reason="PyQt6 is required")
 def test_mapping_rows_and_used_candidates_read_muted() -> None:
     app = QApplication.instance() or QApplication([])
     app.setQuitOnLastWindowClosed(False)
@@ -464,7 +445,6 @@ def test_mapping_rows_and_used_candidates_read_muted() -> None:
     dialog.deleteLater()
 
 
-@pytest.mark.skipif(QApplication is None, reason="PyQt6 is required")
 def test_suggest_button_disabled_without_a_suggester() -> None:
     app = QApplication.instance() or QApplication([])
     app.setQuitOnLastWindowClosed(False)
@@ -473,7 +453,6 @@ def test_suggest_button_disabled_without_a_suggester() -> None:
     dialog.deleteLater()
 
 
-@pytest.mark.skipif(QApplication is None, reason="PyQt6 is required")
 def test_structural_suggestion_fills_only_safe_gaps() -> None:
     app = QApplication.instance() or QApplication([])
     app.setQuitOnLastWindowClosed(False)
@@ -505,7 +484,6 @@ def test_structural_suggestion_fills_only_safe_gaps() -> None:
     dialog.deleteLater()
 
 
-@pytest.mark.skipif(QApplication is None, reason="PyQt6 is required")
 def test_mapping_product_combo_popup_scrolls_a_long_candidate_list() -> None:
     app = QApplication.instance() or QApplication([])
     app.setQuitOnLastWindowClosed(False)
@@ -526,7 +504,6 @@ def test_mapping_product_combo_popup_scrolls_a_long_candidate_list() -> None:
     combo.deleteLater()
 
 
-@pytest.mark.skipif(QApplication is None, reason="PyQt6 is required")
 def test_structural_suggestion_reports_when_nothing_new() -> None:
     app = QApplication.instance() or QApplication([])
     app.setQuitOnLastWindowClosed(False)
@@ -542,7 +519,6 @@ def test_structural_suggestion_reports_when_nothing_new() -> None:
     dialog.deleteLater()
 
 
-@pytest.mark.skipif(QApplication is None, reason="PyQt6 is required")
 def test_structural_suggestion_shows_the_failure_reason() -> None:
     # A failed suggestion must not be presented as "no shared substructure" —
     # that reads as a chemistry claim about the drawing.
@@ -567,7 +543,6 @@ def test_structural_suggestion_shows_the_failure_reason() -> None:
     dialog.deleteLater()
 
 
-@pytest.mark.skipif(QApplication is None, reason="PyQt6 is required")
 def test_correspondence_suggester_returns_the_access_result_unchanged(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -596,7 +571,6 @@ def test_correspondence_suggester_returns_the_access_result_unchanged(
     assert calls[0][2:] == (reactant_ids, product_ids)
 
 
-@pytest.mark.skipif(QApplication is None, reason="PyQt6 is required")
 def test_dialog_label_colors_track_mapping_and_clear_on_reject() -> None:
     class _Highlighter:
         def __init__(self) -> None:
@@ -707,7 +681,6 @@ def test_window_editor_injects_and_finally_clears_canvas_highlighter(
     assert instances[0].clear_count == 1
 
 
-@pytest.mark.skipif(QApplication is None, reason="PyQt6 is required")
 def test_dialog_tables_reject_input_method_cell_editing() -> None:
     app = QApplication.instance() or QApplication([])
     app.setQuitOnLastWindowClosed(False)
@@ -785,7 +758,6 @@ def _reviewed_precomplex_state(
     return state
 
 
-@pytest.mark.skipif(QApplication is None, reason="PyQt6 is required")
 def test_dialog_noop_edit_preserves_reviewed_precomplex_pair(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -807,7 +779,6 @@ def test_dialog_noop_edit_preserves_reviewed_precomplex_pair(
     dialog.deleteLater()
 
 
-@pytest.mark.skipif(QApplication is None, reason="PyQt6 is required")
 def test_dialog_dependency_edit_invalidates_precomplex_pair(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

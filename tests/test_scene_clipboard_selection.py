@@ -7,42 +7,36 @@ from tests.runtime_services import canvas_runtime_services
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-try:
-    from PyQt6.QtCore import QRectF
-    from PyQt6.QtWidgets import (
-        QApplication,
-        QGraphicsItem,
-        QGraphicsRectItem,
-        QGraphicsScene,
-        QGraphicsTextItem,
-    )
-except ModuleNotFoundError:
-    QApplication = None
-
-if QApplication is not None:
-    from chemvas.ui.scene_clipboard_selection import select_pasted_content_for_canvas
-
-    class _FakeCanvas:
-        def __init__(self, atom_item) -> None:
-            self._scene = QGraphicsScene()
-            self.selection_controller = SimpleNamespace(
-                update_selection_outline=mock.Mock()
-            )
-            self.atom_label_service = SimpleNamespace(
-                atom_item_for_id=mock.Mock(return_value=atom_item)
-            )
-            self.services = canvas_runtime_services(
-                atom_label_service=self.atom_label_service,
-                selection_controller=self.selection_controller,
-            )
-
-        def scene(self) -> QGraphicsScene:
-            return self._scene
-
-
-@unittest.skipUnless(
-    QApplication is not None, "PyQt6 is required for scene clipboard selection tests"
+from PyQt6.QtCore import QRectF
+from PyQt6.QtWidgets import (
+    QApplication,
+    QGraphicsItem,
+    QGraphicsRectItem,
+    QGraphicsScene,
+    QGraphicsTextItem,
 )
+
+from chemvas.ui.scene_clipboard_selection import select_pasted_content_for_canvas
+
+
+class _FakeCanvas:
+    def __init__(self, atom_item) -> None:
+        self._scene = QGraphicsScene()
+        self.selection_controller = SimpleNamespace(
+            update_selection_outline=mock.Mock()
+        )
+        self.atom_label_service = SimpleNamespace(
+            atom_item_for_id=mock.Mock(return_value=atom_item)
+        )
+        self.services = canvas_runtime_services(
+            atom_label_service=self.atom_label_service,
+            selection_controller=self.selection_controller,
+        )
+
+    def scene(self) -> QGraphicsScene:
+        return self._scene
+
+
 class SceneClipboardSelectionTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -83,7 +77,3 @@ class SceneClipboardSelectionTest(unittest.TestCase):
         clear_note_selection.assert_called_once_with()
         select_note.assert_called_once_with(note_item)
         canvas.selection_controller.update_selection_outline.assert_called_once_with()
-
-
-if __name__ == "__main__":
-    unittest.main()

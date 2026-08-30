@@ -5,33 +5,16 @@ from unittest import mock
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-try:
-    from PyQt6.QtWidgets import QApplication
-except ModuleNotFoundError:
-    QApplication = None
+from PyQt6.QtWidgets import QApplication
 
-if QApplication is not None:
-    try:
-        from chemvas.bootstrap.main_window import build_main_window
-        from chemvas.ui.main_window_ports import (
-            active_canvas_for_window,
-            services_for_window,
-        )
-        from chemvas.ui.main_window_tool_state_service import MainWindowToolStateService
-    except SyntaxError:
-        build_main_window = None
-        MainWindowToolStateService = None
-else:
-    build_main_window = None
-    MainWindowToolStateService = None
-
-
-@unittest.skipUnless(
-    QApplication is not None
-    and build_main_window is not None
-    and MainWindowToolStateService is not None,
-    "PyQt6 and an importable build_main_window tool state surface are required for tests",
+from chemvas.bootstrap.main_window import build_main_window
+from chemvas.ui.main_window_ports import (
+    active_canvas_for_window,
+    services_for_window,
 )
+from chemvas.ui.main_window_tool_state_service import MainWindowToolStateService
+
+
 class MainWindowToolStateServiceTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -273,7 +256,3 @@ class MainWindowToolStateServiceTest(unittest.TestCase):
             [(0.4,), (0.3,)],
         )
         self.assertEqual(self.tool_mode_controller_for_window.call_count, 2)
-
-
-if __name__ == "__main__":
-    unittest.main()

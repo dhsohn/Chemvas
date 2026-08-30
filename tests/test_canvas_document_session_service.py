@@ -1620,7 +1620,3 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
         )
         embed_svg.assert_called_once_with("/tmp/out.svg", {"payload": 1})
         service._selection_document_state.assert_called_once_with()
-
-
-if __name__ == "__main__":
-    unittest.main()

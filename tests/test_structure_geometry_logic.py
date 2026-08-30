@@ -363,7 +363,3 @@ class StructureGeometryLogicTest(unittest.TestCase):
         self.assertIsNone(
             _bond_endpoints(0, atoms={1: Atom("C", 0.0, 0.0)}, bonds=[Bond(1, 2, 1)])
         )
-
-
-if __name__ == "__main__":
-    unittest.main()

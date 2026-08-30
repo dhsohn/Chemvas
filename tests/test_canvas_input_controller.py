@@ -7,34 +7,30 @@ from tests.runtime_services import canvas_runtime_services
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-try:
-    from PyQt6.QtCore import QEvent, Qt
-    from PyQt6.QtGui import QKeySequence, QTransform
-    from PyQt6.QtWidgets import (
-        QApplication,
-        QGraphicsItem,
-        QGraphicsRectItem,
-        QGraphicsScene,
-        QGraphicsTextItem,
-        QGraphicsView,
-    )
-except ModuleNotFoundError:
-    QApplication = None
+from PyQt6.QtCore import QEvent, Qt
+from PyQt6.QtGui import QKeySequence, QTransform
+from PyQt6.QtWidgets import (
+    QApplication,
+    QGraphicsItem,
+    QGraphicsRectItem,
+    QGraphicsScene,
+    QGraphicsTextItem,
+    QGraphicsView,
+)
 
-if QApplication is not None:
-    from chemvas.domain.document import Atom
-    from chemvas.features.hover import HoverState
-    from chemvas.ui.canvas_atom_graphics_state import CanvasAtomGraphicsState
-    from chemvas.ui.canvas_hover_state import hover_state_for
-    from chemvas.ui.canvas_input_controller import CanvasInputController
-    from chemvas.ui.canvas_insert_state import CanvasInsertState, insert_state_for
-    from chemvas.ui.canvas_scene_items_state import (
-        CanvasSceneItemsState,
-        set_selected_notes_for,
-    )
-    from chemvas.ui.input_view_access import input_view_state_for
-    from chemvas.ui.input_view_state import InputViewState
-    from tests.runtime_state import canvas_runtime_state
+from chemvas.domain.document import Atom
+from chemvas.features.hover import HoverState
+from chemvas.ui.canvas_atom_graphics_state import CanvasAtomGraphicsState
+from chemvas.ui.canvas_hover_state import hover_state_for
+from chemvas.ui.canvas_input_controller import CanvasInputController
+from chemvas.ui.canvas_insert_state import CanvasInsertState, insert_state_for
+from chemvas.ui.canvas_scene_items_state import (
+    CanvasSceneItemsState,
+    set_selected_notes_for,
+)
+from chemvas.ui.input_view_access import input_view_state_for
+from chemvas.ui.input_view_state import InputViewState
+from tests.runtime_state import canvas_runtime_state
 
 
 class _Scene(QGraphicsScene):
@@ -190,9 +186,6 @@ def _input_controller(canvas: _Canvas) -> CanvasInputController:
     )
 
 
-@unittest.skipUnless(
-    QApplication is not None, "PyQt6 is required for canvas input controller tests"
-)
 class CanvasInputControllerTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -560,7 +553,3 @@ class CanvasInputControllerTest(unittest.TestCase):
                 )
             )
         base_event.assert_called_once()
-
-
-if __name__ == "__main__":
-    unittest.main()

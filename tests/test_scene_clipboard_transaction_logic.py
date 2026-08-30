@@ -3,22 +3,18 @@ import unittest
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-try:
-    from PyQt6.QtCore import QRectF
-    from PyQt6.QtWidgets import QApplication, QGraphicsItem
-except ModuleNotFoundError:
-    QApplication = None
+from PyQt6.QtCore import QRectF
+from PyQt6.QtWidgets import QApplication, QGraphicsItem
 
-if QApplication is not None:
-    from chemvas.ui.scene_clipboard_transaction_logic import (
-        build_clipboard_copy_plan,
-        build_clipboard_paste_plan,
-        clipboard_copy_cache_values,
-        clipboard_paste_offset,
-        translated_point_value,
-        translated_scene_item_state,
-        visible_items_to_hide_for_copy,
-    )
+from chemvas.ui.scene_clipboard_transaction_logic import (
+    build_clipboard_copy_plan,
+    build_clipboard_paste_plan,
+    clipboard_copy_cache_values,
+    clipboard_paste_offset,
+    translated_point_value,
+    translated_scene_item_state,
+    visible_items_to_hide_for_copy,
+)
 
 
 class _BoundsItem(QGraphicsItem):
@@ -39,10 +35,6 @@ def _make_rect_item(rect: QRectF, *, visible: bool = True) -> QGraphicsItem:
     return _BoundsItem(rect, visible=visible)
 
 
-@unittest.skipUnless(
-    QApplication is not None,
-    "PyQt6 is required for scene clipboard transaction logic tests",
-)
 class SceneClipboardTransactionLogicTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -276,7 +268,3 @@ class SceneClipboardTransactionLogicTest(unittest.TestCase):
         self.assertIsNone(
             translated_scene_item_state("bad", dx=0.0, dy=0.0, atom_id_map={})
         )
-
-
-if __name__ == "__main__":
-    unittest.main()

@@ -8,59 +8,54 @@ from tests.runtime_state import canvas_runtime_state
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-try:
-    from PyQt6.QtCore import QPointF, Qt
-    from PyQt6.QtGui import QColor, QPainterPath, QPen, QPolygonF
-    from PyQt6.QtWidgets import (
-        QApplication,
-        QGraphicsLineItem,
-        QGraphicsPathItem,
-        QGraphicsPolygonItem,
-        QGraphicsScene,
-    )
-except ModuleNotFoundError:
-    QApplication = None
-    Qt = None
+from PyQt6.QtCore import QPointF, Qt
+from PyQt6.QtGui import QColor, QPainterPath, QPen, QPolygonF
+from PyQt6.QtWidgets import (
+    QApplication,
+    QGraphicsLineItem,
+    QGraphicsPathItem,
+    QGraphicsPolygonItem,
+    QGraphicsScene,
+)
 
-if QApplication is not None:
-    import chemvas.ui.bond_graphics_build_service as bond_graphics_build_module
-    import chemvas.ui.bond_renderer as bond_renderer_module
-    from chemvas.adapters.qt.renderer import Renderer
-    from chemvas.domain.document import (
-        VALID_BOND_ORDERS,
-        VALID_BOND_STYLES,
-        Atom,
-        Bond,
-    )
-    from chemvas.features.rendering import (
-        bold_out_scale,
-        extend_segment,
-        scale_segment,
-        trim_segment,
-    )
-    from chemvas.features.rendering.acs1996_style import ACS1996Style
-    from chemvas.ui.atom_coords_access import (
-        CanvasAtomCoords3DState,
-        atom_coords_3d_for,
-        set_atom_coords_3d_for,
-    )
-    from chemvas.ui.bond_geometry_plan_service import (
-        BondLinePrimitive,
-        BondPolygonPrimitive,
-    )
-    from chemvas.ui.bond_renderer import BondRenderer
-    from chemvas.ui.canvas_bond_graphics_state import (
-        CanvasBondGraphicsState,
-        bond_items_for,
-        set_bond_items_for,
-    )
-    from chemvas.ui.canvas_graph_state import CanvasGraphState, graph_state_for
-    from chemvas.ui.canvas_rotation_state import CanvasRotationState
-    from chemvas.ui.graphics_items import (
-        NoSelectLineItem,
-        NoSelectPathItem,
-        NoSelectPolygonItem,
-    )
+import chemvas.ui.bond_graphics_build_service as bond_graphics_build_module
+import chemvas.ui.bond_renderer as bond_renderer_module
+from chemvas.adapters.qt.renderer import Renderer
+from chemvas.domain.document import (
+    VALID_BOND_ORDERS,
+    VALID_BOND_STYLES,
+    Atom,
+    Bond,
+)
+from chemvas.features.rendering import (
+    bold_out_scale,
+    extend_segment,
+    scale_segment,
+    trim_segment,
+)
+from chemvas.features.rendering.acs1996_style import ACS1996Style
+from chemvas.ui.atom_coords_access import (
+    CanvasAtomCoords3DState,
+    atom_coords_3d_for,
+    set_atom_coords_3d_for,
+)
+from chemvas.ui.bond_geometry_plan_service import (
+    BondLinePrimitive,
+    BondPolygonPrimitive,
+)
+from chemvas.ui.bond_renderer import BondRenderer
+from chemvas.ui.canvas_bond_graphics_state import (
+    CanvasBondGraphicsState,
+    bond_items_for,
+    set_bond_items_for,
+)
+from chemvas.ui.canvas_graph_state import CanvasGraphState, graph_state_for
+from chemvas.ui.canvas_rotation_state import CanvasRotationState
+from chemvas.ui.graphics_items import (
+    NoSelectLineItem,
+    NoSelectPathItem,
+    NoSelectPolygonItem,
+)
 
 
 class _FakeStyle:
@@ -296,9 +291,6 @@ def _renderer_for_bond(
     return canvas, renderer
 
 
-@unittest.skipUnless(
-    QApplication is not None, "PyQt6 is required for bond renderer tests"
-)
 class BondRendererUnitTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -1405,7 +1397,3 @@ class BondRendererUnitTest(unittest.TestCase):
                 isinstance(item, NoSelectLineItem) for item in self.canvas.bond_items[0]
             )
         )
-
-
-if __name__ == "__main__":
-    unittest.main()

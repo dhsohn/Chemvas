@@ -586,7 +586,3 @@ class CanvasDocumentStateTest(unittest.TestCase):
 
         with self.assertRaises(AttributeError):
             restore_document_pre_model_items(canvas, state)
-
-
-if __name__ == "__main__":
-    unittest.main()

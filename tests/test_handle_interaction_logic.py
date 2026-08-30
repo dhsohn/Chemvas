@@ -3,27 +3,20 @@ import unittest
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-try:
-    from PyQt6.QtCore import QPointF, Qt
-    from PyQt6.QtWidgets import QApplication, QGraphicsEllipseItem, QGraphicsScene
-except ModuleNotFoundError:
-    QApplication = None
-    QGraphicsEllipseItem = None
-    QGraphicsScene = None
-    Qt = None
+from PyQt6.QtCore import QPointF, Qt
+from PyQt6.QtWidgets import QApplication, QGraphicsScene
 
-if QApplication is not None:
-    from chemvas.features.selection import (
-        clamp_curved_midpoint,
-        clear_handle_items,
-        control_from_midpoint,
-        create_handle_item,
-        curved_midpoint,
-        default_curved_control,
-        orbital_handle_positions,
-        orbital_rotation_angle,
-        orbital_scale_factor,
-    )
+from chemvas.features.selection import (
+    clamp_curved_midpoint,
+    clear_handle_items,
+    control_from_midpoint,
+    create_handle_item,
+    curved_midpoint,
+    default_curved_control,
+    orbital_handle_positions,
+    orbital_rotation_angle,
+    orbital_scale_factor,
+)
 
 
 class _BrokenHandle:
@@ -31,9 +24,6 @@ class _BrokenHandle:
         raise RuntimeError("wrapped C/C++ object has been deleted")
 
 
-@unittest.skipUnless(
-    QApplication is not None, "PyQt6 is required for handle interaction tests"
-)
 class HandleInteractionLogicTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -142,7 +132,3 @@ class HandleInteractionLogicTest(unittest.TestCase):
 
         self.assertAlmostEqual(unsnapped.x(), 0.0)
         self.assertAlmostEqual(unsnapped.y(), 17.0)
-
-
-if __name__ == "__main__":
-    unittest.main()

@@ -1791,7 +1791,3 @@ class StructureBuildServiceTest(unittest.TestCase):
         self.assertEqual(canvas.scene_items, [])
         self.assertEqual(canvas.record_calls, [])
         self.assertEqual(last_smiles_input_for(canvas), "before")
-
-
-if __name__ == "__main__":
-    unittest.main()

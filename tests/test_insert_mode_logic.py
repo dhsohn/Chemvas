@@ -101,7 +101,3 @@ class InsertModeLogicTest(unittest.TestCase):
         self.assertIsNone(
             build_template_insert_request(clear_insert_session(), (0.0, 0.0), None)
         )
-
-
-if __name__ == "__main__":
-    unittest.main()

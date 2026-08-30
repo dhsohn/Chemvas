@@ -340,7 +340,3 @@ class SceneItemAccessTest(unittest.TestCase):
             [attached],
         )
         self.assertEqual(attached_canvas_scene_items(deleted_canvas, [attached]), [])
-
-
-if __name__ == "__main__":
-    unittest.main()

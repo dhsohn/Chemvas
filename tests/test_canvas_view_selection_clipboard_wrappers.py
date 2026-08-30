@@ -8,43 +8,39 @@ from tests.runtime_state import canvas_runtime_state
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-try:
-    from PyQt6.QtCore import QPointF, QRectF
-    from PyQt6.QtGui import QPolygonF
-    from PyQt6.QtWidgets import QApplication
-except ModuleNotFoundError:
-    QApplication = None
+from PyQt6.QtCore import QPointF, QRectF
+from PyQt6.QtGui import QPolygonF
+from PyQt6.QtWidgets import QApplication
 
-if QApplication is not None:
-    from chemvas.domain.document import Atom, Bond
-    from chemvas.ui.canvas_atom_graphics_state import (
-        CanvasAtomGraphicsState,
-        set_atom_dots_for,
-        set_atom_items_for,
-    )
-    from chemvas.ui.canvas_bond_graphics_state import (
-        CanvasBondGraphicsState,
-        set_bond_items_for,
-    )
-    from chemvas.ui.canvas_mark_registry import CanvasMarkRegistry
-    from chemvas.ui.canvas_scene_items_state import (
-        CanvasSceneItemsState,
-        set_scene_item_collection_for,
-    )
-    from chemvas.ui.mark_item_access import mark_kinds_by_atom_for
-    from chemvas.ui.scene_clipboard_transaction_logic import _copy_bounds_for_items
-    from chemvas.ui.selection_collection_access import (
-        append_ring_selection_atom_ids,
-        append_selected_item_ids,
-        append_unique_scene_item,
-        selected_atom_ids_for_transform_for,
-        selected_items_for_transform_for,
-        selected_mark_atom_ids_for,
-        selected_scene_items_for,
-        selection_items_for_copy_for,
-    )
-    from chemvas.ui.selection_geometry_access import extend_bounds_with_item_rect
-    from chemvas.ui.selection_scene_access import selected_scene_notes_for
+from chemvas.domain.document import Atom, Bond
+from chemvas.ui.canvas_atom_graphics_state import (
+    CanvasAtomGraphicsState,
+    set_atom_dots_for,
+    set_atom_items_for,
+)
+from chemvas.ui.canvas_bond_graphics_state import (
+    CanvasBondGraphicsState,
+    set_bond_items_for,
+)
+from chemvas.ui.canvas_mark_registry import CanvasMarkRegistry
+from chemvas.ui.canvas_scene_items_state import (
+    CanvasSceneItemsState,
+    set_scene_item_collection_for,
+)
+from chemvas.ui.mark_item_access import mark_kinds_by_atom_for
+from chemvas.ui.scene_clipboard_transaction_logic import _copy_bounds_for_items
+from chemvas.ui.selection_collection_access import (
+    append_ring_selection_atom_ids,
+    append_selected_item_ids,
+    append_unique_scene_item,
+    selected_atom_ids_for_transform_for,
+    selected_items_for_transform_for,
+    selected_mark_atom_ids_for,
+    selected_scene_items_for,
+    selection_items_for_copy_for,
+)
+from chemvas.ui.selection_geometry_access import extend_bounds_with_item_rect
+from chemvas.ui.selection_scene_access import selected_scene_notes_for
 
 
 class _FakeItem:
@@ -84,9 +80,6 @@ class _FakeItem:
         return list(self._children)
 
 
-@unittest.skipUnless(
-    QApplication is not None, "PyQt6 is required for canvas view tests"
-)
 class CanvasViewSelectionClipboardWrappersTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -461,7 +454,3 @@ class CanvasViewSelectionClipboardWrappersTest(unittest.TestCase):
         clipboard_controller.copy_selection_to_clipboard.assert_called_once_with()
         clipboard_controller.paste_selection_from_clipboard.assert_called_once_with()
         delete_controller.delete_selected_items.assert_called_once_with()
-
-
-if __name__ == "__main__":
-    unittest.main()

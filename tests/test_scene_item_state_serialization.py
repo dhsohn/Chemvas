@@ -3,20 +3,14 @@ import unittest
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-try:
-    from PyQt6.QtCore import QPointF
-    from PyQt6.QtGui import QPolygonF
-    from PyQt6.QtWidgets import QApplication, QGraphicsPolygonItem, QGraphicsTextItem
-except ModuleNotFoundError:
-    QApplication = None
-    QPointF = None
-    QPolygonF = None
+from PyQt6.QtCore import QPointF
+from PyQt6.QtGui import QPolygonF
+from PyQt6.QtWidgets import QApplication, QGraphicsPolygonItem, QGraphicsTextItem
 
-if QApplication is not None:
-    from chemvas.features.annotations import sanitize_note_html
-    from chemvas.ui import scene_item_state as facade
-    from chemvas.ui import scene_item_state_serialization as serialization
-    from chemvas.ui.scene_item_restore import create_note_item_from_state
+from chemvas.features.annotations import sanitize_note_html
+from chemvas.ui import scene_item_state as facade
+from chemvas.ui import scene_item_state_serialization as serialization
+from chemvas.ui.scene_item_restore import create_note_item_from_state
 
 
 class EmbeddedStateItem:
@@ -27,9 +21,6 @@ class EmbeddedStateItem:
         return self.state if role == 9 else None
 
 
-@unittest.skipUnless(
-    QApplication is not None, "PyQt6 is required for scene item state tests"
-)
 class SceneItemStateSerializationTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -113,7 +104,3 @@ class SceneItemStateSerializationTest(unittest.TestCase):
         self.assertIs(facade.scene_item_state, serialization.scene_item_state)
         self.assertIs(facade.scene_item_state_for, serialization.scene_item_state_for)
         self.assertIs(facade.arrow_state_dict, serialization.arrow_state_dict)
-
-
-if __name__ == "__main__":
-    unittest.main()

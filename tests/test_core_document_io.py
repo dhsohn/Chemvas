@@ -748,7 +748,3 @@ class DocumentNumberBoundsTest(unittest.TestCase):
 
                     with self.assertRaisesRegex(ValueError, "Invalid Chemvas file"):
                         read_document(path)
-
-
-if __name__ == "__main__":
-    unittest.main()

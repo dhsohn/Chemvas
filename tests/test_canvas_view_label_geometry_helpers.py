@@ -9,35 +9,31 @@ from tests.runtime_state import canvas_runtime_state
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-try:
-    from PyQt6.QtCore import QPointF, QRectF
-    from PyQt6.QtWidgets import QApplication
-except ModuleNotFoundError:
-    QApplication = None
+from PyQt6.QtCore import QPointF, QRectF
+from PyQt6.QtWidgets import QApplication
 
-if QApplication is not None:
-    from chemvas.domain.document import Atom, Bond
-    from chemvas.ui.atom_coords_access import CanvasAtomCoords3DState
-    from chemvas.ui.bond_graphics_access import (
-        ring_center_3d_for_bond_for,
-        ring_center_for_bond_for,
-    )
-    from chemvas.ui.bond_label_geometry_access import (
-        label_rect_for_atom_for,
-        trim_line_for_labels_for,
-    )
-    from chemvas.ui.canvas_atom_graphics_state import (
-        CanvasAtomGraphicsState,
-        set_atom_items_for,
-    )
-    from chemvas.ui.canvas_geometry_access import mark_target_distance_for_atom_for
-    from chemvas.ui.canvas_geometry_controller import CanvasGeometryController
-    from chemvas.ui.canvas_rotation_state import CanvasRotationState
-    from chemvas.ui.canvas_scene_items_state import (
-        CanvasSceneItemsState,
-        set_scene_item_collection_for,
-    )
-    from chemvas.ui.canvas_service_ports import geometry_controller_for_access
+from chemvas.domain.document import Atom, Bond
+from chemvas.ui.atom_coords_access import CanvasAtomCoords3DState
+from chemvas.ui.bond_graphics_access import (
+    ring_center_3d_for_bond_for,
+    ring_center_for_bond_for,
+)
+from chemvas.ui.bond_label_geometry_access import (
+    label_rect_for_atom_for,
+    trim_line_for_labels_for,
+)
+from chemvas.ui.canvas_atom_graphics_state import (
+    CanvasAtomGraphicsState,
+    set_atom_items_for,
+)
+from chemvas.ui.canvas_geometry_access import mark_target_distance_for_atom_for
+from chemvas.ui.canvas_geometry_controller import CanvasGeometryController
+from chemvas.ui.canvas_rotation_state import CanvasRotationState
+from chemvas.ui.canvas_scene_items_state import (
+    CanvasSceneItemsState,
+    set_scene_item_collection_for,
+)
+from chemvas.ui.canvas_service_ports import geometry_controller_for_access
 
 
 class _FakeLabelItem:
@@ -58,9 +54,6 @@ class _FakeRingItem:
         return None
 
 
-@unittest.skipUnless(
-    QApplication is not None, "PyQt6 is required for canvas view tests"
-)
 class CanvasViewLabelGeometryHelperTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:

@@ -10,33 +10,28 @@ from tests.runtime_state import canvas_runtime_state
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-try:
-    from PyQt6.QtCore import QPointF, Qt
-    from PyQt6.QtGui import QColor, QPen
-    from PyQt6.QtWidgets import QApplication, QGraphicsScene
-except ModuleNotFoundError:
-    QApplication = None
-    Qt = None
+from PyQt6.QtCore import QPointF, Qt
+from PyQt6.QtGui import QColor, QPen
+from PyQt6.QtWidgets import QApplication, QGraphicsScene
 
-if QApplication is not None:
-    from chemvas.core.history import CompositeCommand, SetRingPolygonsCommand
-    from chemvas.domain.document import Atom, Bond
-    from chemvas.ui.atom_coords_access import CanvasAtomCoords3DState
-    from chemvas.ui.bond_renderer import BondRenderer
-    from chemvas.ui.canvas_atom_graphics_state import CanvasAtomGraphicsState
-    from chemvas.ui.canvas_bond_graphics_state import (
-        CanvasBondGraphicsState,
-        bond_items_for,
-        set_bond_items_for,
-    )
-    from chemvas.ui.canvas_geometry_controller import CanvasGeometryController
-    from chemvas.ui.canvas_graph_state import CanvasGraphState, graph_state_for
-    from chemvas.ui.canvas_rotation_state import CanvasRotationState
-    from chemvas.ui.canvas_scene_items_state import CanvasSceneItemsState
-    from chemvas.ui.scene_clipboard_transaction_logic import translated_scene_item_state
-    from chemvas.ui.selection_collection_access import append_selected_item_ids
-    from chemvas.ui.selection_rotation_access import average_bond_length_for_atoms_for
-    from chemvas.ui.selection_style_access import restore_selection_from_ids_for
+from chemvas.core.history import CompositeCommand, SetRingPolygonsCommand
+from chemvas.domain.document import Atom, Bond
+from chemvas.ui.atom_coords_access import CanvasAtomCoords3DState
+from chemvas.ui.bond_renderer import BondRenderer
+from chemvas.ui.canvas_atom_graphics_state import CanvasAtomGraphicsState
+from chemvas.ui.canvas_bond_graphics_state import (
+    CanvasBondGraphicsState,
+    bond_items_for,
+    set_bond_items_for,
+)
+from chemvas.ui.canvas_geometry_controller import CanvasGeometryController
+from chemvas.ui.canvas_graph_state import CanvasGraphState, graph_state_for
+from chemvas.ui.canvas_rotation_state import CanvasRotationState
+from chemvas.ui.canvas_scene_items_state import CanvasSceneItemsState
+from chemvas.ui.scene_clipboard_transaction_logic import translated_scene_item_state
+from chemvas.ui.selection_collection_access import append_selected_item_ids
+from chemvas.ui.selection_rotation_access import average_bond_length_for_atoms_for
+from chemvas.ui.selection_style_access import restore_selection_from_ids_for
 
 
 class _FakeStyle:
@@ -155,9 +150,6 @@ class _ChangingBonds:
         return Bond(1, 2, 1)
 
 
-@unittest.skipUnless(
-    QApplication is not None, "PyQt6 is required for renderer/canvas tail tests"
-)
 class RendererCanvasTailCoverageTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -300,7 +292,3 @@ class RendererCanvasTailCoverageTest(unittest.TestCase):
         self.assertEqual(
             average_bond_length_for_atoms_for(average_view, {1, 2}, coords), 10.0
         )
-
-
-if __name__ == "__main__":
-    unittest.main()

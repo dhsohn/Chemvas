@@ -5,37 +5,27 @@ from unittest import mock
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-try:
-    from PyQt6.QtCore import QPointF, QRectF, Qt
-    from PyQt6.QtGui import QBrush, QColor, QPainterPath, QPen, QPolygonF
-    from PyQt6.QtWidgets import (
-        QApplication,
-        QGraphicsItemGroup,
-        QGraphicsPathItem,
-        QGraphicsPolygonItem,
-        QGraphicsTextItem,
-    )
-except ModuleNotFoundError:
-    QApplication = None
-    QPointF = None
-    QRectF = None
-    Qt = None
-
-if QApplication is not None:
-    from chemvas.ui.note_item_access import committed_note_text_for
-    from chemvas.ui.scene_item_restore import create_note_item_from_state
-    from chemvas.ui.scene_item_state import (
-        apply_scene_item_state,
-        arrow_state_dict,
-        mark_center_from_state,
-        scene_item_state,
-        ts_bracket_rect_from_state,
-    )
-
-
-@unittest.skipUnless(
-    QApplication is not None, "PyQt6 is required for scene item state tests"
+from PyQt6.QtCore import QPointF, QRectF, Qt
+from PyQt6.QtGui import QBrush, QColor, QPainterPath, QPen, QPolygonF
+from PyQt6.QtWidgets import (
+    QApplication,
+    QGraphicsItemGroup,
+    QGraphicsPathItem,
+    QGraphicsPolygonItem,
+    QGraphicsTextItem,
 )
+
+from chemvas.ui.note_item_access import committed_note_text_for
+from chemvas.ui.scene_item_restore import create_note_item_from_state
+from chemvas.ui.scene_item_state import (
+    apply_scene_item_state,
+    arrow_state_dict,
+    mark_center_from_state,
+    scene_item_state,
+    ts_bracket_rect_from_state,
+)
+
+
 class SceneItemStateUnitTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:

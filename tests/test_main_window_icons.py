@@ -3,24 +3,15 @@ import unittest
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-try:
-    from PyQt6.QtCore import QSize
-    from PyQt6.QtGui import QColor, QPainter, QPixmap
-    from PyQt6.QtWidgets import QApplication
-except ModuleNotFoundError:
-    QApplication = None
-    QSize = None
-    QColor = None
-    QPainter = None
-    QPixmap = None
+from PyQt6.QtCore import QSize
+from PyQt6.QtWidgets import QApplication
 
-if QApplication is not None:
-    from chemvas.bootstrap.main_window import build_main_window
-    from chemvas.shell.icon_factory import (
-        _TEMPLATE_ICON_BY_LABEL,
-        MainWindowIconFactory,
-    )
-    from chemvas.ui.main_window_config import TEMPLATE_ENTRY_SPECS
+from chemvas.bootstrap.main_window import build_main_window
+from chemvas.shell.icon_factory import (
+    _TEMPLATE_ICON_BY_LABEL,
+    MainWindowIconFactory,
+)
+from chemvas.ui.main_window_config import TEMPLATE_ENTRY_SPECS
 
 
 def _opaque_bounds(image) -> tuple[int, int, int, int] | None:
@@ -36,9 +27,6 @@ def _opaque_bounds(image) -> tuple[int, int, int, int] | None:
     return min(xs), min(ys), max(xs), max(ys)
 
 
-@unittest.skipUnless(
-    QApplication is not None, "PyQt6 is required for main window icon tests"
-)
 class MainWindowIconGeometryTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:

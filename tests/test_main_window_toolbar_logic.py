@@ -32,7 +32,3 @@ class MainWindowToolbarLogicTest(unittest.TestCase):
         self.assertEqual(tool_action_key_for_canvas_state("mark"), "mark")
         self.assertEqual(tool_action_key_for_canvas_state("perspective"), "perspective")
         self.assertIsNone(tool_action_key_for_canvas_state(None))
-
-
-if __name__ == "__main__":
-    unittest.main()

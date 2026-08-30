@@ -131,7 +131,3 @@ class DocumentGroupsValidationTest(unittest.TestCase):
                         _canvas_state(groups=groups),
                         CANVAS_FILE_VERSION,
                     )
-
-
-if __name__ == "__main__":
-    unittest.main()

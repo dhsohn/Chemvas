@@ -7,25 +7,20 @@ from tests.runtime_state import canvas_runtime_state
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-try:
-    from PyQt6.QtCore import QPointF, Qt
-    from PyQt6.QtWidgets import QApplication
-except ModuleNotFoundError:
-    QApplication = None
+from PyQt6.QtCore import QPointF, Qt
+from PyQt6.QtWidgets import QApplication
 
 from chemvas.core.rdkit_adapter import RDKitAdapter
 from chemvas.domain.document import Atom, Bond, MoleculeModel
 from chemvas.features.hover import HoverState
-
-if QApplication is not None:
-    from chemvas.ui.canvas_scene_items_state import CanvasSceneItemsState
-    from chemvas.ui.canvas_tool_settings_state import CanvasToolSettingsState
-    from chemvas.ui.handle_state import CanvasHandleState
-    from chemvas.ui.move_tool import MoveTool
-    from chemvas.ui.select_tool import SelectTool
-    from chemvas.ui.selection_style_state import SelectionStyleState
-    from chemvas.ui.text_tool import TextTool
-    from chemvas.ui.tool_context import ToolContext
+from chemvas.ui.canvas_scene_items_state import CanvasSceneItemsState
+from chemvas.ui.canvas_tool_settings_state import CanvasToolSettingsState
+from chemvas.ui.handle_state import CanvasHandleState
+from chemvas.ui.move_tool import MoveTool
+from chemvas.ui.select_tool import SelectTool
+from chemvas.ui.selection_style_state import SelectionStyleState
+from chemvas.ui.text_tool import TextTool
+from chemvas.ui.tool_context import ToolContext
 
 
 def _tool_context_for(canvas):
@@ -510,7 +505,6 @@ class _MoveCanvas:
         self.updated_outline += 1
 
 
-@unittest.skipUnless(QApplication is not None, "PyQt6 is required for tool tests")
 class ToolsTailCoverageTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -625,7 +619,3 @@ class ToolsTailCoverageTest(unittest.TestCase):
 
         self.assertEqual(canvas.pushed_commands, [])
         self.assertEqual(canvas.updated_outline, 0)
-
-
-if __name__ == "__main__":
-    unittest.main()

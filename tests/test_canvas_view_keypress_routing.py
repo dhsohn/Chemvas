@@ -4,15 +4,11 @@ from unittest import mock
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-try:
-    from PyQt6.QtCore import Qt
-    from PyQt6.QtWidgets import QApplication
-except ModuleNotFoundError:
-    QApplication = None
+from PyQt6.QtCore import Qt
+from PyQt6.QtWidgets import QApplication
 
-if QApplication is not None:
-    from chemvas.ui.canvas_view import CanvasView
-    from tests.canvas_factory import build_canvas_view
+from chemvas.ui.canvas_view import CanvasView
+from tests.canvas_factory import build_canvas_view
 
 
 class _FakeKeyEvent:
@@ -34,9 +30,6 @@ class _FakeKeyEvent:
         return ""
 
 
-@unittest.skipUnless(
-    QApplication is not None, "PyQt6 is required for canvas view tests"
-)
 class CanvasViewKeyPressRoutingTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -52,7 +45,3 @@ class CanvasViewKeyPressRoutingTest(unittest.TestCase):
         CanvasView.keyPressEvent(view, event)
 
         input_controller.key_press_event.assert_called_once_with(event)
-
-
-if __name__ == "__main__":
-    unittest.main()

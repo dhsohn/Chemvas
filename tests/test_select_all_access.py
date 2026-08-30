@@ -8,61 +8,54 @@ from tests.runtime_state import canvas_runtime_state
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-try:
-    from PyQt6.QtWidgets import (
-        QApplication,
-        QGraphicsItem,
-        QGraphicsRectItem,
-        QGraphicsScene,
-        QGraphicsView,
-    )
-except ModuleNotFoundError:
-    QApplication = None
+from PyQt6.QtWidgets import (
+    QApplication,
+    QGraphicsItem,
+    QGraphicsRectItem,
+    QGraphicsScene,
+    QGraphicsView,
+)
 
-if QApplication is not None:
-    from chemvas.ui.canvas_atom_graphics_state import (
-        CanvasAtomGraphicsState,
-        set_atom_dot_for,
-        set_atom_item_for,
-    )
-    from chemvas.ui.canvas_bond_graphics_state import (
-        CanvasBondGraphicsState,
-        bond_items_for,
-    )
-    from chemvas.ui.canvas_scene_items_state import (
-        CanvasSceneItemsState,
-        append_scene_item_for,
-    )
-    from chemvas.ui.select_all_access import select_all_scene_items_for
+from chemvas.ui.canvas_atom_graphics_state import (
+    CanvasAtomGraphicsState,
+    set_atom_dot_for,
+    set_atom_item_for,
+)
+from chemvas.ui.canvas_bond_graphics_state import (
+    CanvasBondGraphicsState,
+    bond_items_for,
+)
+from chemvas.ui.canvas_scene_items_state import (
+    CanvasSceneItemsState,
+    append_scene_item_for,
+)
+from chemvas.ui.select_all_access import select_all_scene_items_for
 
 
-if QApplication is not None:
+class _Canvas(QGraphicsView):
+    def __init__(self) -> None:
+        super().__init__(QGraphicsScene())
+        self.runtime_state = canvas_runtime_state(
+            atom_graphics_state=CanvasAtomGraphicsState(),
+            bond_graphics_state=CanvasBondGraphicsState(),
+            scene_items_state=CanvasSceneItemsState(),
+        )
+        self.selection_controller = SimpleNamespace(
+            select_note=mock.Mock(),
+            update_selection_outline=mock.Mock(),
+        )
+        self.services = canvas_runtime_services(
+            selection_controller=self.selection_controller
+        )
 
-    class _Canvas(QGraphicsView):
-        def __init__(self) -> None:
-            super().__init__(QGraphicsScene())
-            self.runtime_state = canvas_runtime_state(
-                atom_graphics_state=CanvasAtomGraphicsState(),
-                bond_graphics_state=CanvasBondGraphicsState(),
-                scene_items_state=CanvasSceneItemsState(),
-            )
-            self.selection_controller = SimpleNamespace(
-                select_note=mock.Mock(),
-                update_selection_outline=mock.Mock(),
-            )
-            self.services = canvas_runtime_services(
-                selection_controller=self.selection_controller
-            )
-
-        def add_scene_item(self, kind: str):
-            item = QGraphicsRectItem(0.0, 0.0, 5.0, 5.0)
-            item.setData(0, kind)
-            item.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsSelectable, True)
-            self.scene().addItem(item)
-            return item
+    def add_scene_item(self, kind: str):
+        item = QGraphicsRectItem(0.0, 0.0, 5.0, 5.0)
+        item.setData(0, kind)
+        item.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsSelectable, True)
+        self.scene().addItem(item)
+        return item
 
 
-@unittest.skipUnless(QApplication is not None, "PyQt6 is required for select-all tests")
 class SelectAllAccessTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -117,7 +110,3 @@ class SelectAllAccessTest(unittest.TestCase):
         append_scene_item_for(canvas, "arrow_items", detached)
 
         self.assertFalse(select_all_scene_items_for(canvas))
-
-
-if __name__ == "__main__":
-    unittest.main()

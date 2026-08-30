@@ -8,31 +8,27 @@ from tests.runtime_state import canvas_runtime_state
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-try:
-    from PyQt6.QtWidgets import QApplication
-except ModuleNotFoundError:
-    QApplication = None
+from PyQt6.QtWidgets import QApplication
 
-if QApplication is not None:
-    from chemvas.domain.document import Atom, Bond
-    from chemvas.ui.canvas_atom_graphics_state import (
-        CanvasAtomGraphicsState,
-        set_atom_dots_for,
-        set_atom_items_for,
-    )
-    from chemvas.ui.canvas_bond_graphics_state import (
-        CanvasBondGraphicsState,
-        set_bond_items_for,
-    )
-    from chemvas.ui.canvas_graph_service import CanvasGraphService
-    from chemvas.ui.canvas_graph_state import CanvasGraphState
-    from chemvas.ui.canvas_ring_fill_scene_access import update_ring_fills_for_atoms_for
-    from chemvas.ui.canvas_ring_fill_scene_service import CanvasRingFillSceneService
-    from chemvas.ui.canvas_scene_items_state import (
-        CanvasSceneItemsState,
-        set_scene_item_collection_for,
-    )
-    from chemvas.ui.selection_style_access import restore_selection_from_ids_for
+from chemvas.domain.document import Atom, Bond
+from chemvas.ui.canvas_atom_graphics_state import (
+    CanvasAtomGraphicsState,
+    set_atom_dots_for,
+    set_atom_items_for,
+)
+from chemvas.ui.canvas_bond_graphics_state import (
+    CanvasBondGraphicsState,
+    set_bond_items_for,
+)
+from chemvas.ui.canvas_graph_service import CanvasGraphService
+from chemvas.ui.canvas_graph_state import CanvasGraphState
+from chemvas.ui.canvas_ring_fill_scene_access import update_ring_fills_for_atoms_for
+from chemvas.ui.canvas_ring_fill_scene_service import CanvasRingFillSceneService
+from chemvas.ui.canvas_scene_items_state import (
+    CanvasSceneItemsState,
+    set_scene_item_collection_for,
+)
+from chemvas.ui.selection_style_access import restore_selection_from_ids_for
 
 
 class _FakeSelectableItem:
@@ -78,9 +74,6 @@ class _FakeRingItem:
         return None
 
 
-@unittest.skipUnless(
-    QApplication is not None, "PyQt6 is required for canvas view tests"
-)
 class CanvasViewTransformHelperTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:

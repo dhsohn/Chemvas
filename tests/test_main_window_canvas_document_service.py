@@ -3,30 +3,21 @@ import unittest
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-try:
-    from PyQt6.QtCore import QCoreApplication, QEvent, QPointF
-    from PyQt6.QtTest import QTest
-    from PyQt6.QtWidgets import QApplication
-except ModuleNotFoundError:
-    QApplication = None
-    QPointF = None
-    QTest = None
+from PyQt6.QtCore import QCoreApplication, QEvent, QPointF
+from PyQt6.QtTest import QTest
+from PyQt6.QtWidgets import QApplication
 
-if QApplication is not None:
-    from chemvas.bootstrap.main_window import build_main_window
-    from chemvas.ui.canvas_bond_graphics_state import bond_items_for_id
-    from chemvas.ui.canvas_document_metadata_state import document_file_path_for
-    from chemvas.ui.canvas_window_access import snapshot_canvas_state_for
-    from chemvas.ui.main_window_ports import (
-        active_canvas_for_window,
-        services_for_window,
-    )
-    from chemvas.ui.structure_mutation_access import add_bond_between_points_for
-
-
-@unittest.skipUnless(
-    QApplication is not None, "PyQt6 is required for canvas document service tests"
+from chemvas.bootstrap.main_window import build_main_window
+from chemvas.ui.canvas_bond_graphics_state import bond_items_for_id
+from chemvas.ui.canvas_document_metadata_state import document_file_path_for
+from chemvas.ui.canvas_window_access import snapshot_canvas_state_for
+from chemvas.ui.main_window_ports import (
+    active_canvas_for_window,
+    services_for_window,
 )
+from chemvas.ui.structure_mutation_access import add_bond_between_points_for
+
+
 class MainWindowCanvasDocumentServiceTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -149,7 +140,3 @@ class MainWindowCanvasDocumentServiceTest(unittest.TestCase):
         QCoreApplication.sendPostedEvents(canvas, QEvent.Type.DeferredDelete)
         with self.assertRaises(RuntimeError):
             canvas.scene()
-
-
-if __name__ == "__main__":
-    unittest.main()

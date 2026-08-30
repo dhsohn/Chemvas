@@ -8,32 +8,28 @@ from tests.runtime_state import canvas_runtime_state
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-try:
-    from PyQt6 import sip
-    from PyQt6.QtCore import QPointF, QRectF, Qt
-    from PyQt6.QtGui import QBrush, QColor, QPainterPath, QPolygonF
-    from PyQt6.QtWidgets import (
-        QApplication,
-        QGraphicsItemGroup,
-        QGraphicsPathItem,
-        QGraphicsPolygonItem,
-        QGraphicsScene,
-        QGraphicsTextItem,
-    )
-except ModuleNotFoundError:
-    QApplication = None
+from PyQt6 import sip
+from PyQt6.QtCore import QPointF, QRectF, Qt
+from PyQt6.QtGui import QBrush, QColor, QPainterPath, QPolygonF
+from PyQt6.QtWidgets import (
+    QApplication,
+    QGraphicsItemGroup,
+    QGraphicsPathItem,
+    QGraphicsPolygonItem,
+    QGraphicsScene,
+    QGraphicsTextItem,
+)
 
-if QApplication is not None:
-    from chemvas.ui.canvas_mark_registry import CanvasMarkRegistry
-    from chemvas.ui.canvas_scene_items_state import (
-        SCENE_ITEM_COLLECTION_ATTRS,
-        CanvasSceneItemsState,
-        scene_item_collection_for,
-        set_scene_item_collection_for,
-    )
-    from chemvas.ui.handle_state import CanvasHandleState
-    from chemvas.ui.scene_item_controller import SceneItemController
-    from chemvas.ui.transactions.scene_rect import scene_rect_is_automatic
+from chemvas.ui.canvas_mark_registry import CanvasMarkRegistry
+from chemvas.ui.canvas_scene_items_state import (
+    SCENE_ITEM_COLLECTION_ATTRS,
+    CanvasSceneItemsState,
+    scene_item_collection_for,
+    set_scene_item_collection_for,
+)
+from chemvas.ui.handle_state import CanvasHandleState
+from chemvas.ui.scene_item_controller import SceneItemController
+from chemvas.ui.transactions.scene_rect import scene_rect_is_automatic
 
 
 class _FakeCanvas:
@@ -232,9 +228,6 @@ class _BrokenSceneItem:
         pass
 
 
-@unittest.skipUnless(
-    QApplication is not None, "PyQt6 is required for scene item controller tests"
-)
 class SceneItemControllerTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -840,7 +833,3 @@ class SceneItemControllerTest(unittest.TestCase):
         self.assertEqual(self.canvas.clear_handles_calls, 1)
         self.assertNotIn(orbital, self.canvas.orbital_items)
         self.assertIsNone(orbital.scene())
-
-
-if __name__ == "__main__":
-    unittest.main()

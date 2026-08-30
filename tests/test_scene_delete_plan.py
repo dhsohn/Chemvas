@@ -3,36 +3,29 @@ import unittest
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-try:
-    from PyQt6.QtWidgets import QApplication
-except ModuleNotFoundError:
-    QApplication = None
+from PyQt6.QtWidgets import QApplication
 
-if QApplication is not None:
-    from chemvas.core.history import (
-        CompositeCommand,
-        DeleteAtomsCommand,
-        DeleteBondCommand,
-    )
-    from chemvas.domain.document import Atom, Bond, MoleculeModel
-    from chemvas.ui.canvas_smiles_input_state import last_smiles_input_for
-    from chemvas.ui.history_commands import DeleteSceneItemsCommand
-    from chemvas.ui.scene_delete_plan import (
-        build_delete_selection_plan,
-        classify_delete_selection,
-    )
-    from tests.test_scene_ops_controller import (
-        _FakeCanvas,
-        _make_note_item,
-        _make_rect_item,
-        _make_ring_item,
-        scene_delete_controller_for,
-    )
-
-
-@unittest.skipUnless(
-    QApplication is not None, "PyQt6 is required for scene ops controller tests"
+from chemvas.core.history import (
+    CompositeCommand,
+    DeleteAtomsCommand,
+    DeleteBondCommand,
 )
+from chemvas.domain.document import Atom, Bond, MoleculeModel
+from chemvas.ui.canvas_smiles_input_state import last_smiles_input_for
+from chemvas.ui.history_commands import DeleteSceneItemsCommand
+from chemvas.ui.scene_delete_plan import (
+    build_delete_selection_plan,
+    classify_delete_selection,
+)
+from tests.test_scene_ops_controller import (
+    _FakeCanvas,
+    _make_note_item,
+    _make_rect_item,
+    _make_ring_item,
+    scene_delete_controller_for,
+)
+
+
 class SceneDeletePlanTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -571,7 +564,3 @@ class SceneDeletePlanTest(unittest.TestCase):
         self.assertNotIn(handle_item, scene_delete.items)
         self.assertNotIn(note_box_item, scene_delete.items)
         self.assertNotIn(note_select_item, scene_delete.items)
-
-
-if __name__ == "__main__":
-    unittest.main()

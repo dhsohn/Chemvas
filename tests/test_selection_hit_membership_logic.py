@@ -1,29 +1,13 @@
 import unittest
 
-try:
-    from chemvas.features.selection import (
-        SelectionHitRequest,
-        SelectionRect,
-        StructureHit,
-        selection_hit_matches,
-    )
-except ImportError as exc:  # pragma: no cover - contract test for upcoming helper API
-    SelectionHitRequest = None
-    SelectionRect = None
-    StructureHit = None
-    selection_hit_matches = None
-    IMPORT_ERROR = str(exc)
-else:  # pragma: no cover - trivial import branch
-    IMPORT_ERROR = ""
-
-
-@unittest.skipIf(
-    SelectionHitRequest is None
-    or SelectionRect is None
-    or selection_hit_matches is None
-    or StructureHit is None,
-    f"could not import selection-hit matching API from 'chemvas.features.selection': {IMPORT_ERROR}",
+from chemvas.features.selection import (
+    SelectionHitRequest,
+    SelectionRect,
+    StructureHit,
+    selection_hit_matches,
 )
+
+
 class SelectionHitMembershipLogicTest(unittest.TestCase):
     def _request(
         self,
@@ -126,7 +110,3 @@ class SelectionHitMembershipLogicTest(unittest.TestCase):
         )
 
         self.assertFalse(selection_hit_matches(request))
-
-
-if __name__ == "__main__":
-    unittest.main()

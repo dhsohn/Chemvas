@@ -6,18 +6,11 @@ from unittest import mock
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-try:
-    from PyQt6.QtWidgets import QApplication, QMainWindow, QTabWidget
-except ModuleNotFoundError:
-    QApplication = None
-    QMainWindow = None
-    QTabWidget = None
+from PyQt6.QtWidgets import QApplication, QMainWindow, QTabWidget
 
-if QApplication is not None:
-    from chemvas.ui.main_window_tab_setup import build_canvas_tab_assembly
+from chemvas.ui.main_window_tab_setup import build_canvas_tab_assembly
 
 
-@unittest.skipUnless(QApplication is not None, "PyQt6 is required for tab setup tests")
 class MainWindowTabSetupTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -48,7 +41,3 @@ class MainWindowTabSetupTest(unittest.TestCase):
         self.assertFalse(assembly.canvas_tabs.tabBar().expanding())
         self.assertFalse(assembly.canvas_tabs.tabBar().drawBase())
         self.assertTrue(assembly.canvas_tabs.tabBar().isHidden())
-
-
-if __name__ == "__main__":
-    unittest.main()

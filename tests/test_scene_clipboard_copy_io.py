@@ -4,33 +4,27 @@ from unittest import mock
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-try:
-    from PyQt6.QtCore import QMimeData, QRectF
-    from PyQt6.QtWidgets import QApplication, QGraphicsRectItem, QGraphicsScene
-except ModuleNotFoundError:
-    QApplication = None
+from PyQt6.QtCore import QMimeData, QRectF
+from PyQt6.QtWidgets import QApplication, QGraphicsRectItem, QGraphicsScene
 
-if QApplication is not None:
-    from chemvas.ui.scene_clipboard_copy_io import (
-        CLIPBOARD_PDF_MIME,
-        CLIPBOARD_SVG_MIME,
-        build_clipboard_mime_data,
-        render_clipboard_raster_image,
-        set_vector_clipboard_data,
-    )
-    from chemvas.ui.scene_clipboard_transaction_logic import ClipboardCopyPlan
-
-    class _FakeCanvas:
-        def __init__(self, scene: QGraphicsScene) -> None:
-            self._scene = scene
-
-        def scene(self) -> QGraphicsScene:
-            return self._scene
-
-
-@unittest.skipUnless(
-    QApplication is not None, "PyQt6 is required for scene clipboard copy I/O tests"
+from chemvas.ui.scene_clipboard_copy_io import (
+    CLIPBOARD_PDF_MIME,
+    CLIPBOARD_SVG_MIME,
+    build_clipboard_mime_data,
+    render_clipboard_raster_image,
+    set_vector_clipboard_data,
 )
+from chemvas.ui.scene_clipboard_transaction_logic import ClipboardCopyPlan
+
+
+class _FakeCanvas:
+    def __init__(self, scene: QGraphicsScene) -> None:
+        self._scene = scene
+
+    def scene(self) -> QGraphicsScene:
+        return self._scene
+
+
 class SceneClipboardCopyIOTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -108,7 +102,3 @@ class SceneClipboardCopyIOTest(unittest.TestCase):
 
         self.assertFalse(mime_data.hasFormat(CLIPBOARD_SVG_MIME))
         self.assertFalse(mime_data.hasFormat(CLIPBOARD_PDF_MIME))
-
-
-if __name__ == "__main__":
-    unittest.main()

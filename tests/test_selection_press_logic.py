@@ -68,7 +68,3 @@ class SelectionPressLogicTest(unittest.TestCase):
         )
 
         self.assertEqual(decision, SelectionPressDecision(action="ignore"))
-
-
-if __name__ == "__main__":
-    unittest.main()

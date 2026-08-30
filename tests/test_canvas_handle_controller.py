@@ -5,15 +5,11 @@ from unittest import mock
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-try:
-    from PyQt6.QtCore import QPointF
-except ModuleNotFoundError:
-    QPointF = None
+from PyQt6.QtCore import QPointF
 
-if QPointF is not None:
-    from chemvas.ui.canvas_handle_controller import CanvasHandleController
-    from chemvas.ui.canvas_tool_settings_state import CanvasToolSettingsState
-    from tests.runtime_state import canvas_runtime_state
+from chemvas.ui.canvas_handle_controller import CanvasHandleController
+from chemvas.ui.canvas_tool_settings_state import CanvasToolSettingsState
+from tests.runtime_state import canvas_runtime_state
 
 
 class _Handle:
@@ -24,9 +20,6 @@ class _Handle:
         return self._data.get(key)
 
 
-@unittest.skipUnless(
-    QPointF is not None, "PyQt6 is required for canvas handle controller tests"
-)
 class CanvasHandleControllerTest(unittest.TestCase):
     def test_overlay_and_selection_wrappers_delegate_to_services(self) -> None:
         canvas = SimpleNamespace(
@@ -169,7 +162,3 @@ class CanvasHandleControllerTest(unittest.TestCase):
             snap_enabled=True,
             snap_distance=5.0,
         )
-
-
-if __name__ == "__main__":
-    unittest.main()

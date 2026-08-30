@@ -8,49 +8,43 @@ from tests.runtime_state import canvas_runtime_state
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-try:
-    from PyQt6.QtGui import QFont
-    from PyQt6.QtWidgets import QApplication, QGraphicsItem, QGraphicsScene
-except ModuleNotFoundError:
-    QApplication = None
-    QGraphicsItem = object
-    QGraphicsScene = object
+from PyQt6.QtGui import QFont
+from PyQt6.QtWidgets import QApplication, QGraphicsItem, QGraphicsScene
 
-if QApplication is not None:
-    from chemvas.core.history import (
-        CompositeCommand,
-        DeleteAtomsCommand,
-        DeleteBondCommand,
-        UpdateBondCommand,
-    )
-    from chemvas.domain.document import Atom, Bond, MoleculeModel
-    from chemvas.features.hover import HoverState
-    from chemvas.ui.atom_coords_access import (
-        CanvasAtomCoords3DState,
-        atom_coords_3d_for,
-        set_atom_coords_3d_for,
-    )
-    from chemvas.ui.atom_label_service import AtomLabelService
-    from chemvas.ui.canvas_atom_graphics_state import (
-        CanvasAtomGraphicsState,
-        atom_dots_for,
-        atom_items_for,
-        set_atom_dots_for,
-        set_atom_items_for,
-    )
-    from chemvas.ui.canvas_bond_graphics_state import (
-        CanvasBondGraphicsState,
-        bond_items_for,
-        set_bond_items_for,
-    )
-    from chemvas.ui.canvas_history_state import CanvasHistoryState
-    from chemvas.ui.canvas_smiles_input_state import (
-        CanvasSmilesInputState,
-        last_smiles_input_for,
-        set_last_smiles_input_for,
-    )
-    from chemvas.ui.graphics_items import AtomLabelItem
-    from chemvas.ui.history_commands import ChangeAtomLabelCommand
+from chemvas.core.history import (
+    CompositeCommand,
+    DeleteAtomsCommand,
+    DeleteBondCommand,
+    UpdateBondCommand,
+)
+from chemvas.domain.document import Atom, Bond, MoleculeModel
+from chemvas.features.hover import HoverState
+from chemvas.ui.atom_coords_access import (
+    CanvasAtomCoords3DState,
+    atom_coords_3d_for,
+    set_atom_coords_3d_for,
+)
+from chemvas.ui.atom_label_service import AtomLabelService
+from chemvas.ui.canvas_atom_graphics_state import (
+    CanvasAtomGraphicsState,
+    atom_dots_for,
+    atom_items_for,
+    set_atom_dots_for,
+    set_atom_items_for,
+)
+from chemvas.ui.canvas_bond_graphics_state import (
+    CanvasBondGraphicsState,
+    bond_items_for,
+    set_bond_items_for,
+)
+from chemvas.ui.canvas_history_state import CanvasHistoryState
+from chemvas.ui.canvas_smiles_input_state import (
+    CanvasSmilesInputState,
+    last_smiles_input_for,
+    set_last_smiles_input_for,
+)
+from chemvas.ui.graphics_items import AtomLabelItem
+from chemvas.ui.history_commands import ChangeAtomLabelCommand
 
 
 class _FakeScene(QGraphicsScene):
@@ -201,9 +195,6 @@ def _atom_label_service(canvas: _FakeCanvas) -> AtomLabelService:
     )
 
 
-@unittest.skipUnless(
-    QApplication is not None, "PyQt6 is required for atom label service tests"
-)
 class AtomLabelServiceTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -1046,7 +1037,3 @@ class AtomLabelServiceTest(unittest.TestCase):
             [ChangeAtomLabelCommand, DeleteBondCommand],
         )
         service.merge_overlapping_atoms.assert_called_once_with(1)
-
-
-if __name__ == "__main__":
-    unittest.main()

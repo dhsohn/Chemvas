@@ -7,15 +7,11 @@ from tests.runtime_services import canvas_runtime_services
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-try:
-    from PyQt6.QtCore import Qt
-    from PyQt6.QtGui import QActionGroup, QIcon, QPixmap
-    from PyQt6.QtWidgets import QApplication, QMainWindow
-except ModuleNotFoundError:
-    QApplication = None
+from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QActionGroup, QIcon, QPixmap
+from PyQt6.QtWidgets import QApplication, QMainWindow
 
-if QApplication is not None:
-    from chemvas.ui.main_window_tool_action_service import MainWindowToolActionService
+from chemvas.ui.main_window_tool_action_service import MainWindowToolActionService
 
 
 class _HarnessWindow(QMainWindow):
@@ -58,9 +54,6 @@ class _HarnessWindow(QMainWindow):
         return QIcon()
 
 
-@unittest.skipUnless(
-    QApplication is not None, "PyQt6 is required for main window tool action tests"
-)
 class MainWindowToolActionServiceTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -175,7 +168,3 @@ class MainWindowToolActionServiceTest(unittest.TestCase):
         self.tool_state_service.set_bond_style.assert_called_once_with(
             self.window, "Hash"
         )
-
-
-if __name__ == "__main__":
-    unittest.main()

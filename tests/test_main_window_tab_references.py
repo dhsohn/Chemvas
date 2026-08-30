@@ -3,24 +3,15 @@ from __future__ import annotations
 import os
 from unittest import mock
 
-import pytest
-
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-try:
-    from PyQt6.QtWidgets import QApplication, QMainWindow
-except ModuleNotFoundError:
-    QApplication = None
+from PyQt6.QtWidgets import QApplication, QMainWindow
 
-if QApplication is not None:
-    from chemvas.ui.main_window_tab_references import MainWindowTabReferences
-    from chemvas.ui.main_window_tab_setup import build_canvas_tab_assembly
-    from tests.canvas_factory import build_canvas_view
+from chemvas.ui.main_window_tab_references import MainWindowTabReferences
+from chemvas.ui.main_window_tab_setup import build_canvas_tab_assembly
+from tests.canvas_factory import build_canvas_view
 
 
-@pytest.mark.skipif(
-    QApplication is None, reason="PyQt6 is required for main window tab reference tests"
-)
 def test_main_window_tab_references_resolve_active_canvas_tabs_and_names() -> None:
     app = QApplication.instance() or QApplication([])
     app.setQuitOnLastWindowClosed(False)

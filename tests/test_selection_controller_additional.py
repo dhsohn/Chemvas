@@ -8,52 +8,48 @@ from tests.runtime_state import canvas_runtime_state
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-try:
-    from PyQt6.QtCore import QPointF, QRectF, Qt
-    from PyQt6.QtGui import QBrush, QColor, QPainterPath, QPen, QPolygonF
-    from PyQt6.QtWidgets import (
-        QApplication,
-        QGraphicsLineItem,
-        QGraphicsPathItem,
-        QGraphicsPolygonItem,
-        QGraphicsScene,
-        QGraphicsTextItem,
-    )
-except ModuleNotFoundError:
-    QApplication = None
+from PyQt6.QtCore import QPointF, QRectF, Qt
+from PyQt6.QtGui import QBrush, QColor, QPainterPath, QPen, QPolygonF
+from PyQt6.QtWidgets import (
+    QApplication,
+    QGraphicsLineItem,
+    QGraphicsPathItem,
+    QGraphicsPolygonItem,
+    QGraphicsScene,
+    QGraphicsTextItem,
+)
 
-if QApplication is not None:
-    from chemvas.domain.document import Atom, Bond
-    from chemvas.features.selection import StructureHit
-    from chemvas.ui.canvas_atom_graphics_state import (
-        CanvasAtomGraphicsState,
-        atom_dots_for,
-        atom_items_for,
-        set_atom_dots_for,
-        set_atom_items_for,
-    )
-    from chemvas.ui.canvas_bond_graphics_state import (
-        CanvasBondGraphicsState,
-        bond_items_for,
-        set_bond_items_for,
-    )
-    from chemvas.ui.canvas_group_state import CanvasGroupState
-    from chemvas.ui.canvas_rotation_state import CanvasRotationState
-    from chemvas.ui.canvas_scene_items_state import (
-        CanvasSceneItemsState,
-        selected_notes_for,
-        set_scene_item_collection_for,
-        set_selected_notes_for,
-    )
-    from chemvas.ui.canvas_text_style_state import CanvasTextStyleState
-    from chemvas.ui.selection_info_state import SelectionInfoState
-    from chemvas.ui.selection_outline_state import (
-        SelectionOutlineState,
-        selection_outlines_for,
-        set_selection_outlines_for,
-    )
-    from chemvas.ui.selection_service_bundle import build_selection_services
-    from chemvas.ui.selection_style_state import SelectionStyleState
+from chemvas.domain.document import Atom, Bond
+from chemvas.features.selection import StructureHit
+from chemvas.ui.canvas_atom_graphics_state import (
+    CanvasAtomGraphicsState,
+    atom_dots_for,
+    atom_items_for,
+    set_atom_dots_for,
+    set_atom_items_for,
+)
+from chemvas.ui.canvas_bond_graphics_state import (
+    CanvasBondGraphicsState,
+    bond_items_for,
+    set_bond_items_for,
+)
+from chemvas.ui.canvas_group_state import CanvasGroupState
+from chemvas.ui.canvas_rotation_state import CanvasRotationState
+from chemvas.ui.canvas_scene_items_state import (
+    CanvasSceneItemsState,
+    selected_notes_for,
+    set_scene_item_collection_for,
+    set_selected_notes_for,
+)
+from chemvas.ui.canvas_text_style_state import CanvasTextStyleState
+from chemvas.ui.selection_info_state import SelectionInfoState
+from chemvas.ui.selection_outline_state import (
+    SelectionOutlineState,
+    selection_outlines_for,
+    set_selection_outlines_for,
+)
+from chemvas.ui.selection_service_bundle import build_selection_services
+from chemvas.ui.selection_style_state import SelectionStyleState
 
 
 class _FakeItem:
@@ -304,9 +300,6 @@ def _make_selection_controller(canvas, *, hit_testing_service=None):
     ).selection_controller
 
 
-@unittest.skipUnless(
-    QApplication is not None, "PyQt6 is required for selection controller tests"
-)
 class SelectionControllerAdditionalTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -1296,7 +1289,3 @@ class SelectionControllerAdditionalTest(unittest.TestCase):
         self.assertTrue(controller.selection_center_marker_enabled())
         controller.add_selection_center_marker(QPointF(5.0, 5.0))
         self.assertEqual(len(selection_outlines_for(canvas)), 5)
-
-
-if __name__ == "__main__":
-    unittest.main()

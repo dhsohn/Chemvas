@@ -1467,7 +1467,3 @@ class SerializeModelStateHealingTest(unittest.TestCase):
         self.assertEqual(state["atoms"][a]["x"], 0.0)
         self.assertEqual(state["atoms"][a]["color"], "#000000")
         build_document_payload(_canvas_state(state), CANVAS_FILE_VERSION)
-
-
-if __name__ == "__main__":
-    unittest.main()

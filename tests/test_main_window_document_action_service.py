@@ -9,48 +9,38 @@ from unittest import mock
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-try:
-    from PyQt6.QtCore import QPointF
-    from PyQt6.QtTest import QTest
-    from PyQt6.QtWidgets import QApplication, QMessageBox
-except ModuleNotFoundError:
-    QApplication = None
-    QPointF = None
-    QMessageBox = None
-    QTest = None
+from PyQt6.QtCore import QPointF
+from PyQt6.QtTest import QTest
+from PyQt6.QtWidgets import QApplication, QMessageBox
 
-if QApplication is not None:
-    from chemvas.bootstrap.main_window import build_main_window
-    from chemvas.bootstrap.window_registry import (
-        forget_window,
-        open_windows,
-        register_window,
-    )
-    from chemvas.core.document_io import write_document
-    from chemvas.core.molfile import parse_molfile, write_molfile
-    from chemvas.domain.document import CANVAS_FILE_VERSION, MoleculeModel
-    from chemvas.ui.canvas_document_metadata_state import document_file_path_for
-    from chemvas.ui.canvas_mark_registry import mark_registry_for
-    from chemvas.ui.canvas_model_access import model_for
-    from chemvas.ui.canvas_window_access import snapshot_canvas_state_for
-    from chemvas.ui.main_window_path_logic import (
-        resolve_save_as_path,
-        resolve_save_path,
-    )
-    from chemvas.ui.main_window_ports import (
-        active_canvas_for_window,
-        services_for_window,
-    )
-    from chemvas.ui.mark_item_access import mark_kinds_by_atom_for
-    from chemvas.ui.renderer_style_access import bond_length_px_for
-    from chemvas.ui.scene_decoration_access import add_mark_for_atom_for
-    from chemvas.ui.structure_mutation_access import add_bond_between_points_for
-    from chemvas.ui.structure_payload_access import build_3d_conversion_payload_for
-
-
-@unittest.skipUnless(
-    QApplication is not None, "PyQt6 is required for main window document action tests"
+from chemvas.bootstrap.main_window import build_main_window
+from chemvas.bootstrap.window_registry import (
+    forget_window,
+    open_windows,
+    register_window,
 )
+from chemvas.core.document_io import write_document
+from chemvas.core.molfile import parse_molfile, write_molfile
+from chemvas.domain.document import CANVAS_FILE_VERSION, MoleculeModel
+from chemvas.ui.canvas_document_metadata_state import document_file_path_for
+from chemvas.ui.canvas_mark_registry import mark_registry_for
+from chemvas.ui.canvas_model_access import model_for
+from chemvas.ui.canvas_window_access import snapshot_canvas_state_for
+from chemvas.ui.main_window_path_logic import (
+    resolve_save_as_path,
+    resolve_save_path,
+)
+from chemvas.ui.main_window_ports import (
+    active_canvas_for_window,
+    services_for_window,
+)
+from chemvas.ui.mark_item_access import mark_kinds_by_atom_for
+from chemvas.ui.renderer_style_access import bond_length_px_for
+from chemvas.ui.scene_decoration_access import add_mark_for_atom_for
+from chemvas.ui.structure_mutation_access import add_bond_between_points_for
+from chemvas.ui.structure_payload_access import build_3d_conversion_payload_for
+
+
 class MainWindowDocumentActionServiceTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -777,7 +767,3 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
                     self.window, canvas, message_box=message_box
                 )
             )
-
-
-if __name__ == "__main__":
-    unittest.main()

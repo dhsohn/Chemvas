@@ -201,7 +201,3 @@ class StructurePayloadLogicTest(unittest.TestCase):
                 {},
                 bounds_getter=self._bounds_for,
             )
-
-
-if __name__ == "__main__":
-    unittest.main()

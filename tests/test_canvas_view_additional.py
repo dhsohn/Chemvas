@@ -9,171 +9,167 @@ from tests.runtime_state import canvas_runtime_state
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-try:
-    from PyQt6.QtCore import QPointF, QRectF, Qt
-    from PyQt6.QtGui import QColor, QFont, QPainterPath, QPolygonF
-    from PyQt6.QtWidgets import (
-        QApplication,
-        QGraphicsPathItem,
-        QGraphicsPolygonItem,
-        QGraphicsScene,
-        QGraphicsTextItem,
-    )
-except ModuleNotFoundError:
-    QApplication = None
+from PyQt6.QtCore import QPointF, QRectF, Qt
+from PyQt6.QtGui import QColor, QFont, QPainterPath, QPolygonF
+from PyQt6.QtWidgets import (
+    QApplication,
+    QGraphicsPathItem,
+    QGraphicsPolygonItem,
+    QGraphicsScene,
+    QGraphicsTextItem,
+)
 
-if QApplication is not None:
-    from chemvas.core.history import UpdateAtomColorCommand
-    from chemvas.domain.document import Atom, Bond, MoleculeModel
-    from chemvas.ui.atom_coords_access import (
-        CanvasAtomCoords3DState,
-        atom_coords_3d_for,
-    )
-    from chemvas.ui.atom_label_access import (
-        add_or_update_atom_label,
-        atom_item_for_id_for,
-        clear_atom_label_for,
-        prompt_atom_label_for,
-    )
-    from chemvas.ui.canvas_atom_graphics_state import (
-        CanvasAtomGraphicsState,
-        atom_dots_for,
-        atom_items_for,
-        set_atom_dots_for,
-        set_atom_items_for,
-    )
-    from chemvas.ui.canvas_bond_graphics_state import (
-        CanvasBondGraphicsState,
-        bond_items_for,
-        set_bond_items_for,
-    )
-    from chemvas.ui.canvas_callback_state import CanvasCallbackState
-    from chemvas.ui.canvas_color_mutation_service import (
-        CanvasColorMutationService,
-        UpdateBondColorCommand,
-    )
-    from chemvas.ui.canvas_document_session_service import CanvasDocumentSessionService
-    from chemvas.ui.canvas_group_state import CanvasGroupState
-    from chemvas.ui.canvas_history_service import CanvasHistoryService
-    from chemvas.ui.canvas_history_state import CanvasHistoryState, history_state_for
-    from chemvas.ui.canvas_mark_registry import CanvasMarkRegistry
-    from chemvas.ui.canvas_note_controller import CanvasNoteController
-    from chemvas.ui.canvas_ring_fill_scene_access import (
-        create_ring_fill_item_for,
-        update_ring_fills_for_atoms_for,
-    )
-    from chemvas.ui.canvas_scene_items_state import (
-        CanvasSceneItemsState,
-        selected_notes_for,
-        set_scene_item_collection_for,
-    )
-    from chemvas.ui.canvas_scene_reset_access import clear_scene_for
-    from chemvas.ui.canvas_service_access import canvas_services_for
-    from chemvas.ui.canvas_smiles_input_state import CanvasSmilesInputState
-    from chemvas.ui.canvas_style_controller import CanvasStyleController
-    from chemvas.ui.canvas_text_style_state import (
-        CanvasTextStyleState,
-        set_text_style_for,
-        text_style_state_for,
-    )
-    from chemvas.ui.canvas_tool_mode_controller import CanvasToolModeController
-    from chemvas.ui.canvas_tool_settings_state import (
-        CanvasToolSettingsState,
-        tool_settings_state_for,
-    )
-    from chemvas.ui.curved_arrow_path_service import CurvedArrowPathService
-    from chemvas.ui.handle_mutation_access import (
-        set_curved_arrow_path_for,
-        update_curved_control_for,
-        update_curved_endpoint_for,
-        update_orbital_rotate_for,
-        update_orbital_scale_for,
-    )
-    from chemvas.ui.handle_overlay_access import (
-        clear_handles_for,
-        show_curved_handles_for,
-    )
-    from chemvas.ui.history_canvas_access import (
-        apply_atom_color_for_history,
-        remove_atom_for_history,
-        remove_bond_for_history,
-        restore_atom_from_state_for_history,
-        restore_bond_from_state_for_history,
-        set_atom_positions_for_history,
-        trim_bonds_for_history,
-    )
-    from chemvas.ui.history_commands import UpdateSceneItemCommand
-    from chemvas.ui.history_recording_access import (
-        record_additions_for,
-        record_bond_update_for,
-    )
-    from chemvas.ui.move_access import shift_selection_outlines_for
-    from chemvas.ui.note_selection_box import update_note_selection_box_for
-    from chemvas.ui.pick_radius_access import atom_pick_radius_for, bond_pick_radius_for
-    from chemvas.ui.scene_decoration_access import (
-        add_arrow_for,
-        add_mark_for,
-        add_orbital_for,
-        add_ts_bracket_for,
-        preview_arrow_for,
-        preview_ts_bracket_for,
-    )
-    from chemvas.ui.scene_decoration_build_access import (
-        add_arrow_head_for,
-        build_arrow_item_for,
-        build_orbital_items_for,
-        build_ts_bracket_item_for,
-        ts_bracket_path_for,
-    )
-    from chemvas.ui.scene_item_access import (
-        apply_scene_item_state,
-        attach_scene_item,
-        bond_ids_for_ring_item,
-        create_scene_item_from_state,
-        refresh_bond_geometry_for_ring_item,
-        remove_scene_item,
-        restore_arrow_from_state,
-        restore_mark_from_state,
-        restore_note_from_state,
-        restore_orbital_from_state,
-        restore_ring_from_state,
-        restore_scene_item,
-        restore_ts_bracket_from_state,
-    )
-    from chemvas.ui.scene_item_state import atom_state_dict_for, scene_item_state_for
-    from chemvas.ui.selection_collection_access import (
-        selected_chemical_ids_for,
-        selected_ids_for,
-        selected_items_for_transform_for,
-        selection_items_for_copy_for,
-    )
-    from chemvas.ui.selection_info_state import SelectionInfoState
-    from chemvas.ui.selection_outline_state import SelectionOutlineState
-    from chemvas.ui.selection_service_access import (
-        clear_note_selection_for,
-        refresh_selection_outline_for,
-        select_note_for,
-        toggle_note_selection_for,
-    )
-    from chemvas.ui.selection_service_bundle import build_selection_services
-    from chemvas.ui.selection_style_state import (
-        SelectionStyleState,
-    )
-    from chemvas.ui.structure_build_access import (
-        fuse_benzene_to_bond_for,
-        fuse_chair_to_bond_for,
-        fuse_regular_ring_to_bond_for,
-        sprout_acetyl_from_atom_for,
-        sprout_benzene_from_atom_for,
-        sprout_bond_from_atom_for,
-        sprout_regular_ring_from_atom_for,
-    )
-    from chemvas.ui.structure_mutation_access import (
-        add_atom_for,
-        add_benzene_ring_for,
-        add_bond_between_points_for,
-        add_bond_for,
-    )
+from chemvas.core.history import UpdateAtomColorCommand
+from chemvas.domain.document import Atom, Bond, MoleculeModel
+from chemvas.ui.atom_coords_access import (
+    CanvasAtomCoords3DState,
+    atom_coords_3d_for,
+)
+from chemvas.ui.atom_label_access import (
+    add_or_update_atom_label,
+    atom_item_for_id_for,
+    clear_atom_label_for,
+    prompt_atom_label_for,
+)
+from chemvas.ui.canvas_atom_graphics_state import (
+    CanvasAtomGraphicsState,
+    atom_dots_for,
+    atom_items_for,
+    set_atom_dots_for,
+    set_atom_items_for,
+)
+from chemvas.ui.canvas_bond_graphics_state import (
+    CanvasBondGraphicsState,
+    bond_items_for,
+    set_bond_items_for,
+)
+from chemvas.ui.canvas_callback_state import CanvasCallbackState
+from chemvas.ui.canvas_color_mutation_service import (
+    CanvasColorMutationService,
+    UpdateBondColorCommand,
+)
+from chemvas.ui.canvas_document_session_service import CanvasDocumentSessionService
+from chemvas.ui.canvas_group_state import CanvasGroupState
+from chemvas.ui.canvas_history_service import CanvasHistoryService
+from chemvas.ui.canvas_history_state import CanvasHistoryState, history_state_for
+from chemvas.ui.canvas_mark_registry import CanvasMarkRegistry
+from chemvas.ui.canvas_note_controller import CanvasNoteController
+from chemvas.ui.canvas_ring_fill_scene_access import (
+    create_ring_fill_item_for,
+    update_ring_fills_for_atoms_for,
+)
+from chemvas.ui.canvas_scene_items_state import (
+    CanvasSceneItemsState,
+    selected_notes_for,
+    set_scene_item_collection_for,
+)
+from chemvas.ui.canvas_scene_reset_access import clear_scene_for
+from chemvas.ui.canvas_service_access import canvas_services_for
+from chemvas.ui.canvas_smiles_input_state import CanvasSmilesInputState
+from chemvas.ui.canvas_style_controller import CanvasStyleController
+from chemvas.ui.canvas_text_style_state import (
+    CanvasTextStyleState,
+    set_text_style_for,
+    text_style_state_for,
+)
+from chemvas.ui.canvas_tool_mode_controller import CanvasToolModeController
+from chemvas.ui.canvas_tool_settings_state import (
+    CanvasToolSettingsState,
+    tool_settings_state_for,
+)
+from chemvas.ui.curved_arrow_path_service import CurvedArrowPathService
+from chemvas.ui.handle_mutation_access import (
+    set_curved_arrow_path_for,
+    update_curved_control_for,
+    update_curved_endpoint_for,
+    update_orbital_rotate_for,
+    update_orbital_scale_for,
+)
+from chemvas.ui.handle_overlay_access import (
+    clear_handles_for,
+    show_curved_handles_for,
+)
+from chemvas.ui.history_canvas_access import (
+    apply_atom_color_for_history,
+    remove_atom_for_history,
+    remove_bond_for_history,
+    restore_atom_from_state_for_history,
+    restore_bond_from_state_for_history,
+    set_atom_positions_for_history,
+    trim_bonds_for_history,
+)
+from chemvas.ui.history_commands import UpdateSceneItemCommand
+from chemvas.ui.history_recording_access import (
+    record_additions_for,
+    record_bond_update_for,
+)
+from chemvas.ui.move_access import shift_selection_outlines_for
+from chemvas.ui.note_selection_box import update_note_selection_box_for
+from chemvas.ui.pick_radius_access import atom_pick_radius_for, bond_pick_radius_for
+from chemvas.ui.scene_decoration_access import (
+    add_arrow_for,
+    add_mark_for,
+    add_orbital_for,
+    add_ts_bracket_for,
+    preview_arrow_for,
+    preview_ts_bracket_for,
+)
+from chemvas.ui.scene_decoration_build_access import (
+    add_arrow_head_for,
+    build_arrow_item_for,
+    build_orbital_items_for,
+    build_ts_bracket_item_for,
+    ts_bracket_path_for,
+)
+from chemvas.ui.scene_item_access import (
+    apply_scene_item_state,
+    attach_scene_item,
+    bond_ids_for_ring_item,
+    create_scene_item_from_state,
+    refresh_bond_geometry_for_ring_item,
+    remove_scene_item,
+    restore_arrow_from_state,
+    restore_mark_from_state,
+    restore_note_from_state,
+    restore_orbital_from_state,
+    restore_ring_from_state,
+    restore_scene_item,
+    restore_ts_bracket_from_state,
+)
+from chemvas.ui.scene_item_state import atom_state_dict_for, scene_item_state_for
+from chemvas.ui.selection_collection_access import (
+    selected_chemical_ids_for,
+    selected_ids_for,
+    selected_items_for_transform_for,
+    selection_items_for_copy_for,
+)
+from chemvas.ui.selection_info_state import SelectionInfoState
+from chemvas.ui.selection_outline_state import SelectionOutlineState
+from chemvas.ui.selection_service_access import (
+    clear_note_selection_for,
+    refresh_selection_outline_for,
+    select_note_for,
+    toggle_note_selection_for,
+)
+from chemvas.ui.selection_service_bundle import build_selection_services
+from chemvas.ui.selection_style_state import (
+    SelectionStyleState,
+)
+from chemvas.ui.structure_build_access import (
+    fuse_benzene_to_bond_for,
+    fuse_chair_to_bond_for,
+    fuse_regular_ring_to_bond_for,
+    sprout_acetyl_from_atom_for,
+    sprout_benzene_from_atom_for,
+    sprout_bond_from_atom_for,
+    sprout_regular_ring_from_atom_for,
+)
+from chemvas.ui.structure_mutation_access import (
+    add_atom_for,
+    add_benzene_ring_for,
+    add_bond_between_points_for,
+    add_bond_for,
+)
 
 
 def _selection_controller_for(view):
@@ -290,9 +286,6 @@ class _FakeItem:
         return self._selected
 
 
-@unittest.skipUnless(
-    QApplication is not None, "PyQt6 is required for canvas view tests"
-)
 class CanvasViewAdditionalTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -2069,7 +2062,3 @@ class CanvasViewAdditionalTest(unittest.TestCase):
         clear_scene_for(view)
 
         reset_service.clear_scene.assert_called_once_with()
-
-
-if __name__ == "__main__":
-    unittest.main()

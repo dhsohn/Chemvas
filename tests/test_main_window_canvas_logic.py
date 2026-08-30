@@ -141,7 +141,3 @@ class MainWindowCanvasLogicTest(unittest.TestCase):
         self.assertIsNone(callback_state_for(inactive_canvas).tool_change)
         self.assertIsNone(callback_state_for(inactive_canvas).zoom)
         self.assertIsNone(history_state_for(inactive_canvas).change_callback)
-
-
-if __name__ == "__main__":
-    unittest.main()

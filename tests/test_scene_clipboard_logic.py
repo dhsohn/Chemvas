@@ -9,41 +9,37 @@ from tests.runtime_state import canvas_runtime_state
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-try:
-    from PyQt6.QtCore import QMimeData, QPointF, QRectF
-    from PyQt6.QtGui import QImage, QPolygonF
-    from PyQt6.QtWidgets import (
-        QApplication,
-        QGraphicsItem,
-        QGraphicsPolygonItem,
-        QGraphicsRectItem,
-        QGraphicsScene,
-        QGraphicsTextItem,
-    )
-except ModuleNotFoundError:
-    QApplication = None
+from PyQt6.QtCore import QMimeData, QPointF, QRectF
+from PyQt6.QtGui import QImage, QPolygonF
+from PyQt6.QtWidgets import (
+    QApplication,
+    QGraphicsItem,
+    QGraphicsPolygonItem,
+    QGraphicsRectItem,
+    QGraphicsScene,
+    QGraphicsTextItem,
+)
 
-if QApplication is not None:
-    from chemvas.domain.document import Atom, Bond, MoleculeModel
-    from chemvas.ui.atom_coords_access import (
-        CanvasAtomCoords3DState,
-        set_atom_coords_3d_for,
-    )
-    from chemvas.ui.canvas_atom_graphics_state import CanvasAtomGraphicsState
-    from chemvas.ui.canvas_mark_registry import CanvasMarkRegistry
-    from chemvas.ui.canvas_rotation_state import CanvasRotationState, rotation_state_for
-    from chemvas.ui.canvas_scene_items_state import (
-        CanvasSceneItemsState,
-        set_scene_item_collection_for,
-    )
-    from chemvas.ui.scene_clipboard_controller import SceneClipboardController
-    from chemvas.ui.scene_clipboard_logic import (
-        MAX_CLIPBOARD_SELECTION_PAYLOAD_BYTES,
-        build_selection_clipboard_payload,
-        clipboard_payload_candidates,
-        decode_clipboard_selection_payload,
-    )
-    from chemvas.ui.scene_clipboard_state import SceneClipboardState
+from chemvas.domain.document import Atom, Bond, MoleculeModel
+from chemvas.ui.atom_coords_access import (
+    CanvasAtomCoords3DState,
+    set_atom_coords_3d_for,
+)
+from chemvas.ui.canvas_atom_graphics_state import CanvasAtomGraphicsState
+from chemvas.ui.canvas_mark_registry import CanvasMarkRegistry
+from chemvas.ui.canvas_rotation_state import CanvasRotationState, rotation_state_for
+from chemvas.ui.canvas_scene_items_state import (
+    CanvasSceneItemsState,
+    set_scene_item_collection_for,
+)
+from chemvas.ui.scene_clipboard_controller import SceneClipboardController
+from chemvas.ui.scene_clipboard_logic import (
+    MAX_CLIPBOARD_SELECTION_PAYLOAD_BYTES,
+    build_selection_clipboard_payload,
+    clipboard_payload_candidates,
+    decode_clipboard_selection_payload,
+)
+from chemvas.ui.scene_clipboard_state import SceneClipboardState
 
 
 def _set_selectable(item: QGraphicsItem) -> QGraphicsItem:
@@ -174,9 +170,6 @@ class _BrokenSceneItem:
         return self._scene_value
 
 
-@unittest.skipUnless(
-    QApplication is not None, "PyQt6 is required for scene clipboard logic tests"
-)
 class SceneClipboardLogicTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -893,7 +886,3 @@ class _FakeCanvas:
         mime_data = QMimeData()
         mime_data.setImageData(image)
         return mime_data
-
-
-if __name__ == "__main__":
-    unittest.main()

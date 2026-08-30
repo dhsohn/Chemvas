@@ -144,7 +144,3 @@ class BondGraphicsLogicTest(unittest.TestCase):
 
         self.assertEqual(removed, [original])
         self.assertEqual(bond_items[0], [replacement])
-
-
-if __name__ == "__main__":
-    unittest.main()

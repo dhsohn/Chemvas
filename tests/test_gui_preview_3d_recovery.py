@@ -6,42 +6,37 @@ from unittest import mock
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-try:
-    from PyQt6.QtCore import QPoint, QPointF, QRectF, Qt
-    from PyQt6.QtGui import QFont, QFontMetricsF
-    from PyQt6.QtTest import QTest
-    from PyQt6.QtWidgets import QApplication, QWidget
-except ModuleNotFoundError:
-    QApplication = None
-    QTest = None
+from PyQt6.QtCore import QPoint, QPointF, QRectF, Qt
+from PyQt6.QtGui import QFont, QFontMetricsF
+from PyQt6.QtTest import QTest
+from PyQt6.QtWidgets import QApplication, QWidget
 
-if QApplication is not None:
-    from chemvas.core.rdkit_adapter import (
-        Molecule3DAtom,
-        Molecule3DBond,
-        Molecule3DScene,
-        MoleculeIdentifiers,
-        RDKitResult,
-    )
-    from chemvas.domain.document import MoleculeModel
-    from chemvas.shell.palette import PALETTE
-    from chemvas.ui.preview_3d import Preview3D
-    from chemvas.ui.preview_3d_painter import (
-        preview_caption_font,
-        preview_footer_height_for_lines,
-        preview_layout_for_widget,
-        preview_title_font,
-        project_preview_paint_scene,
-    )
-    from chemvas.ui.preview_3d_renderer import status_badge_width
-    from chemvas.ui.preview_3d_state import (
-        preview_empty_state_text,
-        preview_info_items,
-        preview_info_lines,
-        preview_metadata_summary,
-        preview_payload_signature,
-        preview_status_badge,
-    )
+from chemvas.core.rdkit_adapter import (
+    Molecule3DAtom,
+    Molecule3DBond,
+    Molecule3DScene,
+    MoleculeIdentifiers,
+    RDKitResult,
+)
+from chemvas.domain.document import MoleculeModel
+from chemvas.shell.palette import PALETTE
+from chemvas.ui.preview_3d import Preview3D
+from chemvas.ui.preview_3d_painter import (
+    preview_caption_font,
+    preview_footer_height_for_lines,
+    preview_layout_for_widget,
+    preview_title_font,
+    project_preview_paint_scene,
+)
+from chemvas.ui.preview_3d_renderer import status_badge_width
+from chemvas.ui.preview_3d_state import (
+    preview_empty_state_text,
+    preview_info_items,
+    preview_info_lines,
+    preview_metadata_summary,
+    preview_payload_signature,
+    preview_status_badge,
+)
 
 
 class _FakeMouseEvent:
@@ -126,7 +121,6 @@ class AnnotatedIdentifierAdapter(SequencedAdapter):
         )
 
 
-@unittest.skipUnless(QApplication is not None, "PyQt6 is required for Preview3D tests")
 class Preview3DRecoveryTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -744,7 +738,6 @@ class Preview3DRecoveryTest(unittest.TestCase):
         self.assertTrue(preview._copy_inchikey_button.isVisible())
 
 
-@unittest.skipUnless(QApplication is not None, "PyQt6 is required for Preview3D tests")
 class Preview3DInteractionDeferralTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -806,7 +799,3 @@ class Preview3DInteractionDeferralTest(unittest.TestCase):
             preview._handle_update_timer_timeout()
         rebuild.assert_not_called()
         self.assertFalse(preview._update_timer.isActive())
-
-
-if __name__ == "__main__":
-    unittest.main()

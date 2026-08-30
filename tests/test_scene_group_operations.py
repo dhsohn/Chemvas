@@ -8,55 +8,51 @@ from tests.runtime_state import canvas_runtime_state
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-try:
-    from PyQt6.QtWidgets import (
-        QApplication,
-        QGraphicsItem,
-        QGraphicsRectItem,
-        QGraphicsScene,
-        QGraphicsView,
-    )
-except ModuleNotFoundError:
-    QApplication = None
+from PyQt6.QtWidgets import (
+    QApplication,
+    QGraphicsItem,
+    QGraphicsRectItem,
+    QGraphicsScene,
+    QGraphicsView,
+)
 
-if QApplication is not None:
-    from chemvas.adapters.qt.renderer import Renderer
-    from chemvas.domain.document import MoleculeModel
-    from chemvas.ui.canvas_atom_graphics_state import (
-        CanvasAtomGraphicsState,
-        set_atom_item_for,
-    )
-    from chemvas.ui.canvas_bond_graphics_state import (
-        CanvasBondGraphicsState,
-        bond_items_for,
-    )
-    from chemvas.ui.canvas_group_state import (
-        CanvasGroupState,
-        group_state_for,
-        register_group_for,
-    )
-    from chemvas.ui.canvas_mark_registry import CanvasMarkRegistry, mark_registry_for
-    from chemvas.ui.canvas_model_access import model_for
-    from chemvas.ui.canvas_scene_items_state import (
-        CanvasSceneItemsState,
-        add_selected_note_for,
-        append_scene_item_for,
-        selected_notes_for,
-    )
-    from chemvas.ui.canvas_text_style_state import CanvasTextStyleState
-    from chemvas.ui.history_commands import (
-        GroupSceneItemsCommand,
-        UngroupSceneItemsCommand,
-    )
-    from chemvas.ui.scene_group_operations import (
-        expand_note_selection_to_groups_for,
-        expand_selection_to_groups_for,
-        group_selection_for,
-        group_selection_targets_for,
-        selected_group_rects_for,
-        ungroup_selection_for,
-    )
-    from chemvas.ui.selection_note_service import SelectionNoteService
+from chemvas.adapters.qt.renderer import Renderer
+from chemvas.domain.document import MoleculeModel
+from chemvas.ui.canvas_atom_graphics_state import (
+    CanvasAtomGraphicsState,
+    set_atom_item_for,
+)
+from chemvas.ui.canvas_bond_graphics_state import (
+    CanvasBondGraphicsState,
+    bond_items_for,
+)
+from chemvas.ui.canvas_group_state import (
+    CanvasGroupState,
+    group_state_for,
+    register_group_for,
+)
+from chemvas.ui.canvas_mark_registry import CanvasMarkRegistry, mark_registry_for
+from chemvas.ui.canvas_model_access import model_for
+from chemvas.ui.canvas_scene_items_state import (
+    CanvasSceneItemsState,
+    add_selected_note_for,
+    append_scene_item_for,
+    selected_notes_for,
+)
+from chemvas.ui.canvas_text_style_state import CanvasTextStyleState
+from chemvas.ui.history_commands import (
+    GroupSceneItemsCommand,
+    UngroupSceneItemsCommand,
+)
+from chemvas.ui.scene_group_operations import (
+    expand_note_selection_to_groups_for,
+    expand_selection_to_groups_for,
+    group_selection_for,
+    group_selection_targets_for,
+    selected_group_rects_for,
+    ungroup_selection_for,
+)
+from chemvas.ui.selection_note_service import SelectionNoteService
 
 
 class _History:
@@ -70,40 +66,38 @@ class _History:
         self.commands.append(command)
 
 
-if QApplication is not None:
+class _Canvas(QGraphicsView):
+    def __init__(self) -> None:
+        super().__init__(QGraphicsScene())
+        self.renderer = Renderer()
+        self.model = MoleculeModel()
+        self.history = _History()
+        self.runtime_state = canvas_runtime_state(
+            atom_graphics_state=CanvasAtomGraphicsState(),
+            bond_graphics_state=CanvasBondGraphicsState(),
+            group_state=CanvasGroupState(),
+            history_service=self.history,
+            mark_registry=CanvasMarkRegistry(),
+            scene_items_state=CanvasSceneItemsState(),
+            text_style_state=CanvasTextStyleState(),
+        )
+        self.selection_controller = SimpleNamespace(
+            select_note=mock.Mock(),
+            toggle_note_selection=mock.Mock(),
+            update_selection_outline=mock.Mock(),
+        )
+        self.services = canvas_runtime_services(
+            selection_controller=self.selection_controller
+        )
 
-    class _Canvas(QGraphicsView):
-        def __init__(self) -> None:
-            super().__init__(QGraphicsScene())
-            self.renderer = Renderer()
-            self.model = MoleculeModel()
-            self.history = _History()
-            self.runtime_state = canvas_runtime_state(
-                atom_graphics_state=CanvasAtomGraphicsState(),
-                bond_graphics_state=CanvasBondGraphicsState(),
-                group_state=CanvasGroupState(),
-                history_service=self.history,
-                mark_registry=CanvasMarkRegistry(),
-                scene_items_state=CanvasSceneItemsState(),
-                text_style_state=CanvasTextStyleState(),
-            )
-            self.selection_controller = SimpleNamespace(
-                select_note=mock.Mock(),
-                toggle_note_selection=mock.Mock(),
-                update_selection_outline=mock.Mock(),
-            )
-            self.services = canvas_runtime_services(
-                selection_controller=self.selection_controller
-            )
-
-        def add_scene_item(self, kind: str, *, selected: bool = False):
-            item = QGraphicsRectItem(0.0, 0.0, 5.0, 5.0)
-            item.setData(0, kind)
-            item.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsSelectable, True)
-            self.scene().addItem(item)
-            if selected:
-                item.setSelected(True)
-            return item
+    def add_scene_item(self, kind: str, *, selected: bool = False):
+        item = QGraphicsRectItem(0.0, 0.0, 5.0, 5.0)
+        item.setData(0, kind)
+        item.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsSelectable, True)
+        self.scene().addItem(item)
+        if selected:
+            item.setSelected(True)
+        return item
 
 
 def _add_atom(canvas, x: float = 0.0, y: float = 0.0, *, selected: bool = False):
@@ -150,9 +144,6 @@ def _add_note(canvas, *, selected: bool = False):
     return item
 
 
-@unittest.skipUnless(
-    QApplication is not None, "PyQt6 is required for scene group operation tests"
-)
 class SceneGroupOperationsTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -725,7 +716,3 @@ class SceneGroupOperationsTest(unittest.TestCase):
         _, item_a = _add_atom(canvas)
 
         self.assertEqual(group_selection_targets_for(canvas, [item_a]), [item_a])
-
-
-if __name__ == "__main__":
-    unittest.main()

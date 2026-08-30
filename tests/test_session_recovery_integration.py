@@ -4,33 +4,25 @@ from unittest import mock
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-try:
-    from PyQt6.QtCore import QPointF
-    from PyQt6.QtWidgets import QApplication
-except ModuleNotFoundError:
-    QApplication = None
-    QPointF = None
+from PyQt6.QtCore import QPointF
+from PyQt6.QtWidgets import QApplication
 
-if QApplication is not None:
-    from chemvas.bootstrap.window_registry import forget_window, open_new_window
-    from chemvas.ui import session_snapshot_store as session_store_module
-    from chemvas.ui.app_data_paths import sessions_dir
-    from chemvas.ui.canvas_window_access import snapshot_canvas_state_for
-    from chemvas.ui.main_window_ports import (
-        active_canvas_for_window,
-        services_for_window,
-    )
-    from chemvas.ui.session_recovery_service import (
-        SessionRecoveryService,
-        collect_open_documents,
-    )
-    from chemvas.ui.session_snapshot_store import SessionSnapshotStore
-    from chemvas.ui.structure_mutation_access import add_bond_between_points_for
-
-
-@unittest.skipUnless(
-    QApplication is not None, "PyQt6 is required for session recovery integration tests"
+from chemvas.bootstrap.window_registry import forget_window, open_new_window
+from chemvas.ui import session_snapshot_store as session_store_module
+from chemvas.ui.app_data_paths import sessions_dir
+from chemvas.ui.canvas_window_access import snapshot_canvas_state_for
+from chemvas.ui.main_window_ports import (
+    active_canvas_for_window,
+    services_for_window,
 )
+from chemvas.ui.session_recovery_service import (
+    SessionRecoveryService,
+    collect_open_documents,
+)
+from chemvas.ui.session_snapshot_store import SessionSnapshotStore
+from chemvas.ui.structure_mutation_access import add_bond_between_points_for
+
+
 class SessionRecoveryIntegrationTest(unittest.TestCase):
     """End-to-end: a real window is drawn on, autosaved, 'crashes', and its
     unsaved drawing is rebuilt into a fresh window on the next launch.
@@ -104,7 +96,3 @@ class SessionRecoveryIntegrationTest(unittest.TestCase):
             forget_window(new_window)
             new_window.close()
             self.app.processEvents()
-
-
-if __name__ == "__main__":
-    unittest.main()

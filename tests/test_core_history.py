@@ -2049,7 +2049,3 @@ class HistoryCommandTest(unittest.TestCase):
         self.assertIn(("restore_bond_from_state", 3, {"order": 2}), canvas.calls)
         self.assertIn(("restore_bond_from_state", 4, {"order": 1}), canvas.calls)
         self.assertIn(("restore_bond_from_state", 4, {"order": 3}), canvas.calls)
-
-
-if __name__ == "__main__":
-    unittest.main()

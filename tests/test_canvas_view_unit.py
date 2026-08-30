@@ -8,91 +8,87 @@ from tests.runtime_state import canvas_runtime_state
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-try:
-    from PyQt6.QtCore import QEvent, QPointF, Qt
-    from PyQt6.QtGui import QColor, QFocusEvent, QPen
-    from PyQt6.QtWidgets import QApplication
-except ModuleNotFoundError:
-    QApplication = None
+from PyQt6.QtCore import QEvent, QPointF, Qt
+from PyQt6.QtGui import QColor, QFocusEvent, QPen
+from PyQt6.QtWidgets import QApplication
 
-if QApplication is not None:
-    from chemvas.domain.document import Atom, Bond
-    from chemvas.features.insertion import (
-        build_atom_annotations,
-        expand_atom_ids_for_structure,
-    )
-    from chemvas.ui.atom_label_access import (
-        atom_has_visible_label_for,
-        implicit_carbon_dot_brush_for,
-        uses_compact_label_hit_shape_for,
-    )
-    from chemvas.ui.canvas_atom_graphics_state import (
-        CanvasAtomGraphicsState,
-        set_atom_items_for,
-    )
-    from chemvas.ui.canvas_history_service import CanvasHistoryService
-    from chemvas.ui.canvas_history_state import CanvasHistoryState, history_state_for
-    from chemvas.ui.canvas_hit_testing_service import CanvasHitTestingService
-    from chemvas.ui.canvas_insert_state import CanvasInsertState, insert_state_for
-    from chemvas.ui.canvas_mark_registry import CanvasMarkRegistry
-    from chemvas.ui.canvas_note_controller import CanvasNoteController
-    from chemvas.ui.canvas_scene_items_state import (
-        CanvasSceneItemsState,
-        ring_items_for,
-        selected_notes_for,
-        set_scene_item_collection_for,
-        set_selected_notes_for,
-    )
-    from chemvas.ui.canvas_service_access import canvas_services_for
-    from chemvas.ui.canvas_tool_settings_state import tool_settings_state_for
-    from chemvas.ui.history_commands import (
-        AddSceneItemsCommand,
-        DeleteSceneItemsCommand,
-        UpdateSceneItemCommand,
-    )
-    from chemvas.ui.input_view_access import (
-        shortcut_modifiers_for,
-    )
-    from chemvas.ui.note_item import NoteItem
-    from chemvas.ui.note_item_access import committed_note_text_for
-    from chemvas.ui.scene_clipboard_transaction_logic import (
-        clipboard_paste_offset,
-        translated_point_value,
-        translated_scene_item_state,
-    )
-    from chemvas.ui.scene_flip_geometry import bounds_from_points, flip_point
-    from chemvas.ui.selection_collection_access import (
-        selected_bond_atom_ids_for,
-        selected_structure_ids_for,
-        selection_snapshot_for,
-        selection_target_item,
-    )
-    from chemvas.ui.selection_service_access import (
-        structure_item_is_selected_for,
-    )
-    from chemvas.ui.selection_style_access import (
-        selection_bond_overlay_width_for,
-        selection_indicator_rect_for_atom_for,
-    )
-    from chemvas.ui.sheet_setup_access import (
-        set_sheet_setup_for,
-        sheet_rect_for,
-        sheet_setup_for,
-    )
-    from chemvas.ui.sheet_setup_state import sheet_setup_state_for
-    from chemvas.ui.structure_geometry_access import (
-        atom_point_for,
-        regular_ring_points_for_atom_for,
-        regular_ring_points_for_bond_for,
-        ring_polygon_points_for_bond_for,
-        sprout_bond_endpoint_for,
-        template_points_for_bond_for,
-    )
-    from chemvas.ui.structure_payload_access import (
-        build_3d_conversion_payload_for,
-        build_structure_payload_for,
-    )
-    from tests.canvas_factory import build_canvas_view
+from chemvas.domain.document import Atom, Bond
+from chemvas.features.insertion import (
+    build_atom_annotations,
+    expand_atom_ids_for_structure,
+)
+from chemvas.ui.atom_label_access import (
+    atom_has_visible_label_for,
+    implicit_carbon_dot_brush_for,
+    uses_compact_label_hit_shape_for,
+)
+from chemvas.ui.canvas_atom_graphics_state import (
+    CanvasAtomGraphicsState,
+    set_atom_items_for,
+)
+from chemvas.ui.canvas_history_service import CanvasHistoryService
+from chemvas.ui.canvas_history_state import CanvasHistoryState, history_state_for
+from chemvas.ui.canvas_hit_testing_service import CanvasHitTestingService
+from chemvas.ui.canvas_insert_state import CanvasInsertState, insert_state_for
+from chemvas.ui.canvas_mark_registry import CanvasMarkRegistry
+from chemvas.ui.canvas_note_controller import CanvasNoteController
+from chemvas.ui.canvas_scene_items_state import (
+    CanvasSceneItemsState,
+    ring_items_for,
+    selected_notes_for,
+    set_scene_item_collection_for,
+    set_selected_notes_for,
+)
+from chemvas.ui.canvas_service_access import canvas_services_for
+from chemvas.ui.canvas_tool_settings_state import tool_settings_state_for
+from chemvas.ui.history_commands import (
+    AddSceneItemsCommand,
+    DeleteSceneItemsCommand,
+    UpdateSceneItemCommand,
+)
+from chemvas.ui.input_view_access import (
+    shortcut_modifiers_for,
+)
+from chemvas.ui.note_item import NoteItem
+from chemvas.ui.note_item_access import committed_note_text_for
+from chemvas.ui.scene_clipboard_transaction_logic import (
+    clipboard_paste_offset,
+    translated_point_value,
+    translated_scene_item_state,
+)
+from chemvas.ui.scene_flip_geometry import bounds_from_points, flip_point
+from chemvas.ui.selection_collection_access import (
+    selected_bond_atom_ids_for,
+    selected_structure_ids_for,
+    selection_snapshot_for,
+    selection_target_item,
+)
+from chemvas.ui.selection_service_access import (
+    structure_item_is_selected_for,
+)
+from chemvas.ui.selection_style_access import (
+    selection_bond_overlay_width_for,
+    selection_indicator_rect_for_atom_for,
+)
+from chemvas.ui.sheet_setup_access import (
+    set_sheet_setup_for,
+    sheet_rect_for,
+    sheet_setup_for,
+)
+from chemvas.ui.sheet_setup_state import sheet_setup_state_for
+from chemvas.ui.structure_geometry_access import (
+    atom_point_for,
+    regular_ring_points_for_atom_for,
+    regular_ring_points_for_bond_for,
+    ring_polygon_points_for_bond_for,
+    sprout_bond_endpoint_for,
+    template_points_for_bond_for,
+)
+from chemvas.ui.structure_payload_access import (
+    build_3d_conversion_payload_for,
+    build_structure_payload_for,
+)
+from tests.canvas_factory import build_canvas_view
 
 
 class _FakeNoteCanvas:
@@ -181,9 +177,6 @@ class _FakeItem:
         return None
 
 
-@unittest.skipUnless(
-    QApplication is not None, "PyQt6 is required for canvas view tests"
-)
 class CanvasViewUnitTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -920,7 +913,3 @@ class CanvasViewUnitTest(unittest.TestCase):
             bonds=fake_view.model.bonds,
             ring_items=ring_items_for(fake_view),
         )
-
-
-if __name__ == "__main__":
-    unittest.main()

@@ -5,32 +5,26 @@ from unittest import mock
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-try:
-    from PyQt6.QtWidgets import (
-        QApplication,
-        QMainWindow,
-        QWidget,
-    )
-except ModuleNotFoundError:
-    QApplication = None
-
-if QApplication is not None:
-    from chemvas.ui.main_window_panel_service import MainWindowPanelService
-    from chemvas.ui.main_window_ports import (
-        apply_preview_window_assembly_for_window,
-        preview_window_for_window,
-    )
-    from chemvas.ui.main_window_ui_references import MainWindowUiReferences
-
-    class _PreviewWidget(QWidget):
-        def __init__(self) -> None:
-            super().__init__()
-            self.set_export_xyz_action = mock.Mock()
-
-
-@unittest.skipUnless(
-    QApplication is not None, "PyQt6 is required for main window panel service tests"
+from PyQt6.QtWidgets import (
+    QApplication,
+    QMainWindow,
+    QWidget,
 )
+
+from chemvas.ui.main_window_panel_service import MainWindowPanelService
+from chemvas.ui.main_window_ports import (
+    apply_preview_window_assembly_for_window,
+    preview_window_for_window,
+)
+from chemvas.ui.main_window_ui_references import MainWindowUiReferences
+
+
+class _PreviewWidget(QWidget):
+    def __init__(self) -> None:
+        super().__init__()
+        self.set_export_xyz_action = mock.Mock()
+
+
 class MainWindowPanelServiceTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -106,7 +100,3 @@ class MainWindowPanelServiceTest(unittest.TestCase):
         preview_window.show.assert_called_once_with()
         preview_window.raise_.assert_called_once_with()
         preview_window.activateWindow.assert_called_once_with()
-
-
-if __name__ == "__main__":
-    unittest.main()

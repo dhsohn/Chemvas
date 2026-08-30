@@ -4,26 +4,22 @@ import os
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-try:
-    from PyQt6.QtCore import QRectF
-    from PyQt6.QtWidgets import (
-        QApplication,
-        QGraphicsItemGroup,
-        QGraphicsRectItem,
-        QGraphicsScene,
-    )
-except ModuleNotFoundError:
-    QApplication = None
+from PyQt6.QtCore import QRectF
+from PyQt6.QtWidgets import (
+    QApplication,
+    QGraphicsItemGroup,
+    QGraphicsRectItem,
+    QGraphicsScene,
+)
 
-if QApplication is not None:
-    from chemvas.features.export import (
-        collect_export_items,
-        content_bounds,
-        export_item_closure,
-        exported_scene,
-        item_export_bounds,
-        set_label_outline_mode,
-    )
+from chemvas.features.export import (
+    collect_export_items,
+    content_bounds,
+    export_item_closure,
+    exported_scene,
+    item_export_bounds,
+    set_label_outline_mode,
+)
 
 
 class _OutlineRectItem(QGraphicsRectItem):

@@ -2,31 +2,27 @@ from __future__ import annotations
 
 import os
 from types import SimpleNamespace
-
-import pytest
+from typing import TYPE_CHECKING
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-try:
-    from PyQt6.QtCore import QPointF
-    from PyQt6.QtWidgets import QApplication, QGraphicsScene
-except ModuleNotFoundError:
-    QApplication = None
+from PyQt6.QtCore import QPointF
+from PyQt6.QtWidgets import QApplication, QGraphicsScene
 
-if QApplication is not None:
-    import chemvas.ui.calculation_mapping_highlight as highlight_module
-    from chemvas.adapters.qt.renderer import Renderer
-    from chemvas.ui.calculation_mapping_highlight import (
-        CalculationMappingHighlighter,
-    )
-    from chemvas.ui.canvas_atom_graphics_state import visible_atom_item_for
-    from chemvas.ui.canvas_service_access import canvas_services_for
-    from chemvas.ui.canvas_view import CanvasView
-
+import chemvas.ui.calculation_mapping_highlight as highlight_module
+from chemvas.adapters.qt.renderer import Renderer
+from chemvas.ui.calculation_mapping_highlight import (
+    CalculationMappingHighlighter,
+)
+from chemvas.ui.canvas_atom_graphics_state import visible_atom_item_for
+from chemvas.ui.canvas_service_access import canvas_services_for
+from chemvas.ui.canvas_view import CanvasView
 from tests.test_calculation_plan import _document_state
 
+if TYPE_CHECKING:
+    import pytest
 
-@pytest.mark.skipif(QApplication is None, reason="PyQt6 is required")
+
 def test_highlighter_labels_atoms_with_endpoint_tints(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -69,7 +65,6 @@ def test_highlighter_labels_atoms_with_endpoint_tints(
     assert scene.items() == []
 
 
-@pytest.mark.skipif(QApplication is None, reason="PyQt6 is required")
 def test_highlighter_grays_out_excluded_atom_labels(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -100,7 +95,6 @@ def test_highlighter_grays_out_excluded_atom_labels(
     assert color_by_id == {1: "#0072b2", 2: "#d55e00", 3: "#9b9b96"}
 
 
-@pytest.mark.skipif(QApplication is None, reason="PyQt6 is required")
 def test_highlighter_tolerates_missing_scene() -> None:
     highlighter = CalculationMappingHighlighter(SimpleNamespace(scene=lambda: None))
 
@@ -108,7 +102,6 @@ def test_highlighter_tolerates_missing_scene() -> None:
     highlighter.clear_all()
 
 
-@pytest.mark.skipif(QApplication is None, reason="PyQt6 is required")
 def test_real_canvas_labels_are_transient_and_preserve_document_selection() -> None:
     app = QApplication.instance() or QApplication([])
     app.setQuitOnLastWindowClosed(False)

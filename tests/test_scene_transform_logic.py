@@ -4,31 +4,27 @@ from types import SimpleNamespace
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-try:
-    from PyQt6.QtCore import QPointF, QRectF
-    from PyQt6.QtWidgets import QApplication
-except ModuleNotFoundError:
-    QApplication = None
+from PyQt6.QtCore import QPointF, QRectF
+from PyQt6.QtWidgets import QApplication
 
-if QApplication is not None:
-    from chemvas.ui.scene_flip_geometry import (
-        bounds_from_points,
-        center_for_flip_group,
-        flip_bounds_for_item,
-        flip_center_for_selection,
-        flip_point,
-    )
-    from chemvas.ui.scene_flip_grouping import (
-        build_flip_atom_position_maps,
-        group_items_for_flip_transform,
-    )
-    from chemvas.ui.scene_flip_state import flip_scene_item_state
-    from tests.test_scene_ops_controller import (
-        _FakeCanvas,
-        _make_note_item,
-        _make_rect_item,
-        _make_ring_item,
-    )
+from chemvas.ui.scene_flip_geometry import (
+    bounds_from_points,
+    center_for_flip_group,
+    flip_bounds_for_item,
+    flip_center_for_selection,
+    flip_point,
+)
+from chemvas.ui.scene_flip_grouping import (
+    build_flip_atom_position_maps,
+    group_items_for_flip_transform,
+)
+from chemvas.ui.scene_flip_state import flip_scene_item_state
+from tests.test_scene_ops_controller import (
+    _FakeCanvas,
+    _make_note_item,
+    _make_rect_item,
+    _make_ring_item,
+)
 
 
 class _FakeSceneItem:
@@ -48,9 +44,6 @@ class _FakeSceneItem:
         return QRectF(self._rect)
 
 
-@unittest.skipUnless(
-    QApplication is not None, "PyQt6 is required for scene transform logic tests"
-)
 class SceneTransformLogicTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -537,7 +530,3 @@ class SceneTransformLogicTest(unittest.TestCase):
 
         self.assertEqual(groups.component_items, [])
         self.assertEqual(groups.standalone_items, [arrow_item])
-
-
-if __name__ == "__main__":
-    unittest.main()

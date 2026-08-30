@@ -244,7 +244,3 @@ class SmilesLoadTransactionBuilderTest(unittest.TestCase):
         self.assertEqual(len(add_bond_commands), 1)
         self.assertEqual(add_bond_commands[0].bond_id, 1)
         self.assertEqual(add_bond_commands[0].bond_state["order"], 2)
-
-
-if __name__ == "__main__":
-    unittest.main()

@@ -4,21 +4,17 @@ from unittest.mock import Mock
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-try:
-    from PyQt6.QtCore import QRectF
-    from PyQt6.QtWidgets import QApplication, QGraphicsItem
-except ModuleNotFoundError:
-    QApplication = None
+from PyQt6.QtCore import QRectF
+from PyQt6.QtWidgets import QApplication, QGraphicsItem
 
-if QApplication is not None:
-    from chemvas.ui.atom_coords_access import atom_coords_3d_for
-    from chemvas.ui.bond_graphics_access import project_point_3d_for
-    from chemvas.ui.canvas_rotation_state import rotation_state_for
-    from tests.test_scene_ops_controller import (
-        _FakeCanvas,
-        _make_note_item,
-        scene_clipboard_controller_for,
-    )
+from chemvas.ui.atom_coords_access import atom_coords_3d_for
+from chemvas.ui.bond_graphics_access import project_point_3d_for
+from chemvas.ui.canvas_rotation_state import rotation_state_for
+from tests.test_scene_ops_controller import (
+    _FakeCanvas,
+    _make_note_item,
+    scene_clipboard_controller_for,
+)
 
 
 class _RecordingFakeCanvas(_FakeCanvas):
@@ -83,10 +79,6 @@ class _ZeroBoundsItem(QGraphicsItem):
         return None
 
 
-@unittest.skipUnless(
-    QApplication is not None,
-    "PyQt6 is required for scene ops controller paste edge tests",
-)
 class SceneOpsControllerPasteEdgesTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -362,7 +354,3 @@ class SceneOpsControllerPasteEdgesTest(unittest.TestCase):
         mime_data = QApplication.clipboard().mimeData()
         self.assertTrue(mime_data.hasImage())
         self.assertFalse(mime_data.hasFormat(canvas.CLIPBOARD_SELECTION_MIME))
-
-
-if __name__ == "__main__":
-    unittest.main()

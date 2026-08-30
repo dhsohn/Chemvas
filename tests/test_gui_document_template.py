@@ -7,83 +7,75 @@ from unittest.mock import patch
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-try:
-    from PyQt6.QtCore import QPointF, Qt
-    from PyQt6.QtTest import QTest
-    from PyQt6.QtWidgets import QApplication
-except ModuleNotFoundError:
-    QApplication = None
-    QTest = None
-    Qt = None
-    QPointF = None
+from PyQt6.QtCore import QPointF, Qt
+from PyQt6.QtTest import QTest
+from PyQt6.QtWidgets import QApplication
 
-if QApplication is not None:
-    from chemvas.bootstrap.main_window import build_main_window
-    from chemvas.core.document_io import read_document
-    from chemvas.core.rdkit_adapter import (
-        Molecule3DAtom,
-        Molecule3DBond,
-        Molecule3DScene,
-        MoleculeIdentifiers,
-    )
-    from chemvas.domain.document import MoleculeModel
-    from chemvas.features.insertion import RDKitResult
-    from chemvas.ui.bond_graphics_access import add_bond_graphics_for
-    from chemvas.ui.canvas_atom_graphics_state import atom_items_for
-    from chemvas.ui.canvas_bond_graphics_state import bond_items_for_id
-    from chemvas.ui.canvas_document_metadata_state import document_file_path_for
-    from chemvas.ui.canvas_history_state import history_state_for
-    from chemvas.ui.canvas_insert_state import insert_state_for
-    from chemvas.ui.canvas_mark_registry import mark_registry_for
-    from chemvas.ui.canvas_scene_items_state import (
-        arrow_items_for,
-        mark_items_for,
-        note_items_for,
-        orbital_items_for,
-        ring_items_for,
-    )
-    from chemvas.ui.canvas_scene_reset_access import clear_scene_for
-    from chemvas.ui.canvas_service_access import canvas_services_for
-    from chemvas.ui.canvas_smiles_input_state import (
-        last_smiles_input_for,
-        set_last_smiles_input_for,
-    )
-    from chemvas.ui.canvas_text_style_state import set_text_style_for
-    from chemvas.ui.canvas_tool_settings_state import (
-        set_tool_setting_for,
-        tool_settings_state_for,
-    )
-    from chemvas.ui.canvas_window_access import (
-        restore_canvas_state_for,
-        save_canvas_to_file_for,
-        snapshot_canvas_state_for,
-    )
-    from chemvas.ui.main_window_config import TEMPLATE_ENTRY_SPECS
-    from chemvas.ui.main_window_ports import (
-        active_canvas_for_window,
-        preview_for_window,
-        preview_window_for_window,
-        services_for_window,
-    )
-    from chemvas.ui.mark_item_access import mark_center_for
-    from chemvas.ui.preview_3d_painter import preview_overlay_font
-    from chemvas.ui.scene_decoration_access import (
-        add_arrow_for,
-        add_mark_for,
-        add_mark_for_atom_for,
-        add_orbital_for,
-        add_ts_bracket_from_points_for,
-    )
-    from chemvas.ui.structure_mutation_access import (
-        add_atom_for,
-        add_benzene_ring_for,
-        add_bond_between_points_for,
-        add_bond_for,
-    )
-    from chemvas.ui.structure_payload_access import build_3d_conversion_payload_for
+from chemvas.bootstrap.main_window import build_main_window
+from chemvas.core.document_io import read_document
+from chemvas.core.rdkit_adapter import (
+    Molecule3DAtom,
+    Molecule3DBond,
+    Molecule3DScene,
+    MoleculeIdentifiers,
+)
+from chemvas.domain.document import MoleculeModel
+from chemvas.features.insertion import RDKitResult
+from chemvas.ui.bond_graphics_access import add_bond_graphics_for
+from chemvas.ui.canvas_atom_graphics_state import atom_items_for
+from chemvas.ui.canvas_bond_graphics_state import bond_items_for_id
+from chemvas.ui.canvas_document_metadata_state import document_file_path_for
+from chemvas.ui.canvas_history_state import history_state_for
+from chemvas.ui.canvas_insert_state import insert_state_for
+from chemvas.ui.canvas_mark_registry import mark_registry_for
+from chemvas.ui.canvas_scene_items_state import (
+    arrow_items_for,
+    mark_items_for,
+    note_items_for,
+    orbital_items_for,
+    ring_items_for,
+)
+from chemvas.ui.canvas_scene_reset_access import clear_scene_for
+from chemvas.ui.canvas_service_access import canvas_services_for
+from chemvas.ui.canvas_smiles_input_state import (
+    last_smiles_input_for,
+    set_last_smiles_input_for,
+)
+from chemvas.ui.canvas_text_style_state import set_text_style_for
+from chemvas.ui.canvas_tool_settings_state import (
+    set_tool_setting_for,
+    tool_settings_state_for,
+)
+from chemvas.ui.canvas_window_access import (
+    restore_canvas_state_for,
+    save_canvas_to_file_for,
+    snapshot_canvas_state_for,
+)
+from chemvas.ui.main_window_config import TEMPLATE_ENTRY_SPECS
+from chemvas.ui.main_window_ports import (
+    active_canvas_for_window,
+    preview_for_window,
+    preview_window_for_window,
+    services_for_window,
+)
+from chemvas.ui.mark_item_access import mark_center_for
+from chemvas.ui.preview_3d_painter import preview_overlay_font
+from chemvas.ui.scene_decoration_access import (
+    add_arrow_for,
+    add_mark_for,
+    add_mark_for_atom_for,
+    add_orbital_for,
+    add_ts_bracket_from_points_for,
+)
+from chemvas.ui.structure_mutation_access import (
+    add_atom_for,
+    add_benzene_ring_for,
+    add_bond_between_points_for,
+    add_bond_for,
+)
+from chemvas.ui.structure_payload_access import build_3d_conversion_payload_for
 
 
-@unittest.skipUnless(QApplication is not None, "PyQt6 is required for GUI tests")
 class GuiDocumentAndTemplateTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -1870,7 +1862,3 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
         tool_state_service.set_arrow_preset(self.window, "ACS")
         self.assertAlmostEqual(tool_mode_controller.get_arrow_line_width(), 1.2)
         self.assertAlmostEqual(tool_mode_controller.get_arrow_head_scale(), 0.3)
-
-
-if __name__ == "__main__":
-    unittest.main()

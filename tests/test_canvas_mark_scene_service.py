@@ -8,28 +8,21 @@ from tests.runtime_services import canvas_runtime_services
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-try:
-    from PyQt6.QtCore import QPointF
-except ModuleNotFoundError:
-    QPointF = None
+from PyQt6.QtCore import QPointF
 
-if QPointF is not None:
-    from chemvas.domain.document import Atom
-    from chemvas.ui.canvas_mark_registry import CanvasMarkRegistry, mark_registry_for
-    from chemvas.ui.canvas_mark_scene_service import CanvasMarkSceneService
-    from chemvas.ui.canvas_scene_items_state import (
-        CanvasSceneItemsState,
-        mark_items_for,
-        set_scene_item_collection_for,
-    )
-    from chemvas.ui.canvas_tool_settings_state import CanvasToolSettingsState
-    from chemvas.ui.selection_info_state import SelectionInfoState
-    from tests.runtime_state import canvas_runtime_state
-
-
-@unittest.skipUnless(
-    QPointF is not None, "PyQt6 is required for canvas mark scene service tests"
+from chemvas.domain.document import Atom
+from chemvas.ui.canvas_mark_registry import CanvasMarkRegistry, mark_registry_for
+from chemvas.ui.canvas_mark_scene_service import CanvasMarkSceneService
+from chemvas.ui.canvas_scene_items_state import (
+    CanvasSceneItemsState,
+    mark_items_for,
+    set_scene_item_collection_for,
 )
+from chemvas.ui.canvas_tool_settings_state import CanvasToolSettingsState
+from chemvas.ui.selection_info_state import SelectionInfoState
+from tests.runtime_state import canvas_runtime_state
+
+
 class CanvasMarkSceneServiceTest(unittest.TestCase):
     def test_missing_atom_paths(self) -> None:
         scene_decoration_service = SimpleNamespace(add_mark=mock.Mock())
@@ -208,7 +201,3 @@ class CanvasMarkSceneServiceTest(unittest.TestCase):
         service.mark_offset_from_click.assert_called_once_with(
             7, QPointF(2.0, 3.0), kind="minus"
         )
-
-
-if __name__ == "__main__":
-    unittest.main()

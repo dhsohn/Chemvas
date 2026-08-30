@@ -8,21 +8,12 @@ from tests.runtime_state import canvas_runtime_state
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-try:
-    from PyQt6.QtCore import QPointF, Qt
-    from PyQt6.QtGui import QColor, QPainterPath, QPen
-    from PyQt6.QtWidgets import QApplication
-except ModuleNotFoundError:
-    QApplication = None
-    QPointF = None
-    Qt = None
-    QColor = None
-    QPainterPath = None
-    QPen = None
+from PyQt6.QtCore import QPointF, Qt
+from PyQt6.QtGui import QColor, QPainterPath, QPen
+from PyQt6.QtWidgets import QApplication
 
-if QApplication is not None:
-    from chemvas.ui.canvas_arrow_build_service import CanvasArrowBuildService
-    from chemvas.ui.canvas_tool_settings_state import CanvasToolSettingsState
+from chemvas.ui.canvas_arrow_build_service import CanvasArrowBuildService
+from chemvas.ui.canvas_tool_settings_state import CanvasToolSettingsState
 
 
 class _RecordingScene:
@@ -33,9 +24,6 @@ class _RecordingScene:
         self.items.append(item)
 
 
-@unittest.skipUnless(
-    QApplication is not None, "PyQt6 is required for canvas arrow build service tests"
-)
 class CanvasArrowBuildServiceTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -273,7 +261,3 @@ class CanvasArrowBuildServiceTest(unittest.TestCase):
 
         self.assertAlmostEqual(solid.widthF(), 2.5)
         self.assertNotEqual(solid.style(), dotted.style())
-
-
-if __name__ == "__main__":
-    unittest.main()

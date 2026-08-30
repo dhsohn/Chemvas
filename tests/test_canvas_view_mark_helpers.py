@@ -9,33 +9,29 @@ from tests.runtime_state import canvas_runtime_state
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-try:
-    from PyQt6.QtCore import QPointF, Qt
-    from PyQt6.QtGui import QColor, QFont
-    from PyQt6.QtWidgets import QApplication, QGraphicsPathItem
-except ModuleNotFoundError:
-    QApplication = None
+from PyQt6.QtCore import QPointF, Qt
+from PyQt6.QtGui import QColor, QFont
+from PyQt6.QtWidgets import QApplication, QGraphicsPathItem
 
-if QApplication is not None:
-    from chemvas.domain.document import Atom
-    from chemvas.ui.canvas_mark_registry import CanvasMarkRegistry
-    from chemvas.ui.canvas_mark_scene_service import CanvasMarkSceneService
-    from chemvas.ui.canvas_scene_decoration_build_service import (
-        CanvasSceneDecorationBuildService,
-    )
-    from chemvas.ui.canvas_service_ports import mark_scene_service_for_access
-    from chemvas.ui.canvas_tool_settings_state import CanvasToolSettingsState
-    from chemvas.ui.graphics_items import AtomDotItem, AtomLabelItem
-    from chemvas.ui.mark_item_access import (
-        build_mark_item_for,
-        mark_center_for,
-        mark_center_for_pointer_for,
-        mark_selection_radius_for,
-        remove_mark_item_for,
-        remove_marks_for_atom_for,
-        set_mark_center_for,
-    )
-    from chemvas.ui.scene_decoration_access import add_mark_for, add_mark_for_atom_for
+from chemvas.domain.document import Atom
+from chemvas.ui.canvas_mark_registry import CanvasMarkRegistry
+from chemvas.ui.canvas_mark_scene_service import CanvasMarkSceneService
+from chemvas.ui.canvas_scene_decoration_build_service import (
+    CanvasSceneDecorationBuildService,
+)
+from chemvas.ui.canvas_service_ports import mark_scene_service_for_access
+from chemvas.ui.canvas_tool_settings_state import CanvasToolSettingsState
+from chemvas.ui.graphics_items import AtomDotItem, AtomLabelItem
+from chemvas.ui.mark_item_access import (
+    build_mark_item_for,
+    mark_center_for,
+    mark_center_for_pointer_for,
+    mark_selection_radius_for,
+    remove_mark_item_for,
+    remove_marks_for_atom_for,
+    set_mark_center_for,
+)
+from chemvas.ui.scene_decoration_access import add_mark_for, add_mark_for_atom_for
 
 
 class _FakeScene:
@@ -46,9 +42,6 @@ class _FakeScene:
         self.items.append(item)
 
 
-@unittest.skipUnless(
-    QApplication is not None, "PyQt6 is required for canvas view tests"
-)
 class CanvasViewMarkHelperTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:

@@ -3,29 +3,22 @@ import unittest
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-try:
-    from PyQt6.QtCore import QPointF
-    from PyQt6.QtGui import QColor
-    from PyQt6.QtWidgets import (
-        QApplication,
-        QGraphicsEllipseItem,
-        QGraphicsScene,
-        QGraphicsTextItem,
-    )
-except ModuleNotFoundError:
-    QApplication = None
-    QGraphicsEllipseItem = None
-    QGraphicsScene = None
-    QGraphicsTextItem = None
+from PyQt6.QtCore import QPointF
+from PyQt6.QtGui import QColor
+from PyQt6.QtWidgets import (
+    QApplication,
+    QGraphicsEllipseItem,
+    QGraphicsScene,
+    QGraphicsTextItem,
+)
 
-if QApplication is not None:
-    from chemvas.ui.graphics_items import NoSelectLineItem
-    from chemvas.ui.hover_rendering import (
-        add_hover_preview_items,
-        build_atom_hover_indicator,
-        build_bond_hover_indicator,
-        clear_hover_items,
-    )
+from chemvas.ui.graphics_items import NoSelectLineItem
+from chemvas.ui.hover_rendering import (
+    add_hover_preview_items,
+    build_atom_hover_indicator,
+    build_bond_hover_indicator,
+    clear_hover_items,
+)
 
 
 class _BrokenHoverItem:
@@ -33,9 +26,6 @@ class _BrokenHoverItem:
         raise RuntimeError("wrapped C/C++ object has been deleted")
 
 
-@unittest.skipUnless(
-    QApplication is not None, "PyQt6 is required for hover scene renderer tests"
-)
 class HoverSceneRendererTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -129,7 +119,3 @@ class HoverSceneRendererTest(unittest.TestCase):
         self.assertIs(dot.scene(), self.scene)
         self.assertEqual(dot.pen().color(), QColor(120, 120, 120, 140))
         self.assertEqual(dot.brush().style().name, dot.brush().style().NoBrush.name)
-
-
-if __name__ == "__main__":
-    unittest.main()

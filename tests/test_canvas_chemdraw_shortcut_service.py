@@ -7,19 +7,15 @@ from tests.runtime_services import canvas_runtime_services
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-try:
-    from PyQt6.QtCore import QPointF, Qt
-except ModuleNotFoundError:
-    QPointF = None
+from PyQt6.QtCore import Qt
 
-if QPointF is not None:
-    from chemvas.domain.document import Atom, Bond
-    from chemvas.features.hover import HoverState
-    from chemvas.ui.canvas_chemdraw_shortcut_service import (
-        CanvasChemdrawShortcutService,
-    )
-    from chemvas.ui.canvas_hover_state import hover_state_for
-    from chemvas.ui.input_view_access import shortcut_modifiers_for
+from chemvas.domain.document import Atom, Bond
+from chemvas.features.hover import HoverState
+from chemvas.ui.canvas_chemdraw_shortcut_service import (
+    CanvasChemdrawShortcutService,
+)
+from chemvas.ui.canvas_hover_state import hover_state_for
+from chemvas.ui.input_view_access import shortcut_modifiers_for
 
 
 class _FakeKeyEvent:
@@ -76,9 +72,6 @@ def _shortcut_service(
     )
 
 
-@unittest.skipUnless(
-    QPointF is not None, "PyQt6 is required for ChemDraw shortcut service tests"
-)
 class CanvasChemDrawShortcutServiceTest(unittest.TestCase):
     def test_object_and_generic_shortcuts_dispatch_expected_actions(self) -> None:
         calls: list[tuple] = []
@@ -517,7 +510,3 @@ class CanvasChemDrawShortcutServiceTest(unittest.TestCase):
         self.assertIn(("benzene", 0), calls)
         self.assertIn(("ring", 0, 6), calls)
         self.assertIn(("chair", 0, True), calls)
-
-
-if __name__ == "__main__":
-    unittest.main()

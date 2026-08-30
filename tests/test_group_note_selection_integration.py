@@ -3,34 +3,27 @@ import unittest
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-try:
-    from PyQt6.QtCore import QCoreApplication, QEvent, QPointF
-    from PyQt6.QtWidgets import (
-        QApplication,
-        QGraphicsItem,
-        QGraphicsRectItem,
-    )
-except ModuleNotFoundError:
-    QApplication = None
-
-if QApplication is not None:
-    from chemvas.ui.canvas_atom_graphics_state import set_atom_item_for
-    from chemvas.ui.canvas_group_state import group_state_for
-    from chemvas.ui.canvas_lifecycle import schedule_canvas_deletion_for
-    from chemvas.ui.canvas_model_access import model_for
-    from chemvas.ui.canvas_scene_items_state import (
-        append_scene_item_for,
-        selected_notes_for,
-    )
-    from chemvas.ui.move_access import move_item_for
-    from chemvas.ui.scene_group_operations import group_selection_for
-    from chemvas.ui.selection_collection_access import selection_snapshot_for
-    from tests.canvas_factory import build_canvas_view
-
-
-@unittest.skipUnless(
-    QApplication is not None, "PyQt6 is required for grouped-note integration tests"
+from PyQt6.QtCore import QCoreApplication, QEvent, QPointF
+from PyQt6.QtWidgets import (
+    QApplication,
+    QGraphicsItem,
+    QGraphicsRectItem,
 )
+
+from chemvas.ui.canvas_atom_graphics_state import set_atom_item_for
+from chemvas.ui.canvas_group_state import group_state_for
+from chemvas.ui.canvas_lifecycle import schedule_canvas_deletion_for
+from chemvas.ui.canvas_model_access import model_for
+from chemvas.ui.canvas_scene_items_state import (
+    append_scene_item_for,
+    selected_notes_for,
+)
+from chemvas.ui.move_access import move_item_for
+from chemvas.ui.scene_group_operations import group_selection_for
+from chemvas.ui.selection_collection_access import selection_snapshot_for
+from tests.canvas_factory import build_canvas_view
+
+
 class GroupedNoteSelectionIntegrationTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
@@ -99,7 +92,3 @@ class GroupedNoteSelectionIntegrationTest(unittest.TestCase):
         self.assertFalse(atom_item_a.isSelected())
         self.assertFalse(atom_item_b.isSelected())
         self.assertNotIn(note, selected_notes_for(canvas))
-
-
-if __name__ == "__main__":
-    unittest.main()
