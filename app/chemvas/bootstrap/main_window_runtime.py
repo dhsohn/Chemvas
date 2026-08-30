@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from chemvas.bootstrap.main_window_services import build_main_window_services
-from chemvas.ui.main_window_icon_factory import MainWindowIconFactory
+from chemvas.shell.icon_factory import MainWindowIconFactory
 from chemvas.ui.main_window_state import MainWindowState
 from chemvas.ui.main_window_tab_references import MainWindowTabReferences
 from chemvas.ui.main_window_tab_setup import build_canvas_tab_assembly

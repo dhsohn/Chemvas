@@ -24,7 +24,7 @@ from chemvas.features.export import (
     EXPORT_SIZES,
     is_dpi_relevant,
 )
-from chemvas.ui.main_window_toolbar_buttons import ArrowButton
+from chemvas.shell.toolbar_buttons import ArrowButton
 from chemvas.ui.sheet_setup_logic import (
     SHEET_ORIENTATION_OPTIONS,
     supported_sheet_sizes,

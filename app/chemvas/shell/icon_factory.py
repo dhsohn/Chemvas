@@ -2,11 +2,11 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from chemvas.ui.main_window_design_icon_renderer import (
+from chemvas.shell.icon_design import (
     draw_design_icon,
     has_design_icon,
 )
-from chemvas.ui.main_window_icon_pixmap_factory import MainWindowIconPixmapFactory
+from chemvas.shell.icon_pixmap_factory import MainWindowIconPixmapFactory
 
 if TYPE_CHECKING:
     from PyQt6.QtGui import QIcon
@@ -26,7 +26,7 @@ _TEMPLATE_ICON_BY_LABEL: dict[str, str] = {
 class MainWindowIconFactory:
     ICON_SIZE = 30
 
-    def __init__(self, window) -> None:
+    def __init__(self, window: object) -> None:
         self._pixmap_icons = MainWindowIconPixmapFactory(default_size=self.ICON_SIZE)
 
     # Logical sizes the design icons are actually displayed at: 16px in the

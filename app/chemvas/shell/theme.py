@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from chemvas.ui.main_window_palette import PALETTE
-from chemvas.ui.main_window_stylesheet import MAIN_WINDOW_STYLESHEET
-from chemvas.ui.main_window_toolbar_styles import (
+from chemvas.shell.palette import PALETTE
+from chemvas.shell.stylesheet import MAIN_WINDOW_STYLESHEET
+from chemvas.shell.toolbar_styles import (
     CONTEXT_ACTION_BUTTON_STYLE,
     CONTEXT_BAR_BUTTON_HEIGHT,
     CONTEXT_BAR_CONTENT_HEIGHT,

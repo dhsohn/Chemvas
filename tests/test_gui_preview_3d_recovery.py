@@ -24,7 +24,7 @@ if QApplication is not None:
         RDKitResult,
     )
     from chemvas.domain.document import MoleculeModel
-    from chemvas.ui.main_window_palette import PALETTE
+    from chemvas.shell.palette import PALETTE
     from chemvas.ui.preview_3d import Preview3D
     from chemvas.ui.preview_3d_painter import (
         preview_caption_font,

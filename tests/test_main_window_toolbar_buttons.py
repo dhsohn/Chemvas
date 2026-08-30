@@ -13,7 +13,7 @@ except ModuleNotFoundError:
     QApplication = None
 
 if QApplication is not None:
-    from chemvas.ui.main_window_toolbar_buttons import (
+    from chemvas.shell.toolbar_buttons import (
         ArrowButton,
         CornerMenuButton,
         CornerMenuToolButton,

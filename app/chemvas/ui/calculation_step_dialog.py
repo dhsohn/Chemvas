@@ -44,9 +44,9 @@ from chemvas.features.calculation_bundle import (
     plan_with_replaced_step,
     structural_calculation_plan_for_document,
 )
+from chemvas.shell.palette import PALETTE
 from chemvas.ui.calculation_mapping_highlight import CalculationMappingHighlighter
 from chemvas.ui.canvas_calculation_plan_state import set_calculation_plan_for
-from chemvas.ui.main_window_palette import PALETTE
 from chemvas.ui.main_window_ports import (
     active_canvas_for_window,
     document_session_service_for_window,

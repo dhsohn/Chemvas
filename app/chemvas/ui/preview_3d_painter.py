@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING
 
 from PyQt6.QtGui import QColor, QFont, QFontMetricsF, QPainter
 
-from chemvas.ui.main_window_palette import PALETTE
+from chemvas.shell.palette import PALETTE
 from chemvas.ui.preview_3d_layout import (
     preview_footer_height,
     preview_footer_item_rects,

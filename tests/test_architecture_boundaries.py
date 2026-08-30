@@ -2634,7 +2634,7 @@ def test_main_window_document_and_icon_services_do_not_use_context_facade() -> N
     removed_context = APP_ROOT / "chemvas" / "ui" / "main_window_context.py"
     paths = [
         APP_ROOT / "chemvas" / "ui" / "main_window_document_action_service.py",
-        APP_ROOT / "chemvas" / "ui" / "main_window_icon_factory.py",
+        APP_ROOT / "chemvas" / "shell" / "icon_factory.py",
     ]
     pattern = re.compile(
         r"\bMainWindowContext\b|\bmain_window_context_for\b|self\.context\b"
@@ -2645,7 +2645,7 @@ def test_main_window_document_and_icon_services_do_not_use_context_facade() -> N
 
 
 def test_main_window_icon_factory_reads_no_canvas_style() -> None:
-    factory = APP_ROOT / "chemvas" / "ui" / "main_window_icon_factory.py"
+    factory = APP_ROOT / "chemvas" / "shell" / "icon_factory.py"
     factory_source = factory.read_text(encoding="utf-8")
 
     # Every icon now comes from the shared SVG design set, so the factory has no
@@ -2666,7 +2666,7 @@ def test_main_window_icon_factory_reads_no_canvas_style() -> None:
 def test_main_window_icon_factory_delegates_hidpi_icon_rendering_to_pixmap_factory() -> (
     None
 ):
-    factory = APP_ROOT / "chemvas" / "ui" / "main_window_icon_factory.py"
+    factory = APP_ROOT / "chemvas" / "shell" / "icon_factory.py"
     factory_source = factory.read_text(encoding="utf-8")
 
     assert "QPixmap" not in factory_source
@@ -2676,7 +2676,7 @@ def test_main_window_icon_factory_delegates_hidpi_icon_rendering_to_pixmap_facto
 
 
 def test_main_window_icon_geometry_helper_stays_removed() -> None:
-    factory = APP_ROOT / "chemvas" / "ui" / "main_window_icon_factory.py"
+    factory = APP_ROOT / "chemvas" / "shell" / "icon_factory.py"
     factory_source = factory.read_text(encoding="utf-8")
 
     assert not (APP_ROOT / "chemvas" / "ui" / "main_window_icon_geometry.py").exists()
@@ -2688,7 +2688,7 @@ def test_main_window_icon_geometry_helper_stays_removed() -> None:
 
 
 def test_main_window_bond_icons_use_only_static_design_mapping() -> None:
-    factory = APP_ROOT / "chemvas" / "ui" / "main_window_icon_factory.py"
+    factory = APP_ROOT / "chemvas" / "shell" / "icon_factory.py"
     factory_source = factory.read_text(encoding="utf-8")
 
     assert not (
@@ -2714,7 +2714,7 @@ def test_main_window_bond_icons_use_only_static_design_mapping() -> None:
 
 
 def test_main_window_arrow_icons_use_only_static_design_mapping() -> None:
-    factory = APP_ROOT / "chemvas" / "ui" / "main_window_icon_factory.py"
+    factory = APP_ROOT / "chemvas" / "shell" / "icon_factory.py"
     factory_source = factory.read_text(encoding="utf-8")
 
     # Arrow previews/presets/controls render through the shared SVG design icon
@@ -2730,7 +2730,7 @@ def test_main_window_arrow_icons_use_only_static_design_mapping() -> None:
 
 
 def test_main_window_template_icons_use_only_static_design_mapping() -> None:
-    factory = APP_ROOT / "chemvas" / "ui" / "main_window_icon_factory.py"
+    factory = APP_ROOT / "chemvas" / "shell" / "icon_factory.py"
     factory_source = factory.read_text(encoding="utf-8")
 
     assert not (
@@ -2744,7 +2744,7 @@ def test_main_window_template_icons_use_only_static_design_mapping() -> None:
 
 
 def test_main_window_utility_icon_accessors_stay_removed() -> None:
-    factory = APP_ROOT / "chemvas" / "ui" / "main_window_icon_factory.py"
+    factory = APP_ROOT / "chemvas" / "shell" / "icon_factory.py"
     factory_source = factory.read_text(encoding="utf-8")
 
     # The window chrome takes these actions from the menus, not from toolbar
@@ -2777,7 +2777,7 @@ def test_main_window_utility_icon_accessors_stay_removed() -> None:
 
 
 def test_design_icon_orphan_glyphs_stay_removed() -> None:
-    renderer = APP_ROOT / "chemvas" / "ui" / "main_window_design_icon_renderer.py"
+    renderer = APP_ROOT / "chemvas" / "shell" / "icon_design.py"
     renderer_source = renderer.read_text(encoding="utf-8")
 
     # Eleven of these lost their last consumer when twelve icon accessors
@@ -2804,7 +2804,7 @@ def test_design_icon_orphan_glyphs_stay_removed() -> None:
 
 
 def test_main_window_tool_icons_use_only_static_design_mapping() -> None:
-    factory = APP_ROOT / "chemvas" / "ui" / "main_window_icon_factory.py"
+    factory = APP_ROOT / "chemvas" / "shell" / "icon_factory.py"
     factory_source = factory.read_text(encoding="utf-8")
 
     assert not (

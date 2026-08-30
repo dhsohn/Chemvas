@@ -14,13 +14,7 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from chemvas.ui.main_window_config import (
-    TEXT_FONT_FAMILY_CHOICES,
-    TOOLBAR_PRIMARY_TOOL_GROUP,
-    TOOLBAR_TOOL_GROUPS,
-)
-from chemvas.ui.main_window_ports import icon_factory_for_window
-from chemvas.ui.main_window_theme import (
+from chemvas.shell.theme import (
     CONTEXT_BAR_BUTTON_HEIGHT,
     SMILES_RENDER_BUTTON_STYLE,
     TOOLBAR_BUTTON_SIZE,
@@ -28,7 +22,13 @@ from chemvas.ui.main_window_theme import (
     TOOLBAR_ICON_SIZE,
     TOOLBAR_THICKNESS,
 )
-from chemvas.ui.main_window_toolbar_buttons import CornerMenuToolButton
+from chemvas.shell.toolbar_buttons import CornerMenuToolButton
+from chemvas.ui.main_window_config import (
+    TEXT_FONT_FAMILY_CHOICES,
+    TOOLBAR_PRIMARY_TOOL_GROUP,
+    TOOLBAR_TOOL_GROUPS,
+)
+from chemvas.ui.main_window_ports import icon_factory_for_window
 
 if TYPE_CHECKING:
     from collections.abc import Callable

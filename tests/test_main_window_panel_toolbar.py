@@ -20,12 +20,12 @@ except ModuleNotFoundError:
     QApplication = None
 
 if QApplication is not None:
+    from chemvas.shell.theme import TOOLBAR_ICON_SIZE
     from chemvas.ui.main_window_config import TOOLBAR_TOOL_ACTION_ORDER
     from chemvas.ui.main_window_panel_toolbar import (
         MainWindowPanelToolbarCallbacks,
         build_panel_toolbar,
     )
-    from chemvas.ui.main_window_theme import TOOLBAR_ICON_SIZE
     from chemvas.ui.main_window_ui_assembly_service import MainWindowUIAssemblyService
 
 

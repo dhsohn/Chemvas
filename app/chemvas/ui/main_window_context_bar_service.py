@@ -10,14 +10,14 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from chemvas.ui.canvas_insert_state import insert_state_for
-from chemvas.ui.canvas_tool_settings_state import tool_settings_state_for
-from chemvas.ui.main_window_context_bar_pages import bond_label_for_state
-from chemvas.ui.main_window_theme import (
+from chemvas.shell.theme import (
     CONTEXT_BAR_CONTENT_HEIGHT,
     TOOLBAR_ICON_SIZE,
     TOOLBAR_THICKNESS,
 )
+from chemvas.ui.canvas_insert_state import insert_state_for
+from chemvas.ui.canvas_tool_settings_state import tool_settings_state_for
+from chemvas.ui.main_window_context_bar_pages import bond_label_for_state
 
 # Maps the active canvas tool name to the context page key shown in the bar.
 _TOOL_PAGE_KEYS = {

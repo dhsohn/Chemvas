@@ -22,6 +22,7 @@ except ModuleNotFoundError:
     QApplication = None
 
 if QApplication is not None:
+    from chemvas.shell.toolbar_buttons import ArrowButton
     from chemvas.ui.canvas_atom_graphics_state import CanvasAtomGraphicsState
     from chemvas.ui.canvas_color_mutation_service import CanvasColorMutationService
     from chemvas.ui.canvas_note_controller import CanvasNoteController
@@ -34,7 +35,6 @@ if QApplication is not None:
     from chemvas.ui.canvas_text_style_state import CanvasTextStyleState
     from chemvas.ui.handle_mutation_service import HandleMutationService
     from chemvas.ui.main_window_panel_toolbar import MainWindowPanelToolbarCallbacks
-    from chemvas.ui.main_window_toolbar_buttons import ArrowButton
     from chemvas.ui.note_item_access import (
         set_committed_note_html_for,
         set_committed_note_text_for,

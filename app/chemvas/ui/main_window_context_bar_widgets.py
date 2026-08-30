@@ -20,8 +20,8 @@ from PyQt6.QtWidgets import (
     QWidgetAction,
 )
 
-from chemvas.ui.main_window_palette import PALETTE
-from chemvas.ui.main_window_theme import (
+from chemvas.shell.palette import PALETTE
+from chemvas.shell.theme import (
     CONTEXT_ACTION_BUTTON_STYLE,
     CONTEXT_BAR_BUTTON_HEIGHT,
     CONTEXT_BAR_ICON_SIZE,

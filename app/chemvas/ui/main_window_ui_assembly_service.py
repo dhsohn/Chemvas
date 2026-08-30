@@ -4,17 +4,17 @@ from typing import TYPE_CHECKING
 
 from PyQt6.QtCore import Qt
 
+from chemvas.shell.theme import (
+    MAIN_WINDOW_STYLESHEET,
+)
+from chemvas.shell.toolbar_buttons import (
+    MainWindowToolbarButtonFactory,
+)
 from chemvas.ui.main_window_menu_bar import MainWindowMenuBarAssembly, build_menu_bar
 from chemvas.ui.main_window_panel_toolbar import (
     MainWindowPanelToolbarAssembly,
     MainWindowPanelToolbarCallbacks,
     build_panel_toolbar,
-)
-from chemvas.ui.main_window_theme import (
-    MAIN_WINDOW_STYLESHEET,
-)
-from chemvas.ui.main_window_toolbar_buttons import (
-    MainWindowToolbarButtonFactory,
 )
 
 if TYPE_CHECKING:
