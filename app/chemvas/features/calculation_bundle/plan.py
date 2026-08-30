@@ -35,7 +35,7 @@ class StepReadiness:
     ready_for_step_pack: bool
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class PathPrecheck:
     reactant_charge: int
     product_charge: int

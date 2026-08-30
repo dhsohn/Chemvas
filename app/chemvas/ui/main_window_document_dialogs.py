@@ -31,7 +31,7 @@ from chemvas.ui.sheet_setup_logic import (
 )
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class FigureExportOptions:
     fmt: str
     sizing: str

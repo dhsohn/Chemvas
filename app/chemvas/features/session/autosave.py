@@ -12,6 +12,7 @@ and a failing hook never propagates into the save path.
 
 from __future__ import annotations
 
+import contextlib
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -57,10 +58,8 @@ def snapshot_unless_quitting() -> None:
 def request_snapshot() -> None:
     if _snapshot_hook is None:
         return
-    try:
+    with contextlib.suppress(Exception):
         _snapshot_hook()
-    except Exception:
-        pass
 
 
 __all__ = [

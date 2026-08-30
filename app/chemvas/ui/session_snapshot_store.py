@@ -9,6 +9,7 @@ raising), so a broken app-data dir can never take down the editor.
 
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 import shutil
@@ -114,13 +115,11 @@ class SessionSnapshotStore:
     def begin(self) -> None:
         # Best-effort: a read-only or broken app-data dir must not prevent the
         # editor from opening. Autosave simply becomes a no-op in that case.
-        try:
+        with contextlib.suppress(OSError):
             self._dir.mkdir(parents=True, exist_ok=True)
             self._write_manifest(
                 SessionManifest(pid=self._pid, clean_exit=False, docs=[])
             )
-        except OSError:
-            pass
 
     def save_documents(self, docs: list[DocDescriptor]) -> None:
         """Rewrite the manifest + dirty-doc snapshots for the current open set.
@@ -272,7 +271,7 @@ class SessionSnapshotStore:
                     display_name=entry.display_name,
                     dirty=entry.dirty,
                 )
-        if file_path and os.path.exists(file_path):
+        if file_path and Path(file_path).exists():
             state = self._read_state(Path(file_path))
             if state is not None:
                 return RestoredDoc(

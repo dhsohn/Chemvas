@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
@@ -23,12 +24,10 @@ def clear_temporary_tool_overlay(
         clear_handles_callback()
     if preview_item is None:
         return None
-    try:
+    with contextlib.suppress(RuntimeError):
         scene = canvas.scene()
         if preview_item.scene() is scene:
             scene.removeItem(preview_item)
-    except RuntimeError:
-        pass
     return None
 
 

@@ -25,7 +25,7 @@ if TYPE_CHECKING:
     from chemvas.ui.main_window_context_bar_widgets import BondLengthSpinBox
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class ContextBarPages:
     pages: dict[str, QWidget]
     bond_group: QButtonGroup | None

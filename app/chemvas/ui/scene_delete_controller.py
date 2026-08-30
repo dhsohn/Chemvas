@@ -117,7 +117,7 @@ class _ObserverPort:
         return [], True
 
 
-@dataclass(slots=True)
+@dataclass(slots=True, kw_only=True)
 class SceneDeleteTransactionSession:
     """One explicit savepoint spanning a delete-tool pointer gesture."""
 

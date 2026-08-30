@@ -34,7 +34,7 @@ if TYPE_CHECKING:
     from chemvas.ui.main_window_ui_assembly_service import MainWindowUIAssemblyService
 
 
-@dataclass(slots=True)
+@dataclass(slots=True, kw_only=True)
 class MainWindowServices:
     action_availability_service: MainWindowActionAvailabilityService
     document_action_service: MainWindowDocumentActionService

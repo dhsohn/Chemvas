@@ -45,7 +45,7 @@ class SelectionSnapshot:
     selection_items: tuple[object, ...]
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class SelectionHitRequest:
     point: Point2D
     outline_hit: bool

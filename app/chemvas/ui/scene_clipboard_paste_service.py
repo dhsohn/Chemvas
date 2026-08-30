@@ -41,7 +41,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class SceneClipboardPasteCallbacks:
     add_atom: Callable[[str, float, float], int]
     apply_atom_color: Callable[[int, str], None]

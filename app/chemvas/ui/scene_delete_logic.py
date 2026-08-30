@@ -13,7 +13,7 @@ if TYPE_CHECKING:
     from chemvas.domain.document import Bond
 
 
-@dataclass(slots=True)
+@dataclass(slots=True, kw_only=True)
 class DeleteSelectionBuckets:
     atom_ids: set[int] = field(default_factory=set)
     bond_ids: set[int] = field(default_factory=set)
@@ -39,7 +39,7 @@ class DeleteSelectionBuckets:
         )
 
 
-@dataclass(slots=True)
+@dataclass(slots=True, kw_only=True)
 class DeleteSelectionPlan:
     single_bond_id: int | None = None
     bond_ids_to_remove: list[int] = field(default_factory=list)

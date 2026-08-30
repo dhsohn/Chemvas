@@ -109,7 +109,7 @@ def _delete_scene_items_for_capture(
     return tuple(items())
 
 
-@dataclass(slots=True)
+@dataclass(slots=True, kw_only=True)
 class DocumentSavepoint:
     canvas: Any
     canvas_model: object

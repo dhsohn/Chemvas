@@ -12,7 +12,7 @@ if TYPE_CHECKING:
 CURRENT_PROFILE_ID = "chemvas-rigid-precomplex-placement/2"
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class PrecomplexPlacementProfile:
     id: str
     approach_sample_count: int

@@ -16,7 +16,7 @@ if TYPE_CHECKING:
     from chemvas.ui.hover import HoverController
 
 
-@dataclass(slots=True)
+@dataclass(slots=True, kw_only=True)
 class CanvasRuntimeServices:
     document: Any
     graph_service: Any

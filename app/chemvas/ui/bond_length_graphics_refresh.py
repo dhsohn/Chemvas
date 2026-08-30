@@ -135,22 +135,18 @@ def _refresh_atom_graphics(canvas) -> None:
             )
             position_getter = _optional_graphics_callable(dot, "pos")
             position_setter = _optional_graphics_callable(dot, "setPos")
-            if any(
-                port is None
-                for port in (
-                    rect_getter,
-                    rect_setter,
-                    hit_padding_setter,
-                    position_getter,
-                    position_setter,
+            if rect_getter is None:
+                raise RuntimeError("atom dot has incomplete geometry ports: rect")
+            if rect_setter is None:
+                raise RuntimeError("atom dot has incomplete geometry ports: setRect")
+            if hit_padding_setter is None:
+                raise RuntimeError(
+                    "atom dot has incomplete geometry ports: set_hit_padding"
                 )
-            ):
-                raise RuntimeError("atom dot has incomplete geometry ports")
-            assert rect_getter is not None
-            assert rect_setter is not None
-            assert hit_padding_setter is not None
-            assert position_getter is not None
-            assert position_setter is not None
+            if position_getter is None:
+                raise RuntimeError("atom dot has incomplete geometry ports: pos")
+            if position_setter is None:
+                raise RuntimeError("atom dot has incomplete geometry ports: setPos")
             expected_rect = QRectF(
                 -dot_radius,
                 -dot_radius,

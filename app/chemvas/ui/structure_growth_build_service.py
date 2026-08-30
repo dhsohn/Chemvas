@@ -17,7 +17,7 @@ if TYPE_CHECKING:
 RingPoints = tuple[list[QPointF], list[tuple[int, float, float]]]
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class StructureGrowthBuildActions:
     atom_point: Callable[[int], QPointF]
     sprout_bond_endpoint: Callable[..., QPointF | None]
@@ -77,9 +77,12 @@ class StructureGrowthBuildService:
             return
 
         def _build() -> bool:
-            assert self.actions.add_atom is not None
-            assert self.actions.add_bond is not None
-            assert self.actions.add_bond_graphics is not None
+            if self.actions.add_atom is None:
+                raise RuntimeError("acetyl build lost the add_atom port")
+            if self.actions.add_bond is None:
+                raise RuntimeError("acetyl build lost the add_bond port")
+            if self.actions.add_bond_graphics is None:
+                raise RuntimeError("acetyl build lost the add_bond_graphics port")
             carbon_id = self.actions.add_atom("C", carbon_end.x(), carbon_end.y())
             anchor_bond_id = self.actions.add_bond(
                 atom_id, carbon_id, 1, style="single"
@@ -141,9 +144,12 @@ class StructureGrowthBuildService:
             return
 
         def _build() -> bool:
-            assert self.actions.add_atom is not None
-            assert self.actions.add_bond is not None
-            assert self.actions.add_bond_graphics is not None
+            if self.actions.add_atom is None:
+                raise RuntimeError("dimethyl build lost the add_atom port")
+            if self.actions.add_bond is None:
+                raise RuntimeError("dimethyl build lost the add_bond port")
+            if self.actions.add_bond_graphics is None:
+                raise RuntimeError("dimethyl build lost the add_bond_graphics port")
             first_id = self.actions.add_atom("C", first_end.x(), first_end.y())
             first_bond_id = self.actions.add_bond(atom_id, first_id, 1, style="single")
             self.actions.add_bond_graphics(first_bond_id)

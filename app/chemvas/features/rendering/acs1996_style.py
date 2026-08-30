@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class ACS1996Style:
     """Approximate ChemDraw ACS 1996 defaults in screen-friendly units."""
 

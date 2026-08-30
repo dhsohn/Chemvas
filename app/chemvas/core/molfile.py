@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 import math
+from itertools import batched
 from typing import TYPE_CHECKING
 
 from chemvas.domain.atom_aliases import ATOM_ALIAS_DEFINITIONS
 from chemvas.domain.document import Bond, MoleculeModel
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable, Mapping, Sequence
+    from collections.abc import Mapping, Sequence
 
 # Element symbols (Z = 1..118).
 _ELEMENTS = frozenset(
@@ -307,15 +308,10 @@ def _radicals(
 
 def _property_lines(tag: str, entries: Sequence[tuple[int, int]]) -> list[str]:
     lines = []
-    for chunk in _chunked(entries, 8):
+    for chunk in batched(entries, 8):
         body = "".join(f"{index:>4}{value:>4}" for index, value in chunk)
         lines.append(f"M  {tag}{len(chunk):>3}{body}")
     return lines
-
-
-def _chunked[T](items: Sequence[T], size: int) -> Iterable[Sequence[T]]:
-    for start in range(0, len(items), size):
-        yield items[start : start + size]
 
 
 def parse_molfile(text: str) -> MoleculeModel:

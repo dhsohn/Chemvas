@@ -23,7 +23,7 @@ class ClipboardCopyPlan:
     payload_json: str | None
 
 
-@dataclass(slots=True)
+@dataclass(slots=True, kw_only=True)
 class ClipboardPastePlan:
     paste_source_json: str
     paste_count: int

@@ -7,7 +7,7 @@ if TYPE_CHECKING:
     from chemvas.domain.document import MoleculeModel
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class ComponentSummary:
     index: int
     atom_ids: tuple[int, ...]
@@ -33,7 +33,7 @@ class CalculationStateSelection:
     radical_electrons: int
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class AtomMapEntry:
     xyz_index: int
     mol_index: int | None
@@ -44,7 +44,7 @@ class AtomMapEntry:
     parent_chemvas_atom_id: int | None = None
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class CalculationArtifacts:
     mol_block: str
     xyz_block: str

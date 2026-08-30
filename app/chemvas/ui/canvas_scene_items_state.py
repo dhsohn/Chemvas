@@ -6,7 +6,7 @@ from typing import Any, cast
 from PyQt6 import sip
 
 
-@dataclass(slots=True)
+@dataclass(slots=True, kw_only=True)
 class CanvasSceneItemsState:
     selected_notes: list[Any] = field(default_factory=list)
     ring_items: list[Any] = field(default_factory=list)

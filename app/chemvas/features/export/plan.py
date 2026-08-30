@@ -19,7 +19,7 @@ POINTS_PER_INCH = 72.0
 MM_PER_INCH = 25.4
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class ExportPlan:
     # Source rectangle in scene coordinates (what scene.render reads).
     source_x: float

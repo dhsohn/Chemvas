@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -124,7 +125,7 @@ _DOCUMENT_MUTATED_RUNTIME_FIELDS = (
 )
 
 
-@dataclass(slots=True)
+@dataclass(slots=True, kw_only=True)
 class _DetachedSceneSnapshot:
     """The previous document's live scene contents, kept alive detached.
 
@@ -171,13 +172,13 @@ class _DetachedSceneSnapshot:
         scene_rect_snapshot: SceneRectSnapshot | None = None
         scene_rect_state_snapshot: SceneRectStateSnapshot | None = None
         raw_scene_rect = scene.sceneRect()
-        try:
+        # A duck scene with a non-rect sceneRect value keeps raw save/restore
+        # semantics instead of the exact rect savepoints.
+        scene_rect_is_rectlike = False
+        with contextlib.suppress(TypeError, ValueError):
             QRectF(raw_scene_rect)
-        except (TypeError, ValueError):
-            # A duck scene with a non-rect sceneRect value keeps raw
-            # save/restore semantics instead of the exact rect savepoints.
-            pass
-        else:
+            scene_rect_is_rectlike = True
+        if scene_rect_is_rectlike:
             scene_rect_state_snapshot = SceneRectStateSnapshot.capture(scene)
             scene_rect_snapshot = SceneRectSnapshot.capture(
                 scene,
@@ -385,7 +386,7 @@ class _DocumentStatusPublication:
             )
 
 
-@dataclass(slots=True)
+@dataclass(slots=True, kw_only=True)
 class _HistoryStateSnapshot:
     service: Any
     state: Any
@@ -396,7 +397,7 @@ class _HistoryStateSnapshot:
     enabled: bool
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class _CanvasRollbackSnapshot:
     document_state: dict
     model: Any

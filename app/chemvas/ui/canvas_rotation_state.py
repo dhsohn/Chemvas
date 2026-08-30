@@ -7,7 +7,7 @@ Coords3D = tuple[float, float, float]
 Point2D = tuple[float, float]
 
 
-@dataclass(slots=True)
+@dataclass(slots=True, kw_only=True)
 class CanvasRotationState:
     base_coords: dict[int, Coords3D] = field(default_factory=dict)
     axis_bond_id: int | None = None

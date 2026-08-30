@@ -549,7 +549,7 @@ class MoveAtomsCommand(HistoryCommand):
         )
 
 
-@dataclass
+@dataclass(kw_only=True)
 class SetAtomPositionsCommand(HistoryCommand):
     before_positions: dict[int, tuple[float, float]]
     after_positions: dict[int, tuple[float, float]]
@@ -813,7 +813,7 @@ class SetSmilesInputCommand(HistoryCommand):
         _set_last_smiles_input(canvas, self.after_value)
 
 
-@dataclass
+@dataclass(kw_only=True)
 class AddAtomsCommand(HistoryCommand):
     atom_states: dict[int, dict]
     before_next_atom_id: int
@@ -911,7 +911,7 @@ class AddAtomsCommand(HistoryCommand):
             raise
 
 
-@dataclass
+@dataclass(kw_only=True)
 class DeleteAtomsCommand(HistoryCommand):
     atom_states: dict[int, dict]
     mark_states: list[dict] = field(default_factory=list)

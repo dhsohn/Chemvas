@@ -7,6 +7,7 @@ an Open. Reads prune entries whose file has since disappeared.
 
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 from typing import TYPE_CHECKING
@@ -41,10 +42,8 @@ def load_recent(*, path: Path | None = None) -> list[str]:
 
 def save_recent(paths: list[str], *, path: Path | None = None) -> None:
     supported = [entry for entry in paths if is_recent_document_path(entry)]
-    try:
+    with contextlib.suppress(OSError):
         atomic_write_text(_target(path), json.dumps(to_json(supported), indent=2))
-    except OSError:
-        pass
 
 
 def record_recent(new_path: str, *, path: Path | None = None) -> list[str]:

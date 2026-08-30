@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 import math
 from typing import TYPE_CHECKING
 
@@ -20,11 +21,9 @@ def clear_handle_items(
     # the `features` layer, which never imports `ui`, and no Qt-aware home
     # exists that both layers can reach.
     for handle in handles:
-        try:
+        with contextlib.suppress(RuntimeError):
             if handle.scene() is scene:
                 scene.removeItem(handle)
-        except RuntimeError:
-            pass
     return []
 
 

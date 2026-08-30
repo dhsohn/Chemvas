@@ -10,7 +10,7 @@ from chemvas.domain.document.precomplex_profile import (
 Vector3 = tuple[float, float, float]
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class GeometryAtom:
     path_index: int
     symbol: str
@@ -37,7 +37,7 @@ class ContactRequest:
     tolerance_angstrom: float
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class PlacementRequest:
     source_sha256: str
     plan_sha256: str
@@ -48,7 +48,7 @@ class PlacementRequest:
     profile: str = CURRENT_PROFILE_ID
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class ValidationMetrics:
     hard_clash_count: int
     soft_overlap_score: float
@@ -65,7 +65,7 @@ class CandidateTransform:
     approach_vector: Vector3
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, kw_only=True)
 class GeneratedCandidate:
     id: str
     geometry_class: str

@@ -96,10 +96,10 @@ def atomic_write_via_temp(path: PathType, writer: Callable[[Path], None]) -> Non
     try:
         writer(tmp)
         if target_mode is not None:
-            os.chmod(tmp, target_mode)
+            tmp.chmod(target_mode)
         with tmp.open("rb+") as handle:
             os.fsync(handle.fileno())
-        os.replace(tmp, target)
+        tmp.replace(target)
     except BaseException:
         # Never leave a stray temp file behind on failure.
         with contextlib.suppress(OSError):

@@ -38,7 +38,7 @@ def _capture_optional_attribute(target: object, name: str) -> object:
     return getattr(target, name, _MISSING_CAPTURE_ATTRIBUTE)
 
 
-@dataclass(slots=True)
+@dataclass(slots=True, kw_only=True)
 class CanvasSceneRectStateSnapshot:
     canvas: object
     scene: object | None
