@@ -91,7 +91,6 @@ class CanvasRuntimeState:
     scene_clipboard_state: SceneClipboardState
     scene_items_state: CanvasSceneItemsState
     smiles_input_state: CanvasSmilesInputState
-    contexts: dict[str, object]
 
     @classmethod
     def create(cls, canvas: Any) -> CanvasRuntimeState:
@@ -131,7 +130,6 @@ class CanvasRuntimeState:
             scene_clipboard_state=SceneClipboardState(),
             scene_items_state=CanvasSceneItemsState(),
             smiles_input_state=CanvasSmilesInputState(),
-            contexts={},
         )
 
 

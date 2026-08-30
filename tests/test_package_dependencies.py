@@ -133,7 +133,7 @@ FEATURE_QT_MIGRATION_ALLOWLIST = frozenset(
 )
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True)
 class ImportEdge:
     source: str
     dependency: str

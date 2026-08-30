@@ -396,7 +396,7 @@ class _HistoryStateSnapshot:
     enabled: bool
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True)
 class _CanvasRollbackSnapshot:
     document_state: dict
     model: Any

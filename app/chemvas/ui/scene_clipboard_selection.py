@@ -21,7 +21,7 @@ from chemvas.ui.selection_service_access import (
 NoteSelector = Callable[[QGraphicsTextItem], None]
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True)
 class SceneClipboardSelectionSnapshot:
     scene_items: list[QGraphicsItem]
     notes: list[QGraphicsTextItem]

@@ -10,10 +10,7 @@ from chemvas.core.history import (
     release_history_transaction_for_command,
     restore_history_transaction_for_command,
 )
-from chemvas.domain.transactions import (
-    add_recovery_error_note as _add_rollback_error_note,
-)
-from chemvas.domain.transactions import run_rollback_step
+from chemvas.domain.transactions import add_recovery_error_note, run_rollback_step
 from chemvas.ui.atom_coords_access import atom_coords_3d_for_id
 from chemvas.ui.atom_label_access import add_or_update_atom_label
 from chemvas.ui.canvas_group_state import (
@@ -46,6 +43,7 @@ from chemvas.ui.scene_item_access import (
 )
 from chemvas.ui.scene_item_state import scene_item_state_for
 from chemvas.ui.transactions.scene_runtime import (
+    _UNAVAILABLE_ITEM_VALUE,
     capture_scene_rect_snapshot,
     capture_scene_runtime,
     create_scene_items_atomically,
@@ -54,8 +52,6 @@ from chemvas.ui.transactions.scene_runtime import (
     restore_scene_rect_snapshot,
     restore_scene_runtime,
 )
-
-_MISSING_SNAPSHOT_ATTRIBUTE = object()
 
 
 @dataclass(slots=True)
@@ -116,9 +112,6 @@ def _restore_active_handle_positions(
             "restoring an active handle position",
             partial(set_position, position),
         )
-
-
-_UNAVAILABLE_ITEM_VALUE = object()
 
 
 @dataclass(slots=True)
@@ -230,7 +223,7 @@ def _restore_raw_move_item_state(
                 set_position(snapshot.position)
                 restored = True
             except Exception as rollback_error:
-                _add_rollback_error_note(
+                add_recovery_error_note(
                     original_error,
                     rollback_error,
                     phase="restoring a moved item's raw position",
@@ -246,7 +239,7 @@ def _restore_raw_move_item_state(
             set_data(index, value)
             restored = True
         except Exception as rollback_error:
-            _add_rollback_error_note(
+            add_recovery_error_note(
                 original_error,
                 rollback_error,
                 phase=f"restoring a moved item's raw data slot {index}",
@@ -310,7 +303,7 @@ class MoveItemsCommand(HistoryCommand):
                         _apply_scene_item_state(canvas, snapshot.item, snapshot.state)
                         continue
                     except Exception as rollback_error:
-                        _add_rollback_error_note(
+                        add_recovery_error_note(
                             original_error,
                             rollback_error,
                             phase="canonically restoring a moved scene item",
@@ -363,7 +356,7 @@ class MoveItemsCommand(HistoryCommand):
             )
             if restore_result is not None:
                 for exact_restore_error in restore_result.errors:
-                    _add_rollback_error_note(
+                    add_recovery_error_note(
                         original_error,
                         exact_restore_error,
                         phase="restoring the exact move transaction",

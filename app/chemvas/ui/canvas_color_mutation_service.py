@@ -267,7 +267,7 @@ class _NoteColorState:
         set_committed_note_html_for(item, self.committed_html)
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True)
 class _ColorRuntimeAuthority:
     restore_once: Callable[[], None]
     verify: Callable[[], None]

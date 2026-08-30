@@ -30,6 +30,7 @@ from chemvas.ui.history_commands import (
     UpdateSceneItemCommand,
 )
 from chemvas.ui.input_view_access import (
+    _MISSING_CAPTURE_ATTRIBUTE,
     focus_canvas_for,
     focused_scene_item_for,
     set_focused_scene_item_for,
@@ -60,8 +61,6 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
     from chemvas.ui.canvas_history_service import HistoryStackSnapshot
-
-_MISSING_CAPTURE_ATTRIBUTE = object()
 
 
 def _capture_optional_attribute(target: object, name: str) -> object:

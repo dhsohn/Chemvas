@@ -9,7 +9,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True)
 class MainWindowTabAssembly:
     canvas_tabs: QTabWidget
 

@@ -20,7 +20,7 @@ if TYPE_CHECKING:
     from chemvas.ui.transactions.document import DocumentSavepoint
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True)
 class SmilesInputRestoreAuthority:
     state: CanvasSmilesInputState
 

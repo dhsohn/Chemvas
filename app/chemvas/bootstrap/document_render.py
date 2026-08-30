@@ -32,7 +32,7 @@ class _ExportPlan(Protocol):
     out_h_pt: float
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True)
 class _RenderedDocument:
     content: bytes
     width_points: float

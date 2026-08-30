@@ -48,7 +48,7 @@ def _optional_callable(target, name: str):
     return candidate if callable(candidate) else None
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True)
 class SceneItemAttachPorts:
     """Bound scene/item ports captured once per attach operation."""
 

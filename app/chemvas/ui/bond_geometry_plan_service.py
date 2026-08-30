@@ -25,17 +25,17 @@ if TYPE_CHECKING:
     from PyQt6.QtGui import QPainterPath, QPolygonF
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True)
 class BondLinePrimitive:
     segment: LineSegment
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True)
 class BondPathPrimitive:
     path: QPainterPath
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True)
 class BondPolygonPrimitive:
     polygon: QPolygonF
     outlined: bool = False

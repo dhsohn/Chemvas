@@ -9,7 +9,7 @@ if TYPE_CHECKING:
     from chemvas.core.history import HistoryCommand
 
 
-@dataclass
+@dataclass(slots=True)
 class CanvasHistoryState:
     history: list[HistoryCommand] = field(default_factory=list)
     redo_stack: list[HistoryCommand] = field(default_factory=list)

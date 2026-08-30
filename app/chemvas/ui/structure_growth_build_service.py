@@ -17,7 +17,7 @@ if TYPE_CHECKING:
 RingPoints = tuple[list[QPointF], list[tuple[int, float, float]]]
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True)
 class StructureGrowthBuildActions:
     atom_point: Callable[[int], QPointF]
     sprout_bond_endpoint: Callable[..., QPointF | None]
