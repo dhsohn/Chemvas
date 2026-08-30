@@ -208,19 +208,5 @@ class RDKitImportHelper:
             inchikey=inchikey,
         )
 
-    def get_name_from_smiles(self, smiles: str) -> str | None:
-        rdkit = self.adapter._load_rdkit()
-        if rdkit == (None, None):
-            return None
-        Chem, _ = rdkit
-        try:
-            mol = Chem.MolFromSmiles(smiles)
-            if mol is None:
-                return None
-            canonical = Chem.MolToSmiles(mol, canonical=True)
-            return self.adapter._name_map.get(canonical)
-        except Exception:
-            return None
-
 
 __all__ = ["RDKitImportHelper"]

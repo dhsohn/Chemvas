@@ -192,10 +192,10 @@ class RDKitConversionHelper:
                 "(rdkit.Chem.rdFMCS) failed to import."
             )
             return None
-        reactant_mol, reactant_map = self.adapter.model_to_rdkit_with_map_tolerant(
+        reactant_mol, reactant_map = self.model_to_rdkit_with_map_tolerant(
             self._submodel(model, reactant_atom_ids)
         )
-        product_mol, product_map = self.adapter.model_to_rdkit_with_map_tolerant(
+        product_mol, product_map = self.model_to_rdkit_with_map_tolerant(
             self._submodel(model, product_atom_ids)
         )
         for side, mol, atom_map in (
@@ -273,7 +273,7 @@ class RDKitConversionHelper:
         return pairs
 
     def model_to_rdkit_strict_labels(self, model: MoleculeModel):
-        mol, _ = self.adapter.model_to_rdkit_with_map_strict_labels(model)
+        mol, _ = self.model_to_rdkit_with_map_strict_labels(model)
         return mol
 
     def _embed_3d_molecule(self, mol, Chem, AllChem):

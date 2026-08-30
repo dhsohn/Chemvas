@@ -858,21 +858,9 @@ class StructureBuildServiceTest(unittest.TestCase):
             [bond.order for bond in canvas.model.bonds if bond is not None], [2, 1, 2]
         )
 
-    def test_add_linear_chain_and_render_model_use_atom_label_service(self) -> None:
+    def test_render_model_uses_atom_label_service(self) -> None:
         canvas = _FakeCanvas()
         service = _service_for(canvas)
-
-        atom_ids = service.add_linear_chain(
-            [QPointF(0.0, 0.0), QPointF(10.0, 0.0), QPointF(20.0, 0.0)],
-            ["C", "N", "C"],
-            [1, 2],
-        )
-
-        self.assertEqual(atom_ids, [0, 1, 2])
-        self.assertEqual(canvas.added_graphics, [0, 1])
-        self.assertEqual(
-            canvas.wrapper_label_calls, [(1, "N", True, False, True, False)]
-        )
 
         canvas.model = MoleculeModel(
             atoms={

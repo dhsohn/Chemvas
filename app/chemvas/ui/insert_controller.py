@@ -12,10 +12,7 @@ from chemvas.ui.insert_template_service import InsertTemplateService
 from chemvas.ui.sheet_setup_access import scene_pos_in_sheet_for
 
 if TYPE_CHECKING:
-    from chemvas.features.insertion import (
-        TemplateInsertRequest,
-        TemplatePointResolvers,
-    )
+    from chemvas.features.insertion import TemplateInsertRequest
     from chemvas.ui.canvas_view import CanvasView
 
 
@@ -105,9 +102,6 @@ class InsertController:
     ) -> None:
         self.template_service.begin_ring_template_insert(ring_size, style)
 
-    def load_smiles(self, smiles: str) -> None:
-        self.smiles_service.load_smiles(smiles)
-
     def begin_smiles_insert(self, smiles: str) -> None:
         self.smiles_service.begin_smiles_insert(smiles)
 
@@ -137,50 +131,6 @@ class InsertController:
 
     def template_insert_request(self, pos: QPointF) -> TemplateInsertRequest | None:
         return self.template_service.template_insert_request(pos)
-
-    def template_point_resolvers(self) -> TemplatePointResolvers:
-        return self.template_service.template_point_resolvers()
-
-    def resolve_ring_points_for_template(
-        self,
-        center: tuple[float, float],
-        n: int,
-        radius: float | None,
-    ) -> list[tuple[float, float]]:
-        return self.template_service.resolve_ring_points_for_template(center, n, radius)
-
-    def resolve_regular_ring_points_for_template_bond(
-        self,
-        n: int,
-        bond_id: int,
-        center: tuple[float, float],
-    ) -> list[tuple[float, float]] | None:
-        return self.template_service.resolve_regular_ring_points_for_template_bond(
-            n, bond_id, center
-        )
-
-    def resolve_chair_points_for_template(
-        self, center: tuple[float, float]
-    ) -> list[tuple[float, float]]:
-        return self.template_service.resolve_chair_points_for_template(center)
-
-    def resolve_boat_points_for_template(
-        self, center: tuple[float, float]
-    ) -> list[tuple[float, float]]:
-        return self.template_service.resolve_boat_points_for_template(center)
-
-    def resolve_template_points_for_template_bond(
-        self,
-        points_local: list[tuple[float, float]],
-        bond_id: int,
-        center: tuple[float, float],
-    ) -> list[tuple[float, float]] | None:
-        return self.template_service.resolve_template_points_for_template_bond(
-            points_local, bond_id, center
-        )
-
-    def bond_merge_seed(self, bond_id: int | None) -> list[tuple[int, float, float]]:
-        return self.insert_commit_service.bond_merge_seed(bond_id)
 
     def commit_template_insert(self, pos: QPointF) -> None:
         if not scene_pos_in_sheet_for(self.canvas, pos):

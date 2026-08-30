@@ -7,7 +7,6 @@ from PyQt6.QtCore import QPointF
 from chemvas.features.insertion import (
     TemplateInsertRequest,
     TemplateInsertResolution,
-    TemplatePointResolvers,
     plan_template_commit,
     plan_template_preview,
     plan_template_preview_update,
@@ -194,47 +193,6 @@ class InsertTemplateService:
                 else gate
             )
         return bond_id, distance
-
-    def template_point_resolvers(self) -> TemplatePointResolvers:
-        return self.template_geometry.point_resolvers()
-
-    def resolve_ring_points_for_template(
-        self,
-        center: tuple[float, float],
-        n: int,
-        radius: float | None,
-    ) -> list[tuple[float, float]]:
-        return self.template_geometry.resolve_ring_points(center, n, radius)
-
-    def resolve_regular_ring_points_for_template_bond(
-        self,
-        n: int,
-        bond_id: int,
-        center: tuple[float, float],
-    ) -> list[tuple[float, float]] | None:
-        return self.template_geometry.resolve_regular_ring_points_for_bond(
-            n, bond_id, center
-        )
-
-    def resolve_chair_points_for_template(
-        self, center: tuple[float, float]
-    ) -> list[tuple[float, float]]:
-        return self.template_geometry.resolve_chair_points(center)
-
-    def resolve_boat_points_for_template(
-        self, center: tuple[float, float]
-    ) -> list[tuple[float, float]]:
-        return self.template_geometry.resolve_boat_points(center)
-
-    def resolve_template_points_for_template_bond(
-        self,
-        points_local: list[tuple[float, float]],
-        bond_id: int,
-        center: tuple[float, float],
-    ) -> list[tuple[float, float]] | None:
-        return self.template_geometry.resolve_template_points_for_bond(
-            points_local, bond_id, center
-        )
 
     def template_points_from_pairs(
         self,

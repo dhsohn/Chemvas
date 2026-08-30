@@ -21,6 +21,8 @@ from typing import TYPE_CHECKING, Any, cast
 from PyQt6.QtCore import QObject, QRectF
 from PyQt6.QtWidgets import QGraphicsScene, QGraphicsView
 
+from chemvas.domain.transactions import add_recovery_error_note
+
 if TYPE_CHECKING:
     from collections.abc import Callable
 
@@ -684,10 +686,65 @@ class ViewSceneRectStateSnapshot:
         self.active = False
 
 
+def capture_scene_rect_snapshot(scene) -> SceneRectSnapshot | None:
+    items_bounding_rect = getattr(scene, "itemsBoundingRect", None)
+    snapshot = SceneRectSnapshot.capture(scene)
+    if snapshot is not None:
+        snapshot.scene_items_bounding_rect_getter = (
+            items_bounding_rect if callable(items_bounding_rect) else None
+        )
+    return snapshot
+
+
+def release_scene_rect_snapshot(
+    snapshot: SceneRectSnapshot | None,
+) -> None:
+    if snapshot is None:
+        return
+    if not snapshot.automatic or not snapshot.guarded:
+        snapshot.release()
+        return
+    items_bounding_rect = snapshot.scene_items_bounding_rect_getter
+    snapshot.release(
+        authoritative_scene_bounds_getter=(
+            items_bounding_rect if callable(items_bounding_rect) else None
+        )
+    )
+
+
+def restore_scene_rect_snapshot(
+    snapshot: SceneRectSnapshot | None,
+    original_error: BaseException,
+) -> None:
+    def note_restore_error(error: BaseException, *, phase: str) -> None:
+        if isinstance(error, BaseExceptionGroup):
+            for nested_error in error.exceptions:
+                note_restore_error(nested_error, phase=phase)
+            return
+        add_recovery_error_note(
+            original_error,
+            error,
+            phase=phase,
+        )
+
+    if snapshot is None:
+        return
+    try:
+        snapshot.restore()
+    except Exception as restore_error:
+        note_restore_error(
+            restore_error,
+            phase="restoring the automatic scene rect",
+        )
+
+
 __all__ = [
     "SceneRectSnapshot",
     "SceneRectStateSnapshot",
     "ViewSceneRectStateSnapshot",
+    "capture_scene_rect_snapshot",
+    "release_scene_rect_snapshot",
+    "restore_scene_rect_snapshot",
     "scene_rect_is_automatic",
     "set_explicit_scene_rect",
     "set_explicit_view_scene_rect",

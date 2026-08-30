@@ -22,14 +22,12 @@ from chemvas.ui.transactions.scene_rect import (
     SceneRectSnapshot,
     SceneRectStateSnapshot,
     ViewSceneRectStateSnapshot,
+    capture_scene_rect_snapshot,
+    release_scene_rect_snapshot,
     scene_rect_is_automatic,
     set_explicit_scene_rect,
     set_explicit_view_scene_rect,
     view_scene_rect_is_explicit,
-)
-from chemvas.ui.transactions.scene_runtime import (
-    capture_scene_rect_snapshot,
-    release_scene_rect_snapshot,
 )
 from tests.runtime_state import canvas_runtime_state
 

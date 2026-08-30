@@ -9,11 +9,6 @@ if TYPE_CHECKING:
 
 
 class MainWindowTextStyleService:
-    _TEXT_ALIGNMENTS: ClassVar[dict[str, str]] = {
-        "Left": "left",
-        "Center": "center",
-        "Right": "right",
-    }
     _TEXT_PRESET_APPLIERS: ClassVar[dict[str, Callable[[Any], None]]] = {
         "ACS": lambda controller: controller.apply_text_preset_acs(),
         "Paper Thin": lambda controller: controller.apply_text_preset_paper_thin(),
@@ -40,11 +35,6 @@ class MainWindowTextStyleService:
             title="Text Color",
             setter=lambda controller, color: controller.set_text_color(color),
             get_color=get_color,
-        )
-
-    def set_text_align(self, window, value: str) -> None:
-        self._style_controller(window).set_text_alignment(
-            self._TEXT_ALIGNMENTS.get(value, "left")
         )
 
     def set_note_box_color(self, window, *, get_color=QColorDialog.getColor) -> None:
