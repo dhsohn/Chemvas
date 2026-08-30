@@ -18,9 +18,10 @@ from chemvas.domain.document import (
     serialize_model_state,
 )
 from chemvas.features.calculation_bundle import (
+    inspect_component_inventory,
     inspect_components,
-    select_component,
     validate_calculation_plan,
+    validate_reviewed_precomplex_pairs,
 )
 
 DOCUMENT_PATCH_FORMAT = "chemvas-graph-patch"
@@ -52,12 +53,10 @@ class DocumentPatchResult:
 
 def inspect_document_graph(state: Mapping[str, object]) -> dict[str, object]:
     """Return a deterministic, complete graph inventory for an agent."""
-    model = _document_model(state)
-    components = inspect_components(state)
-    annotations: dict[int, dict[str, int]] = {}
-    for component in components:
-        selection = select_component(state, component.index)
-        annotations.update(selection.model.atom_annotations)
+    inventory = inspect_component_inventory(state)
+    model = inventory.model
+    components = inventory.components
+    annotations = model.atom_annotations
     attached_marks: dict[int, list[str]] = {}
     for raw_mark in cast("list[object]", state.get("marks", [])):
         if not isinstance(raw_mark, Mapping):
@@ -155,10 +154,12 @@ def apply_document_patch(
     try:
         build_document_payload(candidate, document_version)
         if candidate.get("calculation_plan") is not None:
-            validate_calculation_plan(candidate, candidate["calculation_plan"])
+            plan = validate_calculation_plan(candidate, candidate["calculation_plan"])
+            validate_reviewed_precomplex_pairs(candidate, plan)
     except ValueError as exc:
         raise ValueError(
-            "patched document would violate a document or Calculation Plan invariant"
+            "patched document would violate a document or Calculation Plan invariant: "
+            f"{exc}"
         ) from exc
     after = _counts(candidate, model)
     return DocumentPatchResult(

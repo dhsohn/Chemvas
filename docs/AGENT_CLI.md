@@ -145,6 +145,10 @@ hash into a Graph Patch v1 precondition:
 Supported operations are `add_atom`, `update_atom` (element/color/explicit label),
 `move_atom`, `add_bond`, `update_bond`, and `remove_bond`. Operations run in order on
 a private copy and publish only after full document and Calculation Plan validation.
+If the document carries a reviewed precomplex selection, that validation also
+requires a complete atomic reactant/product review pair whose profile, shared
+source/environment provenance, and electronic graph/plan basis still match the
+candidate graph. A patch that would make it stale produces no output.
 `move_atom` also moves dependent ring-fill, bound-mark, and perspective coordinates.
 Dry-run performs the identical validation and reports the candidate file hash but
 writes nothing. Apply preserves the input document version, never changes the source,
@@ -305,12 +309,19 @@ the generated atoms must also form a complete bijection.
 `inspect-plan` reports a deterministic `path_precheck` for each step. When the
 source mapping is complete, both endpoints have the same charge and
 multiplicity, and either each endpoint is single-component or both
-multicomponent endpoints have an explicitly reviewed precomplex selection, the
+multicomponent endpoints have a current atomic reviewed precomplex pair, the
 single artifact's `endpoint_pair` contains the exact reactant/product XYZ text
-and hashes. The product XYZ is rewritten into the reactant atom-identity order;
-the same object records that order and the bond-change reaction-center atoms as
-canonical 0-based indices. Downstream tools therefore do not need to reconstruct
-the mapping from element order or coordinates.
+and hashes. Invalid review metadata/profile is blocked with
+`multicomponent_precomplex_review_pair_invalid`; a graph/plan basis mismatch is
+blocked with `multicomponent_precomplex_review_pair_stale`. Paired generation
+provenance includes the source-document hash and environment; basis freshness
+binds element/coordinate/bond semantics, the environment, and effective
+charge/radical marks, but ignores mark drawing coordinates, display colors, and
+explicit-label visibility. The product XYZ is rewritten into the reactant
+atom-identity order; the same object records that
+order and the bond-change reaction-center atoms as canonical 0-based indices.
+Downstream tools therefore do not need to reconstruct the mapping from element
+order or coordinates.
 
 An incomplete source mapping still blocks `pack-step` without creating the
 output. Once that gate and the generated-atom bijection pass, an unreviewed

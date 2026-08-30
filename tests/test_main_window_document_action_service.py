@@ -87,6 +87,83 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
                 )
             )
 
+    def test_save_canvas_to_path_rejects_a_path_owned_by_another_canvas(
+        self,
+    ) -> None:
+        canvas = active_canvas_for_window(self.window)
+        other_canvas = object()
+        other_window = object()
+        message_box = mock.Mock()
+
+        with (
+            mock.patch(
+                "chemvas.ui.main_window_document_action_service.find_open_document",
+                return_value=(other_window, other_canvas),
+            ) as find_open_document,
+            mock.patch(
+                "chemvas.ui.main_window_document_action_service.save_canvas_to_file_for"
+            ) as save_canvas_to_file_for,
+        ):
+            result = self.service.save_canvas_to_path(
+                self.window,
+                "/tmp/owned.chemvas",
+                canvas=canvas,
+                message_box=message_box,
+            )
+
+        self.assertFalse(result)
+        find_open_document.assert_called_once_with(
+            "/tmp/owned.chemvas", exclude_canvas=canvas
+        )
+        save_canvas_to_file_for.assert_not_called()
+        message_box.warning.assert_called_once_with(
+            self.window,
+            "Save Error",
+            "This file is already open in another Chemvas window.\n"
+            "Close that document before saving here.",
+        )
+
+    def test_save_canvas_to_path_updates_a_symlink_target_without_replacing_link(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            target = Path(temp_dir) / "target.chemvas"
+            alias = Path(temp_dir) / "alias.chemvas"
+            target.write_text("old", encoding="utf-8")
+            alias.symlink_to(target)
+
+            result = self.service.save_canvas_to_path(self.window, str(alias))
+
+            self.assertTrue(result)
+            self.assertTrue(alias.is_symlink())
+            self.assertNotEqual(target.read_text(encoding="utf-8"), "old")
+            self.assertEqual(
+                document_file_path_for(active_canvas_for_window(self.window)),
+                str(alias),
+            )
+
+    def test_save_canvas_to_path_refuses_to_split_a_hard_link(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            target = Path(temp_dir) / "target.chemvas"
+            alias = Path(temp_dir) / "alias.chemvas"
+            target.write_text("old", encoding="utf-8")
+            os.link(target, alias)
+            message_box = mock.Mock()
+
+            result = self.service.save_canvas_to_path(
+                self.window, str(alias), message_box=message_box
+            )
+
+            self.assertFalse(result)
+            self.assertTrue(os.path.samefile(target, alias))
+            self.assertEqual(target.read_text(encoding="utf-8"), "old")
+            message_box.warning.assert_called_once_with(
+                self.window,
+                "Save Error",
+                "This file has multiple hard-link names.\n"
+                "Use Save As with a new path to preserve atomic saves.",
+            )
+
     def test_load_canvas_from_path_switches_to_an_already_open_document(self) -> None:
         register_window(self.window)
         self.addCleanup(lambda: forget_window(self.window))

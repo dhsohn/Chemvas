@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING, Final
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
 
-    from chemvas.domain.document.model import MoleculeModel
+    from chemvas.domain.document.model import Bond, MoleculeModel
 
 
 @dataclass(frozen=True)
@@ -15,6 +15,12 @@ class AliasAttachment:
     neighbor_element: str
     bond_order: int
     bond_style: str
+
+
+@dataclass(frozen=True)
+class AliasAttachmentInventory:
+    bonds: tuple[Bond, ...]
+    attachments_by_atom: Mapping[int, tuple[AliasAttachment, ...]]
 
 
 @dataclass(frozen=True)
@@ -79,20 +85,52 @@ def alias_attachments_for_atom(
 ) -> tuple[AliasAttachment, ...]:
     attachments: list[AliasAttachment] = []
     for bond in model.bonds:
-        if bond is None or atom_id not in {bond.a, bond.b}:
-            continue
-        neighbor_id = bond.b if bond.a == atom_id else bond.a
-        neighbor = model.atoms.get(neighbor_id)
-        if neighbor is None:
-            continue
-        attachments.append(
-            AliasAttachment(
-                neighbor_element=neighbor.element,
-                bond_order=bond.order,
-                bond_style=bond.style,
-            )
-        )
+        attachment = _alias_attachment_for_bond(model, atom_id, bond)
+        if attachment is not None:
+            attachments.append(attachment)
     return tuple(attachments)
+
+
+def alias_attachment_inventory(model: MoleculeModel) -> AliasAttachmentInventory:
+    """Index present bonds and every atom's attachment context in one traversal."""
+    present_bonds: list[Bond] = []
+    attachments: dict[int, list[AliasAttachment]] = {}
+    for bond in model.bonds:
+        if bond is None:
+            continue
+        present_bonds.append(bond)
+        first = _alias_attachment_for_bond(model, bond.a, bond)
+        if first is not None:
+            attachments.setdefault(bond.a, []).append(first)
+        if bond.b != bond.a:
+            second = _alias_attachment_for_bond(model, bond.b, bond)
+            if second is not None:
+                attachments.setdefault(bond.b, []).append(second)
+    return AliasAttachmentInventory(
+        bonds=tuple(present_bonds),
+        attachments_by_atom={
+            atom_id: tuple(atom_attachments)
+            for atom_id, atom_attachments in attachments.items()
+        },
+    )
+
+
+def _alias_attachment_for_bond(
+    model: MoleculeModel,
+    atom_id: int,
+    bond: Bond | None,
+) -> AliasAttachment | None:
+    if bond is None or (atom_id != bond.a and atom_id != bond.b):
+        return None
+    neighbor_id = bond.b if bond.a == atom_id else bond.a
+    neighbor = model.atoms.get(neighbor_id)
+    if neighbor is None:
+        return None
+    return AliasAttachment(
+        neighbor_element=neighbor.element,
+        bond_order=bond.order,
+        bond_style=bond.style,
+    )
 
 
 def modeled_atom_formal_charge(
@@ -161,8 +199,10 @@ __all__ = [
     "ATOM_ALIAS_DEFINITIONS",
     "AliasAttachment",
     "AliasAttachmentContract",
+    "AliasAttachmentInventory",
     "AtomAliasDefinition",
     "alias_attachment_error",
+    "alias_attachment_inventory",
     "alias_attachments_for_atom",
     "alias_fragment_smiles",
     "modeled_atom_formal_charge",

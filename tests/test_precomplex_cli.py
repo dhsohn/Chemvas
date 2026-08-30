@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 
 from chemvas.bootstrap import calculation_bundle as cli
+from chemvas.bootstrap import document_patch as patch_cli
 from chemvas.core.document_io import read_document
 from chemvas.domain.document import CANVAS_FILE_VERSION
 from chemvas.domain.document.precomplex_profile import (
@@ -246,9 +247,16 @@ def _generate_candidate_fixture(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
+    *,
+    source_bond_style: str | None = None,
 ) -> tuple[Path, Path, dict[str, object]]:
     source = tmp_path / "source.chemvas"
     _write_document_with_plan(source)
+    if source_bond_style is not None:
+        source_payload = json.loads(source.read_text(encoding="utf-8"))
+        source_payload["state"]["model"]["bonds"][1]["style"] = source_bond_style
+        source.write_text(json.dumps(source_payload), encoding="utf-8")
+        read_document(source)
     source_sha256 = hashlib.sha256(source.read_bytes()).hexdigest()
     request = tmp_path / "request.json"
     request_payload: dict[str, object] = {
@@ -313,6 +321,141 @@ def _generate_candidate_fixture(
             CURRENT_PROFILE_ID
         )
     return source, output, raw
+
+
+def _review_candidate_fixture(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    *,
+    source_bond_style: str | None = None,
+) -> tuple[Path, dict[str, object]]:
+    _source, candidates, raw = _generate_candidate_fixture(
+        tmp_path,
+        monkeypatch,
+        capsys,
+        source_bond_style=source_bond_style,
+    )
+    step = raw["state"]["calculation_plan"]["steps"][0]
+    reviewed = tmp_path / "reviewed.chemvas"
+    assert (
+        cli.run(
+            [
+                "select-precomplex",
+                str(candidates),
+                "--step",
+                "S01",
+                "--reactant-candidate",
+                step["reactant"]["precomplex"]["candidates"][0]["id"],
+                "--product-candidate",
+                step["product"]["precomplex"]["candidates"][0]["id"],
+                "--reviewer",
+                "test-reviewer",
+                "--output",
+                str(reviewed),
+            ]
+        )
+        == 0
+    )
+    capsys.readouterr()
+    return reviewed, json.loads(reviewed.read_text(encoding="utf-8"))
+
+
+@pytest.mark.parametrize(
+    ("changed_sides", "error_text"),
+    [
+        (("product",), "stale for this graph or plan"),
+        (("reactant", "product"), "stale for this graph or plan"),
+    ],
+)
+def test_selection_rejects_generation_environment_tampering(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    changed_sides: tuple[str, ...],
+    error_text: str,
+) -> None:
+    _source, _candidates, raw = _generate_candidate_fixture(
+        tmp_path, monkeypatch, capsys
+    )
+    step = raw["state"]["calculation_plan"]["steps"][0]
+    for side in changed_sides:
+        step[side]["precomplex"]["environment"] = {
+            "kind": "solvent",
+            "model": "PCM",
+            "name": "water",
+        }
+    mismatched = tmp_path / "mismatched-environment.chemvas"
+    mismatched.write_text(json.dumps(raw), encoding="utf-8")
+    read_document(mismatched)
+    output = tmp_path / "reviewed.chemvas"
+
+    with pytest.raises(SystemExit) as error:
+        cli.run(
+            [
+                "select-precomplex",
+                str(mismatched),
+                "--step",
+                "S01",
+                "--reactant-candidate",
+                step["reactant"]["precomplex"]["candidates"][0]["id"],
+                "--product-candidate",
+                step["product"]["precomplex"]["candidates"][0]["id"],
+                "--reviewer",
+                "test-reviewer",
+                "--output",
+                str(output),
+            ]
+        )
+
+    assert error.value.code == 2
+    assert error_text in capsys.readouterr().err
+    assert not output.exists()
+
+
+def test_electronic_mark_change_makes_reviewed_precomplex_stale(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    reviewed, payload = _review_candidate_fixture(tmp_path, monkeypatch, capsys)
+    payload["state"]["marks"].append(
+        {
+            "kind": "radical",
+            "text": None,
+            "atom_id": 0,
+            "dx": None,
+            "dy": None,
+            "x": 0.0,
+            "y": 0.0,
+        }
+    )
+    stale = tmp_path / "mark-stale.chemvas"
+    stale.write_text(json.dumps(payload), encoding="utf-8")
+    read_document(stale)
+
+    assert cli.run(["inspect-plan", str(stale)]) == 0
+    inspection = json.loads(capsys.readouterr().out)
+    assert inspection["steps"][0]["path_precheck"]["blocking_reasons"] == [
+        "multicomponent_precomplex_review_pair_stale"
+    ]
+
+    output = tmp_path / "machine.json"
+    with pytest.raises(SystemExit) as error:
+        cli.run(
+            [
+                "pack-step",
+                str(stale),
+                "--step",
+                "S01",
+                "--output",
+                str(output),
+            ]
+        )
+
+    assert error.value.code == 2
+    assert "reviewed precomplex is stale" in capsys.readouterr().err
+    assert not output.exists()
 
 
 @pytest.mark.parametrize("selection_state", ["none", "partial"])
@@ -516,6 +659,54 @@ def _rebind_candidate_id(
     return "pc-" + hashlib.sha256(canonical.encode("ascii")).hexdigest()
 
 
+def test_reviewed_pair_rejects_different_source_document_provenance(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    _reviewed, payload = _review_candidate_fixture(tmp_path, monkeypatch, capsys)
+    precomplex = payload["state"]["calculation_plan"]["steps"][0]["product"][
+        "precomplex"
+    ]
+    selection = precomplex["selection"]
+    selected_id = selection["candidate_id"]
+    precomplex["source_document_sha256"] = "0" * 64
+    rebound_selected_id = None
+    for candidate in precomplex["candidates"]:
+        previous_id = candidate["id"]
+        candidate["id"] = _rebind_candidate_id(precomplex, candidate, [[2, 3], [4]])
+        if previous_id == selected_id:
+            rebound_selected_id = candidate["id"]
+    assert rebound_selected_id is not None
+    selection["candidate_id"] = rebound_selected_id
+    forged = tmp_path / "different-source-provenance.chemvas"
+    forged.write_text(json.dumps(payload), encoding="utf-8")
+    read_document(forged)
+
+    assert cli.run(["inspect-plan", str(forged)]) == 0
+    inspection = json.loads(capsys.readouterr().out)
+    assert inspection["steps"][0]["path_precheck"]["blocking_reasons"] == [
+        "multicomponent_precomplex_review_pair_invalid"
+    ]
+
+    output = tmp_path / "machine.json"
+    with pytest.raises(SystemExit) as error:
+        cli.run(
+            [
+                "pack-step",
+                str(forged),
+                "--step",
+                "S01",
+                "--output",
+                str(output),
+            ]
+        )
+
+    assert error.value.code == 2
+    assert "different generation provenance" in capsys.readouterr().err
+    assert not output.exists()
+
+
 def test_selection_rejects_self_consistent_forged_candidate_geometry(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -610,6 +801,14 @@ def test_pack_rejects_mismatched_pair_review_metadata(
     forged.write_text(json.dumps(tampered), encoding="utf-8")
     read_document(forged)
 
+    assert cli.run(["inspect-plan", str(forged)]) == 0
+    inspection = json.loads(capsys.readouterr().out)
+    precheck = inspection["steps"][0]["path_precheck"]
+    assert precheck["ready_for_path_endpoints"] is False
+    assert precheck["blocking_reasons"] == [
+        "multicomponent_precomplex_review_pair_invalid"
+    ]
+
     machine = tmp_path / field / "machine.json"
     machine.parent.mkdir()
     with pytest.raises(SystemExit) as error:
@@ -626,6 +825,240 @@ def test_pack_rejects_mismatched_pair_review_metadata(
     assert error.value.code == 2
     assert "do not form one atomic pair" in capsys.readouterr().err
     assert not machine.exists()
+
+
+def test_inspect_plan_blocks_stale_review_and_graph_patch_fails_closed(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    _source, candidates, raw = _generate_candidate_fixture(
+        tmp_path, monkeypatch, capsys
+    )
+    step = raw["state"]["calculation_plan"]["steps"][0]
+    reviewed = tmp_path / "reviewed.chemvas"
+    assert (
+        cli.run(
+            [
+                "select-precomplex",
+                str(candidates),
+                "--step",
+                "S01",
+                "--reactant-candidate",
+                step["reactant"]["precomplex"]["candidates"][0]["id"],
+                "--product-candidate",
+                step["product"]["precomplex"]["candidates"][0]["id"],
+                "--reviewer",
+                "test-reviewer",
+                "--output",
+                str(reviewed),
+            ]
+        )
+        == 0
+    )
+    capsys.readouterr()
+
+    stale_payload = json.loads(reviewed.read_text(encoding="utf-8"))
+    stale_payload["state"]["model"]["atoms"]["0"]["x"] += 0.25
+    stale = tmp_path / "stale.chemvas"
+    stale.write_text(json.dumps(stale_payload), encoding="utf-8")
+    read_document(stale)
+
+    assert cli.run(["inspect-plan", str(stale)]) == 0
+    inspection = json.loads(capsys.readouterr().out)
+    precheck = inspection["steps"][0]["path_precheck"]
+    assert precheck["ready_for_path_endpoints"] is False
+    assert precheck["blocking_reasons"] == [
+        "multicomponent_precomplex_review_pair_stale"
+    ]
+
+    reviewed_payload = json.loads(reviewed.read_text(encoding="utf-8"))
+    atom = reviewed_payload["state"]["model"]["atoms"]["0"]
+    patch = tmp_path / "move.json"
+    patch.write_text(
+        json.dumps(
+            {
+                "format": "chemvas-graph-patch",
+                "version": 1,
+                "source_sha256": hashlib.sha256(reviewed.read_bytes()).hexdigest(),
+                "operations": [
+                    {
+                        "op": "move_atom",
+                        "atom_id": 0,
+                        "x": atom["x"] + 0.25,
+                        "y": atom["y"],
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    output = tmp_path / "patched.chemvas"
+
+    with pytest.raises(SystemExit) as error:
+        patch_cli.run(
+            [
+                "apply-patch",
+                str(reviewed),
+                str(patch),
+                "--output",
+                str(output),
+            ]
+        )
+
+    assert error.value.code == 2
+    assert "reviewed precomplex is stale" in capsys.readouterr().err
+    assert not output.exists()
+
+
+def test_graph_patch_allows_cosmetic_color_change_on_a_reviewed_pair(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    reviewed, _payload = _review_candidate_fixture(tmp_path, monkeypatch, capsys)
+    patch = tmp_path / "color.json"
+    patch.write_text(
+        json.dumps(
+            {
+                "format": "chemvas-graph-patch",
+                "version": 1,
+                "source_sha256": hashlib.sha256(reviewed.read_bytes()).hexdigest(),
+                "operations": [
+                    {
+                        "op": "update_atom",
+                        "atom_id": 0,
+                        "changes": {"color": "#ff0000"},
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    assert patch_cli.run(["apply-patch", str(reviewed), str(patch), "--dry-run"]) == 0
+    dry_run = json.loads(capsys.readouterr().out)
+    assert dry_run["written"] is False
+
+    output = tmp_path / "color-patched.chemvas"
+    assert (
+        patch_cli.run(
+            [
+                "apply-patch",
+                str(reviewed),
+                str(patch),
+                "--output",
+                str(output),
+            ]
+        )
+        == 0
+    )
+    capsys.readouterr()
+    assert read_document(output).state["model"]["atoms"]["0"]["color"] == "#ff0000"
+
+    assert cli.run(["inspect-plan", str(output)]) == 0
+    inspection = json.loads(capsys.readouterr().out)
+    assert inspection["steps"][0]["path_precheck"]["ready_for_path_endpoints"] is True
+
+
+def test_graph_patch_preserves_review_after_readding_the_same_bond(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    reviewed, _payload = _review_candidate_fixture(tmp_path, monkeypatch, capsys)
+    patch = tmp_path / "readd-bond.json"
+    patch.write_text(
+        json.dumps(
+            {
+                "format": "chemvas-graph-patch",
+                "version": 1,
+                "source_sha256": hashlib.sha256(reviewed.read_bytes()).hexdigest(),
+                "operations": [
+                    {"op": "remove_bond", "a": 0, "b": 1},
+                    {
+                        "op": "add_bond",
+                        "a": 1,
+                        "b": 0,
+                        "order": 2,
+                        "style": "single",
+                        "color": "#000000",
+                    },
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    output = tmp_path / "readded-bond.chemvas"
+
+    assert (
+        patch_cli.run(
+            [
+                "apply-patch",
+                str(reviewed),
+                str(patch),
+                "--output",
+                str(output),
+            ]
+        )
+        == 0
+    )
+    capsys.readouterr()
+
+    assert cli.run(["inspect-plan", str(output)]) == 0
+    inspection = json.loads(capsys.readouterr().out)
+    assert inspection["steps"][0]["path_precheck"]["ready_for_path_endpoints"] is True
+
+
+def test_graph_patch_rejects_reversing_a_reviewed_wedge_bond(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    reviewed, _payload = _review_candidate_fixture(
+        tmp_path,
+        monkeypatch,
+        capsys,
+        source_bond_style="wedge",
+    )
+    patch = tmp_path / "reverse-wedge.json"
+    patch.write_text(
+        json.dumps(
+            {
+                "format": "chemvas-graph-patch",
+                "version": 1,
+                "source_sha256": hashlib.sha256(reviewed.read_bytes()).hexdigest(),
+                "operations": [
+                    {"op": "remove_bond", "a": 2, "b": 3},
+                    {
+                        "op": "add_bond",
+                        "a": 3,
+                        "b": 2,
+                        "order": 1,
+                        "style": "wedge",
+                        "color": "#000000",
+                    },
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    output = tmp_path / "reversed-wedge.chemvas"
+
+    with pytest.raises(SystemExit) as error:
+        patch_cli.run(
+            [
+                "apply-patch",
+                str(reviewed),
+                str(patch),
+                "--output",
+                str(output),
+            ]
+        )
+
+    assert error.value.code == 2
+    assert "reviewed precomplex is stale" in capsys.readouterr().err
+    assert not output.exists()
 
 
 @pytest.mark.parametrize(

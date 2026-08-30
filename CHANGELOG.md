@@ -7,14 +7,56 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-No behavior changed. This is a consistency pass over the whole codebase —
-lint and type enforcement, one owner per convention, and the 3.12 idioms
-the tree was already reaching for. The drawing application does exactly
-what it did before.
+This release combines correctness fixes for document ownership, crash recovery,
+headless Calculation Plan validation, and the test gate with a consistency pass
+over the whole codebase — lint and type enforcement, one owner per convention,
+and the 3.12 idioms the tree was already reaching for.
 
-Twelve import paths moved, which is the only part an importer can feel.
-Nothing in the desktop application, the command-line interface, or the
-`.chemvas` format changed.
+Separately, twelve import paths moved as part of the consistency work; they are
+listed below. The top-level `.chemvas` document version remains 7; the reviewed-
+precomplex freshness basis changed as described under Fixed.
+
+### Added
+
+- The `chemvas.features.calculation_bundle` package root now exposes
+  `ComponentInventory`, `inspect_component_inventory`,
+  `precomplex_basis_sha256`, `validate_reviewed_precomplex_pair`, and
+  `validate_reviewed_precomplex_pairs`. The `chemvas.features.session` package
+  root now exposes `is_valid_process_identity`.
+
+### Fixed
+
+- Save As now refuses a destination already owned by another live canvas, and
+  opening a symlink or hard-link alias activates the existing document instead
+  of creating an independently editable copy. Saving through a symlink updates
+  its resolved target without replacing the link itself; saving an existing
+  hard-linked target is refused because atomic replacement would split its names.
+  On macOS, identity comparison respects whether the containing volume is case-
+  sensitive, so case-distinct files remain distinct where the filesystem does.
+- Crash recovery now binds a session to both its PID and process-creation
+  identity, so a recycled PID owned by an unrelated process no longer hides the
+  crashed session. The manifest remains strict version 1 for concurrent older
+  binaries, while a separate owner sidecar carries the new identity; legacy or
+  unreadable identity metadata retains the conservative PID-only policy. A
+  malformed or unreadable manifest is preserved instead of being age-pruned,
+  leaving its snapshots available for manual recovery.
+- Graph Patch refuses to publish a document when a reviewed precomplex pair
+  becomes stale. `inspect-plan` now reports stale or non-atomic reviewed pairs as
+  blocked with stable reasons, using the same validator as selection and
+  `pack-step`. That validator also binds both endpoints to one source/environment
+  provenance and includes the environment plus resolved charge/radical marks in
+  the current basis, while display-only colors and label visibility remain
+  editable. Precomplex candidates made with the older basis must be regenerated
+  and reviewed before Graph Patch publication or `pack-step` handoff.
+- Local and main-CI test discovery now includes nested `test_*.py` files instead
+  of silently omitting them. `CHECK_JOBS=0` and other non-positive or malformed
+  concurrency overrides are rejected rather than reaching `xargs` as unlimited
+  parallelism; arbitrarily large positive values are safely capped at eight.
+  Test files run concurrently in isolated processes, and nested paths receive
+  collision-free failure logs.
+- `inspect-document` builds one indexed component/bond/alias-attachment
+  inventory instead of repeatedly scanning the full graph for each bonded
+  component or atom.
 
 ### Changed
 
@@ -29,11 +71,14 @@ Nothing in the desktop application, the command-line interface, or the
 - `chemvas.ui.scene_delete_logic` is now `chemvas.ui.scene_delete_plan`.
   It classifies live `QGraphicsItem`s, so the `_logic` suffix — which
   this project defines as Qt-free — was describing it wrongly.
+- Tag-triggered publication now verifies that the tag matches the package
+  version, its commit is contained in `main`, and that exact `main` commit has a
+  successful completed push CI run before building distributions.
 
 ### Removed
 
 - `RDKitAdapter.get_name_from_smiles` and the 18-entry SMILES-to-name
-  table behind it. Nothing called it.
+  table behind it. No production path called it.
 - Twenty-two other forwarding methods whose only callers were the tests
   verifying the forwarding.
 

@@ -25,6 +25,12 @@ class ComponentSelection:
 
 
 @dataclass(frozen=True)
+class ComponentInventory:
+    model: MoleculeModel
+    components: tuple[ComponentSummary, ...]
+
+
+@dataclass(frozen=True)
 class CalculationStateSelection:
     model: MoleculeModel
     component_indices: tuple[int, ...]
@@ -65,6 +71,7 @@ __all__ = [
     "AtomMapEntry",
     "CalculationArtifacts",
     "CalculationStateSelection",
+    "ComponentInventory",
     "ComponentSelection",
     "ComponentSummary",
 ]

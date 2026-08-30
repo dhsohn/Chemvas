@@ -1,6 +1,8 @@
 import os
+import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -132,3 +134,57 @@ class OpenDocumentRoutingTest(unittest.TestCase):
         # The file is already open, so we switch to its window — no duplicate.
         self.assertEqual(len(open_windows()), 1)
         self.assertIs(open_windows()[0], window)
+
+    def test_reopening_symlink_and_hard_link_aliases_does_not_duplicate(self) -> None:
+        from chemvas.bootstrap.window_registry import open_new_window, open_windows
+        from chemvas.ui.main_window_ports import services_for_window
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            source = Path(temp_dir) / "source.chemvas"
+            source.write_bytes(Path(self.example).read_bytes())
+            symlink = Path(temp_dir) / "symlink.chemvas"
+            symlink.symlink_to(source)
+            hard_link = Path(temp_dir) / "hard-link.chemvas"
+            os.link(source, hard_link)
+
+            window = open_new_window()
+            services_for_window(window).document_action_service.load_canvas_from_path(
+                window, str(source)
+            )
+
+            open_document(str(symlink))
+            open_document(str(hard_link))
+
+            self.assertEqual(len(open_windows()), 1)
+            self.assertIs(open_windows()[0], window)
+
+    def test_save_as_rejects_a_symlink_alias_owned_by_another_window(self) -> None:
+        from chemvas.bootstrap.window_registry import open_new_window
+        from chemvas.ui.main_window_ports import services_for_window
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            source = Path(temp_dir) / "source.chemvas"
+            source.write_bytes(Path(self.example).read_bytes())
+            alias = Path(temp_dir) / "alias.chemvas"
+            alias.symlink_to(source)
+            original_bytes = source.read_bytes()
+
+            owner_window = open_new_window()
+            services_for_window(
+                owner_window
+            ).document_action_service.load_canvas_from_path(owner_window, str(source))
+            saving_window = open_new_window()
+            message_box = mock.Mock()
+
+            saved = services_for_window(
+                saving_window
+            ).document_action_service.save_canvas_to_path(
+                saving_window,
+                str(alias),
+                message_box=message_box,
+            )
+
+            self.assertFalse(saved)
+            self.assertEqual(source.read_bytes(), original_bytes)
+            self.assertTrue(alias.is_symlink())
+            message_box.warning.assert_called_once()

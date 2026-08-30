@@ -29,6 +29,7 @@ from chemvas.features.calculation_bundle import (
     correspondence_readiness,
     fill_correspondence_gaps,
     path_precheck,
+    precomplex_basis_sha256,
     require_step_ready,
     select_calculation_state,
     validate_calculation_plan,
@@ -147,6 +148,85 @@ def test_feature_reexports_the_domain_included_atom_id_policy() -> None:
 
     assert feature_included_atom_ids is included_atom_ids
     assert included_atom_ids(state) == {2, 7}
+
+
+def test_precomplex_basis_plain_bonds_ignore_order_and_orientation() -> None:
+    state = _document_state()
+    state["calculation_plan"] = _plan()
+    plan = validate_calculation_plan(state, state["calculation_plan"])
+    original = precomplex_basis_sha256(
+        state,
+        plan,
+        step_id="S01",
+        side="reactant",
+        environment={"kind": "gas_phase"},
+    )
+
+    reordered = deepcopy(state)
+    raw_model = reordered["model"]
+    assert isinstance(raw_model, dict)
+    raw_bonds = raw_model["bonds"]
+    assert isinstance(raw_bonds, list)
+    raw_bonds.reverse()
+    for raw_bond in raw_bonds:
+        assert isinstance(raw_bond, dict)
+        raw_bond["a"], raw_bond["b"] = raw_bond["b"], raw_bond["a"]
+    reordered_plan = validate_calculation_plan(reordered, reordered["calculation_plan"])
+
+    assert (
+        precomplex_basis_sha256(
+            reordered,
+            reordered_plan,
+            step_id="S01",
+            side="reactant",
+            environment={"kind": "gas_phase"},
+        )
+        == original
+    )
+
+
+@pytest.mark.parametrize("style", ("wedge", "hash"))
+def test_precomplex_basis_preserves_directional_bond_orientation(style: str) -> None:
+    state = _document_state()
+    raw_model = state["model"]
+    assert isinstance(raw_model, dict)
+    raw_bonds = raw_model["bonds"]
+    assert isinstance(raw_bonds, list)
+    directional_bond = raw_bonds[1]
+    assert isinstance(directional_bond, dict)
+    directional_bond["style"] = style
+    state["calculation_plan"] = _plan()
+    plan = validate_calculation_plan(state, state["calculation_plan"])
+    original = precomplex_basis_sha256(
+        state,
+        plan,
+        step_id="S01",
+        side="product",
+        environment={"kind": "gas_phase"},
+    )
+
+    reversed_state = deepcopy(state)
+    reversed_model = reversed_state["model"]
+    assert isinstance(reversed_model, dict)
+    reversed_bonds = reversed_model["bonds"]
+    assert isinstance(reversed_bonds, list)
+    reversed_bond = reversed_bonds[1]
+    assert isinstance(reversed_bond, dict)
+    reversed_bond["a"], reversed_bond["b"] = reversed_bond["b"], reversed_bond["a"]
+    reversed_plan = validate_calculation_plan(
+        reversed_state, reversed_state["calculation_plan"]
+    )
+
+    assert (
+        precomplex_basis_sha256(
+            reversed_state,
+            reversed_plan,
+            step_id="S01",
+            side="product",
+            environment={"kind": "gas_phase"},
+        )
+        != original
+    )
 
 
 def test_correspondence_gap_fill_preserves_all_mapping_safety_policies() -> None:
@@ -311,11 +391,24 @@ def test_path_precheck_reports_multicomponent_geometry_gap() -> None:
     plan = validate_calculation_plan(state, _plan())
     step = calculation_step_by_id(plan, "S01")
 
-    readiness = path_precheck(plan, step)
+    readiness = path_precheck(plan, step, document_state=state)
 
     assert readiness.source_mapping_complete is True
     assert readiness.reactant_component_count == 2
     assert readiness.product_component_count == 2
+    assert readiness.ready_for_path_endpoints is False
+    assert readiness.blocking_reasons == (
+        "multicomponent_precomplex_geometry_not_provided",
+    )
+
+
+def test_path_precheck_preserves_the_original_two_argument_call_shape() -> None:
+    state = _document_state()
+    plan = validate_calculation_plan(state, _plan())
+    step = calculation_step_by_id(plan, "S01")
+
+    readiness = path_precheck(plan, step)
+
     assert readiness.ready_for_path_endpoints is False
     assert readiness.blocking_reasons == (
         "multicomponent_precomplex_geometry_not_provided",

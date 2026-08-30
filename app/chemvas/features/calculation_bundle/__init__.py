@@ -4,6 +4,7 @@ from .model import (
     AtomMapEntry,
     CalculationArtifacts,
     CalculationStateSelection,
+    ComponentInventory,
     ComponentSelection,
     ComponentSummary,
 )
@@ -20,18 +21,27 @@ from .plan import (
     member,
     path_precheck,
     plan_with_replaced_step,
+    precomplex_basis_sha256,
     require_step_ready,
     select_calculation_state,
     step_readiness,
     structural_calculation_plan_for_document,
     validate_calculation_plan,
+    validate_reviewed_precomplex_pair,
+    validate_reviewed_precomplex_pairs,
 )
-from .service import inspect_components, select_component, select_components
+from .service import (
+    inspect_component_inventory,
+    inspect_components,
+    select_component,
+    select_components,
+)
 
 __all__ = [
     "AtomMapEntry",
     "CalculationArtifacts",
     "CalculationStateSelection",
+    "ComponentInventory",
     "ComponentSelection",
     "ComponentSummary",
     "calculate_bond_changes",
@@ -43,10 +53,12 @@ __all__ = [
     "fill_correspondence_gaps",
     "identity_correspondence",
     "included_atom_ids",
+    "inspect_component_inventory",
     "inspect_components",
     "member",
     "path_precheck",
     "plan_with_replaced_step",
+    "precomplex_basis_sha256",
     "require_step_ready",
     "select_calculation_state",
     "select_component",
@@ -54,4 +66,6 @@ __all__ = [
     "step_readiness",
     "structural_calculation_plan_for_document",
     "validate_calculation_plan",
+    "validate_reviewed_precomplex_pair",
+    "validate_reviewed_precomplex_pairs",
 ]
