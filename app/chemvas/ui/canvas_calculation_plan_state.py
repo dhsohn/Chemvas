@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from typing import Any, cast
 
 
-@dataclass
+@dataclass(slots=True)
 class CanvasCalculationPlanState:
     plan: dict[str, object] | None = None
 

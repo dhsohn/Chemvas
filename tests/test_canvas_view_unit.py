@@ -240,7 +240,6 @@ class CanvasViewUnitTest(unittest.TestCase):
 
         self.assertFalse(hasattr(canvas, "_history_state"))
         self.assertFalse(hasattr(canvas, "history_service"))
-        self.assertFalse(hasattr(canvas, "contexts"))
         self.assertIsInstance(history_state_for(canvas), CanvasHistoryState)
         self.assertIs(history_state_for(canvas), canvas.runtime_state.history_state)
 

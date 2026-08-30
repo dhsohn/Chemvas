@@ -22,7 +22,7 @@ if TYPE_CHECKING:
     from collections.abc import Iterable
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True)
 class HistoryStackSnapshot:
     """The single immutable value used for history stack-policy recovery."""
 

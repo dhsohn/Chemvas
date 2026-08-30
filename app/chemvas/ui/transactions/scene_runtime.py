@@ -14,10 +14,7 @@ from PyQt6.QtWidgets import (
     QGraphicsTextItem,
 )
 
-from chemvas.domain.transactions import (
-    add_recovery_error_note as _add_rollback_error_note,
-)
-from chemvas.domain.transactions import run_rollback_step
+from chemvas.domain.transactions import add_recovery_error_note, run_rollback_step
 from chemvas.ui.canvas_scene_items_state import SCENE_ITEM_COLLECTION_ATTRS
 from chemvas.ui.scene_item_access import (
     create_scene_item_from_state as _create_scene_item_from_state,
@@ -1416,7 +1413,7 @@ def _restore_scene_signal_state(
         if errors is not None:
             errors.append(restore_error)
         elif original_error is not None:
-            _add_rollback_error_note(
+            add_recovery_error_note(
                 original_error,
                 restore_error,
                 phase=phase,
@@ -1547,7 +1544,7 @@ def _restore_scene_order_and_selection(
         return
     if original_error is not None:
         for failure in failures:
-            _add_rollback_error_note(
+            add_recovery_error_note(
                 original_error,
                 failure,
                 phase="restoring scene order and selection",
@@ -1585,7 +1582,7 @@ def _restore_scene_focus(
         if errors is not None:
             errors.append(restore_error)
         elif original_error is not None:
-            _add_rollback_error_note(
+            add_recovery_error_note(
                 original_error,
                 restore_error,
                 phase="restoring the scene focus item",
@@ -1764,7 +1761,7 @@ def restore_scene_runtime(
             errors.extend(primitive_errors)
         elif original_error is not None:
             for primitive_error in primitive_errors:
-                _add_rollback_error_note(
+                add_recovery_error_note(
                     original_error,
                     primitive_error,
                     phase="restoring a raw bond primitive",
@@ -1845,7 +1842,7 @@ def restore_scene_rect_snapshot(
             for nested_error in error.exceptions:
                 note_restore_error(nested_error, phase=phase)
             return
-        _add_rollback_error_note(
+        add_recovery_error_note(
             original_error,
             error,
             phase=phase,

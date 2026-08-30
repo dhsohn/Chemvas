@@ -30,8 +30,7 @@ from chemvas.ui.scene_signal_blocking import blocked_scene_signals
 from chemvas.ui.selection_info_state import selection_info_state_for
 from chemvas.ui.selection_outline_state import clear_selection_outlines_for
 from chemvas.ui.selection_style_state import selection_style_state_for
-
-_MISSING_ATTRIBUTE = object()
+from chemvas.ui.transactions.object_graph_snapshot import _MISSING_ATTRIBUTE
 
 
 class CanvasSceneResetService:

@@ -8,7 +8,7 @@ from typing import Any, cast
 from chemvas.ui.main_window_path_logic import is_canonical_saved_document_path
 
 
-@dataclass
+@dataclass(slots=True)
 class CanvasDocumentMetadataState:
     file_path: str | None = None
     display_name: str = "Canvas 1"

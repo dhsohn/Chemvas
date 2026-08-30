@@ -21,7 +21,7 @@ if TYPE_CHECKING:
     from chemvas.ui.canvas_view import CanvasView
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True)
 class StructureSelectionResult:
     selected: bool
     update_outline: bool = False

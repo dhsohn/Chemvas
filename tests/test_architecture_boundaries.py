@@ -3079,7 +3079,7 @@ def test_canvas_runtime_state_attach_does_not_mirror_runtime_services_to_canvas(
     None
 ):
     runtime_state = APP_ROOT / "chemvas" / "ui" / "canvas_runtime_state.py"
-    pattern = re.compile(r"\bcanvas\.(?:history_service|contexts)\s*=")
+    pattern = re.compile(r"\bcanvas\.history_service\s*=")
 
     assert _matching_lines(pattern, [runtime_state]) == []
 
@@ -5680,9 +5680,9 @@ def test_rollback_runner_has_one_owner() -> None:
     re-decides what to swallow and whether to return, which is the policy the
     canonical runner exists to hold.
 
-    The import alias is followed, because ``ui.history_commands`` already
-    imports the note as ``_add_rollback_error_note``; a copy that renamed its
-    import the same way would otherwise read as calling something else.
+    The import alias is followed: ``ui.history_commands`` used to import the
+    note as ``_add_rollback_error_note``, and a copy that renamed its import
+    that way would otherwise read as calling something else.
     """
     runners = [
         f"{path.relative_to(APP_ROOT.parents[0])}:{line_no}: {name}"

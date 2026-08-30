@@ -89,7 +89,7 @@ def _ring_atom_ids(item: _RingDataItem) -> object:
         raise
 
 
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True)
 class _ObserverPort:
     target: object
     name: str
