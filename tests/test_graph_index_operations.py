@@ -1,6 +1,6 @@
 from types import SimpleNamespace
 
-from chemvas.ui.graph_index_operations import (
+from chemvas.features.graph import (
     add_bond_to_atom_index,
     add_neighbor_edge,
     bond_id_between_indexed_atoms,

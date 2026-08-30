@@ -6,6 +6,7 @@ from weakref import ref
 
 from PyQt6.QtCore import QObject, QTimer, pyqtSlot
 
+from chemvas.features.graph import CanvasGraphState
 from chemvas.features.hover import HoverState
 from chemvas.ui.atom_coords_access import CanvasAtomCoords3DState
 from chemvas.ui.canvas_atom_graphics_state import CanvasAtomGraphicsState
@@ -13,7 +14,6 @@ from chemvas.ui.canvas_bond_graphics_state import CanvasBondGraphicsState
 from chemvas.ui.canvas_calculation_plan_state import CanvasCalculationPlanState
 from chemvas.ui.canvas_callback_state import CanvasCallbackState
 from chemvas.ui.canvas_document_metadata_state import CanvasDocumentMetadataState
-from chemvas.ui.canvas_graph_state import CanvasGraphState
 from chemvas.ui.canvas_group_state import CanvasGroupState
 from chemvas.ui.canvas_history_service import CanvasHistoryService
 from chemvas.ui.canvas_history_state import CanvasHistoryState

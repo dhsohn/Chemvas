@@ -3399,9 +3399,8 @@ def test_production_code_imports_concrete_tool_modules_not_tools_reexport() -> N
 
 def test_graph_algorithms_are_canvas_free() -> None:
     graph_modules = [
-        APP_ROOT / "chemvas" / "ui" / "graph_algorithms.py",
-        APP_ROOT / "chemvas" / "ui" / "graph_index_operations.py",
-        APP_ROOT / "chemvas" / "ui" / "graph_rotation_policy.py",
+        APP_ROOT / "chemvas" / "features" / "graph" / "__init__.py",
+        APP_ROOT / "chemvas" / "features" / "graph" / "algorithms.py",
     ]
     pattern = re.compile(r"\bcanvas\b|\bfrom ui\.|\bimport ui\.")
 
@@ -4671,7 +4670,7 @@ def _called_function_names(node: ast.AST) -> set[str]:
 
 WORKLIST_TAKE_METHODS = frozenset({"pop", "popleft"})
 WORKLIST_PUT_METHODS = frozenset({"append", "appendleft", "extend"})
-GRAPH_ALGORITHMS_MODULE = "app/chemvas/ui/graph_algorithms.py"
+GRAPH_ALGORITHMS_MODULE = "app/chemvas/features/graph/algorithms.py"
 
 
 def _drained_worklist_name(node: ast.While) -> str | None:
@@ -4817,8 +4816,7 @@ BOND_CYCLE_CACHE = "bond_cycle_cache"
 BOND_CYCLE_CACHE_MUTATORS = frozenset(
     {"clear", "pop", "popitem", "setdefault", "update"}
 )
-GRAPH_INDEX_OPERATIONS_MODULE = "app/chemvas/ui/graph_index_operations.py"
-CANVAS_GRAPH_STATE_MODULE = "app/chemvas/ui/canvas_graph_state.py"
+GRAPH_FEATURE_INIT_MODULE = "app/chemvas/features/graph/__init__.py"
 CYCLE_SEARCH_HELPER = "edge_has_reachable_alternative_path"
 
 
@@ -4862,9 +4860,10 @@ def test_bond_cycle_cache_has_one_writer() -> None:
     The graph service and the rotation planarity helper each used to compute
     the answer and store it, so the rule that an entry is valid while
     ``graph_version`` is unchanged was written down twice and could drift on
-    one side. ``canvas_graph_state`` still appears because it declares the
-    field and empties it when the graph changes; that is the state owner
-    resetting its own slot, not a second author of entries.
+    one side. ``CanvasGraphState`` — the state owner that declares the field
+    and empties it when the graph changes — lives in the same feature module
+    as ``cached_bond_in_cycle``, so the reset and the one author of entries
+    are a single file.
 
     What escapes: a writer that reaches the mapping through a local alias
     (``cache = graph.bond_cycle_cache``), because the attribute is no longer
@@ -4878,7 +4877,7 @@ def test_bond_cycle_cache_has_one_writer() -> None:
         }
     )
 
-    assert writers == [CANVAS_GRAPH_STATE_MODULE, GRAPH_INDEX_OPERATIONS_MODULE]
+    assert writers == [GRAPH_FEATURE_INIT_MODULE]
 
 
 def _modules_using(name: str) -> list[str]:
@@ -4921,7 +4920,7 @@ def test_cycle_membership_is_decided_in_one_module() -> None:
     (``getattr(graph_algorithms, "...")``), because then neither an import of
     the name nor a call spelling it appears in the tree.
     """
-    assert _modules_using(CYCLE_SEARCH_HELPER) == [GRAPH_INDEX_OPERATIONS_MODULE]
+    assert _modules_using(CYCLE_SEARCH_HELPER) == [GRAPH_FEATURE_INIT_MODULE]
 
 
 HISTORY_COMMANDS_MODULE = "app/chemvas/ui/history_commands.py"

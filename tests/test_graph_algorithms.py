@@ -2,7 +2,7 @@ from itertools import combinations
 from types import SimpleNamespace
 
 from chemvas.domain.document import connected_atom_components
-from chemvas.ui.graph_algorithms import (
+from chemvas.features.graph import (
     adjacency_for_bonds,
     connected_components_for_nodes,
     edge_has_reachable_alternative_path,
