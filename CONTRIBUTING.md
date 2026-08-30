@@ -110,6 +110,16 @@ Using the atom-label feature as a worked example:
 | `*_service` | The actual implementation/logic. Receives its collaborators as **injected ports**. | `atom_label_service.py` |
 | `*_state` | Owns runtime state in a dedicated object instead of as private attrs on the window/canvas. | `main_window_state.py` (`MainWindowState`) |
 | `*_logic` | Pure, Qt-free helpers (parsing, geometry, layout) that are easy to unit-test. | `chemvas.features.annotations` label layout API |
+| `*_controller` | A coordinator class (`FooController` in `foo_controller.py`) that owns the interaction flow for one area of the canvas or window, holding the canvas plus injected collaborators. One deliberate exception lives elsewhere: `HoverController` in `ui/hover.py` owns Qt hover orchestration next to the hover feature seam (see `docs/ARCHITECTURE.md`). | `scene_delete_controller.py` (`SceneDeleteController`) |
+| `*_tool` / `*_tools` | Implementations of the pointer-tool hierarchy rooted at `chemvas.ui.tool_base.Tool`. Every implementation of that hierarchy lives in a `*_tool.py` (one tool) or `*_tools.py` (a family, possibly with an intermediate base as in `preview_tools.py`) module. | `bond_tool.py` (`BondTool`) |
+| `*_bundle` | A dataclass that groups services constructed together and stored or passed as one field, usually next to its `build_*` factory. | `canvas_input_service_bundle.py` (`CanvasInputServiceBundle`) |
+| `*_renderer` / `*_rendering` | Qt painting and graphics-item drawing helpers: a renderer class, or a module of drawing functions. | `bond_renderer.py`, `hover_rendering.py` |
+
+The first five rows are the injected-port discipline; the boundary tests
+enforce much of it (the Qt-free `*_logic` rule is checked per module, not by
+a repo-wide gate). The last four rows document the vocabulary the codebase
+already uses consistently — keep new modules consistent with it, but no
+automated gate checks those suffixes.
 
 A focused test that needs only part of the runtime builds that part rather than
 hanging state or services off a double by hand:
