@@ -7,6 +7,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+No behavior changed. This is a consistency pass over the whole codebase —
+lint and type enforcement, one owner per convention, and the 3.12 idioms
+the tree was already reaching for. The drawing application does exactly
+what it did before.
+
+Twelve import paths moved, which is the only part an importer can feel.
+Nothing in the desktop application, the command-line interface, or the
+`.chemvas` format changed.
+
+### Changed
+
+- The application chrome moved from `chemvas.ui.main_window_*` to
+  `chemvas.shell`, dropping the prefix the package name now carries:
+  `palette`, `stylesheet`, `theme`, `toolbar_styles`, `toolbar_buttons`,
+  `icon_design` (was `main_window_design_icon_renderer`), `icon_factory`
+  and `icon_pixmap_factory`.
+- The graph algorithms, index operations and rotation policy moved from
+  three `chemvas.ui.graph_*` modules to the `chemvas.features.graph`
+  package.
+- `chemvas.ui.scene_delete_logic` is now `chemvas.ui.scene_delete_plan`.
+  It classifies live `QGraphicsItem`s, so the `_logic` suffix — which
+  this project defines as Qt-free — was describing it wrongly.
+
+### Removed
+
+- `RDKitAdapter.get_name_from_smiles` and the 18-entry SMILES-to-name
+  table behind it. Nothing called it.
+- Twenty-two other forwarding methods whose only callers were the tests
+  verifying the forwarding.
+
 ## [0.5.1] - 2026-08-27
 
 Bug fixes only — no name on the public import surface changed. The one

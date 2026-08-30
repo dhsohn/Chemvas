@@ -1,7 +1,8 @@
 # ADR 0001: Feature-oriented modularization
 
-- Status: Accepted
+- Status: Completed
 - Date: 2026-07-18
+- Completed: 2026-08-30
 
 ## Context
 
@@ -171,3 +172,30 @@ suite, and milestone-level full-suite/package verification.
 - Feature internals are not imported across feature boundaries.
 - Ruff lint/format, mypy, process-isolated tests, RDKit smoke tests, and wheel
   smoke tests pass.
+
+## Outcome
+
+All six criteria hold, each enforced by a test rather than asserted here:
+`pyproject`'s `packages.find` limits the wheel to `chemvas*`;
+`test_eager_production_import_graph_stays_acyclic`;
+`test_domain_has_no_framework_or_adapter_dependencies`;
+`test_rollback_kernel_has_no_restore_retry_or_qt_base_port_bypass` together with
+`test_exception_notes_have_one_owner` and `test_rollback_runner_has_one_owner`;
+`test_feature_callers_use_package_public_api`; and the gate itself.
+
+The migration sequence above is a plan, not a criterion, and its step 6 is not
+finished: `chemvas.ui` still holds most production code. That is deliberate and
+this ADR does not hold it open. Of the modules left in `ui`, roughly three
+quarters import PyQt6 directly, and there is no destination defined for them —
+`features` is closed to new Qt modules by the exact-match allowlist, `adapters`
+cannot be imported by `ui`, and `domain` forbids Qt. `shell` is the only legal
+target, which is where the application chrome went; the rest would need a
+destination this ADR never chose.
+
+Deciding that destination is a new question, not unfinished business from this
+one, and it should be a new ADR with its own measurement. What the last slices
+showed is that a move is worth making when the code is a closed leaf set or
+Qt-free policy — chrome and graph both cost no ports and no wiring — and that
+the ADR's own warning holds otherwise: a sixty-line move that needs a port
+protocol, bootstrap construction and runtime-services wiring is a few hundred
+lines relocating Qt from one Qt module to another.
