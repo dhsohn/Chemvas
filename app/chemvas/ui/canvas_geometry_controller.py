@@ -59,6 +59,14 @@ from chemvas.ui.renderer_style_access import (
 )
 
 
+def _xy(point: QPointF) -> tuple[float, float]:
+    return point.x(), point.y()
+
+
+def _bounds(rect: QRectF) -> tuple[float, float, float, float]:
+    return rect.left(), rect.top(), rect.right(), rect.bottom()
+
+
 class CanvasGeometryController:
     def __init__(
         self, canvas, *, hit_testing_service=None, history_service=None
@@ -173,17 +181,17 @@ class CanvasGeometryController:
     def line_rect_clip_t(
         self, p1: QPointF, p2: QPointF, rect: QRectF
     ) -> tuple[float, float] | None:
-        return line_rect_clip_t_helper(p1, p2, rect)
+        return line_rect_clip_t_helper(_xy(p1), _xy(p2), _bounds(rect))
 
     def segment_intersection_t(
         self, p1: QPointF, p2: QPointF, q1: QPointF, q2: QPointF
     ) -> float | None:
-        return segment_intersection_t_helper(p1, p2, q1, q2)
+        return segment_intersection_t_helper(_xy(p1), _xy(p2), _xy(q1), _xy(q2))
 
     def ray_rect_exit_distance(
         self, origin: QPointF, direction: QPointF, rect: QRectF
     ) -> float | None:
-        return ray_rect_exit_distance_helper(origin, direction, rect)
+        return ray_rect_exit_distance_helper(_xy(origin), _xy(direction), _bounds(rect))
 
     def mark_clearance_for_kind(self, kind: str) -> float:
         gap = max(0.6, bond_length_px_for(self.canvas) * 0.05)
@@ -216,9 +224,9 @@ class CanvasGeometryController:
             -clearance, -clearance, clearance, clearance
         )
         distance = ray_rect_exit_distance_helper(
-            QPointF(atom.x, atom.y),
-            QPointF(direction_x, direction_y),
-            expanded_rect,
+            (atom.x, atom.y),
+            (direction_x, direction_y),
+            _bounds(expanded_rect),
         )
         return 0.0 if distance is None else distance
 
@@ -502,7 +510,7 @@ class CanvasGeometryController:
     def line_rect_intersections(
         self, p1: QPointF, p2: QPointF, rect: QRectF
     ) -> list[float]:
-        return line_rect_intersections_helper(p1, p2, rect)
+        return line_rect_intersections_helper(_xy(p1), _xy(p2), _bounds(rect))
 
     def trim_line_for_labels(
         self,
