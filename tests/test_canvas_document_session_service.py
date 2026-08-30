@@ -90,7 +90,6 @@ def _document_services(
         graph_service=SimpleNamespace(rebuild_bond_adjacency=rebuild_bond_adjacency),
         structure_build_service=SimpleNamespace(
             render_model=render_model,
-            ensure_ring_fills_for_model=mock.Mock(),
         ),
         hit_testing_service=SimpleNamespace(
             mark_spatial_index_dirty=mark_spatial_index_dirty
@@ -161,7 +160,6 @@ def _session_service(canvas):
     except AttributeError:
         structure_build_service = SimpleNamespace(
             render_model=mock.Mock(),
-            ensure_ring_fills_for_model=mock.Mock(),
         )
         services.structure.structure_build_service = structure_build_service
     return CanvasDocumentSessionService(
@@ -318,7 +316,6 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
                 "dirty",
             ],
         )
-        canvas.services.structure.structure_build_service.ensure_ring_fills_for_model.assert_not_called()
 
     def test_apply_state_reenables_history_when_restore_fails(self) -> None:
         canvas = SimpleNamespace(

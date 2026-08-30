@@ -127,12 +127,6 @@ class StructureBuildService:
     def create_ring_fill_item(self, points, atom_ids):
         return create_ring_fill_item_for(self.canvas, points, atom_ids)
 
-    def ensure_ring_fills_for_model(self) -> list:
-        """Make sure every ring in the model has a fill polygon so it can be
-        selected and colored. Existing fills (saved or freshly built) are left
-        untouched; new fills are invisible (default alpha) until colored."""
-        return self.committer.ensure_ring_fills_for_model()
-
     def run_recorded_build(
         self,
         action: Callable[[], list | None],
@@ -285,11 +279,6 @@ class StructureBuildService:
 
     def add_atom_with_merge(self, point: QPointF, element: str, merge: list) -> int:
         return self.committer.add_atom_with_merge(point, element, merge)
-
-    def add_linear_chain(
-        self, points: list[QPointF], elements: list[str], bonds: list[int]
-    ):
-        return self.committer.add_linear_chain(points, elements, bonds)
 
     def render_model(self) -> None:
         self.committer.render_model()

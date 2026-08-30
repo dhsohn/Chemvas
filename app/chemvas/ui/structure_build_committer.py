@@ -3,10 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
-from PyQt6.QtCore import QPointF
-
 from chemvas.domain.transactions import add_recovery_error_note, restore_snapshot
-from chemvas.features.graph import find_rings, first_matching_bond_id
+from chemvas.features.graph import first_matching_bond_id
 from chemvas.ui.atom_label_access import add_or_update_atom_label, atom_label_service
 from chemvas.ui.bond_graphics_access import add_bond_graphics_for
 from chemvas.ui.canvas_model_access import (
@@ -21,7 +19,6 @@ from chemvas.ui.canvas_model_access import (
 from chemvas.ui.canvas_ring_fill_scene_access import create_ring_fill_item_for
 from chemvas.ui.canvas_scene_items_state import (
     SCENE_ITEM_COLLECTION_ATTRS,
-    ring_items_for,
     scene_item_collection_for,
 )
 from chemvas.ui.canvas_service_ports import (
@@ -57,6 +54,8 @@ from chemvas.ui.structure_insert_access import (
 from chemvas.ui.structure_mutation_access import add_atom_for, add_bond_for
 
 if TYPE_CHECKING:
+    from PyQt6.QtCore import QPointF
+
     from chemvas.ui.canvas_view import CanvasView
 
 
@@ -578,45 +577,6 @@ class StructureBuildCommitter:
             elif order == 2:
                 double_count += 1
         return double_count
-
-    def add_linear_chain(
-        self, points: list[QPointF], elements: list[str], bonds: list[int]
-    ) -> list[int]:
-        atom_ids = []
-        for point, element in zip(points, elements, strict=False):
-            atom_ids.append(self.add_atom(element, point.x(), point.y()))
-        bonds_start = bond_count_for(self.canvas)
-        for index, order in enumerate(bonds):
-            self.add_bond(atom_ids[index], atom_ids[index + 1], order)
-        self.add_bond_graphics_range(bonds_start)
-        self.label_non_carbon_atoms(atom_ids, elements)
-        return atom_ids
-
-    def ensure_ring_fills_for_model(self) -> list:
-        rings = find_rings(bonds_for(self.canvas))
-        if not rings:
-            return []
-        existing: set[frozenset[int]] = set()
-        for ring_item in ring_items_for(self.canvas):
-            ring_atom_ids = ring_item.data(2)
-            if isinstance(ring_atom_ids, list):
-                existing.add(frozenset(a for a in ring_atom_ids if isinstance(a, int)))
-        created: list = []
-        for ring in rings:
-            if frozenset(ring) in existing:
-                continue
-            points = []
-            for atom_id in ring:
-                atom = atom_for_id(self.canvas, atom_id)
-                if atom is None:
-                    break
-                points.append(QPointF(atom.x, atom.y))
-            if len(points) != len(ring) or len(points) < 3:
-                continue
-            item = create_ring_fill_item_for(self.canvas, points, list(ring))
-            attach_scene_item(self.canvas, item)
-            created.append(item)
-        return created
 
     def render_model(self) -> None:
         for bond_id, bond in enumerate(bonds_for(self.canvas)):

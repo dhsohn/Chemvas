@@ -966,7 +966,6 @@ class InsertCommitServiceTest(unittest.TestCase):
         called_request = patched.call_args.args[1]
         self.assertEqual(called_request.cursor_pos, (9.0, 10.0))
         self.assertEqual(patched.call_args.kwargs["before_smiles_input"], "before")
-        self.assertEqual(service.bond_merge_seed(None), [])
 
     def test_apply_smiles_commit_plan_rejects_duplicate_and_unknown_bond_sources(
         self,

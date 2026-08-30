@@ -25,26 +25,6 @@ class RDKitAdapter:
     def __init__(self) -> None:
         self._rdkit: tuple[Any, Any] | None = None
         self.last_error: str | None = None
-        self._name_map = {
-            "c1ccccc1": "Benzene",
-            "C1CCCCC1": "Cyclohexane",
-            "C1CCCC1": "Cyclopentane",
-            "C1CCC1": "Cyclobutane",
-            "C1CC1": "Cyclopropane",
-            "c1ccc2ccccc2c1": "Naphthalene",
-            "c1ccc2cc3ccccc3cc2c1": "Anthracene",
-            "c1ccc2c(c1)ccc1ccccc12": "Phenanthrene",
-            "c1ccncc1": "Pyridine",
-            "c1cncnc1": "Pyrimidine",
-            "c1c[nH]cn1": "Imidazole",
-            "c1cc[nH]c1": "Pyrrole",
-            "c1ccoc1": "Furan",
-            "c1ccsc1": "Thiophene",
-            "c1ccc2[nH]ccc2c1": "Indole",
-            "c1ccc2ncccc2c1": "Quinoline",
-            "c1ccc2cnccc2c1": "Isoquinoline",
-            "c1ccc2[nH]cnc2c1": "Benzimidazole",
-        }
         self._alias_smiles = alias_fragment_smiles()
         self._import_helper = RDKitImportHelper(self)
         self._conversion_helper = RDKitConversionHelper(self)
@@ -212,9 +192,6 @@ class RDKitAdapter:
             ),
             fallback_error="Failed to build calculation artifacts.",
         )
-
-    def get_name_from_smiles(self, smiles: str) -> str | None:
-        return self._import_helper.get_name_from_smiles(smiles)
 
     def _call_with_result[T](
         self, callback: Callable[[], T | None], *, fallback_error: str

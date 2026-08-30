@@ -51,21 +51,6 @@ class MainWindowTextStyleServiceTest(unittest.TestCase):
             parent=self.window, title="Border Color"
         )
 
-    def test_set_text_align_maps_labels_and_falls_back_to_left(self) -> None:
-        self.service.set_text_align(self.window, "Left")
-        self.service.set_text_align(self.window, "Center")
-        self.service.set_text_align(self.window, "Right")
-        self.service.set_text_align(self.window, "Unexpected")
-
-        self.assertEqual(
-            [
-                call.args[0]
-                for call in self.style_controller.set_text_alignment.call_args_list
-            ],
-            ["left", "center", "right", "left"],
-        )
-        self.assertEqual(self.style_controller_for_window.call_count, 4)
-
     def test_set_text_preset_dispatches_supported_presets_only(self) -> None:
         self.service.set_text_preset(self.window, "ACS")
         self.service.set_text_preset(self.window, "Paper Thin")

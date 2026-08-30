@@ -16,9 +16,6 @@ from chemvas.ui.insert_smiles_commit_service import (
 from chemvas.ui.insert_template_commit_service import (
     apply_template_commit_resolution as _apply_template_commit_resolution,
 )
-from chemvas.ui.insert_template_commit_service import (
-    bond_merge_seed as template_bond_merge_seed,
-)
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -78,11 +75,6 @@ class InsertCommitService:
             after_smiles_input=after_smiles_input,
             bond_exists=self.bond_exists,
         )
-
-    def bond_merge_seed(self, bond_id: int | None) -> list[tuple[int, float, float]]:
-        if bond_id is None:
-            return []
-        return template_bond_merge_seed(self.canvas, bond_id)
 
 
 __all__ = ["InsertCommitService"]

@@ -79,16 +79,6 @@ class CanvasStyleController:
         self._set_text_style("note_padding", 8.0)
         self._apply_text_style_to_selected()
 
-    def set_text_alignment(self, alignment: str) -> None:
-        mapping = {
-            "left": Qt.AlignmentFlag.AlignLeft,
-            "center": Qt.AlignmentFlag.AlignHCenter,
-            "right": Qt.AlignmentFlag.AlignRight,
-        }
-        if alignment in mapping:
-            self._set_text_style("text_alignment", mapping[alignment])
-            self._apply_text_style_to_selected()
-
     def set_note_box_color(self, color: QColor) -> None:
         if color.isValid():
             self._set_text_style("note_box_color", color)

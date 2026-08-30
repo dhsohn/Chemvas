@@ -1063,112 +1063,6 @@ class CanvasViewAdditionalTest(unittest.TestCase):
             QPointF(45.0, 46.0), "sp2"
         )
 
-    def test_insert_controller_public_api_methods_are_callable(self) -> None:
-        insert_controller = mock.Mock()
-        state = object()
-        request = object()
-        resolvers = object()
-        preview_snapshot = object()
-        pairs = [(1.0, 2.0)]
-
-        insert_controller.insert_session_state.return_value = state
-        insert_controller.template_insert_request.return_value = request
-        insert_controller.template_point_resolvers.return_value = resolvers
-        insert_controller.resolve_ring_points_for_template.return_value = pairs
-        insert_controller.resolve_regular_ring_points_for_template_bond.return_value = (
-            pairs
-        )
-        insert_controller.resolve_chair_points_for_template.return_value = pairs
-        insert_controller.resolve_boat_points_for_template.return_value = pairs
-        insert_controller.resolve_template_points_for_template_bond.return_value = pairs
-        insert_controller.smiles_preview_snapshot.return_value = preview_snapshot
-        insert_controller.bond_merge_seed.return_value = [(1, 2.0, 3.0)]
-
-        self.assertIs(insert_controller.insert_session_state(), state)
-        insert_controller.apply_insert_session_state(state)
-        insert_controller.load_smiles("CC")
-        insert_controller.begin_smiles_insert("CO")
-        insert_controller.begin_ring_template_insert(6, "chair")
-        insert_controller.cancel_smiles_insert()
-        insert_controller.commit_smiles_insert(QPointF(4.0, 5.0))
-        insert_controller.clear_smiles_preview()
-        self.assertIs(insert_controller.smiles_preview_snapshot(), preview_snapshot)
-        insert_controller.render_smiles_preview(QPointF(6.0, 7.0))
-        insert_controller.cancel_template_insert()
-        self.assertIs(
-            insert_controller.template_insert_request(QPointF(8.0, 9.0)), request
-        )
-        self.assertIs(insert_controller.template_point_resolvers(), resolvers)
-        self.assertEqual(
-            insert_controller.resolve_ring_points_for_template((1.0, 2.0), 6, 12.0),
-            pairs,
-        )
-        self.assertEqual(
-            insert_controller.resolve_regular_ring_points_for_template_bond(
-                6, 3, (4.0, 5.0)
-            ),
-            pairs,
-        )
-        self.assertEqual(
-            insert_controller.resolve_chair_points_for_template((0.0, 0.0)), pairs
-        )
-        self.assertEqual(
-            insert_controller.resolve_boat_points_for_template((0.0, 0.0)), pairs
-        )
-        self.assertEqual(
-            insert_controller.resolve_template_points_for_template_bond(
-                [(0.0, 0.0)], 4, (2.0, 3.0)
-            ),
-            pairs,
-        )
-        self.assertEqual(insert_controller.bond_merge_seed(7), [(1, 2.0, 3.0)])
-        insert_controller.commit_template_insert(QPointF(10.0, 11.0))
-        insert_controller.clear_template_preview()
-        insert_controller.render_template_preview(QPointF(12.0, 13.0))
-
-        insert_controller.insert_session_state.assert_called_once_with()
-        insert_controller.apply_insert_session_state.assert_called_once_with(state)
-        insert_controller.load_smiles.assert_called_once_with("CC")
-        insert_controller.begin_smiles_insert.assert_called_once_with("CO")
-        insert_controller.begin_ring_template_insert.assert_called_once_with(6, "chair")
-        insert_controller.cancel_smiles_insert.assert_called_once_with()
-        insert_controller.commit_smiles_insert.assert_called_once_with(
-            QPointF(4.0, 5.0)
-        )
-        insert_controller.clear_smiles_preview.assert_called_once_with()
-        insert_controller.smiles_preview_snapshot.assert_called_once_with()
-        insert_controller.render_smiles_preview.assert_called_once_with(
-            QPointF(6.0, 7.0)
-        )
-        insert_controller.cancel_template_insert.assert_called_once_with()
-        insert_controller.template_insert_request.assert_called_once_with(
-            QPointF(8.0, 9.0)
-        )
-        insert_controller.template_point_resolvers.assert_called_once_with()
-        insert_controller.resolve_ring_points_for_template.assert_called_once_with(
-            (1.0, 2.0), 6, 12.0
-        )
-        insert_controller.resolve_regular_ring_points_for_template_bond.assert_called_once_with(
-            6, 3, (4.0, 5.0)
-        )
-        insert_controller.resolve_chair_points_for_template.assert_called_once_with(
-            (0.0, 0.0)
-        )
-        insert_controller.resolve_boat_points_for_template.assert_called_once_with(
-            (0.0, 0.0)
-        )
-        insert_controller.resolve_template_points_for_template_bond.assert_called_once_with(
-            [(0.0, 0.0)], 4, (2.0, 3.0)
-        )
-        insert_controller.bond_merge_seed.assert_called_once_with(7)
-        insert_controller.commit_template_insert.assert_called_once_with(
-            QPointF(10.0, 11.0)
-        )
-        insert_controller.clear_template_preview.assert_called_once_with()
-        insert_controller.render_template_preview.assert_called_once_with(
-            QPointF(12.0, 13.0)
-        )
-
     def test_canvas_bond_mutation_access_delegates_to_service(self) -> None:
         bond_mutation_service = mock.Mock()
         bond_state = {"a": 1, "b": 2, "order": 2}
@@ -1497,10 +1391,6 @@ class CanvasViewAdditionalTest(unittest.TestCase):
         self.assertEqual(text_style.note_border_color.name(), "#111111")
         self.assertEqual(text_style.note_padding, 8.0)
 
-        style_controller.set_text_alignment("center")
-        self.assertEqual(text_style.text_alignment, Qt.AlignmentFlag.AlignHCenter)
-        style_controller.set_text_alignment("bad")
-        self.assertEqual(text_style.text_alignment, Qt.AlignmentFlag.AlignHCenter)
         tool_mode_controller.set_atom_symbol(" N ")
         self.assertEqual(tool_mode_controller.get_atom_symbol(), "N")
         style_controller.set_note_box_color(QColor("#00ff00"))
@@ -1512,7 +1402,7 @@ class CanvasViewAdditionalTest(unittest.TestCase):
         style_controller.set_note_border_color(QColor())
         self.assertEqual(text_style.note_border_color.name(), "#445566")
         self.assertGreaterEqual(
-            note_controller.apply_text_style_to_selected.call_count, 7
+            note_controller.apply_text_style_to_selected.call_count, 6
         )
 
     def test_note_selection_and_text_style_helpers_update_boxes_and_focus(self) -> None:

@@ -42,6 +42,7 @@ from chemvas.ui.canvas_smiles_input_state import (
 from chemvas.ui.history_commands import AddSceneItemsCommand, DeleteSceneItemsCommand
 from chemvas.ui.insert_controller import InsertController
 from chemvas.ui.insert_smiles_service import MAX_SMILES_INPUT_LENGTH
+from chemvas.ui.insert_template_commit_service import bond_merge_seed
 from chemvas.ui.sheet_setup_state import SheetSetupState, sheet_setup_state_for
 from tests.runtime_services import canvas_runtime_services
 from tests.runtime_state import canvas_runtime_state
@@ -381,69 +382,6 @@ def _controller_for(canvas: _FakeCanvas, **kwargs) -> InsertController:
 
 
 class InsertControllerTest(unittest.TestCase):
-    def test_public_wrappers_delegate_to_internal_helpers(self) -> None:
-        canvas = _FakeCanvas()
-        commit_service = Mock()
-        commit_service.bond_merge_seed.return_value = [(1, 2.0, 3.0)]
-        controller = _controller_for(canvas, insert_commit_service=commit_service)
-        state = controller.insert_session_state()
-        request = TemplateInsertRequest(6, (1.0, 2.0), 3, "chair")
-        resolvers = object()
-        pairs = [(1.0, 2.0)]
-        preview_snapshot = ({0: ["bond"]}, {1: "atom"})
-
-        controller.insert_session_state = Mock(return_value=state)
-        controller.smiles_preview_snapshot = Mock(return_value=preview_snapshot)
-        controller.template_insert_request = Mock(return_value=request)
-        controller.template_point_resolvers = Mock(return_value=resolvers)
-        controller.resolve_ring_points_for_template = Mock(return_value=pairs)
-        controller.resolve_regular_ring_points_for_template_bond = Mock(
-            return_value=pairs
-        )
-        controller.resolve_chair_points_for_template = Mock(return_value=pairs)
-        controller.resolve_boat_points_for_template = Mock(return_value=pairs)
-        controller.resolve_template_points_for_template_bond = Mock(return_value=pairs)
-
-        self.assertIs(controller.insert_session_state(), state)
-        self.assertEqual(controller.smiles_preview_snapshot(), preview_snapshot)
-        self.assertIs(controller.template_insert_request(QPointF(1.0, 2.0)), request)
-        self.assertIs(controller.template_point_resolvers(), resolvers)
-        self.assertEqual(
-            controller.resolve_ring_points_for_template((1.0, 2.0), 6, 12.0), pairs
-        )
-        self.assertEqual(
-            controller.resolve_regular_ring_points_for_template_bond(6, 3, (4.0, 5.0)),
-            pairs,
-        )
-        self.assertEqual(
-            controller.resolve_chair_points_for_template((0.0, 0.0)), pairs
-        )
-        self.assertEqual(controller.resolve_boat_points_for_template((0.0, 0.0)), pairs)
-        self.assertEqual(
-            controller.resolve_template_points_for_template_bond(
-                [(0.0, 0.0)], 4, (2.0, 3.0)
-            ),
-            pairs,
-        )
-        self.assertEqual(controller.bond_merge_seed(7), [(1, 2.0, 3.0)])
-
-        controller.insert_session_state.assert_called_once_with()
-        controller.smiles_preview_snapshot.assert_called_once_with()
-        controller.template_insert_request.assert_called_once_with(QPointF(1.0, 2.0))
-        controller.template_point_resolvers.assert_called_once_with()
-        controller.resolve_ring_points_for_template.assert_called_once_with(
-            (1.0, 2.0), 6, 12.0
-        )
-        controller.resolve_regular_ring_points_for_template_bond.assert_called_once_with(
-            6, 3, (4.0, 5.0)
-        )
-        controller.resolve_chair_points_for_template.assert_called_once_with((0.0, 0.0))
-        controller.resolve_boat_points_for_template.assert_called_once_with((0.0, 0.0))
-        controller.resolve_template_points_for_template_bond.assert_called_once_with(
-            [(0.0, 0.0)], 4, (2.0, 3.0)
-        )
-        commit_service.bond_merge_seed.assert_called_once_with(7)
-
     def test_insert_session_state_and_apply_insert_session_state_track_and_clear_modes(
         self,
     ) -> None:
@@ -512,7 +450,7 @@ class InsertControllerTest(unittest.TestCase):
         canvas = _FakeCanvas()
         controller = _controller_for(canvas)
 
-        controller.load_smiles("   ")
+        controller.smiles_service.load_smiles("   ")
 
         canvas.rdkit.smiles_to_2d.assert_not_called()
         canvas.clear_scene.assert_not_called()
@@ -525,7 +463,7 @@ class InsertControllerTest(unittest.TestCase):
         controller = _controller_for(canvas)
 
         with patch("chemvas.ui.insert_smiles_service.QMessageBox.warning") as warning:
-            controller.load_smiles("broken")
+            controller.smiles_service.load_smiles("broken")
 
         warning.assert_called_once_with(canvas, "SMILES Error", "bad smiles")
         canvas.clear_scene.assert_not_called()
@@ -537,7 +475,7 @@ class InsertControllerTest(unittest.TestCase):
         controller = _controller_for(canvas)
 
         with patch("chemvas.ui.insert_smiles_service.QMessageBox.warning") as warning:
-            controller.load_smiles("C" * (MAX_SMILES_INPUT_LENGTH + 1))
+            controller.smiles_service.load_smiles("C" * (MAX_SMILES_INPUT_LENGTH + 1))
 
         warning.assert_called_once_with(
             canvas,
@@ -576,7 +514,7 @@ class InsertControllerTest(unittest.TestCase):
         canvas.clear_scene = Mock(side_effect=_clear_scene)
         controller = _controller_for(canvas)
 
-        controller.load_smiles(" C ")
+        controller.smiles_service.load_smiles(" C ")
 
         canvas.clear_scene.assert_called_once_with()
         canvas.rebuild_bond_adjacency.assert_called_once_with()
@@ -629,7 +567,7 @@ class InsertControllerTest(unittest.TestCase):
         canvas.clear_scene = Mock(side_effect=_clear_scene)
         controller = _controller_for(canvas)
 
-        controller.load_smiles("[NH4+]")
+        controller.smiles_service.load_smiles("[NH4+]")
 
         self.assertEqual(canvas.mark_calls, [(0, 2.0, 1.0, "plus", False)])
         command = canvas.push_command.call_args.args[0]
@@ -665,7 +603,7 @@ class InsertControllerTest(unittest.TestCase):
         controller = _controller_for(canvas)
 
         with self.assertRaisesRegex(RuntimeError, "render failed"):
-            controller.load_smiles(" C ")
+            controller.smiles_service.load_smiles(" C ")
 
         self.assertEqual(canvas.model.atoms, {0: Atom("O", -5.0, -5.0)})
         self.assertEqual(canvas.model.bonds, [])
@@ -696,7 +634,7 @@ class InsertControllerTest(unittest.TestCase):
         controller = _controller_for(canvas)
 
         with self.assertRaisesRegex(RuntimeError, "clear failed"):
-            controller.load_smiles(" C ")
+            controller.smiles_service.load_smiles(" C ")
 
         self.assertEqual(canvas.model.atoms, {0: Atom("O", -5.0, -5.0)})
         self.assertEqual(canvas.model.bonds, [])
@@ -736,7 +674,7 @@ class InsertControllerTest(unittest.TestCase):
         controller = _controller_for(canvas)
 
         with self.assertRaisesRegex(RuntimeError, "mark failed"):
-            controller.load_smiles("[NH2+]")
+            controller.smiles_service.load_smiles("[NH2+]")
 
         self.assertEqual(canvas.model.atoms, {0: Atom("O", -5.0, -5.0)})
         self.assertEqual(last_smiles_input_for(canvas), "before")
@@ -766,7 +704,7 @@ class InsertControllerTest(unittest.TestCase):
         controller = _controller_for(canvas)
 
         with self.assertRaisesRegex(RuntimeError, "render failed"):
-            controller.load_smiles("C")
+            controller.smiles_service.load_smiles("C")
 
         self.assertEqual(canvas.model.atoms, {0: Atom("O", -5.0, -5.0)})
         restored_notes = scene_item_collection_for(canvas, "note_items")
@@ -791,7 +729,7 @@ class InsertControllerTest(unittest.TestCase):
             return_value=None
         )
 
-        controller.load_smiles("C")
+        controller.smiles_service.load_smiles("C")
 
         controller.smiles_service.transaction_builder.capture.assert_called_once_with()
         controller.smiles_service.transaction_builder.build_command.assert_called_once_with(
@@ -1363,23 +1301,25 @@ class InsertControllerTest(unittest.TestCase):
                 request, TemplateInsertRequest(6, (20.0, 30.0), 5, "chair")
             )
             self.assertEqual(
-                controller.resolve_ring_points_for_template((1.0, 2.0), 6, 12.0),
+                controller.template_geometry.resolve_ring_points((1.0, 2.0), 6, 12.0),
                 [(1.0, 2.0), (3.0, 4.0)],
             )
             self.assertEqual(
-                controller.resolve_regular_ring_points_for_template_bond(
+                controller.template_geometry.resolve_regular_ring_points_for_bond(
                     6, 3, (4.0, 5.0)
                 ),
                 [(5.0, 6.0)],
             )
             self.assertEqual(
-                controller.resolve_chair_points_for_template((0.0, 0.0)), [(7.0, 8.0)]
+                controller.template_geometry.resolve_chair_points((0.0, 0.0)),
+                [(7.0, 8.0)],
             )
             self.assertEqual(
-                controller.resolve_boat_points_for_template((0.0, 0.0)), [(9.0, 10.0)]
+                controller.template_geometry.resolve_boat_points((0.0, 0.0)),
+                [(9.0, 10.0)],
             )
             self.assertEqual(
-                controller.resolve_template_points_for_template_bond(
+                controller.template_geometry.resolve_template_points_for_bond(
                     [(0.0, 0.0)], 4, (2.0, 3.0)
                 ),
                 [(11.0, 12.0)],
@@ -1387,12 +1327,12 @@ class InsertControllerTest(unittest.TestCase):
             regular_ring_points_for_bond.return_value = None
             template_points_for_bond.return_value = None
             self.assertIsNone(
-                controller.resolve_regular_ring_points_for_template_bond(
+                controller.template_geometry.resolve_regular_ring_points_for_bond(
                     6, 3, (4.0, 5.0)
                 )
             )
             self.assertIsNone(
-                controller.resolve_template_points_for_template_bond(
+                controller.template_geometry.resolve_template_points_for_bond(
                     [(0.0, 0.0)], 4, (2.0, 3.0)
                 )
             )
@@ -1615,13 +1555,12 @@ class InsertControllerTest(unittest.TestCase):
             },
             bonds=[Bond(1, 2), None, Bond(1, 99)],
         )
-        controller = _controller_for(canvas)
 
-        self.assertEqual(controller.bond_merge_seed(0), [(1, 1.0, 2.0), (2, 3.0, 4.0)])
-        self.assertEqual(controller.bond_merge_seed(-1), [])
-        self.assertEqual(controller.bond_merge_seed(1), [])
-        self.assertEqual(controller.bond_merge_seed(2), [])
-        self.assertEqual(controller.bond_merge_seed(99), [])
+        self.assertEqual(bond_merge_seed(canvas, 0), [(1, 1.0, 2.0), (2, 3.0, 4.0)])
+        self.assertEqual(bond_merge_seed(canvas, -1), [])
+        self.assertEqual(bond_merge_seed(canvas, 1), [])
+        self.assertEqual(bond_merge_seed(canvas, 2), [])
+        self.assertEqual(bond_merge_seed(canvas, 99), [])
 
 
 if __name__ == "__main__":

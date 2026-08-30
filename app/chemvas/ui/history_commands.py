@@ -43,15 +43,16 @@ from chemvas.ui.scene_item_access import (
     restore_scene_item as _restore_scene_item,
 )
 from chemvas.ui.scene_item_state import scene_item_state_for
+from chemvas.ui.transactions.scene_rect import (
+    capture_scene_rect_snapshot,
+    release_scene_rect_snapshot,
+)
 from chemvas.ui.transactions.scene_runtime import (
     _UNAVAILABLE_ITEM_VALUE,
-    capture_scene_rect_snapshot,
     capture_scene_runtime,
     create_scene_items_atomically,
     mutate_existing_scene_items_atomically,
-    release_scene_rect_snapshot,
-    restore_scene_rect_snapshot,
-    restore_scene_runtime,
+    restore_absolute_snapshots,
 )
 
 
@@ -399,16 +400,9 @@ class UpdateSceneItemCommand(HistoryCommand):
             # that rebuild raises, applying the item state back is insufficient:
             # restore the exact pre-command outline membership/list identity and
             # other selection runtime state as well.
-            run_rollback_step(
-                original_error,
-                "restoring the absolute scene/runtime snapshot",
-                partial(
-                    restore_scene_runtime,
-                    runtime_snapshot,
-                    original_error=original_error,
-                ),
+            restore_absolute_snapshots(
+                runtime_snapshot, scene_rect_snapshot, original_error
             )
-            restore_scene_rect_snapshot(scene_rect_snapshot, original_error)
             raise
 
     @override
@@ -516,16 +510,9 @@ def _run_group_state_transaction(
             outline_rollback_note,
             lambda: refresh_selection_outline_for_canvas(canvas),
         )
-        run_rollback_step(
-            original_error,
-            "restoring the absolute scene/runtime snapshot",
-            partial(
-                restore_scene_runtime,
-                runtime_snapshot,
-                original_error=original_error,
-            ),
+        restore_absolute_snapshots(
+            runtime_snapshot, scene_rect_snapshot, original_error
         )
-        restore_scene_rect_snapshot(scene_rect_snapshot, original_error)
         raise
 
 
@@ -665,16 +652,9 @@ class ChangeAtomLabelCommand(HistoryCommand):
                 "restoring the prior SMILES input",
                 lambda: set_last_smiles_input_for(canvas, rollback_smiles_input),
             )
-            run_rollback_step(
-                original_error,
-                "restoring the absolute scene/runtime snapshot",
-                partial(
-                    restore_scene_runtime,
-                    runtime_snapshot,
-                    original_error=original_error,
-                ),
+            restore_absolute_snapshots(
+                runtime_snapshot, scene_rect_snapshot, original_error
             )
-            restore_scene_rect_snapshot(scene_rect_snapshot, original_error)
             raise
 
     @override

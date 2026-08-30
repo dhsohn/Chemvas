@@ -26,7 +26,12 @@ from chemvas.ui.scene_item_access import (
 from chemvas.ui.scene_item_access import (
     restore_scene_item as _restore_scene_item,
 )
-from chemvas.ui.transactions.scene_rect import SceneRectSnapshot
+from chemvas.ui.transactions.scene_rect import (
+    SceneRectSnapshot,
+    capture_scene_rect_snapshot,
+    release_scene_rect_snapshot,
+    restore_scene_rect_snapshot,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -1805,59 +1810,23 @@ def _restore_scene_item_memberships(
         )
 
 
-def release_scene_rect_snapshot(
-    snapshot: SceneRectSnapshot | None,
-) -> None:
-    if snapshot is None:
-        return
-    if not snapshot.automatic or not snapshot.guarded:
-        snapshot.release()
-        return
-    items_bounding_rect = snapshot.scene_items_bounding_rect_getter
-    snapshot.release(
-        authoritative_scene_bounds_getter=(
-            items_bounding_rect if callable(items_bounding_rect) else None
-        )
-    )
-
-
-def capture_scene_rect_snapshot(scene) -> SceneRectSnapshot | None:
-    items_bounding_rect = _snapshot_attribute(
-        scene,
-        "itemsBoundingRect",
-    )
-    snapshot = SceneRectSnapshot.capture(scene)
-    if snapshot is not None:
-        snapshot.scene_items_bounding_rect_getter = (
-            items_bounding_rect if callable(items_bounding_rect) else None
-        )
-    return snapshot
-
-
-def restore_scene_rect_snapshot(
-    snapshot: SceneRectSnapshot | None,
+def restore_absolute_snapshots(
+    runtime_snapshot: SceneRuntimeSnapshot,
+    scene_rect_snapshot: SceneRectSnapshot | None,
     original_error: BaseException,
 ) -> None:
-    def note_restore_error(error: BaseException, *, phase: str) -> None:
-        if isinstance(error, BaseExceptionGroup):
-            for nested_error in error.exceptions:
-                note_restore_error(nested_error, phase=phase)
-            return
-        add_recovery_error_note(
-            original_error,
-            error,
-            phase=phase,
-        )
+    """The shared rollback tail: absolute scene/runtime snapshot, then rect."""
 
-    if snapshot is None:
-        return
-    try:
-        snapshot.restore()
-    except Exception as restore_error:
-        note_restore_error(
-            restore_error,
-            phase="restoring the automatic scene rect",
-        )
+    run_rollback_step(
+        original_error,
+        "restoring the absolute scene/runtime snapshot",
+        partial(
+            restore_scene_runtime,
+            runtime_snapshot,
+            original_error=original_error,
+        ),
+    )
+    restore_scene_rect_snapshot(scene_rect_snapshot, original_error)
 
 
 def mutate_existing_scene_items_atomically(
@@ -1887,16 +1856,9 @@ def mutate_existing_scene_items_atomically(
             unknown_was_attached=unknown_was_attached,
             original_error=original_error,
         )
-        run_rollback_step(
-            original_error,
-            "restoring the absolute scene/runtime snapshot",
-            partial(
-                restore_scene_runtime,
-                runtime_snapshot,
-                original_error=original_error,
-            ),
+        restore_absolute_snapshots(
+            runtime_snapshot, scene_rect_snapshot, original_error
         )
-        restore_scene_rect_snapshot(scene_rect_snapshot, original_error)
         raise
 
 
@@ -1937,14 +1899,7 @@ def create_scene_items_atomically(canvas, states: list[dict], items: list) -> No
                 partial(_remove_scene_item, canvas, item),
             )
         items[:] = original_items
-        run_rollback_step(
-            original_error,
-            "restoring the absolute scene/runtime snapshot",
-            partial(
-                restore_scene_runtime,
-                runtime_snapshot,
-                original_error=original_error,
-            ),
+        restore_absolute_snapshots(
+            runtime_snapshot, scene_rect_snapshot, original_error
         )
-        restore_scene_rect_snapshot(scene_rect_snapshot, original_error)
         raise
