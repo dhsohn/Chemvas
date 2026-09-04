@@ -22,6 +22,7 @@ from PyQt6.QtWidgets import (
 
 from chemvas.shell.theme import MAIN_WINDOW_STYLESHEET
 from chemvas.shell.toolbar_buttons import ArrowButton, CornerMenuButton
+from chemvas.ui import main_window_menu_bar
 from chemvas.ui.main_window_config import TOOLBAR_TOOL_ACTION_ORDER
 from chemvas.ui.main_window_panel_toolbar import MainWindowPanelToolbarCallbacks
 from chemvas.ui.main_window_ui_assembly_service import (
@@ -550,9 +551,14 @@ class MainWindowUIAssemblyServiceTest(unittest.TestCase):
         window = _HarnessWindow()
         self.addCleanup(window.close)
 
-        with mock.patch(
-            "chemvas.ui.main_window_menu_bar.show_about_dialog"
-        ) as show_about:
+        with (
+            mock.patch(
+                "chemvas.ui.main_window_menu_bar.show_about_dialog"
+            ) as show_about,
+            mock.patch(
+                "chemvas.ui.main_window_menu_bar._open_project_repository"
+            ) as open_repository,
+        ):
             assembly = self.service.init_menu_bar(window)
 
             help_menu = self._menu(assembly.menu_bar, "Help")
@@ -576,6 +582,37 @@ class MainWindowUIAssemblyServiceTest(unittest.TestCase):
             show_about.assert_not_called()
             about_action.trigger()
             show_about.assert_called_once_with(window)
+            github_action = next(
+                action for action in actions if action.text() == "Chemvas on GitHub"
+            )
+            open_repository.assert_not_called()
+            github_action.trigger()
+            open_repository.assert_called_once_with()
+
+    def test_github_repository_uses_wsl_browser_bridge(self) -> None:
+        with (
+            mock.patch.dict(
+                os.environ, {"WSL_DISTRO_NAME": "Ubuntu-20.04"}, clear=False
+            ),
+            mock.patch(
+                "chemvas.ui.main_window_menu_bar.shutil.which",
+                return_value="/usr/bin/wslview",
+            ),
+            mock.patch(
+                "chemvas.ui.main_window_menu_bar.QProcess.startDetached",
+                return_value=(True, 1234),
+            ) as start_detached,
+            mock.patch(
+                "chemvas.ui.main_window_menu_bar.QDesktopServices.openUrl"
+            ) as qt_open_url,
+        ):
+            opened = main_window_menu_bar._open_project_repository()
+
+        self.assertTrue(opened)
+        start_detached.assert_called_once_with(
+            "/usr/bin/wslview", [main_window_menu_bar.GITHUB_URL]
+        )
+        qt_open_url.assert_not_called()
 
     def test_apply_theme_sets_stylesheet(self) -> None:
         window = QMainWindow()
