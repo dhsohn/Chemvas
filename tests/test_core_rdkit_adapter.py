@@ -1869,6 +1869,150 @@ class RDKitAdapterTest(unittest.TestCase):
     @unittest.skipUnless(
         _RealChem is not None, "RDKit is required for MCS suggestion tests"
     )
+    def test_suggest_atom_correspondence_honors_symmetric_scaffold_anchor(
+        self,
+    ) -> None:
+        adapter = RDKitAdapter()
+        model = MoleculeModel()
+        reactant = [model.add_atom("C", float(index), 0.0) for index in range(6)]
+        product = [model.add_atom("C", float(index), 5.0) for index in range(6)]
+        for ring in (reactant, product):
+            for index, atom_id in enumerate(ring):
+                model.add_bond(atom_id, ring[(index + 1) % len(ring)], 1)
+
+        # The product anchor is rotated away from RDKit's independent default
+        # embedding. Mixing the default remainder into this fixed pair used to
+        # turn conserved ring bonds into artificial reaction-center changes.
+        fixed = {reactant[0]: product[1]}
+        result = adapter.suggest_atom_correspondence_result(
+            model,
+            frozenset(reactant),
+            frozenset(product),
+            fixed,
+        )
+
+        self.assertIsNone(result.error)
+        assert result.value is not None
+        correspondence = dict(result.value)
+        self.assertEqual(len(correspondence), len(reactant))
+        self.assertEqual(correspondence[reactant[0]], product[1])
+        product_bonds = {
+            frozenset((bond.a, bond.b))
+            for bond in model.bonds
+            if bond.a in product and bond.b in product
+        }
+        for bond in model.bonds:
+            if bond.a not in reactant or bond.b not in reactant:
+                continue
+            self.assertIn(
+                frozenset((correspondence[bond.a], correspondence[bond.b])),
+                product_bonds,
+            )
+
+    @unittest.skipUnless(
+        _RealChem is not None, "RDKit is required for MCS suggestion tests"
+    )
+    def test_suggest_atom_correspondence_never_ignores_an_excluded_anchor(
+        self,
+    ) -> None:
+        adapter = RDKitAdapter()
+        model = MoleculeModel()
+        reactant = [model.add_atom("C", float(index), 0.0) for index in range(4)]
+        product = [model.add_atom("C", float(index), 5.0) for index in range(4)]
+        for leaf in reactant[1:]:
+            model.add_bond(reactant[0], leaf, 1)
+        for index in range(len(product) - 1):
+            model.add_bond(product[index], product[index + 1], 1)
+
+        # The first unconstrained embeddings omit both fixed atoms. Treating
+        # their absent positions as a matching sentinel used to ignore this
+        # anchor and suggest bonds that become artificial breaks when merged.
+        fixed = {reactant[3]: product[0]}
+        result = adapter.suggest_atom_correspondence_result(
+            model,
+            frozenset(reactant),
+            frozenset(product),
+            fixed,
+        )
+
+        self.assertIsNone(result.error)
+        assert result.value is not None
+        correspondence = dict(result.value)
+        self.assertEqual(correspondence[reactant[3]], product[0])
+        product_bonds = {
+            frozenset((bond.a, bond.b))
+            for bond in model.bonds
+            if bond.a in product and bond.b in product
+        }
+        for bond in model.bonds:
+            if bond.a not in correspondence or bond.b not in correspondence:
+                continue
+            self.assertIn(
+                frozenset((correspondence[bond.a], correspondence[bond.b])),
+                product_bonds,
+            )
+
+    @unittest.skipUnless(
+        _RealChem is not None, "RDKit is required for MCS suggestion tests"
+    )
+    def test_suggest_atom_correspondence_rejects_anchor_outside_every_mcs_embedding(
+        self,
+    ) -> None:
+        adapter = RDKitAdapter()
+        model = MoleculeModel()
+        reactant = [model.add_atom("C", float(index), 0.0) for index in range(3)]
+        product = [model.add_atom("C", float(index), 5.0) for index in range(3)]
+        for chain in (reactant, product):
+            model.add_bond(chain[0], chain[1], 1)
+            model.add_bond(chain[1], chain[2], 1)
+        reactant_anchor = model.add_atom("O", 10.0, 0.0)
+        product_anchor = model.add_atom("O", 10.0, 5.0)
+
+        result = adapter.suggest_atom_correspondence_result(
+            model,
+            frozenset((*reactant, reactant_anchor)),
+            frozenset((*product, product_anchor)),
+            {reactant_anchor: product_anchor},
+        )
+
+        self.assertIsNone(result.value)
+        self.assertEqual(
+            result.error,
+            "The existing atom mappings do not align with the shared "
+            "substructure. Review or clear them before requesting a "
+            "structural suggestion.",
+        )
+
+    @unittest.skipUnless(
+        _RealChem is not None, "RDKit is required for MCS suggestion tests"
+    )
+    def test_suggest_atom_correspondence_rejects_incompatible_anchor(self) -> None:
+        adapter = RDKitAdapter()
+        model = MoleculeModel()
+        reactant = [model.add_atom("C", float(index), 0.0) for index in range(3)]
+        product = [model.add_atom("C", float(index), 5.0) for index in range(3)]
+        for chain in (reactant, product):
+            model.add_bond(chain[0], chain[1], 1)
+            model.add_bond(chain[1], chain[2], 1)
+
+        result = adapter.suggest_atom_correspondence_result(
+            model,
+            frozenset(reactant),
+            frozenset(product),
+            {reactant[0]: product[1]},
+        )
+
+        self.assertIsNone(result.value)
+        self.assertEqual(
+            result.error,
+            "The existing atom mappings do not align with the shared "
+            "substructure. Review or clear them before requesting a "
+            "structural suggestion.",
+        )
+
+    @unittest.skipUnless(
+        _RealChem is not None, "RDKit is required for MCS suggestion tests"
+    )
     def test_real_rdkit_smoke_suggestion_survives_an_unsanitizable_drawing(
         self,
     ) -> None:

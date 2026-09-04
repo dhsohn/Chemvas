@@ -7,9 +7,13 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 from PyQt6.QtCore import QRectF
 from PyQt6.QtWidgets import QApplication, QGraphicsItem
 
+from chemvas.adapters.qt.renderer import Renderer
 from chemvas.ui.atom_coords_access import atom_coords_3d_for
 from chemvas.ui.bond_graphics_access import project_point_3d_for
+from chemvas.ui.canvas_atom_graphics_state import visible_atom_item_for
 from chemvas.ui.canvas_rotation_state import rotation_state_for
+from chemvas.ui.canvas_service_access import canvas_services_for
+from chemvas.ui.canvas_view import CanvasView
 from tests.test_scene_ops_controller import (
     _FakeCanvas,
     _make_note_item,
@@ -226,6 +230,44 @@ class SceneOpsControllerPasteEdgesTest(unittest.TestCase):
         )
         self.assertEqual(canvas.clear_note_selection_calls, 1)
         self.assertEqual(canvas.update_selection_outline_calls, 1)
+
+    def test_paste_relayouts_alias_after_its_bond_is_available(self) -> None:
+        canvas = CanvasView(renderer=Renderer())
+        controller = canvas_services_for(
+            canvas
+        ).scene_operations.scene_clipboard_controller
+        payload = {
+            "format": "chemvas-selection",
+            "version": 2,
+            "atoms": [
+                {"id": 10, "element": "CF3", "x": 0.0, "y": 0.0},
+                {"id": 11, "element": "C", "x": 20.0, "y": 0.0},
+            ],
+            "bonds": [
+                {
+                    "a": 10,
+                    "b": 11,
+                    "order": 1,
+                    "style": "single",
+                    "color": "#000000",
+                }
+            ],
+            "rings": [],
+            "marks": [],
+            "scene_items": [],
+        }
+
+        self.assertTrue(
+            controller.paste_selection_from_clipboard(
+                payload_provider=lambda: (payload, "alias-payload")
+            )
+        )
+
+        label = visible_atom_item_for(canvas, 0)
+        self.assertIsNotNone(label)
+        self.assertEqual(label.toPlainText(), "F3C")
+        self.assertEqual(canvas.model.atoms[0].element, "CF3")
+        canvas.deleteLater()
 
     def test_paste_selection_from_clipboard_rolls_back_if_history_recording_raises(
         self,

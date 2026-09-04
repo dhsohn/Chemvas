@@ -3,7 +3,7 @@ from __future__ import annotations
 import contextlib
 from typing import TYPE_CHECKING, Any
 
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import QRectF, Qt
 from PyQt6.QtGui import QBrush, QColor, QFont
 from PyQt6.QtWidgets import (
     QGraphicsItem,
@@ -11,6 +11,8 @@ from PyQt6.QtWidgets import (
     QGraphicsSimpleTextItem,
 )
 
+from chemvas.ui.canvas_atom_graphics_state import visible_atom_item_for
+from chemvas.ui.pick_radius_access import atom_pick_radius_for
 from chemvas.ui.selection_style_access import atom_center_point_for
 
 if TYPE_CHECKING:
@@ -100,12 +102,25 @@ class CalculationMappingHighlighter:
         font.setPointSizeF(7.0)
         font.setBold(True)
         text.setFont(font)
-        text.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIgnoresTransformations, True)
-        # Anchor to the atom itself (not the pick circle, which widens to cover a
-        # long label like OTs or PPh3), just above-right so the id hugs the glyph.
+        # Scale with the canvas so this scene-coordinate clearance remains
+        # valid when the user changes zoom while the mapping dialog is open.
+        clearance_top = center.y() - atom_pick_radius_for(self._canvas)
+        atom_item = visible_atom_item_for(self._canvas, atom_id)
+        if atom_item is not None:
+            bounds_getter = getattr(atom_item, "export_scene_bounding_rect", None)
+            try:
+                visible_bounds = bounds_getter() if callable(bounds_getter) else None
+            except RuntimeError:
+                visible_bounds = None
+            if isinstance(visible_bounds, QRectF) and not visible_bounds.isEmpty():
+                clearance_top = min(clearance_top, visible_bounds.top())
+        text_bounds = text.boundingRect()
+        # Horizontal placement stays tied to the atom center rather than a long
+        # alias's widened hit rectangle. Vertically, clear both the painted
+        # glyph and the ordinary atom pick radius.
         text.setPos(
-            center.x() + _LABEL_OFFSET,
-            center.y() - text.boundingRect().height() - _LABEL_OFFSET,
+            center.x() + _LABEL_OFFSET - text_bounds.left(),
+            clearance_top - _LABEL_OFFSET - text_bounds.bottom(),
         )
         self._prepare_item(text, z_value=_LABEL_Z)
         scene.addItem(text)

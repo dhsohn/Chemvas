@@ -176,6 +176,15 @@ published by `pack-step` below; there is no separate per-species bundle format.
 
 ## Calculation states and elementary steps
 
+Install the RDKit extra before using calculation handoff:
+
+```bash
+pip install "chemvas[rdkit]"
+```
+
+Attaching and inspecting a plan do not invoke RDKit, but **Suggest by
+structure**, `generate-precomplex`, and `pack-step` require it.
+
 Draw the reactant, product, catalyst, and spectators on one canvas, then open
 **Calculation ▸ Edit States and Steps...**. For each endpoint, assign every
 connected component one of these inclusion modes:

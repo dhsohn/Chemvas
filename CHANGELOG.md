@@ -15,6 +15,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   session snapshot during the deferred close.
 - Help > Chemvas on GitHub now uses the WSL browser bridge when available,
   instead of silently accepting Qt's unsuccessful Linux browser dispatch.
+- Deleting and restoring atom charge or radical marks now keeps the chemistry
+  model and selection information synchronized, including undo and redo.
+- Calculation handoff now omits UI values from locked endpoints and constrains
+  structure-based mapping suggestions with reviewed atom correspondences.
+- Atom-label layout now follows pasted and edited bond geometry, preserves
+  isolated-label typing order, treats lowercase carbon labels consistently,
+  and keeps mapping identifiers clear of visible atom glyphs.
+- Layout QA now honors dashed strokes and skips fully transparent shapes, while
+  version 7 documents retain legacy font sizes above the current authoring cap.
+- Explicit Note-tool selection now expands mixed groups, and changing away from
+  the Select tool clears stale resize and rotation handles.
+- Transaction rollback now remains available after a failed savepoint release
+  and preserves equal-z scene ordering in scoped snapshots.
+- Packaged documentation now uses PyPI-safe links and identifies RDKit as a
+  calculation-handoff dependency; the modularization ADR now distinguishes
+  local checks from CI smoke jobs and reports the measured Qt-import ratio.
 
 ## [0.6.0] - 2026-08-30
 

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from PyQt6.QtCore import QPointF
 from PyQt6.QtGui import QPainterPath, QPolygonF
 
@@ -39,10 +41,19 @@ from chemvas.ui.renderer_style_access import (
 )
 from chemvas.ui.scene_item_access import remove_item_from_canvas_scene
 
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
 
 class BondRenderer:
-    def __init__(self, canvas) -> None:
+    def __init__(
+        self,
+        canvas,
+        *,
+        atom_label_relayout: Callable[[set[int], set[int]], None] | None = None,
+    ) -> None:
         self.canvas = canvas
+        self._atom_label_relayout = atom_label_relayout
         self.graph = graph_state_for(canvas)
         self.graphics = BondGraphicsFactory(renderer_for(canvas))
         self.line_geometry = BondLineGeometryService(canvas)
@@ -256,6 +267,7 @@ class BondRenderer:
     def update_bond_geometry(
         self, bond_id: int, *, allow_topology_rebuild: bool = False
     ) -> None:
+        self._relayout_bond_atom_labels(bond_id)
         if allow_topology_rebuild and self.geometry_updater.topology_is_stale(bond_id):
             # A gesture or history step just finished: keeping the mid-gesture
             # item identity would freeze a hash-mark count that reopening the
@@ -285,7 +297,19 @@ class BondRenderer:
         )
 
     def add_bond_graphics(self, bond_id: int) -> None:
+        self._relayout_bond_atom_labels(bond_id)
         self.graphics_builder.add_bond_graphics(bond_id)
+
+    def _relayout_bond_atom_labels(self, bond_id: int) -> None:
+        if self._atom_label_relayout is None:
+            return
+        bonds = bonds_for(self.canvas)
+        if not 0 <= bond_id < len(bonds):
+            return
+        bond = bonds[bond_id]
+        if bond is None:
+            return
+        self._atom_label_relayout({bond.a, bond.b}, {bond_id})
 
 
 __all__ = ["BondRenderer"]

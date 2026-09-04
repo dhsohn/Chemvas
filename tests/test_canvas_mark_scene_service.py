@@ -9,21 +9,31 @@ from tests.runtime_services import canvas_runtime_services
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PyQt6.QtCore import QPointF
+from PyQt6.QtWidgets import QApplication
 
-from chemvas.domain.document import Atom
+from chemvas.adapters.qt.renderer import Renderer
+from chemvas.domain.document import Atom, MoleculeModel
 from chemvas.ui.canvas_mark_registry import CanvasMarkRegistry, mark_registry_for
 from chemvas.ui.canvas_mark_scene_service import CanvasMarkSceneService
+from chemvas.ui.canvas_model_access import model_for, set_atom_annotation_for
 from chemvas.ui.canvas_scene_items_state import (
     CanvasSceneItemsState,
     mark_items_for,
     set_scene_item_collection_for,
 )
 from chemvas.ui.canvas_tool_settings_state import CanvasToolSettingsState
+from chemvas.ui.canvas_view import CanvasView
+from chemvas.ui.scene_decoration_access import add_mark_for_atom_for
 from chemvas.ui.selection_info_state import SelectionInfoState
 from tests.runtime_state import canvas_runtime_state
 
 
 class CanvasMarkSceneServiceTest(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.app = QApplication.instance() or QApplication([])
+        cls.app.setQuitOnLastWindowClosed(False)
+
     def test_missing_atom_paths(self) -> None:
         scene_decoration_service = SimpleNamespace(add_mark=mock.Mock())
         canvas = SimpleNamespace(
@@ -116,6 +126,7 @@ class CanvasMarkSceneServiceTest(unittest.TestCase):
         free_mark = SimpleNamespace(data=lambda key: {1: {"atom_id": None}}.get(key))
         canvas = SimpleNamespace(
             scene=lambda: scene,
+            model=MoleculeModel(),
             runtime_state=canvas_runtime_state(
                 mark_registry=CanvasMarkRegistry({4: [atom_mark], 9: [atom_mark_2]}),
                 scene_items_state=CanvasSceneItemsState(),
@@ -143,6 +154,87 @@ class CanvasMarkSceneServiceTest(unittest.TestCase):
         # removal paths must refresh it.
         self.assertEqual(emit_info.call_args_list, [mock.call(canvas)] * 2)
 
+    def test_deleting_electronic_mark_syncs_annotation_through_undo_and_redo(
+        self,
+    ) -> None:
+        canvas = CanvasView(renderer=Renderer())
+        atom_id = canvas.services.structure.canvas_atom_mutation_service.add_atom(
+            "N", 0.0, 0.0
+        )
+        set_atom_annotation_for(
+            canvas,
+            atom_id,
+            {"formal_charge": 1, "radical_electrons": 1},
+        )
+        plus = add_mark_for_atom_for(
+            canvas,
+            atom_id,
+            QPointF(10.0, -10.0),
+            kind="plus",
+            record=False,
+        )
+        radical = add_mark_for_atom_for(
+            canvas,
+            atom_id,
+            QPointF(-10.0, -10.0),
+            kind="radical",
+            record=False,
+        )
+        assert plus is not None
+        assert radical is not None
+        self.assertEqual(
+            model_for(canvas).atom_annotations,
+            {atom_id: {"formal_charge": 1, "radical_electrons": 1}},
+        )
+
+        plus.setSelected(True)
+        deleted = canvas.services.scene_operations.scene_delete_controller.delete_selected_items()
+
+        self.assertTrue(deleted)
+        self.assertEqual(
+            model_for(canvas).atom_annotations,
+            {atom_id: {"radical_electrons": 1}},
+        )
+
+        canvas.services.history_service.undo()
+        self.assertEqual(
+            model_for(canvas).atom_annotations,
+            {atom_id: {"formal_charge": 1, "radical_electrons": 1}},
+        )
+
+        canvas.services.history_service.redo()
+        self.assertEqual(
+            model_for(canvas).atom_annotations,
+            {atom_id: {"radical_electrons": 1}},
+        )
+        canvas.deleteLater()
+
+    def test_adding_electronic_mark_preserves_annotation_through_undo_and_redo(
+        self,
+    ) -> None:
+        canvas = CanvasView(renderer=Renderer())
+        atom_id = canvas.services.structure.canvas_atom_mutation_service.add_atom(
+            "N", 0.0, 0.0
+        )
+
+        mark = add_mark_for_atom_for(
+            canvas,
+            atom_id,
+            QPointF(10.0, -10.0),
+            kind="plus",
+        )
+
+        assert mark is not None
+        after_add = {atom_id: {"formal_charge": 1}}
+        self.assertEqual(model_for(canvas).atom_annotations, after_add)
+
+        canvas.services.history_service.undo()
+        self.assertEqual(model_for(canvas).atom_annotations, {})
+
+        canvas.services.history_service.redo()
+        self.assertEqual(model_for(canvas).atom_annotations, after_add)
+        canvas.deleteLater()
+
     def test_remove_mark_item_and_remove_marks_for_atom_cover_no_registry_matches(
         self,
     ) -> None:
@@ -151,6 +243,7 @@ class CanvasMarkSceneServiceTest(unittest.TestCase):
         foreign_mark = SimpleNamespace(data=lambda key: {1: {"atom_id": 5}}.get(key))
         canvas = SimpleNamespace(
             scene=lambda: scene,
+            model=MoleculeModel(),
             runtime_state=canvas_runtime_state(
                 mark_registry=CanvasMarkRegistry({5: [foreign_mark]}),
                 scene_items_state=CanvasSceneItemsState(),

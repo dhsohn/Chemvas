@@ -208,6 +208,11 @@ def _settings(value: object) -> dict[str, object]:
     # below once the defaults have been filled in.
     if not set(overrides) <= SETTINGS_KEYS:
         raise ValueError("settings has unknown keys")
+    # Composition v1 is a bounded authoring API even though persisted v7
+    # documents retain their older, unbounded-above compatibility contract.
+    overridden_font_size = overrides.get("text_font_size")
+    if type(overridden_font_size) is int and overridden_font_size > 96:
+        raise ValueError("Invalid Chemvas file.")
     settings.update(overrides)
     # Overridden values feed the mark-distance arithmetic before the final
     # document validation runs, so they must be proven valid here first.

@@ -78,14 +78,13 @@ class TextTool(Tool):
             if not ok:
                 return True
             text = normalize_text_symbol(text)
-        if atom_id is not None and not text and existing_element != "C":
+        if atom_id is not None and not text and existing_element.upper() != "C":
             # An empty label would leave this atom drawn as a bare skeleton
             # vertex while the model and every export still carry the
             # element — the drawing and the chemistry would silently
-            # disagree. Refuse it like other unrepresentable input. The
-            # match is exact because the carbon-dot fallback that keeps a
-            # cleared atom findable is exact too: any other spelling would
-            # clear to nothing.
+            # disagree. Refuse it like other unrepresentable input. Carbon
+            # matching is case-insensitive because the dot fallback that
+            # keeps a cleared carbon findable follows the same contract.
             notify_error_for(
                 self.canvas,
                 "Cannot hide the symbol of a non-carbon atom. Enter C to "

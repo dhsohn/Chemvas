@@ -262,8 +262,12 @@ _BOND_PRIMITIVE_GRAPHICS_PROPERTIES = (
 _ATOM_GRAPHICS_DIRECT_ATTRIBUTES = (
     "_hit_padding",
     "_hit_radius",
+    "_raw_text",
     "_layout",
     "_typographic",
+    "_anchor_element",
+    "_anchor_at_end",
+    "_stack",
     "_stack_element_rect",
 )
 
@@ -788,9 +792,9 @@ def capture_scene_runtime(
         # part of the captured scene, exactly like the whole-document loops
         # over ``scene_items``. Footprint entries that are not scene items
         # (stale registry references, lightweight test doubles) are skipped.
-        scene_item_ids = {id(item) for item in scene_items}
+        detail_item_ids = {id(item) for item in detail_items}
         detail_scope_items = [
-            item for item in detail_items if id(item) in scene_item_ids
+            item for item in scene_items if id(item) in detail_item_ids
         ]
     else:
         detail_scope_items = []

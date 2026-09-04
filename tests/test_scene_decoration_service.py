@@ -95,6 +95,7 @@ class SceneDecorationServiceTest(unittest.TestCase):
                 mark_registry.add_for_atom(atom_id, item)
 
         canvas = SimpleNamespace(
+            model=SimpleNamespace(atoms={7: object()}, atom_annotations={}),
             runtime_state=canvas_runtime_state(
                 tool_settings_state=CanvasToolSettingsState(mark_kind="plus"),
                 scene_items_state=scene_items_state,
@@ -134,6 +135,7 @@ class SceneDecorationServiceTest(unittest.TestCase):
         self.assertEqual(scene.items, [item])
         canvas.attach_scene_item.assert_called_once_with(item)
         build_service.set_mark_center.assert_called_once_with(item, QPointF(4.0, 5.0))
+        self.assertEqual(canvas.model.atom_annotations, {7: {"formal_charge": -1}})
         self.assertEqual(len(pushed), 1)
         self.assertIsInstance(pushed[0], AddSceneItemsCommand)
         self.assertEqual(

@@ -136,6 +136,62 @@ def test_commit_push_failure_restores_document_and_scene(canvas) -> None:
     assert {id(item) for item in canvas.scene().items()} == drawn_items
 
 
+def test_failed_boundary_drag_restores_stationary_endpoint_label_exactly(
+    canvas,
+) -> None:
+    from chemvas.ui.structure_mutation_access import add_atom_for
+
+    moving_id = add_atom_for(canvas, "C", 0.0, 0.0)
+    stationary_id = add_atom_for(canvas, "CF3", 20.0, 0.0)
+    outer_id = add_atom_for(canvas, "C", 40.0, 0.0)
+    _add_bond_with_graphics(canvas, moving_id, stationary_id)
+    outer_bond_id = _add_bond_with_graphics(canvas, stationary_id, outer_id)
+    label = atom_items_for(canvas)[stationary_id]
+    before_outer_bond = _bond_item_states(canvas, outer_bond_id)
+    before = (
+        label.toPlainText(),
+        label._raw_text,
+        label._anchor_element,
+        label._anchor_at_end,
+        label._stack,
+        label.pos(),
+        label.anchor_scene_rect(),
+    )
+    tool = MoveTool(canvas, context=canvas.services.tool_controller.context)
+    assert tool._begin_selection_drag({moving_id}, [], QPointF())
+
+    tool._apply_drag_delta(QPointF(50.0, 0.0))
+
+    assert label.toPlainText() == "F3C"
+    assert label._anchor_at_end is True
+    assert _bond_item_states(canvas, outer_bond_id) != before_outer_bond
+    with (
+        mock.patch.object(
+            canvas.services.history_service,
+            "push",
+            return_value=False,
+        ),
+        mock.patch.object(
+            canvas.bond_renderer,
+            "update_bond_geometry",
+            side_effect=RuntimeError("injected rollback redraw failure"),
+        ),
+        pytest.raises(RuntimeError),
+    ):
+        tool._commit_selection_drag()
+
+    assert (
+        label.toPlainText(),
+        label._raw_text,
+        label._anchor_element,
+        label._anchor_at_end,
+        label._stack,
+        label.pos(),
+        label.anchor_scene_rect(),
+    ) == before
+    assert _bond_item_states(canvas, outer_bond_id) == before_outer_bond
+
+
 def test_moved_drag_still_pushes_one_command_and_round_trips(canvas) -> None:
     molecule_a, _molecule_b = _draw_two_molecules(canvas)
     drawn = _document_state(canvas)

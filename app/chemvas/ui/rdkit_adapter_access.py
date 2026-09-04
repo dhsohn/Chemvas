@@ -1,6 +1,9 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping
 
 
 def rdkit_adapter_for(canvas: Any):
@@ -48,11 +51,13 @@ def suggest_atom_correspondence_result_for(
     model,
     reactant_atom_ids: frozenset[int] | set[int],
     product_atom_ids: frozenset[int] | set[int],
+    existing_correspondence: Mapping[int, int] | None = None,
 ):
     return rdkit_adapter_for(canvas).suggest_atom_correspondence_result(
         model,
         reactant_atom_ids,
         product_atom_ids,
+        existing_correspondence,
     )
 
 

@@ -41,6 +41,7 @@ class SelectTool(SelectionDragMixin, Tool):
     @override
     def deactivate(self) -> None:
         self._cancel_active_interaction()
+        clear_handles_for(self.canvas)
 
     def _selection_drag_context(self, snapshot=None) -> tuple[set[int], list]:
         if snapshot is None:

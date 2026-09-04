@@ -175,18 +175,21 @@ suite, and milestone-level full-suite/package verification.
 
 ## Outcome
 
-All six criteria hold, each enforced by a test rather than asserted here:
+All six criteria hold, enforced by configuration and executable gates rather
+than asserted here:
 `pyproject`'s `packages.find` limits the wheel to `chemvas*`;
 `test_eager_production_import_graph_stays_acyclic`;
 `test_domain_has_no_framework_or_adapter_dependencies`;
 `test_rollback_kernel_has_no_restore_retry_or_qt_base_port_bypass` together with
 `test_exception_notes_have_one_owner` and `test_rollback_runner_has_one_owner`;
-`test_feature_callers_use_package_public_api`; and the gate itself.
+`test_feature_callers_use_package_public_api`; the local `make check` gate for
+lint, formatting, mypy, and process-isolated tests; and CI's `rdkit-smoke` and
+`package-smoke` jobs for the RDKit and installed-wheel checks.
 
 The migration sequence above is a plan, not a criterion, and its step 6 is not
 finished: `chemvas.ui` still holds most production code. That is deliberate and
-this ADR does not hold it open. Of the modules left in `ui`, roughly three
-quarters import PyQt6 directly, and there is no destination defined for them —
+this ADR does not hold it open. Of the 277 modules left in `ui`, 154 (55.6%)
+import PyQt6 directly, and there is no destination defined for them —
 `features` is closed to new Qt modules by the exact-match allowlist, `adapters`
 cannot be imported by `ui`, and `domain` forbids Qt. `shell` is the only legal
 target, which is where the application chrome went; the rest would need a

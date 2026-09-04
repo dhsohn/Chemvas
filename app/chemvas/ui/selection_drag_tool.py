@@ -60,6 +60,12 @@ _DRAG_DELTA_EPSILON = 1e-6
 
 def atom_ids_with_bonds(canvas, atom_ids: set[int], bond_ids: set[int]) -> set[int]:
     expanded = set(atom_ids)
+    # Document savepoints deliberately support lightweight/headless canvases.
+    # Such canvases have no model to expand from, so retain the caller's
+    # explicit atom scope while still allowing their known bond items to be
+    # captured below.
+    if getattr(canvas, "model", None) is None:
+        return expanded
     for bond_id in bond_ids:
         bond = bond_for_id(canvas, bond_id)
         if bond is not None:
@@ -303,15 +309,35 @@ class SelectionDragMixin:
                 for child in child_items():
                     add(child)
 
+        drag_bond_ids = self._drag_bond_ids | self._drag_boundary_bond_ids
+        # Boundary-bond refresh can relayout its stationary endpoint. Include
+        # those neighbouring atoms, plus every bond whose endpoint changes
+        # when that label moves, in the exact savepoint. The endpoints of that
+        # second bond ring are included because its renderer callback evaluates
+        # both labels before writing geometry.
+        relayout_atom_ids = atom_ids_with_bonds(
+            canvas,
+            self._selection_atom_ids,
+            drag_bond_ids,
+        )
+        relayout_internal_bond_ids, relayout_boundary_bond_ids = (
+            self.context.bond_sets_for_atoms(relayout_atom_ids)
+        )
+        bond_ids = relayout_internal_bond_ids | relayout_boundary_bond_ids
+        affected_atom_ids = atom_ids_with_bonds(
+            canvas,
+            relayout_atom_ids,
+            bond_ids,
+        )
         atom_labels = atom_items_for(canvas)
         atom_dots = atom_dots_for(canvas)
-        marks = mark_registry_for(canvas)
-        for atom_id in self._selection_atom_ids:
+        for atom_id in affected_atom_ids:
             add(atom_labels.get(atom_id))
             add(atom_dots.get(atom_id))
+        marks = mark_registry_for(canvas)
+        for atom_id in self._selection_atom_ids:
             for mark in marks.get_for_atom(atom_id) or ():
                 add(mark)
-        bond_ids = self._drag_bond_ids | self._drag_boundary_bond_ids
         for bond_id in bond_ids:
             for bond_item in bond_items_for_id(canvas, bond_id):
                 add(bond_item)
@@ -324,7 +350,7 @@ class SelectionDragMixin:
         for selection_item in self._selection_items:
             add(selection_item)
         return MoveGestureScope(
-            atom_ids=frozenset(self._selection_atom_ids),
+            atom_ids=frozenset(affected_atom_ids),
             bond_ids=frozenset(bond_ids),
             scene_items=tuple(items),
         )

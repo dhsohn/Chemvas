@@ -886,6 +886,24 @@ class StructureBuildServiceTest(unittest.TestCase):
             ],
         )
 
+    def test_render_model_preserves_lowercase_carbon_visibility(self) -> None:
+        canvas = _FakeCanvas()
+        service = _service_for(canvas)
+        canvas.model = MoleculeModel(
+            atoms={
+                0: Atom("c", 0.0, 0.0, explicit_label=False),
+                1: Atom("c", 10.0, 0.0, explicit_label=True),
+            }
+        )
+
+        service.render_model()
+
+        self.assertEqual(canvas.carbon_dots, [0])
+        self.assertEqual(
+            canvas.wrapper_label_calls,
+            [(1, "c", False, False, True, True)],
+        )
+
     def test_add_bond_between_points_creates_or_updates_bonds_with_history(
         self,
     ) -> None:

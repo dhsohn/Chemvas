@@ -570,16 +570,27 @@ class SceneGroupOperationsTest(unittest.TestCase):
         )
         self.assertFalse(group_state_for(canvas).expanding)
 
-    def test_expand_note_selection_skips_mixed_groups_and_reentry(self) -> None:
+    def test_expand_note_selection_selects_mixed_group_and_skips_reentry(self) -> None:
         canvas = _Canvas()
-        atom_a, _ = _add_atom(canvas)
-        note = _add_note(canvas, selected=True)
+        atom_a, atom_item = _add_atom(canvas)
+        arrow = _add_arrow(canvas)
+        note = _add_note(canvas)
         other = _add_note(canvas)
-        register_group_for(canvas, {atom_a}, [note, other])
+        register_group_for(canvas, {atom_a}, [arrow, note, other])
+        service = SelectionNoteService(canvas)
 
-        # Mixed groups expand through the scene selectionChanged hook instead.
-        expand_note_selection_to_groups_for(canvas, note)
-        canvas.selection_controller.select_note.assert_not_called()
+        # A direct Note-tool selection is an explicit group anchor even though
+        # raw Qt note selection remains excluded from the marquee expansion.
+        with mock.patch.object(service, "update_note_selection_box"):
+            service.select_note(note, additive=True)
+
+        self.assertIn(note, selected_notes_for(canvas))
+        self.assertTrue(atom_item.isSelected())
+        self.assertTrue(arrow.isSelected())
+        canvas.selection_controller.select_note.assert_called_once_with(
+            other, additive=True
+        )
+        self.assertFalse(group_state_for(canvas).expanding)
 
         notes_only_canvas = _Canvas()
         note_a = _add_note(notes_only_canvas, selected=True)

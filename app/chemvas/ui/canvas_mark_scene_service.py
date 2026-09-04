@@ -6,7 +6,10 @@ from PyQt6.QtCore import QPointF
 
 from chemvas.ui.canvas_geometry_access import mark_target_distance_for_atom_for
 from chemvas.ui.canvas_mark_registry import mark_registry_for
-from chemvas.ui.canvas_model_access import atom_for_id
+from chemvas.ui.canvas_model_access import (
+    atom_for_id,
+    sync_atom_annotation_from_marks_for,
+)
 from chemvas.ui.canvas_scene_items_state import remove_scene_item_from_collection_for
 from chemvas.ui.canvas_tool_settings_state import tool_settings_state_for
 from chemvas.ui.renderer_style_access import bond_length_px_for
@@ -80,6 +83,11 @@ class CanvasMarkSceneService:
                 self.marks.by_atom.pop(atom_id, None)
         remove_item_from_canvas_scene(self.canvas, item)
         if isinstance(atom_id, int):
+            sync_atom_annotation_from_marks_for(
+                self.canvas,
+                atom_id,
+                self.marks.get_for_atom(atom_id) or (),
+            )
             # Dropping an atom-bound mark changes the selection formula
             # readout without changing the selection; refresh it here.
             emit_selection_info_for(self.canvas)
@@ -90,6 +98,7 @@ class CanvasMarkSceneService:
             remove_scene_item_from_collection_for(self.canvas, "mark_items", item)
             remove_item_from_canvas_scene(self.canvas, item)
         if marks:
+            sync_atom_annotation_from_marks_for(self.canvas, atom_id, ())
             emit_selection_info_for(self.canvas)
 
     def mark_center_for_pointer(

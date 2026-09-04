@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING, Any
 
 from chemvas.ui.canvas_atom_mutation_service import CanvasAtomMutationService
 from chemvas.ui.canvas_bond_mutation_service import CanvasBondMutationService
+from chemvas.ui.canvas_service_ports import atom_label_service_for_access
 from chemvas.ui.insert_controller import InsertController
 from chemvas.ui.structure_build_service import StructureBuildService
 
@@ -38,6 +39,9 @@ def build_structure_services(
         canvas,
         hit_testing_service=hit_testing_service,
         graph_service=graph_service,
+        atom_label_relayout=lambda atom_ids: atom_label_service_for_access(
+            canvas
+        ).relayout_atom_labels(atom_ids),
     )
     structure_build_service = StructureBuildService(
         canvas,

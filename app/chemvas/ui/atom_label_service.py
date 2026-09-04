@@ -18,6 +18,7 @@ from chemvas.features.annotations import (
 from chemvas.ui.atom_label_access import uses_compact_label_hit_shape_for
 from chemvas.ui.atom_label_history_recorder import AtomLabelHistoryRecorder
 from chemvas.ui.atom_label_merge_service import AtomLabelMergeService
+from chemvas.ui.bond_renderer_access import update_bond_geometry_for
 from chemvas.ui.canvas_atom_graphics_state import (
     atom_dots_for,
     atom_items_for,
@@ -27,9 +28,11 @@ from chemvas.ui.canvas_atom_graphics_state import (
     set_atom_item_for,
     visible_atom_item_for,
 )
+from chemvas.ui.canvas_bond_graphics_state import bond_items_for_id
 from chemvas.ui.canvas_hover_state import hover_state_for
 from chemvas.ui.canvas_model_access import (
     atom_for_id,
+    bonds_for,
     required_atom_for,
 )
 from chemvas.ui.canvas_smiles_input_state import (
@@ -53,7 +56,7 @@ from chemvas.ui.scene_selectability import make_item_selectable
 from chemvas.ui.structure_geometry_access import connected_atom_unit_vectors_for
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Callable, Iterable
 
     from chemvas.ui.canvas_view import CanvasView
 
@@ -94,6 +97,10 @@ class AtomLabelService:
         self.move_controller = move_controller
         self.graph_service = graph_service
         self._hover_refresh = hover_refresh or (lambda: None)
+        self._relayout_batch_active = False
+        self._pending_relayout_atom_ids: set[int] = set()
+        self._pending_relayout_bond_ids: set[int] = set()
+        self._processed_relayout_bond_ids: set[int] = set()
         self._history_recorder = AtomLabelHistoryRecorder(
             canvas,
             history_service=history_service,
@@ -148,6 +155,128 @@ class AtomLabelService:
         if center is None:
             center = item.boundingRect().center()
         item.setPos(x - center.x() + offset, y - center.y() - offset)
+
+    @staticmethod
+    def _label_presentation_signature(item: AtomLabelItem) -> tuple[object, ...]:
+        position = item.pos()
+        stack_rect = item._stack_element_rect
+        return (
+            item.toPlainText(),
+            item._raw_text,
+            item._layout,
+            item._typographic,
+            item._anchor_element,
+            item._anchor_at_end,
+            item._stack,
+            (
+                None
+                if stack_rect is None
+                else (
+                    stack_rect.x(),
+                    stack_rect.y(),
+                    stack_rect.width(),
+                    stack_rect.height(),
+                )
+            ),
+            (position.x(), position.y()),
+        )
+
+    def relayout_atom_label(self, atom_id: int) -> bool:
+        """Recompute one label from stored text and current bond geometry.
+
+        The displayed order and anchor are derived presentation state: the
+        model keeps exactly what the user typed, while this method can be
+        called repeatedly after topology or coordinates change. The return
+        value reports whether the visible layout, anchor, or position changed.
+        """
+
+        atom = atom_for_id(self.canvas, atom_id)
+        item = atom_items_for(self.canvas).get(atom_id)
+        if atom is None or not isinstance(item, AtomLabelItem):
+            return False
+        before = self._label_presentation_signature(item)
+        display_text, anchor_element, anchor_at_end, hydrogens_below = (
+            self._hydride_layout(atom_id, atom.element)
+        )
+        item.setPlainText(display_text)
+        if hydrogens_below is None:
+            item.set_anchor(anchor_element, at_end=anchor_at_end)
+        else:
+            item.set_stack_anchor(
+                anchor_element,
+                hydrogens_below=hydrogens_below,
+            )
+        self.position_label(item, atom.x, atom.y)
+        return self._label_presentation_signature(item) != before
+
+    def relayout_atom_labels(
+        self,
+        atom_ids: Iterable[int],
+        *,
+        skip_bond_ids: Iterable[int] = (),
+    ) -> None:
+        """Relayout a batch and refresh each affected incident bond once.
+
+        A bond refresh calls back into this method for its own endpoints. The
+        pending sets turn those callbacks into more work for the active batch,
+        while the processed set prevents recursion and duplicate refreshes.
+        ``skip_bond_ids`` names geometry the caller is already about to update.
+        """
+
+        requested_atom_ids = set(atom_ids)
+        requested_skip_bond_ids = set(skip_bond_ids)
+        self._processed_relayout_bond_ids.update(requested_skip_bond_ids)
+        if self._relayout_batch_active:
+            # The renderer computes its bond primitive immediately after this
+            # callback returns. Relayout these endpoints synchronously so that
+            # primitive sees both fresh ends, while deferring any newly
+            # affected incident bonds to the owning outer batch.
+            changed_atom_ids = self._relayout_atom_ids(requested_atom_ids)
+            if changed_atom_ids:
+                self._pending_relayout_bond_ids.update(
+                    self._incident_bond_ids(changed_atom_ids)
+                )
+            return
+        self._pending_relayout_atom_ids.update(requested_atom_ids)
+        self._relayout_batch_active = True
+        try:
+            while self._pending_relayout_atom_ids or self._pending_relayout_bond_ids:
+                pending_atom_ids = sorted(self._pending_relayout_atom_ids)
+                self._pending_relayout_atom_ids.clear()
+                changed_atom_ids = self._relayout_atom_ids(pending_atom_ids)
+                if changed_atom_ids:
+                    self._pending_relayout_bond_ids.update(
+                        self._incident_bond_ids(changed_atom_ids)
+                    )
+
+                pending_bond_ids = sorted(self._pending_relayout_bond_ids)
+                self._pending_relayout_bond_ids.clear()
+                for bond_id in pending_bond_ids:
+                    if bond_id in self._processed_relayout_bond_ids:
+                        continue
+                    self._processed_relayout_bond_ids.add(bond_id)
+                    if not bond_items_for_id(self.canvas, bond_id):
+                        continue
+                    update_bond_geometry_for(self.canvas, bond_id)
+        finally:
+            self._pending_relayout_atom_ids.clear()
+            self._pending_relayout_bond_ids.clear()
+            self._processed_relayout_bond_ids.clear()
+            self._relayout_batch_active = False
+
+    def _relayout_atom_ids(self, atom_ids: Iterable[int]) -> set[int]:
+        return {
+            atom_id
+            for atom_id in sorted(set(atom_ids))
+            if self.relayout_atom_label(atom_id)
+        }
+
+    def _incident_bond_ids(self, atom_ids: set[int]) -> set[int]:
+        return {
+            bond_id
+            for bond_id, bond in enumerate(bonds_for(self.canvas))
+            if bond is not None and (bond.a in atom_ids or bond.b in atom_ids)
+        }
 
     def _hydride_layout(
         self, atom_id: int, text: str
@@ -206,6 +335,10 @@ class AtomLabelService:
         # as typed. A vertical open side, an unreversible label, or a bond
         # running along the label body keeps the centred full-clearance layout.
         vectors = connected_atom_unit_vectors_for(self.canvas, atom_id)
+        if not vectors:
+            # With no attachment direction there is no chemical reason to
+            # reverse the user's text or select one end as the bond anchor.
+            return text, None, False, None
         open_x, open_y = _open_direction(vectors)
         if abs(open_y) > abs(open_x):
             return text, None, False, None
@@ -331,7 +464,7 @@ class AtomLabelService:
             if existing_item is not None:
                 remove_item_from_canvas_scene(self.canvas, existing_item)
                 pop_atom_item_for(self.canvas, atom_id)
-            if atom.element == "C":
+            if atom.element.upper() == "C":
                 self.ensure_carbon_dot(atom_id)
             if self.move_controller is not None:
                 self.move_controller.redraw_connected_bonds(atom_id)
@@ -379,19 +512,16 @@ class AtomLabelService:
         text_item.setData(1, atom_id)
         text_item.setZValue(3)
         make_item_selectable(text_item)
-        display_text, anchor_element, anchor_at_end, hydrogens_below = (
-            self._hydride_layout(atom_id, text)
-        )
-        text_item.setPlainText(display_text)
-        if hydrogens_below is None:
-            text_item.set_anchor(anchor_element, at_end=anchor_at_end)
-        else:
-            text_item.set_stack_anchor(anchor_element, hydrogens_below=hydrogens_below)
-        self.position_label(text_item, atom.x, atom.y)
+        self.relayout_atom_label(atom_id)
         self.remove_carbon_dot(atom_id)
         merge_ids, merge_info = (
             self.merge_overlapping_atoms(atom_id) if allow_merge else ([], {})
         )
+        if merge_ids:
+            # Merging can retarget or remove the last incident bond. Re-derive
+            # the presentation even when there is no surviving bond for the
+            # renderer-driven refresh below to visit.
+            self.relayout_atom_label(atom_id)
         if self.move_controller is not None:
             self.move_controller.redraw_connected_bonds(atom_id)
         self.restore_atom_item_interaction(
@@ -415,7 +545,9 @@ class AtomLabelService:
         if atom is None:
             return
         initial = (
-            "" if atom.element == "C" and not atom.explicit_label else atom.element
+            ""
+            if atom.element.upper() == "C" and not atom.explicit_label
+            else atom.element
         )
         text, ok = QInputDialog.getText(
             self.canvas,

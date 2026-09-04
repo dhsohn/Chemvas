@@ -51,10 +51,13 @@ def test_build_structure_services_wires_explicit_collaborators(monkeypatch) -> N
         "hit_testing_service": hit_testing_service,
         "graph_service": graph_service,
     }
-    assert services.canvas_bond_mutation_service.kwargs == {
+    bond_mutation_kwargs = dict(services.canvas_bond_mutation_service.kwargs)
+    atom_label_relayout = bond_mutation_kwargs.pop("atom_label_relayout")
+    assert bond_mutation_kwargs == {
         "hit_testing_service": hit_testing_service,
         "graph_service": graph_service,
     }
+    assert callable(atom_label_relayout)
     assert services.structure_build_service.kwargs == {
         "hit_testing_service": hit_testing_service,
         "move_controller": move_controller,

@@ -27,7 +27,7 @@ def check_canvas_layout(canvas: Any) -> dict[str, object]:
     shapes = [
         (index, item)
         for index, item in enumerate(shape_items_for(canvas))
-        if item.isVisible()
+        if item.isVisible() and _has_visible_shape_paint(item)
     ]
     warnings: list[dict[str, object]] = []
 
@@ -105,6 +105,16 @@ def _has_visible_note_glyphs(item: Any) -> bool:
     return bool(item.toPlainText().strip())
 
 
+def _has_visible_shape_paint(item: Any) -> bool:
+    if item.opacity() <= 0.0:
+        return False
+    pen = item.pen()
+    if pen.style() != Qt.PenStyle.NoPen and pen.color().alpha() > 0:
+        return True
+    brush = item.brush()
+    return brush.style() != Qt.BrushStyle.NoBrush and brush.color().alpha() > 0
+
+
 def _scene_shape(item: Any) -> QPainterPath:
     return item.mapToScene(item.shape())
 
@@ -117,6 +127,10 @@ def _shape_border_scene_path(item: Any) -> QPainterPath | None:
     stroker.setWidth(max(float(pen.widthF()), _GEOMETRY_EPSILON))
     stroker.setCapStyle(pen.capStyle())
     stroker.setJoinStyle(pen.joinStyle())
+    dash_pattern = pen.dashPattern()
+    if dash_pattern:
+        stroker.setDashPattern(dash_pattern)
+        stroker.setDashOffset(pen.dashOffset())
     return item.mapToScene(stroker.createStroke(item.path()))
 
 
