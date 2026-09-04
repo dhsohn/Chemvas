@@ -241,6 +241,7 @@ class AtomLabelServiceTest(unittest.TestCase):
             atoms={
                 1: Atom("C", 0.0, 0.0, explicit_label=False),
                 2: Atom("O", 1.0, 0.0, explicit_label=True),
+                3: Atom("c", 2.0, 0.0, explicit_label=False),
             }
         )
         service = _atom_label_service(canvas)
@@ -248,12 +249,18 @@ class AtomLabelServiceTest(unittest.TestCase):
 
         with patch(
             "chemvas.ui.atom_label_service.QInputDialog.getText",
-            side_effect=[(" N ", True), ("   ", True), ("ignored", False)],
-        ):
+            side_effect=[
+                (" N ", True),
+                ("   ", True),
+                ("ignored", False),
+                ("ignored", False),
+            ],
+        ) as get_text:
             service.prompt_atom_label(2)
             service.prompt_atom_label(1)
             service.prompt_atom_label(99)
             service.prompt_atom_label(2)
+            service.prompt_atom_label(3)
 
         service.add_or_update_atom_label.assert_has_calls(
             [
@@ -261,6 +268,7 @@ class AtomLabelServiceTest(unittest.TestCase):
                 call(1, "C", show_carbon=False),
             ]
         )
+        self.assertEqual(get_text.call_args_list[-1].kwargs["text"], "")
 
     def test_merge_overlapping_atoms_deletes_self_loops_and_weaker_duplicates(
         self,
@@ -1266,6 +1274,26 @@ class AtomLabelServiceTest(unittest.TestCase):
         self.assertIn(1, canvas.atom_dots)
         self.assertEqual(canvas.redraw_calls, [1])
         self.assertEqual(canvas.scene_obj.removed_items, [])
+
+    def test_add_or_update_atom_label_replaces_label_with_lowercase_carbon_dot(
+        self,
+    ) -> None:
+        canvas = _FakeCanvas()
+        canvas.model = MoleculeModel(
+            atoms={1: Atom("N", 1.0, 2.0, explicit_label=True)}
+        )
+        existing_label = _FakeGraphicsItem(selected=True)
+        canvas.atom_items[1] = existing_label
+        service = _atom_label_service(canvas)
+
+        service.add_or_update_atom_label(1, "c", allow_merge=False, record=False)
+
+        self.assertEqual(canvas.model.atoms[1].element, "c")
+        self.assertFalse(canvas.model.atoms[1].explicit_label)
+        self.assertNotIn(1, canvas.atom_items)
+        self.assertIn(1, canvas.atom_dots)
+        self.assertTrue(canvas.atom_dots[1].isSelected())
+        self.assertIn(existing_label, canvas.scene_obj.removed_items)
 
     def test_add_or_update_atom_label_removes_non_carbon_label_without_dot_when_record_disabled(
         self,

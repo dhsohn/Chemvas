@@ -36,6 +36,8 @@ _GROUPABLE_STATE_ITEM_KEYS = frozenset(
 POINT_COORDINATE_TOLERANCE = Decimal("0.000001")
 MAX_SAFE_NUMBER = float(2**53 - 1)
 MAX_SAFE_NUMBER_DECIMAL = Decimal(2**53 - 1)
+# QFont's integer point-size constructor is exposed through a signed C++ int.
+_QT_INT_MAX = 2**31 - 1
 SETTINGS_KEYS = frozenset(
     (
         "bond_length_px",
@@ -1173,7 +1175,7 @@ def validate_settings_state(settings: Mapping[str, object]) -> None:
     if type(settings.get("orbital_phase_enabled")) is not bool:
         raise ValueError("Invalid Chemvas file.")
     text_font_size = settings.get("text_font_size")
-    if not _is_int(text_font_size) or text_font_size < 6:
+    if not _is_int(text_font_size) or not 6 <= text_font_size <= _QT_INT_MAX:
         raise ValueError("Invalid Chemvas file.")
     if (
         not _is_int(settings.get("text_font_weight"))

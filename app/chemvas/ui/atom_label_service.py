@@ -464,7 +464,7 @@ class AtomLabelService:
             if existing_item is not None:
                 remove_item_from_canvas_scene(self.canvas, existing_item)
                 pop_atom_item_for(self.canvas, atom_id)
-            if atom.element == "C":
+            if atom.element.upper() == "C":
                 self.ensure_carbon_dot(atom_id)
             if self.move_controller is not None:
                 self.move_controller.redraw_connected_bonds(atom_id)
@@ -545,7 +545,9 @@ class AtomLabelService:
         if atom is None:
             return
         initial = (
-            "" if atom.element == "C" and not atom.explicit_label else atom.element
+            ""
+            if atom.element.upper() == "C" and not atom.explicit_label
+            else atom.element
         )
         text, ok = QInputDialog.getText(
             self.canvas,

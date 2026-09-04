@@ -724,6 +724,8 @@ class DocumentStateTest(unittest.TestCase):
             ("arrow_head_scale", 0.09),
             ("arrow_head_scale", 0.81),
             ("text_font_size", 5),
+            ("text_font_size", 2**31),
+            ("text_font_size", 10**100),
             ("text_font_weight", -1),
             ("text_font_weight", 0),
             ("text_font_weight", 1001),

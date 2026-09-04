@@ -102,7 +102,8 @@ class CalculationMappingHighlighter:
         font.setPointSizeF(7.0)
         font.setBold(True)
         text.setFont(font)
-        text.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIgnoresTransformations, True)
+        # Scale with the canvas so this scene-coordinate clearance remains
+        # valid when the user changes zoom while the mapping dialog is open.
         clearance_top = center.y() - atom_pick_radius_for(self._canvas)
         atom_item = visible_atom_item_for(self._canvas, atom_id)
         if atom_item is not None:

@@ -17,6 +17,7 @@ from chemvas.ui.calculation_mapping_highlight import (
 from chemvas.ui.canvas_atom_graphics_state import visible_atom_item_for
 from chemvas.ui.canvas_service_access import canvas_services_for
 from chemvas.ui.canvas_view import CanvasView
+from chemvas.ui.input_view_access import set_zoom_for
 from tests.test_calculation_plan import _document_state
 
 if TYPE_CHECKING:
@@ -168,6 +169,14 @@ def test_mapping_id_clears_the_visible_atom_glyph_vertically() -> None:
     )
     visible_bounds = atom_item.export_scene_bounding_rect()
     assert id_label.sceneBoundingRect().bottom() < visible_bounds.top()
+    for zoom in (0.5, 0.2):
+        set_zoom_for(canvas, zoom)
+        viewport_transform = canvas.viewportTransform()
+        id_device_bounds = id_label.deviceTransform(viewport_transform).mapRect(
+            id_label.boundingRect()
+        )
+        visible_device_bounds = viewport_transform.mapRect(visible_bounds)
+        assert id_device_bounds.bottom() < visible_device_bounds.top()
     # The long alias widens its own box, but must not push the overlay sideways.
     assert abs(id_label.pos().x() - 3.5) < 1e-6
 

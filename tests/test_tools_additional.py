@@ -783,16 +783,16 @@ class ToolsAdditionalTest(unittest.TestCase):
         self.assertEqual(len(errors), 1)
         self.assertIn("non-carbon", errors[0])
 
-        # Only the exact spelling "C" gets the carbon-dot fallback, so any
-        # other spelling — including lowercase "c" — must refuse too.
+        # Lowercase carbon follows the same carbon-dot fallback and may be
+        # cleared without becoming an invisible, unselectable model atom.
         canvas.model.atoms[2].element = "c"
         with mock.patch.object(
             text_tool_module.QInputDialog, "getText", return_value=("", True)
         ):
             self.assertTrue(tool.on_mouse_press(_Event(QPointF(2.0, 2.0))))
 
-        self.assertEqual(canvas.label_calls, [])
-        self.assertEqual(len(errors), 2)
+        self.assertEqual(canvas.label_calls, [(2, "", True, True)])
+        self.assertEqual(len(errors), 1)
 
     def test_text_tool_handles_dialog_cancel_and_invalid_hover_bond_fallback(
         self,

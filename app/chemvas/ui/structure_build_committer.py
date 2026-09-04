@@ -585,7 +585,7 @@ class StructureBuildCommitter:
             self.add_bond_graphics(bond_id)
 
         for atom_id, atom in atoms_for(self.canvas).items():
-            if atom.element == "C":
+            if atom.element.upper() == "C":
                 if atom.explicit_label:
                     add_or_update_atom_label(
                         self.canvas,
