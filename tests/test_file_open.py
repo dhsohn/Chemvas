@@ -60,6 +60,11 @@ class FileOpenEventFilterTest(unittest.TestCase):
         self.assertFalse(handled)
         self.assertEqual(opened, [])
 
+    def test_filter_can_be_owned_by_the_application(self) -> None:
+        event_filter = FileOpenEventFilter(lambda _path: None, parent=self.app)
+
+        self.assertIs(event_filter.parent(), self.app)
+
 
 class OpenDocumentRoutingTest(unittest.TestCase):
     @classmethod

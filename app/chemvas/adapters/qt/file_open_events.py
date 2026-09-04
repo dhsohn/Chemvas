@@ -13,8 +13,13 @@ if TYPE_CHECKING:
 
 
 class FileOpenEventFilter(QObject):
-    def __init__(self, handler: Callable[[str], None]) -> None:
-        super().__init__()
+    def __init__(
+        self,
+        handler: Callable[[str], None],
+        *,
+        parent: QObject | None = None,
+    ) -> None:
+        super().__init__(parent)
         self._handler = handler
 
     @override

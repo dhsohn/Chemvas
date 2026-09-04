@@ -23,6 +23,8 @@ class _PreviewWidget(QWidget):
     def __init__(self) -> None:
         super().__init__()
         self.set_export_xyz_action = mock.Mock()
+        self.pause_updates = mock.Mock()
+        self.resume_updates = mock.Mock()
 
 
 class MainWindowPanelServiceTest(unittest.TestCase):
@@ -54,6 +56,7 @@ class MainWindowPanelServiceTest(unittest.TestCase):
         self.assertIsNotNone(preview_window)
         self.assertIs(preview_3d.parent(), preview_window)
         self.assertFalse(preview_window.isVisible())
+        preview_3d.pause_updates.assert_called_once_with()
         export_callback = preview_3d.set_export_xyz_action.call_args.args[0]
         export_callback()
         export_xyz_for_window.assert_called_once_with(
@@ -94,8 +97,21 @@ class MainWindowPanelServiceTest(unittest.TestCase):
         preview.set_rdkit_adapter.assert_called_once_with(
             active_canvas_for_window.return_value.rdkit
         )
+        preview.resume_updates.assert_called_once_with()
         preview.refresh_selected_from_canvas.assert_called_once_with(
             active_canvas_for_window.return_value
+        )
+        self.assertEqual(
+            preview.method_calls[:3],
+            [
+                mock.call.set_rdkit_adapter(
+                    active_canvas_for_window.return_value.rdkit
+                ),
+                mock.call.resume_updates(),
+                mock.call.refresh_selected_from_canvas(
+                    active_canvas_for_window.return_value
+                ),
+            ],
         )
         preview_window.show.assert_called_once_with()
         preview_window.raise_.assert_called_once_with()

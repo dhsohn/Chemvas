@@ -181,7 +181,7 @@ def main() -> None:
         app.setDesktopFileName("chemvas")
         app.setWindowIcon(app_icon())
 
-        file_open_filter = FileOpenEventFilter(open_document)
+        file_open_filter = FileOpenEventFilter(open_document, parent=app)
         app.installEventFilter(file_open_filter)
 
         from chemvas.ui.session_recovery_service import create_session_recovery_service

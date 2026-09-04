@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Molecule Info now pauses 3D work when its window is closed, closes without
+  blocking on an active RDKit preview, and no longer leaves the main Qt object
+  tree for nondeterministic QApplication teardown or truncates the last-window
+  session snapshot during the deferred close.
 - Help > Chemvas on GitHub now uses the WSL browser bridge when available,
   instead of silently accepting Qt's unsuccessful Linux browser dispatch.
 

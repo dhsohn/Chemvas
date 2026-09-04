@@ -58,12 +58,12 @@ class Preview3DWorker(QObject):
         inchikey = None
         scene = None
         error = None
-        rdkit = (
-            self._rdkit_adapter_factory()
-            if self._rdkit_adapter_factory is not None
-            else self._rdkit
-        )
         try:
+            rdkit = (
+                self._rdkit_adapter_factory()
+                if self._rdkit_adapter_factory is not None
+                else self._rdkit
+            )
             assert rdkit is not None
             identifier_model = model_with_atom_annotations(
                 self._model, self._atom_annotations
