@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Protocol, override
 
-from PyQt6.QtCore import QTimer
+from PyQt6.QtCore import Qt, QTimer, pyqtBoundSignal
 from PyQt6.QtWidgets import QMainWindow
 
 from chemvas.features.session import snapshot_unless_quitting
@@ -26,7 +26,10 @@ class _PreviewWindow(Protocol):
 
 
 class _Preview3D(Protocol):
-    def shutdown(self) -> None: ...
+    @property
+    def shutdown_finished(self) -> pyqtBoundSignal: ...
+
+    def begin_shutdown(self) -> bool: ...
 
 
 class _UiReferences(Protocol):
@@ -65,13 +68,18 @@ class MainWindow(QMainWindow):
         forget_window: WindowFinalizer,
     ) -> None:
         super().__init__()
+        self.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose, True)
         self._forget_window = forget_window
+        self._close_state = "open"
         runtime = build_runtime(self)
         self._state = runtime.state
         self._ui_refs = runtime.ui_refs
         self._tab_refs = runtime.tab_refs
         self._services = runtime.services
         self._preview_3d = runtime.preview_3d
+        self._preview_3d.shutdown_finished.connect(
+            self._resume_close_after_preview_shutdown
+        )
         bootstrap_window(self, runtime)
 
     @property
@@ -91,13 +99,43 @@ class MainWindow(QMainWindow):
         if event is None:
             super().closeEvent(event)
             return
+        if self._close_state == "waiting":
+            event.ignore()
+            return
+        if self._close_state == "ready":
+            self._finalize_close(event)
+            return
+        if self._close_state != "open":
+            event.ignore()
+            return
         if not self._services.document_action_service.confirm_close_window(self):
             event.ignore()
             return
         preview_window = self._ui_refs.preview_window
         if preview_window is not None:
             preview_window.hide()
-        self._preview_3d.shutdown()
+        self._close_state = "waiting"
+        if not self._preview_3d.begin_shutdown():
+            # Confirmation has completed, so freeze editing until the pending
+            # worker drains. Keep the window visible: hiding an ignored primary
+            # close prevents Qt from emitting lastWindowClosed on the retry.
+            self.setEnabled(False)
+            event.ignore()
+            return
+        self._close_state = "ready"
+        self._finalize_close(event)
+
+    def _resume_close_after_preview_shutdown(self) -> None:
+        if self._close_state != "waiting":
+            return
+        self._close_state = "ready"
+        QTimer.singleShot(0, self.close)
+
+    def _finalize_close(self, event: QCloseEvent) -> None:
+        if self._close_state != "ready":
+            event.ignore()
+            return
+        self._close_state = "finalizing"
         self._forget_window(self)
         # Defer a session refresh: it runs only if the app keeps running (a
         # standalone window close drops the closed document from the restore
@@ -105,6 +143,7 @@ class MainWindow(QMainWindow):
         # this fires, so it no-ops and the full open set is preserved.
         QTimer.singleShot(0, snapshot_unless_quitting)
         super().closeEvent(event)
+        self._close_state = "closed"
 
 
 __all__ = ["MainWindow", "MainWindowRuntime"]

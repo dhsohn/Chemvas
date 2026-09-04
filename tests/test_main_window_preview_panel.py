@@ -1,5 +1,6 @@
 import os
 import unittest
+from unittest import mock
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -12,6 +13,7 @@ class _HarnessWindow(QMainWindow):
     def __init__(self) -> None:
         super().__init__()
         self.preview_widget = QWidget()
+        self.preview_widget.pause_updates = mock.Mock()
 
 
 class MainWindowPreviewPanelTest(unittest.TestCase):
@@ -42,6 +44,7 @@ class MainWindowPreviewPanelTest(unittest.TestCase):
         self.app.processEvents()
         self.assertTrue(assembly.preview_window.isVisible())
 
-        assembly.preview_window.close()
+        self.assertTrue(assembly.preview_window.close())
         self.app.processEvents()
         self.assertFalse(assembly.preview_window.isVisible())
+        window.preview_widget.pause_updates.assert_called_once_with()

@@ -1,5 +1,9 @@
 from __future__ import annotations
 
+import os
+import subprocess
+import sys
+import textwrap
 from types import SimpleNamespace
 from unittest import mock
 
@@ -354,6 +358,96 @@ def test_start_begins_session_snapshots_and_arms_hooks(qapp):
     assert service._timer is not None and service._timer.isActive()
     assert fake_app.aboutToQuit.slots == [service._on_about_to_quit]
     service._timer.stop()
+
+
+def test_production_qobject_owns_the_autosave_timer(qapp):
+    store = _FakeStore(RestoreResult())
+    service, _ = _service(store, current_documents=list)
+
+    service.start(qapp)
+
+    assert service._timer is not None
+    assert service._timer.parent() is qapp
+    service._timer.stop()
+
+
+def test_last_window_close_marks_quitting_before_deferred_snapshot() -> None:
+    script = textwrap.dedent(
+        """
+        from PyQt6.QtCore import Qt, QTimer
+        from PyQt6.QtWidgets import QApplication, QWidget
+        import weakref
+
+        from chemvas.features.session import is_quitting, snapshot_unless_quitting
+        from chemvas.ui.session_recovery_service import SessionRecoveryService
+
+        class Store:
+            def __init__(self):
+                self.saves = 0
+                self.clean_exit = False
+
+            def begin(self):
+                pass
+
+            def save_documents(self, _docs):
+                self.saves += 1
+
+            def mark_clean_exit(self):
+                self.clean_exit = True
+
+        class ClosingWindow(QWidget):
+            def closeEvent(self, event):
+                events.append("close")
+                QTimer.singleShot(0, deferred_snapshot)
+                super().closeEvent(event)
+
+        def deferred_snapshot():
+            events.append(f"snapshot:{is_quitting()}")
+            snapshot_unless_quitting()
+
+        app = QApplication([])
+        app_reference = weakref.ref(app)
+        store = Store()
+        events = []
+        service = SessionRecoveryService(
+            store,
+            open_windows=tuple,
+            current_documents=list,
+        )
+        service.start(app)
+        window = ClosingWindow()
+        window.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose, True)
+        app.lastWindowClosed.connect(
+            lambda: events.append(f"last:{is_quitting()}")
+        )
+        app.aboutToQuit.connect(
+            lambda: events.append(f"about:{is_quitting()}")
+        )
+        window.show()
+        QTimer.singleShot(0, window.close)
+        exit_code = app.exec()
+        print(events, store.saves, store.clean_exit, exit_code)
+        assert "last:True" in events
+        assert store.saves == 1
+        assert store.clean_exit
+        assert exit_code == 0
+        del app
+        assert app_reference() is None
+        """
+    )
+    environment = os.environ.copy()
+    environment["QT_QPA_PLATFORM"] = "offscreen"
+    completed = subprocess.run(
+        [sys.executable, "-c", script],
+        cwd=os.path.dirname(os.path.dirname(__file__)),
+        env=environment,
+        capture_output=True,
+        text=True,
+        timeout=5,
+        check=False,
+    )
+
+    assert completed.returncode == 0, completed.stdout + completed.stderr
 
 
 def test_consumed_sessions_are_pruned_only_after_resnapshot(qapp):

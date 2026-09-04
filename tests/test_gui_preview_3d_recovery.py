@@ -173,6 +173,88 @@ class Preview3DRecoveryTest(unittest.TestCase):
 
         self.assertIs(preview.rdkit_adapter, adapter_b)
 
+    def test_paused_preview_ignores_hidden_refresh_and_reopens_with_current_canvas(
+        self,
+    ) -> None:
+        model = self._make_model()
+        scene = self._make_scene()
+        adapter = SequencedAdapter([(scene, None)])
+        preview = self._create_preview(adapter)
+        canvas = object()
+
+        preview.pause_updates()
+        with mock.patch(
+            "chemvas.ui.preview_3d.build_selected_3d_conversion_payload_for",
+            return_value=(model, None),
+        ) as build_payload:
+            preview.refresh_selected_from_canvas(canvas)
+
+            build_payload.assert_not_called()
+            self.assertFalse(preview._update_timer.isActive())
+            self.assertEqual(adapter.calls, [])
+
+            preview.resume_updates()
+            preview.refresh_selected_from_canvas(canvas)
+            preview._update_timer.stop()
+            preview._handle_update_timer_timeout()
+
+        build_payload.assert_called_once_with(canvas)
+        self.assertEqual(adapter.calls, [(model, None)])
+        self.assertIs(preview._scene, scene)
+
+    def test_pause_updates_invalidates_work_without_waiting_for_it(self) -> None:
+        preview = self._create_preview(SequencedAdapter([]))
+        model = self._make_model()
+        stale_scene = self._make_scene()
+        thread = mock.Mock()
+        thread.wait.side_effect = AssertionError("pause must not wait")
+        request_id = preview._preview_request_id
+        preview._preview_jobs[request_id] = (thread, mock.Mock())
+        preview._pending_model = model
+        preview._current_signature = preview_payload_signature(model, None)
+
+        preview.pause_updates()
+        preview._handle_preview_worker_finished(
+            request_id,
+            "CO",
+            28.01,
+            "C=O",
+            "InChI=STALE",
+            "STALE",
+            stale_scene,
+            None,
+        )
+
+        thread.quit.assert_not_called()
+        thread.wait.assert_not_called()
+        self.assertFalse(preview._disposed)
+        self.assertIsNone(preview._scene)
+        self.assertIsNone(preview._current_signature)
+        preview._preview_jobs.clear()
+
+    def test_begin_shutdown_is_nonblocking_and_signals_after_last_worker(self) -> None:
+        preview = self._create_preview(SequencedAdapter([]))
+        thread = mock.Mock()
+        thread.wait.side_effect = AssertionError("main close must not wait")
+        request_id = preview._preview_request_id
+        preview._preview_jobs[request_id] = (thread, mock.Mock())
+        finished: list[str] = []
+        preview.shutdown_finished.connect(lambda: finished.append("finished"))
+
+        try:
+            self.assertFalse(preview.begin_shutdown())
+
+            thread.quit.assert_called_once_with()
+            thread.wait.assert_not_called()
+            self.assertTrue(preview._disposed)
+            self.assertEqual(finished, [])
+
+            preview._on_preview_thread_finished(request_id)
+
+            self.assertEqual(finished, ["finished"])
+        finally:
+            preview._preview_jobs.clear()
+
     def test_sync_preview_identifiers_use_payload_annotations(self) -> None:
         model = self._make_model()
         annotations = {

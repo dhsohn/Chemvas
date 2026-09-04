@@ -1762,7 +1762,9 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
                 return_value=RDKitResult(scene),
             ),
         ):
-            preview.refresh_selected_from_canvas(active_canvas_for_window(self.window))
+            services_for_window(self.window).panel_service.open_preview_window(
+                self.window
+            )
             self.app.processEvents()
             QTest.qWait(150)
             self.app.processEvents()
@@ -1822,7 +1824,9 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
             "model_to_3d_scene_result",
             return_value=RDKitResult(scene),
         ) as mocked:
-            preview.refresh_selected_from_canvas(active_canvas_for_window(self.window))
+            services_for_window(self.window).panel_service.open_preview_window(
+                self.window
+            )
             self.app.processEvents()
             QTest.qWait(150)
             self.app.processEvents()

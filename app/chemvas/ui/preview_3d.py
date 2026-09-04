@@ -3,7 +3,7 @@ from __future__ import annotations
 import math
 from typing import TYPE_CHECKING, Any, override
 
-from PyQt6.QtCore import QPointF, QRectF, Qt, QThread, QTimer
+from PyQt6.QtCore import QPointF, QRectF, Qt, QThread, QTimer, pyqtSignal
 from PyQt6.QtGui import QFont, QFontMetricsF, QIcon, QPainter
 from PyQt6.QtWidgets import QApplication, QToolButton, QWidget
 
@@ -34,6 +34,8 @@ def _mouse_interaction_active() -> bool:
 
 
 class Preview3D(QWidget):
+    shutdown_finished = pyqtSignal()
+
     def __init__(
         self,
         rdkit_adapter: Preview3DAdapter | None = None,
@@ -51,6 +53,7 @@ class Preview3D(QWidget):
         # once it finishes instead of spawning parallel RDKit embeddings.
         self._preview_restart_pending = False
         self._disposed = False
+        self._updates_paused = False
         self._pending_model: Any | None = None
         self._pending_annotations: Any | None = None
         self._current_signature: tuple[Any, ...] | None = None
@@ -99,6 +102,8 @@ class Preview3D(QWidget):
         self._sync_export_xyz_button()
 
     def refresh_selected_from_canvas(self, canvas) -> None:
+        if self._disposed or self._updates_paused:
+            return
         try:
             model, atom_annotations = build_selected_3d_conversion_payload_for(canvas)
         except Exception as exc:
@@ -120,6 +125,8 @@ class Preview3D(QWidget):
         self.set_structure(model, atom_annotations)
 
     def set_structure(self, model, atom_annotations=None) -> None:
+        if self._disposed or self._updates_paused:
+            return
         signature = self._payload_signature(model, atom_annotations)
         if signature == self._current_signature:
             return
@@ -180,18 +187,20 @@ class Preview3D(QWidget):
         return preview_payload_signature(model, atom_annotations)
 
     def _handle_update_timer_timeout(self) -> None:
+        if self._disposed or self._updates_paused:
+            return
         # An RDKit rebuild competes with the GUI thread for the GIL, so a
         # debounce that fires while the user is still holding a drag would
         # stutter the very interaction that scheduled it. Re-arm and rebuild
         # once the interaction ends.
         if self._interaction_active():
-            if not self._disposed:
+            if not self._disposed and not self._updates_paused:
                 self._update_timer.start()
             return
         self._rebuild_scene()
 
     def _rebuild_scene(self) -> None:
-        if self._disposed:
+        if self._disposed or self._updates_paused:
             return
         if self._pending_model is None:
             self._scene = None
@@ -228,6 +237,8 @@ class Preview3D(QWidget):
         return False
 
     def _start_preview_worker(self) -> None:
+        if self._disposed or self._updates_paused:
+            return
         if self._preview_jobs:
             # A worker is already running. Defer: rebuild with the latest pending
             # payload once it finishes, keeping at most one job alive.
@@ -257,7 +268,11 @@ class Preview3D(QWidget):
 
     def _on_preview_thread_finished(self, request_id: int) -> None:
         self._preview_jobs.pop(request_id, None)
-        if self._disposed or self._preview_jobs:
+        if self._disposed:
+            if not self._preview_jobs:
+                self.shutdown_finished.emit()
+            return
+        if self._updates_paused or self._preview_jobs:
             return
         if self._preview_restart_pending and self._pending_model is not None:
             self._preview_restart_pending = False
@@ -276,7 +291,11 @@ class Preview3D(QWidget):
         scene: Molecule3DScene | None,
         error: str | None,
     ) -> None:
-        if self._disposed or request_id != self._preview_request_id:
+        if (
+            self._disposed
+            or self._updates_paused
+            or request_id != self._preview_request_id
+        ):
             return
         if error or scene is None:
             self._scene = None
@@ -343,11 +362,47 @@ class Preview3D(QWidget):
         self.shutdown()
         super().closeEvent(event)
 
-    def shutdown(self) -> None:
-        self._disposed = True
+    def pause_updates(self) -> None:
+        if self._disposed:
+            return
+        self._updates_paused = True
         self._preview_request_id += 1
         self._preview_restart_pending = False
         self._update_timer.stop()
+        # The next open explicitly refreshes the current canvas. Clearing this
+        # state makes reopening the same selection rebuild instead of treating
+        # the hidden panel's old signature as current.
+        self._pending_model = None
+        self._pending_annotations = None
+        self._current_signature = None
+
+    def resume_updates(self) -> None:
+        if not self._disposed:
+            self._updates_paused = False
+
+    def begin_shutdown(self) -> bool:
+        """Permanently stop updates without blocking the GUI thread.
+
+        Returns whether there are no preview workers left to drain. When a
+        worker is still running, ``shutdown_finished`` is emitted after the
+        last thread finishes.
+        """
+        if not self._disposed:
+            self._disposed = True
+            self._updates_paused = True
+            self._preview_request_id += 1
+            self._preview_restart_pending = False
+            self._update_timer.stop()
+            self._pending_model = None
+            self._pending_annotations = None
+            self._current_signature = None
+        for thread, _worker in tuple(self._preview_jobs.values()):
+            thread.quit()
+        return not self._preview_jobs
+
+    def shutdown(self) -> None:
+        if self.begin_shutdown():
+            return
         self._stop_preview_jobs()
 
     def _stop_preview_jobs(self) -> None:

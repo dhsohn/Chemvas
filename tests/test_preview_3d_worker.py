@@ -76,3 +76,28 @@ def test_preview_worker_uses_payload_annotations_for_charged_radical_identifiers
     )
     assert emissions[0][6] is not None
     assert emissions[0][7] is None
+
+
+def test_preview_worker_emits_completion_when_adapter_factory_raises() -> None:
+    model = MoleculeModel()
+    model.add_atom("C", 0.0, 0.0)
+    emissions = []
+
+    def fail_to_build_adapter():
+        raise RuntimeError("adapter construction failed")
+
+    worker = Preview3DWorker(
+        11,
+        None,
+        model,
+        None,
+        rdkit_adapter_factory=fail_to_build_adapter,
+    )
+    worker.finished.connect(lambda *args: emissions.append(args))
+
+    worker.run()
+
+    assert len(emissions) == 1
+    assert emissions[0][0] == 11
+    assert emissions[0][1:7] == (None, None, None, None, None, None)
+    assert emissions[0][7] == "adapter construction failed"

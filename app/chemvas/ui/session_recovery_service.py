@@ -1,17 +1,18 @@
 """Runtime glue for autosave & session restore.
 
-Owns the periodic snapshot timer, flips the session's clean-exit flag on
-``QApplication.aboutToQuit``, and — on launch — rebuilds the previous session's
-windows from the store. All heavy lifting (what to persist, what to restore)
-lives in :mod:`chemvas.features.session` / :mod:`chemvas.ui.session_snapshot_store`;
-this class just wires those to Qt and the window services.
+Owns the periodic snapshot timer, marks app-wide last-window shutdown before
+deferred close snapshots run, records clean exit on ``QApplication.aboutToQuit``,
+and — on launch — rebuilds the previous session's windows from the store. All
+heavy lifting (what to persist, what to restore) lives in
+:mod:`chemvas.features.session` / :mod:`chemvas.ui.session_snapshot_store`; this
+class just wires those to Qt and the window services.
 """
 
 from __future__ import annotations
 
 import contextlib
 
-from PyQt6.QtCore import QTimer
+from PyQt6.QtCore import QCoreApplication, QObject, QTimer
 
 from chemvas.bootstrap.window_registry import (
     open_new_window as default_open_new_window,
@@ -132,7 +133,13 @@ class SessionRecoveryService:
         connect = getattr(about_to_quit, "connect", None)
         if callable(connect):
             connect(self._on_about_to_quit)
+        last_window_closed = getattr(app, "lastWindowClosed", None)
+        connect = getattr(last_window_closed, "connect", None)
+        if callable(connect):
+            connect(self._on_last_window_closed)
         self._timer = QTimer()
+        if isinstance(app, QObject):
+            self._timer.setParent(app)
         self._timer.setInterval(self._interval_ms)
         self._timer.timeout.connect(self.snapshot_now)
         self._timer.start()
@@ -181,6 +188,19 @@ class SessionRecoveryService:
         # Anything else here is a bug and now propagates.
         with contextlib.suppress(OSError):
             self._store.mark_clean_exit()
+
+    def _on_last_window_closed(self) -> None:
+        """Mark an automatic last-window quit before deferred close snapshots.
+
+        Qt emits ``lastWindowClosed`` before the zero-delay snapshot scheduled
+        by the window close handler, while ``aboutToQuit`` can arrive after it.
+        Without this earlier hook, closing the final window can overwrite the
+        session manifest with an empty open set just before a clean exit.
+        """
+        app = QCoreApplication.instance()
+        quit_on_last_window_closed = getattr(app, "quitOnLastWindowClosed", None)
+        if callable(quit_on_last_window_closed) and quit_on_last_window_closed():
+            mark_quitting()
 
     def _show_recovered_note(self, window, count: int) -> None:
         status_bar = getattr(window, "statusBar", None)

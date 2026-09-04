@@ -24,6 +24,7 @@ class MainWindowPanelService:
 
     def init_panels(self, window) -> None:
         preview = self._preview_for_window(window)
+        preview.pause_updates()
         set_export_action = getattr(preview, "set_export_xyz_action", None)
         if callable(set_export_action):
             set_export_action(lambda: self._export_selected_xyz(window))
@@ -58,9 +59,11 @@ class MainWindowPanelService:
         try:
             canvas = self._active_canvas_for_window(window)
         except RuntimeError:
+            preview.resume_updates()
             preview.clear_preview("No chemical structure selected.")
         else:
             preview.set_rdkit_adapter(rdkit_adapter_for(canvas))
+            preview.resume_updates()
             preview.refresh_selected_from_canvas(canvas)
         preview_window.show()
         preview_window.raise_()

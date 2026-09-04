@@ -6,19 +6,24 @@ import unittest
 from contextlib import contextmanager
 from unittest import mock
 
+from PyQt6.QtCore import QObject
+
 import chemvas.bootstrap.application as chemvas_main
 import chemvas.branding
 import main as app_main
 from chemvas.adapters.qt import FileOpenEventFilter
 
 
-class _QApplicationMetadataStub:
+class _QApplicationMetadataStub(QObject):
     """Records the app-surface calls main() makes on the QApplication.
 
     The real QApplication carries these; the fakes below mirror that surface so
     main()'s branding/identity and file-open wiring is exercised rather than
     raising.
     """
+
+    def __init__(self) -> None:
+        super().__init__()
 
     def installEventFilter(self, event_filter: object) -> None:
         self.installed_event_filter = event_filter
@@ -181,6 +186,7 @@ class MainStderrFilterTest(unittest.TestCase):
             instances: list["FakeApplication"] = []
 
             def __init__(self, args) -> None:
+                super().__init__()
                 self.args = args
                 self.exec_called = False
                 FakeApplication.instances.append(self)
@@ -244,6 +250,7 @@ class MainStderrFilterTest(unittest.TestCase):
         self.assertEqual(application.desktop_file_name, "chemvas")
         self.assertIs(application.window_icon, sentinel_icon)
         self.assertIsInstance(application.installed_event_filter, FileOpenEventFilter)
+        self.assertIs(application.installed_event_filter.parent(), application)
         self.assertEqual(
             [event[0] for event in events], ["enter", "show", "exec", "exit"]
         )
@@ -253,6 +260,7 @@ class MainStderrFilterTest(unittest.TestCase):
 
         class FakeApplication(_QApplicationMetadataStub):
             def __init__(self, args) -> None:
+                super().__init__()
                 self.args = args
 
             def exec(self) -> None:
@@ -325,6 +333,7 @@ class MainStderrFilterTest(unittest.TestCase):
 
         class FakeApplication(_QApplicationMetadataStub):
             def __init__(self, args) -> None:
+                super().__init__()
                 self.args = args
                 events.append("app")
 

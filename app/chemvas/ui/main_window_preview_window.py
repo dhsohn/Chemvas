@@ -17,6 +17,7 @@ class Preview3DWindow(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
         layout.addWidget(preview_widget)
+        self._preview_widget = preview_widget
         self._status_label = QLabel("", self)
         self._status_label.setObjectName("preview_export_status")
         self._status_label.setContentsMargins(12, 4, 12, 6)
@@ -40,8 +41,8 @@ class Preview3DWindow(QWidget):
 
     @override
     def closeEvent(self, event) -> None:
-        event.ignore()
-        self.hide()
+        self._preview_widget.pause_updates()
+        super().closeEvent(event)
 
 
 @dataclass(frozen=True)
