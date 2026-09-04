@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Help > Chemvas on GitHub now uses the WSL browser bridge when available,
+  instead of silently accepting Qt's unsuccessful Linux browser dispatch.
+
 ## [0.6.0] - 2026-08-30
 
 This release combines correctness fixes for document ownership, crash recovery,

@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import os
+import shutil
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from PyQt6.QtCore import QUrl
+from PyQt6.QtCore import QProcess, QUrl
 from PyQt6.QtGui import QAction, QDesktopServices, QKeySequence
 from PyQt6.QtWidgets import QApplication, QMenu, QMenuBar
 
@@ -303,6 +305,16 @@ def _build_calculation_menu(menu_bar: QMenuBar, window) -> None:
     )
 
 
+def _open_project_repository() -> bool:
+    if os.environ.get("WSL_DISTRO_NAME"):
+        wslview = shutil.which("wslview")
+        if wslview is not None:
+            started, _pid = QProcess.startDetached(wslview, [GITHUB_URL])
+            if started:
+                return True
+    return QDesktopServices.openUrl(QUrl(GITHUB_URL))
+
+
 def _build_help_menu(menu_bar: QMenuBar, window) -> None:
     help_menu = _add_menu(menu_bar, "Help")
 
@@ -321,9 +333,7 @@ def _build_help_menu(menu_bar: QMenuBar, window) -> None:
 
     github_action = QAction(f"{APP_NAME} on GitHub", window)
     github_action.setStatusTip("Open the project repository in your browser")
-    github_action.triggered.connect(
-        lambda _checked=False: QDesktopServices.openUrl(QUrl(GITHUB_URL))
-    )
+    github_action.triggered.connect(lambda _checked=False: _open_project_repository())
     help_menu.addAction(github_action)
 
 
