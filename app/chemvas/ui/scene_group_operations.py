@@ -356,26 +356,44 @@ def notes_only_group_member_notes_for(canvas, note) -> list:
 
 
 def expand_note_selection_to_groups_for(canvas, note) -> None:
-    """Select the remaining notes of a notes-only group when one is selected.
+    """Expand an explicit note-service selection to its complete group.
 
-    Mixed groups expand through the scene selectionChanged hook; notes-only
-    groups have no scene-selectable member, so the note service calls this
-    when a note becomes selected to keep the group acting as a unit.
+    Keeping this entry point separate from ``expand_selection_to_groups_for``
+    is intentional: a Qt-selected note from a rubber band must not become a
+    sticky group anchor, while a direct Note-tool selection is an explicit
+    request to select the group as one unit.
     """
-    member_notes = notes_only_group_member_notes_for(canvas, note)
-    if not member_notes:
+    state = group_state_for(canvas)
+    if state.expanding or not state.groups:
         return
+    target_group = next(
+        (
+            group
+            for group in state.groups.values()
+            if any(member is note for member in group.items)
+        ),
+        None,
+    )
+    if target_group is None:
+        return
+    members = attached_canvas_scene_items(canvas, target_group.items)
+    member_notes = [member for member in members if member.data(0) == "note"]
     selected_notes = selected_scene_notes_for(canvas)
     missing = [
         member
         for member in member_notes
         if not any(member is selected for selected in selected_notes)
     ]
-    if not missing:
+    has_scene_members = _group_has_scene_members(canvas, target_group)
+    if not missing and not has_scene_members:
         return
-    state = group_state_for(canvas)
     state.expanding = True
     try:
+        if has_scene_members:
+            atom_ids = target_group.atom_ids & set(atoms_for(canvas))
+            scene_items = _structure_items_for_atom_ids(canvas, atom_ids)
+            scene_items.extend(member for member in members if member.data(0) != "note")
+            set_scene_items_selected_for(canvas, scene_items, True)
         for member in missing:
             select_note_for(canvas, member, additive=True)
     finally:

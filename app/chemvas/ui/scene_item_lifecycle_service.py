@@ -7,6 +7,7 @@ from PyQt6.QtCore import Qt
 from chemvas.domain.transactions import run_rollback_step
 from chemvas.ui.bond_renderer_access import update_bond_geometry_for
 from chemvas.ui.canvas_mark_registry import mark_registry_for
+from chemvas.ui.canvas_model_access import sync_atom_annotation_from_marks_for
 from chemvas.ui.canvas_scene_items_state import (
     append_scene_item_for,
     remove_scene_item_from_collection_for,
@@ -23,6 +24,7 @@ from chemvas.ui.scene_item_access import (
     remove_attached_item_from_canvas_scene,
 )
 from chemvas.ui.scene_item_state import ARROW_KINDS
+from chemvas.ui.selection_info_access import emit_selection_info_for
 from chemvas.ui.selection_service_access import refresh_selection_outline_for
 from chemvas.ui.transactions.scene_item_attach import (
     SceneItemAttachPorts,
@@ -82,15 +84,15 @@ class SceneItemLifecycleService:
                 partial(update_bond_geometry_for, self.canvas, bond_id),
             )
 
-    def attach_scene_item(self, item) -> None:
+    def attach_scene_item(self, item) -> bool:
         if item_is_unavailable_for_scene_operation(item):
-            return
+            return False
         scene = canvas_scene_for_item_operation(self.canvas)
         if scene is None:
-            return
+            return False
         attach_ports = SceneItemAttachPorts.capture(scene, item)
         if not attach_ports.item_can_be_added():
-            return
+            return False
         kind = attach_ports.item_kind_for_attach()
         attach_ports.validate_attachment_contract(
             require_text_interaction=kind == "note",
@@ -127,6 +129,7 @@ class SceneItemLifecycleService:
             if kind == "ring":
                 self._refresh_bond_geometry_for_bond_ids(ring_bond_ids)
             snapshot.release()
+            return True
         except Exception as original_error:
             self._rollback_failed_attach(
                 item,
@@ -253,7 +256,20 @@ class SceneItemLifecycleService:
             remove_scene_item_from_collection_for(self.canvas, "orbital_items", item)
 
     def restore_scene_item(self, item) -> None:
-        self.attach_scene_item(item)
+        if not self.attach_scene_item(item):
+            return
+        if item_is_unavailable_for_scene_operation(item) or item.data(0) != "mark":
+            return
+        data = item.data(1)
+        atom_id = data.get("atom_id") if isinstance(data, dict) else None
+        if not isinstance(atom_id, int):
+            return
+        sync_atom_annotation_from_marks_for(
+            self.canvas,
+            atom_id,
+            self.marks.get_for_atom(atom_id) or (),
+        )
+        emit_selection_info_for(self.canvas)
 
     def remove_scene_item(self, item) -> None:
         if item is None:

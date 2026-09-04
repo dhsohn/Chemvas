@@ -12,6 +12,7 @@ from chemvas.ui.bond_renderer import BondRenderer
 from chemvas.ui.canvas_callback_state import callback_state_for
 from chemvas.ui.canvas_model_state import set_model_for
 from chemvas.ui.canvas_runtime_state import attach_canvas_runtime_state
+from chemvas.ui.canvas_service_ports import atom_label_service_for_access
 from chemvas.ui.canvas_services import attach_canvas_services, build_canvas_services
 from chemvas.ui.renderer_style_access import bond_line_width_for
 from chemvas.ui.scene_group_operations import expand_selection_to_groups_for
@@ -40,7 +41,15 @@ def initialize_canvas_view(canvas, *, renderer) -> None:
     canvas.setMouseTracking(True)
     canvas.viewport().setMouseTracking(True)
     canvas.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
-    canvas.bond_renderer = BondRenderer(canvas)
+    canvas.bond_renderer = BondRenderer(
+        canvas,
+        atom_label_relayout=lambda atom_ids, skip_bond_ids: (
+            atom_label_service_for_access(canvas).relayout_atom_labels(
+                atom_ids,
+                skip_bond_ids=skip_bond_ids,
+            )
+        ),
+    )
     runtime_state.tool_settings_state.arrow_line_width = bond_line_width_for(canvas)
     services = build_canvas_services(
         canvas,

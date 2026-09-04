@@ -11,6 +11,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 from PyQt6.QtGui import QFont
 from PyQt6.QtWidgets import QApplication, QGraphicsItem, QGraphicsScene
 
+from chemvas.adapters.qt.renderer import Renderer
 from chemvas.core.history import (
     CompositeCommand,
     DeleteAtomsCommand,
@@ -35,16 +36,20 @@ from chemvas.ui.canvas_atom_graphics_state import (
 from chemvas.ui.canvas_bond_graphics_state import (
     CanvasBondGraphicsState,
     bond_items_for,
+    bond_items_for_id,
     set_bond_items_for,
 )
 from chemvas.ui.canvas_history_state import CanvasHistoryState
+from chemvas.ui.canvas_service_access import canvas_services_for
 from chemvas.ui.canvas_smiles_input_state import (
     CanvasSmilesInputState,
     last_smiles_input_for,
     set_last_smiles_input_for,
 )
+from chemvas.ui.canvas_view import CanvasView
 from chemvas.ui.graphics_items import AtomLabelItem
 from chemvas.ui.history_commands import ChangeAtomLabelCommand
+from chemvas.ui.transactions.document import document_transaction
 
 
 class _FakeScene(QGraphicsScene):
@@ -732,6 +737,274 @@ class AtomLabelServiceTest(unittest.TestCase):
         anchor = item.anchor_scene_rect()
         self.assertIsNotNone(anchor)
         self.assertLess(anchor.center().x(), item.sceneBoundingRect().center().x())
+
+    def test_isolated_multi_part_label_preserves_typed_order(self) -> None:
+        canvas = _FakeCanvas()
+        canvas.model = MoleculeModel(atoms={2: Atom("C", 0.0, 0.0)})
+        service = _atom_label_service(canvas)
+
+        service.add_or_update_atom_label(2, "Ph3P", record=False)
+
+        item = canvas.atom_items[2]
+        self.assertEqual(item.toPlainText(), "Ph3P")
+        self.assertIsNone(item.anchor_scene_rect())
+
+    def test_relayout_recomputes_display_order_after_geometry_changes(self) -> None:
+        canvas = _FakeCanvas()
+        canvas.model = MoleculeModel(
+            atoms={1: Atom("C", 20.0, 0.0), 2: Atom("C", 0.0, 0.0)},
+            bonds=[Bond(1, 2, 1, style="single")],
+        )
+        service = _atom_label_service(canvas)
+        service.add_or_update_atom_label(2, "CF3", record=False)
+        item = canvas.atom_items[2]
+        self.assertEqual(item.toPlainText(), "F3C")
+
+        canvas.model.atoms[1].x = -20.0
+        service.relayout_atom_labels({2})
+        first_position = item.pos()
+        service.relayout_atom_labels({2})
+
+        self.assertEqual(item.toPlainText(), "CF3")
+        self.assertEqual(item.pos(), first_position)
+        anchor = item.anchor_scene_rect()
+        self.assertIsNotNone(anchor)
+        self.assertLess(anchor.center().x(), item.sceneBoundingRect().center().x())
+
+    def test_merge_relayouts_alias_after_removing_its_last_bond(self) -> None:
+        canvas = _FakeCanvas()
+        canvas.model = MoleculeModel(
+            atoms={1: Atom("C", 0.0, 0.0), 2: Atom("C", 0.5, 0.0)},
+            bonds=[Bond(1, 2, 1, style="single")],
+        )
+        service = _atom_label_service(canvas)
+
+        service.add_or_update_atom_label(1, "CF3", record=False)
+
+        item = canvas.atom_items[1]
+        self.assertEqual(item.toPlainText(), "CF3")
+        self.assertIsNone(item.anchor_scene_rect())
+        self.assertIsNone(canvas.model.bonds[0])
+        self.assertNotIn(2, canvas.model.atoms)
+
+    def test_bond_geometry_refresh_relayouts_both_endpoint_labels(self) -> None:
+        canvas = CanvasView(renderer=Renderer())
+        services = canvas_services_for(canvas)
+        atom_mutation = services.structure.canvas_atom_mutation_service
+        bond_mutation = services.structure.canvas_bond_mutation_service
+        move_controller = services.interaction.move_controller
+        label_id = atom_mutation.add_atom("CF3", 0.0, 0.0)
+        neighbor_id = atom_mutation.add_atom("C", 20.0, 0.0)
+        bond_id = bond_mutation.add_bond(label_id, neighbor_id)
+        canvas.bond_renderer.add_bond_graphics(bond_id)
+        item = atom_items_for(canvas)[label_id]
+        self.assertEqual(item.toPlainText(), "F3C")
+
+        move_controller.move_atoms({neighbor_id}, -40.0, 0.0)
+
+        self.assertEqual(item.toPlainText(), "CF3")
+        self.assertEqual(canvas.model.atoms[label_id].element, "CF3")
+
+        move_controller.move_atoms({neighbor_id}, 40.0, 0.0)
+        self.assertEqual(item.toPlainText(), "F3C")
+        bond_mutation.remove_bond_by_id(bond_id)
+
+        self.assertEqual(item.toPlainText(), "CF3")
+        self.assertIsNone(item.anchor_scene_rect())
+        canvas.deleteLater()
+
+    def test_multibond_relayout_refreshes_surviving_bond_once(self) -> None:
+        canvas = CanvasView(renderer=Renderer())
+        services = canvas_services_for(canvas)
+        atom_mutation = services.structure.canvas_atom_mutation_service
+        bond_mutation = services.structure.canvas_bond_mutation_service
+        move_controller = services.interaction.move_controller
+        label_service = services.atom_label_service
+        label_id = atom_mutation.add_atom("CF3", 0.0, 0.0)
+        left_id = atom_mutation.add_atom("C", -20.0, 0.0)
+        right_id = atom_mutation.add_atom("C", 20.0, 0.0)
+        left_bond_id = bond_mutation.add_bond(label_id, left_id)
+        canvas.bond_renderer.add_bond_graphics(left_bond_id)
+        left_item = bond_items_for_id(canvas, left_bond_id)[0]
+
+        def left_segment() -> tuple[float, float, float, float]:
+            line = left_item.line()
+            return line.x1(), line.y1(), line.x2(), line.y2()
+
+        def expected_left_segment() -> tuple[float, float, float, float]:
+            bond = canvas.model.bonds[left_bond_id]
+            assert bond is not None
+            atom_a = canvas.model.atoms[bond.a]
+            atom_b = canvas.model.atoms[bond.b]
+            primitive = canvas.bond_renderer.geometry_planner.primitives_for_bond(
+                bond,
+                atom_a,
+                atom_b,
+                topology_count=1,
+            )[0]
+            return primitive.segment
+
+        one_bond_segment = left_segment()
+        with patch.object(
+            canvas.bond_renderer,
+            "update_bond_geometry",
+            wraps=canvas.bond_renderer.update_bond_geometry,
+        ) as update_geometry:
+            right_bond_id = bond_mutation.add_bond(label_id, right_id)
+        two_bond_segment = left_segment()
+
+        self.assertEqual(
+            [entry.args[0] for entry in update_geometry.call_args_list],
+            [left_bond_id],
+        )
+        self.assertNotEqual(two_bond_segment, one_bond_segment)
+        self.assertEqual(two_bond_segment, expected_left_segment())
+        self.assertIsNone(atom_items_for(canvas)[label_id].anchor_scene_rect())
+        canvas.bond_renderer.add_bond_graphics(right_bond_id)
+
+        with patch.object(
+            canvas.bond_renderer,
+            "update_bond_geometry",
+            wraps=canvas.bond_renderer.update_bond_geometry,
+        ) as update_geometry:
+            move_controller.move_atoms({right_id}, -20.0, -20.0)
+        moved_segment = left_segment()
+
+        self.assertEqual(
+            [entry.args[0] for entry in update_geometry.call_args_list],
+            [left_bond_id],
+        )
+        self.assertNotEqual(moved_segment, two_bond_segment)
+        self.assertEqual(moved_segment, expected_left_segment())
+        self.assertIsNotNone(atom_items_for(canvas)[label_id].anchor_scene_rect())
+
+        move_controller.move_atoms({right_id}, 20.0, 20.0)
+        self.assertEqual(left_segment(), two_bond_segment)
+        with patch.object(
+            canvas.bond_renderer,
+            "update_bond_geometry",
+            wraps=canvas.bond_renderer.update_bond_geometry,
+        ) as update_geometry:
+            bond_mutation.remove_bond_by_id(right_bond_id)
+        deleted_segment = left_segment()
+
+        self.assertEqual(
+            [entry.args[0] for entry in update_geometry.call_args_list],
+            [left_bond_id],
+        )
+        self.assertNotEqual(deleted_segment, two_bond_segment)
+        self.assertEqual(deleted_segment, expected_left_segment())
+        self.assertIsNotNone(atom_items_for(canvas)[label_id].anchor_scene_rect())
+
+        with patch.object(
+            canvas.bond_renderer,
+            "update_bond_geometry",
+            wraps=canvas.bond_renderer.update_bond_geometry,
+        ) as update_geometry:
+            label_service.relayout_atom_labels({label_id})
+
+        update_geometry.assert_not_called()
+        self.assertEqual(left_segment(), deleted_segment)
+        canvas.deleteLater()
+
+    def test_propagated_refresh_relayouts_other_endpoint_before_geometry(self) -> None:
+        canvas = CanvasView(renderer=Renderer())
+        services = canvas_services_for(canvas)
+        atom_mutation = services.structure.canvas_atom_mutation_service
+        bond_mutation = services.structure.canvas_bond_mutation_service
+        label_service = services.atom_label_service
+        first_id = atom_mutation.add_atom("CF3", 0.0, 0.0)
+        second_id = atom_mutation.add_atom("CF3", 20.0, 0.0)
+        bond_id = bond_mutation.add_bond(first_id, second_id)
+        canvas.bond_renderer.add_bond_graphics(bond_id)
+        first_label = atom_items_for(canvas)[first_id]
+        second_label = atom_items_for(canvas)[second_id]
+        bond_item = bond_items_for_id(canvas, bond_id)[0]
+        self.assertEqual(first_label.toPlainText(), "F3C")
+        self.assertEqual(second_label.toPlainText(), "CF3")
+
+        # Simulate an upstream geometry writer. Relayout is initially requested
+        # for only one endpoint; refreshing its incident bond must synchronously
+        # canonicalize the other endpoint before calculating the new segment.
+        canvas.model.atoms[second_id].x = -20.0
+        with patch.object(
+            canvas.bond_renderer,
+            "update_bond_geometry",
+            wraps=canvas.bond_renderer.update_bond_geometry,
+        ) as update_geometry:
+            label_service.relayout_atom_labels({first_id})
+
+        bond = canvas.model.bonds[bond_id]
+        assert bond is not None
+        primitive = canvas.bond_renderer.geometry_planner.primitives_for_bond(
+            bond,
+            canvas.model.atoms[bond.a],
+            canvas.model.atoms[bond.b],
+            topology_count=1,
+        )[0]
+        line = bond_item.line()
+        self.assertEqual(first_label.toPlainText(), "CF3")
+        self.assertEqual(second_label.toPlainText(), "F3C")
+        self.assertEqual(
+            (line.x1(), line.y1(), line.x2(), line.y2()),
+            primitive.segment,
+        )
+        self.assertEqual(
+            [entry.args[0] for entry in update_geometry.call_args_list],
+            [bond_id],
+        )
+        canvas.deleteLater()
+
+    def test_failed_transaction_restores_exact_relayout_state(self) -> None:
+        canvas = CanvasView(renderer=Renderer())
+        services = canvas_services_for(canvas)
+        atom_mutation = services.structure.canvas_atom_mutation_service
+        bond_mutation = services.structure.canvas_bond_mutation_service
+        label_service = services.atom_label_service
+        label_id = atom_mutation.add_atom("NH2", 0.0, 0.0)
+        neighbor_id = atom_mutation.add_atom("C", 0.0, -20.0)
+        bond_id = bond_mutation.add_bond(label_id, neighbor_id)
+        canvas.bond_renderer.add_bond_graphics(bond_id)
+        item = atom_items_for(canvas)[label_id]
+        before_anchor = item.anchor_scene_rect()
+        before_stack_rect = item._stack_element_rect
+
+        self.assertEqual(item.toPlainText(), "NH2")
+        self.assertEqual(item._raw_text, "NH2")
+        self.assertIsNone(item._anchor_element)
+        self.assertFalse(item._anchor_at_end)
+        self.assertEqual(item._stack, ("N", 2, True))
+        self.assertIsNotNone(before_anchor)
+        self.assertIsNotNone(before_stack_rect)
+
+        with (
+            self.assertRaisesRegex(RuntimeError, "injected post-relayout failure"),
+            patch.object(
+                canvas.bond_renderer,
+                "update_bond_geometry",
+                side_effect=RuntimeError("injected rollback redraw failure"),
+            ),
+        ):
+            with document_transaction(canvas):
+                canvas.model.atoms[neighbor_id].x = 20.0
+                canvas.model.atoms[neighbor_id].y = 0.0
+                label_service.relayout_atom_label(label_id)
+
+                self.assertEqual(item.toPlainText(), "H2N")
+                self.assertEqual(item._raw_text, "H2N")
+                self.assertEqual(item._anchor_element, "N")
+                self.assertTrue(item._anchor_at_end)
+                self.assertIsNone(item._stack)
+                raise RuntimeError("injected post-relayout failure")
+
+        self.assertEqual(item.toPlainText(), "NH2")
+        self.assertEqual(item._raw_text, "NH2")
+        self.assertIsNone(item._anchor_element)
+        self.assertFalse(item._anchor_at_end)
+        self.assertEqual(item._stack, ("N", 2, True))
+        self.assertEqual(item.anchor_scene_rect(), before_anchor)
+        self.assertEqual(item._stack_element_rect, before_stack_rect)
+        canvas.deleteLater()
 
     def test_ambiguous_label_anchors_as_typed_without_reversal(self) -> None:
         # "PhO" is neither an alias nor syntactically decidable, so the typed

@@ -93,6 +93,7 @@ class _CorrespondenceSuggester(Protocol):
         self,
         reactant_atom_ids: frozenset[int],
         product_atom_ids: frozenset[int],
+        existing_correspondence: Mapping[int, int],
     ) -> RDKitResult[list[tuple[int, int]]]: ...
 
 
@@ -400,6 +401,12 @@ class CalculationStepDialog(QDialog):
             return False
         return str(self._role_combos[(side, row)].currentData()) == side
 
+    def _side_locked(self, side: str, row: int) -> bool:
+        opposite_side = "product" if side == "reactant" else "reactant"
+        return self._reactive_role_active(
+            opposite_side, row
+        ) and not self._reactive_role_active(side, row)
+
     def _refresh_cross_side_availability(self) -> None:
         # A component consumed as this endpoint's reactant (or produced as its
         # product) cannot also appear at the other endpoint, so lock the other
@@ -407,13 +414,15 @@ class CalculationStepDialog(QDialog):
         # both sides. Locking only disables — it never clears an existing
         # selection, so switching a role back unlocks the other side intact.
         for row in range(len(self._components)):
-            reactant_reactive = self._reactive_role_active("reactant", row)
-            product_reactive = self._reactive_role_active("product", row)
             self._set_side_locked(
-                "product", row, locked=reactant_reactive and not product_reactive
+                "product",
+                row,
+                locked=self._side_locked("product", row),
             )
             self._set_side_locked(
-                "reactant", row, locked=product_reactive and not reactant_reactive
+                "reactant",
+                row,
+                locked=self._side_locked("reactant", row),
             )
 
     def _set_side_locked(self, side: str, row: int, *, locked: bool) -> None:
@@ -445,6 +454,7 @@ class CalculationStepDialog(QDialog):
             component.formal_charge
             for row, component in enumerate(self._components)
             if self._inclusion_value(side, row) == "included"
+            and not self._side_locked(side, row)
         )
         self._endpoint_widgets(side).charge.setValue(charge)
 
@@ -536,6 +546,8 @@ class CalculationStepDialog(QDialog):
         members: list[CalculationStateMember] = []
         roles: list[CalculationEndpointRole] = []
         for row, component in enumerate(self._components):
+            if self._side_locked(side, row):
+                continue
             inclusion = self._inclusion_value(side, row)
             if inclusion == _UNUSED:
                 continue
@@ -701,8 +713,17 @@ class CalculationStepDialog(QDialog):
         product_state, _product_endpoint = self._build_endpoint("product")
         reactant_ids = included_atom_ids(reactant_state)
         product_ids = included_atom_ids(product_state)
+        existing_correspondence = {
+            reactant_atom_id: product_atom_id
+            for reactant_atom_id in sorted(reactant_ids)
+            if type(product_atom_id := self._mapping_by_reactant.get(reactant_atom_id))
+            is int
+            and product_atom_id in product_ids
+        }
         result = self._correspondence_suggester(
-            frozenset(reactant_ids), frozenset(product_ids)
+            frozenset(reactant_ids),
+            frozenset(product_ids),
+            existing_correspondence,
         )
         if result.value is None:
             # A failed suggestion is not "no shared substructure": presenting
@@ -970,12 +991,14 @@ def _correspondence_suggester_for(
     def suggest(
         reactant_atom_ids: frozenset[int],
         product_atom_ids: frozenset[int],
+        existing_correspondence: Mapping[int, int],
     ) -> RDKitResult[list[tuple[int, int]]]:
         return suggest_atom_correspondence_result_for(
             canvas,
             model,
             reactant_atom_ids,
             product_atom_ids,
+            existing_correspondence,
         )
 
     return suggest

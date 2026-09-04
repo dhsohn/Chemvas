@@ -70,6 +70,7 @@ def _service_for(canvas) -> CanvasBondMutationService:
         canvas,
         hit_testing_service=canvas.services.selection.hit_testing_service,
         graph_service=canvas.services.graph_service,
+        atom_label_relayout=lambda _atom_ids: None,
     )
 
 
@@ -114,6 +115,7 @@ class CanvasBondMutationServiceTest(unittest.TestCase):
             canvas,
             hit_testing_service=injected_hit_testing,
             graph_service=graph,
+            atom_label_relayout=lambda _atom_ids: None,
         ).add_bond(1, 2, 2)
 
         self.assertEqual(bond_id, 0)

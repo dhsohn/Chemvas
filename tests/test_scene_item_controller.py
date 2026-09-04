@@ -490,6 +490,42 @@ class SceneItemControllerTest(unittest.TestCase):
         self.assertIs(ts_bracket.scene(), self.canvas.scene())
         self.assertIs(orbital.scene(), self.canvas.scene())
 
+    def test_restore_atom_mark_syncs_annotation_and_selection_info(self) -> None:
+        self.canvas.model.atoms[7] = object()
+        mark = QGraphicsTextItem("+")
+        mark.setData(0, "mark")
+        mark.setData(1, {"atom_id": 7, "kind": "plus"})
+
+        with patch(
+            "chemvas.ui.scene_item_lifecycle_service.emit_selection_info_for"
+        ) as emit_selection_info:
+            self.controller.restore_scene_item(mark)
+
+        self.assertEqual(
+            self.canvas.model.atom_annotations,
+            {7: {"formal_charge": 1}},
+        )
+        emit_selection_info.assert_called_once_with(self.canvas)
+
+    def test_attach_and_noop_restore_of_atom_mark_preserve_annotation(self) -> None:
+        self.canvas.model.atoms[7] = object()
+        self.canvas.model.atom_annotations = {7: {"radical_electrons": 1}}
+        mark = QGraphicsTextItem("+")
+        mark.setData(0, "mark")
+        mark.setData(1, {"atom_id": 7, "kind": "plus"})
+
+        with patch(
+            "chemvas.ui.scene_item_lifecycle_service.emit_selection_info_for"
+        ) as emit_selection_info:
+            self.controller.attach_scene_item(mark)
+            self.controller.restore_scene_item(mark)
+
+        self.assertEqual(
+            self.canvas.model.atom_annotations,
+            {7: {"radical_electrons": 1}},
+        )
+        emit_selection_info.assert_not_called()
+
     def test_restore_scene_item_reuses_existing_registries_for_offscene_items_without_duplicates(
         self,
     ) -> None:

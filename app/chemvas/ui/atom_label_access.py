@@ -22,7 +22,9 @@ def atom_has_visible_label_for(canvas, atom_id: int) -> bool:
     if atom is None:
         return False
     return (
-        atom.element != "C" or atom.explicit_label or atom_id in atom_items_for(canvas)
+        atom.element.upper() != "C"
+        or atom.explicit_label
+        or atom_id in atom_items_for(canvas)
     )
 
 

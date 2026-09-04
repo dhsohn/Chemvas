@@ -500,16 +500,18 @@ class DocumentSavepoint:
     def release(self) -> None:
         if not self.active:
             return
-        self.active = False
-        if self.scene_rect_snapshot is None:
-            return
-        self.scene_rect_snapshot.release(
-            authoritative_scene_bounds_getter=(
-                self.scene_items_bounding_rect_getter
-                if callable(self.scene_items_bounding_rect_getter)
-                else None
+        if self.scene_rect_snapshot is not None:
+            self.scene_rect_snapshot.release(
+                authoritative_scene_bounds_getter=(
+                    self.scene_items_bounding_rect_getter
+                    if callable(self.scene_items_bounding_rect_getter)
+                    else None
+                )
             )
-        )
+        # A failed lower-level release leaves the savepoint available to the
+        # transaction's exception path, which can still restore every captured
+        # authority. Consume it only after release has completed successfully.
+        self.active = False
 
 
 @contextmanager

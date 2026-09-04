@@ -69,7 +69,9 @@ def test_initialize_canvas_view_configures_view_runtime_and_services(
         setup,
         "BondRenderer",
         mock.Mock(
-            side_effect=lambda canvas: calls.append("bond-renderer") or "bond-renderer"
+            side_effect=lambda canvas, **_kwargs: (
+                calls.append("bond-renderer") or "bond-renderer"
+            )
         ),
     )
     monkeypatch.setattr(setup, "bond_line_width_for", lambda canvas: 2.5)
@@ -101,7 +103,11 @@ def test_initialize_canvas_view_configures_view_runtime_and_services(
     assert canvas.rdkit == "rdkit"
     assert canvas.bond_renderer == "bond-renderer"
     setup.RDKitAdapter.assert_called_once_with()
-    setup.BondRenderer.assert_called_once_with(canvas)
+    setup.BondRenderer.assert_called_once_with(
+        canvas,
+        atom_label_relayout=setup.BondRenderer.call_args.kwargs["atom_label_relayout"],
+    )
+    assert callable(setup.BondRenderer.call_args.kwargs["atom_label_relayout"])
     assert runtime_state.tool_settings_state.arrow_line_width == 2.5
     setup.build_canvas_services.assert_called_once_with(
         canvas,

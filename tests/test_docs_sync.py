@@ -26,6 +26,7 @@ APP = ROOT / "app"
 README = ROOT / "README.md"
 README_KO = ROOT / "README.ko.md"
 REFERENCE = ROOT / "docs" / "REFERENCE.md"
+AGENT_CLI = ROOT / "docs" / "AGENT_CLI.md"
 CHANGELOG = ROOT / "CHANGELOG.md"
 READMES = (README, README_KO)
 
@@ -135,6 +136,43 @@ def test_readmes_show_the_published_install_command():
         assert f"pip install {name}" in _collapse(_read(path)), (
             f"{path.name}: missing the 'pip install {name}' install command"
         )
+
+
+def test_readmes_mark_calculation_handoff_as_an_rdkit_feature() -> None:
+    calculation_cli = _read(APP / "chemvas" / "bootstrap" / "calculation_bundle.py")
+    assert "from chemvas.core.rdkit_adapter import RDKitAdapter" in calculation_cli
+
+    for path in READMES:
+        row = next(
+            (line for line in _read(path).splitlines() if "`machine.json`" in line),
+            None,
+        )
+        assert row is not None, f"{path.name}: missing calculation handoff row"
+        assert "RDKit" in row, (
+            f"{path.name}: calculation handoff uses RDKit but its capability row "
+            "does not mark that dependency"
+        )
+    calculation_docs = _collapse(_read(AGENT_CLI))
+    assert 'pip install "chemvas[rdkit]"' in calculation_docs
+    for command in ("generate-precomplex", "pack-step"):
+        assert re.search(
+            rf"{re.escape(command)}[^.]*require(?:s| it)",
+            calculation_docs,
+            re.IGNORECASE,
+        ), f"{AGENT_CLI.name}: does not state that {command} requires RDKit"
+
+
+def test_packaged_readme_has_no_repository_relative_links() -> None:
+    text = _read(README)
+    markdown_targets = re.findall(r"!?\[[^\]]*\]\(([^)\s]+)", text)
+    html_targets = re.findall(r'\b(?:href|src)="([^"]+)"', text)
+    targets = markdown_targets + html_targets
+    assert targets, "README.md: no links or images found"
+    relative = [target for target in targets if not target.startswith("https://")]
+    assert not relative, (
+        "README.md is the PyPI long description; repository-relative targets "
+        f"would be broken there: {relative}"
+    )
 
 
 def test_reference_matches_atom_and_text_tool_hotkeys():

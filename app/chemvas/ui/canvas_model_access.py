@@ -6,6 +6,7 @@ from typing import Any
 from PyQt6.QtCore import QPointF
 from PyQt6.QtGui import QPolygonF
 
+from chemvas.features.insertion import build_atom_annotations
 from chemvas.ui.canvas_model_state import model_for, set_model_for
 from chemvas.ui.canvas_scene_items_state import ring_items_for
 
@@ -133,6 +134,30 @@ def clear_atom_annotation_for(canvas: Any, atom_id: int) -> None:
         annotations.pop(atom_id, None)
 
 
+def sync_atom_annotation_from_marks_for(
+    canvas: Any,
+    atom_id: int,
+    marks: Any,
+) -> None:
+    if atom_for_id(canvas, atom_id) is None:
+        clear_atom_annotation_for(canvas, atom_id)
+        return
+    mark_kinds: list[str] = []
+    for mark in marks:
+        data = mark.data(1)
+        if not isinstance(data, Mapping):
+            continue
+        kind = data.get("kind")
+        if isinstance(kind, str):
+            mark_kinds.append(kind)
+    annotations = build_atom_annotations(
+        {atom_id},
+        {atom_id: atom_id},
+        {atom_id: mark_kinds},
+    )
+    set_atom_annotation_for(canvas, atom_id, annotations.get(atom_id))
+
+
 def clear_bond_for_id(canvas: Any, bond_id: int) -> None:
     bonds = bonds_for(canvas)
     if 0 <= bond_id < len(bonds):
@@ -206,5 +231,6 @@ __all__ = [
     "set_bond_for_id",
     "set_model_for",
     "set_next_atom_id_for",
+    "sync_atom_annotation_from_marks_for",
     "trim_bonds_direct_for",
 ]

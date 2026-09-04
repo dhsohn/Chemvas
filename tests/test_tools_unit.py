@@ -67,6 +67,7 @@ from chemvas.ui.selection_style_state import (
 )
 from chemvas.ui.tool_base import Tool
 from chemvas.ui.tool_context import ToolContext
+from chemvas.ui.tool_controller import ToolController
 from tests.canvas_factory import build_canvas_view
 
 
@@ -681,6 +682,25 @@ class ToolsUnitTest(unittest.TestCase):
         tool._commit_selection_drag()
         self.assertEqual(canvas.updated_outline, 1)
         self.assertEqual(canvas.pushed_commands, [])
+
+    def test_switching_away_from_select_clears_handle_hit_targets(self) -> None:
+        canvas = _FakeSelectCanvas()
+        select_tool = SelectTool(canvas, context=_tool_context_for(canvas))
+        next_tool = Tool("color", canvas)
+        controller = object.__new__(ToolController)
+        controller.canvas = canvas
+        controller.tools = {"select": select_tool, "color": next_tool}
+        controller.active = select_tool
+        stale_handle = object()
+        canvas.handle_state.active_handles = [stale_handle]
+        canvas.handle_state.target = object()
+
+        controller.set_active("color")
+
+        self.assertIs(controller.active, next_tool)
+        self.assertEqual(canvas.handle_state.active_handles, [])
+        self.assertIsNone(canvas.handle_state.target)
+        self.assertEqual(canvas.clear_handles_calls, 1)
 
     def test_select_tool_begin_and_structure_selection_helpers(self) -> None:
         canvas = _FakeSelectCanvas()

@@ -33,6 +33,7 @@ from tests.test_calculation_plan import _document_state, _plan
 from tests.test_precomplex_cli import _generate_candidate_fixture
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping
     from pathlib import Path
 
     import pytest
@@ -402,6 +403,49 @@ def test_catalyst_included_on_both_sides_is_never_cleared() -> None:
     dialog.deleteLater()
 
 
+def test_locked_opposite_endpoint_selection_is_retained_but_not_saved() -> None:
+    app = QApplication.instance() or QApplication([])
+    app.setQuitOnLastWindowClosed(False)
+    state = _document_state()
+    model_state = state["model"]
+    assert isinstance(model_state, dict)
+    model_state["atom_annotations"] = {4: {"formal_charge": 1}}
+    state["marks"] = [{"kind": "plus", "atom_id": 4}]
+    dialog = CalculationStepDialog(state)
+    _configure_separate_endpoints(dialog)
+    component_atom_ids = dialog._components[2].atom_ids
+
+    # The component starts as a catalyst on both sides. Making it reactive on
+    # the reactant side locks the product controls without clearing their
+    # retained values, so switching back can still restore the catalyst setup.
+    dialog._set_combo_data(dialog._role_combos[("reactant", 2)], "reactant")
+    assert not dialog._inclusion_combos[("product", 2)].isEnabled()
+    assert dialog._inclusion_value("product", 2) == "included"
+    assert dialog._role_combos[("product", 2)].currentData() == "catalyst"
+    assert dialog.reactant_widgets.charge.value() == 1
+    assert dialog.product_widgets.charge.value() == 0
+
+    dialog.accept()
+
+    assert dialog.result_plan_state is not None
+    state["calculation_plan"] = dialog.result_plan_state
+    plan = calculation_plan_for_document(state)
+    step = plan.steps[0]
+    product_state = next(
+        endpoint_state
+        for endpoint_state in plan.states
+        if endpoint_state.id == step.product.state_id
+    )
+    assert product_state.charge == 0
+    assert component_atom_ids not in {
+        member.component_atom_ids for member in product_state.members
+    }
+    assert component_atom_ids not in {
+        role.component_atom_ids for role in step.product.roles
+    }
+    dialog.deleteLater()
+
+
 def test_mapping_rows_and_used_candidates_read_muted() -> None:
     app = QApplication.instance() or QApplication([])
     app.setQuitOnLastWindowClosed(False)
@@ -456,12 +500,14 @@ def test_suggest_button_disabled_without_a_suggester() -> None:
 def test_structural_suggestion_fills_only_safe_gaps() -> None:
     app = QApplication.instance() or QApplication([])
     app.setQuitOnLastWindowClosed(False)
-    calls: list[tuple[frozenset[int], frozenset[int]]] = []
+    calls: list[tuple[frozenset[int], frozenset[int], dict[int, int]]] = []
 
     def suggester(
-        reactant_ids: frozenset[int], product_ids: frozenset[int]
+        reactant_ids: frozenset[int],
+        product_ids: frozenset[int],
+        existing_correspondence: Mapping[int, int],
     ) -> RDKitResult[list[tuple[int, int]]]:
-        calls.append((reactant_ids, product_ids))
+        calls.append((reactant_ids, product_ids, dict(existing_correspondence)))
         # (0,2) fills an unmapped gap; (1,3) must not overwrite the existing
         # mapping; (0,3) would reuse a product already taken by (0,2).
         return RDKitResult([(0, 2), (1, 3), (0, 3)])
@@ -475,8 +521,9 @@ def test_structural_suggestion_fills_only_safe_gaps() -> None:
     dialog.suggest_mapping_button.click()
 
     assert calls, "the suggester should be invoked"
-    reactant_ids, product_ids = calls[-1]
+    reactant_ids, product_ids, existing_correspondence = calls[-1]
     assert 0 in reactant_ids and 3 in product_ids
+    assert existing_correspondence == {1: 3, 4: 4}
     # Gap filled, existing mapping preserved, no product reused.
     assert dialog._mapping_by_reactant[0] == 2
     assert dialog._mapping_by_reactant[1] == 3
@@ -509,7 +556,7 @@ def test_structural_suggestion_reports_when_nothing_new() -> None:
     app.setQuitOnLastWindowClosed(False)
     dialog = CalculationStepDialog(
         _document_state(),
-        correspondence_suggester=lambda _r, _p: RDKitResult([]),
+        correspondence_suggester=lambda _r, _p, _existing: RDKitResult([]),
     )
     _configure_separate_endpoints(dialog)
 
@@ -529,7 +576,7 @@ def test_structural_suggestion_shows_the_failure_reason() -> None:
     )
     dialog = CalculationStepDialog(
         _document_state(),
-        correspondence_suggester=lambda _r, _p: RDKitResult(None, message),
+        correspondence_suggester=lambda _r, _p, _existing: RDKitResult(None, message),
     )
     _configure_separate_endpoints(dialog)
     _set_mapping(dialog, 1, 3)
@@ -548,10 +595,32 @@ def test_correspondence_suggester_returns_the_access_result_unchanged(
 ) -> None:
     canvas = object()
     expected = RDKitResult(None, "The structural suggestion failed.")
-    calls: list[tuple[object, object, frozenset[int], frozenset[int]]] = []
+    calls: list[
+        tuple[
+            object,
+            object,
+            frozenset[int],
+            frozenset[int],
+            dict[int, int],
+        ]
+    ] = []
 
-    def suggest_for(active_canvas, model, reactant_ids, product_ids):
-        calls.append((active_canvas, model, reactant_ids, product_ids))
+    def suggest_for(
+        active_canvas,
+        model,
+        reactant_ids,
+        product_ids,
+        existing_correspondence,
+    ):
+        calls.append(
+            (
+                active_canvas,
+                model,
+                reactant_ids,
+                product_ids,
+                dict(existing_correspondence),
+            )
+        )
         return expected
 
     monkeypatch.setattr(
@@ -562,13 +631,18 @@ def test_correspondence_suggester_returns_the_access_result_unchanged(
     assert suggester is not None
     reactant_ids = frozenset({0, 1})
     product_ids = frozenset({2, 3})
+    existing_correspondence = {0: 2}
 
-    result = suggester(reactant_ids, product_ids)
+    result = suggester(reactant_ids, product_ids, existing_correspondence)
 
     assert result is expected
     assert len(calls) == 1
     assert calls[0][0] is canvas
-    assert calls[0][2:] == (reactant_ids, product_ids)
+    assert calls[0][2:] == (
+        reactant_ids,
+        product_ids,
+        existing_correspondence,
+    )
 
 
 def test_dialog_label_colors_track_mapping_and_clear_on_reject() -> None:

@@ -20,6 +20,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 _GEOMETRY_OPTIMIZATION_MAX_ITERS = 500
+_MAX_CONSTRAINED_MCS_MATCHES = 10_000
 
 
 class RDKitConversionHelper:
@@ -162,6 +163,7 @@ class RDKitConversionHelper:
         model: MoleculeModel,
         reactant_atom_ids: frozenset[int] | set[int],
         product_atom_ids: frozenset[int] | set[int],
+        existing_correspondence: Mapping[int, int] | None = None,
     ) -> list[tuple[int, int]] | None:
         """Suggest reactant->product atom pairs from the common substructure.
 
@@ -174,7 +176,10 @@ class RDKitConversionHelper:
         ``adapter.last_error`` set means the suggestion could not run. The two
         are distinct on purpose — reporting a failure as an empty result would
         present a tool problem as a chemistry claim about the drawing. This is
-        a review-only suggestion and decides no chemistry on its own.
+        a review-only suggestion and decides no chemistry on its own. Existing
+        correspondence is a hard constraint on symmetry-equivalent MCS
+        embeddings; a suggestion is refused instead of mixing an incompatible
+        automorphism into the researcher's mapping.
         """
         rdkit = self.adapter._load_rdkit()
         if rdkit == (None, None):
@@ -244,8 +249,27 @@ class RDKitConversionHelper:
                 "RDKit could not re-read the substructure pattern it found."
             )
             return None
-        reactant_match = reactant_mol.GetSubstructMatch(query)
-        product_match = product_mol.GetSubstructMatch(query)
+        fixed_atom_indices = tuple(
+            (reactant_map[reactant_id], product_map[product_id])
+            for reactant_id, product_id in sorted(
+                (existing_correspondence or {}).items()
+            )
+            if reactant_id in reactant_map and product_id in product_map
+        )
+        matched_embeddings = self._mcs_embeddings_honoring_correspondence(
+            reactant_mol,
+            product_mol,
+            query,
+            fixed_atom_indices=fixed_atom_indices,
+        )
+        if matched_embeddings is None:
+            self.adapter.last_error = (
+                "The existing atom mappings do not align with the shared "
+                "substructure. Review or clear them before requesting a "
+                "structural suggestion."
+            )
+            return None
+        reactant_match, product_match = matched_embeddings
         if len(reactant_match) != len(product_match):
             self.adapter.last_error = (
                 "The shared substructure matched the two endpoints inconsistently."
@@ -271,6 +295,70 @@ class RDKitConversionHelper:
             used_products.add(product_id)
             pairs.append((reactant_id, product_id))
         return pairs
+
+    @staticmethod
+    def _mcs_embeddings_honoring_correspondence(
+        reactant_mol,
+        product_mol,
+        query,
+        *,
+        fixed_atom_indices: tuple[tuple[int, int], ...],
+    ) -> tuple[tuple[int, ...], tuple[int, ...]] | None:
+        """Choose paired MCS embeddings that contain and preserve every anchor."""
+
+        if not fixed_atom_indices:
+            reactant_match = tuple(reactant_mol.GetSubstructMatch(query))
+            product_match = tuple(product_mol.GetSubstructMatch(query))
+            if not reactant_match or not product_match:
+                return None
+            return reactant_match, product_match
+
+        reactant_matches = reactant_mol.GetSubstructMatches(
+            query,
+            uniquify=False,
+            maxMatches=_MAX_CONSTRAINED_MCS_MATCHES,
+        )
+        product_matches = product_mol.GetSubstructMatches(
+            query,
+            uniquify=False,
+            maxMatches=_MAX_CONSTRAINED_MCS_MATCHES,
+        )
+
+        def signature(
+            match: tuple[int, ...], atom_indices: tuple[int, ...]
+        ) -> tuple[int, ...] | None:
+            query_position_by_atom = {
+                atom_index: position for position, atom_index in enumerate(match)
+            }
+            positions: list[int] = []
+            for atom_index in atom_indices:
+                position = query_position_by_atom.get(atom_index)
+                if position is None:
+                    return None
+                positions.append(position)
+            return tuple(positions)
+
+        reactant_anchor_indices = tuple(pair[0] for pair in fixed_atom_indices)
+        product_anchor_indices = tuple(pair[1] for pair in fixed_atom_indices)
+        product_match_by_signature: dict[tuple[int, ...], tuple[int, ...]] = {}
+        for raw_product_match in product_matches:
+            product_embedding = tuple(raw_product_match)
+            product_signature = signature(product_embedding, product_anchor_indices)
+            if product_signature is None:
+                continue
+            product_match_by_signature.setdefault(
+                product_signature,
+                product_embedding,
+            )
+        for raw_reactant_match in reactant_matches:
+            reactant_match = tuple(raw_reactant_match)
+            reactant_signature = signature(reactant_match, reactant_anchor_indices)
+            if reactant_signature is None:
+                continue
+            selected_product_match = product_match_by_signature.get(reactant_signature)
+            if selected_product_match is not None:
+                return reactant_match, selected_product_match
+        return None
 
     def model_to_rdkit_strict_labels(self, model: MoleculeModel):
         mol, _ = self.model_to_rdkit_with_map_strict_labels(model)

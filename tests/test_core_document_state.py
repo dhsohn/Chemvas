@@ -744,6 +744,21 @@ class DocumentStateTest(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     build_document_payload(state, version=CANVAS_FILE_VERSION)
 
+    def test_v7_settings_preserve_legacy_font_sizes_above_authoring_limit(
+        self,
+    ) -> None:
+        settings = _settings()
+        settings["text_font_size"] = 97
+        state = _canvas_state()
+        state["settings"] = settings
+
+        payload = build_document_payload(state, version=CANVAS_FILE_VERSION)
+
+        self.assertEqual(
+            extract_document_state(payload)["settings"]["text_font_size"],
+            97,
+        )
+
     def test_selection_payload_to_canvas_state_maps_supported_items(self) -> None:
         settings = _settings()
         selection_payload = {

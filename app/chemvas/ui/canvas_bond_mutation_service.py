@@ -18,16 +18,24 @@ from chemvas.ui.canvas_model_access import (
 from chemvas.ui.scene_item_access import remove_items_from_canvas_scene
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from chemvas.ui.canvas_view import CanvasView
 
 
 class CanvasBondMutationService:
     def __init__(
-        self, canvas: CanvasView, *, hit_testing_service, graph_service
+        self,
+        canvas: CanvasView,
+        *,
+        hit_testing_service,
+        graph_service,
+        atom_label_relayout: Callable[[set[int]], None],
     ) -> None:
         self.canvas = canvas
         self.hit_testing_service = hit_testing_service
         self.graph_service = graph_service
+        self._atom_label_relayout = atom_label_relayout
 
     def add_bond(self, a: int, b: int, order: int = 1) -> int:
         graph_service = self.graph_service
@@ -40,6 +48,7 @@ class CanvasBondMutationService:
         bond_id = add_bond_to_model_for(self.canvas, a, b, order)
         graph_service.add_bond_neighbors(a, b)
         graph_service.add_bond_index(bond_id, a, b)
+        self._relayout_atom_labels({a, b})
         self.hit_testing_service.mark_spatial_index_dirty()
         return bond_id
 
@@ -56,6 +65,9 @@ class CanvasBondMutationService:
             style=bond_state.get("style", "single"),
             color=bond_state.get("color", "#000000"),
         )
+        old_atom_ids = (
+            {existing_bond.a, existing_bond.b} if existing_bond is not None else set()
+        )
         if existing_bond is not None and (
             existing_bond.a != bond.a or existing_bond.b != bond.b
         ):
@@ -70,6 +82,7 @@ class CanvasBondMutationService:
             graph_service.add_bond_neighbors(bond.a, bond.b)
             graph_service.add_bond_index(bond_id, bond.a, bond.b)
         add_bond_graphics_for(self.canvas, bond_id)
+        self._relayout_atom_labels(old_atom_ids | {bond.a, bond.b})
         self.hit_testing_service.mark_spatial_index_dirty()
 
     def remove_bond_by_id(self, bond_id: int) -> None:
@@ -82,6 +95,8 @@ class CanvasBondMutationService:
             graph_service.remove_bond_index(bond_id, bond.a, bond.b)
             graph_service.remove_bond_neighbors(bond.a, bond.b, skip_bond_id=bond_id)
         clear_bond_for_id(self.canvas, bond_id)
+        if bond is not None:
+            self._relayout_atom_labels({bond.a, bond.b})
         self.hit_testing_service.mark_spatial_index_dirty()
 
     def trim_bonds_to_length(self, length: int) -> None:
@@ -92,6 +107,12 @@ class CanvasBondMutationService:
             (bond_id, bond_for_id(self.canvas, bond_id))
             for bond_id in bond_ids_from(self.canvas, length)
         ]
+        affected_atom_ids = {
+            atom_id
+            for _bond_id, bond in trimmed_bonds
+            if bond is not None
+            for atom_id in (bond.a, bond.b)
+        }
         trim_bonds_direct_for(self.canvas, length)
         for bond_id, bond in trimmed_bonds:
             if bond is not None:
@@ -100,7 +121,12 @@ class CanvasBondMutationService:
                     bond.a, bond.b, skip_bond_id=bond_id
                 )
             self._clear_bond_graphics(bond_id)
+        self._relayout_atom_labels(affected_atom_ids)
         self.hit_testing_service.mark_spatial_index_dirty()
+
+    def _relayout_atom_labels(self, atom_ids: set[int]) -> None:
+        if atom_ids:
+            self._atom_label_relayout(atom_ids)
 
     def _clear_bond_graphics(self, bond_id: int) -> None:
         remove_items_from_canvas_scene(

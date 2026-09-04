@@ -70,10 +70,14 @@ class RDKitAdapter:
         model: MoleculeModel,
         reactant_atom_ids: frozenset[int] | set[int],
         product_atom_ids: frozenset[int] | set[int],
+        existing_correspondence: Mapping[int, int] | None = None,
     ) -> RDKitResult[list[tuple[int, int]]]:
         return self._call_with_result(
             lambda: self._conversion_helper._suggest_atom_correspondence(
-                model, reactant_atom_ids, product_atom_ids
+                model,
+                reactant_atom_ids,
+                product_atom_ids,
+                existing_correspondence,
             ),
             fallback_error="Failed to suggest an atom correspondence.",
         )

@@ -63,12 +63,14 @@ def test_suggest_atom_correspondence_result_delegates_to_canvas_adapter() -> Non
     canvas = SimpleNamespace(rdkit=adapter)
     reactant_ids = frozenset({1, 2})
     product_ids = frozenset({3, 4})
+    existing_correspondence = {1: 3}
 
     result = suggest_atom_correspondence_result_for(
         canvas,
         "model",
         reactant_ids,
         product_ids,
+        existing_correspondence,
     )
 
     assert result is expected
@@ -76,4 +78,5 @@ def test_suggest_atom_correspondence_result_delegates_to_canvas_adapter() -> Non
         "model",
         reactant_ids,
         product_ids,
+        existing_correspondence,
     )

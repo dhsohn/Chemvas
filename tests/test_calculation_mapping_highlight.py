@@ -40,6 +40,10 @@ def test_highlighter_labels_atoms_with_endpoint_tints(
         "atom_center_point_for",
         lambda _canvas, atom_id: centers.get(atom_id),
     )
+    monkeypatch.setattr(highlight_module, "atom_pick_radius_for", lambda _canvas: 6.0)
+    monkeypatch.setattr(
+        highlight_module, "visible_atom_item_for", lambda _canvas, _atom_id: None
+    )
     highlighter = CalculationMappingHighlighter(canvas)
 
     highlighter.show_atom_labels({1, 2}, {2, 3})
@@ -81,6 +85,10 @@ def test_highlighter_grays_out_excluded_atom_labels(
         highlight_module,
         "atom_center_point_for",
         lambda _canvas, atom_id: centers.get(atom_id),
+    )
+    monkeypatch.setattr(highlight_module, "atom_pick_radius_for", lambda _canvas: 6.0)
+    monkeypatch.setattr(
+        highlight_module, "visible_atom_item_for", lambda _canvas, _atom_id: None
     )
     highlighter = CalculationMappingHighlighter(canvas)
 
@@ -134,4 +142,34 @@ def test_real_canvas_labels_are_transient_and_preserve_document_selection() -> N
     )
     assert selected.isSelected() is True
     assert document_service.snapshot_state() == before
+    canvas.deleteLater()
+
+
+def test_mapping_id_clears_the_visible_atom_glyph_vertically() -> None:
+    app = QApplication.instance() or QApplication([])
+    app.setQuitOnLastWindowClosed(False)
+    canvas = CanvasView(renderer=Renderer())
+    state = _document_state()
+    state["model"]["atoms"][1]["element"] = "OTs"
+    document_service = canvas_services_for(
+        canvas
+    ).document.canvas_document_session_service
+    document_service.apply_state(state)
+    atom_item = visible_atom_item_for(canvas, 1)
+    assert atom_item is not None
+    highlighter = CalculationMappingHighlighter(canvas)
+
+    highlighter.show_atom_labels({1}, set())
+
+    id_label = next(
+        item
+        for item in canvas.scene().items()
+        if item.data(0) == "calculation_atom_id_label" and item.data(1) == 1
+    )
+    visible_bounds = atom_item.export_scene_bounding_rect()
+    assert id_label.sceneBoundingRect().bottom() < visible_bounds.top()
+    # The long alias widens its own box, but must not push the overlay sideways.
+    assert abs(id_label.pos().x() - 3.5) < 1e-6
+
+    highlighter.clear_all()
     canvas.deleteLater()

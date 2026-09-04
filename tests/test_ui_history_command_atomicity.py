@@ -506,6 +506,63 @@ def test_exact_scene_snapshot_release_commits_guarded_auto_scene_growth() -> Non
     assert scene.sceneRect().right() > 10_000.0
 
 
+def test_document_savepoint_release_failure_remains_restorable() -> None:
+    app = QApplication.instance() or QApplication([])
+    app.setQuitOnLastWindowClosed(False)
+    scene = QGraphicsScene()
+    original = scene.addRect(QRectF(0.0, 0.0, 10.0, 10.0))
+    snapshot = DocumentSavepoint.capture(
+        SimpleNamespace(scene=lambda: scene),
+        guard_scene_rect=True,
+    )
+    added = scene.addRect(QRectF(20.0, 0.0, 10.0, 10.0))
+
+    with (
+        mock.patch.object(
+            SceneRectSnapshot,
+            "release",
+            side_effect=RuntimeError("injected scene-rect release failure"),
+        ),
+        pytest.raises(RuntimeError, match="scene-rect release failure"),
+    ):
+        snapshot.release()
+
+    assert snapshot.active
+    result = snapshot.restore()
+
+    assert result.authoritative
+    assert result.errors == ()
+    assert original.scene() is scene
+    assert added.scene() is None
+
+
+def test_scoped_runtime_capture_preserves_scene_order_for_equal_z_items() -> None:
+    app = QApplication.instance() or QApplication([])
+    app.setQuitOnLastWindowClosed(False)
+    scene = QGraphicsScene()
+    a = scene.addRect(QRectF(0.0, 0.0, 5.0, 5.0))
+    b = scene.addRect(QRectF(10.0, 0.0, 5.0, 5.0))
+    c = scene.addRect(QRectF(20.0, 0.0, 5.0, 5.0))
+    expected_order = list(scene.items())
+    assert expected_order == [c, b, a]
+
+    snapshot = capture_scene_runtime(
+        SimpleNamespace(scene=lambda: scene),
+        detail_items=(a, b, c),
+    )
+    assert [state.item for state in snapshot.topology_states] == expected_order
+
+    for item in expected_order:
+        scene.removeItem(item)
+        scene.addItem(item)
+    assert list(scene.items()) == [a, b, c]
+
+    errors = restore_scene_runtime(snapshot, collect_errors=True)
+
+    assert errors == []
+    assert list(scene.items()) == expected_order
+
+
 def test_delete_html_authority_accepts_exact_baseline_and_rejects_mutation() -> None:
     app = QApplication.instance() or QApplication([])
     app.setQuitOnLastWindowClosed(False)
