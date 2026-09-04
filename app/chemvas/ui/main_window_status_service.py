@@ -230,15 +230,17 @@ class MainWindowStatusService:
         self.zoom_label.setToolTip(f"Zoom: {zoom_percent}%")
         self.zoom_label.setStatusTip(f"Zoom: {zoom_percent}%")
 
-    def show_error_message(
-        self, window, message: str, *, timeout: int, qtimer=QTimer
-    ) -> None:
+    def show_error_message(self, window, message: str, *, timeout: int) -> None:
         bar = window.statusBar()
         bar.setProperty("statusState", "error")
         bar.style().unpolish(bar)
         bar.style().polish(bar)
         bar.showMessage(message, timeout)
-        qtimer.singleShot(timeout, lambda: self.reset_status_state(window))
+        reset_timer = QTimer(window)
+        reset_timer.setSingleShot(True)
+        reset_timer.timeout.connect(lambda: self.reset_status_state(window))
+        reset_timer.timeout.connect(reset_timer.deleteLater)
+        reset_timer.start(timeout)
 
     def set_autosave_error(self, window, message: str | None) -> None:
         label = self.autosave_error_label

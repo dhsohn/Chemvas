@@ -4,6 +4,9 @@ from types import SimpleNamespace
 from unittest import mock
 
 import pytest
+from PyQt6 import sip
+from PyQt6.QtCore import QCoreApplication, QEvent, QTimer
+from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import QApplication, QMainWindow
 
 from chemvas.ui.main_window_status_service import MainWindowStatusService
@@ -139,20 +142,37 @@ def test_show_active_tool_hint_updates_status_bar_message() -> None:
     bar.showMessage.assert_called_once_with("Select: click or drag marquee")
 
 
-def test_show_error_message_uses_timer_default_inside_status_service() -> None:
+def test_show_error_message_owns_reset_timer_by_window(qapp) -> None:
     service = _service()
-    bar = mock.Mock()
-    window = SimpleNamespace(statusBar=mock.Mock(return_value=bar))
+    window = QMainWindow()
+    bar = window.statusBar()
 
-    with mock.patch(
-        "chemvas.ui.main_window_status_service.QTimer.singleShot"
-    ) as single_shot:
-        service.show_error_message(window, "Invalid molecule", timeout=500)
+    service.show_error_message(window, "Invalid molecule", timeout=500)
 
-    bar.setProperty.assert_called_once_with("statusState", "error")
-    bar.showMessage.assert_called_once_with("Invalid molecule", 500)
-    single_shot.assert_called_once()
-    assert single_shot.call_args.args[0] == 500
+    reset_timers = [child for child in window.children() if isinstance(child, QTimer)]
+    assert len(reset_timers) == 1
+    assert reset_timers[0].parent() is window
+    assert reset_timers[0].isSingleShot()
+    assert reset_timers[0].isActive()
+    assert bar.property("statusState") == "error"
+    assert bar.currentMessage() == "Invalid molecule"
+    window.deleteLater()
+    QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+    assert sip.isdeleted(window)
+
+
+def test_error_reset_timer_is_cancelled_when_window_is_deleted(qapp) -> None:
+    service = _service()
+    service.reset_status_state = mock.Mock()
+    window = QMainWindow()
+
+    service.show_error_message(window, "Invalid molecule", timeout=10)
+    window.deleteLater()
+    QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+    assert sip.isdeleted(window)
+    QTest.qWait(30)
+
+    service.reset_status_state.assert_not_called()
 
 
 def test_autosave_error_stays_visible_until_cleared(qapp) -> None:
