@@ -660,6 +660,9 @@ class CanvasNoteController:
             before_state = note_state_dict_for(self.canvas, item)
             before_state["text"] = committed_text
             before_state["html"] = committed_html
+            command = DeleteSceneItemsCommand.capture(
+                self.canvas, [before_state], [item]
+            )
             # Deselect before removal so grouped companion notes drop with it,
             # then refresh again after removal: a mixed group's box is spanned
             # by attached members, so the pre-removal refresh still covered
@@ -672,10 +675,7 @@ class CanvasNoteController:
                 set_committed_note_html_for(item, "")
 
             self._push_history_or_rollback(
-                DeleteSceneItemsCommand(
-                    item_states=[before_state],
-                    items=[item],
-                ),
+                command,
                 after_push=clear_note_metadata,
                 runtime_rollback=runtime_snapshot,
                 rollback_steps=(

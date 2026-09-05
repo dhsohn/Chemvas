@@ -211,7 +211,7 @@ class SceneOpsControllerTest(unittest.TestCase):
         )
         self.assertEqual(canvas.remove_bond_calls, [0])
         # The oxygen keeps its element label and survives orphaning.
-        self.assertEqual(canvas.remove_atom_calls, [(1, True)])
+        self.assertEqual(canvas.remove_atom_calls, [(1, False)])
         self.assertIn(2, canvas.model.atoms)
         self.assertEqual(sorted(canvas.redraw_connected_bonds_calls), [1, 2])
         self.assertEqual(canvas.suspend_selection_outline_calls, [True, False])
@@ -297,7 +297,7 @@ class SceneOpsControllerTest(unittest.TestCase):
         self.assertEqual(canvas.remove_bond_calls, [0])
         self.assertEqual(sorted(canvas.redraw_connected_bonds_calls), [1, 2])
         # The oxygen endpoint keeps its element label and survives orphaning.
-        self.assertEqual(canvas.remove_atom_calls, [(1, True)])
+        self.assertEqual(canvas.remove_atom_calls, [(1, False)])
 
         delete_bond_commands = [
             child for child in command.commands if isinstance(child, DeleteBondCommand)
@@ -312,13 +312,8 @@ class SceneOpsControllerTest(unittest.TestCase):
         self.assertEqual(len(delete_atom_commands), 1)
         atom_delete = delete_atom_commands[0]
         self.assertEqual(set(atom_delete.atom_states), {1})
-        self.assertEqual(
-            atom_delete.mark_states,
-            [
-                {"kind": "mark", "atom_id": 1, "x": 4.0, "y": -5.0},
-                {"kind": "mark", "atom_id": 1, "x": -2.0, "y": 7.0},
-            ],
-        )
+        self.assertEqual(atom_delete.mark_states, [])
+        self.assertFalse(atom_delete.remove_marks)
 
         delete_scene_item_commands = [
             child
@@ -330,9 +325,20 @@ class SceneOpsControllerTest(unittest.TestCase):
         deleted_kinds = [state["kind"] for state in scene_delete.item_states]
         self.assertEqual(
             deleted_kinds,
-            ["ring", "note", "mark", "arrow", "ts_bracket", "orbital", "weird"],
+            [
+                "ring",
+                "note",
+                "mark",
+                "mark",
+                "mark",
+                "arrow",
+                "ts_bracket",
+                "orbital",
+                "weird",
+            ],
         )
-        self.assertNotIn(linked_mark, scene_delete.items)
+        self.assertEqual(scene_delete.items.count(linked_mark), 1)
+        self.assertEqual(scene_delete.items.count(sibling_mark), 1)
         self.assertIn(free_mark, scene_delete.items)
         self.assertNotIn(handle_item, scene_delete.items)
         self.assertEqual(canvas.suspend_selection_outline_calls, [True, False])
@@ -365,7 +371,7 @@ class SceneOpsControllerTest(unittest.TestCase):
             [{1}],
         )
         self.assertEqual(canvas.remove_bond_calls, [0])
-        self.assertEqual(canvas.remove_atom_calls, [(1, True)])
+        self.assertEqual(canvas.remove_atom_calls, [(1, False)])
         self.assertEqual(set(canvas.model.atoms), {2, 3})
 
     def test_delete_bond_removes_both_orphaned_endpoint_atoms(self) -> None:
@@ -385,7 +391,7 @@ class SceneOpsControllerTest(unittest.TestCase):
         self.assertIsInstance(command, CompositeCommand)
         assert isinstance(command, CompositeCommand)
         self.assertIsInstance(command.commands[0], DeleteBondCommand)
-        self.assertEqual(canvas.remove_atom_calls, [(1, True), (2, True)])
+        self.assertEqual(canvas.remove_atom_calls, [(1, False), (2, False)])
         self.assertEqual(canvas.model.atoms, {})
         self.assertIsNone(canvas.model.bonds[0])
 
@@ -404,7 +410,7 @@ class SceneOpsControllerTest(unittest.TestCase):
         command = controller.delete_bond(0, record=False)
 
         self.assertIsInstance(command, CompositeCommand)
-        self.assertEqual(canvas.remove_atom_calls, [(1, True)])
+        self.assertEqual(canvas.remove_atom_calls, [(1, False)])
         self.assertEqual(set(canvas.model.atoms), {2})
 
     def test_delete_bond_keeps_marked_endpoint_atom(self) -> None:
@@ -428,7 +434,7 @@ class SceneOpsControllerTest(unittest.TestCase):
         command = controller.delete_bond(0, record=False)
 
         self.assertIsInstance(command, CompositeCommand)
-        self.assertEqual(canvas.remove_atom_calls, [(1, True)])
+        self.assertEqual(canvas.remove_atom_calls, [(1, False)])
         self.assertEqual(set(canvas.model.atoms), {2})
 
     def test_delete_atom_removes_invisible_orphaned_neighbor(self) -> None:
@@ -447,7 +453,7 @@ class SceneOpsControllerTest(unittest.TestCase):
 
         self.assertIsInstance(command, CompositeCommand)
         self.assertEqual(canvas.remove_bond_calls, [0])
-        self.assertEqual(canvas.remove_atom_calls, [(1, True), (2, True)])
+        self.assertEqual(canvas.remove_atom_calls, [(1, False), (2, False)])
         self.assertEqual(canvas.model.atoms, {})
 
     def test_delete_atom_keeps_labeled_orphaned_neighbor(self) -> None:
@@ -465,7 +471,7 @@ class SceneOpsControllerTest(unittest.TestCase):
         command = controller.delete_atom(1, record=False)
 
         self.assertIsNotNone(command)
-        self.assertEqual(canvas.remove_atom_calls, [(1, True)])
+        self.assertEqual(canvas.remove_atom_calls, [(1, False)])
         self.assertEqual(set(canvas.model.atoms), {2})
 
     def test_delete_atom_keeps_neighbor_that_still_has_bonds(self) -> None:
@@ -486,7 +492,7 @@ class SceneOpsControllerTest(unittest.TestCase):
 
         self.assertIsNotNone(command)
         # Atom 1 loses its only bond and vanishes; atom 3 keeps the bond to 4.
-        self.assertEqual(canvas.remove_atom_calls, [(2, True), (1, True)])
+        self.assertEqual(canvas.remove_atom_calls, [(2, False), (1, False)])
         self.assertEqual(set(canvas.model.atoms), {3, 4})
 
     def test_delete_selected_items_pushes_single_scene_item_command(self) -> None:

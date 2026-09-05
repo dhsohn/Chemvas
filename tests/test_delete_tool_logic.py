@@ -3,6 +3,7 @@ import unittest
 from types import SimpleNamespace
 
 from tests.runtime_services import canvas_runtime_services
+from tests.runtime_state import canvas_runtime_state
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 from chemvas.core.history import (
@@ -10,6 +11,7 @@ from chemvas.core.history import (
     HistoryCommand,
     SetSmilesInputCommand,
 )
+from chemvas.ui.canvas_scene_items_state import CanvasSceneItemsState
 from chemvas.ui.delete_tool_logic import (
     build_delete_tool_history_command,
     erase_delete_tool_item,
@@ -56,6 +58,9 @@ class _Item:
 
 class _Canvas:
     def __init__(self) -> None:
+        self.runtime_state = canvas_runtime_state(
+            scene_items_state=CanvasSceneItemsState()
+        )
         self.deleted_atoms = []
         self.deleted_bonds = []
         self.deleted_rings = []

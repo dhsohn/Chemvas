@@ -257,6 +257,9 @@ class _FakeAtom:
     def GetIsotope(self) -> int:
         return self._isotope
 
+    def GetChiralTag(self):
+        return "unspecified"
+
 
 class _FakeBond:
     def __init__(self, begin_idx: int, end_idx: int, order: float) -> None:
@@ -272,6 +275,12 @@ class _FakeBond:
 
     def GetBondTypeAsDouble(self) -> float:
         return self._order
+
+    def GetStereo(self):
+        return "none"
+
+    def GetBondDir(self):
+        return "none"
 
 
 class _FakeConformer:
@@ -319,6 +328,9 @@ class _FakeMol:
 
     def GetConformer(self) -> _FakeConformer:
         return self._conformer
+
+    def GetStereoGroups(self):
+        return []
 
 
 class _Fake3DMol:
@@ -386,6 +398,18 @@ class _FakeRWMol:
 
 
 class _FakeChem:
+    ChiralType = SimpleNamespace(
+        CHI_UNSPECIFIED="unspecified",
+        CHI_TETRAHEDRAL_CW="cw",
+        CHI_TETRAHEDRAL_CCW="ccw",
+    )
+    BondStereo = SimpleNamespace(STEREONONE="none")
+    StereoGroupType = SimpleNamespace(STEREO_ABSOLUTE="absolute")
+    BondDir = SimpleNamespace(BEGINWEDGE="beginwedge", BEGINDASH="begindash")
+
+    def WedgeMolBonds(self, mol, conf):
+        pass
+
     class BondType:
         SINGLE = "single"
         DOUBLE = "double"
@@ -683,6 +707,64 @@ class _FakeAllChemCoords(_FakeAllChem):
 
 
 class RDKitAdapterTest(unittest.TestCase):
+    @unittest.skipUnless(_RealChem is not None, "RDKit is required for stereo tests")
+    def test_smiles_import_preserves_absolute_tetrahedral_stereo(self) -> None:
+        adapter = RDKitAdapter()
+        for smiles in (
+            "N[C@@H](C)C(=O)O",
+            "N[C@H](C)C(=O)O",
+            "C[C@H](O)[C@@H](C)F",
+            "C[C@@H]1CCCC[C@H]1O",
+            "N[C@@](C)(F)C(=O)O",
+        ):
+            with self.subTest(smiles=smiles):
+                model = adapter.smiles_to_2d(smiles)
+                self.assertIsNotNone(model, adapter.last_error)
+                imported = adapter._build_conversion_rdkit_mol(model)
+                expected = _RealChem.MolToSmiles(_RealChem.MolFromSmiles(smiles))
+                self.assertEqual(_RealChem.MolToSmiles(imported), expected)
+                self.assertEqual(adapter.compute_identifiers(model).smiles, expected)
+
+    @unittest.skipUnless(_RealChem is not None, "RDKit is required for stereo tests")
+    def test_smiles_import_rejects_unrepresentable_specified_stereo(self) -> None:
+        for smiles in (
+            "F/C=C/F",
+            "F/C=C\\F",
+            "Cl[Pt@SP1](Cl)(N)N",
+            "C[C@H](O)F |&1:1|",
+            "C[C@H](O)F |o1:1|",
+        ):
+            with self.subTest(smiles=smiles):
+                adapter = RDKitAdapter()
+                self.assertIsNotNone(_RealChem.MolFromSmiles(smiles))
+                self.assertIsNone(adapter.smiles_to_2d(smiles))
+                self.assertIn("stereo", adapter.last_error.lower())
+
+    @unittest.skipUnless(_RealChem is not None, "RDKit is required for stereo tests")
+    def test_identifiers_preserve_drawn_wedge_and_hash_stereo(self) -> None:
+        adapter = RDKitAdapter()
+        identifiers = []
+        for style in ("wedge", "hash"):
+            model = MoleculeModel()
+            for element, x, y in (
+                ("C", 0.0, 0.0),
+                ("F", 1.0, 0.0),
+                ("Cl", -1.0, 1.0),
+                ("Br", -1.0, -1.0),
+                ("I", 0.0, 1.5),
+            ):
+                model.add_atom(element, x, y)
+            for atom_id in range(1, 5):
+                model.add_bond(0, atom_id, 1)
+            model.bonds[0].style = style
+            converted = adapter._build_conversion_rdkit_mol(model)
+            info = adapter.compute_identifiers(model)
+            self.assertEqual(info.smiles, _RealChem.MolToSmiles(converted))
+            self.assertEqual(info.inchikey, _RealChem.MolToInchiKey(converted))
+            identifiers.append(info)
+        self.assertNotEqual(identifiers[0].smiles, identifiers[1].smiles)
+        self.assertNotEqual(identifiers[0].inchikey, identifiers[1].inchikey)
+
     def _simple_model(self) -> MoleculeModel:
         model = MoleculeModel()
         a0 = model.add_atom("C", 0.0, 0.0)
@@ -1339,7 +1421,7 @@ class RDKitAdapterTest(unittest.TestCase):
         adapter._rdkit = (_FakeChem({}), _FakeAllChem())
 
         with mock.patch.object(
-            adapter, "model_to_rdkit_strict_labels", return_value=None
+            adapter, "_build_conversion_rdkit_mol", return_value=None
         ):
             self.assertEqual(
                 adapter.compute_props(self._simple_model()), (None, None, None)
@@ -1357,13 +1439,13 @@ class RDKitAdapterTest(unittest.TestCase):
 
         self.assertEqual(adapter.compute_props(model), (None, None, None))
 
-    def test_compute_props_uses_strict_labels(self) -> None:
+    def test_compute_props_uses_preview_conversion(self) -> None:
         adapter = RDKitAdapter()
         adapter._rdkit = (_FakeChem({}), _FakeAllChem())
         model = self._simple_model()
 
         with mock.patch.object(
-            adapter, "model_to_rdkit_strict_labels", return_value=None
+            adapter, "_build_conversion_rdkit_mol", return_value=None
         ) as strict_conversion:
             adapter.compute_props(model)
 
@@ -1377,7 +1459,7 @@ class RDKitAdapterTest(unittest.TestCase):
 
         with mock.patch.object(
             adapter,
-            "model_to_rdkit_strict_labels",
+            "_build_conversion_rdkit_mol",
             return_value=SimpleNamespace(canonical_smiles="CO"),
         ):
             with _patch_descriptor_modules(formula="CH4O", mw=32.042):
@@ -1415,7 +1497,7 @@ class RDKitAdapterTest(unittest.TestCase):
 
         with mock.patch.object(
             adapter,
-            "model_to_rdkit_strict_labels",
+            "_build_conversion_rdkit_mol",
             return_value=SimpleNamespace(canonical_smiles="CO"),
         ):
             with _patch_descriptor_modules(mw_error=RuntimeError("descriptor failure")):
@@ -1447,7 +1529,7 @@ class RDKitAdapterTest(unittest.TestCase):
         adapter._rdkit = (_FakeChem({}), _FakeAllChem())
 
         with mock.patch.object(
-            adapter, "model_to_rdkit_strict_labels", return_value=None
+            adapter, "_build_conversion_rdkit_mol", return_value=None
         ):
             identifiers = adapter.compute_identifiers(self._simple_model())
 
@@ -1466,7 +1548,7 @@ class RDKitAdapterTest(unittest.TestCase):
 
         with mock.patch.object(
             adapter,
-            "model_to_rdkit_strict_labels",
+            "_build_conversion_rdkit_mol",
             return_value=SimpleNamespace(canonical_smiles="CO"),
         ):
             with _patch_descriptor_modules(formula="CH4O", mw=32.042):

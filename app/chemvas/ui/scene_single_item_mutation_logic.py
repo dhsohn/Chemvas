@@ -31,7 +31,9 @@ def delete_atom_with_history(
     redraw_connected_bonds: Callable[[int], None],
     atom_state_getter: Callable[[int], dict],
     next_atom_id_getter: Callable[[], int],
-    remove_atom_only: Callable[[int], None],
+    remove_atom_only: Callable[..., None],
+    remove_scene_item: Callable[[object], None],
+    scene_delete_command_factory: Callable[..., DeleteSceneItemsCommand],
     atom_coords_3d_getter: Callable[[int], tuple[float, float, float] | None]
     | None = None,
     bond_ids: Iterable[int] | None = None,
@@ -46,16 +48,22 @@ def delete_atom_with_history(
         for bond in (bonds[bond_id],)
         if bond is not None and (bond.a == atom_id or bond.b == atom_id)
     ]
-    mark_states = [mark_state_getter(mark) for mark in marks_by_atom.get(atom_id, [])]
+    marks = list(marks_by_atom.get(atom_id, []))
+    mark_states = [mark_state_getter(mark) for mark in marks]
     atom_state = atom_state_getter(atom_id)
     coords_3d = (
         atom_coords_3d_getter(atom_id) if atom_coords_3d_getter is not None else None
     )
     before_next_atom_id = next_atom_id_getter()
+    mark_command = scene_delete_command_factory(mark_states, marks) if marks else None
 
     clear_smiles_input()
     after_smiles_input = current_smiles_input_getter()
     commands: list[HistoryCommand] = []
+    if mark_command is not None:
+        for mark in marks:
+            remove_scene_item(mark)
+        commands.append(mark_command)
     for bond_id, atom_a, atom_b, bond_state in sorted(
         bond_snapshots,
         key=lambda snapshot: snapshot[0],
@@ -75,14 +83,14 @@ def delete_atom_with_history(
 
     atom_command = DeleteAtomsCommand(
         atom_states={atom_id: atom_state},
-        mark_states=mark_states,
+        remove_marks=False,
         before_next_atom_id=before_next_atom_id,
         after_next_atom_id=before_next_atom_id,
         before_smiles_input=before_smiles_input,
         after_smiles_input=after_smiles_input,
         atom_coords_3d={atom_id: coords_3d} if coords_3d is not None else None,
     )
-    remove_atom_only(atom_id)
+    remove_atom_only(atom_id, remove_marks=False)
     atom_command.after_next_atom_id = next_atom_id_getter()
     atom_command.after_smiles_input = current_smiles_input_getter()
     commands.append(atom_command)
@@ -127,9 +135,12 @@ def delete_ring_with_history(
     *,
     ring_state_getter: Callable[[object], dict],
     remove_scene_item: Callable[[object], None],
+    scene_delete_command_factory: Callable[
+        ..., DeleteSceneItemsCommand
+    ] = DeleteSceneItemsCommand,
 ) -> DeleteSceneItemsCommand:
     state = ring_state_getter(item)
-    command = DeleteSceneItemsCommand(item_states=[state], items=[item])
+    command = scene_delete_command_factory([state], [item])
     remove_scene_item(item)
     return command
 

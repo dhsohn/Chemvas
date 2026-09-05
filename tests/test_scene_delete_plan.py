@@ -116,7 +116,6 @@ class SceneDeletePlanTest(unittest.TestCase):
             selection,
             bonds=[Bond(1, 2, 1)],
             marks_by_atom={},
-            mark_state_getter=lambda item: {"kind": item.data(0)},
             atom_has_visible_label=lambda atom_id: False,
         )
 
@@ -133,7 +132,6 @@ class SceneDeletePlanTest(unittest.TestCase):
             selection,
             bonds=[None],
             marks_by_atom={},
-            mark_state_getter=lambda item: {"kind": item.data(0)},
             atom_has_visible_label=lambda atom_id: False,
         )
 
@@ -147,7 +145,6 @@ class SceneDeletePlanTest(unittest.TestCase):
             selection,
             bonds=[None, Bond(2, 3, 1)],
             marks_by_atom={},
-            mark_state_getter=lambda item: {"kind": item.data(0)},
             atom_has_visible_label=lambda atom_id: False,
         )
 
@@ -156,7 +153,7 @@ class SceneDeletePlanTest(unittest.TestCase):
         self.assertEqual(plan.atom_ids, [1])
         self.assertTrue(plan.clear_smiles_input)
 
-    def test_build_delete_selection_plan_filters_atom_bound_marks_and_requests_handle_clear(
+    def test_build_delete_selection_plan_includes_each_bound_mark_once_and_requests_handle_clear(
         self,
     ) -> None:
         atom_item = _make_rect_item("atom", data1=1)
@@ -195,7 +192,6 @@ class SceneDeletePlanTest(unittest.TestCase):
             selection,
             bonds=[Bond(1, 2, 2)],
             marks_by_atom={1: [linked_mark, sibling_mark]},
-            mark_state_getter=lambda item: dict(item.data(9) or {}),
             atom_has_visible_label=lambda atom_id: atom_id == 2,
         )
 
@@ -203,15 +199,16 @@ class SceneDeletePlanTest(unittest.TestCase):
         self.assertEqual(plan.bond_ids_to_remove, [0])
         self.assertEqual(plan.atom_ids, [1])
         self.assertEqual(
-            plan.mark_states_for_atoms,
-            [
-                {"kind": "mark", "atom_id": 1, "x": 4.0, "y": -5.0},
-                {"kind": "mark", "atom_id": 1, "x": -2.0, "y": 7.0},
-            ],
-        )
-        self.assertEqual(
             plan.scene_items,
-            [free_mark, arrow_item, ts_bracket_item, orbital_item, other_item],
+            [
+                linked_mark,
+                free_mark,
+                sibling_mark,
+                arrow_item,
+                ts_bracket_item,
+                orbital_item,
+                other_item,
+            ],
         )
         self.assertTrue(plan.clear_handles)
         self.assertTrue(plan.clear_smiles_input)
@@ -227,7 +224,6 @@ class SceneDeletePlanTest(unittest.TestCase):
             selection,
             bonds=[Bond(1, 2, 1), Bond(2, 3, 1)],
             marks_by_atom={},
-            mark_state_getter=lambda item: dict(item.data(9) or {}),
             atom_has_visible_label=lambda atom_id: False,
         )
 
@@ -251,13 +247,12 @@ class SceneDeletePlanTest(unittest.TestCase):
             selection,
             bonds=[Bond(1, 2, 1), Bond(2, 3, 1)],
             marks_by_atom={1: [orphan_mark]},
-            mark_state_getter=lambda item: dict(item.data(9) or {}),
             atom_has_visible_label=lambda atom_id: False,
         )
 
         self.assertEqual(plan.bond_ids_to_remove, [0])
         self.assertEqual(plan.atom_ids, [])
-        self.assertEqual(plan.mark_states_for_atoms, [])
+        self.assertNotIn(orphan_mark, plan.scene_items)
 
     def test_build_delete_selection_plan_ignores_marks_deleted_with_the_selection(
         self,
@@ -275,19 +270,14 @@ class SceneDeletePlanTest(unittest.TestCase):
             selection,
             bonds=[Bond(1, 2, 1), Bond(2, 3, 1)],
             marks_by_atom={1: [orphan_mark]},
-            mark_state_getter=lambda item: dict(item.data(9) or {}),
             atom_has_visible_label=lambda atom_id: False,
         )
 
         # The selected mark dies with this deletion, so it cannot protect
-        # atom 1; the atom is removed and carries the mark state with it.
+        # atom 1; both the atom and its original mark are removed.
         self.assertEqual(plan.bond_ids_to_remove, [0])
         self.assertEqual(plan.atom_ids, [1])
-        self.assertEqual(
-            plan.mark_states_for_atoms,
-            [{"kind": "mark", "atom_id": 1, "x": 4.0, "y": -5.0}],
-        )
-        self.assertNotIn(orphan_mark, plan.scene_items)
+        self.assertEqual(plan.scene_items, [orphan_mark])
 
     def test_build_delete_selection_plan_keeps_labeled_orphan_endpoint(self) -> None:
         selection = classify_delete_selection(
@@ -298,7 +288,6 @@ class SceneDeletePlanTest(unittest.TestCase):
             selection,
             bonds=[Bond(1, 2, 1)],
             marks_by_atom={},
-            mark_state_getter=lambda item: dict(item.data(9) or {}),
             atom_has_visible_label=lambda atom_id: atom_id == 2,
         )
 
@@ -314,7 +303,6 @@ class SceneDeletePlanTest(unittest.TestCase):
             selection,
             bonds=[Bond(1, 2, 1)],
             marks_by_atom={},
-            mark_state_getter=lambda item: {"kind": item.data(0)},
             atom_has_visible_label=lambda atom_id: False,
         )
 
@@ -335,7 +323,6 @@ class SceneDeletePlanTest(unittest.TestCase):
             selection,
             bonds=[Bond(1, 2, 1), Bond(2, 3, 1)],
             marks_by_atom={},
-            mark_state_getter=lambda item: {"kind": item.data(0)},
             atom_has_visible_label=lambda atom_id: False,
         )
 
@@ -365,7 +352,7 @@ class SceneDeletePlanTest(unittest.TestCase):
         self.assertEqual(canvas.remove_bond_calls, [0])
         # The oxygen keeps its element label, so only the invisible carbon
         # follows the bond out.
-        self.assertEqual(canvas.remove_atom_calls, [(1, True)])
+        self.assertEqual(canvas.remove_atom_calls, [(1, False)])
         self.assertEqual(canvas.removed_scene_items, [])
         self.assertEqual(canvas.clear_handles_calls, 0)
         self.assertEqual(len(canvas.pushed_commands), 1)
@@ -402,7 +389,7 @@ class SceneDeletePlanTest(unittest.TestCase):
         self.assertEqual(canvas.removed_scene_items, [note_item])
         self.assertEqual(canvas.pushed_commands, [])
 
-    def test_delete_selected_items_classifies_scene_items_and_moves_atom_bound_marks_into_atom_delete_state(
+    def test_delete_selected_items_keeps_atom_bound_marks_in_scene_history(
         self,
     ) -> None:
         canvas = _FakeCanvas()
@@ -484,7 +471,7 @@ class SceneDeletePlanTest(unittest.TestCase):
         self.assertEqual(canvas.clear_handles_calls, 1)
         self.assertEqual(canvas.remove_bond_calls, [0])
         # The oxygen endpoint keeps its element label and survives orphaning.
-        self.assertEqual(canvas.remove_atom_calls, [(1, True)])
+        self.assertEqual(canvas.remove_atom_calls, [(1, False)])
         self.assertIsNone(last_smiles_input_for(canvas))
 
         delete_bond_commands = [
@@ -499,13 +486,8 @@ class SceneDeletePlanTest(unittest.TestCase):
         self.assertEqual(len(delete_atom_commands), 1)
         atom_delete = delete_atom_commands[0]
         self.assertEqual(set(atom_delete.atom_states), {1})
-        self.assertEqual(
-            atom_delete.mark_states,
-            [
-                {"kind": "mark", "atom_id": 1, "x": 4.0, "y": -5.0},
-                {"kind": "mark", "atom_id": 1, "x": -2.0, "y": 7.0},
-            ],
-        )
+        self.assertEqual(atom_delete.mark_states, [])
+        self.assertFalse(atom_delete.remove_marks)
 
         delete_scene_item_commands = [
             child
@@ -516,9 +498,20 @@ class SceneDeletePlanTest(unittest.TestCase):
         scene_delete = delete_scene_item_commands[0]
         self.assertEqual(
             [state["kind"] for state in scene_delete.item_states],
-            ["ring", "note", "mark", "arrow", "ts_bracket", "orbital", "other"],
+            [
+                "ring",
+                "note",
+                "mark",
+                "mark",
+                "mark",
+                "arrow",
+                "ts_bracket",
+                "orbital",
+                "other",
+            ],
         )
-        self.assertNotIn(linked_mark, scene_delete.items)
+        self.assertEqual(scene_delete.items.count(linked_mark), 1)
+        self.assertEqual(scene_delete.items.count(sibling_mark), 1)
         self.assertIn(free_mark, scene_delete.items)
         self.assertNotIn(handle_item, scene_delete.items)
         self.assertNotIn(note_box_item, scene_delete.items)

@@ -1,13 +1,16 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from PyQt6.QtCore import QRectF, Qt
-from PyQt6.QtGui import QPainterPath, QPainterPathStroker
+from PyQt6.QtGui import QPainterPath, QPainterPathStroker, QTransform
 
 from chemvas.features.export import item_export_bounds
 from chemvas.ui.canvas_scene_items_state import note_items_for, shape_items_for
 from chemvas.ui.sheet_setup_access import sheet_rect_for
+
+if TYPE_CHECKING:
+    from PyQt6.QtWidgets import QGraphicsTextItem
 
 WARNING_CODES = (
     "outside-sheet",
@@ -19,11 +22,16 @@ _SHEET_EPSILON = 0.01
 
 
 def check_canvas_layout(canvas: Any) -> dict[str, object]:
-    notes = [
-        (index, item)
-        for index, item in enumerate(note_items_for(canvas))
-        if item.isVisible() and _has_visible_note_glyphs(item)
-    ]
+    notes = []
+    note_paths = []
+    for index, item in enumerate(note_items_for(canvas)):
+        if not item.isVisible() or item.effectiveOpacity() <= 0.0:
+            continue
+        path = _note_glyph_scene_path(item)
+        if path.isEmpty():
+            continue
+        notes.append((index, item))
+        note_paths.append((index, path))
     shapes = [
         (index, item)
         for index, item in enumerate(shape_items_for(canvas))
@@ -31,7 +39,6 @@ def check_canvas_layout(canvas: Any) -> dict[str, object]:
     ]
     warnings: list[dict[str, object]] = []
 
-    note_paths = [(index, _scene_shape(item)) for index, item in notes]
     for left_position, (left_index, left_path) in enumerate(note_paths):
         for right_index, right_path in note_paths[left_position + 1 :]:
             overlap = left_path.intersected(right_path)
@@ -101,10 +108,6 @@ def check_canvas_layout(canvas: Any) -> dict[str, object]:
     }
 
 
-def _has_visible_note_glyphs(item: Any) -> bool:
-    return bool(item.toPlainText().strip())
-
-
 def _has_visible_shape_paint(item: Any) -> bool:
     if item.opacity() <= 0.0:
         return False
@@ -115,8 +118,43 @@ def _has_visible_shape_paint(item: Any) -> bool:
     return brush.style() != Qt.BrushStyle.NoBrush and brush.color().alpha() > 0
 
 
-def _scene_shape(item: Any) -> QPainterPath:
-    return item.mapToScene(item.shape())
+def _note_glyph_scene_path(item: QGraphicsTextItem) -> QPainterPath:
+    """Use the shaped text that Qt paints, not its rectangular hit target."""
+    path = QPainterPath()
+    path.setFillRule(Qt.FillRule.WindingFill)
+    document = item.document()
+    if document is None:
+        return path
+    # Force layout before reading block/run positions, including fresh notes.
+    item.boundingRect()
+    block = document.begin()
+    while block.isValid():
+        layout = block.layout()
+        if layout is not None:
+            fragment_iterator = block.begin()
+            while not fragment_iterator.atEnd():
+                fragment = fragment_iterator.fragment()
+                brush = fragment.charFormat().foreground()
+                color = (
+                    item.defaultTextColor()
+                    if brush.style() == Qt.BrushStyle.NoBrush
+                    else brush.color()
+                )
+                if color.alpha() > 0:
+                    runs = layout.glyphRuns(
+                        fragment.position() - block.position(), fragment.length()
+                    )
+                    for run in runs:
+                        font = run.rawFont()
+                        for glyph, position in zip(
+                            run.glyphIndexes(), run.positions(), strict=True
+                        ):
+                            offset = layout.position() + position
+                            transform = QTransform.fromTranslate(offset.x(), offset.y())
+                            path.addPath(transform.map(font.pathForGlyph(glyph)))
+                fragment_iterator += 1
+        block = block.next()
+    return item.mapToScene(path)
 
 
 def _shape_border_scene_path(item: Any) -> QPainterPath | None:

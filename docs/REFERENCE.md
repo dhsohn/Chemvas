@@ -106,6 +106,11 @@ place it on the canvas. `Ts` and `Ac` name the tosyl and acetyl abbreviations on
 the canvas, so a SMILES asking for tennessine or actinium is refused rather than
 drawn as the abbreviation.
 
+Absolute tetrahedral stereochemistry (`@` / `@@`) is drawn with wedge/hash
+bonds. Specified double-bond stereochemistry (`/` / `\`), non-tetrahedral
+stereochemistry, and relative or racemic CXSMILES stereo groups are refused
+because the canvas cannot preserve them. Isotope labels are also unsupported.
+
 ### MOL interchange
 
 Open MDL Molfiles (`.mol`, V2000) as new documents and export the selected
@@ -123,6 +128,9 @@ annotation model can preserve spin multiplicity.
 rotate, scroll to zoom), the molecular formula and weight, and one-click copy of
 the canonical SMILES, InChI, and InChIKey for the current selection. The
 `Export 3D XYZ` button exports the selected molecule.
+Identifiers preserve drawn wedge/hash stereochemistry using the same conversion
+as the preview. They remain unavailable for abbreviation labels; preview and
+3D export can still expand supported abbreviations.
 
 ### 2D→3D `.xyz` export *(RDKit)*
 

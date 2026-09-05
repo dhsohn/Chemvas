@@ -35,6 +35,7 @@ class SceneSingleItemMutationLogicTest(unittest.TestCase):
         removed_bonds: list[int] = []
         redraw_calls: list[int] = []
         removed_atoms: list[tuple[int, bool]] = []
+        removed_marks: list[object] = []
 
         def clear_smiles_input() -> None:
             smiles_state["value"] = None
@@ -84,6 +85,8 @@ class SceneSingleItemMutationLogicTest(unittest.TestCase):
             },
             next_atom_id_getter=lambda: model.next_atom_id,
             remove_atom_only=remove_atom_only,
+            remove_scene_item=removed_marks.append,
+            scene_delete_command_factory=DeleteSceneItemsCommand,
             atom_coords_3d_getter=lambda atom_id: {1: (0.0, 0.0, 2.0)}.get(atom_id),
             bond_ids={0, 1},
         )
@@ -91,18 +94,23 @@ class SceneSingleItemMutationLogicTest(unittest.TestCase):
         self.assertIsInstance(command, CompositeCommand)
         self.assertEqual(
             [type(child) for child in command.commands],
-            [DeleteBondCommand, DeleteBondCommand, DeleteAtomsCommand],
+            [
+                DeleteSceneItemsCommand,
+                DeleteBondCommand,
+                DeleteBondCommand,
+                DeleteAtomsCommand,
+            ],
         )
-        self.assertEqual([child.bond_id for child in command.commands[:2]], [1, 0])
+        self.assertEqual([child.bond_id for child in command.commands[1:3]], [1, 0])
+        self.assertEqual(removed_marks, marks_by_atom[1])
+        self.assertEqual(command.commands[0].items, marks_by_atom[1])
         self.assertEqual(removed_bonds, [1, 0])
         self.assertEqual(redraw_calls, [3, 1, 1, 2])
-        self.assertEqual(removed_atoms, [(1, True)])
+        self.assertEqual(removed_atoms, [(1, False)])
         atom_delete = command.commands[-1]
         assert isinstance(atom_delete, DeleteAtomsCommand)
-        self.assertEqual(
-            atom_delete.mark_states,
-            [{"kind": "mark", "atom_id": 1, "x": 2.0, "y": 3.0}],
-        )
+        self.assertEqual(atom_delete.mark_states, [])
+        self.assertFalse(atom_delete.remove_marks)
         self.assertEqual(atom_delete.before_next_atom_id, 4)
         self.assertEqual(atom_delete.after_next_atom_id, 4)
         self.assertEqual(atom_delete.atom_coords_3d, {1: (0.0, 0.0, 2.0)})
