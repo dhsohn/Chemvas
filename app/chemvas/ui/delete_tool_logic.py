@@ -64,8 +64,9 @@ def erase_delete_tool_item(canvas, item, *, scene_ops=None, delete_session=None)
     if delete_session is not None:
         command = delete_session.delete_scene_item(item, state)
         return command is not None, command
+    command = DeleteSceneItemsCommand.capture(canvas, [state], [item])
     remove_scene_item(canvas, item)
-    return True, DeleteSceneItemsCommand(item_states=[state], items=[item])
+    return True, command
 
 
 def build_delete_tool_history_command(

@@ -51,7 +51,6 @@ class DeleteSelectionPlan:
     single_bond_id: int | None = None
     bond_ids_to_remove: list[int] = field(default_factory=list)
     atom_ids: list[int] = field(default_factory=list)
-    mark_states_for_atoms: list[dict] = field(default_factory=list)
     scene_items: list[QGraphicsItem] = field(default_factory=list)
     clear_handles: bool = False
     clear_smiles_input: bool = False
@@ -95,7 +94,6 @@ def build_delete_selection_plan(
     *,
     bonds: Sequence[Bond | None],
     marks_by_atom: Mapping[int, Sequence[QGraphicsItem]],
-    mark_state_getter: Callable[[QGraphicsItem], dict],
     atom_has_visible_label: Callable[[int], bool],
 ) -> DeleteSelectionPlan:
     if selection.has_single_bond_only():
@@ -122,23 +120,20 @@ def build_delete_selection_plan(
         )
     )
 
-    filtered_marks: list[QGraphicsItem] = []
-    for item in selection.mark_items:
-        data = item.data(1) or {}
-        atom_id = data.get("atom_id")
-        if isinstance(atom_id, int) and atom_id in atom_ids_to_remove:
-            continue
-        filtered_marks.append(item)
-
-    mark_states_for_atoms: list[dict] = []
+    # Bound and standalone marks share one scene-item history owner. Keep the
+    # original objects, including marks selected both directly and via an atom.
+    marks = list(selection.mark_items)
+    mark_ids = {id(mark) for mark in marks}
     for atom_id in sorted(atom_ids_to_remove):
         for mark in marks_by_atom.get(atom_id, []):
-            mark_states_for_atoms.append(mark_state_getter(mark))
+            if id(mark) not in mark_ids:
+                marks.append(mark)
+                mark_ids.add(id(mark))
 
     scene_items: list[QGraphicsItem] = []
     scene_items.extend(selection.ring_items)
     scene_items.extend(selection.note_items)
-    scene_items.extend(filtered_marks)
+    scene_items.extend(marks)
     scene_items.extend(selection.arrow_items)
     scene_items.extend(selection.ts_bracket_items)
     scene_items.extend(selection.orbital_items)
@@ -147,7 +142,6 @@ def build_delete_selection_plan(
     return DeleteSelectionPlan(
         bond_ids_to_remove=sorted(bonds_to_remove, reverse=True),
         atom_ids=sorted(atom_ids_to_remove),
-        mark_states_for_atoms=mark_states_for_atoms,
         scene_items=scene_items,
         clear_handles=bool(
             scene_items

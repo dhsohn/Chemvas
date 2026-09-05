@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from functools import partial
 from typing import TYPE_CHECKING, Protocol
 
 from PyQt6 import sip
@@ -713,7 +714,9 @@ class SceneDeleteController:
                 )
             else:
                 removed_groups.extend(remove_groups_for_items(broken_items))
-        command = DeleteSceneItemsCommand(item_states=broken_states, items=broken_items)
+        command = DeleteSceneItemsCommand.capture(
+            self.canvas, broken_states, broken_items
+        )
         for item in broken_items:
             self._remove_scene_item(item)
         if removed_ring_items is not None:
@@ -977,6 +980,10 @@ class SceneDeleteController:
             atom_state_getter=self._atom_state,
             next_atom_id_getter=lambda: self._next_atom_id,
             remove_atom_only=self._remove_atom,
+            remove_scene_item=self._remove_scene_item,
+            scene_delete_command_factory=partial(
+                DeleteSceneItemsCommand.capture, self.canvas
+            ),
             atom_coords_3d_getter=lambda atom_id: atom_coords_3d_for(self.canvas).get(
                 atom_id
             ),
@@ -1131,6 +1138,9 @@ class SceneDeleteController:
             item,
             ring_state_getter=self._ring_state,
             remove_scene_item=self._remove_scene_item,
+            scene_delete_command_factory=partial(
+                DeleteSceneItemsCommand.capture, self.canvas
+            ),
         )
         command = self._with_group_cleanup(command, removed_groups)
         if record:
@@ -1146,7 +1156,8 @@ class SceneDeleteController:
     ) -> HistoryCommand:
         if removed_groups is None:
             removed_groups = self._remove_overlapping_groups(items=[item])
-        command: HistoryCommand = DeleteSceneItemsCommand(
+        command: HistoryCommand = DeleteSceneItemsCommand.capture(
+            self.canvas,
             item_states=[state],
             items=[item],
         )
@@ -1190,7 +1201,6 @@ class SceneDeleteController:
                 selection,
                 bonds=self._bonds,
                 marks_by_atom=self.marks.by_atom,
-                mark_state_getter=self._mark_state,
                 atom_has_visible_label=lambda atom_id: atom_has_visible_label_for(
                     self.canvas, atom_id
                 ),
@@ -1221,6 +1231,9 @@ class SceneDeleteController:
                 scene_item_state_getter=self._scene_item_state,
                 remove_scene_item=self._remove_scene_item,
                 clear_handles=lambda: clear_handles_for(self.canvas),
+                scene_delete_command_factory=partial(
+                    DeleteSceneItemsCommand.capture, self.canvas
+                ),
                 atom_coords_3d_getter=lambda atom_id: atom_coords_3d_for(
                     self.canvas
                 ).get(atom_id),

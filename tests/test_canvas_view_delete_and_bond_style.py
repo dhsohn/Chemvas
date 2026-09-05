@@ -90,7 +90,7 @@ class CanvasViewDeleteAndBondStyleTest(unittest.TestCase):
         cls.app = QApplication.instance() or QApplication([])
         cls.app.setQuitOnLastWindowClosed(False)
 
-    def test_scene_ops_delete_atom_returns_single_delete_atoms_command_without_bonds(
+    def test_scene_ops_delete_atom_keeps_marks_in_scene_command_without_bonds(
         self,
     ) -> None:
         def remove_atom_only(atom_id: int, remove_marks: bool = True) -> None:
@@ -122,6 +122,7 @@ class CanvasViewDeleteAndBondStyleTest(unittest.TestCase):
                     remove_bond_by_id=remove_bond_by_id
                 ),
                 move_controller=move_controller,
+                scene_item_controller=SimpleNamespace(remove_scene_item=mock.Mock()),
             ),
             push_command=mock.Mock(),
         )
@@ -133,9 +134,14 @@ class CanvasViewDeleteAndBondStyleTest(unittest.TestCase):
 
         command = controller.delete_atom(1)
 
-        self.assertIsInstance(command, DeleteAtomsCommand)
+        self.assertIsInstance(command, CompositeCommand)
+        mark_command, atom_command = command.commands
+        self.assertIsInstance(mark_command, DeleteSceneItemsCommand)
+        self.assertIsInstance(atom_command, DeleteAtomsCommand)
+        self.assertEqual(mark_command.items, [mark_item])
+        self.assertEqual(mark_command.item_states, [{"mark": 1}])
         self.assertEqual(
-            command.atom_states,
+            atom_command.atom_states,
             {
                 1: {
                     "element": "C",
@@ -146,9 +152,10 @@ class CanvasViewDeleteAndBondStyleTest(unittest.TestCase):
                 }
             },
         )
-        self.assertEqual(command.mark_states, [{"mark": 1}])
-        self.assertEqual(command.before_next_atom_id, 5)
-        self.assertEqual(command.after_next_atom_id, 4)
+        self.assertEqual(atom_command.mark_states, [])
+        self.assertFalse(atom_command.remove_marks)
+        self.assertEqual(atom_command.before_next_atom_id, 5)
+        self.assertEqual(atom_command.after_next_atom_id, 4)
         self.assertIsNone(last_smiles_input_for(view))
         remove_bond_by_id.assert_not_called()
         view.push_command.assert_called_once_with(command)

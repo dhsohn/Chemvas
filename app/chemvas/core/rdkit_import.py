@@ -58,10 +58,38 @@ class RDKitImportHelper:
                 "instead: " + ", ".join(isotopes) + "."
             )
             return None
+        supported_chirality = {
+            Chem.ChiralType.CHI_UNSPECIFIED,
+            Chem.ChiralType.CHI_TETRAHEDRAL_CW,
+            Chem.ChiralType.CHI_TETRAHEDRAL_CCW,
+        }
+        if (
+            any(
+                atom.GetChiralTag() not in supported_chirality
+                for atom in mol.GetAtoms()
+            )
+            or any(
+                bond.GetStereo() != Chem.BondStereo.STEREONONE
+                for bond in mol.GetBonds()
+            )
+            or any(
+                group.GetGroupType() != Chem.StereoGroupType.STEREO_ABSOLUTE
+                for group in mol.GetStereoGroups()
+            )
+        ):
+            self.adapter.last_error = (
+                "Cannot insert this SMILES: only absolute tetrahedral stereochemistry "
+                "can be preserved as wedge/hash bonds. Double-bond, non-tetrahedral, "
+                "and relative or racemic stereochemistry are not supported."
+            )
+            return None
         mol = self._kekulized_import_mol(Chem, mol)
         AllChem.Compute2DCoords(mol)
 
         conf = mol.GetConformer()
+        # RDKit may reverse bond endpoints so the stereocenter becomes the
+        # beginning of a wedge. Read those endpoints only after wedging.
+        Chem.WedgeMolBonds(mol, conf)
         pos_by_idx = {}
         for atom in mol.GetAtoms():
             pos = conf.GetAtomPosition(atom.GetIdx())
@@ -109,11 +137,18 @@ class RDKitImportHelper:
 
         for bond in mol.GetBonds():
             order = self._bond_order_for_import(bond)
-            model.add_bond(
+            bond_id = model.add_bond(
                 atom_id_by_rd_idx[bond.GetBeginAtomIdx()],
                 atom_id_by_rd_idx[bond.GetEndAtomIdx()],
                 order,
             )
+            direction = bond.GetBondDir()
+            if direction in (Chem.BondDir.BEGINWEDGE, Chem.BondDir.BEGINDASH):
+                imported_bond = model.bonds[bond_id]
+                assert imported_bond is not None
+                imported_bond.style = (
+                    "wedge" if direction == Chem.BondDir.BEGINWEDGE else "hash"
+                )
 
         return model
 
@@ -175,12 +210,14 @@ class RDKitImportHelper:
         if rdkit == (None, None):
             return MoleculeIdentifiers()
         Chem, _ = rdkit
-        # Use strict label handling so abbreviation/unsupported atom labels
-        # (e.g. Me, Ph, Boc) are not silently substituted with Carbon, which
-        # would report identifiers that do not match the drawn structure. When
-        # such a label is present the conversion returns ``None`` and we leave
-        # the identifiers blank instead of showing a misleading value.
-        mol = self.adapter.model_to_rdkit_strict_labels(model)
+        # Keep the element-only identifier policy, including aliases whose
+        # names collide with element symbols (Ts/Ac). The shared conversion
+        # then preserves the same electronic and stereo state as the preview.
+        if any(
+            atom.element in self.adapter._alias_smiles for atom in model.atoms.values()
+        ):
+            return MoleculeIdentifiers()
+        mol = self.adapter._build_conversion_rdkit_mol(model)
         if mol is None:
             return MoleculeIdentifiers()
         try:

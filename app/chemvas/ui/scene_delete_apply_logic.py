@@ -23,10 +23,13 @@ def apply_delete_selection_plan(
     redraw_connected_bonds: Callable[[int], None],
     atom_state_getter: Callable[[int], dict],
     next_atom_id_getter: Callable[[], int],
-    remove_atom_only: Callable[[int], None],
+    remove_atom_only: Callable[..., None],
     scene_item_state_getter: Callable[[object], dict],
     remove_scene_item: Callable[[object], None],
     clear_handles: Callable[[], None],
+    scene_delete_command_factory: Callable[
+        ..., DeleteSceneItemsCommand
+    ] = DeleteSceneItemsCommand,
     atom_coords_3d_getter: Callable[[int], tuple[float, float, float] | None]
     | None = None,
 ) -> list[HistoryCommand]:
@@ -52,8 +55,19 @@ def apply_delete_selection_plan(
                     atom_coords_3d[atom_id] = coords
 
     scene_states = [scene_item_state_getter(item) for item in plan.scene_items]
+    scene_command = (
+        scene_delete_command_factory(scene_states, plan.scene_items)
+        if plan.scene_items
+        else None
+    )
     after_smiles_input = current_smiles_input_getter()
     commands: list[HistoryCommand] = []
+    # Undo restores atoms and bonds before reattaching their original marks.
+    # Atom payloads above must be captured before mark removal changes charges.
+    if scene_command is not None:
+        for item in plan.scene_items:
+            remove_scene_item(item)
+        commands.append(scene_command)
     for bond_id, atom_a, atom_b, bond_state in bond_snapshots:
         bond_command = DeleteBondCommand(
             bond_id=bond_id,
@@ -69,12 +83,12 @@ def apply_delete_selection_plan(
 
     if plan.atom_ids:
         for atom_id in plan.atom_ids:
-            remove_atom_only(atom_id)
+            remove_atom_only(atom_id, remove_marks=False)
 
         commands.append(
             DeleteAtomsCommand(
                 atom_states=atom_states,
-                mark_states=plan.mark_states_for_atoms,
+                remove_marks=False,
                 before_next_atom_id=before_next_atom_id,
                 after_next_atom_id=next_atom_id_getter(),
                 before_smiles_input=before_smiles_input,
@@ -83,18 +97,8 @@ def apply_delete_selection_plan(
             )
         )
 
-    if plan.scene_items:
-        for item in plan.scene_items:
-            remove_scene_item(item)
-        commands.append(
-            DeleteSceneItemsCommand(
-                item_states=scene_states,
-                items=plan.scene_items,
-            )
-        )
-
-        if plan.clear_handles:
-            clear_handles()
+    if plan.scene_items and plan.clear_handles:
+        clear_handles()
 
     return commands
 

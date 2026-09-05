@@ -7,8 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.1] - 2026-09-05
+
 ### Fixed
 
+- SMILES insertion now preserves absolute tetrahedral stereochemistry as
+  wedge/hash bonds and refuses specified stereochemistry the canvas cannot
+  represent. Molecule Info identifiers now use the same stereo-aware conversion
+  as the 3D preview, while retaining the element-only identifier policy.
+- Undoing deleted notes now restores their registry and equal-z stacking order,
+  including grouped notes, so an otherwise unchanged document stays clean.
+- Deleting atoms now retains their original charge/radical mark items for Undo,
+  preserving order, grouping and appearance when mixed with standalone marks.
+- Layout QA now intersects actual shaped text glyphs instead of note hit boxes,
+  avoiding overlap warnings for whitespace between visible letters.
 - Molecule Info now pauses 3D work when its window is closed, closes without
   blocking on an active RDKit preview, and no longer leaves the main Qt object
   tree for nondeterministic QApplication teardown or truncates the last-window
@@ -1140,7 +1152,8 @@ housekeeping.
   `.chemvas` document type (double-clicking a file opens it in Chemvas), and a
   Linux `.desktop` entry with an `application/x-chemvas` MIME type.
 
-[Unreleased]: https://github.com/dhsohn/Chemvas/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/dhsohn/Chemvas/compare/v0.6.1...HEAD
+[0.6.1]: https://github.com/dhsohn/Chemvas/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/dhsohn/Chemvas/compare/v0.5.1...v0.6.0
 [0.5.1]: https://github.com/dhsohn/Chemvas/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/dhsohn/Chemvas/compare/v0.4.1...v0.5.0

@@ -62,8 +62,6 @@ class SceneDeleteApplyLogicTest(unittest.TestCase):
             "clear_handles_enabled": plan.clear_handles,
             "bond_ids_to_remove": plan.bond_ids_to_remove,
             "atom_ids": plan.atom_ids,
-            "mark_states_for_atoms": plan.mark_states_for_atoms,
-            "mark_states": plan.mark_states_for_atoms,
             "scene_items": plan.scene_items,
             "atom_states": {
                 atom_id: canvas._atom_state_dict(atom_id) for atom_id in plan.atom_ids
@@ -138,16 +136,18 @@ class SceneDeleteApplyLogicTest(unittest.TestCase):
         self.assertEqual(canvas.remove_atom_calls, [])
         self.assertEqual(canvas.last_smiles_input, None)
 
-    def test_delete_apply_helper_builds_delete_atoms_command_with_mark_snapshot(
+    def test_delete_apply_helper_keeps_live_marks_in_the_scene_command(
         self,
     ) -> None:
         canvas = _FakeDeleteCanvas()
+        marks = [
+            _make_rect_item("mark", state={"kind": "mark", "atom_id": atom_id})
+            for atom_id in (1, 3)
+        ]
+        canvas.scene_items.extend(marks)
         plan = DeleteSelectionPlan(
             atom_ids=[1, 3],
-            mark_states_for_atoms=[
-                {"kind": "mark", "atom_id": 1, "x": 10.0, "y": 11.0},
-                {"kind": "mark", "atom_id": 3, "x": 30.0, "y": 31.0},
-            ],
+            scene_items=marks,
             clear_smiles_input=True,
         )
 
@@ -160,18 +160,18 @@ class SceneDeleteApplyLogicTest(unittest.TestCase):
         delete_atoms = delete_atoms_commands[0]
         self.assertEqual(set(delete_atoms.atom_states), {1, 3})
         self.assertEqual(
-            delete_atoms.mark_states,
-            [
-                {"kind": "mark", "atom_id": 1, "x": 10.0, "y": 11.0},
-                {"kind": "mark", "atom_id": 3, "x": 30.0, "y": 31.0},
-            ],
+            [type(command) for command in commands],
+            [DeleteSceneItemsCommand, DeleteAtomsCommand],
         )
+        self.assertEqual(commands[0].items, marks)
+        self.assertEqual(delete_atoms.mark_states, [])
+        self.assertFalse(delete_atoms.remove_marks)
         self.assertEqual(delete_atoms.before_next_atom_id, 7)
         self.assertEqual(delete_atoms.after_next_atom_id, 7)
         self.assertEqual(
             delete_atoms.atom_coords_3d, {1: (10.0, 11.0, 1.0), 3: (30.0, 31.0, 3.0)}
         )
-        self.assertEqual(canvas.remove_atom_calls, [(1, True), (3, True)])
+        self.assertEqual(canvas.remove_atom_calls, [(1, False), (3, False)])
         self.assertEqual(canvas.last_smiles_input, None)
 
     def test_delete_apply_helper_collects_scene_item_states_and_clears_handles_when_needed(

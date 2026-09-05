@@ -5,6 +5,10 @@ from dataclasses import dataclass, field
 from functools import partial
 from typing import Any, override
 
+from PyQt6 import sip
+from PyQt6.QtCore import Qt
+from PyQt6.QtWidgets import QGraphicsItem, QGraphicsScene
+
 from chemvas.core.history import (
     HistoryCommand,
     capture_history_transaction_for_command,
@@ -22,6 +26,10 @@ from chemvas.ui.canvas_group_state import (
     restore_group_for,
 )
 from chemvas.ui.canvas_model_access import atom_for_id, bond_for_id
+from chemvas.ui.canvas_scene_items_state import (
+    SCENE_ITEM_COLLECTION_ATTRS,
+    scene_item_collection_for,
+)
 from chemvas.ui.canvas_smiles_input_state import set_last_smiles_input_for
 from chemvas.ui.history_atom_position_restore import (
     set_atom_positions_for_history as _set_atom_positions_for_history,
@@ -444,11 +452,74 @@ class AddSceneItemsCommand(HistoryCommand):
 
 
 @dataclass
+class _DeletedSceneItemOrder:
+    """History payload for ordering only; rollback remains in scene_runtime."""
+
+    collections: dict[str, list[tuple[int, Any]]]
+    siblings: list[list[QGraphicsItem]]
+
+    @classmethod
+    def capture(cls, canvas, items: list) -> _DeletedSceneItemOrder:
+        item_ids = {id(item) for item in items}
+        collections = {
+            name: [
+                (index, item)
+                for index, item in enumerate(scene_item_collection_for(canvas, name))
+                if id(item) in item_ids
+            ]
+            for name in SCENE_ITEM_COLLECTION_ATTRS
+            if name != "selected_notes"
+        }
+        cohorts: set[tuple[QGraphicsScene, QGraphicsItem | None, float]] = set()
+        for item in items:
+            if not isinstance(item, QGraphicsItem):
+                continue
+            scene = item.scene()
+            if scene is not None:
+                key = (scene, item.parentItem(), item.zValue())
+                cohorts.add(key)
+        siblings = []
+        for scene, parent, z_value in cohorts:
+            siblings.append(
+                [
+                    item
+                    for item in scene.items(Qt.SortOrder.AscendingOrder)
+                    if item.parentItem() is parent and item.zValue() == z_value
+                ]
+            )
+        return cls(collections, siblings)
+
+    def restore(self, canvas) -> None:
+        for name, entries in self.collections.items():
+            collection = scene_item_collection_for(canvas, name)
+            for _, item in entries:
+                collection.remove(item)
+            for index, item in entries:
+                collection.insert(index, item)
+        for siblings in self.siblings:
+            attached = [
+                item
+                for item in siblings
+                if not sip.isdeleted(item) and item.scene() is not None
+            ]
+            for index in range(len(attached) - 2, -1, -1):
+                attached[index].stackBefore(attached[index + 1])
+
+
+@dataclass
 class DeleteSceneItemsCommand(HistoryCommand):
     history_transaction_snapshot_covers_state = True
 
     item_states: list[dict]
     items: list = field(default_factory=list)
+    _order: _DeletedSceneItemOrder | None = field(default=None, repr=False)
+
+    @classmethod
+    def capture(
+        cls, canvas, item_states: list[dict], items: list
+    ) -> DeleteSceneItemsCommand:
+        """Capture ordering before the first item is detached."""
+        return cls(item_states, items, _DeletedSceneItemOrder.capture(canvas, items))
 
     @override
     def redo(self, canvas) -> None:
@@ -469,6 +540,9 @@ class DeleteSceneItemsCommand(HistoryCommand):
             self.items,
             _restore_scene_item,
             unknown_was_attached=False,
+            after_mutation=partial(self._order.restore, canvas)
+            if self._order
+            else None,
         )
 
 

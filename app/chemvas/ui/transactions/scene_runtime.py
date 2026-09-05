@@ -1839,6 +1839,7 @@ def mutate_existing_scene_items_atomically(
     operation: Callable[[Any, Any], None],
     *,
     unknown_was_attached: bool,
+    after_mutation: Callable[[], None] | None = None,
 ) -> None:
     runtime_snapshot = capture_scene_runtime(canvas)
     snapshots = [
@@ -1852,6 +1853,8 @@ def mutate_existing_scene_items_atomically(
         for snapshot in snapshots:
             attempted.append(snapshot)
             operation(canvas, snapshot[0])
+        if after_mutation is not None:
+            after_mutation()
         release_scene_rect_snapshot(scene_rect_snapshot)
     except Exception as original_error:
         _restore_scene_item_memberships(
