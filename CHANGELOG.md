@@ -20,7 +20,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Deleting atoms now retains their original charge/radical mark items for Undo,
   preserving order, grouping and appearance when mixed with standalone marks.
 - Layout QA now intersects actual shaped text glyphs instead of note hit boxes,
-  avoiding overlap warnings for whitespace between visible letters.
+  avoiding overlap warnings for whitespace between visible letters. Rich-text
+  backgrounds, decorations and super/subscript positions remain part of the
+  checked paint geometry, including wrapped and bidirectional text runs.
 - Molecule Info now pauses 3D work when its window is closed, closes without
   blocking on an active RDKit preview, and no longer leaves the main Qt object
   tree for nondeterministic QApplication teardown or truncates the last-window
