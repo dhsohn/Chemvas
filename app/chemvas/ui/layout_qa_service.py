@@ -214,13 +214,21 @@ def _fragment_decoration_path(
     visible_background = (
         background.style() != Qt.BrushStyle.NoBrush and background.color().alpha() > 0
     )
-    if not visible_background and not visible_text:
-        return path
     layout = block.layout()
     assert layout is not None
+    format_font = format_.font().resolve(layout.font())
+    if not visible_background and (
+        not visible_text
+        or not (
+            format_font.underline() or format_font.overline() or format_font.strikeOut()
+        )
+    ):
+        return path
     start = fragment.position() - block.position()
     end = start + fragment.length()
-    for index in range(layout.lineCount()):
+    first_line = layout.lineForTextPosition(start).lineNumber()
+    last_line = layout.lineForTextPosition(end - 1).lineNumber()
+    for index in range(first_line, last_line + 1):
         line = layout.lineAt(index)
         first = max(start, line.textStart())
         last = min(end, line.textStart() + line.textLength())
