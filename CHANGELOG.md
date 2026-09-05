@@ -23,6 +23,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   avoiding overlap warnings for whitespace between visible letters. Rich-text
   backgrounds, decorations and super/subscript positions remain part of the
   checked paint geometry, including wrapped and bidirectional text runs.
+- Rich-text layout checks skip undecorated fragment scans and inspect only
+  intersecting lines for decorated fragments in long wrapped paragraphs.
 - Molecule Info now pauses 3D work when its window is closed, closes without
   blocking on an active RDKit preview, and no longer leaves the main Qt object
   tree for nondeterministic QApplication teardown or truncates the last-window

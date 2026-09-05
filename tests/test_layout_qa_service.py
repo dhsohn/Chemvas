@@ -205,6 +205,18 @@ def test_rich_text_border_collision_matches_native_paint(
         ('<span style="color:transparent;background-color:red">A<br>B</span>', 65),
         ('<p style="color:transparent;background-color:red">A B</p>', 65),
         (
+            '<span style="font-size:24pt;color:transparent">Big </span><span style="font-size:12pt;color:transparent;background-color:red">small</span>',
+            -1,
+        ),
+        (
+            '<span style="font-size:24pt;color:transparent">Big </span><span style="font-size:12pt;vertical-align:super;color:transparent;background-color:red">small</span>',
+            -1,
+        ),
+        (
+            '<span style="font-size:24pt;color:transparent">Big </span><span style="font-size:12pt;vertical-align:sub;color:transparent;background-color:red">small</span>',
+            -1,
+        ),
+        (
             '<p style="color:transparent;background-color:red">A</p><p style="color:transparent">much longer line</p>',
             -1,
         ),
@@ -247,6 +259,41 @@ def test_rich_background_visual_runs_match_native_paint(html: str, width: int) -
             assert paint.contains(QPointF(x + 0.5, y + 0.5)) == (neighborhood == {255})
             checked += 1
     assert checked > 100
+
+
+@pytest.mark.parametrize("decorated", [False, True])
+def test_fragment_geometry_visits_only_intersecting_lines(
+    monkeypatch, decorated: bool
+) -> None:
+    from PyQt6.QtGui import QTextLayout
+
+    from chemvas.ui.layout_qa_service import _note_paint_scene_path
+
+    app = QApplication.instance() or QApplication([])
+    app.setQuitOnLastWindowClosed(False)
+    note = QGraphicsTextItem()
+    decoration = "background-color:yellow;" if decorated else ""
+    note.setHtml(
+        (
+            f'<span style="{decoration}color:red">A </span><span style="{decoration}color:blue">B </span>'
+        )
+        * 400
+    )
+    note.setTextWidth(100)
+    note.boundingRect()
+    calls = []
+    original = QTextLayout.lineAt
+
+    def counted_line_at(layout, index):
+        calls.append(index)
+        return original(layout, index)
+
+    monkeypatch.setattr(QTextLayout, "lineAt", counted_line_at)
+    assert not _note_paint_scene_path(note).isEmpty()
+    if decorated:
+        assert 0 < len(calls) <= 1600
+    else:
+        assert not calls
 
 
 def test_dashed_shape_gap_does_not_report_a_text_border_overlap() -> None:
