@@ -439,18 +439,20 @@ class MainWindowUIAssemblyServiceTest(unittest.TestCase):
         ):
             self._menu_action(edit_menu, "Flip Horizontal").trigger()
             self._menu_action(edit_menu, "Flip Vertical").trigger()
+            self._menu_action(self._menu(edit_menu, "Align"), "Left").trigger()
             self._menu_action(self._menu(edit_menu, "Align"), "Bottom").trigger()
             self._menu_action(
-                self._menu(edit_menu, "Distribute"), "Vertically"
+                self._menu(edit_menu, "Distribute"), "Horizontally"
             ).trigger()
         window.canvas.scene_transform_controller.flip_selected_items.assert_has_calls(
             [mock.call(horizontal=True), mock.call(horizontal=False)]
         )
-        window.canvas.scene_transform_controller.align_selected_items.assert_called_once_with(
-            "bottom"
+        self.assertEqual(
+            window.canvas.scene_transform_controller.align_selected_items.call_args_list,
+            [mock.call("left"), mock.call("bottom")],
         )
         window.canvas.scene_transform_controller.distribute_selected_items.assert_called_once_with(
-            "vertical"
+            "horizontal"
         )
 
         view_menu = self._menu(menu_bar, "View")

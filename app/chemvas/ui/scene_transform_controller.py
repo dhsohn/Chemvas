@@ -5,6 +5,8 @@ from dataclasses import dataclass
 from functools import wraps
 from typing import TYPE_CHECKING
 
+from PyQt6.QtCore import QRectF
+
 from chemvas.core.history import (
     CompositeCommand,
     HistoryCommand,
@@ -17,8 +19,10 @@ from chemvas.features.selection import (
 )
 from chemvas.features.selection import rotated_atom_positions
 from chemvas.ui.bond_graphics_access import add_bond_graphics_for
+from chemvas.ui.canvas_atom_graphics_state import visible_atom_item_for
 from chemvas.ui.canvas_bond_graphics_state import bond_items_for
 from chemvas.ui.canvas_graph_state import graph_state_for
+from chemvas.ui.canvas_group_state import group_state_for
 from chemvas.ui.canvas_mark_registry import mark_registry_for
 from chemvas.ui.canvas_model_access import (
     atoms_for,
@@ -72,22 +76,23 @@ from chemvas.ui.selection_collection_access import (
     selected_items_for_transform_for,
 )
 from chemvas.ui.selection_service_access import refresh_selection_outline_for
-from chemvas.ui.selection_style_access import selection_indicator_rect_for_atom_for
 from chemvas.ui.transactions.document import document_transaction
 
 if TYPE_CHECKING:
-    from PyQt6.QtCore import QRectF
-
     from chemvas.ui.canvas_view import CanvasView
 
 
 @dataclass(frozen=True, slots=True)
 class _AlignObject:
-    """One thing Align/Distribute moves as a unit: a structure or a scene item."""
+    """One thing Align/Distribute moves as a unit.
+
+    A whole molecule (every atom of a structure that has a selected atom), a
+    standalone scene item, or a group carrying both.
+    """
 
     rect: QRectF
     atom_ids: frozenset[int]
-    item: object | None
+    items: tuple[object, ...]
 
 
 ROTATION_STATE_ITEM_KINDS = ARROW_KINDS | {"orbital", "mark"}
@@ -360,25 +365,70 @@ class SceneTransformController:
             self.history.push(CompositeCommand(commands))
         return True
 
-    def _alignment_objects(self) -> list[_AlignObject]:
-        atom_ids = selected_atom_ids_for_transform_for(self.canvas)
-        items = independent_selection_items(
-            selected_items_for_transform_for(self.canvas), atom_ids
-        )
-        objects: list[_AlignObject] = []
-        for component in self.selected_atom_components_for_transform(atom_ids):
-            rect = None
-            for atom_id in sorted(component):
-                atom_rect = selection_indicator_rect_for_atom_for(self.canvas, atom_id)
-                if atom_rect is None:
+    def _object_rect(self, atom_ids: set[int], items: list) -> QRectF | None:
+        rect: QRectF | None = None
+        for atom_id in sorted(atom_ids):
+            atom_item = visible_atom_item_for(self.canvas, atom_id)
+            if atom_item is not None:
+                atom_rect = atom_item.sceneBoundingRect()
+            else:
+                atom = atoms_for(self.canvas).get(atom_id)
+                if atom is None:
                     continue
-                rect = atom_rect if rect is None else rect.united(atom_rect)
-            if rect is not None:
-                objects.append(_AlignObject(rect, frozenset(component), None))
+                atom_rect = QRectF(atom.x, atom.y, 0.0, 0.0)
+            rect = atom_rect if rect is None else rect.united(atom_rect)
         for item in items:
+            item_rect = item.sceneBoundingRect()
+            rect = item_rect if rect is None else rect.united(item_rect)
+        return rect
+
+    def _alignment_objects(self) -> list[_AlignObject]:
+        selected_atoms = selected_atom_ids_for_transform_for(self.canvas)
+        items = independent_selection_items(
+            selected_items_for_transform_for(self.canvas), selected_atoms
+        )
+        # A structure moves whole even when only part of it is selected, so
+        # Align never stretches a bond: expand each selected atom to its full
+        # molecule rather than to the component of the selected atoms only.
+        structures = [
+            set(component)
+            for component in self._graph_service().connected_components(
+                set(atoms_for(self.canvas))
+            )
+            if component & selected_atoms
+        ]
+        objects: list[_AlignObject] = []
+        claimed_atoms: set[int] = set()
+        claimed_items: set[int] = set()
+        # A group is one object: its structures and items keep their layout.
+        for group in group_state_for(self.canvas).groups.values():
+            group_atoms: set[int] = set()
+            for structure in structures:
+                if structure & group.atom_ids:
+                    group_atoms |= structure
+            group_items = [item for item in items if item in group.items]
+            if not group_atoms and not group_items:
+                continue
+            rect = self._object_rect(group_atoms, group_items)
+            if rect is None:
+                continue
+            objects.append(
+                _AlignObject(rect, frozenset(group_atoms), tuple(group_items))
+            )
+            claimed_atoms |= group_atoms
+            claimed_items |= {id(item) for item in group_items}
+        for structure in structures:
+            if structure & claimed_atoms:
+                continue
+            rect = self._object_rect(structure, [])
+            if rect is not None:
+                objects.append(_AlignObject(rect, frozenset(structure), ()))
+        for item in items:
+            if id(item) in claimed_items:
+                continue
             rect = item.sceneBoundingRect()
             if rect.isValid():
-                objects.append(_AlignObject(rect, frozenset(), item))
+                objects.append(_AlignObject(rect, frozenset(), (item,)))
         return objects
 
     def _apply_object_deltas(
@@ -392,9 +442,12 @@ class SceneTransformController:
                 atom_ids = set(target.atom_ids)
                 move_atoms_for(self.canvas, atom_ids, dx, dy, update_selection=False)
                 commands.append(MoveAtomsCommand(atom_ids=atom_ids, dx=dx, dy=dy))
-            else:
-                move_item_for(self.canvas, target.item, dx, dy, update_selection=False)
-                commands.append(MoveItemsCommand(items=[target.item], dx=dx, dy=dy))
+            if target.items:
+                for item in target.items:
+                    move_item_for(self.canvas, item, dx, dy, update_selection=False)
+                commands.append(
+                    MoveItemsCommand(items=list(target.items), dx=dx, dy=dy)
+                )
         if not commands:
             return False
         refresh_selection_outline_for(self.canvas)

@@ -10,7 +10,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Edit ▸ Align and Edit ▸ Distribute line up or evenly space the selected
-  structures and objects, each moved as one unit, in a single undoable step.
+  structures and objects in a single undoable step. A molecule moves whole
+  even when only part of it is selected, and a group moves as one object.
 - Arc arrow kinds (`arc_90_left`, `arc_180_left`, `arc_270_left` and their
   `_right` mirrors) draw circular arcs through the drag endpoints for
   catalytic cycles; holding Shift while dragging bulges the arc to the other

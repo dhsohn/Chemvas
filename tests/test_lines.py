@@ -349,9 +349,11 @@ class _FakeLineCanvas:
         )
         self.preview_calls = []
         self.add_calls = []
+        self.item_under_cursor = None
         self.services = canvas_runtime_services(
             hit_testing_service=SimpleNamespace(
-                scene_pos_from_event=lambda event: event.position()
+                scene_pos_from_event=lambda event: event.position(),
+                item_at_scene_pos=lambda pos: self.item_under_cursor,
             ),
             scene_decoration_service=SimpleNamespace(add_arrow=self.add_arrow),
             scene_decoration_build_service=SimpleNamespace(
@@ -448,6 +450,16 @@ class LineToolTest(unittest.TestCase):
         self.assertEqual((end.x(), end.y()), (44.0, 4.0))
         self.assertEqual(kind, "line_bold")
         self.assertIsNone(tool._start_pos)
+
+    def test_click_on_an_existing_object_places_nothing(self) -> None:
+        canvas = _FakeLineCanvas()
+        canvas.item_under_cursor = object()
+        tool = _line_tool(canvas)
+
+        self.assertTrue(tool.on_mouse_press(_FakeEvent(QPointF(4.0, 4.0))))
+        self.assertTrue(tool.on_mouse_release(_FakeEvent(QPointF(4.0, 4.0))))
+
+        self.assertEqual(canvas.add_calls, [])
 
 
 class LineToolGuiTest(unittest.TestCase):

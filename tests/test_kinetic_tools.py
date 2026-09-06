@@ -2,6 +2,7 @@ import math
 import os
 import unittest
 from types import SimpleNamespace
+from unittest import mock
 
 from tests.runtime_services import canvas_runtime_services
 from tests.runtime_state import canvas_runtime_state
@@ -48,6 +49,21 @@ from chemvas.ui.scene_item_state_serialization import arrow_state_dict
 from chemvas.ui.tool_context import ToolContext
 
 
+def _circumcenter(a, b, c) -> tuple[float, float]:
+    d = 2.0 * (a[0] * (b[1] - c[1]) + b[0] * (c[1] - a[1]) + c[0] * (a[1] - b[1]))
+    ux = (
+        (a[0] ** 2 + a[1] ** 2) * (b[1] - c[1])
+        + (b[0] ** 2 + b[1] ** 2) * (c[1] - a[1])
+        + (c[0] ** 2 + c[1] ** 2) * (a[1] - b[1])
+    ) / d
+    uy = (
+        (a[0] ** 2 + a[1] ** 2) * (c[0] - b[0])
+        + (b[0] ** 2 + b[1] ** 2) * (a[0] - c[0])
+        + (c[0] ** 2 + c[1] ** 2) * (b[0] - a[0])
+    ) / d
+    return (ux, uy)
+
+
 def _distance_from_chord(point, start, end) -> float:
     dx, dy = end[0] - start[0], end[1] - start[1]
     length = math.hypot(dx, dy)
@@ -78,15 +94,15 @@ class ArcGeometryTest(unittest.TestCase):
             self.assertAlmostEqual(
                 abs(_distance_from_chord(mid, start, end)), sagitta, places=6, msg=sweep
             )
-            # Every sample is at the same distance from the circle center.
-            center_x = (points[0][0] + points[-1][0]) / 2.0
-            center_y = (points[0][1] + points[-1][1]) / 2.0
-            centre = None
+            # Every sample lies on the circle through start, midpoint and end.
+            center = _circumcenter(start, mid, end)
             for point in points:
-                d = math.hypot(point[0] - mid[0], point[1] - mid[1])
-                self.assertLessEqual(d, 2.0 * radius + 1e-6)
-            self.assertIsNone(centre)
-            self.assertTrue(math.isfinite(center_x) and math.isfinite(center_y))
+                self.assertAlmostEqual(
+                    math.hypot(point[0] - center[0], point[1] - center[1]),
+                    radius,
+                    places=6,
+                    msg=(sweep, point),
+                )
 
     def test_half_circle_midpoint_is_half_a_chord_away(self) -> None:
         mid = arc_midpoint(
@@ -282,7 +298,8 @@ class _FakeToolCanvas:
         self.add_calls = []
         self.services = canvas_runtime_services(
             hit_testing_service=SimpleNamespace(
-                scene_pos_from_event=lambda event: event.position()
+                scene_pos_from_event=lambda event: event.position(),
+                item_at_scene_pos=lambda pos: None,
             ),
             scene_decoration_service=SimpleNamespace(add_arrow=self.add_arrow),
             scene_decoration_build_service=SimpleNamespace(
@@ -369,6 +386,18 @@ class SnapToolTest(unittest.TestCase):
         self.assertEqual((end.x(), end.y()), (150.0, 50.0))
         self.assertEqual(kind, "arc_90_right")
 
+    def test_short_drag_from_an_endpoint_still_draws_a_short_line_and_arrow(
+        self,
+    ) -> None:
+        for tool_class in (LineTool, ArrowTool):
+            canvas = _FakeToolCanvas()
+            tool = tool_class(canvas, context=_context(canvas))
+            tool.on_mouse_press(_FakeEvent(QPointF(101.0, 1.0)))
+            tool.on_mouse_release(_FakeEvent(QPointF(104.0, 3.0)))
+            start, end, _kind = canvas.add_calls[-1]
+            self.assertEqual((start.x(), start.y()), (100.0, 0.0), tool_class)
+            self.assertEqual((end.x(), end.y()), (104.0, 3.0), tool_class)
+
     def test_shift_does_not_mirror_a_plain_arrow(self) -> None:
         canvas = _FakeToolCanvas(arrow_type="reaction")
         tool = ArrowTool(canvas, mode="auto", context=_context(canvas))
@@ -440,6 +469,8 @@ class KineticToolsGuiTest(unittest.TestCase):
         self._drag(canvas, QPointF(60.0, 60.0), QPointF(120.0, 60.0))
         arc = arrow_items_for(canvas)[-1]
         self.assertEqual(arc.data(0), "arc_90_left")
+        # Drawn left to right, a left-bulging arc rises above its chord.
+        self.assertLess(arc.path().boundingRect().top(), 60.0 - 5.0)
         arc.setSelected(True)
         QTest.keyClick(
             canvas,
@@ -449,11 +480,59 @@ class KineticToolsGuiTest(unittest.TestCase):
         self.app.processEvents()
         self.assertEqual(arc.data(0), "arc_90_right")
         self.assertEqual(arrow_state_dict(arc)["kind"], "arc_90_right")
+        # The mirror image still rises above the chord, so the path did change
+        # side relative to its (now reversed) drag direction.
+        self.assertLess(arc.path().boundingRect().top(), 60.0 - 5.0)
+        self.assertGreater(
+            arrow_state_dict(arc)["start"][0], arrow_state_dict(arc)["end"][0]
+        )
+        QTest.keyClick(
+            canvas,
+            Qt.Key.Key_V,
+            Qt.KeyboardModifier.ControlModifier | Qt.KeyboardModifier.ShiftModifier,
+        )
+        self.app.processEvents()
+        # A vertical flip mirrors again: the bulge is now below the chord.
+        self.assertEqual(arc.data(0), "arc_90_left")
+        self.assertGreater(arc.path().boundingRect().bottom(), 60.0 + 5.0)
         history = canvas.runtime_state.history_service
         history.undo()
+        history.undo()
         self.assertEqual(arc.data(0), "arc_90_left")
+        self.assertLess(arc.path().boundingRect().top(), 60.0 - 5.0)
 
         snapshot_kinds = [
             state["kind"] for state in snapshot_canvas_state_for(canvas)["arrows"]
         ]
         self.assertEqual(snapshot_kinds, ["line_bold", "line_dashed", "arc_90_left"])
+
+    def test_line_tool_double_click_labels_the_level_without_adding_one(self) -> None:
+        canvas = active_canvas_for_window(self.window)
+        tool_mode = canvas_services_for(canvas).input.tool_mode_controller
+        tool_mode.set_line_kind("line_bold")
+        self._drag(canvas, QPointF(-40.0, 0.0), QPointF(40.0, 0.0))
+        (level,) = arrow_items_for(canvas)
+        pos = canvas.mapFromScene(QPointF(0.0, 0.0))
+
+        with mock.patch(
+            "chemvas.ui.scene_decoration_service.prompt_arrow_labels",
+            return_value={"above": "TS", "below": ""},
+        ) as prompt:
+            for press in (
+                QTest.mousePress,
+                QTest.mouseRelease,
+                QTest.mouseDClick,
+                QTest.mouseRelease,
+            ):
+                press(
+                    canvas.viewport(),
+                    Qt.MouseButton.LeftButton,
+                    Qt.KeyboardModifier.NoModifier,
+                    pos,
+                )
+            self.app.processEvents()
+            QTest.qWait(10)
+
+        prompt.assert_called_once()
+        self.assertEqual(arrow_items_for(canvas), [level])
+        self.assertEqual(arrow_state_dict(level)["labels"], {"above": "TS"})

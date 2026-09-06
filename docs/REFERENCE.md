@@ -32,7 +32,8 @@ the [examples README](../examples/README.md) describes what each one contains.
   with a shortened harpoon), resonance, curved, dashed, and arc arrows (90°,
   180°, 270° for catalytic cycles; hold `Shift` while dragging to bulge the
   arc to the other side) with adjustable width and head scale. Arrow and line
-  endpoints snap to nearby arrow and line endpoints while drawing.
+  endpoints snap to nearby arrow and line endpoints while drawing; a snap takes
+  precedence over the `Shift` angle lock.
 - **Arrow labels** — double-click an arrow or line to give it a label above and
   below, such as rate constants. `_` starts a subscript and `^` a superscript,
   and braces group several characters: `k_-1`, `K_{eq}`, `ΔG^‡`. Labels take
@@ -183,7 +184,9 @@ Chemvas supports a major subset of ChemDraw-compatible shortcuts.
   Rotate selection `Alt+Up/Down` (15°) and `Alt+Left/Right` (1°),
   Nudge selection `Shift+Arrows` (10 pt); **Edit ▸ Align** (left, center,
   right, top, middle, bottom) and **Edit ▸ Distribute** (horizontally,
-  vertically) arrange the selected structures and objects as whole units
+  vertically) arrange the selected structures and objects as whole units: a
+  molecule moves whole even when only part of it is selected, and a group
+  moves as one
 - **View:** Actual size `F5`, Fit to window `F6`, Magnify `F7`, Reduce `F8`
 - **File / edit:** Save / Open / Undo / Redo (platform defaults), `Ctrl+A` (select
   all, switches to the Select tool), `Ctrl+C` (copy selection — PNG plus SVG/PDF

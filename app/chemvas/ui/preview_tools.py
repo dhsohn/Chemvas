@@ -114,18 +114,24 @@ class ArrowTool(PreviewDragTool):
         self._read_arc_mirror(event)
         return super().on_mouse_release(event)
 
+    def _end_point(self, current_pos):
+        snapped = snap_to_arrow_endpoints_for(self.canvas, current_pos)
+        # Never snap the end onto the start: a short drag from an existing
+        # endpoint draws a short arrow instead of being swallowed.
+        return current_pos if snapped == self._start_pos else snapped
+
     @override
     def _build_preview(self, current_pos):
         return preview_arrow_for(
             self.canvas,
             self._start_pos,
-            snap_to_arrow_endpoints_for(self.canvas, current_pos),
+            self._end_point(current_pos),
             self._arrow_type(),
         )
 
     @override
     def _commit_drag(self, end_pos) -> None:
-        end = snap_to_arrow_endpoints_for(self.canvas, end_pos)
+        end = self._end_point(end_pos)
         if end == self._start_pos:
             # A click without a drag would add a headless stub; it also lets a
             # double-click reach the arrow under the cursor instead of a stub.

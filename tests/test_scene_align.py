@@ -19,6 +19,7 @@ from chemvas.ui.main_window_ports import (
 )
 from chemvas.ui.scene_align_logic import align_deltas, distribute_deltas
 from chemvas.ui.scene_decoration_access import add_arrow_for
+from chemvas.ui.scene_group_operations import group_selection_for
 from chemvas.ui.scene_item_state_serialization import arrow_state_dict
 from chemvas.ui.structure_mutation_access import add_atom_for, add_bond_for
 
@@ -138,12 +139,68 @@ class AlignGuiTest(unittest.TestCase):
         self.assertAlmostEqual(arrow_state_dict(line)["start"][0], 0.0, places=6)
         self.assertLess(atom_for_id(canvas, atom_a).x, 100.0)
         self.assertEqual(arrow_state_dict(line)["start"][1], 90.0)
+        # Structures align by their ink, on the same ruler as the items.
+        self.assertAlmostEqual(
+            visible_atom_item_for(canvas, atom_a).sceneBoundingRect().left(),
+            arrow.sceneBoundingRect().left(),
+            places=6,
+        )
 
         history.undo()
         self.assertEqual(atom_for_id(canvas, atom_a).x, 100.0)
         self.assertEqual(arrow_state_dict(line)["start"], (30.0, 90.0))
         history.redo()
         self.assertAlmostEqual(arrow_state_dict(line)["start"][0], 0.0, places=6)
+
+    def test_partially_selected_molecule_moves_whole(self) -> None:
+        canvas = self.canvas
+        chain = [add_atom_for(canvas, "C", x, 0.0) for x in (100.0, 120.0, 140.0)]
+        add_bond_for(canvas, chain[0], chain[1])
+        add_bond_for(canvas, chain[1], chain[2])
+        arrow = add_arrow_for(canvas, QPointF(0.0, 60.0), QPointF(40.0, 60.0), "arrow")
+        # Only the two outer atoms are selected; the middle one must follow.
+        self._select(
+            visible_atom_item_for(canvas, chain[0]),
+            visible_atom_item_for(canvas, chain[2]),
+            arrow,
+        )
+        controller = canvas_services_for(
+            canvas
+        ).scene_operations.scene_transform_controller
+
+        self.assertTrue(controller.align_selected_items("left"))
+
+        xs = [atom_for_id(canvas, atom_id).x for atom_id in chain]
+        self.assertAlmostEqual(xs[1] - xs[0], 20.0)
+        self.assertAlmostEqual(xs[2] - xs[1], 20.0)
+        self.assertLess(xs[0], 100.0)
+
+    def test_group_moves_as_one_object(self) -> None:
+        canvas = self.canvas
+        arrow = add_arrow_for(canvas, QPointF(0.0, 0.0), QPointF(40.0, 0.0), "arrow")
+        note_line = add_arrow_for(
+            canvas, QPointF(60.0, 30.0), QPointF(100.0, 30.0), "line"
+        )
+        far = add_arrow_for(
+            canvas, QPointF(200.0, 100.0), QPointF(240.0, 100.0), "arrow"
+        )
+        self._select(arrow, note_line)
+        self.assertTrue(group_selection_for(canvas))
+        self._select(arrow, note_line, far)
+        controller = canvas_services_for(
+            canvas
+        ).scene_operations.scene_transform_controller
+
+        self.assertTrue(controller.align_selected_items("right"))
+
+        # The pair kept its internal offset and moved together toward "far".
+        self.assertAlmostEqual(
+            arrow_state_dict(note_line)["start"][0]
+            - arrow_state_dict(arrow)["start"][0],
+            60.0,
+        )
+        self.assertAlmostEqual(arrow_state_dict(note_line)["end"][0], 240.0, places=6)
+        self.assertEqual(arrow_state_dict(far)["start"], (200.0, 100.0))
 
     def test_distribute_spreads_three_arrows_evenly_and_ignores_pairs(self) -> None:
         canvas = self.canvas
