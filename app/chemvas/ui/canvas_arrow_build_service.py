@@ -5,12 +5,16 @@ import math
 from PyQt6.QtCore import QPointF, Qt
 from PyQt6.QtGui import QBrush, QPainterPath
 
+from chemvas.domain.document import VALID_LINE_KINDS
+from chemvas.features.rendering import wavy_line_points
 from chemvas.ui.canvas_tool_settings_state import tool_settings_state_for
 from chemvas.ui.graphics_items import NoSelectPathItem
 from chemvas.ui.renderer_style_access import (
+    bold_bond_pen_for,
     bond_length_px_for,
     bond_pen_for,
     bond_spacing_px_for,
+    renderer_bond_spacing_for,
 )
 from chemvas.ui.scene_item_access import add_item_to_canvas_scene
 
@@ -28,6 +32,8 @@ class CanvasArrowBuildService:
         return add_item_to_canvas_scene(self.canvas, item)
 
     def build_arrow_item(self, start: QPointF, end: QPointF, kind: str):
+        if kind in VALID_LINE_KINDS:
+            return self.build_line_item(start, end, kind)
         if kind == "equilibrium":
             return self.build_equilibrium_item(start, end)
         if kind == "resonance":
@@ -72,6 +78,33 @@ class CanvasArrowBuildService:
         self.add_arrow_head(path, start, end, double=False)
         item = NoSelectPathItem(path)
         item.setPen(self.arrow_pen(dotted=True))
+        item.setBrush(QBrush(Qt.BrushStyle.NoBrush))
+        item.setData(2, {"start": start, "end": end, "control": None, "double": False})
+        return item
+
+    def build_line_item(self, start: QPointF, end: QPointF, kind: str):
+        path = QPainterPath()
+        if kind == "line_wavy":
+            # One half-wave per bond spacing keeps the wave in step with the
+            # ACS bond metrics, so it scales with the document like a bond.
+            spacing = renderer_bond_spacing_for(self.canvas)
+            points = wavy_line_points(
+                (start.x(), start.y()),
+                (end.x(), end.y()),
+                half_wavelength=spacing,
+                amplitude=spacing * 0.5,
+            )
+            path.moveTo(*points[0])
+            for x, y in points[1:]:
+                path.lineTo(x, y)
+        else:
+            path.moveTo(start)
+            path.lineTo(end)
+        item = NoSelectPathItem(path)
+        if kind == "line_bold":
+            item.setPen(bold_bond_pen_for(self.canvas))
+        else:
+            item.setPen(self.arrow_pen(dotted=kind == "line_dashed"))
         item.setBrush(QBrush(Qt.BrushStyle.NoBrush))
         item.setData(2, {"start": start, "end": end, "control": None, "double": False})
         return item

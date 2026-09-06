@@ -193,6 +193,7 @@ class MainWindowPanelToolbarTest(unittest.TestCase):
                 "toolButton_bond",
                 "toolButton_benzene",
                 "toolButton_arrow",
+                "toolButton_line",
                 "toolButton_ts_bracket",
             ],
         )

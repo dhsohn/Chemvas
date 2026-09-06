@@ -49,6 +49,7 @@ from .bond_style import (
     style_for_double_position,
     style_for_existing_bond_overlay,
 )
+from .line_geometry import snapped_line_end, wavy_line_points
 
 __all__ = [
     "BOLD_BOND_STYLES",
@@ -88,10 +89,12 @@ __all__ = [
     "plain_double_preview_segments",
     "refresh_bond_graphics",
     "scale_segment",
+    "snapped_line_end",
     "strip_corners",
     "style_for_double_position",
     "style_for_existing_bond_overlay",
     "trim_segment",
     "trimmed_line_segment",
+    "wavy_line_points",
     "wedge_triangle_from_segment",
 ]

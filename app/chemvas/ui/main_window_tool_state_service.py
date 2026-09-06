@@ -86,6 +86,10 @@ class MainWindowToolStateService:
         self._tool_mode_controller(window).set_shape_stroke(value)
         self._status.refresh_status_context(window)
 
+    def set_line_kind(self, window, value: str) -> None:
+        self._tool_mode_controller(window).set_line_kind(value)
+        self._status.refresh_status_context(window)
+
     def set_arrow_preset(self, window, value: str) -> None:
         width, head = arrow_preset_from_label(value)
         controller = self._tool_mode_controller(window)

@@ -71,6 +71,11 @@ class MainWindowIconGeometryTest(unittest.TestCase):
             self.factory.icon_bond_triple(),
             self.factory.icon_orbital(),
             self.factory.icon_shape(),
+            self.factory.icon_line(),
+            self.factory.icon_line_kind("line"),
+            self.factory.icon_line_kind("line_dashed"),
+            self.factory.icon_line_kind("line_wavy"),
+            self.factory.icon_line_kind("line_bold"),
             self.factory.icon_perspective(),
         ):
             self.assertIsNotNone(_opaque_bounds(icon.pixmap(30, 30).toImage()))

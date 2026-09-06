@@ -30,6 +30,11 @@ the [examples README](../examples/README.md) describes what each one contains.
   live preview and click-to-insert.
 - **Arrows** — reaction, equilibrium, resonance, curved, and dashed arrows with
   adjustable width and head scale.
+- **Lines** — plain, dashed, wavy, and bold lines that are not bonds, for
+  energy-level diagrams, connectors, and annotations. Hold `Shift` while
+  dragging to lock the angle to 15° steps. Plain, dashed, and wavy lines
+  follow the arrow line width; bold lines use the bold bond width. Lines are
+  saved in the document's arrow list.
 - **Brackets & annotations** — square / round / curly brackets, dagger (`†`) and
   double dagger (`‡`) annotation objects.
 - **Atom labels** — elements, charges, radicals, and common alias labels

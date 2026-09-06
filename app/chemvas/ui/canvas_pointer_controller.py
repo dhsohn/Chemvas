@@ -24,7 +24,17 @@ from chemvas.ui.input_view_access import (
 from chemvas.ui.sheet_setup_access import scene_pos_in_sheet_for
 
 _DRAWING_TOOL_NAMES = frozenset(
-    {"bond", "text", "mark", "note", "arrow", "ts_bracket", "shape", "orbital"}
+    {
+        "bond",
+        "text",
+        "mark",
+        "note",
+        "arrow",
+        "line",
+        "ts_bracket",
+        "shape",
+        "orbital",
+    }
 )
 
 DOUBLE_BOND_CONTEXT_STYLES = (

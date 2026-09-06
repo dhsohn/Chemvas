@@ -105,6 +105,7 @@ class MainWindowContextBarPagesTest(unittest.TestCase):
                 "rotate",
                 "orbital",
                 "shape",
+                "line",
                 "color",
                 "ring_fill",
             },

@@ -42,7 +42,7 @@ chemvas
 
 | 기능 | 용도 | 상세 |
 |---|---|---|
-| **드로잉** | 결합·링·화살표·bracket·원자 라벨 — ChemDraw 호환 단축키 지원 | [REFERENCE](https://github.com/dhsohn/Chemvas/blob/main/docs/REFERENCE.md) |
+| **드로잉** | 결합·링·화살표·선·bracket·원자 라벨 — ChemDraw 호환 단축키 지원 | [REFERENCE](https://github.com/dhsohn/Chemvas/blob/main/docs/REFERENCE.md) |
 | **Figure export** | plain SVG / PDF / PNG / TIFF, 글리프 아웃라인, 결정론적 물리 크기 | [REFERENCE](https://github.com/dhsohn/Chemvas/blob/main/docs/REFERENCE.md#figure-export) |
 | **화학 I/O** | SMILES import, `.mol` 상호운용, 2D→3D `.xyz`, Molecule Info *(RDKit)* | [REFERENCE](https://github.com/dhsohn/Chemvas/blob/main/docs/REFERENCE.md#chemistry-io) |
 | **Agent CLI** | headless 문서 구성 / 레이아웃 점검 / 렌더 / 검사 / hash-gated Graph Patch, Qt 창 없음 | [AGENT_CLI](https://github.com/dhsohn/Chemvas/blob/main/docs/AGENT_CLI.md) |

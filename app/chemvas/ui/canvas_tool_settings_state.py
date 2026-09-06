@@ -18,6 +18,7 @@ class CanvasToolSettingsState:
     active_orbital_type: str = "s"
     active_shape_type: str = "circle"
     active_shape_stroke: str = "solid"
+    active_line_kind: str = "line"
     orbital_phase_enabled: bool = False
     arrow_line_width: float = 1.0
     arrow_head_scale: float = 0.3
