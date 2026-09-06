@@ -73,6 +73,7 @@ CANVAS_STATE_PROPERTIES = (
     "active_arrow_type",
     "active_bracket_type",
     "active_orbital_type",
+    "active_line_kind",
     "orbital_phase_enabled",
     "arrow_line_width",
     "arrow_head_scale",

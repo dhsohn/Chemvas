@@ -184,6 +184,12 @@ class MainWindowIconFactory:
     def icon_shape_stroke(self, style: str) -> QIcon:
         return self._design_icon(f"stroke_{style}", "stroke_solid")
 
+    def icon_line(self) -> QIcon:
+        return self.make_design_icon("line")
+
+    def icon_line_kind(self, kind: str) -> QIcon:
+        return self._design_icon("line_plain" if kind == "line" else kind, "line_plain")
+
     def icon_color(self) -> QIcon:
         return self.make_design_icon("color")
 

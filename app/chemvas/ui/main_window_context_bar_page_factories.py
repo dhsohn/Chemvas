@@ -462,6 +462,36 @@ def build_shape_page(window, tool_state_service) -> QWidget:
     return page
 
 
+_LINE_KIND_SPECS = [
+    ("line", "Line"),
+    ("line_dashed", "Dashed line"),
+    ("line_wavy", "Wavy line"),
+    ("line_bold", "Bold line"),
+]
+
+
+def build_line_page(window, tool_state_service) -> QWidget:
+    page, layout = new_context_page()
+    icon_factory = icon_factory_for_window(window)
+    layout.addWidget(hint_label("Line"))
+
+    kind_group = QButtonGroup(page)
+    kind_group.setExclusive(True)
+    for kind, tip in _LINE_KIND_SPECS:
+        button = icon_button(icon_factory.icon_line_kind(kind), tip, checkable=True)
+        button.setChecked(kind == "line")
+        button.clicked.connect(
+            lambda _checked=False, value=kind: tool_state_service.set_line_kind(
+                window, value
+            )
+        )
+        kind_group.addButton(button)
+        layout.addWidget(button)
+
+    layout.addStretch(1)
+    return page
+
+
 def build_rotate_page(window, rotate_selection) -> QWidget:
     page, layout = new_context_page()
     layout.addWidget(hint_label("Rotate"))
@@ -511,6 +541,7 @@ __all__ = [
     "build_bracket_page",
     "build_color_palette_page",
     "build_empty_page",
+    "build_line_page",
     "build_mark_page",
     "build_orbital_page",
     "build_rotate_page",

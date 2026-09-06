@@ -59,6 +59,7 @@ TOOL_HINTS: dict[str, str] = {
     "mark": "Mark: click atom or label",
     "benzene": "Ring: click to place template",
     "arrow": "Arrow: drag to draw",
+    "line": "Line: drag to draw, Shift locks the angle",
     "ts_bracket": "Brackets: drag around selection",
     "orbital": "Orbital: click to place",
     "perspective": "Perspective: drag selection to rotate",

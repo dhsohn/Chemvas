@@ -23,6 +23,7 @@ from chemvas.ui.main_window_context_bar_pages import bond_label_for_state
 _TOOL_PAGE_KEYS = {
     "bond": "bond",
     "arrow": "arrow",
+    "line": "line",
     "ts_bracket": "bracket",
     "text": "atom",
     "note": "text",

@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- A Line tool draws plain, dashed, wavy, and bold lines that are not bonds, for
+  energy-level diagrams and connectors. Holding Shift locks the drag angle to
+  15° steps. Lines are saved as four new kinds in the document's arrow list;
+  documents without lines are unchanged, and earlier releases reject a
+  document that contains one, as they reject any unknown arrow kind.
+
 ### Removed
 
 - Removed the two `RDKitAdapter` strict-label conversion methods and the

@@ -41,6 +41,13 @@ TOOL_ACTION_SPECS: list[tuple[str, str, str, str, str]] = [
     ("bond", "Bond", "bond", "icon_bond", "Bond (ChemDraw: X)"),
     ("benzene", "Ring", "benzene", "icon_ring", "Ring / Benzene (ChemDraw: J)"),
     ("arrow", "Arrow", "arrow", "icon_arrow", "Arrow (ChemDraw: E)"),
+    (
+        "line",
+        "Line",
+        "line",
+        "icon_line",
+        "Line (plain, dashed, wavy, bold; Shift locks the angle)",
+    ),
     ("text", "Atom", "text", "icon_text", "Atom (ChemDraw: A)"),
     ("note", "Text", "note", "icon_note", "Text / Annotation (ChemDraw: T)"),
     ("mark", "Mark", "mark", "icon_mark", "Charge / Radical"),
@@ -117,6 +124,7 @@ TOOLBAR_PRIMARY_TOOL_GROUP: tuple[str, ...] = (
     "bond",
     "benzene",
     "arrow",
+    "line",
     "ts_bracket",
 )
 

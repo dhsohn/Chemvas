@@ -82,16 +82,23 @@ VALID_BOND_STYLES = frozenset(
         "bold_out",
     )
 )
-VALID_ARROW_KINDS = frozenset(
-    (
-        "arrow",
-        "equilibrium",
-        "resonance",
-        "curved_single",
-        "curved_double",
-        "inhibit",
-        "dotted",
+# Lines are headless members of the arrow family: same start/end schema and
+# the same ``arrows`` list, so every arrow consumer (move, delete, selection,
+# clipboard, groups, export) handles them without a second item kind.
+VALID_LINE_KINDS = frozenset(("line", "line_dashed", "line_wavy", "line_bold"))
+VALID_ARROW_KINDS = (
+    frozenset(
+        (
+            "arrow",
+            "equilibrium",
+            "resonance",
+            "curved_single",
+            "curved_double",
+            "inhibit",
+            "dotted",
+        )
     )
+    | VALID_LINE_KINDS
 )
 VALID_MARK_KINDS = frozenset(
     ("plus", "minus", "circled_plus", "circled_minus", "radical")

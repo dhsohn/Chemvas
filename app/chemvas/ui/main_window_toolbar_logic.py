@@ -45,6 +45,7 @@ TOOL_DISPLAY_NAMES: dict[str, str] = {
     "note": "Text",
     "benzene": "Ring",
     "arrow": "Arrow",
+    "line": "Line",
     "ts_bracket": "Brackets",
     "shape": "Shape",
     "orbital": "Orbital",

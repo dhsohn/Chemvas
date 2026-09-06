@@ -6,6 +6,7 @@ from chemvas.ui.benzene_tool import BenzeneTool
 from chemvas.ui.bond_tool import BondTool
 from chemvas.ui.edit_tools import ColorTool, DeleteTool, FlipTool
 from chemvas.ui.interaction_tools import MarkTool, NoteTool
+from chemvas.ui.line_tool import LineTool
 from chemvas.ui.move_tool import MoveTool
 from chemvas.ui.perspective_tool import PerspectiveTool
 from chemvas.ui.preview_tools import ArrowTool, OrbitalTool, ShapeTool, TSBracketTool
@@ -74,6 +75,7 @@ class ToolController:
             "equilibrium": ArrowTool(canvas, "equilibrium", context=self.context),
             "ts_bracket": TSBracketTool(canvas, context=self.context),
             "shape": ShapeTool(canvas, context=self.context),
+            "line": LineTool(canvas, context=self.context),
             "orbital": OrbitalTool(canvas, context=self.context),
             "perspective": PerspectiveTool(canvas, context=self.context),
         }

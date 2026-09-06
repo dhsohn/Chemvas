@@ -3,6 +3,7 @@ from __future__ import annotations
 from functools import wraps
 from typing import TYPE_CHECKING, Any, ClassVar
 
+from chemvas.domain.document import VALID_LINE_KINDS
 from chemvas.features.annotations import BRACKET_KIND_VALUES, SHAPE_KINDS, STROKE_STYLES
 from chemvas.ui.canvas_callback_state import callback_state_for
 from chemvas.ui.canvas_insert_state import insert_state_for
@@ -172,6 +173,14 @@ class CanvasToolModeController:
         set_tool_setting_for(self.canvas, "active_shape_stroke", stroke_style)
         if not applied:
             self._set_active_tool("shape")
+        self._refresh_tool_mode()
+
+    def set_line_kind(self, line_kind: str) -> None:
+        if line_kind not in VALID_LINE_KINDS:
+            return
+        self._cancel_active_insert_modes()
+        set_tool_setting_for(self.canvas, "active_line_kind", line_kind)
+        self._set_active_tool("line")
         self._refresh_tool_mode()
 
     def set_arrow_line_width(self, width: float) -> None:

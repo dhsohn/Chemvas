@@ -43,7 +43,7 @@ explore the document shown above.
 
 | Capability | Use it for | Details |
 |---|---|---|
-| **Drawing** | bonds, rings, arrows, brackets, atom labels — with ChemDraw-compatible shortcuts | [REFERENCE](https://github.com/dhsohn/Chemvas/blob/main/docs/REFERENCE.md) |
+| **Drawing** | bonds, rings, arrows, lines, brackets, atom labels — with ChemDraw-compatible shortcuts | [REFERENCE](https://github.com/dhsohn/Chemvas/blob/main/docs/REFERENCE.md) |
 | **Figure export** | plain SVG / PDF / PNG / TIFF, outlined glyphs, deterministic physical sizing | [REFERENCE](https://github.com/dhsohn/Chemvas/blob/main/docs/REFERENCE.md#figure-export) |
 | **Chemistry I/O** | SMILES import, `.mol` interchange, 2D→3D `.xyz`, Molecule Info *(RDKit)* | [REFERENCE](https://github.com/dhsohn/Chemvas/blob/main/docs/REFERENCE.md#chemistry-io) |
 | **Agent CLI** | headless compose / layout-check / render / inspect / hash-gated Graph Patch, no Qt window | [AGENT_CLI](https://github.com/dhsohn/Chemvas/blob/main/docs/AGENT_CLI.md) |

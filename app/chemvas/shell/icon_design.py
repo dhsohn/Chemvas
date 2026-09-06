@@ -152,6 +152,11 @@ _SVG_BY_NAME: dict[str, str] = {
     "orbital_phase_off": '<circle cx="12" cy="7" r="5"/><circle cx="12" cy="17" r="5"/>',
     "orbital_phase_on": '<circle cx="12" cy="7" r="5" fill="currentColor"/><circle cx="12" cy="17" r="5"/>',
     # --- Shapes (decorative) ---
+    "line": '<line x1="3" y1="15" x2="15" y2="3"/><line x1="9" y1="21" x2="21" y2="9" stroke-dasharray="3 2.4"/>',
+    "line_plain": '<line x1="3" y1="12" x2="21" y2="12"/>',
+    "line_dashed": '<line x1="3" y1="12" x2="21" y2="12" stroke-dasharray="4 3"/>',
+    "line_wavy": '<path d="M3 12 C4.5 8 6 8 7.5 12 S10.5 16 12 12 S15 8 16.5 12 S19.5 16 21 12"/>',
+    "line_bold": '<line x1="3" y1="12" x2="21" y2="12" stroke-width="3.6"/>',
     "shape": '<rect x="3.5" y="8.5" width="11" height="11" rx="1"/><circle cx="15.5" cy="9" r="5.5"/>',
     "shape_circle": '<circle cx="12" cy="12" r="8"/>',
     "shape_ellipse": '<ellipse cx="12" cy="12" rx="9" ry="6"/>',
