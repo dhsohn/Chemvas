@@ -59,12 +59,6 @@ class RDKitAdapter:
     def model_to_rdkit_with_map_tolerant(self, model: MoleculeModel):
         return self._conversion_helper.model_to_rdkit_with_map_tolerant(model)
 
-    def model_to_rdkit_with_map_strict_labels(self, model: MoleculeModel):
-        return self._conversion_helper.model_to_rdkit_with_map_strict_labels(model)
-
-    def model_to_rdkit_strict_labels(self, model: MoleculeModel):
-        return self._conversion_helper.model_to_rdkit_strict_labels(model)
-
     def suggest_atom_correspondence_result(
         self,
         model: MoleculeModel,

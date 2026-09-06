@@ -914,7 +914,7 @@ class RDKitAdapterTest(unittest.TestCase):
         self.assertEqual(len(model.atoms), 3)
         self.assertEqual(len(model.bonds), 2)
 
-        mol = adapter.model_to_rdkit_strict_labels(model)
+        mol, _atom_map = adapter.model_to_rdkit_with_map_tolerant(model)
         self.assertIsNotNone(mol)
         self.assertEqual(_RealChem.MolToSmiles(mol, canonical=True), "CCO")
 
@@ -928,37 +928,22 @@ class RDKitAdapterTest(unittest.TestCase):
         self.assertEqual(_RealChem.MolToSmiles(mol_from_block, canonical=True), "CCO")
 
     @unittest.skipUnless(_RealChem is not None, "RDKit is required for smoke tests")
-    def test_real_rdkit_smoke_strict_labels_reject_abbreviations(self) -> None:
-        adapter = RDKitAdapter()
-        model = MoleculeModel()
-        model.add_atom("Me", 0.0, 0.0)
-        model.add_atom("Xx", 1.0, 0.0)
-
-        mol, atom_map = adapter.model_to_rdkit_with_map_strict_labels(model)
-
-        self.assertIsNone(mol)
-        self.assertIsNone(atom_map)
-        self.assertEqual(
-            adapter.last_error,
-            "XYZ export supports element symbols only. Unsupported atom labels: Me (atom 0), Xx (atom 1).",
-        )
-
-    @unittest.skipUnless(_RealChem is not None, "RDKit is required for smoke tests")
-    def test_real_rdkit_smoke_strict_labels_reject_every_abbreviation(self) -> None:
+    def test_real_rdkit_smoke_tolerant_build_collapses_every_abbreviation_to_carbon(
+        self,
+    ) -> None:
         # "Ts" (tosyl) and "Ac" (acetyl) are also element symbols, so Chem.Atom
         # accepts them. Without the alias check they would become tennessine and
-        # actinium here instead of being reported as unsupported labels.
+        # actinium here and mislead the substructure comparison.
         for label in ATOM_ALIAS_DEFINITIONS:
             with self.subTest(label=label):
                 adapter = RDKitAdapter()
                 model = MoleculeModel()
                 model.add_atom(label, 0.0, 0.0)
 
-                mol, atom_map = adapter.model_to_rdkit_with_map_strict_labels(model)
+                mol, atom_map = adapter.model_to_rdkit_with_map_tolerant(model)
 
-                self.assertIsNone(mol)
-                self.assertIsNone(atom_map)
-                self.assertIn(label, adapter.last_error)
+                self.assertEqual(atom_map, {0: 0})
+                self.assertEqual(mol.GetAtomWithIdx(0).GetAtomicNum(), 6)
 
     @unittest.skipUnless(_RealChem is not None, "RDKit is required for smoke tests")
     def test_real_rdkit_smoke_identifiers_stay_blank_for_a_tosylate(self) -> None:
@@ -1259,7 +1244,7 @@ class RDKitAdapterTest(unittest.TestCase):
         adapter._rdkit = (None, None)
 
         self.assertEqual(
-            adapter.model_to_rdkit_with_map_strict_labels(self._simple_model()),
+            adapter.model_to_rdkit_with_map_tolerant(self._simple_model()),
             (None, None),
         )
 
@@ -1298,51 +1283,6 @@ class RDKitAdapterTest(unittest.TestCase):
 
         self.assertEqual(len(atom_map), 5)
         self.assertEqual(mol.GetRingInfo().NumRings(), 0)
-
-    def test_model_to_rdkit_with_map_strict_labels_reports_invalid_labels(self) -> None:
-        adapter = RDKitAdapter()
-        chem = _FakeChem({})
-        adapter._rdkit = (chem, _FakeAllChem())
-        model = MoleculeModel()
-        for index, label in enumerate(["Xx", "Me", "Et", "Ph", "OMe", "Boc"]):
-            model.add_atom(label, float(index), 0.0)
-
-        mol, atom_map = adapter.model_to_rdkit_with_map_strict_labels(model)
-
-        self.assertIsNone(mol)
-        self.assertIsNone(atom_map)
-        self.assertEqual(
-            adapter.last_error,
-            "XYZ export supports element symbols only. "
-            "Unsupported atom labels: Xx (atom 0), Me (atom 1), Et (atom 2), "
-            "Ph (atom 3), OMe (atom 4), ....",
-        )
-
-    def test_model_to_rdkit_with_map_rejects_unsupported_bond_styles(self) -> None:
-        adapter = RDKitAdapter()
-        chem = _FakeChem({})
-        adapter._rdkit = (chem, _FakeAllChem())
-        model = MoleculeModel()
-        a0 = model.add_atom("C", 0.0, 0.0)
-        a1 = model.add_atom("O", 1.0, 0.0)
-        a2 = model.add_atom("N", 2.0, 0.0)
-        model.add_bond(a0, a1, 1)
-        model.bonds[-1].style = "wedge"
-        model.add_bond(a1, a2, 1)
-        model.bonds[-1].style = "hash"
-
-        mol, atom_map = adapter._conversion_helper._build_rdkit_mol_with_map(
-            model,
-            unsupported_bond_styles={"wedge", "hash"},
-        )
-
-        self.assertIsNone(mol)
-        self.assertIsNone(atom_map)
-        self.assertEqual(
-            adapter.last_error,
-            "XYZ export does not yet support wedge/hash stereobonds. "
-            "Unsupported bond styles: wedge (bond 0), hash (bond 1).",
-        )
 
     def test_build_conversion_rdkit_mol_reports_invalid_labels_with_supported_aliases(
         self,
@@ -2598,41 +2538,12 @@ class RDKitAdapterTest(unittest.TestCase):
 
 
 class RDKitConversionEdgeTest(unittest.TestCase):
-    def test_helper_branches_cover_short_error_details_component_filtering_and_empty_layout(
+    def test_helper_branches_cover_component_filtering_and_empty_layout(
         self,
     ) -> None:
         adapter = RDKitAdapter()
         helper = adapter._conversion_helper
         adapter._rdkit = (_FakeChem({}), _FakeAllChem())
-
-        invalid_model = MoleculeModel()
-        invalid_model.add_atom("Xx", 0.0, 0.0)
-        invalid_model.add_atom("Me", 1.0, 0.0)
-        mol, atom_map = helper._build_rdkit_mol_with_map(
-            invalid_model, strict_labels=True
-        )
-        self.assertIsNone(mol)
-        self.assertIsNone(atom_map)
-        self.assertEqual(
-            adapter.last_error,
-            "XYZ export supports element symbols only. Unsupported atom labels: Xx (atom 0), Me (atom 1).",
-        )
-
-        style_model = MoleculeModel()
-        a0 = style_model.add_atom("C", 0.0, 0.0)
-        a1 = style_model.add_atom("O", 1.0, 0.0)
-        style_model.add_bond(a0, a1, 1)
-        style_model.bonds[-1].style = "wedge"
-        mol, atom_map = helper._build_rdkit_mol_with_map(
-            style_model,
-            unsupported_bond_styles={"wedge"},
-        )
-        self.assertIsNone(mol)
-        self.assertIsNone(atom_map)
-        self.assertEqual(
-            adapter.last_error,
-            "XYZ export does not yet support wedge/hash stereobonds. Unsupported bond styles: wedge (bond 0).",
-        )
 
         model = MoleculeModel()
         atom_id = model.add_atom("C", 0.0, 0.0)

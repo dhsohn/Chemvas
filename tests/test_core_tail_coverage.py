@@ -214,26 +214,6 @@ class _SubsetIterationAtoms(dict):
 
 
 class RDKitConversionTailCoverageTest(unittest.TestCase):
-    def test_xyz_unsupported_style_error_truncates_long_detail(self) -> None:
-        adapter = RDKitAdapter()
-        adapter._rdkit = (_FakeChem(), _NoComputeAllChem())
-        model = MoleculeModel()
-        atom_ids = [model.add_atom("C", float(index), 0.0) for index in range(7)]
-        for index in range(6):
-            model.bonds.append(
-                Bond(atom_ids[index], atom_ids[index + 1], 1, style="wedge")
-            )
-
-        mol, atom_map = adapter._conversion_helper._build_rdkit_mol_with_map(
-            model,
-            unsupported_bond_styles={"wedge"},
-        )
-
-        self.assertIsNone(mol)
-        self.assertIsNone(atom_map)
-        self.assertIn("wedge (bond 4), ...", adapter.last_error)
-        self.assertNotIn("wedge (bond 5)", adapter.last_error)
-
     def test_alias_fragment_allows_allchem_without_2d_coords_helper(self) -> None:
         adapter = RDKitAdapter()
         adapter._alias_smiles = {"Alias": "[*]C"}

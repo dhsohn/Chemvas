@@ -7,7 +7,6 @@ from PyQt6.QtCore import Qt
 from chemvas.domain.transactions import run_rollback_step
 from chemvas.ui.bond_renderer_access import update_bond_geometry_for
 from chemvas.ui.canvas_mark_registry import mark_registry_for
-from chemvas.ui.canvas_model_access import sync_atom_annotation_from_marks_for
 from chemvas.ui.canvas_scene_items_state import (
     append_scene_item_for,
     remove_scene_item_from_collection_for,
@@ -16,7 +15,7 @@ from chemvas.ui.canvas_scene_items_state import (
 )
 from chemvas.ui.handle_overlay_access import clear_handles_for
 from chemvas.ui.handle_state import handle_target_for
-from chemvas.ui.mark_item_access import remove_mark_item_for
+from chemvas.ui.mark_item_access import remove_mark_item_for, sync_marks_for_atom_for
 from chemvas.ui.note_selection_box import update_note_selection_box_for
 from chemvas.ui.scene_item_access import (
     canvas_scene_for_item_operation,
@@ -24,7 +23,6 @@ from chemvas.ui.scene_item_access import (
     remove_attached_item_from_canvas_scene,
 )
 from chemvas.ui.scene_item_state import ARROW_KINDS
-from chemvas.ui.selection_info_access import emit_selection_info_for
 from chemvas.ui.selection_service_access import refresh_selection_outline_for
 from chemvas.ui.transactions.scene_item_attach import (
     SceneItemAttachPorts,
@@ -264,12 +262,7 @@ class SceneItemLifecycleService:
         atom_id = data.get("atom_id") if isinstance(data, dict) else None
         if not isinstance(atom_id, int):
             return
-        sync_atom_annotation_from_marks_for(
-            self.canvas,
-            atom_id,
-            self.marks.get_for_atom(atom_id) or (),
-        )
-        emit_selection_info_for(self.canvas)
+        sync_marks_for_atom_for(self.canvas, atom_id)
 
     def remove_scene_item(self, item) -> None:
         if item is None:

@@ -12,9 +12,12 @@ from chemvas.domain.document import (
     serialize_model_state,
 )
 from chemvas.features.calculation_bundle import (
+    AtomMapEntry,
+    CalculationArtifacts,
     inspect_components,
     select_component,
     select_components,
+    validate_calculation_artifacts,
 )
 from chemvas.features.calculation_bundle import service as calculation_bundle_service
 
@@ -43,6 +46,134 @@ def _mark(kind: str, atom_id: int) -> dict[str, object]:
         "x": 0.0,
         "y": 0.0,
     }
+
+
+def _artifacts(
+    *,
+    symbols: tuple[str, ...] = ("C", "O"),
+    formal_charge: int = 0,
+    radical_electrons: int = 0,
+    electron_count: int = 14,
+    atom_map: tuple[AtomMapEntry, ...] | None = None,
+    mol_atom_count: int | None = None,
+    xyz_atom_count: int | None = None,
+) -> CalculationArtifacts:
+    if atom_map is None:
+        atom_map = tuple(
+            AtomMapEntry(
+                xyz_index=index,
+                mol_index=index,
+                symbol=symbol,
+                origin="chemvas_atom",
+                chemvas_atom_id=index - 1,
+            )
+            for index, symbol in enumerate(symbols, start=1)
+        )
+    return CalculationArtifacts(
+        mol_block="",
+        xyz_block="",
+        atom_map=atom_map,
+        rdkit_version="test",
+        rdkit_formal_charge=formal_charge,
+        rdkit_radical_electrons=radical_electrons,
+        electron_count=electron_count,
+        geometry_embedding="ETKDGv3",
+        geometry_random_seed=0,
+        geometry_optimization_policy="test",
+        geometry_optimization_result="test",
+        mol_atom_count=len(atom_map) if mol_atom_count is None else mol_atom_count,
+        xyz_atom_count=len(atom_map) if xyz_atom_count is None else xyz_atom_count,
+    )
+
+
+def _entry(
+    xyz_index: int,
+    symbol: str,
+    *,
+    mol_index: int | None = None,
+    chemvas_atom_id: int | None = None,
+    parent_chemvas_atom_id: int | None = None,
+) -> AtomMapEntry:
+    return AtomMapEntry(
+        xyz_index=xyz_index,
+        mol_index=mol_index,
+        symbol=symbol,
+        origin="chemvas_atom" if chemvas_atom_id is not None else "implicit_hydrogen",
+        chemvas_atom_id=chemvas_atom_id,
+        parent_chemvas_atom_id=parent_chemvas_atom_id,
+    )
+
+
+@pytest.mark.parametrize(
+    ("artifacts", "charge", "multiplicity", "radicals"),
+    [
+        (_artifacts(), 0, 1, 0),
+        (_artifacts(formal_charge=1, electron_count=13), 1, 2, 0),
+        (_artifacts(radical_electrons=1, electron_count=13), 0, 2, 1),
+        # The multiplicity limit is inclusive: one electron may be a doublet.
+        (_artifacts(symbols=("H",), electron_count=1), 0, 2, 0),
+    ],
+)
+def test_validate_calculation_artifacts_accepts_consistent_states(
+    artifacts: CalculationArtifacts, charge: int, multiplicity: int, radicals: int
+) -> None:
+    validate_calculation_artifacts(
+        artifacts,
+        declared_charge=charge,
+        declared_multiplicity=multiplicity,
+        modeled_radical_electrons=radicals,
+    )
+
+
+@pytest.mark.parametrize(
+    ("artifacts", "charge", "multiplicity", "radicals", "message"),
+    [
+        (_artifacts(formal_charge=1), 0, 1, 0, "formal charge does not match"),
+        (_artifacts(radical_electrons=1), 0, 1, 0, "radical electron count"),
+        (_artifacts(electron_count=0), 0, 1, 0, "nonpositive electron count"),
+        (_artifacts(electron_count=14), 0, 16, 0, "exceeds the electron-count"),
+        (_artifacts(electron_count=14), 0, 2, 0, "wrong parity"),
+        (_artifacts(xyz_atom_count=3), 0, 1, 0, "does not match the XYZ atom count"),
+        (
+            _artifacts(
+                atom_map=(
+                    _entry(1, "C", mol_index=1, chemvas_atom_id=0),
+                    _entry(3, "O", mol_index=2, chemvas_atom_id=1),
+                ),
+            ),
+            0,
+            1,
+            0,
+            "non-sequential XYZ indices",
+        ),
+        (
+            _artifacts(
+                atom_map=(
+                    _entry(1, "C", mol_index=1, chemvas_atom_id=0),
+                    _entry(2, "O", mol_index=3, chemvas_atom_id=1),
+                ),
+            ),
+            0,
+            1,
+            0,
+            "does not match the MOL atom count",
+        ),
+    ],
+)
+def test_validate_calculation_artifacts_rejects_each_inconsistency(
+    artifacts: CalculationArtifacts,
+    charge: int,
+    multiplicity: int,
+    radicals: int,
+    message: str,
+) -> None:
+    with pytest.raises(ValueError, match=message):
+        validate_calculation_artifacts(
+            artifacts,
+            declared_charge=charge,
+            declared_multiplicity=multiplicity,
+            modeled_radical_electrons=radicals,
+        )
 
 
 def test_inspect_components_uses_stable_atom_id_order_and_annotation_totals() -> None:

@@ -24,6 +24,7 @@ from .plan import (
     precomplex_basis_sha256,
     require_step_ready,
     select_calculation_state,
+    step_atom_correspondence,
     step_readiness,
     structural_calculation_plan_for_document,
     validate_calculation_plan,
@@ -35,6 +36,7 @@ from .service import (
     inspect_components,
     select_component,
     select_components,
+    validate_calculation_artifacts,
 )
 
 __all__ = [
@@ -63,8 +65,10 @@ __all__ = [
     "select_calculation_state",
     "select_component",
     "select_components",
+    "step_atom_correspondence",
     "step_readiness",
     "structural_calculation_plan_for_document",
+    "validate_calculation_artifacts",
     "validate_calculation_plan",
     "validate_reviewed_precomplex_pair",
     "validate_reviewed_precomplex_pairs",

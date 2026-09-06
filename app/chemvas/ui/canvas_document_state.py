@@ -50,7 +50,7 @@ from chemvas.ui.canvas_tool_settings_state import (
     tool_settings_state_for,
 )
 from chemvas.ui.renderer_style_access import bond_length_px_for, set_bond_length_for
-from chemvas.ui.scene_decoration_access import add_mark_for_atom_for
+from chemvas.ui.scene_decoration_access import materialize_mark_for_atom_for
 from chemvas.ui.scene_item_access import (
     attached_canvas_scene_items,
     restore_arrow_from_state,
@@ -301,12 +301,11 @@ def restore_document_post_model_items(canvas, state: dict) -> None:
 
     for mark_state in state["marks"]:
         if mark_state.get("_auto_position") is True:
-            item = add_mark_for_atom_for(
+            item = materialize_mark_for_atom_for(
                 canvas,
                 mark_state["atom_id"],
                 QPointF(float(mark_state["x"]), float(mark_state["y"])),
                 kind=mark_state["kind"],
-                record=False,
             )
             if item is None:
                 raise RuntimeError(

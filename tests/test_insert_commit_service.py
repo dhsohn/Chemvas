@@ -92,7 +92,7 @@ class _FakeCanvas:
         self.added_graphics: list[int] = []
         self.labels: list[tuple[int, str, bool, bool]] = []
         self.carbon_dots: list[int] = []
-        self.mark_calls: list[tuple[int, float, float, str | None, bool]] = []
+        self.mark_calls: list[tuple[int, float, float, str | None]] = []
         self.created_marks: list[object] = []
         self.ring_calls: list[list[tuple[float, float]]] = []
         self.benzene_calls: list[tuple[float, float, int | None]] = []
@@ -124,7 +124,7 @@ class _FakeCanvas:
             hover=SimpleNamespace(),
             scene_decoration=SimpleNamespace(
                 canvas_mark_scene_service=SimpleNamespace(
-                    add_mark_for_atom=self.add_mark_for_atom
+                    materialize_mark_for_atom=self.materialize_mark_for_atom
                 )
             ),
             scene_operations=SimpleNamespace(),
@@ -171,15 +171,14 @@ class _FakeCanvas:
     def _record_additions(self, **kwargs) -> None:
         self.record_calls.append(kwargs)
 
-    def add_mark_for_atom(
+    def materialize_mark_for_atom(
         self,
         atom_id: int,
         click_pos: QPointF,
         *,
         kind: str | None = None,
-        record: bool = True,
     ):
-        self.mark_calls.append((atom_id, click_pos.x(), click_pos.y(), kind, record))
+        self.mark_calls.append((atom_id, click_pos.x(), click_pos.y(), kind))
         item = object()
         self.created_marks.append(item)
         return item
@@ -599,7 +598,7 @@ class InsertCommitServiceTest(unittest.TestCase):
         )
 
         self.assertTrue(applied)
-        self.assertEqual(canvas.mark_calls, [(0, 11.0, 19.0, "plus", False)])
+        self.assertEqual(canvas.mark_calls, [(0, 11.0, 19.0, "plus")])
         self.assertEqual(canvas.model.atom_annotations, {0: {"formal_charge": 1}})
         self.assertEqual(
             canvas.record_calls,
@@ -641,17 +640,12 @@ class InsertCommitServiceTest(unittest.TestCase):
             click_pos: QPointF,
             *,
             kind: str | None = None,
-            record: bool = True,
         ):
             if not canvas.created_marks:
-                return canvas.add_mark_for_atom(
-                    atom_id, click_pos, kind=kind, record=record
-                )
+                return canvas.materialize_mark_for_atom(atom_id, click_pos, kind=kind)
             raise RuntimeError("mark failed")
 
-        canvas.services.scene_decoration.canvas_mark_scene_service.add_mark_for_atom = (
-            add_first_mark_then_fail
-        )
+        canvas.services.scene_decoration.canvas_mark_scene_service.materialize_mark_for_atom = add_first_mark_then_fail
 
         with self.assertRaisesRegex(RuntimeError, "mark failed"):
             apply_smiles_commit_plan(

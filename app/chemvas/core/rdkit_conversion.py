@@ -27,13 +27,7 @@ class RDKitConversionHelper:
     def __init__(self, adapter: RDKitAdapter) -> None:
         self.adapter = adapter
 
-    def _build_rdkit_mol_with_map(
-        self,
-        model: MoleculeModel,
-        *,
-        strict_labels: bool = False,
-        unsupported_bond_styles: set[str] | None = None,
-    ):
+    def _build_rdkit_mol_with_map(self, model: MoleculeModel):
         rdkit = self.adapter._load_rdkit()
         if rdkit == (None, None):
             return None, None
@@ -42,7 +36,6 @@ class RDKitConversionHelper:
         adjacency = self._build_model_adjacency(model)
         atom_annotations = model.atom_annotations
         atom_map = {}
-        invalid_labels: list[str] = []
         for atom_id in sorted(model.atoms):
             atom = model.atoms[atom_id]
             formal_charge, radical_electrons = self._annotation_for_atom(
@@ -51,7 +44,9 @@ class RDKitConversionHelper:
             # An abbreviation label is not an element here. The table is checked
             # first because "Ts" (tosyl) and "Ac" (acetyl) are also element
             # symbols, so Chem.Atom would happily build tennessine and actinium
-            # and report a molecule the drawing never showed.
+            # and report a molecule the drawing never showed. Abbreviations and
+            # unknown labels collapse to carbon: this tolerant build only feeds
+            # substructure comparison, never an exported structure.
             rd_atom = None
             if atom.element not in self.adapter._alias_smiles:
                 try:
@@ -59,9 +54,6 @@ class RDKitConversionHelper:
                 except Exception:
                     rd_atom = None
             if rd_atom is None:
-                if strict_labels:
-                    invalid_labels.append(f"{atom.element} (atom {atom_id})")
-                    continue
                 rd_atom = Chem.Atom("C")
             if self._should_disable_implicit_hydrogens(model, atom_id, adjacency):
                 rd_atom.SetNoImplicit(True)
@@ -71,22 +63,11 @@ class RDKitConversionHelper:
                 radical_electrons=radical_electrons,
             )
             atom_map[atom_id] = rw.AddAtom(rd_atom)
-        if invalid_labels:
-            self.adapter.last_error = (
-                "XYZ export supports element symbols only. "
-                f"Unsupported atom labels: {self._format_atom_refs(invalid_labels)}."
-            )
-            return None, None
-        valid_atoms = set(atom_map.keys())
         seen_bonds: set[tuple[int, int]] = set()
-        unsupported_styles: list[str] = []
-        for bond_id, bond in enumerate(model.bonds):
+        for bond in model.bonds:
             if bond is None or bond.a == bond.b:
                 continue
-            if bond.a not in valid_atoms or bond.b not in valid_atoms:
-                continue
-            if unsupported_bond_styles and bond.style in unsupported_bond_styles:
-                unsupported_styles.append(f"{bond.style} (bond {bond_id})")
+            if bond.a not in atom_map or bond.b not in atom_map:
                 continue
             key = (bond.a, bond.b) if bond.a <= bond.b else (bond.b, bond.a)
             if key in seen_bonds:
@@ -94,17 +75,11 @@ class RDKitConversionHelper:
             seen_bonds.add(key)
             btype = self._bond_type(Chem, bond.order)
             rw.AddBond(atom_map[bond.a], atom_map[bond.b], btype)
-        if unsupported_styles:
-            self.adapter.last_error = (
-                "XYZ export does not yet support wedge/hash stereobonds. "
-                f"Unsupported bond styles: {self._format_atom_refs(unsupported_styles)}."
-            )
-            return None, None
         mol = rw.GetMol()
-        # Sanitization is best-effort here: this export/round-trip path tolerates
-        # structures RDKit cannot fully sanitize (e.g. unusual valences from a
-        # work-in-progress drawing) and lets the caller's downstream embedding
-        # surface any real failure. This deliberately differs from
+        # Sanitization is best-effort here: this substructure-comparison path
+        # tolerates structures RDKit cannot fully sanitize (e.g. unusual
+        # valences from a work-in-progress drawing) so a suggestion can still
+        # be made. This deliberately differs from
         # ``_build_conversion_rdkit_mol``, which is strict and aborts on a
         # sanitize error. Keep the tolerant behavior (see
         # test_model_to_rdkit_with_map_tolerant_ignores_invalid_bonds_and_sanitize_errors
@@ -113,7 +88,7 @@ class RDKitConversionHelper:
             Chem.SanitizeMol(mol)
         except Exception:
             logger.debug(
-                "SanitizeMol failed for tolerant round-trip build; continuing.",
+                "SanitizeMol failed for tolerant substructure build; continuing.",
                 exc_info=True,
             )
             # A failed sanitize leaves the ring cache uninitialized, and every
@@ -126,10 +101,7 @@ class RDKitConversionHelper:
         return mol, atom_map
 
     def model_to_rdkit_with_map_tolerant(self, model: MoleculeModel):
-        return self._build_rdkit_mol_with_map(model, strict_labels=False)
-
-    def model_to_rdkit_with_map_strict_labels(self, model: MoleculeModel):
-        return self._build_rdkit_mol_with_map(model, strict_labels=True)
+        return self._build_rdkit_mol_with_map(model)
 
     @staticmethod
     def _submodel(
@@ -360,10 +332,6 @@ class RDKitConversionHelper:
                 return reactant_match, selected_product_match
         return None
 
-    def model_to_rdkit_strict_labels(self, model: MoleculeModel):
-        mol, _ = self.model_to_rdkit_with_map_strict_labels(model)
-        return mol
-
     def _embed_3d_molecule(self, mol, Chem, AllChem):
         optimization_result = "not_attempted"
         try:
@@ -509,7 +477,7 @@ class RDKitConversionHelper:
         # to their normal valence (R-NH2, R-OH, ...), so RDKit's completion is
         # only suppressed when the user drew the hydrogens explicitly — adding
         # implicit ones on top would double-count them. Both the tolerant
-        # round-trip builder and the strict conversion builder share this rule.
+        # substructure builder and the strict conversion builder share this rule.
         return bool(cls._has_explicit_h_neighbor(model, atom_id, adjacency))
 
     @staticmethod

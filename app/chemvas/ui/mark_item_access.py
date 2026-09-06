@@ -27,6 +27,10 @@ def remove_marks_for_atom_for(canvas, atom_id: int) -> None:
     mark_scene_service_for_access(canvas).remove_marks_for_atom(atom_id)
 
 
+def sync_marks_for_atom_for(canvas, atom_id: int) -> None:
+    mark_scene_service_for_access(canvas).sync_marks_for_atom(atom_id)
+
+
 def mark_center_for_pointer_for(canvas, pos, atom_id: int | None, *, kind: str | None):
     return mark_scene_service_for_access(canvas).mark_center_for_pointer(
         pos, atom_id, kind=kind
@@ -65,4 +69,5 @@ __all__ = [
     "remove_mark_item_for",
     "remove_marks_for_atom_for",
     "set_mark_center_for",
+    "sync_marks_for_atom_for",
 ]

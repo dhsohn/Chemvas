@@ -7,7 +7,7 @@ from PyQt6.QtCore import QPointF
 from chemvas.ui.bond_graphics_access import add_bond_graphics_for
 from chemvas.ui.canvas_model_access import atom_for_id, bond_count_for, bond_ids_from
 from chemvas.ui.canvas_smiles_input_state import set_last_smiles_input_for
-from chemvas.ui.scene_decoration_access import add_mark_for_atom_for
+from chemvas.ui.scene_decoration_access import materialize_mark_for_atom_for
 from chemvas.ui.structure_build_committer import StructureBuildCommitter
 from chemvas.ui.structure_insert_access import (
     add_or_update_insert_atom_label_for,
@@ -123,12 +123,11 @@ def apply_smiles_commit_plan(
             mark_atom_id = id_map.get(mark_plan.source_atom_id)
             if mark_atom_id is None:
                 continue
-            item = add_mark_for_atom_for(
+            item = materialize_mark_for_atom_for(
                 canvas,
                 mark_atom_id,
                 QPointF(mark_plan.x, mark_plan.y),
                 kind=mark_plan.kind,
-                record=False,
             )
             if item is not None:
                 added_scene_items.append(item)

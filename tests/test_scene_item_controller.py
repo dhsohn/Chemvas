@@ -21,6 +21,7 @@ from PyQt6.QtWidgets import (
 )
 
 from chemvas.ui.canvas_mark_registry import CanvasMarkRegistry
+from chemvas.ui.canvas_mark_scene_service import CanvasMarkSceneService
 from chemvas.ui.canvas_scene_items_state import (
     SCENE_ITEM_COLLECTION_ATTRS,
     CanvasSceneItemsState,
@@ -85,7 +86,10 @@ class _FakeCanvas:
                 ts_bracket_path=self.record_ts_bracket_path,
             ),
             canvas_mark_scene_service=SimpleNamespace(
-                remove_mark_item=self.record_remove_mark_item
+                remove_mark_item=self.record_remove_mark_item,
+                # Undo restore of an atom-bound mark reconciles the annotation
+                # through the real mark owner.
+                sync_marks_for_atom=CanvasMarkSceneService(self).sync_marks_for_atom,
             ),
             handle_overlay_service=SimpleNamespace(clear_handles=self.clear_handles),
             curved_arrow_path_service=SimpleNamespace(
@@ -497,7 +501,7 @@ class SceneItemControllerTest(unittest.TestCase):
         mark.setData(1, {"atom_id": 7, "kind": "plus"})
 
         with patch(
-            "chemvas.ui.scene_item_lifecycle_service.emit_selection_info_for"
+            "chemvas.ui.canvas_mark_scene_service.emit_selection_info_for"
         ) as emit_selection_info:
             self.controller.restore_scene_item(mark)
 
@@ -515,7 +519,7 @@ class SceneItemControllerTest(unittest.TestCase):
         mark.setData(1, {"atom_id": 7, "kind": "plus"})
 
         with patch(
-            "chemvas.ui.scene_item_lifecycle_service.emit_selection_info_for"
+            "chemvas.ui.canvas_mark_scene_service.emit_selection_info_for"
         ) as emit_selection_info:
             self.controller.attach_scene_item(mark)
             self.controller.restore_scene_item(mark)

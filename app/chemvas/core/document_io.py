@@ -112,9 +112,20 @@ def read_document(path: PathType) -> ChemvasDocument:
     return document
 
 
-def read_exact_document(path: PathType) -> tuple[bytes, ChemvasDocument]:
-    """Read once so callers can hash the exact bytes that were parsed."""
-    source_bytes = Path(path).read_bytes()
+def read_exact_document(
+    path: PathType, *, max_bytes: int | None = None
+) -> tuple[bytes, ChemvasDocument]:
+    """Read once so callers can hash the exact bytes that were parsed.
+
+    ``max_bytes`` bounds the read itself rather than a prior size check, so a
+    file that grows past the limit while it is being read is still rejected.
+    """
+    with Path(path).open("rb") as stream:
+        source_bytes = (
+            stream.read() if max_bytes is None else stream.read(max_bytes + 1)
+        )
+    if max_bytes is not None and len(source_bytes) > max_bytes:
+        raise ValueError(f"input document exceeds the {max_bytes}-byte limit")
     try:
         payload = strict_json_loads(source_bytes)
     except (ValueError, RecursionError, UnicodeError) as exc:

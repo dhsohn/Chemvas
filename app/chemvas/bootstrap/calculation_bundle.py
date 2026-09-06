@@ -36,7 +36,6 @@ from chemvas.domain.document.precomplex_profile import (
 )
 from chemvas.domain.json_io import strict_json_loads
 from chemvas.features.calculation_bundle import (
-    AtomMapEntry,
     CalculationArtifacts,
     CalculationStateSelection,
     ComponentSummary,
@@ -50,6 +49,8 @@ from chemvas.features.calculation_bundle import (
     precomplex_basis_sha256,
     require_step_ready,
     select_calculation_state,
+    step_atom_correspondence,
+    validate_calculation_artifacts,
     validate_calculation_plan,
     validate_reviewed_precomplex_pair,
 )
@@ -866,7 +867,7 @@ def _pack_step(
             current=product_artifacts,
         )
         interaction_geometry_guarantee = "reviewed_precomplex_pair"
-    correspondence = _step_atom_correspondence(
+    correspondence = step_atom_correspondence(
         step,
         reactant_artifacts=reactant_artifacts,
         product_artifacts=product_artifacts,
@@ -1124,7 +1125,7 @@ def _state_artifacts(
         raise ValueError(
             adapter.last_error or f"RDKit conversion failed for state {state_id}"
         )
-    _validate_calculation_artifacts(
+    validate_calculation_artifacts(
         artifacts,
         declared_charge=charge,
         declared_multiplicity=multiplicity,
@@ -1382,83 +1383,6 @@ def _path_xyz_block(rows: tuple[str, ...], *, comment: str) -> str:
     return "\n".join((str(len(rows)), comment, *rows, ""))
 
 
-def _step_atom_correspondence(
-    step: CalculationStep,
-    *,
-    reactant_artifacts: CalculationArtifacts,
-    product_artifacts: CalculationArtifacts,
-) -> dict[str, object]:
-    reactant_groups = _artifact_atom_groups(reactant_artifacts)
-    product_groups = _artifact_atom_groups(product_artifacts)
-    source_entries: list[dict[str, int]] = []
-    geometry_entries: list[dict[str, object]] = []
-    for entry in sorted(
-        step.atom_correspondence,
-        key=lambda item: item.reactant_atom_id,
-    ):
-        reactant_group = reactant_groups.get(entry.reactant_atom_id, ())
-        product_group = product_groups.get(entry.product_atom_id, ())
-        reactant_symbols = [item.symbol for item in reactant_group]
-        product_symbols = [item.symbol for item in product_group]
-        if not reactant_group or reactant_symbols != product_symbols:
-            raise ValueError(
-                f"Step {step.id} cannot produce a complete geometry atom mapping for "
-                f"Chemvas atoms {entry.reactant_atom_id} -> {entry.product_atom_id}. "
-                "Draw transferred hydrogens explicitly and keep abbreviation expansion "
-                "consistent on both endpoints."
-            )
-        source_entries.append(asdict(entry))
-        geometry_entries.extend(
-            {
-                "reactant_xyz_index": reactant_item.xyz_index,
-                "product_xyz_index": product_item.xyz_index,
-                "symbol": reactant_item.symbol,
-                "reactant_chemvas_atom_id": entry.reactant_atom_id,
-                "product_chemvas_atom_id": entry.product_atom_id,
-                "origin": reactant_item.origin,
-            }
-            for reactant_item, product_item in zip(
-                reactant_group, product_group, strict=True
-            )
-        )
-    reactant_xyz = {entry["reactant_xyz_index"] for entry in geometry_entries}
-    product_xyz = {entry["product_xyz_index"] for entry in geometry_entries}
-    if reactant_xyz != set(range(1, reactant_artifacts.xyz_atom_count + 1)) or (
-        product_xyz != set(range(1, product_artifacts.xyz_atom_count + 1))
-    ):
-        raise ValueError(
-            f"Step {step.id} generated geometry atoms that are not covered by the "
-            "validated atom correspondence."
-        )
-    return {
-        "format": "chemvas-step-atom-correspondence",
-        "version": 1,
-        "step_id": step.id,
-        "source_entries": source_entries,
-        "geometry_entries": geometry_entries,
-        "source_mapping": "complete_bijection",
-        "geometry_mapping": "complete_bijection",
-    }
-
-
-def _artifact_atom_groups(
-    artifacts: CalculationArtifacts,
-) -> dict[int, tuple[AtomMapEntry, ...]]:
-    groups: dict[int, list[AtomMapEntry]] = {}
-    for entry in artifacts.atom_map:
-        owner = (
-            entry.chemvas_atom_id
-            if entry.chemvas_atom_id is not None
-            else entry.parent_chemvas_atom_id
-        )
-        if owner is None:
-            raise ValueError(
-                "A generated calculation atom has no Chemvas provenance owner."
-            )
-        groups.setdefault(owner, []).append(entry)
-    return {owner: tuple(entries) for owner, entries in groups.items()}
-
-
 def _component_dict(component: ComponentSummary) -> dict[str, object]:
     return {
         "index": component.index,
@@ -1499,44 +1423,6 @@ def _validate_new_chemvas_output(source: Path, output: Path) -> None:
         raise ValueError(f"output path already exists: {output}")
     if not output.parent.is_dir():
         raise ValueError(f"output parent directory does not exist: {output.parent}")
-
-
-def _validate_calculation_artifacts(
-    artifacts: CalculationArtifacts,
-    *,
-    declared_charge: int,
-    declared_multiplicity: int,
-    modeled_radical_electrons: int,
-) -> None:
-    if artifacts.rdkit_formal_charge != declared_charge:
-        raise ValueError(
-            "RDKit formal charge does not match the declared charge; "
-            "calculation artifacts were not written"
-        )
-    if artifacts.rdkit_radical_electrons != modeled_radical_electrons:
-        raise ValueError(
-            "RDKit radical electron count does not match the Chemvas marks; "
-            "calculation artifacts were not written"
-        )
-    if artifacts.electron_count < 1:
-        raise ValueError("RDKit produced a nonpositive electron count")
-    if declared_multiplicity > artifacts.electron_count + 1:
-        raise ValueError("declared multiplicity exceeds the electron-count limit")
-    if declared_multiplicity % 2 == artifacts.electron_count % 2:
-        raise ValueError(
-            "declared multiplicity has the wrong parity for the RDKit electron count"
-        )
-    if len(artifacts.atom_map) != artifacts.xyz_atom_count:
-        raise ValueError("RDKit atom map does not match the XYZ atom count")
-    if [entry.xyz_index for entry in artifacts.atom_map] != list(
-        range(1, artifacts.xyz_atom_count + 1)
-    ):
-        raise ValueError("RDKit atom map has non-sequential XYZ indices")
-    mol_indices = [
-        entry.mol_index for entry in artifacts.atom_map if entry.mol_index is not None
-    ]
-    if mol_indices != list(range(1, artifacts.mol_atom_count + 1)):
-        raise ValueError("RDKit atom map does not match the MOL atom count")
 
 
 def _sha256(content: bytes) -> str:

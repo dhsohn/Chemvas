@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Removed
+
+- Removed the two `RDKitAdapter` strict-label conversion methods and the
+  unused unsupported-bond-style option of the tolerant builder; only the tests
+  called them. Molecule Info identifiers, MOL/XYZ export and the 3D preview
+  already go through the stereo-aware conversion builder, and atom-mapping
+  suggestions keep the tolerant builder.
+
 ## [0.6.1] - 2026-09-05
 
 ### Fixed

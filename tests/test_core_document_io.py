@@ -77,6 +77,20 @@ class DocumentIOTest(unittest.TestCase):
             self.assertEqual(source_bytes, path.read_bytes())
             self.assertEqual(document.payload["version"], CANVAS_FILE_VERSION)
 
+    def test_read_exact_document_bounds_the_read_itself(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "document.chemvas"
+            write_document(path, _canvas_state(), CANVAS_FILE_VERSION)
+            size = path.stat().st_size
+
+            source_bytes, _document = read_exact_document(path, max_bytes=size)
+            self.assertEqual(len(source_bytes), size)
+
+            with self.assertRaisesRegex(
+                ValueError, f"exceeds the {size - 1}-byte limit"
+            ):
+                read_exact_document(path, max_bytes=size - 1)
+
     def test_read_document_rejects_duplicate_json_object_keys(self) -> None:
         payload = {
             "type": CHEMVAS_FILE_TYPE,

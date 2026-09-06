@@ -13,8 +13,7 @@ from chemvas.bootstrap.document_cli_shared import (
     json_text,
     offscreen_canvas,
 )
-from chemvas.core.document_io import ChemvasDocument, parse_document
-from chemvas.domain.json_io import strict_json_loads
+from chemvas.core.document_io import read_exact_document
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -28,7 +27,9 @@ def run(argv: list[str]) -> int:
     try:
         source = Path(args.document)
         _validate_source(source)
-        source_bytes, document = _read_layout_document(source)
+        source_bytes, document = read_exact_document(
+            source, max_bytes=MAX_DOCUMENT_BYTES
+        )
         graphics_records = graphics_record_count(
             cast("Mapping[str, object]", document.state)
         )
@@ -78,20 +79,6 @@ def _validate_source(source: Path) -> None:
         raise ValueError("input must use the .chemvas filename extension")
     if not source.is_file():
         raise ValueError(f"input document does not exist: {source}")
-    if source.stat().st_size > MAX_DOCUMENT_BYTES:
-        raise ValueError(f"input document exceeds the {MAX_DOCUMENT_BYTES}-byte limit")
-
-
-def _read_layout_document(source: Path) -> tuple[bytes, ChemvasDocument]:
-    with source.open("rb") as stream:
-        source_bytes = stream.read(MAX_DOCUMENT_BYTES + 1)
-    if len(source_bytes) > MAX_DOCUMENT_BYTES:
-        raise ValueError(f"input document exceeds the {MAX_DOCUMENT_BYTES}-byte limit")
-    try:
-        payload = strict_json_loads(source_bytes)
-    except (ValueError, RecursionError, UnicodeError) as exc:
-        raise ValueError("Invalid Chemvas file.") from exc
-    return source_bytes, parse_document(payload)
 
 
 def _layout_work_units(state: Mapping[str, object]) -> int:

@@ -19,6 +19,7 @@ from chemvas.domain.document import (
 )
 
 from .model import (
+    CalculationArtifacts,
     CalculationStateSelection,
     ComponentInventory,
     ComponentSelection,
@@ -169,6 +170,50 @@ def select_components(
             for atom_id in selected_ids
         ),
     )
+
+
+def validate_calculation_artifacts(
+    artifacts: CalculationArtifacts,
+    *,
+    declared_charge: int,
+    declared_multiplicity: int,
+    modeled_radical_electrons: int,
+) -> None:
+    """Reject artifacts whose electronic state or atom map contradicts the plan.
+
+    RDKit's own charge and radical counts must agree with the declared state
+    and the drawn marks, the multiplicity must be physically possible for the
+    electron count, and the atom map must index every XYZ and MOL atom once.
+    """
+    if artifacts.rdkit_formal_charge != declared_charge:
+        raise ValueError(
+            "RDKit formal charge does not match the declared charge; "
+            "calculation artifacts were not written"
+        )
+    if artifacts.rdkit_radical_electrons != modeled_radical_electrons:
+        raise ValueError(
+            "RDKit radical electron count does not match the Chemvas marks; "
+            "calculation artifacts were not written"
+        )
+    if artifacts.electron_count < 1:
+        raise ValueError("RDKit produced a nonpositive electron count")
+    if declared_multiplicity > artifacts.electron_count + 1:
+        raise ValueError("declared multiplicity exceeds the electron-count limit")
+    if declared_multiplicity % 2 == artifacts.electron_count % 2:
+        raise ValueError(
+            "declared multiplicity has the wrong parity for the RDKit electron count"
+        )
+    if len(artifacts.atom_map) != artifacts.xyz_atom_count:
+        raise ValueError("RDKit atom map does not match the XYZ atom count")
+    if [entry.xyz_index for entry in artifacts.atom_map] != list(
+        range(1, artifacts.xyz_atom_count + 1)
+    ):
+        raise ValueError("RDKit atom map has non-sequential XYZ indices")
+    mol_indices = [
+        entry.mol_index for entry in artifacts.atom_map if entry.mol_index is not None
+    ]
+    if mol_indices != list(range(1, artifacts.mol_atom_count + 1)):
+        raise ValueError("RDKit atom map does not match the MOL atom count")
 
 
 def _model_and_annotations(

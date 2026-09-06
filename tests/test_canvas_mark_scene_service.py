@@ -23,7 +23,10 @@ from chemvas.ui.canvas_scene_items_state import (
 )
 from chemvas.ui.canvas_tool_settings_state import CanvasToolSettingsState
 from chemvas.ui.canvas_view import CanvasView
-from chemvas.ui.scene_decoration_access import add_mark_for_atom_for
+from chemvas.ui.scene_decoration_access import (
+    add_mark_for_atom_for,
+    materialize_mark_for_atom_for,
+)
 from chemvas.ui.selection_info_state import SelectionInfoState
 from tests.runtime_state import canvas_runtime_state
 
@@ -54,7 +57,9 @@ class CanvasMarkSceneServiceTest(unittest.TestCase):
         )
         scene_decoration_service.add_mark.assert_not_called()
 
-    def test_add_mark_for_atom_uses_offset_and_forwards_to_add_mark(self) -> None:
+    def _service_with_mocked_add_mark(
+        self, *, marks: dict[int, list[object]] | None = None
+    ) -> tuple[CanvasMarkSceneService, SimpleNamespace, SimpleNamespace]:
         scene_decoration_service = SimpleNamespace(
             add_mark=mock.Mock(return_value="mark-item")
         )
@@ -64,7 +69,7 @@ class CanvasMarkSceneServiceTest(unittest.TestCase):
             ),
             model=SimpleNamespace(atoms={7: Atom("C", 10.0, 20.0)}),
             runtime_state=canvas_runtime_state(
-                mark_registry=CanvasMarkRegistry(),
+                mark_registry=CanvasMarkRegistry(marks),
                 tool_settings_state=CanvasToolSettingsState(mark_kind="plus"),
             ),
         )
@@ -72,10 +77,21 @@ class CanvasMarkSceneServiceTest(unittest.TestCase):
             canvas, scene_decoration_service=scene_decoration_service
         )
         service.mark_offset_from_click = mock.Mock(return_value=QPointF(1.5, -2.5))
+        return service, canvas, scene_decoration_service
 
-        item = service.add_mark_for_atom(
-            7, QPointF(12.0, 14.0), kind="minus", record=False
+    def test_materialize_mark_for_atom_forwards_offset_without_history_or_sync(
+        self,
+    ) -> None:
+        service, _canvas, scene_decoration_service = (
+            self._service_with_mocked_add_mark()
         )
+
+        with mock.patch(
+            "chemvas.ui.canvas_mark_scene_service.sync_atom_annotation_from_marks_for"
+        ) as sync_annotation:
+            item = service.materialize_mark_for_atom(
+                7, QPointF(12.0, 14.0), kind="minus"
+            )
 
         self.assertEqual(item, "mark-item")
         service.mark_offset_from_click.assert_called_once_with(
@@ -88,6 +104,37 @@ class CanvasMarkSceneServiceTest(unittest.TestCase):
             offset=QPointF(1.5, -2.5),
             record=False,
         )
+        # The model already holds the annotation a materialized mark shows.
+        sync_annotation.assert_not_called()
+
+    def test_add_mark_for_atom_records_history_and_syncs_the_annotation(self) -> None:
+        service, canvas, scene_decoration_service = self._service_with_mocked_add_mark(
+            marks={7: ["existing-mark"]}
+        )
+
+        with (
+            mock.patch(
+                "chemvas.ui.canvas_mark_scene_service.sync_atom_annotation_from_marks_for"
+            ) as sync_annotation,
+            mock.patch(
+                "chemvas.ui.canvas_mark_scene_service.emit_selection_info_for"
+            ) as emit_info,
+        ):
+            item = service.add_mark_for_atom(7, QPointF(12.0, 14.0))
+
+        self.assertEqual(item, "mark-item")
+        scene_decoration_service.add_mark.assert_called_once_with(
+            QPointF(11.5, 17.5),
+            kind="plus",
+            atom_id=7,
+            offset=QPointF(1.5, -2.5),
+            record=True,
+        )
+        # A user edit changes the atom's electronic state: the annotation
+        # follows the marks the atom now carries, and the formula readout
+        # refreshes although the selection itself did not change.
+        sync_annotation.assert_called_once_with(canvas, 7, ["existing-mark"])
+        emit_info.assert_called_once_with(canvas)
 
     def test_mark_offset_from_click_handles_zero_length_and_kind_fallback(self) -> None:
         canvas = SimpleNamespace(
@@ -166,19 +213,17 @@ class CanvasMarkSceneServiceTest(unittest.TestCase):
             atom_id,
             {"formal_charge": 1, "radical_electrons": 1},
         )
-        plus = add_mark_for_atom_for(
+        plus = materialize_mark_for_atom_for(
             canvas,
             atom_id,
             QPointF(10.0, -10.0),
             kind="plus",
-            record=False,
         )
-        radical = add_mark_for_atom_for(
+        radical = materialize_mark_for_atom_for(
             canvas,
             atom_id,
             QPointF(-10.0, -10.0),
             kind="radical",
-            record=False,
         )
         assert plus is not None
         assert radical is not None
