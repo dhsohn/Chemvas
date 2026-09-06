@@ -39,7 +39,9 @@ class _HarnessCanvas:
         self.begin_smiles_insert = mock.Mock()
         self.insert_controller = SimpleNamespace(begin_smiles_insert=mock.Mock())
         self.scene_transform_controller = SimpleNamespace(
-            flip_selected_items=mock.Mock()
+            flip_selected_items=mock.Mock(),
+            align_selected_items=mock.Mock(),
+            distribute_selected_items=mock.Mock(),
         )
         self.tool_mode_controller = SimpleNamespace(
             get_atom_symbol=mock.Mock(return_value="N"),
@@ -367,7 +369,19 @@ class MainWindowUIAssemblyServiceTest(unittest.TestCase):
                 "Flip Horizontal",
                 "Flip Vertical",
                 "Rotate...",
+                "Align",
+                "Distribute",
             ],
+        )
+        align_menu = self._menu(edit_menu, "Align")
+        distribute_menu = self._menu(edit_menu, "Distribute")
+        self.assertEqual(
+            [action.text() for action in align_menu.actions()],
+            ["Left", "Center", "Right", "Top", "Middle", "Bottom"],
+        )
+        self.assertEqual(
+            [action.text() for action in distribute_menu.actions()],
+            ["Horizontally", "Vertically"],
         )
         self.assertIs(assembly.undo_action, self._menu_action(edit_menu, "Undo"))
         self.assertIs(assembly.redo_action, self._menu_action(edit_menu, "Redo"))
@@ -425,8 +439,18 @@ class MainWindowUIAssemblyServiceTest(unittest.TestCase):
         ):
             self._menu_action(edit_menu, "Flip Horizontal").trigger()
             self._menu_action(edit_menu, "Flip Vertical").trigger()
+            self._menu_action(self._menu(edit_menu, "Align"), "Bottom").trigger()
+            self._menu_action(
+                self._menu(edit_menu, "Distribute"), "Vertically"
+            ).trigger()
         window.canvas.scene_transform_controller.flip_selected_items.assert_has_calls(
             [mock.call(horizontal=True), mock.call(horizontal=False)]
+        )
+        window.canvas.scene_transform_controller.align_selected_items.assert_called_once_with(
+            "bottom"
+        )
+        window.canvas.scene_transform_controller.distribute_selected_items.assert_called_once_with(
+            "vertical"
         )
 
         view_menu = self._menu(menu_bar, "View")

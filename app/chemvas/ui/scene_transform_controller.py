@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+from dataclasses import dataclass
 from functools import wraps
 from typing import TYPE_CHECKING
 
@@ -28,6 +29,7 @@ from chemvas.ui.history_canvas_access import set_atom_positions_for_history
 from chemvas.ui.history_commands import MoveItemsCommand, UpdateSceneItemCommand
 from chemvas.ui.history_recording_access import record_bond_update_for
 from chemvas.ui.move_access import move_atoms_for, move_item_for
+from chemvas.ui.scene_align_logic import align_deltas, distribute_deltas
 from chemvas.ui.scene_flip_geometry import (
     bounds_from_points as bounds_from_points_logic,
 )
@@ -70,10 +72,22 @@ from chemvas.ui.selection_collection_access import (
     selected_items_for_transform_for,
 )
 from chemvas.ui.selection_service_access import refresh_selection_outline_for
+from chemvas.ui.selection_style_access import selection_indicator_rect_for_atom_for
 from chemvas.ui.transactions.document import document_transaction
 
 if TYPE_CHECKING:
+    from PyQt6.QtCore import QRectF
+
     from chemvas.ui.canvas_view import CanvasView
+
+
+@dataclass(frozen=True, slots=True)
+class _AlignObject:
+    """One thing Align/Distribute moves as a unit: a structure or a scene item."""
+
+    rect: QRectF
+    atom_ids: frozenset[int]
+    item: object | None
 
 
 ROTATION_STATE_ITEM_KINDS = ARROW_KINDS | {"orbital", "mark"}
@@ -345,6 +359,68 @@ class SceneTransformController:
         else:
             self.history.push(CompositeCommand(commands))
         return True
+
+    def _alignment_objects(self) -> list[_AlignObject]:
+        atom_ids = selected_atom_ids_for_transform_for(self.canvas)
+        items = independent_selection_items(
+            selected_items_for_transform_for(self.canvas), atom_ids
+        )
+        objects: list[_AlignObject] = []
+        for component in self.selected_atom_components_for_transform(atom_ids):
+            rect = None
+            for atom_id in sorted(component):
+                atom_rect = selection_indicator_rect_for_atom_for(self.canvas, atom_id)
+                if atom_rect is None:
+                    continue
+                rect = atom_rect if rect is None else rect.united(atom_rect)
+            if rect is not None:
+                objects.append(_AlignObject(rect, frozenset(component), None))
+        for item in items:
+            rect = item.sceneBoundingRect()
+            if rect.isValid():
+                objects.append(_AlignObject(rect, frozenset(), item))
+        return objects
+
+    def _apply_object_deltas(
+        self, objects: list[_AlignObject], deltas: list[tuple[float, float]]
+    ) -> bool:
+        commands: list[HistoryCommand] = []
+        for target, (dx, dy) in zip(objects, deltas, strict=True):
+            if abs(dx) < 1e-9 and abs(dy) < 1e-9:
+                continue
+            if target.atom_ids:
+                atom_ids = set(target.atom_ids)
+                move_atoms_for(self.canvas, atom_ids, dx, dy, update_selection=False)
+                commands.append(MoveAtomsCommand(atom_ids=atom_ids, dx=dx, dy=dy))
+            else:
+                move_item_for(self.canvas, target.item, dx, dy, update_selection=False)
+                commands.append(MoveItemsCommand(items=[target.item], dx=dx, dy=dy))
+        if not commands:
+            return False
+        refresh_selection_outline_for(self.canvas)
+        if len(commands) == 1:
+            self.history.push(commands[0])
+        else:
+            self.history.push(CompositeCommand(commands))
+        return True
+
+    @_atomic_history_transform
+    def align_selected_items(self, mode: str) -> bool:
+        objects = self._alignment_objects()
+        if len(objects) < 2:
+            return False
+        return self._apply_object_deltas(
+            objects, align_deltas([target.rect for target in objects], mode)
+        )
+
+    @_atomic_history_transform
+    def distribute_selected_items(self, axis: str) -> bool:
+        objects = self._alignment_objects()
+        if len(objects) < 3:
+            return False
+        return self._apply_object_deltas(
+            objects, distribute_deltas([target.rect for target in objects], axis)
+        )
 
     def _atom_bound_marks(self, atom_ids: set[int]) -> list:
         marks: list = []

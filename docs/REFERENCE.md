@@ -181,7 +181,9 @@ Chemvas supports a major subset of ChemDraw-compatible shortcuts.
   Ring fusion `4/5/6/7/8`, Chair fusion `9/0`
 - **Objects:** Flip Horizontal `Ctrl+Shift+H`, Flip Vertical `Ctrl+Shift+V`,
   Rotate selection `Alt+Up/Down` (15°) and `Alt+Left/Right` (1°),
-  Nudge selection `Shift+Arrows` (10 pt)
+  Nudge selection `Shift+Arrows` (10 pt); **Edit ▸ Align** (left, center,
+  right, top, middle, bottom) and **Edit ▸ Distribute** (horizontally,
+  vertically) arrange the selected structures and objects as whole units
 - **View:** Actual size `F5`, Fit to window `F6`, Magnify `F7`, Reduce `F8`
 - **File / edit:** Save / Open / Undo / Redo (platform defaults), `Ctrl+A` (select
   all, switches to the Select tool), `Ctrl+C` (copy selection — PNG plus SVG/PDF
