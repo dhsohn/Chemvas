@@ -12,6 +12,8 @@ from chemvas.domain.document import (
     CalculationPlan,
     CalculationState,
     CalculationStateMember,
+    CalculationStep,
+    CalculationStepEndpoint,
     MoleculeModel,
     build_document_payload,
     calculation_plan_from_state,
@@ -23,6 +25,8 @@ from chemvas.domain.document import (
     serialize_settings,
 )
 from chemvas.features.calculation_bundle import (
+    AtomMapEntry,
+    CalculationArtifacts,
     calculate_bond_changes,
     calculation_plan_report,
     calculation_step_by_id,
@@ -32,6 +36,7 @@ from chemvas.features.calculation_bundle import (
     precomplex_basis_sha256,
     require_step_ready,
     select_calculation_state,
+    step_atom_correspondence,
     validate_calculation_plan,
 )
 from chemvas.features.calculation_bundle import (
@@ -133,6 +138,137 @@ def _plan(*, complete_mapping: bool = True) -> dict[str, object]:
             }
         ],
     }
+
+
+def _artifacts(*entries: AtomMapEntry) -> CalculationArtifacts:
+    return CalculationArtifacts(
+        mol_block="",
+        xyz_block="",
+        atom_map=entries,
+        rdkit_version="test",
+        rdkit_formal_charge=0,
+        rdkit_radical_electrons=0,
+        electron_count=1,
+        geometry_embedding="ETKDGv3",
+        geometry_random_seed=0,
+        geometry_optimization_policy="test",
+        geometry_optimization_result="test",
+        mol_atom_count=sum(entry.mol_index is not None for entry in entries),
+        xyz_atom_count=len(entries),
+    )
+
+
+def _atom(xyz_index: int, symbol: str, chemvas_atom_id: int) -> AtomMapEntry:
+    return AtomMapEntry(
+        xyz_index=xyz_index,
+        mol_index=xyz_index,
+        symbol=symbol,
+        origin="chemvas_atom",
+        chemvas_atom_id=chemvas_atom_id,
+    )
+
+
+def _hydrogen(xyz_index: int, parent_chemvas_atom_id: int | None) -> AtomMapEntry:
+    return AtomMapEntry(
+        xyz_index=xyz_index,
+        mol_index=None,
+        symbol="H",
+        origin="implicit_hydrogen",
+        chemvas_atom_id=None,
+        parent_chemvas_atom_id=parent_chemvas_atom_id,
+    )
+
+
+def _step(*pairs: tuple[int, int]) -> CalculationStep:
+    return CalculationStep(
+        id="S01",
+        reactant=CalculationStepEndpoint("R01", ()),
+        product=CalculationStepEndpoint("P01", ()),
+        atom_correspondence=tuple(
+            CalculationAtomCorrespondence(reactant, product)
+            for reactant, product in pairs
+        ),
+    )
+
+
+def test_step_atom_correspondence_extends_reviewed_pairs_to_generated_atoms() -> None:
+    reactant = _artifacts(_atom(1, "C", 0), _atom(2, "C", 1), _hydrogen(3, 0))
+    product = _artifacts(_atom(1, "C", 3), _atom(2, "C", 2), _hydrogen(3, 3))
+
+    correspondence = step_atom_correspondence(
+        _step((1, 2), (0, 3)),
+        reactant_artifacts=reactant,
+        product_artifacts=product,
+    )
+
+    assert correspondence == {
+        "format": "chemvas-step-atom-correspondence",
+        "version": 1,
+        "step_id": "S01",
+        "source_entries": [
+            {"reactant_atom_id": 0, "product_atom_id": 3},
+            {"reactant_atom_id": 1, "product_atom_id": 2},
+        ],
+        "geometry_entries": [
+            {
+                "reactant_xyz_index": 1,
+                "product_xyz_index": 1,
+                "symbol": "C",
+                "reactant_chemvas_atom_id": 0,
+                "product_chemvas_atom_id": 3,
+                "origin": "chemvas_atom",
+            },
+            {
+                "reactant_xyz_index": 3,
+                "product_xyz_index": 3,
+                "symbol": "H",
+                "reactant_chemvas_atom_id": 0,
+                "product_chemvas_atom_id": 3,
+                "origin": "implicit_hydrogen",
+            },
+            {
+                "reactant_xyz_index": 2,
+                "product_xyz_index": 2,
+                "symbol": "C",
+                "reactant_chemvas_atom_id": 1,
+                "product_chemvas_atom_id": 2,
+                "origin": "chemvas_atom",
+            },
+        ],
+        "source_mapping": "complete_bijection",
+        "geometry_mapping": "complete_bijection",
+    }
+
+
+def test_step_atom_correspondence_rejects_mismatched_generated_groups() -> None:
+    reactant = _artifacts(_atom(1, "C", 0), _hydrogen(2, 0))
+    product_without_hydrogen = _artifacts(_atom(1, "C", 3))
+
+    with pytest.raises(ValueError, match="complete geometry atom mapping"):
+        step_atom_correspondence(
+            _step((0, 3)),
+            reactant_artifacts=reactant,
+            product_artifacts=product_without_hydrogen,
+        )
+
+
+def test_step_atom_correspondence_rejects_uncovered_and_ownerless_atoms() -> None:
+    reactant = _artifacts(_atom(1, "C", 0), _atom(2, "O", 9))
+    product = _artifacts(_atom(1, "C", 3), _atom(2, "O", 8))
+
+    with pytest.raises(ValueError, match="not covered by the validated"):
+        step_atom_correspondence(
+            _step((0, 3)),
+            reactant_artifacts=reactant,
+            product_artifacts=product,
+        )
+
+    with pytest.raises(ValueError, match="no Chemvas provenance owner"):
+        step_atom_correspondence(
+            _step((0, 3)),
+            reactant_artifacts=_artifacts(_atom(1, "C", 0), _hydrogen(2, None)),
+            product_artifacts=product,
+        )
 
 
 def test_feature_reexports_the_domain_included_atom_id_policy() -> None:

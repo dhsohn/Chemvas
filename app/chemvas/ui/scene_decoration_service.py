@@ -7,8 +7,6 @@ from typing import TYPE_CHECKING
 from PyQt6.QtWidgets import QGraphicsTextItem
 
 from chemvas.domain.transactions import run_rollback_step
-from chemvas.ui.canvas_mark_registry import mark_registry_for
-from chemvas.ui.canvas_model_access import sync_atom_annotation_from_marks_for
 from chemvas.ui.canvas_tool_settings_state import tool_settings_state_for
 from chemvas.ui.history_commands import AddSceneItemsCommand
 from chemvas.ui.mark_item_access import build_mark_item_for, set_mark_center_for
@@ -31,7 +29,6 @@ from chemvas.ui.scene_item_state import (
     shape_state_dict_for,
     ts_bracket_state_dict_for,
 )
-from chemvas.ui.selection_info_access import emit_selection_info_for
 from chemvas.ui.transactions.scene_item_attach import SceneItemAttachSnapshot
 
 if TYPE_CHECKING:
@@ -56,6 +53,9 @@ class SceneDecorationService:
         offset: QPointF | None = None,
         record: bool = True,
     ):
+        # Builds, attaches and (when recorded) pushes the scene item only. The
+        # chemistry an atom-bound mark implies is owned by
+        # CanvasMarkSceneService, which decides whether the model follows.
         with self._scene_add_transaction() as track:
             kind = kind or tool_settings_state_for(self.canvas).mark_kind
             item = build_mark_item_for(self.canvas, kind)
@@ -74,17 +74,6 @@ class SceneDecorationService:
             set_mark_center_for(self.canvas, item, pos)
             if record:
                 self._push_add_scene_item(item, mark_state_dict_for(self.canvas, item))
-        if atom_id is not None:
-            if record:
-                sync_atom_annotation_from_marks_for(
-                    self.canvas,
-                    atom_id,
-                    mark_registry_for(self.canvas).get_for_atom(atom_id) or (),
-                )
-            # An atom-bound mark changes the selection formula readout without
-            # changing the selection itself; refresh it here or it stays stale
-            # until the next selection change.
-            emit_selection_info_for(self.canvas)
         return item
 
     def add_arrow(self, start: QPointF, end: QPointF, kind: str):

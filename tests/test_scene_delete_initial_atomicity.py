@@ -149,11 +149,10 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
                     canvas.services.structure.canvas_atom_mutation_service
                 )
                 atom_id = mutation_service.add_atom("N", 10.0, 20.0)
-                mark = canvas.services.scene_decoration.canvas_mark_scene_service.add_mark_for_atom(
+                mark = canvas.services.scene_decoration.canvas_mark_scene_service.materialize_mark_for_atom(
                     atom_id,
                     QPointF(22.0, 20.0),
                     kind="plus",
-                    record=False,
                 )
                 self.assertIsNotNone(mark)
                 assert mark is not None

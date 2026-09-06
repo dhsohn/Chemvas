@@ -48,7 +48,7 @@ from chemvas.ui.renderer_style_access import (
     bond_line_width_for,
     bond_pen_for,
 )
-from chemvas.ui.scene_decoration_access import add_mark_for_atom_for
+from chemvas.ui.scene_decoration_access import materialize_mark_for_atom_for
 from chemvas.ui.scene_signal_blocking import blocked_scene_signals
 
 if TYPE_CHECKING:
@@ -328,12 +328,11 @@ class InsertSmilesService:
             annotation_values = normalized_atom_annotation(annotation)
             for index, kind in enumerate(annotation_mark_kinds(annotation_values)):
                 direction_x, direction_y = annotation_mark_direction(index)
-                item = add_mark_for_atom_for(
+                item = materialize_mark_for_atom_for(
                     self.canvas,
                     atom_id,
                     QPointF(atom.x + direction_x, atom.y + direction_y),
                     kind=kind,
-                    record=False,
                 )
                 if item is not None:
                     added.append(item)

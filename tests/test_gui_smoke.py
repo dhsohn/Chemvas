@@ -72,6 +72,7 @@ from chemvas.ui.scene_decoration_access import (
     add_mark_for_atom_for,
     add_orbital_for,
     add_ts_bracket_for,
+    materialize_mark_for_atom_for,
 )
 from chemvas.ui.scene_item_state import scene_item_state_for
 from chemvas.ui.selection_collection_access import selected_ids_for
@@ -705,19 +706,17 @@ class GuiShortcutSmokeTest(unittest.TestCase):
         atom = active_canvas_for_window(self.window).model.atoms[atom_id]
         base = active_canvas_for_window(self.window).renderer.style.bond_length_px * 0.2
 
-        plus = add_mark_for_atom_for(
+        plus = materialize_mark_for_atom_for(
             active_canvas_for_window(self.window),
             atom_id,
             QPointF(0.0, 0.0),
             kind="plus",
-            record=False,
         )
-        radical = add_mark_for_atom_for(
+        radical = materialize_mark_for_atom_for(
             active_canvas_for_window(self.window),
             atom_id,
             QPointF(0.0, 0.0),
             kind="radical",
-            record=False,
         )
 
         self.assertIsNotNone(plus)
@@ -2573,12 +2572,11 @@ class GuiShortcutSmokeTest(unittest.TestCase):
         atom_b = add_atom_for(active_canvas_for_window(self.window), "O", 20.0, 0.0)
         bond_id = add_bond_for(active_canvas_for_window(self.window), atom_a, atom_b)
         add_bond_graphics_for(active_canvas_for_window(self.window), bond_id)
-        mark = add_mark_for_atom_for(
+        mark = materialize_mark_for_atom_for(
             active_canvas_for_window(self.window),
             atom_a,
             QPointF(-12.0, -8.0),
             kind="minus",
-            record=False,
         )
         arrow = add_arrow_for(
             active_canvas_for_window(self.window),

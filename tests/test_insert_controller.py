@@ -164,7 +164,7 @@ class _FakeCanvas:
         self.add_atom_calls: list[tuple[str, float, float]] = []
         self.ensure_carbon_dot_calls: list[int] = []
         self.atom_label_calls: list[tuple[int, str, bool, bool, bool]] = []
-        self.mark_calls: list[tuple[int, float, float, str | None, bool]] = []
+        self.mark_calls: list[tuple[int, float, float, str | None]] = []
         self.created_marks: list[_FakeSceneItem] = []
         self.removed_scene_items: list[_FakeSceneItem] = []
         self.restored_scene_items: list[_FakeSceneItem] = []
@@ -196,7 +196,7 @@ class _FakeCanvas:
                 record_additions=self._record_additions
             ),
             canvas_mark_scene_service=SimpleNamespace(
-                add_mark_for_atom=self.add_mark_for_atom
+                materialize_mark_for_atom=self.materialize_mark_for_atom
             ),
             canvas_ring_fill_scene_service=SimpleNamespace(
                 create_ring_fill_item=self.create_ring_fill_item,
@@ -345,15 +345,14 @@ class _FakeCanvas:
         self.model.atoms[atom_id].element = text
         self.model.atoms[atom_id].explicit_label = show_carbon
 
-    def add_mark_for_atom(
+    def materialize_mark_for_atom(
         self,
         atom_id: int,
         click_pos: QPointF,
         *,
         kind: str | None = None,
-        record: bool = True,
     ):
-        self.mark_calls.append((atom_id, click_pos.x(), click_pos.y(), kind, record))
+        self.mark_calls.append((atom_id, click_pos.x(), click_pos.y(), kind))
         item = _FakeSceneItem(
             "mark",
             atom_id=atom_id,
@@ -569,7 +568,7 @@ class InsertControllerTest(unittest.TestCase):
 
         controller.smiles_service.load_smiles("[NH4+]")
 
-        self.assertEqual(canvas.mark_calls, [(0, 2.0, 1.0, "plus", False)])
+        self.assertEqual(canvas.mark_calls, [(0, 2.0, 1.0, "plus")])
         command = canvas.push_command.call_args.args[0]
         self.assertIsInstance(command, CompositeCommand)
         self.assertIsInstance(command.commands[0], AddAtomsCommand)
@@ -659,18 +658,13 @@ class InsertControllerTest(unittest.TestCase):
             click_pos: QPointF,
             *,
             kind: str | None = None,
-            record: bool = True,
         ):
             if not canvas.created_marks:
-                return canvas.add_mark_for_atom(
-                    atom_id, click_pos, kind=kind, record=record
-                )
+                return canvas.materialize_mark_for_atom(atom_id, click_pos, kind=kind)
             raise RuntimeError("mark failed")
 
         canvas.clear_scene = Mock(side_effect=_clear_scene)
-        canvas.services.scene_decoration.canvas_mark_scene_service.add_mark_for_atom = (
-            _add_first_mark_then_fail
-        )
+        canvas.services.scene_decoration.canvas_mark_scene_service.materialize_mark_for_atom = _add_first_mark_then_fail
         controller = _controller_for(canvas)
 
         with self.assertRaisesRegex(RuntimeError, "mark failed"):

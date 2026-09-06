@@ -18,6 +18,16 @@ from chemvas.ui.selection_info_access import emit_selection_info_for
 
 
 class CanvasMarkSceneService:
+    """Owns atom-bound charge and radical marks.
+
+    Two distinct operations add such a mark. A user edit changes the atom's
+    electronic state: it is recorded in history and the atom annotation is
+    rebuilt from the marks the atom now carries. Materializing a mark only
+    shows an annotation the model already holds (document restore, SMILES
+    insertion) and must not touch the model or history. Removal and Undo
+    restore reconcile the annotation through the same owner.
+    """
+
     def __init__(self, canvas, *, scene_decoration_service=None) -> None:
         self.canvas = canvas
         self.marks = mark_registry_for(canvas)
@@ -29,7 +39,28 @@ class CanvasMarkSceneService:
         click_pos: QPointF,
         *,
         kind: str | None = None,
-        record: bool = True,
+    ):
+        item = self._add_mark_for_atom(atom_id, click_pos, kind=kind, record=True)
+        if item is not None:
+            self.sync_marks_for_atom(atom_id)
+        return item
+
+    def materialize_mark_for_atom(
+        self,
+        atom_id: int,
+        click_pos: QPointF,
+        *,
+        kind: str | None,
+    ):
+        return self._add_mark_for_atom(atom_id, click_pos, kind=kind, record=False)
+
+    def _add_mark_for_atom(
+        self,
+        atom_id: int,
+        click_pos: QPointF,
+        *,
+        kind: str | None,
+        record: bool,
     ):
         atom = atom_for_id(self.canvas, atom_id)
         if atom is None:
@@ -46,6 +77,19 @@ class CanvasMarkSceneService:
             offset=offset,
             record=record,
         )
+
+    def sync_marks_for_atom(self, atom_id: int) -> None:
+        """Make the atom annotation match its current marks.
+
+        The marks also feed the selection formula readout, which changes here
+        without a selection change, so it is refreshed in the same step.
+        """
+        sync_atom_annotation_from_marks_for(
+            self.canvas,
+            atom_id,
+            self.marks.get_for_atom(atom_id) or (),
+        )
+        emit_selection_info_for(self.canvas)
 
     def mark_offset_from_click(
         self, atom_id: int, click_pos: QPointF, *, kind: str | None = None
@@ -83,14 +127,7 @@ class CanvasMarkSceneService:
                 self.marks.by_atom.pop(atom_id, None)
         remove_item_from_canvas_scene(self.canvas, item)
         if isinstance(atom_id, int):
-            sync_atom_annotation_from_marks_for(
-                self.canvas,
-                atom_id,
-                self.marks.get_for_atom(atom_id) or (),
-            )
-            # Dropping an atom-bound mark changes the selection formula
-            # readout without changing the selection; refresh it here.
-            emit_selection_info_for(self.canvas)
+            self.sync_marks_for_atom(atom_id)
 
     def remove_marks_for_atom(self, atom_id: int) -> None:
         marks = self.marks.pop_for_atom(atom_id)
@@ -98,8 +135,7 @@ class CanvasMarkSceneService:
             remove_scene_item_from_collection_for(self.canvas, "mark_items", item)
             remove_item_from_canvas_scene(self.canvas, item)
         if marks:
-            sync_atom_annotation_from_marks_for(self.canvas, atom_id, ())
-            emit_selection_info_for(self.canvas)
+            self.sync_marks_for_atom(atom_id)
 
     def mark_center_for_pointer(
         self,

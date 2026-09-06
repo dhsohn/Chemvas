@@ -890,14 +890,7 @@ class CanvasViewAdditionalTest(unittest.TestCase):
         )
 
         self.assertEqual(
-            add_mark_for(
-                view,
-                QPointF(1.0, 2.0),
-                kind="plus",
-                atom_id=5,
-                offset=QPointF(0.5, -0.5),
-                record=False,
-            ),
+            add_mark_for(view, QPointF(1.0, 2.0), kind="plus"),
             "mark",
         )
         self.assertEqual(
@@ -911,11 +904,7 @@ class CanvasViewAdditionalTest(unittest.TestCase):
         self.assertEqual(add_orbital_for(view, QPointF(9.0, 8.0)), "orbital")
 
         decoration_service.add_mark.assert_called_once_with(
-            QPointF(1.0, 2.0),
-            kind="plus",
-            atom_id=5,
-            offset=QPointF(0.5, -0.5),
-            record=False,
+            QPointF(1.0, 2.0), kind="plus"
         )
         decoration_service.add_arrow.assert_called_once_with(
             QPointF(0.0, 0.0),

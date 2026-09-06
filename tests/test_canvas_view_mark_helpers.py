@@ -30,8 +30,13 @@ from chemvas.ui.mark_item_access import (
     remove_mark_item_for,
     remove_marks_for_atom_for,
     set_mark_center_for,
+    sync_marks_for_atom_for,
 )
-from chemvas.ui.scene_decoration_access import add_mark_for, add_mark_for_atom_for
+from chemvas.ui.scene_decoration_access import (
+    add_mark_for,
+    add_mark_for_atom_for,
+    materialize_mark_for_atom_for,
+)
 
 
 class _FakeScene:
@@ -174,23 +179,11 @@ class CanvasViewMarkHelperTest(unittest.TestCase):
             )
         )
 
-        item = add_mark_for(
-            view,
-            QPointF(4.0, 5.0),
-            kind="minus",
-            atom_id=7,
-            offset=QPointF(1.5, -2.5),
-            record=False,
-        )
+        item = add_mark_for(view, QPointF(4.0, 5.0), kind="minus")
 
         self.assertEqual(item, "mark-item")
-        service.assert_called_once_with(
-            QPointF(4.0, 5.0),
-            kind="minus",
-            atom_id=7,
-            offset=QPointF(1.5, -2.5),
-            record=False,
-        )
+        # A standalone mark never carries an atom binding through this wrapper.
+        service.assert_called_once_with(QPointF(4.0, 5.0), kind="minus")
 
     def test_mark_build_wrappers_delegate_to_scene_decoration_build_service(
         self,
@@ -227,27 +220,35 @@ class CanvasViewMarkHelperTest(unittest.TestCase):
         )
 
         scene_service.add_mark_for_atom.return_value = mark_item
+        scene_service.materialize_mark_for_atom.return_value = mark_item
         scene_service.mark_offset_from_click.return_value = offset
         scene_service.mark_center_for_pointer.return_value = center
 
         self.assertIs(
-            add_mark_for_atom_for(
-                view, 7, QPointF(12.0, 13.0), kind="minus", record=False
-            ),
+            add_mark_for_atom_for(view, 7, QPointF(12.0, 13.0), kind="minus"),
+            mark_item,
+        )
+        self.assertIs(
+            materialize_mark_for_atom_for(view, 7, QPointF(12.0, 13.0), kind="plus"),
             mark_item,
         )
         remove_mark_item_for(view, mark_item)
         remove_marks_for_atom_for(view, 7)
+        sync_marks_for_atom_for(view, 7)
         self.assertEqual(
             mark_center_for_pointer_for(view, QPointF(12.0, 13.0), 7, kind="minus"),
             center,
         )
 
         scene_service.add_mark_for_atom.assert_called_once_with(
-            7, QPointF(12.0, 13.0), kind="minus", record=False
+            7, QPointF(12.0, 13.0), kind="minus"
+        )
+        scene_service.materialize_mark_for_atom.assert_called_once_with(
+            7, QPointF(12.0, 13.0), kind="plus"
         )
         scene_service.remove_mark_item.assert_called_once_with(mark_item)
         scene_service.remove_marks_for_atom.assert_called_once_with(7)
+        scene_service.sync_marks_for_atom.assert_called_once_with(7)
         scene_service.mark_center_for_pointer.assert_called_once_with(
             QPointF(12.0, 13.0), 7, kind="minus"
         )

@@ -12,30 +12,22 @@ def add_arrow_for(canvas, start, end, kind: str):
     return scene_decoration_service_for_access(canvas).add_arrow(start, end, kind)
 
 
-def add_mark_for(
-    canvas,
-    pos,
-    *,
-    kind: str | None = None,
-    atom_id: int | None = None,
-    offset=None,
-    record: bool = True,
-):
-    return scene_decoration_service_for_access(canvas).add_mark(
-        pos, kind=kind, atom_id=atom_id, offset=offset, record=record
+def add_mark_for(canvas, pos, *, kind: str | None = None):
+    # Standalone marks only; an atom-bound mark goes through
+    # add_mark_for_atom_for or materialize_mark_for_atom_for so the mark owner
+    # decides whether the atom annotation follows.
+    return scene_decoration_service_for_access(canvas).add_mark(pos, kind=kind)
+
+
+def add_mark_for_atom_for(canvas, atom_id: int, click_pos, *, kind: str | None = None):
+    return mark_scene_service_for_access(canvas).add_mark_for_atom(
+        atom_id, click_pos, kind=kind
     )
 
 
-def add_mark_for_atom_for(
-    canvas,
-    atom_id: int,
-    click_pos,
-    *,
-    kind: str | None = None,
-    record: bool = True,
-):
-    return mark_scene_service_for_access(canvas).add_mark_for_atom(
-        atom_id, click_pos, kind=kind, record=record
+def materialize_mark_for_atom_for(canvas, atom_id: int, click_pos, *, kind: str | None):
+    return mark_scene_service_for_access(canvas).materialize_mark_for_atom(
+        atom_id, click_pos, kind=kind
     )
 
 
@@ -121,6 +113,7 @@ __all__ = [
     "add_shape_from_points_for",
     "add_ts_bracket_for",
     "add_ts_bracket_from_points_for",
+    "materialize_mark_for_atom_for",
     "preview_arrow_for",
     "preview_shape_for",
     "preview_ts_bracket_for",

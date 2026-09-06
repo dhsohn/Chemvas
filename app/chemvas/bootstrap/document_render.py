@@ -100,10 +100,7 @@ def _render_document(
     dpi: int,
 ) -> dict[str, object]:
     output_format = _validate_paths(source, output)
-    _validate_source_size(source)
-    source_bytes, document = read_exact_document(source)
-    if len(source_bytes) > MAX_DOCUMENT_BYTES:
-        raise ValueError(f"input document exceeds the {MAX_DOCUMENT_BYTES}-byte limit")
+    source_bytes, document = read_exact_document(source, max_bytes=MAX_DOCUMENT_BYTES)
     state = cast("Mapping[str, object]", document.state)
     graphics_records = graphics_record_count(state)
     if graphics_records > MAX_GRAPHICS_RECORDS:
@@ -154,11 +151,6 @@ def _validate_paths(source: Path, output: Path) -> str:
     if not output.parent.is_dir():
         raise ValueError(f"output parent directory does not exist: {output.parent}")
     return output_format
-
-
-def _validate_source_size(source: Path) -> None:
-    if source.stat().st_size > MAX_DOCUMENT_BYTES:
-        raise ValueError(f"input document exceeds the {MAX_DOCUMENT_BYTES}-byte limit")
 
 
 def _render_offscreen(

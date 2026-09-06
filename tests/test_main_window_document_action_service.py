@@ -36,7 +36,7 @@ from chemvas.ui.main_window_ports import (
 )
 from chemvas.ui.mark_item_access import mark_kinds_by_atom_for
 from chemvas.ui.renderer_style_access import bond_length_px_for
-from chemvas.ui.scene_decoration_access import add_mark_for_atom_for
+from chemvas.ui.scene_decoration_access import materialize_mark_for_atom_for
 from chemvas.ui.structure_mutation_access import add_bond_between_points_for
 from chemvas.ui.structure_payload_access import build_3d_conversion_payload_for
 
@@ -705,7 +705,7 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
             mark_calls += 1
             if mark_calls == 2:
                 return None
-            return add_mark_for_atom_for(*args, **kwargs)
+            return materialize_mark_for_atom_for(*args, **kwargs)
 
         with tempfile.TemporaryDirectory() as temp_dir:
             path = Path(temp_dir) / "charged.mol"
@@ -714,7 +714,7 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
                 encoding="utf-8",
             )
             with mock.patch(
-                "chemvas.ui.canvas_document_state.add_mark_for_atom_for",
+                "chemvas.ui.canvas_document_state.materialize_mark_for_atom_for",
                 side_effect=fail_second_mark,
             ):
                 result = self.service.load_canvas_from_path(

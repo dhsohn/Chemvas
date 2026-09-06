@@ -14,7 +14,10 @@ from chemvas.ui.main_window_ports import (
     services_for_window,
 )
 from chemvas.ui.mark_item_access import mark_center_for
-from chemvas.ui.scene_decoration_access import add_arrow_for, add_mark_for_atom_for
+from chemvas.ui.scene_decoration_access import (
+    add_arrow_for,
+    materialize_mark_for_atom_for,
+)
 from chemvas.ui.scene_item_access import apply_scene_item_state
 from chemvas.ui.scene_item_state import scene_item_state_for
 from chemvas.ui.structure_mutation_access import add_atom_for
@@ -45,12 +48,11 @@ class SceneItemStateCodecTest(unittest.TestCase):
         self,
     ) -> None:
         atom_id = add_atom_for(active_canvas_for_window(self.window), "C", 12.0, -8.0)
-        mark_item = add_mark_for_atom_for(
+        mark_item = materialize_mark_for_atom_for(
             active_canvas_for_window(self.window),
             atom_id,
             QPointF(26.0, -4.0),
             kind="minus",
-            record=False,
         )
 
         state = scene_item_state_for(active_canvas_for_window(self.window), mark_item)

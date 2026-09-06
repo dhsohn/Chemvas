@@ -29,7 +29,12 @@ from chemvas.domain.document.precomplex_profile import (
 from .service import inspect_component_inventory, inspect_components, select_components
 
 if TYPE_CHECKING:
-    from .model import CalculationStateSelection, ComponentSummary
+    from .model import (
+        AtomMapEntry,
+        CalculationArtifacts,
+        CalculationStateSelection,
+        ComponentSummary,
+    )
 
 
 @dataclass(frozen=True)
@@ -501,6 +506,89 @@ def correspondence_readiness(
         mapping_complete=complete,
         ready_for_step_pack=complete and len(reactant_ids) == len(product_ids),
     )
+
+
+def step_atom_correspondence(
+    step: CalculationStep,
+    *,
+    reactant_artifacts: CalculationArtifacts,
+    product_artifacts: CalculationArtifacts,
+) -> dict[str, object]:
+    """Extend the reviewed Chemvas atom mapping to every generated atom.
+
+    Each reviewed pair must own the same symbol sequence on both endpoints
+    (the drawn atom plus its generated hydrogens and alias expansion), and the
+    result must cover every generated atom of both endpoints.
+    """
+    reactant_groups = _artifact_atom_groups(reactant_artifacts)
+    product_groups = _artifact_atom_groups(product_artifacts)
+    source_entries: list[dict[str, int]] = []
+    geometry_entries: list[dict[str, object]] = []
+    for entry in sorted(
+        step.atom_correspondence,
+        key=lambda item: item.reactant_atom_id,
+    ):
+        reactant_group = reactant_groups.get(entry.reactant_atom_id, ())
+        product_group = product_groups.get(entry.product_atom_id, ())
+        reactant_symbols = [item.symbol for item in reactant_group]
+        product_symbols = [item.symbol for item in product_group]
+        if not reactant_group or reactant_symbols != product_symbols:
+            raise ValueError(
+                f"Step {step.id} cannot produce a complete geometry atom mapping for "
+                f"Chemvas atoms {entry.reactant_atom_id} -> {entry.product_atom_id}. "
+                "Draw transferred hydrogens explicitly and keep abbreviation expansion "
+                "consistent on both endpoints."
+            )
+        source_entries.append(asdict(entry))
+        geometry_entries.extend(
+            {
+                "reactant_xyz_index": reactant_item.xyz_index,
+                "product_xyz_index": product_item.xyz_index,
+                "symbol": reactant_item.symbol,
+                "reactant_chemvas_atom_id": entry.reactant_atom_id,
+                "product_chemvas_atom_id": entry.product_atom_id,
+                "origin": reactant_item.origin,
+            }
+            for reactant_item, product_item in zip(
+                reactant_group, product_group, strict=True
+            )
+        )
+    reactant_xyz = {entry["reactant_xyz_index"] for entry in geometry_entries}
+    product_xyz = {entry["product_xyz_index"] for entry in geometry_entries}
+    if reactant_xyz != set(range(1, reactant_artifacts.xyz_atom_count + 1)) or (
+        product_xyz != set(range(1, product_artifacts.xyz_atom_count + 1))
+    ):
+        raise ValueError(
+            f"Step {step.id} generated geometry atoms that are not covered by the "
+            "validated atom correspondence."
+        )
+    return {
+        "format": "chemvas-step-atom-correspondence",
+        "version": 1,
+        "step_id": step.id,
+        "source_entries": source_entries,
+        "geometry_entries": geometry_entries,
+        "source_mapping": "complete_bijection",
+        "geometry_mapping": "complete_bijection",
+    }
+
+
+def _artifact_atom_groups(
+    artifacts: CalculationArtifacts,
+) -> dict[int, tuple[AtomMapEntry, ...]]:
+    groups: dict[int, list[AtomMapEntry]] = {}
+    for entry in artifacts.atom_map:
+        owner = (
+            entry.chemvas_atom_id
+            if entry.chemvas_atom_id is not None
+            else entry.parent_chemvas_atom_id
+        )
+        if owner is None:
+            raise ValueError(
+                "A generated calculation atom has no Chemvas provenance owner."
+            )
+        groups.setdefault(owner, []).append(entry)
+    return {owner: tuple(entries) for owner, entries in groups.items()}
 
 
 def require_step_ready(plan: CalculationPlan, step: CalculationStep) -> None:

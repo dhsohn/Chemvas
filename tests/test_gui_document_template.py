@@ -62,10 +62,9 @@ from chemvas.ui.mark_item_access import mark_center_for
 from chemvas.ui.preview_3d_painter import preview_overlay_font
 from chemvas.ui.scene_decoration_access import (
     add_arrow_for,
-    add_mark_for,
-    add_mark_for_atom_for,
     add_orbital_for,
     add_ts_bracket_from_points_for,
+    materialize_mark_for_atom_for,
 )
 from chemvas.ui.structure_mutation_access import (
     add_atom_for,
@@ -163,12 +162,11 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
         canvas_services_for(
             active_canvas_for_window(self.window)
         ).interaction.note_controller.create_text_note(QPointF(60.0, 10.0), "Scheme")
-        add_mark_for(
+        materialize_mark_for_atom_for(
             active_canvas_for_window(self.window),
+            0,
             QPointF(20.0, 20.0),
             kind="plus",
-            atom_id=0,
-            record=False,
         )
         add_arrow_for(
             active_canvas_for_window(self.window),
@@ -211,12 +209,11 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
             ).interaction.note_controller.create_text_note(
                 QPointF(75.0, 10.0), "Roundtrip"
             )
-            add_mark_for(
+            materialize_mark_for_atom_for(
                 active_canvas_for_window(self.window),
+                0,
                 QPointF(20.0, 20.0),
                 kind="minus",
-                atom_id=0,
-                record=False,
             )
             add_arrow_for(
                 active_canvas_for_window(self.window),
@@ -360,12 +357,11 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
 
     def test_snapshot_restore_preserves_atom_bound_mark_offsets(self) -> None:
         atom_id = add_atom_for(active_canvas_for_window(self.window), "C", 12.0, -8.0)
-        add_mark_for_atom_for(
+        materialize_mark_for_atom_for(
             active_canvas_for_window(self.window),
             atom_id,
             QPointF(42.0, -20.0),
             kind="minus",
-            record=False,
         )
 
         state = snapshot_canvas_state_for(active_canvas_for_window(self.window))
@@ -1618,19 +1614,17 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
 
     def test_canvas_export_xyz_passes_charge_and_radical_annotations(self) -> None:
         atom_id = add_atom_for(active_canvas_for_window(self.window), "C", 0.0, 0.0)
-        add_mark_for_atom_for(
+        materialize_mark_for_atom_for(
             active_canvas_for_window(self.window),
             atom_id,
             QPointF(10.0, -10.0),
             kind="plus",
-            record=False,
         )
-        add_mark_for_atom_for(
+        materialize_mark_for_atom_for(
             active_canvas_for_window(self.window),
             atom_id,
             QPointF(12.0, -12.0),
             kind="radical",
-            record=False,
         )
 
         captured = {}
@@ -1699,12 +1693,11 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
     def test_build_3d_conversion_payload_uses_atom_bound_mark_selection(self) -> None:
         left = add_atom_for(active_canvas_for_window(self.window), "N", -20.0, 0.0)
         add_atom_for(active_canvas_for_window(self.window), "O", 20.0, 0.0)
-        mark = add_mark_for_atom_for(
+        mark = materialize_mark_for_atom_for(
             active_canvas_for_window(self.window),
             left,
             QPointF(-12.0, -10.0),
             kind="plus",
-            record=False,
         )
         arrow = add_arrow_for(
             active_canvas_for_window(self.window),
@@ -1731,12 +1724,11 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
         preview = preview_for_window(self.window)
         preview._async_enabled = False
         atom_id = add_atom_for(active_canvas_for_window(self.window), "N", 0.0, 0.0)
-        add_mark_for_atom_for(
+        materialize_mark_for_atom_for(
             active_canvas_for_window(self.window),
             atom_id,
             QPointF(10.0, -10.0),
             kind="plus",
-            record=False,
         )
         atom_items_for(active_canvas_for_window(self.window))[atom_id].setSelected(True)
 
