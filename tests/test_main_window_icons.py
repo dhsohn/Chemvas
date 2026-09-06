@@ -103,6 +103,9 @@ class MainWindowIconGeometryTest(unittest.TestCase):
             "equilibrium",
             "equilibrium_forward",
             "equilibrium_reverse",
+            "arc_90_left",
+            "arc_180_left",
+            "arc_270_left",
             "resonance",
             "inhibit",
         ):

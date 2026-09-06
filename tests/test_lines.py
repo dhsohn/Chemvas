@@ -27,7 +27,7 @@ from chemvas.domain.document import (
 )
 from chemvas.features.rendering import snapped_line_end, wavy_line_points
 from chemvas.ui.canvas_arrow_build_service import CanvasArrowBuildService
-from chemvas.ui.canvas_scene_items_state import arrow_items_for
+from chemvas.ui.canvas_scene_items_state import CanvasSceneItemsState, arrow_items_for
 from chemvas.ui.canvas_service_access import canvas_services_for
 from chemvas.ui.canvas_tool_settings_state import (
     CanvasToolSettingsState,
@@ -342,8 +342,10 @@ class _FakeLineCanvas:
 
     def __init__(self, kind: str = "line") -> None:
         self.scene_obj = _FakeScene()
+        self.renderer = SimpleNamespace(style=SimpleNamespace(bond_length_px=20.0))
         self.runtime_state = canvas_runtime_state(
-            tool_settings_state=CanvasToolSettingsState(active_line_kind=kind)
+            tool_settings_state=CanvasToolSettingsState(active_line_kind=kind),
+            scene_items_state=CanvasSceneItemsState(),
         )
         self.preview_calls = []
         self.add_calls = []
@@ -434,14 +436,17 @@ class LineToolTest(unittest.TestCase):
         _start, end, _kind = canvas.add_calls[-1]
         self.assertEqual((end.x(), end.y()), (30.0, 2.0))
 
-    def test_click_without_drag_adds_nothing(self) -> None:
-        canvas = _FakeLineCanvas()
+    def test_click_without_drag_places_a_horizontal_level(self) -> None:
+        canvas = _FakeLineCanvas("line_bold")
         tool = _line_tool(canvas)
 
         self.assertTrue(tool.on_mouse_press(_FakeEvent(QPointF(4.0, 4.0))))
         self.assertTrue(tool.on_mouse_release(_FakeEvent(QPointF(4.0, 4.0))))
 
-        self.assertEqual(canvas.add_calls, [])
+        start, end, kind = canvas.add_calls[-1]
+        self.assertEqual((start.x(), start.y()), (4.0, 4.0))
+        self.assertEqual((end.x(), end.y()), (44.0, 4.0))
+        self.assertEqual(kind, "line_bold")
         self.assertIsNone(tool._start_pos)
 
 

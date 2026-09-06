@@ -29,8 +29,10 @@ the [examples README](../examples/README.md) describes what each one contains.
 - **Rings & templates** — benzene, cycloalkanes, chair/boat conformers placed by
   live preview and click-to-insert.
 - **Arrows** — reaction, equilibrium (balanced, or favored in either direction
-  with a shortened harpoon), resonance, curved, and dashed arrows with
-  adjustable width and head scale.
+  with a shortened harpoon), resonance, curved, dashed, and arc arrows (90°,
+  180°, 270° for catalytic cycles; hold `Shift` while dragging to bulge the
+  arc to the other side) with adjustable width and head scale. Arrow and line
+  endpoints snap to nearby arrow and line endpoints while drawing.
 - **Arrow labels** — double-click an arrow or line to give it a label above and
   below, such as rate constants. `_` starts a subscript and `^` a superscript,
   and braces group several characters: `k_-1`, `K_{eq}`, `ΔG^‡`. Labels take
@@ -38,7 +40,8 @@ the [examples README](../examples/README.md) describes what each one contains.
   with their arrow.
 - **Lines** — plain, dashed, wavy, and bold lines that are not bonds, for
   energy-level diagrams, connectors, and annotations. Hold `Shift` while
-  dragging to lock the angle to 15° steps. Plain, dashed, and wavy lines
+  dragging to lock the angle to 15° steps; a click without a drag places a
+  horizontal level two bond lengths long. Plain, dashed, and wavy lines
   follow the arrow line width; bold lines use the bold bond width. Lines are
   saved in the document's arrow list.
 - **Brackets & annotations** — square / round / curly brackets, dagger (`†`) and

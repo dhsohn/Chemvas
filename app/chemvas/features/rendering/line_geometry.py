@@ -69,4 +69,90 @@ def wavy_line_points(
     return points
 
 
-__all__ = ["snapped_line_end", "wavy_line_points"]
+def snapped_endpoint(
+    point: Point2D, candidates: list[Point2D], *, radius: float
+) -> Point2D:
+    """The nearest candidate within ``radius`` of ``point``, else ``point``."""
+    best = point
+    best_distance = radius
+    for candidate in candidates:
+        distance = math.hypot(candidate[0] - point[0], candidate[1] - point[1])
+        if distance <= best_distance:
+            best = candidate
+            best_distance = distance
+    return best
+
+
+def _arc_frame(
+    start: Point2D, end: Point2D, *, sweep_degrees: float, bulge_left: bool
+) -> tuple[Point2D, float, float, float] | None:
+    """Center, radius, start angle and signed sweep (radians) of the arc.
+
+    The arc through ``start`` and ``end`` subtends ``sweep_degrees`` and bulges
+    to the screen-left (or right) of the drag direction. ``None`` for a
+    zero-length chord.
+    """
+    dx = end[0] - start[0]
+    dy = end[1] - start[1]
+    chord = math.hypot(dx, dy)
+    if chord == 0.0:
+        return None
+    sweep = math.radians(sweep_degrees)
+    # Screen-left of the drag direction (y grows downward on screen).
+    nx, ny = dy / chord, -dx / chord
+    if not bulge_left:
+        nx, ny = -nx, -ny
+    mid = ((start[0] + end[0]) * 0.5, (start[1] + end[1]) * 0.5)
+    radius = chord / (2.0 * math.sin(sweep * 0.5))
+    # Negative for a minor arc (center opposite the bulge), positive past 180.
+    center_offset = -(chord * 0.5) / math.tan(sweep * 0.5)
+    center = (mid[0] + nx * center_offset, mid[1] + ny * center_offset)
+    start_angle = math.atan2(start[1] - center[1], start[0] - center[0])
+    for direction in (1.0, -1.0):
+        half = start_angle + direction * sweep * 0.5
+        probe = (
+            center[0] + radius * math.cos(half),
+            center[1] + radius * math.sin(half),
+        )
+        if (probe[0] - mid[0]) * nx + (probe[1] - mid[1]) * ny > 0.0:
+            return center, radius, start_angle, direction * sweep
+    return center, radius, start_angle, sweep
+
+
+def arc_points(
+    start: Point2D, end: Point2D, *, sweep_degrees: float, bulge_left: bool
+) -> list[Point2D]:
+    """Polyline along the arc from ``start`` to ``end``; both ends are exact."""
+    frame = _arc_frame(start, end, sweep_degrees=sweep_degrees, bulge_left=bulge_left)
+    if frame is None:
+        return [start, end]
+    center, radius, start_angle, sweep = frame
+    steps = max(8, int(abs(sweep_degrees) / 5.0))
+    points: list[Point2D] = [start]
+    for index in range(1, steps):
+        angle = start_angle + sweep * index / steps
+        points.append(
+            (center[0] + radius * math.cos(angle), center[1] + radius * math.sin(angle))
+        )
+    points.append(end)
+    return points
+
+
+def arc_midpoint(
+    start: Point2D, end: Point2D, *, sweep_degrees: float, bulge_left: bool
+) -> Point2D:
+    frame = _arc_frame(start, end, sweep_degrees=sweep_degrees, bulge_left=bulge_left)
+    if frame is None:
+        return start
+    center, radius, start_angle, sweep = frame
+    angle = start_angle + sweep * 0.5
+    return (center[0] + radius * math.cos(angle), center[1] + radius * math.sin(angle))
+
+
+__all__ = [
+    "arc_midpoint",
+    "arc_points",
+    "snapped_endpoint",
+    "snapped_line_end",
+    "wavy_line_points",
+]

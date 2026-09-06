@@ -65,6 +65,8 @@ class CanvasArrowBuildServiceTest(unittest.TestCase):
         line = object()
         default = object()
 
+        arc = object()
+        service.build_arc_arrow = mock.Mock(return_value=arc)
         service.build_line_item = mock.Mock(return_value=line)
         service.build_equilibrium_item = mock.Mock(return_value=equilibrium)
         service.build_double_head_arrow = mock.Mock(return_value=resonance)
@@ -92,6 +94,8 @@ class CanvasArrowBuildServiceTest(unittest.TestCase):
         self.assertIs(service.build_arrow_item(start, end, "inhibit"), inhibit)
         self.assertIs(service.build_arrow_item(start, end, "dotted"), dotted)
         self.assertIs(service.build_arrow_item(start, end, "line_wavy"), line)
+        self.assertIs(service.build_arrow_item(start, end, "arc_180_right"), arc)
+        service.build_arc_arrow.assert_called_once_with(start, end, "arc_180_right")
         self.assertIs(service.build_arrow_item(start, end, "reaction"), default)
 
         service.build_line_item.assert_called_once_with(start, end, "line_wavy")
