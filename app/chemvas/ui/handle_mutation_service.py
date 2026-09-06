@@ -22,6 +22,7 @@ from chemvas.ui.handle_mutation_access import (
     orbital_snap_step_for,
 )
 from chemvas.ui.renderer_style_access import bond_length_px_for
+from chemvas.ui.scene_decoration_build_access import apply_arrow_labels_for
 from chemvas.ui.selection_service_access import refresh_selection_outline_for
 
 if TYPE_CHECKING:
@@ -84,6 +85,8 @@ class HandleMutationService:
             )
         data["control"] = control
         item.setData(2, data)
+        if data.get("labels"):
+            apply_arrow_labels_for(self.canvas, item, data["labels"])
         refresh_selection_outline_for(self.canvas)
 
     def update_curved_endpoint(self, item, pos: QPointF, endpoint: str) -> None:
@@ -110,6 +113,8 @@ class HandleMutationService:
         data["end"] = end
         data["control"] = control
         item.setData(2, data)
+        if data.get("labels"):
+            apply_arrow_labels_for(self.canvas, item, data["labels"])
         refresh_selection_outline_for(self.canvas)
 
 

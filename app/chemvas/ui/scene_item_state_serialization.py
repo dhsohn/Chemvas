@@ -150,13 +150,17 @@ def arrow_state_dict(item: QGraphicsPathItem) -> dict:
     start = data.get("start")
     end = data.get("end")
     control = data.get("control")
-    return {
+    state = {
         "kind": item.data(0),
         "start": (start.x(), start.y()) if isinstance(start, QPointF) else None,
         "end": (end.x(), end.y()) if isinstance(end, QPointF) else None,
         "control": (control.x(), control.y()) if isinstance(control, QPointF) else None,
         "double": bool(data.get("double", False)),
     }
+    labels = data.get("labels")
+    if isinstance(labels, dict) and labels:
+        state["labels"] = dict(labels)
+    return state
 
 
 def arrow_state_dict_for(canvas, item) -> dict:

@@ -91,6 +91,8 @@ VALID_ARROW_KINDS = (
         (
             "arrow",
             "equilibrium",
+            "equilibrium_forward",
+            "equilibrium_reverse",
             "resonance",
             "curved_single",
             "curved_double",
@@ -100,6 +102,10 @@ VALID_ARROW_KINDS = (
     )
     | VALID_LINE_KINDS
 )
+# An arrow may carry one short label on each side (rate constants such as
+# k_1 above and k_-1 below); the text keeps the label mini-syntax, not HTML.
+ARROW_LABEL_SIDES = frozenset(("above", "below"))
+MAX_ARROW_LABEL_CHARS = 200
 VALID_MARK_KINDS = frozenset(
     ("plus", "minus", "circled_plus", "circled_minus", "radical")
 )
@@ -813,11 +819,26 @@ def _validate_note_fields(
         raise ValueError(error)
 
 
+def _validate_arrow_labels(labels: object, *, error: str) -> None:
+    if not isinstance(labels, Mapping) or not labels:
+        raise ValueError(error)
+    if not set(labels) <= ARROW_LABEL_SIDES:
+        raise ValueError(error)
+    for text in labels.values():
+        if type(text) is not str or not text.strip():
+            raise ValueError(error)
+        if len(text) > MAX_ARROW_LABEL_CHARS:
+            raise ValueError(error)
+
+
 def _validate_arrow_fields(arrow_state: Mapping[str, object], *, error: str) -> None:
     keys = set(arrow_state)
     required_keys = {"kind", "start", "end"}
-    if not required_keys <= keys or not keys <= required_keys | {"control", "double"}:
+    optional_keys = {"control", "double", "labels"}
+    if not required_keys <= keys or not keys <= required_keys | optional_keys:
         raise ValueError(error)
+    if "labels" in keys:
+        _validate_arrow_labels(arrow_state["labels"], error=error)
     if not _is_valid_choice(arrow_state.get("kind"), VALID_ARROW_KINDS):
         raise ValueError(error)
     if not _is_point(arrow_state.get("start")) or not _is_point(arrow_state.get("end")):

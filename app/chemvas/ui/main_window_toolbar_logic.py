@@ -13,6 +13,8 @@ BOND_STYLE_BY_LABEL: dict[str, tuple[str, int]] = {
 ARROW_TYPE_BY_LABEL: dict[str, str] = {
     "Reaction": "reaction",
     "Equilibrium": "equilibrium",
+    "Equilibrium, forward favored": "equilibrium_forward",
+    "Equilibrium, reverse favored": "equilibrium_reverse",
     "Resonance": "resonance",
     "Curved Single": "curved_single",
     "Curved Double": "curved_double",

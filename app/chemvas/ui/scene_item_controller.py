@@ -16,6 +16,7 @@ from chemvas.ui.renderer_style_access import (
     ring_fill_brush_for,
 )
 from chemvas.ui.scene_decoration_build_access import (
+    apply_arrow_labels_for,
     build_arrow_item_for,
     build_orbital_items_for,
     build_shape_item_for,
@@ -91,6 +92,9 @@ class SceneItemController:
     def _set_curved_arrow_path(self, item, start, end, control, double: bool) -> None:
         set_curved_arrow_path_for(self.canvas, item, start, end, control, double)
 
+    def _set_arrow_labels(self, item, labels) -> None:
+        apply_arrow_labels_for(self.canvas, item, labels)
+
     def _build_ts_bracket_item(self, rect, bracket_kind: str = DEFAULT_BRACKET_KIND):
         return build_ts_bracket_item_for(self.canvas, rect, bracket_kind)
 
@@ -137,6 +141,7 @@ class SceneItemController:
             arrow_state,
             build_arrow_item=self._build_arrow_item,
             set_curved_arrow_path=self._set_curved_arrow_path,
+            set_arrow_labels=self._set_arrow_labels,
         )
         self.attach_scene_item(item)
         return item
@@ -181,6 +186,7 @@ class SceneItemController:
             build_shape_item=self._build_shape_item,
             build_orbital_items=self._build_orbital_items,
             orbital_base_handle_dist=self._orbital_base_handle_dist(),
+            set_arrow_labels=self._set_arrow_labels,
         )
         if item is not None:
             self.attach_scene_item(item)
@@ -216,6 +222,7 @@ class SceneItemController:
             set_curved_arrow_path=self._set_curved_arrow_path,
             orbital_base_handle_dist=self._orbital_base_handle_dist(),
             build_shape_item=self._build_shape_item,
+            set_arrow_labels=self._set_arrow_labels,
         )
 
 

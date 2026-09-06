@@ -3,6 +3,7 @@ from __future__ import annotations
 from PyQt6.QtCore import QEvent, Qt
 from PyQt6.QtWidgets import QMenu
 
+from chemvas.domain.document import VALID_ARROW_KINDS
 from chemvas.features.rendering import (
     DOUBLE_STYLE_CENTER,
     DOUBLE_STYLE_DEFAULT,
@@ -21,6 +22,7 @@ from chemvas.ui.input_view_access import (
     touch_interaction_for,
     zoom_factor_for,
 )
+from chemvas.ui.scene_decoration_access import edit_arrow_labels_for
 from chemvas.ui.sheet_setup_access import scene_pos_in_sheet_for
 
 _DRAWING_TOOL_NAMES = frozenset(
@@ -209,7 +211,23 @@ class CanvasPointerController:
             allow_select_tool=True,
         )
 
+    def _edit_arrow_labels_at(self, event) -> bool:
+        active_tool = getattr(self.tool_controller, "active", None)
+        if active_tool is None or active_tool.name not in {"select", "arrow", "line"}:
+            return False
+        item = self.hit_testing_service.item_at_event(event)
+        if item is None or item.data(0) not in VALID_ARROW_KINDS:
+            return False
+        edit_arrow_labels_for(self.canvas, item)
+        return True
+
     def mouse_double_click_event(self, event, *, base_mouse_double_click_event) -> None:
+        if event.button() == Qt.MouseButton.LeftButton and self._edit_arrow_labels_at(
+            event
+        ):
+            self.hover.clear_hover_highlight()
+            self._accept_event(event)
+            return
         self._dispatch_press_event(
             event,
             base_event=base_mouse_double_click_event,

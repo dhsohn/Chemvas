@@ -192,6 +192,9 @@ class CanvasSceneDecorationBuildService:
     ) -> QGraphicsPathItem:
         return self.arrow_build_service.build_arrow_item(start, end, kind)
 
+    def apply_arrow_labels(self, item, labels) -> None:
+        self.arrow_build_service.apply_arrow_labels(item, labels)
+
     def build_single_head_arrow(
         self, start: QPointF, end: QPointF
     ) -> QGraphicsPathItem:

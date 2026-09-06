@@ -64,7 +64,9 @@ class HandleMutationServiceTest(unittest.TestCase):
         cls.app.setQuitOnLastWindowClosed(False)
 
     def _make_canvas(self, *, bond_length_px: float = 40.0):
-        build_service = SimpleNamespace(add_arrow_head=mock.Mock())
+        build_service = SimpleNamespace(
+            add_arrow_head=mock.Mock(), apply_arrow_labels=lambda item, labels: None
+        )
         canvas = SimpleNamespace(
             renderer=SimpleNamespace(
                 style=SimpleNamespace(bond_length_px=bond_length_px)

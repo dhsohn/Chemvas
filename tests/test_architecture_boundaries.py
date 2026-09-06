@@ -4457,6 +4457,8 @@ ARROW_KIND_MEMBERS = frozenset(
     {
         "arrow",
         "equilibrium",
+        "equilibrium_forward",
+        "equilibrium_reverse",
         "resonance",
         "curved_single",
         "curved_double",
@@ -4492,10 +4494,10 @@ DOCUMENT_STATE_MODULE = "app/chemvas/domain/document/state.py"
 
 
 def test_arrow_kinds_are_listed_in_one_module() -> None:
-    """The seven arrow kind strings are spelled out exactly once.
+    """The nine arrow kind strings are spelled out exactly once.
 
-    Seven modules used to list them. An eighth kind added to the schema but
-    missed in one of the copies is silent: the document validates it while a
+    Seven modules used to list them. A kind added to the schema but missed in
+    one of the copies is silent: the document validates it while a
     scene, an outline, an attach route, or a tool treats it as something else.
     Supersets are fine as long as they union the schema's frozenset instead of
     relisting the members.

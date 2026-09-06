@@ -55,6 +55,32 @@ ArrowItemBuilder = Callable[[QPointF, QPointF, str], QGraphicsPathItem]
 CurvedArrowPathSetter = Callable[
     [QGraphicsPathItem, QPointF, QPointF, QPointF, bool], None
 ]
+ArrowLabelSetter = Callable[[QGraphicsPathItem, Mapping[str, str] | None], None]
+
+
+def arrow_labels_from_state(state: Mapping[str, object]) -> dict[str, str] | None:
+    labels = state.get("labels")
+    if not isinstance(labels, Mapping) or not labels:
+        return None
+    return {str(side): str(text) for side, text in labels.items()}
+
+
+def set_arrow_labels_from_state(
+    setter: ArrowLabelSetter | None,
+    item: QGraphicsPathItem,
+    state: Mapping[str, object],
+) -> None:
+    """Rebuild an arrow's label children through ``setter``.
+
+    A state that carries labels needs the port; silently dropping them would
+    lose user text on restore, so that case fails closed.
+    """
+    labels = arrow_labels_from_state(state)
+    if setter is None:
+        if labels:
+            raise ValueError("Arrow labels require a set_arrow_labels port.")
+        return
+    setter(item, labels)
 
 
 def _float_state_value(value: object, default: float) -> float:
@@ -143,6 +169,7 @@ def apply_scene_item_state(
     set_curved_arrow_path: CurvedArrowPathSetter,
     orbital_base_handle_dist: float,
     build_shape_item: ShapeItemBuilder | None = None,
+    set_arrow_labels: ArrowLabelSetter | None = None,
 ) -> None:
     if item is None or not state:
         return
@@ -288,8 +315,12 @@ def apply_scene_item_state(
             item.setPen(rebuilt.pen())
             item.setBrush(rebuilt.brush())
             data = {"start": start_pt, "end": end_pt, "control": None, "double": double}
+        labels = arrow_labels_from_state(state)
+        if labels:
+            data["labels"] = labels
         item.setData(0, kind)
         item.setData(2, data)
+        set_arrow_labels_from_state(set_arrow_labels, item, state)
 
 
 def mark_center_from_state(
@@ -313,8 +344,10 @@ def mark_center_from_state(
 
 __all__ = [
     "ARROW_KINDS",
+    "ArrowLabelSetter",
     "MarkCenterGetter",
     "apply_scene_item_state",
+    "arrow_labels_from_state",
     "arrow_state_dict",
     "arrow_state_dict_for",
     "atom_state_dict_for",
@@ -331,6 +364,7 @@ __all__ = [
     "ring_state_dict_for",
     "scene_item_state",
     "scene_item_state_for",
+    "set_arrow_labels_from_state",
     "shape_fill_from_state",
     "shape_kind_from_state",
     "shape_rect_from_state",

@@ -76,6 +76,12 @@ class CanvasArrowBuildServiceTest(unittest.TestCase):
         service.build_single_head_arrow = mock.Mock(return_value=default)
 
         self.assertIs(service.build_arrow_item(start, end, "equilibrium"), equilibrium)
+        self.assertIs(
+            service.build_arrow_item(start, end, "equilibrium_forward"), equilibrium
+        )
+        self.assertIs(
+            service.build_arrow_item(start, end, "equilibrium_reverse"), equilibrium
+        )
         self.assertIs(service.build_arrow_item(start, end, "resonance"), resonance)
         self.assertIs(
             service.build_arrow_item(start, end, "curved_single"), curved_single
@@ -89,7 +95,14 @@ class CanvasArrowBuildServiceTest(unittest.TestCase):
         self.assertIs(service.build_arrow_item(start, end, "reaction"), default)
 
         service.build_line_item.assert_called_once_with(start, end, "line_wavy")
-        service.build_equilibrium_item.assert_called_once_with(start, end)
+        self.assertEqual(
+            service.build_equilibrium_item.call_args_list,
+            [
+                mock.call(start, end),
+                mock.call(start, end, favored="forward"),
+                mock.call(start, end, favored="reverse"),
+            ],
+        )
         service.build_double_head_arrow.assert_called_once_with(start, end)
         self.assertEqual(
             service.build_curved_arrow.call_args_list,

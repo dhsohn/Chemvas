@@ -12,6 +12,10 @@ def add_arrow_for(canvas, start, end, kind: str):
     return scene_decoration_service_for_access(canvas).add_arrow(start, end, kind)
 
 
+def edit_arrow_labels_for(canvas, item) -> bool:
+    return scene_decoration_service_for_access(canvas).edit_arrow_labels(item)
+
+
 def add_mark_for(canvas, pos, *, kind: str | None = None):
     # Standalone marks only; an atom-bound mark goes through
     # add_mark_for_atom_for or materialize_mark_for_atom_for so the mark owner
@@ -113,6 +117,7 @@ __all__ = [
     "add_shape_from_points_for",
     "add_ts_bracket_for",
     "add_ts_bracket_from_points_for",
+    "edit_arrow_labels_for",
     "materialize_mark_for_atom_for",
     "preview_arrow_for",
     "preview_shape_for",

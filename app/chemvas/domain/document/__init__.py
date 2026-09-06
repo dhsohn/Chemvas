@@ -15,9 +15,11 @@ from .calculation_plan import (
 from .graph import connected_atom_components
 from .model import Atom, Bond, MoleculeModel
 from .state import (
+    ARROW_LABEL_SIDES,
     CANVAS_FILE_VERSION,
     CHEMVAS_FILE_TYPE,
     CLIPBOARD_SELECTION_VERSION,
+    MAX_ARROW_LABEL_CHARS,
     SETTINGS_KEYS,
     VALID_ARROW_KINDS,
     VALID_BOND_ORDERS,
@@ -42,9 +44,11 @@ from .state import (
 )
 
 __all__ = [
+    "ARROW_LABEL_SIDES",
     "CANVAS_FILE_VERSION",
     "CHEMVAS_FILE_TYPE",
     "CLIPBOARD_SELECTION_VERSION",
+    "MAX_ARROW_LABEL_CHARS",
     "SETTINGS_KEYS",
     "VALID_ARROW_KINDS",
     "VALID_BOND_ORDERS",
