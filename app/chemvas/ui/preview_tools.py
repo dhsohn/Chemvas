@@ -27,6 +27,7 @@ class PreviewDragTool(Tool):
     def __init__(self, name: str, canvas, *, context=None) -> None:
         super().__init__(name, canvas, context=context)
         self._start_pos: QPointF | None = None
+        self._press_pos: QPointF | None = None
         self._preview_item = None
 
     @override
@@ -37,10 +38,24 @@ class PreviewDragTool(Tool):
     def deactivate(self) -> None:
         self._clear_preview()
         self._start_pos = None
+        self._press_pos = None
 
     def _clear_preview(self) -> None:
         clear_temporary_tool_overlay(self.canvas, preview_item=self._preview_item)
         self._preview_item = None
+
+    def _click_end_or_none(self, current_pos: QPointF) -> QPointF | None:
+        """The end of a gesture whose pointer never left the press point.
+
+        The press point goes through the snap funnel once, on press.
+        Asking the funnel again on release answers differently whenever
+        the press took an existing endpoint, because that endpoint is
+        then the one point the release may not take, and the click would
+        commit a stub instead of reading as a click.
+        """
+        if self._start_pos is None or self._press_pos is None:
+            return None
+        return self._start_pos if current_pos == self._press_pos else None
 
     def _build_preview(self, current_pos):
         raise NotImplementedError
@@ -53,6 +68,7 @@ class PreviewDragTool(Tool):
         if event.button() != Qt.MouseButton.LeftButton:
             return False
         self._start_pos = self.context.scene_pos_from_event(event)
+        self._press_pos = QPointF(self._start_pos)
         return True
 
     @override
@@ -74,6 +90,7 @@ class PreviewDragTool(Tool):
             self._commit_drag(end_pos)
         finally:
             self._start_pos = None
+            self._press_pos = None
         return True
 
 
@@ -115,6 +132,9 @@ class ArrowTool(PreviewDragTool):
         return super().on_mouse_release(event)
 
     def _end_point(self, current_pos):
+        click_end = self._click_end_or_none(current_pos)
+        if click_end is not None:
+            return click_end
         # Never take the end this drag started from, or a short drag from an
         # existing endpoint would be swallowed; the grid may still land there,
         # which is how a drag shorter than one grid step reads as a click.

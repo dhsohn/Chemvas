@@ -35,6 +35,9 @@ class LineTool(PreviewDragTool):
         self._angle_locked = bool(event.modifiers() & Qt.KeyboardModifier.ShiftModifier)
 
     def _end_point(self, current_pos: QPointF) -> QPointF:
+        click_end = self._click_end_or_none(current_pos)
+        if click_end is not None:
+            return click_end
         # An existing endpoint is the most specific target, but never the end
         # this drag started from, or a short drag would collapse. Shift is the
         # user's explicit direction, so it outranks the grid, which catches

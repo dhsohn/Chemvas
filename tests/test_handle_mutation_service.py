@@ -12,6 +12,7 @@ from PyQt6.QtCore import QPointF, QRectF
 from PyQt6.QtGui import QPainterPath
 from PyQt6.QtWidgets import QApplication
 
+from chemvas.ui.canvas_scene_items_state import CanvasSceneItemsState
 from chemvas.ui.canvas_tool_settings_state import CanvasToolSettingsState
 from chemvas.ui.curved_arrow_path_service import CurvedArrowPathService
 from chemvas.ui.handle_mutation_service import HandleMutationService
@@ -72,7 +73,8 @@ class HandleMutationServiceTest(unittest.TestCase):
                 style=SimpleNamespace(bond_length_px=bond_length_px)
             ),
             runtime_state=canvas_runtime_state(
-                tool_settings_state=CanvasToolSettingsState()
+                scene_items_state=CanvasSceneItemsState(),
+                tool_settings_state=CanvasToolSettingsState(),
             ),
             refresh_selection_outline=mock.Mock(),
         )

@@ -19,6 +19,7 @@ from PyQt6.QtWidgets import (
 )
 
 from chemvas.ui.canvas_handle_controller import CanvasHandleController
+from chemvas.ui.canvas_scene_items_state import CanvasSceneItemsState
 from chemvas.ui.canvas_service_ports import handle_overlay_service_for_access
 from chemvas.ui.canvas_tool_settings_state import CanvasToolSettingsState
 from chemvas.ui.curved_arrow_path_service import CurvedArrowPathService
@@ -117,6 +118,7 @@ def _make_proxy(
         renderer=SimpleNamespace(style=SimpleNamespace(bond_length_px=bond_length_px)),
         runtime_state=canvas_runtime_state(
             handle_state=CanvasHandleState(),
+            scene_items_state=CanvasSceneItemsState(),
             selection_style_state=SelectionStyleState(
                 color=QColor("#1f5eff"),
                 stroke_delta=0.6,

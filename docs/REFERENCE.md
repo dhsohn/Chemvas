@@ -52,10 +52,11 @@ the [examples README](../examples/README.md) describes what each one contains.
   `i-Pr`, `CF3`, `OTs`, `Ts`, `OMs`, `Ms`, `OTf`, `Tf`, `Ns`, `OAc`, `Ac`).
 - **Snap to grid** — **View ▸ Snap to Grid** shows a faint grid of half a bond
   length on the sheet and snaps the points arrows and lines are drawn at, and
-  the ends dragged with their endpoint handles, onto it. Order of precedence:
-  an existing endpoint wins, then `Shift`, then the grid. A drag shorter than
-  one grid step reads as a click. The grid is hidden while it would be too
-  dense to read on screen, and it belongs to the window, not the document.
+  the ends dragged with their endpoint handles, curved arrows included, onto
+  it. Order of precedence: an existing endpoint wins, then `Shift`, then the
+  grid. A click, and a drag shorter than one grid step, both read as a click.
+  The grid is hidden while it would be too dense to read on screen, and it
+  belongs to the window, not the document.
 - **Editing** — endpoint handles (select an arrow or line, then click it to
   show a handle at each end; drag one to move that end, snapping to nearby
   endpoints, and curved arrows keep their third handle for the curve),

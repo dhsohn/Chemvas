@@ -239,6 +239,60 @@ class GridSnapCanvasTest(unittest.TestCase):
         )
         self.assertEqual(snap_to_endpoint_for(self.canvas, QPointF(1.0, 1.0)), start)
 
+    def test_a_click_on_an_existing_endpoint_is_still_a_click(self) -> None:
+        # The press takes the endpoint, so putting the release through the
+        # funnel again — where that endpoint is the one point it may not take —
+        # answered with a grid intersection and committed a stub.
+        add_arrow_for(
+            self.canvas, QPointF(-103.0, -107.0), QPointF(-33.0, -107.0), "arrow"
+        )
+        set_grid_snap_enabled_for(self.canvas, True)
+        canvas_services_for(self.canvas).input.tool_mode_controller.set_arrow_type(
+            "reaction"
+        )
+
+        self._click(QPointF(-103.0, -107.0))
+
+        self.assertEqual(len(arrow_items_for(self.canvas)), 1)
+
+        # The Line tool keeps its own copy of the short-circuit, and a
+        # click on an existing object is never a request for a new level.
+        canvas_services_for(self.canvas).input.tool_mode_controller.set_line_kind(
+            "line_bold"
+        )
+        self._click(QPointF(-103.0, -107.0))
+
+        self.assertEqual(len(arrow_items_for(self.canvas)), 1)
+
+    def test_a_click_on_an_existing_endpoint_is_a_click_with_the_grid_off(self) -> None:
+        # The endpoint stage runs whether or not the grid does, so the same
+        # click committed a stub the size of the cursor's own offset.
+        add_arrow_for(
+            self.canvas, QPointF(-103.0, -107.0), QPointF(-33.0, -107.0), "arrow"
+        )
+        canvas_services_for(self.canvas).input.tool_mode_controller.set_arrow_type(
+            "reaction"
+        )
+
+        self.assertFalse(grid_snap_enabled_for(self.canvas))
+        self._click(QPointF(-101.0, -106.0))
+
+        self.assertEqual(len(arrow_items_for(self.canvas)), 1)
+
+    def test_a_curved_endpoint_handle_lands_on_the_grid(self) -> None:
+        item = add_arrow_for(
+            self.canvas, QPointF(200.0, 0.0), QPointF(260.0, 0.0), "curved_single"
+        )
+        set_grid_snap_enabled_for(self.canvas, True)
+        handles = canvas_services_for(self.canvas).handles
+        handles.handle_overlay_service.show_curved_handles(item)
+
+        handles.handle_controller.update_handle_drag(
+            active_handles_for(self.canvas)[0], QPointF(203.0, 7.0)
+        )
+
+        self.assertEqual(arrow_state_dict(item)["start"], (200.0, 10.0))
+
     def _paint_background(self, *, scale: float) -> QPixmap:
         pixmap = QPixmap(120, 120)
         pixmap.fill()

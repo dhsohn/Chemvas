@@ -162,6 +162,46 @@ class EndpointHandleTest(unittest.TestCase):
 
         self.assertEqual(arrow_state_dict(item)["end"], (40.0, 0.0))
 
+    def test_a_curved_endpoint_takes_another_items_endpoint(self) -> None:
+        # A curved arrow's ends carry the same kind of handle, so they snap the
+        # same way; they used to copy the raw cursor instead.
+        self._add("line_bold", QPointF(-60.0, 0.0), QPointF(-20.0, 0.0))
+        curved = self._add("curved_single", QPointF(40.0, 40.0), QPointF(100.0, 40.0))
+        controller = self._handles().handle_controller
+        self._handles().handle_overlay_service.show_curved_handles(curved)
+
+        controller.update_handle_drag(
+            active_handles_for(self.canvas)[0], QPointF(-18.0, 2.0)
+        )
+
+        state = arrow_state_dict(curved)
+        self.assertEqual(state["start"], (-20.0, 0.0))
+        self.assertEqual(state["end"], (100.0, 40.0))
+
+    def test_a_curved_end_can_be_dragged_close_to_its_own_start(self) -> None:
+        # A curved arrow's own ends are not snap candidates either, so a
+        # short curve stays draggable instead of collapsing onto its start.
+        curved = self._add("curved_single", QPointF(0.0, 0.0), QPointF(40.0, 0.0))
+        controller = self._handles().handle_controller
+        self._handles().handle_overlay_service.show_curved_handles(curved)
+
+        controller.update_handle_drag(
+            active_handles_for(self.canvas)[2], QPointF(5.0, 0.0)
+        )
+
+        self.assertEqual(arrow_state_dict(curved)["end"], (5.0, 0.0))
+
+    def test_a_curved_drag_onto_the_other_end_is_refused(self) -> None:
+        curved = self._add("curved_single", QPointF(0.0, 0.0), QPointF(40.0, 0.0))
+        controller = self._handles().handle_controller
+        self._handles().handle_overlay_service.show_curved_handles(curved)
+
+        controller.update_handle_drag(
+            active_handles_for(self.canvas)[0], QPointF(40.0, 0.0)
+        )
+
+        self.assertEqual(arrow_state_dict(curved)["start"], (0.0, 0.0))
+
     def test_an_arc_keeps_its_sweep_and_its_label_follows(self) -> None:
         item = self._add("arc_90_left", QPointF(-40.0, 0.0), QPointF(40.0, 0.0))
         service = canvas_services_for(
