@@ -20,7 +20,10 @@ from chemvas.ui.note_item_access import (
 )
 from chemvas.ui.scene_item_state import (
     ARROW_KINDS,
+    ArrowLabelSetter,
+    arrow_labels_from_state,
     mark_center_from_state,
+    set_arrow_labels_from_state,
     shape_fill_from_state,
     shape_kind_from_state,
     shape_rect_from_state,
@@ -132,6 +135,7 @@ def create_arrow_item_from_state(
     *,
     build_arrow_item: ArrowItemBuilder,
     set_curved_arrow_path: CurvedArrowPathSetter,
+    set_arrow_labels: ArrowLabelSetter | None = None,
 ) -> QGraphicsPathItem | None:
     kind = str(arrow_state.get("kind", "arrow"))
     start = arrow_state.get("start")
@@ -144,12 +148,21 @@ def create_arrow_item_from_state(
     item.setData(0, kind)
     control = arrow_state.get("control")
     double = bool(arrow_state.get("double", False))
-    data = {"start": start_pt, "end": end_pt, "control": None, "double": double}
+    data: dict[str, object] = {
+        "start": start_pt,
+        "end": end_pt,
+        "control": None,
+        "double": double,
+    }
     if kind in {"curved_single", "curved_double"} and control is not None:
         control_pt = QPointF(*cast("Any", control))
         set_curved_arrow_path(item, start_pt, end_pt, control_pt, double)
         data["control"] = control_pt
+    labels = arrow_labels_from_state(arrow_state)
+    if labels:
+        data["labels"] = labels
     item.setData(2, data)
+    set_arrow_labels_from_state(set_arrow_labels, item, arrow_state)
     return item
 
 
@@ -228,6 +241,7 @@ def create_scene_item_from_state(
     build_shape_item: ShapeItemBuilder | None = None,
     build_orbital_items: OrbitalItemsBuilder,
     orbital_base_handle_dist: float,
+    set_arrow_labels: ArrowLabelSetter | None = None,
 ):
     kind = state.get("kind")
     if kind == "ring":
@@ -266,5 +280,6 @@ def create_scene_item_from_state(
             state,
             build_arrow_item=build_arrow_item,
             set_curved_arrow_path=set_curved_arrow_path,
+            set_arrow_labels=set_arrow_labels,
         )
     return None

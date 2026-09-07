@@ -54,6 +54,12 @@ class CanvasHitTestingService:
                 continue
             if kind in {"note_box", "note_select"}:
                 continue
+            if kind == "arrow_label":
+                # A label is part of its arrow: picking it picks the arrow.
+                parent = item.parentItem()
+                if parent is None:
+                    continue
+                item, kind = parent, parent.data(0)
             if kind == "handle" and handle_item is None:
                 handle_item = item
                 continue

@@ -59,7 +59,7 @@ _NOTE_REQUIRED = frozenset(("text", "x", "y"))
 _NOTE_ALLOWED = _NOTE_REQUIRED | {"style"}
 _NOTE_STYLE_ALLOWED = frozenset(("font_size", "font_weight", "italic", "color"))
 _ARROW_REQUIRED = frozenset(("kind", "start", "end"))
-_ARROW_ALLOWED = _ARROW_REQUIRED | {"control", "double"}
+_ARROW_ALLOWED = _ARROW_REQUIRED | {"control", "double", "labels"}
 _SHAPE_REQUIRED = frozenset(
     ("shape_kind", "left", "top", "right", "bottom", "stroke_style")
 )
@@ -295,6 +295,9 @@ def _arrows(value: object) -> list[dict[str, object]]:
             if type(arrow["double"]) is not bool:
                 raise ValueError(f"arrow {index} double must be a boolean")
             state["double"] = arrow["double"]
+        if "labels" in arrow:
+            # Shape and length are checked by the document validator at the end.
+            state["labels"] = arrow["labels"]
         arrows.append(state)
     return arrows
 

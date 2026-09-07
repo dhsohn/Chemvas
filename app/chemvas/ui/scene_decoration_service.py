@@ -6,9 +6,11 @@ from typing import TYPE_CHECKING
 
 from PyQt6.QtWidgets import QGraphicsTextItem
 
+from chemvas.domain.document import ARROW_LABEL_SIDES
 from chemvas.domain.transactions import run_rollback_step
+from chemvas.ui.arrow_label_dialog import prompt_arrow_labels
 from chemvas.ui.canvas_tool_settings_state import tool_settings_state_for
-from chemvas.ui.history_commands import AddSceneItemsCommand
+from chemvas.ui.history_commands import AddSceneItemsCommand, UpdateSceneItemCommand
 from chemvas.ui.mark_item_access import build_mark_item_for, set_mark_center_for
 from chemvas.ui.renderer_style_access import bond_length_px_for
 from chemvas.ui.scene_decoration_build_access import (
@@ -18,6 +20,7 @@ from chemvas.ui.scene_decoration_build_access import (
     build_ts_bracket_item_for,
 )
 from chemvas.ui.scene_item_access import (
+    apply_scene_item_state,
     attach_scene_item,
     remove_scene_item,
 )
@@ -29,10 +32,12 @@ from chemvas.ui.scene_item_state import (
     shape_state_dict_for,
     ts_bracket_state_dict_for,
 )
+from chemvas.ui.selection_service_access import refresh_selection_outline_for
+from chemvas.ui.transactions.document import document_transaction
 from chemvas.ui.transactions.scene_item_attach import SceneItemAttachSnapshot
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Iterator
+    from collections.abc import Callable, Iterator, Mapping
 
     from PyQt6.QtCore import QPointF, QRectF
 
@@ -97,6 +102,35 @@ class SceneDecorationService:
             attach_scene_item(self.canvas, item)
             self._push_add_scene_item(item, arrow_state_dict_for(self.canvas, item))
         return item
+
+    def edit_arrow_labels(self, item) -> bool:
+        current = arrow_state_dict_for(self.canvas, item).get("labels") or {}
+        selection = prompt_arrow_labels(
+            self.canvas,
+            above=str(current.get("above", "")),
+            below=str(current.get("below", "")),
+        )
+        if selection is None:
+            return False
+        return self.set_arrow_labels(item, selection)
+
+    def set_arrow_labels(self, item, labels: Mapping[str, str]) -> bool:
+        cleaned = {
+            side: text.strip()
+            for side, text in labels.items()
+            if side in ARROW_LABEL_SIDES and text.strip()
+        }
+        with document_transaction(self.canvas, history_service=self.history):
+            before = arrow_state_dict_for(self.canvas, item)
+            after = {key: value for key, value in before.items() if key != "labels"}
+            if cleaned:
+                after["labels"] = cleaned
+            if after == before:
+                return False
+            apply_scene_item_state(self.canvas, item, after)
+            self.history.push(UpdateSceneItemCommand(item, before, after))
+        refresh_selection_outline_for(self.canvas)
+        return True
 
     def add_ts_bracket(self, rect: QRectF, *, bracket_kind: str | None = None):
         with self._scene_add_transaction() as track:

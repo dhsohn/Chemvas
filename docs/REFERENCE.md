@@ -28,8 +28,14 @@ the [examples README](../examples/README.md) describes what each one contains.
   a consistent default bond length.
 - **Rings & templates** — benzene, cycloalkanes, chair/boat conformers placed by
   live preview and click-to-insert.
-- **Arrows** — reaction, equilibrium, resonance, curved, and dashed arrows with
+- **Arrows** — reaction, equilibrium (balanced, or favored in either direction
+  with a shortened harpoon), resonance, curved, and dashed arrows with
   adjustable width and head scale.
+- **Arrow labels** — double-click an arrow or line to give it a label above and
+  below, such as rate constants. `_` starts a subscript and `^` a superscript,
+  and braces group several characters: `k_-1`, `K_{eq}`, `ΔG^‡`. Labels take
+  the text font settings in force when they are created or edited, and move
+  with their arrow.
 - **Lines** — plain, dashed, wavy, and bold lines that are not bonds, for
   energy-level diagrams, connectors, and annotations. Hold `Shift` while
   dragging to lock the angle to 15° steps. Plain, dashed, and wavy lines

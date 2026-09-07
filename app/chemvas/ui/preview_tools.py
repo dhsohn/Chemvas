@@ -95,6 +95,10 @@ class ArrowTool(PreviewDragTool):
 
     @override
     def _commit_drag(self, end_pos) -> None:
+        if end_pos == self._start_pos:
+            # A click without a drag would add a headless stub; it also lets a
+            # double-click reach the arrow under the cursor instead of a stub.
+            return
         add_arrow_for(self.canvas, self._start_pos, end_pos, self._arrow_type())
 
 

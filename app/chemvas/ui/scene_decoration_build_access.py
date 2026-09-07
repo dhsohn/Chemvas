@@ -10,6 +10,10 @@ def build_arrow_item_for(canvas, start, end, kind: str):
     )
 
 
+def apply_arrow_labels_for(canvas, item, labels) -> None:
+    scene_decoration_build_service_for_access(canvas).apply_arrow_labels(item, labels)
+
+
 def ts_bracket_path_for(canvas, rect, bracket_kind: str = DEFAULT_BRACKET_KIND):
     return scene_decoration_build_service_for_access(canvas).ts_bracket_path(
         rect, bracket_kind
@@ -44,6 +48,7 @@ def add_arrow_head_for(canvas, path, start, end, double: bool) -> None:
 
 __all__ = [
     "add_arrow_head_for",
+    "apply_arrow_labels_for",
     "build_arrow_item_for",
     "build_orbital_items_for",
     "build_shape_item_for",

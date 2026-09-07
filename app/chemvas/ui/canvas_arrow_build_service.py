@@ -1,14 +1,17 @@
 from __future__ import annotations
 
 import math
+from typing import TYPE_CHECKING
 
 from PyQt6.QtCore import QPointF, Qt
-from PyQt6.QtGui import QBrush, QPainterPath
+from PyQt6.QtGui import QBrush, QFont, QPainterPath
 
 from chemvas.domain.document import VALID_LINE_KINDS
+from chemvas.features.annotations import arrow_label_html
 from chemvas.features.rendering import wavy_line_points
+from chemvas.ui.canvas_text_style_state import text_style_state_for
 from chemvas.ui.canvas_tool_settings_state import tool_settings_state_for
-from chemvas.ui.graphics_items import NoSelectPathItem
+from chemvas.ui.graphics_items import NoSelectPathItem, NoSelectTextItem
 from chemvas.ui.renderer_style_access import (
     bold_bond_pen_for,
     bond_length_px_for,
@@ -17,6 +20,14 @@ from chemvas.ui.renderer_style_access import (
     renderer_bond_spacing_for,
 )
 from chemvas.ui.scene_item_access import add_item_to_canvas_scene
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping
+
+# Role of the child text items that carry an arrow's labels. Hit testing maps
+# the role back to the parent arrow, and export collects it so the label
+# widens the figure bounds.
+ARROW_LABEL_ROLE = "arrow_label"
 
 
 class CanvasArrowBuildService:
@@ -36,6 +47,10 @@ class CanvasArrowBuildService:
             return self.build_line_item(start, end, kind)
         if kind == "equilibrium":
             return self.build_equilibrium_item(start, end)
+        if kind == "equilibrium_forward":
+            return self.build_equilibrium_item(start, end, favored="forward")
+        if kind == "equilibrium_reverse":
+            return self.build_equilibrium_item(start, end, favored="reverse")
         if kind == "resonance":
             return self.build_double_head_arrow(start, end)
         if kind == "curved_single":
@@ -156,7 +171,9 @@ class CanvasArrowBuildService:
         item.setData(2, {"start": start, "end": end, "control": None, "double": False})
         return item
 
-    def build_equilibrium_item(self, start: QPointF, end: QPointF):
+    def build_equilibrium_item(
+        self, start: QPointF, end: QPointF, favored: str | None = None
+    ):
         dx = end.x() - start.x()
         dy = end.y() - start.y()
         length = math.hypot(dx, dy) or 1.0
@@ -167,6 +184,12 @@ class CanvasArrowBuildService:
         forward_end = QPointF(end.x() - nx * offset, end.y() - ny * offset)
         reverse_start = QPointF(end.x() + nx * offset, end.y() + ny * offset)
         reverse_end = QPointF(start.x() + nx * offset, start.y() + ny * offset)
+        # A favored direction keeps that harpoon full length and shortens the
+        # other one to half, centred on the arrow, the way ChemDraw draws it.
+        if favored == "forward":
+            reverse_start, reverse_end = self._centered_half(reverse_start, reverse_end)
+        elif favored == "reverse":
+            forward_start, forward_end = self._centered_half(forward_start, forward_end)
 
         path = QPainterPath()
         self.add_harpoon(path, forward_start, forward_end)
@@ -177,6 +200,93 @@ class CanvasArrowBuildService:
         item.setBrush(QBrush(Qt.BrushStyle.NoBrush))
         item.setData(2, {"start": start, "end": end, "control": None, "double": False})
         return item
+
+    @staticmethod
+    def _centered_half(start: QPointF, end: QPointF) -> tuple[QPointF, QPointF]:
+        mid_x = (start.x() + end.x()) * 0.5
+        mid_y = (start.y() + end.y()) * 0.5
+        return (
+            QPointF(
+                mid_x + (start.x() - mid_x) * 0.5, mid_y + (start.y() - mid_y) * 0.5
+            ),
+            QPointF(mid_x + (end.x() - mid_x) * 0.5, mid_y + (end.y() - mid_y) * 0.5),
+        )
+
+    def apply_arrow_labels(self, item, labels: Mapping[str, str] | None) -> None:
+        """Replace the label children of ``item`` from ``labels``.
+
+        Positions come from the arrow's scene-coordinate ``start``/``end``
+        (and ``control`` for a curved arrow) already stored in ``data(2)``,
+        so callers set that data first. Children are parented to the arrow
+        and therefore follow every later move.
+        """
+        for child in list(item.childItems()):
+            if child.data(0) == ARROW_LABEL_ROLE:
+                child.setParentItem(None)
+                scene = child.scene()
+                if scene is not None:
+                    scene.removeItem(child)
+        if not labels:
+            return
+        data = item.data(2) or {}
+        start = data.get("start")
+        end = data.get("end")
+        if not isinstance(start, QPointF) or not isinstance(end, QPointF):
+            return
+        control = data.get("control")
+        if isinstance(control, QPointF):
+            # Midpoint of the quadratic curve at t = 0.5.
+            mid = QPointF(
+                0.25 * start.x() + 0.5 * control.x() + 0.25 * end.x(),
+                0.25 * start.y() + 0.5 * control.y() + 0.25 * end.y(),
+            )
+        else:
+            mid = QPointF((start.x() + end.x()) * 0.5, (start.y() + end.y()) * 0.5)
+        dx = end.x() - start.x()
+        dy = end.y() - start.y()
+        length = math.hypot(dx, dy) or 1.0
+        nx = -dy / length
+        ny = dx / length
+        # "Above" is the side toward smaller y whichever way the arrow was
+        # drawn; a vertical arrow puts "above" on its left.
+        if ny > 0.0 or (ny == 0.0 and nx > 0.0):
+            nx, ny = -nx, -ny
+        style = text_style_state_for(self.canvas)
+        font = QFont(style.text_font_family, style.text_font_size)
+        font.setWeight(style.text_font_weight)
+        font.setItalic(style.text_italic)
+        # Measure how far the arrow's own strokes (harpoons, barbs) reach
+        # from the axis along the normal, so the label clears them at any
+        # bond length; a curved arrow's chord ends are not part of that.
+        path = item.path()
+        arrow_extent = 0.0
+        if not isinstance(control, QPointF):
+            for index in range(path.elementCount()):
+                element = path.elementAt(index)
+                offset = (element.x - mid.x()) * nx + (element.y - mid.y()) * ny
+                arrow_extent = max(arrow_extent, abs(offset))
+        gap = arrow_extent + bond_spacing_px_for(self.canvas)
+        for side, sign in (("above", 1.0), ("below", -1.0)):
+            text = labels.get(side)
+            if not text:
+                continue
+            child = NoSelectTextItem(item)
+            child.setData(0, ARROW_LABEL_ROLE)
+            child.setFont(font)
+            child.setDefaultTextColor(style.text_color)
+            child.setHtml(arrow_label_html(text))
+            rect = child.boundingRect()
+            # Half of the label box projected onto the normal, so a vertical
+            # arrow clears the label's width and a horizontal one its height.
+            half_extent = abs(nx) * rect.width() * 0.5 + abs(ny) * rect.height() * 0.5
+            distance = gap + half_extent
+            center = QPointF(
+                mid.x() + nx * sign * distance, mid.y() + ny * sign * distance
+            )
+            top_left = QPointF(
+                center.x() - rect.width() * 0.5, center.y() - rect.height() * 0.5
+            )
+            child.setPos(item.mapFromScene(top_left))
 
     def add_harpoon(self, path: QPainterPath, start: QPointF, end: QPointF) -> None:
         path.moveTo(start)
@@ -229,4 +339,4 @@ class CanvasArrowBuildService:
         return pen
 
 
-__all__ = ["CanvasArrowBuildService"]
+__all__ = ["ARROW_LABEL_ROLE", "CanvasArrowBuildService"]

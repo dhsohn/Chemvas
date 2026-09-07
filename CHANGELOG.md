@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Arrows and lines can carry a label above and below, such as the rate
+  constants of a kinetic scheme. Double-clicking the arrow opens a two-field
+  dialog; `_` and `^` mark subscripts and superscripts, and braces group
+  several characters. Labels are stored in the arrow's document state under an
+  optional `labels` key, move with the arrow, and survive undo, copy, flip and
+  rotation.
+- Two equilibrium arrow kinds, `equilibrium_forward` and `equilibrium_reverse`,
+  draw the disfavored harpoon at half length so a scheme can show which
+  direction is favored.
 - A Line tool draws plain, dashed, wavy, and bold lines that are not bonds, for
   energy-level diagrams and connectors. Holding Shift locks the drag angle to
   15° steps. Lines are saved as four new kinds in the document's arrow list;

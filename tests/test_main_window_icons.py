@@ -101,6 +101,8 @@ class MainWindowIconGeometryTest(unittest.TestCase):
             "curved_single",
             "curved_double",
             "equilibrium",
+            "equilibrium_forward",
+            "equilibrium_reverse",
             "resonance",
             "inhibit",
         ):

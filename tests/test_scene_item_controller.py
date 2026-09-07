@@ -81,6 +81,7 @@ class _FakeCanvas:
                 build_mark_item=self.record_build_mark_item,
                 set_mark_center=self.record_set_mark_center,
                 build_arrow_item=self.record_build_arrow_item,
+                apply_arrow_labels=lambda item, labels: None,
                 build_ts_bracket_item=self.record_build_ts_bracket_item,
                 build_orbital_items=self.record_build_orbital_items,
                 ts_bracket_path=self.record_ts_bracket_path,

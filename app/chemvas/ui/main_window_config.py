@@ -5,6 +5,8 @@ from chemvas.features.annotations import BRACKET_MENU_SPECS
 ARROW_MENU_SPECS: list[tuple[str, str]] = [
     ("Reaction", "reaction"),
     ("Equilibrium", "equilibrium"),
+    ("Equilibrium, forward favored", "equilibrium_forward"),
+    ("Equilibrium, reverse favored", "equilibrium_reverse"),
     ("Resonance", "resonance"),
     ("Curved Single", "curved_single"),
     ("Curved Double", "curved_double"),

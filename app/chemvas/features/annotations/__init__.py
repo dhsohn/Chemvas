@@ -1,5 +1,6 @@
 """Text and scene-annotation layout, validation, and geometry."""
 
+from .arrow_label import arrow_label_html, parse_arrow_label
 from .brackets import (
     BRACKET_KIND_VALUES,
     BRACKET_MENU_SPECS,
@@ -44,6 +45,7 @@ __all__ = [
     "SUB_SCALE",
     "LabelLayout",
     "LabelRun",
+    "arrow_label_html",
     "attachment_anchor_token",
     "attachment_group_at_end",
     "hydride_display_text",
@@ -51,6 +53,7 @@ __all__ = [
     "normalized_bracket_kind",
     "normalized_shape_kind",
     "normalized_stroke_style",
+    "parse_arrow_label",
     "parse_atom_label",
     "pen_style_for_stroke",
     "place_hydride_stack",
