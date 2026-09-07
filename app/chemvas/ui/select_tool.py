@@ -364,7 +364,7 @@ class SelectTool(SelectionDragMixin, Tool):
         if abs(delta.x()) > 1e-6 or abs(delta.y()) > 1e-6:
             self._clear_pending_handle_toggle()
         try:
-            self._apply_drag_delta(delta)
+            self._apply_drag_delta_with_connect(delta)
         except Exception:
             if self._drag_transaction is None:
                 self._clear_pending_handle_toggle()
@@ -409,7 +409,7 @@ class SelectTool(SelectionDragMixin, Tool):
             delta = scene_pos - self._start_pos
             if abs(delta.x()) > 1e-6 or abs(delta.y()) > 1e-6:
                 try:
-                    self._apply_drag_delta(delta)
+                    self._apply_drag_delta_with_connect(delta)
                 except Exception:
                     if self._drag_transaction is None:
                         self._clear_pending_handle_toggle()

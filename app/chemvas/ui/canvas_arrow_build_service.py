@@ -55,6 +55,20 @@ class CanvasArrowBuildService:
         item = self.build_arrow_item(start, end, kind)
         return add_item_to_canvas_scene(self.canvas, item)
 
+    def build_snap_mark(self, point: QPointF):
+        """A ring at ``point``, in the handle accent rather than drawing ink."""
+        radius = scene_length_for_screen_px(self.canvas, SNAP_MARK_SCREEN_PX) / 2.0
+        mark = NoSelectEllipseItem(
+            point.x() - radius, point.y() - radius, radius * 2, radius * 2
+        )
+        pen = QPen(QColor(HANDLE_ACCENT_COLOR))
+        pen.setWidthF(1.6)
+        pen.setCosmetic(True)
+        mark.setPen(pen)
+        mark.setBrush(QBrush(Qt.BrushStyle.NoBrush))
+        mark.setData(0, SNAP_MARK_ROLE)
+        return mark
+
     def mark_snapped_points(self, item, points) -> None:
         """Ring each of ``points`` that has taken an existing endpoint.
 
@@ -62,22 +76,8 @@ class CanvasArrowBuildService:
         registered as an arrow, so it is never one of the candidates and
         there is nothing to exclude.
         """
-        caught = snapped_points_among_for(self.canvas, points)
-        if not caught:
-            return
-        radius = scene_length_for_screen_px(self.canvas, SNAP_MARK_SCREEN_PX) / 2.0
-        # The handle accent, not drawing ink: this is an interaction mark.
-        pen = QPen(QColor(HANDLE_ACCENT_COLOR))
-        pen.setWidthF(1.6)
-        pen.setCosmetic(True)
-        for point in caught:
-            mark = NoSelectEllipseItem(
-                point.x() - radius, point.y() - radius, radius * 2, radius * 2
-            )
-            mark.setPen(pen)
-            mark.setBrush(QBrush(Qt.BrushStyle.NoBrush))
-            mark.setData(0, SNAP_MARK_ROLE)
-            mark.setParentItem(item)
+        for point in snapped_points_among_for(self.canvas, points):
+            self.build_snap_mark(point).setParentItem(item)
 
     def build_arrow_item(self, start: QPointF, end: QPointF, kind: str):
         if kind in VALID_LINE_KINDS:

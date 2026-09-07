@@ -35,6 +35,9 @@ the [examples README](../examples/README.md) describes what each one contains.
   endpoints snap to nearby arrow and line endpoints while drawing, within
   twelve pixels of the cursor whatever the zoom, and a ring marks an end
   that has taken one. A snap takes precedence over the `Shift` angle lock.
+  Moving an arrow or line — or a selection containing one — connects the
+  same way: carrying an end within reach of another item's end joins them
+  exactly, and carrying on past it leaves the drag where the pointer is.
 - **Arrow labels** — double-click an arrow or line to give it a label above and
   below, such as rate constants. `_` starts a subscript and `^` a superscript,
   and braces group several characters: `k_-1`, `K_{eq}`, `ΔG^‡`. Labels take

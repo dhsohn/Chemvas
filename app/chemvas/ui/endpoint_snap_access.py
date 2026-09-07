@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import math
+
 from PyQt6.QtCore import QPointF
 
 from chemvas.features.rendering import (
@@ -97,6 +99,44 @@ def snap_to_endpoint_for(canvas, pos: QPointF, *, exclude=None, avoid=None):
     return None if point == avoid else point
 
 
+def _item_endpoints(item) -> list[QPointF]:
+    data = item.data(2) or {}
+    return [data[key] for key in ("start", "end") if isinstance(data.get(key), QPointF)]
+
+
+def connection_for(canvas, items):
+    """The shift that joins ``items`` to another end, and where they meet.
+
+    ``None`` when no pair is inside the catch. The smallest shift wins,
+    so the pair the drag has come closest to joining is the one that
+    joins, and moving several items at once still connects only once.
+    """
+    moving = [item for item in items if item is not None]
+    if not moving:
+        return None
+    moving_ids = {id(item) for item in moving}
+    targets = [
+        (point.x(), point.y())
+        for item in arrow_items_for(canvas)
+        if id(item) not in moving_ids
+        for point in _item_endpoints(item)
+    ]
+    if not targets:
+        return None
+    radius = endpoint_snap_radius_for(canvas)
+    best: tuple[float, QPointF, QPointF] | None = None
+    for item in moving:
+        for point in _item_endpoints(item):
+            found = nearest_endpoint((point.x(), point.y()), targets, radius=radius)
+            if found is None:
+                continue
+            shift = QPointF(found[0] - point.x(), found[1] - point.y())
+            distance = math.hypot(shift.x(), shift.y())
+            if best is None or distance < best[0]:
+                best = (distance, shift, QPointF(*found))
+    return None if best is None else (best[1], best[2])
+
+
 def snap_to_grid_for(canvas, pos: QPointF) -> QPointF:
     """``pos`` on the grid, or unchanged when the grid is off."""
     if not grid_snap_enabled_for(canvas):
@@ -119,6 +159,7 @@ __all__ = [
     "ENDPOINT_SNAP_SCREEN_PX",
     "SNAP_MARK_SCREEN_PX",
     "arrow_endpoints_for",
+    "connection_for",
     "endpoint_snap_radius_for",
     "grid_snap_enabled_for",
     "grid_step_for",
