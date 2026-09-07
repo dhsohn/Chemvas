@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-09-07
+
+This release is a set of drawing tools for kinetic and energy schemes: lines
+that are not bonds, rate-constant labels, favored-direction equilibrium
+arrows, arc arrows, endpoint snapping and endpoint drag handles, align and
+distribute, and a snap-to-grid view option.
+
+The `.chemvas` document version remains 7, and a drawing that uses none of the
+new kinds still opens in 0.6.1. One that uses any of them does not: earlier
+releases check an arrow's kind against a closed list and its keys against a
+closed set, so the twelve new kinds — four line styles, six arcs, two favored
+equilibria — and the optional `labels` key are each rejected.
+
 ### Added
 
 - View ▸ Snap to Grid draws a faint grid of half a bond length on the sheet and
@@ -44,9 +57,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   direction is favored.
 - A Line tool draws plain, dashed, wavy, and bold lines that are not bonds, for
   energy-level diagrams and connectors. Holding Shift locks the drag angle to
-  15° steps. Lines are saved as four new kinds in the document's arrow list;
-  documents without lines are unchanged, and earlier releases reject a
-  document that contains one, as they reject any unknown arrow kind.
+  15° steps. Lines are saved as four new kinds in the document's arrow list.
 
 ### Removed
 
@@ -1205,7 +1216,8 @@ housekeeping.
   `.chemvas` document type (double-clicking a file opens it in Chemvas), and a
   Linux `.desktop` entry with an `application/x-chemvas` MIME type.
 
-[Unreleased]: https://github.com/dhsohn/Chemvas/compare/v0.6.1...HEAD
+[Unreleased]: https://github.com/dhsohn/Chemvas/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/dhsohn/Chemvas/compare/v0.6.1...v0.7.0
 [0.6.1]: https://github.com/dhsohn/Chemvas/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/dhsohn/Chemvas/compare/v0.5.1...v0.6.0
 [0.5.1]: https://github.com/dhsohn/Chemvas/compare/v0.5.0...v0.5.1
