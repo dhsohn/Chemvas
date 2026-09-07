@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "chemvas"
 dynamic = ["version"]
-description = "A lightweight PyQt6 app for drawing 2D chemical structures and reaction schemes."
+description = "An open-source desktop canvas for chemical structures and reaction schemes, with publication-ready export and scriptable document workflows."
 readme = "README.md"
 requires-python = ">=3.12"
 license = "MIT"
@@ -17,6 +17,8 @@ keywords = [
     "chemical drawing",
     "chemistry",
     "molecular editor",
+    "reaction schemes",
+    "figure export",
     "PyQt6",
     "scientific software",
 ]

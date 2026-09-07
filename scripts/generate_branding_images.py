@@ -1,14 +1,11 @@
 #!/usr/bin/env python3
-"""Regenerate the README banner and GitHub social-preview image.
+"""Render branding from the existing mark and the actual first-scheme export.
 
-Both reuse the benzene mark from the app icon and add the "Chemvas" wordmark +
-tagline with QPainter, on the brand teal so they read the same in GitHub's light
-and dark themes. Run after changing the mark or the strings below:
-
+Run after capture_first_scheme.py has produced examples/first-scheme.svg:
     QT_QPA_PLATFORM=offscreen python scripts/generate_branding_images.py
 
-The wordmark uses the host's system sans; the generated PNGs are committed so
-contributors don't need to reproduce the font. Outputs land in docs/images/.
+The generated PNGs are committed. Fonts and Qt versions can change their bytes;
+the reaction drawing itself comes from Chemvas's exported SVG.
 """
 
 from __future__ import annotations
@@ -19,28 +16,20 @@ from pathlib import Path
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PyQt6.QtCore import QByteArray, QRectF
-from PyQt6.QtGui import (
-    QColor,
-    QFont,
-    QFontMetrics,
-    QGuiApplication,
-    QImage,
-    QPainter,
-)
+from PyQt6.QtCore import QByteArray, QRectF, Qt
+from PyQt6.QtGui import QColor, QFont, QGuiApplication, QImage, QPainter
 from PyQt6.QtSvg import QSvgRenderer
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 DOCS_IMAGES = REPO_ROOT / "docs" / "images"
 
+DARK = "#123e39"
 TEAL = "#0d9488"
 WHITE = "#ffffff"
-LIGHT_TEAL = "#bfe6dd"
+LIGHT_TEAL = "#c5e9df"
 WORDMARK = "Chemvas"
-TAGLINE = "2D chemical structure drawing canvas"
-WORDMARK_FONT = "Helvetica Neue"
+TAGLINE = "Draw interactively. Automate safely. Export exactly."
 
-# White benzene mark (no tile) for drawing straight onto the teal field.
 _MARK_SVG = (
     '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">'
     '<polygon points="50,17 77,33.25 77,66.75 50,83 23,66.75 23,33.25" '
@@ -56,116 +45,81 @@ def _mark_renderer() -> QSvgRenderer:
 
 def _new_image(width: int, height: int) -> QImage:
     image = QImage(width, height, QImage.Format.Format_ARGB32)
-    image.fill(0)
+    image.fill(QColor(DARK))
     return image
 
 
 def _painter(image: QImage) -> QPainter:
     painter = QPainter(image)
-    painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
-    painter.setRenderHint(QPainter.RenderHint.TextAntialiasing, True)
-    painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform, True)
+    painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+    painter.setRenderHint(QPainter.RenderHint.TextAntialiasing)
+    painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
     return painter
 
 
-def _fonts() -> tuple[QFont, QFont]:
-    wordmark_font = QFont(WORDMARK_FONT)
-    wordmark_font.setBold(True)
-    tagline_font = QFont(WORDMARK_FONT)
-    return wordmark_font, tagline_font
+def _text(
+    painter: QPainter,
+    x: int,
+    y: int,
+    text: str,
+    size: int,
+    color: str = WHITE,
+    *,
+    bold: bool = False,
+) -> None:
+    font = QFont("DejaVu Sans")
+    font.setPixelSize(size)
+    font.setBold(bold)
+    painter.setFont(font)
+    painter.setPen(QColor(color))
+    painter.drawText(x, y, text)
+
+
+def _save(image: QImage, path: Path) -> None:
+    if not image.save(str(path), "PNG"):
+        raise RuntimeError(f"failed to write {path}")
 
 
 def render_banner(out_path: Path) -> None:
-    width, height, radius, pad, mark_size = 1360, 340, 44, 96, 184
-    image = _new_image(width, height)
+    image = _new_image(1360, 270)
     painter = _painter(image)
-    painter.setPen(QColor(0, 0, 0, 0))
-    painter.setBrush(QColor(TEAL))
-    painter.drawRoundedRect(QRectF(0, 0, width, height), radius, radius)
-
-    mark_y = (height - mark_size) / 2
-    _mark_renderer().render(painter, QRectF(pad, mark_y, mark_size, mark_size))
-
-    wordmark_font, tagline_font = _fonts()
-    wordmark_font.setPixelSize(96)
-    tagline_font.setPixelSize(34)
-    wordmark_metrics = QFontMetrics(wordmark_font)
-    tagline_metrics = QFontMetrics(tagline_font)
-    gap = 12
-    block_height = (
-        wordmark_metrics.ascent()
-        + wordmark_metrics.descent()
-        + gap
-        + tagline_metrics.ascent()
-        + tagline_metrics.descent()
-    )
-    top = (height - block_height) / 2
-    text_x = int(pad + mark_size + 56)
-    wordmark_baseline = top + wordmark_metrics.ascent()
-    tagline_baseline = (
-        wordmark_baseline + wordmark_metrics.descent() + gap + tagline_metrics.ascent()
-    )
-
-    painter.setFont(wordmark_font)
-    painter.setPen(QColor(WHITE))
-    painter.drawText(text_x, int(wordmark_baseline), WORDMARK)
-    painter.setFont(tagline_font)
-    painter.setPen(QColor(LIGHT_TEAL))
-    painter.drawText(text_x + 2, int(tagline_baseline), TAGLINE)
+    painter.fillRect(0, 258, 1360, 12, QColor(TEAL))
+    _mark_renderer().render(painter, QRectF(54, 46, 170, 170))
+    _text(painter, 265, 139, WORDMARK, 86, bold=True)
+    _text(painter, 268, 194, TAGLINE, 28, LIGHT_TEAL)
     painter.end()
-
-    if not image.save(str(out_path), "PNG"):
-        raise RuntimeError(f"failed to write {out_path}")
+    _save(image, out_path)
 
 
 def render_social(out_path: Path) -> None:
-    width, height, mark_size = 1280, 640, 232
-    image = _new_image(width, height)
+    scheme_path = REPO_ROOT / "examples" / "first-scheme.svg"
+    if not scheme_path.is_file():
+        raise RuntimeError(f"capture the first-scheme example first: {scheme_path}")
+    scheme = QSvgRenderer(str(scheme_path))
+    if not scheme.isValid():
+        raise RuntimeError(f"invalid example SVG: {scheme_path}")
+    scheme.setAspectRatioMode(Qt.AspectRatioMode.KeepAspectRatio)
+
+    image = _new_image(1280, 640)
     painter = _painter(image)
-    painter.fillRect(0, 0, width, height, QColor(TEAL))
-
-    wordmark_font, tagline_font = _fonts()
-    wordmark_font.setPixelSize(132)
-    tagline_font.setPixelSize(44)
-    wordmark_metrics = QFontMetrics(wordmark_font)
-    tagline_metrics = QFontMetrics(tagline_font)
-    gap_mark = 40
-    gap_text = 24
-    block_height = (
-        mark_size
-        + gap_mark
-        + wordmark_metrics.ascent()
-        + wordmark_metrics.descent()
-        + gap_text
-        + tagline_metrics.ascent()
-        + tagline_metrics.descent()
+    _mark_renderer().render(painter, QRectF(39, 39, 102, 102))
+    _text(painter, 159, 119, WORDMARK, 72, bold=True)
+    _text(painter, 64, 181, TAGLINE, 27, LIGHT_TEAL)
+    painter.setPen(Qt.PenStyle.NoPen)
+    painter.setBrush(QColor(WHITE))
+    painter.drawRoundedRect(QRectF(64, 230, 1152, 265), 20, 20)
+    scheme.render(painter, QRectF(102, 262, 1076, 201))
+    _text(
+        painter,
+        64,
+        551,
+        "Chemical structures. Reaction schemes. Ready for the page.",
+        26,
     )
-    top = (height - block_height) / 2
-
-    _mark_renderer().render(
-        painter, QRectF((width - mark_size) / 2, top, mark_size, mark_size)
-    )
-
-    wordmark_baseline = top + mark_size + gap_mark + wordmark_metrics.ascent()
-    tagline_baseline = (
-        wordmark_baseline
-        + wordmark_metrics.descent()
-        + gap_text
-        + tagline_metrics.ascent()
-    )
-
-    painter.setFont(wordmark_font)
-    painter.setPen(QColor(WHITE))
-    wordmark_x = (width - wordmark_metrics.horizontalAdvance(WORDMARK)) / 2
-    painter.drawText(int(wordmark_x), int(wordmark_baseline), WORDMARK)
-    painter.setFont(tagline_font)
-    painter.setPen(QColor(LIGHT_TEAL))
-    tagline_x = (width - tagline_metrics.horizontalAdvance(TAGLINE)) / 2
-    painter.drawText(int(tagline_x), int(tagline_baseline), TAGLINE)
+    _text(painter, 64, 596, "OPEN SOURCE  /  DESKTOP CANVAS", 17, LIGHT_TEAL)
+    _text(painter, 848, 596, "github.com/dhsohn/Chemvas", 18, LIGHT_TEAL)
     painter.end()
-
-    if not image.save(str(out_path), "PNG"):
-        raise RuntimeError(f"failed to write {out_path}")
+    _save(image, out_path)
 
 
 def main() -> int:
@@ -175,9 +129,8 @@ def main() -> int:
     social = DOCS_IMAGES / "social-preview.png"
     render_banner(banner)
     render_social(social)
-    print("Generated:")
     for artifact in (banner, social):
-        print(f"  {artifact.relative_to(REPO_ROOT)}")
+        print(f"Generated {artifact.relative_to(REPO_ROOT)}")
     return 0
 
 

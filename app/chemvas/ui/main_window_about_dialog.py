@@ -18,7 +18,10 @@ from PyQt6.QtWidgets import (
 from chemvas.branding import APP_NAME, APP_VERSION, app_icon
 
 GITHUB_URL = "https://github.com/dhsohn/Chemvas"
-DESCRIPTION = "A lightweight 2D chemical structure drawing canvas."
+DESCRIPTION = (
+    "An open-source desktop canvas for chemical structures and reaction schemes, "
+    "with publication-ready export and scriptable document workflows."
+)
 
 
 def rdkit_status() -> str:

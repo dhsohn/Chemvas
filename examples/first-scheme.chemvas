@@ -1,0 +1,285 @@
+{
+  "type": "chemvas",
+  "version": 7,
+  "state": {
+    "model": {
+      "atoms": {
+        "0": {
+          "element": "OH",
+          "x": -145.60417615653725,
+          "y": 19.379951921598458,
+          "color": "#000000",
+          "explicit_label": false
+        },
+        "1": {
+          "element": "C",
+          "x": -125.6201805533274,
+          "y": 20.179901751830425,
+          "color": "#000000",
+          "explicit_label": false
+        },
+        "2": {
+          "element": "C",
+          "x": -114.93540587698848,
+          "y": 3.2732288054501097,
+          "color": "#000000",
+          "explicit_label": false
+        },
+        "3": {
+          "element": "C",
+          "x": -124.2346268038595,
+          "y": -14.433393971162168,
+          "color": "#000000",
+          "explicit_label": false
+        },
+        "4": {
+          "element": "C",
+          "x": -113.54985212752062,
+          "y": -31.34006691754248,
+          "color": "#000000",
+          "explicit_label": false
+        },
+        "5": {
+          "element": "C",
+          "x": -93.56585652431075,
+          "y": -30.54011708731049,
+          "color": "#000000",
+          "explicit_label": false
+        },
+        "6": {
+          "element": "C",
+          "x": -84.26663559743974,
+          "y": -12.833494310698207,
+          "color": "#000000",
+          "explicit_label": false
+        },
+        "7": {
+          "element": "C",
+          "x": -94.9514102737786,
+          "y": 4.073178635682076,
+          "color": "#000000",
+          "explicit_label": false
+        },
+        "8": {
+          "element": "O",
+          "x": 90.69212013975903,
+          "y": 20.579951921598443,
+          "color": "#000000",
+          "explicit_label": false
+        },
+        "9": {
+          "element": "C",
+          "x": 110.67611574296892,
+          "y": 21.379901751830424,
+          "color": "#000000",
+          "explicit_label": false
+        },
+        "10": {
+          "element": "C",
+          "x": 121.3608904193078,
+          "y": 4.473228805450113,
+          "color": "#000000",
+          "explicit_label": false
+        },
+        "11": {
+          "element": "C",
+          "x": 112.06166949243676,
+          "y": -13.233393971162165,
+          "color": "#000000",
+          "explicit_label": false
+        },
+        "12": {
+          "element": "C",
+          "x": 122.74644416877567,
+          "y": -30.140066917542477,
+          "color": "#000000",
+          "explicit_label": false
+        },
+        "13": {
+          "element": "C",
+          "x": 142.73043977198552,
+          "y": -29.340117087310492,
+          "color": "#000000",
+          "explicit_label": false
+        },
+        "14": {
+          "element": "C",
+          "x": 152.0296606988566,
+          "y": -11.633494310698213,
+          "color": "#000000",
+          "explicit_label": false
+        },
+        "15": {
+          "element": "C",
+          "x": 141.34488602251764,
+          "y": 5.27317863568209,
+          "color": "#000000",
+          "explicit_label": false
+        }
+      },
+      "bonds": [
+        {
+          "a": 0,
+          "b": 1,
+          "order": 1,
+          "style": "single",
+          "color": "#000000"
+        },
+        {
+          "a": 1,
+          "b": 2,
+          "order": 1,
+          "style": "single",
+          "color": "#000000"
+        },
+        {
+          "a": 2,
+          "b": 3,
+          "order": 2,
+          "style": "single",
+          "color": "#000000"
+        },
+        {
+          "a": 3,
+          "b": 4,
+          "order": 1,
+          "style": "single",
+          "color": "#000000"
+        },
+        {
+          "a": 4,
+          "b": 5,
+          "order": 2,
+          "style": "single",
+          "color": "#000000"
+        },
+        {
+          "a": 5,
+          "b": 6,
+          "order": 1,
+          "style": "single",
+          "color": "#000000"
+        },
+        {
+          "a": 6,
+          "b": 7,
+          "order": 2,
+          "style": "single",
+          "color": "#000000"
+        },
+        {
+          "a": 7,
+          "b": 2,
+          "order": 1,
+          "style": "single",
+          "color": "#000000"
+        },
+        {
+          "a": 8,
+          "b": 9,
+          "order": 2,
+          "style": "single",
+          "color": "#000000"
+        },
+        {
+          "a": 9,
+          "b": 10,
+          "order": 1,
+          "style": "single",
+          "color": "#000000"
+        },
+        {
+          "a": 10,
+          "b": 11,
+          "order": 2,
+          "style": "single",
+          "color": "#000000"
+        },
+        {
+          "a": 11,
+          "b": 12,
+          "order": 1,
+          "style": "single",
+          "color": "#000000"
+        },
+        {
+          "a": 12,
+          "b": 13,
+          "order": 2,
+          "style": "single",
+          "color": "#000000"
+        },
+        {
+          "a": 13,
+          "b": 14,
+          "order": 1,
+          "style": "single",
+          "color": "#000000"
+        },
+        {
+          "a": 14,
+          "b": 15,
+          "order": 2,
+          "style": "single",
+          "color": "#000000"
+        },
+        {
+          "a": 15,
+          "b": 10,
+          "order": 1,
+          "style": "single",
+          "color": "#000000"
+        }
+      ],
+      "next_atom_id": 16
+    },
+    "ring_fills": [],
+    "notes": [],
+    "marks": [],
+    "arrows": [
+      {
+        "kind": "arrow",
+        "start": [
+          -44.81481481481481,
+          -1.4800574979720125
+        ],
+        "end": [
+          45.18518518518518,
+          -1.4800574979720125
+        ],
+        "control": null,
+        "double": false,
+        "labels": {
+          "above": "MnO_2",
+          "below": "oxidation"
+        }
+      }
+    ],
+    "ts_brackets": [],
+    "shapes": [],
+    "orbitals": [],
+    "settings": {
+      "bond_length_px": 20.0,
+      "arrow_line_width": 1.5,
+      "arrow_head_scale": 0.3,
+      "orbital_phase_enabled": false,
+      "text_font_family": "Arial",
+      "text_font_size": 12,
+      "text_font_weight": 400,
+      "text_italic": false,
+      "text_color": "#222222",
+      "text_alignment": "left",
+      "text_line_spacing": 1.0,
+      "note_box_enabled": false,
+      "note_box_color": "#ffffff",
+      "note_box_alpha": 1.0,
+      "note_border_enabled": false,
+      "note_border_color": "#333333",
+      "note_border_width": 1.0,
+      "note_padding": 6.0,
+      "sheet_size": "A4",
+      "sheet_orientation": "landscape"
+    },
+    "last_smiles_input": "O=Cc1ccccc1"
+  }
+}

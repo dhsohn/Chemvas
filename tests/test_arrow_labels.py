@@ -1,5 +1,7 @@
 import os
+import tempfile
 import unittest
+from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
 
@@ -7,8 +9,10 @@ from tests.runtime_state import canvas_runtime_state
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PyQt6.QtCore import QPointF, Qt
-from PyQt6.QtGui import QBrush, QColor, QPainterPath, QPen
+from PIL import Image, ImageChops, ImageFilter
+from PyQt6.QtCore import QByteArray, QPointF, QRectF, Qt
+from PyQt6.QtGui import QBrush, QColor, QFont, QImage, QPainter, QPainterPath, QPen
+from PyQt6.QtSvg import QSvgRenderer
 from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import (
     QApplication,
@@ -34,7 +38,12 @@ from chemvas.features.annotations import (
     parse_arrow_label,
 )
 from chemvas.features.document_composition import compose_document_state
-from chemvas.features.export import collect_export_items, content_bounds
+from chemvas.features.export import (
+    collect_export_items,
+    content_bounds,
+    export_scene,
+    render_scene_to_svg_bytes,
+)
 from chemvas.ui.arrow_label_dialog import prompt_arrow_labels
 from chemvas.ui.canvas_arrow_build_service import (
     ARROW_LABEL_ROLE,
@@ -255,6 +264,126 @@ class ArrowLabelBuildTest(unittest.TestCase):
                 child.sceneBoundingRect().center().x(), 30.0, delta=0.5
             )
         self.assertIn("vertical-align:sub", above.toHtml())
+
+    def test_svg_preserves_shaped_arrow_labels_without_font_dependent_text(self):
+        for text, bold, italic, angle in (
+            ("MnO_2", False, False, 0),
+            ("_{22}", False, False, 0),
+            ("^{22}", False, False, 0),
+            ("K_{eq}^‡", True, True, 0),
+            ("ΔG^‡ < 0 & k_-1", False, True, 37),
+        ):
+            with self.subTest(text=text, angle=angle):
+                service = _build_service()
+                scene = QGraphicsScene()
+                item = service.build_arrow_item(
+                    QPointF(0, 50), QPointF(180, 50), "arrow"
+                )
+                item.setData(0, "arrow")
+                scene.addItem(item)
+                service.apply_arrow_labels(item, {"above": text, "below": "oxidation"})
+                label_color = QColor("#195b90")
+                for child in _label_children(item):
+                    font = QFont("DejaVu Sans", 12)
+                    font.setBold(bold)
+                    font.setItalic(italic)
+                    child.setFont(font)
+                    child.setDefaultTextColor(label_color)
+                item.setRotation(angle)
+                items = collect_export_items(scene)
+                source = content_bounds(items).adjusted(-4, -4, 4, 4)
+                before = self._render_labels(scene, source)
+                state = arrow_state_dict(item)
+                # Passing only the parent exercises selected-arrow clipboard
+                # export: its label descendants must enter outline mode too.
+                svg = render_scene_to_svg_bytes(scene, source=source, items=[item])
+                self.assertNotIn(b"<text", svg)
+                self.assertNotIn(b"<image", svg)
+                renderer = QSvgRenderer(QByteArray(svg))
+                self.assertTrue(renderer.isValid())
+                rendered = self._render_labels(scene, source, renderer=renderer)
+                # Allow one pixel of edge/hinting variation at 4x magnification,
+                # while measuring missing ink rather than the white background.
+                for child in _label_children(item):
+                    rect = child.sceneBoundingRect()
+                    crop = (
+                        round((rect.left() - source.left()) * 4),
+                        round((rect.top() - source.top()) * 4),
+                        round((rect.right() - source.left()) * 4),
+                        round((rect.bottom() - source.top()) * 4),
+                    )
+                    pixels = [
+                        self._pixels(image).crop(crop) for image in (before, rendered)
+                    ]
+                    for sample in pixels:
+                        colors = sample.getcolors(sample.width * sample.height)
+                        self.assertIn(
+                            label_color.getRgb(), {color for _, color in colors}
+                        )
+                    masks = [
+                        sample.convert("L").point(
+                            lambda value: 255 if value < 160 else 0
+                        )
+                        for sample in pixels
+                    ]
+                    for actual, expected in (masks, masks[::-1]):
+                        missing = ImageChops.subtract(
+                            actual, expected.filter(ImageFilter.MaxFilter(3))
+                        )
+                        ink = actual.histogram()[255]
+                        self.assertGreater(ink, 0)
+                        self.assertLess(missing.histogram()[255] / ink, 0.05)
+                self.assertEqual(self._render_labels(scene, source), before)
+                self.assertEqual(arrow_state_dict(item), state)
+
+    @staticmethod
+    def _render_labels(scene, source, *, renderer=None):
+        image = QImage(
+            round(source.width() * 4),
+            round(source.height() * 4),
+            QImage.Format.Format_RGBA8888,
+        )
+        image.fill(Qt.GlobalColor.white)
+        painter = QPainter(image)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.setRenderHint(QPainter.RenderHint.TextAntialiasing)
+        if renderer is None:
+            scene.render(painter, QRectF(image.rect()), source)
+        else:
+            renderer.render(painter, QRectF(image.rect()))
+        painter.end()
+        return image
+
+    @staticmethod
+    def _pixels(image):
+        pixels = image.constBits().asstring(image.sizeInBytes())
+        return Image.frombytes("RGBA", (image.width(), image.height()), pixels)
+
+    def test_file_export_outlines_labels_and_failure_restores_screen_state(self):
+        service = _build_service()
+        scene = QGraphicsScene()
+        item = service.build_arrow_item(QPointF(0, 50), QPointF(120, 50), "arrow")
+        item.setData(0, "arrow")
+        scene.addItem(item)
+        service.apply_arrow_labels(item, {"above": "MnO_2"})
+        (child,) = _label_children(item)
+        source = content_bounds(collect_export_items(scene))
+        before = self._render_labels(scene, source)
+        html = child.toHtml()
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "scheme.svg"
+            export_scene(scene, str(path), fmt="svg", margin=4)
+            self.assertNotIn("<text", path.read_text())
+            with (
+                mock.patch(
+                    "chemvas.features.export.vector.paint_scene_region",
+                    side_effect=RuntimeError("paint failed"),
+                ),
+                self.assertRaisesRegex(RuntimeError, "paint failed"),
+            ):
+                export_scene(scene, str(path), fmt="svg", margin=4)
+        self.assertEqual(child.toHtml(), html)
+        self.assertEqual(self._render_labels(scene, source), before)
 
     def test_above_stays_toward_smaller_y_when_drawn_right_to_left(self) -> None:
         service = _build_service()

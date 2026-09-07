@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Arrow labels now export as glyph outlines, retaining the canvas's text sizing
+  and subscript/superscript positions in SVG figures and vector clipboard copies.
+  The editable document and on-canvas label editing are unchanged.
+
+### Changed
+
+- Refocused the introduction and branding on reaction schemes, figure export,
+  and scriptable document workflows, with a first-scheme tutorial and an editable
+  example. Toolbar hints now describe shortcuts without a product comparison;
+  the key bindings are unchanged.
+
 ## [0.8.1] - 2026-09-07
 
 This maintenance release fixes SMILES bond-type handling, perspective movement,

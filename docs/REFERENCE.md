@@ -72,7 +72,7 @@ the [examples README](../examples/README.md) describes what each one contains.
   delta-based undo/redo.
 - **Desktop menus** — standard File / Edit / View menus, including a
   **Canvas Size** dialog for the sheet size and orientation.
-- **ChemDraw-compatible shortcuts** — a substantial subset
+- **Keyboard shortcuts** — tool selection and atom/bond editing under the pointer
   (see [Keyboard shortcuts](#keyboard-shortcuts)).
 
 ## The `.chemvas` file format
@@ -117,9 +117,12 @@ reopening an already-open file switches to its window instead of duplicating it.
 
 ## Figure export
 
-Plain SVG / PDF / PNG / TIFF with outlined glyphs (so screen, vector, and raster
-output never diverge) and deterministic physical sizing (bond-length or
-84 / 174 mm column fit), independent of zoom.
+Plain SVG / PDF / PNG / TIFF with physical-size presets (bond-length or
+84 / 174 mm column fit), independent of zoom. Atom and arrow labels are outlined
+in vector exports, preserving the shaped glyphs and subscript/superscript
+positions. Other text items retain their own rendering behavior. See the
+[worked example](FIRST_SCHEME.md#4-export-the-figure) for output settings and
+version availability.
 
 Figure export defaults to plain SVG without Chemvas source metadata. Choose
 **Editable Chemvas SVG** only when you want the SVG to carry the original
@@ -189,7 +192,8 @@ Convert the current molecule or atom/bond selection into 3D coordinates:
 
 ## Keyboard shortcuts
 
-Chemvas supports a major subset of ChemDraw-compatible shortcuts.
+Choose a tool on an empty area of the canvas, or hover over an atom or bond to
+edit it with the keys below.
 
 - **Empty canvas (tool hotkeys):** Select/Marquee `Space`, Bond `X`, Atom `A`,
   Text `T`, Arrow `E`, Benzene `J`, Brackets `Shift+T`, Orbitals `Shift+G`,
@@ -215,6 +219,12 @@ Chemvas supports a major subset of ChemDraw-compatible shortcuts.
   selection), `Ctrl+G` / `Ctrl+Shift+G` (group / ungroup selection),
   `Delete`/`Backspace` (delete selection, or edit/delete the hovered atom/bond),
   `Esc` (cancel template / SMILES insertion)
+
+### Shortcut compatibility
+
+Many of these bindings are shared with ChemDraw, so familiar drawing habits can
+carry over. The list above defines Chemvas's supported keys; it does not imply
+complete shortcut or file-format compatibility.
 
 ## Roadmap / not yet supported
 
