@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-09-07
+
+This release makes the endpoint snapping 0.7.0 introduced usable. The catch
+is measured on screen rather than in the document, so it does not shrink as
+the view zooms out; a mark says when an end has been caught; and carrying an
+existing line onto another's end now joins them, which is how a scheme
+assembled from pieces actually gets built.
+
+The `.chemvas` document format is unchanged at version 7. No kind and no key
+is added, so a document written here opens in 0.7.0 and one written there
+opens here.
+
 ### Added
 
 - Moving an arrow or line, or a selection containing one, now connects it:
@@ -27,8 +39,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Removed
 
-- Removed `snap_to_arrow_endpoints_for` and `ENDPOINT_SNAP_FRACTION`. The
-  drawing snap funnel replaced them and no application code called them.
+- Removed `snap_to_arrow_endpoints_for`, which the drawing snap funnel had
+  replaced and which nothing outside its own module called, and
+  `ENDPOINT_SNAP_FRACTION`, the fraction of a bond length the catch used to
+  be measured in.
 
 ## [0.7.0] - 2026-09-07
 
@@ -1239,7 +1253,8 @@ housekeeping.
   `.chemvas` document type (double-clicking a file opens it in Chemvas), and a
   Linux `.desktop` entry with an `application/x-chemvas` MIME type.
 
-[Unreleased]: https://github.com/dhsohn/Chemvas/compare/v0.7.0...HEAD
+[Unreleased]: https://github.com/dhsohn/Chemvas/compare/v0.8.0...HEAD
+[0.8.0]: https://github.com/dhsohn/Chemvas/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/dhsohn/Chemvas/compare/v0.6.1...v0.7.0
 [0.6.1]: https://github.com/dhsohn/Chemvas/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/dhsohn/Chemvas/compare/v0.5.1...v0.6.0
