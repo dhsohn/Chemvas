@@ -1,7 +1,6 @@
 import os
 import unittest
 from types import SimpleNamespace
-from unittest import mock
 
 from tests.runtime_state import canvas_runtime_state
 
@@ -31,9 +30,7 @@ class CanvasSceneDecorationBuildServiceTest(unittest.TestCase):
         cls.app = QApplication.instance() or QApplication([])
         cls.app.setQuitOnLastWindowClosed(False)
 
-    def _make_service(
-        self, *, orbital_phase_enabled: bool = True, arrow_build_service=None
-    ):
+    def _make_service(self, *, orbital_phase_enabled: bool = True):
         scene = _RecordingScene()
         style = SimpleNamespace(
             bond_length_px=20.0,
@@ -61,42 +58,9 @@ class CanvasSceneDecorationBuildServiceTest(unittest.TestCase):
             scene=lambda: scene,
         )
         return (
-            CanvasSceneDecorationBuildService(
-                canvas, arrow_build_service=arrow_build_service
-            ),
+            CanvasSceneDecorationBuildService(canvas),
             scene,
             style,
-        )
-
-    def test_build_arrow_item_delegates_to_arrow_build_service(self) -> None:
-        arrow_service = mock.Mock()
-        service, _, _ = self._make_service(arrow_build_service=arrow_service)
-        arrow_service.build_arrow_item.return_value = "arrow"
-
-        self.assertEqual(
-            service.build_arrow_item(
-                QPointF(1.0, 2.0), QPointF(8.0, 9.0), "equilibrium"
-            ),
-            "arrow",
-        )
-        arrow_service.build_arrow_item.assert_called_once_with(
-            QPointF(1.0, 2.0),
-            QPointF(8.0, 9.0),
-            "equilibrium",
-        )
-
-    def test_curved_arrow_helpers_delegate_to_arrow_build_service(self) -> None:
-        arrow_service = mock.Mock()
-        service, _, _ = self._make_service(arrow_build_service=arrow_service)
-        arrow_service.build_curved_arrow.return_value = "curved"
-
-        result = service.build_curved_arrow(
-            QPointF(0.0, 0.0), QPointF(10.0, 0.0), double=True
-        )
-
-        self.assertEqual(result, "curved")
-        arrow_service.build_curved_arrow.assert_called_once_with(
-            QPointF(0.0, 0.0), QPointF(10.0, 0.0), True
         )
 
     def test_ts_bracket_rect_from_points_applies_minimum_size_and_normalization(
@@ -173,20 +137,6 @@ class CanvasSceneDecorationBuildServiceTest(unittest.TestCase):
         )
         self.assertEqual(no_phase_items[0].brush().style(), Qt.BrushStyle.NoBrush)
         self.assertEqual(no_phase_items[1].brush().style(), Qt.BrushStyle.NoBrush)
-
-    def test_preview_arrow_adds_built_item_to_scene(self) -> None:
-        service, scene, _ = self._make_service()
-        start = QPointF(-5.0, 1.0)
-        end = QPointF(9.0, 7.0)
-
-        item = service.preview_arrow(start, end, "curved_single")
-
-        self.assertIs(scene.items[-1], item)
-        self.assertFalse(item.path().isEmpty())
-        self.assertEqual(item.data(2)["start"], start)
-        self.assertEqual(item.data(2)["end"], end)
-        self.assertFalse(item.data(2)["double"])
-        self.assertIsNotNone(item.data(2)["control"])
 
     def test_preview_ts_bracket_adds_preview_item_to_scene_with_preview_brush(
         self,

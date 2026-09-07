@@ -1,6 +1,5 @@
 import os
 import unittest
-from unittest import mock
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -12,6 +11,7 @@ from chemvas.ui.canvas_scene_decoration_build_service import (
     CanvasSceneDecorationBuildService,
 )
 from chemvas.ui.canvas_tool_settings_state import set_tool_setting_for
+from chemvas.ui.scene_decoration_access import preview_arrow_for
 from tests.canvas_factory import build_canvas_view
 
 
@@ -29,104 +29,9 @@ class CanvasSceneDecorationBuildServiceTest(unittest.TestCase):
         self.canvas.deleteLater()
         self.app.processEvents()
 
-    def test_build_arrow_item_delegates_to_arrow_build_service(self) -> None:
-        arrow_service = mock.Mock()
-        service = CanvasSceneDecorationBuildService(
-            self.canvas, arrow_build_service=arrow_service
-        )
-        arrow_service.build_arrow_item.return_value = "arrow"
-
-        result = service.build_arrow_item(
-            QPointF(1.0, 2.0), QPointF(7.0, 8.0), "dotted"
-        )
-
-        self.assertEqual(result, "arrow")
-        arrow_service.build_arrow_item.assert_called_once_with(
-            QPointF(1.0, 2.0), QPointF(7.0, 8.0), "dotted"
-        )
-
-    def test_arrow_helpers_delegate_to_arrow_build_service(self) -> None:
-        arrow_service = mock.Mock()
-        service = CanvasSceneDecorationBuildService(
-            self.canvas, arrow_build_service=arrow_service
-        )
-        path = object()
-        item = object()
-
-        arrow_service.preview_arrow.return_value = item
-        arrow_service.build_arrow_item.return_value = item
-        arrow_service.build_single_head_arrow.return_value = item
-        arrow_service.build_double_head_arrow.return_value = item
-        arrow_service.build_dotted_arrow.return_value = item
-        arrow_service.build_curved_arrow.return_value = item
-        arrow_service.build_inhibition_arrow.return_value = item
-        arrow_service.build_equilibrium_item.return_value = item
-        arrow_service.arrow_pen.return_value = "pen"
-
-        self.assertIs(
-            service.preview_arrow(QPointF(1.0, 2.0), QPointF(3.0, 4.0), "reaction"),
-            item,
-        )
-        self.assertIs(
-            service.build_arrow_item(QPointF(5.0, 6.0), QPointF(7.0, 8.0), "dotted"),
-            item,
-        )
-        self.assertIs(
-            service.build_single_head_arrow(QPointF(1.0, 1.0), QPointF(2.0, 2.0)), item
-        )
-        self.assertIs(
-            service.build_double_head_arrow(QPointF(1.0, 1.0), QPointF(2.0, 2.0)), item
-        )
-        self.assertIs(
-            service.build_dotted_arrow(QPointF(1.0, 1.0), QPointF(2.0, 2.0)), item
-        )
-        self.assertIs(
-            service.build_curved_arrow(
-                QPointF(1.0, 1.0), QPointF(2.0, 2.0), double=True
-            ),
-            item,
-        )
-        self.assertIs(
-            service.build_inhibition_arrow(QPointF(1.0, 1.0), QPointF(2.0, 2.0)), item
-        )
-        self.assertIs(
-            service.build_equilibrium_item(QPointF(1.0, 1.0), QPointF(2.0, 2.0)), item
-        )
-        service.add_arrow_head(path, QPointF(3.0, 3.0), QPointF(4.0, 4.0), double=False)
-        self.assertEqual(service.arrow_pen(dotted=True), "pen")
-
-        arrow_service.preview_arrow.assert_called_once_with(
-            QPointF(1.0, 2.0), QPointF(3.0, 4.0), "reaction"
-        )
-        arrow_service.build_arrow_item.assert_called_once_with(
-            QPointF(5.0, 6.0), QPointF(7.0, 8.0), "dotted"
-        )
-        arrow_service.build_single_head_arrow.assert_called_once_with(
-            QPointF(1.0, 1.0), QPointF(2.0, 2.0)
-        )
-        arrow_service.build_double_head_arrow.assert_called_once_with(
-            QPointF(1.0, 1.0), QPointF(2.0, 2.0)
-        )
-        arrow_service.build_dotted_arrow.assert_called_once_with(
-            QPointF(1.0, 1.0), QPointF(2.0, 2.0)
-        )
-        arrow_service.build_curved_arrow.assert_called_once_with(
-            QPointF(1.0, 1.0), QPointF(2.0, 2.0), True
-        )
-        arrow_service.build_inhibition_arrow.assert_called_once_with(
-            QPointF(1.0, 1.0), QPointF(2.0, 2.0)
-        )
-        arrow_service.build_equilibrium_item.assert_called_once_with(
-            QPointF(1.0, 1.0), QPointF(2.0, 2.0)
-        )
-        arrow_service.add_arrow_head.assert_called_once_with(
-            path, QPointF(3.0, 3.0), QPointF(4.0, 4.0), False
-        )
-        arrow_service.arrow_pen.assert_called_once_with(dotted=True)
-
     def test_preview_helpers_add_items_to_scene(self) -> None:
-        arrow = self.service.preview_arrow(
-            QPointF(0.0, 0.0), QPointF(12.0, 0.0), "reaction"
+        arrow = preview_arrow_for(
+            self.canvas, QPointF(0.0, 0.0), QPointF(12.0, 0.0), "reaction"
         )
         bracket = self.service.preview_ts_bracket(QPointF(1.0, 2.0), QPointF(3.0, 4.0))
 

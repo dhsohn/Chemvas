@@ -700,7 +700,7 @@ class _ToolControllerPreviewCanvas:
                 scene_pos_from_event=self.scene_pos_from_event
             ),
             scene_decoration_service=SimpleNamespace(add_arrow=self.add_arrow),
-            scene_decoration_build_service=SimpleNamespace(
+            arrow_build_service=SimpleNamespace(
                 preview_arrow=self.preview_arrow,
                 mark_snapped_points=lambda item, points: None,
             ),

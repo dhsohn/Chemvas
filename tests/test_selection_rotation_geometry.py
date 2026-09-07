@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import math
 
+import pytest
+
 from chemvas.features.selection import (
     axis_rotated_coords,
     center_for_coords_3d,
@@ -9,10 +11,58 @@ from chemvas.features.selection import (
     flatten_coords_to_plane,
     fragment_plane_normal_for,
     normalize_3d,
+    project_point_3d,
     rigid_rotated_coords,
     rigid_rotation_angles_from_drag,
     rotate_point_around_axis,
+    translate_projected_point_3d,
+    unproject_point_3d,
 )
+
+
+@pytest.mark.parametrize("bond_length_px", [10.0, 40.0])
+@pytest.mark.parametrize(
+    ("depth_ratio", "scale"),
+    [(-100.0, 1 / 1.8), (-0.8, 1 / 1.8), (0.0, 1.0), (0.7, 1 / 0.3), (100.0, 1 / 0.3)],
+)
+def test_projection_inverse_and_screen_translation_share_clamped_depth(
+    bond_length_px, depth_ratio, scale
+) -> None:
+    focal = max(bond_length_px * 8.0, 120.0)
+    center = (10.0, -5.0, 100.0)
+    anchor = (20.0, 30.0)
+    point = (13.0, 7.0, center[2] + depth_ratio * focal)
+    frame = dict(bond_length_px=bond_length_px, center_3d=center, anchor_2d=anchor)
+    projected = project_point_3d(point, **frame)
+
+    assert projected == pytest.approx((20.0 + 3.0 * scale, 30.0 + 12.0 * scale))
+    assert unproject_point_3d(projected, point[2], **frame) == pytest.approx(point)
+    moved = translate_projected_point_3d(
+        point, 9.0, -6.0, bond_length_px=bond_length_px, center_3d=center
+    )
+    assert moved[2] == point[2]
+    assert project_point_3d(moved, **frame) == pytest.approx(
+        (projected[0] + 9.0, projected[1] - 6.0)
+    )
+    assert translate_projected_point_3d(
+        moved, -9.0, 6.0, bond_length_px=bond_length_px, center_3d=center
+    ) == pytest.approx(point)
+
+
+def test_projection_without_camera_is_identity_and_keeps_depth() -> None:
+    frame = dict(bond_length_px=20.0, center_3d=None, anchor_2d=(100.0, 200.0))
+    assert project_point_3d((3.0, 7.0, 11.0), **frame) == (3.0, 7.0)
+    assert unproject_point_3d((3.0, 7.0), 11.0, **frame) == (3.0, 7.0, 11.0)
+    assert translate_projected_point_3d(
+        (3.0, 7.0, 11.0), 9.0, -6.0, bond_length_px=20.0, center_3d=None
+    ) == (12.0, 1.0, 11.0)
+
+
+def test_projection_without_anchor_uses_the_camera_center() -> None:
+    frame = dict(bond_length_px=20.0, center_3d=(10.0, 20.0, 30.0), anchor_2d=None)
+    projected = project_point_3d((13.0, 27.0, 30.0), **frame)
+    assert projected == (13.0, 27.0)
+    assert unproject_point_3d(projected, 30.0, **frame) == (13.0, 27.0, 30.0)
 
 
 def test_selection_reexports_the_bond_geometry_normalize_3d() -> None:

@@ -9,6 +9,7 @@ from chemvas.features.selection import (
     fragment_plane_normal_for,
     normalize_3d,
     rotate_point_around_axis,
+    unproject_point_3d,
 )
 from chemvas.ui.atom_coords_access import set_atom_coords_3d_for_id
 from chemvas.ui.atom_label_access import atom_label_service
@@ -32,10 +33,6 @@ from chemvas.ui.selection_rotation_planarity import (
     flatten_planar_fragments_for,
     planar_fragment_components_for,
 )
-
-
-def _perspective_camera_distance_for(canvas) -> float:
-    return max(bond_length_px_for(canvas) * 8.0, 120.0)
 
 
 def bond_ids_for_atom_ids_for(canvas, atom_ids: set[int]) -> set[int]:
@@ -136,16 +133,12 @@ def unproject_scene_point_3d_for(
         return point.x(), point.y(), z
     if anchor_2d is None:
         anchor_2d = rotation.projection_anchor_2d or (center_3d[0], center_3d[1])
-    cx, cy, cz = center_3d
-    anchor_x, anchor_y = anchor_2d
-    focal = _perspective_camera_distance_for(canvas)
-    dz = max(min(z - cz, focal * 0.7), -focal * 0.8)
-    denom = max(focal - dz, focal * 0.2)
-    scale = focal / denom
-    return (
-        cx + (point.x() - anchor_x) / scale,
-        cy + (point.y() - anchor_y) / scale,
+    return unproject_point_3d(
+        (point.x(), point.y()),
         z,
+        bond_length_px=bond_length_px_for(canvas),
+        center_3d=center_3d,
+        anchor_2d=anchor_2d,
     )
 
 

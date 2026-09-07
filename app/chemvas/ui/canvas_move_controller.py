@@ -6,6 +6,7 @@ from PyQt6.QtCore import QPointF, QRectF
 
 from chemvas.domain.document import VALID_ARROW_KINDS
 from chemvas.features.annotations import normalized_shape_kind, shape_path
+from chemvas.features.selection import translate_projected_point_3d
 from chemvas.ui.atom_coords_access import (
     atom_coords_3d_for_id,
     set_atom_coords_3d_for_id,
@@ -20,9 +21,11 @@ from chemvas.ui.canvas_graph_state import graph_state_for
 from chemvas.ui.canvas_mark_registry import mark_registry_for
 from chemvas.ui.canvas_model_access import atom_for_id, bond_for_id, bonds_for
 from chemvas.ui.canvas_ring_fill_scene_service import rebuild_ring_fill_polygons
+from chemvas.ui.canvas_rotation_state import rotation_state_for
 from chemvas.ui.canvas_scene_items_state import ring_items_for
 from chemvas.ui.handle_state import active_handles_for, handle_target_for
 from chemvas.ui.mark_item_access import mark_center_for
+from chemvas.ui.renderer_style_access import bond_length_px_for
 from chemvas.ui.selection_service_access import refresh_selection_outline_for
 
 # Every arrow kind the document schema knows, plus the annotation items that
@@ -245,8 +248,17 @@ class CanvasMoveController:
         self.hit_testing_service.mark_spatial_index_dirty()
         coords_3d = atom_coords_3d_for_id(self.canvas, atom_id)
         if coords_3d is not None:
-            x, y, z = coords_3d
-            set_atom_coords_3d_for_id(self.canvas, atom_id, (x + dx, y + dy, z))
+            set_atom_coords_3d_for_id(
+                self.canvas,
+                atom_id,
+                translate_projected_point_3d(
+                    coords_3d,
+                    dx,
+                    dy,
+                    bond_length_px=bond_length_px_for(self.canvas),
+                    center_3d=rotation_state_for(self.canvas).projection_center_3d,
+                ),
+            )
         label = atom_items_for(self.canvas).get(atom_id)
         if label is not None:
             label.moveBy(dx, dy)

@@ -3,8 +3,10 @@ from __future__ import annotations
 import json
 import os
 from types import SimpleNamespace
+from unittest.mock import patch
 
 from chemvas.bootstrap import calculation_bundle as calculation_bundle_cli
+from chemvas.domain.document import state as document_state_module
 from chemvas.features.insertion import RDKitResult
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
@@ -93,6 +95,24 @@ def test_dialog_assigns_roles_in_one_document_and_saves_draft_mapping() -> None:
     assert step.reactant.roles[2].role == "spectator"
     assert [entry.reactant_atom_id for entry in step.atom_correspondence] == [4]
     assert readiness.mapping_complete is False
+    dialog.deleteLater()
+
+
+def test_dialog_deserializes_its_source_model_once() -> None:
+    app = QApplication.instance() or QApplication([])
+    app.setQuitOnLastWindowClosed(False)
+    state = _document_state()
+    state["calculation_plan"] = _plan()
+    with patch.object(
+        document_state_module,
+        "MoleculeModel",
+        wraps=document_state_module.MoleculeModel,
+    ) as model_construction:
+        dialog = CalculationStepDialog(state)
+
+    assert len(dialog._atom_elements) == 6
+    assert model_construction.call_count == 1
+    dialog.reject()
     dialog.deleteLater()
 
 

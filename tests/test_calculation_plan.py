@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from copy import deepcopy
+from unittest.mock import patch
 
 import pytest
 
@@ -24,6 +25,7 @@ from chemvas.domain.document import (
     serialize_model_state,
     serialize_settings,
 )
+from chemvas.domain.document import state as document_state_module
 from chemvas.features.calculation_bundle import (
     AtomMapEntry,
     CalculationArtifacts,
@@ -156,6 +158,57 @@ def _artifacts(*entries: AtomMapEntry) -> CalculationArtifacts:
         mol_atom_count=sum(entry.mol_index is not None for entry in entries),
         xyz_atom_count=len(entries),
     )
+
+
+def test_plan_report_deserializes_the_document_model_once() -> None:
+    state = _document_state()
+    state["calculation_plan"] = _plan()
+    with patch.object(
+        document_state_module, "MoleculeModel", wraps=MoleculeModel
+    ) as model_construction:
+        report = calculation_plan_report(state)
+
+    assert len(report["states"]) == 2
+    assert model_construction.call_count == 1
+
+
+def test_plan_report_rebuilds_inventory_for_changes_to_the_same_document() -> None:
+    state = _document_state()
+    state["calculation_plan"] = _plan()
+    first_report = calculation_plan_report(state)
+    state["marks"] = [{"kind": "plus", "atom_id": 0}]
+    state["calculation_plan"]["states"][0]["charge"] = 1
+    changed_state = deepcopy(state)
+
+    second_report = calculation_plan_report(state)
+
+    assert first_report["states"][0]["modeled_formal_charge"] == 0
+    assert second_report["states"][0]["modeled_formal_charge"] == 1
+    assert second_report["states"][0]["charge"] == 1
+    assert state == changed_state
+
+
+def test_plan_validation_keeps_structural_errors_before_mark_errors() -> None:
+    state = _document_state()
+    state["calculation_plan"] = {}
+    state["marks"] = "invalid"
+
+    with pytest.raises(ValueError) as error:
+        calculation_plan_report(state)
+
+    assert str(error.value) == "Invalid Chemvas calculation plan."
+
+
+def test_plan_validation_keeps_mark_errors_before_semantic_charge_errors() -> None:
+    state = _document_state()
+    state["calculation_plan"] = _plan()
+    state["calculation_plan"]["states"][0]["charge"] = 7
+    state["marks"] = "invalid"
+
+    with pytest.raises(ValueError) as error:
+        calculation_plan_report(state)
+
+    assert str(error.value) == "Invalid Chemvas document state: marks are invalid."
 
 
 def _atom(xyz_index: int, symbol: str, chemvas_atom_id: int) -> AtomMapEntry:

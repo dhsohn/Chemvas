@@ -410,6 +410,16 @@ class CanvasHistoryService:
         finally:
             self._finish_mutation()
 
+    def discard_without_notification(self) -> None:
+        """Forget commands after scene destruction without publishing a change.
+
+        The document/reset caller publishes its resulting canvas state. Keep
+        the live list objects and history policy intact for that caller's
+        savepoint and any existing list aliases.
+        """
+        self.state.history.clear()
+        self.state.redo_stack.clear()
+
     def notify_change(self) -> None:
         if self._history_publication_active:
             raise RuntimeError("re-entrant history publication is not allowed")

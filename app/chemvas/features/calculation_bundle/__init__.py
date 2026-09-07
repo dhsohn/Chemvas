@@ -9,6 +9,7 @@ from .model import (
     ComponentSummary,
 )
 from .plan import (
+    apply_calculation_step_edit,
     calculate_bond_changes,
     calculation_plan_for_document,
     calculation_plan_report,
@@ -22,6 +23,7 @@ from .plan import (
     path_precheck,
     plan_with_replaced_step,
     precomplex_basis_sha256,
+    prepare_calculation_step_editor,
     require_step_ready,
     select_calculation_state,
     step_atom_correspondence,
@@ -46,6 +48,7 @@ __all__ = [
     "ComponentInventory",
     "ComponentSelection",
     "ComponentSummary",
+    "apply_calculation_step_edit",
     "calculate_bond_changes",
     "calculation_plan_for_document",
     "calculation_plan_report",
@@ -61,6 +64,7 @@ __all__ = [
     "path_precheck",
     "plan_with_replaced_step",
     "precomplex_basis_sha256",
+    "prepare_calculation_step_editor",
     "require_step_ready",
     "select_calculation_state",
     "select_component",

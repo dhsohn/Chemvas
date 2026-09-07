@@ -20,7 +20,10 @@ from chemvas.ui.canvas_scene_items_state import (
 )
 from chemvas.ui.move_access import move_item_for
 from chemvas.ui.scene_group_operations import group_selection_for
-from chemvas.ui.selection_collection_access import selection_snapshot_for
+from chemvas.ui.selection_collection_access import (
+    selection_snapshot_for,
+    selection_status_count_for,
+)
 from tests.canvas_factory import build_canvas_view
 
 
@@ -44,6 +47,53 @@ class GroupedNoteSelectionIntegrationTest(unittest.TestCase):
         schedule_canvas_deletion_for(canvas)
         QCoreApplication.sendPostedEvents(canvas, QEvent.Type.DeferredDelete)
         self.app.processEvents()
+
+    def test_pasted_single_multiple_and_mixed_note_counts(self) -> None:
+        canvas = build_canvas_view()
+        self.addCleanup(self._dispose_canvas, canvas)
+        clipboard = canvas.services.scene_operations.scene_clipboard_controller
+        notes = [
+            canvas.services.interaction.note_controller.create_text_note(
+                QPointF(index * 40.0, 40.0), f"note {index}"
+            )
+            for index in range(2)
+        ]
+        clipboard.select_pasted_content(set(), notes[:1])
+        self.assertTrue(notes[0].isSelected())
+        self.assertIn(notes[0], selected_notes_for(canvas))
+        self.assertEqual(selection_status_count_for(canvas), 1)
+
+        clipboard.select_pasted_content(set(), notes)
+        self.assertEqual(selection_status_count_for(canvas), 2)
+        atom_id, _ = self._add_atom(canvas, 80.0)
+        clipboard.select_pasted_content({atom_id}, notes)
+        self.assertEqual(selection_status_count_for(canvas), 3)
+
+        canvas.services.selection.selection_controller.clear_note_selection()
+        self.assertEqual(selection_status_count_for(canvas), 1)
+        canvas.scene().clearSelection()
+        self.assertEqual(selection_status_count_for(canvas), 0)
+
+    def test_group_toggle_does_not_count_its_note_twice(self) -> None:
+        canvas = build_canvas_view()
+        self.addCleanup(self._dispose_canvas, canvas)
+        atom_id, atom_item = self._add_atom(canvas, 0.0)
+        note = canvas.services.interaction.note_controller.create_text_note(
+            QPointF(40.0, 40.0), "group label"
+        )
+        canvas.services.scene_operations.scene_clipboard_controller.select_pasted_content(
+            {atom_id}, [note]
+        )
+        self.assertTrue(group_selection_for(canvas))
+        selection = canvas.services.selection.selection_controller
+        selection.clear_note_selection()
+        canvas.scene().clearSelection()
+
+        selection.toggle_item_selection(atom_item)
+        self.assertIn(note, selected_notes_for(canvas))
+        self.assertEqual(selection_status_count_for(canvas), 2)
+        selection.toggle_item_selection(atom_item)
+        self.assertEqual(selection_status_count_for(canvas), 0)
 
     def test_grouped_note_follows_shift_click_and_drag(self) -> None:
         canvas = build_canvas_view()

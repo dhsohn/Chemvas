@@ -48,8 +48,13 @@ def inspect_components(state: Mapping[str, object]) -> tuple[ComponentSummary, .
 
 def inspect_component_inventory(state: Mapping[str, object]) -> ComponentInventory:
     """Deserialize and annotate a document once for complete graph inspection."""
-    model, annotations = _model_and_annotations(state)
-    model.atom_annotations = annotations
+    return _component_inventory(state, _document_model(state))
+
+
+def _component_inventory(
+    state: Mapping[str, object], model: MoleculeModel
+) -> ComponentInventory:
+    model.atom_annotations = _document_annotations(state, model)
     graph = _graph_index(model)
     return ComponentInventory(
         model=model,
@@ -69,7 +74,8 @@ def inspect_component_inventory(state: Mapping[str, object]) -> ComponentInvento
 def select_component(
     state: Mapping[str, object], component_index: int
 ) -> ComponentSelection:
-    model, annotations = _model_and_annotations(state)
+    model = _document_model(state)
+    annotations = _document_annotations(state, model)
     graph = _graph_index(model)
     if not graph.components:
         raise ValueError("The Chemvas document contains no chemical structure.")
@@ -115,7 +121,8 @@ def select_components(
     state: Mapping[str, object],
     component_atom_ids: Sequence[Sequence[int]],
 ) -> CalculationStateSelection:
-    model, annotations = _model_and_annotations(state)
+    model = _document_model(state)
+    annotations = _document_annotations(state, model)
     graph = _graph_index(model)
     component_index_by_atoms = {
         tuple(atom_ids): index for index, atom_ids in enumerate(graph.components)
@@ -216,21 +223,23 @@ def validate_calculation_artifacts(
         raise ValueError("RDKit atom map does not match the MOL atom count")
 
 
-def _model_and_annotations(
-    state: Mapping[str, object],
-) -> tuple[MoleculeModel, dict[int, dict[str, int]]]:
+def _document_model(state: Mapping[str, object]) -> MoleculeModel:
     model_state = state.get("model")
     if not isinstance(model_state, Mapping):
         raise ValueError("Invalid Chemvas document state: model is missing.")
-    model = deserialize_model_state(cast("Mapping[str, object]", model_state))
+    return deserialize_model_state(cast("Mapping[str, object]", model_state))
+
+
+def _document_annotations(
+    state: Mapping[str, object], model: MoleculeModel
+) -> dict[int, dict[str, int]]:
     marks = state.get("marks", ())
     if not isinstance(marks, Sequence) or isinstance(marks, (str, bytes)):
         raise ValueError("Invalid Chemvas document state: marks are invalid.")
-    annotations = _resolve_annotations(
+    return _resolve_annotations(
         model,
         cast("Sequence[object]", marks),
     )
-    return model, annotations
 
 
 def _resolve_annotations(

@@ -135,7 +135,7 @@ class _FakeCanvas:
                 structure_build_service=SimpleNamespace(
                     add_atom_with_merge=self.add_atom_with_merge,
                     add_ring_from_points=self.add_ring_from_points,
-                    add_benzene_ring=self.add_benzene_ring,
+                    build_benzene_ring=self.build_benzene_ring,
                 ),
             ),
             tool_controller=SimpleNamespace(),
@@ -226,10 +226,7 @@ class _FakeCanvas:
         self.benzene_calls.append((center.x(), center.y(), attach_bond_id))
         return [(center.x() + 1.0, center.y() + 1.0)] * 6, []
 
-    def add_benzene_ring(
-        self, center, attach_atom_id=None, attach_bond_id=None, before_smiles_input=None
-    ):
-        set_last_smiles_input_for(self, None)
+    def build_benzene_ring(self, center, attach_atom_id=None, attach_bond_id=None):
         points = [(center.x() + 1.0, center.y() + 1.0)] * 6
         atom_ids = []
         for point_x, point_y in points:
@@ -240,12 +237,6 @@ class _FakeCanvas:
             len(self.model.bonds) - len(atom_ids), len(self.model.bonds)
         ):
             self._add_bond_graphics(bond_id)
-        self._record_additions(
-            before_next_atom_id=0,
-            before_bond_count=0,
-            before_smiles_input=before_smiles_input,
-            added_scene_items=[],
-        )
 
 
 class _DetachableSourceId:
@@ -799,7 +790,7 @@ class InsertCommitServiceTest(unittest.TestCase):
         self.assertIsNone(last_smiles_input_for(canvas))
 
         blocked = _FakeCanvas()
-        blocked.services.structure.structure_build_service.add_benzene_ring = (
+        blocked.services.structure.structure_build_service.build_benzene_ring = (
             lambda *args, **kwargs: None
         )
         self.assertFalse(
@@ -812,7 +803,7 @@ class InsertCommitServiceTest(unittest.TestCase):
             )
         )
 
-    def test_benzene_template_preserves_original_error_when_outer_rollback_fails(
+    def test_benzene_template_preserves_original_error_when_build_rollback_fails(
         self,
     ) -> None:
         canvas = _FakeCanvas()
@@ -828,14 +819,14 @@ class InsertCommitServiceTest(unittest.TestCase):
             bond_id=None,
         )
         original_error = RuntimeError("original benzene failure")
-        canvas.services.structure.structure_build_service.add_benzene_ring = mock.Mock(
-            side_effect=original_error
+        canvas.services.structure.structure_build_service.build_benzene_ring = (
+            mock.Mock(side_effect=original_error)
         )
 
         with (
             mock.patch(
-                "chemvas.ui.insert_template_commit_service.rollback_insert_mutation",
-                side_effect=RuntimeError("outer rollback failure"),
+                "chemvas.ui.insert_template_commit_service.StructureBuildCommitter.abort_recorded_change",
+                side_effect=RuntimeError("build rollback failure"),
             ),
             self.assertRaises(RuntimeError) as raised,
         ):
@@ -849,7 +840,7 @@ class InsertCommitServiceTest(unittest.TestCase):
 
         self.assertIs(raised.exception, original_error)
         self.assertTrue(
-            any("outer rollback failure" in note for note in original_error.__notes__)
+            any("build rollback failure" in note for note in original_error.__notes__)
         )
 
     def test_apply_smiles_commit_plan_prefers_atom_label_service_over_canvas_wrapper(

@@ -18,6 +18,7 @@ from PyQt6.QtWidgets import (
     QGraphicsScene,
 )
 
+from chemvas.ui.canvas_arrow_build_service import CanvasArrowBuildService
 from chemvas.ui.canvas_handle_controller import CanvasHandleController
 from chemvas.ui.canvas_scene_items_state import CanvasSceneItemsState
 from chemvas.ui.canvas_service_ports import handle_overlay_service_for_access
@@ -127,10 +128,12 @@ def _make_proxy(
         ),
         refresh_selection_outline=mock.Mock(),
         services=canvas_runtime_services(
-            scene_decoration_build_service=SimpleNamespace(add_arrow_head=mock.Mock()),
             selection_controller=SimpleNamespace(update_selection_outline=mock.Mock()),
         ),
     )
+    arrow_builder = CanvasArrowBuildService(view)
+    arrow_builder.add_arrow_head = mock.Mock(wraps=arrow_builder.add_arrow_head)
+    view.services.scene_decoration.arrow_build_service = arrow_builder
     view.services.selection.selection_controller.update_selection_outline = (
         view.refresh_selection_outline
     )
@@ -386,7 +389,7 @@ class CanvasViewHandleHelpersTest(unittest.TestCase):
         self.assertEqual(curved_item.data(2)["control"], QPointF(5.0, 8.0))
         self.assertEqual(curved_item.pos(), QPointF())
         self.assertEqual(
-            view.services.scene_decoration.scene_decoration_build_service.add_arrow_head.call_count,
+            view.services.scene_decoration.arrow_build_service.add_arrow_head.call_count,
             2,
         )
         self.assertEqual(view.refresh_selection_outline.call_count, 1)
@@ -436,7 +439,7 @@ class CanvasViewHandleHelpersTest(unittest.TestCase):
         self.assertIn("control", curved_item.data(2))
         self.assertEqual(curved_item.pos(), QPointF())
         self.assertEqual(
-            view.services.scene_decoration.scene_decoration_build_service.add_arrow_head.call_count,
+            view.services.scene_decoration.arrow_build_service.add_arrow_head.call_count,
             2,
         )
         self.assertEqual(view.refresh_selection_outline.call_count, 1)

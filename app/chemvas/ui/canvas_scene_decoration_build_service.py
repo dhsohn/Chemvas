@@ -30,7 +30,6 @@ from chemvas.features.annotations import (
     pen_style_for_stroke,
     shape_path,
 )
-from chemvas.ui.canvas_arrow_build_service import CanvasArrowBuildService
 from chemvas.ui.canvas_tool_settings_state import tool_settings_state_for
 from chemvas.ui.graphics_items import (
     AtomDotItem,
@@ -119,11 +118,8 @@ class _ChargeCircleMarkItem(NoSelectPathItem):
 
 
 class CanvasSceneDecorationBuildService:
-    def __init__(self, canvas, *, arrow_build_service=None) -> None:
+    def __init__(self, canvas) -> None:
         self.canvas = canvas
-        self.arrow_build_service = arrow_build_service or CanvasArrowBuildService(
-            canvas
-        )
 
     def build_mark_item(self, kind: str):
         selection_radius = mark_selection_radius_for(self.canvas)
@@ -183,52 +179,6 @@ class CanvasSceneDecorationBuildService:
             item.setPos(center.x() - rect.center().x(), center.y() - rect.center().y())
             return
         item.setPos(center)
-
-    def preview_arrow(self, start: QPointF, end: QPointF, kind: str):
-        return self.arrow_build_service.preview_arrow(start, end, kind)
-
-    def build_snap_mark(self, point):
-        return self.arrow_build_service.build_snap_mark(point)
-
-    def mark_snapped_points(self, item, points) -> None:
-        self.arrow_build_service.mark_snapped_points(item, points)
-
-    def build_arrow_item(
-        self, start: QPointF, end: QPointF, kind: str
-    ) -> QGraphicsPathItem:
-        return self.arrow_build_service.build_arrow_item(start, end, kind)
-
-    def apply_arrow_labels(self, item, labels) -> None:
-        self.arrow_build_service.apply_arrow_labels(item, labels)
-
-    def build_single_head_arrow(
-        self, start: QPointF, end: QPointF
-    ) -> QGraphicsPathItem:
-        return self.arrow_build_service.build_single_head_arrow(start, end)
-
-    def build_double_head_arrow(
-        self, start: QPointF, end: QPointF
-    ) -> QGraphicsPathItem:
-        return self.arrow_build_service.build_double_head_arrow(start, end)
-
-    def build_dotted_arrow(self, start: QPointF, end: QPointF) -> QGraphicsPathItem:
-        return self.arrow_build_service.build_dotted_arrow(start, end)
-
-    def build_curved_arrow(
-        self, start: QPointF, end: QPointF, double: bool
-    ) -> QGraphicsPathItem:
-        return self.arrow_build_service.build_curved_arrow(start, end, double)
-
-    def build_inhibition_arrow(self, start: QPointF, end: QPointF) -> QGraphicsPathItem:
-        return self.arrow_build_service.build_inhibition_arrow(start, end)
-
-    def build_equilibrium_item(self, start: QPointF, end: QPointF) -> QGraphicsPathItem:
-        return self.arrow_build_service.build_equilibrium_item(start, end)
-
-    def add_arrow_head(
-        self, path: QPainterPath, start: QPointF, end: QPointF, double: bool
-    ) -> None:
-        self.arrow_build_service.add_arrow_head(path, start, end, double)
 
     def ts_bracket_rect_from_points(self, start: QPointF, end: QPointF) -> QRectF:
         rect = QRectF(start, end).normalized()
@@ -514,9 +464,6 @@ class CanvasSceneDecorationBuildService:
             node.setPen(pen)
             items.append(node)
         return items
-
-    def arrow_pen(self, dotted: bool = False):
-        return self.arrow_build_service.arrow_pen(dotted=dotted)
 
 
 __all__ = ["CanvasSceneDecorationBuildService"]

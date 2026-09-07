@@ -33,7 +33,6 @@ from chemvas.ui.history_canvas_access import (
     capture_history_transaction_for_history,
     release_history_transaction_for_history,
     restore_history_transaction_for_history,
-    verify_history_transaction_for_history,
 )
 from chemvas.ui.insert_commit_rollback import (
     SmilesInputRestoreAuthority,
@@ -183,35 +182,7 @@ class StructureBuildCommitter:
         merged_scene_items = self._merged_added_scene_items(snapshot, added_scene_items)
         if merged_scene_items is not None:
             kwargs["added_scene_items"] = merged_scene_items
-        published_transaction = capture_history_transaction_for_history(
-            self.canvas,
-            history_service=None,
-            guard_scene_rect=False,
-        )
-        try:
-            record_insert_additions_for(self.canvas, **kwargs)
-            verify_history_transaction_for_history(
-                self.canvas,
-                published_transaction,
-            )
-        except Exception as error:
-            try:
-                release_history_transaction_for_history(
-                    self.canvas,
-                    published_transaction,
-                )
-            except Exception as cleanup_error:
-                add_recovery_error_note(
-                    error,
-                    cleanup_error,
-                    phase="releasing the build publication snapshot",
-                )
-            raise
-        else:
-            release_history_transaction_for_history(
-                self.canvas,
-                published_transaction,
-            )
+        record_insert_additions_for(self.canvas, **kwargs)
         self.release_recorded_change(snapshot)
 
     def release_recorded_change(

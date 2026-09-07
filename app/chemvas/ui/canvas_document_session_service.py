@@ -100,6 +100,10 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
     from chemvas.features.export import ExportPlan
+    from chemvas.ui.canvas_history_service import (
+        CanvasHistoryService,
+        HistoryStackSnapshot,
+    )
 
 _DOCUMENT_MUTATED_RUNTIME_FIELDS = (
     "sheet_setup_state",
@@ -386,17 +390,6 @@ class _DocumentStatusPublication:
             )
 
 
-@dataclass(slots=True, kw_only=True)
-class _HistoryStateSnapshot:
-    service: Any
-    state: Any
-    history: list
-    history_items: tuple
-    redo_stack: list
-    redo_items: tuple
-    enabled: bool
-
-
 @dataclass(frozen=True, kw_only=True)
 class _CanvasRollbackSnapshot:
     document_state: dict
@@ -446,7 +439,7 @@ class CanvasDocumentSessionService:
         hit_testing_service,
         graph_service,
         structure_build_service=None,
-        history_service=None,
+        history_service: CanvasHistoryService | None = None,
     ) -> None:
         self.canvas = canvas
         self.history = history_service
@@ -473,13 +466,16 @@ class CanvasDocumentSessionService:
             raise RuntimeError(
                 "structure_build_service is required to apply document state"
             )
-        history_snapshot = self._snapshot_history_state()
+        history_snapshot = (
+            self.history.capture_stack_snapshot() if self.history is not None else None
+        )
         rollback_snapshot = self._snapshot_live_canvas_state()
         try:
             # The rollback snapshot holds the scene-rect guard open from here
             # on; any pre-detach failure must run the rollback path so the
             # guard is closed rather than left pinning automatic growth.
-            self._set_history_enabled(history_snapshot, False)
+            if self.history is not None and self.history.is_enabled():
+                self.history.set_enabled(False)
             rollback_snapshot.detach_scene_items()
             self._clear_detached_selection_state()
         except Exception as original_error:
@@ -495,8 +491,8 @@ class CanvasDocumentSessionService:
             raise
         try:
             self._apply_state_contents(state)
-            if history_snapshot is not None:
-                history_snapshot.service.clear()
+            if self.history is not None:
+                self.history.clear()
             self._restore_history_enabled(history_snapshot)
             rollback_snapshot.commit_replacement()
         except Exception as original_error:
@@ -513,7 +509,7 @@ class CanvasDocumentSessionService:
     def _rollback_or_converge(
         self,
         rollback_snapshot: _CanvasRollbackSnapshot,
-        history_snapshot: _HistoryStateSnapshot | None,
+        history_snapshot: HistoryStackSnapshot | None,
         *,
         original_error: BaseException,
         clear_target: bool,
@@ -545,7 +541,8 @@ class CanvasDocumentSessionService:
                     phase="clearing an unrecoverable document scene",
                 )
             try:
-                self._force_clear_history(history_snapshot)
+                if self.history is not None:
+                    self.history.discard_without_notification()
             except Exception as cleanup_error:
                 add_recovery_error_note(
                     original_error,
@@ -562,54 +559,13 @@ class CanvasDocumentSessionService:
                     phase="restoring the history enabled state",
                 )
 
-    def _snapshot_history_state(self) -> _HistoryStateSnapshot | None:
-        if self.history is None:
-            return None
-        state = self.history.state
-        history = state.history
-        redo_stack = state.redo_stack
-        if not isinstance(history, list) or not isinstance(redo_stack, list):
-            raise RuntimeError("document history stacks must be mutable lists")
-        return _HistoryStateSnapshot(
-            service=self.history,
-            state=state,
-            history=history,
-            history_items=tuple(history),
-            redo_stack=redo_stack,
-            redo_items=tuple(redo_stack),
-            enabled=bool(state.enabled),
-        )
-
-    @staticmethod
-    def _set_history_enabled(
-        snapshot: _HistoryStateSnapshot | None,
-        enabled: bool,
-    ) -> None:
-        if snapshot is None:
-            return
-        if bool(snapshot.state.enabled) is not enabled:
-            snapshot.service.set_enabled(enabled)
-
     def _restore_history_enabled(
         self,
-        snapshot: _HistoryStateSnapshot | None,
+        snapshot: HistoryStackSnapshot | None,
     ) -> None:
-        if snapshot is not None:
-            self._set_history_enabled(snapshot, snapshot.enabled)
-
-    @staticmethod
-    def _restore_history_state(snapshot: _HistoryStateSnapshot | None) -> None:
-        if snapshot is None:
-            return
-        snapshot.history[:] = snapshot.history_items
-        snapshot.redo_stack[:] = snapshot.redo_items
-
-    @staticmethod
-    def _force_clear_history(snapshot: _HistoryStateSnapshot | None) -> None:
-        if snapshot is None:
-            return
-        snapshot.history[:] = []
-        snapshot.redo_stack[:] = []
+        if self.history is not None and snapshot is not None:
+            if self.history.is_enabled() is not snapshot.enabled:
+                self.history.set_enabled(snapshot.enabled)
 
     def _clear_target_for_rollback(self) -> None:
         try:
@@ -623,7 +579,7 @@ class CanvasDocumentSessionService:
     def _restore_previous_document(
         self,
         rollback_snapshot: _CanvasRollbackSnapshot,
-        history_snapshot: _HistoryStateSnapshot | None,
+        history_snapshot: HistoryStackSnapshot | None,
         *,
         original_error: BaseException,
     ) -> None:
@@ -634,8 +590,11 @@ class CanvasDocumentSessionService:
                 restore_error,
                 phase="restoring the previous document scene",
             )
-        self._restore_history_state(history_snapshot)
-        self._restore_history_enabled(history_snapshot)
+        if self.history is not None and history_snapshot is not None:
+            if not self.history.restore_stack_snapshot(
+                history_snapshot, original_error, phase="document replacement"
+            ):
+                raise RuntimeError("Failed to restore the previous document history.")
         rollback_snapshot.status_publication.publish(original_error)
         self._verify_previous_document(rollback_snapshot, restore_errors)
 
@@ -883,36 +842,19 @@ class CanvasDocumentSessionService:
         sizing: str = "bond",
     ) -> ExportPlan:
         """Return the exact geometry plan used by figure export without painting."""
-        from chemvas.features.export import (
-            build_export_plan,
-            collect_export_items,
-            content_bounds,
-        )
+        from chemvas.features.export import resolve_export_plan
 
         items, pad, unit_scale, target_width_pt = self._figure_export_parameters(
             scope=scope,
             sizing=sizing,
         )
-        export_items = (
-            list(items)
-            if items is not None
-            else collect_export_items(canvas_scene_for(self.canvas))
-        )
-        bounds = content_bounds(export_items)
-        if bounds is None:
-            raise ValueError("There is nothing to export.")
-        plan = build_export_plan(
-            bounds.x(),
-            bounds.y(),
-            bounds.width(),
-            bounds.height(),
+        _export_items, plan = resolve_export_plan(
+            canvas_scene_for(self.canvas),
+            items=items,
             margin=pad,
             unit_scale=unit_scale,
             target_width_pt=target_width_pt,
         )
-        # content_bounds already rejected an empty or degenerate rect, which is
-        # the only way build_export_plan returns None.
-        assert plan is not None
         return plan
 
     def _figure_export_parameters(

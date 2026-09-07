@@ -5,6 +5,10 @@ from typing import Any
 from chemvas.ui.canvas_service_access import canvas_services_for
 
 
+def arrow_build_service_for_access(canvas) -> Any:
+    return canvas_services_for(canvas).scene_decoration.arrow_build_service
+
+
 def atom_label_service_for_access(canvas) -> Any:
     return canvas_services_for(canvas).atom_label_service
 
@@ -114,6 +118,7 @@ def structure_mutation_build_service(canvas) -> Any:
 
 
 __all__ = [
+    "arrow_build_service_for_access",
     "atom_label_service_for_access",
     "canvas_window_document_session_service",
     "curved_arrow_path_service_for_access",

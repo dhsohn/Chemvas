@@ -14,6 +14,7 @@
   폰트 설정.
 - HistoryCommand (`app/chemvas/core/history.py`): 델타 기반 실행 취소/다시 실행(undo/redo). 다중 엔티티(multi-entity) 연산은 `CompositeCommand`로 그룹화되며, 이는 다시 실행 시 자식 델타 커맨드를 순서대로 적용하고 실행 취소 시 역순으로 적용한다.
 - BondRenderer (`app/chemvas/ui/bond_renderer.py`): 결합 QGraphicsItem 생성/업데이트 및 기하 헬퍼(geometry helpers)로, CanvasView 컨텍스트에 의해 구동된다.
+- 화살표(`app/chemvas/ui/canvas_arrow_build_service.py`): scene-decoration bundle이 기존 canvas ports/access를 통해 arrow builder를 직접 노출한다. 곡선 생성과 갱신은 path/head 생성을 공유하지만, handle 편집과 document-state 적용의 서로 다른 metadata·label 정책은 유지한다. 메뉴 이벤트에는 표시 문자열 대신 kind ID를 전달한다.
 - Graphics items (`app/chemvas/ui/graphics_items.py`): 선택 불가능한 QGraphicsItem 래퍼(wrapper).
 - Label layout (`app/chemvas/features/annotations`): 원자 레이블을 조판 런과 배치로 파싱하는 순수(Qt-free) 공개 API이며 화면과 아웃라인 내보내기 타이포그래피의 단일 소유자다.
 - Figure export (`app/chemvas/features/export`): feature 패키지가 공개 API, Qt-free 대화상자/계획 규칙, 씬 범위 처리, SVG/PDF/raster 렌더러를 소유한다. 외부 호출자는 `chemvas.features.export`만 import하고 렌더러 모듈은 비공개 구현 세부사항으로 남는다. 순수 plan은 패딩이 적용된 소스 사각형과 물리 출력 크기를 포인트 단위로 계산한다. Qt 서비스는 보이는 콘텐츠를 수집하고, 일시적 오버레이를 제외하며, 가능한 경우 항목별 export bounds를 사용하고, 레이블을 아웃라인 처리한 뒤 SVG/PDF/PNG/TIFF로 렌더링한다. `unit_scale` 또는 `target_width_pt`로 줌과 무관한 크기를 결정하고 `scope`와 `background`로 내용과 배경을 선택한다.
@@ -26,6 +27,19 @@
 - 창 없는 문서 렌더링(`app/chemvas/bootstrap/document_render.py`): bootstrap은 파일과 출력 자원 계약을 먼저 검증한 뒤 보이지 않는 `QApplication`과 `CanvasView`를 지연 조립한다. 적용된 문서는 `CanvasDocumentSessionService.plan_figure_export`로 painting 전 자원 preflight를 거치고 GUI와 같은 전체 sheet figure-export 경로로 private 임시 저장소에 SVG/PNG를 렌더한다. 제한을 통과한 출력만 기존 경로를 덮어쓰지 않고 원자적으로 공개하며 원본/출력 hash, point/pixel 크기, 문서 버전이 render report v1을 이룬다. 데스크톱 창, session recovery, RDKit loading, editable SVG payload, PDF, TIFF는 이 명령의 범위 밖이다.
 - 이전된 feature 정책 (`app/chemvas/features/{export,session,annotations,rendering,insertion,selection,hover}`): 각 패키지는 응집된 planning/geometry/state 계약을 하나의 공개 API로 제공한다. 기존 평면 호환 모듈은 삭제되었고 `test_package_dependencies.py`가 재도입을 막는다.
 - 메인 창 조립: `chemvas.shell.main_window`가 얇은 Qt 셸을 소유하고, `chemvas.bootstrap`이 runtime/service 조립·창 등록·문서 열기·앱 시작을 소유한다. Qt 파일 열기 이벤트는 `chemvas.adapters.qt`를 통해 들어온다.
+
+계산 plan 검증과 보고는 요청 안에서 `ComponentInventory`를 재사용한다. 편집 준비는
+structural validation을 사용하므로 사용자가 맞지 않는 전하 같은 의미 오류를 수정할 수
+있다. 중복 step 거부와 reviewed-precomplex 유지·무효화는 calculation feature의 순수
+step-edit 연산이 소유하며, dialog는 widget 입력 수집과 오류 표시를 맡는다. 문서 편집
+사이에 inventory를 캐시하지 않는다.
+
+Figure export의 사전 검사와 렌더링은 feature의 `resolve_export_plan` 진입점에서
+content bounds와 물리 크기를 함께 계산한다. 선택 회전, 클립보드 배치, 원자 이동은
+`chemvas.features.selection`의 순수 원근 기하 계산을 공유한다. 화면 좌표 이동은
+저장 좌표에 역투영한 변화량을 적용해 깊이, 카메라 frame, 기존 stale 좌표의 오차를
+보존한다. 선택 상태 집계는 Qt 선택과 선택된 노트 registry에 같은 item identity를
+적용하여 겹치는 항목을 한 번만 센다.
 
 ## 전환기 UI 규율 (ports / access / state / services)
 `app/chemvas/ui` 패키지는 구조 전환 중 실제 책임을 분리하는 경우에만 작은 역할 모듈을 유지한다. 목표는 `CanvasView`와 `MainWindow`를 얇은 Qt 셸로 유지하고(갓 오브젝트 금지), 모든 서비스를 헤드리스로 생성 가능하게 하며, 모든 의존성을 명시적으로 만드는 것이다.
@@ -64,6 +78,9 @@
 ## 트랜잭션과 복구 소유권
 
 - `CanvasHistoryService`는 undo/redo stack 정책과 불변 `HistoryStackSnapshot` 값의 유일한 소유자다. 최상위 exact undo/redo 연산은 문서 savepoint를 하나만 캡처하고, 중첩 command는 그 연산에 위임한다.
+- 문서 교체는 stack capture/restore를 해당 history owner에 맡기고, destructive scene reset도 알림 없는 stack discard를 위임한다. 이 연산은 기존 stack list를 보존한다. 문서 교체의 detached-scene snapshot은 원래 Qt scene item을 별도로 보존한다.
+- 기록되는 구조 삽입은 history 기록 성공까지 작업 전 savepoint를 유지한다. 기록 실패는 기존 rollback authority로 복구하며, 성공한 발행을 검사하기 위해 전체 문서 savepoint를 다시 캡처하지 않는다.
+- 벤젠 template 삽입도 같은 committer 범위 안에서 mutation-only ring builder를 호출하며 recorded build를 중첩하지 않는다. 성공한 삽입은 한 번 캡처하고 no-op·실패 복원도 같은 owner를 따른다. History push 실패 시 recorder가 사용하는 기존 역연산 command의 savepoint는 작업 전 캡처와 별도로 유지한다.
 - `chemvas.ui.transactions.document.DocumentSavepoint`는 문서 전체 capture, restore, verify, release의 공개 소유자다. 같은 패키지의 하위 object-graph, scene-runtime, scene-rect primitive를 조합한다. `history_commands`는 command class만 소유하며 private snapshot toolkit을 내보내지 않는다.
 - `chemvas.domain.transactions`는 프레임워크와 무관한 `RestoreOutcome` 검증, 복구 오류 note 부착, 1회 restore helper만 소유한다.
 - restore는 한 번 적용하고 한 번 검증한다. exact 복원을 입증하지 못하면 history는 ADR 0002의 보수적인 fail-closed stack 정책을 적용하고 durable recovery는 autosave/session restore에 맡긴다. 제거된 retry, authority channel, compatibility probing, 병렬 stack snapshot 계층은 다시 도입할 수 없다.
@@ -90,7 +107,7 @@ Agent 편집 흐름: `inspect-document` -> 정확한 source SHA-256과 안정적
 - 캔버스의 전하/라디칼 마크(charge/radical marks)는 변환 전에 원자별 주석으로 정규화되어야 하며, 그래야 형식 전하(formal charge)와 라디칼 전자가 RDKit으로 보존된다.
 - 별칭의 정본은 `chemvas.domain.atom_aliases.ATOM_ALIAS_DEFINITIONS`이며 현재 `Me`, `Et`, `OH`, `Ph`, `PPh3`, `OMe`, `Boc`, `CO2Me`, `t-Bu`, `tBu`, `i-Pr`, `CF3`, `OTs`, `Ts`, `OMs`, `Ms`, `OTf`, `Tf`, `Ns`, `OAc`, `Ac`를 포함한다. 이 별칭들은 변환 시점에 명시적 프래그먼트로 확장되어야 한다. 지원되지 않는 약어는 추측하지 말고 확실하게(loudly) 실패해야 한다.
 - 쐐기/해시 결합(Wedge/hash bonds)은 단일 결합에 대해서만 RDKit 결합 방향으로 변환되어야 한다. 잘못된 입체(stereo) 사용은 정확한 메시지와 함께 실패해야 한다.
-- SMILES 삽입은 RDKit wedging 후 결합 끝점을 복사해 절대 사면체 입체배치를 보존한다. 지정된 이중결합·비사면체·상대/라세미 입체화학은 거부한다. Molecule Info 식별자는 미리보기 변환을 재사용하되, 원소 라벨만 허용하는 기존 정책을 유지한다.
+- SMILES 삽입은 RDKit wedging 후 결합 끝점을 복사해 절대 사면체 입체배치를 보존한다. 지정된 이중결합·비사면체·상대/라세미 입체화학은 거부한다. Kekulization 이후 RDKit의 단일·이중·삼중 결합 타입만 표현할 수 있으며, 배위·미지정·사중 결합이나 남은 aromatic 타입은 반올림·clamp하지 않고 거부한다. Molecule Info 식별자는 미리보기 변환을 재사용하되, 원소 라벨만 허용하는 기존 정책을 유지한다.
 - `.xyz`는 좌표 전용이다. 결합 차수(bond order)와 반응 의미(reaction semantics)는 출력 포맷에 보존되지 않으며 왕복 가능한(round-trippable) 상태로 취급해서는 안 된다.
 - Calculation Plan v2는 명시적 state, `included`/`context_only` membership, endpoint별 역할, source atom correspondence, step-side precomplex ensemble, reviewer 선택을 저장한다. 유일한 placement profile `chemvas-rigid-precomplex-placement/2`는 모든 지원 원소에 Cordero(2008) Table 2 covalent radius(C-sp3, Fe-low-spin, Co-low-spin selector)와 Alvarez(2013) Table 1 van der Waals radius를 사용하고 exact provenance를 저장·검증한다. Plan은 역할·contact·spin state·coordination·반응기구를 추론하지 않는다. elementary-step handoff는 공통 envelope와 inline domain payload 안에 provenance, mapping, bond change, 조건부 identity-ordered endpoint pair를 담은 `machine.json` 하나다. 검토된 rigid placement와 empirical-radius clash score도 heuristic 초기 추정값이며 후속 양자화학 최적화와 연구자 검토가 필요하다.
 - 미리보기 창은 사용자가 보는 것과 실제로 내보내지는 것 사이의 불일치를 피하기 위해 `.xyz` 내보내기와 동일한 변환 경로를 재사용해야 한다.

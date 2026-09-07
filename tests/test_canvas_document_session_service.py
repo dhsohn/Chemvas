@@ -38,7 +38,7 @@ from chemvas.ui.canvas_rotation_state import CanvasRotationState
 from chemvas.ui.canvas_runtime_state import attach_canvas_runtime_state
 from chemvas.ui.canvas_scene_items_state import CanvasSceneItemsState
 from chemvas.ui.canvas_scene_reset_service import CanvasSceneResetService
-from chemvas.ui.history_commands import UpdateSceneItemCommand
+from chemvas.ui.history_commands import AddSceneItemsCommand, UpdateSceneItemCommand
 from chemvas.ui.selection_info_state import (
     SelectionInfoState,
     selection_info_state_for,
@@ -1131,6 +1131,18 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
         selection_info.cache = ("NH", "15.01")
         selection_info.rdkit_warmup_pending = True
 
+        history = canvas.services.history_service
+        undo = history.state.history
+        redo = history.state.redo_stack
+        undo_command = AddSceneItemsCommand(items=selected_items, item_states=[])
+        redo_command = AddSceneItemsCommand(items=selected_items, item_states=[])
+        undo.append(undo_command)
+        redo.append(redo_command)
+        history.set_enabled(False)
+        history.state.limit = 7
+        history_callback = mock.Mock()
+        history.state.change_callback = history_callback
+
         service = canvas.services.document.canvas_document_session_service
         target_state = deepcopy(service.snapshot_state())
         target_state["settings"]["bond_length_px"] = 31.0
@@ -1157,6 +1169,13 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
         )
         self.assertEqual(selection_info.cache, ("NH", "15.01"))
         self.assertTrue(selection_info.rdkit_warmup_pending)
+        self.assertIs(history.state.history, undo)
+        self.assertIs(history.state.redo_stack, redo)
+        self.assertEqual(undo, [undo_command])
+        self.assertEqual(redo, [redo_command])
+        self.assertFalse(history.state.enabled)
+        self.assertEqual(history.state.limit, 7)
+        history_callback.assert_not_called()
 
         canvas.services.document.canvas_scene_reset_service.clear_scene()
 
@@ -1169,6 +1188,69 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
         self.assertEqual(selection_info.cache, ("", ""))
         self.assertFalse(selection_info.rdkit_warmup_pending)
         self.assertEqual(selection_callback.call_args, mock.call("", ""))
+        self.assertIs(history.state.history, undo)
+        self.assertIs(history.state.redo_stack, redo)
+        self.assertEqual(undo, [])
+        self.assertEqual(redo, [])
+        self.assertFalse(history.state.enabled)
+        self.assertEqual(history.state.limit, 7)
+        history_callback.assert_not_called()
+
+    def test_history_restore_failure_leaves_a_blank_document_with_original_policy(
+        self,
+    ) -> None:
+        for enabled in (True, False):
+            with self.subTest(enabled=enabled):
+                canvas = build_canvas_view()
+                self.addCleanup(canvas.close)
+                self.addCleanup(
+                    canvas.services.document.canvas_scene_reset_service.clear_scene
+                )
+                atom_id = add_atom_for(canvas, "N", 0.0, 0.0)
+                item = atom_items_for(canvas)[atom_id]
+                history = canvas.services.history_service
+                undo = history.state.history
+                redo = history.state.redo_stack
+                undo.append(AddSceneItemsCommand(items=[item], item_states=[]))
+                redo.append(AddSceneItemsCommand(items=[item], item_states=[]))
+                history.set_enabled(enabled)
+                history.state.limit = 7
+                callback = mock.Mock()
+                history.state.change_callback = callback
+                service = canvas.services.document.canvas_document_session_service
+                state = deepcopy(service.snapshot_state())
+                primary = RuntimeError("document build failed")
+
+                with (
+                    mock.patch(
+                        "chemvas.ui.canvas_document_session_service.restore_document_post_model_items",
+                        side_effect=primary,
+                    ),
+                    mock.patch.object(
+                        history,
+                        "verify_stack_snapshot",
+                        side_effect=RuntimeError("history verification failed"),
+                    ),
+                ):
+                    with self.assertRaises(RuntimeError) as raised:
+                        service.apply_state(state)
+
+                self.assertIs(raised.exception, primary)
+                self.assertTrue(
+                    any(
+                        "history verification failed" in note
+                        for note in primary.__notes__
+                    )
+                )
+                self.assertEqual(canvas.model.atoms, {})
+                self.assertEqual(canvas.scene().items(), [])
+                self.assertIs(history.state.history, undo)
+                self.assertIs(history.state.redo_stack, redo)
+                self.assertEqual(undo, [])
+                self.assertEqual(redo, [])
+                self.assertIs(history.state.enabled, enabled)
+                self.assertEqual(history.state.limit, 7)
+                callback.assert_not_called()
 
     def test_restore_and_save_delegate_through_session_methods(self) -> None:
         canvas = SimpleNamespace(
@@ -1218,6 +1300,40 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
 
         snapshot.assert_not_called()
         write_document.assert_not_called()
+
+    def test_plan_figure_export_uses_the_shared_feature_resolver(self) -> None:
+        canvas = build_canvas_view()
+        service = canvas.services.document.canvas_document_session_service
+        item = QGraphicsRectItem(0.0, 0.0, 10.0, 20.0)
+        canvas.scene().addItem(item)
+        expected_plan = object()
+        try:
+            with (
+                mock.patch.object(
+                    service,
+                    "_figure_export_parameters",
+                    return_value=([item], 4.0, 0.5, None),
+                ) as parameters,
+                mock.patch(
+                    "chemvas.features.export.resolve_export_plan",
+                    return_value=([item], expected_plan),
+                    create=True,
+                ) as resolve_plan,
+            ):
+                plan = service.plan_figure_export(scope="selection", sizing="bond")
+
+            self.assertIs(plan, expected_plan)
+            parameters.assert_called_once_with(scope="selection", sizing="bond")
+            resolve_plan.assert_called_once_with(
+                canvas.scene(),
+                items=[item],
+                margin=4.0,
+                unit_scale=0.5,
+                target_width_pt=None,
+            )
+        finally:
+            canvas.deleteLater()
+            self.app.processEvents()
 
     def test_export_figure_selection_scope_uses_selected_scene_items(self) -> None:
         selected_item = _SceneItem()

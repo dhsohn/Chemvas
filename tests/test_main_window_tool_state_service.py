@@ -208,8 +208,8 @@ class MainWindowToolStateServiceTest(unittest.TestCase):
                 "set_orbital_phase_enabled",
             ) as set_orbital_phase_enabled,
         ):
-            self.service.set_arrow_type(self.window, "Curved Double")
-            self.service.set_arrow_type(self.window, "Unknown")
+            self.service.set_arrow_type(self.window, "curved_double")
+            self.service.set_arrow_type(self.window, "reaction")
             self.service.set_orbital_type(self.window, "MO antibonding")
             self.service.set_orbital_type(self.window, "Unknown")
             self.service.set_orbital_phase(self.window, "Phase On")

@@ -3,8 +3,8 @@ from __future__ import annotations
 import hashlib
 import json
 from collections.abc import Iterable, Mapping
-from dataclasses import asdict, dataclass
-from typing import TYPE_CHECKING, cast
+from dataclasses import asdict, dataclass, replace
+from typing import TYPE_CHECKING
 
 from chemvas.domain.document import (
     CalculationAtomCorrespondence,
@@ -16,23 +16,29 @@ from chemvas.domain.document import (
     MoleculeModel,
     calculation_plan_from_state,
     calculation_plan_to_state,
-    deserialize_model_state,
     included_atom_ids,
     model_bond_pairs,
 )
+from chemvas.domain.document.calculation_plan import NO_PRECOMPLEX
 from chemvas.domain.document.precomplex import precomplex_state_from_json
 from chemvas.domain.document.precomplex_profile import (
     precomplex_placement_profile,
     radius_provenance_for,
 )
 
-from .service import inspect_component_inventory, inspect_components, select_components
+from .service import (
+    _component_inventory,
+    _document_model,
+    inspect_component_inventory,
+    select_components,
+)
 
 if TYPE_CHECKING:
     from .model import (
         AtomMapEntry,
         CalculationArtifacts,
         CalculationStateSelection,
+        ComponentInventory,
         ComponentSummary,
     )
 
@@ -66,15 +72,23 @@ def validate_calculation_plan(
     document_state: Mapping[str, object],
     plan_state: object,
 ) -> CalculationPlan:
+    plan, _inventory = _validated_plan_and_inventory(document_state, plan_state)
+    return plan
+
+
+def _validated_plan_and_inventory(
+    document_state: Mapping[str, object], plan_state: object
+) -> tuple[CalculationPlan, ComponentInventory]:
     model = _document_model(document_state)
     plan = calculation_plan_from_state(
         plan_state,
         atom_ids=set(model.atoms),
         bond_pairs=model_bond_pairs(model),
     )
-    components = {
-        summary.atom_ids: summary for summary in inspect_components(document_state)
-    }
+    # Structural errors precede mark/alias and semantic errors, as they do at
+    # the public validation boundary. Reuse this parsed model after that gate.
+    inventory = _component_inventory(document_state, model)
+    components = {summary.atom_ids: summary for summary in inventory.components}
     for state in plan.states:
         modeled_charge = sum(
             components[member.component_atom_ids].formal_charge
@@ -96,24 +110,21 @@ def validate_calculation_plan(
                     f"{entry.reactant_atom_id} to {product_label} atom "
                     f"{entry.product_atom_id}; mapped atom labels must match."
                 )
-    return plan
+    return plan, inventory
 
 
 def calculation_plan_for_document(
     document_state: Mapping[str, object],
 ) -> CalculationPlan:
-    raw_plan = document_state.get("calculation_plan")
-    if raw_plan is None:
-        raise ValueError("The Chemvas document does not contain a calculation plan.")
-    return validate_calculation_plan(document_state, raw_plan)
+    return validate_calculation_plan(
+        document_state, _document_plan_state(document_state)
+    )
 
 
 def structural_calculation_plan_for_document(
     document_state: Mapping[str, object],
 ) -> CalculationPlan:
-    raw_plan = document_state.get("calculation_plan")
-    if raw_plan is None:
-        raise ValueError("The Chemvas document does not contain a calculation plan.")
+    raw_plan = _document_plan_state(document_state)
     model = _document_model(document_state)
     return calculation_plan_from_state(
         raw_plan,
@@ -122,13 +133,38 @@ def structural_calculation_plan_for_document(
     )
 
 
+def prepare_calculation_step_editor(
+    document_state: Mapping[str, object],
+) -> tuple[ComponentInventory, CalculationPlan | None]:
+    """Inspect the source once while allowing semantically invalid plan drafts."""
+    inventory = inspect_component_inventory(document_state)
+    raw_plan = document_state.get("calculation_plan")
+    plan = (
+        calculation_plan_from_state(
+            raw_plan,
+            atom_ids=set(inventory.model.atoms),
+            bond_pairs=model_bond_pairs(inventory.model),
+        )
+        if raw_plan is not None
+        else None
+    )
+    return inventory, plan
+
+
+def _document_plan_state(document_state: Mapping[str, object]) -> object:
+    raw_plan = document_state.get("calculation_plan")
+    if raw_plan is None:
+        raise ValueError("The Chemvas document does not contain a calculation plan.")
+    return raw_plan
+
+
 def calculation_plan_report(
     document_state: Mapping[str, object],
 ) -> dict[str, object]:
-    plan = calculation_plan_for_document(document_state)
-    components = {
-        summary.atom_ids: summary for summary in inspect_components(document_state)
-    }
+    plan, inventory = _validated_plan_and_inventory(
+        document_state, _document_plan_state(document_state)
+    )
+    components = {summary.atom_ids: summary for summary in inventory.components}
     return {
         "format": "chemvas-calculation-plan-inspection",
         "version": 1,
@@ -140,7 +176,9 @@ def calculation_plan_report(
                 "product_state": step.product.state_id,
                 "readiness": asdict(step_readiness(plan, step)),
                 "path_precheck": asdict(
-                    path_precheck(plan, step, document_state=document_state)
+                    _path_precheck(
+                        plan, step, document_state=document_state, inventory=inventory
+                    )
                 ),
             }
             for step in plan.steps
@@ -231,7 +269,23 @@ def precomplex_basis_sha256(
     environment: Mapping[str, object],
 ) -> str:
     """Bind a precomplex to its chemical graph, plan, and environment."""
-    inventory = inspect_component_inventory(document_state)
+    return _precomplex_basis_sha256(
+        inspect_component_inventory(document_state),
+        plan,
+        step_id=step_id,
+        side=side,
+        environment=environment,
+    )
+
+
+def _precomplex_basis_sha256(
+    inventory: ComponentInventory,
+    plan: CalculationPlan,
+    *,
+    step_id: str,
+    side: str,
+    environment: Mapping[str, object],
+) -> str:
     plan_state = calculation_plan_to_state(plan)
     plan_state["version"] = 2
     raw_steps = plan_state.get("steps")
@@ -315,6 +369,8 @@ def _validate_reviewed_precomplex_pair(
     document_state: Mapping[str, object] | None,
     plan: CalculationPlan,
     step: CalculationStep,
+    *,
+    inventory: ComponentInventory | None = None,
 ) -> dict[str, object]:
     identities: list[tuple[object, object, object]] = []
     profiles: list[tuple[str, object]] = []
@@ -376,8 +432,10 @@ def _validate_reviewed_precomplex_pair(
                     "multicomponent_precomplex_review_pair_invalid",
                     "Precomplex review pair has invalid generation provenance.",
                 )
-            expected_basis = precomplex_basis_sha256(
-                document_state,
+            if inventory is None:
+                inventory = inspect_component_inventory(document_state)
+            expected_basis = _precomplex_basis_sha256(
+                inventory,
                 plan,
                 step_id=step.id,
                 side=side,
@@ -435,6 +493,16 @@ def path_precheck(
     Callers that have the document should pass it by keyword so reviewed
     precomplex freshness can also be checked against the current graph.
     """
+    return _path_precheck(plan, step, document_state=document_state, inventory=None)
+
+
+def _path_precheck(
+    plan: CalculationPlan,
+    step: CalculationStep,
+    *,
+    document_state: Mapping[str, object] | None,
+    inventory: ComponentInventory | None,
+) -> PathPrecheck:
     reactant_state = calculation_state_by_id(plan, step.reactant.state_id)
     product_state = calculation_state_by_id(plan, step.product.state_id)
     source_mapping_complete = step_readiness(plan, step).ready_for_step_pack
@@ -454,7 +522,9 @@ def path_precheck(
         blocking_reasons.append("endpoint_multiplicity_mismatch")
     if not single_component_endpoints:
         try:
-            _validate_reviewed_precomplex_pair(document_state, plan, step)
+            _validate_reviewed_precomplex_pair(
+                document_state, plan, step, inventory=inventory
+            )
         except _ReviewedPrecomplexPairError as exc:
             blocking_reasons.append(exc.blocking_reason)
     return PathPrecheck(
@@ -714,6 +784,80 @@ def plan_with_replaced_step(
     )
 
 
+def apply_calculation_step_edit(
+    document_state: Mapping[str, object],
+    *,
+    current_plan: CalculationPlan | None,
+    selected_step_id: str | None,
+    reactant_state: CalculationState,
+    product_state: CalculationState,
+    step: CalculationStep,
+) -> CalculationPlan:
+    """Validate an editor draft, retaining reviewed geometry only on a no-op edit."""
+    if (
+        selected_step_id is None
+        and current_plan is not None
+        and any(candidate.id == step.id for candidate in current_plan.steps)
+    ):
+        raise ValueError(
+            f"Step {step.id} already exists. Select Edit {step.id} instead."
+        )
+    # An edited endpoint starts without a review, even if a caller built its
+    # draft by replacing fields on an existing step rather than from widgets.
+    step = replace(
+        step,
+        reactant=replace(step.reactant, precomplex=NO_PRECOMPLEX),
+        product=replace(step.product, precomplex=NO_PRECOMPLEX),
+    )
+    existing_step = (
+        next(
+            (
+                candidate
+                for candidate in current_plan.steps
+                if candidate.id == selected_step_id
+            ),
+            None,
+        )
+        if current_plan is not None and selected_step_id is not None
+        else None
+    )
+    if existing_step is not None:
+        assert current_plan is not None
+        existing_reactant_state = calculation_state_by_id(
+            current_plan, existing_step.reactant.state_id
+        )
+        existing_product_state = calculation_state_by_id(
+            current_plan, existing_step.product.state_id
+        )
+        if (
+            reactant_state == existing_reactant_state
+            and product_state == existing_product_state
+            and step.reactant.state_id == existing_step.reactant.state_id
+            and step.reactant.roles == existing_step.reactant.roles
+            and step.product.state_id == existing_step.product.state_id
+            and step.product.roles == existing_step.product.roles
+            and step.atom_correspondence == existing_step.atom_correspondence
+        ):
+            step = replace(
+                step,
+                reactant=replace(
+                    step.reactant, precomplex=existing_step.reactant.precomplex
+                ),
+                product=replace(
+                    step.product, precomplex=existing_step.product.precomplex
+                ),
+            )
+    return plan_with_replaced_step(
+        document_state,
+        current_plan_state=(
+            calculation_plan_to_state(current_plan) if current_plan else None
+        ),
+        reactant_state=reactant_state,
+        product_state=product_state,
+        step=step,
+    )
+
+
 def identity_correspondence(
     reactant_state: CalculationState,
     product_state: CalculationState,
@@ -768,13 +912,6 @@ def member(
     return CalculationStateMember(component_atom_ids, inclusion)
 
 
-def _document_model(document_state: Mapping[str, object]) -> MoleculeModel:
-    model_state = document_state.get("model")
-    if not isinstance(model_state, Mapping):
-        raise ValueError("Invalid Chemvas document state: model is missing.")
-    return deserialize_model_state(cast("Mapping[str, object]", model_state))
-
-
 def _bond_orders(
     model: MoleculeModel,
     atom_ids: set[int],
@@ -793,6 +930,7 @@ def _pair(a: int, b: int) -> tuple[int, int]:
 __all__ = [
     "PathPrecheck",
     "StepReadiness",
+    "apply_calculation_step_edit",
     "calculate_bond_changes",
     "calculation_plan_for_document",
     "calculation_plan_report",
@@ -806,6 +944,7 @@ __all__ = [
     "path_precheck",
     "plan_with_replaced_step",
     "precomplex_basis_sha256",
+    "prepare_calculation_step_editor",
     "require_step_ready",
     "select_calculation_state",
     "step_readiness",

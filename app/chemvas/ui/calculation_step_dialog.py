@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Iterable, Mapping
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Protocol, cast, override
 
 from PyQt6.QtCore import Qt
@@ -35,14 +35,14 @@ from chemvas.domain.document import (
     deserialize_model_state,
 )
 from chemvas.features.calculation_bundle import (
+    apply_calculation_step_edit,
     calculation_state_by_id,
     correspondence_readiness,
     fill_correspondence_gaps,
     identity_correspondence,
     included_atom_ids,
     inspect_components,
-    plan_with_replaced_step,
-    structural_calculation_plan_for_document,
+    prepare_calculation_step_editor,
 )
 from chemvas.shell.palette import PALETTE
 from chemvas.ui.calculation_mapping_highlight import CalculationMappingHighlighter
@@ -145,11 +145,9 @@ class CalculationStepDialog(QDialog):
         self._document_state = document_state
         self._mapping_highlighter = mapping_highlighter
         self._correspondence_suggester = correspondence_suggester
-        self._components = inspect_components(document_state)
-        raw_model = document_state.get("model")
-        if not isinstance(raw_model, Mapping):
-            raise ValueError("Invalid Chemvas document state: model is missing.")
-        model = deserialize_model_state(cast("Mapping[str, object]", raw_model))
+        inventory, self._plan = prepare_calculation_step_editor(document_state)
+        self._components = inventory.components
+        model = inventory.model
         self._atom_elements = {
             atom_id: atom.element for atom_id, atom in model.atoms.items()
         }
@@ -158,11 +156,6 @@ class CalculationStepDialog(QDialog):
             for component in self._components
             for atom_id in component.atom_ids
         }
-        self._plan = (
-            structural_calculation_plan_for_document(document_state)
-            if document_state.get("calculation_plan") is not None
-            else None
-        )
         self.result_plan_state: dict[str, object] | None = None
         self._loading = False
         self._inclusion_combos: dict[tuple[str, int], QComboBox] = {}
@@ -898,14 +891,6 @@ class CalculationStepDialog(QDialog):
             product_state, product_endpoint = self._build_endpoint("product")
             step_id = self.step_id.text().strip()
             selected_step_id = self.step_selector.currentData()
-            if (
-                selected_step_id is None
-                and self._plan is not None
-                and any(step.id == step_id for step in self._plan.steps)
-            ):
-                raise ValueError(
-                    f"Step {step_id} already exists. Select Edit {step_id} instead."
-                )
             correspondence = self._active_correspondence(
                 reactant_state,
                 product_state,
@@ -916,53 +901,10 @@ class CalculationStepDialog(QDialog):
                 product=product_endpoint,
                 atom_correspondence=correspondence,
             )
-            existing_step = (
-                next(
-                    (
-                        candidate
-                        for candidate in self._plan.steps
-                        if candidate.id == selected_step_id
-                    ),
-                    None,
-                )
-                if self._plan is not None and selected_step_id is not None
-                else None
-            )
-            if existing_step is not None:
-                assert self._plan is not None
-                existing_reactant_state = calculation_state_by_id(
-                    self._plan, existing_step.reactant.state_id
-                )
-                existing_product_state = calculation_state_by_id(
-                    self._plan, existing_step.product.state_id
-                )
-                if (
-                    reactant_state == existing_reactant_state
-                    and product_state == existing_product_state
-                    and reactant_endpoint.state_id == existing_step.reactant.state_id
-                    and reactant_endpoint.roles == existing_step.reactant.roles
-                    and product_endpoint.state_id == existing_step.product.state_id
-                    and product_endpoint.roles == existing_step.product.roles
-                    and correspondence == existing_step.atom_correspondence
-                ):
-                    step = replace(
-                        step,
-                        reactant=replace(
-                            step.reactant,
-                            precomplex=existing_step.reactant.precomplex,
-                        ),
-                        product=replace(
-                            step.product,
-                            precomplex=existing_step.product.precomplex,
-                        ),
-                    )
-            plan = plan_with_replaced_step(
+            plan = apply_calculation_step_edit(
                 self._document_state,
-                current_plan_state=(
-                    calculation_plan_to_state(self._plan)
-                    if self._plan is not None
-                    else None
-                ),
+                current_plan=self._plan,
+                selected_step_id=selected_step_id,
                 reactant_state=reactant_state,
                 product_state=product_state,
                 step=step,

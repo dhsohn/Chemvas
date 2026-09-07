@@ -9,7 +9,7 @@ from PyQt6.QtGui import QBrush, QColor, QFont, QPainterPath, QPen
 from chemvas.domain.document import ARC_KIND_SWEEPS, VALID_ARC_KINDS, VALID_LINE_KINDS
 from chemvas.features.annotations import arrow_label_html
 from chemvas.features.rendering import arc_midpoint, arc_points, wavy_line_points
-from chemvas.features.selection import HANDLE_ACCENT_COLOR
+from chemvas.features.selection import HANDLE_ACCENT_COLOR, default_curved_control
 from chemvas.ui.canvas_text_style_state import text_style_state_for
 from chemvas.ui.canvas_tool_settings_state import tool_settings_state_for
 from chemvas.ui.endpoint_snap_access import (
@@ -184,15 +184,21 @@ class CanvasArrowBuildService:
         return item
 
     def build_curved_arrow(self, start: QPointF, end: QPointF, double: bool):
-        dx = end.x() - start.x()
-        dy = end.y() - start.y()
-        length = math.hypot(dx, dy) or 1.0
-        nx = -dy / length
-        ny = dx / length
-        control = QPointF(
-            start.x() + dx * 0.5 + nx * length * 0.3,
-            start.y() + dy * 0.5 + ny * length * 0.3,
+        control = default_curved_control(start, end)
+        item = NoSelectPathItem(
+            self.build_curved_arrow_path(start, end, control, double)
         )
+        item.setPen(self.arrow_pen())
+        item.setBrush(QBrush(Qt.BrushStyle.NoBrush))
+        item.setData(
+            2, {"start": start, "end": end, "control": control, "double": double}
+        )
+        return item
+
+    def build_curved_arrow_path(
+        self, start: QPointF, end: QPointF, control: QPointF, double: bool
+    ) -> QPainterPath:
+        """The same quadratic path and heads for creation and later edits."""
         path = QPainterPath()
         path.moveTo(start)
         path.quadTo(control, end)
@@ -201,13 +207,7 @@ class CanvasArrowBuildService:
             self.add_arrow_head(path, control, start, double=False)
         else:
             self.add_arrow_head(path, control, end, double=False)
-        item = NoSelectPathItem(path)
-        item.setPen(self.arrow_pen())
-        item.setBrush(QBrush(Qt.BrushStyle.NoBrush))
-        item.setData(
-            2, {"start": start, "end": end, "control": control, "double": double}
-        )
-        return item
+        return path
 
     def build_inhibition_arrow(self, start: QPointF, end: QPointF):
         dx = end.x() - start.x()

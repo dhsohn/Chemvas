@@ -34,7 +34,10 @@ match the pending publisher above.
 2. In [`CHANGELOG.md`](CHANGELOG.md), rename the `## [Unreleased]` heading to
    `## [0.1.0] - YYYY-MM-DD`, start a fresh empty `## [Unreleased]` above it, and
    update the link references at the bottom.
-3. Open a PR with those changes; merge once CI is green.
+3. Open a PR with those changes; merge once CI is green. Wait for the CI run
+   triggered by the push to `main` to pass on that exact merge commit before
+   tagging it. The release provenance check requires successful `main` push CI;
+   the PR's CI result alone does not satisfy it.
 4. Tag the merge commit on `main` and push the tag:
    ```bash
    git checkout main && git pull

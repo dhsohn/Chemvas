@@ -155,21 +155,6 @@ class CanvasSceneResetService:
             clear_insert_runtime,
         )
 
-    def _discard_history_in_place(self) -> None:
-        # Emptying the stacks through their live lists keeps list identity
-        # for every alias holder and deliberately skips the history change
-        # notification: the reset caller publishes the new document itself.
-        history_service = history_service_for_access(self.canvas)
-        state = getattr(history_service, "state", None)
-        if state is None:
-            return
-        history = getattr(state, "history", None)
-        if isinstance(history, list):
-            history[:] = []
-        redo_stack = getattr(state, "redo_stack", None)
-        if isinstance(redo_stack, list):
-            redo_stack[:] = []
-
     def clear_scene(self) -> None:
         """Reset the canvas to a blank document.
 
@@ -216,7 +201,9 @@ class CanvasSceneResetService:
                     errors.append(error)
             if discard_history:
                 try:
-                    self._discard_history_in_place()
+                    history_service_for_access(
+                        self.canvas
+                    ).discard_without_notification()
                 except Exception as error:
                     errors.append(error)
         finally:

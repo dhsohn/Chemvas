@@ -28,6 +28,7 @@ from chemvas.ui.canvas_bond_graphics_state import (
 )
 from chemvas.ui.canvas_mark_registry import CanvasMarkRegistry
 from chemvas.ui.canvas_move_controller import CanvasMoveController
+from chemvas.ui.canvas_rotation_state import CanvasRotationState
 from chemvas.ui.canvas_scene_items_state import (
     CanvasSceneItemsState,
     set_scene_item_collection_for,
@@ -406,8 +407,10 @@ class CanvasViewMoveHelpersTest(unittest.TestCase):
         hit_testing_service = SimpleNamespace(mark_spatial_index_dirty=mock.Mock())
         view = SimpleNamespace(
             model=SimpleNamespace(atoms={1: Atom("C", 1.0, 2.0)}),
+            renderer=SimpleNamespace(style=SimpleNamespace(bond_length_px=20.0)),
             services=canvas_runtime_services(hit_testing_service=hit_testing_service),
             runtime_state=canvas_runtime_state(
+                rotation_state=CanvasRotationState(),
                 atom_coords_3d_state=CanvasAtomCoords3DState(),
                 atom_graphics_state=CanvasAtomGraphicsState(),
                 mark_registry=CanvasMarkRegistry({1: [mark]}),

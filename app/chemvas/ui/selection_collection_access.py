@@ -206,7 +206,7 @@ def selection_status_count_for(canvas) -> int:
             continue
         identities.add(selection_status_item_identity(item))
     for note in selected_scene_notes_for(canvas):
-        identities.add(("note", id(note)))
+        identities.add(selection_status_item_identity(note))
     return len(identities)
 
 

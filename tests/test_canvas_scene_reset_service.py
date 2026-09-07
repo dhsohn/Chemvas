@@ -323,12 +323,27 @@ class CanvasSceneResetServiceTest(unittest.TestCase):
             app = QApplication.instance() or QApplication([])
             canvas = build_canvas_view()
             item = canvas.scene().addRect(0, 0, 10, 10)
-            history = canvas.services.history_service.state.history
+            service = canvas.services.history_service
+            history = service.state.history
+            redo = service.state.redo_stack
             history.append(AddSceneItemsCommand(items=[item], item_states=[{}]))
+            redo.append(AddSceneItemsCommand(items=[item], item_states=[{}]))
+            service.set_enabled(False)
+            service.state.limit = 7
+            notifications = []
+            service.state.change_callback = lambda: notifications.append("history")
             selection_info_state_for(canvas).callback = None
             canvas.services.document.canvas_scene_reset_service.clear_scene()
+            assert service.state.history is history
+            assert service.state.redo_stack is redo
             assert history == []
-            canvas.services.history_service.undo()
+            assert redo == []
+            assert service.state.enabled is False
+            assert service.state.limit == 7
+            assert notifications == []
+            assert canvas.scene().items() == []
+            service.undo()
+            service.redo()
             canvas.close()
             app.processEvents()
             """

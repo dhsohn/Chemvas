@@ -1,6 +1,7 @@
 import os
 import tempfile
 import unittest
+from unittest import mock
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -14,6 +15,7 @@ from PyQt6.QtWidgets import (
 )
 
 from chemvas.features.export import (
+    ExportPlan,
     collect_export_items,
     content_bounds,
     export_scene,
@@ -73,6 +75,36 @@ class ExportRenderServiceTest(unittest.TestCase):
         self.assertIn("<path", content)
         # ...so the exported figure carries no font-dependent <text> element.
         self.assertNotIn("<text", content)
+
+    def test_render_uses_the_shared_feature_plan(self) -> None:
+        scene = self._content_scene()
+        items = collect_export_items(scene)
+        plan = ExportPlan(
+            source_x=-10.0,
+            source_y=-20.0,
+            source_w=100.0,
+            source_h=200.0,
+            out_w_pt=123.0,
+            out_h_pt=456.0,
+        )
+        with (
+            tempfile.TemporaryDirectory() as tmp,
+            mock.patch(
+                "chemvas.features.export.service.resolve_export_plan",
+                return_value=(items, plan),
+                create=True,
+            ) as resolve_plan,
+        ):
+            path = os.path.join(tmp, "shared-plan.svg")
+            result = export_scene(scene, path, fmt="svg", margin=4.0)
+            with open(path, encoding="utf-8") as handle:
+                content = handle.read()
+
+        self.assertIs(result, plan)
+        self.assertIn('viewBox="0 0 123 456"', content)
+        resolve_plan.assert_called_once_with(
+            scene, items=None, margin=4.0, unit_scale=1.0, target_width_pt=None
+        )
 
     def test_empty_scene_reports_nothing_to_export(self) -> None:
         scene = QGraphicsScene()

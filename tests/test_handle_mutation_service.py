@@ -12,6 +12,7 @@ from PyQt6.QtCore import QPointF, QRectF
 from PyQt6.QtGui import QPainterPath
 from PyQt6.QtWidgets import QApplication
 
+from chemvas.ui.canvas_arrow_build_service import CanvasArrowBuildService
 from chemvas.ui.canvas_scene_items_state import CanvasSceneItemsState
 from chemvas.ui.canvas_tool_settings_state import CanvasToolSettingsState
 from chemvas.ui.curved_arrow_path_service import CurvedArrowPathService
@@ -65,9 +66,6 @@ class HandleMutationServiceTest(unittest.TestCase):
         cls.app.setQuitOnLastWindowClosed(False)
 
     def _make_canvas(self, *, bond_length_px: float = 40.0):
-        build_service = SimpleNamespace(
-            add_arrow_head=mock.Mock(), apply_arrow_labels=lambda item, labels: None
-        )
         canvas = SimpleNamespace(
             renderer=SimpleNamespace(
                 style=SimpleNamespace(bond_length_px=bond_length_px)
@@ -78,8 +76,10 @@ class HandleMutationServiceTest(unittest.TestCase):
             ),
             refresh_selection_outline=mock.Mock(),
         )
+        build_service = CanvasArrowBuildService(canvas)
+        build_service.add_arrow_head = mock.Mock(wraps=build_service.add_arrow_head)
         canvas.services = canvas_runtime_services(
-            scene_decoration_build_service=build_service,
+            arrow_build_service=build_service,
             selection_controller=SimpleNamespace(
                 update_selection_outline=canvas.refresh_selection_outline
             ),
@@ -136,7 +136,9 @@ class HandleMutationServiceTest(unittest.TestCase):
         self.assertFalse(curved_item.path().isEmpty())
         self.assertEqual(curved_item.data(2)["control"], QPointF(5.0, 8.0))
         self.assertEqual(curved_item.pos(), QPointF())
-        add_arrow_head = canvas.services.scene_decoration.scene_decoration_build_service.add_arrow_head
+        add_arrow_head = (
+            canvas.services.scene_decoration.arrow_build_service.add_arrow_head
+        )
         self.assertEqual(add_arrow_head.call_count, 2)
         canvas.refresh_selection_outline.assert_called_once_with()
 
@@ -174,7 +176,9 @@ class HandleMutationServiceTest(unittest.TestCase):
         self.assertEqual(curved_item.pos(), QPointF())
         canvas.refresh_selection_outline.assert_called_once_with()
 
-        add_arrow_head = canvas.services.scene_decoration.scene_decoration_build_service.add_arrow_head
+        add_arrow_head = (
+            canvas.services.scene_decoration.arrow_build_service.add_arrow_head
+        )
         add_arrow_head.reset_mock()
         canvas.refresh_selection_outline.reset_mock()
         fallback_item = _FakeGraphicsItem(

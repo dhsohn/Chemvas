@@ -2,7 +2,6 @@ import unittest
 
 from chemvas.ui.main_window_toolbar_logic import (
     arrow_preset_from_label,
-    arrow_type_from_label,
     bond_style_from_label,
     orbital_type_from_label,
     tool_action_key_for_canvas_state,
@@ -14,8 +13,6 @@ class MainWindowToolbarLogicTest(unittest.TestCase):
     def test_mapping_helpers_use_expected_defaults(self) -> None:
         self.assertEqual(bond_style_from_label("Bold"), ("bold_in", 1))
         self.assertEqual(bond_style_from_label("Unknown"), ("single", 1))
-        self.assertEqual(arrow_type_from_label("Curved Double"), "curved_double")
-        self.assertEqual(arrow_type_from_label("Unknown"), "reaction")
         self.assertEqual(orbital_type_from_label("sp2"), "sp2")
         self.assertEqual(orbital_type_from_label("Unknown"), "s")
         self.assertEqual(arrow_preset_from_label("Bold"), (2.2, 0.4))

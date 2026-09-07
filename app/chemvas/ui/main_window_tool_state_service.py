@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from chemvas.ui.main_window_toolbar_logic import (
     arrow_preset_from_label,
-    arrow_type_from_label,
     bond_style_from_label,
     orbital_type_from_label,
     tool_action_key_for_canvas_state,
@@ -61,8 +60,8 @@ class MainWindowToolStateService:
         self._tool_mode_controller(window).set_mark_kind(kind)
         self._status.refresh_status_context(window)
 
-    def set_arrow_type(self, window, value: str) -> None:
-        self._tool_mode_controller(window).set_arrow_type(arrow_type_from_label(value))
+    def set_arrow_type(self, window, kind: str) -> None:
+        self._tool_mode_controller(window).set_arrow_type(kind)
 
     def set_bracket_type(self, window, value: str) -> None:
         self._tool_mode_controller(window).set_bracket_type(value)

@@ -221,7 +221,7 @@ def build_arrow_page(
                 value,
                 icon_factory.icon_arrow_preview(value),
                 label,
-                lambda _checked, v=label: tool_state_service.set_arrow_type(window, v),
+                lambda _checked, v=value: tool_state_service.set_arrow_type(window, v),
             )
             for label, value in ARROW_MENU_SPECS
         ],
