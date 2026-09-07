@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- The endpoint snap reaches twelve pixels from the cursor at any zoom.
+  It was a fixed fraction of a bond length, which is eight pixels at the
+  default zoom and fewer as the view zooms out, so a connector had to be
+  released almost exactly on the endpoint to take it. A ring on the
+  drawing preview now marks an end that has taken an existing endpoint,
+  and an endpoint handle sitting on another item's endpoint is drawn
+  filled rather than hollow.
+
+### Removed
+
+- Removed `snap_to_arrow_endpoints_for` and `ENDPOINT_SNAP_FRACTION`. The
+  drawing snap funnel replaced them and no application code called them.
+
 ## [0.7.0] - 2026-09-07
 
 This release is a set of drawing tools for kinetic and energy schemes: lines

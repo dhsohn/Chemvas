@@ -187,6 +187,9 @@ class CanvasSceneDecorationBuildService:
     def preview_arrow(self, start: QPointF, end: QPointF, kind: str):
         return self.arrow_build_service.preview_arrow(start, end, kind)
 
+    def mark_snapped_points(self, item, points) -> None:
+        self.arrow_build_service.mark_snapped_points(item, points)
+
     def build_arrow_item(
         self, start: QPointF, end: QPointF, kind: str
     ) -> QGraphicsPathItem:

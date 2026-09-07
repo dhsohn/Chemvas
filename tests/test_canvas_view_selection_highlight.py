@@ -19,6 +19,7 @@ from PyQt6.QtWidgets import (
 )
 
 from chemvas.ui.canvas_handle_controller import CanvasHandleController
+from chemvas.ui.canvas_scene_items_state import CanvasSceneItemsState
 from chemvas.ui.canvas_service_ports import handle_overlay_service_for_access
 from chemvas.ui.canvas_tool_settings_state import CanvasToolSettingsState
 from chemvas.ui.curved_arrow_path_service import CurvedArrowPathService
@@ -220,6 +221,7 @@ class CanvasViewSelectionHighlightTest(unittest.TestCase):
             renderer=SimpleNamespace(style=SimpleNamespace(bond_length_px=20.0)),
             runtime_state=canvas_runtime_state(
                 handle_state=CanvasHandleState(),
+                scene_items_state=CanvasSceneItemsState(),
                 selection_style_state=_selection_style_state(),
                 tool_settings_state=CanvasToolSettingsState(curved_snap_step=2),
             ),

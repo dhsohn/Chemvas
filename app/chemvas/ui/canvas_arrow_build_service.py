@@ -4,14 +4,24 @@ import math
 from typing import TYPE_CHECKING
 
 from PyQt6.QtCore import QPointF, Qt
-from PyQt6.QtGui import QBrush, QFont, QPainterPath
+from PyQt6.QtGui import QBrush, QColor, QFont, QPainterPath, QPen
 
 from chemvas.domain.document import ARC_KIND_SWEEPS, VALID_ARC_KINDS, VALID_LINE_KINDS
 from chemvas.features.annotations import arrow_label_html
 from chemvas.features.rendering import arc_midpoint, arc_points, wavy_line_points
+from chemvas.features.selection import HANDLE_ACCENT_COLOR
 from chemvas.ui.canvas_text_style_state import text_style_state_for
 from chemvas.ui.canvas_tool_settings_state import tool_settings_state_for
-from chemvas.ui.graphics_items import NoSelectPathItem, NoSelectTextItem
+from chemvas.ui.endpoint_snap_access import (
+    SNAP_MARK_SCREEN_PX,
+    scene_length_for_screen_px,
+    snapped_points_among_for,
+)
+from chemvas.ui.graphics_items import (
+    NoSelectEllipseItem,
+    NoSelectPathItem,
+    NoSelectTextItem,
+)
 from chemvas.ui.renderer_style_access import (
     bold_bond_pen_for,
     bond_length_px_for,
@@ -28,6 +38,9 @@ if TYPE_CHECKING:
 # the role back to the parent arrow, and export collects it so the label
 # widens the figure bounds.
 ARROW_LABEL_ROLE = "arrow_label"
+# Role of the ring drawn on a preview end that has taken an existing
+# endpoint. It lives on the preview, so it disappears with it.
+SNAP_MARK_ROLE = "snap_mark"
 
 
 class CanvasArrowBuildService:
@@ -41,6 +54,30 @@ class CanvasArrowBuildService:
     def preview_arrow(self, start: QPointF, end: QPointF, kind: str):
         item = self.build_arrow_item(start, end, kind)
         return add_item_to_canvas_scene(self.canvas, item)
+
+    def mark_snapped_points(self, item, points) -> None:
+        """Ring each of ``points`` that has taken an existing endpoint.
+
+        ``item`` is the preview, which is added to the scene without being
+        registered as an arrow, so it is never one of the candidates and
+        there is nothing to exclude.
+        """
+        caught = snapped_points_among_for(self.canvas, points)
+        if not caught:
+            return
+        radius = scene_length_for_screen_px(self.canvas, SNAP_MARK_SCREEN_PX) / 2.0
+        # The handle accent, not drawing ink: this is an interaction mark.
+        pen = QPen(QColor(HANDLE_ACCENT_COLOR))
+        pen.setWidthF(1.6)
+        pen.setCosmetic(True)
+        for point in caught:
+            mark = NoSelectEllipseItem(
+                point.x() - radius, point.y() - radius, radius * 2, radius * 2
+            )
+            mark.setPen(pen)
+            mark.setBrush(QBrush(Qt.BrushStyle.NoBrush))
+            mark.setData(0, SNAP_MARK_ROLE)
+            mark.setParentItem(item)
 
     def build_arrow_item(self, start: QPointF, end: QPointF, kind: str):
         if kind in VALID_LINE_KINDS:
@@ -373,4 +410,4 @@ class CanvasArrowBuildService:
         return pen
 
 
-__all__ = ["ARROW_LABEL_ROLE", "CanvasArrowBuildService"]
+__all__ = ["ARROW_LABEL_ROLE", "SNAP_MARK_ROLE", "CanvasArrowBuildService"]

@@ -27,6 +27,11 @@ def clear_handle_items(
     return []
 
 
+# The accent a ChemDraw-style handle is outlined with, and the fill of one
+# that has taken hold of another item's endpoint.
+HANDLE_ACCENT_COLOR = "#0f8a78"
+
+
 def create_handle_item(
     pos: QPointF,
     handle_type: str,
@@ -38,7 +43,7 @@ def create_handle_item(
     half = size / 2.0
     handle = QGraphicsRectItem(pos.x() - half, pos.y() - half, size, size)
     handle.setBrush(QBrush(QColor("#ffffff")))
-    pen = QPen(QColor("#0f8a78"))
+    pen = QPen(QColor(HANDLE_ACCENT_COLOR))
     pen.setWidthF(1.3)
     handle.setPen(pen)
     handle.setData(0, "handle")
@@ -46,6 +51,15 @@ def create_handle_item(
     handle.setData(2, target)
     handle.setZValue(30)
     return handle
+
+
+def mark_handle_snapped(handle: QGraphicsRectItem) -> None:
+    """Fill a handle that is sitting on another item's endpoint.
+
+    A hollow handle is free, a filled one has taken hold; that is the
+    difference a drag needs to see without stopping to look.
+    """
+    handle.setBrush(QBrush(QColor(HANDLE_ACCENT_COLOR)))
 
 
 def shape_resize_handle_positions(rect: QRectF) -> list[tuple[str, QPointF]]:
@@ -179,12 +193,14 @@ def clamp_curved_midpoint(
 
 
 __all__ = [
+    "HANDLE_ACCENT_COLOR",
     "clamp_curved_midpoint",
     "clear_handle_items",
     "control_from_midpoint",
     "create_handle_item",
     "curved_midpoint",
     "default_curved_control",
+    "mark_handle_snapped",
     "orbital_handle_positions",
     "orbital_rotation_angle",
     "orbital_scale_factor",
