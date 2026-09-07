@@ -16,7 +16,7 @@ from chemvas.ui.canvas_model_access import (
     next_atom_id_for,
 )
 from chemvas.ui.canvas_smiles_input_state import last_smiles_input_for
-from chemvas.ui.history_commands import AddSceneItemsCommand
+from chemvas.ui.history_commands import AddSceneItemsCommand, GroupSceneItemsCommand
 from chemvas.ui.scene_item_state import (
     atom_state_dict_for,
     bond_state_dict,
@@ -52,6 +52,7 @@ class CanvasHistoryRecordingService:
         before_bond_count: int,
         before_smiles_input: str | None,
         added_scene_items: list | None = None,
+        added_groups: list[GroupSceneItemsCommand] | None = None,
     ) -> None:
         commands: list[HistoryCommand] = []
         after_next_atom_id = next_atom_id_for(self.canvas)
@@ -104,6 +105,8 @@ class CanvasHistoryRecordingService:
                         item_states=states, items=list(added_scene_items)
                     )
                 )
+        if added_groups:
+            commands.extend(added_groups)
         if not commands:
             return
         if len(commands) == 1:

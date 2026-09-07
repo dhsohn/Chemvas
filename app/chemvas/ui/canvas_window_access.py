@@ -58,11 +58,27 @@ def set_history_change_callback_for(canvas, callback) -> None:
     history_service_for_canvas(canvas).set_change_callback(callback)
 
 
+def set_document_change_callback_for(canvas, callback) -> None:
+    callback_state_for(canvas).document_change = callback
+
+
+def notify_document_change_for(canvas) -> None:
+    callback = callback_state_for(canvas).document_change
+    if callback is not None:
+        try:
+            callback()
+        except Exception:
+            # Chrome is an observer, not an authority over editor/history state.
+            return
+
+
 __all__ = [
     "history_service_for_canvas",
+    "notify_document_change_for",
     "notify_error_for",
     "restore_canvas_state_for",
     "save_canvas_to_file_for",
+    "set_document_change_callback_for",
     "set_error_callback_for",
     "set_history_change_callback_for",
     "set_selection_info_callback_for",

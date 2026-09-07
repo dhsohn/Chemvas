@@ -68,6 +68,7 @@ UNSAFE_NOTE_HTML_VALUE_MARKERS = (
 )
 SAFE_NOTE_STYLE_PROPERTIES = frozenset(
     (
+        "-qt-paragraph-type",
         "background-color",
         "color",
         "font-family",
@@ -239,6 +240,11 @@ class _NoteHtmlSanitizer(HTMLParser):
             if not _is_safe_attr_value(value):
                 continue
             parts.append(f' {name}="{escape(value, quote=True)}"')
+        if tag in {"p", "li"}:
+            # Qt exports this rule in a head stylesheet, which is deliberately
+            # removed above. Keep its paragraph whitespace policy as a fixed
+            # inline rule, without accepting arbitrary stylesheets or CSS.
+            style_values.append("white-space:pre-wrap")
         style_value = "; ".join(style_values)
         if style_value and _is_safe_attr_value(style_value):
             parts.append(f' style="{escape(style_value, quote=True)}"')
@@ -321,6 +327,10 @@ def _is_safe_style_property_value(property_name: str, value: str) -> bool:
         )
     if property_name == "vertical-align":
         return lower_value in {"baseline", "sub", "super"}
+    if property_name == "-qt-paragraph-type":
+        # Qt uses this marker with <br> to represent one empty paragraph,
+        # rather than a paragraph containing an additional line break.
+        return lower_value == "empty"
     return False
 
 

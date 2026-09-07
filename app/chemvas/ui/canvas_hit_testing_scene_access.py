@@ -15,4 +15,13 @@ def scene_items_at_pos_for_canvas(canvas, pos):
     )
 
 
-__all__ = ["scene_items_at_pos_for_canvas"]
+def scene_items_in_rect_for_canvas(canvas, rect):
+    return canvas_scene_for(canvas).items(
+        rect,
+        Qt.ItemSelectionMode.IntersectsItemBoundingRect,
+        Qt.SortOrder.DescendingOrder,
+        QTransform(),
+    )
+
+
+__all__ = ["scene_items_at_pos_for_canvas", "scene_items_in_rect_for_canvas"]

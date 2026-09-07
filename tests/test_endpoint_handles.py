@@ -374,7 +374,8 @@ class EndpointHandleTest(unittest.TestCase):
         item.setSelected(True)
         self.app.processEvents()
 
-        self._click(QPointF(0.0, 0.0))
+        # Click the curve itself, not the empty midpoint of its chord.
+        self._click(QPointF(0.0, 12.0))
 
         self.assertEqual(
             _handle_types(self.canvas),

@@ -8,9 +8,8 @@ from tests.runtime_state import canvas_runtime_state
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PyQt6.QtCore import QEvent, QPointF, Qt
-from PyQt6.QtGui import QTextCursor
-from PyQt6.QtWidgets import QApplication, QGraphicsScene, QGraphicsTextItem
+from PyQt6.QtCore import QPointF, Qt
+from PyQt6.QtWidgets import QApplication
 
 import chemvas.ui.edit_tools as edit_tools_module
 import chemvas.ui.perspective_tool as perspective_tool_module
@@ -1265,35 +1264,20 @@ class ToolsAdditionalTest(unittest.TestCase):
         self.assertFalse(perspective_tool.on_mouse_release(_Event(QPointF())))
         self.assertEqual(perspective_canvas.end_calls, 0)
 
-    def test_note_tool_click_collapses_selection_double_click_selects_word(
+    def test_note_tool_delegates_editing_note_pointer_gestures_to_qt(
         self,
     ) -> None:
-        scene = QGraphicsScene()
-        note = QGraphicsTextItem("Hello World")
-        note.setData(0, "note")
-        scene.addItem(note)
-
-        center_y = note.boundingRect().center().y()
-        context = SimpleNamespace(
-            scene_pos_from_event=lambda _event: note.mapToScene(QPointF(2.0, center_y))
-        )
+        note = SimpleNamespace(data=lambda _role: "note", hasFocus=lambda: True)
+        context = SimpleNamespace(item_at_event=lambda _event: note)
         tool = NoteTool(SimpleNamespace(), context=context)
-
-        cursor = note.textCursor()
-        cursor.select(QTextCursor.SelectionType.Document)
-        note.setTextCursor(cursor)
-        self.assertTrue(note.textCursor().hasSelection())
-
-        press = SimpleNamespace(type=lambda: QEvent.Type.MouseButtonPress)
-        tool._place_caret_in_note(note, press)
-        # A single click drops the selection (caret only).
-        self.assertFalse(note.textCursor().hasSelection())
-
-        dbl = SimpleNamespace(type=lambda: QEvent.Type.MouseButtonDblClick)
-        tool._place_caret_in_note(note, dbl)
-        # A double click selects the word under the caret.
-        self.assertTrue(note.textCursor().hasSelection())
-        self.assertEqual(note.textCursor().selectedText(), "Hello")
+        for modifiers in (
+            Qt.KeyboardModifier.NoModifier,
+            Qt.KeyboardModifier.ShiftModifier,
+            Qt.KeyboardModifier.ControlModifier,
+        ):
+            self.assertFalse(
+                tool.on_mouse_press(_Event(QPointF(), modifiers=modifiers))
+            )
 
     def test_orbital_mark_and_note_tools_cover_mouse_press_paths(
         self,

@@ -6,6 +6,7 @@ from PyQt6.QtCore import QRectF
 
 import chemvas.ui.scene_clipboard_access as access
 from chemvas.domain.document import CLIPBOARD_SELECTION_VERSION
+from chemvas.ui.canvas_group_state import CanvasGroupState
 from chemvas.ui.scene_clipboard_state import SceneClipboardState
 from tests.runtime_state import canvas_runtime_state
 
@@ -13,6 +14,7 @@ from tests.runtime_state import canvas_runtime_state
 class _Canvas:
     def __init__(self, scene) -> None:
         self._scene = scene
+        self.runtime_state = canvas_runtime_state(group_state=CanvasGroupState())
 
     def scene(self):
         return self._scene

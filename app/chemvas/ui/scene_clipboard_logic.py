@@ -85,6 +85,7 @@ def _serialize_marks(
     selected_items: Sequence[QGraphicsItem],
     scene,
     scene_item_state_getter: Callable[[QGraphicsItem], dict],
+    item_refs: dict[QGraphicsItem, tuple[str, int]],
 ) -> list[dict]:
     marks: list[dict] = []
     seen_mark_items: set[QGraphicsItem] = set()
@@ -98,6 +99,7 @@ def _serialize_marks(
             if not mark_state:
                 continue
             seen_mark_items.add(mark_item)
+            item_refs[mark_item] = ("marks", len(marks))
             marks.append(mark_state)
     for item in selected_items:
         if item.data(0) != "mark" or item in seen_mark_items:
@@ -106,6 +108,7 @@ def _serialize_marks(
         if not mark_state:
             continue
         seen_mark_items.add(item)
+        item_refs[item] = ("marks", len(marks))
         marks.append(_selected_mark_state_for_payload(mark_state, atom_ids))
     return marks
 
@@ -124,6 +127,7 @@ def _selected_mark_state_for_payload(mark_state: dict, atom_ids: set[int]) -> di
 def _serialize_scene_items(
     selected_items: Sequence[QGraphicsItem],
     scene_item_state_getter: Callable[[QGraphicsItem], dict],
+    item_refs: dict[QGraphicsItem, tuple[str, int]],
 ) -> list[dict]:
     scene_item_states: list[dict] = []
     for item in selected_items:
@@ -131,6 +135,7 @@ def _serialize_scene_items(
             continue
         state = scene_item_state_getter(item)
         if state:
+            item_refs[item] = ("scene_items", len(scene_item_states))
             scene_item_states.append(state)
     return scene_item_states
 
@@ -149,6 +154,7 @@ def build_selection_clipboard_payload(
     scene_item_state_getter: Callable[[QGraphicsItem], dict],
     perspective_state_getter: Callable[[set[int]], dict | None] | None = None,
     version: int,
+    groups: Sequence[tuple[set[int], Sequence[QGraphicsItem]]] = (),
 ) -> dict | None:
     if type(version) is not int or version != CLIPBOARD_SELECTION_VERSION:
         raise ValueError("Unsupported Chemvas clipboard selection version.")
@@ -160,10 +166,18 @@ def build_selection_clipboard_payload(
     atoms = _serialize_atoms(atom_ids, atom_state_getter)
     serialized_bonds = _serialize_bonds(atom_ids, bonds, bond_state_getter)
     rings = _serialize_rings(ring_items, atom_ids, scene, scene_item_state_getter)
+    item_refs: dict[QGraphicsItem, tuple[str, int]] = {}
     marks = _serialize_marks(
-        atom_ids, marks_by_atom, selected_items, scene, scene_item_state_getter
+        atom_ids,
+        marks_by_atom,
+        selected_items,
+        scene,
+        scene_item_state_getter,
+        item_refs,
     )
-    scene_item_states = _serialize_scene_items(selected_items, scene_item_state_getter)
+    scene_item_states = _serialize_scene_items(
+        selected_items, scene_item_state_getter, item_refs
+    )
 
     if not atoms and not marks and not rings and not scene_item_states:
         return None
@@ -180,6 +194,19 @@ def build_selection_clipboard_payload(
         perspective_state = perspective_state_getter(atom_ids)
         if perspective_state is not None:
             payload["perspective"] = perspective_state
+    copied_atom_ids = {atom["id"] for atom in atoms}
+    copied_groups = [
+        {
+            "atoms": sorted(group_atoms),
+            "items": [item_refs[item] for item in group_items],
+        }
+        for group_atoms, group_items in groups
+        if (group_atoms or group_items)
+        and group_atoms <= copied_atom_ids
+        and all(item in item_refs for item in group_items)
+    ]
+    if copied_groups:
+        payload["groups"] = copied_groups
     return payload
 
 

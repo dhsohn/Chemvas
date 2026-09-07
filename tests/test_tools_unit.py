@@ -279,6 +279,7 @@ class _FakeSelectCanvas:
             ),
             selection_controller=SimpleNamespace(
                 toggle_item_selection=self.toggle_item_selection,
+                clear_note_selection=mock.Mock(),
                 preferred_structure_item_at_scene_pos=self.preferred_structure_item_at_scene_pos,
                 selection_hit_test=self.selection_hit_test,
                 select_structure_for_item=self.select_structure_for_item,

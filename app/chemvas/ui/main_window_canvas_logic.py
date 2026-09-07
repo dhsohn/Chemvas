@@ -8,6 +8,7 @@ from chemvas.ui.canvas_tool_settings_state import (
     tool_settings_state_for,
 )
 from chemvas.ui.canvas_window_access import (
+    set_document_change_callback_for,
     set_error_callback_for,
     set_history_change_callback_for,
     set_selection_info_callback_for,
@@ -91,6 +92,7 @@ def bind_active_canvas_callbacks(
     zoom_callback,
     history_change_callback,
     error_callback=None,
+    document_change_callback=None,
 ) -> None:
     for canvas in canvases:
         is_active = canvas is active_canvas
@@ -104,6 +106,9 @@ def bind_active_canvas_callbacks(
         set_zoom_callback_for(canvas, zoom_callback if is_active else None)
         set_history_change_callback_for(
             canvas, history_change_callback if is_active else None
+        )
+        set_document_change_callback_for(
+            canvas, document_change_callback if is_active else None
         )
 
 

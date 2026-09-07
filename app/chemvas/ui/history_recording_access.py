@@ -1,6 +1,9 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from chemvas.ui.history_commands import GroupSceneItemsCommand
 
 from chemvas.ui.canvas_service_ports import history_recording_service_for_access
 
@@ -12,6 +15,7 @@ def record_additions_for(
     before_smiles_input: str | None,
     *,
     added_scene_items: list | None = None,
+    added_groups: list[GroupSceneItemsCommand] | None = None,
 ) -> None:
     kwargs: dict[str, Any] = {
         "before_next_atom_id": before_next_atom_id,
@@ -20,6 +24,8 @@ def record_additions_for(
     }
     if added_scene_items is not None:
         kwargs["added_scene_items"] = added_scene_items
+    if added_groups:
+        kwargs["added_groups"] = added_groups
     history_recording_service_for_access(canvas).record_additions(**kwargs)
 
 

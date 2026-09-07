@@ -4,6 +4,7 @@ import time
 from typing import override
 
 from PyQt6.QtCore import Qt
+from PyQt6.QtWidgets import QApplication, QGraphicsView
 
 from chemvas.domain.document import VALID_ARROW_KINDS, VALID_CURVED_ARROW_KINDS
 from chemvas.features.selection import SelectionPressContext, plan_selection_press
@@ -18,6 +19,7 @@ from chemvas.ui.history_commands import UpdateSceneItemCommand
 from chemvas.ui.scene_item_state import scene_item_state_for
 from chemvas.ui.selection_collection_access import selection_snapshot_for
 from chemvas.ui.selection_drag_tool import SelectionDragMixin
+from chemvas.ui.selection_service_access import clear_note_selection_for
 from chemvas.ui.tool_base import Tool
 
 
@@ -43,6 +45,9 @@ class SelectTool(SelectionDragMixin, Tool):
     @override
     def deactivate(self) -> None:
         self._cancel_active_interaction()
+        # Qt owns marquee dragging separately from our item transactions.
+        # Changing mode stops it even if the mouse button is still held.
+        self.context.set_drag_mode(QGraphicsView.DragMode.NoDrag)
         clear_handles_for(self.canvas)
 
     def _selection_drag_context(self, snapshot=None) -> tuple[set[int], list]:
@@ -264,15 +269,28 @@ class SelectTool(SelectionDragMixin, Tool):
         snapshot = selection_snapshot_for(self.canvas)
         if (
             item is not None
-            and item.data(0) in VALID_ARROW_KINDS
-            and snapshot is not None
-            and item in snapshot.selection_items
+            and item.data(0) in {"note", "shape"}
+            and (snapshot is None or item not in snapshot.selection_items)
         ):
-            return self._begin_arrow_handle_toggle_or_drag(
-                item,
-                press_pos,
-                snapshot=snapshot,
-            )
+            if event.modifiers() & Qt.KeyboardModifier.ControlModifier:
+                return self.context.toggle_item_selection(item)
+            clear_handles_for(self.canvas)
+            if not self._select_structure_item(item):
+                return False
+            atom_ids, selection_items = self._selection_drag_context()
+            return self._begin_selection_drag(atom_ids, selection_items, press_pos)
+        if item is not None and item.data(0) in VALID_ARROW_KINDS:
+            if snapshot is not None and item in snapshot.selection_items:
+                return self._begin_arrow_handle_toggle_or_drag(
+                    item, press_pos, snapshot=snapshot
+                )
+            clear_handles_for(self.canvas)
+            if event.modifiers() & Qt.KeyboardModifier.ControlModifier:
+                return self.context.toggle_item_selection(item)
+            if not self._select_structure_item(item):
+                return False
+            atom_ids, selection_items = self._selection_drag_context()
+            return self._begin_selection_drag(atom_ids, selection_items, press_pos)
         selected_arrow = self._selected_arrow_item_for_handle_toggle(snapshot)
         if (
             item is None
@@ -320,6 +338,10 @@ class SelectTool(SelectionDragMixin, Tool):
             )
         )
         if decision.action == "ignore":
+            if not event.modifiers() & (
+                Qt.KeyboardModifier.ControlModifier | Qt.KeyboardModifier.ShiftModifier
+            ):
+                clear_note_selection_for(self.canvas)
             return False
         if decision.action == "reselect_preferred_and_drag":
             if preferred is None or preferred.data(0) not in {"atom", "bond", "ring"}:
@@ -359,10 +381,25 @@ class SelectTool(SelectionDragMixin, Tool):
             if now - self._last_drag_time < self._drag_interval:
                 return True
             self._last_drag_time = now
-        scene_pos = self.context.scene_pos_from_event(event)
+        self._move_selection_to(self.context.scene_pos_from_event(event))
+        return True
+
+    def _move_selection_to(self, scene_pos) -> None:
+        if self._start_pos is None or not self._drag_selection:
+            return
         delta = scene_pos - self._start_pos
-        if abs(delta.x()) > 1e-6 or abs(delta.y()) > 1e-6:
-            self._clear_pending_handle_toggle()
+        if not self._drag_delta_is_effective(delta):
+            return
+        if not self._moved and any(
+            item.data(0) in VALID_ARROW_KINDS for item in self._selection_items
+        ):
+            transform = self.canvas.transform()
+            screen_delta = transform.map(scene_pos) - transform.map(self._start_pos)
+            if screen_delta.manhattanLength() < QApplication.startDragDistance():
+                # Keep the press position until the gesture starts: several
+                # small frames must accumulate, while click jitter stays inert.
+                return
+        self._clear_pending_handle_toggle()
         try:
             self._apply_drag_delta_with_connect(delta)
         except Exception:
@@ -370,13 +407,15 @@ class SelectTool(SelectionDragMixin, Tool):
                 self._clear_pending_handle_toggle()
             raise
         self._start_pos = scene_pos
-        return True
 
     @override
     def on_mouse_release(self, event) -> bool:
         if self._active_handle is not None:
             self._commit_handle_drag()
             return True
+        # The final pointer position matters even when Qt coalesces every move
+        # frame. Resolve it before deciding whether this was a handle click.
+        self._move_selection_to(self.context.scene_pos_from_event(event))
         if self._pending_arrow_handle_item is not None and not self._moved:
             item = self._pending_arrow_handle_item
             action = self._pending_arrow_handle_action
@@ -404,17 +443,6 @@ class SelectTool(SelectionDragMixin, Tool):
         if self._start_pos is None and not self._drag_selection:
             self._clear_pending_handle_toggle()
             return False
-        if self._start_pos is not None and self._drag_selection:
-            scene_pos = self.context.scene_pos_from_event(event)
-            delta = scene_pos - self._start_pos
-            if abs(delta.x()) > 1e-6 or abs(delta.y()) > 1e-6:
-                try:
-                    self._apply_drag_delta_with_connect(delta)
-                except Exception:
-                    if self._drag_transaction is None:
-                        self._clear_pending_handle_toggle()
-                    raise
-                self._start_pos = scene_pos
         try:
             self._commit_selection_drag()
         except Exception:

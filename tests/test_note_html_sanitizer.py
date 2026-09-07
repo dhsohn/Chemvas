@@ -46,7 +46,7 @@ def test_sanitize_note_html_keeps_safe_body_subset() -> None:
     sanitized = sanitize_note_html(html)
 
     assert sanitized == (
-        "<p><b>B</b><strong>S</strong><i>I</i><em>E</em><u>U</u><sub>2</sub><sup>+</sup><br>"
+        '<p style="white-space:pre-wrap"><b>B</b><strong>S</strong><i>I</i><em>E</em><u>U</u><sub>2</sub><sup>+</sup><br>'
         '<span style="color:#123456; background-color:rgb(10, 20, 30)">S</span></p>'
     )
 
@@ -87,7 +87,7 @@ def test_sanitize_note_html_preserves_legacy_note_formatting_without_document_wr
     assert '<div align="center" style="background-color:#ffeeaa">' in sanitized
     assert '<blockquote style="margin-left:40px; color:rgb(12, 34, 56)">' in sanitized
     assert '<font color="red" face="Courier New" size="4">font</font>' in sanitized
-    assert '<p align="right">' in sanitized
+    assert '<p align="right" style="white-space:pre-wrap">' in sanitized
     assert "font-family:&#x27;Courier New&#x27;" in sanitized
     assert "font-size:12pt" in sanitized
     assert "font-weight:700" in sanitized
@@ -97,9 +97,34 @@ def test_sanitize_note_html_preserves_legacy_note_formatting_without_document_wr
     assert "color:#abcdef" in sanitized
     assert "background-color:lightblue" in sanitized
     assert "vertical-align:super" in sanitized
-    assert '<ul type="disc"><li value="2">one</li></ul>' in sanitized
-    assert '<ol type="A" start="2"><li type="i">two</li></ol>' in sanitized
+    assert (
+        '<ul type="disc"><li value="2" style="white-space:pre-wrap">one</li></ul>'
+        in sanitized
+    )
+    assert (
+        '<ol type="A" start="2"><li type="i" style="white-space:pre-wrap">two</li></ol>'
+        in sanitized
+    )
     assert "background-image" not in sanitized
     assert "url(" not in sanitized
-    assert "white-space" not in sanitized
+    assert sanitized.count("white-space:pre-wrap") == 3
+    assert sanitize_note_html(sanitized) == sanitized
+
+
+def test_whitespace_policy_is_fixed_not_untrusted_css():
+    html = '<p style="white-space:nowrap; color:red; white-space:url(file:///x)">  a   b  </p>'
+    sanitized = sanitize_note_html(html)
+    assert sanitized == '<p style="color:red; white-space:pre-wrap">  a   b  </p>'
+    assert sanitize_note_html(sanitized) == sanitized
+
+
+def test_empty_paragraph_marker_accepts_only_the_qt_empty_value():
+    sanitized = sanitize_note_html(
+        '<p style="-qt-paragraph-type:empty; -qt-block-indent:7"><br></p>'
+        '<p style="-qt-paragraph-type:other; -qt-paragraph-type:url(file:///x)">x</p>'
+    )
+    assert sanitized == (
+        '<p style="-qt-paragraph-type:empty; white-space:pre-wrap"><br></p>'
+        '<p style="white-space:pre-wrap">x</p>'
+    )
     assert sanitize_note_html(sanitized) == sanitized

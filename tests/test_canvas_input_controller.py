@@ -349,7 +349,7 @@ class CanvasInputControllerTest(unittest.TestCase):
         canvas.services.scene_operations.scene_delete_controller.delete_selected_items.assert_not_called()
         empty_cut_event.accept.assert_not_called()
 
-    def test_key_press_event_escape_copy_and_paste_false_paths_fall_through(
+    def test_escape_returns_to_selection_and_unhandled_clipboard_keys_fall_through(
         self,
     ) -> None:
         canvas = _Canvas()
@@ -370,8 +370,9 @@ class CanvasInputControllerTest(unittest.TestCase):
             controller.key_press_event(copy_event)
             controller.key_press_event(paste_event)
 
-        self.assertEqual(base_key_press.call_count, 3)
-        escape_event.accept.assert_not_called()
+        self.assertEqual(base_key_press.call_count, 2)
+        escape_event.accept.assert_called_once_with()
+        controller.tool_mode_controller.set_tool.assert_called_once_with("select")
         copy_event.accept.assert_not_called()
         paste_event.accept.assert_not_called()
 

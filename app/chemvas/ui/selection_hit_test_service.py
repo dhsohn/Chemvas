@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from chemvas.domain.document import VALID_ARROW_KINDS
 from chemvas.features.selection import (
     SelectionHitRequest,
     SelectionRect,
@@ -76,6 +77,10 @@ class SelectionHitTestService:
         for outline in selection_outlines_for(self.canvas):
             data = outline.data(2) or {}
             if data.get("kind") not in {"component", "object", "group"}:
+                continue
+            if data.get("object_kind") in VALID_ARROW_KINDS:
+                # Arrow halos scale with the drawing. Picking uses the same
+                # screen-space stroke corridor before and after selection.
                 continue
             if outline.contains(outline.mapFromScene(pos)):
                 outline_hit = True
