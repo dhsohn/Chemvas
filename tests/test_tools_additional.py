@@ -701,7 +701,8 @@ class _ToolControllerPreviewCanvas:
             ),
             scene_decoration_service=SimpleNamespace(add_arrow=self.add_arrow),
             scene_decoration_build_service=SimpleNamespace(
-                preview_arrow=self.preview_arrow
+                preview_arrow=self.preview_arrow,
+                mark_snapped_points=lambda item, points: None,
             ),
         )
 

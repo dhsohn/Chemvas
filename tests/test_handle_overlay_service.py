@@ -12,6 +12,7 @@ from PyQt6.QtCore import QPointF, QRectF
 from PyQt6.QtGui import QColor, QPainterPath, QPen
 from PyQt6.QtWidgets import QApplication, QGraphicsEllipseItem, QGraphicsScene
 
+from chemvas.ui.canvas_scene_items_state import CanvasSceneItemsState
 from chemvas.ui.handle_overlay_service import HandleOverlayService
 from chemvas.ui.handle_state import CanvasHandleState
 
@@ -70,7 +71,10 @@ class HandleOverlayServiceTest(unittest.TestCase):
             renderer=SimpleNamespace(
                 style=SimpleNamespace(bond_length_px=bond_length_px)
             ),
-            runtime_state=canvas_runtime_state(handle_state=CanvasHandleState()),
+            runtime_state=canvas_runtime_state(
+                handle_state=CanvasHandleState(),
+                scene_items_state=CanvasSceneItemsState(),
+            ),
             services=canvas_runtime_services(
                 selection_highlight_styler=mock.Mock(),
                 handle_mutation_service=SimpleNamespace(

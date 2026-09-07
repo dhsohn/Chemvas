@@ -3,12 +3,14 @@
 from .active_tool import ActiveToolReference
 from .center import bounding_box_center_for_atoms, center_for_atoms
 from .handles import (
+    HANDLE_ACCENT_COLOR,
     clamp_curved_midpoint,
     clear_handle_items,
     control_from_midpoint,
     create_handle_item,
     curved_midpoint,
     default_curved_control,
+    mark_handle_snapped,
     orbital_handle_positions,
     orbital_rotation_angle,
     orbital_scale_factor,
@@ -53,6 +55,7 @@ from .rotation_geometry import (
 
 __all__ = [
     "ARROW_OBJECT_KINDS",
+    "HANDLE_ACCENT_COLOR",
     "ActiveToolReference",
     "AtomHitCandidate",
     "BondHitCandidate",
@@ -78,6 +81,7 @@ __all__ = [
     "dominant_axis_angle_from_drag",
     "flatten_coords_to_plane",
     "fragment_plane_normal_for",
+    "mark_handle_snapped",
     "nearest_ring_atom_id",
     "normalize_3d",
     "orbital_handle_positions",

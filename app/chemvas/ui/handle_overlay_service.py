@@ -8,11 +8,15 @@ from chemvas.features.selection import (
     create_handle_item as create_handle_item_helper,
 )
 from chemvas.features.selection import (
+    mark_handle_snapped as mark_handle_snapped_helper,
+)
+from chemvas.features.selection import (
     orbital_handle_positions as orbital_handle_positions_helper,
 )
 from chemvas.features.selection import (
     shape_resize_handle_positions as shape_resize_handle_positions_helper,
 )
+from chemvas.ui.endpoint_snap_access import snapped_points_among_for
 from chemvas.ui.handle_mutation_access import (
     curved_midpoint_for,
     default_curved_control_for,
@@ -91,13 +95,12 @@ class HandleOverlayService:
             return
         self.clear_handles()
         selection_highlight_styler_for(self.canvas).set_selection_highlight([item])
-        set_active_handles_for(
-            self.canvas,
-            [
-                self.create_handle(start, "arrow_start", item),
-                self.create_handle(end, "arrow_end", item),
-            ],
-        )
+        handles = [
+            self.create_handle(start, "arrow_start", item),
+            self.create_handle(end, "arrow_end", item),
+        ]
+        self.mark_snapped_handles(item, handles, (start, end))
+        set_active_handles_for(self.canvas, handles)
         set_handle_target_for(self.canvas, item)
 
     def show_curved_handles(self, item) -> None:
@@ -124,8 +127,19 @@ class HandleOverlayService:
                 handles[0],
                 self.create_handle(end, "curved_end", item),
             ]
+            self.mark_snapped_handles(item, [handles[0], handles[2]], (start, end))
         set_active_handles_for(self.canvas, handles)
         set_handle_target_for(self.canvas, item)
+
+    def mark_snapped_handles(self, item, handles, points) -> None:
+        """Fill the handles whose point has taken another item's endpoint."""
+        caught = {
+            (point.x(), point.y())
+            for point in snapped_points_among_for(self.canvas, points, exclude=item)
+        }
+        for handle, point in zip(handles, points, strict=True):
+            if (point.x(), point.y()) in caught:
+                mark_handle_snapped_helper(handle)
 
     def create_handle(self, pos: QPointF, handle_type: str, target):
         handle = create_handle_item_helper(pos, handle_type, target)

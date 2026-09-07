@@ -10,7 +10,7 @@ from tests.runtime_state import canvas_runtime_state
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PyQt6.QtCore import QPointF, Qt
-from PyQt6.QtGui import QColor, QPen
+from PyQt6.QtGui import QColor, QPen, QTransform
 from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import QApplication
 
@@ -36,8 +36,8 @@ from chemvas.ui.canvas_text_style_state import CanvasTextStyleState
 from chemvas.ui.canvas_tool_settings_state import CanvasToolSettingsState
 from chemvas.ui.canvas_window_access import snapshot_canvas_state_for
 from chemvas.ui.endpoint_snap_access import (
-    ENDPOINT_SNAP_FRACTION,
-    snap_to_arrow_endpoints_for,
+    ENDPOINT_SNAP_SCREEN_PX,
+    snap_to_endpoint_for,
 )
 from chemvas.ui.line_tool import LineTool
 from chemvas.ui.main_window_ports import (
@@ -295,6 +295,7 @@ class _FakeToolCanvas:
             ),
         )
         self.preview_calls = []
+        self.snap_mark_calls = []
         self.add_calls = []
         self.services = canvas_runtime_services(
             hit_testing_service=SimpleNamespace(
@@ -303,9 +304,16 @@ class _FakeToolCanvas:
             ),
             scene_decoration_service=SimpleNamespace(add_arrow=self.add_arrow),
             scene_decoration_build_service=SimpleNamespace(
-                preview_arrow=self.preview_arrow
+                preview_arrow=self.preview_arrow,
+                mark_snapped_points=lambda item, points: self.snap_mark_calls.append(
+                    (item, list(points))
+                ),
             ),
         )
+
+    def transform(self):
+        # The snap reach is a screen distance, so it asks the view.
+        return QTransform()
 
     def setDragMode(self, mode) -> None:
         self.drag_mode = mode
@@ -337,13 +345,14 @@ class SnapToolTest(unittest.TestCase):
     def setUpClass(cls) -> None:
         cls.app = QApplication.instance() or QApplication([])
 
-    def test_snap_radius_is_a_fraction_of_the_bond_length(self) -> None:
+    def test_snap_radius_is_a_distance_on_screen(self) -> None:
         canvas = _FakeToolCanvas()
-        radius = 20.0 * ENDPOINT_SNAP_FRACTION
-        near = snap_to_arrow_endpoints_for(canvas, QPointF(100.0 + radius * 0.9, 1.0))
-        far = snap_to_arrow_endpoints_for(canvas, QPointF(100.0 + radius * 1.5, 0.0))
+        radius = ENDPOINT_SNAP_SCREEN_PX
+        near = snap_to_endpoint_for(canvas, QPointF(100.0 + radius * 0.9, 1.0))
+        far = snap_to_endpoint_for(canvas, QPointF(100.0 + radius * 1.5, 0.0))
+        assert near is not None
         self.assertEqual((near.x(), near.y()), (100.0, 0.0))
-        self.assertEqual((far.x(), far.y()), (100.0 + radius * 1.5, 0.0))
+        self.assertIsNone(far)
 
     def test_line_tool_snaps_both_ends_and_snap_beats_the_angle_lock(self) -> None:
         canvas = _FakeToolCanvas()

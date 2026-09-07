@@ -14,6 +14,7 @@ from chemvas.ui.endpoint_snap_access import (
 from chemvas.ui.preview_tools import PreviewDragTool
 from chemvas.ui.renderer_style_access import bond_length_px_for
 from chemvas.ui.scene_decoration_access import add_arrow_for, preview_arrow_for
+from chemvas.ui.scene_decoration_build_access import mark_snapped_points_for
 
 # Shift locks the drag to multiples of this angle so energy-diagram levels and
 # connectors come out exactly horizontal, vertical or diagonal.
@@ -73,12 +74,10 @@ class LineTool(PreviewDragTool):
 
     @override
     def _build_preview(self, current_pos):
-        return preview_arrow_for(
-            self.canvas,
-            self._start_pos,
-            self._end_point(current_pos),
-            self._line_kind(),
-        )
+        end = self._end_point(current_pos)
+        item = preview_arrow_for(self.canvas, self._start_pos, end, self._line_kind())
+        mark_snapped_points_for(self.canvas, item, [self._start_pos, end])
+        return item
 
     @override
     def _commit_drag(self, end_pos) -> None:

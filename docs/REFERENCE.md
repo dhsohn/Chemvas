@@ -32,8 +32,9 @@ the [examples README](../examples/README.md) describes what each one contains.
   with a shortened harpoon), resonance, curved, dashed, and arc arrows (90°,
   180°, 270° for catalytic cycles; hold `Shift` while dragging to bulge the
   arc to the other side) with adjustable width and head scale. Arrow and line
-  endpoints snap to nearby arrow and line endpoints while drawing; a snap takes
-  precedence over the `Shift` angle lock.
+  endpoints snap to nearby arrow and line endpoints while drawing, within
+  twelve pixels of the cursor whatever the zoom, and a ring marks an end
+  that has taken one. A snap takes precedence over the `Shift` angle lock.
 - **Arrow labels** — double-click an arrow or line to give it a label above and
   below, such as rate constants. `_` starts a subscript and `^` a superscript,
   and braces group several characters: `k_-1`, `K_{eq}`, `ΔG^‡`. Labels take
@@ -59,7 +60,9 @@ the [examples README](../examples/README.md) describes what each one contains.
   belongs to the window, not the document.
 - **Editing** — endpoint handles (select an arrow or line, then click it to
   show a handle at each end; drag one to move that end, snapping to nearby
-  endpoints, and curved arrows keep their third handle for the curve),
+  endpoints — a handle sitting on another item's endpoint is drawn filled
+  rather than hollow — and curved arrows keep their third handle for the
+  curve),
   select / move, an eraser tool (click or drag to erase; atoms a
   deletion leaves with no bond and nothing visible — no label or mark — are
   removed with it), horizontal & vertical flip, perspective rotation, and

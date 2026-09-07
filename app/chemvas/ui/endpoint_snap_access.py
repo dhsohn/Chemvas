@@ -4,16 +4,35 @@ from PyQt6.QtCore import QPointF
 
 from chemvas.features.rendering import (
     nearest_endpoint,
-    snapped_endpoint,
     snapped_to_grid,
 )
 from chemvas.ui.canvas_scene_items_state import arrow_items_for
 from chemvas.ui.canvas_tool_settings_state import tool_settings_state_for
 from chemvas.ui.renderer_style_access import bond_length_px_for
 
-# Endpoints closer than this fraction of a bond length snap together, so a
-# dashed connector meets an energy level exactly and cycle arcs share corners.
-ENDPOINT_SNAP_FRACTION = 0.4
+# Snapping is an input affordance, so its reach is a distance on screen
+# rather than in the document: an endpoint this many pixels from the cursor
+# is caught, at any zoom. A dashed connector then meets an energy level
+# exactly, and cycle arcs share corners, without aiming at a few pixels.
+ENDPOINT_SNAP_SCREEN_PX = 12.0
+# Diameter of the ring that says an end has been caught. It has to clear
+# a bold line's own width to be seen at all.
+SNAP_MARK_SCREEN_PX = 16.0
+
+
+def scene_length_for_screen_px(canvas, pixels: float) -> float:
+    """``pixels`` on screen, in scene units at the canvas's current zoom.
+
+    The smaller axis governs, so the reach is at least ``pixels`` in every
+    direction when the perspective tool squashes one of them.
+    """
+    transform = canvas.transform()
+    scale = min(abs(transform.m11()), abs(transform.m22())) or 1.0
+    return pixels / scale
+
+
+def endpoint_snap_radius_for(canvas) -> float:
+    return scene_length_for_screen_px(canvas, ENDPOINT_SNAP_SCREEN_PX)
 
 
 def arrow_endpoints_for(canvas, *, exclude=None) -> list[tuple[float, float]]:
@@ -30,16 +49,19 @@ def arrow_endpoints_for(canvas, *, exclude=None) -> list[tuple[float, float]]:
     return points
 
 
-def snap_to_arrow_endpoints_for(canvas, pos: QPointF, *, exclude=None) -> QPointF:
-    candidates = arrow_endpoints_for(canvas, exclude=exclude)
-    if not candidates:
-        return pos
-    x, y = snapped_endpoint(
-        (pos.x(), pos.y()),
-        candidates,
-        radius=bond_length_px_for(canvas) * ENDPOINT_SNAP_FRACTION,
-    )
-    return QPointF(x, y)
+def snapped_points_among_for(canvas, points, *, exclude=None):
+    """The ``points`` that are sitting exactly on an existing endpoint.
+
+    A gesture takes an endpoint by copying it, so equality is the whole
+    test; this is what the ring is drawn from, rather than a record of
+    which stage of the funnel answered.
+    """
+    endpoints = set(arrow_endpoints_for(canvas, exclude=exclude))
+    return [
+        point
+        for point in points
+        if point is not None and (point.x(), point.y()) in endpoints
+    ]
 
 
 def grid_snap_enabled_for(canvas) -> bool:
@@ -67,7 +89,7 @@ def snap_to_endpoint_for(canvas, pos: QPointF, *, exclude=None, avoid=None):
     found = nearest_endpoint(
         (pos.x(), pos.y()),
         candidates,
-        radius=bond_length_px_for(canvas) * ENDPOINT_SNAP_FRACTION,
+        radius=endpoint_snap_radius_for(canvas),
     )
     if found is None:
         return None
@@ -94,13 +116,16 @@ def snap_drawing_point_for(canvas, pos: QPointF, *, exclude=None, avoid=None):
 
 
 __all__ = [
-    "ENDPOINT_SNAP_FRACTION",
+    "ENDPOINT_SNAP_SCREEN_PX",
+    "SNAP_MARK_SCREEN_PX",
     "arrow_endpoints_for",
+    "endpoint_snap_radius_for",
     "grid_snap_enabled_for",
     "grid_step_for",
+    "scene_length_for_screen_px",
     "set_grid_snap_enabled_for",
     "snap_drawing_point_for",
-    "snap_to_arrow_endpoints_for",
     "snap_to_endpoint_for",
     "snap_to_grid_for",
+    "snapped_points_among_for",
 ]

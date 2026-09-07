@@ -10,6 +10,10 @@ def build_arrow_item_for(canvas, start, end, kind: str):
     )
 
 
+def mark_snapped_points_for(canvas, item, points) -> None:
+    scene_decoration_build_service_for_access(canvas).mark_snapped_points(item, points)
+
+
 def apply_arrow_labels_for(canvas, item, labels) -> None:
     scene_decoration_build_service_for_access(canvas).apply_arrow_labels(item, labels)
 
@@ -53,5 +57,6 @@ __all__ = [
     "build_orbital_items_for",
     "build_shape_item_for",
     "build_ts_bracket_item_for",
+    "mark_snapped_points_for",
     "ts_bracket_path_for",
 ]
