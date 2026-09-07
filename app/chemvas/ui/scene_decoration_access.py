@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from chemvas.features.annotations import DEFAULT_BRACKET_KIND
 from chemvas.ui.canvas_service_ports import (
+    arrow_build_service_for_access,
     mark_scene_service_for_access,
     scene_decoration_build_service_for_access,
     scene_decoration_service_for_access,
@@ -36,9 +37,7 @@ def materialize_mark_for_atom_for(canvas, atom_id: int, click_pos, *, kind: str 
 
 
 def preview_arrow_for(canvas, start, end, kind: str):
-    return scene_decoration_build_service_for_access(canvas).preview_arrow(
-        start, end, kind
-    )
+    return arrow_build_service_for_access(canvas).preview_arrow(start, end, kind)
 
 
 def add_ts_bracket_for(canvas, rect, bracket_kind: str = DEFAULT_BRACKET_KIND):

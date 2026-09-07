@@ -23,6 +23,7 @@ def test_build_scene_decoration_services_wires_explicit_collaborators(
     monkeypatch,
 ) -> None:
     for class_name in (
+        "CanvasArrowBuildService",
         "CanvasMarkSceneService",
         "CanvasSceneDecorationBuildService",
         "SceneDecorationService",
@@ -37,6 +38,8 @@ def test_build_scene_decoration_services_wires_explicit_collaborators(
     services = build_scene_decoration_services(canvas, history_service=history_service)
 
     assert isinstance(services, SceneDecorationServiceBundle)
+    assert services.arrow_build_service.service_name == "CanvasArrowBuildService"
+    assert services.arrow_build_service.args == (canvas,)
     assert (
         services.scene_decoration_build_service.service_name
         == "CanvasSceneDecorationBuildService"

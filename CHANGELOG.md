@@ -7,6 +7,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.1] - 2026-09-07
+
+This maintenance release fixes SMILES bond-type handling, perspective movement,
+and note selection counts, and consolidates editor and export responsibilities.
+The `.chemvas` document format remains version 7 and Calculation Plan remains
+version 2; existing supported documents do not need migration.
+
+### Fixed
+
+- Reject SMILES with unrepresentable bond types instead of silently converting
+  dative, unspecified, or higher-order bonds into ordinary single/triple bonds.
+- Preserve drawing perspective coordinates when moving a rotated structure, so
+  subsequent rotation and clipboard operations keep its depth information.
+- Count a selected note once when both Qt selection and note-selection state
+  refer to it, including after paste and group selection.
+
+### Changed
+
+- Document replacement and scene reset use the history service's stack policy.
+  Recorded structure builds retain their pre-build savepoint through history
+  recording, and benzene template insertion no longer nests recorded builds.
+- Figure-export preflight and rendering share plan resolution. Perspective
+  rotation, movement, and clipboard placement share projection geometry.
+- Arrow creation and curved-path editing share path/head construction, and tool
+  menu actions carry kind IDs instead of deriving behavior from display labels.
+- Calculation validation and reporting reuse a request-local component inventory;
+  step editing shares duplicate-step and reviewed-precomplex retention rules.
+- Architecture checks scan the current UI package and reject empty inventories.
+  Eager-import checks resolve imported modules consistently, and tests that only
+  called their own mocks have been removed while real delegation checks remain.
+
 ## [0.8.0] - 2026-09-07
 
 This release makes the endpoint snapping 0.7.0 introduced usable. The catch
@@ -1253,7 +1284,8 @@ housekeeping.
   `.chemvas` document type (double-clicking a file opens it in Chemvas), and a
   Linux `.desktop` entry with an `application/x-chemvas` MIME type.
 
-[Unreleased]: https://github.com/dhsohn/Chemvas/compare/v0.8.0...HEAD
+[Unreleased]: https://github.com/dhsohn/Chemvas/compare/v0.8.1...HEAD
+[0.8.1]: https://github.com/dhsohn/Chemvas/compare/v0.8.0...v0.8.1
 [0.8.0]: https://github.com/dhsohn/Chemvas/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/dhsohn/Chemvas/compare/v0.6.1...v0.7.0
 [0.6.1]: https://github.com/dhsohn/Chemvas/compare/v0.6.0...v0.6.1

@@ -18,6 +18,7 @@ from PyQt6.QtWidgets import (
     QGraphicsScene,
 )
 
+from chemvas.ui.canvas_arrow_build_service import CanvasArrowBuildService
 from chemvas.ui.canvas_handle_controller import CanvasHandleController
 from chemvas.ui.canvas_scene_items_state import CanvasSceneItemsState
 from chemvas.ui.canvas_service_ports import handle_overlay_service_for_access
@@ -64,6 +65,7 @@ def _attach_handle_services(view: SimpleNamespace) -> SimpleNamespace:
         )
     services.selection_highlight_styler = SelectionHighlightStyler(view)
     services.handle_overlay_service = HandleOverlayService(view)
+    services.arrow_build_service = CanvasArrowBuildService(view)
     services.curved_arrow_path_service = CurvedArrowPathService(view)
     services.handle_mutation_service = HandleMutationService(
         view,
@@ -225,11 +227,7 @@ class CanvasViewSelectionHighlightTest(unittest.TestCase):
                 selection_style_state=_selection_style_state(),
                 tool_settings_state=CanvasToolSettingsState(curved_snap_step=2),
             ),
-            services=canvas_runtime_services(
-                scene_decoration_build_service=SimpleNamespace(
-                    add_arrow_head=mock.Mock()
-                )
-            ),
+            services=canvas_runtime_services(),
             refresh_selection_outline=mock.Mock(),
         )
         _attach_handle_services(view)
@@ -362,11 +360,8 @@ class CanvasViewSelectionHighlightTest(unittest.TestCase):
             runtime_state=canvas_runtime_state(
                 tool_settings_state=CanvasToolSettingsState()
             ),
-            services=canvas_runtime_services(
-                scene_decoration_build_service=SimpleNamespace(
-                    add_arrow_head=mock.Mock()
-                )
-            ),
+            renderer=SimpleNamespace(style=SimpleNamespace(bond_length_px=20.0)),
+            services=canvas_runtime_services(),
             refresh_selection_outline=mock.Mock(),
         )
         _attach_handle_services(curved_view)

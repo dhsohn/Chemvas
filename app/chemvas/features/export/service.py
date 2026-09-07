@@ -33,13 +33,15 @@ if TYPE_CHECKING:
     from PyQt6.QtWidgets import QGraphicsItem, QGraphicsScene
 
 
-def _resolve_plan(
+def resolve_export_plan(
     scene: QGraphicsScene,
-    items: Sequence[QGraphicsItem] | None,
+    *,
+    items: Sequence[QGraphicsItem] | None = None,
     margin: float,
-    unit_scale: float,
-    target_width_pt: float | None,
+    unit_scale: float = 1.0,
+    target_width_pt: float | None = None,
 ) -> tuple[list[QGraphicsItem], ExportPlan]:
+    """Resolve the content and geometry shared by preflight and figure output."""
     export_items = list(items) if items is not None else collect_export_items(scene)
     bounds = content_bounds(export_items)
     if bounds is None:
@@ -93,8 +95,12 @@ def export_scene(
     opened.
     """
     fmt = (fmt or "").lower()
-    export_items, plan = _resolve_plan(
-        scene, items, margin, unit_scale, target_width_pt
+    export_items, plan = resolve_export_plan(
+        scene,
+        items=items,
+        margin=margin,
+        unit_scale=unit_scale,
+        target_width_pt=target_width_pt,
     )
     if fmt == "svg":
         export_svg_file(scene, path, export_items, plan, background, title)
@@ -144,4 +150,5 @@ __all__ = [
     "item_export_bounds",
     "render_scene_to_pdf_bytes",
     "render_scene_to_svg_bytes",
+    "resolve_export_plan",
 ]

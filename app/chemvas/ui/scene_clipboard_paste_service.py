@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING
 from PyQt6.QtWidgets import QGraphicsItem
 
 from chemvas.domain.transactions import add_recovery_error_note
+from chemvas.features.selection import unproject_point_3d
 from chemvas.ui.atom_coords_access import atom_coords_3d_for
 from chemvas.ui.canvas_model_access import atom_for_id, bond_count_for, next_atom_id_for
 from chemvas.ui.canvas_rotation_state import rotation_state_for
@@ -230,38 +231,13 @@ def apply_pasted_perspective_for_canvas(
         target_z = coords[2]
         if target_center is not None and projection_center_3d is not None:
             target_z = target_center[2] + (coords[2] - projection_center_3d[2])
-        stored_coords[atom_id] = _coords_for_projection_frame(
-            canvas,
-            atom.x,
-            atom.y,
+        stored_coords[atom_id] = unproject_point_3d(
+            (atom.x, atom.y),
             target_z,
+            bond_length_px=bond_length_px_for(canvas),
             center_3d=target_center,
             anchor_2d=target_anchor,
         )
-
-
-def _coords_for_projection_frame(
-    canvas,
-    screen_x: float,
-    screen_y: float,
-    z: float,
-    *,
-    center_3d: tuple[float, float, float] | None,
-    anchor_2d: tuple[float, float] | None,
-) -> tuple[float, float, float]:
-    if center_3d is None:
-        return screen_x, screen_y, z
-    cx, cy, cz = center_3d
-    anchor_x, anchor_y = anchor_2d or (cx, cy)
-    focal = max(bond_length_px_for(canvas) * 8.0, 120.0)
-    dz = max(min(z - cz, focal * 0.7), -focal * 0.8)
-    denom = max(focal - dz, focal * 0.2)
-    scale = focal / denom
-    return (
-        cx + (screen_x - anchor_x) / scale,
-        cy + (screen_y - anchor_y) / scale,
-        z,
-    )
 
 
 __all__ = [

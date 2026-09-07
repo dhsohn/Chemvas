@@ -584,9 +584,11 @@ class _FakePreviewCanvas:
                     )
                 ),
             ),
-            scene_decoration_build_service=SimpleNamespace(
+            arrow_build_service=SimpleNamespace(
                 preview_arrow=self.preview_arrow,
                 mark_snapped_points=lambda item, points: None,
+            ),
+            scene_decoration_build_service=SimpleNamespace(
                 preview_ts_bracket=self.preview_ts_bracket,
                 ts_bracket_rect_from_points=lambda start, end: QRectF(
                     start, end

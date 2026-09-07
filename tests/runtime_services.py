@@ -6,6 +6,7 @@ from typing import Any
 from chemvas.ui.canvas_runtime_services import CanvasRuntimeServices
 
 SERVICE_PATHS: dict[str, tuple[str, str]] = {
+    "arrow_build_service": ("scene_decoration", "arrow_build_service"),
     "selection_controller": ("selection", "selection_controller"),
     "scene_item_controller": ("scene_view", "scene_item_controller"),
     "scene_clipboard_controller": (

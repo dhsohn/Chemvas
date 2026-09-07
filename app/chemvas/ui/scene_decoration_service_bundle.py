@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
+from chemvas.ui.canvas_arrow_build_service import CanvasArrowBuildService
 from chemvas.ui.canvas_mark_scene_service import CanvasMarkSceneService
 from chemvas.ui.canvas_scene_decoration_build_service import (
     CanvasSceneDecorationBuildService,
@@ -15,6 +16,7 @@ if TYPE_CHECKING:
 
 @dataclass(slots=True)
 class SceneDecorationServiceBundle:
+    arrow_build_service: CanvasArrowBuildService
     canvas_mark_scene_service: CanvasMarkSceneService
     scene_decoration_build_service: CanvasSceneDecorationBuildService
     scene_decoration_service: SceneDecorationService
@@ -25,6 +27,7 @@ def build_scene_decoration_services(
     *,
     history_service: Any,
 ) -> SceneDecorationServiceBundle:
+    arrow_build_service = CanvasArrowBuildService(canvas)
     scene_decoration_build_service = CanvasSceneDecorationBuildService(canvas)
     scene_decoration_service = SceneDecorationService(
         canvas, history_service=history_service
@@ -34,6 +37,7 @@ def build_scene_decoration_services(
         scene_decoration_service=scene_decoration_service,
     )
     return SceneDecorationServiceBundle(
+        arrow_build_service=arrow_build_service,
         canvas_mark_scene_service=canvas_mark_scene_service,
         scene_decoration_build_service=scene_decoration_build_service,
         scene_decoration_service=scene_decoration_service,

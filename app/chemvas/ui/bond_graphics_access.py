@@ -4,6 +4,7 @@ import math
 
 from PyQt6.QtCore import Qt
 
+from chemvas.features.selection import project_point_3d
 from chemvas.ui.bond_renderer_access import bond_renderer_for
 from chemvas.ui.canvas_model_access import atom_for_id
 from chemvas.ui.canvas_rotation_state import rotation_state_for
@@ -73,15 +74,11 @@ def project_point_3d_for(
         return point[0], point[1]
     if anchor_2d is None:
         anchor_2d = rotation.projection_anchor_2d or (center_3d[0], center_3d[1])
-    cx, cy, cz = center_3d
-    anchor_x, anchor_y = anchor_2d
-    focal = max(bond_length_px_for(canvas) * 8.0, 120.0)
-    dz = max(min(point[2] - cz, focal * 0.7), -focal * 0.8)
-    denom = max(focal - dz, focal * 0.2)
-    scale = focal / denom
-    return (
-        anchor_x + (point[0] - cx) * scale,
-        anchor_y + (point[1] - cy) * scale,
+    return project_point_3d(
+        point,
+        bond_length_px=bond_length_px_for(canvas),
+        center_3d=center_3d,
+        anchor_2d=anchor_2d,
     )
 
 

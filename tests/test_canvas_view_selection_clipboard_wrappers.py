@@ -259,7 +259,7 @@ class CanvasViewSelectionClipboardWrappersTest(unittest.TestCase):
             )
         append_unique.assert_called_once()
 
-    def test_selection_copy_helpers_delegate_paths(self) -> None:
+    def test_selection_copy_helpers_use_selected_items_and_bounds(self) -> None:
         child = _FakeItem("note")
         with mock.patch(
             "chemvas.ui.selection_collection_access.selected_scene_items_for",
@@ -275,29 +275,6 @@ class CanvasViewSelectionClipboardWrappersTest(unittest.TestCase):
                 ),
                 [child],
             )
-
-        controller = SimpleNamespace(
-            clipboard_controller=SimpleNamespace(
-                selection_payload_for_clipboard=mock.Mock(return_value={"atoms": [1]}),
-                clipboard_selection_payload=mock.Mock(
-                    return_value=({"atoms": [2]}, "payload-json")
-                ),
-                select_pasted_content=mock.Mock(),
-            ),
-        )
-
-        self.assertEqual(
-            controller.clipboard_controller.selection_payload_for_clipboard(),
-            {"atoms": [1]},
-        )
-        self.assertEqual(
-            controller.clipboard_controller.clipboard_selection_payload(),
-            ({"atoms": [2]}, "payload-json"),
-        )
-        controller.clipboard_controller.select_pasted_content({4}, [child])
-        controller.clipboard_controller.select_pasted_content.assert_called_once_with(
-            {4}, [child]
-        )
 
         bounds_item = SimpleNamespace(
             sceneBoundingRect=lambda: QRectF(1.0, 2.0, 3.0, 4.0)

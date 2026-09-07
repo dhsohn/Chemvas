@@ -142,6 +142,11 @@ bonds. Specified double-bond stereochemistry (`/` / `\`), non-tetrahedral
 stereochemistry, and relative or racemic CXSMILES stereo groups are refused
 because the canvas cannot preserve them. Isotope labels are also unsupported.
 
+Single, double, and triple bonds are supported, including aromatic structures
+that RDKit can Kekulize into those bond orders. Other bond types, such as dative,
+unspecified, and quadruple bonds, are refused rather than approximated. Aromatic
+input that cannot be represented by Kekulization is also refused.
+
 ### MOL interchange
 
 Open MDL Molfiles (`.mol`, V2000) as new documents and export the selected

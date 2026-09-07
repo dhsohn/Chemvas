@@ -2,9 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from PyQt6.QtGui import QPainterPath
-
-from chemvas.ui.scene_decoration_build_access import add_arrow_head_for
+from chemvas.ui.scene_decoration_build_access import build_curved_arrow_path_for
 
 if TYPE_CHECKING:
     from PyQt6.QtCore import QPointF
@@ -29,15 +27,9 @@ class CurvedArrowPathService:
         # Reset per-item translation before rebuilding the local path so
         # the rendered arrow stays aligned with endpoint/control handles.
         item.setPos(0.0, 0.0)
-        path = QPainterPath()
-        path.moveTo(start)
-        path.quadTo(control, end)
-        if double:
-            add_arrow_head_for(self.canvas, path, control, end, double=False)
-            add_arrow_head_for(self.canvas, path, control, start, double=False)
-        else:
-            add_arrow_head_for(self.canvas, path, control, end, double=False)
-        item.setPath(path)
+        item.setPath(
+            build_curved_arrow_path_for(self.canvas, start, end, control, double)
+        )
 
 
 __all__ = ["CurvedArrowPathService"]

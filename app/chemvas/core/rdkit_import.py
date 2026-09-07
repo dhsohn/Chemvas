@@ -84,6 +84,24 @@ class RDKitImportHelper:
             )
             return None
         mol = self._kekulized_import_mol(Chem, mol)
+        bond_orders = {
+            Chem.BondType.SINGLE: 1,
+            Chem.BondType.DOUBLE: 2,
+            Chem.BondType.TRIPLE: 3,
+        }
+        unsupported_bond_types = sorted(
+            {
+                str(bond.GetBondType())
+                for bond in mol.GetBonds()
+                if bond.GetBondType() not in bond_orders
+            }
+        )
+        if unsupported_bond_types:
+            self.adapter.last_error = (
+                "Cannot insert this SMILES: Chemvas cannot represent these bond "
+                "types: " + ", ".join(unsupported_bond_types) + "."
+            )
+            return None
         AllChem.Compute2DCoords(mol)
 
         conf = mol.GetConformer()
@@ -136,11 +154,10 @@ class RDKitImportHelper:
                 model.atom_annotations[atom_id] = annotation
 
         for bond in mol.GetBonds():
-            order = self._bond_order_for_import(bond)
             bond_id = model.add_bond(
                 atom_id_by_rd_idx[bond.GetBeginAtomIdx()],
                 atom_id_by_rd_idx[bond.GetEndAtomIdx()],
-                order,
+                bond_orders[bond.GetBondType()],
             )
             direction = bond.GetBondDir()
             if direction in (Chem.BondDir.BEGINWEDGE, Chem.BondDir.BEGINDASH):
@@ -170,19 +187,6 @@ class RDKitImportHelper:
             return import_mol
         except Exception:
             return mol
-
-    @staticmethod
-    def _bond_order_for_import(bond) -> int:
-        try:
-            order_value = float(bond.GetBondTypeAsDouble())
-        except Exception:
-            return 1
-        if abs(order_value - 1.5) < 1e-6 or bool(
-            getattr(bond, "GetIsAromatic", lambda: False)()
-        ):
-            return 2
-        order = round(order_value)
-        return max(1, min(3, order))
 
     @staticmethod
     def _atom_annotation(atom) -> dict[str, int]:

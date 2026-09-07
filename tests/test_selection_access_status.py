@@ -107,6 +107,20 @@ def test_selection_status_count_handles_missing_scene() -> None:
     assert selection_status_count_for(SimpleNamespace()) == 0
 
 
+def test_selection_status_count_dedupes_a_note_in_both_selection_sources() -> None:
+    scene = _Scene([])
+    note = _Item("note", "n1", scene=scene)
+    scene = _Scene([note])
+    note._scene = scene
+    canvas = SimpleNamespace(
+        scene=lambda: scene,
+        runtime_state=canvas_runtime_state(scene_items_state=CanvasSceneItemsState()),
+    )
+    set_selected_notes_for(canvas, [note])
+
+    assert selection_status_count_for(canvas) == 1
+
+
 def test_scene_selected_items_for_reads_scene_selection() -> None:
     selected_items = [_Item("atom", 1), _Item("bond", 2)]
     scene = _Scene(selected_items)

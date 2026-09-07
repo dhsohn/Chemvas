@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import replace
 from typing import TYPE_CHECKING
 
 from PyQt6.QtCore import QPointF
@@ -11,26 +12,17 @@ from chemvas.ui.canvas_model_access import (
     bond_count_for,
     bond_for_id,
     bond_ids_from,
-    next_atom_id_for,
 )
-from chemvas.ui.canvas_service_ports import history_service_for_access
 from chemvas.ui.canvas_smiles_input_state import set_last_smiles_input_for
-from chemvas.ui.history_canvas_access import (
-    capture_history_transaction_for_history,
-    release_history_transaction_for_history,
-)
-from chemvas.ui.insert_commit_rollback import (
-    capture_smiles_input_restore_authority,
-    rollback_insert_mutation,
-)
 from chemvas.ui.structure_build_committer import StructureBuildCommitter
 from chemvas.ui.structure_insert_access import (
     add_atom_with_merge_for,
     add_insert_ring_from_points_for,
+    build_insert_benzene_ring_for,
     has_insert_mutation_since_for,
     insert_bond_exists_for,
 )
-from chemvas.ui.structure_mutation_access import add_benzene_ring_for, add_bond_for
+from chemvas.ui.structure_mutation_access import add_bond_for
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -137,51 +129,34 @@ def _apply_benzene_template_commit(
     after_smiles_input: str | None,
 ) -> bool:
     center = QPointF(*request.cursor_pos)
-    before_next_atom_id = next_atom_id_for(canvas)
-    before_bond_count = bond_count_for(canvas)
-    smiles_authority = capture_smiles_input_restore_authority(canvas)
-    exact_transaction = None
+    committer = StructureBuildCommitter(canvas)
+    snapshot = committer.begin_recorded_change(before_smiles_input=before_smiles_input)
     try:
-        # Exact capture is itself fallible extension code.  If a live capture
-        # port mutates the SMILES input and then raises, the same rollback path
-        # must restore the authority even though no ring atom exists yet.
-        exact_transaction = capture_history_transaction_for_history(
-            canvas,
-            history_service=history_service_for_access(canvas),
-        )
-        set_last_smiles_input_for(canvas, after_smiles_input)
-        add_benzene_ring_for(
+        build_insert_benzene_ring_for(
             canvas,
             center,
             attach_atom_id=plan.atom_id,
             attach_bond_id=plan.bond_id,
-            before_smiles_input=before_smiles_input,
         )
         changed = has_insert_mutation_since_for(
-            canvas, before_next_atom_id, before_bond_count
+            canvas, snapshot.before_next_atom_id, snapshot.before_bond_count
         )
-        if not changed:
-            rollback_insert_mutation(
-                canvas,
-                before_next_atom_id=before_next_atom_id,
-                before_bond_count=before_bond_count,
-                before_smiles_input=before_smiles_input,
-                exact_transaction=exact_transaction,
-                smiles_authority=smiles_authority,
+        if changed:
+            # The recorded benzene helper historically inferred a None
+            # predecessor from the staged input. Keep that command metadata
+            # separate from the explicit predecessor used when aborting.
+            recording_snapshot = replace(
+                snapshot,
+                before_smiles_input=(
+                    before_smiles_input
+                    if before_smiles_input is not None
+                    else after_smiles_input
+                ),
             )
-            return False
-        release_history_transaction_for_history(canvas, exact_transaction)
+            committer.record_additions(recording_snapshot)
     except Exception as error:
         try:
-            rollback_insert_mutation(
-                canvas,
-                before_next_atom_id=before_next_atom_id,
-                before_bond_count=before_bond_count,
-                before_smiles_input=before_smiles_input,
-                exact_transaction=exact_transaction,
-                smiles_authority=smiles_authority,
-                original_error=error,
-            )
+            committer.abort_recorded_change(snapshot, original_error=error)
         except Exception as rollback_error:
             add_recovery_error_note(
                 error,
@@ -189,6 +164,9 @@ def _apply_benzene_template_commit(
                 phase="rolling back the benzene template insert",
             )
         raise
+    if not changed:
+        committer.abort_recorded_change(snapshot)
+        return False
     return True
 
 

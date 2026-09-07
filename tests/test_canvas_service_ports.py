@@ -15,6 +15,7 @@ def _canvas_with_service(service_name: str, service):
 @pytest.mark.parametrize(
     ("selector", "service_name"),
     [
+        (ports.arrow_build_service_for_access, "arrow_build_service"),
         (ports.atom_label_service_for_access, "atom_label_service"),
         (
             ports.canvas_window_document_session_service,

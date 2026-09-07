@@ -37,6 +37,7 @@ from .service import (
     export_scene,
     render_scene_to_pdf_bytes,
     render_scene_to_svg_bytes,
+    resolve_export_plan,
 )
 
 __all__ = [
@@ -64,6 +65,7 @@ __all__ = [
     "points_for_mm",
     "render_scene_to_pdf_bytes",
     "render_scene_to_svg_bytes",
+    "resolve_export_plan",
     "set_label_outline_mode",
     "suffix_for_format",
 ]

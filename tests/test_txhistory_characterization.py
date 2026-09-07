@@ -411,6 +411,41 @@ def test_successful_document_open_round_trips_between_canvases(canvas, app) -> N
         target.close()
 
 
+def test_silent_history_discard_preserves_lists_policy_and_document(canvas) -> None:
+    _record_molecule(canvas)
+    _record_molecule(canvas, offset=100.0)
+    history = _history(canvas)
+    history.undo()
+    history.set_enabled(False)
+    history.state.limit = 7
+    snapshot = history.capture_stack_snapshot()
+    undo = history.state.history
+    redo = history.state.redo_stack
+    drawn = _document_state(canvas)
+    callback = mock.Mock()
+    history.state.change_callback = callback
+
+    history.discard_without_notification()
+
+    assert history.state.history is undo
+    assert history.state.redo_stack is redo
+    assert undo == []
+    assert redo == []
+    assert history.state.enabled is False
+    assert history.state.limit == 7
+    assert _document_state(canvas) == drawn
+    callback.assert_not_called()
+
+    assert history.restore_stack_snapshot(
+        snapshot, RuntimeError("document replacement failed"), phase="document open"
+    )
+    assert history.state.history is undo
+    assert history.state.redo_stack is redo
+    history.verify_stack_snapshot(snapshot)
+    assert _document_state(canvas) == drawn
+    callback.assert_not_called()
+
+
 def test_scene_rect_guard_preserves_automatic_mode_after_restore(app) -> None:
     scene = QGraphicsScene()
     assert scene_rect_is_automatic(scene)

@@ -276,6 +276,11 @@ class _FakeBond:
     def GetBondTypeAsDouble(self) -> float:
         return self._order
 
+    def GetBondType(self):
+        return {1.0: "single", 2.0: "double", 3.0: "triple"}.get(
+            self._order, "unsupported"
+        )
+
     def GetStereo(self):
         return "none"
 
@@ -740,6 +745,38 @@ class RDKitAdapterTest(unittest.TestCase):
                 self.assertIsNone(adapter.smiles_to_2d(smiles))
                 self.assertIn("stereo", adapter.last_error.lower())
 
+    @unittest.skipUnless(_RealChem is not None, "RDKit is required for bond tests")
+    def test_smiles_import_rejects_unrepresentable_bond_types(self) -> None:
+        for smiles, bond_type in (
+            ("N->[Cu+2]", "DATIVE"),
+            ("C~C", "UNSPECIFIED"),
+            ("[Re]$[Re]", "QUADRUPLE"),
+        ):
+            with self.subTest(smiles=smiles):
+                adapter = RDKitAdapter()
+                self.assertIsNotNone(_RealChem.MolFromSmiles(smiles))
+
+                self.assertIsNone(adapter.smiles_to_2d(smiles))
+
+                self.assertIn("cannot represent", adapter.last_error)
+                self.assertIn(bond_type, adapter.last_error)
+
+    def test_smiles_import_checks_bond_type_before_coordinate_generation(self) -> None:
+        molecule = _FakeMol(
+            atom_symbols=["N", "Cu"],
+            bonds=[(0, 1, 1.0)],
+            positions={0: (0.0, 0.0, 0.0), 1: (1.0, 0.0, 0.0)},
+        )
+        molecule.GetBonds()[0].GetBondType = lambda: "dative"
+        adapter = RDKitAdapter()
+        all_chem = _FakeAllChem()
+        adapter._rdkit = (_FakeChem({"N->[Cu+2]": molecule}), all_chem)
+        with mock.patch.object(all_chem, "Compute2DCoords") as compute_coords:
+            self.assertIsNone(adapter.smiles_to_2d("N->[Cu+2]"))
+
+        self.assertIn("dative", adapter.last_error)
+        compute_coords.assert_not_called()
+
     @unittest.skipUnless(_RealChem is not None, "RDKit is required for stereo tests")
     def test_identifiers_preserve_drawn_wedge_and_hash_stereo(self) -> None:
         adapter = RDKitAdapter()
@@ -878,6 +915,29 @@ class RDKitAdapterTest(unittest.TestCase):
         self.assertIn("13C", adapter.last_error)
         # The unlabeled molecule still inserts.
         self.assertIsNotNone(adapter.smiles_to_2d("CCO"))
+
+    @unittest.skipUnless(
+        _RealChem is not None, "RDKit is required for aromatic import tests"
+    )
+    def test_smiles_import_rejects_aromatic_bonds_left_after_kekulization(
+        self,
+    ) -> None:
+        for failure in (None, RuntimeError("injected kekulization failure")):
+            with self.subTest(kekulize="no-op" if failure is None else "raises"):
+                adapter = RDKitAdapter()
+                _, all_chem = adapter._load_rdkit()
+                with (
+                    mock.patch.object(
+                        _RealChem, "Kekulize", side_effect=failure, return_value=None
+                    ) as kekulize,
+                    mock.patch.object(all_chem, "Compute2DCoords") as compute_coords,
+                ):
+                    self.assertIsNone(adapter.smiles_to_2d("c1ccccc1"))
+
+                self.assertIn("cannot represent", adapter.last_error)
+                self.assertIn("AROMATIC", adapter.last_error)
+                kekulize.assert_called_once()
+                compute_coords.assert_not_called()
 
     @unittest.skipUnless(
         _RealChem is not None, "RDKit is required for aromatic import tests"

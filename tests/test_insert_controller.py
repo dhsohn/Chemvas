@@ -149,7 +149,7 @@ class _FakeCanvas:
                 )
             ),
         )
-        self.add_benzene_ring = Mock()
+        self.build_benzene_ring = Mock()
 
         self._atom_state_dict = Mock(side_effect=lambda atom_id: {"atom_id": atom_id})
         self._bond_state_dict = Mock(
@@ -217,7 +217,7 @@ class _FakeCanvas:
                 render_model=Mock(),
                 add_ring_from_points=Mock(),
                 add_atom_with_merge=Mock(),
-                add_benzene_ring=self.add_benzene_ring,
+                build_benzene_ring=self.build_benzene_ring,
             ),
         )
 
@@ -1038,7 +1038,7 @@ class InsertControllerTest(unittest.TestCase):
             ),
             _points(5),
         )
-        canvas.add_benzene_ring.assert_not_called()
+        canvas.build_benzene_ring.assert_not_called()
         canvas.services.structure.structure_build_service.add_atom_with_merge.assert_not_called()
         self.assertTrue(canvas.insert_state.template_active)
         self.assertEqual(canvas.insert_state.template_ring_size, 5)
@@ -1051,7 +1051,9 @@ class InsertControllerTest(unittest.TestCase):
             before_smiles_input="before",
         )
 
-    def test_commit_template_insert_routes_benzene_plan_to_canvas_helper(self) -> None:
+    def test_commit_template_insert_routes_benzene_plan_to_unrecorded_builder(
+        self,
+    ) -> None:
         canvas = _FakeCanvas()
         canvas.insert_state.template_active = True
         canvas.insert_state.template_ring_size = 6
@@ -1072,20 +1074,24 @@ class InsertControllerTest(unittest.TestCase):
         ):
             controller.commit_template_insert(QPointF(*request.cursor_pos))
 
-        canvas.add_benzene_ring.assert_called_once()
-        args = canvas.add_benzene_ring.call_args
+        canvas.build_benzene_ring.assert_called_once()
+        args = canvas.build_benzene_ring.call_args
         self.assertEqual((args.args[0].x(), args.args[0].y()), (8.0, 9.0))
         self.assertEqual(args.kwargs["attach_bond_id"], 4)
-        self.assertEqual(args.kwargs["before_smiles_input"], "before")
+        self.assertNotIn("before_smiles_input", args.kwargs)
         canvas.services.structure.structure_build_service.add_ring_from_points.assert_not_called()
-        canvas._record_additions.assert_not_called()
+        canvas._record_additions.assert_called_once_with(
+            before_next_atom_id=0,
+            before_bond_count=0,
+            before_smiles_input="before",
+        )
         self.assertTrue(canvas.insert_state.template_active)
         self.assertEqual(canvas.insert_state.template_ring_size, 6)
         self.assertEqual(canvas.insert_state.template_ring_style, "benzene")
         self.assertEqual(canvas.insert_state.template_preview_items, [])
         self.assertIsNone(last_smiles_input_for(canvas))
 
-    def test_commit_template_insert_routes_atom_benzene_plan_to_canvas_helper(
+    def test_commit_template_insert_routes_atom_benzene_plan_to_unrecorded_builder(
         self,
     ) -> None:
         canvas = _FakeCanvas()
@@ -1106,8 +1112,8 @@ class InsertControllerTest(unittest.TestCase):
         ):
             controller.commit_template_insert(QPointF(*request.cursor_pos))
 
-        canvas.add_benzene_ring.assert_called_once()
-        args = canvas.add_benzene_ring.call_args
+        canvas.build_benzene_ring.assert_called_once()
+        args = canvas.build_benzene_ring.call_args
         self.assertEqual(args.kwargs["attach_atom_id"], 3)
         self.assertIsNone(args.kwargs["attach_bond_id"])
 

@@ -10,21 +10,6 @@ BOND_STYLE_BY_LABEL: dict[str, tuple[str, int]] = {
     "Dotted": ("dotted", 1),
 }
 
-ARROW_TYPE_BY_LABEL: dict[str, str] = {
-    "Reaction": "reaction",
-    "Equilibrium": "equilibrium",
-    "Equilibrium, forward favored": "equilibrium_forward",
-    "Equilibrium, reverse favored": "equilibrium_reverse",
-    "Resonance": "resonance",
-    "Curved Single": "curved_single",
-    "Curved Double": "curved_double",
-    "Inhibition": "inhibit",
-    "Dotted": "dotted",
-    "Arc 90°": "arc_90_left",
-    "Arc 180°": "arc_180_left",
-    "Arc 270°": "arc_270_left",
-}
-
 ORBITAL_TYPE_BY_LABEL: dict[str, str] = {
     "s": "s",
     "p": "p",
@@ -65,10 +50,6 @@ def bond_style_from_label(value: str) -> tuple[str, int]:
     return BOND_STYLE_BY_LABEL.get(value, ("single", 1))
 
 
-def arrow_type_from_label(value: str) -> str:
-    return ARROW_TYPE_BY_LABEL.get(value, "reaction")
-
-
 def orbital_type_from_label(value: str) -> str:
     return ORBITAL_TYPE_BY_LABEL.get(value, "s")
 
@@ -93,7 +74,6 @@ def tool_action_key_for_canvas_state(
 
 __all__ = [
     "arrow_preset_from_label",
-    "arrow_type_from_label",
     "bond_style_from_label",
     "orbital_type_from_label",
     "tool_action_key_for_canvas_state",

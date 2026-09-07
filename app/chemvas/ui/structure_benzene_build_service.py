@@ -80,38 +80,60 @@ class StructureBenzeneBuildService:
 
         def _build():
             nonlocal built_ring_item
-            result = benzene_ring_points(center, attach_atom_id, attach_bond_id)
-            if result is None:
-                return []
-            points, merge = result
-
-            atom_ids: list[int] = []
-            for point in points:
-                atom_ids.append(add_atom_with_merge(point, "C", merge))
-
-            bond_orders = [
-                order for _, _, order in alternating_ring_bond_specs(atom_ids)
-            ]
-            resolved_bond_orders = self.committer.resolved_ring_bond_orders(
-                atom_ids, bond_orders
+            built_ring_item = self.build_benzene_ring(
+                center,
+                attach_atom_id,
+                attach_bond_id,
+                benzene_ring_points=benzene_ring_points,
+                add_atom_with_merge=add_atom_with_merge,
+                bond_exists=bond_exists,
+                create_ring_fill_item=create_ring_fill_item,
             )
-            bonds_start = bond_count_for(self.canvas)
-            for index, order in enumerate(resolved_bond_orders):
-                a_id = atom_ids[index]
-                b_id = atom_ids[(index + 1) % len(atom_ids)]
-                if bond_exists(a_id, b_id):
-                    continue
-                self.committer.add_bond(a_id, b_id, order)
-
-            factory = create_ring_fill_item or self.create_ring_fill_item
-            built_ring_item = factory(points, atom_ids)
-            attach_scene_item(self.canvas, built_ring_item)
-
-            self.committer.add_bond_graphics_range(bonds_start)
-            return [built_ring_item]
+            return [] if built_ring_item is None else [built_ring_item]
 
         run_recorded_build(_build, before_smiles_input=before_smiles_input)
         return built_ring_item
+
+    def build_benzene_ring(
+        self,
+        center: QPointF,
+        attach_atom_id: int | None = None,
+        attach_bond_id: int | None = None,
+        *,
+        benzene_ring_points: Callable,
+        add_atom_with_merge: Callable,
+        bond_exists: Callable[[int, int], bool],
+        create_ring_fill_item: Callable | None = None,
+    ) -> object | None:
+        """Build ring contents inside the caller's recorded transaction."""
+        if self._has_unsupported_fuse_bond_order(attach_bond_id):
+            return None
+        result = benzene_ring_points(center, attach_atom_id, attach_bond_id)
+        if result is None:
+            return None
+        points, merge = result
+
+        atom_ids: list[int] = []
+        for point in points:
+            atom_ids.append(add_atom_with_merge(point, "C", merge))
+
+        bond_orders = [order for _, _, order in alternating_ring_bond_specs(atom_ids)]
+        resolved_bond_orders = self.committer.resolved_ring_bond_orders(
+            atom_ids, bond_orders
+        )
+        bonds_start = bond_count_for(self.canvas)
+        for index, order in enumerate(resolved_bond_orders):
+            a_id = atom_ids[index]
+            b_id = atom_ids[(index + 1) % len(atom_ids)]
+            if bond_exists(a_id, b_id):
+                continue
+            self.committer.add_bond(a_id, b_id, order)
+
+        factory = create_ring_fill_item or self.create_ring_fill_item
+        ring_item = factory(points, atom_ids)
+        attach_scene_item(self.canvas, ring_item)
+        self.committer.add_bond_graphics_range(bonds_start)
+        return ring_item
 
     def create_ring_fill_item(
         self, points: list[QPointF], atom_ids: list[int]

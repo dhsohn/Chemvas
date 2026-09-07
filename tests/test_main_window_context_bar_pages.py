@@ -86,6 +86,21 @@ class MainWindowContextBarPagesTest(unittest.TestCase):
         self.assertEqual(bond_label_for_state("hash", 1), "Hash")
         self.assertIsNone(bond_label_for_state("unknown", 1))
 
+    def test_arrow_button_uses_kind_when_its_display_label_changes(self) -> None:
+        from chemvas.ui import main_window_context_bar_page_factories as factories
+
+        with mock.patch.object(
+            factories,
+            "ARROW_MENU_SPECS",
+            [("Changed display label", "curved_double")],
+        ):
+            pages = self.builder.build(self.window)
+        pages.arrow_buttons["curved_double"].click()
+
+        self.tool_state_service.set_arrow_type.assert_called_once_with(
+            self.window, "curved_double"
+        )
+
     def test_builder_returns_pages_and_wires_bond_ring_template_arrow_actions(
         self,
     ) -> None:
@@ -201,7 +216,7 @@ class MainWindowContextBarPagesTest(unittest.TestCase):
         preset_button.click()
 
         self.tool_state_service.set_arrow_type.assert_called_once_with(
-            self.window, "Curved Double"
+            self.window, "curved_double"
         )
         self.tool_state_service.set_arrow_preset.assert_called_once_with(
             self.window, "Bold"

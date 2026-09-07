@@ -48,9 +48,12 @@ from .rotation_geometry import (
     flatten_coords_to_plane,
     fragment_plane_normal_for,
     normalize_3d,
+    project_point_3d,
     rigid_rotated_coords,
     rigid_rotation_angles_from_drag,
     rotate_point_around_axis,
+    translate_projected_point_3d,
+    unproject_point_3d,
 )
 
 __all__ = [
@@ -89,6 +92,7 @@ __all__ = [
     "orbital_scale_factor",
     "padded_rect_contains_point",
     "plan_selection_press",
+    "project_point_3d",
     "resized_shape_rect",
     "rigid_rotated_coords",
     "rigid_rotation_angles_from_drag",
@@ -101,4 +105,6 @@ __all__ = [
     "selection_path_for_object_item",
     "shape_resize_handle_positions",
     "structure_hit_is_selected",
+    "translate_projected_point_3d",
+    "unproject_point_3d",
 ]

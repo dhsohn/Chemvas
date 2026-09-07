@@ -303,7 +303,7 @@ class _FakeToolCanvas:
                 item_at_scene_pos=lambda pos: None,
             ),
             scene_decoration_service=SimpleNamespace(add_arrow=self.add_arrow),
-            scene_decoration_build_service=SimpleNamespace(
+            arrow_build_service=SimpleNamespace(
                 preview_arrow=self.preview_arrow,
                 mark_snapped_points=lambda item, points: self.snap_mark_calls.append(
                     (item, list(points))

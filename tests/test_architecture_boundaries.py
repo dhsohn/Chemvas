@@ -14,6 +14,12 @@ dependency contract, it probably belongs in a unit test, not here.
 import ast
 import re
 from pathlib import Path
+from typing import TYPE_CHECKING
+
+import pytest
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator
 
 APP_ROOT = Path(__file__).resolve().parents[1] / "app"
 
@@ -3414,9 +3420,12 @@ def test_production_window_helpers_do_not_reach_into_window_private_members() ->
     }
     main_window_files = sorted(
         path
-        for path in APP_ROOT.glob("ui/main_window*.py")
+        for path in _app_python_files()
+        if path.parent == APP_ROOT / "chemvas" / "ui"
+        and path.name.startswith("main_window")
         if path not in allowed_paths
     )
+    assert main_window_files, "No main-window helpers found in the source inventory"
     pattern = re.compile(
         r"\b(?:window|self\.window)\._"
         r"|vars\(\s*window\s*\)\[\s*\"_[A-Za-z]"
@@ -3427,10 +3436,139 @@ def test_production_window_helpers_do_not_reach_into_window_private_members() ->
     assert _matching_lines(pattern, main_window_files) == []
 
 
+def test_window_private_guard_rejects_empty_inventory(monkeypatch, tmp_path) -> None:
+    monkeypatch.setitem(globals(), "APP_ROOT", tmp_path)
+    with pytest.raises(AssertionError):
+        test_production_window_helpers_do_not_reach_into_window_private_members()
+
+
+def test_window_private_guard_allows_canonical_ports(monkeypatch, tmp_path) -> None:
+    helpers = tmp_path / "chemvas" / "ui"
+    helpers.mkdir(parents=True)
+    (helpers / "main_window_example_service.py").write_text(
+        "def probe(window):\n    return window.public_value\n", encoding="utf-8"
+    )
+    (helpers / "main_window_ports.py").write_text(
+        "def probe(window):\n    return window._private_value\n", encoding="utf-8"
+    )
+    monkeypatch.setitem(globals(), "APP_ROOT", tmp_path)
+    test_production_window_helpers_do_not_reach_into_window_private_members()
+
+
+@pytest.mark.parametrize(
+    "access",
+    [
+        "window._service",
+        "self.window._service",
+        'vars(window)["_service"]',
+        'getattr(window, "_service")',
+        'setattr(window, "_service", None)',
+    ],
+)
+def test_window_private_guard_rejects_current_layout_violation(
+    monkeypatch, tmp_path, access
+) -> None:
+    root = tmp_path / "app"
+    helpers = root / "chemvas" / "ui"
+    helpers.mkdir(parents=True)
+    (helpers / "main_window_example_service.py").write_text(
+        f"def probe(window):\n    return {access}\n", encoding="utf-8"
+    )
+    monkeypatch.setitem(globals(), "APP_ROOT", root)
+    with pytest.raises(AssertionError):
+        test_production_window_helpers_do_not_reach_into_window_private_members()
+
+
+@pytest.mark.parametrize(
+    "left,right",
+    [
+        ("from example import right", "from example import left"),
+        ("from . import right", "from . import left"),
+        ("from . import right as peer", "from . import left as peer"),
+        ("import example.right", "import example.left"),
+    ],
+)
+def test_eager_import_guard_rejects_module_cycles(monkeypatch, tmp_path, left, right):
+    package = tmp_path / "example"
+    package.mkdir()
+    (package / "__init__.py").write_text("", encoding="utf-8")
+    (package / "left.py").write_text(left, encoding="utf-8")
+    (package / "right.py").write_text(right, encoding="utf-8")
+    monkeypatch.setitem(globals(), "APP_ROOT", tmp_path)
+    with pytest.raises(AssertionError):
+        test_eager_production_import_graph_stays_acyclic()
+
+
+@pytest.mark.parametrize("eager_only", [False, True])
+def test_import_graph_rejects_empty_inventory(monkeypatch, tmp_path, eager_only):
+    monkeypatch.setitem(globals(), "APP_ROOT", tmp_path)
+    with pytest.raises(AssertionError, match="No Python modules"):
+        _static_app_import_graph(eager_only=eager_only)
+
+
+@pytest.mark.parametrize(
+    "source,eager",
+    [
+        ("from example import right", True),
+        ("from . import right as peer", True),
+        ("from example.right import READY", True),
+        ("def lazy():\n    from example import right", False),
+        ("async def lazy():\n    from example import right", False),
+        ("if TYPE_CHECKING:\n    from example import right", False),
+        ("if typing.TYPE_CHECKING:\n    from example import right", False),
+        ("if TYPE_CHECKING:\n    pass\nelse:\n    from example import right", True),
+        ("class Widget:\n    from example import right", True),
+        ("try:\n    pass\nexcept RuntimeError:\n    from example import right", True),
+        ("match value:\n    case 1:\n        from example import right", True),
+    ],
+)
+def test_import_graph_preserves_lazy_and_type_only_boundaries(
+    monkeypatch, tmp_path, source, eager
+):
+    package = tmp_path / "example"
+    package.mkdir()
+    (package / "__init__.py").write_text("", encoding="utf-8")
+    (package / "left.py").write_text(source, encoding="utf-8")
+    (package / "right.py").write_text("READY = True", encoding="utf-8")
+    monkeypatch.setitem(globals(), "APP_ROOT", tmp_path)
+    assert "example.right" in _static_app_import_graph()["example.left"]
+    assert (
+        "example.right" in _static_app_import_graph(eager_only=True)["example.left"]
+    ) is eager
+    assert all(
+        dependency in {"example", "example.right"}
+        for dependency in _static_app_import_graph()["example.left"]
+    )
+
+
 # --- Dependency contracts ------------------------------------------------
 
 
-def _static_app_import_graph() -> dict[str, set[str]]:
+def _eager_imports(node: ast.AST) -> Iterator[ast.Import | ast.ImportFrom]:
+    """Visit import-time statements, including class/exception/match bodies."""
+    if isinstance(node, (ast.Import, ast.ImportFrom)):
+        yield node
+        return
+    if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+        return
+    if isinstance(node, ast.If) and (
+        (isinstance(node.test, ast.Name) and node.test.id == "TYPE_CHECKING")
+        or (
+            isinstance(node.test, ast.Attribute)
+            and isinstance(node.test.value, ast.Name)
+            and node.test.value.id == "typing"
+            and node.test.attr == "TYPE_CHECKING"
+        )
+    ):
+        for statement in node.orelse:
+            yield from _eager_imports(statement)
+        return
+    for child in ast.iter_child_nodes(node):
+        yield from _eager_imports(child)
+
+
+def _static_app_import_graph(*, eager_only: bool = False) -> dict[str, set[str]]:
+    """Share module discovery and resolution across full and eager contracts."""
     module_paths: dict[str, Path] = {}
     for path in _app_python_files():
         relative = path.relative_to(APP_ROOT).with_suffix("")
@@ -3440,9 +3578,10 @@ def _static_app_import_graph() -> dict[str, set[str]]:
         module_paths[".".join(parts)] = path
 
     graph = {module: set() for module in module_paths}
+    assert graph, "No Python modules found in the source inventory"
     for module, path in module_paths.items():
         tree = ast.parse(path.read_text(encoding="utf-8"))
-        for node in ast.walk(tree):
+        for node in _eager_imports(tree) if eager_only else ast.walk(tree):
             candidates: list[str] = []
             if isinstance(node, ast.Import):
                 candidates.extend(alias.name for alias in node.names)
@@ -3467,82 +3606,6 @@ def _static_app_import_graph() -> dict[str, set[str]]:
                     for alias in node.names
                     if imported_from
                 )
-            graph[module].update(
-                candidate
-                for candidate in candidates
-                if candidate in module_paths and candidate != module
-            )
-    return graph
-
-
-def _static_top_level_app_import_graph() -> dict[str, set[str]]:
-    """Return eager module dependencies, excluding lazy/type-only imports.
-
-    The broader graph above intentionally includes imports nested under
-    ``TYPE_CHECKING`` and inside functions.  Those relationships are useful for
-    local dependency contracts, while this graph protects import-time startup
-    from real cycles during the package migration.
-    """
-    module_paths: dict[str, Path] = {}
-    for path in _app_python_files():
-        relative = path.relative_to(APP_ROOT).with_suffix("")
-        parts = list(relative.parts)
-        if parts[-1] == "__init__":
-            parts.pop()
-        module_paths[".".join(parts)] = path
-
-    def eager_imports(statements: list[ast.stmt]) -> list[ast.Import | ast.ImportFrom]:
-        imports: list[ast.Import | ast.ImportFrom] = []
-        for statement in statements:
-            if isinstance(statement, (ast.Import, ast.ImportFrom)):
-                imports.append(statement)
-                continue
-            if isinstance(statement, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                continue
-            if isinstance(statement, ast.If) and (
-                (
-                    isinstance(statement.test, ast.Name)
-                    and statement.test.id == "TYPE_CHECKING"
-                )
-                or (
-                    isinstance(statement.test, ast.Attribute)
-                    and isinstance(statement.test.value, ast.Name)
-                    and statement.test.value.id == "typing"
-                    and statement.test.attr == "TYPE_CHECKING"
-                )
-            ):
-                imports.extend(eager_imports(statement.orelse))
-                continue
-            child_statements = [
-                child
-                for child in ast.iter_child_nodes(statement)
-                if isinstance(child, ast.stmt)
-            ]
-            imports.extend(eager_imports(child_statements))
-        return imports
-
-    graph = {module: set() for module in module_paths}
-    for module, path in module_paths.items():
-        tree = ast.parse(path.read_text(encoding="utf-8"))
-        for node in eager_imports(tree.body):
-            candidates: list[str] = []
-            if isinstance(node, ast.Import):
-                candidates.extend(alias.name for alias in node.names)
-            elif isinstance(node, ast.ImportFrom):
-                if node.level:
-                    package = (
-                        module
-                        if path.name == "__init__.py"
-                        else module.rpartition(".")[0]
-                    )
-                    package_parts = package.split(".") if package else []
-                    keep_count = max(0, len(package_parts) - node.level + 1)
-                    imported_parts = package_parts[:keep_count]
-                    if node.module:
-                        imported_parts.extend(node.module.split("."))
-                    candidates.append(".".join(imported_parts))
-                else:
-                    candidates.append(node.module or "")
             graph[module].update(
                 candidate
                 for candidate in candidates
@@ -3624,7 +3687,7 @@ def test_history_transaction_dependency_cluster_stays_acyclic() -> None:
 
 
 def test_eager_production_import_graph_stays_acyclic() -> None:
-    graph = _static_top_level_app_import_graph()
+    graph = _static_app_import_graph(eager_only=True)
     cyclic_components = [
         sorted(component)
         for component in _strongly_connected_components(graph)
@@ -3647,17 +3710,55 @@ def test_document_savepoint_does_not_depend_on_history_policy_or_commands() -> N
 
 
 def test_history_stack_snapshot_has_one_production_owner() -> None:
-    owners = [
-        path
-        for path in _app_python_files()
-        if re.search(
-            r"^class HistoryStackSnapshot\b",
-            path.read_text(encoding="utf-8"),
-            re.MULTILINE,
-        )
-    ]
+    owners = []
+    for path in _app_python_files():
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.ClassDef):
+                continue
+            fields = {
+                child.target.id
+                for child in node.body
+                if isinstance(child, ast.AnnAssign)
+                and isinstance(child.target, ast.Name)
+            }
+            if {"state", "history", "redo_stack"} <= fields:
+                owners.append(path)
 
     assert owners == [APP_ROOT / "chemvas" / "ui" / "canvas_history_service.py"]
+
+
+def test_document_lifecycle_does_not_reach_into_history_stacks() -> None:
+    """Document replacement/reset use stack policy, not the mutable stack fields."""
+    violations = []
+    for name in ("canvas_document_session_service", "canvas_scene_reset_service"):
+        path = APP_ROOT / "chemvas" / "ui" / f"{name}.py"
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Attribute):
+                attribute, receiver = node.attr, node.value
+            elif (
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Name)
+                and node.func.id in {"getattr", "setattr", "delattr", "hasattr"}
+                and len(node.args) >= 2
+                and isinstance(node.args[1], ast.Constant)
+            ):
+                attribute, receiver = node.args[1].value, node.args[0]
+            else:
+                continue
+            if attribute not in {"history", "redo_stack"}:
+                continue
+            # The session's injected history service is not a stack field.
+            if (
+                attribute == "history"
+                and isinstance(receiver, ast.Name)
+                and receiver.id == "self"
+            ):
+                continue
+            violations.append(f"{path.name}:{node.lineno}: {ast.unparse(node)}")
+
+    assert violations == []
 
 
 def test_removed_history_recovery_lattice_stays_absent() -> None:

@@ -126,6 +126,20 @@ def insert_bond_exists_for(canvas, a_id: int, b_id: int, *, bond_exists=None) ->
     )
 
 
+def build_insert_benzene_ring_for(
+    canvas,
+    center,
+    *,
+    attach_atom_id: int | None = None,
+    attach_bond_id: int | None = None,
+) -> object | None:
+    return structure_insert_build_service_for_access(canvas).build_benzene_ring(
+        center,
+        attach_atom_id=attach_atom_id,
+        attach_bond_id=attach_bond_id,
+    )
+
+
 def add_insert_ring_from_points_for(
     canvas,
     points,
@@ -328,6 +342,7 @@ __all__ = [
     "add_atom_with_merge_for",
     "add_insert_ring_from_points_for",
     "add_or_update_insert_atom_label_for",
+    "build_insert_benzene_ring_for",
     "ensure_insert_carbon_dot_for",
     "has_insert_mutation_since_for",
     "insert_bond_exists_for",

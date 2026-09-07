@@ -266,6 +266,23 @@ class StructureBuildService:
             run_recorded_build=self.run_recorded_build,
         )
 
+    def build_benzene_ring(
+        self,
+        center: QPointF,
+        *,
+        attach_atom_id: int | None = None,
+        attach_bond_id: int | None = None,
+    ) -> object | None:
+        return self.benzene_builder.build_benzene_ring(
+            center,
+            attach_atom_id,
+            attach_bond_id,
+            benzene_ring_points=self.benzene_ring_points,
+            add_atom_with_merge=self.add_atom_with_merge,
+            bond_exists=self.bond_exists,
+            create_ring_fill_item=self.create_ring_fill_item,
+        )
+
     def add_ring_from_points(
         self,
         points,

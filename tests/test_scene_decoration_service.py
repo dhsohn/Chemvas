@@ -368,6 +368,7 @@ class SceneDecorationServiceTest(unittest.TestCase):
         )
         service = _scene_decoration_service(canvas)
 
+        canvas.services.scene_decoration.arrow_build_service = build_service
         arrow = service.add_arrow(QPointF(1.0, 2.0), QPointF(6.0, 7.0), "curved_double")
         ts_bracket = service.add_ts_bracket(
             QRectF(QPointF(0.0, 0.0), QPointF(4.0, 8.0))
