@@ -23,6 +23,7 @@ from chemvas.ui.main_window_ports import (
     reset_zoom_for_window,
     scene_transform_controller_for_window,
     select_all_for_window,
+    set_grid_snap_for_window,
     set_sheet_setup_for_window,
     sheet_orientation_for_window,
     sheet_size_for_window,
@@ -41,6 +42,7 @@ class MainWindowMenuBarAssembly:
     menu_bar: QMenuBar
     undo_action: QAction
     redo_action: QAction
+    grid_snap_action: QAction
 
 
 def _add_menu(menu_bar: QMenuBar, title: str) -> QMenu:
@@ -82,12 +84,17 @@ def _add_action(
     status_tip: str,
     triggered,
     shortcut: QKeySequence | QKeySequence.StandardKey | None = None,
+    checkable: bool = False,
 ) -> QAction:
     action = QAction(text, window)
     action.setStatusTip(status_tip)
     if shortcut is not None:
         action.setShortcut(shortcut)
-    action.triggered.connect(lambda _checked=False: triggered())
+    if checkable:
+        action.setCheckable(True)
+        action.triggered.connect(lambda checked=False: triggered(checked))
+    else:
+        action.triggered.connect(lambda _checked=False: triggered())
     menu.addAction(action)
     return action
 
@@ -284,7 +291,7 @@ def _build_edit_menu(
 
 def _build_view_menu(
     menu_bar: QMenuBar, window, callbacks: MainWindowPanelToolbarCallbacks
-) -> None:
+) -> QAction:
     view_menu = _add_menu(menu_bar, "View")
     _add_action(
         view_menu,
@@ -319,6 +326,18 @@ def _build_view_menu(
         triggered=lambda: zoom_out_for_window(window),
     )
     view_menu.addSeparator()
+    grid_snap_action = _add_action(
+        view_menu,
+        window,
+        "Snap to Grid",
+        status_tip=(
+            "Show a grid on the sheet and snap drawn arrows, lines and their "
+            "endpoint handles to it"
+        ),
+        triggered=lambda checked: set_grid_snap_for_window(window, checked),
+        checkable=True,
+    )
+    view_menu.addSeparator()
     _add_action(
         view_menu,
         window,
@@ -326,6 +345,7 @@ def _build_view_menu(
         status_tip="Open the selected molecule in a separate molecule info window",
         triggered=lambda: callbacks.open_preview_window(window),
     )
+    return grid_snap_action
 
 
 def _build_calculation_menu(menu_bar: QMenuBar, window) -> None:
@@ -385,13 +405,14 @@ def build_menu_bar(
     menu_bar = window.menuBar()
     _build_file_menu(menu_bar, window, callbacks)
     undo_action, redo_action = _build_edit_menu(menu_bar, window, callbacks)
-    _build_view_menu(menu_bar, window, callbacks)
+    grid_snap_action = _build_view_menu(menu_bar, window, callbacks)
     _build_calculation_menu(menu_bar, window)
     _build_help_menu(menu_bar, window)
     return MainWindowMenuBarAssembly(
         menu_bar=menu_bar,
         undo_action=undo_action,
         redo_action=redo_action,
+        grid_snap_action=grid_snap_action,
     )
 
 

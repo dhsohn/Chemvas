@@ -45,6 +45,7 @@ from chemvas.ui.main_window_ports import (
     document_session_service_for_window,
     fit_canvas_to_view_for_window,
     geometry_controller_for_window,
+    grid_snap_action_for_window,
     history_service_for_window,
     icon_factory_for_window,
     insert_controller_for_window,
@@ -98,6 +99,7 @@ def build_main_window_services() -> MainWindowServices:
         active_canvas_or_none_for_window=active_canvas_or_none_for_window,
         undo_action_for_window=undo_action_for_window,
         redo_action_for_window=redo_action_for_window,
+        grid_snap_action_for_window=grid_snap_action_for_window,
     )
     text_style_service = MainWindowTextStyleService(
         style_controller_for_window=style_controller_for_window,

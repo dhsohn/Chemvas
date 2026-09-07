@@ -69,11 +69,17 @@ def wavy_line_points(
     return points
 
 
-def snapped_endpoint(
+def nearest_endpoint(
     point: Point2D, candidates: list[Point2D], *, radius: float
-) -> Point2D:
-    """The nearest candidate within ``radius`` of ``point``, else ``point``."""
-    best = point
+) -> Point2D | None:
+    """The nearest candidate within ``radius`` of ``point``, else ``None``.
+
+    Distinguishing "nothing in range" from "the candidate is exactly here"
+    matters to callers that fall back to another snap: inferring it from
+    whether the point moved would drag a cursor sitting exactly on an
+    endpoint away from it.
+    """
+    best: Point2D | None = None
     best_distance = radius
     for candidate in candidates:
         distance = math.hypot(candidate[0] - point[0], candidate[1] - point[1])
@@ -81,6 +87,24 @@ def snapped_endpoint(
             best = candidate
             best_distance = distance
     return best
+
+
+def snapped_endpoint(
+    point: Point2D, candidates: list[Point2D], *, radius: float
+) -> Point2D:
+    """The nearest candidate within ``radius`` of ``point``, else ``point``."""
+    found = nearest_endpoint(point, candidates, radius=radius)
+    return point if found is None else found
+
+
+def snapped_to_grid(point: Point2D, *, step: float) -> Point2D:
+    """``point`` rounded to the nearest grid intersection of size ``step``.
+
+    A non-positive step means no grid, so the point passes through.
+    """
+    if step <= 0.0:
+        return point
+    return (round(point[0] / step) * step, round(point[1] / step) * step)
 
 
 def _arc_frame(
@@ -152,7 +176,9 @@ def arc_midpoint(
 __all__ = [
     "arc_midpoint",
     "arc_points",
+    "nearest_endpoint",
     "snapped_endpoint",
     "snapped_line_end",
+    "snapped_to_grid",
     "wavy_line_points",
 ]

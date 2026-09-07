@@ -15,7 +15,7 @@ from chemvas.features.selection import (
 from chemvas.features.selection import (
     resized_shape_rect as resized_shape_rect_helper,
 )
-from chemvas.ui.endpoint_snap_access import snap_to_arrow_endpoints_for
+from chemvas.ui.endpoint_snap_access import snap_drawing_point_for
 from chemvas.ui.handle_mutation_access import (
     clamp_curved_midpoint_for,
     control_from_midpoint_for,
@@ -94,7 +94,7 @@ class HandleMutationService:
         end = data.get("end")
         if not isinstance(start, QPointF) or not isinstance(end, QPointF):
             return
-        moved = snap_to_arrow_endpoints_for(self.canvas, pos, exclude=item)
+        moved = snap_drawing_point_for(self.canvas, pos, exclude=item)
         if endpoint == "start":
             start, anchor = moved, end
         else:

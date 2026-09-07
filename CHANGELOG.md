@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- View ▸ Snap to Grid draws a faint grid of half a bond length on the sheet and
+  snaps the points the Line and Arrow tools place, and the ends dragged with
+  endpoint handles, onto it. An existing endpoint still takes precedence, and
+  the Shift angle lock outranks the grid; a drag shorter than one grid step
+  reads as a click. The grid is left unpainted while it would be too dense to
+  read. The setting belongs to the canvas rather than the document, so each
+  window keeps its own and it is not saved.
 - Selecting an arrow or line and clicking it now shows a handle at each
   endpoint; dragging one moves that end, snapping to nearby endpoints, and the
   whole drag undoes in one step. Arcs keep their sweep and equilibrium arrows

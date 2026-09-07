@@ -61,6 +61,23 @@ def redo_action_for_window(window):
     return ui_references_for_window(window).redo_action
 
 
+def grid_snap_action_for_window(window):
+    return ui_references_for_window(window).grid_snap_action
+
+
+def set_grid_snap_for_window(window, enabled: bool) -> None:
+    # Imported here, not at module scope: every window service imports
+    # this module, and these two pull in Qt widget code.
+    from chemvas.ui.endpoint_snap_access import set_grid_snap_enabled_for
+    from chemvas.ui.input_view_access import update_viewport_for
+
+    canvas = active_canvas_or_none_for_window(window)
+    if canvas is None:
+        return
+    set_grid_snap_enabled_for(canvas, enabled)
+    update_viewport_for(canvas)
+
+
 def active_canvas_for_window(window):
     canvas = active_canvas_or_none_for_window(window)
     if canvas is not None:
@@ -341,6 +358,7 @@ __all__ = [
     "document_session_service_for_window",
     "fit_canvas_to_view_for_window",
     "geometry_controller_for_window",
+    "grid_snap_action_for_window",
     "group_selection_for_window",
     "history_service_for_window",
     "icon_factory_for_window",
@@ -359,6 +377,7 @@ __all__ = [
     "services_for_window",
     "set_atom_input_for_window",
     "set_context_bar_page_override_for_window",
+    "set_grid_snap_for_window",
     "set_last_canvas_tab_index_for_window",
     "set_sheet_setup_for_window",
     "set_zoom_percent_for_window",

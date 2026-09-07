@@ -10,7 +10,7 @@ from chemvas.core.tool_overlay_logic import (
 )
 from chemvas.domain.document import VALID_ARC_KINDS, mirrored_arc_kind
 from chemvas.ui.canvas_tool_settings_state import tool_settings_state_for
-from chemvas.ui.endpoint_snap_access import snap_to_arrow_endpoints_for
+from chemvas.ui.endpoint_snap_access import snap_drawing_point_for
 from chemvas.ui.scene_decoration_access import (
     add_arrow_for,
     add_orbital_for,
@@ -101,7 +101,7 @@ class ArrowTool(PreviewDragTool):
     def on_mouse_press(self, event) -> bool:
         handled = super().on_mouse_press(event)
         if handled and self._start_pos is not None:
-            self._start_pos = snap_to_arrow_endpoints_for(self.canvas, self._start_pos)
+            self._start_pos = snap_drawing_point_for(self.canvas, self._start_pos)
         return handled
 
     @override
@@ -115,10 +115,10 @@ class ArrowTool(PreviewDragTool):
         return super().on_mouse_release(event)
 
     def _end_point(self, current_pos):
-        snapped = snap_to_arrow_endpoints_for(self.canvas, current_pos)
-        # Never snap the end onto the start: a short drag from an existing
-        # endpoint draws a short arrow instead of being swallowed.
-        return current_pos if snapped == self._start_pos else snapped
+        # Never take the end this drag started from, or a short drag from an
+        # existing endpoint would be swallowed; the grid may still land there,
+        # which is how a drag shorter than one grid step reads as a click.
+        return snap_drawing_point_for(self.canvas, current_pos, avoid=self._start_pos)
 
     @override
     def _build_preview(self, current_pos):

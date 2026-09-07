@@ -52,8 +52,10 @@ from .bond_style import (
 from .line_geometry import (
     arc_midpoint,
     arc_points,
+    nearest_endpoint,
     snapped_endpoint,
     snapped_line_end,
+    snapped_to_grid,
     wavy_line_points,
 )
 
@@ -89,6 +91,7 @@ __all__ = [
     "is_plain_double_bond_style",
     "is_positionable_double_bond_style",
     "line_intersection",
+    "nearest_endpoint",
     "normal_away_from_parallel_segment",
     "normalize_3d",
     "normalized_bold_double_style",
@@ -99,6 +102,7 @@ __all__ = [
     "scale_segment",
     "snapped_endpoint",
     "snapped_line_end",
+    "snapped_to_grid",
     "strip_corners",
     "style_for_double_position",
     "style_for_existing_bond_overlay",
