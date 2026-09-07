@@ -142,6 +142,12 @@ class MoveTool(SelectionDragMixin, Tool):
         return True
 
     @override
+    def _connectable_items(self) -> list:
+        if self._drag_selection:
+            return super()._connectable_items()
+        return [self._drag_item] if self._drag_item is not None else []
+
+    @override
     def _apply_drag_delta(self, delta: QPointF) -> None:
         if not self._drag_delta_is_effective(delta):
             return
@@ -176,7 +182,7 @@ class MoveTool(SelectionDragMixin, Tool):
             self._last_drag_time = now
         scene_pos = self.context.scene_pos_from_event(event)
         delta = scene_pos - self._start_pos
-        self._apply_drag_delta(delta)
+        self._apply_drag_delta_with_connect(delta)
         self._start_pos = scene_pos
         return True
 
@@ -188,7 +194,7 @@ class MoveTool(SelectionDragMixin, Tool):
             scene_pos = self.context.scene_pos_from_event(event)
             delta = scene_pos - self._start_pos
             if abs(delta.x()) > 1e-6 or abs(delta.y()) > 1e-6:
-                self._apply_drag_delta(delta)
+                self._apply_drag_delta_with_connect(delta)
                 self._start_pos = scene_pos
         if self._drag_selection:
             try:

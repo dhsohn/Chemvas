@@ -27,6 +27,7 @@ from chemvas.core.history import (
     HistoryCommand,
     MoveAtomsCommand,
 )
+from chemvas.core.tool_overlay_logic import clear_temporary_tool_overlay
 from chemvas.domain.transactions import add_recovery_error_note
 from chemvas.ui.bond_renderer_access import update_bond_geometry_for
 from chemvas.ui.canvas_atom_graphics_state import atom_dots_for, atom_items_for
@@ -34,6 +35,7 @@ from chemvas.ui.canvas_bond_graphics_state import bond_items_for_id
 from chemvas.ui.canvas_mark_registry import mark_registry_for
 from chemvas.ui.canvas_model_access import bond_for_id
 from chemvas.ui.canvas_scene_items_state import ring_items_for_atoms
+from chemvas.ui.endpoint_snap_access import connection_for
 from chemvas.ui.handle_state import active_handles_for
 from chemvas.ui.history_canvas_access import (
     MoveGestureScope,
@@ -45,6 +47,7 @@ from chemvas.ui.move_access import (
     move_item_for,
     shift_selection_outlines_for,
 )
+from chemvas.ui.scene_decoration_build_access import show_connect_mark_for
 from chemvas.ui.selection_collection_access import independent_selection_items
 from chemvas.ui.selection_outline_state import selection_outlines_for
 from chemvas.ui.selection_service_access import refresh_selection_outline_for
@@ -90,6 +93,8 @@ class SelectionDragMixin:
     _drag_transaction: _DragTransactionToken | None
 
     def _reset_selection_drag_state(self) -> None:
+        self._clear_connect_mark()
+        self._connect_offset: QPointF = QPointF(0.0, 0.0)
         self._drag_selection = False
         self._selection_atom_ids: set[int] = set()
         self._selection_items: list = []
@@ -101,6 +106,40 @@ class SelectionDragMixin:
         self._start_pos: QPointF | None = None
         self._moved: bool = False
         self._total_delta: QPointF = QPointF(0.0, 0.0)
+
+    def _clear_connect_mark(self) -> None:
+        clear_temporary_tool_overlay(
+            self.canvas, preview_item=getattr(self, "_connect_mark", None)
+        )
+        self._connect_mark = None
+
+    def _connectable_items(self) -> list:
+        """The items whose ends this drag may connect to another's."""
+        return list(self._selection_items) if self._drag_selection else []
+
+    def _apply_drag_delta_with_connect(self, delta: QPointF) -> None:
+        """Apply a drag frame, holding a moved end on the end it can meet.
+
+        Last frame's correction is taken back before the pointer's own
+        movement is applied, so the items sit under the cursor plus
+        whatever the current connection needs; carrying on past the
+        target leaves nothing behind.
+        """
+        if not self._drag_delta_is_effective(delta):
+            # Qt delivers a move at the exact press coordinate. A gesture
+            # that has not moved must not connect, or clicking an item that
+            # happens to sit near another's end would move it.
+            return
+        self._apply_drag_delta(delta - self._connect_offset)
+        self._connect_offset = QPointF(0.0, 0.0)
+        self._clear_connect_mark()
+        connection = connection_for(self.canvas, self._connectable_items())
+        if connection is None:
+            return
+        shift, meeting_point = connection
+        self._apply_drag_delta(shift)
+        self._connect_offset = shift
+        self._connect_mark = show_connect_mark_for(self.canvas, meeting_point)
 
     def _begin_drag_transaction(self) -> _DragTransactionToken:
         if self._drag_transaction is not None:

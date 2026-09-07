@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Moving an arrow or line, or a selection containing one, now connects it:
+  carrying an end within reach of another item's end joins them exactly and
+  rings the meeting point, and carrying on past it leaves the drag where the
+  pointer is. Drawing already snapped; assembling a scheme by moving pieces
+  did not, so the ends never actually met.
+
 ### Changed
 
 - The endpoint snap reaches twelve pixels from the cursor at any zoom.
