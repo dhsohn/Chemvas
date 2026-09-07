@@ -91,6 +91,46 @@ def _valid_payload() -> dict:
 
 
 class ClipboardPayloadValidationTest(unittest.TestCase):
+    def test_accepts_groups_with_payload_local_references(self) -> None:
+        payload = _valid_payload()
+        payload["groups"] = [
+            {"atoms": [0, 1, 2], "items": [["scene_items", 0]]},
+            {"atoms": [], "items": [["scene_items", 1], ["scene_items", 3]]},
+        ]
+        self.assertTrue(validate_clipboard_selection_payload(payload))
+
+    def test_rejects_malformed_or_overlapping_clipboard_groups(self) -> None:
+        invalid_groups = [
+            {},
+            False,
+            "groups",
+            [None],
+            [{"atoms": [], "items": []}],
+            [{"atoms": [99], "items": []}],
+            [{"atoms": [True], "items": []}],
+            [{"atoms": [0, 0], "items": []}],
+            [{"atoms": [0], "items": []}, {"atoms": [0], "items": []}],
+            [{"atoms": [], "items": [["scene_items", -1]]}],
+            [{"atoms": [], "items": [["scene_items", 4]]}],
+            [{"atoms": [], "items": [["scene_items", True]]}],
+            [{"atoms": [], "items": [["scene_items", 0.0]]}],
+            [{"atoms": [], "items": [["scene_items", 0, 1]]}],
+            [{"atoms": [], "items": [["notes", 0]]}],
+            [{"atoms": [], "items": [["rings", 0]]}],
+            [{"atoms": [], "items": [[[], 0]]}],
+            [{"atoms": [], "items": [["scene_items", 0]], "extra": 0}],
+            [{"atoms": [], "items": [["scene_items", 0], ["scene_items", 0]]}],
+            [
+                {"atoms": [], "items": [["scene_items", 0]]},
+                {"atoms": [], "items": [["scene_items", 0]]},
+            ],
+        ]
+        for groups in invalid_groups:
+            with self.subTest(groups=groups):
+                payload = _valid_payload()
+                payload["groups"] = groups
+                self.assertFalse(validate_clipboard_selection_payload(payload))
+
     def test_accepts_well_formed_payload(self) -> None:
         self.assertTrue(validate_clipboard_selection_payload(_valid_payload()))
 

@@ -167,7 +167,10 @@ CLIPBOARD_SELECTION_REQUIRED_KEYS = frozenset(
         "scene_items",
     )
 )
-CLIPBOARD_SELECTION_PAYLOAD_KEYS = CLIPBOARD_SELECTION_REQUIRED_KEYS | {"perspective"}
+CLIPBOARD_SELECTION_PAYLOAD_KEYS = CLIPBOARD_SELECTION_REQUIRED_KEYS | {
+    "perspective",
+    "groups",
+}
 
 
 def atom_to_state(atom: Atom, explicit_label: bool) -> StateDict:
@@ -1143,14 +1146,19 @@ def _validate_perspective_state(state: object, atom_ids: set[int]) -> None:
     _validate_optional_point_2d(state.get("projection_anchor_2d"))
 
 
-def _validate_group_states(state: Mapping[str, object], atom_ids: set[int]) -> None:
+def _validate_group_states(
+    state: Mapping[str, object],
+    atom_ids: set[int],
+    *,
+    item_keys: frozenset[str] = _GROUPABLE_STATE_ITEM_KEYS,
+) -> None:
     group_states = state.get("groups")
     if group_states is None:
         return
     if not isinstance(group_states, list):
         raise ValueError("Invalid Chemvas file.")
     item_counts: dict[str, int] = {}
-    for key in _GROUPABLE_STATE_ITEM_KEYS:
+    for key in item_keys:
         items = state.get(key)
         item_counts[key] = len(items) if isinstance(items, list) else 0
     seen_atom_ids: set[int] = set()
@@ -1179,9 +1187,7 @@ def _validate_group_states(state: Mapping[str, object], atom_ids: set[int]) -> N
             if not isinstance(item_ref, (list, tuple)) or len(item_ref) != 2:
                 raise ValueError("Invalid Chemvas file.")
             kind, index = item_ref
-            if not _is_valid_choice(kind, _GROUPABLE_STATE_ITEM_KEYS) or not _is_int(
-                index
-            ):
+            if not _is_valid_choice(kind, item_keys) or not _is_int(index):
                 raise ValueError("Invalid Chemvas file.")
             if not 0 <= index < item_counts[kind] or (kind, index) in seen_item_refs:
                 raise ValueError("Invalid Chemvas file.")
@@ -1314,6 +1320,9 @@ def validate_clipboard_selection_payload(payload: Mapping[str, object]) -> bool:
         for item_state in _validated_scene_state_list(payload.get("scene_items")):
             _validate_clipboard_scene_item(item_state)
         _validate_clipboard_perspective(payload, atom_ids)
+        _validate_group_states(
+            payload, atom_ids, item_keys=frozenset(("marks", "scene_items"))
+        )
     except ValueError:
         return False
     return True

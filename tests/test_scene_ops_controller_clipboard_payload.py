@@ -23,6 +23,7 @@ from PyQt6.QtWidgets import (
 from chemvas.domain.document import Atom, Bond, MoleculeModel
 from chemvas.ui.atom_coords_access import CanvasAtomCoords3DState
 from chemvas.ui.canvas_atom_graphics_state import CanvasAtomGraphicsState
+from chemvas.ui.canvas_group_state import CanvasGroupState
 from chemvas.ui.canvas_mark_registry import CanvasMarkRegistry
 from chemvas.ui.canvas_rotation_state import CanvasRotationState
 from chemvas.ui.canvas_scene_items_state import (
@@ -435,6 +436,7 @@ class _FakeCanvas:
         self.mark_registry = CanvasMarkRegistry()
         self.scene_clipboard_state = SceneClipboardState()
         self.runtime_state = canvas_runtime_state(
+            group_state=CanvasGroupState(),
             atom_graphics_state=CanvasAtomGraphicsState(),
             atom_coords_3d_state=CanvasAtomCoords3DState(),
             mark_registry=self.mark_registry,

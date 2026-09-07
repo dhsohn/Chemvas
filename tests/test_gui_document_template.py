@@ -7,7 +7,8 @@ from unittest.mock import patch
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PyQt6.QtCore import QPointF, Qt
+from PyQt6.QtCore import QEvent, QPointF, Qt
+from PyQt6.QtGui import QMouseEvent
 from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import QApplication
 
@@ -938,6 +939,9 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
             4,
         )
 
+        state = insert_state_for(canvas)
+        previous_preview = list(state.template_preview_items)
+        self.assertTrue(previous_preview)
         self._click_scene_point(QPointF(0.0, 0.0))
 
         self.assertTrue(
@@ -951,17 +955,32 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
             insert_state_for(active_canvas_for_window(self.window)).template_ring_style,
             "regular",
         )
-        self.assertEqual(
-            insert_state_for(
-                active_canvas_for_window(self.window)
-            ).template_preview_lines,
-            [],
+        # Native mouse moves can already have redrawn the next preview while
+        # the click helper drains events. The committed preview must be gone.
+        self.assertTrue(all(item.scene() is None for item in previous_preview))
+        document_after_commit = snapshot_canvas_state_for(canvas)
+        history = canvas.runtime_state.history_service.state
+        stacks_after_commit = (tuple(history.history), tuple(history.redo_stack))
+        point = canvas.mapFromScene(QPointF(100.0, 80.0))
+        self.app.sendEvent(
+            canvas.viewport(),
+            QMouseEvent(
+                QEvent.Type.MouseMove,
+                QPointF(point),
+                QPointF(canvas.viewport().mapToGlobal(point)),
+                Qt.MouseButton.NoButton,
+                Qt.MouseButton.NoButton,
+                Qt.KeyboardModifier.NoModifier,
+            ),
         )
+        self.assertEqual(len(state.template_preview_lines), 4)
+        self.assertEqual(len(state.template_preview_dots), 4)
+        self.assertTrue(
+            all(item.scene() is canvas.scene() for item in state.template_preview_items)
+        )
+        self.assertEqual(snapshot_canvas_state_for(canvas), document_after_commit)
         self.assertEqual(
-            insert_state_for(
-                active_canvas_for_window(self.window)
-            ).template_preview_dots,
-            [],
+            (tuple(history.history), tuple(history.redo_stack)), stacks_after_commit
         )
         self.assertEqual(
             len(active_canvas_for_window(self.window).model.atoms),

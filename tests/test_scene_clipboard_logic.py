@@ -26,6 +26,7 @@ from chemvas.ui.atom_coords_access import (
     set_atom_coords_3d_for,
 )
 from chemvas.ui.canvas_atom_graphics_state import CanvasAtomGraphicsState
+from chemvas.ui.canvas_group_state import CanvasGroupState
 from chemvas.ui.canvas_mark_registry import CanvasMarkRegistry
 from chemvas.ui.canvas_rotation_state import CanvasRotationState, rotation_state_for
 from chemvas.ui.canvas_scene_items_state import (
@@ -816,6 +817,7 @@ class _FakeCanvas:
         # given, not whatever the accessor happens to hand back.
         self.mark_registry = CanvasMarkRegistry()
         self.runtime_state = canvas_runtime_state(
+            group_state=CanvasGroupState(),
             scene_items_state=CanvasSceneItemsState(),
             atom_graphics_state=CanvasAtomGraphicsState(),
             mark_registry=self.mark_registry,

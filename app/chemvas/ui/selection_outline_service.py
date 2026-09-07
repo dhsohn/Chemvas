@@ -267,6 +267,7 @@ class SelectionOutlineService:
         if path.isEmpty():
             return
         outline = selection_object_outline_item(path, color)
+        outline.setData(2, {"kind": "object", "object_kind": item.data(0)})
         add_item_to_canvas_scene(self.canvas, outline)
         append_selection_outline_for(self.canvas, outline)
 

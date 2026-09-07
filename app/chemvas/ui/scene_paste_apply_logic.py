@@ -15,6 +15,7 @@ class PasteApplyResult:
     atom_id_map: dict[int, int] = field(default_factory=dict)
     new_atom_ids: set[int] = field(default_factory=set)
     added_scene_items: list[object] = field(default_factory=list)
+    scene_item_map: dict[tuple[str, int], object] = field(default_factory=dict)
 
     def has_changes(self) -> bool:
         return bool(self.atom_id_map or self.added_scene_items)
@@ -122,8 +123,12 @@ def apply_paste_payload(
             },
         )
 
-    for state_group in (rings, marks, scene_items):
-        for state in state_group:
+    for section, state_group in (
+        ("rings", rings),
+        ("marks", marks),
+        ("scene_items", scene_items),
+    ):
+        for index, state in enumerate(state_group):
             translated_state = translated_scene_item_state(
                 state,
                 dx=dx,
@@ -135,6 +140,7 @@ def apply_paste_payload(
             item = create_scene_item_from_state(translated_state)
             if item is not None:
                 result.added_scene_items.append(item)
+                result.scene_item_map[section, index] = item
 
     if apply_perspective is not None:
         translated_perspective = translated_perspective_state(

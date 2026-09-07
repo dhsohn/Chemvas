@@ -38,6 +38,7 @@ class ClipboardPastePlan:
     before_next_atom_id: int
     before_bond_count: int
     before_smiles_input: object
+    groups: Sequence[dict]
 
     def has_payload_content(self) -> bool:
         return bool(
@@ -208,6 +209,7 @@ def build_clipboard_paste_plan(
         before_next_atom_id=before_next_atom_id,
         before_bond_count=before_bond_count,
         before_smiles_input=before_smiles_input,
+        groups=payload.get("groups") or [],
     )
 
 

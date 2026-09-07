@@ -60,6 +60,10 @@ class CanvasInputController:
         return atom_label_service(self.canvas)
 
     def key_press_event(self, event) -> None:
+        if event.key() == Qt.Key.Key_Escape:
+            self._cancel_interaction()
+            event.accept()
+            return
         focus_item = focused_scene_item_for(self.canvas)
         if isinstance(focus_item, QGraphicsTextItem) and (
             focus_item.textInteractionFlags()
@@ -68,15 +72,6 @@ class CanvasInputController:
             QGraphicsView.keyPressEvent(self.canvas, event)
             return
         self.hover.refresh()
-        if event.key() == Qt.Key.Key_Escape:
-            if self.insert_state.template_active:
-                cancel_template_insert_for(self.canvas)
-                event.accept()
-                return
-            if self.insert_state.smiles_active:
-                cancel_smiles_insert_for(self.canvas)
-                event.accept()
-                return
         if event.matches(QKeySequence.StandardKey.Undo):
             self.history.undo()
             event.accept()
@@ -187,6 +182,16 @@ class CanvasInputController:
             event.accept()
             return
         QGraphicsView.keyPressEvent(self.canvas, event)
+
+    def _cancel_interaction(self) -> None:
+        if self.insert_state.template_active:
+            cancel_template_insert_for(self.canvas)
+        elif self.insert_state.smiles_active:
+            cancel_smiles_insert_for(self.canvas)
+        else:
+            # Tool deactivation owns gesture rollback and note commits.
+            # Re-enter Select even when already active to cancel its drag.
+            self.tool_mode_controller.set_tool("select")
 
     def handle_chemdraw_shortcut(self, event) -> bool:
         handle_shortcut = getattr(

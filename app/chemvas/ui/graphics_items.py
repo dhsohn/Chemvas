@@ -8,6 +8,7 @@ from PyQt6.QtGui import (
     QFont,
     QFontMetricsF,
     QPainterPath,
+    QPainterPathStroker,
     QPalette,
     QPen,
     QTextCharFormat,
@@ -65,6 +66,18 @@ class NoSelectLineItem(_NoSelectPaintMixin, QGraphicsLineItem):
 
 class NoSelectPathItem(_NoSelectPaintMixin, QGraphicsPathItem):
     pass
+
+
+class ArrowPathItem(NoSelectPathItem):
+    """Pick the stroke, not the implicit fill of an open arrow/line path."""
+
+    @override
+    def shape(self) -> QPainterPath:
+        # Qt's original path bounds use a continuous stroke even for dashes.
+        # Keep those bounds and the gaps pickable without closing the curve.
+        pen = self.pen()
+        pen.setStyle(Qt.PenStyle.SolidLine)
+        return QPainterPathStroker(pen).createStroke(self.path())
 
 
 class NoSelectPolygonItem(_NoSelectPaintMixin, QGraphicsPolygonItem):

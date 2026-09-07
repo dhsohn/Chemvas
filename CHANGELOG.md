@@ -7,14 +7,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.2] - 2026-09-07
+
+This maintenance release improves selection and text-editing workflows, preserves
+copied groups, and keeps arrow-label typography intact in vector exports.
+The `.chemvas` document format remains version 7. Grouped clipboard payloads
+include membership that older versions may reject; use matching versions when
+copying groups between running instances.
+
 ### Fixed
 
+- Preserve note spacing, tabs, and empty paragraphs through document Undo/Redo
+  and save/open without allowing external stylesheets or resource loading.
+- Clear pasted/group-selected notes when clicking empty canvas or selecting a
+  different object. Notes and shapes now move on the first selection drag.
+- Move notes-only groups together from the first press on either member,
+  including after selecting another object, with one-step Undo and Escape cancel.
+- Keep copied groups independent of the originals, including mixed structures
+  and annotations, with paste and its group membership in one Undo step.
+- Switching away from Text commits the current note and returns keyboard/Undo
+  input to the drawing. Text Undo no longer crosses completed editing sessions;
+  undoing an emptied note also restores its text. Mouse drag and Shift-click
+  select text naturally, and unsaved markers update while typing or formatting.
+- Lines and arrows can be selected near their strokes and dragged on the first
+  press. A small wobble during a click no longer moves them or adds an undo step;
+  curved arrows no longer treat their interior as a filled click target. Picking
+  uses a screen-space margin without changing the drawing or exported stroke width.
 - Arrow labels now export as glyph outlines, retaining the canvas's text sizing
   and subscript/superscript positions in SVG figures and vector clipboard copies.
   The editable document and on-canvas label editing are unchanged.
 
 ### Changed
 
+- Escape cancels active drawing/drag gestures and returns to Select. In a note,
+  it commits the text and leaves editing so drawing shortcuts work again.
 - Refocused the introduction and branding on reaction schemes, figure export,
   and scriptable document workflows, with a first-scheme tutorial and an editable
   example. Toolbar hints now describe shortcuts without a product comparison;
@@ -1297,7 +1323,8 @@ housekeeping.
   `.chemvas` document type (double-clicking a file opens it in Chemvas), and a
   Linux `.desktop` entry with an `application/x-chemvas` MIME type.
 
-[Unreleased]: https://github.com/dhsohn/Chemvas/compare/v0.8.1...HEAD
+[Unreleased]: https://github.com/dhsohn/Chemvas/compare/v0.8.2...HEAD
+[0.8.2]: https://github.com/dhsohn/Chemvas/compare/v0.8.1...v0.8.2
 [0.8.1]: https://github.com/dhsohn/Chemvas/compare/v0.8.0...v0.8.1
 [0.8.0]: https://github.com/dhsohn/Chemvas/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/dhsohn/Chemvas/compare/v0.6.1...v0.7.0

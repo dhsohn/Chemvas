@@ -23,6 +23,7 @@ from chemvas.ui.canvas_scene_items_state import (
     selected_notes_for,
 )
 from chemvas.ui.canvas_text_style_state import text_style_state_for
+from chemvas.ui.canvas_window_access import notify_document_change_for
 from chemvas.ui.graphics_items import NoSelectRectItem
 from chemvas.ui.history_commands import (
     AddSceneItemsCommand,
@@ -273,6 +274,12 @@ class CanvasNoteController:
             cursor.clearSelection()
             item.setTextCursor(cursor)
         item.setTextInteractionFlags(Qt.TextInteractionFlag.NoTextInteraction)
+
+    def finish_note_edit(self) -> None:
+        item = self._editing_note()
+        if item is not None:
+            # NoteItem.focusOutEvent owns the existing commit/delete path.
+            item.clearFocus()
 
     def _deselect_note(self, item: QGraphicsTextItem) -> None:
         if item in selected_notes_for(self.canvas):
@@ -660,8 +667,14 @@ class CanvasNoteController:
             before_state = note_state_dict_for(self.canvas, item)
             before_state["text"] = committed_text
             before_state["html"] = committed_html
-            command = DeleteSceneItemsCommand.capture(
-                self.canvas, [before_state], [item]
+            empty_state = note_state_dict_for(self.canvas, item)
+            # Deletion reattaches the same live item on Undo, which is already
+            # empty. Restore its committed content as part of the same action.
+            command = CompositeCommand(
+                [
+                    UpdateSceneItemCommand(item, before_state, empty_state),
+                    DeleteSceneItemsCommand.capture(self.canvas, [empty_state], [item]),
+                ]
             )
             # Deselect before removal so grouped companion notes drop with it,
             # then refresh again after removal: a mixed group's box is spanned
@@ -688,6 +701,7 @@ class CanvasNoteController:
             )
             return
         self._remove_note_atomically(item)
+        notify_document_change_for(self.canvas)
 
     def update_text_note(self, item: QGraphicsTextItem, text: str) -> None:
         item.setPlainText(text)
@@ -709,11 +723,20 @@ class CanvasNoteController:
         def _resize() -> None:
             self.update_note_box(item)
             update_note_selection_box_for(self.canvas, item)
+            if item.hasFocus():
+                # Live editor changes are not document-history commands yet.
+                notify_document_change_for(self.canvas)
 
         document.contentsChanged.connect(_resize)
         item.setData(22, True)
 
     def begin_note_edit(self, item: QGraphicsTextItem) -> None:
+        if not item.hasFocus():
+            # Prior sessions already belong to document history. Qt otherwise
+            # coalesces typing across blur/re-entry and Undo erases saved text.
+            document = item.document()
+            if document is not None:
+                document.clearUndoRedoStacks()
         if item not in selected_notes_for(self.canvas):
             selection_controller = self._selection_controller()
             if selection_controller is not None:

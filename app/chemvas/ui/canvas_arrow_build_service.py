@@ -19,8 +19,8 @@ from chemvas.ui.endpoint_snap_access import (
 )
 from chemvas.ui.graphics_items import (
     ArrowLabelItem,
+    ArrowPathItem,
     NoSelectEllipseItem,
-    NoSelectPathItem,
 )
 from chemvas.ui.renderer_style_access import (
     bold_bond_pen_for,
@@ -107,7 +107,7 @@ class CanvasArrowBuildService:
         path.moveTo(start)
         path.lineTo(end)
         self.add_arrow_head(path, start, end, double=False)
-        item = NoSelectPathItem(path)
+        item = ArrowPathItem(path)
         item.setPen(self.arrow_pen())
         item.setBrush(QBrush(Qt.BrushStyle.NoBrush))
         item.setData(2, {"start": start, "end": end, "control": None, "double": False})
@@ -119,7 +119,7 @@ class CanvasArrowBuildService:
         path.lineTo(end)
         self.add_arrow_head(path, start, end, double=False)
         self.add_arrow_head(path, end, start, double=False)
-        item = NoSelectPathItem(path)
+        item = ArrowPathItem(path)
         item.setPen(self.arrow_pen())
         item.setBrush(QBrush(Qt.BrushStyle.NoBrush))
         item.setData(2, {"start": start, "end": end, "control": None, "double": False})
@@ -130,7 +130,7 @@ class CanvasArrowBuildService:
         path.moveTo(start)
         path.lineTo(end)
         self.add_arrow_head(path, start, end, double=False)
-        item = NoSelectPathItem(path)
+        item = ArrowPathItem(path)
         item.setPen(self.arrow_pen(dotted=True))
         item.setBrush(QBrush(Qt.BrushStyle.NoBrush))
         item.setData(2, {"start": start, "end": end, "control": None, "double": False})
@@ -150,7 +150,7 @@ class CanvasArrowBuildService:
             path.lineTo(x, y)
         # The head follows the arc's final tangent, not the chord.
         self.add_arrow_head(path, QPointF(*points[-2]), end, double=False)
-        item = NoSelectPathItem(path)
+        item = ArrowPathItem(path)
         item.setPen(self.arrow_pen())
         item.setBrush(QBrush(Qt.BrushStyle.NoBrush))
         item.setData(2, {"start": start, "end": end, "control": None, "double": False})
@@ -174,7 +174,7 @@ class CanvasArrowBuildService:
         else:
             path.moveTo(start)
             path.lineTo(end)
-        item = NoSelectPathItem(path)
+        item = ArrowPathItem(path)
         if kind == "line_bold":
             item.setPen(bold_bond_pen_for(self.canvas))
         else:
@@ -185,9 +185,7 @@ class CanvasArrowBuildService:
 
     def build_curved_arrow(self, start: QPointF, end: QPointF, double: bool):
         control = default_curved_control(start, end)
-        item = NoSelectPathItem(
-            self.build_curved_arrow_path(start, end, control, double)
-        )
+        item = ArrowPathItem(self.build_curved_arrow_path(start, end, control, double))
         item.setPen(self.arrow_pen())
         item.setBrush(QBrush(Qt.BrushStyle.NoBrush))
         item.setData(
@@ -224,7 +222,7 @@ class CanvasArrowBuildService:
         bar_end = QPointF(end.x() + nx * bar, end.y() + ny * bar)
         path.moveTo(bar_start)
         path.lineTo(bar_end)
-        item = NoSelectPathItem(path)
+        item = ArrowPathItem(path)
         item.setPen(self.arrow_pen())
         item.setBrush(QBrush(Qt.BrushStyle.NoBrush))
         item.setData(2, {"start": start, "end": end, "control": None, "double": False})
@@ -254,7 +252,7 @@ class CanvasArrowBuildService:
         self.add_harpoon(path, forward_start, forward_end)
         self.add_harpoon(path, reverse_start, reverse_end)
 
-        item = NoSelectPathItem(path)
+        item = ArrowPathItem(path)
         item.setPen(self.arrow_pen())
         item.setBrush(QBrush(Qt.BrushStyle.NoBrush))
         item.setData(2, {"start": start, "end": end, "control": None, "double": False})

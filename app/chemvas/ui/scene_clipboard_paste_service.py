@@ -8,6 +8,7 @@ from PyQt6.QtWidgets import QGraphicsItem
 from chemvas.domain.transactions import add_recovery_error_note
 from chemvas.features.selection import unproject_point_3d
 from chemvas.ui.atom_coords_access import atom_coords_3d_for
+from chemvas.ui.canvas_group_state import register_group_for
 from chemvas.ui.canvas_model_access import atom_for_id, bond_count_for, next_atom_id_for
 from chemvas.ui.canvas_rotation_state import rotation_state_for
 from chemvas.ui.canvas_service_ports import history_service_for_access
@@ -17,6 +18,7 @@ from chemvas.ui.history_canvas_access import (
     release_history_transaction_for_history,
     restore_history_transaction_for_history,
 )
+from chemvas.ui.history_commands import GroupSceneItemsCommand
 from chemvas.ui.history_recording_access import record_additions_for
 from chemvas.ui.insert_commit_rollback import rollback_insert_mutation
 from chemvas.ui.renderer_style_access import bond_length_px_for
@@ -133,6 +135,14 @@ def paste_selection_from_clipboard_for_canvas(
         added_scene_items = [
             item for item in result.added_scene_items if isinstance(item, QGraphicsItem)
         ]
+        added_groups = []
+        for group in plan.groups:
+            atom_ids = {result.atom_id_map[atom_id] for atom_id in group["atoms"]}
+            items = [result.scene_item_map[tuple(ref)] for ref in group["items"]]
+            group_id = register_group_for(canvas, atom_ids, items)
+            added_groups.append(
+                GroupSceneItemsCommand(atom_ids, items, group_id=group_id)
+            )
         callbacks.select_pasted_content(result.new_atom_ids, added_scene_items)
         record_additions_for(
             canvas,
@@ -140,6 +150,7 @@ def paste_selection_from_clipboard_for_canvas(
             plan.before_bond_count,
             before_smiles_input,
             added_scene_items=added_scene_items,
+            added_groups=added_groups,
         )
         set_clipboard_paste_source_json_for(canvas, plan.paste_source_json)
         set_clipboard_paste_count_for(canvas, plan.paste_count)

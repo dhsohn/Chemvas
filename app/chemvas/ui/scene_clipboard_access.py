@@ -13,6 +13,7 @@ from chemvas.ui.atom_coords_access import (
     atom_coords_3d_for,
     stored_atom_coords_3d_matches_projection_for,
 )
+from chemvas.ui.canvas_group_state import group_state_for
 from chemvas.ui.canvas_model_access import model_for
 from chemvas.ui.canvas_rotation_state import rotation_state_for
 from chemvas.ui.scene_clipboard_logic import build_selection_clipboard_payload
@@ -75,6 +76,10 @@ def build_selection_clipboard_payload_for_canvas(
             )
         ),
         version=version,
+        groups=[
+            (group.atom_ids, group.items)
+            for group in group_state_for(canvas).groups.values()
+        ],
     )
 
 

@@ -57,6 +57,7 @@ def select_single_structure_item_for(canvas, item) -> bool:
     if not targets:
         return False
     clear_scene_selection_for(canvas)
+    clear_note_selection_for(canvas)
     set_scene_items_selected_for(canvas, targets, True, block_signals=False)
     return True
 

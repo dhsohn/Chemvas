@@ -3,10 +3,14 @@ from __future__ import annotations
 import math
 from typing import TYPE_CHECKING
 
-from PyQt6.QtCore import QPointF
+from PyQt6.QtCore import QPointF, QRectF
 
+from chemvas.domain.document import VALID_ARROW_KINDS
 from chemvas.ui.canvas_bond_graphics_state import bond_items_for_id
-from chemvas.ui.canvas_hit_testing_scene_access import scene_items_at_pos_for_canvas
+from chemvas.ui.canvas_hit_testing_scene_access import (
+    scene_items_at_pos_for_canvas,
+    scene_items_in_rect_for_canvas,
+)
 from chemvas.ui.canvas_hover_state import hover_state_for
 from chemvas.ui.canvas_model_access import (
     atom_for_id,
@@ -15,6 +19,7 @@ from chemvas.ui.canvas_model_access import (
     bonds_for,
     has_atoms_for,
 )
+from chemvas.ui.graphics_items import ArrowPathItem
 from chemvas.ui.pick_radius_access import atom_pick_radius_for, bond_pick_radius_for
 from chemvas.ui.renderer_style_access import bond_length_px_for
 from chemvas.ui.spatial_index_state import (
@@ -28,6 +33,10 @@ from chemvas.ui.spatial_index_state import (
 
 if TYPE_CHECKING:
     from chemvas.ui.canvas_view import CanvasView
+
+
+# Input tolerance only: neither document strokes nor export bounds grow.
+ARROW_PICK_SCREEN_PX = 6.0
 
 
 class CanvasHitTestingService:
@@ -88,7 +97,50 @@ class CanvasHitTestingService:
                 nearby_items = bond_items_for_id(self.canvas, nearby_bond_id)
                 if nearby_items:
                     return nearby_items[0]
-        return bond_item or ring_item or other_item
+        if bond_item is not None or ring_item is not None:
+            return bond_item or ring_item
+        if other_item is None or other_item.data(0) == "shape":
+            return self._arrow_near(pos, stop_at=other_item) or other_item
+        return other_item
+
+    def _arrow_near(self, pos: QPointF, *, stop_at=None):
+        view_transform = self.canvas.viewportTransform()
+        inverse, invertible = view_transform.inverted()
+        if not invertible:
+            return None
+        point = view_transform.map(pos)
+        radius = ARROW_PICK_SCREEN_PX
+        search_rect = inverse.mapRect(
+            QRectF(point.x() - radius, point.y() - radius, radius * 2, radius * 2)
+        )
+        nearest = None
+        best_distance = radius
+        for item in scene_items_in_rect_for_canvas(self.canvas, search_rect):
+            # A background panel must not swallow a foreground connector's
+            # margin, but picking must not reach through a covering shape.
+            if item is stop_at:
+                break
+            if (
+                not isinstance(item, ArrowPathItem)
+                or item.data(0) not in VALID_ARROW_KINDS
+            ):
+                continue
+            # Flatten in view coordinates, so the same reach works for zoom,
+            # perspective scaling and translated or rotated scene items.
+            path = view_transform.map(item.mapToScene(item.path()))
+            distance = min(
+                (
+                    self.distance_point_to_segment(
+                        point, polygon[index - 1], polygon[index]
+                    )
+                    for polygon in path.toSubpathPolygons()
+                    for index in range(1, len(polygon))
+                ),
+                default=math.inf,
+            )
+            if distance < best_distance:
+                nearest, best_distance = item, distance
+        return nearest
 
     def item_at_event(self, event):
         return self.item_at_scene_pos(self.scene_pos_from_event(event))

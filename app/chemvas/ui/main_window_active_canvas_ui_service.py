@@ -58,6 +58,9 @@ class MainWindowActiveCanvasUIService:
             ),
             zoom_callback=self._status.update_zoom_label,
             history_change_callback=lambda: self._on_history_change(window),
+            document_change_callback=lambda: self._refresh_document_chrome_for_window(
+                window
+            ),
             error_callback=lambda message: self._status.show_error_message(
                 window, message, timeout=6000
             ),

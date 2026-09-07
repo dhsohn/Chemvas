@@ -13,6 +13,7 @@ from PyQt6.QtGui import QColor, QFont, QTextCursor
 from PyQt6.QtWidgets import QApplication, QGraphicsScene, QGraphicsTextItem
 
 from chemvas.domain.document.state import _validate_note_states
+from chemvas.ui.canvas_callback_state import CanvasCallbackState
 from chemvas.ui.canvas_history_service import CanvasHistoryService
 from chemvas.ui.canvas_history_state import CanvasHistoryState
 from chemvas.ui.canvas_note_controller import (
@@ -56,6 +57,7 @@ def _attach_history_service(canvas):
 
 
 def _note_controller(canvas, **kwargs) -> CanvasNoteController:
+    canvas.runtime_state.callback_state = CanvasCallbackState()
     history_service = getattr(
         getattr(canvas, "services", None), "history_service", None
     )
@@ -547,7 +549,7 @@ class CanvasNoteControllerUnitTest(unittest.TestCase):
 
         item.setPlainText("")
         controller.handle_note_focus_out(item)
-        self.assertEqual(type(canvas.commands[-1]).__name__, "DeleteSceneItemsCommand")
+        self.assertEqual(type(canvas.commands[-1]).__name__, "CompositeCommand")
         self.assertEqual(canvas.removed_items[-1], item)
         self.assertEqual(committed_note_text_for(item), "")
 
@@ -621,6 +623,9 @@ class CanvasNoteControllerUnitTest(unittest.TestCase):
             scene_item_controller=SimpleNamespace(
                 remove_scene_item=canvas.removed_items.append,
                 restore_scene_item=canvas.restored_items.append,
+                apply_scene_item_state=lambda item, state: item.setPlainText(
+                    state["text"]
+                ),
             ),
             selection_controller=SimpleNamespace(
                 update_note_selection_box=canvas.updated_boxes.append,

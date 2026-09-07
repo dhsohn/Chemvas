@@ -70,6 +70,12 @@ the [examples README](../examples/README.md) describes what each one contains.
   deletion leaves with no bond and nothing visible — no label or mark — are
   removed with it), horizontal & vertical flip, perspective rotation, and
   delta-based undo/redo.
+  With Select, press near a line or arrow's stroke to select it and keep
+  dragging to move it in the same gesture. The click margin is measured on
+  screen, independent of zoom; a curve's interior is not treated as a filled
+  click target. Before a drag starts, pointer movements below the system drag
+  threshold leave the drawing and undo/redo stacks unchanged. Click an already
+  selected stroke to toggle its endpoint handles.
 - **Desktop menus** — standard File / Edit / View menus, including a
   **Canvas Size** dialog for the sheet size and orientation.
 - **Keyboard shortcuts** — tool selection and atom/bond editing under the pointer
@@ -192,6 +198,22 @@ Convert the current molecule or atom/bond selection into 3D coordinates:
 
 ## Keyboard shortcuts
 
+While editing a free-text note, drag to select text, double-click to select a word,
+or Shift-click to extend a text selection. Formatting controls keep the editor
+active. Choosing another tool commits the note and returns keyboard input to the
+drawing. Undo within the editor affects the current editing session; after leaving
+the editor, document Undo reverses the committed edit. Unsaved markers also track
+typing, formatting, and text Undo before the note loses focus.
+Press `Esc` to commit the note and return to Select without discarding the text.
+Note spacing, tabs, and empty paragraphs are retained when saving/reopening or
+undoing/redoing a committed edit.
+
+In Select, notes and shapes can be moved with the first drag, like arrows.
+Click empty canvas outside the selection to clear it, including selected notes.
+Copy/paste preserves complete groups as independent copies; one Undo removes
+the pasted objects and their groups together. Partial groups supplied by a
+programmatic selection are copied as ungrouped objects.
+
 Choose a tool on an empty area of the canvas, or hover over an atom or bond to
 edit it with the keys below.
 
@@ -218,7 +240,8 @@ edit it with the keys below.
   vector clipboard flavors), `Ctrl+X` (cut selection), `Ctrl+V` (paste the copied
   selection), `Ctrl+G` / `Ctrl+Shift+G` (group / ungroup selection),
   `Delete`/`Backspace` (delete selection, or edit/delete the hovered atom/bond),
-  `Esc` (cancel template / SMILES insertion)
+  `Esc` (cancel template / SMILES insertion; otherwise cancel the active gesture
+  and return to Select, or commit and leave note editing)
 
 ### Shortcut compatibility
 

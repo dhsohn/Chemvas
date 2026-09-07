@@ -111,6 +111,9 @@ class ToolContext:
     def begin_note_edit(self, item) -> None:
         self.note_controller.begin_note_edit(item)
 
+    def finish_note_edit(self) -> None:
+        self.note_controller.finish_note_edit()
+
     def push_history(self, command) -> None:
         if self.history_service is None:
             raise AttributeError("ToolContext requires an injected history_service")

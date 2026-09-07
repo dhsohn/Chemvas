@@ -115,6 +115,7 @@ class MainWindowCanvasLogicTest(unittest.TestCase):
         tool_change_callback = object()
         zoom_callback = object()
         history_change_callback = object()
+        document_change_callback = object()
 
         bind_active_canvas_callbacks(
             [inactive_canvas, active_canvas],
@@ -123,6 +124,7 @@ class MainWindowCanvasLogicTest(unittest.TestCase):
             tool_change_callback=tool_change_callback,
             zoom_callback=zoom_callback,
             history_change_callback=history_change_callback,
+            document_change_callback=document_change_callback,
         )
 
         self.assertIs(
@@ -134,10 +136,14 @@ class MainWindowCanvasLogicTest(unittest.TestCase):
         )
         self.assertIs(callback_state_for(active_canvas).zoom, zoom_callback)
         self.assertIs(
+            callback_state_for(active_canvas).document_change, document_change_callback
+        )
+        self.assertIs(
             history_state_for(active_canvas).change_callback, history_change_callback
         )
         self.assertIsNone(selection_info_state_for(inactive_canvas).callback)
         self.assertIsNone(callback_state_for(inactive_canvas).error)
         self.assertIsNone(callback_state_for(inactive_canvas).tool_change)
         self.assertIsNone(callback_state_for(inactive_canvas).zoom)
+        self.assertIsNone(callback_state_for(inactive_canvas).document_change)
         self.assertIsNone(history_state_for(inactive_canvas).change_callback)

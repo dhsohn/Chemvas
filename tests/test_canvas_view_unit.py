@@ -12,6 +12,7 @@ from PyQt6.QtCore import QEvent, QPointF, Qt
 from PyQt6.QtGui import QColor, QFocusEvent, QPen
 from PyQt6.QtWidgets import QApplication
 
+from chemvas.core.history import CompositeCommand
 from chemvas.domain.document import Atom, Bond
 from chemvas.features.insertion import (
     build_atom_annotations,
@@ -26,6 +27,7 @@ from chemvas.ui.canvas_atom_graphics_state import (
     CanvasAtomGraphicsState,
     set_atom_items_for,
 )
+from chemvas.ui.canvas_callback_state import CanvasCallbackState
 from chemvas.ui.canvas_history_service import CanvasHistoryService
 from chemvas.ui.canvas_history_state import CanvasHistoryState, history_state_for
 from chemvas.ui.canvas_hit_testing_service import CanvasHitTestingService
@@ -96,7 +98,8 @@ class _FakeNoteCanvas:
         self.commands = []
         self.removed_items = []
         self.runtime_state = canvas_runtime_state(
-            scene_items_state=CanvasSceneItemsState()
+            scene_items_state=CanvasSceneItemsState(),
+            callback_state=CanvasCallbackState(),
         )
         set_selected_notes_for(self, [])
         self.updated_boxes = []
@@ -361,7 +364,8 @@ class CanvasViewUnitTest(unittest.TestCase):
 
         item.setPlainText("")
         item.focusOutEvent(QFocusEvent(QEvent.Type.FocusOut))
-        self.assertIsInstance(canvas.commands[-1], DeleteSceneItemsCommand)
+        self.assertIsInstance(canvas.commands[-1], CompositeCommand)
+        self.assertIsInstance(canvas.commands[-1].commands[-1], DeleteSceneItemsCommand)
         self.assertEqual(canvas.removed_items[-1], item)
         self.assertEqual(committed_note_text_for(item), "")
 
