@@ -19,7 +19,11 @@ from chemvas.ui.history_commands import UpdateSceneItemCommand
 from chemvas.ui.scene_item_state import scene_item_state_for
 from chemvas.ui.selection_collection_access import selection_snapshot_for
 from chemvas.ui.selection_drag_tool import SelectionDragMixin
-from chemvas.ui.selection_service_access import clear_note_selection_for
+from chemvas.ui.selection_scene_access import clear_scene_selection_for
+from chemvas.ui.selection_service_access import (
+    clear_note_selection_for,
+    select_note_for,
+)
 from chemvas.ui.tool_base import Tool
 
 
@@ -275,7 +279,12 @@ class SelectTool(SelectionDragMixin, Tool):
             if event.modifiers() & Qt.KeyboardModifier.ControlModifier:
                 return self.context.toggle_item_selection(item)
             clear_handles_for(self.canvas)
-            if not self._select_structure_item(item):
+            if item.data(0) == "note":
+                clear_scene_selection_for(self.canvas)
+                # Notes own selection outside Qt; their service expands
+                # notes-only groups before the drag snapshot is collected.
+                select_note_for(self.canvas, item)
+            elif not self._select_structure_item(item):
                 return False
             atom_ids, selection_items = self._selection_drag_context()
             return self._begin_selection_drag(atom_ids, selection_items, press_pos)

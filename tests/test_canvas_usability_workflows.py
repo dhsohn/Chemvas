@@ -158,6 +158,60 @@ def clipboard(monkeypatch):
     return memory
 
 
+@pytest.mark.parametrize("pressed_member", [0, 1])
+@pytest.mark.parametrize("cancel", [False, True])
+@pytest.mark.parametrize("previous_selection", ["blank", "arrow"])
+def test_first_drag_moves_notes_only_group_as_unit(
+    drawing, tmp_path, pressed_member, cancel, previous_selection
+):
+    window, canvas = drawing
+    first = _note(window, canvas, "First")
+    _tool(window, "note")
+    _click(canvas, QPointF(40, 35))
+    QTest.keyClicks(canvas, "Second")
+    second = note_items_for(canvas)[-1]
+    _tool(window, "select")
+    _ctrl(canvas, Qt.Key.Key_A)
+    _ctrl(canvas, Qt.Key.Key_G)
+    group = next(iter(group_state_for(canvas).groups.values()))
+    assert set(group.items) == {first, second}
+    arrow = _arrow(window, canvas)
+    _click(canvas, QPointF(160, 130))
+    if previous_selection == "arrow":
+        _click(canvas, QPointF(20, -20))
+        assert arrow.isSelected()
+    assert not selected_notes_for(canvas)
+    _save(window, canvas, tmp_path / "note-group.chemvas")
+    baseline = snapshot_canvas_state_for(canvas)
+    arrow_before = arrow_state_dict(arrow)
+    notes = (first, second)
+    centers = [note.sceneBoundingRect().center() for note in notes]
+    start = centers[pressed_member]
+    delta = QPointF(30, 15)
+    history = history_service_for_window(window)
+    count = len(history.state.history)
+    _drag(canvas, start, start + delta, cancel=cancel)
+    assert set(selected_notes_for(canvas)) == set(notes)
+    assert not arrow.isSelected()
+    assert arrow_state_dict(arrow) == arrow_before
+    assert set(group.items) == set(notes)
+    if cancel:
+        assert snapshot_canvas_state_for(canvas) == baseline
+        assert len(history.state.history) == count
+        assert not window.isWindowModified()
+        return
+    assert [note.sceneBoundingRect().center() for note in notes] == [
+        center + delta for center in centers
+    ]
+    assert len(history.state.history) == count + 1
+    moved = snapshot_canvas_state_for(canvas)
+    _ctrl(canvas, Qt.Key.Key_Z)
+    assert snapshot_canvas_state_for(canvas) == baseline
+    assert not window.isWindowModified()
+    _ctrl(canvas, Qt.Key.Key_Y)
+    assert snapshot_canvas_state_for(canvas) == moved
+
+
 def _copy_pair(window, canvas, *, grouped):
     _note(window, canvas)
     _arrow(window, canvas)

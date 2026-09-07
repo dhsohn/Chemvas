@@ -763,7 +763,9 @@ class ToolsUnitTest(unittest.TestCase):
             tool.on_mouse_press(_FakeEvent(button=Qt.MouseButton.RightButton))
         )
 
-        canvas.item = _FakeItem("note")
+        # An unsupported shape target exercises the structure-selection guard;
+        # notes now route through their own selection service.
+        canvas.item = _FakeItem("shape")
         canvas.toggle_result = False
         canvas.preferred_item = None
         self.assertFalse(

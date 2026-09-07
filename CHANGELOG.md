@@ -21,6 +21,8 @@ copying groups between running instances.
   and save/open without allowing external stylesheets or resource loading.
 - Clear pasted/group-selected notes when clicking empty canvas or selecting a
   different object. Notes and shapes now move on the first selection drag.
+- Move notes-only groups together from the first press on either member,
+  including after selecting another object, with one-step Undo and Escape cancel.
 - Keep copied groups independent of the originals, including mixed structures
   and annotations, with paste and its group membership in one Undo step.
 - Switching away from Text commits the current note and returns keyboard/Undo
