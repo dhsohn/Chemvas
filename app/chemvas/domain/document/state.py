@@ -100,6 +100,11 @@ ARC_KIND_SWEEPS: dict[str, tuple[float, bool]] = {
 VALID_ARC_KINDS = frozenset(ARC_KIND_SWEEPS)
 
 
+# Curved arrows carry a control point and get a third, control handle; every
+# other arrow kind is defined by its two endpoints alone.
+VALID_CURVED_ARROW_KINDS = frozenset(("curved_single", "curved_double"))
+
+
 def mirrored_arc_kind(kind: str) -> str:
     if kind.endswith("_left"):
         return kind[: -len("_left")] + "_right"

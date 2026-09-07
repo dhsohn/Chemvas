@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from typing import TYPE_CHECKING
 
 from PyQt6.QtCore import QPointF, QRectF
@@ -14,6 +15,7 @@ from chemvas.features.selection import (
 from chemvas.features.selection import (
     resized_shape_rect as resized_shape_rect_helper,
 )
+from chemvas.ui.endpoint_snap_access import snap_to_arrow_endpoints_for
 from chemvas.ui.handle_mutation_access import (
     clamp_curved_midpoint_for,
     control_from_midpoint_for,
@@ -22,11 +24,18 @@ from chemvas.ui.handle_mutation_access import (
     orbital_snap_step_for,
 )
 from chemvas.ui.renderer_style_access import bond_length_px_for
-from chemvas.ui.scene_decoration_build_access import apply_arrow_labels_for
+from chemvas.ui.scene_decoration_build_access import (
+    apply_arrow_labels_for,
+    build_arrow_item_for,
+)
 from chemvas.ui.selection_service_access import refresh_selection_outline_for
 
 if TYPE_CHECKING:
     from chemvas.ui.canvas_view import CanvasView
+
+# An endpoint drag stops here rather than collapsing an arrow or line into a
+# dot, which renders as a bare arrow head or a wavy blob.
+MIN_ARROW_LENGTH_BOND_LENGTHS = 0.1
 
 
 class HandleMutationService:
@@ -69,6 +78,45 @@ class HandleMutationService:
             snap_step=orbital_snap_step_for(self.canvas),
         )
         item.setRotation(angle)
+
+    def update_arrow_endpoint(self, item, pos: QPointF, endpoint: str) -> None:
+        """Move one end of a non-curved arrow or line to ``pos``.
+
+        The item is rebuilt from its own kind, so an arc keeps its sweep and an
+        equilibrium pair keeps its harpoons. A drag that would shrink the item
+        below a usable length is refused rather than leaving a degenerate arrow
+        behind.
+        """
+        if endpoint not in {"start", "end"}:
+            return
+        data = item.data(2) or {}
+        start = data.get("start")
+        end = data.get("end")
+        if not isinstance(start, QPointF) or not isinstance(end, QPointF):
+            return
+        moved = snap_to_arrow_endpoints_for(self.canvas, pos, exclude=item)
+        if endpoint == "start":
+            start, anchor = moved, end
+        else:
+            end, anchor = moved, start
+        if math.hypot(moved.x() - anchor.x(), moved.y() - anchor.y()) < (
+            bond_length_px_for(self.canvas) * MIN_ARROW_LENGTH_BOND_LENGTHS
+        ):
+            return
+        kind = str(item.data(0) or "arrow")
+        rebuilt = build_arrow_item_for(self.canvas, start, end, kind)
+        # Arrow geometry is absolute, but a moved item carries its offset in
+        # pos(); clear it or the rebuilt path renders shifted by that delta.
+        item.setPos(0.0, 0.0)
+        item.setPath(rebuilt.path())
+        item.setPen(rebuilt.pen())
+        item.setBrush(rebuilt.brush())
+        data["start"] = start
+        data["end"] = end
+        item.setData(2, data)
+        if data.get("labels"):
+            apply_arrow_labels_for(self.canvas, item, data["labels"])
+        refresh_selection_outline_for(self.canvas)
 
     def update_curved_control(self, item, pos: QPointF) -> None:
         data = item.data(2) or {}

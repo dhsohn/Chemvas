@@ -34,6 +34,9 @@ from chemvas.ui.transactions.scene_runtime import (
     restore_scene_runtime,
 )
 
+# Every kind that can own handles; deleting one must take its handles with it.
+HANDLE_BEARING_KINDS = ARROW_KINDS | frozenset({"shape", "orbital"})
+
 
 def _add_item_with_attach_ports(
     attach_ports: SceneItemAttachPorts,
@@ -279,12 +282,7 @@ class SceneItemLifecycleService:
         self._remove_scene_item_registration(item, kind)
         if kind == "note":
             update_note_selection_box_for(self.canvas, item)
-        if kind in {
-            "shape",
-            "orbital",
-            "curved_single",
-            "curved_double",
-        } and item is handle_target_for(self.canvas):
+        if kind in HANDLE_BEARING_KINDS and item is handle_target_for(self.canvas):
             clear_handles_for(self.canvas)
         removed = remove_attached_item_from_canvas_scene(self.canvas, item)
         if was_selected_note:

@@ -5,10 +5,12 @@ from typing import override
 
 from PyQt6.QtCore import Qt
 
+from chemvas.domain.document import VALID_ARROW_KINDS, VALID_CURVED_ARROW_KINDS
 from chemvas.features.selection import SelectionPressContext, plan_selection_press
 from chemvas.ui.handle_overlay_access import (
     clear_handles_for,
     show_curved_handles_for,
+    show_endpoint_handles_for,
     show_shape_handles_for,
 )
 from chemvas.ui.handle_state import active_handles_for, handle_target_for
@@ -26,8 +28,8 @@ class SelectTool(SelectionDragMixin, Tool):
         self._active_handle = None
         self._handle_target = None
         self._handle_before_state: dict | None = None
-        self._pending_curved_handle_item = None
-        self._pending_curved_handle_action: str | None = None
+        self._pending_arrow_handle_item = None
+        self._pending_arrow_handle_action: str | None = None
         self._pending_shape_handle_item = None
         self._pending_shape_handle_action: str | None = None
         self._reset_selection_drag_state()
@@ -55,9 +57,9 @@ class SelectTool(SelectionDragMixin, Tool):
             return False
         return self.context.select_single_structure_item(item)
 
-    def _clear_pending_curved_handle_toggle(self) -> None:
-        self._pending_curved_handle_item = None
-        self._pending_curved_handle_action = None
+    def _clear_pending_handle_toggle(self) -> None:
+        self._pending_arrow_handle_item = None
+        self._pending_arrow_handle_action = None
         self._pending_shape_handle_item = None
         self._pending_shape_handle_action = None
 
@@ -75,7 +77,7 @@ class SelectTool(SelectionDragMixin, Tool):
         if token is None:
             if self._drag_transaction is None:
                 self._clear_handle_drag_state()
-                self._clear_pending_curved_handle_toggle()
+                self._clear_pending_handle_toggle()
                 self._reset_selection_drag_state()
                 return
             token = self._require_drag_token()
@@ -84,7 +86,7 @@ class SelectTool(SelectionDragMixin, Tool):
         finally:
             if self._drag_transaction is None:
                 self._clear_handle_drag_state()
-                self._clear_pending_curved_handle_toggle()
+                self._clear_pending_handle_toggle()
                 self._reset_selection_drag_state()
 
     def _cancel_active_interaction(self) -> None:
@@ -96,10 +98,10 @@ class SelectTool(SelectionDragMixin, Tool):
                 self._cancel_selection_drag()
             finally:
                 if self._drag_transaction is None:
-                    self._clear_pending_curved_handle_toggle()
+                    self._clear_pending_handle_toggle()
             return
         self._clear_handle_drag_state()
-        self._clear_pending_curved_handle_toggle()
+        self._clear_pending_handle_toggle()
         self._reset_selection_drag_state()
 
     def _commit_handle_drag(self) -> None:
@@ -123,11 +125,11 @@ class SelectTool(SelectionDragMixin, Tool):
         except Exception:
             if self._drag_transaction is None:
                 self._clear_handle_drag_state()
-                self._clear_pending_curved_handle_toggle()
+                self._clear_pending_handle_toggle()
                 self._reset_selection_drag_state()
             raise
         self._clear_handle_drag_state()
-        self._clear_pending_curved_handle_toggle()
+        self._clear_pending_handle_toggle()
         self._reset_selection_drag_state()
 
     def _commit_pending_handle_toggle(self, operation) -> None:
@@ -144,10 +146,10 @@ class SelectTool(SelectionDragMixin, Tool):
             self._commit_drag_transaction(commit)
         except Exception:
             if self._drag_transaction is None:
-                self._clear_pending_curved_handle_toggle()
+                self._clear_pending_handle_toggle()
                 self._reset_selection_drag_state()
             raise
-        self._clear_pending_curved_handle_toggle()
+        self._clear_pending_handle_toggle()
         self._reset_selection_drag_state()
 
     def _shape_handle_toggle_action_for_item(self, item) -> str:
@@ -183,14 +185,14 @@ class SelectTool(SelectionDragMixin, Tool):
             raise
         return True
 
-    def _curved_handle_toggle_action_for_item(self, item) -> str:
+    def _arrow_handle_toggle_action_for_item(self, item) -> str:
         if handle_target_for(self.canvas) is item and bool(
             active_handles_for(self.canvas)
         ):
             return "hide"
         return "show"
 
-    def _begin_curved_handle_toggle_or_drag(
+    def _begin_arrow_handle_toggle_or_drag(
         self,
         item,
         press_pos,
@@ -203,28 +205,37 @@ class SelectTool(SelectionDragMixin, Tool):
         if not atom_ids and not selection_items:
             return False
         handle_target = handle_target_for(self.canvas)
-        action = self._curved_handle_toggle_action_for_item(item)
+        action = self._arrow_handle_toggle_action_for_item(item)
         if not self._begin_selection_drag(atom_ids, selection_items, press_pos):
             return False
         try:
             if handle_target is not None and handle_target is not item:
                 clear_handles_for(self.canvas)
-            self._pending_curved_handle_item = item
-            self._pending_curved_handle_action = action
+            self._pending_arrow_handle_item = item
+            self._pending_arrow_handle_action = action
         except Exception as original_error:
             self._cancel_selection_drag(original_error)
             raise
         return True
 
-    def _selected_curved_item_for_handle_toggle(self, snapshot) -> object | None:
+    def _selected_arrow_item_for_handle_toggle(self, snapshot) -> object | None:
         if snapshot is None:
             return None
         if len(snapshot.selection_items) != 1:
             return None
         item = snapshot.selection_items[0]
-        if item is None or item.data(0) not in {"curved_single", "curved_double"}:
+        if item is None or item.data(0) not in VALID_ARROW_KINDS:
             return None
         return item
+
+    @staticmethod
+    def _show_arrow_handles_for_item(canvas, item) -> None:
+        # A curved arrow also gets its control handle; every other arrow and
+        # line is defined by its two ends alone.
+        if item.data(0) in VALID_CURVED_ARROW_KINDS:
+            show_curved_handles_for(canvas, item)
+        else:
+            show_endpoint_handles_for(canvas, item)
 
     @override
     def on_mouse_press(self, event) -> bool:
@@ -253,23 +264,23 @@ class SelectTool(SelectionDragMixin, Tool):
         snapshot = selection_snapshot_for(self.canvas)
         if (
             item is not None
-            and item.data(0) in {"curved_single", "curved_double"}
+            and item.data(0) in VALID_ARROW_KINDS
             and snapshot is not None
             and item in snapshot.selection_items
         ):
-            return self._begin_curved_handle_toggle_or_drag(
+            return self._begin_arrow_handle_toggle_or_drag(
                 item,
                 press_pos,
                 snapshot=snapshot,
             )
-        selected_curved = self._selected_curved_item_for_handle_toggle(snapshot)
+        selected_arrow = self._selected_arrow_item_for_handle_toggle(snapshot)
         if (
             item is None
-            and selected_curved is not None
+            and selected_arrow is not None
             and self.context.selection_hit_test(press_pos, snapshot=snapshot)
         ):
-            return self._begin_curved_handle_toggle_or_drag(
-                selected_curved,
+            return self._begin_arrow_handle_toggle_or_drag(
+                selected_arrow,
                 press_pos,
                 snapshot=snapshot,
             )
@@ -284,7 +295,7 @@ class SelectTool(SelectionDragMixin, Tool):
                 press_pos,
                 snapshot=snapshot,
             )
-        self._clear_pending_curved_handle_toggle()
+        self._clear_pending_handle_toggle()
         clear_handles_for(self.canvas)
         if snapshot is None:
             preferred = self.context.preferred_structure_item_at_scene_pos(press_pos)
@@ -351,12 +362,12 @@ class SelectTool(SelectionDragMixin, Tool):
         scene_pos = self.context.scene_pos_from_event(event)
         delta = scene_pos - self._start_pos
         if abs(delta.x()) > 1e-6 or abs(delta.y()) > 1e-6:
-            self._clear_pending_curved_handle_toggle()
+            self._clear_pending_handle_toggle()
         try:
             self._apply_drag_delta(delta)
         except Exception:
             if self._drag_transaction is None:
-                self._clear_pending_curved_handle_toggle()
+                self._clear_pending_handle_toggle()
             raise
         self._start_pos = scene_pos
         return True
@@ -366,13 +377,13 @@ class SelectTool(SelectionDragMixin, Tool):
         if self._active_handle is not None:
             self._commit_handle_drag()
             return True
-        if self._pending_curved_handle_item is not None and not self._moved:
-            item = self._pending_curved_handle_item
-            action = self._pending_curved_handle_action
+        if self._pending_arrow_handle_item is not None and not self._moved:
+            item = self._pending_arrow_handle_item
+            action = self._pending_arrow_handle_action
 
             def apply_toggle() -> None:
                 if action == "show":
-                    show_curved_handles_for(self.canvas, item)
+                    self._show_arrow_handles_for_item(self.canvas, item)
                 elif action == "hide":
                     clear_handles_for(self.canvas)
 
@@ -391,7 +402,7 @@ class SelectTool(SelectionDragMixin, Tool):
             self._commit_pending_handle_toggle(apply_toggle)
             return True
         if self._start_pos is None and not self._drag_selection:
-            self._clear_pending_curved_handle_toggle()
+            self._clear_pending_handle_toggle()
             return False
         if self._start_pos is not None and self._drag_selection:
             scene_pos = self.context.scene_pos_from_event(event)
@@ -401,16 +412,16 @@ class SelectTool(SelectionDragMixin, Tool):
                     self._apply_drag_delta(delta)
                 except Exception:
                     if self._drag_transaction is None:
-                        self._clear_pending_curved_handle_toggle()
+                        self._clear_pending_handle_toggle()
                     raise
                 self._start_pos = scene_pos
         try:
             self._commit_selection_drag()
         except Exception:
             if self._drag_transaction is None:
-                self._clear_pending_curved_handle_toggle()
+                self._clear_pending_handle_toggle()
             raise
-        self._clear_pending_curved_handle_toggle()
+        self._clear_pending_handle_toggle()
         return True
 
 

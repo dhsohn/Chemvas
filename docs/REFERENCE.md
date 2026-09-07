@@ -50,7 +50,10 @@ the [examples README](../examples/README.md) describes what each one contains.
 - **Atom labels** — elements, charges, radicals, and common alias labels
   (`Me`, `Et`, `OH`, `Ph`, `PPh3`, `OMe`, `Boc`, `CO2Me`, `t-Bu`, `tBu`,
   `i-Pr`, `CF3`, `OTs`, `Ts`, `OMs`, `Ms`, `OTf`, `Tf`, `Ns`, `OAc`, `Ac`).
-- **Editing** — select / move, an eraser tool (click or drag to erase; atoms a
+- **Editing** — endpoint handles (select an arrow or line, then click it to
+  show a handle at each end; drag one to move that end, snapping to nearby
+  endpoints, and curved arrows keep their third handle for the curve),
+  select / move, an eraser tool (click or drag to erase; atoms a
   deletion leaves with no bond and nothing visible — no label or mark — are
   removed with it), horizontal & vertical flip, perspective rotation, and
   delta-based undo/redo.

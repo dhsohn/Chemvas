@@ -853,7 +853,7 @@ class ToolsUnitTest(unittest.TestCase):
         self.assertTrue(tool.on_mouse_press(second_click))
         self.assertTrue(tool.on_mouse_release(second_click))
         self.assertEqual(canvas.curved_handles_shown, [curved])
-        self.assertIsNone(tool._pending_curved_handle_item)
+        self.assertIsNone(tool._pending_arrow_handle_item)
 
         canvas.item = None
         canvas.selection_hit = True
@@ -959,8 +959,8 @@ class ToolsUnitTest(unittest.TestCase):
             )
         )
         tool._last_drag_time = 100.0
-        tool._pending_curved_handle_item = object()
-        tool._pending_curved_handle_action = "show"
+        tool._pending_arrow_handle_item = object()
+        tool._pending_arrow_handle_action = "show"
         with mock.patch.object(
             select_tool_module.time,
             "monotonic",
@@ -968,7 +968,7 @@ class ToolsUnitTest(unittest.TestCase):
         ):
             self.assertTrue(tool.on_mouse_move(_FakeEvent(QPointF(3.0, 4.0))))
         self.assertEqual(canvas.shift_calls, [])
-        self.assertIsNotNone(tool._pending_curved_handle_item)
+        self.assertIsNotNone(tool._pending_arrow_handle_item)
 
         with mock.patch.object(
             select_tool_module.time,
@@ -977,7 +977,7 @@ class ToolsUnitTest(unittest.TestCase):
         ):
             self.assertTrue(tool.on_mouse_move(_FakeEvent(QPointF(4.0, 5.0))))
         self.assertTrue(canvas.shift_calls)
-        self.assertIsNone(tool._pending_curved_handle_item)
+        self.assertIsNone(tool._pending_arrow_handle_item)
 
     def test_move_tool_selection_drag_builds_composite_move_command(self) -> None:
         canvas = _FakeMoveCanvas()

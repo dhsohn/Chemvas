@@ -11,9 +11,12 @@ from chemvas.ui.renderer_style_access import bond_length_px_for
 ENDPOINT_SNAP_FRACTION = 0.4
 
 
-def arrow_endpoints_for(canvas) -> list[tuple[float, float]]:
+def arrow_endpoints_for(canvas, *, exclude=None) -> list[tuple[float, float]]:
     points: list[tuple[float, float]] = []
     for item in arrow_items_for(canvas):
+        if item is exclude:
+            # Dragging an endpoint must not snap to the item's own ends.
+            continue
         data = item.data(2) or {}
         for key in ("start", "end"):
             point = data.get(key)
@@ -22,8 +25,8 @@ def arrow_endpoints_for(canvas) -> list[tuple[float, float]]:
     return points
 
 
-def snap_to_arrow_endpoints_for(canvas, pos: QPointF) -> QPointF:
-    candidates = arrow_endpoints_for(canvas)
+def snap_to_arrow_endpoints_for(canvas, pos: QPointF, *, exclude=None) -> QPointF:
+    candidates = arrow_endpoints_for(canvas, exclude=exclude)
     if not candidates:
         return pos
     x, y = snapped_endpoint(

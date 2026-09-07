@@ -498,7 +498,7 @@ class ToolsTailCoverageTest(unittest.TestCase):
 
         canvas.snapshot = SimpleNamespace(selected_atom_ids=set(), selection_items=[])
         self.assertFalse(
-            tool._begin_curved_handle_toggle_or_drag(curved, QPointF(1.0, 1.0))
+            tool._begin_arrow_handle_toggle_or_drag(curved, QPointF(1.0, 1.0))
         )
 
         canvas.snapshot = SimpleNamespace(
@@ -506,32 +506,32 @@ class ToolsTailCoverageTest(unittest.TestCase):
         )
         canvas.scene_obj.selected_items = []
         self.assertIs(
-            tool._selected_curved_item_for_handle_toggle(canvas.snapshot),
+            tool._selected_arrow_item_for_handle_toggle(canvas.snapshot),
             curved,
         )
 
         canvas.runtime_state.handle_state.target = object()
         canvas.scene_obj.selected_items = [curved]
         self.assertTrue(
-            tool._begin_curved_handle_toggle_or_drag(curved, QPointF(1.0, 1.0))
+            tool._begin_arrow_handle_toggle_or_drag(curved, QPointF(1.0, 1.0))
         )
         self.assertEqual(canvas.clear_handles_calls, 1)
 
-        tool._pending_curved_handle_item = None
+        tool._pending_arrow_handle_item = None
         canvas.runtime_state.handle_state.target = curved
         canvas.runtime_state.handle_state.active_handles = [object()]
         self.assertTrue(
-            tool._begin_curved_handle_toggle_or_drag(curved, QPointF(1.0, 1.0))
+            tool._begin_arrow_handle_toggle_or_drag(curved, QPointF(1.0, 1.0))
         )
         self.assertTrue(tool.on_mouse_release(_Event(QPointF(1.0, 1.0))))
         self.assertEqual(canvas.clear_handles_calls, 2)
         self.assertEqual(canvas.curved_handles, [])
 
-        tool._pending_curved_handle_item = curved
-        tool._pending_curved_handle_action = "show"
+        tool._pending_arrow_handle_item = curved
+        tool._pending_arrow_handle_action = "show"
         tool._start_pos = QPointF(2.0, 2.0)
         self.assertTrue(tool.on_mouse_move(_Event(QPointF(2.0, 2.0))))
-        self.assertIs(tool._pending_curved_handle_item, curved)
+        self.assertIs(tool._pending_arrow_handle_item, curved)
 
         handle = _Item("handle")
         target = _Item("curved_single")
@@ -544,8 +544,8 @@ class ToolsTailCoverageTest(unittest.TestCase):
         self.assertTrue(tool.on_mouse_release(_Event(QPointF(2.0, 2.0))))
         self.assertEqual(canvas.pushed_commands, [])
 
-        tool._pending_curved_handle_item = curved
-        tool._pending_curved_handle_action = "noop"
+        tool._pending_arrow_handle_item = curved
+        tool._pending_arrow_handle_action = "noop"
         tool._begin_drag_transaction()
         self.assertTrue(tool.on_mouse_release(_Event(QPointF(2.0, 2.0))))
         self.assertEqual(canvas.clear_handles_calls, 2)
