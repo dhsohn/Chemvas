@@ -2,7 +2,7 @@
 Type=Application
 Name=Chemvas
 GenericName=Chemical Structure Editor
-Comment=2D chemical structure drawing canvas
+Comment=Draw chemical structures and reaction schemes; export publication-ready figures
 Exec=chemvas %f
 Icon=chemvas
 Terminal=false

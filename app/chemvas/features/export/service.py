@@ -1,10 +1,10 @@
 """Render the canvas scene to a figure file (SVG / PDF / PNG / TIFF).
 
 All formats share one path: pick the content items, hide everything transient,
-switch atom labels into outline mode, then render the scene region onto a paint
-device. Outlining (see ``AtomLabelItem.set_outline_mode``) means the figure does
-not depend on the viewer having the label font installed, and that screen, SVG,
-PDF and raster output all show identical glyphs.
+switch atom and arrow labels into outline mode, then render the scene region
+onto a paint device. These labels retain their shaped glyphs without requiring
+the viewer to have the label font installed. Other text items keep their own
+painting behavior.
 """
 
 from __future__ import annotations

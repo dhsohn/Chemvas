@@ -18,9 +18,9 @@ What you'd like Chemvas to do.
 Other ways you've worked around this, if any.
 
 **Scope check**
-Chemvas aims to stay a *lightweight* drawing tool. Does this fit that goal, or is it
-a larger feature worth discussing first?
+Chemvas focuses on drawing chemical structures and reaction schemes, exporting
+figures, and working with documents from scripts. Which workflow would this
+improve?
 
 **Additional context**
-Mockups, references to how other tools (ChemDraw, etc.) handle it, or a `.chemvas`
-example.
+Mockups, references to other tools, or a small `.chemvas` example.

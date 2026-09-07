@@ -1,61 +1,100 @@
-# Screenshots & demo media
+# Demo and branding media
 
-The README's hero image is **`demo.png`** (already in place — the C–P bond cleavage
-reaction scheme under KOtBu / THF from
-[`examples/template2.chemvas`](../../examples/template2.chemvas), shown on the
-canvas). The items below are optional extras you can add later to enrich the README.
+The introduction leads with the actual figure exported from
+[first-scheme.chemvas](../../examples/first-scheme.chemvas), followed by a short
+walkthrough of the desktop workflow. The example is a schematic drawing exercise;
+it is not an experimental result.
 
-## Branding images (generated)
+| Asset | Source and purpose |
+| --- | --- |
+| `examples/first-scheme.png` | 300 DPI, 174 mm PNG export; the README's completed result. |
+| `examples/first-scheme.svg` | Plain SVG using the 174 mm preset, with outlined atom/arrow labels and no embedded source document. |
+| `demo.gif` | Real Qt UI/canvas frames with chapter captions and edited pauses. |
+| `demo.png` | A still of the completed drawing in the app. |
+| `banner.png` | Existing Chemvas mark and the new tagline, rendered at 1360×270. |
+| `social-preview.png` | 1280×640 sharing card, including the actual example SVG. |
 
-**`banner.png`** (README header) and **`social-preview.png`** (1280×640, GitHub's
-Open Graph card) are generated from the app icon by
-[`scripts/generate_branding_images.py`](../../scripts/generate_branding_images.py).
-Regenerate both after editing the mark or the wordmark strings:
+## Regenerate the walkthrough
+
+Use the repository's development environment with the optional RDKit backend:
+
+```bash
+python -m pip install -e ".[dev,rdkit]"
+QT_QPA_PLATFORM=offscreen python scripts/capture_first_scheme.py --output-dir /tmp/chemvas-demo-capture
+```
+
+Choose an empty output directory. The script refuses a non-empty directory and
+uses a temporary app-data/config/cache profile. It never opens existing user
+documents or starts session recovery. It inserts the two structures through the
+SMILES controls, rotates each selection, opens the actual atom-label and
+arrow-label dialogs, aligns the scheme, saves the document, and exports it
+through the desktop figure-export service. The export-options dialog is real;
+the output path is supplied by the script to avoid recording a user's file picker.
+Trailing whitespace in the generated SVG is removed for repository hygiene;
+the drawing's elements, attributes, and glyph paths are not changed.
+
+The walkthrough calls the atom-label action directly: this also works on
+Wayland, which may refuse synthetic global pointer motion. The tutorial describes
+the user's hover-and-Enter shortcut. The committed capture was produced offscreen;
+a Wayland run also completed and produced an identical editable document in the
+capture environment. This is not a Windows or macOS acceptance claim.
+
+Captions and cursor highlights are added around/to the captured UI frames.
+Pauses are edited for readability, so the GIF is not a speed measurement.
+Qt, fonts, display scaling, and RDKit versions can change the output. The
+committed files are a reviewed capture, not a cross-machine byte-reproduction
+guarantee.
+
+Review the output, then copy the five files to their intended destinations:
+
+```bash
+cp /tmp/chemvas-demo-capture/first-scheme.chemvas examples/first-scheme.chemvas
+cp /tmp/chemvas-demo-capture/first-scheme.svg examples/first-scheme.svg
+cp /tmp/chemvas-demo-capture/first-scheme.png examples/first-scheme.png
+cp /tmp/chemvas-demo-capture/demo.gif docs/images/demo.gif
+cp /tmp/chemvas-demo-capture/demo.png docs/images/demo.png
+```
+
+Check the saved drawing and its command-line rendering using a new output path:
+
+```bash
+chemvas inspect-document examples/first-scheme.chemvas
+chemvas check-layout examples/first-scheme.chemvas
+chemvas render-document examples/first-scheme.chemvas --output /tmp/first-scheme-check.svg
+```
+
+The command-line render uses preset bond-length sizing. The example SVG and PNG
+use the desktop export's 174 mm setting.
+
+The example SVG includes outlined arrow labels, preserving the canvas's shaped
+glyphs and subscript/superscript positions. The sharing card renders this SVG
+directly; it does not repair the output. The SVG records a width of 173.919 mm
+after the exporter rounds the nominal 174 mm preset. PyPI 0.8.1 predates the
+arrow-label fix; use the development checkout to regenerate these exports until
+the next release.
+
+## Regenerate the branding
+
+After updating the example SVG:
 
 ```bash
 QT_QPA_PLATFORM=offscreen python scripts/generate_branding_images.py
 ```
 
-`social-preview.png` isn't referenced from the README — upload it once under
-**GitHub ▸ Settings ▸ General ▸ Social preview**. The app icon assets themselves
-live in `app/chemvas/assets/icon/` (see [`packaging/README.md`](../../packaging/README.md)).
+The [branding script](../../scripts/generate_branding_images.py) reuses the
+existing mark and reads the example SVG; it does not redraw the chemistry.
 
-## Nice-to-have extras
+`social-preview.png` must be uploaded separately under **GitHub ▸ Settings ▸
+General ▸ Social preview**. Committing it does not change the repository's
+configured sharing image. The app icon remains in `app/chemvas/assets/icon/`.
 
-| File | What it should show | Suggested size |
-| --- | --- | --- |
-| `demo.gif` | A 5–10s loop: draw a structure → type a SMILES and Render → export a figure. Motion sells a drawing tool. | ≤ 1200px wide, a few MB |
-| `molecule-info.png` | The Molecule Info window with the interactive 3D preview. | ~1200px wide |
-| `export-dialog.png` | The figure-export dialog (format/size/DPI options). | ~1000px wide |
+The package summary lives in [pyproject.toml](../../pyproject.toml). The GitHub
+About description is a separate setting; the corresponding copy is:
 
-If you replace `demo.png` with a different hero, keep the filename or update the
-`![...](docs/images/demo.png)` reference in
-[`README.md`](../../README.md) and [`README.ko.md`](../../README.ko.md).
+> An open-source desktop canvas for chemical structures and reaction schemes,
+> with publication-ready export and scriptable document workflows.
 
-## How to capture (macOS)
-
-Still image of a region:
-
-```bash
-# interactive crosshair → saves a PNG to ~/Desktop
-screencapture -i ~/Desktop/demo.png
-```
-
-Or press <kbd>⌘</kbd><kbd>⇧</kbd><kbd>4</kbd> and drag. Move the result here — over
-`demo.png` if it is a new hero, otherwise under one of the filenames above.
-
-For a short GIF, [Kap](https://getkap.co) (free, open source) is the easiest — record
-the window, export as GIF. From the command line you can also record a `.mov` with
-<kbd>⌘</kbd><kbd>⇧</kbd><kbd>5</kbd> and convert it:
-
-```bash
-# with ffmpeg + gifski for a crisp, small GIF
-ffmpeg -i recording.mov -vf "fps=15,scale=1000:-1" -f yuv4mpegpipe - \
-  | gifski -o demo.gif -
-```
-
-## Tips
-
-- Use a clean canvas and the default ACS style so the structure reads clearly.
-- Trim dead time from the GIF; keep it short so it loops nicely on GitHub.
-- Keep file sizes reasonable (GitHub renders inline; multi-MB GIFs feel sluggish).
+README and documentation links use `main` URLs so they also work on PyPI after
+publication. New media and tutorial URLs will become available when these files
+reach `main` on GitHub. PyPI's long description updates with a subsequent package
+release.

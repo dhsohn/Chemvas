@@ -75,15 +75,15 @@ def _dist_name() -> str:
 
 
 def _tool_hotkeys() -> dict[str, str]:
-    """Map each tool's UI label to its ChemDraw hotkey, read from the tooltip
+    """Map each tool's UI label to its hotkey, read from the tooltip
     hints in TOOL_ACTION_SPECS (the same strings shown to the user)."""
     src = _read(APP / "chemvas" / "ui" / "main_window_config.py")
     hotkeys: dict[str, str] = {}
     for label, hint in re.findall(
-        r'\(\s*"[^"]+",\s*"([^"]+)",\s*"[^"]+",\s*"[^"]+",\s*"([^"]*ChemDraw:[^"]*)"',
+        r'\(\s*"[^"]+",\s*"([^"]+)",\s*"[^"]+",\s*"[^"]+",\s*"([^"]*Shortcut:[^"]*)"',
         src,
     ):
-        key = re.search(r"ChemDraw:\s*([^),]+)", hint)
+        key = re.search(r"Shortcut:\s*([^),]+)", hint)
         if key:
             hotkeys[label] = key.group(1).strip()
     return hotkeys
@@ -178,7 +178,7 @@ def test_packaged_readme_has_no_repository_relative_links() -> None:
 def test_reference_matches_atom_and_text_tool_hotkeys():
     hotkeys = _tool_hotkeys()
     for label in ("Atom", "Text"):
-        assert label in hotkeys, f"{label!r} tool has no ChemDraw hint in config"
+        assert label in hotkeys, f"{label!r} tool has no shortcut hint in config"
     text = _collapse(_read(REFERENCE))
     for label in ("Atom", "Text"):
         key = hotkeys[label]

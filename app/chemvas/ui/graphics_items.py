@@ -3,7 +3,16 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, override
 
 from PyQt6.QtCore import QPointF, QRectF, Qt
-from PyQt6.QtGui import QFont, QFontMetricsF, QPainterPath, QPen
+from PyQt6.QtGui import (
+    QAbstractTextDocumentLayout,
+    QFont,
+    QFontMetricsF,
+    QPainterPath,
+    QPalette,
+    QPen,
+    QTextCharFormat,
+    QTextCursor,
+)
 from PyQt6.QtWidgets import (
     QGraphicsEllipseItem,
     QGraphicsLineItem,
@@ -123,6 +132,49 @@ class AtomDotItem(NoSelectEllipseItem):
 
 class NoSelectTextItem(_NoSelectPaintMixin, QGraphicsTextItem):
     pass
+
+
+class ArrowLabelItem(NoSelectTextItem):
+    """Keep Qt's rich-text layout, including shaped sub/superscript glyphs."""
+
+    def __init__(self, *args) -> None:
+        super().__init__(*args)
+        self._outline_mode = False
+
+    def set_outline_mode(self, enabled: bool) -> None:
+        self._outline_mode = bool(enabled)
+        self.update()
+
+    @override
+    def paint(self, painter, option, widget=None) -> None:
+        if not self._outline_mode:
+            super().paint(painter, option, widget)
+            return
+        # Let Qt outline the rich text itself so shaping and baseline offsets
+        # follow the normal paint path. Apply the format to a temporary document
+        # to leave the editable text, layout and undo history untouched.
+        document = self.document()
+        assert document is not None
+        outlined = document.clone()
+        assert outlined is not None
+        cursor = QTextCursor(outlined)
+        cursor.select(QTextCursor.SelectionType.Document)
+        outline_format = QTextCharFormat()
+        # A solid but transparent stroke enables Qt's glyph-path rendering
+        # without thickening the visible text.
+        outline_format.setTextOutline(QPen(Qt.GlobalColor.transparent))
+        cursor.mergeCharFormat(outline_format)
+        context = QAbstractTextDocumentLayout.PaintContext()
+        palette = QPalette()
+        palette.setColor(QPalette.ColorRole.Text, self.defaultTextColor())
+        context.palette = palette
+        layout = outlined.documentLayout()
+        assert layout is not None
+        painter.save()
+        try:
+            layout.draw(painter, context)
+        finally:
+            painter.restore()
 
 
 class AtomLabelItem(NoSelectTextItem):

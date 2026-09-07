@@ -18,9 +18,9 @@ from chemvas.ui.endpoint_snap_access import (
     snapped_points_among_for,
 )
 from chemvas.ui.graphics_items import (
+    ArrowLabelItem,
     NoSelectEllipseItem,
     NoSelectPathItem,
-    NoSelectTextItem,
 )
 from chemvas.ui.renderer_style_access import (
     bold_bond_pen_for,
@@ -341,7 +341,7 @@ class CanvasArrowBuildService:
             text = labels.get(side)
             if not text:
                 continue
-            child = NoSelectTextItem(item)
+            child = ArrowLabelItem(item)
             child.setData(0, ARROW_LABEL_ROLE)
             child.setFont(font)
             child.setDefaultTextColor(style.text_color)

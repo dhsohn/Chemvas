@@ -42,10 +42,10 @@ TEMPLATE_ENTRY_SPECS: list[tuple[str, int, str]] = [
 ]
 
 TOOL_ACTION_SPECS: list[tuple[str, str, str, str, str]] = [
-    ("select", "Select", "select", "icon_select", "Select / Marquee (ChemDraw: Space)"),
-    ("bond", "Bond", "bond", "icon_bond", "Bond (ChemDraw: X)"),
-    ("benzene", "Ring", "benzene", "icon_ring", "Ring / Benzene (ChemDraw: J)"),
-    ("arrow", "Arrow", "arrow", "icon_arrow", "Arrow (ChemDraw: E)"),
+    ("select", "Select", "select", "icon_select", "Select / Marquee (Shortcut: Space)"),
+    ("bond", "Bond", "bond", "icon_bond", "Bond (Shortcut: X)"),
+    ("benzene", "Ring", "benzene", "icon_ring", "Ring / Benzene (Shortcut: J)"),
+    ("arrow", "Arrow", "arrow", "icon_arrow", "Arrow (Shortcut: E)"),
     (
         "line",
         "Line",
@@ -53,15 +53,15 @@ TOOL_ACTION_SPECS: list[tuple[str, str, str, str, str]] = [
         "icon_line",
         "Line (plain, dashed, wavy, bold; Shift locks the angle)",
     ),
-    ("text", "Atom", "text", "icon_text", "Atom (ChemDraw: A)"),
-    ("note", "Text", "note", "icon_note", "Text / Annotation (ChemDraw: T)"),
+    ("text", "Atom", "text", "icon_text", "Atom (Shortcut: A)"),
+    ("note", "Text", "note", "icon_note", "Text / Annotation (Shortcut: T)"),
     ("mark", "Mark", "mark", "icon_mark", "Charge / Radical"),
     (
         "ts_bracket",
         "Brackets",
         "ts_bracket",
         "icon_ts_bracket",
-        "Brackets (ChemDraw: Shift+T)",
+        "Brackets (Shortcut: Shift+T)",
     ),
     (
         "shape",
@@ -83,7 +83,7 @@ TOOL_ACTION_SPECS: list[tuple[str, str, str, str, str]] = [
         "Perspective",
         "perspective",
         "icon_perspective",
-        "Perspective Rotation (ChemDraw: Alt+D, Shift+drag locks X/Y)",
+        "Perspective Rotation (Shortcut: Alt+D, Shift+drag locks X/Y)",
     ),
     ("color", "Color", "color", "icon_color", "Color"),
 ]

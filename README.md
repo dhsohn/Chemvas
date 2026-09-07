@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://raw.githubusercontent.com/dhsohn/Chemvas/main/docs/images/banner.png" alt="Chemvas — 2D chemical structure drawing canvas" width="680">
+  <img src="https://raw.githubusercontent.com/dhsohn/Chemvas/main/docs/images/banner.png" alt="Chemvas — Draw interactively. Automate safely. Export exactly." width="680">
 </p>
 
 <p align="center">
@@ -11,60 +11,101 @@
 
 <p align="center"><b>English</b> · <a href="https://github.com/dhsohn/Chemvas/blob/main/README.ko.md">한국어</a></p>
 
-Chemvas is a lightweight PyQt6 app for **drawing 2D chemical structures and
-reaction schemes** — ACS 1996 defaults, ChemDraw-compatible shortcuts, and
-publication-ready figure export. Draw fast, export exactly.
+Chemvas is an **open-source desktop canvas for chemical structures and reaction
+schemes**, with publication-ready export and scriptable document workflows.
 
-![Chemvas — a C–P bond cleavage reaction scheme (KOtBu / THF) drawn on the canvas](https://raw.githubusercontent.com/dhsohn/Chemvas/main/docs/images/demo.png)
+![A benzyl alcohol oxidation scheme exported directly from Chemvas](https://raw.githubusercontent.com/dhsohn/Chemvas/main/examples/first-scheme.png)
 
-## Statement of need
+[Open the editable drawing](https://raw.githubusercontent.com/dhsohn/Chemvas/main/examples/first-scheme.chemvas) ·
+[Get the SVG](https://raw.githubusercontent.com/dhsohn/Chemvas/main/examples/first-scheme.svg) ·
+[Follow the walkthrough](https://github.com/dhsohn/Chemvas/blob/main/docs/FIRST_SCHEME.md)
 
-Sketching a scheme for a lab notebook or paper should not require a commercial
-suite — and automating edits should not mean trusting an LLM with your drawing.
-Chemvas keeps the interactive canvas small and fast, and exposes headless
-CLI contracts for rendering, inspection, editing, and calculation handoff:
-document edits bind to the exact source hash and unsupported input fails
-closed. Agents propose, validation decides.
+## Draw interactively. Automate safely. Export exactly.
 
-## Quickstart
+- **Draw interactively.** Sketch structures, insert SMILES, label reaction arrows,
+  and align molecules on a desktop canvas. Keep working in an editable drawing
+  with autosave and crash recovery. SMILES insertion needs the optional RDKit backend.
+- **Automate safely.** Compose, inspect, check layouts, and render documents from
+  scripts. Graph edits check the source file's hash and validate the proposed
+  changes before writing a new document.
+- **Export exactly.** Save SVG, PDF, PNG, or TIFF with explicit physical-size
+  presets, including 84 mm and 174 mm column widths. Keep the editable document
+  alongside the exported figure.
+
+## Install and draw
+
+Requires **Python 3.12+**. Install with SMILES support for the walkthrough:
 
 ```bash
-pip install chemvas              # core (PyQt6 included)
-pip install "chemvas[rdkit]"     # + SMILES import, formula/weight, calculation handoff, 3D
+pip install "chemvas[rdkit]"
 chemvas
 ```
 
-Pick a tool from the toolbar and click/drag on the canvas. Type a SMILES string
-and press **Insert** to preview and place it *(RDKit)*. Open
-[examples/template2.chemvas](https://github.com/dhsohn/Chemvas/blob/main/examples/template2.chemvas) via **File ▸ Open** to
-explore the document shown above.
+For drawing and figure export without RDKit, use `pip install chemvas`.
+PyQt6 is included in either installation. Desktop installers are not available
+yet; the supported distribution is the Python package.
 
-## What it does
+## Your first reaction scheme
 
-| Capability | Use it for | Details |
-|---|---|---|
-| **Drawing** | bonds, rings, arrows, lines, brackets, atom labels — with ChemDraw-compatible shortcuts | [REFERENCE](https://github.com/dhsohn/Chemvas/blob/main/docs/REFERENCE.md) |
-| **Figure export** | plain SVG / PDF / PNG / TIFF, outlined glyphs, deterministic physical sizing | [REFERENCE](https://github.com/dhsohn/Chemvas/blob/main/docs/REFERENCE.md#figure-export) |
-| **Chemistry I/O** | SMILES import, `.mol` interchange, 2D→3D `.xyz`, Molecule Info *(RDKit)* | [REFERENCE](https://github.com/dhsohn/Chemvas/blob/main/docs/REFERENCE.md#chemistry-io) |
-| **Agent CLI** | headless compose / layout-check / render / inspect / hash-gated Graph Patch, no Qt window | [AGENT_CLI](https://github.com/dhsohn/Chemvas/blob/main/docs/AGENT_CLI.md) |
-| **Calculation handoff** | elementary steps, reviewed precomplexes, one `machine.json` per step *(RDKit)* | [AGENT_CLI](https://github.com/dhsohn/Chemvas/blob/main/docs/AGENT_CLI.md#calculation-states-and-elementary-steps) |
+![Chemvas walkthrough: insert structures, label an arrow, align the scheme, and export SVG](https://raw.githubusercontent.com/dhsohn/Chemvas/main/docs/images/demo.gif)
 
-Documents are `.chemvas` files (JSON, version 7 contract) with autosave and
-crash recovery; everything except the marked *(RDKit)* features runs without
-RDKit.
+This edited walkthrough uses the real application. The drawing is a schematic
+illustration, not an experimental result.
 
-## Development, testing, and full docs
+1. Enter `OCc1ccccc1` in the SMILES field, click **Insert**, then click to place
+   the structure. Hover over its oxygen, press **Enter**, and set the label to
+   `OH`.
+2. Insert `O=Cc1ccccc1` to the right. Choose **Arrow** and drag between the two
+   structures. Double-click the arrow to add its labels.
+3. Select the scheme, then choose **Edit ▸ Align ▸ Middle**.
+4. Save the drawing as `.chemvas`. Use **File ▸ Export Figure…** to export
+   **Plain SVG** at **Fit 2-column (174 mm)**.
 
-- `make check` runs the whole local gate — lint, formatting, mypy, the
-  file-isolated headless test suite, and the `machine.json` conformance check.
-  Read [CONTRIBUTING.md](https://github.com/dhsohn/Chemvas/blob/main/CONTRIBUTING.md) before moving code: the architecture
-  boundaries are enforced by tests.
-- Docs index: [REFERENCE](https://github.com/dhsohn/Chemvas/blob/main/docs/REFERENCE.md) · [AGENT_CLI](https://github.com/dhsohn/Chemvas/blob/main/docs/AGENT_CLI.md) ·
-  [ARCHITECTURE](https://github.com/dhsohn/Chemvas/blob/main/docs/ARCHITECTURE.md) · [CHANGELOG](https://github.com/dhsohn/Chemvas/blob/main/CHANGELOG.md) ·
-  [RELEASING](https://github.com/dhsohn/Chemvas/blob/main/RELEASING.md)
-- Known gaps (SDF interchange, one-file binaries, multi-molecule 3D export) →
-  [roadmap](https://github.com/dhsohn/Chemvas/blob/main/docs/REFERENCE.md#roadmap--not-yet-supported)
+The [step-by-step guide](https://github.com/dhsohn/Chemvas/blob/main/docs/FIRST_SCHEME.md)
+includes the label text, downloadable files, and a command-line export example.
+The saved drawing opens and exports without RDKit.
 
-## License
+## Work with drawings from scripts
 
+After downloading `first-scheme.chemvas`, try:
+
+```bash
+chemvas inspect-document first-scheme.chemvas
+chemvas check-layout first-scheme.chemvas
+chemvas render-document first-scheme.chemvas --output first-scheme-rendered.svg
+```
+
+Rendering creates a new file and leaves the source drawing untouched. This
+command uses preset bond-length sizing; the downloadable SVG above was exported
+with the desktop's 174 mm column setting. Layout checks currently cover note
+text and shape borders, not every possible overlap in a chemical scheme.
+
+See the [document CLI guide](https://github.com/dhsohn/Chemvas/blob/main/docs/AGENT_CLI.md)
+for composition, Graph Patch, render guarantees, and limits.
+
+## More workflows and documentation
+
+- **Chemistry I/O:** SMILES import, MOL interchange, molecule information, and
+  3D XYZ export. Some operations require RDKit; see the
+  [reference](https://github.com/dhsohn/Chemvas/blob/main/docs/REFERENCE.md#chemistry-io).
+- **Calculation handoff (RDKit):** elementary steps and reviewed precomplexes, exported as one `machine.json` per step. [Details](https://github.com/dhsohn/Chemvas/blob/main/docs/AGENT_CLI.md#calculation-states-and-elementary-steps).
+- **Documents:** editable `.chemvas` JSON files (version 7).
+  [Drawing tools and shortcuts](https://github.com/dhsohn/Chemvas/blob/main/docs/REFERENCE.md) ·
+  [More examples](https://github.com/dhsohn/Chemvas/tree/main/examples) ·
+  [Current limits and roadmap](https://github.com/dhsohn/Chemvas/blob/main/docs/REFERENCE.md#roadmap--not-yet-supported).
+
+## Contribute
+
+Try the example and [share what got in your way](https://github.com/dhsohn/Chemvas/issues).
+Small reproducible drawings, installation feedback, and documentation improvements
+are useful contributions. If Chemvas is useful to you, a star helps others find it.
+
+For development, read
+[CONTRIBUTING](https://github.com/dhsohn/Chemvas/blob/main/CONTRIBUTING.md).
+`make check` runs lint, formatting, type checking, the file-isolated test suite,
+and document-handoff conformance checks.
+
+[Architecture](https://github.com/dhsohn/Chemvas/blob/main/docs/ARCHITECTURE.md) ·
+[Changelog](https://github.com/dhsohn/Chemvas/blob/main/CHANGELOG.md) ·
+[Releasing](https://github.com/dhsohn/Chemvas/blob/main/RELEASING.md) ·
 [MIT License](https://github.com/dhsohn/Chemvas/blob/main/LICENSE)
