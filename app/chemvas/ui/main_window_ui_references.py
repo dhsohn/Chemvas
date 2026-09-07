@@ -23,6 +23,7 @@ class MainWindowUiReferences:
     atom_input: QLineEdit | None = None
     undo_action: QAction | None = None
     redo_action: QAction | None = None
+    grid_snap_action: QAction | None = None
     preview_window: Preview3DWindow | None = None
 
     def require_icon_factory(self) -> MainWindowIconFactory:
@@ -36,6 +37,7 @@ class MainWindowUiReferences:
     def apply_menu_bar_assembly(self, assembly: MainWindowMenuBarAssembly) -> None:
         self.undo_action = assembly.undo_action
         self.redo_action = assembly.redo_action
+        self.grid_snap_action = assembly.grid_snap_action
 
     def set_atom_input(self, atom_input: QLineEdit | None) -> None:
         self.atom_input = atom_input

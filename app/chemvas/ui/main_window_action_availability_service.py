@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from chemvas.ui.endpoint_snap_access import grid_snap_enabled_for
+
 
 class MainWindowActionAvailabilityService:
     def __init__(
@@ -9,11 +11,13 @@ class MainWindowActionAvailabilityService:
         active_canvas_or_none_for_window,
         undo_action_for_window,
         redo_action_for_window,
+        grid_snap_action_for_window,
     ) -> None:
         self._history_service_for_window = history_service_for_window
         self._active_canvas_or_none_for_window = active_canvas_or_none_for_window
         self._undo_action_for_window = undo_action_for_window
         self._redo_action_for_window = redo_action_for_window
+        self._grid_snap_action_for_window = grid_snap_action_for_window
 
     def update_action_availability(self, window) -> None:
         canvas = self._active_canvas_or_none_for_window(window)
@@ -29,6 +33,17 @@ class MainWindowActionAvailabilityService:
         ):
             if action is not None:
                 action.setEnabled(enabled)
+
+    def sync_grid_snap_action(self, window) -> None:
+        """Show the grid state of the canvas the user is actually looking at."""
+        action = self._grid_snap_action_for_window(window)
+        if action is None:
+            return
+        canvas = self._active_canvas_or_none_for_window(window)
+        enabled = grid_snap_enabled_for(canvas) if canvas is not None else False
+        blocked = action.blockSignals(True)
+        action.setChecked(enabled)
+        action.blockSignals(blocked)
 
 
 __all__ = ["MainWindowActionAvailabilityService"]

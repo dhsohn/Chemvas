@@ -6,7 +6,11 @@ from PyQt6.QtCore import QPointF, Qt
 
 from chemvas.features.rendering import snapped_line_end
 from chemvas.ui.canvas_tool_settings_state import tool_settings_state_for
-from chemvas.ui.endpoint_snap_access import snap_to_arrow_endpoints_for
+from chemvas.ui.endpoint_snap_access import (
+    snap_drawing_point_for,
+    snap_to_endpoint_for,
+    snap_to_grid_for,
+)
 from chemvas.ui.preview_tools import PreviewDragTool
 from chemvas.ui.renderer_style_access import bond_length_px_for
 from chemvas.ui.scene_decoration_access import add_arrow_for, preview_arrow_for
@@ -31,25 +35,30 @@ class LineTool(PreviewDragTool):
         self._angle_locked = bool(event.modifiers() & Qt.KeyboardModifier.ShiftModifier)
 
     def _end_point(self, current_pos: QPointF) -> QPointF:
-        snapped = snap_to_arrow_endpoints_for(self.canvas, current_pos)
-        # The end never snaps onto the start, so a short drag that begins at
-        # an existing endpoint still draws a short line.
-        if snapped != current_pos and snapped != self._start_pos:
-            return snapped
-        if not self._angle_locked or self._start_pos is None:
-            return current_pos
-        x, y = snapped_line_end(
-            (self._start_pos.x(), self._start_pos.y()),
-            (current_pos.x(), current_pos.y()),
-            step_degrees=LINE_ANGLE_STEP_DEGREES,
-        )
-        return QPointF(x, y)
+        click_end = self._click_end_or_none(current_pos)
+        if click_end is not None:
+            return click_end
+        # An existing endpoint is the most specific target, but never the end
+        # this drag started from, or a short drag would collapse. Shift is the
+        # user's explicit direction, so it outranks the grid, which catches
+        # everything else.
+        endpoint = snap_to_endpoint_for(self.canvas, current_pos, avoid=self._start_pos)
+        if endpoint is not None:
+            return endpoint
+        if self._angle_locked and self._start_pos is not None:
+            x, y = snapped_line_end(
+                (self._start_pos.x(), self._start_pos.y()),
+                (current_pos.x(), current_pos.y()),
+                step_degrees=LINE_ANGLE_STEP_DEGREES,
+            )
+            return QPointF(x, y)
+        return snap_to_grid_for(self.canvas, current_pos)
 
     @override
     def on_mouse_press(self, event) -> bool:
         handled = super().on_mouse_press(event)
         if handled and self._start_pos is not None:
-            self._start_pos = snap_to_arrow_endpoints_for(self.canvas, self._start_pos)
+            self._start_pos = snap_drawing_point_for(self.canvas, self._start_pos)
         return handled
 
     @override

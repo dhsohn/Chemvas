@@ -9,12 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- View ▸ Snap to Grid draws a faint grid of half a bond length on the sheet and
+  snaps the points the Line and Arrow tools place, and the ends dragged with
+  endpoint handles, curved arrows included, onto it. An existing endpoint
+  still takes precedence, and the Shift angle lock outranks the grid; a click,
+  and a drag shorter than one grid step, both read as a click. The grid is left
+  unpainted while it would be too dense to read. The setting belongs to the
+  canvas rather than the document, so each window keeps its own and it is not
+  saved.
 - Selecting an arrow or line and clicking it now shows a handle at each
   endpoint; dragging one moves that end, snapping to nearby endpoints, and the
   whole drag undoes in one step. Arcs keep their sweep and equilibrium arrows
   their harpoons, labels follow, and a drag that would shrink the item below a
   tenth of a bond length is refused. Curved arrows keep their existing control
-  handle.
+  handle, and their endpoint handles snap and refuse a collapse the same way.
 - Edit ▸ Align and Edit ▸ Distribute line up or evenly space the selected
   structures and objects in a single undoable step. A molecule moves whole
   even when only part of it is selected, and a group moves as one object.

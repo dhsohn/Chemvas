@@ -29,6 +29,7 @@ def test_update_action_availability_sets_history_actions() -> None:
         active_canvas_or_none_for_window=active_canvas_or_none_for_window,
         undo_action_for_window=undo_action_for_window,
         redo_action_for_window=redo_action_for_window,
+        grid_snap_action_for_window=lambda _window: None,
     )
 
     service.update_action_availability(window)
@@ -52,6 +53,7 @@ def test_update_action_availability_handles_missing_canvas_and_actions() -> None
         active_canvas_or_none_for_window=active_canvas_or_none_for_window,
         undo_action_for_window=undo_action_for_window,
         redo_action_for_window=redo_action_for_window,
+        grid_snap_action_for_window=lambda _window: None,
     )
 
     service.update_action_availability(window)

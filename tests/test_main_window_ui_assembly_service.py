@@ -461,7 +461,14 @@ class MainWindowUIAssemblyServiceTest(unittest.TestCase):
         ]
         self.assertEqual(
             view_texts,
-            ["Actual Size", "Fit to Window", "Zoom In", "Zoom Out", "Molecule Info"],
+            [
+                "Actual Size",
+                "Fit to Window",
+                "Zoom In",
+                "Zoom Out",
+                "Snap to Grid",
+                "Molecule Info",
+            ],
         )
         for text, key in (
             ("Actual Size", "F5"),

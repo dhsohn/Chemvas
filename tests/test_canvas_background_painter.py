@@ -4,13 +4,16 @@ from types import SimpleNamespace
 from unittest import mock
 
 from PyQt6.QtCore import QRectF, Qt
-from PyQt6.QtGui import QColor
+from PyQt6.QtGui import QColor, QTransform
 
 import chemvas.ui.canvas_background_painter as background_painter
 
 
 def test_draw_canvas_background_paints_workspace_shadow_and_sheet(monkeypatch) -> None:
     canvas = SimpleNamespace()
+    monkeypatch.setattr(
+        background_painter, "grid_snap_enabled_for", mock.Mock(return_value=False)
+    )
     painter = mock.Mock()
     viewport_rect = QRectF(-100.0, -80.0, 200.0, 160.0)
     sheet_rect = QRectF(-20.0, -10.0, 40.0, 20.0)
@@ -32,3 +35,62 @@ def test_draw_canvas_background_paints_workspace_shadow_and_sheet(monkeypatch) -
     pen = painter.setPen.call_args.args[0]
     assert pen.color() == QColor("#dededa")
     assert pen.widthF() == 1.0
+    # With the grid off the painter asks once and draws no points.
+    background_painter.grid_snap_enabled_for.assert_called_once_with(canvas)
+    painter.drawPoints.assert_not_called()
+
+
+def test_draw_canvas_background_draws_grid_points_when_the_grid_is_on(
+    monkeypatch,
+) -> None:
+    canvas = SimpleNamespace()
+    painter = mock.Mock()
+    painter.transform.return_value = QTransform()
+    sheet_rect = QRectF(0.0, 0.0, 40.0, 30.0)
+    monkeypatch.setattr(
+        background_painter, "sheet_rect_for", mock.Mock(return_value=sheet_rect)
+    )
+    monkeypatch.setattr(
+        background_painter, "grid_snap_enabled_for", mock.Mock(return_value=True)
+    )
+    monkeypatch.setattr(
+        background_painter, "grid_step_for", mock.Mock(return_value=10.0)
+    )
+
+    background_painter.draw_canvas_background_for(
+        canvas, painter, QRectF(-100.0, -100.0, 400.0, 400.0)
+    )
+
+    points = painter.drawPoints.call_args.args
+    # 5 columns (0..40) x 4 rows (0..30) inside the sheet, and nothing outside.
+    assert len(points) == 20
+    assert all(
+        sheet_rect.contains(point) or sheet_rect.intersects(QRectF(point, point))
+        for point in points
+    )
+    assert min(point.x() for point in points) == 0.0
+    assert max(point.x() for point in points) == 40.0
+
+
+def test_draw_canvas_background_skips_a_grid_too_dense_to_read(monkeypatch) -> None:
+    canvas = SimpleNamespace()
+    painter = mock.Mock()
+    dense = (background_painter.MIN_GRID_SPACING_PX / 10.0) * 0.5
+    painter.transform.return_value = QTransform().scale(dense, dense)
+    monkeypatch.setattr(
+        background_painter,
+        "sheet_rect_for",
+        mock.Mock(return_value=QRectF(0.0, 0.0, 400.0, 300.0)),
+    )
+    monkeypatch.setattr(
+        background_painter, "grid_snap_enabled_for", mock.Mock(return_value=True)
+    )
+    monkeypatch.setattr(
+        background_painter, "grid_step_for", mock.Mock(return_value=10.0)
+    )
+
+    background_painter.draw_canvas_background_for(
+        canvas, painter, QRectF(-100.0, -100.0, 900.0, 900.0)
+    )
+
+    painter.drawPoints.assert_not_called()

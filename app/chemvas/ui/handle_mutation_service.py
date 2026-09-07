@@ -15,7 +15,7 @@ from chemvas.features.selection import (
 from chemvas.features.selection import (
     resized_shape_rect as resized_shape_rect_helper,
 )
-from chemvas.ui.endpoint_snap_access import snap_to_arrow_endpoints_for
+from chemvas.ui.endpoint_snap_access import snap_drawing_point_for
 from chemvas.ui.handle_mutation_access import (
     clamp_curved_midpoint_for,
     control_from_midpoint_for,
@@ -94,7 +94,7 @@ class HandleMutationService:
         end = data.get("end")
         if not isinstance(start, QPointF) or not isinstance(end, QPointF):
             return
-        moved = snap_to_arrow_endpoints_for(self.canvas, pos, exclude=item)
+        moved = snap_drawing_point_for(self.canvas, pos, exclude=item)
         if endpoint == "start":
             start, anchor = moved, end
         else:
@@ -138,6 +138,16 @@ class HandleMutationService:
         refresh_selection_outline_for(self.canvas)
 
     def update_curved_endpoint(self, item, pos: QPointF, endpoint: str) -> None:
+        """Move one end of a curved arrow to ``pos``.
+
+        A curved arrow's ends carry the same kind of handle as every other
+        arrow's, so they snap the same way: another item's endpoint first,
+        then the grid, and never this item's own far end. A drag that would
+        collapse the curve onto that far end is refused, which snapping
+        otherwise makes easy to do by accident.
+        """
+        if endpoint not in {"start", "end"}:
+            return
         data = item.data(2) or {}
         start = data.get("start")
         end = data.get("end")
@@ -145,11 +155,14 @@ class HandleMutationService:
         double = data.get("double", False)
         if not isinstance(start, QPointF) or not isinstance(end, QPointF):
             return
+        moved = QPointF(snap_drawing_point_for(self.canvas, pos, exclude=item))
         if endpoint == "start":
-            start = QPointF(pos)
-        elif endpoint == "end":
-            end = QPointF(pos)
+            start, anchor = moved, end
         else:
+            end, anchor = moved, start
+        if math.hypot(moved.x() - anchor.x(), moved.y() - anchor.y()) < (
+            bond_length_px_for(self.canvas) * MIN_ARROW_LENGTH_BOND_LENGTHS
+        ):
             return
         if not isinstance(control, QPointF):
             control = default_curved_control_for(self.canvas, start, end)

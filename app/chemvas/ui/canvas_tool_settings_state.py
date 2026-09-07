@@ -26,6 +26,8 @@ class CanvasToolSettingsState:
     curved_snap_step: float = 0.15
     orbital_snap_enabled: bool = False
     orbital_snap_step: int = 15
+    grid_snap_enabled: bool = False
+    grid_snap_step: float = 0.5
 
 
 def tool_settings_state_for(canvas: Any) -> CanvasToolSettingsState:

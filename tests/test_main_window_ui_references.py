@@ -33,6 +33,7 @@ def test_main_window_ui_references_apply_toolbar_and_menu_bar_assemblies() -> No
     atom_input = QLineEdit()
     undo_action = QAction("Undo", owner)
     redo_action = QAction("Redo", owner)
+    grid_snap_action = QAction("Snap to Grid", owner)
     refs = MainWindowUiReferences()
 
     refs.apply_toolbar_assembly(SimpleNamespace(tool_actions={"select": action}))
@@ -42,13 +43,19 @@ def test_main_window_ui_references_apply_toolbar_and_menu_bar_assemblies() -> No
     assert refs.atom_input is None
     assert refs.undo_action is None
     assert refs.redo_action is None
+    assert refs.grid_snap_action is None
 
     refs.apply_menu_bar_assembly(
-        SimpleNamespace(undo_action=undo_action, redo_action=redo_action)
+        SimpleNamespace(
+            undo_action=undo_action,
+            redo_action=redo_action,
+            grid_snap_action=grid_snap_action,
+        )
     )
 
     assert refs.undo_action is undo_action
     assert refs.redo_action is redo_action
+    assert refs.grid_snap_action is grid_snap_action
     refs.set_atom_input(atom_input)
     assert refs.atom_input is atom_input
     preview_window = object()

@@ -86,6 +86,7 @@ class MainWindowActiveCanvasUIService:
 
     def refresh_active_canvas_ui(self, window) -> None:
         self.bind_active_canvas(window)
+        self._action_availability.sync_grid_snap_action(window)
         atom_input = self._atom_input_for_window(window)
         if atom_input is not None:
             atom_input.blockSignals(True)
