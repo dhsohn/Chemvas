@@ -44,6 +44,10 @@ class CanvasHandleController:
         if self.handle_overlay_service is not None:
             self.handle_overlay_service.show_curved_handles(item)
 
+    def show_endpoint_handles(self, item) -> None:
+        if self.handle_overlay_service is not None:
+            self.handle_overlay_service.show_endpoint_handles(item)
+
     def show_shape_handles(self, item) -> None:
         if self.handle_overlay_service is not None:
             self.handle_overlay_service.show_shape_handles(item)
@@ -67,6 +71,11 @@ class CanvasHandleController:
         elif handle_type == "curved_control":
             self.update_curved_control(target, scene_pos)
             self.show_curved_handles(target)
+        elif handle_type in {"arrow_start", "arrow_end"}:
+            self.update_arrow_endpoint(
+                target, scene_pos, handle_type.removeprefix("arrow_")
+            )
+            self.show_endpoint_handles(target)
         elif handle_type == "curved_start":
             self.update_curved_endpoint(target, scene_pos, "start")
             self.show_curved_handles(target)
@@ -96,6 +105,10 @@ class CanvasHandleController:
     def update_curved_endpoint(self, item, pos: QPointF, endpoint: str) -> None:
         if self.handle_mutation_service is not None:
             self.handle_mutation_service.update_curved_endpoint(item, pos, endpoint)
+
+    def update_arrow_endpoint(self, item, pos: QPointF, endpoint: str) -> None:
+        if self.handle_mutation_service is not None:
+            self.handle_mutation_service.update_arrow_endpoint(item, pos, endpoint)
 
     def default_curved_control(self, start: QPointF, end: QPointF) -> QPointF:
         return default_curved_control_helper(start, end)

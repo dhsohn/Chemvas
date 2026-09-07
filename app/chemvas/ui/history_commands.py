@@ -31,6 +31,7 @@ from chemvas.ui.canvas_scene_items_state import (
     scene_item_collection_for,
 )
 from chemvas.ui.canvas_smiles_input_state import set_last_smiles_input_for
+from chemvas.ui.handle_overlay_access import clear_handles_for
 from chemvas.ui.history_atom_position_restore import (
     set_atom_positions_for_history as _set_atom_positions_for_history,
 )
@@ -90,6 +91,20 @@ def _restore_group_state(snapshot: _GroupStateSnapshot) -> None:
     snapshot.state.groups = snapshot.groups_object
     snapshot.state.next_group_id = snapshot.next_group_id
     snapshot.state.expanding = snapshot.expanding
+
+
+def _clear_handles_for_target(canvas, item) -> None:
+    """Drop handles that were placed from the geometry this command replaced.
+
+    Reads the handle slot the way ``_active_handle_position_snapshots`` does,
+    so a lightweight canvas without a runtime container is simply a canvas
+    with no handles rather than an error inside an undo.
+    """
+    runtime_state = getattr(canvas, "runtime_state", None)
+    handle_state = getattr(runtime_state, "handle_state", None)
+    if handle_state is None or getattr(handle_state, "target", None) is not item:
+        return
+    clear_handles_for(canvas)
 
 
 def _active_handle_position_snapshots(canvas) -> list[tuple[object, object]]:
@@ -391,6 +406,7 @@ class UpdateSceneItemCommand(HistoryCommand):
         scene_rect_snapshot = capture_scene_rect_snapshot(runtime_snapshot.scene)
         try:
             _apply_scene_item_state(canvas, self.item, state)
+            _clear_handles_for_target(canvas, self.item)
             refresh_selection_outline_for_canvas(canvas)
             release_scene_rect_snapshot(scene_rect_snapshot)
         except Exception as original_error:

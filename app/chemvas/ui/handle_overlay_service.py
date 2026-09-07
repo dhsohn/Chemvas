@@ -80,6 +80,26 @@ class HandleOverlayService:
         set_active_handles_for(self.canvas, handles)
         set_handle_target_for(self.canvas, item)
 
+    def show_endpoint_handles(self, item) -> None:
+        """Two handles, one per end, for an arrow or line without a control."""
+        data = item.data(2) or {}
+        start = data.get("start")
+        end = data.get("end")
+        if not isinstance(start, QPointF) or not isinstance(end, QPointF):
+            # Nothing to grip: leave the previous state rather than highlight
+            # an item that gets no handles.
+            return
+        self.clear_handles()
+        selection_highlight_styler_for(self.canvas).set_selection_highlight([item])
+        set_active_handles_for(
+            self.canvas,
+            [
+                self.create_handle(start, "arrow_start", item),
+                self.create_handle(end, "arrow_end", item),
+            ],
+        )
+        set_handle_target_for(self.canvas, item)
+
     def show_curved_handles(self, item) -> None:
         self.clear_handles()
         selection_highlight_styler_for(self.canvas).set_selection_highlight([item])
