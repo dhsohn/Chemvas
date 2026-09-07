@@ -565,7 +565,8 @@ class _FakePreviewCanvas:
         self.drag_mode = None
         self.scene_obj = _FakePreviewScene()
         self.runtime_state = canvas_runtime_state(
-            tool_settings_state=CanvasToolSettingsState(active_arrow_type="reaction")
+            tool_settings_state=CanvasToolSettingsState(active_arrow_type="reaction"),
+            scene_items_state=CanvasSceneItemsState(),
         )
         self.preview_arrow_calls = []
         self.preview_ts_bracket_calls = []

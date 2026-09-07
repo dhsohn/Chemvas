@@ -15,12 +15,14 @@ from .calculation_plan import (
 from .graph import connected_atom_components
 from .model import Atom, Bond, MoleculeModel
 from .state import (
+    ARC_KIND_SWEEPS,
     ARROW_LABEL_SIDES,
     CANVAS_FILE_VERSION,
     CHEMVAS_FILE_TYPE,
     CLIPBOARD_SELECTION_VERSION,
     MAX_ARROW_LABEL_CHARS,
     SETTINGS_KEYS,
+    VALID_ARC_KINDS,
     VALID_ARROW_KINDS,
     VALID_BOND_ORDERS,
     VALID_BOND_STYLES,
@@ -33,6 +35,7 @@ from .state import (
     extract_document_state,
     is_document_number,
     is_hex_color,
+    mirrored_arc_kind,
     model_bond_pairs,
     normalize_json_numbers,
     ring_atom_ids_form_cycle,
@@ -44,12 +47,14 @@ from .state import (
 )
 
 __all__ = [
+    "ARC_KIND_SWEEPS",
     "ARROW_LABEL_SIDES",
     "CANVAS_FILE_VERSION",
     "CHEMVAS_FILE_TYPE",
     "CLIPBOARD_SELECTION_VERSION",
     "MAX_ARROW_LABEL_CHARS",
     "SETTINGS_KEYS",
+    "VALID_ARC_KINDS",
     "VALID_ARROW_KINDS",
     "VALID_BOND_ORDERS",
     "VALID_BOND_STYLES",
@@ -76,6 +81,7 @@ __all__ = [
     "included_atom_ids",
     "is_document_number",
     "is_hex_color",
+    "mirrored_arc_kind",
     "model_bond_pairs",
     "normalize_json_numbers",
     "ring_atom_ids_form_cycle",

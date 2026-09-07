@@ -29,8 +29,11 @@ the [examples README](../examples/README.md) describes what each one contains.
 - **Rings & templates** — benzene, cycloalkanes, chair/boat conformers placed by
   live preview and click-to-insert.
 - **Arrows** — reaction, equilibrium (balanced, or favored in either direction
-  with a shortened harpoon), resonance, curved, and dashed arrows with
-  adjustable width and head scale.
+  with a shortened harpoon), resonance, curved, dashed, and arc arrows (90°,
+  180°, 270° for catalytic cycles; hold `Shift` while dragging to bulge the
+  arc to the other side) with adjustable width and head scale. Arrow and line
+  endpoints snap to nearby arrow and line endpoints while drawing; a snap takes
+  precedence over the `Shift` angle lock.
 - **Arrow labels** — double-click an arrow or line to give it a label above and
   below, such as rate constants. `_` starts a subscript and `^` a superscript,
   and braces group several characters: `k_-1`, `K_{eq}`, `ΔG^‡`. Labels take
@@ -38,7 +41,8 @@ the [examples README](../examples/README.md) describes what each one contains.
   with their arrow.
 - **Lines** — plain, dashed, wavy, and bold lines that are not bonds, for
   energy-level diagrams, connectors, and annotations. Hold `Shift` while
-  dragging to lock the angle to 15° steps. Plain, dashed, and wavy lines
+  dragging to lock the angle to 15° steps; a click without a drag places a
+  horizontal level two bond lengths long. Plain, dashed, and wavy lines
   follow the arrow line width; bold lines use the bold bond width. Lines are
   saved in the document's arrow list.
 - **Brackets & annotations** — square / round / curly brackets, dagger (`†`) and
@@ -178,7 +182,11 @@ Chemvas supports a major subset of ChemDraw-compatible shortcuts.
   Ring fusion `4/5/6/7/8`, Chair fusion `9/0`
 - **Objects:** Flip Horizontal `Ctrl+Shift+H`, Flip Vertical `Ctrl+Shift+V`,
   Rotate selection `Alt+Up/Down` (15°) and `Alt+Left/Right` (1°),
-  Nudge selection `Shift+Arrows` (10 pt)
+  Nudge selection `Shift+Arrows` (10 pt); **Edit ▸ Align** (left, center,
+  right, top, middle, bottom) and **Edit ▸ Distribute** (horizontally,
+  vertically) arrange the selected structures and objects as whole units: a
+  molecule moves whole even when only part of it is selected, and a group
+  moves as one
 - **View:** Actual size `F5`, Fit to window `F6`, Magnify `F7`, Reduce `F8`
 - **File / edit:** Save / Open / Undo / Redo (platform defaults), `Ctrl+A` (select
   all, switches to the Select tool), `Ctrl+C` (copy selection — PNG plus SVG/PDF

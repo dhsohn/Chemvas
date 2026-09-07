@@ -6,9 +6,9 @@ from typing import TYPE_CHECKING
 from PyQt6.QtCore import QPointF, Qt
 from PyQt6.QtGui import QBrush, QFont, QPainterPath
 
-from chemvas.domain.document import VALID_LINE_KINDS
+from chemvas.domain.document import ARC_KIND_SWEEPS, VALID_ARC_KINDS, VALID_LINE_KINDS
 from chemvas.features.annotations import arrow_label_html
-from chemvas.features.rendering import wavy_line_points
+from chemvas.features.rendering import arc_midpoint, arc_points, wavy_line_points
 from chemvas.ui.canvas_text_style_state import text_style_state_for
 from chemvas.ui.canvas_tool_settings_state import tool_settings_state_for
 from chemvas.ui.graphics_items import NoSelectPathItem, NoSelectTextItem
@@ -45,6 +45,8 @@ class CanvasArrowBuildService:
     def build_arrow_item(self, start: QPointF, end: QPointF, kind: str):
         if kind in VALID_LINE_KINDS:
             return self.build_line_item(start, end, kind)
+        if kind in VALID_ARC_KINDS:
+            return self.build_arc_arrow(start, end, kind)
         if kind == "equilibrium":
             return self.build_equilibrium_item(start, end)
         if kind == "equilibrium_forward":
@@ -93,6 +95,26 @@ class CanvasArrowBuildService:
         self.add_arrow_head(path, start, end, double=False)
         item = NoSelectPathItem(path)
         item.setPen(self.arrow_pen(dotted=True))
+        item.setBrush(QBrush(Qt.BrushStyle.NoBrush))
+        item.setData(2, {"start": start, "end": end, "control": None, "double": False})
+        return item
+
+    def build_arc_arrow(self, start: QPointF, end: QPointF, kind: str):
+        sweep_degrees, bulge_left = ARC_KIND_SWEEPS[kind]
+        points = arc_points(
+            (start.x(), start.y()),
+            (end.x(), end.y()),
+            sweep_degrees=sweep_degrees,
+            bulge_left=bulge_left,
+        )
+        path = QPainterPath()
+        path.moveTo(*points[0])
+        for x, y in points[1:]:
+            path.lineTo(x, y)
+        # The head follows the arc's final tangent, not the chord.
+        self.add_arrow_head(path, QPointF(*points[-2]), end, double=False)
+        item = NoSelectPathItem(path)
+        item.setPen(self.arrow_pen())
         item.setBrush(QBrush(Qt.BrushStyle.NoBrush))
         item.setData(2, {"start": start, "end": end, "control": None, "double": False})
         return item
@@ -234,11 +256,22 @@ class CanvasArrowBuildService:
         if not isinstance(start, QPointF) or not isinstance(end, QPointF):
             return
         control = data.get("control")
+        kind = str(item.data(0) or "")
         if isinstance(control, QPointF):
             # Midpoint of the quadratic curve at t = 0.5.
             mid = QPointF(
                 0.25 * start.x() + 0.5 * control.x() + 0.25 * end.x(),
                 0.25 * start.y() + 0.5 * control.y() + 0.25 * end.y(),
+            )
+        elif kind in ARC_KIND_SWEEPS:
+            sweep_degrees, bulge_left = ARC_KIND_SWEEPS[kind]
+            mid = QPointF(
+                *arc_midpoint(
+                    (start.x(), start.y()),
+                    (end.x(), end.y()),
+                    sweep_degrees=sweep_degrees,
+                    bulge_left=bulge_left,
+                )
             )
         else:
             mid = QPointF((start.x() + end.x()) * 0.5, (start.y() + end.y()) * 0.5)
@@ -257,10 +290,11 @@ class CanvasArrowBuildService:
         font.setItalic(style.text_italic)
         # Measure how far the arrow's own strokes (harpoons, barbs) reach
         # from the axis along the normal, so the label clears them at any
-        # bond length; a curved arrow's chord ends are not part of that.
+        # bond length; a curved arrow's or arc's chord ends are not part of
+        # that, since their labels sit at the curve midpoint instead.
         path = item.path()
         arrow_extent = 0.0
-        if not isinstance(control, QPointF):
+        if not isinstance(control, QPointF) and kind not in ARC_KIND_SWEEPS:
             for index in range(path.elementCount()):
                 element = path.elementAt(index)
                 offset = (element.x - mid.x()) * nx + (element.y - mid.y()) * ny

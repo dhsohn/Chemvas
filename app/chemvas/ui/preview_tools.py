@@ -8,7 +8,9 @@ from chemvas.core.tool_overlay_logic import (
     activate_tool_no_drag,
     clear_temporary_tool_overlay,
 )
+from chemvas.domain.document import VALID_ARC_KINDS, mirrored_arc_kind
 from chemvas.ui.canvas_tool_settings_state import tool_settings_state_for
+from chemvas.ui.endpoint_snap_access import snap_to_arrow_endpoints_for
 from chemvas.ui.scene_decoration_access import (
     add_arrow_for,
     add_orbital_for,
@@ -79,27 +81,62 @@ class ArrowTool(PreviewDragTool):
     def __init__(self, canvas, mode: str = "auto", *, context=None) -> None:
         super().__init__("arrow", canvas, context=context)
         self.mode = mode
+        self._mirror_arc = False
 
     def _arrow_type(self) -> str:
-        return (
+        kind = (
             self.mode
             if self.mode != "auto"
             else tool_settings_state_for(self.canvas).active_arrow_type
         )
+        if self._mirror_arc and kind in VALID_ARC_KINDS:
+            return mirrored_arc_kind(kind)
+        return kind
+
+    def _read_arc_mirror(self, event) -> None:
+        # Shift while dragging bulges an arc to the other side of the drag.
+        self._mirror_arc = bool(event.modifiers() & Qt.KeyboardModifier.ShiftModifier)
+
+    @override
+    def on_mouse_press(self, event) -> bool:
+        handled = super().on_mouse_press(event)
+        if handled and self._start_pos is not None:
+            self._start_pos = snap_to_arrow_endpoints_for(self.canvas, self._start_pos)
+        return handled
+
+    @override
+    def on_mouse_move(self, event) -> bool:
+        self._read_arc_mirror(event)
+        return super().on_mouse_move(event)
+
+    @override
+    def on_mouse_release(self, event) -> bool:
+        self._read_arc_mirror(event)
+        return super().on_mouse_release(event)
+
+    def _end_point(self, current_pos):
+        snapped = snap_to_arrow_endpoints_for(self.canvas, current_pos)
+        # Never snap the end onto the start: a short drag from an existing
+        # endpoint draws a short arrow instead of being swallowed.
+        return current_pos if snapped == self._start_pos else snapped
 
     @override
     def _build_preview(self, current_pos):
         return preview_arrow_for(
-            self.canvas, self._start_pos, current_pos, self._arrow_type()
+            self.canvas,
+            self._start_pos,
+            self._end_point(current_pos),
+            self._arrow_type(),
         )
 
     @override
     def _commit_drag(self, end_pos) -> None:
-        if end_pos == self._start_pos:
+        end = self._end_point(end_pos)
+        if end == self._start_pos:
             # A click without a drag would add a headless stub; it also lets a
             # double-click reach the arrow under the cursor instead of a stub.
             return
-        add_arrow_for(self.canvas, self._start_pos, end_pos, self._arrow_type())
+        add_arrow_for(self.canvas, self._start_pos, end, self._arrow_type())
 
 
 class TSBracketTool(PreviewDragTool):

@@ -49,7 +49,13 @@ from .bond_style import (
     style_for_double_position,
     style_for_existing_bond_overlay,
 )
-from .line_geometry import snapped_line_end, wavy_line_points
+from .line_geometry import (
+    arc_midpoint,
+    arc_points,
+    snapped_endpoint,
+    snapped_line_end,
+    wavy_line_points,
+)
 
 __all__ = [
     "BOLD_BOND_STYLES",
@@ -65,6 +71,8 @@ __all__ = [
     "STANDARD_BOND_STYLES",
     "ACS1996Style",
     "LineSegment",
+    "arc_midpoint",
+    "arc_points",
     "base_plain_double_style_for_dotted_variant",
     "bold_double_strip_geometry",
     "bold_double_style_for_position",
@@ -89,6 +97,7 @@ __all__ = [
     "plain_double_preview_segments",
     "refresh_bond_graphics",
     "scale_segment",
+    "snapped_endpoint",
     "snapped_line_end",
     "strip_corners",
     "style_for_double_position",

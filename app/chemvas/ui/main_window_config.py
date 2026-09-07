@@ -12,6 +12,9 @@ ARROW_MENU_SPECS: list[tuple[str, str]] = [
     ("Curved Double", "curved_double"),
     ("Inhibition", "inhibit"),
     ("Dotted", "dotted"),
+    ("Arc 90°", "arc_90_left"),
+    ("Arc 180°", "arc_180_left"),
+    ("Arc 270°", "arc_270_left"),
 ]
 
 ARROW_PRESET_SPECS: list[str] = ["Default", "Bold", "Fine"]

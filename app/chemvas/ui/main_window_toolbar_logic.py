@@ -20,6 +20,9 @@ ARROW_TYPE_BY_LABEL: dict[str, str] = {
     "Curved Double": "curved_double",
     "Inhibition": "inhibit",
     "Dotted": "dotted",
+    "Arc 90°": "arc_90_left",
+    "Arc 180°": "arc_180_left",
+    "Arc 270°": "arc_270_left",
 }
 
 ORBITAL_TYPE_BY_LABEL: dict[str, str] = {

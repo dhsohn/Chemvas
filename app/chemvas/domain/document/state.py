@@ -86,6 +86,28 @@ VALID_BOND_STYLES = frozenset(
 # the same ``arrows`` list, so every arrow consumer (move, delete, selection,
 # clipboard, groups, export) handles them without a second item kind.
 VALID_LINE_KINDS = frozenset(("line", "line_dashed", "line_wavy", "line_bold"))
+# Arc arrows are circular arcs through the drag endpoints; the kind carries
+# the sweep and the side of the drag direction the arc bulges toward, so a
+# mirror flip only has to swap that suffix.
+ARC_KIND_SWEEPS: dict[str, tuple[float, bool]] = {
+    "arc_90_left": (90.0, True),
+    "arc_90_right": (90.0, False),
+    "arc_180_left": (180.0, True),
+    "arc_180_right": (180.0, False),
+    "arc_270_left": (270.0, True),
+    "arc_270_right": (270.0, False),
+}
+VALID_ARC_KINDS = frozenset(ARC_KIND_SWEEPS)
+
+
+def mirrored_arc_kind(kind: str) -> str:
+    if kind.endswith("_left"):
+        return kind[: -len("_left")] + "_right"
+    if kind.endswith("_right"):
+        return kind[: -len("_right")] + "_left"
+    return kind
+
+
 VALID_ARROW_KINDS = (
     frozenset(
         (
@@ -101,6 +123,7 @@ VALID_ARROW_KINDS = (
         )
     )
     | VALID_LINE_KINDS
+    | VALID_ARC_KINDS
 )
 # An arrow may carry one short label on each side (rate constants such as
 # k_1 above and k_-1 below); the text keeps the label mini-syntax, not HTML.

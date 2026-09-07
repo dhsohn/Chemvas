@@ -4,6 +4,7 @@ from typing import TYPE_CHECKING
 
 from PyQt6.QtCore import QPointF, QRectF
 
+from chemvas.domain.document import VALID_ARC_KINDS, mirrored_arc_kind
 from chemvas.ui.scene_item_state import ARROW_KINDS
 
 if TYPE_CHECKING:
@@ -116,6 +117,10 @@ def flip_scene_item_state(
                 continue
             flipped = flip_point(QPointF(*point), center, horizontal)
             after_state[key] = (flipped.x(), flipped.y())
+        if kind in VALID_ARC_KINDS:
+            # A mirror swaps handedness: the arc must bulge to the other side
+            # of its (mirrored) drag direction to stay the mirror image.
+            after_state["kind"] = mirrored_arc_kind(str(kind))
         return after_state
     return {}
 

@@ -26,6 +26,7 @@ from chemvas.ui.benzene_tool import BenzeneTool
 from chemvas.ui.canvas_callback_state import CanvasCallbackState
 from chemvas.ui.canvas_hover_state import hover_state_for
 from chemvas.ui.canvas_rotation_state import CanvasRotationState
+from chemvas.ui.canvas_scene_items_state import CanvasSceneItemsState
 from chemvas.ui.canvas_smiles_input_state import (
     CanvasSmilesInputState,
     set_last_smiles_input_for,
@@ -688,7 +689,8 @@ class _ToolControllerPreviewCanvas:
         self.drag_mode = None
         self.scene_obj = _PreviewScene()
         self.runtime_state = canvas_runtime_state(
-            tool_settings_state=CanvasToolSettingsState(active_arrow_type="reaction")
+            tool_settings_state=CanvasToolSettingsState(active_arrow_type="reaction"),
+            scene_items_state=CanvasSceneItemsState(),
         )
         self.clear_handles_calls = 0
         self.preview_arrow_calls = []

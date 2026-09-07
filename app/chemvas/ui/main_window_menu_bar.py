@@ -60,6 +60,20 @@ def run_sheet_setup_dialog(window) -> None:
         set_sheet_setup_for_window(window, selection.size, selection.orientation)
 
 
+ALIGN_MENU_SPECS: tuple[tuple[str, str], ...] = (
+    ("Left", "left"),
+    ("Center", "center"),
+    ("Right", "right"),
+    ("Top", "top"),
+    ("Middle", "middle"),
+    ("Bottom", "bottom"),
+)
+DISTRIBUTE_MENU_SPECS: tuple[tuple[str, str], ...] = (
+    ("Horizontally", "horizontal"),
+    ("Vertically", "vertical"),
+)
+
+
 def _add_action(
     menu,
     window,
@@ -243,6 +257,28 @@ def _build_edit_menu(
         status_tip="Enter an angle to rotate the current selection",
         triggered=lambda: callbacks.show_rotate_options(window),
     )
+    align_menu = edit_menu.addMenu("Align")
+    for text, mode in ALIGN_MENU_SPECS:
+        _add_action(
+            align_menu,
+            window,
+            text,
+            status_tip=f"Align the selected structures and objects by their {text.lower()}",
+            triggered=lambda mode=mode: scene_transform_controller_for_window(
+                window
+            ).align_selected_items(mode),
+        )
+    distribute_menu = edit_menu.addMenu("Distribute")
+    for text, axis in DISTRIBUTE_MENU_SPECS:
+        _add_action(
+            distribute_menu,
+            window,
+            text,
+            status_tip=f"Spread the selected structures and objects {text.lower()} with equal gaps",
+            triggered=lambda axis=axis: scene_transform_controller_for_window(
+                window
+            ).distribute_selected_items(axis),
+        )
     return undo_action, redo_action
 
 

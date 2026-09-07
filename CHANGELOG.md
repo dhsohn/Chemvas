@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Edit ▸ Align and Edit ▸ Distribute line up or evenly space the selected
+  structures and objects in a single undoable step. A molecule moves whole
+  even when only part of it is selected, and a group moves as one object.
+- Arc arrow kinds (`arc_90_left`, `arc_180_left`, `arc_270_left` and their
+  `_right` mirrors) draw circular arcs through the drag endpoints for
+  catalytic cycles; holding Shift while dragging bulges the arc to the other
+  side, and a mirror flip keeps the mirror image.
+- Arrow and line endpoints snap to nearby arrow and line endpoints while
+  drawing, and a Line-tool click without a drag places a horizontal level two
+  bond lengths long.
 - Arrows and lines can carry a label above and below, such as the rate
   constants of a kinetic scheme. Double-clicking the arrow opens a two-field
   dialog; `_` and `^` mark subscripts and superscripts, and braces group
