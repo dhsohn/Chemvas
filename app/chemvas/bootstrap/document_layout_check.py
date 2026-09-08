@@ -83,7 +83,8 @@ def _layout_work_units(state: Mapping[str, object]) -> int:
     notes = state.get("notes", [])
     shapes = state.get("shapes", [])
     arrows = state.get("arrows", [])
-    if not all(isinstance(records, list) for records in (notes, shapes, arrows)):
+    marks = state.get("marks", [])
+    if not all(isinstance(records, list) for records in (notes, shapes, arrows, marks)):
         raise ValueError("Invalid Chemvas file.")
     model = state.get("model")
     if not isinstance(model, Mapping) or not isinstance(model.get("atoms"), Mapping):
@@ -102,11 +103,19 @@ def _layout_work_units(state: Mapping[str, object]) -> int:
     shape_count = len(cast("list[object]", shapes))
     arrow_count = len(cast("list[object]", arrows))
     bond_count = len(bonds)
+    charge_count = sum(
+        mark.get("kind") in {"plus", "minus"} and type(mark.get("atom_id")) is int
+        for mark in cast("list[Mapping[str, object]]", marks)
+    )
     text_count = note_count + label_count
     return (
         text_count * (text_count - 1) // 2
         + note_count * shape_count
         + arrow_count * (label_count + bond_count)
+        # Count incident and invisible pairs too: this pre-Qt bound must not
+        # depend on clipping, label placement or graphical visibility.
+        + (label_count + charge_count) * bond_count
+        + len(cast("list[object]", marks))
         + text_count
         + shape_count
         + arrow_count

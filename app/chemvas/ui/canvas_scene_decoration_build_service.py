@@ -117,6 +117,26 @@ class _ChargeCircleMarkItem(NoSelectPathItem):
         return stroker.createStroke(self.path())
 
 
+class _BracketGlyphItem(NoSelectPathItem):
+    """Keep the font used to construct a dagger's outlined glyph."""
+
+    def __init__(self, path: QPainterPath, font: QFont, text: str) -> None:
+        super().__init__(path)
+        self._glyph_run: tuple[str, QFont] | None = (text, QFont(font))
+
+    def export_glyph_run(self) -> tuple[str, QFont] | None:
+        if self._glyph_run is None:
+            return None
+        text, font = self._glyph_run
+        return text, QFont(font)
+
+    @override
+    def setPath(self, path: QPainterPath) -> None:
+        super().setPath(path)
+        # A replaced path no longer proves which font produced its glyph.
+        self._glyph_run = None
+
+
 class CanvasSceneDecorationBuildService:
     def __init__(self, canvas) -> None:
         self.canvas = canvas
@@ -290,9 +310,7 @@ class CanvasSceneDecorationBuildService:
         stroker.setJoinStyle(Qt.PenJoinStyle.MiterJoin)
         return stroker.createStroke(bracket_lines)
 
-    def _add_bracket_symbol(
-        self, path: QPainterPath, rect: QRectF, symbol: str, *, align_right: bool
-    ) -> QPainterPath:
+    def _bracket_symbol_font(self, rect: QRectF) -> QFont:
         font = QFont(font_family_for(self.canvas))
         font.setPixelSize(
             max(
@@ -302,6 +320,12 @@ class CanvasSceneDecorationBuildService:
                 ),
             )
         )
+        return font
+
+    def _add_bracket_symbol(
+        self, path: QPainterPath, rect: QRectF, symbol: str, *, align_right: bool
+    ) -> QPainterPath:
+        font = self._bracket_symbol_font(rect)
         x = (
             rect.right() + rect.width() * 0.035
             if align_right
@@ -337,7 +361,16 @@ class CanvasSceneDecorationBuildService:
     ) -> QGraphicsPathItem:
         normalized = QRectF(rect).normalized()
         bracket_kind = normalized_bracket_kind(bracket_kind)
-        item = NoSelectPathItem(self.ts_bracket_path(normalized, bracket_kind))
+        path = self.ts_bracket_path(normalized, bracket_kind)
+        item = (
+            _BracketGlyphItem(
+                path,
+                self._bracket_symbol_font(normalized),
+                "\u2020" if bracket_kind == "dagger" else "\u2021",
+            )
+            if bracket_kind in {"dagger", "double_dagger"}
+            else NoSelectPathItem(path)
+        )
         item.setPen(QPen(Qt.PenStyle.NoPen))
         item.setBrush(QBrush(QColor(bond_color_for(self.canvas))))
         item.setData(0, "ts_bracket")

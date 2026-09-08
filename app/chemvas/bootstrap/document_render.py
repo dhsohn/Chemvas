@@ -2,11 +2,12 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import math
 import sys
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Protocol, cast
+from typing import TYPE_CHECKING, Any, cast
 
 from chemvas.bootstrap.document_cli_shared import (
     MAX_DOCUMENT_BYTES,
@@ -16,20 +17,20 @@ from chemvas.bootstrap.document_cli_shared import (
     offscreen_canvas,
 )
 from chemvas.core.document_io import atomic_create_bytes, read_exact_document
+from chemvas.ui.export_guard_service import (
+    MAX_RASTER_DIMENSION_PIXELS,
+    MAX_RASTER_PIXELS,
+    MAX_VECTOR_DIMENSION_POINTS,
+    validate_export_budget,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
+    from chemvas.features.export import ExportPlan
+
 MAX_OUTPUT_BYTES = 64 * 1024 * 1024
-MAX_VECTOR_DIMENSION_POINTS = 14_400.0
-MAX_RASTER_DIMENSION_PIXELS = 10_000
-MAX_RASTER_PIXELS = 25_000_000
 PNG_DPI_CHOICES = (150, 300, 600, 1200)
-
-
-class _ExportPlan(Protocol):
-    out_w_pt: float
-    out_h_pt: float
 
 
 @dataclass(frozen=True)
@@ -39,6 +40,7 @@ class _RenderedDocument:
     height_points: float
     width_pixels: int | None
     height_pixels: int | None
+    font_readability: dict[str, object] | None = None
 
 
 def run(argv: list[str]) -> int:
@@ -52,6 +54,9 @@ def run(argv: list[str]) -> int:
             output=Path(args.output),
             background=str(args.background),
             dpi=int(args.dpi),
+            width_mm=args.width_mm,
+            max_height_mm=args.max_height_mm,
+            min_font_pt=args.min_font_pt,
         )
         sys.stdout.write(json_text(report))
         return 0
@@ -89,7 +94,32 @@ def _argument_parser() -> argparse.ArgumentParser:
         type=int,
         help="PNG resolution; SVG ignores this value (default: 300)",
     )
+    render_parser.add_argument(
+        "--width-mm",
+        type=_positive_finite_number,
+        help="physical output width in mm, preserving aspect ratio (default: bond sizing)",
+    )
+    render_parser.add_argument(
+        "--max-height-mm",
+        type=_positive_finite_number,
+        help="reject output taller than this height in mm; never shrink to fit",
+    )
+    render_parser.add_argument(
+        "--min-font-pt",
+        type=_positive_finite_number,
+        help="reject visible glyphs below this final point size, including scripts",
+    )
     return parser
+
+
+def _positive_finite_number(value: str) -> float:
+    try:
+        number = float(value)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError("must be a positive finite number") from exc
+    if not math.isfinite(number) or number <= 0.0:
+        raise argparse.ArgumentTypeError("must be a positive finite number")
+    return number
 
 
 def _render_document(
@@ -98,6 +128,9 @@ def _render_document(
     output: Path,
     background: str,
     dpi: int,
+    width_mm: float | None = None,
+    max_height_mm: float | None = None,
+    min_font_pt: float | None = None,
 ) -> dict[str, object]:
     output_format = _validate_paths(source, output)
     source_bytes, document = read_exact_document(source, max_bytes=MAX_DOCUMENT_BYTES)
@@ -114,10 +147,13 @@ def _render_document(
         output_format=output_format,
         background=background,
         dpi=dpi,
+        width_mm=width_mm,
+        max_height_mm=max_height_mm,
+        min_font_pt=min_font_pt,
     )
     atomic_create_bytes(output, rendered.content)
     output_sha256 = _sha256(rendered.content)
-    return {
+    report: dict[str, object] = {
         "format": "chemvas-document-render-report",
         "version": 1,
         "source": str(source),
@@ -136,6 +172,9 @@ def _render_document(
         "height_pixels": rendered.height_pixels,
         "graphics_records": graphics_records,
     }
+    if rendered.font_readability is not None:
+        report["font_readability"] = rendered.font_readability
+    return report
 
 
 def _validate_paths(source: Path, output: Path) -> str:
@@ -159,13 +198,22 @@ def _render_offscreen(
     output_format: str,
     background: str,
     dpi: int,
+    width_mm: float | None = None,
+    max_height_mm: float | None = None,
+    min_font_pt: float | None = None,
 ) -> _RenderedDocument:
-    with offscreen_canvas(state, command="render-document") as (_, service):
-        plan = cast("_ExportPlan", service.plan_figure_export())
-        width_pixels, height_pixels = _validate_render_budget(
+    with offscreen_canvas(state, command="render-document") as (canvas, service):
+        plan = cast(
+            "ExportPlan",
+            service.plan_figure_export(
+                scope="sheet", sizing="bond", target_width_mm=width_mm
+            ),
+        )
+        width_pixels, height_pixels = validate_export_budget(
             plan,
             output_format=output_format,
             dpi=dpi,
+            max_height_mm=max_height_mm,
         )
         with tempfile.TemporaryDirectory(prefix="chemvas-render-document-") as raw_tmp:
             rendered_path = Path(raw_tmp) / f"rendered.{output_format}"
@@ -176,6 +224,7 @@ def _render_offscreen(
                 dpi=dpi,
                 background=background,
                 sizing="bond",
+                target_width_mm=width_mm,
                 editable_svg=False,
             )
             rendered_size = rendered_path.stat().st_size
@@ -184,49 +233,27 @@ def _render_offscreen(
                     f"rendered output exceeds the {MAX_OUTPUT_BYTES}-byte limit"
                 )
             content = rendered_path.read_bytes()
+        font_readability = None
+        if min_font_pt is not None:
+            from chemvas.ui.export_readability_service import assess_export_readability
+
+            font_readability = assess_export_readability(
+                canvas,
+                plan,
+                minimum_font_pt=min_font_pt,
+                output_format=output_format,
+                dpi=dpi,
+                width_pixels=width_pixels,
+                height_pixels=height_pixels,
+            )
         return _RenderedDocument(
             content=content,
             width_points=float(plan.out_w_pt),
             height_points=float(plan.out_h_pt),
             width_pixels=width_pixels,
             height_pixels=height_pixels,
+            font_readability=font_readability,
         )
-
-
-def _validate_render_budget(
-    plan: _ExportPlan,
-    *,
-    output_format: str,
-    dpi: int,
-) -> tuple[int | None, int | None]:
-    width_points = float(plan.out_w_pt)
-    height_points = float(plan.out_h_pt)
-    if (
-        width_points <= 0.0
-        or height_points <= 0.0
-        or width_points > MAX_VECTOR_DIMENSION_POINTS
-        or height_points > MAX_VECTOR_DIMENSION_POINTS
-    ):
-        raise ValueError(
-            "rendered dimensions must be positive and no larger than "
-            f"{MAX_VECTOR_DIMENSION_POINTS:g} points per side"
-        )
-    if output_format != "png":
-        return None, None
-
-    width_pixels = max(1, round(width_points / 72.0 * dpi))
-    height_pixels = max(1, round(height_points / 72.0 * dpi))
-    if (
-        width_pixels > MAX_RASTER_DIMENSION_PIXELS
-        or height_pixels > MAX_RASTER_DIMENSION_PIXELS
-        or width_pixels * height_pixels > MAX_RASTER_PIXELS
-    ):
-        raise ValueError(
-            "PNG render exceeds the "
-            f"{MAX_RASTER_DIMENSION_PIXELS}-pixel side or "
-            f"{MAX_RASTER_PIXELS}-pixel area limit"
-        )
-    return width_pixels, height_pixels
 
 
 def _report_number(value: float) -> float:

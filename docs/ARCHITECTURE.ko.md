@@ -99,6 +99,43 @@ Agent 편집 흐름: `inspect-document` -> 정확한 source SHA-256과 안정적
 창 없는 렌더 흐름: `render-document` -> 원본 1회 읽기/hash 및 record-count gate -> 검증된 state를 invisible canvas에 적용 -> canonical whole-sheet export plan -> point/pixel 자원 gate -> private SVG/PNG 렌더 -> output byte gate -> 단 한 번의 원자적 비덮어쓰기 공개 -> hash·크기 JSON report. painting에는 지연 import한 Qt가 필요하지만 RDKit과 desktop session-recovery service는 시작하지 않는다.
 
 ## 복합 그룹화 (Composite Grouping)
+
+네이티브 템플릿 CLI(`bootstrap.document_template`)는 기존 insertion 공개
+planner·Qt geometry resolver·native template commit을 격리 캔버스에서 조립한다.
+package dependency 테스트에 명시한 legacy UI 조립 경계이며 새 고리 엔진이 아니다.
+원본 identity·기하 보존과 최종 문서 검증 후 원자적으로 공개한다. Qt-free Graph
+Patch의 `set_terminal_angle`은 기존 move-atom 경로로 의존 좌표를 처리하고
+최종 의미론 gate를 유지한다.
+
+Layout QA의 원자–비인접 결합·부착 전하–결합 교차는 기존 네이티브 글리프와
+실제 결합 페인트 경로를 재사용한다. bootstrap은 Qt 복원 전에 두 후보 쌍의
+곱을 작업량에 포함한다. 읽기 전용 진단이며 새 폰트 렌더러나 기하 수정을 넣지 않는다.
+
+명시적 도식 배치는 `chemvas.features.scheme_layout`의 Qt-free 입력 검증,
+headless bootstrap 명령, 기존 캔버스 이동 서비스 옆의
+`ui.scheme_layout_service`로 구성한다. UI 통합은 정본 문서 항목 색인,
+글자 페인트 기하와 이동 커널을 재사용한다. 출력에는 바뀐 좌표와 네이티브 그룹
+소속만 반영하며, 글자·스타일 표현을 다시 직렬화하거나 별도 영속 배치 스키마를
+추가하지 않는다.
+
+명시적 `align-y`는 같은 측정 계획·이동 파이프라인 안에서 분기한다. 분자 잉크만
+측정하고, 겹치지 않는 명시적 원자 parts와 행별 기준 blocks를 받으며, 세로 기하
+변경만 원본 복사본에 반영한다. 모든 X 좌표·설명문·기존 그룹은 그대로 보존한다.
+mode 생략 시 기존 arrange 경로와 보고서를 유지하며 새 영속 스키마나 GUI 모드는 없다.
+
+선택적 폭 제한 배치는 같은 측정값을 Qt-free 순서 보존 행 분할기에 전달한다.
+연결 화살표는 다음 줄 맨 앞의 네이티브 화살표로 유지하고, 보고서에는 원본 행·블록
+식별을 보존한다. 폭 제한을 생략하면 기존 공통 열 너비 경로를 유지한다.
+
+데스크톱 Arrange Scheme 대화상자는 사용자가 고른 기존 그룹을 동일한 검증 요청으로
+변환한다. 읽기 전용 배치 계획을 기존 document transaction 안의 네이티브 이동
+명령으로 실행하고, 한 번의 composite undo/redo로 기록한다. 씬이나 그룹 객체는
+교체하지 않는다. GUI 내보내기는 공통 크기 한도와 가독성 검사를 사용하며,
+기존 임시 파일 원자 writer가 검사 실패 시 목적지를 보존한다.
+노트와 화살표 라벨은 하나의 네이티브 rich-text 윤곽 출력을 공유한다. 자동 목록
+번호는 Qt 번호 생성과 해석된 픽셀 폰트를 사용하며, 별도 글자 배치나 SVG 폰트
+파서를 유지하지 않는다.
+
 하나의 연산이 여러 엔티티 유형을 동시에 다룰 때(예: 원자 생성과 결합 생성), CanvasView는 개별 델타 커맨드를 단일 `CompositeCommand`로 그룹화하여 전체 연산이 원자적으로(atomically) 실행 취소/다시 실행되도록 한다.
 
 ## 3D 변환 제약 (3D Conversion Constraints)

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import math
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
@@ -18,7 +17,6 @@ from chemvas.features.rendering import (
 from chemvas.ui.renderer_style_access import (
     renderer_bold_bond_width_for,
     renderer_bond_line_width_for,
-    renderer_hash_spacing_for,
 )
 
 if TYPE_CHECKING:
@@ -136,10 +134,8 @@ class BondGeometryPlanService:
         topology_count: int | None,
     ) -> tuple[BondPrimitive, ...]:
         if topology_count is None:
-            length = math.hypot(b.x - a.x, b.y - a.y) or 1.0
-            topology_count = max(
-                3,
-                int(length / max(renderer_hash_spacing_for(self.canvas), 1e-6)),
+            topology_count = self.renderer.hash_topology_count(
+                a.x, a.y, b.x, b.y, bond.a, bond.b
             )
         elif topology_count < 3:
             raise ValueError("hash bond graphics topology requires at least 3 items")

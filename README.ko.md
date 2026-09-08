@@ -74,10 +74,29 @@ chemvas render-document first-scheme.chemvas --output first-scheme-rendered.svg
 ```
 
 출력 명령은 새 파일을 만들며 원본 그림은 그대로 둡니다.
-이 명령은 기본 결합 길이를 기준으로 크기를 정합니다. 위의 다운로드용 SVG는
-데스크톱에서 174 mm 단 너비를 선택해 출력했습니다.
+기본값은 결합 길이 기준 출력입니다. `--width-mm 174`로 출력 폭을 지정하고,
+`--max-height-mm 120`으로 너무 긴 그림을 자동 축소하지 않고 거부할 수 있습니다.
+`--min-font-pt 6`을 추가하면 아래첨자를 포함해 최종 출력 글씨가 지정한 크기보다
+작을 때 출력을 거부합니다. 6 pt는 사용 예시이며 학술지 공통 기준은 아닙니다.
+스킴 정렬 요청의 `max_row_width`로 긴 경로를 줄 나눌 수 있습니다. 연결 화살표는
+다음 줄 맨 앞에 유지되며, 구조 자체는 축소하지 않습니다.
+구조·이름·에너지는 [반응 도식 배치](https://github.com/dhsohn/Chemvas/blob/main/docs/SCHEME_LAYOUT.md)의 `layout-document`로
+정렬하고 함께 움직이는 네이티브 그룹으로 저장할 수 있습니다.
 현재 레이아웃 검사는 노트·원자 라벨 글자, 도형 경계, 화살표와 구조의 교차를 다루며,
 화학 반응식에서 가능한 모든 겹침을 검사하지는 않습니다.
+
+화면에서는 구조와 설명문을 그룹으로 묶은 뒤 **Edit ▸ Arrange Scheme…**에서
+행·순서·설명문·줄 나눔을 지정할 수 있습니다. 정렬 전체를 한 번에 되돌릴 수 있습니다.
+**File ▸ Export Figure…**에는 사용자 지정 출력 폭과 최대 높이 옵션도 있습니다.
+최소 글자 크기 검사는 전체 캔버스 SVG·PNG 출력에서 사용할 수 있습니다.
+
+간격과 설명문이 이미 맞으면 `layout-document`의 `mode: "align-y"`로
+구조 그림만 세로 정렬할 수 있습니다. 모든 X 좌표와 설명문은 그대로 둡니다.
+에이전트는 `insert-template`으로 네이티브 벤젠·정다각형·의자형 고리를 넣고,
+Graph Patch의 `set_terminal_angle`로 지정한 말단 결합각을 조정할 수 있습니다.
+겹침 검사에는 원자 라벨–비인접 결합과 부착 전하–결합의 실제 잉크 교차도 포함됩니다.
+[논문 그림 작성 예제](https://github.com/dhsohn/Chemvas/blob/main/docs/PUBLICATION_SCHEMES.md)는 공통 출력 축척·실제 첨자·
+명시적 독립 구조 정렬·중복 상단 제목 생략을 한 흐름으로 보여줍니다.
 
 문서 구성·구조 패치·출력 보장과 제한은
 [문서 CLI 안내](https://github.com/dhsohn/Chemvas/blob/main/docs/AGENT_CLI.md)를 참고하세요.

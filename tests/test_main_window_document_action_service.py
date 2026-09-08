@@ -26,6 +26,7 @@ from chemvas.ui.canvas_document_metadata_state import document_file_path_for
 from chemvas.ui.canvas_mark_registry import mark_registry_for
 from chemvas.ui.canvas_model_access import model_for
 from chemvas.ui.canvas_window_access import snapshot_canvas_state_for
+from chemvas.ui.main_window_document_dialogs import FigureExportOptions
 from chemvas.ui.main_window_path_logic import (
     resolve_save_as_path,
     resolve_save_path,
@@ -727,6 +728,92 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
                         )
                     getattr(session_service, session_method).assert_not_called()
                     message_box.question.assert_called_once()
+
+    def test_export_figure_forwards_limits_and_reports_guard_failure(self) -> None:
+        file_dialog = mock.Mock()
+        file_dialog.getSaveFileName.return_value = ("figure.svg", "")
+        message_box = mock.Mock()
+        session = mock.Mock()
+        session.export_figure.side_effect = ValueError("minimum font size is too small")
+        options = FigureExportOptions(
+            fmt="svg",
+            sizing="custom",
+            scope="sheet",
+            dpi=300,
+            background="transparent",
+            target_width_mm=83.75,
+            max_height_mm=120.25,
+            min_font_pt=7.25,
+        )
+        with (
+            mock.patch(
+                "chemvas.ui.main_window_document_action_service.prompt_export_options",
+                return_value=options,
+            ),
+            mock.patch.object(
+                self.service,
+                "_document_session_service_for_window",
+                return_value=session,
+            ),
+        ):
+            self.service.export_figure(
+                self.window, file_dialog=file_dialog, message_box=message_box
+            )
+        session.export_figure.assert_called_once_with(
+            "figure.svg",
+            fmt="svg",
+            scope="sheet",
+            dpi=300,
+            background="transparent",
+            sizing="custom",
+            editable_svg=False,
+            target_width_mm=83.75,
+            max_height_mm=120.25,
+            min_font_pt=7.25,
+        )
+        message_box.warning.assert_called_once()
+        self.assertIn("minimum font size", message_box.warning.call_args.args[2])
+        self.assertNotIn("Exported:", self.window.statusBar().currentMessage())
+
+    def test_export_figure_cancel_does_not_request_path_or_session(self) -> None:
+        file_dialog = mock.Mock()
+        with (
+            mock.patch(
+                "chemvas.ui.main_window_document_action_service.prompt_export_options",
+                return_value=None,
+            ),
+            mock.patch.object(
+                self.service, "_document_session_service_for_window"
+            ) as session,
+        ):
+            self.service.export_figure(self.window, file_dialog=file_dialog)
+        file_dialog.getSaveFileName.assert_not_called()
+        session.assert_not_called()
+
+    def test_export_figure_cancelled_destination_does_not_call_session(self) -> None:
+        file_dialog = mock.Mock()
+        file_dialog.getSaveFileName.return_value = ("", "")
+        options = FigureExportOptions(
+            fmt="svg",
+            sizing="custom",
+            scope="sheet",
+            dpi=300,
+            background="transparent",
+            target_width_mm=84,
+            min_font_pt=7,
+        )
+        with (
+            mock.patch(
+                "chemvas.ui.main_window_document_action_service.prompt_export_options",
+                return_value=options,
+            ),
+            mock.patch.object(
+                self.service, "_document_session_service_for_window"
+            ) as session,
+        ):
+            self.service.export_figure(self.window, file_dialog=file_dialog)
+        file_dialog.getSaveFileName.assert_called_once()
+        session.assert_not_called()
 
     def test_load_canvas_dialog_advertises_only_public_document_suffixes(
         self,

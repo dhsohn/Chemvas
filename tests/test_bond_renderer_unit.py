@@ -1,5 +1,6 @@
 import os
 import unittest
+from itertools import pairwise
 from types import SimpleNamespace
 from unittest import mock
 
@@ -9,7 +10,7 @@ from tests.runtime_state import canvas_runtime_state
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PyQt6.QtCore import QPointF, Qt
-from PyQt6.QtGui import QColor, QPainterPath, QPen, QPolygonF
+from PyQt6.QtGui import QColor, QPainterPath, QPainterPathStroker, QPen, QPolygonF
 from PyQt6.QtWidgets import (
     QApplication,
     QGraphicsLineItem,
@@ -481,6 +482,52 @@ class BondRendererUnitTest(unittest.TestCase):
         renderer.update_bond_geometry(0, allow_topology_rebuild=True)
         self.assertIs(canvas.bond_items[0], items)
         self.assertEqual(tuple(id(item) for item in items), item_ids)
+
+    def test_label_trimmed_hash_count_uses_visible_stem_in_both_draw_paths(self):
+        self.canvas.renderer = Renderer(ACS1996Style(bond_length_px=47 * 20 / 12))
+        self.canvas.model.atoms[0] = Atom("P", 0.0, 0.0)
+        self.canvas.model.atoms[1] = Atom("Ar", 112.0, 0.0)
+        self.canvas._trim = (0.4, 0.6)
+        self._set_bond(Bond(0, 1, 1, style="hash"))
+        self.renderer = BondRenderer(self.canvas)
+        self.renderer.add_bond_graphics(0)
+        drawn = self.renderer.draw_hash_bond(0.0, 0.0, 112.0, 0.0, 0, 1)
+
+        for items in (self.canvas.bond_items[0], drawn):
+            self.assertEqual(len(items), 3)
+            ink = []
+            for item in items:
+                line = item.line()
+                path = QPainterPath(line.p1())
+                path.lineTo(line.p2())
+                stroker = QPainterPathStroker()
+                stroker.setWidth(item.pen().widthF())
+                stroker.setCapStyle(item.pen().capStyle())
+                ink.append(stroker.createStroke(path))
+            self.assertTrue(
+                all(not left.intersects(right) for left, right in pairwise(ink))
+            )
+
+    def test_hash_label_change_retains_gesture_items_then_rebuilds(self):
+        canvas, renderer = _renderer_for_bond("hash", 1, ring=False, end=(40.0, 0.0))
+        items = canvas.bond_items[0]
+        self.assertEqual(len(items), 10)
+        canvas._trim = (0.25, 0.75)
+
+        renderer.update_bond_geometry(0)
+        self.assertIs(canvas.bond_items[0], items)
+        self.assertEqual(len(items), 10)
+        renderer.update_bond_geometry(0, allow_topology_rebuild=True)
+        self.assertEqual(len(canvas.bond_items[0]), 5)
+        stable = canvas.bond_items[0]
+        renderer.update_bond_geometry(0, allow_topology_rebuild=True)
+        self.assertIs(canvas.bond_items[0], stable)
+
+    def test_fully_clipped_hash_keeps_minimum_graphics_topology(self):
+        canvas, renderer = _renderer_for_bond("hash", 1, ring=False, end=(40.0, 0.0))
+        canvas._trim = (0.5, 0.5)
+        renderer.update_bond_geometry(0, allow_topology_rebuild=True)
+        self.assertEqual(len(canvas.bond_items[0]), 3)
 
     def test_update_rejects_malformed_topology_before_mutating_any_item(self) -> None:
         canvas, renderer = _renderer_for_bond("double", 2, ring=False)

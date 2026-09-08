@@ -24,6 +24,8 @@ IGNORED_STDERR_SUBSTRINGS = (
 DOCUMENT_PATCH_COMMANDS = frozenset(("apply-patch", "inspect-document"))
 DOCUMENT_COMPOSITION_COMMANDS = frozenset(("compose-document",))
 DOCUMENT_LAYOUT_COMMANDS = frozenset(("check-layout",))
+SCHEME_LAYOUT_COMMANDS = frozenset(("layout-document",))
+DOCUMENT_TEMPLATE_COMMANDS = frozenset(("insert-template",))
 DOCUMENT_RENDER_COMMANDS = frozenset(("render-document",))
 CALCULATION_BUNDLE_COMMANDS = frozenset(
     (
@@ -46,6 +48,8 @@ HEADLESS_SUBCOMMAND_HELP = (
     ("inspect-document", "inspect the complete chemical graph as JSON"),
     ("inspect-plan", "inspect embedded calculation states and steps"),
     ("inspect-precomplex", "inspect persisted candidate XYZ and provenance"),
+    ("insert-template", "insert a native ring template in a new document"),
+    ("layout-document", "align structure blocks and captions in a new document"),
     ("pack-step", "create one elementary-step JSON artifact"),
     ("render-document", "render a document to SVG or PNG"),
     ("select-precomplex", "review and select a precomplex endpoint pair"),
@@ -138,6 +142,20 @@ def main() -> None:
 
     if len(sys.argv) > 1 and sys.argv[1] in DOCUMENT_LAYOUT_COMMANDS:
         from chemvas.bootstrap.document_layout_check import run
+
+        with _filtered_stderr():
+            result = run(sys.argv[1:])
+        raise SystemExit(result)
+
+    if len(sys.argv) > 1 and sys.argv[1] in SCHEME_LAYOUT_COMMANDS:
+        from chemvas.bootstrap.document_layout import run
+
+        with _filtered_stderr():
+            result = run(sys.argv[1:])
+        raise SystemExit(result)
+
+    if len(sys.argv) > 1 and sys.argv[1] in DOCUMENT_TEMPLATE_COMMANDS:
+        from chemvas.bootstrap.document_template import run
 
         with _filtered_stderr():
             result = run(sys.argv[1:])

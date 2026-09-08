@@ -7,6 +7,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-09-09
+
+This release adds explicit scheme layout and print-size controls for publication
+figures. The `.chemvas` document format remains version 7.
+
+### Added
+
+- Arrange explicit structure/caption blocks with `layout-document`, using native
+  painted text bounds, aligned caption baselines and persistent GUI groups.
+  Optional row-width budgets wrap complete blocks and continuation arrows.
+- Arrange existing structure/caption groups from **Edit ▸ Arrange Scheme…**, with
+  explicit row/order/arrow choices, optional wrapping and single-step undo/redo.
+- Align molecular drawings only with `layout-document` mode `align-y`, preserving
+  X coordinates, notes and groups. Explicit parts and reference blocks control
+  independent fragments and the molecular reference.
+- Insert native regular-ring, benzene, chair and boat templates through
+  source-pinned `insert-template`, with dry-run and non-overwriting output.
+- Set a specified ordinary terminal bond angle with Graph Patch
+  `set_terminal_angle`, preserving bond length and rejecting unsupported stereo.
+- Request physical export widths and optional height limits in the CLI and
+  **Export Figure**. Check final printed glyph sizes, including scripts, for
+  whole-canvas SVG/PNG without changing the source fonts.
+- Detect visible atom-label–nonincident-bond and attached-charge–bond ink
+  overlaps, including charge contact with its own incident bond.
+- Provide a reproducible publication recipe with native ring metadata, real
+  scripts, common nominal print scale and measured SVG/PNG font reports.
+
+### Fixed
+
+- Scale bond-to-label clearance with the actual painted pen width and leave a
+  proportional visible gap, including ordinary, parallel, wedge and hashed bonds.
+- Use native rich-text glyph geometry for note SVG and PNG exports, including
+  mixed point/pixel fonts and scripts, with pixel-resolved list markers.
+  Preserve the editable note HTML and fonts in the document.
+- Choose fresh stereobond hatch counts from the label-trimmed visible stem to
+  reduce crowding at compact figure scales. Canvas and export use the same count.
+
 ## [0.8.4] - 2026-09-08
 
 ### Added
@@ -1384,7 +1421,8 @@ housekeeping.
   `.chemvas` document type (double-clicking a file opens it in Chemvas), and a
   Linux `.desktop` entry with an `application/x-chemvas` MIME type.
 
-[Unreleased]: https://github.com/dhsohn/Chemvas/compare/v0.8.4...HEAD
+[Unreleased]: https://github.com/dhsohn/Chemvas/compare/v0.9.0...HEAD
+[0.9.0]: https://github.com/dhsohn/Chemvas/compare/v0.8.4...v0.9.0
 [0.8.4]: https://github.com/dhsohn/Chemvas/compare/v0.8.3...v0.8.4
 [0.8.3]: https://github.com/dhsohn/Chemvas/compare/v0.8.2...v0.8.3
 [0.8.2]: https://github.com/dhsohn/Chemvas/compare/v0.8.1...v0.8.2

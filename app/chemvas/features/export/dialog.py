@@ -36,6 +36,7 @@ EXPORT_SIZES: tuple[tuple[str, str], ...] = (
     ("Fit 1-column (84 mm)", "col1"),
     ("Fit 2-column (174 mm)", "col2"),
     ("Screen (1:1)", "screen"),
+    ("Custom width (mm)", "custom"),
 )
 
 _RASTER_FORMATS = frozenset({"png", "tiff"})
@@ -56,6 +57,11 @@ def is_dpi_relevant(fmt: str) -> bool:
     """DPI affects raster size and PDF rasterization resolution; SVG ignores it."""
     fmt = fmt.lower()
     return fmt in _RASTER_FORMATS or fmt == "pdf"
+
+
+def supports_minimum_font_check(fmt: str, scope: str) -> bool:
+    """The native font proof currently covers whole-canvas SVG and PNG only."""
+    return fmt.lower() in {"svg", "png"} and scope == "sheet"
 
 
 def suffix_for_format(fmt: str) -> str:
@@ -96,4 +102,5 @@ __all__ = [
     "is_raster_format",
     "normalize_export_path",
     "suffix_for_format",
+    "supports_minimum_font_check",
 ]

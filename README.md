@@ -76,13 +76,35 @@ chemvas render-document first-scheme.chemvas --output first-scheme-rendered.svg
 ```
 
 Rendering creates a new file and leaves the source drawing untouched. This
-command uses preset bond-length sizing; the downloadable SVG above was exported
-with the desktop's 174 mm column setting. Layout checks cover visible note and
+command defaults to preset bond-length sizing; add `--width-mm 174` to request
+a column width, or `--max-height-mm 120` to reject an overly tall figure without
+shrinking it. Layout checks cover visible note and
 atom-label text, shape borders, and arrow–structure crossings, not every possible
 overlap in a chemical scheme.
 
 See the [document CLI guide](https://github.com/dhsohn/Chemvas/blob/main/docs/AGENT_CLI.md)
 for composition, Graph Patch, render guarantees, and limits.
+
+For structure names and energies that stay aligned, use
+[explicit scheme layout](https://github.com/dhsohn/Chemvas/blob/main/docs/SCHEME_LAYOUT.md) to arrange structure/caption
+blocks and keep them together as native groups.
+
+That layout also accepts a `max_row_width` budget for long pathways. Use
+`render-document --min-font-pt 6` to reject output with glyphs smaller than your
+chosen threshold, including subscripts; the value is not a journal preset.
+
+In the desktop, group each structure with its notes and use **Edit ▸ Arrange
+Scheme…** to set rows, reading order, captions and optional wrapping as one
+undoable edit. **File ▸ Export Figure…** also accepts a custom width and optional
+height limit. Minimum-font checking is available for whole-canvas SVG and PNG.
+
+For already-spaced drawings, `layout-document` with `mode: "align-y"` moves only
+molecular Y positions, keeping captions and all X positions fixed. Agents can
+also `insert-template` with native benzene/chair/regular-ring geometry and use
+Graph Patch `set_terminal_angle` for a specified terminal bond angle. Layout
+diagnostics now include nonincident atom-label–bond and attached-charge–bond ink.
+The [publication recipe](https://github.com/dhsohn/Chemvas/blob/main/docs/PUBLICATION_SCHEMES.md) shows common print scale,
+real scripts, explicit independent parts and no duplicate figure heading.
 
 ## More workflows and documentation
 

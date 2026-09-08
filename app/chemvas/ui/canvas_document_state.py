@@ -85,7 +85,7 @@ def snapshot_canvas_document_state(canvas) -> dict:
 def snapshot_canvas_document_state_with_warnings(canvas) -> tuple[dict, list[str]]:
     tool_settings = tool_settings_state_for(canvas)
     text_style = text_style_state_for(canvas)
-    item_lists = _document_item_lists_for(canvas)
+    item_lists = document_item_lists_for(canvas)
     model_state, warnings = serialize_model_state_with_warnings(
         model_for(canvas),
         explicit_label_atom_ids=atom_items_for(canvas).keys(),
@@ -348,7 +348,7 @@ def restore_document_post_model_items(canvas, state: dict) -> None:
         )
 
 
-def _document_item_lists_for(canvas) -> dict[str, list]:
+def document_item_lists_for(canvas) -> dict[str, list]:
     # Single source of the per-kind item lists: the snapshot serializers below
     # and the group [kind, index] references both consume THIS function, so a
     # group reference can never resolve to a different object than the one the
@@ -375,7 +375,7 @@ def _snapshot_groups(canvas, item_lists: dict[str, list] | None = None) -> list[
     if not state_groups:
         return []
     if item_lists is None:
-        item_lists = _document_item_lists_for(canvas)
+        item_lists = document_item_lists_for(canvas)
     item_index: dict[int, tuple[str, int]] = {}
     for kind_key, items in item_lists.items():
         for index, item in enumerate(items):
@@ -411,7 +411,7 @@ def restore_document_groups(canvas, state: dict) -> None:
     groups_state = state.get("groups") or []
     if not groups_state:
         return
-    item_lists = _document_item_lists_for(canvas)
+    item_lists = document_item_lists_for(canvas)
     model_atoms = model_for(canvas).atoms
     for group_state in groups_state:
         atom_ids = {

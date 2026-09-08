@@ -103,9 +103,30 @@ def test_root_help_inventory_matches_dispatched_headless_commands(
         application.DOCUMENT_PATCH_COMMANDS
         | application.DOCUMENT_COMPOSITION_COMMANDS
         | application.DOCUMENT_LAYOUT_COMMANDS
+        | application.SCHEME_LAYOUT_COMMANDS
+        | application.DOCUMENT_TEMPLATE_COMMANDS
         | application.DOCUMENT_RENDER_COMMANDS
         | application.CALCULATION_BUNDLE_COMMANDS
     )
+
+
+def test_template_command_dispatches_to_headless_runner(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from chemvas.bootstrap import document_template
+
+    seen: list[list[str]] = []
+
+    def run(argv: list[str]) -> int:
+        seen.append(argv)
+        return 7
+
+    monkeypatch.setattr(document_template, "run", run)
+    monkeypatch.setattr(sys, "argv", ["chemvas", "insert-template", "--help"])
+    with pytest.raises(SystemExit) as error:
+        application.main()
+    assert error.value.code == 7
+    assert seen == [["insert-template", "--help"]]
 
 
 @pytest.mark.parametrize(

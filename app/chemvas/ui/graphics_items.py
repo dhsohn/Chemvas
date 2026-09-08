@@ -11,8 +11,11 @@ from PyQt6.QtGui import (
     QPainterPathStroker,
     QPalette,
     QPen,
+    QRawFont,
+    QTextBlock,
     QTextCharFormat,
     QTextCursor,
+    QTextListFormat,
 )
 from PyQt6.QtWidgets import (
     QGraphicsEllipseItem,
@@ -35,7 +38,9 @@ from chemvas.features.annotations import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Callable, Iterator
+
+    from PyQt6.QtGui import QColor
 
 
 def _scaled_font(base: QFont, scale: float) -> QFont:
@@ -147,8 +152,8 @@ class NoSelectTextItem(_NoSelectPaintMixin, QGraphicsTextItem):
     pass
 
 
-class ArrowLabelItem(NoSelectTextItem):
-    """Keep Qt's rich-text layout, including shaped sub/superscript glyphs."""
+class ExportTextItem(QGraphicsTextItem):
+    """Use Qt's shaped rich-text outlines for export; preserve normal editing."""
 
     def __init__(self, *args) -> None:
         super().__init__(*args)
@@ -157,6 +162,41 @@ class ArrowLabelItem(NoSelectTextItem):
     def set_outline_mode(self, enabled: bool) -> None:
         self._outline_mode = bool(enabled)
         self.update()
+
+    def export_list_marker_runs(self) -> Iterator[tuple[str, QFont, QColor]]:
+        """Expose native automatic numbering with the exact font used on export."""
+        document = self.document()
+        assert document is not None
+        block = document.begin()
+        while block.isValid():
+            text_list = block.textList()
+            if text_list is not None and text_list.format().style() not in {
+                QTextListFormat.Style.ListDisc,
+                QTextListFormat.Style.ListCircle,
+                QTextListFormat.Style.ListSquare,
+            }:
+                brush = block.charFormat().foreground()
+                color = (
+                    self.defaultTextColor()
+                    if brush.style() == Qt.BrushStyle.NoBrush
+                    else brush.color()
+                )
+                yield (
+                    text_list.itemText(block),
+                    self._list_marker_font(block),
+                    color,
+                )
+            block = block.next()
+
+    def _list_marker_font(self, block: QTextBlock) -> QFont:
+        document = self.document()
+        assert document is not None
+        font = block.charFormat().font().resolve(document.defaultFont())
+        # Qt draws list numbers directly, without the text-outline format. A
+        # resolved pixel font keeps its native em size on the 72-dpi SVG device
+        # too; point fonts would otherwise be reinterpreted at the device DPI.
+        font.setPixelSize(round(QRawFont.fromFont(font).pixelSize()))
+        return font
 
     @override
     def paint(self, painter, option, widget=None) -> None:
@@ -170,6 +210,13 @@ class ArrowLabelItem(NoSelectTextItem):
         assert document is not None
         outlined = document.clone()
         assert outlined is not None
+        block = outlined.begin()
+        while block.isValid():
+            if block.textList() is not None:
+                marker_format = QTextCharFormat()
+                marker_format.setFont(self._list_marker_font(block))
+                QTextCursor(block).mergeBlockCharFormat(marker_format)
+            block = block.next()
         cursor = QTextCursor(outlined)
         cursor.select(QTextCursor.SelectionType.Document)
         outline_format = QTextCharFormat()
@@ -188,6 +235,10 @@ class ArrowLabelItem(NoSelectTextItem):
             layout.draw(painter, context)
         finally:
             painter.restore()
+
+
+class ArrowLabelItem(_NoSelectPaintMixin, ExportTextItem):
+    """Export rich arrow labels without a dashed selection rectangle."""
 
 
 class AtomLabelItem(NoSelectTextItem):

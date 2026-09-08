@@ -1,6 +1,10 @@
 import unittest
 
-from chemvas.features.export import build_export_plan, points_for_mm
+from chemvas.features.export import (
+    build_export_plan,
+    points_for_mm,
+    svg_viewport_size_points,
+)
 
 
 class BuildExportPlanTest(unittest.TestCase):
@@ -38,3 +42,9 @@ class BuildExportPlanTest(unittest.TestCase):
     def test_zero_content_returns_none(self):
         self.assertIsNone(build_export_plan(0.0, 0.0, 0.0, 40.0, margin=4.0))
         self.assertIsNone(build_export_plan(0.0, 0.0, 100.0, 0.0, margin=4.0))
+
+    def test_svg_viewport_retains_qt_whole_point_rounding(self):
+        for size, expected in ((0.1, 1), (1.49, 1), (1.5, 2), (2.5, 2), (2.51, 3)):
+            with self.subTest(size=size):
+                plan = build_export_plan(0, 0, size, size, margin=0)
+                self.assertEqual(svg_viewport_size_points(plan), (expected, expected))

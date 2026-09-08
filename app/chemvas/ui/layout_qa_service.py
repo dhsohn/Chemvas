@@ -16,6 +16,7 @@ from PyQt6.QtGui import (
 from PyQt6.QtWidgets import (
     QGraphicsLineItem,
     QGraphicsPolygonItem,
+    QGraphicsTextItem,
     QStyleOptionGraphicsItem,
 )
 
@@ -25,6 +26,7 @@ from chemvas.ui.canvas_bond_graphics_state import bond_items_for
 from chemvas.ui.canvas_model_access import bond_for_id
 from chemvas.ui.canvas_scene_items_state import (
     arrow_items_for,
+    mark_items_for,
     note_items_for,
     shape_items_for,
 )
@@ -32,10 +34,11 @@ from chemvas.ui.sheet_setup_access import sheet_rect_for
 
 if TYPE_CHECKING:
     from PyQt6.QtGui import QRawFont, QTextBlock, QTextFragment
-    from PyQt6.QtWidgets import QGraphicsTextItem
 
 WARNING_CODES = (
     "arrow-structure-overlap",
+    "atom-bond-overlap",
+    "charge-bond-overlap",
     "outside-sheet",
     "text-shape-border-overlap",
     "text-text-overlap",
@@ -50,7 +53,7 @@ def check_canvas_layout(canvas: Any) -> dict[str, object]:
     for index, item in enumerate(note_items_for(canvas)):
         if not item.isVisible() or item.effectiveOpacity() <= 0.0:
             continue
-        path = _note_paint_scene_path(item)
+        path = note_paint_scene_path(item)
         if path.isEmpty():
             continue
         notes.append((index, item))
@@ -137,7 +140,13 @@ def check_canvas_layout(canvas: Any) -> dict[str, object]:
                 )
             )
 
-    warnings.extend(_arrow_structure_warnings(canvas, atom_paths))
+    bond_paths = (
+        _molecular_bond_paths(canvas)
+        if atom_paths or arrow_items_for(canvas) or mark_items_for(canvas)
+        else []
+    )
+    warnings.extend(_molecular_text_bond_warnings(canvas, atom_paths, bond_paths))
+    warnings.extend(_arrow_structure_warnings(canvas, atom_paths, bond_paths))
 
     sheet = sheet_rect_for(canvas).adjusted(
         -_SHEET_EPSILON,
@@ -171,21 +180,82 @@ def check_canvas_layout(canvas: Any) -> dict[str, object]:
     }
 
 
-def _arrow_structure_warnings(
-    canvas: Any, atom_paths: list[tuple[int, QPainterPath]]
-) -> list[dict[str, object]]:
-    warnings: list[dict[str, object]] = []
+def _molecular_bond_paths(canvas: Any) -> list[tuple[list[int], QPainterPath]]:
     # A bond may have several painted pieces (parallel strokes, hashes, dots).
     # Report it once using stable document atom IDs, not its runtime slot.
     bond_paths = []
-    if arrow_items_for(canvas):
-        for bond_id, items in sorted(bond_items_for(canvas).items()):
-            path = QPainterPath()
-            for item in items:
-                path = path.united(_graphics_paint_scene_path(item))
-            bond = bond_for_id(canvas, bond_id)
-            if bond is not None and not path.isEmpty():
-                bond_paths.append((sorted((bond.a, bond.b)), path))
+    for bond_id, items in sorted(bond_items_for(canvas).items()):
+        path = QPainterPath()
+        for item in items:
+            path = path.united(_graphics_paint_scene_path(item))
+        bond = bond_for_id(canvas, bond_id)
+        if bond is not None and not path.isEmpty():
+            bond_paths.append((sorted((bond.a, bond.b)), path))
+    return bond_paths
+
+
+def _molecular_text_bond_warnings(
+    canvas: Any,
+    atom_paths: list[tuple[int, QPainterPath]],
+    bond_paths: list[tuple[list[int], QPainterPath]],
+) -> list[dict[str, object]]:
+    warnings: list[dict[str, object]] = []
+    for atom_id, atom_path in atom_paths:
+        for atom_ids, bond_path in bond_paths:
+            if atom_id in atom_ids:
+                continue
+            overlap = atom_path.intersected(bond_path)
+            if _positive_path(overlap):
+                warnings.append(
+                    _warning(
+                        "atom-bond-overlap",
+                        [
+                            {"kind": "atom", "id": atom_id},
+                            {"kind": "bond", "atom_ids": atom_ids},
+                        ],
+                        overlap.boundingRect(),
+                        "Atom label crosses a nonincident molecular bond.",
+                    )
+                )
+    for index, item in enumerate(mark_items_for(canvas)):
+        metadata = item.data(1)
+        if (
+            not isinstance(item, QGraphicsTextItem)
+            or not isinstance(metadata, dict)
+            or metadata.get("kind") not in {"plus", "minus"}
+            or type(metadata.get("atom_id")) is not int
+            or not item.isVisible()
+            or item.effectiveOpacity() <= 0.0
+        ):
+            continue
+        charge_path = note_paint_scene_path(item)
+        for atom_ids, bond_path in bond_paths:
+            overlap = charge_path.intersected(bond_path)
+            if _positive_path(overlap):
+                warnings.append(
+                    _warning(
+                        "charge-bond-overlap",
+                        [
+                            {
+                                "kind": "mark",
+                                "index": index,
+                                "atom_id": metadata["atom_id"],
+                            },
+                            {"kind": "bond", "atom_ids": atom_ids},
+                        ],
+                        overlap.boundingRect(),
+                        "Attached charge glyph crosses a molecular bond.",
+                    )
+                )
+    return warnings
+
+
+def _arrow_structure_warnings(
+    canvas: Any,
+    atom_paths: list[tuple[int, QPainterPath]],
+    bond_paths: list[tuple[list[int], QPainterPath]],
+) -> list[dict[str, object]]:
+    warnings: list[dict[str, object]] = []
     for arrow_index, arrow in enumerate(arrow_items_for(canvas)):
         arrow_path = _graphics_paint_scene_path(arrow)
         for atom_id, atom_path in atom_paths:
@@ -255,7 +325,7 @@ def _atom_label_scene_path(item: QGraphicsTextItem) -> QPainterPath:
         painter.end()
     if painter.text_path is not None:
         return item.mapToScene(painter.text_path)
-    return _note_paint_scene_path(item)
+    return note_paint_scene_path(item)
 
 
 def _has_visible_shape_paint(item: Any) -> bool:
@@ -268,7 +338,7 @@ def _has_visible_shape_paint(item: Any) -> bool:
     return brush.style() != Qt.BrushStyle.NoBrush and brush.color().alpha() > 0
 
 
-def _note_paint_scene_path(item: QGraphicsTextItem) -> QPainterPath:
+def note_paint_scene_path(item: QGraphicsTextItem) -> QPainterPath:
     """Use the shaped text that Qt paints, not its rectangular hit target."""
     path = QPainterPath()
     path.setFillRule(Qt.FillRule.WindingFill)
@@ -482,4 +552,4 @@ def _warning_sort_key(warning: dict[str, object]) -> tuple[str, str]:
     return str(warning["code"]), repr(warning["items"])
 
 
-__all__ = ["WARNING_CODES", "check_canvas_layout"]
+__all__ = ["WARNING_CODES", "check_canvas_layout", "note_paint_scene_path"]

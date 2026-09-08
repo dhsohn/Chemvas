@@ -34,6 +34,7 @@ from chemvas.ui.main_window_ports import (
     zoom_out_for_window,
 )
 from chemvas.ui.recent_menu import build_recent_menu
+from chemvas.ui.scheme_layout_dialog import arrange_scheme_for_window
 
 if TYPE_CHECKING:
     from chemvas.ui.main_window_panel_toolbar import MainWindowPanelToolbarCallbacks
@@ -256,6 +257,13 @@ def _build_edit_menu(
         "Ungroup",
         status_tip="Ungroup the selected group (Ctrl+Shift+G)",
         triggered=lambda: ungroup_selection_for_window(window),
+    )
+    _add_action(
+        edit_menu,
+        window,
+        "Arrange Scheme...",
+        status_tip="Arrange existing structure/caption groups and explicit pathway arrows",
+        triggered=lambda: arrange_scheme_for_window(window),
     )
     edit_menu.addSeparator()
     _add_action(

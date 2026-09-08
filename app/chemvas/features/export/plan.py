@@ -35,6 +35,11 @@ def points_for_mm(mm: float) -> float:
     return mm / MM_PER_INCH * POINTS_PER_INCH
 
 
+def svg_viewport_size_points(plan: ExportPlan) -> tuple[int, int]:
+    """Qt's physical SVG viewport, rounded to whole points at 72 dpi."""
+    return max(1, round(plan.out_w_pt)), max(1, round(plan.out_h_pt))
+
+
 def build_export_plan(
     content_x: float,
     content_y: float,
@@ -77,4 +82,5 @@ __all__ = [
     "ExportPlan",
     "build_export_plan",
     "points_for_mm",
+    "svg_viewport_size_points",
 ]

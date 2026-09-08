@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from copy import deepcopy
 
 import pytest
@@ -88,10 +89,172 @@ def test_inspection_is_sorted_and_exposes_agent_patch_contract() -> None:
         "add_atom",
         "update_atom",
         "move_atom",
+        "set_terminal_angle",
         "add_bond",
         "update_bond",
         "remove_bond",
     ]
+
+
+def _angle_state() -> dict[str, object]:
+    return _state(
+        MoleculeModel(
+            atoms={
+                0: Atom("C", -18.0, 0.0),
+                1: Atom("O", 0.0, 0.0),
+                2: Atom("C", 18.0, 0.0),
+            },
+            bonds=[Bond(0, 1), Bond(1, 2)],
+        )
+    )
+
+
+def _angle_op(angle: object = 120) -> dict[str, object]:
+    return {
+        "op": "set_terminal_angle",
+        "pivot_id": 1,
+        "reference_id": 0,
+        "terminal_id": 2,
+        "angle_degrees": angle,
+    }
+
+
+@pytest.mark.parametrize("angle", [120, -120, 60, -60])
+def test_terminal_angle_preserves_graph_lengths_other_atoms_and_attached_marks(
+    angle: float,
+) -> None:
+    state = _angle_state()
+    state["marks"] = [
+        {
+            "kind": "plus",
+            "text": "+",
+            "atom_id": 2,
+            "dx": 2.0,
+            "dy": 3.0,
+            "x": 20.0,
+            "y": 3.0,
+        }
+    ]
+    state["model"]["atom_annotations"] = {2: {"formal_charge": 1}}
+    before = deepcopy(state)
+    result = apply_document_patch(
+        state,
+        _patch(_angle_op(angle)),
+        source_sha256=SOURCE_HASH,
+        document_version=CANVAS_FILE_VERSION,
+    )
+    assert state == before
+    model = result.state["model"]
+    atom = model["atoms"][2]
+    assert (atom["x"], atom["y"]) == pytest.approx(
+        (
+            18 * math.cos(math.pi + math.radians(angle)),
+            18 * math.sin(math.pi + math.radians(angle)),
+        )
+    )
+    assert math.hypot(atom["x"], atom["y"]) == pytest.approx(18)
+    assert model["atoms"][0] == before["model"]["atoms"][0]
+    assert model["atoms"][1] == before["model"]["atoms"][1]
+    assert model["bonds"] == before["model"]["bonds"]
+    assert result.state["marks"][0]["x"] == pytest.approx(atom["x"] + 2)
+    assert result.state["marks"][0]["y"] == pytest.approx(atom["y"] + 3)
+    assert result.operations[0]["op"] == "set_terminal_angle"
+
+
+@pytest.mark.parametrize(
+    "angle", [0, 180, -180, 181, True, "120", float("nan"), float("inf")]
+)
+def test_terminal_angle_rejects_invalid_angles_without_mutation(angle: object) -> None:
+    state = _angle_state()
+    before = deepcopy(state)
+    with pytest.raises(ValueError, match="angle_degrees"):
+        apply_document_patch(
+            state,
+            _patch(_angle_op(angle)),
+            source_sha256=SOURCE_HASH,
+            document_version=CANVAS_FILE_VERSION,
+        )
+    assert state == before
+
+
+@pytest.mark.parametrize(
+    "case",
+    [
+        "stereo",
+        "reaction",
+        "double",
+        "branch",
+        "not_terminal",
+        "same_id",
+        "missing_id",
+        "perspective",
+        "zero_length",
+        "unknown_key",
+    ],
+)
+def test_terminal_angle_rejects_unsupported_geometry(case: str) -> None:
+    state = _angle_state()
+    op = _angle_op()
+    model = state["model"]
+    if case in {"stereo", "reaction", "double"}:
+        model["bonds"][1]["style"] = {
+            "stereo": "wedge",
+            "reaction": "dotted",
+            "double": "double",
+        }[case]
+        if case == "double":
+            model["bonds"][1]["order"] = 2
+    elif case in {"branch", "not_terminal"}:
+        model["atoms"][3] = {**model["atoms"][0], "y": 18.0}
+        model["next_atom_id"] = 4
+        model["bonds"].append(
+            {
+                "a": 1 if case == "branch" else 2,
+                "b": 3,
+                "order": 1,
+                "style": "single",
+                "color": "#000000",
+            }
+        )
+    elif case == "same_id":
+        op["reference_id"] = 2
+    elif case == "missing_id":
+        op["terminal_id"] = 100
+    elif case == "perspective":
+        state["perspective"] = {
+            "atom_coords_3d": {2: [18, 0, 0]},
+            "projection_center_3d": None,
+            "projection_anchor_2d": None,
+        }
+    elif case == "zero_length":
+        model["atoms"][2]["x"] = 0
+    else:
+        op["guess_stereo"] = True
+    before = deepcopy(state)
+    with pytest.raises(ValueError):
+        apply_document_patch(
+            state,
+            _patch(op),
+            source_sha256=SOURCE_HASH,
+            document_version=CANVAS_FILE_VERSION,
+        )
+    assert state == before
+
+
+def test_terminal_angle_rejects_unrepresentable_large_coordinate_rotation() -> None:
+    state = _angle_state()
+    for atom in state["model"]["atoms"].values():
+        atom["x"] += 1e16
+        atom["y"] += 1e16
+    before = deepcopy(state)
+    with pytest.raises(ValueError, match="cannot preserve the bond length"):
+        apply_document_patch(
+            state,
+            _patch(_angle_op()),
+            source_sha256=SOURCE_HASH,
+            document_version=CANVAS_FILE_VERSION,
+        )
+    assert state == before
 
 
 def test_inspection_deserializes_once_for_many_components(

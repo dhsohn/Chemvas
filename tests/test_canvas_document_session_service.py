@@ -22,6 +22,7 @@ from PyQt6.QtWidgets import (
 from chemvas.adapters.qt.renderer import Renderer
 from chemvas.core.svg_roundtrip import extract_chemvas_document_from_svg
 from chemvas.domain.document import MoleculeModel, serialize_settings
+from chemvas.features.document_composition import compose_document_state
 from chemvas.ui.atom_coords_access import CanvasAtomCoords3DState
 from chemvas.ui.bond_graphics_access import add_bond_graphics_for
 from chemvas.ui.canvas_atom_graphics_state import atom_dots_for, atom_items_for
@@ -1323,7 +1324,9 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
                 plan = service.plan_figure_export(scope="selection", sizing="bond")
 
             self.assertIs(plan, expected_plan)
-            parameters.assert_called_once_with(scope="selection", sizing="bond")
+            parameters.assert_called_once_with(
+                scope="selection", sizing="bond", target_width_mm=None
+            )
             resolve_plan.assert_called_once_with(
                 canvas.scene(),
                 items=[item],
@@ -1553,6 +1556,160 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
         self.assertAlmostEqual(
             export_canvas_scene.call_args.kwargs["target_width_pt"], 84.0 / 25.4 * 72.0
         )
+
+    def _canvas_with_export_note(self):
+        canvas = build_canvas_view()
+        service = canvas.services.document.canvas_document_session_service
+        service.apply_state(
+            compose_document_state(
+                {
+                    "format": "chemvas-document-composition",
+                    "version": 1,
+                    "atoms": [],
+                    "bonds": [],
+                    "notes": [{"text": "H2O caption", "x": 0, "y": 0}],
+                }
+            )
+        )
+        self.addCleanup(canvas.deleteLater)
+        return canvas, service
+
+    def test_guarded_native_export_preserves_state_and_accepts_svg_png(self) -> None:
+        _canvas, service = self._canvas_with_export_note()
+        before = deepcopy(service.snapshot_state())
+        with tempfile.TemporaryDirectory() as tmp:
+            for fmt in ("svg", "png"):
+                with self.subTest(fmt=fmt):
+                    path = Path(tmp) / f"figure.{fmt}"
+                    service.export_figure(
+                        str(path),
+                        fmt=fmt,
+                        sizing="custom",
+                        target_width_mm=83.75,
+                        max_height_mm=240,
+                        min_font_pt=0.01,
+                    )
+                    self.assertTrue(path.stat().st_size > 0)
+                    self.assertEqual(service.snapshot_state(), before)
+            self.assertEqual(len(list(Path(tmp).iterdir())), 2)
+
+    def test_native_font_failure_preserves_existing_or_absent_destination(self) -> None:
+        _canvas, service = self._canvas_with_export_note()
+        before = deepcopy(service.snapshot_state())
+        with tempfile.TemporaryDirectory() as tmp:
+            for fmt in ("svg", "png"):
+                for exists in (False, True):
+                    with self.subTest(fmt=fmt, exists=exists):
+                        path = Path(tmp) / f"figure-{exists}.{fmt}"
+                        if exists:
+                            path.write_bytes(b"ORIGINAL")
+                        files_before = set(Path(tmp).iterdir())
+                        with self.assertRaisesRegex(ValueError, "below --min-font-pt"):
+                            service.export_figure(
+                                str(path), fmt=fmt, target_width_mm=84, min_font_pt=1000
+                            )
+                        self.assertEqual(set(Path(tmp).iterdir()), files_before)
+                        if exists:
+                            self.assertEqual(path.read_bytes(), b"ORIGINAL")
+                        else:
+                            self.assertFalse(path.exists())
+                        self.assertEqual(service.snapshot_state(), before)
+
+    def test_height_failure_happens_before_render_or_temporary_file(self) -> None:
+        _canvas, service = self._canvas_with_export_note()
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "figure.svg"
+            path.write_bytes(b"ORIGINAL")
+            with (
+                mock.patch(
+                    "chemvas.ui.canvas_document_session_service.export_canvas_scene_for"
+                ) as render,
+                mock.patch(
+                    "chemvas.ui.canvas_document_session_service.atomic_write_via_temp"
+                ) as atomic_write,
+                self.assertRaisesRegex(ValueError, "rendered height exceeds"),
+            ):
+                service.export_figure(str(path), target_width_mm=84, max_height_mm=0.01)
+            render.assert_not_called()
+            atomic_write.assert_not_called()
+            self.assertEqual(path.read_bytes(), b"ORIGINAL")
+
+    def test_custom_width_raster_budget_rejects_before_paint_without_opt_in_limits(
+        self,
+    ):
+        _canvas, service = self._canvas_with_export_note()
+        for fmt in ("png", "tiff"):
+            with (
+                self.subTest(fmt=fmt),
+                mock.patch(
+                    "chemvas.ui.canvas_document_session_service.export_canvas_scene_for"
+                ) as render,
+                mock.patch(
+                    "chemvas.ui.canvas_document_session_service.atomic_write_via_temp"
+                ) as atomic_write,
+                self.assertRaisesRegex(ValueError, "pixel area limit"),
+            ):
+                service.export_figure(
+                    "unused", fmt=fmt, sizing="custom", target_width_mm=5080, dpi=1200
+                )
+            render.assert_not_called()
+            atomic_write.assert_not_called()
+
+    def test_font_guard_rejects_unsupported_direct_session_combinations(self) -> None:
+        canvas, service = self._canvas_with_export_note()
+        for item in canvas.scene().items():
+            item.setSelected(True)
+        for fmt, scope in (("pdf", "sheet"), ("tiff", "sheet"), ("svg", "selection")):
+            with (
+                self.subTest(fmt=fmt, scope=scope),
+                mock.patch(
+                    "chemvas.ui.canvas_document_session_service.atomic_write_via_temp"
+                ) as atomic_write,
+                self.assertRaisesRegex(ValueError, "requires whole-canvas SVG or PNG"),
+            ):
+                service.export_figure("unused", fmt=fmt, scope=scope, min_font_pt=6)
+            atomic_write.assert_not_called()
+
+    def test_custom_width_requires_valid_value_and_invalid_font_rejects_before_write(
+        self,
+    ):
+        _canvas, service = self._canvas_with_export_note()
+        cases = [({"sizing": "custom"}, "requires a target width")]
+        for value in (0, -1, float("nan"), float("inf"), True):
+            cases.append(({"target_width_mm": value}, "target width"))
+            cases.append(({"min_font_pt": value}, "minimum font size"))
+        for options, message in cases:
+            with (
+                self.subTest(options=options),
+                mock.patch(
+                    "chemvas.ui.canvas_document_session_service.atomic_write_via_temp"
+                ) as atomic_write,
+                self.assertRaisesRegex(ValueError, message),
+            ):
+                service.export_figure("unused", **options)
+            atomic_write.assert_not_called()
+
+    def test_unguarded_export_does_not_invoke_plan_or_font_check(self) -> None:
+        _canvas, service = self._canvas_with_export_note()
+        with (
+            tempfile.TemporaryDirectory() as tmp,
+            mock.patch.object(service, "plan_figure_export") as plan,
+            mock.patch(
+                "chemvas.ui.canvas_document_session_service.assess_export_readability"
+            ) as font_check,
+        ):
+            default_path = Path(tmp) / "figure.svg"
+            explicit_path = Path(tmp) / "explicit.svg"
+            service.export_figure(str(default_path))
+            service.export_figure(
+                str(explicit_path),
+                max_height_mm=None,
+                min_font_pt=None,
+                target_width_mm=None,
+            )
+            self.assertEqual(default_path.read_bytes(), explicit_path.read_bytes())
+        plan.assert_not_called()
+        font_check.assert_not_called()
 
     def test_export_figure_plain_svg_does_not_embed_sheet_payload_by_default(
         self,
