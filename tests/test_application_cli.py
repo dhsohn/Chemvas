@@ -114,7 +114,12 @@ def test_root_help_inventory_matches_dispatched_headless_commands(
         ("drawing.chemvas", "drawing.chemvas"),
         ("drawing.CHEMVAS", "drawing.CHEMVAS"),
         ("drawing.svg", "drawing.svg"),
+        ("structure.mol", "structure.mol"),
+        ("structure.MOL", "structure.MOL"),
         ("legacy.json", None),
+        ("collection.sdf", None),
+        ("coordinates.xyz", None),
+        ("--structure.mol", None),
     ],
 )
 def test_startup_document_path_uses_only_public_document_suffixes(
@@ -123,4 +128,20 @@ def test_startup_document_path_uses_only_public_document_suffixes(
     assert (
         application._startup_document_path(["chemvas", "--platform", argument])
         == expected
+    )
+
+
+def test_startup_document_path_preserves_first_supported_path() -> None:
+    assert (
+        application._startup_document_path(
+            [
+                "chemvas",
+                "--style",
+                "Fusion",
+                "legacy.json",
+                "my structure.mol",
+                "next.svg",
+            ]
+        )
+        == "my structure.mol"
     )

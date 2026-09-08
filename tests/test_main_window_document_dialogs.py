@@ -1,5 +1,7 @@
 import os
+import tempfile
 import unittest
+from pathlib import Path
 from unittest import mock
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
@@ -13,17 +15,20 @@ from PyQt6.QtWidgets import (
 )
 
 from chemvas.bootstrap.main_window import build_main_window
+from chemvas.ui.canvas_window_access import snapshot_canvas_state_for
 from chemvas.ui.main_window_document_dialogs import (
     FigureExportOptions,
     SheetSetupSelection,
     prompt_export_options,
     prompt_sheet_setup,
 )
+from chemvas.ui.main_window_menu_bar import run_sheet_setup_dialog
 from chemvas.ui.main_window_ports import (
     active_canvas_for_window,
+    history_service_for_window,
     services_for_window,
 )
-from chemvas.ui.sheet_setup_access import set_sheet_setup_for
+from chemvas.ui.sheet_setup_access import set_sheet_setup_for, sheet_setup_for
 
 
 class MainWindowDocumentDialogsTest(unittest.TestCase):
@@ -170,3 +175,86 @@ class MainWindowDocumentDialogsTest(unittest.TestCase):
                     current_orientation="landscape",
                 )
             )
+
+    def _choose_sheet_orientation(
+        self, orientation: str, *, accepted: bool = True
+    ) -> None:
+        def drive_dialog(dialog: QDialog):
+            combo = dialog.findChild(QComboBox, "sheetOrientationCombo")
+            self.assertIsNotNone(combo)
+            index = combo.findData(orientation)
+            self.assertGreaterEqual(index, 0)
+            combo.setCurrentIndex(index)
+            if accepted:
+                dialog.accept()
+                return QDialog.DialogCode.Accepted
+            dialog.reject()
+            return QDialog.DialogCode.Rejected
+
+        with mock.patch(
+            "chemvas.ui.main_window_document_dialogs.QDialog.exec", new=drive_dialog
+        ):
+            run_sheet_setup_dialog(self.window)
+
+    def test_confirmed_sheet_change_updates_document_chrome_without_history(
+        self,
+    ) -> None:
+        canvas = active_canvas_for_window(self.window)
+        services = services_for_window(self.window)
+        history = history_service_for_window(self.window).state
+        before_history = (tuple(history.history), tuple(history.redo_stack))
+        self.window.statusBar().showMessage("Keep this feedback")
+
+        self._choose_sheet_orientation("portrait")
+
+        self.assertEqual(sheet_setup_for(canvas), ("A4", "portrait"))
+        self.assertTrue(services.canvas_document_service.is_dirty(canvas))
+        self.assertTrue(self.window.isWindowModified())
+        self.assertEqual(
+            self.window.tab_references.canvas_tabs.tabText(0), "● Canvas 1"
+        )
+        self.assertEqual(
+            services.status_service.status_context_texts()["sheet"],
+            "Canvas: ● Canvas 1",
+        )
+        self.assertEqual(self.window.statusBar().currentMessage(), "Keep this feedback")
+        self.assertEqual(
+            (tuple(history.history), tuple(history.redo_stack)), before_history
+        )
+
+    def test_sheet_change_chrome_tracks_saved_orientation_checkpoint(self) -> None:
+        services = services_for_window(self.window)
+        canvas = active_canvas_for_window(self.window)
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = str(Path(temp_dir) / "portrait.chemvas")
+            self._choose_sheet_orientation("portrait")
+            self.assertTrue(
+                services.document_action_service.save_canvas_to_path(self.window, path)
+            )
+            self.assertFalse(self.window.isWindowModified())
+
+            self._choose_sheet_orientation("landscape")
+            self.assertTrue(self.window.isWindowModified())
+            self.assertTrue(services.canvas_document_service.is_dirty(canvas))
+
+            self._choose_sheet_orientation("portrait")
+            self.assertFalse(self.window.isWindowModified())
+            self.assertFalse(services.canvas_document_service.is_dirty(canvas))
+            self.assertEqual(
+                services.status_service.status_context_texts()["sheet"],
+                "Canvas: portrait.chemvas",
+            )
+
+    def test_same_sheet_settings_and_cancel_preserve_document_and_chrome(self) -> None:
+        canvas = active_canvas_for_window(self.window)
+        status = services_for_window(self.window).status_service
+        before_document = snapshot_canvas_state_for(canvas)
+        before_status = status.status_context_texts()
+        before_title = self.window.windowTitle()
+        for orientation, accepted in (("landscape", True), ("portrait", False)):
+            with self.subTest(orientation=orientation, accepted=accepted):
+                self._choose_sheet_orientation(orientation, accepted=accepted)
+                self.assertEqual(snapshot_canvas_state_for(canvas), before_document)
+                self.assertEqual(status.status_context_texts(), before_status)
+                self.assertEqual(self.window.windowTitle(), before_title)
+                self.assertFalse(self.window.isWindowModified())

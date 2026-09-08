@@ -25,6 +25,7 @@ def test_update_action_availability_sets_history_actions() -> None:
     redo_action_for_window = mock.Mock(return_value=redo_action)
     window = SimpleNamespace()
     service = MainWindowActionAvailabilityService(
+        text_history_availability_for_window=lambda window: None,
         history_service_for_window=history_service_for_window,
         active_canvas_or_none_for_window=active_canvas_or_none_for_window,
         undo_action_for_window=undo_action_for_window,
@@ -49,6 +50,7 @@ def test_update_action_availability_handles_missing_canvas_and_actions() -> None
     redo_action_for_window = mock.Mock(return_value=None)
     window = SimpleNamespace()
     service = MainWindowActionAvailabilityService(
+        text_history_availability_for_window=lambda window: None,
         history_service_for_window=history_service_for_window,
         active_canvas_or_none_for_window=active_canvas_or_none_for_window,
         undo_action_for_window=undo_action_for_window,

@@ -63,6 +63,7 @@ from chemvas.ui.main_window_ports import (
     set_zoom_percent_for_window,
     style_controller_for_window,
     tab_references_for_window,
+    text_history_availability_for_window,
     tool_action_for_window,
     tool_actions_for_window,
     tool_mode_controller_for_window,
@@ -97,6 +98,7 @@ def build_main_window_services() -> MainWindowServices:
 
     action_availability_service = MainWindowActionAvailabilityService(
         history_service_for_window=history_service_for_window,
+        text_history_availability_for_window=text_history_availability_for_window,
         active_canvas_or_none_for_window=active_canvas_or_none_for_window,
         undo_action_for_window=undo_action_for_window,
         redo_action_for_window=redo_action_for_window,

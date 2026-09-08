@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Route Edit menu commands to focused single-line text inputs such as the
+  SMILES field. Show the input's text Undo/Redo availability instead of the
+  drawing history while editing text.
+- Show platform-native shortcuts and text-aware descriptions in the clipboard
+  menu hints.
+- Refresh the unsaved-change indicators immediately after changing the canvas
+  orientation.
+- Open MOL files supplied on the command line through the same document-loading
+  path used by the desktop app.
+- Ask users to select a molecular structure before opening the MOL export save
+  dialog when the canvas selection contains no structure.
+
 ## [0.8.3] - 2026-09-08
 
 This maintenance release fixes group movement after Redo and window feedback,

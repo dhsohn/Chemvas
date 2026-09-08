@@ -50,6 +50,7 @@ from chemvas.ui.open_document_lookup import (
 )
 from chemvas.ui.rdkit_export_job_state import rdkit_export_jobs_for
 from chemvas.ui.recent_documents_store import record_recent
+from chemvas.ui.selection_collection_access import selected_structure_ids_for
 
 
 def _annotation_mark_states(model: MoleculeModel) -> list[dict[str, object]]:
@@ -345,6 +346,22 @@ class MainWindowDocumentActionService:
         file_dialog = QFileDialog if file_dialog is None else file_dialog
         message_box = QMessageBox if message_box is None else message_box
         dialog_parent = window if dialog_parent is None else dialog_parent
+
+        def report(message: str) -> None:
+            if status_sink is not None:
+                status_sink(message)
+
+        if selected_only:
+            try:
+                selected_structure_ids_for(
+                    self._active_canvas_for_window(window), require_non_empty=True
+                )
+            except ValueError as exc:
+                message = str(exc)
+                message_box.warning(dialog_parent, "Export Error", message)
+                report(f"Export failed: {message}")
+                return
+
         dialog_path, _ = file_dialog.getSaveFileName(
             dialog_parent,
             "Export MOL",
@@ -358,10 +375,6 @@ class MainWindowDocumentActionService:
             dialog_parent, dialog_path, path, message_box
         ):
             return
-
-        def report(message: str) -> None:
-            if status_sink is not None:
-                status_sink(message)
 
         try:
             self._document_session_service_for_window(window).export_mol(
