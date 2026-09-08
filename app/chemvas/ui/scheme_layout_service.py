@@ -142,9 +142,7 @@ def _rect_values(bounds: QRectF) -> list[float]:
     return [bounds.left(), bounds.top(), bounds.right(), bounds.bottom()]
 
 
-def _plan_align_y(
-    canvas: CanvasView, source: dict[str, Any], request: LayoutRequest
-) -> CanvasLayoutPlan:
+def _plan_align_y(canvas: CanvasView, request: LayoutRequest) -> CanvasLayoutPlan:
     atom_moves: list[tuple[LayoutBlock, float, float]] = []
     item_moves: dict[tuple[str, int], tuple[float, float]] = {}
     placements: list[dict[str, object]] = []
@@ -184,11 +182,6 @@ def _plan_align_y(
             for kind, index in block.items:
                 if kind != "notes":
                     item_moves[(kind, index)] = (0.0, dy)
-        for index in row.arrows:
-            item_moves[("arrows", index)] = (
-                0.0,
-                target - float(source["arrows"][index]["start"][1]),
-            )
     return CanvasLayoutPlan(
         tuple(atom_moves),
         item_moves,
@@ -289,7 +282,7 @@ def plan_canvas_layout(
 ) -> CanvasLayoutPlan:
     """Measure native paint and validate all line budgets before any mutation."""
     if request.mode == "align-y":
-        return _plan_align_y(canvas, source, request)
+        return _plan_align_y(canvas, request)
     items = document_item_lists_for(canvas)
     rows = [
         tuple(_block(canvas, block, items) for block in row.blocks)

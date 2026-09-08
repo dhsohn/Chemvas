@@ -168,6 +168,7 @@ def test_align_y_cli_preserves_source_notes_and_x_and_moves_explicit_parts(
     assert source.read_bytes() == before_bytes
     candidate = read_document(output).state
     assert candidate["notes"] == original["notes"]
+    assert candidate["arrows"] == original["arrows"]
     assert candidate.get("groups") == original.get("groups")
     assert candidate["model"]["bonds"] == original["model"]["bonds"]
     for placement in report["placements"]:

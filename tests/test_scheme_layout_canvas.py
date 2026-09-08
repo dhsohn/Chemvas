@@ -659,7 +659,7 @@ def test_align_y_keeps_notes_x_groups_and_geometry_but_centers_separate_products
                 k: v for k, v in before.items() if k != "y"
             }
             assert after["y"] - before["y"] == pytest.approx(placement["dy"])
-    for key in ("notes", "groups", "settings", "shapes", "orbitals"):
+    for key in ("notes", "groups", "settings", "shapes", "orbitals", "arrows"):
         assert candidate[key] == original[key]
     assert candidate["model"]["bonds"] == original["model"]["bonds"]
     for before, after in zip(original["marks"], candidate["marks"], strict=True):
@@ -680,17 +680,12 @@ def test_align_y_keeps_notes_x_groups_and_geometry_but_centers_separate_products
         assert candidate["ts_brackets"][0][key] - original["ts_brackets"][0][
             key
         ] == pytest.approx(placements[1]["dy"])
-    for before, after in zip(original["arrows"], candidate["arrows"], strict=True):
-        assert after["start"] == [before["start"][0], target]
-        assert after["end"] == [before["end"][0], target]
-        assert {k: v for k, v in after.items() if k not in {"start", "end"}} == {
-            k: v for k, v in before.items() if k not in {"start", "end"}
-        }
     output = tmp_path / "aligned.chemvas"
     write_document(output, candidate, CANVAS_FILE_VERSION)
     _, reopened = read_exact_document(output)
     assert reopened.state["notes"] == candidate["notes"]
     assert reopened.state["groups"] == candidate["groups"]
+    assert reopened.state["arrows"] == original["arrows"]
     with offscreen_canvas(reopened.state, command="test-align-y-reopen") as (canvas, _):
         items = document_item_lists_for(canvas)
         for placement in placements:
