@@ -334,5 +334,11 @@ class CanvasViewLabelGeometryHelperTest(unittest.TestCase):
             7, 1.0, 0.0, "minus"
         )
         controller.trim_line_for_labels.assert_called_once_with(
-            1, 2, 0.0, 0.0, 3.0, 4.0
+            1, 2, 0.0, 0.0, 3.0, 4.0, ()
+        )
+        controller.trim_line_for_labels.reset_mock()
+        offsets = ((0.0, 0.0), (1.0, 2.0))
+        trim_line_for_labels_for(view, 1, 2, 0.0, 0.0, 3.0, 4.0, offsets)
+        controller.trim_line_for_labels.assert_called_once_with(
+            1, 2, 0.0, 0.0, 3.0, 4.0, offsets
         )

@@ -4,7 +4,7 @@ import math
 from functools import partial
 
 from PyQt6.QtCore import QPointF, QRectF
-from PyQt6.QtGui import QFontMetricsF
+from PyQt6.QtGui import QFontMetricsF, QPainterPath, QPainterPathStroker, QTransform
 from PyQt6.QtWidgets import QGraphicsTextItem
 
 from chemvas.core.history import (
@@ -41,6 +41,7 @@ from chemvas.ui.canvas_model_access import (
 )
 from chemvas.ui.canvas_rotation_state import rotation_state_for
 from chemvas.ui.canvas_scene_items_state import ring_items_for
+from chemvas.ui.graphics_items import AtomLabelItem
 from chemvas.ui.history_canvas_access import (
     capture_history_transaction_for_history,
     release_history_transaction_for_history,
@@ -65,6 +66,79 @@ def _xy(point: QPointF) -> tuple[float, float]:
 
 def _bounds(rect: QRectF) -> tuple[float, float, float, float]:
     return rect.left(), rect.top(), rect.right(), rect.bottom()
+
+
+def _glyph_line_clip_t(
+    p1: QPointF,
+    p2: QPointF,
+    path: QPainterPath,
+    stroke_width: float,
+    offsets: tuple[tuple[float, float], ...] = (),
+) -> tuple[float, float] | None:
+    """First/last ink crossings, including stroke extent and a small air gap.
+
+    Inspect every contour, not just the filled interval containing the atom:
+    the atom may sit in O's counter, or between separate typographic runs.
+    Never terminate there and leave another piece of the label on the bond.
+    """
+    gap = max(0.2, stroke_width * 0.1)
+    # A disk enclosing a square cap also covers round/flat bond caps. Keep
+    # the small flattening allowance separate from the visible clearance.
+    radius = stroke_width / math.sqrt(2.0) + gap + 0.01
+    stroker = QPainterPathStroker()
+    stroker.setWidth(2.0 * radius)
+    stroker.setCurveThreshold(0.001)
+    # Qt's default polygonization tolerance is in device coordinates. Flatten
+    # at 64x to keep scene error below the 0.01 allowance, including curves.
+    scale = 64.0
+    transform = QTransform.fromScale(scale, scale)
+    start, end = transform.map(p1), transform.map(p2)
+    hits = []
+    length = math.hypot(p2.x() - p1.x(), p2.y() - p1.y())
+    ux, uy = (p2.x() - p1.x()) / length, (p2.y() - p1.y()) / length
+    along = [ux * x + uy * y for x, y in offsets] or [0.0]
+    across = [-uy * x + ux * y for x, y in offsets] or [0.0]
+    low, high = min(across), max(across)
+    for outline in (path, stroker.createStroke(path)):
+        if outline.contains(p1):
+            hits.append(0.0)
+        if outline.contains(p2):
+            hits.append(1.0)
+        for polygon in outline.toSubpathPolygons(transform):
+            if offsets:
+                # Inspect the entire band occupied by parallel strokes or a
+                # filled strip, including ink between (not only on) its edges.
+                points = [
+                    (
+                        (p.x() / scale - p1.x()) * ux + (p.y() / scale - p1.y()) * uy,
+                        -(p.x() / scale - p1.x()) * uy + (p.y() / scale - p1.y()) * ux,
+                    )
+                    for p in (polygon.at(i) for i in range(polygon.size()))
+                ]
+                xs = [x for x, y in points if low <= y <= high]
+                for index in range(len(points) - 1):
+                    x0, y0 = points[index]
+                    x1, y1 = points[index + 1]
+                    if abs(y1 - y0) < 1e-12:
+                        continue
+                    for y in (low, high):
+                        ratio = (y - y0) / (y1 - y0)
+                        if 0 <= ratio <= 1:
+                            xs.append(x0 + ratio * (x1 - x0))
+                if xs:
+                    first = (min(xs) - max(along)) / length
+                    last = (max(xs) - min(along)) / length
+                    if first <= 1 and last >= 0:
+                        hits.extend((max(0.0, first), min(1.0, last)))
+                continue
+            for index in range(polygon.size() - 1):
+                left, right = polygon.at(index), polygon.at(index + 1)
+                hit = segment_intersection_t_helper(
+                    _xy(start), _xy(end), _xy(left), _xy(right)
+                )
+                if hit is not None:
+                    hits.append(hit)
+    return (min(hits), max(hits)) if hits else None
 
 
 class CanvasGeometryController:
@@ -520,7 +594,17 @@ class CanvasGeometryController:
         y1: float,
         x2: float,
         y2: float,
+        offsets: tuple[tuple[float, float], ...] = (),
+        *,
+        stroke_width: float | None = None,
     ) -> tuple[float, float]:
+        """Trim the supplied scene-space segment to label ink.
+
+        ``stroke_width`` is the painted width/envelope, not the hit width;
+        omitted it uses the standard bond pen. Pass actual offset coordinates
+        for parallel strokes. Equal parameters mean no clear span remains and
+        callers must not paint it. Non-AtomLabelItem fallbacks stay unchanged.
+        """
         dx = x2 - x1
         dy = y2 - y1
         length = math.hypot(dx, dy)
@@ -532,8 +616,32 @@ class CanvasGeometryController:
         t1 = 1.0
         hit_start = False
         hit_end = False
+        glyph_hit = False
+        width = (
+            bond_line_width_for(self.canvas) if stroke_width is None else stroke_width
+        )
+        width = max(0.0, float(width))
         for atom_id, is_start in ((a_id, True), (b_id, False)):
             if atom_id is None:
+                continue
+            item = atom_items_for(self.canvas).get(atom_id)
+            if isinstance(item, AtomLabelItem):
+                clipped = _glyph_line_clip_t(
+                    p1,
+                    p2,
+                    item.mapToScene(item.glyph_path()),
+                    width,
+                    offsets,
+                )
+                if clipped is not None:
+                    glyph_hit = True
+                    entry_t, exit_t = clipped
+                    if is_start:
+                        t0 = max(t0, exit_t)
+                    else:
+                        t1 = min(t1, entry_t)
+                # Empty glyphs and rays that miss the ink need no rectangle or
+                # radius fallback. Hit padding must never move visible bonds.
                 continue
             label_rect = self.visible_label_rect_for_atom(atom_id)
             if label_rect is not None:
@@ -563,6 +671,10 @@ class CanvasGeometryController:
                 t0 = min(1.0, t0 + gap_t)
             if hit_end:
                 t1 = max(0.0, t1 - gap_t)
+        if glyph_hit:
+            # A forced minimum span would put ink back inside a counter or
+            # overlapping labels. Leave suppression to the painting caller.
+            return t0, max(t0, t1)
         min_span = 0.02
         if t1 - t0 < min_span:
             if hit_start and not hit_end:

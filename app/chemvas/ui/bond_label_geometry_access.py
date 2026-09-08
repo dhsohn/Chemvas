@@ -15,9 +15,10 @@ def trim_line_for_labels_for(
     y1: float,
     x2: float,
     y2: float,
+    offsets: tuple[tuple[float, float], ...] = (),
 ) -> tuple[float, float]:
     return geometry_controller_for_access(canvas).trim_line_for_labels(
-        a_id, b_id, x1, y1, x2, y2
+        a_id, b_id, x1, y1, x2, y2, offsets
     )
 
 

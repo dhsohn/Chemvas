@@ -241,7 +241,9 @@ class BondRingDoubleGeometryService:
                 ny = -ny
 
         spacing = self._bond_spacing() * 1.1
-        t0, t1 = self.renderer.trim_line_for_labels(a_id, b_id, a.x, a.y, b.x, b.y)
+        t0, t1 = self.renderer.trim_line_for_labels(
+            a_id, b_id, a.x, a.y, b.x, b.y, ((0.0, 0.0), (nx * spacing, ny * spacing))
+        )
         base_bx1 = a.x + dx * t0
         base_by1 = a.y + dy * t0
         base_bx2 = a.x + dx * t1

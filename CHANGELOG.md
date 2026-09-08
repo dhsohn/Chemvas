@@ -19,6 +19,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Trim bonds to the painted atom-label outlines with a small stroke-aware gap,
+  rather than the empty text-box margins, without shrinking selection targets.
+  Account for parallel strokes and filled bond widths so compact endpoints do
+  not cross letter shapes or subscripts.
 - Route Edit menu commands to focused single-line text inputs such as the
   SMILES field. Show the input's text Undo/Redo availability instead of the
   drawing history while editing text.

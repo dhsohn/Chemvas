@@ -78,6 +78,10 @@ class BondLineGeometryService:
         b_id: int | None = None,
     ) -> tuple[list[tuple[float, float]], float]:
         """Dot centres plus the radius to draw each of them at."""
+        # Label trimming can consume the entire visible segment. Keep the
+        # path primitive, but do not turn its collapsed span into a painted dot.
+        if x1 == x2 and y1 == y2 and (a_id is not None or b_id is not None):
+            return [], self._dotted_dot_radius()
         centers = dotted_bond_dot_centers(
             x1,
             y1,
@@ -117,7 +121,16 @@ class BondLineGeometryService:
             offsets = [-spacing, 0.0, spacing]
         else:
             offsets = [0.0]
-        t0, t1 = trim_line_for_labels_for(self.canvas, a_id, b_id, x1, y1, x2, y2)
+        t0, t1 = trim_line_for_labels_for(
+            self.canvas,
+            a_id,
+            b_id,
+            x1,
+            y1,
+            x2,
+            y2,
+            tuple((nx * offset, ny * offset) for offset in offsets),
+        )
         base_x1 = x1 + dx * t0
         base_y1 = y1 + dy * t0
         base_x2 = x1 + dx * t1
@@ -213,15 +226,25 @@ class BondLineGeometryService:
     ]:
         dx = x2 - x1
         dy = y2 - y1
-        t0, t1 = trim_line_for_labels_for(self.canvas, a_id, b_id, x1, y1, x2, y2)
+        inner_nx, inner_ny = self._plain_double_normal(x1, y1, x2, y2, a_id, b_id)
+        side_offset, center_offset = self._plain_double_offsets()
+        variant = normalized_plain_double_style(style, 2)
+        if variant == DOUBLE_STYLE_DEFAULT:
+            distances = (0.0, side_offset)
+        elif variant == DOUBLE_STYLE_OUTER:
+            distances = (-side_offset, 0.0)
+        else:
+            distances = (-center_offset, center_offset)
+        offsets = tuple((inner_nx * d, inner_ny * d) for d in distances)
+        t0, t1 = trim_line_for_labels_for(
+            self.canvas, a_id, b_id, x1, y1, x2, y2, offsets
+        )
         base_segment = (
             x1 + dx * t0,
             y1 + dy * t0,
             x1 + dx * t1,
             y1 + dy * t1,
         )
-        inner_nx, inner_ny = self._plain_double_normal(*base_segment, a_id, b_id)
-        side_offset, center_offset = self._plain_double_offsets()
         outer_full_seg = offset_segment(base_segment, inner_nx, inner_ny, -side_offset)
         inner_full_seg = offset_segment(base_segment, inner_nx, inner_ny, side_offset)
         outer_center_seg = offset_segment(
@@ -242,7 +265,6 @@ class BondLineGeometryService:
         if b_id is not None and label_rect_for_atom_for(self.canvas, b_id) is not None:
             has_label = True
         trim = self._double_short_trim(base_length, has_label=has_label)
-        variant = normalized_plain_double_style(style, 2)
         if variant == DOUBLE_STYLE_DEFAULT:
             return (
                 base_segment,
@@ -257,6 +279,15 @@ class BondLineGeometryService:
             )
         return outer_center_seg, inner_center_seg, (inner_nx, inner_ny)
 
+    def _stereo_label_trim(self, a_id, b_id, x1, y1, x2, y2):
+        length = math.hypot(x2 - x1, y2 - y1) or 1.0
+        half_width = bold_bond_pen_for(self.canvas).widthF() / 2.0
+        ox = -(y2 - y1) / length * half_width
+        oy = (x2 - x1) / length * half_width
+        return trim_line_for_labels_for(
+            self.canvas, a_id, b_id, x1, y1, x2, y2, ((-ox, -oy), (ox, oy))
+        )
+
     def wedge_triangle(
         self,
         x1: float,
@@ -270,7 +301,7 @@ class BondLineGeometryService:
         tuple[float, float],
         tuple[float, float],
     ]:
-        t0, t1 = trim_line_for_labels_for(self.canvas, a_id, b_id, x1, y1, x2, y2)
+        t0, t1 = self._stereo_label_trim(a_id, b_id, x1, y1, x2, y2)
         return wedge_triangle_from_segment(
             trimmed_line_segment(x1, y1, x2, y2, t0=t0, t1=t1),
             max_width=bold_bond_pen_for(self.canvas).widthF(),
@@ -286,7 +317,7 @@ class BondLineGeometryService:
         a_id: int | None = None,
         b_id: int | None = None,
     ) -> list[tuple[float, float, float, float]]:
-        t0, t1 = trim_line_for_labels_for(self.canvas, a_id, b_id, x1, y1, x2, y2)
+        t0, t1 = self._stereo_label_trim(a_id, b_id, x1, y1, x2, y2)
         return hash_segments_from_segment(
             trimmed_line_segment(x1, y1, x2, y2, t0=t0, t1=t1),
             count=count,

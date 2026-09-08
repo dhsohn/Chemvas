@@ -440,13 +440,18 @@ class AtomLabelItem(NoSelectTextItem):
             painter.drawText(QPointF(margin + run.x, margin + run.baseline), run.text)
         painter.restore()
 
-    def _paint_outlined(self, painter) -> None:
+    def glyph_path(self) -> QPainterPath:
+        """Painted glyph outlines in local coordinates, excluding hit padding.
+
+        Shared with outlined export; typography, anchors and stacked hydrides
+        retain their existing layout. The caller may map this to scene space.
+        """
+        path = QPainterPath()
         text = self._raw_text
         if not text:
-            return
+            return path
         font = self.font()
         margin = self._doc_margin()
-        path = QPainterPath()
         if self._typographic and self._layout is not None:
             sub_font = _scaled_font(font, SUB_SCALE)
             for run in self._layout.runs:
@@ -457,6 +462,12 @@ class AtomLabelItem(NoSelectTextItem):
         else:
             ascent = QFontMetricsF(font).ascent()
             path.addText(QPointF(margin, margin + ascent), font, text)
+        return path
+
+    def _paint_outlined(self, painter) -> None:
+        path = self.glyph_path()
+        if path.isEmpty():
+            return
         painter.save()
         painter.setPen(Qt.PenStyle.NoPen)
         painter.setBrush(self.defaultTextColor())

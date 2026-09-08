@@ -156,7 +156,7 @@ class _FakeCanvas:
     def graph_state(self):
         return graph_state_for(self)
 
-    def trim_line_for_labels(self, a_id, b_id, x1, y1, x2, y2):
+    def trim_line_for_labels(self, a_id, b_id, x1, y1, x2, y2, offsets=()):
         return self._trim
 
     def label_rect_for_atom(self, atom_id: int):
