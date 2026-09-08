@@ -42,12 +42,61 @@ Atom IDs must be contiguous and ordered from zero. Optional atom fields are
 derives linked visual charge/radical marks from those annotations and rejects a
 candidate whose electronic semantics are inconsistent. Bonds accept the normal
 Chemvas order/style/color contract. The manifest can also contain bounded
-`notes`, `arrows`, `shapes`, `ring_fills`, and documented canvas `settings`.
+`notes`, `arrows`, `shapes`, `ring_fills`, `ts_brackets`, and documented canvas `settings`.
 Canvas settings start from the live A4 landscape defaults; the global text size
 is limited to the same 6–96 pt range as interactive note editing. Structured
 note style accepts only `font_size` (6–96 pt), `font_weight`
-(100–900), `italic`, and hexadecimal `color`; text is escaped and converted to
-safe canonical span HTML by Chemvas rather than accepting arbitrary HTML.
+(100–900 in steps of 100), `italic`, hexadecimal `color`, and `vertical_align`
+(`baseline`, `sub`, or `super`). Text is escaped and converted to safe canonical
+HTML by Chemvas rather than accepting arbitrary HTML.
+
+For mixed typography, give a note exactly one of `text` or `runs`. A non-empty
+`runs` array contains at most 256 objects with `text` and optional `style`:
+
+```json
+{
+  "x": 64, "y": 108, "style": {"font_size": 12},
+  "runs": [
+    {"text": "TS", "style": {"font_weight": 700, "italic": true}},
+    {"text": "2", "style": {"vertical_align": "sub"}},
+    {"text": "‡", "style": {"vertical_align": "super", "color": "#075CAD"}}
+  ]
+}
+```
+
+The note-level style supplies defaults; individual run styles override them.
+Plain text is derived by concatenating the runs, not supplied a second time.
+Spaces and line breaks between runs are preserved through the native note HTML
+path. Neither a note nor a run accepts an `html` field.
+
+Arrows require `kind`, `start`, and `end`; optional fields are `control`, `double`,
+`labels`, and hexadecimal `color`. Omit `color` for the normal default pen. For
+`curved_single` and `curved_double`, an omitted `double` flag is derived from
+`kind`; an explicit contradictory flag is rejected. An explicit `control`
+sets the curve's control point; omission keeps the native default curve.
+Per-arrow color is stored in the native document and selection clipboard.
+Older Chemvas releases without this field cannot read documents that contain it;
+existing documents without arrow colors remain supported.
+
+TS decorations use the existing native bracket objects, not separate line
+segments. Each `ts_brackets` entry has exactly `bracket_kind`, `left`, `top`,
+`right`, and `bottom`:
+
+```json
+{"bracket_kind": "square_pair", "left": 40, "top": 40, "right": 160, "bottom": 120}
+```
+
+Supported kinds are `square_pair`, `parentheses_pair`, `braces_pair`,
+`square_left`, `parenthesis_left`, `brace_left`, `dagger`, and `double_dagger`.
+Add a separate `double_dagger` decoration for a transition-state symbol beside
+a bracket pair. The array is bounded to 4,096 objects, like the other scene arrays.
+
+Arrow labels are optional. For a labelled arrow, use a non-empty mapping such as
+`"labels": {"above": "THF"}`; the only sides are `above` and `below`, with at most
+200 characters per non-blank value. Omit unused sides instead of supplying empty
+strings, and omit `labels` entirely for an unlabelled arrow. Invalid composition
+labels report the zero-based arrow index and label field before any output is
+published.
 
 The command rejects duplicate JSON keys, non-finite numbers, unknown keys,
 invalid graph references, unsupported styles, and inputs larger than 1 MiB. It
@@ -68,20 +117,31 @@ chemvas check-layout scheme.chemvas > layout-report.json
 
 The current v1 checker reports these stable warning codes:
 
-- `text-text-overlap` for intersecting visible note glyph paths;
+- `text-text-overlap` for intersecting visible note and/or atom-label glyph paths;
+- `arrow-structure-overlap` when painted arrow geometry crosses an atom label
+  or a painted molecular bond;
 - `text-shape-border-overlap` when note text crosses the painted shape border;
 - `outside-sheet` when a visible note or shape extends beyond the sheet.
 
 The report includes the exact source SHA-256, document version, deterministic
-warning counts, persisted note/shape indices, and rounded intersection bounds.
+warning counts, persisted note/shape/arrow indices, stable atom IDs (bond endpoints
+for bond references), and rounded intersection bounds.
 The checker does not move objects, write history, normalize, or save the source.
 Before starting Qt it conservatively rejects a document whose potential
-note-pair, note–shape, and outside-sheet work exceeds 10,000 units, so the
+text-pair, note–shape, arrow–structure, and geometry work exceeds 10,000 units, so the
 complete deterministic warning report remains bounded.
 Exit status is `0` for a valid clean document, `1` for a valid document with one
 or more warnings, and `2` for invalid input or bootstrap/resource failure. It is
-a diagnostic gate, not an automatic layout engine, and currently does not claim
-atom-label or arrow–structure collision coverage.
+a diagnostic gate, not an automatic layout engine. Bond-to-own-atom contact and
+filled highlight interiors are not collision pairs. Intentional arrow-to-structure
+contacts may still warn: inspect the reported intersection rather than treating
+every warning as an error in the chemistry. The checker does not cover every
+possible overlap (for example, note–arrow, atom–shape, or TS-bracket collisions),
+and `outside-sheet` remains limited to notes and shapes. Atom-label coverage follows
+the fonts produced by native document restore; underline/strikeout decorations
+injected directly into Qt atom items are not persisted and are outside this
+contract. The work limit bounds record and candidate-pair counts, not arbitrary
+font/glyph complexity. Visual review is still required.
 
 ## Headless document rendering
 

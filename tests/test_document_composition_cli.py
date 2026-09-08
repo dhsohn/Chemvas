@@ -65,6 +65,33 @@ def test_compose_document_public_cli_writes_reopenable_canonical_document(
     assert document.state["model"]["bonds"][0]["a"] == 0
 
 
+def test_compose_document_invalid_arrow_label_is_actionable_and_writes_nothing(
+    tmp_path: Path,
+) -> None:
+    composition = _composition()
+    composition["arrows"] = [
+        {
+            "kind": "arrow",
+            "start": [0.0, 0.0],
+            "end": [20.0, 0.0],
+            "labels": {"above": "", "below": "THF"},
+        },
+    ]
+    request = tmp_path / "invalid-label.json"
+    request.write_text(json.dumps(composition), encoding="utf-8")
+    before = request.read_bytes()
+    output = tmp_path / "scheme.chemvas"
+
+    result = _run("compose-document", str(request), "--output", str(output))
+
+    assert result.returncode != 0
+    assert "arrow 0 labels.above must be a non-empty string" in result.stderr
+    assert "omit unused sides" in result.stderr
+    assert result.stdout == ""
+    assert not output.exists()
+    assert request.read_bytes() == before
+
+
 def test_compose_document_synchronizes_atom_annotations_and_electronic_marks(
     tmp_path: Path,
 ) -> None:

@@ -1,19 +1,33 @@
 from __future__ import annotations
 
 import math
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, override
 
 from PyQt6.QtCore import QRectF, Qt
 from PyQt6.QtGui import (
+    QPainter,
     QPainterPath,
     QPainterPathStroker,
+    QPicture,
     QTextCharFormat,
     QTextCursor,
     QTransform,
 )
+from PyQt6.QtWidgets import (
+    QGraphicsLineItem,
+    QGraphicsPolygonItem,
+    QStyleOptionGraphicsItem,
+)
 
 from chemvas.features.export import item_export_bounds
-from chemvas.ui.canvas_scene_items_state import note_items_for, shape_items_for
+from chemvas.ui.canvas_atom_graphics_state import atom_items_for
+from chemvas.ui.canvas_bond_graphics_state import bond_items_for
+from chemvas.ui.canvas_model_access import bond_for_id
+from chemvas.ui.canvas_scene_items_state import (
+    arrow_items_for,
+    note_items_for,
+    shape_items_for,
+)
 from chemvas.ui.sheet_setup_access import sheet_rect_for
 
 if TYPE_CHECKING:
@@ -21,6 +35,7 @@ if TYPE_CHECKING:
     from PyQt6.QtWidgets import QGraphicsTextItem
 
 WARNING_CODES = (
+    "arrow-structure-overlap",
     "outside-sheet",
     "text-shape-border-overlap",
     "text-text-overlap",
@@ -46,6 +61,44 @@ def check_canvas_layout(canvas: Any) -> dict[str, object]:
         if item.isVisible() and _has_visible_shape_paint(item)
     ]
     warnings: list[dict[str, object]] = []
+    atom_paths = []
+    for atom_id, item in sorted(atom_items_for(canvas).items()):
+        if not item.isVisible() or item.effectiveOpacity() <= 0.0:
+            continue
+        path = _atom_label_scene_path(item)
+        if not path.isEmpty():
+            atom_paths.append((atom_id, path))
+    for left_position, (left_id, left_path) in enumerate(atom_paths):
+        for right_id, right_path in atom_paths[left_position + 1 :]:
+            overlap = left_path.intersected(right_path)
+            if _positive_path(overlap):
+                warnings.append(
+                    _warning(
+                        "text-text-overlap",
+                        [
+                            {"kind": "atom", "id": left_id},
+                            {"kind": "atom", "id": right_id},
+                        ],
+                        overlap.boundingRect(),
+                        "Atom labels overlap.",
+                    )
+                )
+
+    for atom_id, atom_path in atom_paths:
+        for note_index, note_path in note_paths:
+            overlap = atom_path.intersected(note_path)
+            if _positive_path(overlap):
+                warnings.append(
+                    _warning(
+                        "text-text-overlap",
+                        [
+                            {"kind": "atom", "id": atom_id},
+                            {"kind": "note", "index": note_index},
+                        ],
+                        overlap.boundingRect(),
+                        "Atom label and note overlap.",
+                    )
+                )
 
     for left_position, (left_index, left_path) in enumerate(note_paths):
         for right_index, right_path in note_paths[left_position + 1 :]:
@@ -84,6 +137,8 @@ def check_canvas_layout(canvas: Any) -> dict[str, object]:
                 )
             )
 
+    warnings.extend(_arrow_structure_warnings(canvas, atom_paths))
+
     sheet = sheet_rect_for(canvas).adjusted(
         -_SHEET_EPSILON,
         -_SHEET_EPSILON,
@@ -114,6 +169,93 @@ def check_canvas_layout(canvas: Any) -> dict[str, object]:
         "counts": counts,
         "warnings": warnings,
     }
+
+
+def _arrow_structure_warnings(
+    canvas: Any, atom_paths: list[tuple[int, QPainterPath]]
+) -> list[dict[str, object]]:
+    warnings: list[dict[str, object]] = []
+    # A bond may have several painted pieces (parallel strokes, hashes, dots).
+    # Report it once using stable document atom IDs, not its runtime slot.
+    bond_paths = []
+    if arrow_items_for(canvas):
+        for bond_id, items in sorted(bond_items_for(canvas).items()):
+            path = QPainterPath()
+            for item in items:
+                path = path.united(_graphics_paint_scene_path(item))
+            bond = bond_for_id(canvas, bond_id)
+            if bond is not None and not path.isEmpty():
+                bond_paths.append((sorted((bond.a, bond.b)), path))
+    for arrow_index, arrow in enumerate(arrow_items_for(canvas)):
+        arrow_path = _graphics_paint_scene_path(arrow)
+        for atom_id, atom_path in atom_paths:
+            overlap = arrow_path.intersected(atom_path)
+            if _positive_path(overlap):
+                warnings.append(
+                    _warning(
+                        "arrow-structure-overlap",
+                        [
+                            {"kind": "arrow", "index": arrow_index},
+                            {"kind": "atom", "id": atom_id},
+                        ],
+                        overlap.boundingRect(),
+                        "Arrow crosses an atom label.",
+                    )
+                )
+        for atom_ids, bond_path in bond_paths:
+            overlap = arrow_path.intersected(bond_path)
+            if _positive_path(overlap):
+                warnings.append(
+                    _warning(
+                        "arrow-structure-overlap",
+                        [
+                            {"kind": "arrow", "index": arrow_index},
+                            {"kind": "bond", "atom_ids": atom_ids},
+                        ],
+                        overlap.boundingRect(),
+                        "Arrow crosses a molecular bond.",
+                    )
+                )
+
+    return warnings
+
+
+class _AtomLabelPainter(QPainter):
+    """Collect custom label paint runs without duplicating their layout rules."""
+
+    def __init__(self, picture: QPicture) -> None:
+        super().__init__(picture)
+        self.text_path: QPainterPath | None = None
+
+    @override
+    def drawText(self, *args: Any) -> Any:
+        point, text = args
+        if self.text_path is None:
+            self.text_path = QPainterPath()
+            self.text_path.setFillRule(Qt.FillRule.WindingFill)
+        if self.pen().color().alpha() > 0:
+            self.text_path.addText(point, self.font(), text)
+
+    @override
+    def drawPath(self, path: QPainterPath) -> None:
+        self.text_path = QPainterPath()
+        if self.brush().color().alpha() > 0:
+            self.text_path.addPath(path)
+
+
+def _atom_label_scene_path(item: QGraphicsTextItem) -> QPainterPath:
+    # The public paint entrypoint supplies positioned subscript/stacked runs.
+    # Plain labels paint through Qt's C++ text engine instead; use its shaped
+    # document glyphs just as for notes. Neither path includes the hit target.
+    picture = QPicture()
+    painter = _AtomLabelPainter(picture)
+    try:
+        item.paint(painter, QStyleOptionGraphicsItem(), None)
+    finally:
+        painter.end()
+    if painter.text_path is not None:
+        return item.mapToScene(painter.text_path)
+    return _note_paint_scene_path(item)
 
 
 def _has_visible_shape_paint(item: Any) -> bool:
@@ -269,10 +411,37 @@ def _fragment_decoration_path(
     return path
 
 
+def _graphics_paint_scene_path(item: Any) -> QPainterPath:
+    if not item.isVisible() or item.effectiveOpacity() <= 0.0:
+        return QPainterPath()
+    if isinstance(item, QGraphicsLineItem):
+        path = QPainterPath(item.line().p1())
+        path.lineTo(item.line().p2())
+    elif isinstance(item, QGraphicsPolygonItem):
+        path = QPainterPath()
+        path.setFillRule(item.fillRule())
+        path.addPolygon(item.polygon())
+        path.closeSubpath()
+    else:
+        path = item.path()
+    painted = _stroke_path(path, item.pen())
+    if not isinstance(item, QGraphicsLineItem):
+        brush = item.brush()
+        if brush.style() != Qt.BrushStyle.NoBrush and brush.color().alpha() > 0:
+            painted = painted.united(path)
+    return item.mapToScene(painted)
+
+
 def _shape_border_scene_path(item: Any) -> QPainterPath | None:
     pen = item.pen()
     if pen.style() == Qt.PenStyle.NoPen or pen.color().alpha() == 0:
         return None
+    return item.mapToScene(_stroke_path(item.path(), pen))
+
+
+def _stroke_path(path: QPainterPath, pen: Any) -> QPainterPath:
+    if pen.style() == Qt.PenStyle.NoPen or pen.color().alpha() == 0:
+        return QPainterPath()
     stroker = QPainterPathStroker()
     stroker.setWidth(max(float(pen.widthF()), _GEOMETRY_EPSILON))
     stroker.setCapStyle(pen.capStyle())
@@ -281,7 +450,7 @@ def _shape_border_scene_path(item: Any) -> QPainterPath | None:
     if dash_pattern:
         stroker.setDashPattern(dash_pattern)
         stroker.setDashOffset(pen.dashOffset())
-    return item.mapToScene(stroker.createStroke(item.path()))
+    return stroker.createStroke(path)
 
 
 def _positive_path(path: QPainterPath) -> bool:

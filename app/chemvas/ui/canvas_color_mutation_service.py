@@ -43,6 +43,8 @@ from chemvas.ui.note_item_access import (
 )
 from chemvas.ui.scene_item_access import item_is_in_canvas_scene
 from chemvas.ui.scene_item_state import (
+    ARROW_KINDS,
+    arrow_state_dict_for,
     note_state_dict_for,
     ring_state_dict_for,
     shape_state_dict_for,
@@ -377,6 +379,9 @@ class CanvasColorMutationService:
                 return
             if kind == "shape":
                 self._apply_shape_fill(item, color)
+                return
+            if kind in ARROW_KINDS:
+                self._apply_arrow_color(item, color)
 
     def apply_color_to_items(self, items: Iterable[object], color: QColor) -> None:
         items = tuple(items)
@@ -445,6 +450,24 @@ class CanvasColorMutationService:
             elif rollback is not None:
                 self._rollback_commands([rollback], original_error=original_error)
             raise
+
+    def _apply_arrow_color(self, item, color: QColor) -> None:
+        def mutate() -> None:
+            data = item.data(2) or {}
+            data["color"] = color.name()
+            item.setData(2, data)
+            pen = item.pen()
+            pen.setColor(QColor(color.name()))
+            item.setPen(pen)
+            for child in item.childItems():
+                if child.data(0) == "arrow_label" and isinstance(
+                    child, QGraphicsTextItem
+                ):
+                    child.setDefaultTextColor(QColor(color.name()))
+
+        self._record_scene_item_mutation(
+            item, state_for=arrow_state_dict_for, mutation=mutate
+        )
 
     def _apply_shape_fill(self, item, color: QColor) -> None:
         self._record_scene_item_mutation(

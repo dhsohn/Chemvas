@@ -157,6 +157,9 @@ def arrow_state_dict(item: QGraphicsPathItem) -> dict:
         "control": (control.x(), control.y()) if isinstance(control, QPointF) else None,
         "double": bool(data.get("double", False)),
     }
+    color = data.get("color")
+    if isinstance(color, str):
+        state["color"] = color
     labels = data.get("labels")
     if isinstance(labels, dict) and labels:
         state["labels"] = dict(labels)

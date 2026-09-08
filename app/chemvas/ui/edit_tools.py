@@ -6,6 +6,7 @@ from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QColor
 
 from chemvas.core.tool_overlay_logic import activate_tool_no_drag
+from chemvas.domain.document import VALID_ARROW_KINDS
 from chemvas.domain.transactions import add_recovery_error_note
 from chemvas.ui.canvas_smiles_input_state import last_smiles_input_for
 from chemvas.ui.delete_tool_logic import (
@@ -45,7 +46,7 @@ class ColorTool(Tool):
             targets = [
                 sel
                 for sel in self.context.selected_scene_items(excluded_kinds=set())
-                if sel.data(0) in {"bond", "atom", "ring", "shape"}
+                if sel.data(0) in {"bond", "atom", "ring", "shape"} | VALID_ARROW_KINDS
             ]
             if not targets:
                 return True

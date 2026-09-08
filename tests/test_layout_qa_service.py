@@ -16,6 +16,7 @@ from PyQt6.QtWidgets import (
     QGraphicsTextItem,
 )
 
+from chemvas.ui.canvas_atom_graphics_state import CanvasAtomGraphicsState
 from chemvas.ui.canvas_scene_items_state import CanvasSceneItemsState
 from chemvas.ui.layout_qa_service import check_canvas_layout
 from chemvas.ui.sheet_setup_state import SheetSetupState
@@ -74,6 +75,7 @@ def _canvas(
 ) -> SimpleNamespace:
     return SimpleNamespace(
         runtime_state=canvas_runtime_state(
+            atom_graphics_state=CanvasAtomGraphicsState(),
             scene_items_state=CanvasSceneItemsState(
                 note_items=notes,
                 shape_items=shapes,

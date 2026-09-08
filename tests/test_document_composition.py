@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import pytest
 
+from chemvas.domain.document import MAX_ARROW_LABEL_CHARS
 from chemvas.features.document_composition import compose_document_state, service
 
 
@@ -70,3 +71,42 @@ def test_composition_fails_if_electronic_marks_do_not_match_annotations(
 
     with pytest.raises(ValueError, match="charge/radical"):
         compose_document_state(composition)
+
+
+@pytest.mark.parametrize(
+    "labels",
+    [
+        None,
+        [],
+        {},
+        {"left": "condition"},
+        {"above": ""},
+        {"below": "  "},
+        {"above": 1},
+        {"above": "x" * (MAX_ARROW_LABEL_CHARS + 1)},
+    ],
+)
+def test_composition_identifies_invalid_arrow_labels(labels: object) -> None:
+    composition = _composition()
+    composition["arrows"] = [
+        {"kind": "arrow", "start": [0.0, 0.0], "end": [20.0, 0.0]},
+        {"kind": "arrow", "start": [40.0, 0.0], "end": [60.0, 0.0], "labels": labels},
+    ]
+
+    with pytest.raises(ValueError, match=r"arrow 1 labels"):
+        compose_document_state(composition)
+
+
+def test_composition_preserves_one_sided_arrow_label() -> None:
+    composition = _composition()
+    composition["arrows"] = [
+        {
+            "kind": "arrow",
+            "start": [0.0, 0.0],
+            "end": [20.0, 0.0],
+            "labels": {"above": "THF"},
+        },
+    ]
+
+    state = compose_document_state(composition)
+    assert state["arrows"][0]["labels"] == {"above": "THF"}
