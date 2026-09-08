@@ -4,10 +4,10 @@ import os
 import sys
 import threading
 from contextlib import contextmanager
-from pathlib import Path
 from typing import TYPE_CHECKING
 
 from chemvas import __version__
+from chemvas.ui.main_window_path_logic import is_desktop_document_path
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -21,7 +21,6 @@ IGNORED_STDERR_SUBSTRINGS = (
     "This plugin supports grabbing the mouse only for popup windows",
 )
 
-STARTUP_DOCUMENT_SUFFIXES = frozenset((".chemvas", ".svg"))
 DOCUMENT_PATCH_COMMANDS = frozenset(("apply-patch", "inspect-document"))
 DOCUMENT_COMPOSITION_COMMANDS = frozenset(("compose-document",))
 DOCUMENT_LAYOUT_COMMANDS = frozenset(("check-layout",))
@@ -61,7 +60,7 @@ def _startup_document_path(argv: list[str]) -> str | None:
     for argument in argv[1:]:
         if argument.startswith("-"):
             continue
-        if Path(argument).suffix.lower() in STARTUP_DOCUMENT_SUFFIXES:
+        if is_desktop_document_path(argument):
             return argument
     return None
 
@@ -73,9 +72,10 @@ def _root_help() -> str:
     )
     return (
         "Usage:\n"
-        "  chemvas\n"
+        "  chemvas [document]\n"
         "  chemvas <command> [options]\n\n"
-        "Run with no arguments to launch the desktop app.\n\n"
+        "Run with no arguments to launch the desktop app.\n"
+        "Pass a .chemvas, .svg, or .mol document to open it at startup.\n\n"
         "Options:\n"
         "  -h, --help         show this help message and exit\n"
         "  --version          show version and exit\n\n"

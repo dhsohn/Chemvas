@@ -37,7 +37,10 @@ from chemvas.ui.main_window_ports import (
 )
 from chemvas.ui.mark_item_access import mark_kinds_by_atom_for
 from chemvas.ui.renderer_style_access import bond_length_px_for
-from chemvas.ui.scene_decoration_access import materialize_mark_for_atom_for
+from chemvas.ui.scene_decoration_access import (
+    add_arrow_for,
+    materialize_mark_for_atom_for,
+)
 from chemvas.ui.structure_mutation_access import add_bond_between_points_for
 from chemvas.ui.structure_payload_access import build_3d_conversion_payload_for
 
@@ -552,6 +555,96 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
                 self.window, str(existing), canvas=None
             )
             message_box.question.assert_not_called()
+
+    def test_selected_mol_export_requires_structure_before_asking_for_a_path(
+        self,
+    ) -> None:
+        canvas = active_canvas_for_window(self.window)
+        add_bond_between_points_for(canvas, QPointF(-20, 0), QPointF(20, 0))
+        arrow = add_arrow_for(canvas, QPointF(0, 50), QPointF(80, 50), "forward")
+        canvas.scene().clearSelection()
+        before = snapshot_canvas_state_for(canvas)
+        self.window.statusBar().showMessage("Keep this feedback")
+
+        for annotation_selected in (False, True):
+            with self.subTest(annotation_selected=annotation_selected):
+                arrow.setSelected(annotation_selected)
+                file_dialog = mock.Mock()
+                file_dialog.getSaveFileName.return_value = ("", "")
+                message_box = mock.Mock()
+                status_sink = mock.Mock()
+                with mock.patch.object(
+                    self.service, "_document_session_service_for_window"
+                ) as session_service:
+                    self.service.export_mol(
+                        self.window,
+                        selected_only=True,
+                        file_dialog=file_dialog,
+                        message_box=message_box,
+                        dialog_parent=canvas,
+                        status_sink=status_sink,
+                    )
+
+                file_dialog.getSaveFileName.assert_not_called()
+                session_service.assert_not_called()
+                message = "Select a molecular structure on the canvas first."
+                message_box.warning.assert_called_once_with(
+                    canvas, "Export Error", message
+                )
+                status_sink.assert_called_once_with(f"Export failed: {message}")
+                self.assertEqual(snapshot_canvas_state_for(canvas), before)
+                self.assertEqual(
+                    self.window.statusBar().currentMessage(), "Keep this feedback"
+                )
+
+    def test_mol_export_preserves_atom_bond_and_atom_mark_selection(self) -> None:
+        canvas = active_canvas_for_window(self.window)
+        add_bond_between_points_for(canvas, QPointF(-20, 0), QPointF(20, 0))
+        atom_id = min(model_for(canvas).atoms)
+        mark = materialize_mark_for_atom_for(
+            canvas, atom_id, QPointF(-20, -10), kind="plus"
+        )
+        self.assertIsNotNone(mark)
+        before = snapshot_canvas_state_for(canvas)
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            for kind, expected_atoms, expected_bonds in (
+                ("atom", 1, 0),
+                ("bond", 2, 1),
+                ("mark", 1, 0),
+                ("all", 2, 1),
+            ):
+                with self.subTest(selection=kind):
+                    canvas.scene().clearSelection()
+                    if kind != "all":
+                        item = next(
+                            item
+                            for item in canvas.scene().items()
+                            if item.data(0) == kind
+                            and (kind != "atom" or item.data(1) == atom_id)
+                        )
+                        item.setSelected(True)
+                    path = Path(temp_dir) / f"{kind}.mol"
+                    file_dialog = mock.Mock()
+                    file_dialog.getSaveFileName.return_value = (str(path), "")
+                    message_box = mock.Mock()
+
+                    self.service.export_mol(
+                        self.window,
+                        selected_only=kind != "all",
+                        file_dialog=file_dialog,
+                        message_box=message_box,
+                    )
+
+                    file_dialog.getSaveFileName.assert_called_once()
+                    message_box.warning.assert_not_called()
+                    exported = parse_molfile(path.read_text(encoding="utf-8"))
+                    self.assertEqual(len(exported.atoms), expected_atoms)
+                    self.assertEqual(len(exported.bonds), expected_bonds)
+                    self.assertEqual(
+                        list(exported.atom_annotations.values()), [{"formal_charge": 1}]
+                    )
+                    self.assertEqual(snapshot_canvas_state_for(canvas), before)
 
     def test_export_paths_do_not_reprompt_a_dialog_confirmed_target(self) -> None:
         # The normalizers round-trip through Path(), so the returned string can

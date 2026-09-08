@@ -255,7 +255,7 @@ class MainStderrFilterTest(unittest.TestCase):
             [event[0] for event in events], ["enter", "show", "exec", "exit"]
         )
 
-    def test_main_loads_startup_canvas_file_argument(self) -> None:
+    def _assert_main_loads_startup_file(self, path: str) -> None:
         events: list[tuple[str, object]] = []
 
         class FakeApplication(_QApplicationMetadataStub):
@@ -302,7 +302,7 @@ class MainStderrFilterTest(unittest.TestCase):
             yield
             events.append(("exit", None))
 
-        argv = ["chemvas", "--style", "Fusion", "/tmp/start.chemvas"]
+        argv = ["chemvas", "--style", "Fusion", path]
         with (
             mock.patch.dict(
                 sys.modules,
@@ -322,11 +322,17 @@ class MainStderrFilterTest(unittest.TestCase):
             [
                 ("enter", {}),
                 ("show", None),
-                ("load", "/tmp/start.chemvas"),
+                ("load", path),
                 ("exec", argv),
                 ("exit", None),
             ],
         )
+
+    def test_main_loads_startup_canvas_file_argument(self) -> None:
+        self._assert_main_loads_startup_file("/tmp/start.chemvas")
+
+    def test_main_loads_startup_mol_file_argument(self) -> None:
+        self._assert_main_loads_startup_file("/tmp/my structure.mol")
 
     def test_main_module_executes_main_when_run_as_script(self) -> None:
         events: list[str] = []

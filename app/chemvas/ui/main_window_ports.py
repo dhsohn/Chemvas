@@ -3,6 +3,8 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
+    from PyQt6.QtWidgets import QGraphicsTextItem, QLineEdit
+
     from chemvas.ui.main_window_service_types import MainWindowServices
     from chemvas.ui.main_window_tab_references import MainWindowTabReferences
     from chemvas.ui.main_window_ui_references import MainWindowUiReferences
@@ -157,7 +159,86 @@ def scene_delete_controller_for_window(window):
     ).scene_operations.scene_delete_controller
 
 
+def _text_editor_for_window(window) -> QLineEdit | QGraphicsTextItem | None:
+    from PyQt6.QtCore import Qt
+    from PyQt6.QtWidgets import QGraphicsTextItem, QLineEdit, QWidget
+
+    if not isinstance(window, QWidget):
+        return None
+    # QWidget retains this window's focus target while its native menu is open.
+    # QApplication.focusWidget() could instead belong to another window.
+    widget = window.focusWidget()
+    if widget is None:
+        return None
+    if isinstance(widget, QLineEdit):
+        return widget
+    canvas = active_canvas_or_none_for_window(window)
+    if canvas is None or widget not in (canvas, canvas.viewport()):
+        return None
+    from chemvas.ui.input_view_access import focused_scene_item_for
+
+    item = focused_scene_item_for(canvas)
+    if isinstance(item, QGraphicsTextItem) and (
+        item.textInteractionFlags() & Qt.TextInteractionFlag.TextEditable
+    ):
+        return item
+    return None
+
+
+def text_history_availability_for_window(window) -> tuple[bool, bool] | None:
+    from PyQt6.QtWidgets import QGraphicsTextItem, QLineEdit
+
+    editor = _text_editor_for_window(window)
+    if isinstance(editor, QLineEdit):
+        if editor.isReadOnly():
+            return False, False
+        return editor.isUndoAvailable(), editor.isRedoAvailable()
+    if isinstance(editor, QGraphicsTextItem):
+        document = editor.document()
+        assert document is not None
+        return document.isUndoAvailable(), document.isRedoAvailable()
+    return None
+
+
+def _edit_text_for_window(window, operation: str) -> bool:
+    from PyQt6.QtCore import QEvent
+    from PyQt6.QtGui import QKeyEvent, QKeySequence
+    from PyQt6.QtWidgets import QLineEdit
+
+    editor = _text_editor_for_window(window)
+    if editor is None:
+        return False
+    if isinstance(editor, QLineEdit):
+        if not editor.isReadOnly() or operation in {"Copy", "SelectAll"}:
+            getattr(editor, operation[0].lower() + operation[1:])()
+    else:
+        # Reuse Qt's native rich-text editing, including its clipboard formats
+        # and text undo stack, without reimplementing QTextControl operations.
+        key = QKeySequence(getattr(QKeySequence.StandardKey, operation))[0]
+        event = QKeyEvent(
+            QEvent.Type.KeyPress, key.key().value, key.keyboardModifiers()
+        )
+        scene = editor.scene()
+        assert scene is not None
+        scene.sendEvent(editor, event)
+    # An empty selection or exhausted text history must never fall through to
+    # a destructive canvas command.
+    return True
+
+
+def undo_for_window(window) -> None:
+    if not _edit_text_for_window(window, "Undo"):
+        history_service_for_window(window).undo()
+
+
+def redo_for_window(window) -> None:
+    if not _edit_text_for_window(window, "Redo"):
+        history_service_for_window(window).redo()
+
+
 def copy_selection_for_window(window) -> bool:
+    if _edit_text_for_window(window, "Copy"):
+        return True
     if active_canvas_or_none_for_window(window) is None:
         return False
     return bool(
@@ -166,17 +247,23 @@ def copy_selection_for_window(window) -> bool:
 
 
 def cut_selection_for_window(window) -> None:
+    if _edit_text_for_window(window, "Cut"):
+        return
     if copy_selection_for_window(window):
         scene_delete_controller_for_window(window).delete_selected_items()
 
 
 def paste_selection_for_window(window) -> None:
+    if _edit_text_for_window(window, "Paste"):
+        return
     if active_canvas_or_none_for_window(window) is None:
         return
     scene_clipboard_controller_for_window(window).paste_selection_from_clipboard()
 
 
 def select_all_for_window(window) -> None:
+    if _edit_text_for_window(window, "SelectAll"):
+        return
     from chemvas.ui.select_all_access import select_all_scene_items_for
 
     canvas = active_canvas_or_none_for_window(window)
@@ -314,9 +401,14 @@ def sheet_orientation_for_window(window) -> str:
 
 
 def set_sheet_setup_for_window(window, size: str, orientation: str) -> None:
-    from chemvas.ui.sheet_setup_access import set_sheet_setup_for
+    from chemvas.ui.canvas_window_access import notify_document_change_for
+    from chemvas.ui.sheet_setup_access import set_sheet_setup_for, sheet_setup_for
 
-    set_sheet_setup_for(active_canvas_for_window(window), size, orientation)
+    canvas = active_canvas_for_window(window)
+    before = sheet_setup_for(canvas)
+    set_sheet_setup_for(canvas, size, orientation)
+    if sheet_setup_for(canvas) != before:
+        notify_document_change_for(canvas)
 
 
 def next_canvas_name_for_window(window, prefix: str = "Canvas") -> str:
@@ -368,6 +460,7 @@ __all__ = [
     "preview_for_window",
     "preview_window_for_window",
     "redo_action_for_window",
+    "redo_for_window",
     "reset_zoom_for_window",
     "scene_clipboard_controller_for_window",
     "scene_delete_controller_for_window",
@@ -385,11 +478,13 @@ __all__ = [
     "sheet_size_for_window",
     "style_controller_for_window",
     "tab_references_for_window",
+    "text_history_availability_for_window",
     "tool_action_for_window",
     "tool_actions_for_window",
     "tool_mode_controller_for_window",
     "ui_references_for_window",
     "undo_action_for_window",
+    "undo_for_window",
     "ungroup_selection_for_window",
     "zoom_in_for_window",
     "zoom_out_for_window",

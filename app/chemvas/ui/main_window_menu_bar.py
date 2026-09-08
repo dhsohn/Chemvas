@@ -18,15 +18,17 @@ from chemvas.ui.main_window_ports import (
     cut_selection_for_window,
     fit_canvas_to_view_for_window,
     group_selection_for_window,
-    history_service_for_window,
     paste_selection_for_window,
+    redo_for_window,
     reset_zoom_for_window,
     scene_transform_controller_for_window,
     select_all_for_window,
+    services_for_window,
     set_grid_snap_for_window,
     set_sheet_setup_for_window,
     sheet_orientation_for_window,
     sheet_size_for_window,
+    undo_for_window,
     ungroup_selection_for_window,
     zoom_in_for_window,
     zoom_out_for_window,
@@ -171,14 +173,23 @@ def _build_file_menu(
 def _build_edit_menu(
     menu_bar: QMenuBar, window, callbacks: MainWindowPanelToolbarCallbacks
 ) -> tuple[QAction, QAction]:
+    def text_action_tip(description: str, key: QKeySequence.StandardKey) -> str:
+        shortcut = QKeySequence(key).toString(QKeySequence.SequenceFormat.NativeText)
+        return f"{description} ({shortcut})"
+
     edit_menu = _add_menu(menu_bar, "Edit")
+    edit_menu.aboutToShow.connect(
+        lambda: services_for_window(
+            window
+        ).action_availability_service.update_action_availability(window)
+    )
     undo_action = _add_action(
         edit_menu,
         window,
         "Undo",
         status_tip="Undo the last edit",
         shortcut=QKeySequence.StandardKey.Undo,
-        triggered=lambda: history_service_for_window(window).undo(),
+        triggered=lambda: undo_for_window(window),
     )
     redo_action = _add_action(
         edit_menu,
@@ -186,7 +197,7 @@ def _build_edit_menu(
         "Redo",
         status_tip="Redo the last undone edit",
         shortcut=QKeySequence.StandardKey.Redo,
-        triggered=lambda: history_service_for_window(window).redo(),
+        triggered=lambda: redo_for_window(window),
     )
     edit_menu.addSeparator()
     # Cut/Copy/Paste/Select All/Group keys are handled by the canvas key-press
@@ -198,21 +209,27 @@ def _build_edit_menu(
         edit_menu,
         window,
         "Cut",
-        status_tip="Cut the selection to the clipboard (Ctrl+X)",
+        status_tip=text_action_tip(
+            "Cut selected text or objects", QKeySequence.StandardKey.Cut
+        ),
         triggered=lambda: cut_selection_for_window(window),
     )
     _add_action(
         edit_menu,
         window,
         "Copy",
-        status_tip="Copy the selection to the clipboard (Ctrl+C)",
+        status_tip=text_action_tip(
+            "Copy selected text or objects", QKeySequence.StandardKey.Copy
+        ),
         triggered=lambda: copy_selection_for_window(window),
     )
     _add_action(
         edit_menu,
         window,
         "Paste",
-        status_tip="Paste the copied selection (Ctrl+V)",
+        status_tip=text_action_tip(
+            "Paste into the text editor or canvas", QKeySequence.StandardKey.Paste
+        ),
         triggered=lambda: paste_selection_for_window(window),
     )
     edit_menu.addSeparator()
@@ -220,7 +237,9 @@ def _build_edit_menu(
         edit_menu,
         window,
         "Select All",
-        status_tip="Select everything on the canvas (Ctrl+A)",
+        status_tip=text_action_tip(
+            "Select all text or canvas objects", QKeySequence.StandardKey.SelectAll
+        ),
         triggered=lambda: select_all_for_window(window),
     )
     edit_menu.addSeparator()
