@@ -74,6 +74,12 @@ def offscreen_canvas(
         if existing is not None and not isinstance(existing, QApplication):
             raise RuntimeError(f"{command} requires a QApplication instance")
         application = existing or QApplication([f"chemvas-{command}"])
+        if existing is None:
+            # The offscreen plugin may name a missing generic family on macOS.
+            # Use Qt's default family before text items initialize their layout.
+            font = application.font()
+            font.setFamily(font.defaultFamily())
+            application.setFont(font)
     finally:
         if previous_qt_platform is None:
             os.environ.pop("QT_QPA_PLATFORM", None)

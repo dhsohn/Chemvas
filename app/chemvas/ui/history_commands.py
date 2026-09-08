@@ -31,6 +31,7 @@ from chemvas.ui.canvas_scene_items_state import (
     scene_item_collection_for,
 )
 from chemvas.ui.canvas_smiles_input_state import set_last_smiles_input_for
+from chemvas.ui.canvas_view_event_router import route_scene_selection_group_changed
 from chemvas.ui.handle_overlay_access import clear_handles_for
 from chemvas.ui.history_atom_position_restore import (
     set_atom_positions_for_history as _set_atom_positions_for_history,
@@ -583,6 +584,10 @@ def _run_group_state_transaction(
     scene_rect_snapshot = capture_scene_rect_snapshot(runtime_snapshot.scene)
     try:
         apply_change()
+        # Pasted scene items regain selection before their group is restored.
+        # Membership changes emit no Qt selectionChanged signal; reconcile now
+        # so the next drag cannot move a ring while leaving its sidechain behind.
+        route_scene_selection_group_changed(canvas)
         # The dashed group box is part of the selection outline; without a
         # refresh, undo/redo would leave a stale box (and its hit-test area).
         refresh_selection_outline_for_canvas(canvas)

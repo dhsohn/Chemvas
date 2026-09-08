@@ -17,6 +17,7 @@ from PyQt6.QtWidgets import (
     QGraphicsTextItem,
 )
 
+from chemvas.ui.canvas_callback_state import CanvasCallbackState
 from chemvas.ui.canvas_group_state import (
     CanvasGroupState,
     CanvasSceneGroup,
@@ -220,7 +221,9 @@ class _StyledSceneItem(_SceneItem):
 class _Canvas:
     def __init__(self) -> None:
         self._scene = _Scene()
-        self.runtime_state = canvas_runtime_state(group_state=CanvasGroupState())
+        self.runtime_state = canvas_runtime_state(
+            group_state=CanvasGroupState(), callback_state=CanvasCallbackState()
+        )
 
     def scene(self) -> _Scene:
         return self._scene
@@ -2192,7 +2195,9 @@ def _group_snapshot(canvas) -> tuple[dict[int, CanvasSceneGroup], int, bool]:
 
 def _group_canvas(**attrs) -> SimpleNamespace:
     return SimpleNamespace(
-        runtime_state=canvas_runtime_state(group_state=CanvasGroupState()),
+        runtime_state=canvas_runtime_state(
+            group_state=CanvasGroupState(), callback_state=CanvasCallbackState()
+        ),
         **attrs,
     )
 

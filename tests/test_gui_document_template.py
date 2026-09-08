@@ -553,7 +553,7 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
             )
             self._document_actions().save_canvas(self.window)
 
-        save_mock.assert_called_once_with(expected_path)
+        save_mock.assert_called_once_with(os.path.realpath(expected_path))
         dialog_mock.assert_not_called()
         self.assertEqual(self._current_file_path(), expected_path)
         self.assertEqual(
@@ -600,7 +600,7 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
     def test_save_canvas_as_failure_warns_and_preserves_current_path(self) -> None:
         self._set_current_file_path("/tmp/original.chemvas")
         self.window.statusBar().showMessage("Before save as")
-        attempted_path = os.path.abspath("/tmp/renamed.chemvas")
+        attempted_path = os.path.realpath("/tmp/renamed.chemvas")
         doc_service = active_canvas_for_window(
             self.window
         ).services.document.canvas_document_session_service
@@ -730,7 +730,7 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
     def test_save_canvas_failure_warns_and_preserves_current_path(self) -> None:
         self._set_current_file_path("/tmp/original.chemvas")
         self.window.statusBar().showMessage("Before save")
-        attempted_path = os.path.abspath("/tmp/original.chemvas")
+        attempted_path = os.path.realpath("/tmp/original.chemvas")
         doc_service = active_canvas_for_window(
             self.window
         ).services.document.canvas_document_session_service

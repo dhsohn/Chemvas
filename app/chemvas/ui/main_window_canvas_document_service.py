@@ -37,6 +37,7 @@ class MainWindowCanvasDocumentService:
         active_canvas_or_none_for_window,
         next_canvas_name_for_window,
         set_last_canvas_tab_index_for_window,
+        update_sheet_status_label_for_window,
     ) -> None:
         self._active_canvas_ui = active_canvas_ui
         self._canvas_factory = canvas_factory
@@ -45,6 +46,9 @@ class MainWindowCanvasDocumentService:
         self._next_canvas_name_for_window = next_canvas_name_for_window
         self._set_last_canvas_tab_index_for_window = (
             set_last_canvas_tab_index_for_window
+        )
+        self._update_sheet_status_label_for_window = (
+            update_sheet_status_label_for_window
         )
 
     def create_canvas(
@@ -210,6 +214,7 @@ class MainWindowCanvasDocumentService:
                 index, decorate_tab_title(self.display_name(canvas), dirty=dirty)
             )
         self._refresh_window_title(window, canvas, dirty=dirty)
+        self._update_sheet_status_label_for_window(window)
 
     def _refresh_window_title(
         self, window, canvas: CanvasView, *, dirty: bool | None = None

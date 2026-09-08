@@ -1,29 +1,60 @@
 from __future__ import annotations
 
+from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import (
     QDialog,
     QHBoxLayout,
     QLabel,
     QLineEdit,
     QPushButton,
+    QSizePolicy,
     QVBoxLayout,
 )
 
 from chemvas.domain.document import MAX_ARROW_LABEL_CHARS
+from chemvas.features.annotations import arrow_label_html
 
 LABEL_SYNTAX_HINT = (
-    "_ starts a subscript and ^ a superscript; braces group several characters "
-    "(k_-1, K_{eq}, ΔG^‡). Leave a field empty to remove that label."
+    "Use _{...} for subscripts and ^{...} for superscripts. "
+    "Examples: K_{2}CO_{3}, H_{2}SO_{4}, ΔG^{‡}.\n"
+    "Without braces, _ or ^ applies until the next space, _ or ^. "
+    "Leave a field empty to remove that label."
 )
 
 
 def _label_input(layout: QVBoxLayout, caption: str, name: str, text: str) -> QLineEdit:
-    layout.addWidget(QLabel(caption))
+    caption_label = QLabel(caption)
+    layout.addWidget(caption_label)
     field = QLineEdit()
     field.setObjectName(name)
+    field.setAccessibleName(f"{caption.removesuffix(':')} label")
+    caption_label.setBuddy(field)
     field.setMaxLength(MAX_ARROW_LABEL_CHARS)
     field.setText(text)
     layout.addWidget(field)
+
+    preview = QLabel()
+    preview.setObjectName(f"{name.removesuffix('Input')}Preview")
+    preview.setAccessibleName(f"{caption.removesuffix(':')} label preview")
+    preview.setTextFormat(Qt.TextFormat.RichText)
+    preview.setTextInteractionFlags(Qt.TextInteractionFlag.NoTextInteraction)
+    preview.setWordWrap(True)
+    preview.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
+    preview_font = preview.font()
+    preview_font.setPointSize(14)
+    preview.setFont(preview_font)
+    preview.setMargin(4)
+    preview.setMinimumHeight(preview.fontMetrics().height() + 8)
+    preview_row = QHBoxLayout()
+    preview_row.addWidget(QLabel("Preview:"))
+    preview_row.addWidget(preview, 1)
+    layout.addLayout(preview_row)
+
+    def update_preview(value: str) -> None:
+        preview.setText(arrow_label_html(value) if value else "No label")
+
+    field.textChanged.connect(update_preview)
+    update_preview(field.text())
     return field
 
 
@@ -31,11 +62,14 @@ def prompt_arrow_labels(parent, *, above: str, below: str) -> dict[str, str] | N
     dialog = QDialog(parent)
     dialog.setWindowTitle("Arrow Labels")
     dialog.setStyleSheet(parent.window().styleSheet())
+    dialog.setMinimumWidth(480)
+    dialog.setMaximumWidth(640)
     layout = QVBoxLayout(dialog)
 
     above_input = _label_input(layout, "Above:", "arrowLabelAboveInput", above)
     below_input = _label_input(layout, "Below:", "arrowLabelBelowInput", below)
     hint = QLabel(LABEL_SYNTAX_HINT)
+    hint.setTextFormat(Qt.TextFormat.PlainText)
     hint.setWordWrap(True)
     layout.addWidget(hint)
 

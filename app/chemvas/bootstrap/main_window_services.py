@@ -56,6 +56,7 @@ from chemvas.ui.main_window_ports import (
     reset_zoom_for_window,
     scene_transform_controller_for_window,
     selected_scene_items_for_window,
+    services_for_window,
     set_atom_input_for_window,
     set_context_bar_page_override_for_window,
     set_last_canvas_tab_index_for_window,
@@ -221,12 +222,15 @@ def build_main_window_services() -> MainWindowServices:
         active_canvas_or_none_for_window=active_canvas_or_none_for_window,
         next_canvas_name_for_window=next_canvas_name_for_window,
         set_last_canvas_tab_index_for_window=set_last_canvas_tab_index_for_window,
+        update_sheet_status_label_for_window=status_service.update_sheet_status_label,
     )
     document_action_service = MainWindowDocumentActionService(
         document_session_service_for_window=document_session_service_for_window,
         active_canvas_for_window=active_canvas_for_window,
         active_canvas_or_none_for_window=active_canvas_or_none_for_window,
-        canvas_document_service=canvas_document_service,
+        canvas_document_service_for_window=lambda window: (
+            services_for_window(window).canvas_document_service
+        ),
     )
     canvas_tab_ui_service = MainWindowCanvasTabUIService(
         close_canvas_tab_for_window=document_action_service.close_canvas_tab,

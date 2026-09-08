@@ -20,6 +20,7 @@ from PyQt6.QtWidgets import (
     QGraphicsItem,
     QGraphicsPathItem,
     QGraphicsScene,
+    QLabel,
     QLineEdit,
     QPushButton,
 )
@@ -69,6 +70,21 @@ from chemvas.ui.selection_collection_access import selection_items_for_copy_for
 
 
 class ArrowLabelSyntaxTest(unittest.TestCase):
+    def test_chemical_formula_requires_braces_to_limit_each_subscript(self) -> None:
+        self.assertEqual(
+            parse_arrow_label("K_2CO_3"),
+            (LabelRun("K", "normal"), LabelRun("2CO3", "sub")),
+        )
+        self.assertEqual(
+            parse_arrow_label("K_{2}CO_{3}"),
+            (
+                LabelRun("K", "normal"),
+                LabelRun("2", "sub"),
+                LabelRun("CO", "normal"),
+                LabelRun("3", "sub"),
+            ),
+        )
+
     def test_marker_applies_to_the_following_token(self) -> None:
         self.assertEqual(
             parse_arrow_label("k_1"), (LabelRun("k", "normal"), LabelRun("1", "sub"))
@@ -285,6 +301,9 @@ class ArrowLabelBuildTest(unittest.TestCase):
                 label_color = QColor("#195b90")
                 for child in _label_children(item):
                     font = QFont("DejaVu Sans", 12)
+                    # Compare glyph geometry without platform-specific text
+                    # smoothing; the SVG paths still use painter antialiasing.
+                    font.setStyleStrategy(QFont.StyleStrategy.NoAntialias)
                     font.setBold(bold)
                     font.setItalic(italic)
                     child.setFont(font)
@@ -627,6 +646,68 @@ class ArrowLabelDialogTest(unittest.TestCase):
                     active_canvas_for_window(self.window), above="", below=""
                 )
             )
+
+    def test_live_previews_show_initial_scope_and_follow_each_input(self) -> None:
+        def drive_dialog(dialog: QDialog):
+            above = dialog.findChild(QLineEdit, "arrowLabelAboveInput")
+            below = dialog.findChild(QLineEdit, "arrowLabelBelowInput")
+            above_preview = dialog.findChild(QLabel, "arrowLabelAbovePreview")
+            below_preview = dialog.findChild(QLabel, "arrowLabelBelowPreview")
+            self.assertIsNotNone(above_preview)
+            self.assertIsNotNone(below_preview)
+            self.assertEqual(above_preview.textFormat(), Qt.TextFormat.RichText)
+            self.assertEqual(above_preview.text(), "MeI, K<sub>2CO3</sub>")
+            self.assertEqual(below_preview.text(), "k<sub>-1</sub>")
+
+            above.selectAll()
+            QTest.keyClicks(above, "MeI, K_{2}CO_{3}")
+            self.assertEqual(above_preview.text(), "MeI, K<sub>2</sub>CO<sub>3</sub>")
+            self.assertEqual(below_preview.text(), "k<sub>-1</sub>")
+            below.clear()
+            self.assertEqual(below_preview.text(), "No label")
+            self.assertEqual(above.text(), "MeI, K_{2}CO_{3}")
+            self.assertEqual(below.text(), "")
+            return QDialog.DialogCode.Accepted
+
+        with mock.patch("chemvas.ui.arrow_label_dialog.QDialog.exec", new=drive_dialog):
+            result = prompt_arrow_labels(
+                active_canvas_for_window(self.window),
+                above="MeI, K_2CO_3",
+                below="k_-1",
+            )
+        self.assertEqual(result, {"above": "MeI, K_{2}CO_{3}", "below": ""})
+
+    def test_preview_escapes_markup_and_cancel_keeps_the_document_unchanged(self):
+        canvas = active_canvas_for_window(self.window)
+        before = snapshot_canvas_state_for(canvas)
+
+        def drive_dialog(dialog: QDialog):
+            above = dialog.findChild(QLineEdit, "arrowLabelAboveInput")
+            below = dialog.findChild(QLineEdit, "arrowLabelBelowInput")
+            preview = dialog.findChild(QLabel, "arrowLabelAbovePreview")
+            self.assertIsNotNone(preview)
+            above.setText("<b>실온 & 산화</b>^‡")
+            self.assertEqual(
+                preview.text(), "&lt;b&gt;실온 &amp; 산화&lt;/b&gt;<sup>‡</sup>"
+            )
+            self.assertEqual(above.text(), "<b>실온 & 산화</b>^‡")
+            below.setText("x" * (MAX_ARROW_LABEL_CHARS + 1))
+            self.assertEqual(len(below.text()), MAX_ARROW_LABEL_CHARS)
+            self.assertEqual(
+                dialog.findChild(QLabel, "arrowLabelBelowPreview").text(),
+                "x" * MAX_ARROW_LABEL_CHARS,
+            )
+            above.setText("&" * MAX_ARROW_LABEL_CHARS)
+            self.assertEqual(preview.text(), "&amp;" * MAX_ARROW_LABEL_CHARS)
+            dialog.adjustSize()
+            available = dialog.screen().availableGeometry()
+            self.assertLessEqual(dialog.width(), min(640, available.width()))
+            self.assertLessEqual(dialog.height(), available.height())
+            return QDialog.DialogCode.Rejected
+
+        with mock.patch("chemvas.ui.arrow_label_dialog.QDialog.exec", new=drive_dialog):
+            self.assertIsNone(prompt_arrow_labels(canvas, above="", below=""))
+        self.assertEqual(snapshot_canvas_state_for(canvas), before)
 
 
 class ArrowLabelGuiTest(unittest.TestCase):

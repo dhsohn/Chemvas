@@ -53,13 +53,14 @@ class _ZoomPercentButton(QToolButton):
 
 
 TOOL_HINTS: dict[str, str] = {
-    "select": "Select: click or drag marquee",
+    "select": "Select: double-click arrows/lines for labels",
     "bond": "Bond: click-drag to draw",
     "text": "Atom / Text: click to place label",
     "mark": "Mark: click atom or label",
     "benzene": "Ring: click to place template",
-    "arrow": "Arrow: drag to draw",
-    "line": "Line: drag to draw, Shift locks the angle",
+    "arrow": "Arrow: drag to draw; double-click for labels",
+    "line": "Line: double-click for labels; Shift locks angle",
+    "note": "Text: click to add/edit; Esc to finish",
     "ts_bracket": "Brackets: drag around selection",
     "orbital": "Orbital: click to place",
     "perspective": "Perspective: drag selection to rotate",

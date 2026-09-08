@@ -139,7 +139,9 @@ def test_show_active_tool_hint_updates_status_bar_message() -> None:
 
     service.show_active_tool_hint(window)
 
-    bar.showMessage.assert_called_once_with("Select: click or drag marquee")
+    bar.showMessage.assert_called_once_with(
+        "Select: double-click arrows/lines for labels"
+    )
 
 
 def test_show_error_message_owns_reset_timer_by_window(qapp) -> None:

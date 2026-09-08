@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.3] - 2026-09-08
+
+This maintenance release fixes group movement after Redo and window feedback,
+and makes reaction-condition editing easier to check. The `.chemvas` document
+format remains version 7; existing supported documents do not need migration.
+
+### Fixed
+
+- Restore complete group selection after Undo/Redo before the next drag, so a
+  pasted ring and its sidechain move together with the group's annotations.
+- Keep tool, selection, and zoom feedback attached to the destination window
+  when opening a document in a new window.
+- Update the status bar's document name and unsaved marker after saving,
+  renaming, editing, and Undo/Redo without replacing the current feedback message.
+- Initialize headless Qt with its platform default font family, avoiding the
+  missing generic-font warning when checking layouts on macOS.
+
+### Changed
+
+- Preview arrow labels while typing and explain explicit subscript and superscript
+  ranges with chemical-formula examples.
+- Show how to edit arrow and line labels, and how to enter and finish note editing,
+  in the drawing tool hints.
+
 ## [0.8.2] - 2026-09-07
 
 This maintenance release improves selection and text-editing workflows, preserves
@@ -1323,7 +1347,8 @@ housekeeping.
   `.chemvas` document type (double-clicking a file opens it in Chemvas), and a
   Linux `.desktop` entry with an `application/x-chemvas` MIME type.
 
-[Unreleased]: https://github.com/dhsohn/Chemvas/compare/v0.8.2...HEAD
+[Unreleased]: https://github.com/dhsohn/Chemvas/compare/v0.8.3...HEAD
+[0.8.3]: https://github.com/dhsohn/Chemvas/compare/v0.8.2...v0.8.3
 [0.8.2]: https://github.com/dhsohn/Chemvas/compare/v0.8.1...v0.8.2
 [0.8.1]: https://github.com/dhsohn/Chemvas/compare/v0.8.0...v0.8.1
 [0.8.0]: https://github.com/dhsohn/Chemvas/compare/v0.7.0...v0.8.0

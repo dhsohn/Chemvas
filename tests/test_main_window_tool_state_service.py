@@ -106,7 +106,8 @@ class MainWindowToolStateServiceTest(unittest.TestCase):
         self.service.set_tool_with_status(self.window, "select")
 
         self.assertEqual(
-            self.window.statusBar().currentMessage(), "Select: click or drag marquee"
+            self.window.statusBar().currentMessage(),
+            "Select: double-click arrows/lines for labels",
         )
         self.assertEqual(
             self.status_service.status_context_texts()["tool"], "Tool: Select"
