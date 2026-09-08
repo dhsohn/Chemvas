@@ -6,7 +6,7 @@ from unittest import mock
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PyQt6.QtCore import QEvent
+from PyQt6.QtCore import QEvent, QPointF
 from PyQt6.QtWidgets import QApplication
 
 from chemvas.adapters.qt import FileOpenEventFilter
@@ -123,6 +123,128 @@ class OpenDocumentRoutingTest(unittest.TestCase):
         # new window rather than as another tab (single-document-per-window).
         self.assertEqual(len(open_windows()), 2)
         self.assertIs(open_windows()[0], window)
+
+    def test_new_chemvas_window_keeps_its_ui_callbacks(self) -> None:
+        self._assert_new_document_window_keeps_its_ui_callbacks(".chemvas")
+
+    def test_new_editable_svg_window_keeps_its_ui_callbacks(self) -> None:
+        self._assert_new_document_window_keeps_its_ui_callbacks(".svg")
+
+    def test_new_mol_window_keeps_its_ui_callbacks(self) -> None:
+        self._assert_new_document_window_keeps_its_ui_callbacks(".mol")
+
+    def _assert_new_document_window_keeps_its_ui_callbacks(self, suffix: str) -> None:
+        from chemvas.bootstrap.window_registry import open_new_window, open_windows
+        from chemvas.core.document_io import write_document
+        from chemvas.core.molfile import write_molfile
+        from chemvas.core.svg_roundtrip import (
+            CHEMVAS_SVG_SCOPE_SHEET,
+            create_editable_svg_payload,
+            embed_chemvas_document_in_svg,
+        )
+        from chemvas.domain.document import CANVAS_FILE_VERSION
+        from chemvas.ui.canvas_model_access import model_for
+        from chemvas.ui.canvas_window_access import snapshot_canvas_state_for
+        from chemvas.ui.main_window_ports import (
+            active_canvas_for_window,
+            services_for_window,
+            set_zoom_percent_for_window,
+            tool_action_for_window,
+            tool_mode_controller_for_window,
+        )
+        from chemvas.ui.scene_decoration_access import add_arrow_for
+        from chemvas.ui.structure_mutation_access import add_bond_between_points_for
+
+        reference = open_new_window()
+        reference_services = services_for_window(reference)
+        reference_canvas = active_canvas_for_window(reference)
+        add_bond_between_points_for(reference_canvas, QPointF(-20, 0), QPointF(20, 0))
+        with tempfile.TemporaryDirectory() as temp_dir:
+            reference_path = Path(temp_dir) / "reference.chemvas"
+            self.assertTrue(
+                reference_services.document_action_service.save_canvas_to_path(
+                    reference, str(reference_path)
+                )
+            )
+            state = snapshot_canvas_state_for(reference_canvas)
+            path = Path(temp_dir) / f"opened{suffix}"
+            if suffix == ".mol":
+                path.write_text(
+                    write_molfile(model_for(reference_canvas)), encoding="utf-8"
+                )
+            elif suffix == ".svg":
+                path.write_text(
+                    '<svg xmlns="http://www.w3.org/2000/svg"/>', encoding="utf-8"
+                )
+                embed_chemvas_document_in_svg(
+                    path,
+                    create_editable_svg_payload(
+                        state,
+                        document_version=CANVAS_FILE_VERSION,
+                        scope=CHEMVAS_SVG_SCOPE_SHEET,
+                    ),
+                )
+            else:
+                write_document(path, state, version=CANVAS_FILE_VERSION)
+            tool_mode_controller_for_window(reference).set_tool("line")
+            self.app.processEvents()
+            reference_status = reference_services.status_service.status_context_texts()
+            reference_page = (
+                reference_services.context_bar_service._stack.currentWidget()
+            )
+            reference_document = snapshot_canvas_state_for(reference_canvas)
+
+            open_document(str(path))
+            self.app.processEvents()
+
+            self.assertEqual(len(open_windows()), 2)
+            target = open_windows()[-1]
+            target_services = services_for_window(target)
+            target_canvas = active_canvas_for_window(target)
+            self.assertEqual(len(model_for(target_canvas).atoms), 2)
+            tool_mode_controller_for_window(target).set_tool("arrow")
+            arrow = add_arrow_for(
+                target_canvas, QPointF(0, 70), QPointF(100, 70), "arrow"
+            )
+            arrow.setSelected(True)
+            set_zoom_percent_for_window(target, 150)
+            self.app.processEvents()
+
+            target_status = target_services.status_service.status_context_texts()
+            self.assertEqual(target_status["tool"], "Tool: Arrow")
+            self.assertEqual(target_status["selection"], "Selection: 1")
+            self.assertEqual(target_status["zoom"], "150%")
+            self.assertTrue(tool_action_for_window(target, "arrow").isChecked())
+            self.assertIs(
+                target_services.context_bar_service._stack.currentWidget(),
+                target_services.context_bar_service._pages["arrow"],
+            )
+            self.assertTrue(
+                target_services.canvas_document_service.is_dirty(target_canvas)
+            )
+            self.assertTrue(target.isWindowModified())
+            self.assertEqual(
+                reference_services.status_service.status_context_texts(),
+                reference_status,
+            )
+            self.assertIs(
+                reference_services.context_bar_service._stack.currentWidget(),
+                reference_page,
+            )
+            self.assertEqual(
+                snapshot_canvas_state_for(reference_canvas), reference_document
+            )
+            self.assertFalse(reference.isWindowModified())
+
+            # Returning to the original window must not update the new one.
+            tool_mode_controller_for_window(reference).set_tool("bond")
+            self.assertEqual(
+                reference_services.status_service.status_context_texts()["tool"],
+                "Tool: Bond",
+            )
+            self.assertEqual(
+                target_services.status_service.status_context_texts(), target_status
+            )
 
     def test_reopening_the_same_file_switches_instead_of_duplicating(self) -> None:
         from chemvas.bootstrap.window_registry import open_new_window, open_windows

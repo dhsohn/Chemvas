@@ -89,12 +89,12 @@ class MainWindowDocumentActionService:
         document_session_service_for_window,
         active_canvas_for_window,
         active_canvas_or_none_for_window,
-        canvas_document_service,
+        canvas_document_service_for_window,
     ) -> None:
         self._document_session_service_for_window = document_session_service_for_window
         self._active_canvas_for_window = active_canvas_for_window
         self._active_canvas_or_none_for_window = active_canvas_or_none_for_window
-        self._canvas_documents = canvas_document_service
+        self._canvas_documents_for_window = canvas_document_service_for_window
 
     @staticmethod
     def normalize_xyz_export_path(dialog_path: str | None) -> str | None:
@@ -109,7 +109,7 @@ class MainWindowDocumentActionService:
         self, window, *, canvas: CanvasView | None = None
     ) -> str | None:
         target = self._active_canvas_for_window(window) if canvas is None else canvas
-        return self._canvas_documents.file_path(target)
+        return self._canvas_documents_for_window(window).file_path(target)
 
     def default_xyz_export_path(self, window) -> str:
         current_path = self.current_file_path(window)
@@ -183,12 +183,13 @@ class MainWindowDocumentActionService:
         except Exception as exc:
             message_box.warning(window, "Save Error", f"Failed to save file:\n{exc}")
             return False
-        self._canvas_documents.set_file_path(target, path)
-        self._canvas_documents.set_display_name(
-            target, self._canvas_documents.display_name_for_path(path) or path
+        documents = self._canvas_documents_for_window(window)
+        documents.set_file_path(target, path)
+        documents.set_display_name(
+            target, documents.display_name_for_path(path) or path
         )
-        self._canvas_documents.mark_clean(target)
-        self._canvas_documents.refresh_tab_title(window, target)
+        documents.mark_clean(target)
+        documents.refresh_tab_title(window, target)
         record_recent(path)
         # Refresh the autosave manifest now that this document has a (new) path,
         # so a Save chosen from the quit close-prompt is reflected before the
@@ -498,7 +499,7 @@ class MainWindowDocumentActionService:
                 # An imported MOL has no backing .chemvas document: open it
                 # unbound (no file path, not in recents) so it reads as a new
                 # untitled drawing and Save can never overwrite the .mol.
-                self._canvas_documents.open_state(
+                self._canvas_documents_for_window(target).open_state(
                     target,
                     state=state,
                     file_path=None,
@@ -510,7 +511,7 @@ class MainWindowDocumentActionService:
             if Path(path).suffix.lower() == ".svg":
                 document = read_editable_svg(path)
                 target = target_provider() if target_provider is not None else window
-                self._canvas_documents.open_state(
+                self._canvas_documents_for_window(target).open_state(
                     target,
                     state=document.state,
                     file_path=None,
@@ -522,7 +523,9 @@ class MainWindowDocumentActionService:
                 return True
             document = read_document(path)
             target = target_provider() if target_provider is not None else window
-            self._canvas_documents.open_state(
+            # The destination owns its UI callbacks; another window's service
+            # would bind this canvas to that window's status and options widgets.
+            self._canvas_documents_for_window(target).open_state(
                 target, state=document.state, file_path=path
             )
         except Exception as exc:
@@ -581,7 +584,7 @@ class MainWindowDocumentActionService:
             return False
         if not self.confirm_close_canvas(window, widget):
             return False
-        self._canvas_documents.remove_canvas(window, widget)
+        self._canvas_documents_for_window(window).remove_canvas(window, widget)
         # The open-document set changed: drop the closed document from the session
         # so a clean quit does not reopen it. (This explicit close path is never
         # taken during Cmd+Q, which closes whole windows, so it cannot truncate a
@@ -602,17 +605,18 @@ class MainWindowDocumentActionService:
         self, window, canvas: CanvasView, *, message_box=None
     ) -> bool:
         message_box = QMessageBox if message_box is None else message_box
+        documents = self._canvas_documents_for_window(window)
         if rdkit_export_jobs_for(canvas):
-            name = self._canvas_documents.display_name(canvas)
+            name = documents.display_name(canvas)
             message_box.warning(
                 window,
                 "XYZ Export in Progress",
                 f"Wait for the 3D XYZ export from {name} to finish before closing it.",
             )
             return False
-        if not self._canvas_documents.is_dirty(canvas):
+        if not documents.is_dirty(canvas):
             return True
-        name = self._canvas_documents.display_name(canvas)
+        name = documents.display_name(canvas)
         choice = message_box.question(
             window,
             "Save Changes",

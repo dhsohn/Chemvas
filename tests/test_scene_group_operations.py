@@ -26,6 +26,7 @@ from chemvas.ui.canvas_bond_graphics_state import (
     CanvasBondGraphicsState,
     bond_items_for,
 )
+from chemvas.ui.canvas_callback_state import CanvasCallbackState
 from chemvas.ui.canvas_group_state import (
     CanvasGroupState,
     group_state_for,
@@ -76,6 +77,7 @@ class _Canvas(QGraphicsView):
             atom_graphics_state=CanvasAtomGraphicsState(),
             bond_graphics_state=CanvasBondGraphicsState(),
             group_state=CanvasGroupState(),
+            callback_state=CanvasCallbackState(),
             history_service=self.history,
             mark_registry=CanvasMarkRegistry(),
             scene_items_state=CanvasSceneItemsState(),

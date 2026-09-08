@@ -40,7 +40,11 @@ the [examples README](../examples/README.md) describes what each one contains.
   exactly, and carrying on past it leaves the drag where the pointer is.
 - **Arrow labels** — double-click an arrow or line to give it a label above and
   below, such as rate constants. `_` starts a subscript and `^` a superscript,
-  and braces group several characters: `k_-1`, `K_{eq}`, `ΔG^‡`. Labels take
+  and braces set the exact range: `K_{2}CO_{3}`, `H_{2}SO_{4}`, `ΔG^{‡}`.
+  Without braces, a marker applies until the next space, `_`, or `^`;
+  `K_2CO_3` therefore also puts `CO` in the subscript. The dialog previews
+  both labels as you type so you can check their scope before choosing OK.
+  Labels take
   the text font settings in force when they are created or edited, and move
   with their arrow.
 - **Lines** — plain, dashed, wavy, and bold lines that are not bonds, for

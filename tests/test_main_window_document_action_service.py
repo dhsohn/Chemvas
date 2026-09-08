@@ -32,6 +32,7 @@ from chemvas.ui.main_window_path_logic import (
 )
 from chemvas.ui.main_window_ports import (
     active_canvas_for_window,
+    history_service_for_window,
     services_for_window,
 )
 from chemvas.ui.mark_item_access import mark_kinds_by_atom_for
@@ -86,6 +87,101 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
                     canvas
                 )
             )
+
+    def test_save_as_keeps_sheet_status_current_without_tool_switch(self) -> None:
+        canvas = active_canvas_for_window(self.window)
+        status = services_for_window(self.window).status_service
+        add_bond_between_points_for(canvas, QPointF(-20, 0), QPointF(20, 0))
+        other_status = {
+            key: value
+            for key, value in status.status_context_texts().items()
+            if key != "sheet"
+        }
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            for name in ("first.chemvas", "renamed.chemvas"):
+                with self.subTest(name=name):
+                    path = str(Path(temp_dir) / name)
+                    file_dialog = mock.Mock()
+                    file_dialog.getSaveFileName.return_value = (path, "")
+
+                    self.assertTrue(
+                        self.service.save_canvas_as(
+                            self.window, file_dialog=file_dialog
+                        )
+                    )
+
+                    self.assertEqual(
+                        status.status_context_texts()["sheet"], f"Canvas: {name}"
+                    )
+                    self.assertEqual(
+                        self.window.statusBar().currentMessage(), f"Saved: {path}"
+                    )
+                    self.assertEqual(
+                        {
+                            key: value
+                            for key, value in status.status_context_texts().items()
+                            if key != "sheet"
+                        },
+                        other_status,
+                    )
+
+    def test_sheet_status_follows_edit_undo_redo_and_save(self) -> None:
+        canvas = active_canvas_for_window(self.window)
+        status = services_for_window(self.window).status_service
+        history = history_service_for_window(self.window)
+        self.window.statusBar().showMessage("Keep this feedback")
+
+        add_bond_between_points_for(canvas, QPointF(-20, 0), QPointF(20, 0))
+        self.assertEqual(status.status_context_texts()["sheet"], "Canvas: ● Canvas 1")
+        history.undo()
+        self.assertEqual(status.status_context_texts()["sheet"], "Canvas: Canvas 1")
+        history.redo()
+        self.assertEqual(status.status_context_texts()["sheet"], "Canvas: ● Canvas 1")
+        self.assertEqual(self.window.statusBar().currentMessage(), "Keep this feedback")
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = str(Path(temp_dir) / "saved.chemvas")
+            self.assertTrue(self.service.save_canvas_to_path(self.window, path))
+            self.assertEqual(
+                status.status_context_texts()["sheet"], "Canvas: saved.chemvas"
+            )
+
+    def test_failed_save_preserves_sheet_status_and_document_state(self) -> None:
+        canvas = active_canvas_for_window(self.window)
+        status = services_for_window(self.window).status_service
+        with tempfile.TemporaryDirectory() as temp_dir:
+            original_path = Path(temp_dir) / "original.chemvas"
+            failed_path = Path(temp_dir) / "failed.chemvas"
+            self.assertTrue(
+                self.service.save_canvas_to_path(self.window, str(original_path))
+            )
+            original_bytes = original_path.read_bytes()
+            add_bond_between_points_for(canvas, QPointF(-20, 0), QPointF(20, 0))
+            before_document = snapshot_canvas_state_for(canvas)
+            before_status = status.status_context_texts()
+            message_box = mock.Mock()
+
+            with mock.patch(
+                "chemvas.ui.main_window_document_action_service.save_canvas_to_file_for",
+                side_effect=OSError("write failed"),
+            ):
+                result = self.service.save_canvas_to_path(
+                    self.window, str(failed_path), message_box=message_box
+                )
+
+            self.assertFalse(result)
+            self.assertFalse(failed_path.exists())
+            self.assertEqual(original_path.read_bytes(), original_bytes)
+            self.assertEqual(document_file_path_for(canvas), str(original_path))
+            self.assertEqual(snapshot_canvas_state_for(canvas), before_document)
+            self.assertEqual(status.status_context_texts(), before_status)
+            self.assertTrue(
+                services_for_window(self.window).canvas_document_service.is_dirty(
+                    canvas
+                )
+            )
+            message_box.warning.assert_called_once()
 
     def test_save_canvas_to_path_rejects_a_path_owned_by_another_canvas(
         self,
