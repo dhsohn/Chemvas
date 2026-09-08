@@ -109,7 +109,10 @@ class HandleMutationService:
         # pos(); clear it or the rebuilt path renders shifted by that delta.
         item.setPos(0.0, 0.0)
         item.setPath(rebuilt.path())
-        item.setPen(rebuilt.pen())
+        pen = rebuilt.pen()
+        if data.get("color"):
+            pen.setColor(item.pen().color())
+        item.setPen(pen)
         item.setBrush(rebuilt.brush())
         data["start"] = start
         data["end"] = end

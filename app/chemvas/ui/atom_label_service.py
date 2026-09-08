@@ -42,7 +42,6 @@ from chemvas.ui.canvas_smiles_input_state import (
 from chemvas.ui.graphics_items import AtomDotItem, AtomLabelItem
 from chemvas.ui.pick_radius_access import atom_pick_radius_for
 from chemvas.ui.renderer_style_access import (
-    atom_color_for,
     atom_font_for,
     atom_label_offset_px_for,
     bond_length_px_for,
@@ -507,7 +506,7 @@ class AtomLabelService:
             text_item.set_hit_radius(label_hit_radius)
 
         text_item.setFont(atom_font_for(self.canvas))
-        text_item.setDefaultTextColor(QColor(atom_color_for(self.canvas)))
+        text_item.setDefaultTextColor(QColor(atom.color))
         text_item.setData(0, "atom")
         text_item.setData(1, atom_id)
         text_item.setZValue(3)

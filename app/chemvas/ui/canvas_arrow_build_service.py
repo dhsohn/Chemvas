@@ -342,7 +342,7 @@ class CanvasArrowBuildService:
             child = ArrowLabelItem(item)
             child.setData(0, ARROW_LABEL_ROLE)
             child.setFont(font)
-            child.setDefaultTextColor(style.text_color)
+            child.setDefaultTextColor(QColor(data.get("color", style.text_color)))
             child.setHtml(arrow_label_html(text))
             rect = child.boundingRect()
             # Half of the label box projected onto the normal, so a vertical

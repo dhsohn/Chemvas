@@ -77,8 +77,9 @@ chemvas render-document first-scheme.chemvas --output first-scheme-rendered.svg
 
 Rendering creates a new file and leaves the source drawing untouched. This
 command uses preset bond-length sizing; the downloadable SVG above was exported
-with the desktop's 174 mm column setting. Layout checks currently cover note
-text and shape borders, not every possible overlap in a chemical scheme.
+with the desktop's 174 mm column setting. Layout checks cover visible note and
+atom-label text, shape borders, and arrow–structure crossings, not every possible
+overlap in a chemical scheme.
 
 See the [document CLI guide](https://github.com/dhsohn/Chemvas/blob/main/docs/AGENT_CLI.md)
 for composition, Graph Patch, render guarantees, and limits.

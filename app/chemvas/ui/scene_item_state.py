@@ -315,6 +315,17 @@ def apply_scene_item_state(
             item.setPen(rebuilt.pen())
             item.setBrush(rebuilt.brush())
             data = {"start": start_pt, "end": end_pt, "control": None, "double": double}
+        color = state.get("color")
+        if isinstance(color, str):
+            data["color"] = color
+        pen = item.pen()
+        if isinstance(color, str):
+            pen.setColor(QColor(color))
+        elif kind in {"curved_single", "curved_double"} and control_pt is not None:
+            # Curves update their path in place, so clear a previous override.
+            # Other kinds already have the native builder's default pen.
+            pen.setColor(QColor(bond_color))
+        item.setPen(pen)
         labels = arrow_labels_from_state(state)
         if labels:
             data["labels"] = labels

@@ -3,8 +3,9 @@ from __future__ import annotations
 import argparse
 import hashlib
 import sys
+from collections.abc import Mapping
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, cast
+from typing import Any, cast
 
 from chemvas.bootstrap.document_cli_shared import (
     MAX_DOCUMENT_BYTES,
@@ -14,9 +15,6 @@ from chemvas.bootstrap.document_cli_shared import (
     offscreen_canvas,
 )
 from chemvas.core.document_io import read_exact_document
-
-if TYPE_CHECKING:
-    from collections.abc import Mapping
 
 MAX_LAYOUT_WORK_UNITS = 10_000
 
@@ -84,15 +82,35 @@ def _validate_source(source: Path) -> None:
 def _layout_work_units(state: Mapping[str, object]) -> int:
     notes = state.get("notes", [])
     shapes = state.get("shapes", [])
-    if not isinstance(notes, list) or not isinstance(shapes, list):
+    arrows = state.get("arrows", [])
+    if not all(isinstance(records, list) for records in (notes, shapes, arrows)):
         raise ValueError("Invalid Chemvas file.")
-    note_count = len(notes)
-    shape_count = len(shapes)
+    model = state.get("model")
+    if not isinstance(model, Mapping) or not isinstance(model.get("atoms"), Mapping):
+        raise ValueError("Invalid Chemvas file.")
+    bonds = model.get("bonds")
+    if not isinstance(bonds, list):
+        raise ValueError("Invalid Chemvas file.")
+    # render_model creates no label for an implicit C. Count all other atoms,
+    # including explicit C, regardless of color, clipping or derived typography.
+    label_count = sum(
+        1
+        for atom in model["atoms"].values()
+        if atom["element"].upper() != "C" or bool(atom.get("explicit_label", False))
+    )
+    note_count = len(cast("list[object]", notes))
+    shape_count = len(cast("list[object]", shapes))
+    arrow_count = len(cast("list[object]", arrows))
+    bond_count = len(bonds)
+    text_count = note_count + label_count
     return (
-        note_count * (note_count - 1) // 2
+        text_count * (text_count - 1) // 2
         + note_count * shape_count
-        + note_count
+        + arrow_count * (label_count + bond_count)
+        + text_count
         + shape_count
+        + arrow_count
+        + bond_count
     )
 
 

@@ -86,6 +86,7 @@ def test_check_layout_reports_overlapping_notes_without_mutating_source(
     assert report["ok"] is False
     assert report["warning_count"] == 1
     assert report["counts"] == {
+        "arrow-structure-overlap": 0,
         "outside-sheet": 0,
         "text-shape-border-overlap": 0,
         "text-text-overlap": 1,
@@ -189,6 +190,7 @@ def test_check_layout_reports_text_crossing_shape_border(tmp_path: Path) -> None
     assert result.returncode == 1, result.stderr
     report = json.loads(result.stdout)
     assert report["counts"] == {
+        "arrow-structure-overlap": 0,
         "outside-sheet": 0,
         "text-shape-border-overlap": 1,
         "text-text-overlap": 0,
@@ -211,6 +213,7 @@ def test_check_layout_reports_note_outside_sheet(tmp_path: Path) -> None:
     assert result.returncode == 1, result.stderr
     report = json.loads(result.stdout)
     assert report["counts"] == {
+        "arrow-structure-overlap": 0,
         "outside-sheet": 1,
         "text-shape-border-overlap": 0,
         "text-text-overlap": 0,

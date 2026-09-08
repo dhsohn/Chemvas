@@ -158,6 +158,17 @@ def create_arrow_item_from_state(
         control_pt = QPointF(*cast("Any", control))
         set_curved_arrow_path(item, start_pt, end_pt, control_pt, double)
         data["control"] = control_pt
+    elif kind in {"curved_single", "curved_double"}:
+        # Keep the default curve that the native builder already painted.
+        built_data = item.data(2)
+        data["control"] = built_data["control"]
+        data["double"] = built_data["double"]
+    color = arrow_state.get("color")
+    if isinstance(color, str):
+        data["color"] = color
+        pen = item.pen()
+        pen.setColor(QColor(color))
+        item.setPen(pen)
     labels = arrow_labels_from_state(arrow_state)
     if labels:
         data["labels"] = labels

@@ -5,7 +5,9 @@ from html import escape
 from typing import Any, cast
 
 from chemvas.domain.document import (
+    ARROW_LABEL_SIDES,
     CANVAS_FILE_VERSION,
+    MAX_ARROW_LABEL_CHARS,
     SETTINGS_KEYS,
     VALID_ARROW_KINDS,
     VALID_BOND_ORDERS,
@@ -22,6 +24,7 @@ from chemvas.domain.document import (
 from chemvas.domain.document.state import (
     VALID_SHAPE_KINDS,
     VALID_SHAPE_STROKES,
+    VALID_TS_BRACKET_KINDS,
     validate_settings_state,
 )
 from chemvas.features.annotations import sanitize_note_html
@@ -36,6 +39,7 @@ COMPOSITION_VERSION = 1
 MAX_ATOMS = 4096
 MAX_BONDS = 8192
 MAX_SCENE_ITEMS = 4096
+MAX_NOTE_RUNS = 256
 MAX_ELECTRONIC_MARKS_PER_ATOM = 8
 ELECTRONIC_MARK_DISTANCE_BOND_FRACTION = 0.55
 _ROOT_REQUIRED = frozenset(("format", "version", "atoms", "bonds"))
@@ -44,6 +48,7 @@ _ROOT_ALLOWED = _ROOT_REQUIRED | {
     "arrows",
     "shapes",
     "ring_fills",
+    "ts_brackets",
     "settings",
 }
 _ATOM_REQUIRED = frozenset(("id", "element", "x", "y"))
@@ -55,16 +60,19 @@ _ATOM_ALLOWED = _ATOM_REQUIRED | {
 }
 _BOND_REQUIRED = frozenset(("a", "b", "order"))
 _BOND_ALLOWED = _BOND_REQUIRED | {"style", "color"}
-_NOTE_REQUIRED = frozenset(("text", "x", "y"))
-_NOTE_ALLOWED = _NOTE_REQUIRED | {"style"}
-_NOTE_STYLE_ALLOWED = frozenset(("font_size", "font_weight", "italic", "color"))
+_NOTE_REQUIRED = frozenset(("x", "y"))
+_NOTE_ALLOWED = _NOTE_REQUIRED | {"text", "runs", "style"}
+_NOTE_STYLE_ALLOWED = frozenset(
+    ("font_size", "font_weight", "italic", "color", "vertical_align")
+)
 _ARROW_REQUIRED = frozenset(("kind", "start", "end"))
-_ARROW_ALLOWED = _ARROW_REQUIRED | {"control", "double", "labels"}
+_ARROW_ALLOWED = _ARROW_REQUIRED | {"control", "double", "labels", "color"}
 _SHAPE_REQUIRED = frozenset(
     ("shape_kind", "left", "top", "right", "bottom", "stroke_style")
 )
 _SHAPE_ALLOWED = _SHAPE_REQUIRED | {"fill", "fill_alpha"}
 _RING_REQUIRED = frozenset(("atom_ids", "color", "alpha"))
+_TS_BRACKET_REQUIRED = frozenset(("bracket_kind", "left", "top", "right", "bottom"))
 _DEFAULT_BOND_STYLE = {1: "single", 2: "double", 3: "triple"}
 
 
@@ -88,6 +96,7 @@ def compose_document_state(composition: object) -> dict[str, Any]:
     arrows = _arrows(root.get("arrows", []))
     shapes = _shapes(root.get("shapes", []))
     ring_fills = _ring_fills(root.get("ring_fills", []), atoms)
+    ts_brackets = _ts_brackets(root.get("ts_brackets", []))
 
     model = MoleculeModel(atoms=atoms, bonds=bonds, atom_annotations=annotations)
     marks = _annotation_marks(
@@ -104,7 +113,7 @@ def compose_document_state(composition: object) -> dict[str, Any]:
         "notes": notes,
         "marks": marks,
         "arrows": arrows,
-        "ts_brackets": [],
+        "ts_brackets": ts_brackets,
         "shapes": shapes,
         "orbitals": [],
         "settings": settings,
@@ -227,44 +236,108 @@ def _notes(value: object) -> list[dict[str, object]]:
         _keys(
             note, required=_NOTE_REQUIRED, allowed=_NOTE_ALLOWED, name=f"note {index}"
         )
-        text = note.get("text")
-        if not isinstance(text, str):
-            raise ValueError(f"note {index} text must be a string")
+        if ("text" in note) == ("runs" in note):
+            raise ValueError(f"note {index} requires exactly one of text or runs")
         state: dict[str, object] = {
-            "text": text,
             "x": _number(note.get("x"), f"note {index} x"),
             "y": _number(note.get("y"), f"note {index} y"),
         }
-        if "style" in note:
-            state["html"] = _styled_note_html(text, note.get("style"), index)
+        if "runs" in note:
+            state["text"], state["html"] = _note_runs(note, index)
+        else:
+            text = note.get("text")
+            if not isinstance(text, str):
+                raise ValueError(f"note {index} text must be a string")
+            state["text"] = text
+            if "style" in note:
+                state["html"] = _styled_note_html(text, note.get("style"), index)
         notes.append(state)
     return notes
 
 
 def _styled_note_html(text: str, value: object, index: int) -> str:
-    style = _mapping(value, f"note {index} style")
+    declarations = _note_style_css(value, f"note {index}")
+    escaped_text = _note_text_html(text)
+    return _safe_note_html(
+        f'<p><span style="{declarations}">{escaped_text}</span></p>', index
+    )
+
+
+def _note_style_css(value: object, name: str) -> str:
+    style = _mapping(value, f"{name} style")
     if not style or not set(style) <= _NOTE_STYLE_ALLOWED:
-        raise ValueError(f"note {index} style must use supported non-empty keys")
+        raise ValueError(f"{name} style must use supported non-empty keys")
     declarations: list[str] = []
     if "font_size" in style:
         size = style["font_size"]
         if type(size) is not int or not 6 <= cast("int", size) <= 96:
-            raise ValueError(f"note {index} font_size must be an integer from 6 to 96")
+            raise ValueError(f"{name} font_size must be an integer from 6 to 96")
         declarations.append(f"font-size:{size}pt")
     if "font_weight" in style:
         weight = style["font_weight"]
         if type(weight) is not int or weight not in range(100, 1000, 100):
-            raise ValueError(f"note {index} font_weight must be 100 through 900")
+            raise ValueError(f"{name} font_weight must be 100 through 900")
         declarations.append(f"font-weight:{weight}")
     if "italic" in style:
         italic = style["italic"]
         if type(italic) is not bool:
-            raise ValueError(f"note {index} italic must be a boolean")
+            raise ValueError(f"{name} italic must be a boolean")
         declarations.append("font-style:italic" if italic else "font-style:normal")
     if "color" in style:
-        declarations.append(f"color:{_color(style['color'], f'note {index} color')}")
-    escaped_text = escape(text, quote=False).replace("\n", "<br>")
-    raw_html = f'<span style="{";".join(declarations)}">{escaped_text}</span>'
+        declarations.append(f"color:{_color(style['color'], f'{name} color')}")
+    if "vertical_align" in style:
+        alignment = style["vertical_align"]
+        if not isinstance(alignment, str) or alignment not in {
+            "baseline",
+            "sub",
+            "super",
+        }:
+            raise ValueError(f"{name} vertical_align must be baseline, sub, or super")
+        declarations.append(f"vertical-align:{alignment}")
+    return ";".join(declarations)
+
+
+def _note_runs(note: Mapping[str, object], index: int) -> tuple[str, str]:
+    runs = _list(note["runs"], f"note {index} runs", maximum=MAX_NOTE_RUNS)
+    if not runs:
+        raise ValueError(f"note {index} runs must not be empty")
+    texts: list[str] = []
+    spans: list[str] = []
+    previous_ended_with_cr = False
+    for run_index, raw in enumerate(runs):
+        name = f"note {index} run {run_index}"
+        run = _mapping(raw, name)
+        _keys(run, required=frozenset(("text",)), allowed={"text", "style"}, name=name)
+        text = run.get("text")
+        if not isinstance(text, str):
+            raise ValueError(f"{name} text must be a string")
+        texts.append(text)
+        # A CRLF belongs to the concatenated source, even across empty runs.
+        html_text = (
+            text[1:] if previous_ended_with_cr and text.startswith("\n") else text
+        )
+        if text:
+            previous_ended_with_cr = text.endswith("\r")
+        span = _note_text_html(html_text)
+        if "style" in run:
+            css = _note_style_css(run["style"], name)
+            span = f'<span style="{css}">{span}</span>'
+        spans.append(span)
+    html = "".join(spans)
+    if "style" in note:
+        css = _note_style_css(note["style"], f"note {index}")
+        html = f'<span style="{css}">{html}</span>'
+    # The sanitizer supplies Qt's paragraph whitespace policy; preserve spaces
+    # across run boundaries rather than letting HTML collapse the source text.
+    return "".join(texts), _safe_note_html(f"<p>{html}</p>", index)
+
+
+def _note_text_html(text: str) -> str:
+    normalized = text.replace("\r\n", "\n").replace("\r", "\n")
+    return escape(normalized, quote=False).replace("\n", "<br>")
+
+
+def _safe_note_html(raw_html: str, index: int) -> str:
     sanitized = sanitize_note_html(raw_html)
     if sanitized is None:
         raise ValueError(f"note {index} style could not be represented safely")
@@ -295,11 +368,55 @@ def _arrows(value: object) -> list[dict[str, object]]:
             if type(arrow["double"]) is not bool:
                 raise ValueError(f"arrow {index} double must be a boolean")
             state["double"] = arrow["double"]
+        if kind in {"curved_single", "curved_double"}:
+            double = kind == "curved_double"
+            if "double" in arrow and arrow["double"] != double:
+                raise ValueError(f"arrow {index} double must agree with kind")
+            state["double"] = double
+        if "color" in arrow:
+            state["color"] = _color(arrow["color"], f"arrow {index} color")
         if "labels" in arrow:
-            # Shape and length are checked by the document validator at the end.
-            state["labels"] = arrow["labels"]
+            labels = _mapping(arrow["labels"], f"arrow {index} labels")
+            if not labels or not set(labels) <= ARROW_LABEL_SIDES:
+                raise ValueError(
+                    f"arrow {index} labels must contain above and/or below; "
+                    "omit labels for an unlabelled arrow"
+                )
+            for side, text in labels.items():
+                if type(text) is not str or not text.strip():
+                    raise ValueError(
+                        f"arrow {index} labels.{side} must be a non-empty string; "
+                        "omit unused sides"
+                    )
+                if len(text) > MAX_ARROW_LABEL_CHARS:
+                    raise ValueError(
+                        f"arrow {index} labels.{side} exceeds "
+                        f"{MAX_ARROW_LABEL_CHARS} characters"
+                    )
+            state["labels"] = dict(labels)
         arrows.append(state)
     return arrows
+
+
+def _ts_brackets(value: object) -> list[dict[str, object]]:
+    brackets: list[dict[str, object]] = []
+    for index, raw in enumerate(_list(value, "ts_brackets", maximum=MAX_SCENE_ITEMS)):
+        name = f"ts_bracket {index}"
+        bracket = _mapping(raw, name)
+        _keys(
+            bracket,
+            required=_TS_BRACKET_REQUIRED,
+            allowed=_TS_BRACKET_REQUIRED,
+            name=name,
+        )
+        kind = bracket.get("bracket_kind")
+        if not isinstance(kind, str) or kind not in VALID_TS_BRACKET_KINDS:
+            raise ValueError(f"{name} bracket_kind is not supported")
+        state: dict[str, object] = {"kind": "ts_bracket", "bracket_kind": kind}
+        for key in ("left", "top", "right", "bottom"):
+            state[key] = _number(bracket.get(key), f"{name} {key}")
+        brackets.append(state)
+    return brackets
 
 
 def _shapes(value: object) -> list[dict[str, object]]:

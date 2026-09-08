@@ -865,8 +865,10 @@ def _validate_arrow_labels(labels: object, *, error: str) -> None:
 def _validate_arrow_fields(arrow_state: Mapping[str, object], *, error: str) -> None:
     keys = set(arrow_state)
     required_keys = {"kind", "start", "end"}
-    optional_keys = {"control", "double", "labels"}
+    optional_keys = {"control", "double", "labels", "color"}
     if not required_keys <= keys or not keys <= required_keys | optional_keys:
+        raise ValueError(error)
+    if "color" in keys and not _is_hex_color(arrow_state["color"]):
         raise ValueError(error)
     if "labels" in keys:
         _validate_arrow_labels(arrow_state["labels"], error=error)

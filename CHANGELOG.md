@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Report visible atom-label overlaps with notes or other labels and painted
+  arrow-to-structure crossings in layout diagnostics, with bounded preflight work.
+- Compose native TS brackets and bounded mixed-format note runs, including
+  subscript and superscript text, without accepting arbitrary HTML.
+- Preserve per-arrow colors through document and clipboard round trips and
+  geometry edits. Documents containing the new optional color field require a
+  Chemvas build that supports it.
+
 ### Fixed
 
 - Route Edit menu commands to focused single-line text inputs such as the
@@ -20,6 +30,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   path used by the desktop app.
 - Ask users to select a molecular structure before opening the MOL export save
   dialog when the canvas selection contains no structure.
+
+- Render atom labels with their individual stored colors after restoration and
+  label updates, rather than resetting them to the global text color.
+- Derive composed curved-arrow heads from their kind when the `double` flag is
+  omitted, and reject a contradictory explicit flag.
+- Report the arrow index and label field for invalid composition labels, with
+  guidance to omit unused sides, instead of a generic invalid-file error.
 
 ## [0.8.3] - 2026-09-08
 

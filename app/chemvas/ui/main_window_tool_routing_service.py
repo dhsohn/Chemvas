@@ -3,6 +3,8 @@ from __future__ import annotations
 from PyQt6.QtCore import QTimer
 from PyQt6.QtGui import QColor
 
+from chemvas.domain.document import VALID_ARROW_KINDS
+
 
 class MainWindowToolRoutingService:
     def __init__(
@@ -38,7 +40,8 @@ class MainWindowToolRoutingService:
             items = [
                 item
                 for item in self._selected_scene_items(window)
-                if item.data(0) in {"bond", "atom", "ring", "note", "shape"}
+                if item.data(0)
+                in {"bond", "atom", "ring", "note", "shape"} | VALID_ARROW_KINDS
             ]
             color_service.apply_color_to_items(items, color)
 
