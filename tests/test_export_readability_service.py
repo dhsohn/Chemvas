@@ -8,6 +8,7 @@ import pytest
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
+from PyQt6.QtCore import QRectF
 from PyQt6.QtGui import QFont, QRawFont, QTransform
 from PyQt6.QtWidgets import QApplication, QGraphicsItem, QGraphicsTextItem
 
@@ -21,7 +22,9 @@ from chemvas.features.export import (
 from chemvas.features.export.vector import render_svg_bytes
 from chemvas.ui.canvas_scene_items_state import note_items_for, ts_bracket_items_for
 from chemvas.ui.export_readability_service import assess_export_readability
-from chemvas.ui.scene_item_access import canvas_scene_for
+from chemvas.ui.scene_decoration_build_access import build_ts_bracket_item_for
+from chemvas.ui.scene_item_access import apply_scene_item_state, canvas_scene_for
+from chemvas.ui.scene_item_state_serialization import scene_item_state_for
 
 
 @pytest.fixture(scope="module", autouse=True)
@@ -149,6 +152,52 @@ def test_custom_atom_scripts_and_arrow_scripts_and_ts_glyph_are_covered() -> Non
         bracket.setPath(bracket.path())
         with pytest.raises(ValueError, match="construction font"):
             _assess(canvas)
+
+
+@pytest.mark.parametrize("bracket_kind", ["dagger", "double_dagger"])
+@pytest.mark.parametrize("output_format", ["svg", "png"])
+def test_native_ts_rebuild_refreshes_glyph_font_and_restores_it(
+    bracket_kind: str, output_format: str
+) -> None:
+    state = _state(
+        ts_brackets=[
+            {
+                "left": 10,
+                "top": 10,
+                "right": 30,
+                "bottom": 50,
+                "bracket_kind": bracket_kind,
+            }
+        ]
+    )
+    with offscreen_canvas(state, command="test-native-ts-font") as (canvas, _):
+        item = ts_bracket_items_for(canvas)[0]
+        original = scene_item_state_for(canvas, item)
+        assert original is not None
+        for rect in (
+            QRectF(40, 20, 20, 40),
+            QRectF(40, 20, 40, 16),
+            QRectF(10, 10, 20, 40),
+        ):
+            rebuilt = dict(
+                original,
+                left=rect.left(),
+                top=rect.top(),
+                right=rect.right(),
+                bottom=rect.bottom(),
+            )
+            apply_scene_item_state(canvas, item, rebuilt)
+            fresh = build_ts_bracket_item_for(canvas, rect, bracket_kind)
+            assert item.path() == fresh.path()
+            text, font = fresh.export_glyph_run()
+            report = _assess(canvas, output_format=output_format)
+            actual_text, actual_font = item.export_glyph_run()
+            assert actual_text == text and actual_font == font
+            assert (
+                report["coverage"]["ts_bracket"]["minimum_pt"]
+                == QRawFont.fromFont(font).pixelSize()
+            )
+        assert scene_item_state_for(canvas, item) == original
 
 
 def test_hidden_transparent_and_whitespace_text_are_not_missing_measurements() -> None:

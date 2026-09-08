@@ -508,6 +508,30 @@ class BondRendererUnitTest(unittest.TestCase):
                 all(not left.intersects(right) for left, right in pairwise(ink))
             )
 
+    def test_hash_count_uses_the_same_width_aware_trim_as_painted_segments(self):
+        self.canvas.model.atoms[0] = Atom("P", 0.0, 0.0)
+        self.canvas.model.atoms[1] = Atom("Ar", 40.0, 0.0)
+        self._set_bond(Bond(0, 1, 1, style="hash"))
+
+        def trim(canvas, a_id, b_id, x1, y1, x2, y2, offsets=()):
+            # Side samples encounter glyph ink before the centerline does.
+            return (0.3, 0.75) if offsets else (0.1, 0.9)
+
+        with mock.patch(
+            "chemvas.ui.bond_line_geometry_service.trim_line_for_labels_for",
+            side_effect=trim,
+        ):
+            self.renderer.add_bond_graphics(0)
+            drawn = self.renderer.draw_hash_bond(0.0, 0.0, 40.0, 0.0, 0, 1)
+
+        # The actual 18-unit stem calls for four strokes at spacing 4,
+        # not eight strokes selected from the 32-unit centerline-only span.
+        for items in (self.canvas.bond_items[0], drawn):
+            self.assertEqual(len(items), 4)
+            centers = [item.line().center().x() for item in items]
+            self.assertAlmostEqual(centers[0], 12.0)
+            self.assertAlmostEqual(centers[-1], 30.0)
+
     def test_hash_label_change_retains_gesture_items_then_rebuilds(self):
         canvas, renderer = _renderer_for_bond("hash", 1, ring=False, end=(40.0, 0.0))
         items = canvas.bond_items[0]

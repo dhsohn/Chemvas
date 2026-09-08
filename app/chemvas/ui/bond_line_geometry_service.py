@@ -322,7 +322,7 @@ class BondLineGeometryService:
         labels. Keep the established minimum of three items, including a fully
         clipped stem; in-place gesture updates deliberately retain their count.
         """
-        t0, t1 = trim_line_for_labels_for(self.canvas, a_id, b_id, x1, y1, x2, y2)
+        t0, t1 = self._stereo_label_trim(a_id, b_id, x1, y1, x2, y2)
         start_x, start_y, end_x, end_y = trimmed_line_segment(
             x1, y1, x2, y2, t0=t0, t1=t1
         )
