@@ -104,6 +104,49 @@ Agent-edit flow: `inspect-document` -> exact source SHA-256 plus stable atom/bon
 Headless render flow: `render-document` -> exact source read/hash and record-count gate -> validated state applied to an invisible canvas -> canonical whole-sheet export plan -> point/pixel resource gate -> private SVG/PNG render -> output byte gate -> one atomic non-overwriting publication -> hash-and-dimension JSON report. Qt is lazy but required for painting; RDKit and the desktop session-recovery service are not started.
 
 ## Composite Grouping
+
+Native template CLI composition (`bootstrap.document_template`) joins the
+existing insertion public planner, Qt geometry resolver and native template
+commit on an isolated canvas. It is an explicit legacy UI composition boundary,
+registered in the package dependency test, not a second ring engine. Source
+identity/geometry preservation and final document validation precede atomic
+publication. Graph Patch's Qt-free `set_terminal_angle` delegates dependent
+coordinates to its existing move-atom path and retains the final semantic gate.
+
+Layout QA reuses native glyph and painted bond paths for atom–nonincident-bond
+and attached-charge–bond intersections. The bootstrap candidate budget includes
+both cross products before Qt restore. These are read-only diagnostics and do
+not add geometry changes or a parallel font renderer.
+
+Explicit scheme layout uses a Qt-free request validator in
+`chemvas.features.scheme_layout`, a headless bootstrap command, and
+`ui.scheme_layout_service` beside the existing native canvas movement services.
+The UI integration reuses the canonical document item-index map, text-paint
+geometry and move kernels. It copies only changed coordinates and native group
+membership into the output; it does not serialize a replacement text/style
+representation or add a second persistent layout schema.
+
+Explicit `align-y` branches within the same measured-plan/movement pipeline. It
+measures molecular paint only, supports explicit disjoint atom parts and row
+reference blocks, and copies only vertical geometry changes back. Captions,
+all X coordinates and existing groups stay exact. The omitted-mode arrange path
+and its JSON report remain unchanged; no new persistent schema or GUI mode is added.
+
+Optional width-limited layout reuses those measurements with a Qt-free ordered
+row partitioner. Continuation arrows remain native arrows, placed at the start
+of the next line; reports retain source row/block identities. Omitted width
+budgets keep the original shared-column path.
+
+The desktop Arrange Scheme dialog converts explicit existing-group choices into
+the same validated request. Its read-only measured plan becomes native move
+commands inside the existing document transaction, recorded as one composite
+undo/redo operation without replacing the scene or group identities. GUI export
+options use the shared dimension-budget guard and canonical readability service;
+the existing atomic temporary writer protects the destination on rejection.
+Notes and arrow labels share one native rich-text export outline implementation.
+Automatic list markers retain Qt numbering with resolved pixel fonts; no parallel
+text layout or SVG-font parser is maintained.
+
 When an operation touches multiple entity types at once (ex: atom creation plus bond creation), CanvasView groups the individual delta commands into a single `CompositeCommand` so the whole operation undoes/redoes atomically.
 
 ## 3D Conversion Constraints

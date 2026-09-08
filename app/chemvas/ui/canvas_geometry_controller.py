@@ -3,7 +3,7 @@ from __future__ import annotations
 import math
 from functools import partial
 
-from PyQt6.QtCore import QPointF, QRectF
+from PyQt6.QtCore import QPointF, QRectF, Qt
 from PyQt6.QtGui import QFontMetricsF, QPainterPath, QPainterPathStroker, QTransform
 from PyQt6.QtWidgets import QGraphicsTextItem
 
@@ -55,6 +55,7 @@ from chemvas.ui.renderer_style_access import (
     atom_font_for,
     bond_length_px_for,
     bond_line_width_for,
+    renderer_bond_line_width_for,
     renderer_for,
     set_bond_length_for,
 )
@@ -81,12 +82,13 @@ def _glyph_line_clip_t(
     the atom may sit in O's counter, or between separate typographic runs.
     Never terminate there and leave another piece of the label on the bond.
     """
-    gap = max(0.2, stroke_width * 0.1)
+    gap = max(0.2, stroke_width * 0.5)
     # A disk enclosing a square cap also covers round/flat bond caps. Keep
     # the small flattening allowance separate from the visible clearance.
     radius = stroke_width / math.sqrt(2.0) + gap + 0.01
     stroker = QPainterPathStroker()
     stroker.setWidth(2.0 * radius)
+    stroker.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
     stroker.setCurveThreshold(0.001)
     # Qt's default polygonization tolerance is in device coordinates. Flatten
     # at 64x to keep scene error below the 0.01 allowance, including curves.
@@ -617,20 +619,21 @@ class CanvasGeometryController:
         hit_start = False
         hit_end = False
         glyph_hit = False
-        width = (
-            bond_line_width_for(self.canvas) if stroke_width is None else stroke_width
-        )
-        width = max(0.0, float(width))
         for atom_id, is_start in ((a_id, True), (b_id, False)):
             if atom_id is None:
                 continue
             item = atom_items_for(self.canvas).get(atom_id)
             if isinstance(item, AtomLabelItem):
+                width = (
+                    renderer_bond_line_width_for(self.canvas)
+                    if stroke_width is None
+                    else stroke_width
+                )
                 clipped = _glyph_line_clip_t(
                     p1,
                     p2,
                     item.mapToScene(item.glyph_path()),
-                    width,
+                    max(0.0, float(width)),
                     offsets,
                 )
                 if clipped is not None:

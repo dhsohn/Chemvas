@@ -3,12 +3,13 @@ from __future__ import annotations
 from typing import override
 
 from PyQt6.QtCore import Qt
-from PyQt6.QtWidgets import QGraphicsItem, QGraphicsTextItem
+from PyQt6.QtWidgets import QGraphicsItem
 
 from chemvas.ui.canvas_service_ports import note_controller_for_access
+from chemvas.ui.graphics_items import ExportTextItem
 
 
-class NoteItem(QGraphicsTextItem):
+class NoteItem(ExportTextItem):
     def __init__(self, canvas) -> None:
         super().__init__()
         self._canvas = canvas

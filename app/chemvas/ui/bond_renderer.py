@@ -160,6 +160,17 @@ class BondRenderer:
         corners = self.line_geometry.wedge_triangle(x1, y1, x2, y2, a_id, b_id)
         return QPolygonF([QPointF(x, y) for x, y in corners])
 
+    def hash_topology_count(
+        self,
+        x1: float,
+        y1: float,
+        x2: float,
+        y2: float,
+        a_id: int | None = None,
+        b_id: int | None = None,
+    ) -> int:
+        return self.line_geometry.hash_topology_count(x1, y1, x2, y2, a_id, b_id)
+
     def hash_segments(
         self,
         x1: float,

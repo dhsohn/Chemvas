@@ -419,6 +419,9 @@ class MainWindowDocumentActionService:
                 background=options.background,
                 sizing=options.sizing,
                 editable_svg=options.editable_svg,
+                target_width_mm=options.target_width_mm,
+                max_height_mm=options.max_height_mm,
+                min_font_pt=options.min_font_pt,
             )
         except Exception as exc:
             message_box.warning(

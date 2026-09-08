@@ -307,6 +307,28 @@ class BondLineGeometryService:
             max_width=bold_bond_pen_for(self.canvas).widthF(),
         )
 
+    def hash_topology_count(
+        self,
+        x1: float,
+        y1: float,
+        x2: float,
+        y2: float,
+        a_id: int | None = None,
+        b_id: int | None = None,
+    ) -> int:
+        """Choose fresh hatch topology from the label-trimmed visible stem.
+
+        Counting the full bond compresses too many strokes between large atom
+        labels. Keep the established minimum of three items, including a fully
+        clipped stem; in-place gesture updates deliberately retain their count.
+        """
+        t0, t1 = self._stereo_label_trim(a_id, b_id, x1, y1, x2, y2)
+        start_x, start_y, end_x, end_y = trimmed_line_segment(
+            x1, y1, x2, y2, t0=t0, t1=t1
+        )
+        length = math.hypot(end_x - start_x, end_y - start_y)
+        return max(3, int(length / max(self._hash_spacing(), 1e-6)))
+
     def hash_segments(
         self,
         x1: float,

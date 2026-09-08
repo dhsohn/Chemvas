@@ -17,12 +17,14 @@ from .dialog import (
     is_raster_format,
     normalize_export_path,
     suffix_for_format,
+    supports_minimum_font_check,
 )
 from .plan import (
     POINTS_PER_INCH,
     ExportPlan,
     build_export_plan,
     points_for_mm,
+    svg_viewport_size_points,
 )
 from .scope import (
     EXPORT_EXCLUDED_KINDS,
@@ -68,4 +70,6 @@ __all__ = [
     "resolve_export_plan",
     "set_label_outline_mode",
     "suffix_for_format",
+    "supports_minimum_font_check",
+    "svg_viewport_size_points",
 ]

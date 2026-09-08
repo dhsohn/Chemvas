@@ -118,6 +118,10 @@ chemvas check-layout scheme.chemvas > layout-report.json
 The current v1 checker reports these stable warning codes:
 
 - `text-text-overlap` for intersecting visible note and/or atom-label glyph paths;
+- `atom-bond-overlap` for an atom-label glyph crossing a nonincident molecular
+  bond's painted stroke (bonds attached to that atom are excluded);
+- `charge-bond-overlap` for an attached charge glyph crossing a painted bond,
+  including a bond attached to the charge's own atom;
 - `arrow-structure-overlap` when painted arrow geometry crosses an atom label
   or a painted molecular bond;
 - `text-shape-border-overlap` when note text crosses the painted shape border;
@@ -128,11 +132,15 @@ warning counts, persisted note/shape/arrow indices, stable atom IDs (bond endpoi
 for bond references), and rounded intersection bounds.
 The checker does not move objects, write history, normalize, or save the source.
 Before starting Qt it conservatively rejects a document whose potential
-text-pair, note–shape, arrow–structure, and geometry work exceeds 10,000 units, so the
+text-pair, atom–bond, attached-charge–bond, note–shape, arrow–structure, and
+geometry work exceeds 10,000 units, so the
 complete deterministic warning report remains bounded.
 Exit status is `0` for a valid clean document, `1` for a valid document with one
 or more warnings, and `2` for invalid input or bootstrap/resource failure. It is
-a diagnostic gate, not an automatic layout engine. Bond-to-own-atom contact and
+a diagnostic gate, not an automatic layout engine. Charge witnesses include the
+persisted mark index and attached atom ID; bond witnesses use sorted endpoint
+IDs. Hidden/transparent ink and actual dash/dot gaps are not collisions.
+Bond-to-own-atom label contact and
 filled highlight interiors are not collision pairs. Intentional arrow-to-structure
 contacts may still warn: inspect the reported intersection rather than treating
 every warning as an error in the chemistry. The checker does not cover every
@@ -143,6 +151,65 @@ injected directly into Qt atom items are not persisted and are outside this
 contract. The work limit bounds record and candidate-pair counts, not arbitrary
 font/glyph complexity. Visual review is still required.
 
+## Explicit scheme layout
+
+Use `layout-document` to arrange whole structure blocks, center caption notes,
+align caption baselines and preserve native GUI groups in a new document.
+Choose `"mode": "align-y"` to align only molecular drawings vertically while
+keeping all X coordinates, captions and existing groups fixed. Explicit `parts`
+can align independent fragments separately; omission keeps complexes rigid.
+See [structure and caption layout](SCHEME_LAYOUT.md) for the source-pinned
+request format, examples and limits.
+
+## Native ring templates
+
+Insert the same ring templates used by the desktop, without RDKit:
+
+```bash
+chemvas insert-template scheme.chemvas --request ring.json --dry-run
+chemvas insert-template scheme.chemvas --request ring.json --output ring-added.chemvas
+```
+
+```json
+{
+  "format": "chemvas-template-insertion",
+  "version": 1,
+  "source_sha256": "<64 lowercase hexadecimal characters>",
+  "ring_size": 6,
+  "style": "benzene",
+  "position": [200, 120],
+  "anchor": {"kind": "free"}
+}
+```
+
+All root fields are required. `regular` supports ring sizes 3–12; `benzene`,
+`chair`, `chair_flip`, and `boat` require size 6. Position is the native template
+placement point, not a promise that it is the ring's centroid. Atom anchoring uses
+`{"kind":"atom","atom_id":0}`; bond anchoring uses
+`{"kind":"bond","a":0,"b":1}` with unordered existing endpoints. Existing
+native geometry and occupancy rules determine placement. Chair/boat atom anchors,
+anchors in groups, and anchors incident to wedge/hash bonds are rejected.
+Explicit choice of a chair or boat is a drawing choice, not inferred stereochemistry.
+
+The command pins exact source bytes, validates before Qt, invokes the native
+template planner and commit on a private canvas, and preserves source coordinates,
+existing graph/annotations, notes, settings, groups and ring metadata. It retains
+the native insertion reset of `last_smiles_input`. Insertion never recalculates
+an existing bond length or normalizes a distorted source ring. Benzene ring
+membership is retained so the renderer can put double-bond strokes inside the ring.
+Calculation Plan and perspective documents are rejected without deleting their data.
+
+Limits: request 64 KiB, source/candidate 8 MiB, 20,000 graphics records with a
+conservative insertion reservation, finite coordinates within ±1,000,000 and
+a positive bond metric at most 1,000,000. Duplicate/unknown keys, stale hashes,
+invalid topology, partial native mutation and unsafe anchors produce no output.
+Dry-run constructs and validates the same candidate as a write. The deterministic
+report includes source/request/candidate hashes and `added_atom_ids`. Existing
+or symlink outputs are refused and a new output is published atomically.
+
+For a complete public-command example with bent O–Me bonds, real scripts and a
+common print scale, see [publication schemes](PUBLICATION_SCHEMES.md).
+
 ## Headless document rendering
 
 An agent can render the complete drawing through the same figure-export path as
@@ -151,6 +218,8 @@ the desktop app without opening a window or loading RDKit:
 ```bash
 chemvas render-document scheme.chemvas --output scheme.svg
 chemvas render-document scheme.chemvas --output scheme.png --dpi 600
+chemvas render-document scheme.chemvas --output journal.svg --width-mm 174 --max-height-mm 120
+chemvas render-document scheme.chemvas --output readable.svg --width-mm 174 --min-font-pt 6
 chemvas render-document scheme.chemvas --output scheme-transparent.png \
   --background transparent
 ```
@@ -160,6 +229,47 @@ may be 150, 300, 600, or 1200, while SVG ignores DPI. The command starts only an
 invisible offscreen Qt canvas, does not start session recovery, and leaves the
 source untouched. It refuses existing files, directories, and symlinks and
 publishes the new output atomically.
+
+Omitting `--width-mm` retains preset bond-length sizing. A positive finite width
+requests the padded figure width through the same physical-size planner as GUI
+export, preserving aspect ratio. PNG dimensions round to pixels at the chosen
+DPI; Qt's SVG physical viewport rounds to whole points while its viewBox and the
+report retain the planned fractional point dimensions. Optional
+`--max-height-mm` rejects a taller output before painting, including SVG viewport
+or PNG pixel rounding; it never shrinks the
+figure to fit. These size options do not reflow a drawing, so arrange the content
+before choosing its final print size.
+
+Optional `--min-font-pt` supplies a positive finite minimum for final printed
+glyph sizes. It checks the fonts used by native output, including small subscript
+and superscript glyphs, against the output scale and rejects undersized output
+before publication. It does not change fonts or source geometry. For example,
+6 pt is a user-selected threshold, not a built-in journal standard. Omit this
+option to keep the existing render path without font analysis. See
+[scheme layout](SCHEME_LAYOUT.md) for width-limited row wrapping.
+
+The optional `font_readability` report gives the minimum resolved font em size
+in points, a witness item reference and coverage by text kind. It covers visible
+atom labels, notes, arrow labels, text charge marks and native TS dagger glyphs;
+non-font strokes, hidden/transparent text and whitespace are excluded. Em size
+is the font size, not the height of the glyph's ink. Physical SVG viewport and
+PNG pixel rounding are included. No visible text is reported separately rather
+than assigned a fictitious minimum. Missing glyphs, missing font provenance and
+unsupported text transforms cause an explicit measurement error when the guard
+is enabled. Passing it does not certify contrast, spacing or publication quality.
+Notes and arrow labels share the native Qt rich-text outline path in exported
+figures, preserving the canvas glyph sizes, mixed point/pixel runs and scripts.
+Qt-generated numbered-list markers retain text in SVG, with resolved pixel fonts
+from that same native layout. The check uses those construction fonts for both
+SVG and PNG, and identifies note witnesses by source-note index. Source HTML,
+fonts and editability in Chemvas are unchanged. Plain SVG note bodies are paths,
+not editable SVG text; editable Chemvas SVG retains the embedded document.
+The check runs before atomic publication and may render privately before
+rejecting an output.
+PNG point sizes use the requested DPI and rounded pixel dimensions, not the tiny
+integer pixels-per-metre rounding difference in PNG resolution metadata.
+SVG viewport and PNG pixel rounding can produce a small difference in final
+physical scale, but note glyph construction no longer differs by output format.
 
 Standard output is a deterministic JSON report containing the exact source and
 output SHA-256 hashes, document version, output byte count, physical point size,
@@ -203,13 +313,33 @@ hash into a Graph Patch v1 precondition:
 ```
 
 Supported operations are `add_atom`, `update_atom` (element/color/explicit label),
-`move_atom`, `add_bond`, `update_bond`, and `remove_bond`. Operations run in order on
+`move_atom`, `set_terminal_angle`, `add_bond`, `update_bond`, and `remove_bond`.
+Operations run in order on
 a private copy and publish only after full document and Calculation Plan validation.
 If the document carries a reviewed precomplex selection, that validation also
 requires a complete atomic reactant/product review pair whose profile, shared
 source/environment provenance, and electronic graph/plan basis still match the
 candidate graph. A patch that would make it stale produces no output.
 `move_atom` also moves dependent ring-fill, bound-mark, and perspective coordinates.
+
+`set_terminal_angle` is a limited alternative to handwritten terminal coordinates:
+
+```json
+{"op":"set_terminal_angle", "pivot_id":6, "reference_id":2,
+ "terminal_id":7, "angle_degrees":-120}
+```
+
+It sets the signed angle from pivot→reference to pivot→terminal; in canvas
+coordinates Y points down, so positive angles turn clockwise. The angle must be
+strictly between −180° and 180°, excluding zero. Pivot degree must be exactly 2,
+terminal degree exactly 1, and both specified bonds must be ordinary single bonds.
+Only the terminal moves; its bond length and dependent ring/mark coordinates are
+preserved through the existing atom-move path. This is useful for an explicitly
+drawn aryl–O–Me fragment, not arbitrary fragment rotation or geometry optimization.
+Stereo/reaction-style bonds at the pivot, affected perspective coordinates,
+nonfinite/zero-length geometry, numerically unrepresentable results and no-ops
+are rejected. The final document/Calculation Plan semantic gate still applies.
+
 Dry-run performs the identical validation and reports the candidate file hash but
 writes nothing. Apply preserves the input document version, never changes the source,
 and refuses to replace an existing file or symlink.

@@ -40,6 +40,8 @@ def _compose(
     *,
     notes: list[dict[str, object]],
     shapes: list[dict[str, object]] | None = None,
+    atoms: list[dict[str, object]] | None = None,
+    bonds: list[dict[str, object]] | None = None,
 ) -> Path:
     request = tmp_path / "layout.json"
     request.write_text(
@@ -47,8 +49,8 @@ def _compose(
             {
                 "format": "chemvas-document-composition",
                 "version": 1,
-                "atoms": [],
-                "bonds": [],
+                "atoms": atoms or [],
+                "bonds": bonds or [],
                 "notes": notes,
                 "shapes": shapes or [],
             }
@@ -87,6 +89,8 @@ def test_check_layout_reports_overlapping_notes_without_mutating_source(
     assert report["warning_count"] == 1
     assert report["counts"] == {
         "arrow-structure-overlap": 0,
+        "atom-bond-overlap": 0,
+        "charge-bond-overlap": 0,
         "outside-sheet": 0,
         "text-shape-border-overlap": 0,
         "text-text-overlap": 1,
@@ -191,6 +195,8 @@ def test_check_layout_reports_text_crossing_shape_border(tmp_path: Path) -> None
     report = json.loads(result.stdout)
     assert report["counts"] == {
         "arrow-structure-overlap": 0,
+        "atom-bond-overlap": 0,
+        "charge-bond-overlap": 0,
         "outside-sheet": 0,
         "text-shape-border-overlap": 1,
         "text-text-overlap": 0,
@@ -214,6 +220,8 @@ def test_check_layout_reports_note_outside_sheet(tmp_path: Path) -> None:
     report = json.loads(result.stdout)
     assert report["counts"] == {
         "arrow-structure-overlap": 0,
+        "atom-bond-overlap": 0,
+        "charge-bond-overlap": 0,
         "outside-sheet": 1,
         "text-shape-border-overlap": 0,
         "text-text-overlap": 0,
@@ -237,3 +245,103 @@ def test_check_layout_refuses_a_document_whose_number_cannot_be_parsed(
     assert result.stdout == ""
     assert "Traceback" not in result.stderr
     assert "Invalid Chemvas file." in result.stderr
+
+
+@pytest.mark.parametrize("charged", [False, True])
+def test_molecular_pair_budget_rejects_before_opening_qt(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys, charged: bool
+) -> None:
+    count = 111 if charged else 100
+    atoms = [
+        {
+            "id": index,
+            "element": "C" if charged else "N",
+            "x": float(index * 30),
+            "y": 0.0,
+            **({"formal_charge": 1} if charged else {}),
+        }
+        for index in range(count)
+    ]
+    source = _compose(
+        tmp_path,
+        notes=[],
+        atoms=atoms,
+        bonds=[{"a": index, "b": index + 1, "order": 1} for index in range(count - 1)],
+    )
+    before = source.read_bytes()
+
+    def forbidden(_state):
+        raise AssertionError("Resource rejection must precede Qt")
+
+    monkeypatch.setattr(document_layout_check, "_check_offscreen", forbidden)
+    with pytest.raises(SystemExit) as error:
+        document_layout_check.run(["check-layout", str(source)])
+    assert error.value.code == 2
+    output = capsys.readouterr()
+    assert output.out == ""
+    assert "layout work limit of 10000" in output.err
+    assert source.read_bytes() == before
+
+
+def test_check_layout_reports_atom_bond_ids_and_preserves_source(
+    tmp_path: Path,
+) -> None:
+    source = _compose(
+        tmp_path,
+        notes=[],
+        atoms=[
+            {"id": 0, "element": "C", "x": -40.0, "y": 0.0},
+            {"id": 1, "element": "C", "x": 40.0, "y": 0.0},
+            {"id": 2, "element": "H", "x": 0.0, "y": 0.0},
+        ],
+        bonds=[{"a": 0, "b": 1, "order": 1}],
+    )
+    before = source.read_bytes()
+    first = _run("check-layout", str(source))
+    second = _run("check-layout", str(source))
+    assert first.returncode == second.returncode == 1
+    assert first.stderr == second.stderr == ""
+    assert first.stdout == second.stdout
+    report = json.loads(first.stdout)
+    assert report["counts"]["atom-bond-overlap"] == 1
+    assert report["warnings"][0]["items"] == [
+        {"kind": "atom", "id": 2},
+        {"kind": "bond", "atom_ids": [0, 1]},
+    ]
+    assert report["source_sha256"] == hashlib.sha256(before).hexdigest()
+    assert source.read_bytes() == before
+
+
+def test_check_layout_reports_attached_charge_index_without_mutation(
+    tmp_path: Path,
+) -> None:
+    from chemvas.core.document_io import read_exact_document, write_document
+
+    composed = _compose(
+        tmp_path,
+        notes=[],
+        atoms=[
+            {"id": 0, "element": "C", "x": -40.0, "y": 0.0},
+            {"id": 1, "element": "C", "x": 40.0, "y": 0.0},
+            {"id": 2, "element": "C", "x": 0.0, "y": 80.0, "formal_charge": -1},
+        ],
+        bonds=[{"a": 0, "b": 1, "order": 1}],
+    )
+    _, document = read_exact_document(composed, max_bytes=1024 * 1024)
+    document.state["marks"][0].update(x=0.0, y=0.0, dx=0.0, dy=-80.0)
+    source = tmp_path / "charged.chemvas"
+    write_document(source, document.state, document.payload["version"])
+    before = source.read_bytes()
+
+    result = _run("check-layout", str(source))
+
+    assert result.returncode == 1
+    assert result.stderr == ""
+    report = json.loads(result.stdout)
+    assert report["counts"]["charge-bond-overlap"] == 1
+    assert report["warnings"][0]["items"] == [
+        {"kind": "mark", "index": 0, "atom_id": 2},
+        {"kind": "bond", "atom_ids": [0, 1]},
+    ]
+    assert report["source_sha256"] == hashlib.sha256(before).hexdigest()
+    assert source.read_bytes() == before

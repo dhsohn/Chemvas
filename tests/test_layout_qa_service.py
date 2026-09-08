@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import os
 from types import SimpleNamespace
 
@@ -21,6 +22,177 @@ from chemvas.ui.canvas_scene_items_state import CanvasSceneItemsState
 from chemvas.ui.layout_qa_service import check_canvas_layout
 from chemvas.ui.sheet_setup_state import SheetSetupState
 from tests.runtime_state import canvas_runtime_state
+
+
+def _molecular_state(*, charge: int = 0, attached_to_endpoint: bool = False):
+    from chemvas.features.document_composition import compose_document_state
+
+    charged_id = 0 if attached_to_endpoint else 2
+    atoms = [
+        {"id": 0, "element": "C", "x": -40.0, "y": 0.0},
+        {"id": 1, "element": "C", "x": 40.0, "y": 0.0},
+        {"id": 2, "element": "H", "x": 0.0, "y": 80.0 if charge else 0.0},
+    ]
+    if charge:
+        atoms[charged_id]["formal_charge"] = charge
+    state = compose_document_state(
+        {
+            "format": "chemvas-document-composition",
+            "version": 1,
+            "atoms": atoms,
+            "bonds": [{"a": 0, "b": 1, "order": 1}],
+        }
+    )
+    if charge:
+        state["marks"][0].update(
+            x=0.0, y=0.0, dx=-atoms[charged_id]["x"], dy=-atoms[charged_id]["y"]
+        )
+    return state
+
+
+def test_atom_nonincident_bond_collision_is_identified_without_mutation() -> None:
+    from chemvas.bootstrap.document_cli_shared import offscreen_canvas
+    from chemvas.ui.canvas_atom_graphics_state import atom_items_for
+
+    state = _molecular_state()
+    original = copy.deepcopy(state)
+    with offscreen_canvas(state, command="test-atom-bond-ink") as (canvas, service):
+        before = service.snapshot_state()
+        report = check_canvas_layout(canvas)
+        matches = [w for w in report["warnings"] if w["code"] == "atom-bond-overlap"]
+        assert len(matches) == 1
+        assert matches[0]["items"] == [
+            {"kind": "atom", "id": 2},
+            {"kind": "bond", "atom_ids": [0, 1]},
+        ]
+        assert service.snapshot_state() == before
+        assert state == original
+        atom_items_for(canvas)[2].moveBy(0.0, 50.0)
+        assert check_canvas_layout(canvas)["counts"]["atom-bond-overlap"] == 0
+
+
+@pytest.mark.parametrize("charge", [-1, 1])
+@pytest.mark.parametrize("attached_to_endpoint", [False, True])
+def test_attached_charge_bond_collision_includes_its_own_incident_bond(
+    charge: int, attached_to_endpoint: bool
+) -> None:
+    from chemvas.bootstrap.document_cli_shared import offscreen_canvas
+    from chemvas.ui.canvas_scene_items_state import mark_items_for
+
+    state = _molecular_state(charge=charge, attached_to_endpoint=attached_to_endpoint)
+    with offscreen_canvas(state, command="test-charge-bond-ink") as (canvas, service):
+        before = service.snapshot_state()
+        report = check_canvas_layout(canvas)
+        matches = [w for w in report["warnings"] if w["code"] == "charge-bond-overlap"]
+        assert len(matches) == 1
+        assert matches[0]["items"] == [
+            {"kind": "mark", "index": 0, "atom_id": 0 if attached_to_endpoint else 2},
+            {"kind": "bond", "atom_ids": [0, 1]},
+        ]
+        assert service.snapshot_state() == before
+        mark_items_for(canvas)[0].moveBy(0.0, 50.0)
+        assert check_canvas_layout(canvas)["counts"]["charge-bond-overlap"] == 0
+
+
+def test_atom_own_incident_bond_is_excluded_even_when_its_ink_crosses() -> None:
+    from chemvas.bootstrap.document_cli_shared import offscreen_canvas
+    from chemvas.ui.canvas_bond_graphics_state import bond_items_for
+
+    state = _molecular_state()
+    state["model"]["atoms"][0].update(element="H", x=0.0)
+    state["model"]["atoms"][2]["y"] = 80.0
+    with offscreen_canvas(state, command="test-own-bond-exclusion") as (canvas, _):
+        # Deliberately extend the real painted line through its own endpoint
+        # glyph, so this tests exclusion rather than normal label trimming.
+        bond_items_for(canvas)[0][0].setLine(-40.0, 0.0, 40.0, 0.0)
+        assert check_canvas_layout(canvas)["counts"]["atom-bond-overlap"] == 0
+
+
+@pytest.mark.parametrize("kind", ["atom", "charge", "bond"])
+@pytest.mark.parametrize("hidden_by", ["visibility", "opacity", "color"])
+def test_molecular_ink_checks_ignore_hidden_or_transparent_paint(
+    kind: str, hidden_by: str
+) -> None:
+    from chemvas.bootstrap.document_cli_shared import offscreen_canvas
+    from chemvas.ui.canvas_atom_graphics_state import atom_items_for
+    from chemvas.ui.canvas_bond_graphics_state import bond_items_for
+    from chemvas.ui.canvas_scene_items_state import mark_items_for
+
+    state = _molecular_state(charge=1 if kind == "charge" else 0)
+    with offscreen_canvas(state, command="test-invisible-molecular-ink") as (canvas, _):
+        code = "charge-bond-overlap" if kind == "charge" else "atom-bond-overlap"
+        assert check_canvas_layout(canvas)["counts"][code] == 1
+        item = (
+            mark_items_for(canvas)[0]
+            if kind == "charge"
+            else bond_items_for(canvas)[0][0]
+            if kind == "bond"
+            else atom_items_for(canvas)[2]
+        )
+        if hidden_by == "visibility":
+            item.setVisible(False)
+        elif hidden_by == "opacity":
+            item.setOpacity(0.0)
+        elif kind == "bond":
+            pen = item.pen()
+            pen.setColor(QColor(0, 0, 0, 0))
+            item.setPen(pen)
+        else:
+            item.setDefaultTextColor(QColor(0, 0, 0, 0))
+        assert check_canvas_layout(canvas)["counts"][code] == 0
+
+
+@pytest.mark.parametrize("charge", [0, 1])
+def test_actual_molecular_dash_gap_is_not_a_collision(charge: int) -> None:
+    from chemvas.bootstrap.document_cli_shared import offscreen_canvas
+    from chemvas.ui.canvas_bond_graphics_state import bond_items_for
+
+    state = _molecular_state(charge=charge)
+    code = "charge-bond-overlap" if charge else "atom-bond-overlap"
+    with offscreen_canvas(state, command="test-molecular-dash-gap") as (canvas, _):
+        line = bond_items_for(canvas)[0][0]
+        line.setLine(-12.0, 0.0, 68.0, 0.0)
+        pen = QPen(QColor("black"), 2.0)
+        pen.setDashPattern([1.0, 20.0])
+        pen.setCapStyle(Qt.PenCapStyle.FlatCap)
+        line.setPen(pen)
+        assert check_canvas_layout(canvas)["counts"][code] == 0
+        pen.setStyle(Qt.PenStyle.SolidLine)
+        line.setPen(pen)
+        assert check_canvas_layout(canvas)["counts"][code] == 1
+
+
+@pytest.mark.parametrize("charge", [0, 1])
+def test_actual_molecular_dot_gap_is_not_a_collision(charge: int) -> None:
+    from chemvas.bootstrap.document_cli_shared import offscreen_canvas
+    from chemvas.ui.canvas_bond_graphics_state import bond_items_for
+
+    state = _molecular_state(charge=charge)
+    state["model"]["bonds"][0]["style"] = "dotted"
+    code = "charge-bond-overlap" if charge else "atom-bond-overlap"
+    with offscreen_canvas(state, command="test-molecular-dot-gap") as (canvas, _):
+        item = bond_items_for(canvas)[0][0]
+        path = QPainterPath()
+        path.addEllipse(QPointF(-15.0, 0.0), 2.0, 2.0)
+        path.addEllipse(QPointF(15.0, 0.0), 2.0, 2.0)
+        item.setPath(path)
+        assert check_canvas_layout(canvas)["counts"][code] == 0
+        path.addEllipse(QPointF(0.0, 0.0), 2.0, 2.0)
+        item.setPath(path)
+        assert check_canvas_layout(canvas)["counts"][code] == 1
+
+
+def test_unattached_charge_and_attached_radical_are_not_charge_glyphs() -> None:
+    from chemvas.bootstrap.document_cli_shared import offscreen_canvas
+    from chemvas.ui.canvas_scene_items_state import mark_items_for
+
+    state = _molecular_state(charge=1)
+    with offscreen_canvas(state, command="test-charge-only-scope") as (canvas, _):
+        mark = mark_items_for(canvas)[0]
+        metadata = dict(mark.data(1))
+        for change in ({"atom_id": None}, {"kind": "dot"}):
+            mark.setData(1, {**metadata, **change})
+            assert check_canvas_layout(canvas)["counts"]["charge-bond-overlap"] == 0
 
 
 def test_note_whitespace_does_not_collide_with_another_note() -> None:
@@ -225,7 +397,7 @@ def test_rich_text_border_collision_matches_native_paint(
     ],
 )
 def test_rich_background_visual_runs_match_native_paint(html: str, width: int) -> None:
-    from chemvas.ui.layout_qa_service import _note_paint_scene_path
+    from chemvas.ui.layout_qa_service import note_paint_scene_path
 
     app = QApplication.instance() or QApplication([])
     app.setQuitOnLastWindowClosed(False)
@@ -245,7 +417,7 @@ def test_rich_background_visual_runs_match_native_paint(html: str, width: int) -
     painter = QPainter(image)
     scene.render(painter, bounds, bounds)
     painter.end()
-    paint = _note_paint_scene_path(note)
+    paint = note_paint_scene_path(note)
     checked = 0
     for y in range(2, image.height() - 2):
         for x in range(2, image.width() - 2):
@@ -269,7 +441,7 @@ def test_fragment_geometry_visits_only_intersecting_lines(
 ) -> None:
     from PyQt6.QtGui import QTextLayout
 
-    from chemvas.ui.layout_qa_service import _note_paint_scene_path
+    from chemvas.ui.layout_qa_service import note_paint_scene_path
 
     app = QApplication.instance() or QApplication([])
     app.setQuitOnLastWindowClosed(False)
@@ -291,7 +463,7 @@ def test_fragment_geometry_visits_only_intersecting_lines(
         return original(layout, index)
 
     monkeypatch.setattr(QTextLayout, "lineAt", counted_line_at)
-    assert not _note_paint_scene_path(note).isEmpty()
+    assert not note_paint_scene_path(note).isEmpty()
     if decorated:
         assert 0 < len(calls) <= 1600
     else:

@@ -7,6 +7,8 @@ from PyQt6.QtWidgets import (
     QCheckBox,
     QComboBox,
     QDialog,
+    QDoubleSpinBox,
+    QFormLayout,
     QFrame,
     QHBoxLayout,
     QLabel,
@@ -23,6 +25,7 @@ from chemvas.features.export import (
     EXPORT_SCOPES,
     EXPORT_SIZES,
     is_dpi_relevant,
+    supports_minimum_font_check,
 )
 from chemvas.shell.toolbar_buttons import ArrowButton
 from chemvas.ui.sheet_setup_logic import (
@@ -39,6 +42,73 @@ class FigureExportOptions:
     dpi: int
     background: str
     editable_svg: bool = False
+    target_width_mm: float | None = None
+    max_height_mm: float | None = None
+    min_font_pt: float | None = None
+
+
+@dataclass(frozen=True)
+class _ExportLimitControls:
+    width: QDoubleSpinBox
+    height_check: QCheckBox
+    height: QDoubleSpinBox
+    font_check: QCheckBox
+    font: QDoubleSpinBox
+
+    def sync(self, *, sizing: str, fmt: str, scope: str) -> None:
+        self.width.setEnabled(sizing == "custom")
+        self.height.setEnabled(self.height_check.isChecked())
+        font_available = supports_minimum_font_check(fmt, scope)
+        self.font_check.setEnabled(font_available)
+        if not font_available:
+            self.font_check.setChecked(False)
+        self.font.setEnabled(font_available and self.font_check.isChecked())
+
+
+def _export_dimension_spin(
+    name: str, *, value: float, maximum: float, suffix: str
+) -> QDoubleSpinBox:
+    spin = QDoubleSpinBox()
+    spin.setObjectName(name)
+    spin.setRange(0.01, maximum)
+    spin.setDecimals(2)
+    spin.setValue(value)
+    spin.setSuffix(suffix)
+    return spin
+
+
+def _add_export_limits(layout: QVBoxLayout) -> _ExportLimitControls:
+    controls_layout = QFormLayout()
+    layout.addLayout(controls_layout)
+    width_label = QLabel("Custom width:")
+    width = _export_dimension_spin(
+        "exportWidthSpin", value=84.0, maximum=5080.0, suffix=" mm"
+    )
+    width_label.setBuddy(width)
+    controls_layout.addRow(width_label, width)
+    height_check = QCheckBox("Limit exported height")
+    height_check.setObjectName("exportMaxHeightCheck")
+    height = _export_dimension_spin(
+        "exportMaxHeightSpin", value=240.0, maximum=5080.0, suffix=" mm"
+    )
+    controls_layout.addRow(height_check, height)
+    font_check = QCheckBox("Minimum exported font size")
+    font_check.setObjectName("exportMinFontCheck")
+    font = _export_dimension_spin(
+        "exportMinFontSpin", value=6.0, maximum=1000.0, suffix=" pt"
+    )
+    controls_layout.addRow(font_check, font)
+    explanation = QLabel(
+        "Minimum font checking is available only for whole-canvas SVG and PNG. "
+        "It checks the exported text size; it does not resize text. "
+        "A failed limit check leaves the destination file unchanged."
+    )
+    explanation.setObjectName("exportLimitsExplanation")
+    explanation.setWordWrap(True)
+    layout.addWidget(explanation)
+    explanation.setMinimumWidth(340)
+    explanation.setMinimumHeight(explanation.heightForWidth(340))
+    return _ExportLimitControls(width, height_check, height, font_check, font)
 
 
 @dataclass(frozen=True)
@@ -112,6 +182,8 @@ def prompt_export_options(window) -> FigureExportOptions | None:
     dpi_combo.setCurrentIndex(DPI_OPTIONS.index(DEFAULT_DPI))
     layout.addWidget(dpi_combo)
 
+    limits = _add_export_limits(layout)
+
     def sync_format_controls() -> None:
         fmt = format_combo.currentData()
         dpi_enabled = is_dpi_relevant(fmt)
@@ -124,9 +196,16 @@ def prompt_export_options(window) -> FigureExportOptions | None:
         editable_svg_warning.setVisible(
             editable_enabled and editable_svg_check.isChecked()
         )
+        limits.sync(
+            sizing=size_combo.currentData(), fmt=fmt, scope=scope_combo.currentData()
+        )
 
     format_combo.currentIndexChanged.connect(sync_format_controls)
     editable_svg_check.toggled.connect(sync_format_controls)
+    size_combo.currentIndexChanged.connect(sync_format_controls)
+    scope_combo.currentIndexChanged.connect(sync_format_controls)
+    limits.height_check.toggled.connect(sync_format_controls)
+    limits.font_check.toggled.connect(sync_format_controls)
     sync_format_controls()
 
     export_btn, cancel_btn = _add_action_row(layout, accept_label="Export")
@@ -143,6 +222,13 @@ def prompt_export_options(window) -> FigureExportOptions | None:
         background=background_combo.currentData(),
         editable_svg=format_combo.currentData() == "svg"
         and editable_svg_check.isChecked(),
+        target_width_mm=limits.width.value()
+        if size_combo.currentData() == "custom"
+        else None,
+        max_height_mm=limits.height.value()
+        if limits.height_check.isChecked()
+        else None,
+        min_font_pt=limits.font.value() if limits.font_check.isChecked() else None,
     )
 
 

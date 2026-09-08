@@ -366,6 +366,7 @@ class MainWindowUIAssemblyServiceTest(unittest.TestCase):
                 "Select All",
                 "Group",
                 "Ungroup",
+                "Arrange Scheme...",
                 "Flip Horizontal",
                 "Flip Vertical",
                 "Rotate...",
@@ -401,6 +402,11 @@ class MainWindowUIAssemblyServiceTest(unittest.TestCase):
             )
         self._menu_action(edit_menu, "Rotate...").trigger()
         self.panel_toolbar_callbacks.show_rotate_options.assert_called_once_with(window)
+        with mock.patch(
+            "chemvas.ui.main_window_menu_bar.arrange_scheme_for_window"
+        ) as arrange_scheme:
+            self._menu_action(edit_menu, "Arrange Scheme...").trigger()
+            arrange_scheme.assert_called_once_with(window)
         with (
             mock.patch(
                 "chemvas.ui.main_window_menu_bar.cut_selection_for_window"

@@ -11,6 +11,8 @@ from PyQt6.QtWidgets import (
     QCheckBox,
     QComboBox,
     QDialog,
+    QDoubleSpinBox,
+    QLabel,
     QPushButton,
 )
 
@@ -117,6 +119,101 @@ class MainWindowDocumentDialogsTest(unittest.TestCase):
             "chemvas.ui.main_window_document_dialogs.QDialog.exec", new=drive_dialog
         ):
             self.assertIsNone(prompt_export_options(self.window))
+
+    def test_export_limits_are_opt_in_and_default_options_are_unchanged(self) -> None:
+        def drive_dialog(dialog: QDialog):
+            for name in ("exportWidthSpin", "exportMaxHeightSpin", "exportMinFontSpin"):
+                self.assertFalse(dialog.findChild(QDoubleSpinBox, name).isEnabled())
+            for name in ("exportMaxHeightCheck", "exportMinFontCheck"):
+                self.assertFalse(dialog.findChild(QCheckBox, name).isChecked())
+            return QDialog.DialogCode.Accepted
+
+        with mock.patch(
+            "chemvas.ui.main_window_document_dialogs.QDialog.exec", new=drive_dialog
+        ):
+            self.assertEqual(
+                prompt_export_options(self.window),
+                FigureExportOptions(
+                    fmt="svg",
+                    sizing="bond",
+                    scope="sheet",
+                    dpi=300,
+                    background="transparent",
+                ),
+            )
+
+    def test_export_custom_width_and_optional_limits_retain_fractional_values(self):
+        def drive_dialog(dialog: QDialog):
+            sizing = dialog.findChild(QComboBox, "exportSizeCombo")
+            sizing.setCurrentIndex(sizing.findData("custom"))
+            width = dialog.findChild(QDoubleSpinBox, "exportWidthSpin")
+            self.assertTrue(width.isEnabled())
+            width.setValue(83.75)
+            for check, spin, value in (
+                ("exportMaxHeightCheck", "exportMaxHeightSpin", 123.45),
+                ("exportMinFontCheck", "exportMinFontSpin", 7.25),
+            ):
+                dialog.findChild(QCheckBox, check).setChecked(True)
+                control = dialog.findChild(QDoubleSpinBox, spin)
+                self.assertTrue(control.isEnabled())
+                control.setValue(value)
+            return QDialog.DialogCode.Accepted
+
+        with mock.patch(
+            "chemvas.ui.main_window_document_dialogs.QDialog.exec", new=drive_dialog
+        ):
+            options = prompt_export_options(self.window)
+        self.assertEqual(options.sizing, "custom")
+        self.assertEqual(options.target_width_mm, 83.75)
+        self.assertEqual(options.max_height_mm, 123.45)
+        self.assertEqual(options.min_font_pt, 7.25)
+
+    def test_export_font_check_disables_and_clears_unsupported_format_or_scope(self):
+        def drive_dialog(dialog: QDialog):
+            fmt = dialog.findChild(QComboBox, "exportFormatCombo")
+            scope = dialog.findChild(QComboBox, "exportScopeCombo")
+            check = dialog.findChild(QCheckBox, "exportMinFontCheck")
+            font = dialog.findChild(QDoubleSpinBox, "exportMinFontSpin")
+            explanation = dialog.findChild(QLabel, "exportLimitsExplanation")
+            self.assertIn("whole-canvas SVG and PNG", explanation.text())
+            self.assertGreaterEqual(
+                explanation.minimumHeight(), explanation.heightForWidth(340)
+            )
+            for unsupported_fmt in ("pdf", "tiff"):
+                fmt.setCurrentIndex(fmt.findData("svg"))
+                check.setChecked(True)
+                fmt.setCurrentIndex(fmt.findData(unsupported_fmt))
+                self.assertFalse(check.isEnabled())
+                self.assertFalse(check.isChecked())
+                self.assertFalse(font.isEnabled())
+            fmt.setCurrentIndex(fmt.findData("png"))
+            self.assertTrue(check.isEnabled())
+            check.setChecked(True)
+            scope.setCurrentIndex(scope.findData("selection"))
+            self.assertFalse(check.isEnabled())
+            self.assertFalse(check.isChecked())
+            self.assertFalse(font.isEnabled())
+            return QDialog.DialogCode.Accepted
+
+        with mock.patch(
+            "chemvas.ui.main_window_document_dialogs.QDialog.exec", new=drive_dialog
+        ):
+            self.assertIsNone(prompt_export_options(self.window).min_font_pt)
+
+    def test_export_preset_ignores_previously_entered_custom_width(self):
+        def drive_dialog(dialog: QDialog):
+            sizing = dialog.findChild(QComboBox, "exportSizeCombo")
+            sizing.setCurrentIndex(sizing.findData("custom"))
+            dialog.findChild(QDoubleSpinBox, "exportWidthSpin").setValue(150)
+            sizing.setCurrentIndex(sizing.findData("col1"))
+            return QDialog.DialogCode.Accepted
+
+        with mock.patch(
+            "chemvas.ui.main_window_document_dialogs.QDialog.exec", new=drive_dialog
+        ):
+            options = prompt_export_options(self.window)
+        self.assertEqual(options.sizing, "col1")
+        self.assertIsNone(options.target_width_mm)
 
     def test_prompt_sheet_setup_uses_current_settings_and_returns_confirmed_value(
         self,

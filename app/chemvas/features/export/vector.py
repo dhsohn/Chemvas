@@ -15,7 +15,7 @@ from PyQt6.QtGui import QPageSize, QPainter, QPdfWriter
 from PyQt6.QtSvg import QSvgGenerator
 
 from .painting import paint_scene_region
-from .plan import POINTS_PER_INCH, ExportPlan
+from .plan import POINTS_PER_INCH, ExportPlan, svg_viewport_size_points
 from .scope import exported_scene
 
 if TYPE_CHECKING:
@@ -28,7 +28,7 @@ def configure_svg_generator(
     generator: QSvgGenerator, plan: ExportPlan, title: str | None
 ) -> None:
     generator.setResolution(int(POINTS_PER_INCH))
-    generator.setSize(QSize(max(1, round(plan.out_w_pt)), max(1, round(plan.out_h_pt))))
+    generator.setSize(QSize(*svg_viewport_size_points(plan)))
     generator.setViewBox(QRectF(0.0, 0.0, plan.out_w_pt, plan.out_h_pt))
     if title:
         generator.setTitle(title)

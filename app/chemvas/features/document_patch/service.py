@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from collections.abc import Mapping
 from copy import deepcopy
 from dataclasses import dataclass
@@ -36,6 +37,7 @@ _SUPPORTED_OPERATIONS = (
     "add_atom",
     "update_atom",
     "move_atom",
+    "set_terminal_angle",
     "add_bond",
     "update_bond",
     "remove_bond",
@@ -219,6 +221,8 @@ def _apply_operation(
         return _update_atom(model, operation)
     if op == "move_atom":
         return _move_atom(state, model, operation)
+    if op == "set_terminal_angle":
+        return _set_terminal_angle(state, model, operation)
     if op == "add_bond":
         return _add_bond(model, operation)
     if op == "update_bond":
@@ -291,6 +295,99 @@ def _move_atom(
     _move_attached_marks(state, atom_id, dx, dy)
     _move_perspective_coordinate(state, atom_id, dx, dy)
     return {"op": "move_atom", "atom_id": atom_id, "x": x, "y": y}
+
+
+def _set_terminal_angle(
+    state: dict[str, Any], model: MoleculeModel, operation: Mapping[str, object]
+) -> dict[str, object]:
+    _require_exact_keys(
+        operation,
+        {"op", "pivot_id", "reference_id", "terminal_id", "angle_degrees"},
+        "set_terminal_angle",
+    )
+    pivot_id, reference_id, terminal_id = (
+        _atom_id(operation.get(key), key)
+        for key in ("pivot_id", "reference_id", "terminal_id")
+    )
+    if len({pivot_id, reference_id, terminal_id}) != 3:
+        raise ValueError("pivot, reference, and terminal must be distinct atoms")
+    pivot, reference, terminal = (
+        _existing_atom(model, atom_id)
+        for atom_id in (pivot_id, reference_id, terminal_id)
+    )
+    angle = _number(operation.get("angle_degrees"), "angle_degrees")
+    if not -180.0 < angle < 180.0 or angle == 0.0:
+        raise ValueError(
+            "angle_degrees must be nonzero and strictly between -180 and 180"
+        )
+    incident = [
+        bond
+        for bond in model.bonds
+        if bond is not None and pivot_id in (bond.a, bond.b)
+    ]
+    terminal_bonds = [
+        bond
+        for bond in model.bonds
+        if bond is not None and terminal_id in (bond.a, bond.b)
+    ]
+    if len(incident) != 2 or len(terminal_bonds) != 1:
+        raise ValueError(
+            "set_terminal_angle requires pivot degree 2 and terminal degree 1"
+        )
+    for other_id in (reference_id, terminal_id):
+        bond = _existing_bond(model, pivot_id, other_id)
+        if bond.order != 1 or bond.style != "single":
+            raise ValueError(
+                "set_terminal_angle requires two plain single bonds, without stereo or reaction styles"
+            )
+    perspective = state.get("perspective")
+    if isinstance(perspective, Mapping):
+        coordinates = perspective.get("atom_coords_3d", {})
+        if isinstance(coordinates, Mapping) and any(
+            atom_id in coordinates or str(atom_id) in coordinates
+            for atom_id in (pivot_id, reference_id, terminal_id)
+        ):
+            raise ValueError("set_terminal_angle does not edit perspective coordinates")
+    length = math.hypot(terminal.x - pivot.x, terminal.y - pivot.y)
+    reference_length = math.hypot(reference.x - pivot.x, reference.y - pivot.y)
+    if (
+        length == 0.0
+        or reference_length == 0.0
+        or not math.isfinite(length + reference_length)
+    ):
+        raise ValueError(
+            "set_terminal_angle requires finite nonzero source bond lengths"
+        )
+    target = math.atan2(reference.y - pivot.y, reference.x - pivot.x) + math.radians(
+        angle
+    )
+    x, y = pivot.x + length * math.cos(target), pivot.y + length * math.sin(target)
+    actual_length = math.hypot(x - pivot.x, y - pivot.y)
+    angle_error = math.remainder(
+        math.atan2(y - pivot.y, x - pivot.x) - target, 2 * math.pi
+    )
+    if (
+        not math.isclose(actual_length, length, rel_tol=1e-12)
+        or abs(angle_error) > 1e-10
+    ):
+        raise ValueError(
+            "target angle cannot preserve the bond length at these coordinate magnitudes"
+        )
+    if math.hypot(x - terminal.x, y - terminal.y) <= length * 1e-12:
+        raise ValueError("set_terminal_angle must change the terminal position")
+    _move_atom(
+        state, model, {"op": "move_atom", "atom_id": terminal_id, "x": x, "y": y}
+    )
+    return {
+        "op": "set_terminal_angle",
+        "pivot_id": pivot_id,
+        "reference_id": reference_id,
+        "terminal_id": terminal_id,
+        "angle_degrees": angle,
+        "bond_length": length,
+        "x": x,
+        "y": y,
+    }
 
 
 def _add_bond(

@@ -8,10 +8,18 @@ from chemvas.features.export import (
     is_raster_format,
     normalize_export_path,
     suffix_for_format,
+    supports_minimum_font_check,
 )
 
 
 class ExportDialogLogicTest(unittest.TestCase):
+    def test_minimum_font_check_is_whole_canvas_svg_png_only(self):
+        for fmt in ("svg", "png", "SVG", "PNG"):
+            self.assertTrue(supports_minimum_font_check(fmt, "sheet"))
+            self.assertFalse(supports_minimum_font_check(fmt, "selection"))
+        for fmt in ("pdf", "tiff", "unknown"):
+            self.assertFalse(supports_minimum_font_check(fmt, "sheet"))
+
     def test_raster_classification(self):
         self.assertTrue(is_raster_format("png"))
         self.assertTrue(is_raster_format("TIFF"))

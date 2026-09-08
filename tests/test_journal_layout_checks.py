@@ -376,8 +376,9 @@ def test_work_bound_excludes_only_implicit_carbons_and_includes_arrows() -> None
     state["shapes"] = [
         {"shape_kind": "rect", "rect": [0.0, 0.0, 10.0, 10.0]} for _ in range(37)
     ]
-    assert document_layout_check._layout_work_units(state) == 8520
+    # The original 8520 units plus 60 visible labels × 98 candidate bonds.
+    assert document_layout_check._layout_work_units(state) == 8520 + 60 * 98
     assert document_layout_check.MAX_LAYOUT_WORK_UNITS == 10000
     # Explicit C is visible; do not discard it with implicit skeletal vertices.
     state["model"]["atoms"][0]["explicit_label"] = True
-    assert document_layout_check._layout_work_units(state) == 8631
+    assert document_layout_check._layout_work_units(state) == 8631 + 61 * 98

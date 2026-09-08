@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import contextlib
+import math
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -26,6 +27,7 @@ from chemvas.domain.document import (
     selection_payload_to_canvas_state,
 )
 from chemvas.domain.transactions import add_recovery_error_note
+from chemvas.features.export import supports_minimum_font_check
 from chemvas.ui.canvas_calculation_plan_state import set_calculation_plan_for
 from chemvas.ui.canvas_document_export_access import export_canvas_scene_for
 from chemvas.ui.canvas_document_state import (
@@ -45,6 +47,8 @@ from chemvas.ui.canvas_mark_registry import mark_registry_for
 from chemvas.ui.canvas_model_access import bonds_for, set_model_for
 from chemvas.ui.canvas_scene_items_state import ring_items_for
 from chemvas.ui.canvas_scene_reset_access import clear_scene_for
+from chemvas.ui.export_guard_service import validate_export_budget
+from chemvas.ui.export_readability_service import assess_export_readability
 from chemvas.ui.main_window_path_logic import is_canonical_saved_document_path
 from chemvas.ui.rdkit_adapter_access import (
     model_to_mol_block_for,
@@ -807,15 +811,43 @@ class CanvasDocumentSessionService:
         dpi: int = 300,
         background: str = "transparent",
         sizing: str = "bond",
+        target_width_mm: float | None = None,
         editable_svg: bool = False,
+        max_height_mm: float | None = None,
+        min_font_pt: float | None = None,
     ) -> None:
         items, pad, unit_scale, target_width_pt = self._figure_export_parameters(
             scope=scope,
             sizing=sizing,
+            target_width_mm=target_width_mm,
         )
 
         fmt = fmt.lower()
         target = Path(path)
+        guard_plan = None
+        width_pixels, height_pixels = None, None
+        if min_font_pt is not None:
+            if not supports_minimum_font_check(fmt, scope):
+                raise ValueError(
+                    "Minimum font checking requires whole-canvas SVG or PNG export."
+                )
+            if (
+                isinstance(min_font_pt, bool)
+                or not math.isfinite(min_font_pt)
+                or min_font_pt <= 0.0
+            ):
+                raise ValueError("minimum font size must be a positive finite number")
+        if (
+            max_height_mm is not None
+            or min_font_pt is not None
+            or target_width_mm is not None
+        ):
+            guard_plan = self.plan_figure_export(
+                scope=scope, sizing=sizing, target_width_mm=target_width_mm
+            )
+            width_pixels, height_pixels = validate_export_budget(
+                guard_plan, output_format=fmt, dpi=dpi, max_height_mm=max_height_mm
+            )
 
         def render_to_temp(tmp: Path) -> None:
             export_canvas_scene_for(
@@ -830,6 +862,16 @@ class CanvasDocumentSessionService:
                 unit_scale=unit_scale,
                 target_width_pt=target_width_pt,
             )
+            if min_font_pt is not None and guard_plan is not None:
+                assess_export_readability(
+                    self.canvas,
+                    guard_plan,
+                    minimum_font_pt=min_font_pt,
+                    output_format=fmt,
+                    dpi=dpi,
+                    width_pixels=width_pixels,
+                    height_pixels=height_pixels,
+                )
             if fmt == "svg" and editable_svg:
                 self._embed_editable_svg_payload(str(tmp), fmt=fmt, scope=scope)
 
@@ -840,6 +882,7 @@ class CanvasDocumentSessionService:
         *,
         scope: str = "sheet",
         sizing: str = "bond",
+        target_width_mm: float | None = None,
     ) -> ExportPlan:
         """Return the exact geometry plan used by figure export without painting."""
         from chemvas.features.export import resolve_export_plan
@@ -847,6 +890,7 @@ class CanvasDocumentSessionService:
         items, pad, unit_scale, target_width_pt = self._figure_export_parameters(
             scope=scope,
             sizing=sizing,
+            target_width_mm=target_width_mm,
         )
         _export_items, plan = resolve_export_plan(
             canvas_scene_for(self.canvas),
@@ -862,6 +906,7 @@ class CanvasDocumentSessionService:
         *,
         scope: str,
         sizing: str,
+        target_width_mm: float | None,
     ) -> tuple[list[Any] | None, float, float, float | None]:
         from chemvas.features.export import points_for_mm
 
@@ -874,7 +919,17 @@ class CanvasDocumentSessionService:
 
         unit_scale = 1.0
         target_width_pt = None
-        if sizing == "bond":
+        if sizing == "custom" and target_width_mm is None:
+            raise ValueError("Custom width sizing requires a target width in mm.")
+        if target_width_mm is not None:
+            if (
+                isinstance(target_width_mm, bool)
+                or not math.isfinite(target_width_mm)
+                or target_width_mm <= 0.0
+            ):
+                raise ValueError("target width must be a positive finite number")
+            target_width_pt = points_for_mm(target_width_mm)
+        elif sizing == "bond":
             bond_length_px = bond_length_px_for(self.canvas)
             if bond_length_px > 0:
                 unit_scale = bond_length_pt_for(self.canvas) / bond_length_px

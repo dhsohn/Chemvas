@@ -92,7 +92,10 @@ def _label_controller(
         item.setRotation(27)
         item.setScale(1.4)
     canvas = SimpleNamespace(
-        renderer=SimpleNamespace(style=SimpleNamespace(bond_line_width=width)),
+        renderer=SimpleNamespace(
+            style=SimpleNamespace(bond_line_width=width),
+            bond_line_width=lambda: width,
+        ),
         runtime_state=canvas_runtime_state(
             atom_graphics_state=CanvasAtomGraphicsState(atom_items={1: item})
         ),

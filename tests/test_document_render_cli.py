@@ -5,6 +5,7 @@ import json
 import os
 import subprocess
 import sys
+import xml.etree.ElementTree as ET
 from pathlib import Path
 
 import pytest
@@ -25,6 +26,7 @@ from chemvas.domain.document import (
     serialize_model_state,
     serialize_settings,
 )
+from chemvas.ui.canvas_document_session_service import CanvasDocumentSessionService
 
 
 @pytest.fixture(scope="module", autouse=True)
@@ -73,6 +75,69 @@ def _write_source(
 ) -> bytes:
     write_document(path, state or _state(), version)
     return path.read_bytes()
+
+
+@pytest.mark.parametrize("output_format", ["svg", "png"])
+@pytest.mark.parametrize("null_graphics", [False, True])
+def test_empty_graphics_measure_atoms_and_null_graphics_remain_invalid(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    output_format: str,
+    null_graphics: bool,
+) -> None:
+    state = _state()
+    for key in (
+        "notes",
+        "marks",
+        "arrows",
+        "ts_brackets",
+        "shapes",
+        "orbitals",
+        "ring_fills",
+    ):
+        state[key] = []
+    source = tmp_path / "source.chemvas"
+    source_bytes = _write_source(source, state=state)
+    output = tmp_path / f"native.{output_format}"
+    if null_graphics:
+        payload = json.loads(source_bytes)
+        payload["state"]["notes"] = None
+        source_bytes = json.dumps(payload).encode()
+        source.write_bytes(source_bytes)
+        with pytest.raises(SystemExit) as error:
+            cli.run(
+                [
+                    "render-document",
+                    str(source),
+                    "--output",
+                    str(output),
+                    "--min-font-pt",
+                    "1",
+                ]
+            )
+        assert error.value.code == 2
+        assert "Invalid Chemvas file" in capsys.readouterr().err
+        assert not output.exists()
+        assert source.read_bytes() == source_bytes
+        return
+    assert (
+        cli.run(
+            [
+                "render-document",
+                str(source),
+                "--output",
+                str(output),
+                "--min-font-pt",
+                "1",
+            ]
+        )
+        == 0
+    )
+    report = json.loads(capsys.readouterr().out)
+    assert report["graphics_records"] == 3
+    assert report["font_readability"]["coverage"]["atom"]["glyphs"] == 1
+    assert "note" not in report["font_readability"]["coverage"]
+    assert source.read_bytes() == source_bytes
 
 
 @pytest.mark.parametrize("output_format", ["svg", "png"])
@@ -157,7 +222,7 @@ def test_render_is_byte_deterministic_and_reports_exact_hashes(
     if output_format == "svg":
         assert b"<svg" in first.read_bytes()
         assert b"<path" in first.read_bytes()
-        assert b">render</text>" in first.read_bytes()
+        assert b"<text" not in first.read_bytes()
         assert b"chemvas-svg-source" not in first.read_bytes()
         assert first_report["dpi"] is None
         assert first_report["width_pixels"] is None
@@ -185,6 +250,229 @@ def test_default_white_png_and_current_document_render(
     assert report["chemvas_document_version"] == CANVAS_FILE_VERSION
     assert report["background"] == "white"
     assert image.pixelColor(0, 0).alpha() == 255
+
+
+@pytest.mark.parametrize("output_format", ["svg", "png"])
+def test_width_uses_shared_export_size_and_preserves_aspect_ratio(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    output_format: str,
+) -> None:
+    source = tmp_path / "source.chemvas"
+    source_bytes = _write_source(source)
+    default_output = tmp_path / f"default.{output_format}"
+    sized_output = tmp_path / f"sized.{output_format}"
+    assert (
+        cli.run(["render-document", str(source), "--output", str(default_output)]) == 0
+    )
+    default_report = json.loads(capsys.readouterr().out)
+    assert (
+        cli.run(
+            [
+                "render-document",
+                str(source),
+                "--output",
+                str(sized_output),
+                "--width-mm",
+                "25.4",
+                "--max-height-mm",
+                "100",
+            ]
+        )
+        == 0
+    )
+    report = json.loads(capsys.readouterr().out)
+
+    assert set(report) == set(default_report)
+    assert report["width_points"] == 72.0
+    assert report["height_points"] / report["width_points"] == pytest.approx(
+        default_report["height_points"] / default_report["width_points"], abs=1e-6
+    )
+    assert source.read_bytes() == source_bytes
+    if output_format == "svg":
+        svg = ET.fromstring(sized_output.read_bytes())
+        assert svg.attrib["width"] == "25.4mm"
+        view_box = [float(value) for value in svg.attrib["viewBox"].split()]
+        assert view_box[2] == 72.0
+        assert view_box[3] == pytest.approx(report["height_points"], abs=1e-3)
+    else:
+        image = QImage(str(sized_output))
+        assert image.width() == report["width_pixels"] == 300
+        assert image.height() == report["height_pixels"]
+
+    with cli.offscreen_canvas(_state(), command="test-render") as (_, service):
+        gui_default = tmp_path / f"gui-default.{output_format}"
+        gui_sized = tmp_path / f"gui-sized.{output_format}"
+        service.export_figure(str(gui_default), fmt=output_format, background="white")
+        service.export_figure(
+            str(gui_sized), fmt=output_format, background="white", target_width_mm=25.4
+        )
+    assert default_output.read_bytes() == gui_default.read_bytes()
+    assert sized_output.read_bytes() == gui_sized.read_bytes()
+
+
+@pytest.mark.parametrize("option", ["--width-mm", "--max-height-mm", "--min-font-pt"])
+@pytest.mark.parametrize("value", ["0", "-1", "nan", "inf", "-inf", "1e309", "bad"])
+def test_invalid_physical_options_fail_before_canvas_creation(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+    option: str,
+    value: str,
+) -> None:
+    source = tmp_path / "source.chemvas"
+    _write_source(source)
+    output = tmp_path / "invalid.svg"
+
+    def unexpected_canvas(*args: object, **kwargs: object) -> None:
+        pytest.fail("invalid physical option reached canvas creation")
+
+    monkeypatch.setattr(cli, "offscreen_canvas", unexpected_canvas)
+    with pytest.raises(SystemExit) as error:
+        cli.run(
+            [
+                "render-document",
+                str(source),
+                "--output",
+                str(output),
+                f"{option}={value}",
+            ]
+        )
+    assert error.value.code == 2
+    assert "positive finite number" in capsys.readouterr().err
+    assert not output.exists()
+
+
+@pytest.mark.parametrize("width", [0.0, -1.0, float("nan"), float("inf")])
+def test_direct_service_rejects_invalid_width_for_plan_and_export(
+    tmp_path: Path, width: float
+) -> None:
+    output = tmp_path / "invalid.svg"
+    with cli.offscreen_canvas(_state(), command="test-render") as (_, service):
+        with pytest.raises(ValueError, match="target width must be a positive finite"):
+            service.plan_figure_export(target_width_mm=width)
+        with pytest.raises(ValueError, match="target width must be a positive finite"):
+            service.export_figure(str(output), target_width_mm=width)
+    assert not output.exists()
+
+
+@pytest.mark.parametrize("output_format", ["svg", "png"])
+def test_font_guard_reports_coverage_without_changing_output_bytes(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    output_format: str,
+) -> None:
+    source = tmp_path / "source.chemvas"
+    source_bytes = _write_source(source)
+    first = tmp_path / f"plain.{output_format}"
+    checked = tmp_path / f"checked.{output_format}"
+    cli.run(["render-document", str(source), "--output", str(first)])
+    plain = json.loads(capsys.readouterr().out)
+    cli.run(
+        ["render-document", str(source), "--output", str(checked), "--min-font-pt", "1"]
+    )
+    report = json.loads(capsys.readouterr().out)
+    assert "font_readability" not in plain
+    assert set(report) == set(plain) | {"font_readability"}
+    assert first.read_bytes() == checked.read_bytes()
+    assert source.read_bytes() == source_bytes
+    assert report["font_readability"]["status"] == "passed"
+    assert report["font_readability"]["minimum_font_pt"] >= 1
+    assert report["font_readability"]["coverage"]["atom"]["glyphs"] == 1
+    assert report["font_readability"]["coverage"]["note"]["glyphs"] == 6
+
+
+def test_font_guard_rejects_before_publication_and_reports_minimum_witness(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source = tmp_path / "source.chemvas"
+    source_bytes = _write_source(source)
+    output = tmp_path / "too-small.svg"
+
+    def unexpected_publication(*args: object, **kwargs: object) -> None:
+        pytest.fail("undersized text reached output publication")
+
+    monkeypatch.setattr(cli, "atomic_create_bytes", unexpected_publication)
+    with pytest.raises(SystemExit) as error:
+        cli.run(
+            [
+                "render-document",
+                str(source),
+                "--output",
+                str(output),
+                "--min-font-pt",
+                "100",
+            ]
+        )
+    message = capsys.readouterr().err
+    assert error.value.code == 2
+    assert "minimum visible font is" in message
+    assert "below --min-font-pt 100" in message
+    assert "'kind': 'atom', 'id': 1" in message
+    assert source.read_bytes() == source_bytes
+    assert not output.exists()
+
+
+def test_default_export_does_not_invoke_font_measurement(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from chemvas.ui import export_readability_service
+
+    def unexpected_measurement(*args: object, **kwargs: object) -> None:
+        pytest.fail("default export reached optional font measurement")
+
+    monkeypatch.setattr(
+        export_readability_service, "assess_export_readability", unexpected_measurement
+    )
+    source = tmp_path / "source.chemvas"
+    _write_source(source)
+    assert (
+        cli.run(
+            ["render-document", str(source), "--output", str(tmp_path / "plain.svg")]
+        )
+        == 0
+    )
+    assert "font_readability" not in json.loads(capsys.readouterr().out)
+
+
+@pytest.mark.parametrize(
+    ("output_format", "options", "message"),
+    [
+        ("svg", ["--width-mm", "25.4", "--max-height-mm", "1"], "height exceeds"),
+        ("png", ["--max-height-mm", "0.001"], "height exceeds"),
+        ("svg", ["--width-mm", "6000"], "points per side"),
+        ("png", ["--width-mm", "500", "--dpi", "1200"], "PNG render exceeds"),
+    ],
+)
+def test_physical_size_limits_fail_before_painting(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+    output_format: str,
+    options: list[str],
+    message: str,
+) -> None:
+    source = tmp_path / "source.chemvas"
+    source_bytes = _write_source(source)
+    output = tmp_path / f"limited.{output_format}"
+
+    def unexpected_export(*args: object, **kwargs: object) -> None:
+        pytest.fail("over-budget physical size reached painting")
+
+    monkeypatch.setattr(
+        CanvasDocumentSessionService, "export_figure", unexpected_export
+    )
+    with pytest.raises(SystemExit) as error:
+        cli.run(["render-document", str(source), "--output", str(output), *options])
+    assert error.value.code == 2
+    assert message in capsys.readouterr().err
+    assert source.read_bytes() == source_bytes
+    assert not output.exists()
+    assert not list(tmp_path.glob(f".{output.name}.staging-*"))
 
 
 def test_empty_document_and_extreme_geometry_publish_nothing(

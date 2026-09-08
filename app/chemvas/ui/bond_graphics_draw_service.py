@@ -19,7 +19,6 @@ from chemvas.ui.renderer_style_access import (
     bond_pen_for,
     renderer_bold_bond_width_for,
     renderer_bond_line_width_for,
-    renderer_hash_spacing_for,
 )
 
 # Cap the mitre extension so a very acute junction falls back to a flat end
@@ -255,10 +254,7 @@ class BondGraphicsDrawService:
         a_id: int | None = None,
         b_id: int | None = None,
     ):
-        dx = x2 - x1
-        dy = y2 - y1
-        length = math.hypot(dx, dy) or 1.0
-        count = max(3, int(length / max(renderer_hash_spacing_for(self.canvas), 1e-6)))
+        count = self.renderer.hash_topology_count(x1, y1, x2, y2, a_id, b_id)
         segments = self.renderer.hash_segments(x1, y1, x2, y2, count, a_id, b_id)
         return [self._line_item(*segment) for segment in segments]
 

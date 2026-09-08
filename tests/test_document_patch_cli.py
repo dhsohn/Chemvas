@@ -74,6 +74,61 @@ def _patch(source_bytes: bytes) -> dict[str, object]:
     }
 
 
+def test_terminal_angle_cli_decimal_and_failure_leave_original_intact(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    state = _state()
+    model = state["model"]
+    model["atoms"][2] = {
+        "element": "C",
+        "x": 36.0,
+        "y": 0.0,
+        "color": "#000000",
+        "explicit_label": False,
+    }
+    model["next_atom_id"] = 3
+    model["bonds"].append(
+        {"a": 1, "b": 2, "order": 1, "style": "single", "color": "#000000"}
+    )
+    source, patch_path, output = (
+        tmp_path / name for name in ("angle.chemvas", "angle.json", "adjusted.chemvas")
+    )
+    write_document(source, state, CANVAS_FILE_VERSION)
+    before = source.read_bytes()
+    patch = _patch(before)
+    patch["operations"] = [
+        {
+            "op": "set_terminal_angle",
+            "pivot_id": 1,
+            "reference_id": 0,
+            "terminal_id": 2,
+            "angle_degrees": -120.5,
+        }
+    ]
+    patch_path.write_text(json.dumps(patch))
+    assert (
+        cli.run(["apply-patch", str(source), str(patch_path), "--output", str(output)])
+        == 0
+    )
+    report = json.loads(capsys.readouterr().out)
+    assert report["operations"][0]["angle_degrees"] == -120.5
+    assert report["operations"][0]["bond_length"] == 18
+    assert source.read_bytes() == before
+    candidate = read_document(output).state
+    assert candidate["model"]["bonds"] == state["model"]["bonds"]
+    assert candidate["notes"] == state["notes"]
+    patch["operations"][0]["angle_degrees"] = 0
+    patch_path.write_text(json.dumps(patch))
+    bad_output = tmp_path / "rejected.chemvas"
+    with pytest.raises(SystemExit) as error:
+        cli.run(
+            ["apply-patch", str(source), str(patch_path), "--output", str(bad_output)]
+        )
+    assert error.value.code == 2
+    assert not bad_output.exists()
+    assert source.read_bytes() == before
+
+
 def test_inspect_document_hashes_exact_bytes_and_lists_full_graph(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
