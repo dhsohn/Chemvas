@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.4] - 2026-09-08
+
 ### Added
 
 - Report visible atom-label overlaps with notes or other labels and painted
@@ -19,6 +21,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Trim bonds to the painted atom-label outlines with a small stroke-aware gap,
+  rather than the empty text-box margins, without shrinking selection targets.
+  Account for parallel strokes and filled bond widths so compact endpoints do
+  not cross letter shapes or subscripts.
 - Route Edit menu commands to focused single-line text inputs such as the
   SMILES field. Show the input's text Undo/Redo availability instead of the
   drawing history while editing text.
@@ -1378,7 +1384,8 @@ housekeeping.
   `.chemvas` document type (double-clicking a file opens it in Chemvas), and a
   Linux `.desktop` entry with an `application/x-chemvas` MIME type.
 
-[Unreleased]: https://github.com/dhsohn/Chemvas/compare/v0.8.3...HEAD
+[Unreleased]: https://github.com/dhsohn/Chemvas/compare/v0.8.4...HEAD
+[0.8.4]: https://github.com/dhsohn/Chemvas/compare/v0.8.3...v0.8.4
 [0.8.3]: https://github.com/dhsohn/Chemvas/compare/v0.8.2...v0.8.3
 [0.8.2]: https://github.com/dhsohn/Chemvas/compare/v0.8.1...v0.8.2
 [0.8.1]: https://github.com/dhsohn/Chemvas/compare/v0.8.0...v0.8.1

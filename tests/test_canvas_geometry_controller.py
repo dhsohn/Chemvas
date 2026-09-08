@@ -212,6 +212,9 @@ class CanvasGeometryControllerTest(unittest.TestCase):
     ) -> None:
         canvas = SimpleNamespace(
             renderer=SimpleNamespace(style=SimpleNamespace(bond_line_width=0.0)),
+            runtime_state=canvas_runtime_state(
+                atom_graphics_state=CanvasAtomGraphicsState()
+            ),
         )
         controller = CanvasGeometryController(canvas)
         controller.visible_label_rect_for_atom = lambda atom_id: {

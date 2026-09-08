@@ -71,9 +71,11 @@ class BondRenderer:
         )
 
     def trim_line_for_labels(
-        self, a_id, b_id, x1: float, y1: float, x2: float, y2: float
+        self, a_id, b_id, x1: float, y1: float, x2: float, y2: float, offsets=()
     ):
-        return trim_line_for_labels_for(self.canvas, a_id, b_id, x1, y1, x2, y2)
+        return trim_line_for_labels_for(
+            self.canvas, a_id, b_id, x1, y1, x2, y2, offsets
+        )
 
     def bond_offset_unit_3d(self, a_id: int, b_id: int, target=None):
         return bond_offset_unit_3d_for(self.canvas, a_id, b_id, target=target)

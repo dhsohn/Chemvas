@@ -77,6 +77,16 @@ class BondGeometryPlanService:
         if bold_width <= base_width + 1e-6:
             return self._line(segment)
         a_id, b_id = endpoint_ids if endpoint_ids is not None else (None, None)
+        extension = bold_width - base_width
+        offsets = ((0.0, 0.0), (normal[0] * extension, normal[1] * extension))
+        t0, t1 = self.renderer.trim_line_for_labels(a_id, b_id, *segment, offsets)
+        x1, y1, x2, y2 = segment
+        segment = (
+            x1 + (x2 - x1) * t0,
+            y1 + (y2 - y1) * t0,
+            x1 + (x2 - x1) * t1,
+            y1 + (y2 - y1) * t1,
+        )
         return BondPolygonPrimitive(
             self.renderer.graphics_drawer.bold_strip_polygon(
                 *segment,
