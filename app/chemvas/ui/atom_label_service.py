@@ -331,19 +331,27 @@ class AtomLabelService:
         # right), the display text reverses group-wise ("F3C", "TsO"),
         # ChemDraw-style, without touching the stored label. When the
         # attachment end is unknowable, the token facing the bonds anchors
-        # as typed. A vertical open side, an unreversible label, or a bond
-        # running along the label body keeps the centred full-clearance layout.
+        # as typed. Known reversible labels retain their attachment anchor
+        # even on a vertical open side; an exactly vertical bond preserves the
+        # typed order. Unknown or unreversible vertical labels, and a bond
+        # running along the label body, keep the centred full-clearance layout.
         vectors = connected_atom_unit_vectors_for(self.canvas, atom_id)
         if not vectors:
             # With no attachment direction there is no chemical reason to
             # reverse the user's text or select one end as the bond anchor.
             return text, None, False, None
         open_x, open_y = _open_direction(vectors)
-        if abs(open_y) > abs(open_x):
-            return text, None, False, None
-        anchor_at_end = open_x < 0.0
-        display = text
         attachment_at_end = self._attachment_at_end(text)
+        if abs(open_y) > abs(open_x) and (
+            attachment_at_end is None or reversed_display_text(text) is None
+        ):
+            return text, None, False, None
+        anchor_at_end = (
+            attachment_at_end
+            if attachment_at_end is not None and abs(open_x) < 1e-6
+            else open_x < 0.0
+        )
+        display = text
         if attachment_at_end is not None and attachment_at_end != anchor_at_end:
             flipped = reversed_display_text(text)
             if flipped is not None:

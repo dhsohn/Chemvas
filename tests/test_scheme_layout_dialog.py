@@ -7,7 +7,7 @@ import pytest
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PyQt6.QtWidgets import QApplication, QDialog, QDialogButtonBox
+from PyQt6.QtWidgets import QApplication, QComboBox, QDialog, QDialogButtonBox
 
 from chemvas.bootstrap.document_cli_shared import offscreen_canvas
 from chemvas.features.document_composition import compose_document_state
@@ -241,3 +241,124 @@ def test_dialog_apply_uses_native_grouped_arrangement():
         assert dialog.result_report["block_count"] == 2
         assert len(history_service_for_access(canvas).state.history) == 1
         dialog.deleteLater()
+
+
+def test_dialog_does_not_guess_caption_roles_from_position():
+    source = _source()
+    source["groups"][0]["items"].append(["notes", 2])
+    dialog = SchemeLayoutDialog(source, arrange=lambda request: {})
+    assert all(not group.captions.text() for group in dialog.group_widgets)
+    assert dialog.caption_alignment.currentData() == "row"
+    assert not dialog.arrow_color.text()
+    dialog.deleteLater()
+
+
+def test_named_note_role_picker_preserves_caption_order_and_cancel(monkeypatch):
+    source = _source()
+    source["groups"][0]["items"].append(["notes", 2])
+    dialog = SchemeLayoutDialog(source, arrange=lambda request: {})
+    group = dialog.group_widgets[0]
+    group.captions.setText("3, 1")
+
+    def choose(roles_dialog):
+        roles_dialog.findChild(QComboBox, "schemeNoteRole0").setCurrentIndex(0)
+        assert (
+            roles_dialog.findChild(QComboBox, "schemeNoteRole2").currentData()
+            == "caption"
+        )
+        return QDialog.DialogCode.Accepted
+
+    monkeypatch.setattr(QDialog, "exec", choose)
+    dialog._choose_note_roles(group)
+    assert group.captions.text() == "3"
+    monkeypatch.setattr(QDialog, "exec", lambda self: QDialog.DialogCode.Rejected)
+    dialog._choose_note_roles(group)
+    assert group.captions.text() == "3"
+    dialog.deleteLater()
+
+
+def test_comparison_controls_use_shared_validator_and_explicit_arrow_owner():
+    calls = []
+    dialog = SchemeLayoutDialog(
+        _source(), arrange=lambda request: calls.append(request) or {}
+    )
+    first, second = dialog.group_widgets
+    first.captions.setText("1")
+    second.captions.setText("2")
+    first.arrow.setCurrentIndex(1)
+    first.column_group.setText("comparison")
+    dialog.caption_alignment.setCurrentIndex(1)
+    dialog.arrow_color.setText("#000000")
+    dialog._apply()
+    assert len(calls) == 1
+    request = calls[0]
+    assert request.rows[0].column_group == "comparison"
+    assert request.rows[0].blocks[0].captions == (0,)
+    assert request.rows[0].arrows == (0,)
+    assert request.caption_alignment == "structure"
+    assert request.arrow_color == "#000000"
+    dialog.deleteLater()
+
+
+def test_conflicting_comparison_groups_and_invalid_color_reject():
+    choices = [
+        GroupLayoutChoice(0, 1, 1, (0,), 0, "a"),
+        GroupLayoutChoice(1, 1, 2, (1,), None, "b"),
+    ]
+    with pytest.raises(ValueError, match="conflicting alignment groups"):
+        grouped_layout_request(_source(), choices)
+    with pytest.raises(ValueError, match="arrow_color"):
+        grouped_layout_request(_source(), _choices(), arrow_color="blue")
+
+
+def test_arrow_color_and_geometry_are_one_edit_with_exact_undo_and_reopen():
+    source = _source()
+    source["arrows"][0].update(
+        color="#0055aa", labels={"above": "H_2O", "below": "condition"}
+    )
+    source["arrows"].append(
+        {"kind": "arrow", "start": [640, 260], "end": [710, 260], "color": "#cc0000"}
+    )
+    with offscreen_canvas(source, command="test-scheme-gui-color") as (canvas, _):
+        before = _snapshot(canvas)
+        request = grouped_layout_request(before, _choices(), arrow_color="#000000")
+        arrange_grouped_canvas(canvas, before, request)
+        after = _snapshot(canvas)
+        assert after["arrows"][0]["color"] == "#000000"
+        assert after["arrows"][0]["labels"] == before["arrows"][0]["labels"]
+        assert after["arrows"][1] == before["arrows"][1]
+        assert after["settings"] == before["settings"]
+        assert after["groups"] == before["groups"]
+        history = history_service_for_access(canvas)
+        assert len(history.state.history) == 1
+        history.undo()
+        _assert_equal_coordinates(_snapshot(canvas), before)
+        history.redo()
+        _assert_equal_coordinates(_snapshot(canvas), after)
+    with offscreen_canvas(after, command="test-scheme-gui-reopen") as (canvas, _):
+        _assert_equal_coordinates(_snapshot(canvas), after)
+
+
+def test_failed_movement_rolls_back_prior_color_change(monkeypatch):
+    from chemvas.core.history import MoveAtomsCommand
+
+    source = _source()
+    source["arrows"][0]["color"] = "#0055aa"
+    with offscreen_canvas(source, command="test-scheme-gui-color-rollback") as (
+        canvas,
+        _,
+    ):
+        before = _snapshot(canvas)
+
+        def fail(self, canvas):
+            raise RuntimeError("injected movement after recoloring")
+
+        monkeypatch.setattr(MoveAtomsCommand, "redo", fail)
+        with pytest.raises(RuntimeError, match="injected movement"):
+            arrange_grouped_canvas(
+                canvas,
+                before,
+                grouped_layout_request(before, _choices(), arrow_color="#000000"),
+            )
+        assert _snapshot(canvas) == before
+        assert not history_service_for_access(canvas).state.history

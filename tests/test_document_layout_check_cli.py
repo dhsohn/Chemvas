@@ -20,6 +20,9 @@ def _run(
     env["QT_QPA_PLATFORM"] = "offscreen"
     if env_updates is not None:
         env.update(env_updates)
+    # Child CLIs must exercise this checkout too, even when the interpreter's
+    # editable installation points at a different worktree.
+    env["PYTHONPATH"] = str(Path(__file__).resolve().parents[1] / "app")
     return subprocess.run(
         [
             sys.executable,
@@ -42,6 +45,7 @@ def _compose(
     shapes: list[dict[str, object]] | None = None,
     atoms: list[dict[str, object]] | None = None,
     bonds: list[dict[str, object]] | None = None,
+    arrows: list[dict[str, object]] | None = None,
 ) -> Path:
     request = tmp_path / "layout.json"
     request.write_text(
@@ -53,6 +57,7 @@ def _compose(
                 "bonds": bonds or [],
                 "notes": notes,
                 "shapes": shapes or [],
+                "arrows": arrows or [],
             }
         ),
         encoding="utf-8",
@@ -92,6 +97,8 @@ def test_check_layout_reports_overlapping_notes_without_mutating_source(
         "atom-bond-overlap": 0,
         "charge-bond-overlap": 0,
         "outside-sheet": 0,
+        "text-arrow-overlap": 0,
+        "text-bond-overlap": 0,
         "text-shape-border-overlap": 0,
         "text-text-overlap": 1,
     }
@@ -100,6 +107,21 @@ def test_check_layout_reports_overlapping_notes_without_mutating_source(
         {"index": 0, "kind": "note"},
         {"index": 1, "kind": "note"},
     ]
+
+
+def test_child_cli_uses_this_checkout_instead_of_ambient_pythonpath(tmp_path):
+    source = _compose(tmp_path, notes=[])
+    foreign = tmp_path / "foreign"
+    package = foreign / "chemvas"
+    package.mkdir(parents=True)
+    (package / "__init__.py").write_text(
+        'raise RuntimeError("imported the wrong checkout")\n'
+    )
+    result = _run("check-layout", str(source), env_updates={"PYTHONPATH": str(foreign)})
+    assert result.returncode == 0, result.stderr
+    assert json.loads(result.stdout)["coverage"]["ok_meaning"] == (
+        "No warnings in the checked collision and sheet-boundary classes."
+    )
 
 
 def test_check_layout_enforces_size_limit_during_the_read(
@@ -158,6 +180,72 @@ def test_check_layout_ignores_notes_without_visible_glyphs(tmp_path: Path) -> No
     report = json.loads(result.stdout)
     assert report["ok"] is True
     assert report["warning_count"] == 0
+    coverage = report["coverage"]
+    assert (
+        coverage["ok_meaning"]
+        == "No warnings in the checked collision and sheet-boundary classes."
+    )
+    assert (
+        "Aesthetic quality, semantic label ownership, chemical correctness or stereochemical meaning."
+        in coverage["not_checked"]
+    )
+    assert (
+        "Attached arrow-label ink against molecular bonds and own or other arrow strokes."
+        in coverage["checked"]
+    )
+
+
+def test_check_layout_attached_label_overlap_preserves_native_source(
+    tmp_path: Path,
+) -> None:
+    source = _compose(
+        tmp_path,
+        notes=[],
+        arrows=[
+            {
+                "kind": "arrow",
+                "start": [-40.0, 0.0],
+                "end": [40.0, 0.0],
+                "labels": {"above": "k_1^‡"},
+            }
+            for _ in range(2)
+        ],
+    )
+    before = source.read_bytes()
+    result = _run("check-layout", str(source))
+    assert result.returncode == 1, result.stderr
+    report = json.loads(result.stdout)
+    assert report["warning_count"] == 1
+    assert report["warnings"][0]["code"] == "text-text-overlap"
+    assert report["warnings"][0]["items"] == [
+        {"kind": "arrow-label", "index": 0, "side": "above"},
+        {"kind": "arrow-label", "index": 1, "side": "above"},
+    ]
+    assert source.read_bytes() == before
+    assert report["source_sha256"] == hashlib.sha256(before).hexdigest()
+
+
+def test_check_layout_reports_attached_label_outside_sheet(tmp_path: Path) -> None:
+    source = _compose(
+        tmp_path,
+        notes=[],
+        arrows=[
+            {
+                "kind": "arrow",
+                "start": [1000.0, 0.0],
+                "end": [1080.0, 0.0],
+                "labels": {"below": "k_1"},
+            }
+        ],
+    )
+    result = _run("check-layout", str(source))
+    assert result.returncode == 1, result.stderr
+    report = json.loads(result.stdout)
+    assert report["warning_count"] == 1
+    assert report["warnings"][0]["code"] == "outside-sheet"
+    assert report["warnings"][0]["items"] == [
+        {"kind": "arrow-label", "index": 0, "side": "below"}
+    ]
 
 
 def test_check_layout_rejects_documents_above_the_work_budget(tmp_path: Path) -> None:
@@ -198,6 +286,8 @@ def test_check_layout_reports_text_crossing_shape_border(tmp_path: Path) -> None
         "atom-bond-overlap": 0,
         "charge-bond-overlap": 0,
         "outside-sheet": 0,
+        "text-arrow-overlap": 0,
+        "text-bond-overlap": 0,
         "text-shape-border-overlap": 1,
         "text-text-overlap": 0,
     }
@@ -223,6 +313,8 @@ def test_check_layout_reports_note_outside_sheet(tmp_path: Path) -> None:
         "atom-bond-overlap": 0,
         "charge-bond-overlap": 0,
         "outside-sheet": 1,
+        "text-arrow-overlap": 0,
+        "text-bond-overlap": 0,
         "text-shape-border-overlap": 0,
         "text-text-overlap": 0,
     }

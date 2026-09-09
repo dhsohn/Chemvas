@@ -173,6 +173,77 @@ def _validate(state: dict[str, Any], request: dict[str, Any]):
     return validate_layout_request(state, request, source_sha256=_HASH)
 
 
+def test_explicit_comparison_and_caption_style_options_are_immutable() -> None:
+    state, request = _state(), _request()
+    request["rows"][0]["column_group"] = "controls"
+    request.update(caption_alignment="structure", arrow_color="#12aBcD")
+    before = deepcopy(state), deepcopy(request)
+    result = _validate(state, request)
+    assert result.rows[0].column_group == "controls"
+    assert result.caption_alignment == "structure"
+    assert result.arrow_color == "#12aBcD"
+    assert (state, request) == before
+    with pytest.raises(FrozenInstanceError):
+        result.rows[0].column_group = "changed"
+
+
+@pytest.mark.parametrize("value", [None, False, 1, [], {}, "", " ", "x" * 65, "a\nb"])
+def test_invalid_column_group_fails_closed(value) -> None:
+    request = _request()
+    request["rows"][0]["column_group"] = value
+    with pytest.raises(ValueError, match="column_group"):
+        _validate(_state(), request)
+
+
+def test_column_group_bounds_and_mismatched_row_lengths() -> None:
+    request = _request()
+    request["rows"][0]["column_group"] = "x" * 64
+    assert _validate(_state(), request).rows[0].column_group == "x" * 64
+    request["rows"].append({"blocks": [{"atoms": [4, 5]}], "column_group": "x" * 64})
+    with pytest.raises(ValueError, match="same number of blocks"):
+        _validate(_state(), request)
+    request["rows"][1]["column_group"] = "other"
+    assert len(_validate(_state(), request).rows) == 2
+
+
+@pytest.mark.parametrize("value", [None, False, 1, [], {}, "", "center", "Row"])
+def test_invalid_caption_alignment_fails_closed(value) -> None:
+    request = _request()
+    request["caption_alignment"] = value
+    with pytest.raises(ValueError, match="caption_alignment"):
+        _validate(_state(), request)
+
+
+@pytest.mark.parametrize("value", [None, False, 1, [], {}, "red", "#12", "#12345678"])
+def test_invalid_arrow_color_fails_closed(value) -> None:
+    request = _request()
+    request["arrow_color"] = value
+    with pytest.raises(ValueError, match="arrow_color"):
+        _validate(_state(), request)
+
+
+@pytest.mark.parametrize(
+    "field,value", [("caption_alignment", "row"), ("arrow_color", "#123")]
+)
+def test_align_y_rejects_explicit_arrangement_style_options(field, value) -> None:
+    request = _align_request()
+    request[field] = value
+    with pytest.raises(ValueError, match="align-y"):
+        _validate(_state(), request)
+
+
+def test_align_y_rejects_column_groups_and_color_requires_scoped_arrows() -> None:
+    request = _align_request()
+    request["rows"][0]["column_group"] = "controls"
+    with pytest.raises(ValueError, match="align-y"):
+        _validate(_state(), request)
+    request = _request()
+    request["rows"][0].pop("arrows")
+    request["arrow_color"] = "#123"
+    with pytest.raises(ValueError, match="requires at least one row arrow"):
+        _validate(_state(), request)
+
+
 def test_request_is_immutable_and_validation_preserves_source() -> None:
     state, request = _state(), _request()
     before_state, before_request = deepcopy(state), deepcopy(request)

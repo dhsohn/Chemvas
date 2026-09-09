@@ -102,19 +102,24 @@ def _layout_work_units(state: Mapping[str, object]) -> int:
     note_count = len(cast("list[object]", notes))
     shape_count = len(cast("list[object]", shapes))
     arrow_count = len(cast("list[object]", arrows))
+    arrow_label_count = sum(
+        bool(text)
+        for arrow in cast("list[Mapping[str, Any]]", arrows)
+        for text in arrow.get("labels", {}).values()
+    )
     bond_count = len(bonds)
     charge_count = sum(
         mark.get("kind") in {"plus", "minus"} and type(mark.get("atom_id")) is int
         for mark in cast("list[Mapping[str, object]]", marks)
     )
-    text_count = note_count + label_count
+    text_count = note_count + label_count + arrow_label_count
     return (
         text_count * (text_count - 1) // 2
-        + note_count * shape_count
-        + arrow_count * (label_count + bond_count)
+        + (note_count + arrow_label_count) * shape_count
+        + arrow_count * (label_count + arrow_label_count + bond_count)
         # Count incident and invisible pairs too: this pre-Qt bound must not
         # depend on clipping, label placement or graphical visibility.
-        + (label_count + charge_count) * bond_count
+        + (label_count + charge_count + arrow_label_count) * bond_count
         + len(cast("list[object]", marks))
         + text_count
         + shape_count

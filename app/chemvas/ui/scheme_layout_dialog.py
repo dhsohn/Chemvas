@@ -5,6 +5,7 @@ import json
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
+from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QTextDocument
 from PyQt6.QtWidgets import (
     QComboBox,
@@ -13,9 +14,11 @@ from PyQt6.QtWidgets import (
     QDoubleSpinBox,
     QFormLayout,
     QGridLayout,
+    QHBoxLayout,
     QLabel,
     QLineEdit,
     QMessageBox,
+    QPushButton,
     QScrollArea,
     QSpinBox,
     QVBoxLayout,
@@ -29,8 +32,9 @@ from chemvas.ui.canvas_document_state import (
     snapshot_canvas_document_state_with_warnings,
 )
 from chemvas.ui.canvas_service_ports import history_service_for_access
-from chemvas.ui.history_commands import MoveItemsCommand
+from chemvas.ui.history_commands import MoveItemsCommand, UpdateSceneItemCommand
 from chemvas.ui.main_window_ports import active_canvas_for_window
+from chemvas.ui.scene_item_state import arrow_state_dict_for
 from chemvas.ui.scheme_layout_service import plan_canvas_layout
 from chemvas.ui.selection_service_access import refresh_selection_outline_for
 from chemvas.ui.transactions.document import document_transaction
@@ -49,6 +53,7 @@ class GroupLayoutChoice:
     order: int
     captions: tuple[int, ...]
     arrow_after: int | None = None
+    column_group: str | None = None
 
 
 def grouped_layout_request(
@@ -60,6 +65,8 @@ def grouped_layout_request(
     caption_gap: float = 10,
     line_gap: float = 4,
     max_row_width: float | None = None,
+    caption_alignment: str = "row",
+    arrow_color: str | None = None,
 ) -> LayoutRequest:
     """Bind explicit existing groups to the same validated request as the CLI."""
     groups = source.get("groups", [])
@@ -105,6 +112,13 @@ def grouped_layout_request(
                 f"Row {row_number}: choose every connecting arrow, or none."
             )
         raw_row: dict[str, object] = {"blocks": blocks}
+        column_groups = {
+            member.column_group for member in members if member.column_group is not None
+        }
+        if len(column_groups) > 1:
+            raise ValueError(f"Row {row_number} has conflicting alignment groups.")
+        if column_groups:
+            raw_row["column_group"] = column_groups.pop()
         if any(arrow is not None for arrow in arrows):
             raw_row["arrows"] = arrows
         raw_rows.append(raw_row)
@@ -118,7 +132,10 @@ def grouped_layout_request(
         "row_gap": row_gap,
         "caption_gap": caption_gap,
         "line_gap": line_gap,
+        "caption_alignment": caption_alignment,
     }
+    if arrow_color is not None:
+        raw["arrow_color"] = arrow_color
     if max_row_width is not None:
         raw["max_row_width"] = max_row_width
     return validate_layout_request(source, raw, source_sha256=digest)
@@ -133,11 +150,18 @@ def arrange_grouped_canvas(
         raise ValueError("The drawing changed. Close and reopen Arrange Scheme.")
     plan = plan_canvas_layout(canvas, source, request)
     items = document_item_lists_for(canvas)
-    commands: list[HistoryCommand] = [
+    commands: list[HistoryCommand] = []
+    for index, color in plan.arrow_colors.items():
+        item = items["arrows"][index]
+        before = arrow_state_dict_for(canvas, item)
+        after = {**before, "color": color}
+        if before != after:
+            commands.append(UpdateSceneItemCommand(item, before, after))
+    commands.extend(
         MoveAtomsCommand(atom_ids=set(block.atoms), dx=dx, dy=dy)
         for block, dx, dy in plan.atom_moves
         if abs(dx) > 1e-9 or abs(dy) > 1e-9
-    ]
+    )
     commands.extend(
         MoveItemsCommand(items=[items[kind][index]], dx=dx, dy=dy)
         for (kind, index), (dx, dy) in plan.item_moves.items()
@@ -161,9 +185,12 @@ class _GroupWidgets:
     order: QSpinBox
     captions: QLineEdit
     arrow: QComboBox
+    column_group: QLineEdit
 
 
 def _note_title(note: dict[str, Any]) -> str:
+    if not note.get("html"):
+        return " ".join(str(note.get("text", "")).split())
     document = QTextDocument()
     document.setHtml(note.get("html", ""))
     return " ".join(document.toPlainText().split())
@@ -192,16 +219,24 @@ class SchemeLayoutDialog(QDialog):
         layout = QVBoxLayout(self)
         explanation = QLabel(
             "Each group is one structure block. Row 0 leaves a group unchanged. "
-            "Set reading order and arrows explicitly. Caption note numbers are "
-            "1-based, in top-to-bottom order; other group items keep their offsets. "
-            "Unassigned objects stay in place. Arrange is one undoable edit."
+            "Choose note roles explicitly; none are guessed from their positions. "
+            "Caption numbers are 1-based, in top-to-bottom order; other group notes keep their offsets. "
+            "Put reaction conditions in the arrow's Above/Below labels, and keep panel explanations outside structure groups. "
+            "Unassigned objects stay in place. Choose roles again after reopening this dialog. Arrange is one undoable edit."
         )
         explanation.setWordWrap(True)
         layout.addWidget(explanation)
         panel = QWidget(self)
         grid = QGridLayout(panel)
         for column, title in enumerate(
-            ("Group", "Row (0 = skip)", "Order", "Caption note numbers", "Arrow after")
+            (
+                "Group",
+                "Row (0 = skip)",
+                "Order",
+                "Note roles / caption order",
+                "Arrow after",
+                "Alignment group",
+            )
         ):
             grid.addWidget(QLabel(title), 0, column)
         self.group_widgets: list[_GroupWidgets] = []
@@ -215,9 +250,9 @@ class SchemeLayoutDialog(QDialog):
             order.setValue(index + 1)
             notes = sorted(
                 (i for kind, i in group["items"] if kind == "notes"),
-                key=lambda i: (source["notes"][i]["y"], source["notes"][i]["x"], i),
             )
-            captions = QLineEdit(", ".join(str(i + 1) for i in notes))
+            captions = QLineEdit()
+            captions.setPlaceholderText("No captions chosen")
             captions.setToolTip(
                 "Comma-separated note numbers, in caption order. Empty means no captions.\n"
                 + "\n".join(
@@ -228,10 +263,34 @@ class SchemeLayoutDialog(QDialog):
             arrow.addItem("None", None)
             for arrow_index, record in enumerate(source.get("arrows", [])):
                 arrow.addItem(f"{arrow_index + 1}: {record['kind']}", arrow_index)
-            self.group_widgets.append(_GroupWidgets(index, row, order, captions, arrow))
-            title = _note_title(source["notes"][notes[0]]) if notes else "Structure"
+                labels = record.get("labels", {})
+                arrow.setItemData(
+                    arrow.count() - 1,
+                    "\n".join(f"{side}: {text}" for side, text in labels.items())
+                    or "No attached condition labels",
+                    Qt.ItemDataRole.ToolTipRole,
+                )
+            column_group = QLineEdit()
+            column_group.setPlaceholderText("Default")
+            column_group.setMaxLength(64)
+            column_group.setToolTip(
+                "Rows with the same name share column widths. Use a different name for an independent row. "
+                "Blank retains the original block-count alignment; wrapping uses independent lines."
+            )
+            widgets = _GroupWidgets(index, row, order, captions, arrow, column_group)
+            self.group_widgets.append(widgets)
+            roles = QWidget()
+            role_layout = QHBoxLayout(roles)
+            role_layout.setContentsMargins(0, 0, 0, 0)
+            role_layout.addWidget(captions)
+            choose_roles = QPushButton("Choose…")
+            choose_roles.setEnabled(bool(notes))
+            choose_roles.clicked.connect(
+                lambda checked=False, entry=widgets: self._choose_note_roles(entry)
+            )
+            role_layout.addWidget(choose_roles)
             group_label = QLabel(
-                f"{index + 1}: {title[:32]} ({len(group['atoms'])} atoms)"
+                f"{index + 1}: Structure ({len(group['atoms'])} atoms)"
             )
             group_label.setToolTip(
                 f"Group {index + 1}: atom IDs {', '.join(str(a) for a in group['atoms'])}"
@@ -241,8 +300,9 @@ class SchemeLayoutDialog(QDialog):
                     group_label,
                     row,
                     order,
-                    captions,
+                    roles,
                     arrow,
+                    column_group,
                 )
             ):
                 grid.addWidget(widget, index + 1, column)
@@ -252,6 +312,17 @@ class SchemeLayoutDialog(QDialog):
         scroll.setWidget(panel)
         layout.addWidget(scroll)
         form = QFormLayout()
+        self.caption_alignment = QComboBox()
+        self.caption_alignment.addItem("Shared caption baselines", "row")
+        self.caption_alignment.addItem("Close to each structure", "structure")
+        form.addRow("Caption placement", self.caption_alignment)
+        self.arrow_color = QLineEdit()
+        self.arrow_color.setPlaceholderText("Preserve colors; enter #000000 for black")
+        self.arrow_color.setToolTip(
+            "Only explicitly chosen connecting arrows and their labels are recolored. "
+            "Font and stroke size retain the document settings."
+        )
+        form.addRow("Connecting-arrow color", self.arrow_color)
         self.distances: dict[str, QDoubleSpinBox] = {}
         for name, title, initial in (
             ("gap", "Horizontal gap", 40),
@@ -283,6 +354,66 @@ class SchemeLayoutDialog(QDialog):
         buttons.rejected.connect(self.reject)
         layout.addWidget(buttons)
 
+    def _choose_note_roles(self, widgets: _GroupWidgets) -> None:
+        try:
+            previous = tuple(
+                int(value.strip()) - 1
+                for value in widgets.captions.text().split(",")
+                if value.strip()
+            )
+        except ValueError:
+            self.error_label.setText(
+                "Caption order must use note numbers, or clear it before choosing roles."
+            )
+            return
+        notes = sorted(
+            index
+            for kind, index in self._source["groups"][widgets.index]["items"]
+            if kind == "notes"
+        )
+        dialog = QDialog(self)
+        dialog.setWindowTitle(f"Note roles — structure group {widgets.index + 1}")
+        layout = QVBoxLayout(dialog)
+        panel = QWidget(dialog)
+        form = QFormLayout(panel)
+        choices: dict[int, QComboBox] = {}
+        for index in notes:
+            role = QComboBox()
+            role.addItem("Attached note — keep offset", "attached")
+            role.addItem("Structure caption — place below", "caption")
+            role.setCurrentIndex(1 if index in previous else 0)
+            role.setObjectName(f"schemeNoteRole{index}")
+            choices[index] = role
+            title = _note_title(self._source["notes"][index])
+            label = QLabel(f"{index + 1}: {title[:70]}")
+            label.setToolTip(title)
+            form.addRow(label, role)
+        scroll = QScrollArea(dialog)
+        scroll.setWidgetResizable(True)
+        scroll.setWidget(panel)
+        layout.addWidget(scroll)
+        dialog.resize(600, min(650, 100 + len(notes) * 40))
+        buttons = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
+        )
+        buttons.accepted.connect(dialog.accept)
+        buttons.rejected.connect(dialog.reject)
+        layout.addWidget(buttons)
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            selected = {
+                index
+                for index, role in choices.items()
+                if role.currentData() == "caption"
+            }
+            ordered = list(
+                dict.fromkeys(index for index in previous if index in selected)
+            )
+            ordered.extend(
+                index for index in notes if index in selected and index not in ordered
+            )
+            widgets.captions.setText(", ".join(str(index + 1) for index in ordered))
+        dialog.deleteLater()
+
     def _apply(self) -> None:
         try:
             choices = [
@@ -298,13 +429,19 @@ class SchemeLayoutDialog(QDialog):
                     if widgets.row.value()
                     else (),
                     widgets.arrow.currentData(),
+                    widgets.column_group.text().strip() or None,
                 )
                 for widgets in self.group_widgets
             ]
             values = {name: spin.value() for name, spin in self.distances.items()}
             width = values.pop("max_row_width")
             request = grouped_layout_request(
-                self._source, choices, max_row_width=width or None, **values
+                self._source,
+                choices,
+                max_row_width=width or None,
+                caption_alignment=self.caption_alignment.currentData(),
+                arrow_color=self.arrow_color.text().strip() or None,
+                **values,
             )
             self.result_report = self._arrange(request)
         except Exception as exc:

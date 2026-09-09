@@ -341,6 +341,7 @@ class CanvasArrowBuildService:
                 continue
             child = ArrowLabelItem(item)
             child.setData(0, ARROW_LABEL_ROLE)
+            child.setData(1, side)
             child.setFont(font)
             child.setDefaultTextColor(QColor(data.get("color", style.text_color)))
             child.setHtml(arrow_label_html(text))
