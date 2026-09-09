@@ -24,6 +24,7 @@ from PyQt6.QtWidgets import (
 
 from chemvas.features.export import (
     ExportPlan,
+    MinimumFontSizeError,
     collect_export_items,
     export_item_closure,
     svg_viewport_size_points,
@@ -315,10 +316,7 @@ def assess_export_readability(
                 f"font readability unavailable for {reference}: {exc}"
             ) from exc
     if minimum is not None and minimum < minimum_font_pt:
-        raise ValueError(
-            f"minimum visible font is {minimum:.6f} pt at {witness}; "
-            f"below --min-font-pt {minimum_font_pt:g}; output was not resized"
-        )
+        raise MinimumFontSizeError(minimum, minimum_font_pt, witness)
     return {
         "minimum_required_pt": minimum_font_pt,
         "minimum_font_pt": minimum,

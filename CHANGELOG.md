@@ -16,6 +16,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Explain failed height limits with the measured output height and desktop
+  controls while preserving existing files and command-line diagnostics.
+- Measure PDF height limits against the native page geometry, including
+  whole-point rounding and standard-paper matching.
+
+- Keep unchecked checkboxes visible against the desktop dialog background,
+  including when an export option is unavailable.
+- Add Close Window with the platform's standard shortcut (Command-W on macOS),
+  retaining the existing save, cancel and shutdown handling.
+- Explain failed minimum-font export checks with measured sizes and corrective
+  actions in the desktop dialog while preserving command-line diagnostics.
+
 - Report unrecognized command names before starting Qt. Reject unrecognized
   desktop arguments after Qt consumes its options, before opening a window or
   restoring a session.

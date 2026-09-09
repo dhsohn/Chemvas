@@ -14,8 +14,14 @@ MAX_RASTER_PIXELS = 25_000_000
 
 
 def _rendered_height_points(plan: ExportPlan, output_format: str, dpi: int) -> float:
-    from chemvas.features.export import POINTS_PER_INCH, svg_viewport_size_points
+    from chemvas.features.export import (
+        POINTS_PER_INCH,
+        pdf_page_size,
+        svg_viewport_size_points,
+    )
 
+    if output_format == "pdf":
+        return float(pdf_page_size(plan).sizePoints().height())
     if output_format == "svg":
         return float(svg_viewport_size_points(plan)[1])
     if output_format in {"png", "tiff"}:
@@ -35,7 +41,11 @@ def validate_export_budget(
     max_height_mm: float | None = None,
 ) -> tuple[int | None, int | None]:
     """Reject over-budget output without resizing; resolve native raster dimensions."""
-    from chemvas.features.export import POINTS_PER_INCH, points_for_mm
+    from chemvas.features.export import (
+        POINTS_PER_INCH,
+        MaximumHeightError,
+        points_for_mm,
+    )
 
     width_points = float(plan.out_w_pt)
     height_points = float(plan.out_h_pt)
@@ -60,9 +70,8 @@ def validate_export_budget(
             raise ValueError("maximum height must be a positive finite number")
         rendered_height = _rendered_height_points(plan, output_format, dpi)
         if rendered_height > math.nextafter(points_for_mm(max_height_mm), math.inf):
-            raise ValueError(
-                f"rendered height exceeds --max-height-mm {max_height_mm:g}; "
-                "output was not resized"
+            raise MaximumHeightError(
+                rendered_height / points_for_mm(1.0), max_height_mm
             )
     if output_format not in {"png", "tiff"}:
         return None, None

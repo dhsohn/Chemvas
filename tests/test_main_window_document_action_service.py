@@ -10,6 +10,7 @@ from unittest import mock
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PyQt6.QtCore import QPointF
+from PyQt6.QtGui import QKeySequence
 from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import QApplication, QMessageBox
 
@@ -22,6 +23,7 @@ from chemvas.bootstrap.window_registry import (
 from chemvas.core.document_io import write_document
 from chemvas.core.molfile import parse_molfile, write_molfile
 from chemvas.domain.document import CANVAS_FILE_VERSION, MoleculeModel
+from chemvas.features.export.errors import MinimumFontSizeError
 from chemvas.ui.canvas_document_metadata_state import document_file_path_for
 from chemvas.ui.canvas_mark_registry import mark_registry_for
 from chemvas.ui.canvas_model_access import model_for
@@ -65,6 +67,35 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
         self.window.close()
         self.app.processEvents()
         QTest.qWait(10)
+
+    def test_close_shortcut_preserves_dirty_document_when_cancelled(self) -> None:
+        add_bond_between_points_for(
+            active_canvas_for_window(self.window),
+            QPointF(-20.0, 0.0),
+            QPointF(20.0, 0.0),
+        )
+        file_menu = next(
+            action.menu()
+            for action in self.window.menuBar().actions()
+            if action.text() == "File"
+        )
+        action = next(a for a in file_menu.actions() if a.text() == "Close Window")
+        self.assertEqual(
+            action.shortcuts(), QKeySequence.keyBindings(QKeySequence.StandardKey.Close)
+        )
+        with mock.patch(
+            "chemvas.ui.main_window_document_action_service.QMessageBox.question",
+            return_value=QMessageBox.StandardButton.Cancel,
+        ) as question:
+            QTest.keySequence(self.window, action.shortcut())
+            self.app.processEvents()
+        question.assert_called_once()
+        self.assertTrue(self.window.isVisible())
+        self.assertTrue(
+            services_for_window(self.window).canvas_document_service.is_dirty(
+                active_canvas_for_window(self.window)
+            )
+        )
 
     def test_save_canvas_to_path_updates_only_active_canvas_path_title_and_clean_state(
         self,
@@ -734,7 +765,11 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
         file_dialog.getSaveFileName.return_value = ("figure.svg", "")
         message_box = mock.Mock()
         session = mock.Mock()
-        session.export_figure.side_effect = ValueError("minimum font size is too small")
+        session.export_figure.side_effect = MinimumFontSizeError(
+            5.762193,
+            7.25,
+            {"kind": "arrow", "index": 1, "part": "label", "script": True},
+        )
         options = FigureExportOptions(
             fmt="svg",
             sizing="custom",
@@ -772,8 +807,67 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
             min_font_pt=7.25,
         )
         message_box.warning.assert_called_once()
-        self.assertIn("minimum font size", message_box.warning.call_args.args[2])
+        message = message_box.warning.call_args.args[2]
+        self.assertIn("5.76 pt", message)
+        self.assertIn("7.25 pt", message)
+        self.assertIn("Increase the export width", message)
+        self.assertIn("No file was written", message)
+        self.assertNotIn("--min-font-pt", message)
+        self.assertNotIn("'kind'", message)
         self.assertNotIn("Exported:", self.window.statusBar().currentMessage())
+
+    def test_export_height_failure_explains_gui_controls_and_preserves_destination(
+        self,
+    ) -> None:
+        canvas = active_canvas_for_window(self.window)
+        add_bond_between_points_for(canvas, QPointF(-20, -30), QPointF(20, 30))
+        before = snapshot_canvas_state_for(canvas)
+        with tempfile.TemporaryDirectory() as temp_dir:
+            for fmt in ("svg", "pdf", "png", "tiff"):
+                for existing in (False, True):
+                    with self.subTest(fmt=fmt, existing=existing):
+                        path = Path(temp_dir) / f"figure-{existing}.{fmt}"
+                        sentinel = b"previous successful export"
+                        if existing:
+                            path.write_bytes(sentinel)
+                        options = FigureExportOptions(
+                            fmt=fmt,
+                            sizing="custom",
+                            scope="sheet",
+                            dpi=300,
+                            background="white",
+                            target_width_mm=84,
+                            max_height_mm=1,
+                        )
+                        file_dialog = mock.Mock()
+                        file_dialog.getSaveFileName.return_value = (str(path), "")
+                        message_box = mock.Mock()
+                        with mock.patch(
+                            "chemvas.ui.main_window_document_action_service."
+                            "prompt_export_options",
+                            return_value=options,
+                        ):
+                            self.service.export_figure(
+                                self.window,
+                                file_dialog=file_dialog,
+                                message_box=message_box,
+                            )
+                        message_box.warning.assert_called_once()
+                        message = message_box.warning.call_args.args[2]
+                        self.assertIn("The exported figure is", message)
+                        self.assertIn("the maximum is 1 mm", message)
+                        self.assertIn("Reduce the export width", message)
+                        self.assertIn("Limit exported height", message)
+                        self.assertIn("No file was written or resized", message)
+                        self.assertNotIn("--max-height-mm", message)
+                        self.assertNotIn(
+                            "Exported:", self.window.statusBar().currentMessage()
+                        )
+                        if existing:
+                            self.assertEqual(path.read_bytes(), sentinel)
+                        else:
+                            self.assertFalse(path.exists())
+                        self.assertEqual(snapshot_canvas_state_for(canvas), before)
 
     def test_export_figure_cancel_does_not_request_path_or_session(self) -> None:
         file_dialog = mock.Mock()
