@@ -15,8 +15,6 @@ from decimal import Decimal
 from io import BytesIO
 from typing import cast
 
-from PIL import Image, UnidentifiedImageError
-
 MAX_IMAGE_BYTES = 16 * 1024 * 1024
 MAX_IMAGE_PIXELS = 25_000_000
 MAX_DOCUMENT_IMAGE_BYTES = 64 * 1024 * 1024
@@ -185,6 +183,9 @@ def _pixel_dimensions(width: object, height: object) -> tuple[int, int]:
 def _inspect_image_bytes(data: bytes) -> tuple[str, int, int]:
     if not isinstance(data, bytes) or not 0 < len(data) <= MAX_IMAGE_BYTES:
         raise ValueError("Image exceeds the 16 MiB byte limit or is empty.")
+    # Image-free document APIs remain usable without loading raster dependencies.
+    from PIL import Image, UnidentifiedImageError
+
     try:
         with warnings.catch_warnings():
             warnings.simplefilter("error", Image.DecompressionBombWarning)

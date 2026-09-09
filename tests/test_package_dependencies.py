@@ -371,6 +371,33 @@ def test_hover_feature_import_does_not_load_qt() -> None:
     assert result.returncode == 0, result.stderr
 
 
+def test_headless_document_api_does_not_require_image_or_gui_dependencies() -> None:
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-I",
+            "-S",
+            "-c",
+            (
+                "import sys; sys.path.insert(0, sys.argv[1]); "
+                "from chemvas.bootstrap.application import main; "
+                "from chemvas.domain.document import MoleculeModel, validate_image_states; "
+                "assert callable(main); assert MoleculeModel is not None; "
+                "assert validate_image_states([]) is None; "
+                "assert not any(name.split('.')[0] in {'PIL', 'PyQt6'} "
+                "for name in sys.modules)"
+            ),
+            str(APP_ROOT),
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=20,
+    )
+
+    assert result.returncode == 0, result.stderr
+
+
 def test_rdkit_adapter_import_does_not_load_qt() -> None:
     env = os.environ.copy()
     pythonpath = env.get("PYTHONPATH")
