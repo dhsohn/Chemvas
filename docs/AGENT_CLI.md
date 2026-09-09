@@ -130,8 +130,9 @@ The current v1 checker reports these stable warning codes:
   or a painted molecular bond;
 - `text-shape-border-overlap` when note or attached arrow-label text crosses a
   painted shape border;
-- `outside-sheet` when a visible note, shape or attached arrow label extends
-  beyond the sheet.
+- `outside-sheet` when supported visible native content extends beyond the
+  sheet, including molecular structures, arrow strokes and labels, notes,
+  shapes, marks, ring fills, orbitals and TS brackets.
 
 The report includes the exact source SHA-256, document version, deterministic
 warning counts, persisted note/shape/arrow indices, stable atom IDs (bond endpoints
@@ -154,12 +155,37 @@ filled highlight interiors are not collision pairs. Intentional arrow-to-structu
 contacts may still warn: inspect the reported intersection rather than treating
 every warning as an error in the chemistry. The checker does not cover every
 possible overlap (for example, note–arrow, atom–shape, or TS-bracket collisions),
-and `outside-sheet` remains limited to notes, shapes and attached arrow labels.
+even though their sheet containment is checked. Sheet checks use native visible
+text/export bounds and painted geometry, not only atom centers or interaction
+hit regions. Text-box margins and stroke extents can matter at the edge.
 Atom-label coverage follows
 the fonts produced by native document restore; underline/strikeout decorations
 injected directly into Qt atom items are not persisted and are outside this
 contract. The work limit bounds record and candidate-pair counts, not arbitrary
 font/glyph complexity. Visual review is still required.
+
+For a large drawing that exceeds the pairwise collision-work limit, request only
+the linear sheet-containment check:
+
+```bash
+chemvas check-layout scheme.chemvas --sheet-only > sheet-report.json
+```
+
+The shared document-size and graphics-record limits still apply. This mode's
+counts contain only `outside-sheet`, and its `coverage` explicitly states that
+collisions were not checked. Exit `0` therefore means only that sheet containment
+passed. Exit `1` means a boundary warning and exit `2` means the check did not
+complete successfully. Do not treat a work-limit refusal as a clean report or
+silently discard `outside-sheet` warnings.
+
+Before delivering an editable drawing, require a clean sheet-containment result
+for the **exact saved `.chemvas` bytes**. Bind the report's `source_sha256` to the
+file and retain the report; then check collisions within the documented scope,
+render at the intended physical size and inspect the native drawing in the GUI.
+An export's width, height or minimum-font guard does not resize the stored
+coordinates or certify that they fit the native working sheet. These diagnostics
+do not alter ordinary Save/Open, automatically shrink content, or reorganize a
+reaction path.
 
 ## Explicit scheme layout
 

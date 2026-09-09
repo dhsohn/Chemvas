@@ -16,6 +16,11 @@ layout/font reports, SVG, 600 dpi PNG and `manifest.json` are retained for revie
 Failed runs leave their new directory for diagnosis; choose a new directory to
 retry. No old drawing or output is overwritten. A CLI error or layout warning
 stops this example before further publication; it does not auto-correct chemistry.
+The final native SHA-256 is pinned before its layout check. The check, export-box
+probe and both final export reports must reference those same bytes. Each
+manifest figure includes `layout_check`, containing the saved report filename
+and its SHA-256. A source mismatch stops the recipe without a final manifest;
+any intermediate files remain diagnostic material, not an accepted delivery.
 
 ## What to reuse
 
@@ -36,9 +41,11 @@ stops this example before further publication; it does not auto-correct chemistr
    and `"super"`. `A_1` and `kcal mol^-1` are not substitutes for formatting.
    The example's A identifiers and superscript a are typography samples only.
    There is no overall figure title that duplicates the manuscript caption.
-5. **Validate the final size.** Run `check-layout`, render with height and minimum
-   font guards, and inspect both the native drawing and the final SVG/PNG. A clean
-   diagnostic report is not a chemistry or stereochemistry validation.
+5. **Validate editable and printed size separately.** Require a clean
+   `check-layout` result, including full native-sheet containment, before any
+   export. Render with height and minimum-font guards, then inspect both the
+   native drawing and final SVG/PNG. A clean diagnostic report is not a chemistry
+   or stereochemistry validation.
 
 The small example intentionally has no invented arrows, energies or TS geometry.
 For a real pathway, add the researcher-supplied states and arrows explicitly,
@@ -82,6 +89,20 @@ renderer metric) to derive canvas width before applying the common 5/40 mm scale
 It does **not** rewrite an SVG, scale individual notes, or install a parallel
 style engine. If changing presets or font settings, remeasure and review the
 whole figure set; do not copy the ACS conversion constant to another preset.
+
+The native working sheet and physical export are different coordinate spaces.
+Small PDF dimensions do not make an oversized saved drawing editable within its
+sheet. Keep the native geometry, fonts and whole-figure placement within that
+sheet from the start; do not ignore boundary warnings and rely on export scaling
+to hide them. Before delivery, reopen the final native file and check that its
+complete drawing is visible and its groups can be selected and moved as intended.
+Do not save temporary review moves back into the delivery file.
+
+For larger authored documents, `check-layout --sheet-only` can run the bounded
+linear containment check without the pairwise collision pass. Its report is only
+sheet-fit evidence, not a substitute for collision or visual review. The small
+examples here use the default combined check once; they do not need a redundant
+sheet-only call. Neither mode modifies Save/Open or automatically shrinks content.
 
 The template-to-composition step is deliberately limited to the new, graph-only
 seed created inside the example. It transfers both inspected graph data and the
@@ -132,6 +153,8 @@ composition, source-pinned layout request, native source and final document,
 `comparison-graph.json`, collision report, SVG/600 dpi PNG and `manifest.json`.
 The output directory must be new; any command error or collision warning stops
 the run. The original template example and its print profile remain unchanged.
+The same source-pinned `layout_check` receipt and export checks apply to this
+comparison's manifest.
 
 Ownership is explicit in the layout request:
 

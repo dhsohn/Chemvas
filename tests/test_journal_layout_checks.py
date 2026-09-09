@@ -536,7 +536,8 @@ def test_attached_label_work_limit_rejects_before_qt(
     state = _state({}, arrows=[_labelled_arrow() for _ in range(arrow_count)])
     write_document(source, state, CANVAS_FILE_VERSION)
 
-    def reject_qt(_state):
+    def reject_qt(_state, *, sheet_only):
+        assert sheet_only is False
         assert arrow_count == 49, "attached label work limit must run before Qt"
         return {"ok": True}
 

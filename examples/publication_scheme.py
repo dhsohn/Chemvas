@@ -53,6 +53,21 @@ def command(*args: object) -> dict:
     return json.loads(result.stdout)
 
 
+def document_command(
+    operation: str, document: Path, source_sha256: str, *args: object
+) -> dict:
+    """Keep the native check and every export bound to one saved document."""
+    if sha256(document) != source_sha256:
+        raise ValueError("Native source SHA-256 changed before validation or export")
+    report = command(operation, document, *args)
+    if (
+        report.get("source_sha256") != source_sha256
+        or sha256(document) != source_sha256
+    ):
+        raise ValueError("Native source SHA-256 does not match the command report")
+    return report
+
+
 def compose(directory: Path, name: str, payload: dict) -> Path:
     request = directory / f"{name}.composition.json"
     output = directory / f"{name}.chemvas"
@@ -259,22 +274,29 @@ def figure(directory: Path, name: str, fragment: tuple, multipart: bool) -> dict
         "layout-document", arranged, "--layout", request, "--output", final
     )
     write_json(directory / f"{name}-alignment-report.json", alignment)
-    qa = command("check-layout", final)
-    write_json(directory / f"{name}-layout-report.json", qa)
+    source_sha256 = sha256(final)
+    qa = document_command("check-layout", final, source_sha256)
+    layout_report = directory / f"{name}-layout-report.json"
+    write_json(layout_report, qa)
     # Probe the padded export box. The existing ACS preset uses 14.4 pt per
     # renderer bond metric. Derive each figure's width from ONE physical scale,
     # never stretch every figure to the same width or shrink a long pathway.
-    probe = command(
-        "render-document", final, "--output", directory / f"{name}-probe.svg"
+    probe = document_command(
+        "render-document",
+        final,
+        source_sha256,
+        "--output",
+        directory / f"{name}-probe.svg",
     )
     scene_width = probe["width_points"] / (14.4 / RENDERER_METRIC)
     width_mm = scene_width * MM_PER_UNIT
     outputs = {}
     for extension in ("svg", "png"):
         path = directory / f"{name}.{extension}"
-        report = command(
+        report = document_command(
             "render-document",
             final,
+            source_sha256,
             "--output",
             path,
             "--width-mm",
@@ -290,7 +312,8 @@ def figure(directory: Path, name: str, fragment: tuple, multipart: bool) -> dict
         outputs[extension] = report
     return {
         "document": final.name,
-        "source_sha256": sha256(final),
+        "source_sha256": source_sha256,
+        "layout_check": {"report": layout_report.name, "sha256": sha256(layout_report)},
         "embed_width_mm": width_mm,
         "exports": outputs,
     }

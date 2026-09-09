@@ -18,6 +18,7 @@ from PyQt6.QtWidgets import (
 )
 
 from chemvas.ui.canvas_atom_graphics_state import CanvasAtomGraphicsState
+from chemvas.ui.canvas_bond_graphics_state import CanvasBondGraphicsState
 from chemvas.ui.canvas_scene_items_state import CanvasSceneItemsState
 from chemvas.ui.layout_qa_service import check_canvas_layout
 from chemvas.ui.sheet_setup_state import SheetSetupState
@@ -258,6 +259,7 @@ def _canvas(
     return SimpleNamespace(
         runtime_state=canvas_runtime_state(
             atom_graphics_state=CanvasAtomGraphicsState(),
+            bond_graphics_state=CanvasBondGraphicsState(),
             scene_items_state=CanvasSceneItemsState(
                 note_items=notes,
                 shape_items=shapes,
@@ -265,6 +267,280 @@ def _canvas(
             sheet_setup_state=SheetSetupState(rect=sheet),
         )
     )
+
+
+@pytest.mark.parametrize(
+    "html,visible",
+    [
+        ("<ul><li><br/></li></ul>", True),
+        ("<ol><li><br/></li></ol>", True),
+        ('<ul><li style="white-space:pre-wrap"> </li></ul>', True),
+        ("<p><br/></p>", False),
+    ],
+)
+@pytest.mark.parametrize("transparent", [False, True])
+def test_sheet_containment_includes_native_empty_list_markers(
+    html, visible, transparent
+):
+    scene = QGraphicsScene()
+    note = QGraphicsTextItem()
+    scene.addItem(note)
+    note.setHtml(html)
+    if transparent:
+        note.setDefaultTextColor(QColor(0, 0, 0, 0))
+    note.setPos(1000, 0)
+    # Qt is the independent oracle: an empty list can still paint a marker.
+    bounds = note.boundingRect()
+    image = QImage(200, 100, QImage.Format.Format_ARGB32_Premultiplied)
+    image.fill(Qt.GlobalColor.transparent)
+    painter = QPainter(image)
+    from PyQt6.QtWidgets import QStyleOptionGraphicsItem
+
+    note.paint(painter, QStyleOptionGraphicsItem(), None)
+    painter.end()
+    has_ink = any(
+        image.pixelColor(x, y).alpha()
+        for y in range(image.height())
+        for x in range(image.width())
+    )
+    assert has_ink == (visible and not transparent)
+    assert bounds.width() < 200 and bounds.height() < 100
+    canvas = _canvas(notes=[note], shapes=[], sheet=QRectF(-100, -100, 200, 200))
+    assert check_canvas_layout(canvas, sheet_only=True)["counts"][
+        "outside-sheet"
+    ] == int(has_ink)
+
+
+@pytest.mark.parametrize("rotation", [0, 90, 180, 270])
+def test_sheet_containment_includes_italic_ink_outside_the_text_box(rotation):
+    from PyQt6.QtWidgets import QStyleOptionGraphicsItem
+
+    from chemvas.features.export import item_export_bounds
+
+    note = QGraphicsTextItem("j")
+    font = QFont("Times New Roman", 72)
+    font.setItalic(True)
+    note.setFont(font)
+    image = QImage(250, 250, QImage.Format.Format_ARGB32_Premultiplied)
+    image.fill(Qt.GlobalColor.transparent)
+    painter = QPainter(image)
+    painter.translate(40, 40)
+    note.paint(painter, QStyleOptionGraphicsItem(), None)
+    painter.end()
+    # Independent native raster oracle: italic paint overhangs the text box.
+    assert any(image.pixelColor(x, y).alpha() for x in range(39) for y in range(250))
+    sheet = QRectF(-421, -297.5, 842, 595)
+    note.setRotation(rotation)
+    box = item_export_bounds(note)
+    dx, dy = {
+        0: (sheet.left() + 1 - box.left(), 0),
+        90: (0, sheet.top() + 1 - box.top()),
+        180: (sheet.right() - 1 - box.right(), 0),
+        270: (0, sheet.bottom() - 1 - box.bottom()),
+    }[rotation]
+    note.moveBy(dx, dy)
+    assert sheet.contains(item_export_bounds(note))
+    canvas = _canvas(notes=[note], shapes=[], sheet=sheet)
+    assert check_canvas_layout(canvas, sheet_only=True)["counts"]["outside-sheet"] == 1
+    note.setPos(0, 0)
+    assert check_canvas_layout(canvas, sheet_only=True)["ok"] is True
+
+
+@pytest.mark.parametrize(
+    "kind",
+    [
+        "atom",
+        "dot",
+        "bond",
+        "note",
+        "shape",
+        "ring",
+        "arrow",
+        "arrow-label",
+        "mark",
+        "ts_bracket",
+        "orbital",
+    ],
+)
+@pytest.mark.parametrize("edge", ["left", "right", "top", "bottom"])
+def test_sheet_containment_covers_each_native_item_and_edge_without_mutation(
+    kind, edge
+):
+    from chemvas.bootstrap.document_cli_shared import offscreen_canvas
+    from chemvas.features.document_composition import compose_document_state
+    from chemvas.ui.canvas_atom_graphics_state import atom_dots_for, atom_items_for
+    from chemvas.ui.canvas_bond_graphics_state import bond_items_for
+    from chemvas.ui.canvas_scene_items_state import (
+        arrow_items_for,
+        mark_items_for,
+        note_items_for,
+        orbital_items_for,
+        ring_items_for,
+        shape_items_for,
+        ts_bracket_items_for,
+    )
+    from chemvas.ui.scene_item_access import create_scene_item_from_state
+    from chemvas.ui.sheet_setup_access import sheet_rect_for
+
+    state = compose_document_state(
+        {
+            "format": "chemvas-document-composition",
+            "version": 1,
+            "atoms": [
+                {"id": 0, "element": "C", "x": -40.0, "y": 0.0},
+                {"id": 1, "element": "C", "x": 0.0, "y": 0.0},
+                {"id": 2, "element": "C", "x": -20.0, "y": 35.0},
+                {"id": 3, "element": "O", "x": 70.0, "y": 0.0, "formal_charge": -1},
+                {"id": 4, "element": "C", "x": 100.0, "y": 100.0},
+            ],
+            "bonds": [
+                {"a": a, "b": b, "order": 1} for a, b in [(0, 1), (1, 2), (2, 0)]
+            ],
+            "ring_fills": [{"atom_ids": [0, 1, 2], "color": "#ffeeaa", "alpha": 0.5}],
+            "notes": [{"text": "Label", "x": -120.0, "y": 60.0}],
+            "arrows": [
+                {
+                    "kind": "arrow",
+                    "start": [-100.0, -50.0],
+                    "end": [100.0, -50.0],
+                    "labels": {"above": "THF"},
+                }
+            ],
+            "shapes": [
+                {
+                    "shape_kind": "rect",
+                    "left": -100.0,
+                    "top": 100.0,
+                    "right": -40.0,
+                    "bottom": 120.0,
+                    "stroke_style": "solid",
+                }
+            ],
+            "ts_brackets": [
+                {
+                    "bracket_kind": "square_pair",
+                    "left": -150.0,
+                    "top": -100.0,
+                    "right": -100.0,
+                    "bottom": -60.0,
+                }
+            ],
+        }
+    )
+    with offscreen_canvas(state, command="test-sheet-item") as (canvas, service):
+        create_scene_item_from_state(
+            canvas,
+            {
+                "kind": "orbital",
+                "orbital_kind": "p",
+                "center": (150.0, 0.0),
+                "scale": 1.0,
+                "rotation": 35.0,
+            },
+        )
+        arrow = arrow_items_for(canvas)[0]
+        label = next(
+            child for child in arrow.childItems() if child.data(0) == "arrow_label"
+        )
+        item = {
+            "atom": atom_items_for(canvas)[3],
+            "dot": atom_dots_for(canvas)[4],
+            "bond": bond_items_for(canvas)[0][0],
+            "note": note_items_for(canvas)[0],
+            "shape": shape_items_for(canvas)[0],
+            "ring": ring_items_for(canvas)[0],
+            "arrow": arrow,
+            "arrow-label": label,
+            "mark": mark_items_for(canvas)[0],
+            "ts_bracket": ts_bracket_items_for(canvas)[0],
+            "orbital": orbital_items_for(canvas)[0],
+        }[kind]
+        if kind == "dot":
+            # Implicit-carbon hit dots are transparent by default. Exercise
+            # an actually painted dot, not an invisible selection target.
+            item.setBrush(QBrush(QColor("black")))
+        assert check_canvas_layout(canvas, sheet_only=True)["ok"] is True
+        sheet = sheet_rect_for(canvas)
+        dx, dy = {
+            "left": (-2 * sheet.width(), 0),
+            "right": (2 * sheet.width(), 0),
+            "top": (0, -2 * sheet.height()),
+            "bottom": (0, 2 * sheet.height()),
+        }[edge]
+        item.moveBy(dx, dy)
+        before = service.snapshot_state()
+        report = check_canvas_layout(canvas, sheet_only=True)
+        assert report["ok"] is False
+        expected_kind = "atom" if kind == "dot" else kind
+        assert any(w["items"][0]["kind"] == expected_kind for w in report["warnings"])
+        assert service.snapshot_state() == before
+        assert (
+            check_canvas_layout(canvas)["counts"]["outside-sheet"]
+            == report["counts"]["outside-sheet"]
+        )
+        item.setVisible(False)
+        assert check_canvas_layout(canvas, sheet_only=True)["ok"] is True
+        item.setVisible(True)
+        item.setOpacity(0)
+        assert check_canvas_layout(canvas, sheet_only=True)["ok"] is True
+        item.setOpacity(1)
+        item.moveBy(-dx, -dy)
+        assert check_canvas_layout(canvas, sheet_only=True)["ok"] is True
+
+
+@pytest.mark.parametrize(
+    "style,order",
+    [("single", 1), ("wedge", 1), ("hash", 1), ("double", 2), ("triple", 3)],
+)
+def test_sheet_containment_counts_multistroke_bond_once(style, order):
+    from chemvas.bootstrap.document_cli_shared import offscreen_canvas
+    from chemvas.features.document_composition import compose_document_state
+
+    state = compose_document_state(
+        {
+            "format": "chemvas-document-composition",
+            "version": 1,
+            "atoms": [
+                {"id": 0, "element": "C", "x": 1000.0, "y": 0.0},
+                {"id": 1, "element": "C", "x": 1040.0, "y": 0.0},
+            ],
+            "bonds": [{"a": 0, "b": 1, "order": order, "style": style}],
+        }
+    )
+    with offscreen_canvas(state, command="test-sheet-bond") as (canvas, _):
+        warnings = check_canvas_layout(canvas, sheet_only=True)["warnings"]
+        assert [w["items"] for w in warnings if w["items"][0]["kind"] == "bond"] == [
+            [{"kind": "bond", "atom_ids": [0, 1]}]
+        ]
+
+
+@pytest.mark.parametrize("delta,expected", [(-0.1, 0), (0.0, 0), (0.1, 1)])
+def test_sheet_boundary_includes_painted_stroke_not_just_endpoints(delta, expected):
+    from chemvas.bootstrap.document_cli_shared import offscreen_canvas
+    from chemvas.features.document_composition import compose_document_state
+    from chemvas.ui.canvas_bond_graphics_state import bond_items_for
+    from chemvas.ui.sheet_setup_access import sheet_rect_for
+
+    state = compose_document_state(
+        {
+            "format": "chemvas-document-composition",
+            "version": 1,
+            "atoms": [
+                {"id": 0, "element": "C", "x": -40.0, "y": 0.0},
+                {"id": 1, "element": "C", "x": 0.0, "y": 0.0},
+            ],
+            "bonds": [{"a": 0, "b": 1, "order": 1}],
+        }
+    )
+    with offscreen_canvas(state, command="test-sheet-stroke-edge") as (canvas, _):
+        item = bond_items_for(canvas)[0][0]
+        item.moveBy(
+            0, sheet_rect_for(canvas).bottom() - item.pen().widthF() / 2 + delta
+        )
+        assert (
+            check_canvas_layout(canvas, sheet_only=True)["counts"]["outside-sheet"]
+            == expected
+        )
 
 
 @pytest.mark.parametrize(

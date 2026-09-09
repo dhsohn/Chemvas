@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.1] - 2026-09-09
+
+### Added
+
+- Check native sheet containment without pairwise collision work using
+  `check-layout --sheet-only`. Reports explicitly distinguish boundary-only
+  results from collision checks and retain document-size and record limits.
+- Bind the publication examples' layout checks and exports to the same saved
+  drawing bytes, retaining the layout report hash in each figure manifest.
+
+### Fixed
+
+- Include visible molecular structures, arrow bodies, marks, ring fills,
+  orbitals and TS brackets in the shared sheet-boundary diagnostics. Keep normal
+  Save/Open and all native coordinates unchanged; physical export sizing does
+  not stand in for a drawing that fits its editable sheet.
+
 ## [0.10.0] - 2026-09-09
 
 This release adds explicit comparison-layout controls and corrects abbreviation
@@ -1446,7 +1463,8 @@ housekeeping.
   `.chemvas` document type (double-clicking a file opens it in Chemvas), and a
   Linux `.desktop` entry with an `application/x-chemvas` MIME type.
 
-[Unreleased]: https://github.com/dhsohn/Chemvas/compare/v0.10.0...HEAD
+[Unreleased]: https://github.com/dhsohn/Chemvas/compare/v0.10.1...HEAD
+[0.10.1]: https://github.com/dhsohn/Chemvas/compare/v0.10.0...v0.10.1
 [0.10.0]: https://github.com/dhsohn/Chemvas/compare/v0.9.0...v0.10.0
 [0.9.0]: https://github.com/dhsohn/Chemvas/compare/v0.8.4...v0.9.0
 [0.8.4]: https://github.com/dhsohn/Chemvas/compare/v0.8.3...v0.8.4
