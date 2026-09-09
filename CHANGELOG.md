@@ -26,6 +26,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Set the top toolbar's button groups apart with a gap instead of a
+  divider line.
 - Draw every selection as one thin outline in the accent colour instead of a
   translucent fill: bonds get a band that follows them, labelled and lone
   atoms a rounded box or ring, arrows, marks, shapes and orbitals an outline

@@ -92,6 +92,18 @@ def _toolbar_spacer() -> QWidget:
     return spacer
 
 
+# The breathing room between button groups; there is no divider line, the
+# gap alone says where one group ends and the next begins.
+TOOLBAR_GROUP_GAP_PX = 12
+
+
+def _toolbar_group_gap() -> QWidget:
+    gap = QWidget()
+    gap.setObjectName("toolbarGroupGap")
+    gap.setFixedWidth(TOOLBAR_GROUP_GAP_PX)
+    return gap
+
+
 def _add_smiles_controls(
     panel_bar: QToolBar, window, insert_controller_for_window
 ) -> None:
@@ -228,17 +240,17 @@ def build_panel_toolbar(
 
     for action_key in TOOLBAR_PRIMARY_TOOL_GROUP:
         add_tool(action_key, primary=True)
-    panel_bar.addSeparator()
+    panel_bar.addWidget(_toolbar_group_gap())
     for group_index, action_keys in enumerate(TOOLBAR_TOOL_GROUPS[1:]):
         for action_key in action_keys:
             add_tool(action_key, primary=False)
         if group_index < len(TOOLBAR_TOOL_GROUPS[1:]) - 1:
-            panel_bar.addSeparator()
-    panel_bar.addSeparator()
+            panel_bar.addWidget(_toolbar_group_gap())
+    panel_bar.addWidget(_toolbar_group_gap())
     panel_bar.addWidget(flip_h_btn)
     panel_bar.addWidget(flip_v_btn)
     panel_bar.addWidget(rotate_btn)
-    panel_bar.addSeparator()
+    panel_bar.addWidget(_toolbar_group_gap())
     _add_smiles_controls(panel_bar, window, insert_controller_for_window)
     panel_bar.addWidget(_toolbar_spacer())
 

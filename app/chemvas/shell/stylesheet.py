@@ -3,7 +3,6 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from chemvas.shell.palette import PALETTE
-from chemvas.shell.toolbar_styles import TOOLBAR_BUTTON_SIZE
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -28,19 +27,6 @@ def main_window_chrome_stylesheet(palette: Mapping[str, str]) -> str:
                 background: {palette["surface_context"]};
                 border-bottom: 1px solid {palette["border"]};
                 padding: 0px 4px;
-            }}
-            QToolBar::separator {{
-                background: {palette["border"]};
-            }}
-            QToolBar::separator:horizontal {{
-                width: 1px;
-                height: {TOOLBAR_BUTTON_SIZE - 4}px;
-                margin: 3px 9px;
-            }}
-            QToolBar::separator:vertical {{
-                width: 20px;
-                height: 1px;
-                margin: 4px 5px;
             }}
             QToolBar QLabel#toolbarSectionLabel {{
                 background: transparent;
