@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from copy import deepcopy
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
 from PyQt6.QtCore import QPointF, QRectF
@@ -22,6 +22,7 @@ from chemvas.ui.canvas_model_access import model_for
 from chemvas.ui.canvas_scene_items_state import ring_items_for
 from chemvas.ui.layout_qa_service import note_paint_scene_path
 from chemvas.ui.move_access import move_atoms_for, move_item_for
+from chemvas.ui.scene_item_access import apply_scene_item_state
 from chemvas.ui.scene_item_state import scene_item_state_for
 
 if TYPE_CHECKING:
@@ -61,11 +62,12 @@ class _Line:
 
 @dataclass(frozen=True)
 class CanvasLayoutPlan:
-    """Measured translations; planning never changes the canvas or its history."""
+    """Measured moves and requested colors; planning never changes the canvas."""
 
     atom_moves: tuple[tuple[LayoutBlock, float, float], ...]
     item_moves: dict[tuple[str, int], tuple[float, float]]
     report: dict[str, object]
+    arrow_colors: dict[int, str] = field(default_factory=dict)
 
 
 def _caption(index: int, item: QGraphicsTextItem) -> _Caption:
@@ -205,9 +207,9 @@ def _line_geometry(
     arrow_bounds: dict[int, QRectF],
 ) -> tuple[
     list[_Line],
-    dict[int, list[float]],
-    dict[int, list[float]],
-    dict[int, float],
+    dict[int | str, list[float]],
+    dict[int | str, list[float]],
+    dict[int | str, float],
 ]:
     """Resolve line breaks and widths before any scene mutation."""
     wrapped = request.max_row_width is not None
@@ -243,14 +245,14 @@ def _line_geometry(
     if len(lines) > MAX_LAYOUT_ROWS:
         raise ValueError(f"wrapped layout exceeds the {MAX_LAYOUT_ROWS}-row limit")
 
-    # Matching row lengths share column widths and arrow slots. Captions count
-    # toward each cell's width. Width-limited lines instead retain their own
-    # widths: sharing columns after wrapping could exceed the chosen budget.
-    columns: dict[int, list[float]] = {}
-    slots: dict[int, list[float]] = {}
+    # Explicit comparison groups share columns only with their own rows;
+    # ungrouped rows retain block-count sharing. Captions count toward cell
+    # widths. Width-limited lines keep independent widths to respect the budget.
+    columns: dict[int | str, list[float]] = {}
+    slots: dict[int | str, list[float]] = {}
     for line_index, line in enumerate(lines):
         count = len(line.blocks)
-        key = line_index if wrapped else count
+        key = _column_key(request, line, line_index)
         widths = columns.setdefault(key, [0.0] * count)
         gaps = slots.setdefault(key, [request.gap] * (count - 1))
         for index, block in enumerate(line.blocks):
@@ -275,6 +277,71 @@ def _line_geometry(
                     "all native structure, caption and arrow bounds"
                 )
     return lines, columns, slots, row_widths
+
+
+def _column_key(request: LayoutRequest, line: _Line, index: int) -> int | str:
+    if request.max_row_width is not None:
+        return index
+    return request.rows[line.source_row].column_group or len(line.blocks)
+
+
+def _place_row_captions(
+    blocks: tuple[_Block, ...],
+    centers: list[float],
+    caption_top: float,
+    request: LayoutRequest,
+    item_moves: dict[tuple[str, int], tuple[float, float]],
+) -> float:
+    levels = max(len(block.captions) for block in blocks)
+    for level in range(levels):
+        captions = [
+            block.captions[level] for block in blocks if level < len(block.captions)
+        ]
+        ascent = max(c.baseline - c.bounds.top() for c in captions)
+        descent = max(c.bounds.bottom() - c.baseline for c in captions)
+        baseline = caption_top + ascent
+        for center, block in zip(centers, blocks, strict=True):
+            if level < len(block.captions):
+                caption = block.captions[level]
+                item_moves[("notes", caption.index)] = (
+                    center - caption.bounds.center().x(),
+                    baseline - caption.baseline,
+                )
+        caption_top = baseline + descent + request.line_gap
+    return caption_top - request.line_gap
+
+
+def _place_structure_captions(
+    blocks: tuple[_Block, ...],
+    centers: list[float],
+    axis: float,
+    request: LayoutRequest,
+    item_moves: dict[tuple[str, int], tuple[float, float]],
+) -> tuple[float, list[dict[str, object]]]:
+    bottom = axis
+    placements: list[dict[str, object]] = []
+    for column, (center, block) in enumerate(zip(centers, blocks, strict=True)):
+        caption_top = (
+            axis + block.bounds.bottom() - block.anchor_y + request.caption_gap
+        )
+        for caption in block.captions:
+            item_moves[("notes", caption.index)] = (
+                center - caption.bounds.center().x(),
+                caption_top - caption.bounds.top(),
+            )
+            caption_bottom = caption_top + caption.bounds.height()
+            placements.append(
+                {
+                    "column": column,
+                    "note": caption.index,
+                    "center_x": center,
+                    "top": caption_top,
+                    "bottom": caption_bottom,
+                }
+            )
+            bottom = max(bottom, caption_bottom)
+            caption_top = caption_bottom + request.line_gap
+    return bottom, placements
 
 
 def plan_canvas_layout(
@@ -307,11 +374,12 @@ def plan_canvas_layout(
     item_moves: dict[tuple[str, int], tuple[float, float]] = {}
     placements: list[dict[str, object]] = []
     line_provenance: list[dict[str, object]] = []
+    caption_placements: list[dict[str, object]] = []
 
     for row_number, line in enumerate(lines):
         blocks = line.blocks
         count = len(blocks)
-        key = row_number if wrapped else count
+        key = _column_key(request, line, row_number)
         above = max(block.anchor_y - block.bounds.top() for block in blocks)
         below = max(block.bounds.bottom() - block.anchor_y for block in blocks)
         line_arrows = line.arrows + (
@@ -375,24 +443,19 @@ def plan_canvas_layout(
                     )
                 cursor += slots[key][column]
 
-        caption_top = axis + below + request.caption_gap
-        levels = max(len(block.captions) for block in blocks)
-        for level in range(levels):
-            captions = [
-                block.captions[level] for block in blocks if level < len(block.captions)
-            ]
-            ascent = max(c.baseline - c.bounds.top() for c in captions)
-            descent = max(c.bounds.bottom() - c.baseline for c in captions)
-            baseline = caption_top + ascent
-            for center, block in zip(centers, blocks, strict=True):
-                if level < len(block.captions):
-                    caption = block.captions[level]
-                    item_moves[("notes", caption.index)] = (
-                        center - caption.bounds.center().x(),
-                        baseline - caption.baseline,
-                    )
-            caption_top = baseline + descent + request.line_gap
-        row_bottom = caption_top - request.line_gap if levels else axis + below
+        row_bottom = axis + below
+        if request.caption_alignment == "structure":
+            caption_bottom, records = _place_structure_captions(
+                blocks, centers, axis, request, item_moves
+            )
+            row_bottom = max(row_bottom, caption_bottom)
+            caption_placements.extend(
+                {"row": row_number, **record} for record in records
+            )
+        elif any(block.captions for block in blocks):
+            row_bottom = _place_row_captions(
+                blocks, centers, row_bottom + request.caption_gap, request, item_moves
+            )
         top = row_bottom + request.row_gap
 
     report: dict[str, object] = {
@@ -408,24 +471,53 @@ def plan_canvas_layout(
             logical_row_count=len(rows),
             lines=line_provenance,
         )
-    return CanvasLayoutPlan(tuple(atom_moves), item_moves, report)
+    if any(row.column_group is not None for row in request.rows):
+        report["column_groups"] = [row.column_group for row in request.rows]
+    if request.caption_alignment != "row":
+        report.update(
+            caption_alignment=request.caption_alignment,
+            caption_placements=caption_placements,
+        )
+    arrow_colors = {
+        index: request.arrow_color
+        for row in request.rows
+        for index in row.arrows
+        if request.arrow_color is not None
+    }
+    if arrow_colors:
+        report["arrow_color_changes"] = [
+            {
+                "arrow": index,
+                "before": source["arrows"][index].get("color"),
+                "after": color,
+            }
+            for index, color in arrow_colors.items()
+        ]
+    return CanvasLayoutPlan(tuple(atom_moves), item_moves, report, arrow_colors)
 
 
 def arrange_canvas(
     canvas: CanvasView, source: dict[str, Any], request: LayoutRequest
 ) -> tuple[dict[str, Any], dict[str, object]]:
-    """Translate a disposable canvas, copying only coordinates and native groups.
+    """Arrange a disposable canvas without rewriting text or molecular properties.
 
-    Text HTML, styles and unselected records retain their exact source values.
+    Text HTML and unselected records retain their exact source values. Only
+    explicitly requested row-arrow colors change outside geometry and groups.
     """
     plan = plan_canvas_layout(canvas, source, request)
     items = document_item_lists_for(canvas)
+    for index, color in plan.arrow_colors.items():
+        arrow = items["arrows"][index]
+        state = scene_item_state_for(canvas, arrow)
+        apply_scene_item_state(canvas, arrow, {**state, "color": color})
     for block_request, dx, dy in plan.atom_moves:
         move_atoms_for(canvas, set(block_request.atoms), dx, dy, update_selection=False)
     for (kind, index), (dx, dy) in plan.item_moves.items():
         move_item_for(canvas, items[kind][index], dx, dy, update_selection=False)
 
     candidate = deepcopy(source)
+    for index, color in plan.arrow_colors.items():
+        candidate["arrows"][index]["color"] = color
     selected_atoms = {atom for block, _, _ in plan.atom_moves for atom in block.atoms}
     model = model_for(canvas)
     for atom_id, atom in candidate["model"]["atoms"].items():

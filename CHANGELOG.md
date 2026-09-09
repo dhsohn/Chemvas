@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-09-09
+
+This release adds explicit comparison-layout controls and corrects abbreviation
+attachment placement. The `.chemvas` document format remains version 7.
+
+### Added
+
+- Choose named note roles in Arrange Scheme instead of guessing captions from
+  their positions. Compare explicitly named row groups and optionally place
+  caption stacks close to their individual structure blocks.
+- Apply an explicit color to chosen reaction arrows and their attached labels
+  through the shared GUI/CLI layout path, retaining other drawing styles.
+- Provide a small-format, native comparison example with complete reaction rows
+  and explicit labels, without inferring chemistry or deleting content to fit.
+
+### Fixed
+
+- Keep the attachment glyph of reversible abbreviations such as OMe/MeO on the
+  bonded atom for vertical and steeply angled bonds, rather than centering the
+  whole label. Preserve typed order for a vertical bond and reuse directional
+  display reversal for left/right approaches without changing the stored label.
+- Include attached arrow-label ink in layout collision diagnostics and their
+  pre-Qt work budget. Report diagnostic coverage separately from publication
+  readability and semantic design review.
+
 ## [0.9.0] - 2026-09-09
 
 This release adds explicit scheme layout and print-size controls for publication
@@ -1421,7 +1446,8 @@ housekeeping.
   `.chemvas` document type (double-clicking a file opens it in Chemvas), and a
   Linux `.desktop` entry with an `application/x-chemvas` MIME type.
 
-[Unreleased]: https://github.com/dhsohn/Chemvas/compare/v0.9.0...HEAD
+[Unreleased]: https://github.com/dhsohn/Chemvas/compare/v0.10.0...HEAD
+[0.10.0]: https://github.com/dhsohn/Chemvas/compare/v0.9.0...v0.10.0
 [0.9.0]: https://github.com/dhsohn/Chemvas/compare/v0.8.4...v0.9.0
 [0.8.4]: https://github.com/dhsohn/Chemvas/compare/v0.8.3...v0.8.4
 [0.8.3]: https://github.com/dhsohn/Chemvas/compare/v0.8.2...v0.8.3

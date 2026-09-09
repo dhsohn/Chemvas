@@ -48,6 +48,25 @@ intended. Do not choose wedge/hash direction or coordination geometry from aesth
 
 ## Example print profile, not a new default
 
+### Connected abbreviations
+
+Use a native atom abbreviation such as `OMe` when its internal O–Me bond should
+not be drawn explicitly. The attachment is oxygen: the O glyph stays at the
+bonded atom for horizontal, vertical and steeply angled bonds. For a left-facing
+label the display can read `MeO`; for a right-facing label it can read `OMe`.
+An exactly vertical attachment keeps the typed order while still anchoring O.
+Moving the bond or reopening the drawing recomputes this presentation through
+the same native label service used by canvas and figure export.
+
+This is display layout, not a change to the stored label, atom coordinates or
+chemical conversion aliases. The rule uses the existing attachment information
+for reversible labels; it does not infer an attachment atom in an unknown or
+unreversible string. Isolated labels and label-body collision guards retain
+their existing layout. Check surrounding text after reflow because anchoring
+the correct glyph shifts the rest of the abbreviation sideways.
+
+### Shared physical scale
+
 The recipe uses ordinary bond length 40 canvas units, a target of 5 mm per bond,
 Arial, native body font 17 and script-run font 22. Qt reduces script runs as part
 of native layout. These values produce approximately 8.1 pt body/atom text and
@@ -91,3 +110,66 @@ to wrap, reduce fonts or shrink structures for you.
 
 See [CLI contracts](AGENT_CLI.md) and [alignment contracts](SCHEME_LAYOUT.md) for
 source hashes, explicit part membership, supported operations and resource limits.
+
+## Two complete comparison rows
+
+For a narrow-column comparison, a second runnable example keeps both alternatives
+complete instead of making the reader reconstruct a shared reactant or product:
+
+```bash
+python examples/publication_comparison.py --output-dir /absolute/existing-parent/new-comparison
+```
+
+This is a **symbolic connectivity example only**. R₁–R₄ denote abstract fragments,
+not specified compounds. Each input and output contains all four fragment labels
+once; the two product pairings are authored explicitly, not predicted by Chemvas.
+The native arrow labels “case 1”/“case 2” and “symbolic only” demonstrate above/below
+condition placement without inventing reagents, conditions, yields or selectivity.
+Replace them only with information appropriate to the actual figure.
+
+The example uses the existing recipe's public command helpers. It saves the
+composition, source-pinned layout request, native source and final document,
+`comparison-graph.json`, collision report, SVG/600 dpi PNG and `manifest.json`.
+The output directory must be new; any command error or collision warning stops
+the run. The original template example and its print profile remain unchanged.
+
+Ownership is explicit in the layout request:
+
+- Each side is a rigid block containing four atom IDs and its plus-sign note.
+  Its separate Input/Output caption belongs to that block, not the arrow.
+- Both complete rows use `column_group: "comparison"`, with one existing
+  horizontal arrow per row. No row, component, caption or branch is inferred.
+- `caption_alignment: "structure"` centers each caption under its own block.
+  Use `"row"` instead when a shared caption baseline is the intended design.
+- `arrow_color: "#000000"` explicitly applies black to the listed row arrows.
+  It is not a global recoloring operation on structures, notes or other arrows.
+- `max_row_width` is omitted: each specified path remains one horizontal row.
+
+The comparison uses 20-unit bonds at **5 mm per bond**, Arial, native body font 10
+and note-script font 13. This one profile is shared by both rows, every structure,
+caption and condition label. It produces approximately 9.2 pt body text, 7.1 pt
+atom subscripts and 7.8 pt caption subscripts in the tested environment. The
+smaller native coordinates also keep the arranged example on the native A4
+working sheet; physical size comes from the common 5/20 mm-per-unit conversion,
+not from filling the sheet or scaling individual structures. Actual font reports
+remain authoritative when fonts or Qt versions differ.
+
+The resulting figure is about 79 × 42 mm. Its **85 × 100 mm** bounds are maxima,
+not a command to stretch a short figure to that size. Use `embed_width_mm` and
+preserve aspect ratio when inserting it into a manuscript. A width failure asks
+for an explicit reorganization; a height or font failure stops the native export.
+None of these guards shrinks a molecule, font or arrow to force a fit.
+
+Choose parallel complete rows when the comparison itself is the message, especially
+when conditions or products differ. A symmetric branch is a different authored
+scheme: use it only when a shared origin and the intended arrow connectivity are
+actually appropriate. Do not turn a comparison into branching just to save width,
+and do not imply a chemical relationship from spatial symmetry. If meaningful
+content is too wide at readable scale, split panels or explicitly reorganize rows.
+
+`check-layout` covers only its reported collision and sheet-boundary classes. It
+does not establish caption ownership, chemical meaning, visual balance, or final
+publication quality. Review the complete native figure and exported image at the
+intended insertion size as well as at zoom: a clean collision report alone is not
+approval of the design. The example's regression tests check graph preservation,
+explicit grouping, native scripts and physical dimensions separately.

@@ -22,6 +22,7 @@ from chemvas.domain.document import (
     serialize_model_state,
     serialize_settings,
 )
+from chemvas.ui.canvas_arrow_build_service import ARROW_LABEL_ROLE
 from chemvas.ui.canvas_atom_graphics_state import atom_items_for
 from chemvas.ui.canvas_scene_items_state import arrow_items_for, note_items_for
 from chemvas.ui.layout_qa_service import check_canvas_layout
@@ -382,3 +383,252 @@ def test_work_bound_excludes_only_implicit_carbons_and_includes_arrows() -> None
     # Explicit C is visible; do not discard it with implicit skeletal vertices.
     state["model"]["atoms"][0]["explicit_label"] = True
     assert document_layout_check._layout_work_units(state) == 8631 + 61 * 98
+
+
+def _attached_label(canvas, arrow_index=0, side="above"):
+    return next(
+        child
+        for child in arrow_items_for(canvas)[arrow_index].childItems()
+        if child.data(0) == ARROW_LABEL_ROLE and child.data(1) == side
+    )
+
+
+def _labelled_arrow(*, y=150.0, labels=None):
+    return {
+        "kind": "arrow",
+        "start": [-40.0, y],
+        "end": [40.0, y],
+        "labels": labels or {"above": "N", "below": "k_1^‡"},
+    }
+
+
+def _painted_label_point(item):
+    bounds = item.boundingRect()
+    scale = 4
+    image = QImage(
+        int(bounds.width() * scale) + 1,
+        int(bounds.height() * scale) + 1,
+        QImage.Format.Format_ARGB32_Premultiplied,
+    )
+    image.fill(Qt.GlobalColor.transparent)
+    painter = QPainter(image)
+    painter.scale(scale, scale)
+    painter.translate(-bounds.topLeft())
+    item.paint(painter, QStyleOptionGraphicsItem())
+    painter.end()
+    for y in range(image.height()):
+        for x in range(image.width()):
+            if image.pixelColor(x, y).alpha() > 240:
+                return item.mapToScene(
+                    bounds.topLeft() + QPointF((x + 0.5) / scale, (y + 0.5) / scale)
+                )
+    pytest.fail("native label must paint a visible glyph")
+
+
+@pytest.mark.parametrize("other_kind", ["atom", "note", "arrow-label"])
+def test_attached_arrow_label_text_pairs_have_stable_side_refs(other_kind) -> None:
+    state = _state(
+        {7: Atom("N", 0.0, 0.0)} if other_kind == "atom" else {},
+        notes=[{"text": "N", "x": 0.0, "y": 0.0}] if other_kind == "note" else [],
+        arrows=[_labelled_arrow(), _labelled_arrow(y=250.0)],
+    )
+    with offscreen_canvas(state, command="test-arrow-label-text") as (canvas, service):
+        label = _attached_label(canvas)
+        other = (
+            atom_items_for(canvas)[7]
+            if other_kind == "atom"
+            else note_items_for(canvas)[0]
+            if other_kind == "note"
+            else _attached_label(canvas, 1)
+        )
+        label.setFont(other.font())
+        label.setHtml(other.toHtml())
+        label.setPos(label.parentItem().mapFromScene(other.scenePos()))
+        before = service.snapshot_state()
+        report = check_canvas_layout(canvas)
+        matches = [w for w in report["warnings"] if w["code"] == "text-text-overlap"]
+        assert len(matches) == 1
+        assert {"kind": "arrow-label", "index": 0, "side": "above"} in matches[0][
+            "items"
+        ]
+        assert service.snapshot_state() == before
+        label.moveBy(200.0, 0.0)
+        assert check_canvas_layout(canvas)["counts"]["text-text-overlap"] == 0
+
+
+@pytest.mark.parametrize("angle", [0, 37])
+def test_scripted_arrow_label_crossing_bond_uses_native_ink(angle) -> None:
+    from chemvas.ui.canvas_bond_graphics_state import bond_items_for
+
+    state = _state(
+        {7: Atom("C", -50.0, 0.0), 42: Atom("C", 50.0, 0.0)},
+        bonds=[Bond(7, 42)],
+        arrows=[_labelled_arrow()],
+    )
+    with offscreen_canvas(state, command="test-arrow-label-bond") as (canvas, _):
+        label = _attached_label(canvas, side="below")
+        label.setRotation(angle)
+        point = _painted_label_point(label)
+        bond = bond_items_for(canvas)[0][0]
+        bond.setLine(point.x() - 5, point.y(), point.x() + 5, point.y())
+        report = check_canvas_layout(canvas)
+        matches = [w for w in report["warnings"] if w["code"] == "text-bond-overlap"]
+        assert len(matches) == 1
+        assert matches[0]["items"] == [
+            {"kind": "arrow-label", "index": 0, "side": "below"},
+            {"kind": "bond", "atom_ids": [7, 42]},
+        ]
+        label.moveBy(0, 80)
+        assert check_canvas_layout(canvas)["counts"]["text-bond-overlap"] == 0
+
+
+@pytest.mark.parametrize("owner_index", [0, 1])
+def test_attached_label_crossing_own_or_other_arrow_stroke(owner_index) -> None:
+    state = _state({}, arrows=[_labelled_arrow(y=0.0), _labelled_arrow(y=200.0)])
+    with offscreen_canvas(state, command="test-arrow-label-stroke") as (canvas, _):
+        label = _attached_label(canvas, owner_index)
+        point = _painted_label_point(label)
+        label.moveBy(-point.x(), -point.y())
+        matches = [
+            w
+            for w in check_canvas_layout(canvas)["warnings"]
+            if w["code"] == "text-arrow-overlap"
+        ]
+        assert len(matches) == 1
+        assert matches[0]["items"] == [
+            {"kind": "arrow-label", "index": owner_index, "side": "above"},
+            {"kind": "arrow", "index": 0},
+        ]
+
+
+@pytest.mark.parametrize(
+    "hidden_by", ["visibility", "parent", "opacity", "color", "whitespace"]
+)
+def test_attached_label_outside_sheet_ignores_invisible_ink(hidden_by) -> None:
+    state = _state({}, arrows=[_labelled_arrow(labels={"above": "N"})])
+    with offscreen_canvas(state, command="test-arrow-label-visibility") as (canvas, _):
+        label = _attached_label(canvas)
+        label.setPos(1000, 0)
+        matches = check_canvas_layout(canvas)["warnings"]
+        assert len(matches) == 1
+        assert matches[0]["code"] == "outside-sheet"
+        assert matches[0]["items"] == [
+            {"kind": "arrow-label", "index": 0, "side": "above"}
+        ]
+        if hidden_by == "visibility":
+            label.setVisible(False)
+        elif hidden_by == "parent":
+            label.parentItem().setVisible(False)
+        elif hidden_by == "opacity":
+            label.parentItem().setOpacity(0)
+        elif hidden_by == "color":
+            label.setHtml('<span style="color:transparent">N</span>')
+        else:
+            label.setPlainText("  ")
+        assert check_canvas_layout(canvas)["ok"] is True
+
+
+@pytest.mark.parametrize("arrow_count", [49, 50])
+def test_attached_label_work_limit_rejects_before_qt(
+    tmp_path, monkeypatch, capsys, arrow_count
+) -> None:
+    source = tmp_path / "many-arrow-labels.chemvas"
+    state = _state({}, arrows=[_labelled_arrow() for _ in range(arrow_count)])
+    write_document(source, state, CANVAS_FILE_VERSION)
+
+    def reject_qt(_state):
+        assert arrow_count == 49, "attached label work limit must run before Qt"
+        return {"ok": True}
+
+    monkeypatch.setattr(document_layout_check, "_check_offscreen", reject_qt)
+    if arrow_count == 49:
+        assert document_layout_check.run(["check-layout", str(source)]) == 0
+        assert capsys.readouterr().err == ""
+    else:
+        with pytest.raises(SystemExit) as error:
+            document_layout_check.run(["check-layout", str(source)])
+        assert error.value.code == 2
+        assert "layout work limit" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("target_kind", ["bond", "arrow"])
+def test_attached_label_in_actual_dash_gap_is_clear(target_kind) -> None:
+    from PyQt6.QtGui import QPainterPath, QPen
+
+    from chemvas.ui.canvas_bond_graphics_state import bond_items_for
+
+    state = _state(
+        {7: Atom("C", -60.0, 0.0), 42: Atom("C", 60.0, 0.0)}
+        if target_kind == "bond"
+        else {},
+        bonds=[Bond(7, 42)] if target_kind == "bond" else [],
+        arrows=[_labelled_arrow(), _labelled_arrow(y=0.0, labels={"below": ""})],
+    )
+    with offscreen_canvas(state, command="test-arrow-label-dash-gap") as (canvas, _):
+        label = _attached_label(canvas)
+        label.setScale(0.05)
+        point = _painted_label_point(label)
+        label.moveBy(-48.0 - point.x(), -point.y())
+        if target_kind == "bond":
+            target = bond_items_for(canvas)[0][0]
+        else:
+            target = arrow_items_for(canvas)[1]
+            path = QPainterPath(QPointF(-60, 0))
+            path.lineTo(60, 0)
+            target.setPath(path)
+        pen = QPen(Qt.GlobalColor.black)
+        pen.setWidthF(2)
+        pen.setCapStyle(Qt.PenCapStyle.FlatCap)
+        pen.setDashPattern([1, 10])
+        target.setPen(pen)
+        code = "text-bond-overlap" if target_kind == "bond" else "text-arrow-overlap"
+        assert check_canvas_layout(canvas)["counts"][code] == 0
+        pen.setStyle(Qt.PenStyle.SolidLine)
+        target.setPen(pen)
+        assert check_canvas_layout(canvas)["counts"][code] == 1
+
+
+def test_attached_label_shape_border_and_glyph_gap() -> None:
+    from PyQt6.QtGui import QPainterPath, QPen
+
+    from chemvas.ui.canvas_scene_items_state import shape_items_for
+
+    state = _state({}, arrows=[_labelled_arrow(labels={"above": "O"})])
+    state["shapes"] = [
+        {
+            "shape_kind": "rect",
+            "left": -10.0,
+            "top": -10.0,
+            "right": 10.0,
+            "bottom": 10.0,
+        }
+    ]
+    with offscreen_canvas(state, command="test-arrow-label-border") as (canvas, _):
+        label = _attached_label(canvas)
+        shape = shape_items_for(canvas)[0]
+        # The centre of the O is a genuine unpainted hole, not a glyph hitbox.
+        centre = label.mapToScene(label.boundingRect().center())
+        shape.setPen(QPen(Qt.GlobalColor.black, 0.1))
+        path = QPainterPath(centre - QPointF(0.1, 0))
+        path.lineTo(centre + QPointF(0.1, 0))
+        shape.setPath(path)
+        assert check_canvas_layout(canvas)["counts"]["text-shape-border-overlap"] == 0
+        point = _painted_label_point(label)
+        path = QPainterPath(point - QPointF(1, 0))
+        path.lineTo(point + QPointF(1, 0))
+        shape.setPath(path)
+        assert check_canvas_layout(canvas)["counts"]["text-shape-border-overlap"] == 1
+
+
+def test_arrow_label_work_bound_counts_only_the_added_comparisons() -> None:
+    state = _state(
+        {7: Atom("N", 0, 0), 42: Atom("C", 40, 0)},
+        bonds=[Bond(7, 42)],
+        notes=[{"text": "note", "x": 0, "y": 60}],
+        arrows=[_labelled_arrow(labels={"above": "", "below": ""})],
+    )
+    state["shapes"] = [{"shape_kind": "rect", "rect": [0, 0, 10, 10]}]
+    before = document_layout_check._layout_work_units(state)
+    state["arrows"][0]["labels"] = {"above": "k_1", "below": "k_-1"}
+    # 5 new text pairs, 2 borders, 2 arrow strokes, 2 bonds and 2 labels.
+    assert document_layout_check._layout_work_units(state) == before + 13

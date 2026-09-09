@@ -17,16 +17,27 @@ or changing horizontal placement. This mode is explicit, never the default.
    group when they belong to that state.
 2. Open **Edit ▸ Arrange Scheme…**. Each existing group is one block. Set its
    row and order within that row; row **0** leaves that group untouched.
-3. Check the caption note numbers (1-based in this dialog). They initially
-   follow the notes' current top-to-bottom positions. Reorder the numbers to
-   choose caption levels; omit a number to move that note with the structure
-   without repositioning it below. Hover for the note text and group atom IDs.
+3. Use **Choose…** to assign each named note as a **Structure caption** or an
+   **Attached note** that keeps its offset. No captions are guessed from position.
+   The caption field lists 1-based note numbers; reorder them to choose caption
+   levels. Hover for the note text and group atom IDs. Reaction conditions belong
+   in the arrow's existing Above/Below fields; panel explanations should stay
+   outside structure groups.
 4. Choose each connecting **Arrow after** explicitly, or choose none for a
    gallery without arrows. The last block of a logical row must have no outgoing
    arrow. Existing arrows must satisfy the same horizontal-arrow rules as the CLI.
 5. Set gaps and optional **Wrap width**, in canvas units, then click **Arrange**.
    A wrap width of **0** means no wrapping. The complete edit can be undone with
    **Ctrl+Z** and redone normally; existing group membership stays intact.
+
+Use **Alignment group** to name related comparison rows. The same name shares
+their column widths; different names keep unrelated comparisons independent.
+One name per row is sufficient; conflicting names in one row are rejected.
+Blank retains the original block-count alignment. Choose **Close to each
+structure** to keep captions below their own block rather than at shared row
+baselines. An optional **Connecting-arrow color**, for example `#000000`, applies
+only to the chosen arrows and their attached labels. Blank preserves their colors.
+Arrow line width and label fonts remain the document's common settings.
 
 The dialog does not infer a mechanism or decide which note describes a structure.
 Unassigned arrows and other objects remain where they were. Unsupported or stale
@@ -83,7 +94,37 @@ TS brackets or shapes that move rigidly with the structure. Both are optional.
 Include separate TS symbols such as a double dagger as well as their brackets.
 `anchor_atom` must belong to its block. Optional `arrows` must have one entry per
 adjacent pair of blocks. These must already be horizontal, left-to-right `arrow`
-or `equilibrium` items. Their lengths, labels and styles are preserved.
+or `equilibrium` items. Their lengths and label text are preserved; colors also
+stay unchanged unless explicitly overridden as described below.
+
+## Explicit comparison rows
+
+The existing row planner supports three optional choices in arrange mode:
+
+- `rows[].column_group`: an identifier of 1–64 printable, non-whitespace characters. Rows
+  with the same identifier must have the same block count and share column and
+  arrow-slot widths. Different names keep comparisons independent. Omitted
+  groups retain the original block-count sharing, separate from named groups.
+  Width-limited wrapping still uses independent display lines.
+- `caption_alignment`: `"row"` (default) aligns caption baselines across a row;
+  `"structure"` places each caption stack below its own painted block, including
+  explicitly attached items such as TS brackets. It does not ignore those items
+  or move text through them to reach a molecular bounding box.
+- `arrow_color`: a hexadecimal color such as `"#000000"`, applied only to the
+  explicitly listed `rows[].arrows` and their labels. Unlisted arrows, molecular
+  colors, captions, fonts, line widths and arrow kinds stay unchanged. Omit it
+  to preserve deliberate color distinctions. Use separate requests for groups
+  that intentionally use different colors.
+
+These choices do not infer branching, duplicate reactants or decide chemical
+equivalence. Choose the rows before arranging. For a narrow figure, two complete
+reaction rows can communicate a comparison more clearly than a squeezed branch;
+this is an authoring decision, not an automatic template conversion.
+
+The GUI and CLI use the same validation and measured plan. Role choices are
+one-shot layout instructions, not a new persistent document schema: after
+reopening, choose roles again or rerun an explicit request with the current
+source hash. The native groups and arrow labels themselves remain persistent.
 
 ## Align only the molecular drawings
 
@@ -129,7 +170,8 @@ from the molecular center. Combining movable decorations with multiple `parts`
 is ambiguous and rejected. Arrows stay fixed. Existing group boundaries must
 still be respected; unlike ordinary arrangement this mode does not create groups.
 
-`anchor_atom`, `gap`, `row_gap`, `caption_gap`, `line_gap`, and `max_row_width`
+`anchor_atom`, `gap`, `row_gap`, `caption_gap`, `line_gap`, `max_row_width`,
+`column_group`, `caption_alignment`, and `arrow_color`
 are rejected in `align-y`, even when set to an old default. It neither lays out
 columns nor wraps rows. `parts` and `reference_blocks` are rejected in ordinary
 arrange requests. Omit `mode` to retain the existing arrangement path and report.
@@ -191,7 +233,8 @@ canvas units, excluding unlisted objects.
 
 ## Scope and retained limitations
 
-- Layout only translates. It does not normalize bonds, rotate structures, infer
+- Geometry changes are translations only. An explicit arrow-color override is
+  separate from geometry. Layout does not normalize bonds, rotate structures, infer
   stereochemistry, change text or resize fonts. Unlisted objects stay in place.
 - Automatic numbered/bulleted lists are not caption levels: their markers are
   not part of the caption-glyph bounds. Omit their caption number in the dialog

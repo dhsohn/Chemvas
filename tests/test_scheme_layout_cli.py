@@ -123,7 +123,7 @@ def _run(source: Path, layout: Path, output: Path) -> subprocess.CompletedProces
         capture_output=True,
         text=True,
         timeout=30,
-        env={**os.environ, "PYTHONPATH": "app"},
+        env={**os.environ, "PYTHONPATH": os.path.abspath("app")},
     )
 
 
@@ -312,6 +312,90 @@ def test_layout_rejects_invalid_input_before_opening_qt(
         )
     assert exc.value.code == 2
     assert not output.exists()
+
+
+def test_comparison_caption_and_color_cli_options_preserve_source_and_graph(
+    tmp_path: Path,
+) -> None:
+    source, layout, output = _files(tmp_path)
+    request = json.loads(layout.read_text())
+    request["rows"][0]["column_group"] = "controls"
+    request.update(caption_alignment="structure", arrow_color="#000")
+    layout.write_text(json.dumps(request))
+    before = source.read_bytes(), layout.read_bytes()
+    original = read_document(source).state
+
+    result = _run(source, layout, output)
+
+    assert result.returncode == 0, result.stderr
+    assert (source.read_bytes(), layout.read_bytes()) == before
+    report = json.loads(result.stdout)
+    assert report["column_groups"] == ["controls"]
+    assert report["caption_alignment"] == "structure"
+    assert {item["note"] for item in report["caption_placements"]} == {0, 1, 2, 3}
+    assert report["arrow_color_changes"] == [
+        {"arrow": 0, "before": "#123456", "after": "#000"}
+    ]
+    candidate = read_document(output).state
+    assert candidate["model"]["bonds"] == original["model"]["bonds"]
+    assert (
+        candidate["model"]["atom_annotations"] == original["model"]["atom_annotations"]
+    )
+    assert candidate["settings"] == original["settings"]
+    assert candidate["arrows"][0]["color"] == "#000"
+    assert candidate["arrows"][0]["labels"] == original["arrows"][0]["labels"]
+    for prior, after in zip(original["notes"], candidate["notes"], strict=True):
+        assert {k: v for k, v in prior.items() if k not in {"x", "y"}} == {
+            k: v for k, v in after.items() if k not in {"x", "y"}
+        }
+
+
+def test_explicit_default_caption_policy_produces_identical_document_bytes(
+    tmp_path: Path,
+) -> None:
+    source, layout, output = _files(tmp_path)
+    assert _run(source, layout, output).returncode == 0
+    request = json.loads(layout.read_text())
+    request["caption_alignment"] = "row"
+    layout.write_text(json.dumps(request))
+    second = tmp_path / "explicit-default.chemvas"
+    result = _run(source, layout, second)
+    assert result.returncode == 0, result.stderr
+    assert second.read_bytes() == output.read_bytes()
+
+
+@pytest.mark.parametrize(
+    "field,value",
+    [("caption_alignment", "auto"), ("arrow_color", "black"), ("column_group", "")],
+)
+def test_invalid_semantic_options_fail_before_qt_and_publish_nothing(
+    tmp_path: Path, monkeypatch, field, value
+) -> None:
+    source, layout, output = _files(tmp_path)
+    request = json.loads(layout.read_text())
+    target = request["rows"][0] if field == "column_group" else request
+    target[field] = value
+    layout.write_text(json.dumps(request))
+    before = source.read_bytes(), layout.read_bytes()
+
+    def unexpected(*_args, **_kwargs):
+        pytest.fail("invalid arrangement policy must not open a canvas")
+
+    monkeypatch.setattr(document_layout, "offscreen_canvas", unexpected)
+    with pytest.raises(SystemExit) as exc:
+        document_layout.run(
+            [
+                "layout-document",
+                str(source),
+                "--layout",
+                str(layout),
+                "--output",
+                str(output),
+            ]
+        )
+    assert exc.value.code == 2
+    assert not output.exists()
+    assert (source.read_bytes(), layout.read_bytes()) == before
 
 
 def test_width_limited_cli_wraps_without_losing_the_connecting_arrow(

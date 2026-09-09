@@ -11,6 +11,7 @@ from chemvas.domain.document import (
     build_document_payload,
     deserialize_model_state,
     is_document_number,
+    is_hex_color,
 )
 
 MAX_LAYOUT_ROWS = 128
@@ -25,6 +26,8 @@ _ROOT_ALLOWED = _ROOT_REQUIRED | {
     "line_gap",
     "max_row_width",
     "mode",
+    "caption_alignment",
+    "arrow_color",
 }
 _ITEM_KINDS = frozenset(("notes", "ts_brackets", "shapes"))
 
@@ -43,6 +46,7 @@ class LayoutRow:
     blocks: tuple[LayoutBlock, ...]
     arrows: tuple[int, ...] = ()
     reference_blocks: tuple[int, ...] = ()
+    column_group: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -55,6 +59,8 @@ class LayoutRequest:
     line_gap: float = 4.0
     max_row_width: float | None = None
     mode: Literal["arrange", "align-y"] = "arrange"
+    caption_alignment: Literal["row", "structure"] = "row"
+    arrow_color: str | None = None
 
 
 def validate_layout_request(
@@ -92,12 +98,16 @@ def validate_layout_request(
     atom_owners: dict[int, int] = {}
     item_owners: set[tuple[str, int]] = set()
     block_count = 0
+    column_sizes: dict[str, int] = {}
     for row_index, raw_row in enumerate(
         _array(root["rows"], "rows", MAX_LAYOUT_ROWS, nonempty=True)
     ):
         name = f"row {row_index}"
         row = _object(
-            raw_row, name, {"blocks"}, {"blocks", "arrows", "reference_blocks"}
+            raw_row,
+            name,
+            {"blocks"},
+            {"blocks", "arrows", "reference_blocks", "column_group"},
         )
         blocks: list[LayoutBlock] = []
         for block_index, raw_block in enumerate(
@@ -131,7 +141,14 @@ def validate_layout_request(
             _check_arrow(state, arrow_index)
             _claim_item(("arrows", arrow_index), item_owners)
         references = _references(row, name, len(blocks), mode)
-        rows.append(LayoutRow(tuple(blocks), arrows, references))
+        column_group = _column_group(row, name, mode)
+        if column_group is not None and column_sizes.setdefault(
+            column_group, len(blocks)
+        ) != len(blocks):
+            raise ValueError(
+                "rows in one column_group must have the same number of blocks"
+            )
+        rows.append(LayoutRow(tuple(blocks), arrows, references, column_group))
     part_owners = {
         atom: (row_index, block_index, part_index)
         for row_index, row in enumerate(rows)
@@ -149,6 +166,7 @@ def validate_layout_request(
             raise ValueError(
                 f"parts must not cut bonds; bond {bond.a}–{bond.b} crosses a part boundary"
             )
+    caption_alignment, arrow_color = _arrangement_style(root, rows)
     result = LayoutRequest(
         source_sha256=digest,
         rows=tuple(rows),
@@ -164,6 +182,8 @@ def validate_layout_request(
             else None
         ),
         mode=mode,
+        caption_alignment=caption_alignment,
+        arrow_color=arrow_color,
     )
     merged_layout_groups(state, result)
     return result
@@ -179,11 +199,49 @@ def _mode(root: Mapping[str, object]) -> Literal["arrange", "align-y"]:
         "caption_gap",
         "line_gap",
         "max_row_width",
+        "caption_alignment",
+        "arrow_color",
     }:
         raise ValueError(
-            "align-y preserves positions outside Y alignment; omit gaps and max_row_width"
+            "align-y preserves positions outside Y alignment; omit gaps and max_row_width, "
+            "caption_alignment and arrow_color"
         )
     return cast("Literal['arrange', 'align-y']", mode)
+
+
+def _column_group(row: Mapping[str, object], name: str, mode: str) -> str | None:
+    if "column_group" not in row:
+        return None
+    if mode == "align-y":
+        raise ValueError("column_group is not used by align-y; omit it")
+    value = row["column_group"]
+    if (
+        not isinstance(value, str)
+        or not 1 <= len(value) <= 64
+        or any(
+            character.isspace() or not character.isprintable() for character in value
+        )
+    ):
+        raise ValueError(
+            f"{name} column_group must be 1–64 printable non-whitespace characters"
+        )
+    return value
+
+
+def _arrangement_style(
+    root: Mapping[str, object], rows: Sequence[LayoutRow]
+) -> tuple[Literal["row", "structure"], str | None]:
+    alignment = root.get("caption_alignment", "row")
+    if alignment not in ("row", "structure"):
+        raise ValueError("caption_alignment must be row or structure")
+    color = None
+    if "arrow_color" in root:
+        if not is_hex_color(root["arrow_color"]):
+            raise ValueError("arrow_color must be hexadecimal (#rgb or #rrggbb)")
+        if not any(row.arrows for row in rows):
+            raise ValueError("arrow_color requires at least one row arrow")
+        color = cast("str", root["arrow_color"])
+    return cast("Literal['row', 'structure']", alignment), color
 
 
 def _references(

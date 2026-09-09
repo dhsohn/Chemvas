@@ -21,6 +21,7 @@ from PyQt6.QtWidgets import (
 )
 
 from chemvas.features.export import item_export_bounds
+from chemvas.ui.canvas_arrow_build_service import ARROW_LABEL_ROLE
 from chemvas.ui.canvas_atom_graphics_state import atom_items_for
 from chemvas.ui.canvas_bond_graphics_state import bond_items_for
 from chemvas.ui.canvas_model_access import bond_for_id
@@ -40,6 +41,8 @@ WARNING_CODES = (
     "atom-bond-overlap",
     "charge-bond-overlap",
     "outside-sheet",
+    "text-arrow-overlap",
+    "text-bond-overlap",
     "text-shape-border-overlap",
     "text-text-overlap",
 )
@@ -168,6 +171,10 @@ def check_canvas_layout(canvas: Any) -> dict[str, object]:
                 )
             )
 
+    warnings.extend(
+        _arrow_label_warnings(canvas, atom_paths, note_paths, bond_paths, shapes, sheet)
+    )
+
     warnings.sort(key=_warning_sort_key)
     counts = {code: 0 for code in WARNING_CODES}
     for warning in warnings:
@@ -177,7 +184,109 @@ def check_canvas_layout(canvas: Any) -> dict[str, object]:
         "warning_count": len(warnings),
         "counts": counts,
         "warnings": warnings,
+        "coverage": {
+            "ok_meaning": "No warnings in the checked collision and sheet-boundary classes.",
+            "checked": [
+                "Visible atom, note and attached arrow-label ink pairs.",
+                "Atom labels against nonincident molecular bonds; attached charges against all molecular bonds.",
+                "Arrow strokes against atom labels and molecular bonds.",
+                "Attached arrow-label ink against molecular bonds and own or other arrow strokes.",
+                "Notes and attached arrow-label ink against shape borders.",
+                "Notes, shapes and attached arrow labels outside the sheet.",
+            ],
+            "not_checked": [
+                "Aesthetic quality, semantic label ownership, chemical correctness or stereochemical meaning.",
+                "Final print-size readability; use the export readability guard separately.",
+                "Other collision pairs, including note-bond, note-arrow, bond-bond, arrow-arrow and charge-text pairs.",
+                "TS brackets, orbitals, ring fills and other standalone marks.",
+                "Automatic list markers outside the collected text glyph runs.",
+                "Sheet containment of molecular structures and arrow strokes.",
+            ],
+        },
     }
+
+
+def _arrow_label_warnings(
+    canvas: Any,
+    atom_paths: list[tuple[int, QPainterPath]],
+    note_paths: list[tuple[int, QPainterPath]],
+    bond_paths: list[tuple[list[int], QPainterPath]],
+    shapes: list[tuple[int, Any]],
+    sheet: QRectF,
+) -> list[dict[str, object]]:
+    warnings: list[dict[str, object]] = []
+    text_paths: list[tuple[dict[str, object], QPainterPath]] = [
+        ({"kind": "atom", "id": atom_id}, path) for atom_id, path in atom_paths
+    ] + [({"kind": "note", "index": index}, path) for index, path in note_paths]
+    targets: list[tuple[str, dict[str, object], QPainterPath]] = [
+        ("text-bond-overlap", {"kind": "bond", "atom_ids": ids}, path)
+        for ids, path in bond_paths
+    ]
+    targets.extend(
+        (
+            "text-arrow-overlap",
+            {"kind": "arrow", "index": index},
+            _graphics_paint_scene_path(arrow),
+        )
+        for index, arrow in enumerate(arrow_items_for(canvas))
+    )
+    targets.extend(
+        ("text-shape-border-overlap", {"kind": "shape", "index": index}, path)
+        for index, shape in shapes
+        if (path := _shape_border_scene_path(shape)) is not None
+    )
+    for index, arrow in enumerate(arrow_items_for(canvas)):
+        for item in arrow.childItems():
+            if (
+                item.data(0) != ARROW_LABEL_ROLE
+                or not isinstance(item, QGraphicsTextItem)
+                or not item.isVisible()
+                or item.effectiveOpacity() <= 0.0
+            ):
+                continue
+            side = item.data(1)
+            if side not in {"above", "below"}:
+                raise ValueError("Arrow label has no valid above/below side metadata.")
+            label_path = note_paint_scene_path(item)
+            if label_path.isEmpty():
+                continue
+            ref = {"kind": "arrow-label", "index": index, "side": side}
+            # Previously visited labels join the text list, so every pair is
+            # checked once without comparing all scene items indiscriminately.
+            for other_ref, path in text_paths:
+                overlap = label_path.intersected(path)
+                if _positive_path(overlap):
+                    warnings.append(
+                        _warning(
+                            "text-text-overlap",
+                            [other_ref, ref],
+                            overlap.boundingRect(),
+                            "Attached arrow label overlaps other text.",
+                        )
+                    )
+            for code, other_ref, path in targets:
+                overlap = label_path.intersected(path)
+                if _positive_path(overlap):
+                    warnings.append(
+                        _warning(
+                            code,
+                            [ref, other_ref],
+                            overlap.boundingRect(),
+                            "Attached arrow label crosses painted geometry.",
+                        )
+                    )
+            bounds = label_path.boundingRect()
+            if not sheet.contains(bounds):
+                warnings.append(
+                    _warning(
+                        "outside-sheet",
+                        [ref],
+                        bounds,
+                        "Attached arrow label extends outside the sheet.",
+                    )
+                )
+            text_paths.append((ref, label_path))
+    return warnings
 
 
 def _molecular_bond_paths(canvas: Any) -> list[tuple[list[int], QPainterPath]]:

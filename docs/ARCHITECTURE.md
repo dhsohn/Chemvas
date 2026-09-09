@@ -115,16 +115,21 @@ coordinates to its existing move-atom path and retains the final semantic gate.
 
 Layout QA reuses native glyph and painted bond paths for atom–nonincident-bond
 and attached-charge–bond intersections. The bootstrap candidate budget includes
-both cross products before Qt restore. These are read-only diagnostics and do
-not add geometry changes or a parallel font renderer.
+both cross products before Qt restore. Attached arrow labels carry a native
+above/below witness and use the same glyph paths against text, bonds, arrow
+strokes and shape borders; their comparisons are included in the pre-Qt budget.
+The report states diagnostic coverage without claiming semantic design approval.
+These read-only diagnostics do not add geometry changes or a parallel font renderer.
 
 Explicit scheme layout uses a Qt-free request validator in
 `chemvas.features.scheme_layout`, a headless bootstrap command, and
 `ui.scheme_layout_service` beside the existing native canvas movement services.
 The UI integration reuses the canonical document item-index map, text-paint
-geometry and move kernels. It copies only changed coordinates and native group
-membership into the output; it does not serialize a replacement text/style
-representation or add a second persistent layout schema.
+geometry and move kernels. It copies changed coordinates and native group
+membership into the output; an explicit arrow-color override copies only that
+existing per-arrow field. It does not serialize a replacement text/style
+representation or add a second persistent layout schema. Named comparison rows
+and per-block caption stacks are optional policies of the same planner.
 
 Explicit `align-y` branches within the same measured-plan/movement pipeline. It
 measures molecular paint only, supports explicit disjoint atom parts and row
@@ -140,7 +145,10 @@ budgets keep the original shared-column path.
 The desktop Arrange Scheme dialog converts explicit existing-group choices into
 the same validated request. Its read-only measured plan becomes native move
 commands inside the existing document transaction, recorded as one composite
-undo/redo operation without replacing the scene or group identities. GUI export
+undo/redo operation without replacing the scene or group identities. An explicit
+arrow-color override uses the existing scene-item state command in that same
+composite edit. The dialog requires explicit note-role selection instead of
+inferring captions from current coordinates. GUI export
 options use the shared dimension-budget guard and canonical readability service;
 the existing atomic temporary writer protects the destination on rejection.
 Notes and arrow labels share one native rich-text export outline implementation.

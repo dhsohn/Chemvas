@@ -1032,13 +1032,16 @@ class AtomLabelServiceTest(unittest.TestCase):
         self.assertEqual(item.toPlainText(), "NH4+")
         self.assertIsNone(item.anchor_scene_rect())
 
-    def test_multi_part_label_with_a_vertical_bond_keeps_the_centred_layout(
+    def test_multi_part_label_with_a_vertical_bond_anchors_on_attachment(
         self,
     ) -> None:
-        # A one-line box is already shallow against a vertical bond; anchoring
-        # sideways would only shift the label for no trimming gain.
+        # A vertical bond still attaches to C, not the CF3 string midpoint.
         item = self._multi_part_label_item("CF3", 0.0, -20.0)
-        self.assertIsNone(item.anchor_scene_rect())
+        self.assertEqual(item.toPlainText(), "CF3")
+        anchor = item.anchor_scene_rect()
+        self.assertIsNotNone(anchor)
+        self.assertAlmostEqual(anchor.center().x(), 2.0, delta=0.6)
+        self.assertAlmostEqual(anchor.center().y(), -2.0, delta=0.6)
 
     def test_cf3_anchor_keeps_the_atom_on_the_carbon_glyph(self) -> None:
         # position_label must put the anchored C cell (not the label midpoint)

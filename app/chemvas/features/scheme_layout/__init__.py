@@ -1,4 +1,4 @@
-"""Explicit, translation-only scheme layout request contracts."""
+"""Explicit scheme layout and scoped presentation request contracts."""
 
 from .service import (
     MAX_LAYOUT_BLOCKS,

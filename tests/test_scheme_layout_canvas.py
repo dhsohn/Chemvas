@@ -224,6 +224,107 @@ def test_matching_rows_share_columns_and_caption_baselines_after_reopen() -> Non
         assert model.atoms[11].y >= first_row_bottom + 18 - 1e-6
 
 
+def test_explicit_column_groups_share_only_with_their_own_rows() -> None:
+    state = _state()
+    original = _request(state)
+    variants = (
+        original,
+        replace(
+            original,
+            rows=tuple(
+                replace(row, column_group="comparison") for row in original.rows
+            ),
+        ),
+        replace(
+            original,
+            rows=(
+                replace(original.rows[0], column_group="independent"),
+                original.rows[1],
+            ),
+        ),
+    )
+    outputs = []
+    for request in variants:
+        with offscreen_canvas(state, command="test-column-groups") as (canvas, _):
+            outputs.append(arrange_canvas(canvas, state, request))
+    assert outputs[0][0] == outputs[1][0]
+    assert outputs[0][1]["placements"] == outputs[1][1]["placements"]
+    placements = outputs[2][1]["placements"]
+    assert placements[0]["center_x"] != pytest.approx(placements[2]["center_x"])
+    assert outputs[2][1]["layout_width"] < outputs[0][1]["layout_width"]
+    assert outputs[2][1]["column_groups"] == ["independent", None]
+
+
+def test_structure_captions_follow_their_own_block_bottom_and_multiline_ink() -> None:
+    state = _state()
+    request = replace(_request(state), caption_alignment="structure")
+    with offscreen_canvas(state, command="test-structure-captions") as (canvas, _):
+        items = document_item_lists_for(canvas)
+        before = [
+            scheme_layout_service._block(canvas, block, items)
+            for row in request.rows
+            for block in row.blocks
+        ]
+        candidate, report = arrange_canvas(canvas, state, request)
+    with offscreen_canvas(candidate, command="test-reopened-captions") as (canvas, _):
+        notes = document_item_lists_for(canvas)["notes"]
+        for block, placement in zip(before, report["placements"], strict=True):
+            last_bottom = block.bounds.bottom() + placement["dy"]
+            for level, caption in enumerate(block.captions):
+                bounds = note_paint_scene_path(notes[caption.index]).boundingRect()
+                gap = request.caption_gap if level == 0 else request.line_gap
+                assert bounds.top() == pytest.approx(last_bottom + gap, abs=1e-6)
+                assert bounds.center().x() == pytest.approx(
+                    placement["center_x"], abs=1e-6
+                )
+                last_bottom = bounds.bottom()
+        assert _baseline(notes[0]) != pytest.approx(_baseline(notes[2]))
+        assert report["caption_alignment"] == "structure"
+        assert report["caption_placements"][0]["note"] == 0
+
+
+def test_scoped_arrow_color_preserves_every_geometry_and_other_style() -> None:
+    state = _state()
+    state["arrows"][0]["color"] = "#AABBCC"
+    state["arrows"][1]["color"] = "#123456"
+    original = deepcopy(state)
+    request = replace(_request(state), rows=(_request(state).rows[0],))
+    with offscreen_canvas(state, command="test-default-color") as (canvas, _):
+        default, default_report = arrange_canvas(canvas, state, request)
+    request = replace(request, arrow_color="#102030")
+    with offscreen_canvas(state, command="test-scoped-color") as (canvas, _):
+        before = document_item_lists_for(canvas)["arrows"][0].pen().color().name()
+        plan = scheme_layout_service.plan_canvas_layout(canvas, state, request)
+        assert (
+            document_item_lists_for(canvas)["arrows"][0].pen().color().name() == before
+        )
+        assert plan.arrow_colors == {0: "#102030"}
+        candidate, report = arrange_canvas(canvas, state, request)
+        arrow = document_item_lists_for(canvas)["arrows"][0]
+        assert arrow.pen().color().name() == "#102030"
+        assert all(
+            child.defaultTextColor().name() == "#102030" for child in arrow.childItems()
+        )
+    assert candidate["arrows"][1] == original["arrows"][1]
+    assert report["placements"] == default_report["placements"]
+    assert report["arrow_color_changes"] == [
+        {"arrow": 0, "before": "#AABBCC", "after": "#102030"}
+    ]
+    default["arrows"][0]["color"] = "#102030"
+    assert candidate == default
+    assert state == original
+
+
+def test_default_caption_policy_is_exactly_equivalent_when_explicit() -> None:
+    state = _state()
+    request = _request(state)
+    with offscreen_canvas(state, command="test-default-captions") as (canvas, _):
+        before = arrange_canvas(canvas, state, request)
+    with offscreen_canvas(state, command="test-explicit-row-captions") as (canvas, _):
+        after = arrange_canvas(canvas, state, replace(request, caption_alignment="row"))
+    assert before == after
+
+
 def test_ring_fill_marks_bracket_and_arrow_move_without_semantic_changes() -> None:
     state = _state()
     original = deepcopy(state)
@@ -343,11 +444,14 @@ def test_saved_group_reopens_moves_as_unit_and_undo_redo(
 
 
 @pytest.mark.parametrize("text", ["", "   \n  "])
-def test_empty_caption_fails_before_canvas_or_source_mutation(text: str) -> None:
+@pytest.mark.parametrize("alignment", ["row", "structure"])
+def test_empty_caption_fails_before_canvas_or_source_mutation(
+    text: str, alignment: str
+) -> None:
     state = _state()
     state["notes"][0] = {"text": text, "x": 20, "y": 20}
     original = deepcopy(state)
-    request = _request(state)
+    request = replace(_request(state), caption_alignment=alignment, arrow_color="#123")
     with offscreen_canvas(state, command="test-scheme-layout-empty-caption") as (
         canvas,
         session,
@@ -534,7 +638,10 @@ def test_unbounded_layout_retains_existing_report_contract() -> None:
     )
 
 
-def test_wrapped_mode_does_not_expand_opposite_wide_columns_past_budget() -> None:
+@pytest.mark.parametrize("column_group", [None, "comparison"])
+def test_wrapped_mode_does_not_expand_opposite_wide_columns_past_budget(
+    column_group,
+) -> None:
     state = _state()
     wide, narrow = deepcopy(state["notes"][2]), deepcopy(state["notes"][6])
     state["notes"][0], state["notes"][2], state["notes"][6] = (
@@ -545,7 +652,9 @@ def test_wrapped_mode_does_not_expand_opposite_wide_columns_past_budget() -> Non
     base = _request(state)
     request = replace(
         base,
-        rows=tuple(LayoutRow(row.blocks) for row in base.rows),
+        rows=tuple(
+            LayoutRow(row.blocks, column_group=column_group) for row in base.rows
+        ),
         max_row_width=430,
     )
     with offscreen_canvas(state, command="test-opposite-wide-columns") as (canvas, _):

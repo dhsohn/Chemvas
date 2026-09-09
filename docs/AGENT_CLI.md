@@ -117,23 +117,32 @@ chemvas check-layout scheme.chemvas > layout-report.json
 
 The current v1 checker reports these stable warning codes:
 
-- `text-text-overlap` for intersecting visible note and/or atom-label glyph paths;
+- `text-text-overlap` for intersecting visible note, atom-label or attached
+  arrow-label glyph paths;
+- `text-arrow-overlap` for attached arrow-label ink crossing its own or another
+  arrow's painted stroke;
+- `text-bond-overlap` for attached arrow-label ink crossing a molecular bond;
 - `atom-bond-overlap` for an atom-label glyph crossing a nonincident molecular
   bond's painted stroke (bonds attached to that atom are excluded);
 - `charge-bond-overlap` for an attached charge glyph crossing a painted bond,
   including a bond attached to the charge's own atom;
 - `arrow-structure-overlap` when painted arrow geometry crosses an atom label
   or a painted molecular bond;
-- `text-shape-border-overlap` when note text crosses the painted shape border;
-- `outside-sheet` when a visible note or shape extends beyond the sheet.
+- `text-shape-border-overlap` when note or attached arrow-label text crosses a
+  painted shape border;
+- `outside-sheet` when a visible note, shape or attached arrow label extends
+  beyond the sheet.
 
 The report includes the exact source SHA-256, document version, deterministic
 warning counts, persisted note/shape/arrow indices, stable atom IDs (bond endpoints
-for bond references), and rounded intersection bounds.
+for bond references), and rounded intersection bounds. Attached label witnesses
+use `kind: "arrow-label"`, the parent arrow's `index`, and `side: "above"` or
+`"below"`. The `coverage` object lists checked and unchecked classes: `ok: true`
+means no warnings in those checked classes, not a semantic or visual-design pass.
 The checker does not move objects, write history, normalize, or save the source.
 Before starting Qt it conservatively rejects a document whose potential
-text-pair, atom–bond, attached-charge–bond, note–shape, arrow–structure, and
-geometry work exceeds 10,000 units, so the
+text-pair, atom–bond, attached-charge–bond, note–shape, arrow–structure,
+attached-label–bond/arrow/shape and geometry work exceeds 10,000 units, so the
 complete deterministic warning report remains bounded.
 Exit status is `0` for a valid clean document, `1` for a valid document with one
 or more warnings, and `2` for invalid input or bootstrap/resource failure. It is
@@ -145,7 +154,8 @@ filled highlight interiors are not collision pairs. Intentional arrow-to-structu
 contacts may still warn: inspect the reported intersection rather than treating
 every warning as an error in the chemistry. The checker does not cover every
 possible overlap (for example, note–arrow, atom–shape, or TS-bracket collisions),
-and `outside-sheet` remains limited to notes and shapes. Atom-label coverage follows
+and `outside-sheet` remains limited to notes, shapes and attached arrow labels.
+Atom-label coverage follows
 the fonts produced by native document restore; underline/strikeout decorations
 injected directly into Qt atom items are not persisted and are outside this
 contract. The work limit bounds record and candidate-pair counts, not arbitrary
@@ -155,6 +165,12 @@ font/glyph complexity. Visual review is still required.
 
 Use `layout-document` to arrange whole structure blocks, center caption notes,
 align caption baselines and preserve native GUI groups in a new document.
+Explicit `column_group` names limit column sharing to related comparison rows;
+`caption_alignment: "structure"` places captions close to their own blocks.
+Optional `arrow_color` recolors only listed reaction arrows and their labels.
+Otherwise geometry and style defaults remain unchanged. Assign caption notes,
+attached notes and existing arrow conditions explicitly; do not scatter free
+notes around a narrow template to avoid overlaps.
 Choose `"mode": "align-y"` to align only molecular drawings vertically while
 keeping all X coordinates, captions and existing groups fixed. Explicit `parts`
 can align independent fragments separately; omission keeps complexes rigid.
