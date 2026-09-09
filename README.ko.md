@@ -44,6 +44,9 @@ RDKit 없이 직접 그리기와 그림 출력만 사용하려면 `pip install c
 두 방식 모두 PyQt6가 함께 설치됩니다. 데스크톱 설치 파일은 아직 제공하지 않으며,
 현재 배포 방식은 Python 패키지입니다.
 
+Windows 실행 파일과 설치 프로그램의 로컬 시험 빌드는
+[Windows 배포 준비 안내](https://github.com/dhsohn/Chemvas/blob/main/packaging/windows/README.md)를 참고하세요.
+
 ## 첫 반응식 만들기
 
 ![Chemvas 따라 그리기: 구조 삽입, 화살표 라벨 작성, 반응식 정렬, SVG 출력](https://raw.githubusercontent.com/dhsohn/Chemvas/main/docs/images/demo.gif)

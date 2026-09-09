@@ -236,7 +236,10 @@ class CanvasArrowBuildService:
         length = math.hypot(dx, dy) or 1.0
         nx = -dy / length
         ny = dx / length
-        offset = bond_spacing_px_for(self.canvas) * 1.5
+        # Keep the shafts one bond spacing apart, with room for thick strokes.
+        offset = max(
+            bond_spacing_px_for(self.canvas) * 0.5, self.settings.arrow_line_width
+        )
         forward_start = QPointF(start.x() - nx * offset, start.y() - ny * offset)
         forward_end = QPointF(end.x() - nx * offset, end.y() - ny * offset)
         reverse_start = QPointF(end.x() + nx * offset, end.y() + ny * offset)
