@@ -1,15 +1,13 @@
-"""Give a non-bundled macOS process a proper application name.
+"""Give a macOS Python launch the application's menu name.
 
-macOS reads the name it shows in the menu bar — and Qt reads the name it puts
-in the application menu — from the main bundle's ``CFBundleName``, not from
-``QApplication.setApplicationName()``. A ``pip install``ed or run-from-source
-Chemvas has no ``Info.plist`` at all, so Qt falls back to the basename of
-``argv[0]`` and macOS falls back to the process name: the menu ends up reading
-"python" or "main.py" instead of "Chemvas".
+Qt's native application menu reads the main bundle's ``CFBundleName``.
+Framework Python supplies its own ``Python.app`` bundle, including the name
+``Python`` and identifier ``org.python.python``, even for a pip-installed app.
+Other Python launches may have no bundle name and fall back to the executable.
 
-Writing ``CFBundleName`` into the main bundle's info dictionary (and setting the
-process name to match) before the ``QApplication`` is constructed fixes both.
-A real ``.app`` bundle already carries the key, so this leaves it alone.
+Set the name in the process's in-memory bundle dictionary and update the process
+name before constructing ``QApplication``. Preserve names from application
+bundles; only the standard Python launcher name is replaced.
 """
 
 from __future__ import annotations
@@ -28,6 +26,10 @@ def _core_foundation() -> ctypes.CDLL:
     library = ctypes.cdll.LoadLibrary(path)
     library.CFBundleGetMainBundle.restype = ctypes.c_void_p
     library.CFBundleGetMainBundle.argtypes = []
+    library.CFBundleGetIdentifier.restype = ctypes.c_void_p
+    library.CFBundleGetIdentifier.argtypes = [ctypes.c_void_p]
+    library.CFEqual.restype = ctypes.c_bool
+    library.CFEqual.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
     library.CFBundleGetInfoDictionary.restype = ctypes.c_void_p
     library.CFBundleGetInfoDictionary.argtypes = [ctypes.c_void_p]
     library.CFBundleGetValueForInfoDictionaryKey.restype = ctypes.c_void_p
@@ -87,8 +89,8 @@ def apply_macos_app_name(name: str, *, platform: str | None = None) -> bool:
     """Name this process ``name`` for the macOS menu bar. True if applied.
 
     Must be called before the ``QApplication`` is constructed: Qt reads the name
-    once, while it builds the Cocoa menu bar. A no-op off macOS, and a no-op
-    inside a real ``.app`` bundle, whose ``Info.plist`` already names it.
+    once, while it builds the Cocoa menu bar. A no-op off macOS. Existing
+    bundle names are preserved except for the standard CPython launcher bundle.
 
     Failures are swallowed: this is cosmetic, and reaching into CoreFoundation
     by hand is exactly the kind of call that a future macOS could stop honoring.
@@ -113,8 +115,16 @@ def apply_macos_app_name(name: str, *, platform: str | None = None) -> bool:
             )
 
         bundle_name_key = cfstr("CFBundleName")
-        if cf.CFBundleGetValueForInfoDictionaryKey(bundle, bundle_name_key):
-            return False
+        bundle_name = cf.CFBundleGetValueForInfoDictionaryKey(bundle, bundle_name_key)
+        if bundle_name:
+            bundle_id = cf.CFBundleGetIdentifier(bundle)
+            is_python_launcher = (
+                bundle_id
+                and cf.CFEqual(bundle_id, cfstr("org.python.python"))
+                and cf.CFEqual(bundle_name, cfstr("Python"))
+            )
+            if not is_python_launcher:
+                return False
         cf.CFDictionarySetValue(info, bundle_name_key, cfstr(name))
         _set_process_name(_objc_runtime(), name)
     except Exception:

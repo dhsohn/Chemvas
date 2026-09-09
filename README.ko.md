@@ -74,12 +74,14 @@ Windows 실행 파일과 설치 프로그램의 로컬 시험 빌드는
 chemvas inspect-document first-scheme.chemvas
 chemvas check-layout first-scheme.chemvas
 chemvas render-document first-scheme.chemvas --output first-scheme-rendered.svg
+chemvas render-document first-scheme.chemvas --output first-scheme.pdf --width-mm 174
 ```
 
+문서 하나를 SVG, PNG 또는 한 페이지의 벡터 PDF로 출력합니다.
 출력 명령은 새 파일을 만들며 원본 그림은 그대로 둡니다.
 기본값은 결합 길이 기준 출력입니다. `--width-mm 174`로 출력 폭을 지정하고,
 `--max-height-mm 120`으로 너무 긴 그림을 자동 축소하지 않고 거부할 수 있습니다.
-`--min-font-pt 6`을 추가하면 아래첨자를 포함해 최종 출력 글씨가 지정한 크기보다
+SVG·PNG 출력에 `--min-font-pt 6`을 추가하면 아래첨자를 포함해 글씨가 지정한 크기보다
 작을 때 출력을 거부합니다. 6 pt는 사용 예시이며 학술지 공통 기준은 아닙니다.
 스킴 정렬 요청의 `max_row_width`로 긴 경로를 줄 나눌 수 있습니다. 연결 화살표는
 다음 줄 맨 앞에 유지되며, 구조 자체는 축소하지 않습니다.

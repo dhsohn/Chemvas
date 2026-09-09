@@ -259,6 +259,7 @@ the desktop app without opening a window or loading RDKit:
 
 ```bash
 chemvas render-document scheme.chemvas --output scheme.svg
+chemvas render-document scheme.chemvas --output scheme.pdf --width-mm 174
 chemvas render-document scheme.chemvas --output scheme.png --dpi 600
 chemvas render-document scheme.chemvas --output journal.svg --width-mm 174 --max-height-mm 120
 chemvas render-document scheme.chemvas --output readable.svg --width-mm 174 --min-font-pt 6
@@ -266,24 +267,27 @@ chemvas render-document scheme.chemvas --output scheme-transparent.png \
   --background transparent
 ```
 
-The output suffix selects SVG or PNG. White is the default background; PNG DPI
-may be 150, 300, 600, or 1200, while SVG ignores DPI. The command starts only an
-invisible offscreen Qt canvas, does not start session recovery, and leaves the
-source untouched. It refuses existing files, directories, and symlinks and
-publishes the new output atomically.
+The output suffix selects SVG, PDF, or PNG. PDF uses the same native vector
+exporter as the desktop app and produces one page from one document. White is
+the default background. PNG/PDF DPI may be 150, 300, 600, or 1200; for PDF it
+sets the paint-device resolution while paths remain vectors. SVG ignores DPI.
+The command starts only an invisible offscreen Qt canvas, does not start session
+recovery, and leaves the source untouched. It refuses existing files, directories,
+and symlinks and publishes the new output atomically.
 
 Omitting `--width-mm` retains preset bond-length sizing. A positive finite width
 requests the padded figure width through the same physical-size planner as GUI
 export, preserving aspect ratio. PNG dimensions round to pixels at the chosen
 DPI; Qt's SVG physical viewport rounds to whole points while its viewBox and the
-report retain the planned fractional point dimensions. Optional
-`--max-height-mm` rejects a taller output before painting, including SVG viewport
-or PNG pixel rounding; it never shrinks the
-figure to fit. These size options do not reflow a drawing, so arrange the content
+report retain the planned fractional point dimensions. PDF pages round to whole
+points through Qt; their report uses the actual page dimensions. Optional
+`--max-height-mm` rejects a taller output before painting, including SVG viewport,
+PDF page, or PNG pixel rounding; it never shrinks the figure to fit. These size options do not reflow a drawing, so arrange the content
 before choosing its final print size.
 
-Optional `--min-font-pt` supplies a positive finite minimum for final printed
-glyph sizes. It checks the fonts used by native output, including small subscript
+Optional `--min-font-pt` applies to SVG and PNG and supplies a positive finite
+minimum for final printed glyph sizes. PDF with this option is rejected before
+rendering. It checks the fonts used by native output, including small subscript
 and superscript glyphs, against the output scale and rejects undersized output
 before publication. It does not change fonts or source geometry. For example,
 6 pt is a user-selected threshold, not a built-in journal standard. Omit this
@@ -313,11 +317,14 @@ integer pixels-per-metre rounding difference in PNG resolution metadata.
 SVG viewport and PNG pixel rounding can produce a small difference in final
 physical scale, but note glyph construction no longer differs by output format.
 
-Standard output is a deterministic JSON report containing the exact source and
-output SHA-256 hashes, document version, output byte count, physical point size,
-and PNG pixel dimensions. Repeated renders are byte-identical within the same
-Chemvas/Qt/font environment; Qt or font changes can alter path geometry or encoded
-bytes, so consumers should use the reported hash rather than assume
+Standard output is a JSON report containing the exact source and output SHA-256
+hashes, document version, output byte count, physical point size, and PNG pixel
+dimensions. SVG and PDF report null pixel dimensions; PDF reports its requested
+DPI. Repeated SVG/PNG renders and their report values are byte-identical within
+the same Chemvas/Qt/font environment, apart from the supplied output path. PDF
+metadata includes Qt-generated identifiers and timestamps, so repeated PDF bytes
+and output hashes may differ. Qt or font changes can also alter path geometry
+or encoded bytes; consumers should use the reported hash rather than assume
 cross-platform byte identity. Rendering is fail-closed at 8 MiB of source data,
 20,000 graphics records, 64 MiB of output, 14,400 points per side, and—for
 PNG—10,000 pixels per side or 25 million total pixels.

@@ -76,9 +76,11 @@ After downloading `first-scheme.chemvas`, try:
 chemvas inspect-document first-scheme.chemvas
 chemvas check-layout first-scheme.chemvas
 chemvas render-document first-scheme.chemvas --output first-scheme-rendered.svg
+chemvas render-document first-scheme.chemvas --output first-scheme.pdf --width-mm 174
 ```
 
-Rendering creates a new file and leaves the source drawing untouched. This
+Rendering exports one drawing to SVG, PNG, or a single-page vector PDF. It
+creates a new file and leaves the source drawing untouched. This
 command defaults to preset bond-length sizing; add `--width-mm 174` to request
 a column width, or `--max-height-mm 120` to reject an overly tall figure without
 shrinking it. Layout checks cover visible note and
@@ -93,7 +95,7 @@ For structure names and energies that stay aligned, use
 blocks and keep them together as native groups.
 
 That layout also accepts a `max_row_width` budget for long pathways. Use
-`render-document --min-font-pt 6` to reject output with glyphs smaller than your
+`render-document --min-font-pt 6` with SVG or PNG to reject glyphs smaller than your
 chosen threshold, including subscripts; the value is not a journal preset.
 
 In the desktop, group each structure with its notes and use **Edit ▸ Arrange

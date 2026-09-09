@@ -22,8 +22,12 @@ class _QApplicationMetadataStub(QObject):
     raising.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, parsed_arguments: list[str]) -> None:
         super().__init__()
+        self._parsed_arguments = parsed_arguments
+
+    def arguments(self) -> list[str]:
+        return list(self._parsed_arguments)
 
     def installEventFilter(self, event_filter: object) -> None:
         self.installed_event_filter = event_filter
@@ -186,7 +190,8 @@ class MainStderrFilterTest(unittest.TestCase):
             instances: list["FakeApplication"] = []
 
             def __init__(self, args) -> None:
-                super().__init__()
+                # QApplication has consumed the -style option and its value.
+                super().__init__([args[0]])
                 self.args = args
                 self.exec_called = False
                 FakeApplication.instances.append(self)
@@ -223,7 +228,7 @@ class MainStderrFilterTest(unittest.TestCase):
             events.append(("exit", None))
 
         sentinel_icon = object()
-        argv = ["chemvas", "--style", "Fusion"]
+        argv = ["chemvas", "-style", "Fusion"]
         with (
             mock.patch.dict(
                 sys.modules,
@@ -260,7 +265,7 @@ class MainStderrFilterTest(unittest.TestCase):
 
         class FakeApplication(_QApplicationMetadataStub):
             def __init__(self, args) -> None:
-                super().__init__()
+                super().__init__([args[0], path])
                 self.args = args
 
             def exec(self) -> None:
@@ -302,7 +307,7 @@ class MainStderrFilterTest(unittest.TestCase):
             yield
             events.append(("exit", None))
 
-        argv = ["chemvas", "--style", "Fusion", path]
+        argv = ["chemvas", "-style", "Fusion", path]
         with (
             mock.patch.dict(
                 sys.modules,
@@ -339,7 +344,7 @@ class MainStderrFilterTest(unittest.TestCase):
 
         class FakeApplication(_QApplicationMetadataStub):
             def __init__(self, args) -> None:
-                super().__init__()
+                super().__init__(list(args))
                 self.args = args
                 events.append("app")
 
@@ -385,7 +390,7 @@ class MainStderrFilterTest(unittest.TestCase):
         ):
             with (
                 mock.patch.object(sys, "platform", "linux"),
-                mock.patch.object(sys, "argv", ["python", "app/main.py"]),
+                mock.patch.object(sys, "argv", ["app/main.py"]),
                 mock.patch.object(chemvas.branding, "app_icon", lambda: object()),
             ):
                 runpy.run_module("main", run_name="__main__")
