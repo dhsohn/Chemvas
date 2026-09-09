@@ -13,6 +13,7 @@ from chemvas.core.svg_roundtrip import (
 from chemvas.domain.document import MoleculeModel, serialize_model_state
 from chemvas.features.export import (
     default_export_path,
+    export_error_message,
     file_filter_for_format,
     normalize_export_path,
 )
@@ -427,7 +428,7 @@ class MainWindowDocumentActionService:
             message_box.warning(
                 window,
                 "Export Error",
-                f"Failed to export figure:\n{exc}",
+                f"Failed to export figure:\n{export_error_message(exc)}",
             )
             return
         window.statusBar().showMessage(f"Exported: {path}", 4000)

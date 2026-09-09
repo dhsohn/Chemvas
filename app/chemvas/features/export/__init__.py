@@ -12,6 +12,7 @@ from .dialog import (
     EXPORT_SCOPES,
     EXPORT_SIZES,
     default_export_path,
+    export_error_message,
     file_filter_for_format,
     is_dpi_relevant,
     is_raster_format,
@@ -19,6 +20,7 @@ from .dialog import (
     suffix_for_format,
     supports_minimum_font_check,
 )
+from .errors import MaximumHeightError, MinimumFontSizeError
 from .plan import (
     POINTS_PER_INCH,
     ExportPlan,
@@ -41,6 +43,7 @@ from .service import (
     render_scene_to_svg_bytes,
     resolve_export_plan,
 )
+from .vector import pdf_page_size
 
 __all__ = [
     "DEFAULT_DPI",
@@ -52,10 +55,13 @@ __all__ = [
     "EXPORT_SIZES",
     "POINTS_PER_INCH",
     "ExportPlan",
+    "MaximumHeightError",
+    "MinimumFontSizeError",
     "build_export_plan",
     "collect_export_items",
     "content_bounds",
     "default_export_path",
+    "export_error_message",
     "export_item_closure",
     "export_scene",
     "exported_scene",
@@ -64,6 +70,7 @@ __all__ = [
     "is_raster_format",
     "item_export_bounds",
     "normalize_export_path",
+    "pdf_page_size",
     "points_for_mm",
     "render_scene_to_pdf_bytes",
     "render_scene_to_svg_bytes",

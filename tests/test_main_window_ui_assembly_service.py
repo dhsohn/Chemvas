@@ -329,6 +329,7 @@ class MainWindowUIAssemblyServiceTest(unittest.TestCase):
                 "Canvas Size...",
                 "Export Figure...",
                 "Export MOL...",
+                "Close Window",
             ],
         )
         self.assertIsNotNone(self._menu_action(file_menu, "Open Recent").menu())

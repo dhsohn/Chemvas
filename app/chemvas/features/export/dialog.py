@@ -9,6 +9,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from chemvas.features.export.errors import MaximumHeightError, MinimumFontSizeError
+
 # (label, fmt key, default suffix)
 EXPORT_FORMATS: tuple[tuple[str, str, str], ...] = (
     ("Plain SVG - vector", "svg", ".svg"),
@@ -89,6 +91,27 @@ def default_export_path(current_file_path: str | None, fmt: str) -> str:
     return str(Path(current_file_path).with_suffix(suffix))
 
 
+def export_error_message(error: Exception) -> str:
+    """Describe failed export limits using the controls available in the dialog."""
+    if isinstance(error, MaximumHeightError):
+        return (
+            f"The exported figure is {error.height_mm:.2f} mm high; "
+            f"the maximum is {error.maximum_mm:g} mm.\n\n"
+            "Reduce the export width, or raise or turn off "
+            "Limit exported height in Export Figure. "
+            "No file was written or resized."
+        )
+    if isinstance(error, MinimumFontSizeError):
+        return (
+            f"The smallest visible text is {error.minimum_pt:.2f} pt; "
+            f"the required minimum is {error.required_pt:g} pt.\n\n"
+            "Increase the export width or the drawing's text size, or lower "
+            "Minimum font size in Export Figure. "
+            "No file was written or resized."
+        )
+    return str(error)
+
+
 __all__ = [
     "DEFAULT_DPI",
     "DPI_OPTIONS",
@@ -97,6 +120,7 @@ __all__ = [
     "EXPORT_SCOPES",
     "EXPORT_SIZES",
     "default_export_path",
+    "export_error_message",
     "file_filter_for_format",
     "is_dpi_relevant",
     "is_raster_format",

@@ -318,6 +318,15 @@ def main_window_form_stylesheet(palette: Mapping[str, str]) -> str:
             QDialog QLabel, QMessageBox QLabel {{
                 color: {palette["text"]};
             }}
+            QCheckBox::indicator:unchecked {{
+                background: {palette["surface_input"]};
+                border: 1px solid {palette["text_faint"]};
+                border-radius: 3px;
+            }}
+            QCheckBox::indicator:unchecked:disabled {{
+                background: {palette["surface_app"]};
+                border-color: {palette["border_strong"]};
+            }}
             QDialog QLineEdit, QMessageBox QLineEdit {{
                 background: {palette["surface_input"]};
                 border: 1px solid {palette["border_strong"]};

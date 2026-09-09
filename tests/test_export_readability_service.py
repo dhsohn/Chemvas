@@ -19,6 +19,7 @@ from chemvas.features.export import (
     collect_export_items,
     svg_viewport_size_points,
 )
+from chemvas.features.export.errors import MinimumFontSizeError
 from chemvas.features.export.vector import render_svg_bytes
 from chemvas.ui.canvas_scene_items_state import note_items_for, ts_bracket_items_for
 from chemvas.ui.export_readability_service import assess_export_readability
@@ -91,8 +92,11 @@ def test_resolved_font_pixels_not_declared_points_control_the_minimum() -> None:
             "script": False,
         }
         assert report["coverage"]["note"]["glyphs"] == 1
-        with pytest.raises(ValueError, match="below --min-font-pt"):
+        with pytest.raises(MinimumFontSizeError, match="below --min-font-pt") as error:
             _assess(canvas, minimum=expected + 0.01)
+        assert error.value.minimum_pt == pytest.approx(expected)
+        assert error.value.required_pt == expected + 0.01
+        assert error.value.witness == report["minimum_witness"]
 
 
 def test_rich_text_scripts_and_small_spans_use_resolved_runs() -> None:

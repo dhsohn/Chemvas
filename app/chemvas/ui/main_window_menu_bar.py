@@ -170,6 +170,16 @@ def _build_file_menu(
         triggered=lambda: callbacks.export_mol(window),
     )
 
+    file_menu.addSeparator()
+    close_action = _add_action(
+        file_menu,
+        window,
+        "Close Window",
+        status_tip="Close this window, asking to save any unsaved drawings",
+        triggered=window.close,
+    )
+    close_action.setShortcuts(QKeySequence.StandardKey.Close)
+
 
 def _build_edit_menu(
     menu_bar: QMenuBar, window, callbacks: MainWindowPanelToolbarCallbacks
