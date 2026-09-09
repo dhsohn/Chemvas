@@ -7,11 +7,13 @@ from chemvas.ui.scene_item_access import canvas_scene_for
 
 
 def scene_items_at_pos_for_canvas(canvas, pos):
+    # Handles keep their size on screen (ItemIgnoresTransformations), so the
+    # scene needs the view's transform to place their shapes for picking.
     return canvas_scene_for(canvas).items(
         pos,
         Qt.ItemSelectionMode.IntersectsItemShape,
         Qt.SortOrder.DescendingOrder,
-        QTransform(),
+        canvas.viewportTransform(),
     )
 
 

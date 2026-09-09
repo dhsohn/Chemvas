@@ -1842,14 +1842,26 @@ class GuiShortcutSmokeTest(unittest.TestCase):
         ]
         self.assertEqual(sum(1 for data in kinds if data.get("kind") == "component"), 1)
         self.assertEqual(sum(1 for data in kinds if data.get("kind") == "center"), 0)
-        self.assertTrue(all(data.get("kind") == "component" for data in kinds))
+        # Two atoms can turn, so the frame and its rotation knob join the band.
+        self.assertEqual(sum(1 for data in kinds if data.get("kind") == "frame"), 1)
+        self.assertEqual(
+            sum(
+                1
+                for item in selection_outlines_for(
+                    active_canvas_for_window(self.window)
+                )
+                if item.data(0) == "handle"
+            ),
+            1,
+        )
         component_outline = next(
             item
             for item in selection_outlines_for(active_canvas_for_window(self.window))
             if (item.data(2) or {}).get("kind") == "component"
         )
         self.assertEqual(component_outline.path().fillRule(), Qt.FillRule.WindingFill)
-        self.assertEqual(component_outline.brush().color().name(), "#0d9488")
+        self.assertEqual(component_outline.pen().color().name(), "#0d9488")
+        self.assertEqual(component_outline.brush().style(), Qt.BrushStyle.NoBrush)
 
     def test_disconnected_atom_selection_adds_multiple_component_overlays(self) -> None:
         left = add_atom_for(active_canvas_for_window(self.window), "C", -40.0, 0.0)
@@ -1887,7 +1899,7 @@ class GuiShortcutSmokeTest(unittest.TestCase):
             selection_outlines_for(active_canvas_for_window(self.window)), []
         )
 
-    def test_arrow_selection_uses_filled_object_overlay(self) -> None:
+    def test_arrow_selection_uses_outlined_object_overlay(self) -> None:
         arrow = add_arrow_for(
             active_canvas_for_window(self.window),
             QPointF(-40.0, 0.0),
@@ -1904,11 +1916,13 @@ class GuiShortcutSmokeTest(unittest.TestCase):
         ]
         self.assertEqual(len(object_outlines), 1)
         outline = object_outlines[0]
-        self.assertEqual(outline.brush().color().name(), "#0d9488")
-        self.assertGreater(outline.brush().color().alpha(), 0)
-        self.assertEqual(outline.pen().style(), Qt.PenStyle.NoPen)
+        self.assertEqual(outline.pen().color().name(), "#0d9488")
+        self.assertTrue(outline.pen().isCosmetic())
+        self.assertEqual(outline.brush().style(), Qt.BrushStyle.NoBrush)
 
-    def test_mark_and_ts_bracket_selection_use_filled_object_overlays(self) -> None:
+    def test_mark_and_ts_bracket_selection_use_outlined_object_overlays(
+        self,
+    ) -> None:
         mark = add_mark_for(
             active_canvas_for_window(self.window), QPointF(10.0, 10.0), kind="plus"
         )
@@ -1926,10 +1940,13 @@ class GuiShortcutSmokeTest(unittest.TestCase):
         ]
         self.assertEqual(len(object_outlines), 2)
         self.assertTrue(
-            all(item.brush().color().name() == "#0d9488" for item in object_outlines)
+            all(item.pen().color().name() == "#0d9488" for item in object_outlines)
         )
         self.assertTrue(
-            all(item.pen().style() == Qt.PenStyle.NoPen for item in object_outlines)
+            all(
+                item.brush().style() == Qt.BrushStyle.NoBrush
+                for item in object_outlines
+            )
         )
 
     def test_mark_selection_overlay_matches_single_atom_selection_radius(self) -> None:

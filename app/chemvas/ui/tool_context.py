@@ -199,6 +199,19 @@ class ToolContext:
     def update_handle_drag(self, handle, scene_pos: QPointF) -> None:
         self.handle_controller.update_handle_drag(handle, scene_pos)
 
+    def begin_rotation_drag(self, press_pos: QPointF):
+        return self.scene_transform_controller.begin_rotation_drag(press_pos)
+
+    def update_rotation_drag(
+        self, session, scene_pos: QPointF, *, snap_step: float | None = None
+    ) -> None:
+        self.scene_transform_controller.update_rotation_drag(
+            session, scene_pos, snap_step=snap_step
+        )
+
+    def rotation_drag_command(self, session):
+        return self.scene_transform_controller.rotation_drag_command(session)
+
     def begin_selection_3d_rotation(
         self, *, axis_hint: int | None = None, press_pos=None
     ) -> bool:

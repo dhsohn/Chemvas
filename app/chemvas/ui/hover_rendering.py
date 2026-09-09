@@ -101,12 +101,15 @@ def _apply_preview_style(item: QGraphicsItem, color: QColor) -> None:
             styleable.setBrush(brush)
 
 
+# The hover mark speaks the selection's language at a lighter weight: the
+# same accent, faint, so what the pointer would pick previews what picking
+# it will show.
 def _indicator_pen_color() -> QColor:
-    return QColor("#9a9a9a")
+    return QColor(13, 148, 136, 150)
 
 
 def _indicator_brush_color() -> QColor:
-    return QColor(190, 190, 190, 80)
+    return QColor(13, 148, 136, 30)
 
 
 def _preview_color() -> QColor:

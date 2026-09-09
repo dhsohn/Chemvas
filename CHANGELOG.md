@@ -9,10 +9,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Turn a selection by dragging the rotation handle above its frame. The frame
+  appears around two or more selected atoms or a rotatable arrow, line, or
+  orbital; hold Shift to snap the sweep to 15° steps. The drag undoes as one
+  step and Escape cancels it, matching **Edit ▸ Rotate**.
 - Export one document to a single-page vector PDF with `render-document`.
   Reuse the desktop PDF exporter and retain physical sizing, source preservation,
   and refusal to overwrite an existing output. Minimum-font checking remains
   available for SVG and PNG.
+
+### Changed
+
+- Draw every selection as one thin outline in the accent colour instead of a
+  translucent fill: bonds get a band that follows them, labelled and lone
+  atoms a rounded box or ring, arrows, marks, shapes and orbitals an outline
+  around their shape, and notes a solid box. The drawing keeps its own
+  colours while selected; arrows and shapes are no longer recoloured or
+  thickened. Group boxes stay dashed.
+- Handles are hollow circles that keep their size on screen at any zoom
+  (edge-midpoint resize handles are smaller than corner and endpoint handles).
+  A handle that has taken another item's endpoint is still shown filled.
+- Tint the hover ring with the selection accent instead of grey.
 
 ### Fixed
 

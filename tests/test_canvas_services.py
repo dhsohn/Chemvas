@@ -127,7 +127,6 @@ def test_build_canvas_services_composes_grouped_runtimes(monkeypatch) -> None:
     )
     scene_view = SimpleNamespace(
         scene_item_controller=object(),
-        selection_highlight_styler=object(),
         geometry_controller=object(),
         canvas_ring_fill_scene_service=object(),
     )

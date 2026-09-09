@@ -224,13 +224,6 @@ class _MarkRegistrySnapshot:
 
 
 @dataclass(slots=True)
-class _SelectionVisualSnapshot:
-    item: object
-    pen: object
-    data_6: object
-
-
-@dataclass(slots=True)
 class _VisibilitySnapshot:
     item: object
     visible: bool
@@ -515,7 +508,6 @@ class SceneRuntimeSnapshot:
     topology_states: list[_SceneItemTopologySnapshot]
     selected_states: list[_SceneSelectionSnapshot]
     visibility_states: list[_VisibilitySnapshot]
-    selection_visuals: list[_SelectionVisualSnapshot]
     list_attributes: list[_ListAttributeSnapshot]
     mark_registry: _MarkRegistrySnapshot | None
     handle_state: Any | None
@@ -663,32 +655,6 @@ def _mark_registry_snapshot(
     for key, value in mapping.items():
         entries.append((key, value, list(value) if isinstance(value, list) else None))
     return _MarkRegistrySnapshot(registry, mapping, entries)
-
-
-def _selection_visual_snapshots(
-    items: list,
-) -> list[_SelectionVisualSnapshot]:
-    snapshots: list[_SelectionVisualSnapshot] = []
-    pending = list(items)
-    seen: set[int] = set()
-    while pending:
-        item = pending.pop()
-        if id(item) in seen:
-            continue
-        seen.add(id(item))
-        if graphics_item_is_deleted(item):
-            continue
-        child_items = _snapshot_attribute(item, "childItems")
-        if callable(child_items):
-            pending.extend(child_items())
-        pen_method = _snapshot_attribute(item, "pen")
-        data_method = _snapshot_attribute(item, "data")
-        if not callable(pen_method):
-            continue
-        pen = pen_method()
-        data_6 = data_method(6) if callable(data_method) else _UNAVAILABLE_ITEM_VALUE
-        snapshots.append(_SelectionVisualSnapshot(item, pen, data_6))
-    return snapshots
 
 
 def _visibility_snapshots(
@@ -847,19 +813,6 @@ def capture_scene_runtime(
     )
     if handle_snapshot is not None:
         list_attributes.append(handle_snapshot)
-    selection_style_state = _snapshot_runtime_state_object(
-        canvas,
-        "selection_style_state",
-    )
-    selected_items_snapshot = _list_attribute_snapshot(
-        selection_style_state,
-        "selected_items",
-    )
-    selection_visuals = _selection_visual_snapshots(
-        selected_items_snapshot.contents if selected_items_snapshot is not None else [],
-    )
-    if selected_items_snapshot is not None:
-        list_attributes.append(selected_items_snapshot)
     selection_outline_state = _snapshot_runtime_state_object(
         canvas,
         "selection_outline_state",
@@ -915,7 +868,6 @@ def capture_scene_runtime(
         visibility_states=_visibility_snapshots(
             detail_scope_items,
         ),
-        selection_visuals=selection_visuals,
         list_attributes=list_attributes,
         mark_registry=_mark_registry_snapshot(
             _snapshot_runtime_state_object(
@@ -1657,17 +1609,6 @@ def _restore_mark_registry(snapshot: _MarkRegistrySnapshot) -> None:
     snapshot.registry.by_atom = snapshot.mapping_object
 
 
-def _restore_selection_visual(snapshot: _SelectionVisualSnapshot) -> None:
-    set_pen = _snapshot_attribute(snapshot.item, "setPen")
-    if callable(set_pen):
-        set_pen(snapshot.pen)
-    if snapshot.data_6 is _UNAVAILABLE_ITEM_VALUE:
-        return
-    set_data = _snapshot_attribute(snapshot.item, "setData")
-    if callable(set_data):
-        set_data(6, snapshot.data_6)
-
-
 def _restore_visibility(snapshot: _VisibilitySnapshot) -> None:
     for method_name, value in (
         ("setRect", snapshot.rect),
@@ -1724,13 +1665,6 @@ def restore_scene_runtime(
                 original_error,
                 "restoring selection-overlay visibility",
                 partial(_restore_visibility, visibility_snapshot),
-                errors=errors,
-            )
-        for visual_snapshot in snapshot.selection_visuals:
-            _run_suppressed_restore_step(
-                original_error,
-                "restoring a selection visual",
-                partial(_restore_selection_visual, visual_snapshot),
                 errors=errors,
             )
         if snapshot.handle_state is not None:

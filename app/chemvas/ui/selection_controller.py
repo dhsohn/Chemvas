@@ -149,11 +149,8 @@ class SelectionController:
         atom_ids: set[int],
         bond_ids: set[int],
         color: QColor,
-        atom_pad: float,
     ) -> None:
-        self.outline_service.add_selection_component_overlay(
-            atom_ids, bond_ids, color, atom_pad
-        )
+        self.outline_service.add_selection_component_overlay(atom_ids, bond_ids, color)
 
     def selection_center_for_atoms(self, atom_ids: set[int]) -> QPointF | None:
         return self.outline_service.selection_center_for_atoms(atom_ids)

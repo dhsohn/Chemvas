@@ -7,7 +7,6 @@ from chemvas.ui.canvas_geometry_controller import CanvasGeometryController
 from chemvas.ui.canvas_ring_fill_scene_service import CanvasRingFillSceneService
 from chemvas.ui.scene_item_controller import SceneItemController
 from chemvas.ui.scene_item_lifecycle_service import SceneItemLifecycleService
-from chemvas.ui.selection_highlight_styler import SelectionHighlightStyler
 
 if TYPE_CHECKING:
     from chemvas.ui.canvas_view import CanvasView
@@ -16,7 +15,6 @@ if TYPE_CHECKING:
 @dataclass(slots=True)
 class CanvasSceneViewServiceBundle:
     scene_item_controller: SceneItemController
-    selection_highlight_styler: SelectionHighlightStyler
     geometry_controller: CanvasGeometryController
     canvas_ring_fill_scene_service: CanvasRingFillSceneService
 
@@ -36,7 +34,6 @@ def build_canvas_scene_view_services(
         graph_service=graph_service,
         lifecycle_service=scene_item_lifecycle_service,
     )
-    selection_highlight_styler = SelectionHighlightStyler(canvas)
     geometry_controller = CanvasGeometryController(
         canvas,
         hit_testing_service=hit_testing_service,
@@ -45,7 +42,6 @@ def build_canvas_scene_view_services(
     canvas_ring_fill_scene_service = CanvasRingFillSceneService(canvas)
     return CanvasSceneViewServiceBundle(
         scene_item_controller=scene_item_controller,
-        selection_highlight_styler=selection_highlight_styler,
         geometry_controller=geometry_controller,
         canvas_ring_fill_scene_service=canvas_ring_fill_scene_service,
     )

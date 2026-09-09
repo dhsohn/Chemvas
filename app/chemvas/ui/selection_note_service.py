@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, cast
 
 from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QBrush, QPen
+from PyQt6.QtGui import QBrush
 from PyQt6.QtWidgets import QGraphicsItem, QGraphicsRectItem, QGraphicsTextItem
 
 from chemvas.ui.canvas_scene_items_state import (
@@ -19,12 +19,10 @@ from chemvas.ui.scene_group_operations import (
     expand_note_selection_to_groups_for,
     notes_only_group_member_notes_for,
 )
+from chemvas.ui.selection_outline_items import selection_outline_pen
 from chemvas.ui.selection_scene_access import set_scene_items_selected_for
 from chemvas.ui.selection_service_access import refresh_selection_outline_for
-from chemvas.ui.selection_style_access import (
-    selection_color_for,
-    selection_stroke_delta_for,
-)
+from chemvas.ui.selection_style_access import selection_color_for
 
 if TYPE_CHECKING:
     from chemvas.ui.canvas_view import CanvasView
@@ -155,10 +153,7 @@ class SelectionNoteService:
             item.setData(21, sel)
         sel.setVisible(True)
         sel.setRect(rect)
-        pen = QPen(selection_color_for(self.canvas))
-        pen.setWidthF(selection_stroke_delta_for(self.canvas))
-        pen.setStyle(Qt.PenStyle.DashLine)
-        sel.setPen(pen)
+        sel.setPen(selection_outline_pen(selection_color_for(self.canvas)))
         sel.setBrush(QBrush(Qt.BrushStyle.NoBrush))
 
 

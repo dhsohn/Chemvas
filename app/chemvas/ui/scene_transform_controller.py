@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from functools import wraps
 from typing import TYPE_CHECKING
 
-from PyQt6.QtCore import QRectF
+from PyQt6.QtCore import QPointF, QRectF
 
 from chemvas.core.history import (
     CompositeCommand,
@@ -17,7 +17,7 @@ from chemvas.features.rendering import refresh_bond_graphics
 from chemvas.features.selection import (
     bounding_box_center_for_atoms as bounding_box_center_for_atoms_logic,
 )
-from chemvas.features.selection import rotated_atom_positions
+from chemvas.features.selection import rotated_atom_positions, rotation_drag_angle
 from chemvas.ui.bond_graphics_access import add_bond_graphics_for
 from chemvas.ui.canvas_atom_graphics_state import visible_atom_item_for
 from chemvas.ui.canvas_bond_graphics_state import bond_items_for
@@ -60,7 +60,7 @@ from chemvas.ui.scene_item_state import (
     scene_item_state_for,
     ts_bracket_rect_from_state,
 )
-from chemvas.ui.scene_rotation_state import rotate_scene_item_state
+from chemvas.ui.scene_rotation_state import rotate_scene_item_state, rotated_point
 from chemvas.ui.scene_single_item_mutation_logic import (
     apply_bond_style_with_history,
     cycle_bond_style_with_history,
@@ -79,6 +79,8 @@ from chemvas.ui.selection_service_access import refresh_selection_outline_for
 from chemvas.ui.transactions.document import document_transaction
 
 if TYPE_CHECKING:
+    from PyQt6.QtWidgets import QGraphicsItem
+
     from chemvas.ui.canvas_view import CanvasView
 
 
@@ -96,6 +98,22 @@ class _AlignObject:
 
 
 ROTATION_STATE_ITEM_KINDS = ARROW_KINDS | {"orbital", "mark"}
+
+
+@dataclass(slots=True)
+class RotationDragSession:
+    """One rotation-handle drag: what turns, about where, and how far so far.
+
+    Every frame is computed from the positions and states captured at the
+    press, so the sweep never accumulates rounding and a return to the
+    starting angle restores the document exactly.
+    """
+
+    center: QPointF
+    press_pos: QPointF
+    before_positions: dict[int, tuple[float, float]]
+    item_states: tuple[tuple[QGraphicsItem, dict], ...]
+    angle_degrees: float = 0.0
 
 
 def _atomic_history_transform(operation):
@@ -570,5 +588,110 @@ class SceneTransformController:
             return
         self.history.push(CompositeCommand(commands))
 
+    def begin_rotation_drag(self, press_pos: QPointF) -> RotationDragSession | None:
+        """Capture what a rotation-handle drag turns, or ``None`` if nothing."""
+        atom_ids, items, transform_items = self._rotation_selection()
+        if not atom_ids and not transform_items:
+            return None
+        center = self._rotation_center(atom_ids, items)
+        if center is None:
+            return None
+        before_positions: dict[int, tuple[float, float]] = {}
+        for atom_id in atom_ids:
+            atom = self._atoms.get(atom_id)
+            if atom is not None:
+                before_positions[atom_id] = (atom.x, atom.y)
+        # Read item states before any atom moves: an atom-bound mark is
+        # repositioned by set_atom_positions, so its state must be the
+        # pre-drag one for every frame to rotate from.
+        item_states = tuple(
+            (item, self._scene_item_state(item)) for item in transform_items
+        )
+        return RotationDragSession(
+            center=QPointF(center),
+            press_pos=QPointF(press_pos),
+            before_positions=before_positions,
+            item_states=item_states,
+        )
 
-__all__ = ["SceneTransformController"]
+    def update_rotation_drag(
+        self,
+        session: RotationDragSession,
+        pos: QPointF,
+        *,
+        snap_step: float | None = None,
+    ) -> None:
+        angle = rotation_drag_angle(
+            session.center, session.press_pos, pos, snap_step=snap_step
+        )
+        if angle == session.angle_degrees:
+            return
+        session.angle_degrees = angle
+        after_positions, item_updates = self._rotation_drag_result(session)
+        if after_positions:
+            self._set_atom_positions(after_positions, update_selection=False)
+        if angle == 0.0:
+            # Back at the start: items that turned earlier in this drag return
+            # to the state captured at the press.
+            item_updates = [
+                (item, before_state, before_state)
+                for item, before_state in session.item_states
+                if before_state
+            ]
+        for item, _before_state, after_state in item_updates:
+            self._apply_scene_item_state(item, after_state)
+        refresh_selection_outline_for(self.canvas)
+
+    def rotation_drag_command(
+        self, session: RotationDragSession
+    ) -> HistoryCommand | None:
+        """The one history command for a finished drag; ``None`` if it did not turn."""
+        after_positions, item_updates = self._rotation_drag_result(session)
+        commands: list[HistoryCommand] = []
+        if after_positions and session.before_positions != after_positions:
+            commands.append(
+                SetAtomPositionsCommand(
+                    before_positions=dict(session.before_positions),
+                    after_positions=after_positions,
+                )
+            )
+        for item, before_state, after_state in item_updates:
+            commands.append(UpdateSceneItemCommand(item, before_state, after_state))
+        if not commands:
+            return None
+        if len(commands) == 1:
+            return commands[0]
+        return CompositeCommand(commands)
+
+    def _rotation_drag_result(
+        self, session: RotationDragSession
+    ) -> tuple[dict[int, tuple[float, float]], list[tuple[QGraphicsItem, dict, dict]]]:
+        angle_degrees = session.angle_degrees
+        if angle_degrees == 0.0:
+            # Rotating by nothing is the identity, which floating-point
+            # rotation is not: hand back the captured positions themselves so
+            # a drag that returns to its start restores the document exactly.
+            return dict(session.before_positions), []
+        angle_radians = math.radians(angle_degrees)
+        after_positions: dict[int, tuple[float, float]] = {}
+        for atom_id, (x, y) in session.before_positions.items():
+            rotated = rotated_point(QPointF(x, y), session.center, angle_radians)
+            after_positions[atom_id] = (rotated.x(), rotated.y())
+        item_updates: list[tuple[QGraphicsItem, dict, dict]] = []
+        for item, before_state in session.item_states:
+            after_state = rotate_scene_item_state(
+                item,
+                before_state,
+                center=session.center,
+                angle_degrees=angle_degrees,
+                transformed_atom_positions=after_positions,
+                atoms=self._atoms,
+                ts_bracket_rect_from_state=ts_bracket_rect_from_state,
+            )
+            if not before_state or not after_state or before_state == after_state:
+                continue
+            item_updates.append((item, before_state, after_state))
+        return after_positions, item_updates
+
+
+__all__ = ["RotationDragSession", "SceneTransformController"]

@@ -16,20 +16,8 @@ from chemvas.ui.selection_service_access import selection_service_from_canvas
 from chemvas.ui.selection_style_state import selection_style_state_for
 
 
-def selected_highlight_items_for(canvas) -> list:
-    return selection_style_state_for(canvas).selected_items
-
-
-def set_selected_highlight_items_for(canvas, items: list) -> None:
-    selection_style_state_for(canvas).selected_items = items
-
-
 def selection_color_for(canvas):
     return selection_style_state_for(canvas).color
-
-
-def selection_stroke_delta_for(canvas) -> float:
-    return float(selection_style_state_for(canvas).stroke_delta)
 
 
 def suspend_selection_outline_for(canvas) -> bool:
@@ -105,11 +93,8 @@ def selection_indicator_rect_for_atom_for(canvas, atom_id: int):
 __all__ = [
     "atom_center_point_for",
     "restore_selection_from_ids_for",
-    "selected_highlight_items_for",
     "selection_bond_overlay_width_for",
     "selection_color_for",
     "selection_indicator_rect_for_atom_for",
-    "selection_stroke_delta_for",
-    "set_selected_highlight_items_for",
     "suspend_selection_outline_for",
 ]

@@ -6,6 +6,7 @@ from unittest import mock
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PyQt6.QtCore import QPointF
+from PyQt6.QtGui import QTransform
 from PyQt6.QtWidgets import QApplication
 
 from chemvas.domain.document import Atom, Bond
@@ -90,6 +91,7 @@ class CanvasHitTestingServiceTest(unittest.TestCase):
         handle_item = _FakeItem("handle")
         canvas = SimpleNamespace(
             renderer=_renderer_double(),
+            viewportTransform=QTransform,
             scene=lambda: _FakeScene([_FakeItem("atom"), handle_item]),
             runtime_state=canvas_runtime_state(
                 bond_graphics_state=CanvasBondGraphicsState()
@@ -103,6 +105,7 @@ class CanvasHitTestingServiceTest(unittest.TestCase):
 
         near_bond_canvas = SimpleNamespace(
             renderer=_renderer_double(),
+            viewportTransform=QTransform,
             scene=lambda: _FakeScene([handle_item]),
             runtime_state=canvas_runtime_state(
                 bond_graphics_state=CanvasBondGraphicsState()
@@ -120,6 +123,7 @@ class CanvasHitTestingServiceTest(unittest.TestCase):
         atom_item = _FakeItem("atom")
         canvas = SimpleNamespace(
             renderer=_renderer_double(),
+            viewportTransform=QTransform,
             scene=lambda: _FakeScene(
                 [
                     _FakeItem("selection_outline"),
@@ -142,6 +146,7 @@ class CanvasHitTestingServiceTest(unittest.TestCase):
         nearby_bond_graphic = _FakeItem("bond_graphic")
         fallback_canvas = SimpleNamespace(
             renderer=_renderer_double(),
+            viewportTransform=QTransform,
             scene=lambda: _FakeScene([_FakeItem("note_box"), _FakeItem("other")]),
             runtime_state=canvas_runtime_state(
                 bond_graphics_state=CanvasBondGraphicsState()
@@ -157,6 +162,7 @@ class CanvasHitTestingServiceTest(unittest.TestCase):
 
         empty_fallback_canvas = SimpleNamespace(
             renderer=_renderer_double(),
+            viewportTransform=QTransform,
             scene=lambda: _FakeScene([_FakeItem("note_box"), _FakeItem("other")]),
             runtime_state=canvas_runtime_state(
                 bond_graphics_state=CanvasBondGraphicsState()

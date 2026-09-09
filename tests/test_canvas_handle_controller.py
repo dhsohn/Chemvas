@@ -34,27 +34,14 @@ class CanvasHandleControllerTest(unittest.TestCase):
             show_curved_handles=mock.Mock(),
             create_handle=mock.Mock(return_value="handle"),
         )
-        styler = SimpleNamespace(
-            set_selection_highlight=mock.Mock(),
-            clear_selection_highlight=mock.Mock(),
-            apply_selection_style=mock.Mock(),
+        controller = CanvasHandleController(canvas, handle_overlay_service=overlay)
+        controller.clear_handles()
+        controller.show_orbital_handles("orbital")
+        controller.show_curved_handles("curved")
+        self.assertEqual(
+            controller.create_handle(QPointF(1.0, 2.0), "orbital_scale", "target"),
+            "handle",
         )
-
-        with mock.patch(
-            "chemvas.ui.canvas_handle_controller.selection_highlight_styler_for",
-            return_value=styler,
-        ) as styler_for:
-            controller = CanvasHandleController(canvas, handle_overlay_service=overlay)
-            controller.clear_handles()
-            controller.show_orbital_handles("orbital")
-            controller.show_curved_handles("curved")
-            self.assertEqual(
-                controller.create_handle(QPointF(1.0, 2.0), "orbital_scale", "target"),
-                "handle",
-            )
-            controller.set_selection_highlight(["item"])
-            controller.clear_selection_highlight()
-            controller.apply_selection_style("item", True)
 
         overlay.clear_handles.assert_called_once_with()
         overlay.show_orbital_handles.assert_called_once_with("orbital")
@@ -62,10 +49,6 @@ class CanvasHandleControllerTest(unittest.TestCase):
         overlay.create_handle.assert_called_once_with(
             QPointF(1.0, 2.0), "orbital_scale", "target"
         )
-        self.assertEqual(styler_for.call_count, 3)
-        styler.set_selection_highlight.assert_called_once_with(["item"])
-        styler.clear_selection_highlight.assert_called_once_with()
-        styler.apply_selection_style.assert_called_once_with("item", True)
 
     def test_update_handle_drag_mutation_wrappers_and_snap_distance(self) -> None:
         mutation_service = SimpleNamespace(

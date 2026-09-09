@@ -239,7 +239,7 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
             clear_scene=mock.Mock(side_effect=lambda: events.append("clear")),
             model="old-model",
             runtime_state=_document_runtime_state(
-                selection_style_state=SelectionStyleState(selected_items=[object()]),
+                selection_style_state=SelectionStyleState(),
                 selection_info_state=SimpleNamespace(
                     callback=selection_callback,
                     signature=(frozenset({1}), frozenset()),
@@ -297,7 +297,6 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
         self.assertEqual(history_state_for(canvas).history, [])
         self.assertEqual(history_state_for(canvas).redo_stack, [])
         selection_info = selection_info_state_for(canvas)
-        self.assertEqual(selection_style_state_for(canvas).selected_items, [])
         self.assertIs(selection_info.callback, selection_callback)
         self.assertIsNone(selection_info.signature)
         self.assertIsNone(selection_info.pending_signature)
@@ -818,7 +817,7 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
             scene_items=scene_registry,
             scene=lambda: scene,
             runtime_state=_document_runtime_state(
-                selection_style_state=SelectionStyleState(selected_items=[parent_item])
+                selection_style_state=SelectionStyleState()
             ),
         )
 
@@ -892,9 +891,6 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
             self.assertIs(child_item.scene(), scene)
             self.assertIs(canvas.scene_items, scene_registry)
             self.assertEqual(canvas.scene_items, [parent_item, child_item])
-            self.assertEqual(
-                selection_style_state_for(canvas).selected_items, [parent_item]
-            )
             self.assertTrue(parent_item.isSelected())
             self.assertIs(scene.focusItem(), parent_item)
             canvas.services.history_service.undo()
@@ -1118,8 +1114,6 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
             item.setSelected(True)
 
         selection_style = selection_style_state_for(canvas)
-        original_highlights = list(selected_items)
-        selection_style.selected_items = original_highlights
         selection_style.suspend_outline = True
         selection_info = selection_info_state_for(canvas)
         selection_callback = mock.Mock()
@@ -1156,8 +1150,6 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
 
         self.assertTrue(all(item.scene() is canvas.scene() for item in selected_items))
         self.assertTrue(all(item.isSelected() for item in selected_items))
-        self.assertIs(selection_style.selected_items, original_highlights)
-        self.assertEqual(selection_style.selected_items, selected_items)
         self.assertTrue(selection_style.suspend_outline)
         self.assertIs(selection_info.callback, selection_callback)
         self.assertEqual(
@@ -1182,7 +1174,6 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
 
         self.assertEqual(canvas.scene().items(), [])
         self.assertEqual(canvas.model.atoms, {})
-        self.assertEqual(selection_style.selected_items, [])
         self.assertFalse(selection_style.suspend_outline)
         self.assertIsNone(selection_info.signature)
         self.assertIsNone(selection_info.pending_signature)

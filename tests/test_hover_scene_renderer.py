@@ -67,8 +67,9 @@ class HoverSceneRendererTest(unittest.TestCase):
         self.assertEqual(atom_indicator.rect().y(), -7.5)
         self.assertEqual(atom_indicator.rect().width(), 7.0)
         self.assertEqual(atom_indicator.rect().height(), 7.0)
-        self.assertEqual(atom_indicator.pen().color(), QColor("#9a9a9a"))
-        self.assertEqual(atom_indicator.brush().color(), QColor(190, 190, 190, 80))
+        # The selection accent, faint: hover previews what selecting shows.
+        self.assertEqual(atom_indicator.pen().color(), QColor(13, 148, 136, 150))
+        self.assertEqual(atom_indicator.brush().color(), QColor(13, 148, 136, 30))
         self.assertEqual(atom_indicator.zValue(), 5.0)
 
         self.assertEqual(bond_indicator.rect().x(), 2.0)

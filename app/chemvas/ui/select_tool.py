@@ -7,7 +7,11 @@ from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QApplication, QGraphicsView
 
 from chemvas.domain.document import VALID_ARROW_KINDS, VALID_CURVED_ARROW_KINDS
-from chemvas.features.selection import SelectionPressContext, plan_selection_press
+from chemvas.features.selection import (
+    ROTATION_HANDLE_TYPE,
+    SelectionPressContext,
+    plan_selection_press,
+)
 from chemvas.ui.handle_overlay_access import (
     clear_handles_for,
     show_curved_handles_for,
@@ -26,6 +30,10 @@ from chemvas.ui.selection_service_access import (
 )
 from chemvas.ui.tool_base import Tool
 
+# Holding Shift while turning the rotation handle snaps the sweep to this
+# many degrees, so a scheme can be squared up without typing an angle.
+ROTATION_SNAP_STEP_DEGREES = 15.0
+
 
 class SelectTool(SelectionDragMixin, Tool):
     def __init__(self, canvas, *, context=None) -> None:
@@ -34,6 +42,7 @@ class SelectTool(SelectionDragMixin, Tool):
         self._active_handle = None
         self._handle_target = None
         self._handle_before_state: dict | None = None
+        self._rotation_session = None
         self._pending_arrow_handle_item = None
         self._pending_arrow_handle_action: str | None = None
         self._pending_shape_handle_item = None
@@ -98,7 +107,43 @@ class SelectTool(SelectionDragMixin, Tool):
                 self._clear_pending_handle_toggle()
                 self._reset_selection_drag_state()
 
+    def _cancel_rotation_drag(
+        self,
+        original_error: BaseException | None = None,
+        *,
+        token=None,
+    ) -> None:
+        if token is None:
+            if self._drag_transaction is None:
+                self._rotation_session = None
+                return
+            token = self._require_drag_token()
+        try:
+            self._cancel_drag_transaction(token, original_error)
+        finally:
+            if self._drag_transaction is None:
+                self._rotation_session = None
+
+    def _commit_rotation_drag(self) -> None:
+        session = self._rotation_session
+        self._require_drag_token()
+
+        def commit(owner) -> None:
+            command = self.context.rotation_drag_command(session)
+            self._ensure_drag_owner(owner, phase="reading its rotation result")
+            if command is not None:
+                self._push_drag_history(owner, command)
+
+        try:
+            self._commit_drag_transaction(commit)
+        finally:
+            if self._drag_transaction is None:
+                self._rotation_session = None
+
     def _cancel_active_interaction(self) -> None:
+        if self._rotation_session is not None:
+            self._cancel_rotation_drag()
+            return
         if self._active_handle is not None:
             self._cancel_handle_drag()
             return
@@ -258,6 +303,15 @@ class SelectTool(SelectionDragMixin, Tool):
             if self.context.toggle_item_selection(item):
                 return True
         item = self.context.item_at_event(event)
+        if item is not None and item.data(1) == ROTATION_HANDLE_TYPE:
+            session = self.context.begin_rotation_drag(
+                self.context.scene_pos_from_event(event)
+            )
+            if session is None:
+                return False
+            self._begin_drag_transaction()
+            self._rotation_session = session
+            return True
         if item is not None and item.data(0) == "handle":
             handle_target = item.data(2)
             handle_before_state = scene_item_state_for(
@@ -366,6 +420,24 @@ class SelectTool(SelectionDragMixin, Tool):
 
     @override
     def on_mouse_move(self, event) -> bool:
+        if self._rotation_session is not None:
+            scene_pos = self.context.scene_pos_from_event(event)
+            token = self._require_drag_token()
+            snap_step = (
+                ROTATION_SNAP_STEP_DEGREES
+                if event.modifiers() & Qt.KeyboardModifier.ShiftModifier
+                else None
+            )
+            try:
+                self._prepare_drag_mutation(token)
+                self.context.update_rotation_drag(
+                    self._rotation_session, scene_pos, snap_step=snap_step
+                )
+                self._ensure_drag_owner(token, phase="turning its selection")
+            except Exception as original_error:
+                self._cancel_rotation_drag(original_error, token=token)
+                raise
+            return True
         if self._active_handle is not None:
             scene_pos = self.context.scene_pos_from_event(event)
             token = self._require_drag_token()
@@ -419,6 +491,9 @@ class SelectTool(SelectionDragMixin, Tool):
 
     @override
     def on_mouse_release(self, event) -> bool:
+        if self._rotation_session is not None:
+            self._commit_rotation_drag()
+            return True
         if self._active_handle is not None:
             self._commit_handle_drag()
             return True

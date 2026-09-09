@@ -79,7 +79,6 @@ from chemvas.ui.selection_collection_access import (
     selection_items_for_copy_for,
 )
 from chemvas.ui.selection_info_state import selection_info_state_for
-from chemvas.ui.selection_style_access import set_selected_highlight_items_for
 from chemvas.ui.structure_payload_access import (
     build_3d_conversion_payload_for,
     build_selected_3d_conversion_payload_for,
@@ -706,7 +705,6 @@ class CanvasDocumentSessionService:
         )
 
     def _clear_detached_selection_state(self) -> None:
-        set_selected_highlight_items_for(self.canvas, [])
         selection_info_state = selection_info_state_for(self.canvas)
         selection_info_state.signature = None
         selection_info_state.pending_signature = None

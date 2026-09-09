@@ -36,7 +36,6 @@ LEGACY_CANVAS_SERVICE_NAMES = frozenset(
         "handle_overlay_service",
         "handle_mutation_service",
         "curved_arrow_path_service",
-        "selection_highlight_styler",
         "move_controller",
         "note_controller",
         "pointer_controller",
@@ -1651,7 +1650,6 @@ def test_selection_controller_delegates_note_selection_details() -> None:
     controller_pattern = re.compile(
         r"\bselected_notes_for\b|\badd_selected_note_for\b|\bremove_selected_note_for\b"
         r"|\bclear_selected_notes_for\b|\bNoSelectRectItem\b|\btext_style_state_for\b"
-        r"|\bselection_stroke_delta_for\b"
     )
     service_pattern = re.compile(r"\bclass SelectionNoteService\b|\bnote_select\b")
 
@@ -1840,7 +1838,7 @@ def test_canvas_services_delegates_document_service_assembly_to_bundle() -> None
 def test_canvas_services_delegates_scene_view_service_assembly_to_bundle() -> None:
     direct_instantiation = re.compile(
         r"\b(?:CanvasGeometryController|CanvasRingFillSceneService|"
-        r"SceneItemController|SelectionHighlightStyler)\("
+        r"SceneItemController)\("
     )
 
     assert _matching_lines(direct_instantiation, _service_assembly_paths()) == []
@@ -2009,15 +2007,6 @@ def test_graph_service_fallback_resolution_is_centralized() -> None:
 CONTEXT_FACADE_RULES: tuple[
     tuple[str | None, tuple[str, ...], tuple[str, ...]], ...
 ] = (
-    (
-        "selection_highlight_context.py",
-        ("selection_highlight_styler.py",),
-        (
-            r"\bSelectionHighlightContext\b",
-            r"\bselection_highlight_context_for\b",
-            r"self\.context\b",
-        ),
-    ),
     (
         "curved_arrow_path_context.py",
         ("curved_arrow_path_service.py",),
