@@ -50,6 +50,11 @@ class ImageItem(QGraphicsRectItem):
     def image(self) -> QImage:
         return QImage(self._image)
 
+    def export_scene_bounding_rect(self) -> QRectF:
+        if self.effectiveOpacity() <= 0.0:
+            return QRectF()
+        return self.sceneBoundingRect()
+
     def image_state(self) -> dict[str, object]:
         state = dict(self.data(1))
         state.update(

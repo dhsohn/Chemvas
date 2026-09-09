@@ -139,6 +139,12 @@ The original 16-bit PNG file and its SVG raster can retain that precision;
 PDF and whole-figure PNG export are 8-bit display outputs. Use the native
 embedded source when the original pixel precision is needed.
 
+Images with zero effective object opacity do not contribute to whole-canvas or
+selection figure export bounds; a figure containing only those images has nothing
+to export. Positive-opacity images retain their full rectangle, including
+transparent pixel margins. Native image state and the original selection frame
+used by bitmap clipboard copy are unchanged.
+
 Image text is raster content: `--min-font-pt` measures native text, not NMR labels
 or SEM scale bars inside an image. There is no OCR or scientific annotation
 validation. The editable SVG input envelope is bounded at 256 MiB (native payload

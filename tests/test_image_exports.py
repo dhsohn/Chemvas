@@ -12,7 +12,7 @@ import pytest
 from PIL import Image
 from PyQt6.QtCore import QRectF
 from PyQt6.QtGui import QImage
-from PyQt6.QtWidgets import QApplication, QGraphicsScene
+from PyQt6.QtWidgets import QApplication, QGraphicsRectItem, QGraphicsScene
 
 from chemvas.bootstrap import document_render
 from chemvas.bootstrap.document_cli_shared import (
@@ -139,6 +139,117 @@ def test_svg_and_png_apply_object_opacity_without_changing_source(tmp_path):
     assert output.pixelColor(63, 47).alpha() in {127, 128}
     assert output.pixelColor(1, 0).alpha() in {63, 64}
     assert base64.b64decode(item.image_state()["data_base64"]) == data
+
+
+@pytest.mark.parametrize("fmt", ["png", "svg", "pdf"])
+@pytest.mark.parametrize("selection", [False, True])
+@pytest.mark.parametrize("target_width", [None, 32])
+def test_zero_opacity_image_does_not_expand_export_bounds(
+    tmp_path, fmt, selection, target_width
+):
+    data = _source_bytes()
+    scene, visible = _scene(data)
+    hidden_state = image_state_from_bytes(
+        data, x=200_000, y=200_000, width=60_000, height=45_000, opacity=0
+    )
+    hidden = ImageItem(hidden_state)
+    scene.addItem(hidden)
+    items = [visible, hidden] if selection else None
+    assert hidden.isVisible() and hidden.effectiveOpacity() == 0
+    assert content_bounds(items or collect_export_items(scene)) == QRectF(0, 0, 64, 48)
+
+    path = tmp_path / f"visible-only.{fmt}"
+    plan = export_scene(
+        scene,
+        str(path),
+        fmt=fmt,
+        items=items,
+        margin=0,
+        dpi=72,
+        target_width_pt=target_width,
+    )
+
+    assert (plan.source_x, plan.source_y, plan.source_w, plan.source_h) == (
+        0,
+        0,
+        64,
+        48,
+    )
+    assert (plan.out_w_pt, plan.out_h_pt) == (
+        target_width or 64,
+        (target_width or 64) * 0.75,
+    )
+    assert path.stat().st_size > 0
+    if fmt == "png":
+        output = QImage(str(path))
+        assert output.width() == plan.out_w_pt
+        assert output.height() == plan.out_h_pt
+        assert output.pixelColor(output.width() - 1, output.height() - 1).alpha() == 255
+    assert hidden.image_state() == hidden_state
+    assert hidden.isVisible()
+
+
+@pytest.mark.parametrize("selection", [False, True])
+def test_only_zero_opacity_image_has_nothing_to_export(tmp_path, selection):
+    scene, item = _scene(_source_bytes(), opacity=0)
+    path = tmp_path / "empty.png"
+
+    with pytest.raises(ValueError, match="There is nothing to export"):
+        export_scene(
+            scene,
+            str(path),
+            fmt="png",
+            items=[item] if selection else None,
+            margin=0,
+            dpi=72,
+        )
+
+    assert not path.exists()
+    assert not item.sceneBoundingRect().isEmpty()
+
+
+def test_image_export_bounds_use_effective_opacity_without_changing_geometry():
+    scene, item = _scene(_source_bytes(), opacity=0.5)
+    parent = QGraphicsRectItem()
+    scene.addItem(parent)
+    item.setParentItem(parent)
+    bounds = item.sceneBoundingRect()
+    assert content_bounds([item]) == bounds
+
+    parent.setOpacity(0)
+
+    assert item.opacity() == 0.5 and item.effectiveOpacity() == 0
+    assert content_bounds([item]) is None
+    assert item.sceneBoundingRect() == bounds
+    parent.setOpacity(1)
+    assert content_bounds([item]) == bounds
+
+
+def test_fully_transparent_pixels_keep_frame_at_positive_object_opacity():
+    with BytesIO() as buffer:
+        Image.new("RGBA", (64, 48), (0, 0, 0, 0)).save(buffer, format="PNG")
+        data = buffer.getvalue()
+    scene, item = _scene(data, opacity=0.5)
+
+    assert content_bounds(collect_export_items(scene)) == QRectF(0, 0, 64, 48)
+    assert base64.b64decode(item.image_state()["data_base64"]) == data
+
+
+def test_zero_opacity_image_survives_native_and_mixed_editable_svg(tmp_path):
+    data = _source_bytes(image_format="JPEG")
+    state = _state(data, x=200_000, y=200_000, opacity=0)
+    state["images"].append(image_state_from_bytes(_source_bytes(), x=50, y=70))
+    native = tmp_path / "hidden-image.chemvas"
+    write_document(native, state, CANVAS_FILE_VERSION)
+    assert read_document(native).state["images"] == state["images"]
+
+    with offscreen_canvas(state, command="image-opacity-test") as (_canvas, service):
+        path = tmp_path / "hidden-image.svg"
+        service.export_figure(str(path), fmt="svg", scope="sheet", editable_svg=True)
+
+    restored = svg_roundtrip.extract_chemvas_document_from_svg(path)
+    assert restored.state["images"] == state["images"]
+    assert base64.b64decode(restored.state["images"][0]["data_base64"]) == data
 
 
 def _pdf_image_streams(data):
