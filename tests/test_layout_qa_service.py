@@ -24,6 +24,16 @@ from chemvas.ui.sheet_setup_state import SheetSetupState
 from tests.runtime_state import canvas_runtime_state
 
 
+@pytest.fixture(scope="module", autouse=True)
+def application() -> QApplication:
+    # Keep one owner alive across offscreen canvases and standalone text items.
+    # Recreating QApplication between cases can crash in Qt scene setup.
+    app = QApplication.instance() or QApplication([])
+    assert isinstance(app, QApplication)
+    app.setQuitOnLastWindowClosed(False)
+    return app
+
+
 def _molecular_state(*, charge: int = 0, attached_to_endpoint: bool = False):
     from chemvas.features.document_composition import compose_document_state
 
