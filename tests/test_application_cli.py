@@ -284,17 +284,24 @@ def test_qt_options_are_consumed_before_desktop_document_selection(
 ) -> None:
     script = textwrap.dedent("""
         import sys
+        from types import SimpleNamespace
         from PyQt6.QtWidgets import QApplication
-        from chemvas.bootstrap import application, window_registry
+        from chemvas.bootstrap import application, file_open, window_registry
+        from chemvas.core import rdkit_adapter
+        from chemvas.ui import session_recovery_service
         expected = sys.argv[5:]
-        def desktop_boundary():
-            app = QApplication.instance()
-            assert app is not None
-            assert app.arguments()[1:] == expected
+        opened = []
+        def desktop_boundary(app):
+            assert sys.argv[1:] == expected, (sys.argv[1:], expected)
             assert app.style().objectName() == 'fusion'
-            assert application._startup_document_path(app.arguments()) == (expected[0] if expected else None)
+            assert opened == expected[:1], (opened, expected[:1])
             raise SystemExit(7)
-        window_registry.open_new_window = desktop_boundary
+        QApplication.exec = desktop_boundary
+        window_registry.open_new_window = lambda: object()
+        file_open.open_document = opened.append
+        session_recovery_service.create_session_recovery_service = lambda: SimpleNamespace(
+            restore_previous=lambda window: None, start=lambda app: None)
+        rdkit_adapter.warm_rdkit_in_background = lambda: None
         application.main()
     """)
     env = os.environ.copy()

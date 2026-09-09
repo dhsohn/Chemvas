@@ -236,9 +236,9 @@ def main() -> None:
         apply_macos_app_name(APP_NAME)
 
         app = QApplication(sys.argv)
-        # Qt consumes its own platform/style options; validate only what remains
-        # before creating a window or touching the saved workspace.
-        desktop_arguments = app.arguments()
+        # PyQt removes Qt options from the supplied Python list. Keep its Unicode
+        # strings: Qt's arguments() can recode document paths on Windows.
+        desktop_arguments = list(sys.argv)
         for argument in desktop_arguments[1:]:
             if argument.startswith("-") or not is_desktop_document_path(argument):
                 _reject_startup_argument(argument)
