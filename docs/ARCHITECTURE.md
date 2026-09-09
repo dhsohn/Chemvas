@@ -120,6 +120,12 @@ above/below witness and use the same glyph paths against text, bonds, arrow
 strokes and shape borders; their comparisons are included in the pre-Qt budget.
 The report states diagnostic coverage without claiming semantic design approval.
 These read-only diagnostics do not add geometry changes or a parallel font renderer.
+Both default and sheet-only checks share one native-content containment pass,
+including molecular paint, decoration children and attached arrow labels.
+Sheet-only omits the pairwise work entirely, retains the input byte/record limits,
+and reports boundary coverage without collision counts or approval. Publication
+examples pin their final document bytes across checking and rendering; normal
+document Save/Open and output-only physical sizing remain independent.
 
 Explicit scheme layout uses a Qt-free request validator in
 `chemvas.features.scheme_layout`, a headless bootstrap command, and

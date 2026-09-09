@@ -241,10 +241,11 @@ def test_check_layout_reports_attached_label_outside_sheet(tmp_path: Path) -> No
     result = _run("check-layout", str(source))
     assert result.returncode == 1, result.stderr
     report = json.loads(result.stdout)
-    assert report["warning_count"] == 1
-    assert report["warnings"][0]["code"] == "outside-sheet"
-    assert report["warnings"][0]["items"] == [
-        {"kind": "arrow-label", "index": 0, "side": "below"}
+    assert report["warning_count"] == 2
+    assert all(w["code"] == "outside-sheet" for w in report["warnings"])
+    assert [w["items"] for w in report["warnings"]] == [
+        [{"kind": "arrow", "index": 0}],
+        [{"kind": "arrow-label", "index": 0, "side": "below"}],
     ]
 
 
@@ -259,6 +260,67 @@ def test_check_layout_rejects_documents_above_the_work_budget(tmp_path: Path) ->
     assert result.returncode == 2
     assert result.stdout == ""
     assert "layout work limit of 10000" in result.stderr
+
+
+@pytest.mark.parametrize("sheet_only", [False, True])
+def test_molecular_only_drawing_outside_sheet_fails_without_mutation(
+    tmp_path: Path, sheet_only: bool
+) -> None:
+    source = _compose(
+        tmp_path,
+        notes=[],
+        atoms=[
+            {"id": 0, "element": "C", "x": 1000.0, "y": 0.0},
+            {"id": 1, "element": "O", "x": 1040.0, "y": 0.0},
+        ],
+        bonds=[{"a": 0, "b": 1, "order": 1}],
+    )
+    before = source.read_bytes()
+    args = ["--sheet-only"] if sheet_only else []
+    result = _run("check-layout", str(source), *args)
+    assert result.returncode == 1, result.stderr
+    report = json.loads(result.stdout)
+    refs = [w["items"] for w in report["warnings"] if w["code"] == "outside-sheet"]
+    assert [{"kind": "bond", "atom_ids": [0, 1]}] in refs
+    assert [{"kind": "atom", "id": 1}] in refs
+    assert report["source_sha256"] == hashlib.sha256(before).hexdigest()
+    assert source.read_bytes() == before
+
+
+@pytest.mark.parametrize("x", [0.0, 1000.0])
+def test_sheet_only_checks_large_documents_without_claiming_collision_approval(
+    tmp_path: Path, x: float
+) -> None:
+    source = _compose(
+        tmp_path,
+        notes=[{"text": "overlap", "x": x, "y": 0.0} for _ in range(142)],
+    )
+    assert _run("check-layout", str(source)).returncode == 2
+    result = _run("check-layout", str(source), "--sheet-only")
+    assert result.returncode == (1 if x else 0), result.stderr
+    report = json.loads(result.stdout)
+    assert report["counts"] == {"outside-sheet": 142 if x else 0}
+    assert (
+        report["coverage"]["ok_meaning"]
+        == "No visible content outside the sheet; collisions were not checked."
+    )
+    assert "All collision checks (--sheet-only)." in report["coverage"]["not_checked"]
+
+
+def test_sheet_only_keeps_graphics_record_limit_before_qt(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys
+) -> None:
+    source = _compose(tmp_path, notes=[{"text": "bounded", "x": 0.0, "y": 0.0}])
+    monkeypatch.setattr(document_layout_check, "MAX_GRAPHICS_RECORDS", 0)
+
+    def forbidden(*args, **kwargs):
+        raise AssertionError("Qt started for refused input")
+
+    monkeypatch.setattr(document_layout_check, "_check_offscreen", forbidden)
+    with pytest.raises(SystemExit) as info:
+        document_layout_check.run(["check-layout", str(source), "--sheet-only"])
+    assert info.value.code == 2
+    assert "graphics-record layout limit" in capsys.readouterr().err
 
 
 def test_check_layout_reports_text_crossing_shape_border(tmp_path: Path) -> None:

@@ -4,6 +4,7 @@ import hashlib
 import json
 import math
 import os
+import runpy
 import subprocess
 import sys
 from collections import Counter
@@ -13,6 +14,12 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 RECIPE = ROOT / "examples" / "publication_comparison.py"
+
+
+@pytest.fixture(autouse=True)
+def _pin_recipe_child_source(monkeypatch):
+    # runpy uses pytest's import path, but recipe subprocesses do not inherit it.
+    monkeypatch.setenv("PYTHONPATH", str(ROOT / "app"))
 
 
 @pytest.fixture(scope="module")
@@ -186,6 +193,17 @@ def test_comparison_is_readable_at_one_common_physical_scale(comparison):
         assert Path(report["output"]).is_file()
     check = json.loads((directory / "comparison-check.json").read_text())
     assert check["ok"] and check["warning_count"] == 0
+    receipt = manifest["layout_check"]
+    assert receipt["report"] == "comparison-check.json"
+    assert (
+        receipt["sha256"]
+        == hashlib.sha256((directory / receipt["report"]).read_bytes()).hexdigest()
+    )
+    assert check["source_sha256"] == manifest["source_sha256"]
+    assert all(
+        report["source_sha256"] == manifest["source_sha256"]
+        for report in manifest["exports"].values()
+    )
     inventory = json.loads((directory / "comparison-graph.json").read_text())
     assert inventory["atom_count"] == 16 and inventory["bond_count"] == 8
 
@@ -226,3 +244,49 @@ def test_comparison_refuses_existing_directory_without_changes(comparison):
     assert before == {
         p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in directory.iterdir()
     }
+
+
+def test_comparison_rejects_outside_molecules_before_export(tmp_path, monkeypatch):
+    monkeypatch.syspath_prepend(str(ROOT / "examples"))
+    namespace = runpy.run_path(str(RECIPE))
+    real_command = namespace["command"]
+    called = []
+
+    def displaced(*args):
+        called.append(args[0])
+        report = real_command(*args)
+        if args[0] == "layout-document":
+            path = Path(args[-1])
+            native = json.loads(path.read_text())
+            for atom in native["state"]["model"]["atoms"].values():
+                atom["x"] += 1000
+            path.write_text(json.dumps(native))
+        return report
+
+    monkeypatch.setitem(namespace["build"].__globals__, "command", displaced)
+    directory = tmp_path / "new"
+    with pytest.raises(RuntimeError, match="outside-sheet"):
+        namespace["build"](directory)
+    assert "render-document" not in called
+    assert not (directory / "manifest.json").exists()
+
+
+def test_comparison_stops_on_stale_native_source_report(tmp_path, monkeypatch):
+    monkeypatch.syspath_prepend(str(ROOT / "examples"))
+    import publication_scheme
+
+    real_command = publication_scheme.command
+
+    def stale(*args):
+        report = real_command(*args)
+        if args[0] == "check-layout":
+            return {**report, "source_sha256": "0" * 64}
+        return report
+
+    monkeypatch.setattr(publication_scheme, "command", stale)
+    namespace = runpy.run_path(str(RECIPE))
+    directory = tmp_path / "new"
+    with pytest.raises(ValueError, match="source SHA-256"):
+        namespace["build"](directory)
+    assert not (directory / "comparison-probe.svg").exists()
+    assert not (directory / "manifest.json").exists()

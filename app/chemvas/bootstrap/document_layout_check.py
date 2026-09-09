@@ -35,14 +35,16 @@ def run(argv: list[str]) -> int:
             raise ValueError(
                 f"input document exceeds the {MAX_GRAPHICS_RECORDS}-graphics-record layout limit"
             )
-        layout_work_units = _layout_work_units(
-            cast("Mapping[str, object]", document.state)
-        )
-        if layout_work_units > MAX_LAYOUT_WORK_UNITS:
-            raise ValueError(
-                f"input document exceeds the layout work limit of {MAX_LAYOUT_WORK_UNITS}"
+        if not args.sheet_only:
+            layout_work_units = _layout_work_units(
+                cast("Mapping[str, object]", document.state)
             )
-        analysis = _check_offscreen(document.state)
+            if layout_work_units > MAX_LAYOUT_WORK_UNITS:
+                raise ValueError(
+                    f"input document exceeds the layout work limit of {MAX_LAYOUT_WORK_UNITS}; "
+                    "use --sheet-only for containment only (collisions remain unchecked)"
+                )
+        analysis = _check_offscreen(document.state, sheet_only=args.sheet_only)
         report = {
             "format": "chemvas-layout-check-report",
             "version": 1,
@@ -69,6 +71,11 @@ def _argument_parser() -> argparse.ArgumentParser:
         help="report deterministic layout warnings",
     )
     check.add_argument("document", help="input .chemvas document")
+    check.add_argument(
+        "--sheet-only",
+        action="store_true",
+        help="check all visible content against the sheet without pairwise collision checks",
+    )
     return parser
 
 
@@ -128,14 +135,16 @@ def _layout_work_units(state: Mapping[str, object]) -> int:
     )
 
 
-def _check_offscreen(state: dict[str, Any]) -> dict[str, object]:
+def _check_offscreen(
+    state: dict[str, Any], *, sheet_only: bool = False
+) -> dict[str, object]:
     with offscreen_canvas(state, command="check-layout", pin_locale=True) as (
         canvas,
         _,
     ):
         from chemvas.ui.layout_qa_service import check_canvas_layout
 
-        return check_canvas_layout(canvas)
+        return check_canvas_layout(canvas, sheet_only=sheet_only)
 
 
 __all__ = ["run"]

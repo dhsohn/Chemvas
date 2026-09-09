@@ -14,22 +14,28 @@ from PyQt6.QtGui import (
     QTransform,
 )
 from PyQt6.QtWidgets import (
+    QGraphicsEllipseItem,
+    QGraphicsItemGroup,
     QGraphicsLineItem,
     QGraphicsPolygonItem,
+    QGraphicsRectItem,
     QGraphicsTextItem,
     QStyleOptionGraphicsItem,
 )
 
-from chemvas.features.export import item_export_bounds
+from chemvas.features.export import EXPORT_EXCLUDED_KINDS, item_export_bounds
 from chemvas.ui.canvas_arrow_build_service import ARROW_LABEL_ROLE
-from chemvas.ui.canvas_atom_graphics_state import atom_items_for
+from chemvas.ui.canvas_atom_graphics_state import atom_dots_for, atom_items_for
 from chemvas.ui.canvas_bond_graphics_state import bond_items_for
 from chemvas.ui.canvas_model_access import bond_for_id
 from chemvas.ui.canvas_scene_items_state import (
     arrow_items_for,
     mark_items_for,
     note_items_for,
+    orbital_items_for,
+    ring_items_for,
     shape_items_for,
+    ts_bracket_items_for,
 )
 from chemvas.ui.sheet_setup_access import sheet_rect_for
 
@@ -50,7 +56,10 @@ _GEOMETRY_EPSILON = 0.01
 _SHEET_EPSILON = 0.01
 
 
-def check_canvas_layout(canvas: Any) -> dict[str, object]:
+def check_canvas_layout(canvas: Any, *, sheet_only: bool = False) -> dict[str, object]:
+    warnings = _sheet_boundary_warnings(canvas)
+    if sheet_only:
+        return _layout_report(warnings, sheet_only=True)
     notes = []
     note_paths = []
     for index, item in enumerate(note_items_for(canvas)):
@@ -66,7 +75,6 @@ def check_canvas_layout(canvas: Any) -> dict[str, object]:
         for index, item in enumerate(shape_items_for(canvas))
         if item.isVisible() and _has_visible_shape_paint(item)
     ]
-    warnings: list[dict[str, object]] = []
     atom_paths = []
     for atom_id, item in sorted(atom_items_for(canvas).items()):
         if not item.isVisible() or item.effectiveOpacity() <= 0.0:
@@ -151,40 +159,31 @@ def check_canvas_layout(canvas: Any) -> dict[str, object]:
     warnings.extend(_molecular_text_bond_warnings(canvas, atom_paths, bond_paths))
     warnings.extend(_arrow_structure_warnings(canvas, atom_paths, bond_paths))
 
-    sheet = sheet_rect_for(canvas).adjusted(
-        -_SHEET_EPSILON,
-        -_SHEET_EPSILON,
-        _SHEET_EPSILON,
-        _SHEET_EPSILON,
-    )
-    for kind, records in (("note", notes), ("shape", shapes)):
-        for index, item in records:
-            bounds = item_export_bounds(item)
-            if sheet.contains(bounds):
-                continue
-            warnings.append(
-                _warning(
-                    "outside-sheet",
-                    [{"kind": kind, "index": index}],
-                    bounds,
-                    f"{kind.capitalize()} extends outside the sheet.",
-                )
-            )
-
     warnings.extend(
-        _arrow_label_warnings(canvas, atom_paths, note_paths, bond_paths, shapes, sheet)
+        _arrow_label_warnings(canvas, atom_paths, note_paths, bond_paths, shapes)
     )
+    return _layout_report(warnings, sheet_only=False)
 
-    warnings.sort(key=_warning_sort_key)
-    counts = {code: 0 for code in WARNING_CODES}
-    for warning in warnings:
-        counts[str(warning["code"])] += 1
-    return {
-        "ok": not warnings,
-        "warning_count": len(warnings),
-        "counts": counts,
-        "warnings": warnings,
-        "coverage": {
+
+def _layout_report(
+    warnings: list[dict[str, object]], *, sheet_only: bool
+) -> dict[str, object]:
+    containment = (
+        "Visible atoms, bonds, notes, marks, arrows and attached labels, "
+        "shapes, TS brackets, orbitals and ring fills outside the sheet."
+    )
+    unchecked = [
+        "Aesthetic quality, semantic label ownership, chemical correctness or stereochemical meaning.",
+        "Final print-size readability; use the export readability guard separately.",
+    ]
+    if sheet_only:
+        coverage = {
+            "ok_meaning": "No visible content outside the sheet; collisions were not checked.",
+            "checked": [containment],
+            "not_checked": [*unchecked, "All collision checks (--sheet-only)."],
+        }
+    else:
+        coverage = {
             "ok_meaning": "No warnings in the checked collision and sheet-boundary classes.",
             "checked": [
                 "Visible atom, note and attached arrow-label ink pairs.",
@@ -192,18 +191,132 @@ def check_canvas_layout(canvas: Any) -> dict[str, object]:
                 "Arrow strokes against atom labels and molecular bonds.",
                 "Attached arrow-label ink against molecular bonds and own or other arrow strokes.",
                 "Notes and attached arrow-label ink against shape borders.",
-                "Notes, shapes and attached arrow labels outside the sheet.",
+                containment,
             ],
             "not_checked": [
-                "Aesthetic quality, semantic label ownership, chemical correctness or stereochemical meaning.",
-                "Final print-size readability; use the export readability guard separately.",
+                *unchecked,
                 "Other collision pairs, including note-bond, note-arrow, bond-bond, arrow-arrow and charge-text pairs.",
-                "TS brackets, orbitals, ring fills and other standalone marks.",
-                "Automatic list markers outside the collected text glyph runs.",
-                "Sheet containment of molecular structures and arrow strokes.",
+                "Collisions involving TS brackets, orbitals, ring fills and other standalone marks.",
+                "Automatic list markers outside the collected text glyph runs in collision checks.",
             ],
-        },
+        }
+
+    warnings.sort(key=_warning_sort_key)
+    counts = {code: 0 for code in (("outside-sheet",) if sheet_only else WARNING_CODES)}
+    for warning in warnings:
+        counts[str(warning["code"])] += 1
+    return {
+        "ok": not warnings,
+        "warning_count": len(warnings),
+        "counts": counts,
+        "warnings": warnings,
+        "coverage": coverage,
     }
+
+
+def _sheet_boundary_warnings(canvas: Any) -> list[dict[str, object]]:
+    """Containment has no pairwise work and is shared by both check modes."""
+    sheet = sheet_rect_for(canvas).adjusted(
+        -_SHEET_EPSILON, -_SHEET_EPSILON, _SHEET_EPSILON, _SHEET_EPSILON
+    )
+    warnings: list[dict[str, object]] = []
+
+    def check(ref: dict[str, object], bounds: QRectF | None) -> None:
+        if bounds is None or bounds.isNull():
+            return
+        if not all(math.isfinite(v) for v in bounds.getRect()):
+            raise ValueError("Cannot measure non-finite native content bounds.")
+        if not sheet.contains(bounds):
+            warnings.append(
+                _warning(
+                    "outside-sheet",
+                    [ref],
+                    bounds,
+                    "Visible content extends outside the sheet.",
+                )
+            )
+
+    for atom_id, item in sorted(atom_items_for(canvas).items()):
+        check(
+            {"kind": "atom", "id": atom_id}, _sheet_item_bounds(item, atom_label=True)
+        )
+    for atom_id, item in sorted(atom_dots_for(canvas).items()):
+        check({"kind": "atom", "id": atom_id}, _sheet_item_bounds(item))
+    for atom_ids, path in _molecular_bond_paths(canvas):
+        check({"kind": "bond", "atom_ids": atom_ids}, path.boundingRect())
+    for kind, items in (
+        ("note", note_items_for(canvas)),
+        ("mark", mark_items_for(canvas)),
+        ("arrow", arrow_items_for(canvas)),
+        ("shape", shape_items_for(canvas)),
+        ("ts_bracket", ts_bracket_items_for(canvas)),
+        ("orbital", orbital_items_for(canvas)),
+        ("ring", ring_items_for(canvas)),
+    ):
+        for index, item in enumerate(items):
+            ref: dict[str, object] = {"kind": kind, "index": index}
+            check(ref, _sheet_item_bounds(item))
+            if kind == "arrow":
+                for child in item.childItems():
+                    if child.data(0) != ARROW_LABEL_ROLE:
+                        continue
+                    side = child.data(1)
+                    if side not in {"above", "below"}:
+                        raise ValueError(
+                            "Arrow label has no valid above/below side metadata."
+                        )
+                    check(
+                        {"kind": "arrow-label", "index": index, "side": side},
+                        _sheet_item_bounds(child),
+                    )
+    return warnings
+
+
+def _sheet_item_bounds(item: Any, *, atom_label: bool = False) -> QRectF | None:
+    if not item.isVisible() or item.effectiveOpacity() <= 0.0:
+        return None
+    if isinstance(item, QGraphicsTextItem):
+        path = (
+            _atom_label_scene_path(item) if atom_label else note_paint_scene_path(item)
+        )
+        # Keep native text/export bounds, excluding the atom-label hit halo.
+        # Notes retain their editable text box, including native list indentation.
+        if path.isEmpty() and not _has_visible_list_marker(item):
+            return None
+        bounds = item_export_bounds(item)
+        # Italic bearings and scripts can paint beyond Qt's text box.
+        return bounds if path.isEmpty() else bounds.united(path.boundingRect())
+    bounds = QRectF()
+    if not isinstance(item, QGraphicsItemGroup):
+        bounds = _graphics_paint_scene_path(item).boundingRect()
+    for child in item.childItems():
+        if child.data(0) in EXPORT_EXCLUDED_KINDS or child.data(0) == ARROW_LABEL_ROLE:
+            continue
+        child_bounds = _sheet_item_bounds(child)
+        if child_bounds is not None:
+            bounds = child_bounds if bounds.isNull() else bounds.united(child_bounds)
+    return None if bounds.isNull() else bounds
+
+
+def _has_visible_list_marker(item: QGraphicsTextItem) -> bool:
+    # Qt paints list markers outside glyphRuns(), including empty list items.
+    # Use its block formatting; do not reconstruct marker glyphs or positions.
+    document = item.document()
+    assert document is not None
+    block = document.begin()
+    while block.isValid():
+        text_list = block.textList()
+        if text_list is not None:
+            brush = block.charFormat().foreground()
+            color = (
+                item.defaultTextColor()
+                if brush.style() == Qt.BrushStyle.NoBrush
+                else brush.color()
+            )
+            if color.alpha() > 0:
+                return True
+        block = block.next()
+    return False
 
 
 def _arrow_label_warnings(
@@ -212,7 +325,6 @@ def _arrow_label_warnings(
     note_paths: list[tuple[int, QPainterPath]],
     bond_paths: list[tuple[list[int], QPainterPath]],
     shapes: list[tuple[int, Any]],
-    sheet: QRectF,
 ) -> list[dict[str, object]]:
     warnings: list[dict[str, object]] = []
     text_paths: list[tuple[dict[str, object], QPainterPath]] = [
@@ -275,16 +387,6 @@ def _arrow_label_warnings(
                             "Attached arrow label crosses painted geometry.",
                         )
                     )
-            bounds = label_path.boundingRect()
-            if not sheet.contains(bounds):
-                warnings.append(
-                    _warning(
-                        "outside-sheet",
-                        [ref],
-                        bounds,
-                        "Attached arrow label extends outside the sheet.",
-                    )
-                )
             text_paths.append((ref, label_path))
     return warnings
 
@@ -601,6 +703,12 @@ def _graphics_paint_scene_path(item: Any) -> QPainterPath:
         path.setFillRule(item.fillRule())
         path.addPolygon(item.polygon())
         path.closeSubpath()
+    elif isinstance(item, QGraphicsEllipseItem):
+        path = QPainterPath()
+        path.addEllipse(item.rect())
+    elif isinstance(item, QGraphicsRectItem):
+        path = QPainterPath()
+        path.addRect(item.rect())
     else:
         path = item.path()
     painted = _stroke_path(path, item.pen())

@@ -12,7 +12,7 @@ import json
 import subprocess
 from pathlib import Path
 
-from publication_scheme import command, compose, sha256, write_json
+from publication_scheme import command, compose, document_command, sha256, write_json
 
 BOND_UNITS = 20.0
 BOND_MM = 5.0
@@ -141,9 +141,16 @@ def build(directory: Path) -> dict:
     write_json(directory / "comparison-graph.json", command("inspect-document", final))
     # A warning is a nonzero exit, so command() stops before rendering. Passing
     # collision checks still does not establish visual or scientific suitability.
-    write_json(directory / "comparison-check.json", command("check-layout", final))
-    probe = command(
-        "render-document", final, "--output", directory / "comparison-probe.svg"
+    source_sha256 = sha256(final)
+    qa = document_command("check-layout", final, source_sha256)
+    layout_report = directory / "comparison-check.json"
+    write_json(layout_report, qa)
+    probe = document_command(
+        "render-document",
+        final,
+        source_sha256,
+        "--output",
+        directory / "comparison-probe.svg",
     )
     scene_width = probe["width_points"] / (14.4 / RENDERER_METRIC)
     width_mm = scene_width * MM_PER_UNIT
@@ -154,9 +161,10 @@ def build(directory: Path) -> dict:
     exports = {}
     for extension in ("svg", "png"):
         path = directory / f"comparison.{extension}"
-        report = command(
+        report = document_command(
             "render-document",
             final,
+            source_sha256,
             "--output",
             path,
             "--width-mm",
@@ -175,7 +183,8 @@ def build(directory: Path) -> dict:
         "version": 1,
         "synthetic_example_only": True,
         "document": final.name,
-        "source_sha256": sha256(final),
+        "source_sha256": source_sha256,
+        "layout_check": {"report": layout_report.name, "sha256": sha256(layout_report)},
         "bond_units": BOND_UNITS,
         "bond_mm": BOND_MM,
         "mm_per_unit": MM_PER_UNIT,
