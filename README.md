@@ -45,6 +45,9 @@ For drawing and figure export without RDKit, use `pip install chemvas`.
 PyQt6 is included in either installation. Desktop installers are not available
 yet; the supported distribution is the Python package.
 
+For local Windows executable and installer builds, see the
+[Windows preparation guide](https://github.com/dhsohn/Chemvas/blob/main/packaging/windows/README.md).
+
 ## Your first reaction scheme
 
 ![Chemvas walkthrough: insert structures, label an arrow, align the scheme, and export SVG](https://raw.githubusercontent.com/dhsohn/Chemvas/main/docs/images/demo.gif)

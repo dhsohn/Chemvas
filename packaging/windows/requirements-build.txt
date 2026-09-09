@@ -1,0 +1,2 @@
+# Install only into the explicitly prepared Windows build environment.
+PyInstaller==6.22.2

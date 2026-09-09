@@ -41,6 +41,13 @@ a `.chemvas` file is handled cross-platform: Windows/Linux pass the path in `arg
 (read by `_startup_document_path`), and macOS delivers a `QEvent.FileOpen` that
 `chemvas.adapters.qt.FileOpenEventFilter` routes to the bootstrap loader.
 
+## Windows installer
+
+The [Windows build guide](windows/README.md) describes the native x64 build,
+GUI and console executables, per-user Inno Setup installer, and `.chemvas`
+Open with registration. Desktop binaries are still local trial artifacts,
+not published releases.
+
 ## Linux desktop integration
 
 [`linux/chemvas.desktop`](linux/chemvas.desktop) and

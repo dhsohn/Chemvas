@@ -213,6 +213,45 @@ class CanvasArrowBuildServiceTest(unittest.TestCase):
         self.assertGreater(equilibrium.path().boundingRect().height(), 8.0)
         self.assertGreater(equilibrium.path().boundingRect().width(), 9.0)
 
+    def test_equilibrium_shafts_use_one_bond_spacing(self) -> None:
+        service, _ = self._make_service()
+        start = QPointF(7.0, -11.0)
+        for kind in ("equilibrium", "equilibrium_forward", "equilibrium_reverse"):
+            for dx, dy in (
+                (60.0, 0.0),
+                (-60.0, 0.0),
+                (0.0, 60.0),
+                (0.0, -60.0),
+                (36.0, 48.0),
+            ):
+                for spacing in (6.0, 10.0, 15.0):
+                    with self.subTest(kind=kind, direction=(dx, dy), spacing=spacing):
+                        service.canvas.renderer.style.bond_spacing_px = spacing
+                        end = start + QPointF(dx, dy)
+                        item = service.build_arrow_item(start, end, kind)
+                        path = item.path()
+                        length = math.hypot(dx, dy)
+                        forward = path.elementAt(1)
+                        reverse = path.elementAt(5)
+                        gap = (
+                            (reverse.x - forward.x) * -dy + (reverse.y - forward.y) * dx
+                        ) / length
+                        self.assertAlmostEqual(gap, spacing)
+                        self.assertEqual(item.data(2)["start"], start)
+                        self.assertEqual(item.data(2)["end"], end)
+
+    def test_thick_equilibrium_shafts_keep_one_stroke_of_clearance(self) -> None:
+        service, _ = self._make_service()
+        for kind in ("equilibrium", "equilibrium_forward", "equilibrium_reverse"):
+            for width in (4.0, 7.0):
+                with self.subTest(kind=kind, width=width):
+                    service.settings.arrow_line_width = width
+                    path = service.build_arrow_item(
+                        QPointF(0, 0), QPointF(60, 0), kind
+                    ).path()
+                    gap = path.elementAt(5).y - path.elementAt(1).y
+                    self.assertAlmostEqual(gap - width, width)
+
     def test_build_equilibrium_item_draws_outward_facing_harpoons(self) -> None:
         service, _ = self._make_service()
         start = QPointF(0.0, 0.0)

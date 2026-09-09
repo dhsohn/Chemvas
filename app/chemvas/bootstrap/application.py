@@ -127,6 +127,28 @@ def _filtered_stderr(stderr_fd: int = 2, platform: str | None = None) -> Iterato
 
 
 def main() -> None:
+    # The Windows GUI bootloader has no standard streams. Keep command-line
+    # operations on the console companion rather than losing their reports.
+    if (
+        sys.platform == "win32"
+        and sys.stdout is None
+        and len(sys.argv) > 1
+        and sys.argv[1]
+        in {"-h", "--help", "--version", *dict(HEADLESS_SUBCOMMAND_HELP)}
+    ):
+        from PyQt6.QtWidgets import QApplication, QMessageBox
+
+        console_notice_app = QApplication.instance() or QApplication(sys.argv)
+        QMessageBox.information(
+            None,
+            "Chemvas command line",
+            "Use chemvas-cli.exe for command-line options and document commands.\n"
+            "Use chemvas.exe to draw or open a document.",
+        )
+        # Keep the application alive until the modal notice has closed.
+        del console_notice_app
+        raise SystemExit(2)
+
     if len(sys.argv) > 1 and sys.argv[1] in {"-h", "--help"}:
         sys.stdout.write(_root_help())
         raise SystemExit(0)

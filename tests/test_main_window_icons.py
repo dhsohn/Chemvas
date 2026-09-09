@@ -94,6 +94,27 @@ class MainWindowIconGeometryTest(unittest.TestCase):
         ):
             self.assertIn(expected_size, icon.availableSizes())
 
+    def test_equilibrium_preview_icons_keep_a_compact_two_line_gap(self) -> None:
+        for kind in ("equilibrium", "equilibrium_forward", "equilibrium_reverse"):
+            with self.subTest(kind=kind):
+                image = self.factory.icon_arrow_preview(kind).pixmap(30, 30).toImage()
+                rows = [
+                    y
+                    for y in range(image.height())
+                    if image.pixelColor(15, y).alpha() >= 128
+                ]
+                self.assertTrue(rows)
+                self.assertLessEqual(max(rows) - min(rows), 6)
+                self.assertTrue(
+                    any(
+                        image.pixelColor(15, y).alpha() == 0
+                        for y in range(min(rows), max(rows))
+                    )
+                )
+                bounds = _opaque_bounds(image)
+                self.assertIsNotNone(bounds)
+                self.assertGreaterEqual(bounds[2] - bounds[0], 24)
+
     def test_arrow_preview_matrix_renders_special_cases(self) -> None:
         for kind in (
             "reaction",

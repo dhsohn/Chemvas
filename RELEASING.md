@@ -57,3 +57,7 @@ match the pending publisher above.
 - Desktop binaries (`.app`/`.exe`/AppImage via PyInstaller — see
   [`packaging/`](packaging/)) are not published here yet; attaching them to the
   GitHub Release is a planned follow-up.
+- The [Windows preparation guide](packaging/windows/README.md) provides a local
+  x64 installer build and acceptance checklist. Local builds are unsigned;
+  signing, clean-machine acceptance, and bundled-dependency distribution review
+  must precede publishing installers.

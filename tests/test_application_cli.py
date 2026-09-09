@@ -166,3 +166,35 @@ def test_startup_document_path_preserves_first_supported_path() -> None:
         )
         == "my structure.mol"
     )
+
+
+@pytest.mark.parametrize(
+    "argument",
+    ["--help", "-h", "--version", *dict(application.HEADLESS_SUBCOMMAND_HELP)],
+)
+def test_windows_gui_rejects_console_commands_before_dispatch(
+    argument: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from PyQt6 import QtWidgets
+
+    notices: list[str] = []
+    monkeypatch.setattr(QtWidgets.QApplication, "instance", lambda: object())
+    monkeypatch.setattr(
+        QtWidgets.QMessageBox,
+        "information",
+        lambda _parent, _title, message: notices.append(message),
+    )
+    monkeypatch.setattr(sys, "platform", "win32")
+    monkeypatch.setattr(sys, "argv", ["chemvas.exe", argument])
+    with monkeypatch.context() as no_console:
+        no_console.setattr(sys, "stdout", None)
+        with pytest.raises(SystemExit) as error:
+            application.main()
+    assert error.value.code == 2
+    assert len(notices) == 1
+    assert "chemvas-cli.exe" in notices[0]
+
+
+def test_startup_path_keeps_windows_unicode_spaces_and_ampersand() -> None:
+    path = "C:/그림 폴더/OH & OMe 구조.CHEMVAS"
+    assert application._startup_document_path(["chemvas.exe", path]) == path
