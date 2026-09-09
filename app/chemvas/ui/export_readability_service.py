@@ -324,7 +324,7 @@ def assess_export_readability(
         "status": "passed" if minimum is not None else "no-visible-text",
         "measurement": "resolved native glyph em after item and physical-output transforms",
         "scope": "visible atom labels, scripts, notes including automatic numbering, arrow labels, charge text and TS glyphs",
-        "exclusions": "whitespace, transparent/hidden text, non-font paths and decoration strokes",
+        "exclusions": "whitespace, transparent/hidden text, non-font paths, decoration strokes and text inside raster images",
         "coverage": coverage,
         "scene_to_output_pt": scale,
     }

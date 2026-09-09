@@ -27,6 +27,7 @@ _DRAGGABLE_ITEM_KINDS = VALID_ARROW_KINDS | frozenset(
         "orbital",
         "ts_bracket",
         "shape",
+        "image",
     }
 )
 

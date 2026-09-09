@@ -225,7 +225,7 @@ rows, structure paint from captions, and caption levels. All distances are at
 most 10,000; gap must be positive and the others may be zero.
 
 Requests are limited to 1 MiB, 128 rows, 128 blocks, 4,096 atom references and
-4,096 item references. Inputs retain the 8 MiB / 20,000 graphics-record bounds.
+4,096 item references. Inputs retain the 96 MiB / 20,000 graphics-record bounds.
 Existing output files and symlinks are refused; a new output is published
 atomically without modifying the source. The JSON report records source,
 request and output hashes, translations and arranged-region dimensions in

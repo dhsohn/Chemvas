@@ -14,6 +14,7 @@ from PyQt6.QtWidgets import (
 
 from chemvas.features.annotations import sanitize_note_html
 from chemvas.ui.graphics_items import RING_FILL_Z_VALUE, NoSelectPolygonItem
+from chemvas.ui.image_item import ImageItem
 from chemvas.ui.note_item_access import (
     set_committed_note_html_for,
     set_committed_note_text_for,
@@ -255,6 +256,8 @@ def create_scene_item_from_state(
     set_arrow_labels: ArrowLabelSetter | None = None,
 ):
     kind = state.get("kind")
+    if kind == "image":
+        return ImageItem(state)
     if kind == "ring":
         return create_ring_item_from_state(
             state, ring_fill_brush_getter=ring_fill_brush_getter

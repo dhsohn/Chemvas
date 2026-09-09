@@ -30,6 +30,7 @@ from chemvas.ui.canvas_bond_graphics_state import bond_items_for
 from chemvas.ui.canvas_model_access import bond_for_id
 from chemvas.ui.canvas_scene_items_state import (
     arrow_items_for,
+    image_items_for,
     mark_items_for,
     note_items_for,
     orbital_items_for,
@@ -170,7 +171,7 @@ def _layout_report(
 ) -> dict[str, object]:
     containment = (
         "Visible atoms, bonds, notes, marks, arrows and attached labels, "
-        "shapes, TS brackets, orbitals and ring fills outside the sheet."
+        "shapes, TS brackets, orbitals, ring fills and full image rectangles outside the sheet."
     )
     unchecked = [
         "Aesthetic quality, semantic label ownership, chemical correctness or stereochemical meaning.",
@@ -196,7 +197,7 @@ def _layout_report(
             "not_checked": [
                 *unchecked,
                 "Other collision pairs, including note-bond, note-arrow, bond-bond, arrow-arrow and charge-text pairs.",
-                "Collisions involving TS brackets, orbitals, ring fills and other standalone marks.",
+                "Collisions involving images, TS brackets, orbitals, ring fills and other standalone marks.",
                 "Automatic list markers outside the collected text glyph runs in collision checks.",
             ],
         }
@@ -252,6 +253,7 @@ def _sheet_boundary_warnings(canvas: Any) -> list[dict[str, object]]:
         ("ts_bracket", ts_bracket_items_for(canvas)),
         ("orbital", orbital_items_for(canvas)),
         ("ring", ring_items_for(canvas)),
+        ("image", image_items_for(canvas)),
     ):
         for index, item in enumerate(items):
             ref: dict[str, object] = {"kind": kind, "index": index}
@@ -275,6 +277,9 @@ def _sheet_boundary_warnings(canvas: Any) -> list[dict[str, object]]:
 def _sheet_item_bounds(item: Any, *, atom_label: bool = False) -> QRectF | None:
     if not item.isVisible() or item.effectiveOpacity() <= 0.0:
         return None
+    if item.data(0) == "image":
+        # Preserve the entire original image area, including transparent margins.
+        return item_export_bounds(item)
     if isinstance(item, QGraphicsTextItem):
         path = (
             _atom_label_scene_path(item) if atom_label else note_paint_scene_path(item)

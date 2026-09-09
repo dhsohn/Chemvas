@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 
 from chemvas.domain.document import (
+    MAX_DOCUMENT_BYTES,
     build_document_payload,
     extract_document_state,
     normalize_json_numbers,
@@ -65,6 +66,8 @@ def write_document(
 def _write_document_payload(path: Path, payload: dict[str, Any]) -> None:
     with path.open("w", encoding="utf-8") as handle:
         json.dump(payload, handle, indent=2)
+    if path.stat().st_size > MAX_DOCUMENT_BYTES:
+        raise ValueError(f"output document exceeds the {MAX_DOCUMENT_BYTES}-byte limit")
 
 
 def atomic_write_text(path: PathType, text: str, *, encoding: str = "utf-8") -> None:
@@ -113,7 +116,7 @@ def read_document(path: PathType) -> ChemvasDocument:
 
 
 def read_exact_document(
-    path: PathType, *, max_bytes: int | None = None
+    path: PathType, *, max_bytes: int = MAX_DOCUMENT_BYTES
 ) -> tuple[bytes, ChemvasDocument]:
     """Read once so callers can hash the exact bytes that were parsed.
 
@@ -121,10 +124,8 @@ def read_exact_document(
     file that grows past the limit while it is being read is still rejected.
     """
     with Path(path).open("rb") as stream:
-        source_bytes = (
-            stream.read() if max_bytes is None else stream.read(max_bytes + 1)
-        )
-    if max_bytes is not None and len(source_bytes) > max_bytes:
+        source_bytes = stream.read(max_bytes + 1)
+    if len(source_bytes) > max_bytes:
         raise ValueError(f"input document exceeds the {max_bytes}-byte limit")
     try:
         payload = strict_json_loads(source_bytes)

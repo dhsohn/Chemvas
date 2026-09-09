@@ -89,6 +89,10 @@ overlap in a chemical scheme.
 
 See the [document CLI guide](https://github.com/dhsohn/Chemvas/blob/main/docs/AGENT_CLI.md)
 for composition, Graph Patch, render guarantees, and limits.
+PNG/JPEG experimental panels can be embedded alongside structures using
+**File ▸ Insert Image**, clipboard paste, or the composition CLI. Use
+**Edit ▸ Image Properties** to set their size, aspect ratio and opacity;
+see [image objects](https://github.com/dhsohn/Chemvas/blob/main/docs/IMAGE_OBJECTS.md) for the schema and limits.
 
 For structure names and energies that stay aligned, use
 [explicit scheme layout](https://github.com/dhsohn/Chemvas/blob/main/docs/SCHEME_LAYOUT.md) to arrange structure/caption

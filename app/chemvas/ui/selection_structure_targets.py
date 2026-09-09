@@ -17,6 +17,7 @@ STRUCTURE_OVERLAY_KINDS = VALID_ARROW_KINDS | frozenset(
         "shape",
         "orbital",
         "note",
+        "image",
         "mark",
     }
 )

@@ -19,6 +19,7 @@ DELETE_SCENE_ITEM_KINDS = VALID_ARROW_KINDS | frozenset(
         "ts_bracket",
         "shape",
         "note",
+        "image",
         "mark",
     }
 )

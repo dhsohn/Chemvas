@@ -105,6 +105,9 @@ Graph Patch의 `set_terminal_angle`로 지정한 말단 결합각을 조정할 �
 
 문서 구성·구조 패치·출력 보장과 제한은
 [문서 CLI 안내](https://github.com/dhsohn/Chemvas/blob/main/docs/AGENT_CLI.md)를 참고하세요.
+PNG/JPEG 실험 그림은 **File ▸ Insert Image…**, 클립보드 붙여넣기 또는 composition CLI로
+구조 옆에 내장할 수 있습니다. **Edit ▸ Image Properties…**에서 위치·크기·종횡비 잠금·
+투명도를 설정합니다. [이미지 객체 안내](https://github.com/dhsohn/Chemvas/blob/main/docs/IMAGE_OBJECTS.md)에 스키마와 제한을 설명합니다.
 
 ## 다른 작업과 문서
 

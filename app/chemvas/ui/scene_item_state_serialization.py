@@ -21,6 +21,7 @@ from chemvas.features.annotations import (
 )
 from chemvas.ui.canvas_atom_graphics_state import atom_items_for
 from chemvas.ui.canvas_model_access import atom_annotation_for, atom_for_id
+from chemvas.ui.image_item import ImageItem
 
 MarkCenterGetter = Callable[[Any], QPointF]
 
@@ -254,6 +255,8 @@ def scene_item_state(item, *, mark_center_getter: MarkCenterGetter) -> dict:
     if not callable(data_method):
         return {}
     kind = item.data(0)
+    if kind == "image" and isinstance(item, ImageItem):
+        return item.image_state()
     if kind == "ring" and isinstance(item, QGraphicsPolygonItem):
         return ring_state_dict(item)
     if kind == "note" and isinstance(item, QGraphicsTextItem):

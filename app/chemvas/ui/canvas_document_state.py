@@ -30,6 +30,7 @@ from chemvas.ui.canvas_model_access import model_for
 from chemvas.ui.canvas_rotation_state import rotation_state_for
 from chemvas.ui.canvas_scene_items_state import (
     arrow_items_for,
+    image_items_for,
     mark_items_for,
     note_items_for,
     orbital_items_for,
@@ -53,6 +54,7 @@ from chemvas.ui.renderer_style_access import bond_length_px_for, set_bond_length
 from chemvas.ui.scene_decoration_access import materialize_mark_for_atom_for
 from chemvas.ui.scene_item_access import (
     attached_canvas_scene_items,
+    create_scene_item_from_state,
     restore_arrow_from_state,
     restore_mark_from_state,
     restore_note_from_state,
@@ -67,6 +69,7 @@ from chemvas.ui.scene_item_state import (
     note_state_dict_for,
     orbital_state_dict_for,
     ring_state_dict_for,
+    scene_item_state_for,
     shape_state_dict_for,
     ts_bracket_state_dict_for,
 )
@@ -124,6 +127,10 @@ def snapshot_canvas_document_state_with_warnings(canvas) -> tuple[dict, list[str
         "last_smiles_input": last_smiles_input_for(canvas),
     }
     _add_projection_state(canvas, state)
+    if item_lists["images"]:
+        state["images"] = [
+            scene_item_state_for(canvas, item) for item in item_lists["images"]
+        ]
     calculation_plan = calculation_plan_for(canvas)
     if calculation_plan is not None:
         model = model_for(canvas)
@@ -296,6 +303,8 @@ def restore_document_pre_model_items(canvas, state: dict) -> None:
 
 
 def restore_document_post_model_items(canvas, state: dict) -> None:
+    for image_state in state.get("images", []):
+        create_scene_item_from_state(canvas, image_state)
     for note_state in state["notes"]:
         restore_note_from_state(canvas, note_state)
 
@@ -355,6 +364,7 @@ def document_item_lists_for(canvas) -> dict[str, list]:
     # matching snapshot entry was written from. Standalone marks can be group
     # members, so they are indexed here too.
     return {
+        "images": attached_canvas_scene_items(canvas, image_items_for(canvas)),
         "notes": attached_canvas_scene_items(canvas, note_items_for(canvas)),
         "marks": attached_canvas_scene_items(canvas, mark_items_for(canvas)),
         "arrows": [

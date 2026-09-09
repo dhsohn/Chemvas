@@ -24,6 +24,8 @@ def paint_scene_region(
     target = QRectF(0.0, 0.0, float(target_w), float(target_h))
     painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
     painter.setRenderHint(QPainter.RenderHint.TextAntialiasing, True)
+    # PDF otherwise chooses lossy JPEG encoding for opaque raster images.
+    painter.setRenderHint(QPainter.RenderHint.LosslessImageRendering, True)
     if background == "white":
         painter.fillRect(target, Qt.GlobalColor.white)
     source = QRectF(plan.source_x, plan.source_y, plan.source_w, plan.source_h)

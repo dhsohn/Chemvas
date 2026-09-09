@@ -39,7 +39,7 @@ def flip_scene_item_state(
             )
         ]
         return after_state
-    if kind == "note":
+    if kind in {"note", "image"}:
         rect = item.sceneBoundingRect()
         if rect.isValid():
             if horizontal:

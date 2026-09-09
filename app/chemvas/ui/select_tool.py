@@ -327,7 +327,7 @@ class SelectTool(SelectionDragMixin, Tool):
         snapshot = selection_snapshot_for(self.canvas)
         if (
             item is not None
-            and item.data(0) in {"note", "shape"}
+            and item.data(0) in {"note", "shape", "image"}
             and (snapshot is None or item not in snapshot.selection_items)
         ):
             if event.modifiers() & Qt.KeyboardModifier.ControlModifier:

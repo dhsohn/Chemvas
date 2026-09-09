@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING
 
 from PyQt6.QtWidgets import QGraphicsItem
 
+from chemvas.domain.document import validate_image_states
 from chemvas.domain.transactions import add_recovery_error_note
 from chemvas.features.selection import unproject_point_3d
 from chemvas.ui.atom_coords_access import atom_coords_3d_for
@@ -91,6 +92,18 @@ def paste_selection_from_clipboard_for_canvas(
     # cascade offset for the next real paste.
     if not plan.has_payload_content():
         return False
+    incoming_images = [
+        state
+        for state in plan.scene_items
+        if isinstance(state, dict) and state.get("kind") == "image"
+    ]
+    if incoming_images:
+        from chemvas.ui.canvas_document_state import document_item_lists_for
+
+        existing_images = [
+            item.image_state() for item in document_item_lists_for(canvas)["images"]
+        ]
+        validate_image_states([*existing_images, *incoming_images])
     before_smiles_input = (
         plan.before_smiles_input if isinstance(plan.before_smiles_input, str) else None
     )

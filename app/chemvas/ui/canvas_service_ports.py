@@ -49,6 +49,10 @@ def history_service_for_access(canvas) -> Any:
     return canvas_services_for(canvas).history_service
 
 
+def tool_mode_controller_for_access(canvas) -> Any:
+    return canvas_services_for(canvas).input.tool_mode_controller
+
+
 def history_recording_service_for_access(canvas) -> Any:
     return canvas_services_for(canvas).document.canvas_history_recording_service
 

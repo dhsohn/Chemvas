@@ -67,6 +67,7 @@ OBJECT_OVERLAY_KINDS = {
     *ARROW_OBJECT_KINDS,
     "ts_bracket",
     "shape",
+    "image",
     "mark",
     "orbital",
 }
@@ -280,6 +281,14 @@ class SelectionOutlineService:
         )
 
     def add_selection_object_overlay(self, item, color: QColor) -> None:
+        if item.data(0) == "image":
+            outline = selection_group_outline_item(
+                item.sceneBoundingRect().adjusted(-2.0, -2.0, 2.0, 2.0), color
+            )
+            outline.setData(2, {"kind": "object", "object_kind": "image"})
+            add_item_to_canvas_scene(self.canvas, outline)
+            append_selection_outline_for(self.canvas, outline)
+            return
         path = self.selection_path_for_object_item(item)
         if path.isEmpty():
             return
