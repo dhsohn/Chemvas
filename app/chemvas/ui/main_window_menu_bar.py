@@ -11,6 +11,10 @@ from PyQt6.QtWidgets import QApplication, QMenu, QMenuBar
 
 from chemvas.branding import APP_NAME
 from chemvas.ui.calculation_step_dialog import edit_calculation_plan_for_window
+from chemvas.ui.image_actions import (
+    image_properties_for_window,
+    insert_image_for_window,
+)
 from chemvas.ui.main_window_about_dialog import GITHUB_URL, show_about_dialog
 from chemvas.ui.main_window_document_dialogs import prompt_sheet_setup
 from chemvas.ui.main_window_ports import (
@@ -150,6 +154,13 @@ def _build_file_menu(
     _add_action(
         file_menu,
         window,
+        "Insert Image...",
+        status_tip="Embed an original PNG or JPEG image in the current drawing",
+        triggered=lambda: insert_image_for_window(window),
+    )
+    _add_action(
+        file_menu,
+        window,
         "Canvas Size...",
         status_tip="Change the canvas sheet size and orientation",
         triggered=lambda: run_sheet_setup_dialog(window),
@@ -267,6 +278,13 @@ def _build_edit_menu(
         "Ungroup",
         status_tip="Ungroup the selected group (Ctrl+Shift+G)",
         triggered=lambda: ungroup_selection_for_window(window),
+    )
+    _add_action(
+        edit_menu,
+        window,
+        "Image Properties...",
+        status_tip="Set the selected image's position, size, aspect ratio and opacity",
+        triggered=lambda: image_properties_for_window(window),
     )
     _add_action(
         edit_menu,

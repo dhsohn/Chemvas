@@ -135,7 +135,7 @@ def translated_scene_item_state(
         if isinstance(translated.get("y"), (int, float)):
             translated["y"] = float(translated["y"]) + dy
         return translated
-    if kind == "note":
+    if kind in {"note", "image"}:
         if isinstance(translated.get("x"), (int, float)):
             translated["x"] = float(translated["x"]) + dx
         if isinstance(translated.get("y"), (int, float)):

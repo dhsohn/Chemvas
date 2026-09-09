@@ -35,6 +35,7 @@ _MOVE_BY_ITEM_KINDS = VALID_ARROW_KINDS | frozenset(
         "ts_bracket",
         "orbital",
         "note",
+        "image",
     }
 )
 

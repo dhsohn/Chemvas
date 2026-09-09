@@ -62,6 +62,9 @@ echo "[check] mypy"
 # each, several at a time — so this script, the CI test job and the RDKit job
 # cannot drift apart on it. Arguments narrow the run to the given files.
 echo "[check] Tests"
+# Subprocess CLI tests must exercise this checkout, even when its interpreter
+# comes from an editable installation in a different registered worktree.
+export PYTHONPATH="$ROOT/app${PYTHONPATH:+:$PYTHONPATH}"
 if [[ $# -gt 0 ]]; then
   files=("$@")
 else

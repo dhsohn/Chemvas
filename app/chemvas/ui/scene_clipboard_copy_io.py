@@ -7,6 +7,10 @@ from PyQt6.QtCore import QMimeData, Qt
 from PyQt6.QtGui import QImage, QPainter
 
 from chemvas.features.export import content_bounds
+from chemvas.ui.export_guard_service import (
+    MAX_RASTER_DIMENSION_PIXELS,
+    MAX_RASTER_PIXELS,
+)
 from chemvas.ui.scene_clipboard_access import (
     render_canvas_scene_region,
     render_canvas_selection_vector_bytes,
@@ -26,6 +30,15 @@ CLIPBOARD_PDF_MIME = "application/pdf"
 
 
 def render_clipboard_raster_image(canvas, plan: ClipboardCopyPlan) -> QImage:
+    if (
+        plan.image_width > MAX_RASTER_DIMENSION_PIXELS
+        or plan.image_height > MAX_RASTER_DIMENSION_PIXELS
+        or plan.image_width * plan.image_height > MAX_RASTER_PIXELS
+    ):
+        raise ValueError(
+            "The selection is too large to copy as an image. Reduce its canvas size "
+            "or copy a smaller selection (10,000 pixels per side, 25 million pixels total)."
+        )
     image = QImage(
         plan.image_width, plan.image_height, QImage.Format.Format_ARGB32_Premultiplied
     )

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from html import escape
 from typing import Any, cast
 
@@ -8,6 +8,9 @@ from chemvas.domain.document import (
     ARROW_LABEL_SIDES,
     CANVAS_FILE_VERSION,
     MAX_ARROW_LABEL_CHARS,
+    MAX_DOCUMENT_IMAGE_BYTES,
+    MAX_DOCUMENT_IMAGE_PIXELS,
+    MAX_DOCUMENT_IMAGES,
     SETTINGS_KEYS,
     VALID_ARROW_KINDS,
     VALID_BOND_ORDERS,
@@ -16,6 +19,7 @@ from chemvas.domain.document import (
     Bond,
     MoleculeModel,
     build_document_payload,
+    image_state_from_bytes,
     is_document_number,
     is_hex_color,
     serialize_model_state,
@@ -50,6 +54,7 @@ _ROOT_ALLOWED = _ROOT_REQUIRED | {
     "ring_fills",
     "ts_brackets",
     "settings",
+    "images",
 }
 _ATOM_REQUIRED = frozenset(("id", "element", "x", "y"))
 _ATOM_ALLOWED = _ATOM_REQUIRED | {
@@ -74,9 +79,15 @@ _SHAPE_ALLOWED = _SHAPE_REQUIRED | {"fill", "fill_alpha"}
 _RING_REQUIRED = frozenset(("atom_ids", "color", "alpha"))
 _TS_BRACKET_REQUIRED = frozenset(("bracket_kind", "left", "top", "right", "bottom"))
 _DEFAULT_BOND_STYLE = {1: "single", 2: "double", 3: "triple"}
+_IMAGE_REQUIRED = frozenset(("source", "x", "y"))
+_IMAGE_ALLOWED = _IMAGE_REQUIRED | {"width", "height", "opacity", "lock_aspect"}
 
 
-def compose_document_state(composition: object) -> dict[str, Any]:
+def compose_document_state(
+    composition: object,
+    *,
+    image_source_reader: Callable[[str], bytes] | None = None,
+) -> dict[str, Any]:
     root = _mapping(composition, "composition")
     _keys(root, required=_ROOT_REQUIRED, allowed=_ROOT_ALLOWED, name="composition")
     if root.get("format") != COMPOSITION_FORMAT:
@@ -97,6 +108,7 @@ def compose_document_state(composition: object) -> dict[str, Any]:
     shapes = _shapes(root.get("shapes", []))
     ring_fills = _ring_fills(root.get("ring_fills", []), atoms)
     ts_brackets = _ts_brackets(root.get("ts_brackets", []))
+    images = _images(root.get("images", []), image_source_reader)
 
     model = MoleculeModel(atoms=atoms, bonds=bonds, atom_annotations=annotations)
     marks = _annotation_marks(
@@ -119,9 +131,63 @@ def compose_document_state(composition: object) -> dict[str, Any]:
         "settings": settings,
         "last_smiles_input": None,
     }
+    if images:
+        state["images"] = images
     build_document_payload(state, CANVAS_FILE_VERSION)
     inspect_components(state)
     return state
+
+
+def _images(
+    value: object,
+    source_reader: Callable[[str], bytes] | None,
+) -> list[dict[str, object]]:
+    images: list[dict[str, object]] = []
+    byte_count = 0
+    pixel_count = 0
+    for index, raw_image in enumerate(
+        _list(value, "images", maximum=MAX_DOCUMENT_IMAGES)
+    ):
+        name = f"image {index}"
+        image = _mapping(raw_image, name)
+        _keys(image, required=_IMAGE_REQUIRED, allowed=_IMAGE_ALLOWED, name=name)
+        source = image.get("source")
+        if not isinstance(source, str) or not source.strip() or "\x00" in source:
+            raise ValueError(f"{name} source must be a non-empty file path")
+        if source_reader is None:
+            raise ValueError("Image compositions require an image_source_reader.")
+        x = _number(image.get("x"), f"{name} x")
+        y = _number(image.get("y"), f"{name} y")
+        width = _number(image["width"], f"{name} width") if "width" in image else None
+        height = (
+            _number(image["height"], f"{name} height") if "height" in image else None
+        )
+        opacity = _number(image.get("opacity", 1.0), f"{name} opacity")
+        lock_aspect = image.get("lock_aspect", True)
+        if type(lock_aspect) is not bool:
+            raise ValueError(f"{name} lock_aspect must be a boolean")
+        data = source_reader(source)
+        byte_count += len(data)
+        if byte_count > MAX_DOCUMENT_IMAGE_BYTES:
+            raise ValueError("Combined image bytes exceed the 64 MiB document limit.")
+        image_state = image_state_from_bytes(
+            data,
+            x=x,
+            y=y,
+            width=width,
+            height=height,
+            opacity=opacity,
+            lock_aspect=lock_aspect,
+        )
+        pixel_count += cast("int", image_state["pixel_width"]) * cast(
+            "int", image_state["pixel_height"]
+        )
+        if pixel_count > MAX_DOCUMENT_IMAGE_PIXELS:
+            raise ValueError(
+                "Combined image pixels exceed the 100 million document limit."
+            )
+        images.append(image_state)
+    return images
 
 
 def _atoms(

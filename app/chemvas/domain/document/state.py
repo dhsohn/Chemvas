@@ -6,6 +6,7 @@ from decimal import Decimal
 from typing import Any, TypeGuard, cast
 
 from .calculation_plan import calculation_plan_from_state
+from .images import validate_image_states
 from .model import Atom, Bond, MoleculeModel
 
 StateDict = dict[Any, Any]
@@ -29,9 +30,11 @@ CANVAS_STATE_KEYS = frozenset(
         "last_smiles_input",
     )
 )
-OPTIONAL_CANVAS_STATE_KEYS = frozenset(("perspective", "groups", "calculation_plan"))
+OPTIONAL_CANVAS_STATE_KEYS = frozenset(
+    ("perspective", "groups", "calculation_plan", "images")
+)
 _GROUPABLE_STATE_ITEM_KEYS = frozenset(
-    ("notes", "marks", "arrows", "ts_brackets", "shapes", "orbitals")
+    ("notes", "marks", "arrows", "ts_brackets", "shapes", "orbitals", "images")
 )
 POINT_COORDINATE_TOLERANCE = Decimal("0.000001")
 MAX_SAFE_NUMBER = float(2**53 - 1)
@@ -540,6 +543,7 @@ def selection_payload_to_canvas_state(
     ts_bracket_states: list[StateDict] = []
     shape_states: list[StateDict] = []
     orbital_states: list[StateDict] = []
+    image_states: list[StateDict] = []
 
     for ring_state in rings:
         ring_fills.append(
@@ -582,6 +586,8 @@ def selection_payload_to_canvas_state(
             ts_bracket_states.append(dict(item_state))
         elif kind == "shape":
             shape_states.append(dict(item_state))
+        elif kind == "image":
+            image_states.append(dict(item_state))
         elif kind == "orbital":
             orbital_states.append(
                 {
@@ -617,6 +623,8 @@ def selection_payload_to_canvas_state(
     )
     if perspective_state is not None:
         state["perspective"] = perspective_state
+    if image_states:
+        state["images"] = image_states
     _validate_canvas_state(state, version=CANVAS_FILE_VERSION)
     return state
 
@@ -719,6 +727,7 @@ def _validate_canvas_state(state: Mapping[str, object], *, version: int) -> None
     _validate_ts_bracket_states(state.get("ts_brackets"))
     _validate_shape_states(state.get("shapes"))
     _validate_orbital_states(state.get("orbitals"))
+    validate_image_states(state.get("images", []))
     _validate_perspective_state(state.get("perspective"), atom_ids)
     _validate_group_states(state, atom_ids)
     calculation_plan = state.get("calculation_plan")
@@ -1319,7 +1328,11 @@ def validate_clipboard_selection_payload(payload: Mapping[str, object]) -> bool:
             _validate_clipboard_ring(ring_state, atom_ids, bond_pairs, atom_positions)
         for mark_state in _validated_scene_state_list(payload.get("marks")):
             _validate_clipboard_mark(mark_state, atom_ids)
-        for item_state in _validated_scene_state_list(payload.get("scene_items")):
+        scene_items = _validated_scene_state_list(payload.get("scene_items"))
+        validate_image_states(
+            [item for item in scene_items if item.get("kind") == "image"]
+        )
+        for item_state in scene_items:
             _validate_clipboard_scene_item(item_state)
         _validate_clipboard_perspective(payload, atom_ids)
         _validate_group_states(
@@ -1548,6 +1561,9 @@ def _validate_clipboard_scene_item(item_state: Mapping[str, object]) -> None:
         return
     if kind == "shape":
         _validate_shape_fields(item_state, error="Invalid clipboard payload.")
+        return
+    if kind == "image":
+        # The complete image set was validated together before scene traversal.
         return
     if kind == "orbital":
         _validate_orbital_fields(

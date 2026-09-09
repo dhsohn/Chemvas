@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Embed original PNG and JPEG images using **File ▸ Insert Image**, clipboard
+  paste, or `compose-document`. Move images with the selection tool and edit
+  their size, original aspect ratio lock, and opacity in **Edit ▸ Image Properties**.
+  Native documents and editable SVG retain the source bytes; figure exports
+  include the complete raster. See [image objects](docs/IMAGE_OBJECTS.md) for
+  limits and older-reader compatibility.
 - Turn a selection by dragging the rotation handle above its frame. The frame
   appears around two or more selected atoms or a rotatable arrow, line, or
   orbital; hold Shift to snap the sweep to 15° steps. The drag undoes as one

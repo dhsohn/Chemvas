@@ -13,6 +13,18 @@ from .calculation_plan import (
     included_atom_ids,
 )
 from .graph import connected_atom_components
+from .images import (
+    MAX_DOCUMENT_BYTES,
+    MAX_DOCUMENT_IMAGE_BYTES,
+    MAX_DOCUMENT_IMAGE_PIXELS,
+    MAX_DOCUMENT_IMAGES,
+    MAX_IMAGE_BYTES,
+    MAX_IMAGE_PIXELS,
+    image_bytes_from_state,
+    image_state_from_bytes,
+    validate_image_state,
+    validate_image_states,
+)
 from .model import Atom, Bond, MoleculeModel
 from .state import (
     ARC_KIND_SWEEPS,
@@ -54,6 +66,12 @@ __all__ = [
     "CHEMVAS_FILE_TYPE",
     "CLIPBOARD_SELECTION_VERSION",
     "MAX_ARROW_LABEL_CHARS",
+    "MAX_DOCUMENT_BYTES",
+    "MAX_DOCUMENT_IMAGES",
+    "MAX_DOCUMENT_IMAGE_BYTES",
+    "MAX_DOCUMENT_IMAGE_PIXELS",
+    "MAX_IMAGE_BYTES",
+    "MAX_IMAGE_PIXELS",
     "SETTINGS_KEYS",
     "VALID_ARC_KINDS",
     "VALID_ARROW_KINDS",
@@ -80,6 +98,8 @@ __all__ = [
     "connected_atom_components",
     "deserialize_model_state",
     "extract_document_state",
+    "image_bytes_from_state",
+    "image_state_from_bytes",
     "included_atom_ids",
     "is_document_number",
     "is_hex_color",
@@ -92,4 +112,6 @@ __all__ = [
     "serialize_model_state_with_warnings",
     "serialize_settings",
     "validate_clipboard_selection_payload",
+    "validate_image_state",
+    "validate_image_states",
 ]

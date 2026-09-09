@@ -12,6 +12,7 @@ from chemvas.core.document_io import ChemvasDocument, create_document, parse_doc
 from chemvas.domain.document import (
     CANVAS_FILE_VERSION,
     CHEMVAS_FILE_TYPE,
+    MAX_DOCUMENT_BYTES,
     normalize_json_numbers,
 )
 from chemvas.domain.json_io import strict_json_loads
@@ -30,8 +31,10 @@ XLINK_NAMESPACE = "http://www.w3.org/1999/xlink"
 
 _SOURCE_TAG = f"{{{CHEMVAS_SVG_NAMESPACE}}}source"
 _METADATA_TAG = f"{{{SVG_NAMESPACE}}}metadata"
-_MAX_SVG_SOURCE_TEXT_BYTES = 8 * 1024 * 1024
-_MAX_SVG_PAYLOAD_BYTES = 32 * 1024 * 1024
+_MAX_SVG_SOURCE_TEXT_BYTES = 128 * 1024 * 1024
+_MAX_SVG_PAYLOAD_BYTES = MAX_DOCUMENT_BYTES
+# Editable SVG carries both rendered image data and the compressed native source.
+_MAX_SVG_FILE_BYTES = 256 * 1024 * 1024
 _FORBIDDEN_XML_DECLARATIONS = ("<!DOCTYPE", "<!ENTITY")
 
 
@@ -77,7 +80,10 @@ def embed_chemvas_document_in_svg(path: PathType, payload: dict[str, Any]) -> No
     )
     source.text = _encode_payload(payload)
     metadata.append(source)
-    tree.write(path, encoding="utf-8", xml_declaration=True)
+    output = ET.tostring(root, encoding="utf-8", xml_declaration=True)
+    if len(output) > _MAX_SVG_FILE_BYTES:
+        raise ValueError("Editable SVG exceeds the file size limit.")
+    Path(path).write_bytes(output)
 
 
 def extract_chemvas_document_from_svg(path: PathType) -> ChemvasDocument:
@@ -108,9 +114,12 @@ def _parse_svg_tree(
     path: PathType, *, error_message: str
 ) -> ET.ElementTree[ET.Element[str]]:
     try:
-        data = Path(path).read_bytes()
+        with Path(path).open("rb") as stream:
+            data = stream.read(_MAX_SVG_FILE_BYTES + 1)
     except OSError as exc:
         raise ValueError(error_message) from exc
+    if len(data) > _MAX_SVG_FILE_BYTES:
+        raise ValueError(error_message)
     # xml.etree expands internal entities, so a crafted DTD ("billion laughs")
     # could exhaust memory. Chemvas-exported SVGs never carry a DOCTYPE, and
     # entity declarations can only live inside one, so reject them before the
@@ -179,7 +188,12 @@ def _metadata_element(root: ET.Element) -> ET.Element:
 
 def _encode_payload(payload: dict[str, Any]) -> str:
     raw = json.dumps(payload, separators=(",", ":"), sort_keys=True).encode("utf-8")
-    return base64.b64encode(zlib.compress(raw)).decode("ascii")
+    if len(raw) > _MAX_SVG_PAYLOAD_BYTES:
+        raise ValueError("Editable Chemvas metadata exceeds the document size limit.")
+    encoded = base64.b64encode(zlib.compress(raw)).decode("ascii")
+    if len(encoded) > _MAX_SVG_SOURCE_TEXT_BYTES:
+        raise ValueError("Editable Chemvas metadata exceeds the encoded size limit.")
+    return encoded
 
 
 def _decode_source_element(source: ET.Element) -> dict[str, Any]:

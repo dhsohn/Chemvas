@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from PyQt6.QtWidgets import QApplication, QGraphicsItem
+from PyQt6.QtWidgets import QApplication, QGraphicsItem, QMessageBox
 
 from chemvas.ui.atom_label_access import add_or_update_atom_label
 from chemvas.ui.canvas_format_access import (
@@ -14,6 +14,7 @@ from chemvas.ui.canvas_model_access import (
 )
 from chemvas.ui.canvas_scene_items_state import ring_items_for
 from chemvas.ui.history_canvas_access import apply_atom_color_for_history
+from chemvas.ui.image_actions import image_bytes_from_mime, insert_image_bytes
 from chemvas.ui.scene_clipboard_access import (
     build_selection_clipboard_payload_for_canvas,
 )
@@ -184,23 +185,48 @@ class SceneClipboardController:
             if callable(payload_provider)
             else self.selection_payload_for_clipboard
         )
-        return copy_selection_to_clipboard_for_canvas(
-            self.canvas,
-            clipboard=self._clipboard(),
-            payload_provider=provider,
-        )
+        try:
+            return copy_selection_to_clipboard_for_canvas(
+                self.canvas,
+                clipboard=self._clipboard(),
+                payload_provider=provider,
+            )
+        except ValueError as error:
+            if payload_provider is not None:
+                raise
+            QMessageBox.warning(self.canvas, "Copy", str(error))
+            return False
 
     def paste_selection_from_clipboard(self, *, payload_provider=None) -> bool:
+        if payload_provider is None:
+            mime = self._clipboard().mimeData()
+            if mime is not None and not mime.hasFormat(
+                clipboard_selection_mime_for(self.canvas)
+            ):
+                try:
+                    data = image_bytes_from_mime(mime)
+                    if data is not None:
+                        insert_image_bytes(self.canvas, data)
+                        return True
+                except ValueError as error:
+                    QMessageBox.warning(self.canvas, "Paste Image", str(error))
+                    return False
         provider = (
             payload_provider
             if callable(payload_provider)
             else self.clipboard_selection_payload
         )
-        return paste_selection_from_clipboard_for_canvas(
-            self.canvas,
-            payload_provider=provider,
-            callbacks=self._paste_callbacks(),
-        )
+        try:
+            return paste_selection_from_clipboard_for_canvas(
+                self.canvas,
+                payload_provider=provider,
+                callbacks=self._paste_callbacks(),
+            )
+        except ValueError as error:
+            if payload_provider is not None:
+                raise
+            QMessageBox.warning(self.canvas, "Paste", str(error))
+            return False
 
 
 __all__ = [

@@ -18,6 +18,7 @@ from chemvas.features.annotations import (
     normalized_stroke_style,
     sanitize_note_html,
 )
+from chemvas.ui.image_item import ImageItem
 from chemvas.ui.note_item_access import (
     set_committed_note_html_for,
     set_committed_note_text_for,
@@ -155,6 +156,28 @@ def _build_ts_bracket_path(
     return builder(rect, bracket_kind)
 
 
+def _apply_note_state(
+    item: QGraphicsTextItem,
+    state: Mapping[str, object],
+    note_style_applier: NoteStyleApplier,
+) -> None:
+    html = sanitize_note_html(state.get("html"))
+    if html is not None:
+        item.setHtml(html)
+    else:
+        item.setPlainText(str(state.get("text", "")))
+    set_committed_note_text_for(item, item.toPlainText())
+    set_committed_note_html_for(item, item.toHtml())
+    item.setPos(
+        QPointF(
+            _float_state_value(state.get("x"), 0.0),
+            _float_state_value(state.get("y"), 0.0),
+        )
+    )
+    note_style_applier(item)
+    item.setTextInteractionFlags(Qt.TextInteractionFlag.NoTextInteraction)
+
+
 def apply_scene_item_state(
     item,
     state: Mapping[str, object],
@@ -174,22 +197,11 @@ def apply_scene_item_state(
     if item is None or not state:
         return
     kind = state.get("kind")
+    if kind == "image" and isinstance(item, ImageItem):
+        item.apply_image_state(state)
+        return
     if kind == "note" and isinstance(item, QGraphicsTextItem):
-        html = sanitize_note_html(state.get("html"))
-        if html is not None:
-            item.setHtml(html)
-        else:
-            item.setPlainText(str(state.get("text", "")))
-        set_committed_note_text_for(item, item.toPlainText())
-        set_committed_note_html_for(item, item.toHtml())
-        item.setPos(
-            QPointF(
-                _float_state_value(state.get("x"), 0.0),
-                _float_state_value(state.get("y"), 0.0),
-            )
-        )
-        note_style_applier(item)
-        item.setTextInteractionFlags(Qt.TextInteractionFlag.NoTextInteraction)
+        _apply_note_state(item, state, note_style_applier)
         return
     if kind == "mark":
         if isinstance(item, QGraphicsTextItem):

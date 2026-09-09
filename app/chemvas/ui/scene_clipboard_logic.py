@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING, cast
 
 from chemvas.domain.document import (
     CLIPBOARD_SELECTION_VERSION,
+    MAX_DOCUMENT_BYTES,
     Bond,
     normalize_json_numbers,
     validate_clipboard_selection_payload,
@@ -19,7 +20,7 @@ if TYPE_CHECKING:
     from PyQt6.QtWidgets import QGraphicsItem
 
 CLIPBOARD_SELECTION_FORMAT = "chemvas-selection"
-MAX_CLIPBOARD_SELECTION_PAYLOAD_BYTES = 8 * 1024 * 1024
+MAX_CLIPBOARD_SELECTION_PAYLOAD_BYTES = MAX_DOCUMENT_BYTES
 
 
 def _item_in_scene(item: QGraphicsItem, scene) -> bool:

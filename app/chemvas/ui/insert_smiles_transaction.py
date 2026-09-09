@@ -17,6 +17,7 @@ from chemvas.ui.canvas_model_access import atoms_for, bonds_for, next_atom_id_fo
 from chemvas.ui.canvas_rotation_state import rotation_state_for
 from chemvas.ui.canvas_scene_items_state import (
     arrow_items_for,
+    image_items_for,
     mark_items_for,
     note_items_for,
     orbital_items_for,
@@ -203,6 +204,7 @@ class SmilesLoadTransactionBuilder:
         scene_items = list(ring_items_for(self.canvas))
         scene_items.extend(self._free_mark_items(atom_ids))
         scene_items.extend(note_items_for(self.canvas))
+        scene_items.extend(image_items_for(self.canvas))
         scene_items.extend(arrow_items_for(self.canvas))
         scene_items.extend(ts_bracket_items_for(self.canvas))
         scene_items.extend(shape_items_for(self.canvas))

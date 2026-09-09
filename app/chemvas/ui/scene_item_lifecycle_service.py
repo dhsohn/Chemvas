@@ -157,6 +157,8 @@ class SceneItemLifecycleService:
                 self.marks.add_for_atom(mark_atom_id, item)
         elif kind == "note":
             append_scene_item_for(self.canvas, "note_items", item)
+        elif kind == "image":
+            append_scene_item_for(self.canvas, "image_items", item)
         elif kind in ARROW_KINDS:
             append_scene_item_for(self.canvas, "arrow_items", item)
         elif kind == "ts_bracket":
@@ -247,6 +249,8 @@ class SceneItemLifecycleService:
         elif kind == "note":
             remove_selected_note_for(self.canvas, item)
             remove_scene_item_from_collection_for(self.canvas, "note_items", item)
+        elif kind == "image":
+            remove_scene_item_from_collection_for(self.canvas, "image_items", item)
         elif kind in ARROW_KINDS:
             remove_scene_item_from_collection_for(self.canvas, "arrow_items", item)
         elif kind == "ts_bracket":

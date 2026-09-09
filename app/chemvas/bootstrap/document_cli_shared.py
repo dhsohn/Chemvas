@@ -7,7 +7,8 @@ from collections.abc import Iterator, Mapping
 from contextlib import contextmanager
 from typing import Any
 
-MAX_DOCUMENT_BYTES = 8 * 1024 * 1024
+from chemvas.domain.document import MAX_DOCUMENT_BYTES
+
 MAX_GRAPHICS_RECORDS = 20_000
 
 
@@ -36,6 +37,7 @@ def graphics_record_count(state: Mapping[str, object]) -> int:
         "ts_brackets",
         "shapes",
         "orbitals",
+        "images",
     ):
         records = state.get(key, [])
         if isinstance(records, list):

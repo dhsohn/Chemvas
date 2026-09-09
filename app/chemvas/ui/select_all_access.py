@@ -4,6 +4,7 @@ from chemvas.ui.canvas_atom_graphics_state import atom_dots_for, atom_items_for
 from chemvas.ui.canvas_bond_graphics_state import bond_items_for
 from chemvas.ui.canvas_scene_items_state import (
     arrow_items_for,
+    image_items_for,
     mark_items_for,
     note_items_for,
     orbital_items_for,
@@ -27,6 +28,7 @@ def _all_selectable_scene_items_for(canvas) -> tuple[list, list]:
     for bond_items in bond_items_for(canvas).values():
         items.extend(attached_canvas_scene_items(canvas, bond_items))
     for items_for in (
+        image_items_for,
         ring_items_for,
         mark_items_for,
         arrow_items_for,

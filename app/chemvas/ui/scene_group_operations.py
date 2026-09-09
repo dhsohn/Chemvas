@@ -45,7 +45,7 @@ from chemvas.ui.selection_style_access import selection_indicator_rect_for_atom_
 from chemvas.ui.transactions.document import document_transaction
 
 GROUPABLE_STANDALONE_KINDS = frozenset(
-    {"note", "ts_bracket", "shape", "orbital"}
+    {"note", "image", "ts_bracket", "shape", "orbital"}
 ) | frozenset(ARROW_KINDS)
 
 

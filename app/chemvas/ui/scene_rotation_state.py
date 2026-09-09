@@ -50,10 +50,10 @@ def rotate_scene_item_state(
             )
         ]
         return after_state
-    if kind == "note":
+    if kind in {"note", "image"}:
         rect = item.sceneBoundingRect()
         if rect.isValid():
-            # Notes stay upright: orbit the text block's center around the
+            # Notes and image pixels stay upright: orbit the block's center around the
             # pivot and carry the anchor along by the same offset.
             rotated_center = rotated_point(rect.center(), center, angle_radians)
             after_state["x"] = (

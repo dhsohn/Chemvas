@@ -16,6 +16,10 @@ public Composition v1 contract instead of constructing internal document state:
 chemvas compose-document scheme.json --output scheme.chemvas
 ```
 
+The optional `images` array embeds PNG/JPEG files alongside native scene objects.
+Paths are relative to the composition JSON file. See [image objects](IMAGE_OBJECTS.md)
+for exact fields, pixel preservation, GUI editing and resource limits.
+
 A minimal composition is:
 
 ```json
@@ -241,7 +245,7 @@ an existing bond length or normalizes a distorted source ring. Benzene ring
 membership is retained so the renderer can put double-bond strokes inside the ring.
 Calculation Plan and perspective documents are rejected without deleting their data.
 
-Limits: request 64 KiB, source/candidate 8 MiB, 20,000 graphics records with a
+Limits: request 64 KiB, source/candidate 96 MiB, 20,000 graphics records with a
 conservative insertion reservation, finite coordinates within ±1,000,000 and
 a positive bond metric at most 1,000,000. Duplicate/unknown keys, stale hashes,
 invalid topology, partial native mutation and unsafe anchors produce no output.
@@ -325,7 +329,7 @@ the same Chemvas/Qt/font environment, apart from the supplied output path. PDF
 metadata includes Qt-generated identifiers and timestamps, so repeated PDF bytes
 and output hashes may differ. Qt or font changes can also alter path geometry
 or encoded bytes; consumers should use the reported hash rather than assume
-cross-platform byte identity. Rendering is fail-closed at 8 MiB of source data,
+cross-platform byte identity. Rendering is fail-closed at 96 MiB of source data,
 20,000 graphics records, 64 MiB of output, 14,400 points per side, and—for
 PNG—10,000 pixels per side or 25 million total pixels.
 

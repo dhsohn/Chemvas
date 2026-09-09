@@ -36,6 +36,7 @@ _KIND_COLLECTION = {
     "ring": "ring_items",
     "mark": "mark_items",
     "note": "note_items",
+    "image": "image_items",
     "ts_bracket": "ts_bracket_items",
     "shape": "shape_items",
     "orbital": "orbital_items",

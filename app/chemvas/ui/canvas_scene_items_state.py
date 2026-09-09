@@ -11,6 +11,7 @@ class CanvasSceneItemsState:
     selected_notes: list[Any] = field(default_factory=list)
     ring_items: list[Any] = field(default_factory=list)
     note_items: list[Any] = field(default_factory=list)
+    image_items: list[Any] = field(default_factory=list)
     mark_items: list[Any] = field(default_factory=list)
     arrow_items: list[Any] = field(default_factory=list)
     ts_bracket_items: list[Any] = field(default_factory=list)
@@ -22,6 +23,7 @@ SCENE_ITEM_COLLECTION_ATTRS = (
     "selected_notes",
     "ring_items",
     "note_items",
+    "image_items",
     "mark_items",
     "arrow_items",
     "ts_bracket_items",
@@ -69,6 +71,10 @@ def selected_notes_for(canvas: Any) -> list[Any]:
 
 def note_items_for(canvas: Any) -> list[Any]:
     return scene_item_collection_for(canvas, "note_items")
+
+
+def image_items_for(canvas: Any) -> list[Any]:
+    return scene_item_collection_for(canvas, "image_items")
 
 
 def ring_items_for(canvas: Any) -> list[Any]:
@@ -143,6 +149,7 @@ __all__ = [
     "arrow_items_for",
     "clear_scene_item_collections_for",
     "clear_selected_notes_for",
+    "image_items_for",
     "mark_items_for",
     "note_items_for",
     "orbital_items_for",
