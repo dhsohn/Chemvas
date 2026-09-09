@@ -22,8 +22,11 @@ class _QApplicationMetadataStub(QObject):
     raising.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, args: list[str], parsed_arguments: list[str]) -> None:
         super().__init__()
+        self.args = list(args)
+        # PyQt updates the supplied list after Qt consumes its own options.
+        args[:] = parsed_arguments
 
     def installEventFilter(self, event_filter: object) -> None:
         self.installed_event_filter = event_filter
@@ -186,8 +189,8 @@ class MainStderrFilterTest(unittest.TestCase):
             instances: list["FakeApplication"] = []
 
             def __init__(self, args) -> None:
-                super().__init__()
-                self.args = args
+                # QApplication has consumed the -style option and its value.
+                super().__init__(args, [args[0]])
                 self.exec_called = False
                 FakeApplication.instances.append(self)
 
@@ -223,7 +226,8 @@ class MainStderrFilterTest(unittest.TestCase):
             events.append(("exit", None))
 
         sentinel_icon = object()
-        argv = ["chemvas", "--style", "Fusion"]
+        argv = ["chemvas", "-style", "Fusion"]
+        original_argv = list(argv)
         with (
             mock.patch.dict(
                 sys.modules,
@@ -240,7 +244,8 @@ class MainStderrFilterTest(unittest.TestCase):
             ):
                 app_main.main()
 
-        self.assertEqual(FakeApplication.instances[0].args, argv)
+        self.assertEqual(FakeApplication.instances[0].args, original_argv)
+        self.assertEqual(argv, ["chemvas"])
         self.assertTrue(FakeApplication.instances[0].exec_called)
         self.assertTrue(FakeMainWindow.instances[0].shown)
         application = FakeApplication.instances[0]
@@ -260,8 +265,7 @@ class MainStderrFilterTest(unittest.TestCase):
 
         class FakeApplication(_QApplicationMetadataStub):
             def __init__(self, args) -> None:
-                super().__init__()
-                self.args = args
+                super().__init__(args, [args[0], path])
 
             def exec(self) -> None:
                 events.append(("exec", self.args))
@@ -302,7 +306,8 @@ class MainStderrFilterTest(unittest.TestCase):
             yield
             events.append(("exit", None))
 
-        argv = ["chemvas", "--style", "Fusion", path]
+        argv = ["chemvas", "-style", "Fusion", path]
+        original_argv = list(argv)
         with (
             mock.patch.dict(
                 sys.modules,
@@ -323,10 +328,11 @@ class MainStderrFilterTest(unittest.TestCase):
                 ("enter", {}),
                 ("show", None),
                 ("load", path),
-                ("exec", argv),
+                ("exec", original_argv),
                 ("exit", None),
             ],
         )
+        self.assertEqual(argv, ["chemvas", path])
 
     def test_main_loads_startup_canvas_file_argument(self) -> None:
         self._assert_main_loads_startup_file("/tmp/start.chemvas")
@@ -339,8 +345,7 @@ class MainStderrFilterTest(unittest.TestCase):
 
         class FakeApplication(_QApplicationMetadataStub):
             def __init__(self, args) -> None:
-                super().__init__()
-                self.args = args
+                super().__init__(args, list(args))
                 events.append("app")
 
             def exec(self) -> None:
@@ -385,7 +390,7 @@ class MainStderrFilterTest(unittest.TestCase):
         ):
             with (
                 mock.patch.object(sys, "platform", "linux"),
-                mock.patch.object(sys, "argv", ["python", "app/main.py"]),
+                mock.patch.object(sys, "argv", ["app/main.py"]),
                 mock.patch.object(chemvas.branding, "app_icon", lambda: object()),
             ):
                 runpy.run_module("main", run_name="__main__")

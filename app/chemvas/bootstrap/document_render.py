@@ -5,7 +5,7 @@ import hashlib
 import math
 import sys
 import tempfile
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 
@@ -73,13 +73,13 @@ def _argument_parser() -> argparse.ArgumentParser:
     subparsers = parser.add_subparsers(dest="command", required=True)
     render_parser = subparsers.add_parser(
         "render-document",
-        help="render a .chemvas document to a new SVG or PNG file",
+        help="render a .chemvas document to a new SVG, PDF, or PNG file",
     )
     render_parser.add_argument("document", help="input .chemvas document")
     render_parser.add_argument(
         "--output",
         required=True,
-        help="new non-overwriting .svg or .png output path",
+        help="new non-overwriting .svg, .pdf, or .png output path",
     )
     render_parser.add_argument(
         "--background",
@@ -92,7 +92,7 @@ def _argument_parser() -> argparse.ArgumentParser:
         choices=PNG_DPI_CHOICES,
         default=300,
         type=int,
-        help="PNG resolution; SVG ignores this value (default: 300)",
+        help="PNG/PDF resolution; SVG ignores this value (default: 300)",
     )
     render_parser.add_argument(
         "--width-mm",
@@ -107,7 +107,7 @@ def _argument_parser() -> argparse.ArgumentParser:
     render_parser.add_argument(
         "--min-font-pt",
         type=_positive_finite_number,
-        help="reject visible glyphs below this final point size, including scripts",
+        help="SVG/PNG only: reject glyphs below this final point size, including scripts",
     )
     return parser
 
@@ -133,6 +133,8 @@ def _render_document(
     min_font_pt: float | None = None,
 ) -> dict[str, object]:
     output_format = _validate_paths(source, output)
+    if output_format == "pdf" and min_font_pt is not None:
+        raise ValueError("--min-font-pt supports SVG and PNG output only")
     source_bytes, document = read_exact_document(source, max_bytes=MAX_DOCUMENT_BYTES)
     state = cast("Mapping[str, object]", document.state)
     graphics_records = graphics_record_count(state)
@@ -165,7 +167,7 @@ def _render_document(
         "output_bytes": len(rendered.content),
         "written": True,
         "background": background,
-        "dpi": dpi if output_format == "png" else None,
+        "dpi": dpi if output_format in {"png", "pdf"} else None,
         "width_points": _report_number(rendered.width_points),
         "height_points": _report_number(rendered.height_points),
         "width_pixels": rendered.width_pixels,
@@ -183,8 +185,8 @@ def _validate_paths(source: Path, output: Path) -> str:
     if not source.is_file():
         raise ValueError(f"input document does not exist: {source}")
     output_format = output.suffix.lower().removeprefix(".")
-    if output_format not in {"svg", "png"}:
-        raise ValueError("output must use the .svg or .png filename extension")
+    if output_format not in {"svg", "pdf", "png"}:
+        raise ValueError("output must use the .svg, .pdf, or .png filename extension")
     if output.exists() or output.is_symlink():
         raise ValueError(f"output path already exists: {output}")
     if not output.parent.is_dir():
@@ -213,8 +215,28 @@ def _render_offscreen(
             plan,
             output_format=output_format,
             dpi=dpi,
-            max_height_mm=max_height_mm,
+            max_height_mm=None if output_format == "pdf" else max_height_mm,
         )
+        output_plan = plan
+        if output_format == "pdf":
+            from PyQt6.QtCore import QSizeF
+            from PyQt6.QtGui import QPageSize
+
+            # Match the native PDF writer's whole-point page dimensions.
+            page_size = QPageSize(
+                QSizeF(plan.out_w_pt, plan.out_h_pt), QPageSize.Unit.Point
+            ).sizePoints()
+            output_plan = replace(
+                plan,
+                out_w_pt=float(page_size.width()),
+                out_h_pt=float(page_size.height()),
+            )
+            validate_export_budget(
+                output_plan,
+                output_format=output_format,
+                dpi=dpi,
+                max_height_mm=max_height_mm,
+            )
         with tempfile.TemporaryDirectory(prefix="chemvas-render-document-") as raw_tmp:
             rendered_path = Path(raw_tmp) / f"rendered.{output_format}"
             service.export_figure(
@@ -248,8 +270,8 @@ def _render_offscreen(
             )
         return _RenderedDocument(
             content=content,
-            width_points=float(plan.out_w_pt),
-            height_points=float(plan.out_h_pt),
+            width_points=float(output_plan.out_w_pt),
+            height_points=float(output_plan.out_h_pt),
             width_pixels=width_pixels,
             height_pixels=height_pixels,
             font_readability=font_readability,

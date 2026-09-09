@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Export one document to a single-page vector PDF with `render-document`.
+  Reuse the desktop PDF exporter and retain physical sizing, source preservation,
+  and refusal to overwrite an existing output. Minimum-font checking remains
+  available for SVG and PNG.
+
+### Fixed
+
+- Report unrecognized command names before starting Qt. Reject unrecognized
+  desktop arguments after Qt consumes its options, before opening a window or
+  restoring a session.
+- Show Chemvas in the macOS application menu when launched through the standard
+  framework Python bundle. Preserve names supplied by other application bundles.
+
 ## [0.10.2] - 2026-09-09
 
 ### Added

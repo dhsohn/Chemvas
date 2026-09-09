@@ -14,10 +14,13 @@ class _Plan:
     out_h_pt: float
 
 
-def test_svg_budget_reports_points_without_raster_dimensions() -> None:
+@pytest.mark.parametrize("output_format", ["svg", "pdf"])
+def test_vector_budget_reports_points_without_raster_dimensions(
+    output_format: str,
+) -> None:
     assert validate_export_budget(
         _Plan(144.0, 72.0),
-        output_format="svg",
+        output_format=output_format,
         dpi=1200,
     ) == (None, None)
 
@@ -67,7 +70,7 @@ def test_png_budget_rejects_side_and_area_overflow() -> None:
         )
 
 
-@pytest.mark.parametrize("output_format", ["svg", "png"])
+@pytest.mark.parametrize("output_format", ["svg", "pdf", "png"])
 def test_max_height_is_an_inclusive_gate_not_a_resize(output_format: str) -> None:
     plan = _Plan(144.0, 72.0)
     expected = (600, 300) if output_format == "png" else (None, None)

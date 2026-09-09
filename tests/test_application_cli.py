@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import subprocess
 import sys
+import textwrap
 from pathlib import Path
 
 import pytest
@@ -170,7 +171,13 @@ def test_startup_document_path_preserves_first_supported_path() -> None:
 
 @pytest.mark.parametrize(
     "argument",
-    ["--help", "-h", "--version", *dict(application.HEADLESS_SUBCOMMAND_HELP)],
+    [
+        "--help",
+        "-h",
+        "--version",
+        "render",
+        *dict(application.HEADLESS_SUBCOMMAND_HELP),
+    ],
 )
 def test_windows_gui_rejects_console_commands_before_dispatch(
     argument: str, monkeypatch: pytest.MonkeyPatch
@@ -198,3 +205,117 @@ def test_windows_gui_rejects_console_commands_before_dispatch(
 def test_startup_path_keeps_windows_unicode_spaces_and_ampersand() -> None:
     path = "C:/그림 폴더/OH & OMe 구조.CHEMVAS"
     assert application._startup_document_path(["chemvas.exe", path]) == path
+
+
+@pytest.mark.parametrize("arguments", [["render", "--help"], ["typo"], ["legacy.json"]])
+def test_unknown_command_exits_without_importing_qt(
+    arguments: list[str], tmp_path: Path
+) -> None:
+    poison_package = tmp_path / "PyQt6"
+    poison_package.mkdir()
+    (poison_package / "__init__.py").write_text(
+        "raise AssertionError('invalid command imported PyQt6')\n", encoding="utf-8"
+    )
+    env = os.environ.copy()
+    env["PYTHONPATH"] = os.pathsep.join((str(tmp_path), str(APP_ROOT)))
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            "from chemvas.bootstrap.application import main; main()",
+            *arguments,
+        ],
+        capture_output=True,
+        check=False,
+        env=env,
+        text=True,
+        timeout=10,
+    )
+    assert result.returncode == 2, result.stderr
+    assert result.stdout == ""
+    assert f"unrecognized argument: {arguments[0]}" in result.stderr
+    assert "chemvas --help" in result.stderr
+    assert "imported PyQt6" not in result.stderr
+
+
+@pytest.mark.parametrize(
+    "arguments",
+    [
+        ["--unknown"],
+        ["drawing.chemvas", "--unknown"],
+        ["-platform", "offscreen", "render", "--help"],
+        ["--structure.mol"],
+    ],
+)
+def test_unknown_arguments_do_not_create_windows_or_restore_sessions(
+    arguments: list[str],
+) -> None:
+    script = textwrap.dedent("""
+        from chemvas.bootstrap import application, window_registry
+        from chemvas.ui import session_recovery_service
+        def forbidden():
+            raise AssertionError('invalid arguments reached desktop state')
+        window_registry.open_new_window = forbidden
+        session_recovery_service.create_session_recovery_service = forbidden
+        application.main()
+    """)
+    env = os.environ.copy()
+    env["PYTHONPATH"] = str(APP_ROOT)
+    env["QT_QPA_PLATFORM"] = "offscreen"
+    result = subprocess.run(
+        [sys.executable, "-c", script, *arguments],
+        capture_output=True,
+        check=False,
+        env=env,
+        text=True,
+        timeout=10,
+    )
+    assert result.returncode == 2, result.stderr
+    assert "unrecognized argument:" in result.stderr
+    assert "chemvas --help" in result.stderr
+    assert "reached desktop state" not in result.stderr
+
+
+@pytest.mark.parametrize(
+    "document", [None, "그림 폴더/OH & OMe.MOL", "drawing.svg", "drawing.CHEMVAS"]
+)
+def test_qt_options_are_consumed_before_desktop_document_selection(
+    document: str | None,
+) -> None:
+    script = textwrap.dedent("""
+        import sys
+        from types import SimpleNamespace
+        from PyQt6.QtWidgets import QApplication
+        from chemvas.bootstrap import application, file_open, window_registry
+        from chemvas.core import rdkit_adapter
+        from chemvas.ui import session_recovery_service
+        expected = sys.argv[5:]
+        opened = []
+        def desktop_boundary(app):
+            assert sys.argv[1:] == expected, (sys.argv[1:], expected)
+            assert app.style().objectName() == 'fusion'
+            assert opened == expected[:1], (opened, expected[:1])
+            raise SystemExit(7)
+        QApplication.exec = desktop_boundary
+        window_registry.open_new_window = lambda: object()
+        file_open.open_document = opened.append
+        session_recovery_service.create_session_recovery_service = lambda: SimpleNamespace(
+            restore_previous=lambda window: None, start=lambda app: None)
+        rdkit_adapter.warm_rdkit_in_background = lambda: None
+        application.main()
+    """)
+    env = os.environ.copy()
+    env["PYTHONPATH"] = str(APP_ROOT)
+    env["QT_QPA_PLATFORM"] = "offscreen"
+    arguments = ["-platform", "offscreen", "-style", "Fusion"]
+    if document is not None:
+        arguments.append(document)
+    result = subprocess.run(
+        [sys.executable, "-c", script, *arguments],
+        capture_output=True,
+        check=False,
+        env=env,
+        text=True,
+        timeout=10,
+    )
+    assert result.returncode == 7, result.stderr

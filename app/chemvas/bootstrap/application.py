@@ -4,7 +4,7 @@ import os
 import sys
 import threading
 from contextlib import contextmanager
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, NoReturn
 
 from chemvas import __version__
 from chemvas.ui.main_window_path_logic import is_desktop_document_path
@@ -51,7 +51,7 @@ HEADLESS_SUBCOMMAND_HELP = (
     ("insert-template", "insert a native ring template in a new document"),
     ("layout-document", "align structure blocks and captions in a new document"),
     ("pack-step", "create one elementary-step JSON artifact"),
-    ("render-document", "render a document to SVG or PNG"),
+    ("render-document", "render a document to SVG, PNG or PDF"),
     ("select-precomplex", "review and select a precomplex endpoint pair"),
 )
 
@@ -85,6 +85,32 @@ def _root_help() -> str:
         "  --version          show version and exit\n\n"
         f"Headless commands:\n{command_help}\n"
     )
+
+
+def _windows_console_notice(error: str = "") -> NoReturn:
+    from PyQt6.QtWidgets import QApplication, QMessageBox
+
+    console_notice_app = QApplication.instance() or QApplication(sys.argv)
+    QMessageBox.information(
+        None,
+        "Chemvas command line",
+        error + "Use chemvas-cli.exe for command-line options and document commands.\n"
+        "Use chemvas.exe to draw or open a document.",
+    )
+    # Keep the application alive until the modal notice has closed.
+    del console_notice_app
+    raise SystemExit(2)
+
+
+def _reject_startup_argument(argument: str) -> NoReturn:
+    message = (
+        f"chemvas: error: unrecognized argument: {argument}\n"
+        "Run 'chemvas --help' for supported commands and document types.\n"
+    )
+    if sys.platform == "win32" and sys.stdout is None:
+        _windows_console_notice(message)
+    sys.stderr.write(message)
+    raise SystemExit(2)
 
 
 def _stderr_filter_loop(
@@ -136,18 +162,7 @@ def main() -> None:
         and sys.argv[1]
         in {"-h", "--help", "--version", *dict(HEADLESS_SUBCOMMAND_HELP)}
     ):
-        from PyQt6.QtWidgets import QApplication, QMessageBox
-
-        console_notice_app = QApplication.instance() or QApplication(sys.argv)
-        QMessageBox.information(
-            None,
-            "Chemvas command line",
-            "Use chemvas-cli.exe for command-line options and document commands.\n"
-            "Use chemvas.exe to draw or open a document.",
-        )
-        # Keep the application alive until the modal notice has closed.
-        del console_notice_app
-        raise SystemExit(2)
+        _windows_console_notice()
 
     if len(sys.argv) > 1 and sys.argv[1] in {"-h", "--help"}:
         sys.stdout.write(_root_help())
@@ -200,6 +215,13 @@ def main() -> None:
 
         raise SystemExit(run(sys.argv[1:]))
 
+    if (
+        len(sys.argv) > 1
+        and not sys.argv[1].startswith("-")
+        and not is_desktop_document_path(sys.argv[1])
+    ):
+        _reject_startup_argument(sys.argv[1])
+
     with _filtered_stderr():
         from PyQt6.QtWidgets import QApplication
 
@@ -214,6 +236,12 @@ def main() -> None:
         apply_macos_app_name(APP_NAME)
 
         app = QApplication(sys.argv)
+        # PyQt removes Qt options from the supplied Python list. Keep its Unicode
+        # strings: Qt's arguments() can recode document paths on Windows.
+        desktop_arguments = list(sys.argv)
+        for argument in desktop_arguments[1:]:
+            if argument.startswith("-") or not is_desktop_document_path(argument):
+                _reject_startup_argument(argument)
         app.setApplicationName(APP_NAME)
         app.setApplicationDisplayName(APP_NAME)
         app.setApplicationVersion(APP_VERSION)
@@ -235,7 +263,7 @@ def main() -> None:
         # guard, switches to the file if the restore already reopened it. Both
         # the argv and the QEvent.FileOpen paths therefore behave identically.
         recovery.restore_previous(window)
-        startup_document_path = _startup_document_path(sys.argv)
+        startup_document_path = _startup_document_path(desktop_arguments)
         if startup_document_path is not None:
             open_document(startup_document_path)
         recovery.start(app)
