@@ -237,9 +237,13 @@ class MainWindowUIAssemblyServiceTest(unittest.TestCase):
         note_button = assembly.panel_bar.findChild(QToolButton, "toolButton_note")
         self.assertIsNotNone(note_button)
         self.assertIsNotNone(note_button.menu())
+        # Groups are set apart by gap widgets; no divider line remains.
         self.assertEqual(
             sum(1 for action in assembly.panel_bar.actions() if action.isSeparator()),
-            4,
+            0,
+        )
+        self.assertEqual(
+            len(assembly.panel_bar.findChildren(QWidget, "toolbarGroupGap")), 4
         )
         self.assertTrue(assembly.tool_actions["bond"].isChecked())
         self.assertIsNotNone(

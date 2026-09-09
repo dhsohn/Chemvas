@@ -132,17 +132,19 @@ class MainWindowPanelToolbarTest(unittest.TestCase):
         groups = []
         group = []
         for action in toolbar.actions():
-            if action.isSeparator():
-                if group:
-                    groups.append(group)
-                    group = []
-                continue
             widget = (
                 action.defaultWidget()
                 if hasattr(action, "defaultWidget")
                 else toolbar.widgetForAction(action)
             )
             if widget is None:
+                continue
+            # Groups are set apart by a gap widget, not a divider line.
+            if widget.objectName() == "toolbarGroupGap":
+                self.assertFalse(action.isSeparator())
+                if group:
+                    groups.append(group)
+                    group = []
                 continue
             if isinstance(widget, QLineEdit):
                 group.append(widget.placeholderText())
