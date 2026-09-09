@@ -89,10 +89,6 @@ def scene_reset_service_for_access(canvas) -> Any:
     return canvas_services_for(canvas).document.canvas_scene_reset_service
 
 
-def selection_highlight_styler_for_access(canvas) -> Any:
-    return canvas_services_for(canvas).scene_view.selection_highlight_styler
-
-
 def selection_service_for_access(canvas) -> Any:
     return canvas_services_for(canvas).selection.selection_controller
 
@@ -139,7 +135,6 @@ __all__ = [
     "scene_decoration_service_for_access",
     "scene_item_controller_for_access",
     "scene_reset_service_for_access",
-    "selection_highlight_styler_for_access",
     "selection_service_for_access",
     "structure_build_service_for_access",
     "structure_insert_build_service_for_access",

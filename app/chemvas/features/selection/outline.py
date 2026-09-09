@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Callable
 
 from PyQt6.QtCore import QPointF, Qt
-from PyQt6.QtGui import QPainterPath, QPainterPathStroker, QPen
+from PyQt6.QtGui import QPainterPath, QPainterPathStroker, QPen, QTransform
 from PyQt6.QtWidgets import (
     QGraphicsItem,
     QGraphicsLineItem,
@@ -23,6 +23,22 @@ ARROW_OBJECT_KINDS = VALID_ARROW_KINDS
 
 def _default_width_for_pen(pen: QPen) -> float:
     return float(pen.widthF())
+
+
+# QPainterPath.simplified() flattens curves with a tolerance fixed in path
+# units, so a band a few document units wide comes back with visibly
+# polygonal caps once the view zooms in. Simplifying an enlarged copy and
+# scaling the result back keeps the round caps round.
+_SIMPLIFY_SCALE = 32.0
+
+
+def simplified_outline_path(path: QPainterPath) -> QPainterPath:
+    """The union of ``path``'s overlapping subpaths, with its curves kept smooth."""
+    enlarged = QTransform().scale(_SIMPLIFY_SCALE, _SIMPLIFY_SCALE).map(path)
+    reduced = QTransform().scale(1.0 / _SIMPLIFY_SCALE, 1.0 / _SIMPLIFY_SCALE)
+    simplified = reduced.map(enlarged.simplified())
+    simplified.setFillRule(Qt.FillRule.WindingFill)
+    return simplified
 
 
 def selection_line_stroke_path(
@@ -114,9 +130,7 @@ def selection_path_for_object_item(
     stroker.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
     overlay = QPainterPath(shape)
     overlay.addPath(stroker.createStroke(shape))
-    simplified = overlay.simplified()
-    simplified.setFillRule(Qt.FillRule.WindingFill)
-    return simplified
+    return simplified_outline_path(overlay)
 
 
 __all__ = [
@@ -126,4 +140,5 @@ __all__ = [
     "selection_line_stroke_path",
     "selection_path_for_bond_item",
     "selection_path_for_object_item",
+    "simplified_outline_path",
 ]

@@ -10,6 +10,8 @@ from PyQt6.QtWidgets import QGraphicsLineItem
 from chemvas.features.selection import (
     ARROW_OBJECT_KINDS,
     bounding_box_center_for_atoms,
+    selection_frame_applies,
+    simplified_outline_path,
 )
 from chemvas.features.selection import (
     selection_line_stroke_path as build_selection_line_stroke_path,
@@ -22,11 +24,12 @@ from chemvas.features.selection import (
 )
 from chemvas.ui.bond_graphics_access import ring_center_for_bond_for
 from chemvas.ui.bond_label_geometry_access import trim_line_for_labels_for
+from chemvas.ui.canvas_atom_graphics_state import atom_items_for
 from chemvas.ui.canvas_bond_graphics_state import bond_items_for_id
 from chemvas.ui.canvas_model_access import atom_for_id, atoms_for, bond_for_id
 from chemvas.ui.mark_item_access import mark_center_for, mark_selection_radius_for
 from chemvas.ui.pick_radius_access import atom_pick_radius_for
-from chemvas.ui.renderer_style_access import bond_length_px_for
+from chemvas.ui.renderer_style_access import bond_length_px_for, bond_spacing_px_for
 from chemvas.ui.scene_group_operations import selected_group_rects_for
 from chemvas.ui.scene_item_access import (
     add_item_to_canvas_scene,
@@ -37,6 +40,7 @@ from chemvas.ui.selection_info_access import emit_selection_info_for
 from chemvas.ui.selection_outline_items import (
     selection_center_outline_items,
     selection_component_outline_item,
+    selection_frame_outline_items,
     selection_group_outline_item,
     selection_object_outline_item,
 )
@@ -66,6 +70,10 @@ OBJECT_OVERLAY_KINDS = {
     "mark",
     "orbital",
 }
+# What the rotation knob turns about the frame's centre: the same items the
+# Edit rotate command turns, minus atom-bound marks (a mark alone would spin
+# about its own centre, which changes nothing).
+ROTATABLE_OBJECT_KINDS = {*ARROW_OBJECT_KINDS, "orbital"}
 
 
 class SelectionOutlineService:
@@ -110,11 +118,7 @@ class SelectionOutlineService:
 
         self.clear_selection_outlines()
 
-        atom_pad = bond_length_px_for(self.canvas) * 0.06
-        atom_fill = QColor(selection_color_for(self.canvas))
-        atom_fill.setAlpha(45)
-        object_fill = QColor(selection_color_for(self.canvas))
-        object_fill.setAlpha(45)
+        color = QColor(selection_color_for(self.canvas))
         candidate_bond_ids = set(bond_ids)
         graph = getattr(self.graph_service, "graph", None)
         atom_bond_ids = getattr(graph, "atom_bond_ids", {})
@@ -133,18 +137,23 @@ class SelectionOutlineService:
                 and bond.a in component
                 and bond.b in component
             }
-            self.add_selection_component_overlay(
-                component, component_bond_ids, atom_fill, atom_pad
-            )
+            self.add_selection_component_overlay(component, component_bond_ids, color)
 
         center = self.selection_center_for_atoms(atom_ids)
         if center is not None and self.selection_center_marker_enabled():
             self.add_selection_center_marker(center)
 
         for item in object_items:
-            self.add_selection_object_overlay(item, object_fill)
+            self.add_selection_object_overlay(item, color)
         for group_rect in group_rects:
             self.add_selection_group_overlay(group_rect)
+        rotatable_items = [
+            item for item in object_items if item.data(0) in ROTATABLE_OBJECT_KINDS
+        ]
+        if selection_frame_applies(len(atom_ids), len(rotatable_items)):
+            frame_rect = self.selection_frame_rect(atom_ids, rotatable_items)
+            if frame_rect is not None:
+                self.add_selection_frame_overlay(frame_rect)
         emit_selection_info_for(self.canvas)
 
     def clear_selection_outlines(self) -> None:
@@ -231,7 +240,15 @@ class SelectionOutlineService:
                         widths.append(
                             selection_bond_overlay_width_for(self.canvas, item.pen())
                         )
-                    axis_shift = (min(offsets) + max(offsets)) * 0.5
+                    # A ring double bond keeps one line on the atom axis and
+                    # shortens the other inside the ring; its band stays on the
+                    # axis so it meets the neighbouring bands at the vertex.
+                    # Only a symmetric pair (C=O) is centred between its lines.
+                    on_axis_tolerance = bond_spacing_px_for(self.canvas) * 0.25
+                    if any(abs(offset) <= on_axis_tolerance for offset in offsets):
+                        axis_shift = 0.0
+                    else:
+                        axis_shift = (min(offsets) + max(offsets)) * 0.5
                     overlay_width = max(widths)
                     return self.selection_line_stroke_path(
                         QPointF(base_x1 + nx * axis_shift, base_y1 + ny * axis_shift),
@@ -278,30 +295,72 @@ class SelectionOutlineService:
         add_item_to_canvas_scene(self.canvas, outline)
         append_selection_outline_for(self.canvas, outline)
 
+    def add_selection_frame_overlay(self, rect) -> None:
+        for item in selection_frame_outline_items(
+            rect, QColor(selection_color_for(self.canvas))
+        ):
+            add_item_to_canvas_scene(self.canvas, item)
+            append_selection_outline_for(self.canvas, item)
+
+    def selection_frame_rect(self, atom_ids: set[int], items: list):
+        """The box the rotation frame draws: every atom mark and turning item."""
+        rect = None
+        atom_labels = atom_items_for(self.canvas)
+        for atom_id in sorted(atom_ids):
+            atom_rect = selection_indicator_rect_for_atom_for(self.canvas, atom_id)
+            if atom_rect is None:
+                continue
+            label = atom_labels.get(atom_id)
+            if label is not None:
+                # A label such as "HO" is wider than its pick circle; the
+                # frame encloses the whole label rather than cutting it.
+                atom_rect = atom_rect.united(label.sceneBoundingRect())
+            rect = atom_rect if rect is None else rect.united(atom_rect)
+        for item in items:
+            # An arrow's labels are its children and turn with it, so the frame
+            # (and the knob above it) clears them instead of sitting on them.
+            item_rect = item.sceneBoundingRect().united(
+                item.mapRectToScene(item.childrenBoundingRect())
+            )
+            rect = item_rect if rect is None else rect.united(item_rect)
+        if rect is None:
+            return None
+        pad = bond_length_px_for(self.canvas) * 0.12
+        return rect.adjusted(-pad, -pad, pad, pad)
+
     def add_selection_component_overlay(
         self,
         atom_ids: set[int],
         bond_ids: set[int],
         color: QColor,
-        atom_pad: float,
     ) -> None:
+        # The outline follows the bonds. Only an atom that draws a label gets
+        # its own rounded box, and an atom with no selected bond gets a ring,
+        # so a selected chain reads as one band instead of a row of bubbles.
+        atom_labels = atom_items_for(self.canvas)
+        bonded_atom_ids: set[int] = set()
+        for bond_id in bond_ids:
+            bond = bond_for_id(self.canvas, bond_id)
+            if bond is not None:
+                bonded_atom_ids.add(bond.a)
+                bonded_atom_ids.add(bond.b)
         component_path = QPainterPath()
         component_path.setFillRule(Qt.FillRule.WindingFill)
         for atom_id in atom_ids:
+            if atom_id in bonded_atom_ids and atom_labels.get(atom_id) is None:
+                continue
             rect = selection_indicator_rect_for_atom_for(self.canvas, atom_id)
             if rect is None:
                 continue
-            padded = rect.adjusted(-atom_pad, -atom_pad, atom_pad, atom_pad)
-            corner = min(padded.width(), padded.height()) / 2.0
-            component_path.addRoundedRect(padded, corner, corner)
+            corner = min(rect.width(), rect.height()) / 2.0
+            component_path.addRoundedRect(rect, corner, corner)
         for bond_id in bond_ids:
             bond_path = self.selection_path_for_bond(bond_id)
             if not bond_path.isEmpty():
                 component_path.addPath(bond_path)
         if component_path.isEmpty():
             return
-        component_path = component_path.simplified()
-        component_path.setFillRule(Qt.FillRule.WindingFill)
+        component_path = simplified_outline_path(component_path)
         outline = selection_component_outline_item(
             component_path, color=color, atom_ids=atom_ids
         )
@@ -326,4 +385,8 @@ class SelectionOutlineService:
             append_selection_outline_for(self.canvas, marker)
 
 
-__all__ = ["OBJECT_OVERLAY_KINDS", "SelectionOutlineService"]
+__all__ = [
+    "OBJECT_OVERLAY_KINDS",
+    "ROTATABLE_OBJECT_KINDS",
+    "SelectionOutlineService",
+]

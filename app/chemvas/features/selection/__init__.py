@@ -3,11 +3,16 @@
 from .active_tool import ActiveToolReference
 from .center import bounding_box_center_for_atoms, center_for_atoms
 from .handles import (
+    EDGE_HANDLE_SCREEN_PX,
     HANDLE_ACCENT_COLOR,
+    HANDLE_SCREEN_PX,
+    ROTATION_HANDLE_STEM_PX,
+    ROTATION_HANDLE_TYPE,
     clamp_curved_midpoint,
     clear_handle_items,
     control_from_midpoint,
     create_handle_item,
+    create_rotation_handle_item,
     curved_midpoint,
     default_curved_control,
     mark_handle_snapped,
@@ -15,6 +20,8 @@ from .handles import (
     orbital_rotation_angle,
     orbital_scale_factor,
     resized_shape_rect,
+    rotation_drag_angle,
+    selection_frame_applies,
     shape_resize_handle_positions,
 )
 from .hit import (
@@ -37,6 +44,7 @@ from .outline import (
     selection_line_stroke_path,
     selection_path_for_bond_item,
     selection_path_for_object_item,
+    simplified_outline_path,
 )
 from .press import SelectionPressContext, SelectionPressDecision, plan_selection_press
 from .rotation import rotated_atom_positions
@@ -58,7 +66,11 @@ from .rotation_geometry import (
 
 __all__ = [
     "ARROW_OBJECT_KINDS",
+    "EDGE_HANDLE_SCREEN_PX",
     "HANDLE_ACCENT_COLOR",
+    "HANDLE_SCREEN_PX",
+    "ROTATION_HANDLE_STEM_PX",
+    "ROTATION_HANDLE_TYPE",
     "ActiveToolReference",
     "AtomHitCandidate",
     "BondHitCandidate",
@@ -79,6 +91,7 @@ __all__ = [
     "clear_handle_items",
     "control_from_midpoint",
     "create_handle_item",
+    "create_rotation_handle_item",
     "curved_midpoint",
     "default_curved_control",
     "dominant_axis_angle_from_drag",
@@ -98,12 +111,15 @@ __all__ = [
     "rigid_rotation_angles_from_drag",
     "rotate_point_around_axis",
     "rotated_atom_positions",
+    "rotation_drag_angle",
     "selected_atom_ids_with_bond_endpoints",
+    "selection_frame_applies",
     "selection_hit_matches",
     "selection_line_stroke_path",
     "selection_path_for_bond_item",
     "selection_path_for_object_item",
     "shape_resize_handle_positions",
+    "simplified_outline_path",
     "structure_hit_is_selected",
     "translate_projected_point_3d",
     "unproject_point_3d",

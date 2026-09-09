@@ -81,6 +81,12 @@ class _FakeItem:
     def sceneBoundingRect(self) -> QRectF:
         return QRectF(self._rect)
 
+    def childrenBoundingRect(self) -> QRectF:
+        return QRectF()
+
+    def mapRectToScene(self, rect: QRectF) -> QRectF:
+        return QRectF(rect)
+
     def contains(self, _pos) -> bool:
         return self._contains
 
@@ -96,6 +102,7 @@ class _FakeScene:
         self._selected_items = list(selected_items or [])
         self.block_signal_calls = []
         self.removed_items = []
+        self.added_items = []
         self.clear_selection_calls = 0
 
     def selectedItems(self):
@@ -106,6 +113,9 @@ class _FakeScene:
 
     def removeItem(self, item) -> None:
         self.removed_items.append(item)
+
+    def addItem(self, item) -> None:
+        self.added_items.append(item)
 
     def clearSelection(self) -> None:
         self.clear_selection_calls += 1
@@ -845,7 +855,7 @@ class SelectionControllerAdditionalTest(unittest.TestCase):
             controller.selection_path_for_object_item("object"), "object-path"
         )
         controller.add_selection_object_overlay("object", color)
-        controller.add_selection_component_overlay({1}, {2}, color, 1.5)
+        controller.add_selection_component_overlay({1}, {2}, color)
         self.assertEqual(controller.selection_center_for_atoms({1, 2}), center)
         self.assertTrue(controller.selection_center_marker_enabled())
         controller.add_selection_center_marker(center)
@@ -876,7 +886,7 @@ class SelectionControllerAdditionalTest(unittest.TestCase):
             "object", color
         )
         controller.outline_service.add_selection_component_overlay.assert_called_once_with(
-            {1}, {2}, color, 1.5
+            {1}, {2}, color
         )
         controller.outline_service.selection_center_for_atoms.assert_called_once_with(
             {1, 2}
@@ -900,7 +910,6 @@ class SelectionControllerAdditionalTest(unittest.TestCase):
         )
         canvas.runtime_state.selection_style_state = SelectionStyleState(
             color=QColor("#1f5eff"),
-            stroke_delta=0.8,
         )
         set_selected_notes_for(canvas, [note_a])
         controller = _make_selection_controller(canvas)
@@ -1271,8 +1280,10 @@ class SelectionControllerAdditionalTest(unittest.TestCase):
         controller.outline_service.selection_path_for_bond = mock.Mock(
             return_value=QPainterPath()
         )
-        controller.add_selection_component_overlay({1}, {0}, QColor("#334455"), 1.0)
-        self.assertEqual(len(selection_outlines_for(canvas)), 2)
+        # A bonded, unlabelled atom draws no mark of its own: with no bond
+        # band there is nothing to outline.
+        controller.add_selection_component_overlay({1}, {0}, QColor("#334455"))
+        self.assertEqual(len(selection_outlines_for(canvas)), 1)
 
         non_empty_bond_path = controller.selection_line_stroke_path(
             QPointF(0.0, 0.0), QPointF(10.0, 0.0), 4.0
@@ -1280,12 +1291,12 @@ class SelectionControllerAdditionalTest(unittest.TestCase):
         controller.outline_service.selection_path_for_bond = mock.Mock(
             return_value=non_empty_bond_path
         )
-        controller.add_selection_component_overlay({1}, {0}, QColor("#334455"), 1.0)
-        self.assertEqual(len(selection_outlines_for(canvas)), 3)
+        controller.add_selection_component_overlay({1}, {0}, QColor("#334455"))
+        self.assertEqual(len(selection_outlines_for(canvas)), 2)
 
         self.assertEqual(
             controller.selection_center_for_atoms({1, 2}), QPointF(0.0, 0.0)
         )
         self.assertTrue(controller.selection_center_marker_enabled())
         controller.add_selection_center_marker(QPointF(5.0, 5.0))
-        self.assertEqual(len(selection_outlines_for(canvas)), 5)
+        self.assertEqual(len(selection_outlines_for(canvas)), 4)

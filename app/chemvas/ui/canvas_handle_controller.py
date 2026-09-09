@@ -18,7 +18,6 @@ from chemvas.ui.handle_mutation_access import (
     curved_snap_distance_for,
     curved_snap_enabled_for,
 )
-from chemvas.ui.selection_highlight_styler import selection_highlight_styler_for
 
 if TYPE_CHECKING:
     from PyQt6.QtCore import QPointF
@@ -136,17 +135,6 @@ class CanvasHandleController:
             mid,
             snap_enabled=snap_enabled,
             snap_distance=snap_distance,
-        )
-
-    def set_selection_highlight(self, items: list) -> None:
-        selection_highlight_styler_for(self.canvas).set_selection_highlight(items)
-
-    def clear_selection_highlight(self) -> None:
-        selection_highlight_styler_for(self.canvas).clear_selection_highlight()
-
-    def apply_selection_style(self, item, selected: bool) -> None:
-        selection_highlight_styler_for(self.canvas).apply_selection_style(
-            item, selected
         )
 
 

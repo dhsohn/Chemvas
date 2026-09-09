@@ -1157,7 +1157,6 @@ class CanvasViewAdditionalTest(unittest.TestCase):
                 tool_settings_state=CanvasToolSettingsState(atom_symbol="C"),
                 selection_style_state=SelectionStyleState(
                     color=QColor("#000000"),
-                    stroke_delta=0.6,
                 ),
                 text_style_state=CanvasTextStyleState(
                     text_font_family="Helvetica",
@@ -1262,7 +1261,6 @@ class CanvasViewAdditionalTest(unittest.TestCase):
                 ),
                 selection_style_state=SelectionStyleState(
                     color=QColor("#1f5eff"),
-                    stroke_delta=0.8,
                 ),
                 scene_items_state=CanvasSceneItemsState(),
                 group_state=CanvasGroupState(),

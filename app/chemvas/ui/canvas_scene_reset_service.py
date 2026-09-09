@@ -102,7 +102,6 @@ class CanvasSceneResetService:
         selection_info = selection_info_state_for(canvas)
 
         def clear_selection_runtime() -> None:
-            selection_style.selected_items.clear()
             selection_style.suspend_outline = False
             selection_info.signature = None
             selection_info.pending_signature = None

@@ -41,9 +41,7 @@ class SelectionNoteServiceTest(unittest.TestCase):
             runtime_state=canvas_runtime_state(
                 group_state=CanvasGroupState(),
                 scene_items_state=CanvasSceneItemsState(),
-                selection_style_state=SelectionStyleState(
-                    color=QColor("#1f5eff"), stroke_delta=0.8
-                ),
+                selection_style_state=SelectionStyleState(color=QColor("#1f5eff")),
                 text_style_state=CanvasTextStyleState(note_padding=6.0),
             ),
             # Note-selection changes refresh the selection outline through the
@@ -78,9 +76,7 @@ class SelectionNoteServiceTest(unittest.TestCase):
             runtime_state=canvas_runtime_state(
                 group_state=CanvasGroupState(),
                 scene_items_state=CanvasSceneItemsState(),
-                selection_style_state=SelectionStyleState(
-                    color=QColor("#1f5eff"), stroke_delta=0.8
-                ),
+                selection_style_state=SelectionStyleState(color=QColor("#1f5eff")),
                 text_style_state=CanvasTextStyleState(note_padding=6.0),
             ),
             # Note-selection changes refresh the selection outline through the
@@ -112,9 +108,7 @@ class SelectionNoteServiceTest(unittest.TestCase):
             runtime_state=canvas_runtime_state(
                 group_state=CanvasGroupState(),
                 scene_items_state=CanvasSceneItemsState(),
-                selection_style_state=SelectionStyleState(
-                    color=QColor("#1f5eff"), stroke_delta=0.8
-                ),
+                selection_style_state=SelectionStyleState(color=QColor("#1f5eff")),
                 text_style_state=CanvasTextStyleState(note_padding=6.0),
             ),
             # Note-selection changes refresh the selection outline through the
@@ -142,9 +136,7 @@ class SelectionNoteServiceTest(unittest.TestCase):
             runtime_state=canvas_runtime_state(
                 group_state=CanvasGroupState(),
                 scene_items_state=CanvasSceneItemsState(),
-                selection_style_state=SelectionStyleState(
-                    color=QColor("#1f5eff"), stroke_delta=0.8
-                ),
+                selection_style_state=SelectionStyleState(color=QColor("#1f5eff")),
                 text_style_state=CanvasTextStyleState(note_padding=6.0),
             ),
             # Note-selection changes refresh the selection outline through the

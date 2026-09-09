@@ -366,7 +366,6 @@ class CanvasSceneResetServiceTest(unittest.TestCase):
             scene=lambda: scene,
             runtime_state=canvas_runtime_state(
                 selection_style_state=SelectionStyleState(
-                    selected_items=[object()],
                     suspend_outline=True,
                 ),
                 selection_info_state=SelectionInfoState.create(),
@@ -379,7 +378,6 @@ class CanvasSceneResetServiceTest(unittest.TestCase):
             service.clear_scene()
 
         self.assertEqual(scene.clear_calls, 0)
-        self.assertEqual(len(selection_style_state_for(canvas).selected_items), 1)
         self.assertTrue(selection_style_state_for(canvas).suspend_outline)
 
     def test_empty_status_publication_reentry_publishes_once(self) -> None:
@@ -415,7 +413,6 @@ class CanvasSceneResetServiceTest(unittest.TestCase):
         scene = _FakeScene()
         apply_insert_session_state = mock.Mock()
         selection_callback = mock.Mock()
-        selected_highlight = object()
         canvas = SimpleNamespace(
             scene=lambda: scene,
             model=SimpleNamespace(dummy=True),
@@ -464,7 +461,6 @@ class CanvasSceneResetServiceTest(unittest.TestCase):
             mark_registry=CanvasMarkRegistry({1: [object()]}),
             insert_state=CanvasInsertState(smiles_preview_model=object()),
             selection_style_state=SelectionStyleState(
-                selected_items=[selected_highlight],
                 suspend_outline=True,
             ),
             selection_info_state=SelectionInfoState(
@@ -528,7 +524,6 @@ class CanvasSceneResetServiceTest(unittest.TestCase):
         self.assertEqual(shape_items_for(canvas), [])
         self.assertEqual(orbital_items_for(canvas), [])
         self.assertEqual(selection_outlines_for(canvas), [])
-        self.assertEqual(canvas.selection_style_state.selected_items, [])
         self.assertFalse(canvas.selection_style_state.suspend_outline)
         self.assertIsNone(canvas.selection_info_state.signature)
         self.assertIsNone(canvas.selection_info_state.pending_signature)

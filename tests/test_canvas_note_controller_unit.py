@@ -355,7 +355,6 @@ class CanvasNoteControllerUnitTest(unittest.TestCase):
                 ),
                 selection_style_state=SelectionStyleState(
                     color=QColor("#1f5eff"),
-                    stroke_delta=0.8,
                 ),
                 scene_items_state=CanvasSceneItemsState(),
             ),
@@ -486,7 +485,6 @@ class CanvasNoteControllerUnitTest(unittest.TestCase):
                 text_style_state=CanvasTextStyleState(note_padding=6.0),
                 selection_style_state=SelectionStyleState(
                     color=QColor("#1f5eff"),
-                    stroke_delta=0.8,
                 ),
                 scene_items_state=CanvasSceneItemsState(),
             ),

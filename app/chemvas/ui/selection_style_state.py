@@ -8,9 +8,7 @@ from PyQt6.QtGui import QColor
 
 @dataclass(slots=True)
 class SelectionStyleState:
-    selected_items: list = field(default_factory=list)
     color: QColor = field(default_factory=lambda: QColor("#0d9488"))
-    stroke_delta: float = 0.6
     suspend_outline: bool = False
 
 

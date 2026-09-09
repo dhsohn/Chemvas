@@ -198,26 +198,6 @@ class _VisualRectSceneItem(_SceneItem):
         self.brush_value = value
 
 
-class _StyledSceneItem(_SceneItem):
-    def __init__(self, name: str) -> None:
-        super().__init__(name)
-        self.pen_value = "highlight"
-        self.original_pen = "normal"
-
-    def pen(self):
-        return self.pen_value
-
-    def setPen(self, value) -> None:
-        self.pen_value = value
-
-    def data(self, index: int):
-        return self.original_pen if index == 6 else None
-
-    def setData(self, index: int, value) -> None:
-        if index == 6:
-            self.original_pen = value
-
-
 class _Canvas:
     def __init__(self) -> None:
         self._scene = _Scene()
@@ -242,7 +222,7 @@ def _install_scene_runtime_state(canvas: _Canvas) -> None:
     )
     canvas.runtime_state.mark_registry = SimpleNamespace(by_atom={})
     canvas.runtime_state.handle_state = SimpleNamespace(active_handles=[], target=None)
-    canvas.runtime_state.selection_style_state = SimpleNamespace(selected_items=[])
+    canvas.runtime_state.selection_style_state = SimpleNamespace()
     canvas.runtime_state.selection_outline_state = SimpleNamespace(outlines=[])
     canvas.runtime_state.selection_info_state = SimpleNamespace(
         signature=(frozenset({1}), frozenset()),
@@ -1363,11 +1343,9 @@ def test_note_remove_failure_restores_collections_selection_and_container_identi
 
     note_items = [other, note]
     selected_notes = [note]
-    selected_style_items = [note]
     outlines = [_SceneItem("outline")]
     canvas.runtime_state.scene_items_state.note_items = note_items
     canvas.runtime_state.scene_items_state.selected_notes = selected_notes
-    canvas.runtime_state.selection_style_state.selected_items = selected_style_items
     canvas.runtime_state.selection_outline_state.outlines = outlines
     before_order = canvas.scene().items()
     before_info = vars(canvas.runtime_state.selection_info_state).copy()
@@ -1376,7 +1354,6 @@ def test_note_remove_failure_restores_collections_selection_and_container_identi
         note_items.remove(item)
         selected_notes.remove(item)
         item.setSelected(False)
-        canvas.runtime_state.selection_style_state.selected_items = []
         canvas.runtime_state.selection_outline_state.outlines = []
         canvas.runtime_state.selection_info_state.signature = None
         canvas.runtime_state.selection_info_state.cache = ("mutated", "selection")
@@ -1402,11 +1379,6 @@ def test_note_remove_failure_restores_collections_selection_and_container_identi
     assert note_items == [other, note]
     assert canvas.runtime_state.scene_items_state.selected_notes is selected_notes
     assert selected_notes == [note]
-    assert (
-        canvas.runtime_state.selection_style_state.selected_items
-        is selected_style_items
-    )
-    assert selected_style_items == [note]
     assert canvas.runtime_state.selection_outline_state.outlines is outlines
     assert vars(canvas.runtime_state.selection_info_state) == before_info
 
@@ -1505,7 +1477,7 @@ def test_handle_target_remove_failure_restores_handles_scene_order_and_container
 ) -> None:
     canvas = _Canvas()
     _install_scene_runtime_state(canvas)
-    target = _StyledSceneItem("target")
+    target = _SceneItem("target")
     first_handle = _SceneItem("first-handle")
     second_handle = _SceneItem("second-handle")
     other = _SceneItem("other")
@@ -1516,8 +1488,6 @@ def test_handle_target_remove_failure_restores_handles_scene_order_and_container
     active_handles = [first_handle, second_handle]
     canvas.runtime_state.handle_state.active_handles = active_handles
     canvas.runtime_state.handle_state.target = target
-    selected_style_items = [target]
-    canvas.runtime_state.selection_style_state.selected_items = selected_style_items
     before_order = canvas.scene().items()
 
     def remove_after_handle_clear(_canvas, item) -> None:
@@ -1526,9 +1496,6 @@ def test_handle_target_remove_failure_restores_handles_scene_order_and_container
         canvas.scene().detach(second_handle)
         canvas.runtime_state.handle_state.active_handles = []
         canvas.runtime_state.handle_state.target = None
-        target.pen_value = "normal"
-        target.original_pen = None
-        canvas.runtime_state.selection_style_state.selected_items = []
         raise RuntimeError("target remove failed before detach")
 
     command = DeleteSceneItemsCommand([], [target])
@@ -1554,13 +1521,6 @@ def test_handle_target_remove_failure_restores_handles_scene_order_and_container
     assert canvas.runtime_state.handle_state.active_handles is active_handles
     assert active_handles == [first_handle, second_handle]
     assert canvas.runtime_state.handle_state.target is target
-    assert (
-        canvas.runtime_state.selection_style_state.selected_items
-        is selected_style_items
-    )
-    assert selected_style_items == [target]
-    assert target.pen_value == "highlight"
-    assert target.original_pen == "normal"
 
 
 @pytest.mark.parametrize(("method_name", "direction"), [("redo", 1.0), ("undo", -1.0)])

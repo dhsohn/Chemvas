@@ -477,7 +477,6 @@ def test_load_smiles_clears_detached_highlight_and_pending_selection_info() -> N
         canvas.scene().addItem(old_highlight)
 
         selection_style = selection_style_state_for(canvas)
-        selection_style.selected_items = [old_highlight]
         selection_style.suspend_outline = True
         selection_info = selection_info_state_for(canvas)
         selection_callback = mock.Mock()
@@ -500,7 +499,6 @@ def test_load_smiles_clears_detached_highlight_and_pending_selection_info() -> N
 
         assert canvas.model is replacement_model
         assert old_highlight.scene() is None
-        assert selection_style.selected_items == []
         assert not selection_style.suspend_outline
         assert selection_info.signature is None
         assert selection_info.pending_signature is None

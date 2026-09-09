@@ -127,6 +127,10 @@ class SelectionOutlineServiceTest(unittest.TestCase):
         service.selection_center_marker_enabled = mock.Mock(return_value=True)
         service.add_selection_center_marker = mock.Mock()
         service.add_selection_object_overlay = mock.Mock()
+        service.selection_frame_rect = mock.Mock(
+            return_value=QRectF(0.0, 0.0, 4.0, 2.0)
+        )
+        service.add_selection_frame_overlay = mock.Mock()
 
         service.update_selection_outline()
 
@@ -139,6 +143,12 @@ class SelectionOutlineServiceTest(unittest.TestCase):
         service.add_selection_center_marker.assert_called_once_with(QPointF(1.0, 0.0))
         service.add_selection_object_overlay.assert_called_once_with(
             object_item, mock.ANY
+        )
+        # Two atoms and a rotatable arrow: the frame and its knob are drawn
+        # around the atoms and the arrow.
+        service.selection_frame_rect.assert_called_once_with({1, 2}, [object_item])
+        service.add_selection_frame_overlay.assert_called_once_with(
+            QRectF(0.0, 0.0, 4.0, 2.0)
         )
         canvas.selection_info_callback.assert_called_once_with("", "")
 
@@ -190,6 +200,7 @@ class SelectionOutlineServiceTest(unittest.TestCase):
         service = _outline_service(canvas)
         service.add_selection_component_overlay = mock.Mock()
         service.selection_center_for_atoms = mock.Mock(return_value=None)
+        service.add_selection_frame_overlay = mock.Mock()
 
         service.update_selection_outline()
 
@@ -338,7 +349,7 @@ class SelectionOutlineServiceTest(unittest.TestCase):
         )
 
         service.add_selection_object_overlay(_FakeItem("arrow"), QColor("#abcdef"))
-        service.add_selection_component_overlay({1}, {0}, QColor("#334455"), 1.0)
+        service.add_selection_component_overlay({1}, {0}, QColor("#334455"))
         service.add_selection_center_marker(QPointF(5.0, 5.0))
 
         self.assertEqual(len(selection_outlines_for(canvas)), 4)

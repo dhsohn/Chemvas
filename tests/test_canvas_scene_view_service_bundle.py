@@ -27,7 +27,6 @@ def test_build_canvas_scene_view_services_wires_explicit_collaborators(
         "CanvasRingFillSceneService",
         "SceneItemController",
         "SceneItemLifecycleService",
-        "SelectionHighlightStyler",
     ):
         monkeypatch.setattr(
             canvas_scene_view_service_bundle,
@@ -55,7 +54,6 @@ def test_build_canvas_scene_view_services_wires_explicit_collaborators(
     assert lifecycle_service.service_name == "SceneItemLifecycleService"
     assert lifecycle_service.args == (canvas,)
     assert lifecycle_service.kwargs == {"graph_service": graph_service}
-    assert services.selection_highlight_styler.args == (canvas,)
     assert services.geometry_controller.kwargs == {
         "hit_testing_service": hit_testing_service,
         "history_service": history_service,

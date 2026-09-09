@@ -76,7 +76,6 @@ class HandleOverlayServiceTest(unittest.TestCase):
                 scene_items_state=CanvasSceneItemsState(),
             ),
             services=canvas_runtime_services(
-                selection_highlight_styler=mock.Mock(),
                 handle_mutation_service=SimpleNamespace(
                     update_curved_control=mock.Mock(side_effect=update_curved_control)
                 ),
@@ -100,7 +99,6 @@ class HandleOverlayServiceTest(unittest.TestCase):
         self.assertIsNone(canvas.runtime_state.handle_state.target)
         self.assertIsNone(handle_a.scene())
         self.assertIsNone(handle_b.scene())
-        canvas.services.scene_view.selection_highlight_styler.clear_selection_highlight.assert_called_once_with()
 
     def test_clear_handles_uses_scene_access_helper_without_context_scene_facade(
         self,
@@ -166,28 +164,21 @@ class HandleOverlayServiceTest(unittest.TestCase):
 
         service.show_orbital_handles(item)
 
-        canvas.services.scene_view.selection_highlight_styler.set_selection_highlight.assert_called_once_with(
-            [item]
-        )
         self.assertIs(canvas.runtime_state.handle_state.target, item)
         self.assertEqual(len(canvas.runtime_state.handle_state.active_handles), 2)
         self.assertEqual(
             [
-                (handle.rect().center().x(), handle.rect().center().y())
+                (handle.pos().x(), handle.pos().y())
                 for handle in canvas.runtime_state.handle_state.active_handles
             ],
             [(17.0, 20.0), (10.0, 13.0)],
         )
 
         fallback = _FakeGraphicsItem(rect=QRectF(0.0, 0.0, 20.0, 10.0), data={1: {}})
-        canvas.services.scene_view.selection_highlight_styler.set_selection_highlight.reset_mock()
         service.show_orbital_handles(fallback)
-        canvas.services.scene_view.selection_highlight_styler.set_selection_highlight.assert_called_once_with(
-            [fallback]
-        )
         self.assertEqual(
             [
-                (handle.rect().center().x(), handle.rect().center().y())
+                (handle.pos().x(), handle.pos().y())
                 for handle in canvas.runtime_state.handle_state.active_handles
             ],
             [(42.0, 5.0), (10.0, -27.0)],
@@ -203,16 +194,13 @@ class HandleOverlayServiceTest(unittest.TestCase):
 
         service.show_curved_handles(item)
 
-        canvas.services.scene_view.selection_highlight_styler.set_selection_highlight.assert_called_once_with(
-            [item]
-        )
         canvas.services.handles.handle_mutation_service.update_curved_control.assert_called_once_with(
             item, QPointF(5.0, 1.5)
         )
         self.assertEqual(len(canvas.runtime_state.handle_state.active_handles), 3)
         self.assertEqual(
             [
-                (handle.data(1), handle.rect().center().x(), handle.rect().center().y())
+                (handle.data(1), handle.pos().x(), handle.pos().y())
                 for handle in canvas.runtime_state.handle_state.active_handles
             ],
             [
@@ -223,18 +211,14 @@ class HandleOverlayServiceTest(unittest.TestCase):
         )
 
         fallback = _FakeGraphicsItem(rect=QRectF(0.0, 0.0, 20.0, 20.0), data={2: {}})
-        canvas.services.scene_view.selection_highlight_styler.set_selection_highlight.reset_mock()
         canvas.services.handles.handle_mutation_service.update_curved_control.reset_mock()
         service.show_curved_handles(fallback)
-        canvas.services.scene_view.selection_highlight_styler.set_selection_highlight.assert_called_once_with(
-            [fallback]
-        )
         canvas.services.handles.handle_mutation_service.update_curved_control.assert_not_called()
         self.assertEqual(len(canvas.runtime_state.handle_state.active_handles), 1)
         self.assertEqual(
             (
-                canvas.runtime_state.handle_state.active_handles[0].rect().center().x(),
-                canvas.runtime_state.handle_state.active_handles[0].rect().center().y(),
+                canvas.runtime_state.handle_state.active_handles[0].pos().x(),
+                canvas.runtime_state.handle_state.active_handles[0].pos().y(),
             ),
             (10.0, 10.0),
         )

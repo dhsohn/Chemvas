@@ -32,7 +32,6 @@ from chemvas.ui.handle_state import (
     set_handle_target_for,
 )
 from chemvas.ui.renderer_style_access import bond_length_px_for
-from chemvas.ui.selection_highlight_styler import selection_highlight_styler_for
 
 if TYPE_CHECKING:
     from chemvas.ui.canvas_view import CanvasView
@@ -48,11 +47,9 @@ class HandleOverlayService:
             clear_handle_items_for_canvas(self.canvas, active_handles_for(self.canvas)),
         )
         set_handle_target_for(self.canvas, None)
-        selection_highlight_styler_for(self.canvas).clear_selection_highlight()
 
     def show_orbital_handles(self, item) -> None:
         self.clear_handles()
-        selection_highlight_styler_for(self.canvas).set_selection_highlight([item])
         data = item.data(1) or {}
         center = data.get("center")
         base_dist = data.get("base_handle_dist", bond_length_px_for(self.canvas) * 0.8)
@@ -72,7 +69,6 @@ class HandleOverlayService:
 
     def show_shape_handles(self, item) -> None:
         self.clear_handles()
-        selection_highlight_styler_for(self.canvas).set_selection_highlight([item])
         data = item.data(1) or {}
         rect = data.get("rect")
         if rect is None:
@@ -94,7 +90,6 @@ class HandleOverlayService:
             # an item that gets no handles.
             return
         self.clear_handles()
-        selection_highlight_styler_for(self.canvas).set_selection_highlight([item])
         handles = [
             self.create_handle(start, "arrow_start", item),
             self.create_handle(end, "arrow_end", item),
@@ -105,7 +100,6 @@ class HandleOverlayService:
 
     def show_curved_handles(self, item) -> None:
         self.clear_handles()
-        selection_highlight_styler_for(self.canvas).set_selection_highlight([item])
         data = item.data(2) or {}
         start = data.get("start")
         end = data.get("end")
