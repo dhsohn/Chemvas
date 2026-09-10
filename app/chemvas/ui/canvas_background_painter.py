@@ -9,6 +9,7 @@ from chemvas.ui.canvas_model_state import model_for
 from chemvas.ui.canvas_scene_items_state import scene_items_state_for
 from chemvas.ui.endpoint_snap_access import grid_snap_enabled_for, grid_step_for
 from chemvas.ui.sheet_setup_access import sheet_rect_for
+from chemvas.ui.sheet_setup_state import sheet_setup_state_for
 
 # Below this on-screen spacing the grid reads as a grey wash rather than as a
 # guide, so it is left unpainted while the snapping itself keeps working.
@@ -35,9 +36,11 @@ def draw_canvas_background_for(canvas, painter, rect) -> None:
     painter.setBrush(Qt.BrushStyle.NoBrush)
     painter.drawRect(sheet_rect)
     _draw_grid(canvas, painter, rect, sheet_rect)
-    if document_is_empty_for(canvas):
+    empty = document_is_empty_for(canvas)
+    if empty:
         _draw_empty_hint(painter, sheet_rect)
     painter.restore()
+    _repaint_whole_view_when_emptiness_flips(canvas, empty)
 
 
 # Shown on a sheet with nothing on it, so a first look says what to do; it
@@ -77,6 +80,21 @@ def _draw_empty_hint(painter, sheet_rect) -> None:
     box = QRectF(device_center.x() - 300.0, device_center.y() - 12.0, 600.0, 24.0)
     painter.drawText(box, Qt.AlignmentFlag.AlignCenter, EMPTY_SHEET_HINT)
     painter.restore()
+
+
+def _repaint_whole_view_when_emptiness_flips(canvas, empty: bool) -> None:
+    # The view repaints only the changed object's region, and the first or
+    # last object rarely sits under the hint, so a partial pass would leave a
+    # stale hint over a fresh drawing (or none over a newly emptied sheet).
+    # The pass that first sees the flip asks for one full viewport repaint.
+    state = sheet_setup_state_for(canvas)
+    if state.empty_hint_shown is None:
+        state.empty_hint_shown = empty
+        return
+    if state.empty_hint_shown == empty:
+        return
+    state.empty_hint_shown = empty
+    canvas.viewport().update()
 
 
 def _draw_grid(canvas, painter, rect, sheet_rect) -> None:

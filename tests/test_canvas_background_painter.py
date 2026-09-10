@@ -7,10 +7,20 @@ from PyQt6.QtCore import QRectF, Qt
 from PyQt6.QtGui import QColor, QTransform
 
 import chemvas.ui.canvas_background_painter as background_painter
+from chemvas.ui.sheet_setup_state import SheetSetupState
+from tests.runtime_state import canvas_runtime_state
+
+
+def _canvas() -> SimpleNamespace:
+    viewport = mock.Mock()
+    return SimpleNamespace(
+        runtime_state=canvas_runtime_state(sheet_setup_state=SheetSetupState()),
+        viewport=mock.Mock(return_value=viewport),
+    )
 
 
 def test_draw_canvas_background_paints_workspace_shadow_and_sheet(monkeypatch) -> None:
-    canvas = SimpleNamespace()
+    canvas = _canvas()
     monkeypatch.setattr(
         background_painter, "grid_snap_enabled_for", mock.Mock(return_value=False)
     )
@@ -46,7 +56,7 @@ def test_draw_canvas_background_paints_workspace_shadow_and_sheet(monkeypatch) -
 def test_draw_canvas_background_draws_grid_points_when_the_grid_is_on(
     monkeypatch,
 ) -> None:
-    canvas = SimpleNamespace()
+    canvas = _canvas()
     painter = mock.Mock()
     painter.transform.return_value = QTransform()
     sheet_rect = QRectF(0.0, 0.0, 40.0, 30.0)
@@ -79,7 +89,7 @@ def test_draw_canvas_background_draws_grid_points_when_the_grid_is_on(
 
 
 def test_draw_canvas_background_skips_a_grid_too_dense_to_read(monkeypatch) -> None:
-    canvas = SimpleNamespace()
+    canvas = _canvas()
     painter = mock.Mock()
     monkeypatch.setattr(
         background_painter, "document_is_empty_for", mock.Mock(return_value=False)
@@ -108,7 +118,7 @@ def test_draw_canvas_background_skips_a_grid_too_dense_to_read(monkeypatch) -> N
 def test_draw_canvas_background_writes_the_hint_only_on_an_empty_sheet(
     monkeypatch,
 ) -> None:
-    canvas = SimpleNamespace()
+    canvas = _canvas()
     painter = mock.Mock()
     painter.transform.return_value = QTransform().scale(2.0, 2.0)
     sheet_rect = QRectF(0.0, 0.0, 400.0, 300.0)
@@ -143,9 +153,47 @@ def test_draw_canvas_background_writes_the_hint_only_on_an_empty_sheet(
     painter.drawText.assert_not_called()
 
 
+def test_draw_canvas_background_repaints_the_whole_view_when_emptiness_flips(
+    monkeypatch,
+) -> None:
+    canvas = _canvas()
+    painter = mock.Mock()
+    painter.transform.return_value = QTransform()
+    monkeypatch.setattr(
+        background_painter,
+        "sheet_rect_for",
+        mock.Mock(return_value=QRectF(0.0, 0.0, 400.0, 300.0)),
+    )
+    monkeypatch.setattr(
+        background_painter, "grid_snap_enabled_for", mock.Mock(return_value=False)
+    )
+    monkeypatch.setattr(
+        background_painter, "document_is_empty_for", mock.Mock(return_value=True)
+    )
+    rect = QRectF(10.0, 10.0, 20.0, 20.0)
+    update = canvas.viewport().update
+
+    # The first pass only records the state; repeating it asks for nothing.
+    background_painter.draw_canvas_background_for(canvas, painter, rect)
+    background_painter.draw_canvas_background_for(canvas, painter, rect)
+    update.assert_not_called()
+
+    # A partial pass that first sees an object on the sheet asks for one full
+    # repaint, so the hint's pixels outside that pass are cleared too.
+    background_painter.document_is_empty_for.return_value = False
+    background_painter.draw_canvas_background_for(canvas, painter, rect)
+    background_painter.draw_canvas_background_for(canvas, painter, rect)
+    assert update.call_count == 1
+
+    # And once more when the last object goes away.
+    background_painter.document_is_empty_for.return_value = True
+    background_painter.draw_canvas_background_for(canvas, painter, rect)
+    assert update.call_count == 2
+    assert canvas.runtime_state.sheet_setup_state.empty_hint_shown is True
+
+
 def test_document_is_empty_for_reads_atoms_and_every_scene_registry() -> None:
     from chemvas.ui.canvas_scene_items_state import CanvasSceneItemsState
-    from tests.runtime_state import canvas_runtime_state
 
     def canvas_with(*, atoms, **registries):
         return SimpleNamespace(
