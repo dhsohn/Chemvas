@@ -50,7 +50,7 @@ def _bonded_pair(canvas):
 def _select_all(window, canvas) -> None:
     # Select everything and settle the outline before reading it: under a
     # loaded CI runner the selection signal can land after the assertion.
-    _select_all(window, canvas)
+    select_all_for_window(window)
     QApplication.processEvents()
     refresh_selection_outline_for(canvas)
     QApplication.processEvents()
