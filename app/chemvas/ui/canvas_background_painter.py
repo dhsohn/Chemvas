@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import math
 
-from PyQt6.QtCore import QPointF, Qt
+from PyQt6.QtCore import QPointF, QRectF, Qt
 from PyQt6.QtGui import QColor, QPen
 
+from chemvas.ui.canvas_model_state import model_for
+from chemvas.ui.canvas_scene_items_state import scene_items_state_for
 from chemvas.ui.endpoint_snap_access import grid_snap_enabled_for, grid_step_for
 from chemvas.ui.sheet_setup_access import sheet_rect_for
 
@@ -33,6 +35,47 @@ def draw_canvas_background_for(canvas, painter, rect) -> None:
     painter.setBrush(Qt.BrushStyle.NoBrush)
     painter.drawRect(sheet_rect)
     _draw_grid(canvas, painter, rect, sheet_rect)
+    if document_is_empty_for(canvas):
+        _draw_empty_hint(painter, sheet_rect)
+    painter.restore()
+
+
+# Shown on a sheet with nothing on it, so a first look says what to do; it
+# is part of the view's background, never of the document or an export.
+EMPTY_SHEET_HINT = "Drag to draw a bond, or choose Ring and insert a SMILES"
+
+
+def document_is_empty_for(canvas) -> bool:
+    if model_for(canvas).atoms:
+        return False
+    state = scene_items_state_for(canvas)
+    return not any(
+        (
+            state.ring_items,
+            state.note_items,
+            state.image_items,
+            state.mark_items,
+            state.arrow_items,
+            state.ts_bracket_items,
+            state.shape_items,
+            state.orbital_items,
+        )
+    )
+
+
+def _draw_empty_hint(painter, sheet_rect) -> None:
+    # Faint, centred and drawn in screen pixels: the hint keeps its size and
+    # place on the page at any zoom, and stays a whisper next to the drawing
+    # tools' own marks.
+    painter.save()
+    device_center = painter.transform().map(sheet_rect.center())
+    painter.resetTransform()
+    font = painter.font()
+    font.setPointSizeF(11.0)
+    painter.setFont(font)
+    painter.setPen(QColor("#b4b4b0"))
+    box = QRectF(device_center.x() - 300.0, device_center.y() - 12.0, 600.0, 24.0)
+    painter.drawText(box, Qt.AlignmentFlag.AlignCenter, EMPTY_SHEET_HINT)
     painter.restore()
 
 
@@ -73,4 +116,4 @@ def _grid_coordinates(first: float, limit: float, step: float) -> list[float]:
     return [first + index * step for index in range(max(0, count))]
 
 
-__all__ = ["draw_canvas_background_for"]
+__all__ = ["EMPTY_SHEET_HINT", "document_is_empty_for", "draw_canvas_background_for"]

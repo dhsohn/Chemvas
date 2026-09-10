@@ -399,21 +399,26 @@ def main_window_status_stylesheet(palette: Mapping[str, str]) -> str:
             QStatusBar QToolButton#statusZoomLabel:pressed {{
                 background: {palette["pressed"]};
             }}
+            QStatusBar QFrame#statusZoomGroup {{
+                background: {palette["surface_input"]};
+                border: 1px solid {palette["border_strong"]};
+                border-radius: 6px;
+            }}
             QStatusBar QToolButton#statusZoomFitButton {{
                 color: {palette["text_muted"]};
                 background: transparent;
-                border: 1px solid {palette["border_strong"]};
-                border-radius: 4px;
+                border: none;
+                border-left: 1px solid {palette["border"]};
+                border-radius: 0;
                 font-size: 12px;
                 font-weight: 500;
                 min-width: 18px;
                 padding: 1px 7px;
-                margin: 0 0 0 3px;
+                margin: 0 0 0 2px;
             }}
             QStatusBar QToolButton#statusZoomFitButton:hover {{
                 background: {palette["hover"]};
                 color: {palette["text"]};
-                border-color: {palette["scrollbar_hover"]};
             }}
             QStatusBar QToolButton#statusZoomFitButton:pressed {{
                 background: {palette["pressed"]};

@@ -20,6 +20,9 @@ def test_draw_canvas_background_paints_workspace_shadow_and_sheet(monkeypatch) -
     monkeypatch.setattr(
         background_painter, "sheet_rect_for", mock.Mock(return_value=sheet_rect)
     )
+    monkeypatch.setattr(
+        background_painter, "document_is_empty_for", mock.Mock(return_value=False)
+    )
 
     background_painter.draw_canvas_background_for(canvas, painter, viewport_rect)
 
@@ -51,6 +54,9 @@ def test_draw_canvas_background_draws_grid_points_when_the_grid_is_on(
         background_painter, "sheet_rect_for", mock.Mock(return_value=sheet_rect)
     )
     monkeypatch.setattr(
+        background_painter, "document_is_empty_for", mock.Mock(return_value=False)
+    )
+    monkeypatch.setattr(
         background_painter, "grid_snap_enabled_for", mock.Mock(return_value=True)
     )
     monkeypatch.setattr(
@@ -75,6 +81,9 @@ def test_draw_canvas_background_draws_grid_points_when_the_grid_is_on(
 def test_draw_canvas_background_skips_a_grid_too_dense_to_read(monkeypatch) -> None:
     canvas = SimpleNamespace()
     painter = mock.Mock()
+    monkeypatch.setattr(
+        background_painter, "document_is_empty_for", mock.Mock(return_value=False)
+    )
     dense = (background_painter.MIN_GRID_SPACING_PX / 10.0) * 0.5
     painter.transform.return_value = QTransform().scale(dense, dense)
     monkeypatch.setattr(
@@ -94,3 +103,72 @@ def test_draw_canvas_background_skips_a_grid_too_dense_to_read(monkeypatch) -> N
     )
 
     painter.drawPoints.assert_not_called()
+
+
+def test_draw_canvas_background_writes_the_hint_only_on_an_empty_sheet(
+    monkeypatch,
+) -> None:
+    canvas = SimpleNamespace()
+    painter = mock.Mock()
+    painter.transform.return_value = QTransform().scale(2.0, 2.0)
+    sheet_rect = QRectF(0.0, 0.0, 400.0, 300.0)
+    monkeypatch.setattr(
+        background_painter, "sheet_rect_for", mock.Mock(return_value=sheet_rect)
+    )
+    monkeypatch.setattr(
+        background_painter, "grid_snap_enabled_for", mock.Mock(return_value=False)
+    )
+    monkeypatch.setattr(
+        background_painter, "document_is_empty_for", mock.Mock(return_value=True)
+    )
+
+    background_painter.draw_canvas_background_for(
+        canvas, painter, QRectF(-100.0, -100.0, 800.0, 600.0)
+    )
+
+    # The hint is laid out in device pixels around the sheet centre (400, 300
+    # at 200 %) with the painter's transform reset first.
+    painter.resetTransform.assert_called_once_with()
+    box, alignment, text = painter.drawText.call_args.args
+    assert text == background_painter.EMPTY_SHEET_HINT
+    assert alignment == Qt.AlignmentFlag.AlignCenter
+    assert box.center().x() == 400.0
+    assert box.center().y() == 300.0
+
+    painter.drawText.reset_mock()
+    background_painter.document_is_empty_for.return_value = False
+    background_painter.draw_canvas_background_for(
+        canvas, painter, QRectF(-100.0, -100.0, 800.0, 600.0)
+    )
+    painter.drawText.assert_not_called()
+
+
+def test_document_is_empty_for_reads_atoms_and_every_scene_registry() -> None:
+    from chemvas.ui.canvas_scene_items_state import CanvasSceneItemsState
+    from tests.runtime_state import canvas_runtime_state
+
+    def canvas_with(*, atoms, **registries):
+        return SimpleNamespace(
+            model=SimpleNamespace(atoms=atoms),
+            runtime_state=canvas_runtime_state(
+                scene_items_state=CanvasSceneItemsState(**registries)
+            ),
+        )
+
+    assert background_painter.document_is_empty_for(canvas_with(atoms={}))
+    assert not background_painter.document_is_empty_for(
+        canvas_with(atoms={1: object()})
+    )
+    for name in (
+        "ring_items",
+        "note_items",
+        "image_items",
+        "mark_items",
+        "arrow_items",
+        "ts_bracket_items",
+        "shape_items",
+        "orbital_items",
+    ):
+        assert not background_painter.document_is_empty_for(
+            canvas_with(atoms={}, **{name: [object()]})
+        ), name
