@@ -23,6 +23,7 @@ from chemvas.ui.main_window_config import (
 )
 from chemvas.ui.main_window_context_bar_widgets import (
     BondLengthSpinBox,
+    KindMenuButton,
     action_button,
     atom_symbol_input,
     bond_length_input,
@@ -313,6 +314,20 @@ def build_mark_page(window, tool_state_service) -> ButtonGroupPage:
     return ButtonGroupPage(page=page, group=group, buttons=buttons)
 
 
+# Arrow kinds folded into the "More arrows" menu: the equilibrium variants,
+# inhibition and the three arcs are drawn far less often than the rest.
+MORE_ARROW_KINDS: frozenset[str] = frozenset(
+    {
+        "equilibrium_forward",
+        "equilibrium_reverse",
+        "inhibit",
+        "arc_90_left",
+        "arc_180_left",
+        "arc_270_left",
+    }
+)
+
+
 def build_arrow_page(
     window, tool_mode_controller, tool_state_service
 ) -> ButtonGroupPage:
@@ -335,8 +350,27 @@ def build_arrow_page(
                 lambda _checked, v=value: tool_state_service.set_arrow_type(window, v),
             )
             for label, value in ARROW_MENU_SPECS
+            if value not in MORE_ARROW_KINDS
         ],
     )
+    # The seldom-used kinds share one button whose menu lists them; the
+    # button wears whichever was picked last.
+    more_entries = [
+        (value, icon_factory.icon_arrow_preview(value), label)
+        for label, value in ARROW_MENU_SPECS
+        if value in MORE_ARROW_KINDS
+    ]
+    if more_entries:
+        more_button = KindMenuButton(
+            more_entries,
+            lambda value: tool_state_service.set_arrow_type(window, value),
+            tooltip="More arrows",
+        )
+        more_button.setObjectName("more_arrows_button")
+        group.addButton(more_button)
+        for kind in more_button.kinds():
+            buttons[kind] = more_button
+        layout.addWidget(more_button)
 
     layout.addWidget(divider())
     for label in ARROW_PRESET_SPECS:

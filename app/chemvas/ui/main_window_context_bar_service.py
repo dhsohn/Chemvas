@@ -18,6 +18,7 @@ from chemvas.shell.theme import (
 from chemvas.ui.canvas_insert_state import insert_state_for
 from chemvas.ui.canvas_tool_settings_state import tool_settings_state_for
 from chemvas.ui.main_window_context_bar_pages import bond_label_for_state
+from chemvas.ui.main_window_context_bar_widgets import KindMenuButton
 
 # Maps the active canvas tool name to the context page key shown in the bar.
 _TOOL_PAGE_KEYS = {
@@ -214,9 +215,10 @@ class MainWindowContextBarService:
         canvas = self._active_canvas_or_none_for_window(window)
         if canvas is None:
             return
-        target = self._arrow_buttons.get(
-            tool_settings_state_for(canvas).active_arrow_type
-        )
+        kind = tool_settings_state_for(canvas).active_arrow_type
+        target = self._arrow_buttons.get(kind)
+        if isinstance(target, KindMenuButton):
+            target.show_kind(kind)
         self._arrow_group.setExclusive(False)
         for button in self._arrow_buttons.values():
             blocked = button.blockSignals(True)

@@ -19,6 +19,7 @@ from chemvas.bootstrap.main_window import build_main_window
 from chemvas.shell.theme import (
     CONTEXT_BAR_BUTTON_HEIGHT,
 )
+from chemvas.ui.canvas_tool_settings_state import tool_settings_state_for
 from chemvas.ui.main_window_context_bar_pages import (
     MainWindowContextBarPageBuilder,
     bond_label_for_state,
@@ -350,3 +351,45 @@ class MainWindowContextBarPagesTest(unittest.TestCase):
         begin_smiles_insert.assert_called_once_with("c1ccccc1")
         # The eraser has no options: its page is quiet.
         self.assertEqual(pages.pages["empty"].findChildren(QToolButton), [])
+
+    def test_rare_arrow_kinds_share_one_menu_button(self) -> None:
+        pages = self.builder.build(self.window)
+        more = pages.arrow_buttons["arc_90_left"]
+
+        self.assertIs(more, pages.arrow_buttons["inhibit"])
+        self.assertEqual(more.objectName(), "more_arrows_button")
+        self.assertNotIn("reaction", [b.objectName() for b in [more]])
+        self.assertIsNot(pages.arrow_buttons["reaction"], more)
+        self.assertEqual(
+            [action.text() for action in more.menu().actions()],
+            [
+                "Equilibrium, forward favored",
+                "Equilibrium, reverse favored",
+                "Inhibition",
+                "Arc 90°",
+                "Arc 180°",
+                "Arc 270°",
+            ],
+        )
+
+        inhibit = next(a for a in more.menu().actions() if a.text() == "Inhibition")
+        inhibit.trigger()
+
+        self.tool_state_service.set_arrow_type.assert_called_once_with(
+            self.window, "inhibit"
+        )
+        self.assertEqual(more.toolTip(), "More arrows: Inhibition")
+        # The button wears the picked entry's own icon.
+        self.assertEqual(more.icon().cacheKey(), inhibit.icon().cacheKey())
+
+    def test_reflecting_a_rare_arrow_kind_dresses_the_menu_button(self) -> None:
+        canvas = active_canvas_for_window(self.window)
+        tool_settings_state_for(canvas).active_arrow_type = "arc_180_left"
+
+        services_for_window(self.window).context_bar_service.reflect_arrow_state(
+            self.window
+        )
+
+        more = self.window.findChild(QToolButton, "more_arrows_button")
+        self.assertTrue(more.isChecked())
+        self.assertEqual(more.toolTip(), "More arrows: Arc 180\u00b0")

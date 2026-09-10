@@ -147,6 +147,52 @@ def icon_button(
     return button
 
 
+class KindMenuButton(QToolButton):
+    """One checkable button standing in for several rarely used kinds.
+
+    Its menu lists the kinds; picking one fires ``on_pick`` and the button
+    takes that kind's icon and label, so the bar shows which one is active
+    without a row of buttons for options that are seldom needed.
+    """
+
+    def __init__(self, entries, on_pick, *, tooltip: str) -> None:
+        super().__init__()
+        self._icons = {kind: icon for kind, icon, _label in entries}
+        self._labels = {kind: label for kind, _icon, label in entries}
+        self._tooltip = tooltip
+        self.setIconSize(_ICON_SIZE)
+        self.setFixedSize(CONTEXT_BAR_BUTTON_HEIGHT + 10, CONTEXT_BAR_BUTTON_HEIGHT)
+        self.setAutoRaise(True)
+        self.setCheckable(True)
+        self.setStyleSheet(_ICON_BUTTON_STYLE)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
+        menu = QMenu(self)
+        for kind, icon, label in entries:
+            action = menu.addAction(icon, label)
+            if action is not None:
+                action.triggered.connect(
+                    lambda _checked=False, value=kind: self._pick(value)
+                )
+        self.setMenu(menu)
+        self._on_pick = on_pick
+        self.show_kind(entries[0][0])
+
+    def _pick(self, kind: str) -> None:
+        self.show_kind(kind)
+        self._on_pick(kind)
+
+    def kinds(self) -> tuple[str, ...]:
+        return tuple(self._icons)
+
+    def show_kind(self, kind: str) -> None:
+        icon = self._icons.get(kind)
+        if icon is None:
+            return
+        self.setIcon(icon)
+        self.setToolTip(f"{self._tooltip}: {self._labels[kind]}")
+
+
 def action_button(text: str, tooltip: str) -> QToolButton:
     button = QToolButton()
     button.setText(text)
