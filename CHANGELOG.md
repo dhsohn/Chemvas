@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Shorten both READMEs to a front page: what Chemvas is, install, the first
+  reaction scheme, three script commands and where the documentation lives.
+  The feature narrative and the CLI option walkthrough now live only in the
+  linked guides.
 - Close the blank gaps between the top toolbar's button groups (after
   Brackets and after Orbital); the tool buttons now form one continuous row.
 - Recapture the first-scheme walkthrough GIF, still and example exports
