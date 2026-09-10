@@ -56,8 +56,12 @@ the [examples README](../examples/README.md) describes what each one contains.
 - **Brackets & annotations** — square / round / curly brackets, dagger (`†`) and
   double dagger (`‡`) annotation objects.
 - **Atom labels** — elements, charges, radicals, and common alias labels
-  (`Me`, `Et`, `OH`, `Ph`, `PPh3`, `OMe`, `Boc`, `CO2Me`, `t-Bu`, `tBu`,
+  (`Me`, `Et`, `OH`, `NH2`, `SH`, `Ph`, `PPh3`, `OMe`, `Boc`, `CO2Me`, `t-Bu`, `tBu`,
   `i-Pr`, `CF3`, `OTs`, `Ts`, `OMs`, `Ms`, `OTf`, `Tf`, `Ns`, `OAc`, `Ac`).
+  OH, NH2, and SH support Molecule Info identifiers when neutral and attached
+  through exactly one single bond, including wedge/hash. Use an element label
+  for a charged or radical atom; these hydride aliases reject those annotations.
+  Other aliases do not provide identifiers. SMILES insertion keeps element labels.
 - **Snap to grid** — **View ▸ Snap to Grid** shows a faint grid of half a bond
   length on the sheet and snaps the points arrows and lines are drawn at, and
   the ends dragged with their endpoint handles, curved arrows included, onto

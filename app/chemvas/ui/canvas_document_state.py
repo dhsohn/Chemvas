@@ -300,11 +300,13 @@ def _color_from_setting(value: str) -> QColor:
 def restore_document_pre_model_items(canvas, state: dict) -> None:
     for ring_state in state["ring_fills"]:
         restore_ring_from_state(canvas, ring_state)
+    # Restore backgrounds before the structure so its first viewport paint is
+    # visible over raster images, including in a newly opened native window.
+    for image_state in state.get("images", []):
+        create_scene_item_from_state(canvas, image_state)
 
 
 def restore_document_post_model_items(canvas, state: dict) -> None:
-    for image_state in state.get("images", []):
-        create_scene_item_from_state(canvas, image_state)
     for note_state in state["notes"]:
         restore_note_from_state(canvas, note_state)
 

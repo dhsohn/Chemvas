@@ -34,6 +34,7 @@ class AliasAttachmentContract:
 @dataclass(frozen=True)
 class AtomAliasDefinition:
     fragment_smiles: str
+    terminal_hydrogens: int | None = None
     intrinsic_formal_charge: int = 0
     attachment_contract: AliasAttachmentContract | None = None
 
@@ -42,7 +43,9 @@ ATOM_ALIAS_DEFINITIONS: Final[Mapping[str, AtomAliasDefinition]] = MappingProxyT
     {
         "Me": AtomAliasDefinition("[*:1]C"),
         "Et": AtomAliasDefinition("[*:1]CC"),
-        "OH": AtomAliasDefinition("[*:1]O"),
+        "OH": AtomAliasDefinition("[*:1][OH]", terminal_hydrogens=1),
+        "NH2": AtomAliasDefinition("[*:1][NH2]", terminal_hydrogens=2),
+        "SH": AtomAliasDefinition("[*:1][SH]", terminal_hydrogens=1),
         "Ph": AtomAliasDefinition("[*:1]c1ccccc1"),
         "PPh3": AtomAliasDefinition(
             "[*:1][P+](c1ccccc1)(c1ccccc1)c1ccccc1",
@@ -163,6 +166,19 @@ def alias_attachment_error(
     annotation: Mapping[str, int] | None = None,
 ) -> str | None:
     definition = ATOM_ALIAS_DEFINITIONS.get(label)
+    if definition is not None and definition.terminal_hydrogens is not None:
+        if len(attachments) != 1 or attachments[0].bond_order != 1:
+            return (
+                f"Alias label '{label}' on atom {atom_id} requires exactly one "
+                "single attachment bond to preserve its displayed hydrogens."
+            )
+        if annotation and any(
+            annotation.get(key, 0) for key in ("formal_charge", "radical_electrons")
+        ):
+            return (
+                f"Alias label '{label}' on atom {atom_id} does not support explicit "
+                "charge or radical annotations; use an element label instead."
+            )
     contract = definition.attachment_contract if definition is not None else None
     if contract is None:
         return None

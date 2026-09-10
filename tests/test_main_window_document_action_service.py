@@ -707,6 +707,54 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
             message_box.question.assert_not_called()
             session_service.export_xyz_async.assert_called_once()
 
+    def test_export_figure_confirms_replacing_the_file_the_format_retargets_to(
+        self,
+    ) -> None:
+        # Typing another format's extension retargets the write, so the file
+        # that gets replaced is not the name the save dialog confirmed.
+        with tempfile.TemporaryDirectory() as temp_dir:
+            existing = Path(temp_dir) / "target.svg"
+            existing.write_text("sentinel")
+            file_dialog = mock.Mock()
+            file_dialog.getSaveFileName.return_value = (
+                str(Path(temp_dir) / "target.pdf"),
+                "",
+            )
+            message_box = mock.Mock()
+            message_box.question.return_value = QMessageBox.StandardButton.No
+            session_service = mock.Mock()
+
+            with contextlib.ExitStack() as stack:
+                stack.enter_context(
+                    mock.patch.object(
+                        self.service,
+                        "_document_session_service_for_window",
+                        return_value=session_service,
+                    )
+                )
+                stack.enter_context(
+                    mock.patch(
+                        "chemvas.ui.main_window_document_action_service."
+                        "prompt_export_options",
+                        return_value=SimpleNamespace(
+                            fmt="svg",
+                            scope="sheet",
+                            dpi=300,
+                            background="transparent",
+                            sizing="bond",
+                            editable_svg=False,
+                        ),
+                    )
+                )
+                self.service.export_figure(
+                    self.window,
+                    file_dialog=file_dialog,
+                    message_box=message_box,
+                )
+            session_service.export_figure.assert_not_called()
+            message_box.question.assert_called_once()
+            self.assertEqual(existing.read_text(), "sentinel")
+
     def test_export_paths_confirm_overwrite_when_normalization_retargets(
         self,
     ) -> None:

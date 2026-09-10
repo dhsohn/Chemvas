@@ -355,3 +355,35 @@ class MainWindowDocumentDialogsTest(unittest.TestCase):
                 self.assertEqual(status.status_context_texts(), before_status)
                 self.assertEqual(self.window.windowTitle(), before_title)
                 self.assertFalse(self.window.isWindowModified())
+
+    def test_export_remembers_last_accepted_format_and_cancel_preserves_it(self):
+        for expected, choice, accepted in (
+            ("svg", "png", True),
+            ("png", "pdf", False),
+            ("png", "tiff", True),
+            ("tiff", "svg", False),
+        ):
+            with self.subTest(expected=expected, choice=choice):
+
+                def drive_dialog(
+                    dialog, expected=expected, choice=choice, accepted=accepted
+                ):
+                    combo = dialog.findChild(QComboBox, "exportFormatCombo")
+                    self.assertEqual(combo.currentData(), expected)
+                    dpi = dialog.findChild(QComboBox, "exportDpiCombo")
+                    self.assertEqual(dpi.isEnabled(), expected in ("png", "tiff"))
+                    combo.setCurrentIndex(combo.findData(choice))
+                    return (
+                        QDialog.DialogCode.Accepted
+                        if accepted
+                        else QDialog.DialogCode.Rejected
+                    )
+
+                with mock.patch(
+                    "chemvas.ui.main_window_document_dialogs.QDialog.exec",
+                    new=drive_dialog,
+                ):
+                    options = prompt_export_options(self.window)
+                self.assertEqual(
+                    options.fmt if options else None, choice if accepted else None
+                )

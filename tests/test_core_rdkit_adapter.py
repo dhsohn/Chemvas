@@ -1368,8 +1368,8 @@ class RDKitAdapterTest(unittest.TestCase):
             adapter.last_error,
             "Unsupported atom labels for 3D conversion: "
             "Bad0 (atom 0), Bad1 (atom 1), Bad2 (atom 2), Bad3 (atom 3), Bad4 (atom 4), .... "
-            "Supported aliases: Ac, Boc, CF3, CO2Me, Et, Me, Ms, Ns, OAc, OH, OMe, "
-            "OMs, OTf, OTs, PPh3, Ph, Tf, Ts, i-Pr, t-Bu, tBu.",
+            "Supported aliases: Ac, Boc, CF3, CO2Me, Et, Me, Ms, NH2, Ns, OAc, OH, OMe, "
+            "OMs, OTf, OTs, PPh3, Ph, SH, Tf, Ts, i-Pr, t-Bu, tBu.",
         )
 
     def test_build_conversion_rdkit_mol_rejects_wedge_on_non_single_bond(self) -> None:
@@ -2981,3 +2981,95 @@ class WarmRdkitInBackgroundTest(unittest.TestCase):
             captured[0].last_error,
             "RDKit is not available in this environment.",
         )
+
+
+@unittest.skipUnless(_RealChem is not None, "RDKit is required for hydride tests")
+class TerminalHydrideIdentifiersTest(unittest.TestCase):
+    def test_neutral_hydride_identifiers_match_formula_mass_and_preserve_saved_state(
+        self,
+    ):
+        from chemvas.domain.document import (
+            deserialize_model_state,
+            serialize_model_state,
+        )
+
+        for label, formula, mw, smiles in (
+            ("OH", "CH4O", 32.042, "CO"),
+            ("NH2", "CH5N", 31.058, "CN"),
+            ("SH", "CH4S", 48.110, "CS"),
+        ):
+            with self.subTest(label=label):
+                model = MoleculeModel()
+                carbon = model.add_atom("C", 0, 0)
+                hydride = model.add_atom(label, 40, 0)
+                model.add_bond(carbon, hydride, 1)
+                state = serialize_model_state(model)
+                restored = deserialize_model_state(state)
+                identifiers = RDKitAdapter().compute_identifiers(restored)
+                self.assertEqual(identifiers.formula, formula)
+                self.assertAlmostEqual(identifiers.mw, mw, places=3)
+                self.assertEqual(identifiers.smiles, smiles)
+                self.assertTrue(identifiers.inchi)
+                self.assertTrue(identifiers.inchikey)
+                self.assertEqual(serialize_model_state(restored), state)
+
+    def test_hydrides_preserve_adjacent_stereo_charge_and_radicals(self):
+        from chemvas.domain.document import serialize_model_state
+
+        for smiles in (
+            "N[C@@H](C)O",
+            "N[C@H](C)O",
+            "C[C@H](S)F",
+            "C[NH2+]CO",
+            "C[CH]O",
+        ):
+            with self.subTest(smiles=smiles):
+                adapter = RDKitAdapter()
+                model = adapter.smiles_to_2d(smiles)
+                self.assertIsNotNone(model)
+                for atom_id, atom in model.atoms.items():
+                    if (
+                        atom.element in ("O", "N", "S")
+                        and atom_id not in model.atom_annotations
+                    ):
+                        atom.element = {"O": "OH", "N": "NH2", "S": "SH"}[atom.element]
+                state = serialize_model_state(model)
+                actual = adapter.compute_identifiers(model)
+                self.assertEqual(
+                    actual.smiles,
+                    _RealChem.MolToSmiles(_RealChem.MolFromSmiles(smiles)),
+                )
+                self.assertEqual(serialize_model_state(model), state)
+
+    def test_invalid_hydrides_fail_conversion_without_changing_the_model(self):
+        from chemvas.domain.document import serialize_model_state
+
+        for label in ("OH", "NH2", "SH"):
+            for order, annotation in (
+                (2, {}),
+                (3, {}),
+                (1, {"formal_charge": 1}),
+                (1, {"formal_charge": -1}),
+                (1, {"radical_electrons": 1}),
+            ):
+                with self.subTest(label=label, order=order, annotation=annotation):
+                    model = MoleculeModel()
+                    c = model.add_atom("C", 0, 0)
+                    h = model.add_atom(label, 40, 0)
+                    model.add_bond(c, h, order)
+                    if annotation:
+                        model.atom_annotations[h] = annotation
+                    state = serialize_model_state(model)
+                    adapter = RDKitAdapter()
+                    self.assertIsNone(adapter._build_conversion_rdkit_mol(model))
+                    self.assertIn(label, adapter.last_error)
+                    self.assertIsNone(adapter.compute_identifiers(model).formula)
+                    self.assertEqual(serialize_model_state(model), state)
+
+    def test_other_alias_identifiers_stay_unavailable(self):
+        for label in ("Me", "Ph", "PPh3", "Ts", "Ac"):
+            model = MoleculeModel()
+            c = model.add_atom("C", 0, 0)
+            a = model.add_atom(label, 40, 0)
+            model.add_bond(c, a, 1)
+            self.assertIsNone(RDKitAdapter().compute_identifiers(model).formula)
