@@ -123,7 +123,6 @@ class MainWindowUIAssemblyServiceTest(unittest.TestCase):
             open_recent_path=mock.Mock(),
         )
         self.service = MainWindowUIAssemblyService(
-            insert_controller_for_window=self.insert_controller_for_window,
             build_tool_actions_for_window=self.build_tool_actions_for_window,
             panel_toolbar_callbacks=self.panel_toolbar_callbacks,
         )
@@ -242,7 +241,7 @@ class MainWindowUIAssemblyServiceTest(unittest.TestCase):
             0,
         )
         self.assertEqual(
-            len(assembly.panel_bar.findChildren(QWidget, "toolbarGroupGap")), 3
+            len(assembly.panel_bar.findChildren(QWidget, "toolbarGroupGap")), 2
         )
         self.assertTrue(assembly.tool_actions["bond"].isChecked())
         self.assertIsNotNone(
@@ -278,14 +277,9 @@ class MainWindowUIAssemblyServiceTest(unittest.TestCase):
         self.assertEqual(section_labels, [])
 
         self.assertIsNone(assembly.panel_bar.findChild(QLineEdit, "atomInput"))
-        self.assertEqual(
-            [
-                line_edit.objectName()
-                for line_edit in assembly.panel_bar.findChildren(QLineEdit)
-            ],
-            ["contextSmilesInput"],
-        )
-        self.assertIsNotNone(
+        # SMILES insert moved to the Ring options bar.
+        self.assertEqual(assembly.panel_bar.findChildren(QLineEdit), [])
+        self.assertIsNone(
             assembly.panel_bar.findChild(QToolButton, "smiles_render_button")
         )
 

@@ -109,6 +109,9 @@ class MainWindowContextBarPageBuilder:
                 ring_size,
                 style=style,
             ),
+            begin_smiles_insert=lambda text: self._insert_controller_for_window(
+                window
+            ).begin_smiles_insert(text),
         )
         mark_page = build_mark_page(window, self._tool_state)
         text_page = build_text_page(

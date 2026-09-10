@@ -300,7 +300,6 @@ def build_main_window_services() -> MainWindowServices:
         ),
     )
     ui_assembly_service = MainWindowUIAssemblyService(
-        insert_controller_for_window=insert_controller_for_window,
         build_tool_actions_for_window=tool_action_service.build_tool_actions,
         panel_toolbar_callbacks=panel_toolbar_callbacks,
     )
