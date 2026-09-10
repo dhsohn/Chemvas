@@ -286,10 +286,11 @@ def build_main_window_services() -> MainWindowServices:
         ),
         open_preview_window=panel_service.open_preview_window,
         new_canvas=open_new_window,
-        # Edit > Rotate... switches to the Select tool, whose options bar
-        # carries the angle input.
-        show_rotate_options=lambda window: context_page_state_service.show_context_page(
-            window, "select"
+        # Edit > Rotate... hands the canvas to the Select tool, whose options
+        # bar carries the angle input; checking the button alone would leave
+        # the canvas in the previous tool.
+        show_rotate_options=lambda window: (
+            context_page_state_service.set_tool_with_status(window, "select")
         ),
         set_note_font_family=set_note_font_family_for_window,
         open_recent_path=lambda window, path: (
