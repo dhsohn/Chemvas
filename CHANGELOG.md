@@ -26,6 +26,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Move the SMILES field and its Insert button from the top toolbar to the
+  Ring tool's options bar, beside the ring templates; Insert is now an
+  outlined button like the bar's other actions.
 - Move flip, rotate, align and distribute into the Select tool's options bar,
   which also opens for the Perspective tool and for **Edit ▸ Rotate...**; the
   top toolbar now holds only drawing tools. Tools without options leave the

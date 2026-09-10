@@ -58,11 +58,11 @@ def _canvas_file_version() -> int:
 
 
 def _smiles_button_label() -> str:
-    src = _read(APP / "chemvas" / "ui" / "main_window_panel_toolbar.py")
-    # The SMILES insert button is tagged with objectName "smiles_render_button";
-    # its displayed label is the setText(...) right after.
+    src = _read(APP / "chemvas" / "ui" / "main_window_context_bar_page_factories.py")
+    # The SMILES insert button is built as action_button("<label>", ...) just
+    # before it is tagged with objectName "smiles_render_button".
     anchor = src.index('"smiles_render_button"')
-    match = re.search(r'setText\("([^"]+)"\)', src[anchor : anchor + 400])
+    match = re.search(r'action_button\("([^"]+)"', src[anchor - 400 : anchor])
     assert match, "could not find setText(...) for the SMILES button"
     return match.group(1)
 

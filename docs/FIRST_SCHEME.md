@@ -33,8 +33,9 @@ pip install "chemvas[rdkit]"
 
 ## 1. Insert and arrange two structures
 
-1. Enter `OCc1ccccc1` in the SMILES field at the top. Click **Insert**, then click
-   on the left of the canvas to place benzyl alcohol.
+1. Choose the **Ring** tool and enter `OCc1ccccc1` in the SMILES field of its
+   options bar. Click **Insert**, then click on the left of the canvas to place
+   benzyl alcohol.
 2. For the orientation in the example, select the molecule with **Select** and
    press **Alt+Up** three times to rotate it by −45°. You can also enter an angle
    through **Edit ▸ Rotate…**.

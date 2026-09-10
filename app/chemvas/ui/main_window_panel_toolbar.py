@@ -6,7 +6,6 @@ from typing import TYPE_CHECKING, Any
 from PyQt6.QtCore import QSize, Qt
 from PyQt6.QtGui import QAction, QActionGroup, QFont
 from PyQt6.QtWidgets import (
-    QLineEdit,
     QMenu,
     QSizePolicy,
     QToolBar,
@@ -15,8 +14,6 @@ from PyQt6.QtWidgets import (
 )
 
 from chemvas.shell.theme import (
-    CONTEXT_BAR_BUTTON_HEIGHT,
-    SMILES_RENDER_BUTTON_STYLE,
     TOOLBAR_BUTTON_SIZE,
     TOOLBAR_BUTTON_STYLE,
     TOOLBAR_ICON_SIZE,
@@ -103,45 +100,6 @@ def _toolbar_group_gap() -> QWidget:
     return gap
 
 
-def _add_smiles_controls(
-    panel_bar: QToolBar, window, insert_controller_for_window
-) -> None:
-    smiles_input = QLineEdit()
-    smiles_input.setObjectName("contextSmilesInput")
-    smiles_input.setPlaceholderText("CC(=O)Oc1ccccc1C(=O)O")
-    # The input stretches toward the file/history cluster so it never forces the
-    # top toolbar to overflow (it shrinks to its minimum on narrow windows), but
-    # it is capped so it does not sprawl across very wide monitors. A trailing
-    # spacer takes up any slack past the cap, keeping the file buttons pinned
-    # to the right edge.
-    smiles_input.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-    smiles_input.setMinimumWidth(120)
-    smiles_input.setMaximumWidth(340)
-    smiles_input.setFixedHeight(CONTEXT_BAR_BUTTON_HEIGHT)
-    smiles_input.setToolTip("SMILES")
-    smiles_input.setStatusTip("Type a SMILES string to insert")
-    render_button = QToolButton()
-    render_button.setObjectName("smiles_render_button")
-    render_button.setText("Insert")
-    render_button.setToolTip("Insert SMILES")
-    render_button.setStatusTip("Insert the typed SMILES structure")
-    render_button.setFixedHeight(CONTEXT_BAR_BUTTON_HEIGHT)
-    render_button.setStyleSheet(SMILES_RENDER_BUTTON_STYLE)
-    render_button.setCursor(Qt.CursorShape.PointingHandCursor)
-    render_button.clicked.connect(
-        lambda _checked=False: insert_controller_for_window(window).begin_smiles_insert(
-            smiles_input.text()
-        )
-    )
-    smiles_input.returnPressed.connect(
-        lambda: insert_controller_for_window(window).begin_smiles_insert(
-            smiles_input.text()
-        )
-    )
-    panel_bar.addWidget(smiles_input)
-    panel_bar.addWidget(render_button)
-
-
 def _build_note_font_menu_button(
     panel_bar: QToolBar,
     window,
@@ -183,7 +141,6 @@ def build_panel_toolbar(
     window,
     *,
     build_tool_actions: Callable[[object, QActionGroup], dict[str, QAction]],
-    insert_controller_for_window,
     callbacks: MainWindowPanelToolbarCallbacks,
 ) -> MainWindowPanelToolbarAssembly:
     panel_bar = QToolBar("Panels", window)
@@ -216,8 +173,6 @@ def build_panel_toolbar(
             add_tool(action_key, primary=False)
         if group_index < len(TOOLBAR_TOOL_GROUPS[1:]) - 1:
             panel_bar.addWidget(_toolbar_group_gap())
-    panel_bar.addWidget(_toolbar_group_gap())
-    _add_smiles_controls(panel_bar, window, insert_controller_for_window)
     panel_bar.addWidget(_toolbar_spacer())
 
     return MainWindowPanelToolbarAssembly(

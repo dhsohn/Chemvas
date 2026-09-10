@@ -119,7 +119,6 @@ class MainWindowPanelToolbarTest(unittest.TestCase):
             open_recent_path=mock.Mock(),
         )
         self.button_service = MainWindowUIAssemblyService(
-            insert_controller_for_window=self.insert_controller_for_window,
             build_tool_actions_for_window=mock.Mock(),
             panel_toolbar_callbacks=self.panel_callbacks,
         )
@@ -160,7 +159,6 @@ class MainWindowPanelToolbarTest(unittest.TestCase):
         assembly = build_panel_toolbar(
             window,
             build_tool_actions=self.build_tool_actions,
-            insert_controller_for_window=self.insert_controller_for_window,
             callbacks=self.panel_callbacks,
         )
 
@@ -209,12 +207,11 @@ class MainWindowPanelToolbarTest(unittest.TestCase):
             ],
             self._toolbar_widget_groups(assembly.panel_bar),
         )
-        # The SMILES quick-insert bar closes the toolbar. Its "SMILES" QLabel is
-        # neither a tool button nor a line edit, so the widget group is just the
-        # input placeholder and Render button.
+        # The SMILES controls live on the Ring options bar now; the eraser
+        # closes the toolbar.
         self.assertEqual(
-            self._toolbar_widget_groups(assembly.panel_bar)[-1],
-            ["CC(=O)Oc1ccccc1C(=O)O", "smiles_render_button"],
+            self._toolbar_widget_groups(assembly.panel_bar)[-1][-1],
+            "toolButton_delete",
         )
         primary_button_names = (
             "toolButton_select",
@@ -245,10 +242,7 @@ class MainWindowPanelToolbarTest(unittest.TestCase):
         self.assertTrue(
             all(action.font().family() == action.text() for action in font_actions)
         )
-        line_edits = assembly.panel_bar.findChildren(QLineEdit)
-        self.assertEqual(
-            [line_edit.objectName() for line_edit in line_edits], ["contextSmilesInput"]
-        )
+        self.assertEqual(assembly.panel_bar.findChildren(QLineEdit), [])
         self.assertIsNone(assembly.panel_bar.findChild(QLineEdit, "atomInput"))
 
         window.canvas.insert_controller.begin_smiles_insert.assert_not_called()

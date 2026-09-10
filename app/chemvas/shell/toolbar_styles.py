@@ -95,35 +95,11 @@ CONTEXT_ACTION_BUTTON_STYLE = (
     "}"
 )
 
-SMILES_RENDER_BUTTON_STYLE = (
-    "QToolButton#smiles_render_button {"
-    " border: 1px solid transparent;"
-    " border-radius: 6px;"
-    " padding: 0px 14px;"
-    f" background-color: {_P['accent_hover']};"
-    f" color: {_P['accent_contrast']};"
-    " font-weight: 500;"
-    "}"
-    "QToolButton#smiles_render_button:hover {"
-    f" background-color: {_P['accent_pressed']};"
-    "}"
-    "QToolButton#smiles_render_button:pressed {"
-    f" background-color: {_P['accent_pressed']};"
-    "}"
-    "QToolButton#smiles_render_button:disabled {"
-    f" color: {_P['text_faint']};"
-    f" background: {_P['pressed']};"
-    " border-color: transparent;"
-    "}"
-)
-
-
 __all__ = [
     "CONTEXT_ACTION_BUTTON_STYLE",
     "CONTEXT_BAR_BUTTON_HEIGHT",
     "CONTEXT_BAR_CONTENT_HEIGHT",
     "CONTEXT_BAR_ICON_SIZE",
-    "SMILES_RENDER_BUTTON_STYLE",
     "TOOLBAR_BUTTON_SIZE",
     "TOOLBAR_BUTTON_STYLE",
     "TOOLBAR_ICON_SIZE",

@@ -55,8 +55,8 @@ For local Windows executable and installer builds, see the
 This edited walkthrough uses the real application. The drawing is a schematic
 illustration, not an experimental result.
 
-1. Enter `OCc1ccccc1` in the SMILES field, click **Insert**, then click to place
-   the structure. Hover over its oxygen, press **Enter**, and set the label to
+1. Choose the **Ring** tool, enter `OCc1ccccc1` in the SMILES field of its
+   options bar, click **Insert**, then click to place the structure. Hover over its oxygen, press **Enter**, and set the label to
    `OH`.
 2. Insert `O=Cc1ccccc1` to the right. Choose **Arrow** and drag between the two
    structures. Double-click the arrow to add its labels.

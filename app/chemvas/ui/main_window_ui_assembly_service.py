@@ -28,11 +28,9 @@ class MainWindowUIAssemblyService:
     def __init__(
         self,
         *,
-        insert_controller_for_window,
         build_tool_actions_for_window,
         panel_toolbar_callbacks: MainWindowPanelToolbarCallbacks,
     ) -> None:
-        self._insert_controller_for_window = insert_controller_for_window
         self._build_tool_actions_for_window = build_tool_actions_for_window
         self._panel_toolbar_callbacks = panel_toolbar_callbacks
         self._buttons = MainWindowToolbarButtonFactory()
@@ -68,7 +66,6 @@ class MainWindowUIAssemblyService:
         panel_toolbar = build_panel_toolbar(
             window,
             build_tool_actions=self._build_tool_actions_for_window,
-            insert_controller_for_window=self._insert_controller_for_window,
             callbacks=self._panel_toolbar_callbacks,
         )
         window.addToolBar(Qt.ToolBarArea.TopToolBarArea, panel_toolbar.panel_bar)

@@ -34,7 +34,8 @@ pip install "chemvas[rdkit]"
 
 ## 1. 두 구조 삽입하고 배치하기
 
-1. 상단 SMILES 입력란에 `OCc1ccccc1`을 입력하고 **Insert**를 누르세요.
+1. **Ring** 도구를 고르고 옵션 바의 SMILES 입력란에 `OCc1ccccc1`을 입력한 뒤
+   **Insert**를 누르세요.
    캔버스 왼쪽을 클릭해 벤질 알코올을 배치하세요.
 2. 예제와 같은 방향으로 놓으려면 **Select**로 분자를 선택하고 **Alt+Up**을
    세 번 눌러 −45° 회전하세요. **Edit ▸ Rotate…**에서도 각도를 입력할 수 있습니다.
