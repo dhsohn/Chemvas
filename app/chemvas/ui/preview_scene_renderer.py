@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 import contextlib
+import math
 from typing import TYPE_CHECKING, override
 
-from PyQt6.QtCore import QPointF, QRectF, Qt
+from PyQt6.QtCore import QPointF, QRect, QRectF, Qt
 from PyQt6.QtGui import QColor, QImage, QPainter, QPainterPath, QPen, QTransform
 from PyQt6.QtWidgets import (
     QGraphicsEllipseItem,
@@ -57,6 +58,9 @@ class SmilesPreviewItem(QGraphicsItem):
         self.setZValue(SMILES_PREVIEW_Z_VALUE)
         self.setAcceptedMouseButtons(Qt.MouseButton.NoButton)
         self.setAcceptHoverEvents(False)
+        # Ask Qt for the exposed rectangle so the compositing layer covers only
+        # what is on screen, not the whole structure at the current zoom.
+        self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemUsesExtendedStyleOption)
 
     def picture(self) -> QPicture:
         return self._picture
@@ -78,11 +82,35 @@ class SmilesPreviewItem(QGraphicsItem):
         # Item opacity is applied per primitive, so every bond junction and
         # label overlap would paint darker than the rest. Replay the picture
         # at full strength into a device-resolution layer and blend that once.
+        # The layer spans only the exposed part of the item: a large structure
+        # at high zoom must not allocate an image the size of the whole
+        # transformed molecule on every pointer move.
+        exposed = self._bounds
+        if option is not None:
+            exposed = exposed.intersected(option.exposedRect)
         world = painter.worldTransform()
-        device_rect = world.mapRect(self._bounds).toAlignedRect()
+        device = painter.device()
+        ratio = device.devicePixelRatioF()
+        # A scene render hands every item its whole bounding rectangle as the
+        # exposed rectangle, so the paint device itself is the hard cap.
+        device_rect = (
+            world.mapRect(exposed)
+            .toAlignedRect()
+            .intersected(
+                QRect(
+                    0,
+                    0,
+                    math.ceil(device.width() / ratio),
+                    math.ceil(device.height() / ratio),
+                )
+            )
+        )
+        if painter.hasClipping():
+            device_rect = device_rect.intersected(
+                world.mapRect(painter.clipBoundingRect()).toAlignedRect()
+            )
         if device_rect.isEmpty():
             return
-        ratio = painter.device().devicePixelRatioF()
         layer = QImage(
             device_rect.size() * ratio, QImage.Format.Format_ARGB32_Premultiplied
         )

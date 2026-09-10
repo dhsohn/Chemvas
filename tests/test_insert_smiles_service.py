@@ -448,6 +448,7 @@ def test_insert_smiles_service_render_preview_routes_clear_and_move_paths() -> N
     clear_smiles_preview.reset_mock()
     canvas.insert_state.smiles_preview_picture = "picture"
     item = mock.Mock()
+    item.picture.return_value = "picture"
     with mock.patch(
         "chemvas.ui.insert_smiles_service.add_smiles_preview_item_for",
         return_value=item,
@@ -461,6 +462,46 @@ def test_insert_smiles_service_render_preview_routes_clear_and_move_paths() -> N
     assert [call.args for call in item.setPos.call_args_list] == [
         (2.0, 3.0),
         (4.0, 5.0),
+    ]
+
+
+def test_insert_smiles_service_render_preview_replaces_a_stale_ghost() -> None:
+    # A second Insert while the first ghost is still up swaps the picture; the
+    # item built from the old picture must go, or the ghost and the commit
+    # would disagree again.
+    canvas = _FakeCanvas()
+    canvas.insert_state.smiles_preview_model = MoleculeModel(
+        atoms={0: Atom("C", 0.0, 0.0)}
+    )
+    canvas.insert_state.smiles_preview_center = QPointF(0.0, 0.0)
+    canvas.insert_state.smiles_preview_picture = "new-picture"
+    stale_item = mock.Mock()
+    stale_item.picture.return_value = "old-picture"
+    canvas.insert_state.smiles_preview_items = [stale_item]
+    service = _service_for(canvas)
+    fresh_item = mock.Mock()
+    fresh_item.picture.return_value = "new-picture"
+
+    with (
+        mock.patch(
+            "chemvas.ui.insert_smiles_service.clear_smiles_preview_helper",
+            return_value=[],
+        ) as clear_helper,
+        mock.patch(
+            "chemvas.ui.insert_smiles_service.add_smiles_preview_item_for",
+            return_value=fresh_item,
+        ) as add_item,
+    ):
+        service.render_smiles_preview(QPointF(7.0, 8.0))
+        service.render_smiles_preview(QPointF(9.0, 10.0))
+
+    clear_helper.assert_called_once_with(canvas, [stale_item])
+    add_item.assert_called_once_with(canvas, "new-picture")
+    stale_item.setPos.assert_not_called()
+    assert canvas.insert_state.smiles_preview_items == [fresh_item]
+    assert [call.args for call in fresh_item.setPos.call_args_list] == [
+        (7.0, 8.0),
+        (9.0, 10.0),
     ]
 
 

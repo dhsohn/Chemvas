@@ -985,6 +985,7 @@ class InsertControllerTest(unittest.TestCase):
         canvas.insert_state.smiles_preview_picture = "picture"
         controller = _controller_for(canvas)
         item = Mock()
+        item.picture.return_value = "picture"
 
         with patch(
             "chemvas.ui.insert_smiles_service.add_smiles_preview_item_for",

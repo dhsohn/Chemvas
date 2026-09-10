@@ -154,6 +154,28 @@ class SmilesPreviewPictureTest(unittest.TestCase):
         self.assertGreater(_inked_pixels(committed), 0)
         self.assertEqual(_differing_pixels(committed, ghost), 0)
 
+    def test_inserting_again_replaces_the_ghost_with_the_new_picture(self) -> None:
+        controller = insert_controller_for_access(self.canvas)
+        insert_state = insert_state_for(self.canvas)
+        first = MoleculeModel()
+        first.add_bond(first.add_atom("C", -10.0, 0.0), first.add_atom("C", 10.0, 0.0))
+        with patch.object(self.canvas.rdkit, "smiles_to_2d", return_value=first):
+            controller.begin_smiles_insert("CC")
+        controller.render_smiles_preview(QPointF(5.0, 5.0))
+        stale_item = insert_state.smiles_preview_items[0]
+
+        with patch.object(
+            self.canvas.rdkit, "smiles_to_2d", return_value=_benzyl_alcohol()
+        ):
+            controller.begin_smiles_insert(SMILES)
+        controller.render_smiles_preview(QPointF(5.0, 5.0))
+
+        (item,) = insert_state.smiles_preview_items
+        self.assertIsNot(item, stale_item)
+        self.assertIs(item.picture(), insert_state.smiles_preview_picture)
+        self.assertIsNone(stale_item.scene())
+        self.assertIs(item.scene(), self.canvas.scene())
+
     def test_ghost_canvas_is_disposed_after_rendering(self) -> None:
         before = _live_canvas_count()
 

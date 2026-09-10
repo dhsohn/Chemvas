@@ -273,9 +273,14 @@ class InsertSmilesService:
             self._clear_smiles_preview()
             return
         items = self.insert_state.smiles_preview_items
-        if items:
-            item = items[0]
-        else:
+        item = items[0] if items else None
+        if item is not None and item.picture() is not picture:
+            # A new SMILES was inserted while the previous ghost was still up:
+            # the item must show the picture the commit will place, not the
+            # one it was built from.
+            self._clear_smiles_preview()
+            item = None
+        if item is None:
             item = add_smiles_preview_item_for(self.canvas, picture)
             self.insert_state.smiles_preview_items = [item]
         item.setPos(
