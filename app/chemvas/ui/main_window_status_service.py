@@ -187,6 +187,9 @@ class MainWindowStatusService:
         ):
             zoom_layout.addWidget(widget)
         window.statusBar().addPermanentWidget(zoom_group)
+        window.statusBar().messageChanged.connect(
+            lambda message: self.show_active_tool_hint(window) if not message else None
+        )
         self.refresh_status_context(window)
         self.show_active_tool_hint(window)
 

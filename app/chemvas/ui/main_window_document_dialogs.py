@@ -28,6 +28,10 @@ from chemvas.features.export import (
     supports_minimum_font_check,
 )
 from chemvas.shell.toolbar_buttons import ArrowButton
+from chemvas.ui.main_window_ports import (
+    last_export_format_for_window,
+    set_last_export_format_for_window,
+)
 from chemvas.ui.sheet_setup_logic import (
     SHEET_ORIENTATION_OPTIONS,
     supported_sheet_sizes,
@@ -141,6 +145,9 @@ def prompt_export_options(window) -> FigureExportOptions | None:
     format_combo.setObjectName("exportFormatCombo")
     for label, fmt, _suffix in EXPORT_FORMATS:
         format_combo.addItem(label, fmt)
+    format_combo.setCurrentIndex(
+        format_combo.findData(last_export_format_for_window(window))
+    )
     layout.addWidget(format_combo)
 
     layout.addWidget(QLabel("Size:"))
@@ -214,6 +221,7 @@ def prompt_export_options(window) -> FigureExportOptions | None:
 
     if dialog.exec() != QDialog.DialogCode.Accepted:
         return None
+    set_last_export_format_for_window(window, format_combo.currentData())
     return FigureExportOptions(
         fmt=format_combo.currentData(),
         sizing=size_combo.currentData(),

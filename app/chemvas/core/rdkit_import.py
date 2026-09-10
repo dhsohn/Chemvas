@@ -3,6 +3,7 @@ from __future__ import annotations
 import math
 from typing import TYPE_CHECKING, Any, cast
 
+from chemvas.domain.atom_aliases import ATOM_ALIAS_DEFINITIONS
 from chemvas.domain.document import MoleculeModel
 from chemvas.features.insertion import MoleculeIdentifiers
 
@@ -214,11 +215,13 @@ class RDKitImportHelper:
         if rdkit == (None, None):
             return MoleculeIdentifiers()
         Chem, _ = rdkit
-        # Keep the element-only identifier policy, including aliases whose
-        # names collide with element symbols (Ts/Ac). The shared conversion
-        # then preserves the same electronic and stereo state as the preview.
+        # Terminal hydrides have a fixed H count and a shared attachment
+        # validator. Other aliases, including the Ts/Ac element collisions,
+        # retain the existing unavailable-identifier policy.
         if any(
-            atom.element in self.adapter._alias_smiles for atom in model.atoms.values()
+            definition.terminal_hydrogens is None
+            for atom in model.atoms.values()
+            if (definition := ATOM_ALIAS_DEFINITIONS.get(atom.element)) is not None
         ):
             return MoleculeIdentifiers()
         mol = self.adapter._build_conversion_rdkit_mol(model)

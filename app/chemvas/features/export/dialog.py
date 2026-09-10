@@ -7,6 +7,7 @@ document dialog module.
 
 from __future__ import annotations
 
+import errno
 from pathlib import Path
 
 from chemvas.features.export.errors import MaximumHeightError, MinimumFontSizeError
@@ -50,6 +51,19 @@ _FILTER = {
     "tiff": "TIFF (*.tif *.tiff)",
 }
 
+# Every suffix this dialog can write. A typed suffix from this set names a
+# format, so it is retargeted when it contradicts the chosen one; an unknown
+# suffix ("scheme.v2") is a filename the user chose and is left alone.
+_FORMAT_SUFFIXES: dict[str, frozenset[str]] = {
+    "svg": frozenset({".svg"}),
+    "pdf": frozenset({".pdf"}),
+    "png": frozenset({".png"}),
+    "tiff": frozenset({".tif", ".tiff"}),
+}
+_KNOWN_SUFFIXES = frozenset(
+    suffix for suffixes in _FORMAT_SUFFIXES.values() for suffix in suffixes
+)
+
 
 def is_raster_format(fmt: str) -> bool:
     return fmt.lower() in _RASTER_FORMATS
@@ -75,13 +89,25 @@ def file_filter_for_format(fmt: str) -> str:
 
 
 def normalize_export_path(dialog_path: str | None, fmt: str) -> str | None:
+    """Give the exported file a suffix that matches the format being written.
+
+    A name typed with another format's suffix ("figure.pdf" while the dialog is
+    on SVG) otherwise produced SVG bytes in a file every other program reads by
+    its extension. Retargeting keeps the written format and the name in step;
+    the caller confirms the retargeted name before replacing an existing file.
+    """
     if not dialog_path:
         return None
     path = Path(dialog_path)
-    if path.suffix:
-        return str(path)
     suffix = suffix_for_format(fmt)
-    return str(path.with_suffix(suffix)) if suffix else str(path)
+    if not suffix:
+        return str(path)
+    current = path.suffix.lower()
+    if current in _FORMAT_SUFFIXES.get(fmt.lower(), frozenset()):
+        return str(path)
+    if current and current not in _KNOWN_SUFFIXES:
+        return str(path)
+    return str(path.with_suffix(suffix))
 
 
 def default_export_path(current_file_path: str | None, fmt: str) -> str:
@@ -109,7 +135,29 @@ def export_error_message(error: Exception) -> str:
             "Minimum font size in Export Figure. "
             "No file was written or resized."
         )
+    if isinstance(error, OSError):
+        return _filesystem_error_message(error)
     return str(error)
+
+
+def _filesystem_error_message(error: OSError) -> str:
+    """Explain a failed write without the staging path the user never chose.
+
+    Exports are staged through a temporary file next to the destination, so the
+    raw OSError names a path that does not exist once the export unwinds.
+    """
+    if error.errno == errno.ENOENT:
+        detail = "The destination folder does not exist."
+    elif error.errno in (errno.EACCES, errno.EPERM, errno.EROFS):
+        detail = "You do not have permission to write there."
+    elif error.errno == errno.ENOSPC:
+        detail = "The disk is full."
+    else:
+        # An OSError raised without an errno still carries its own message, and
+        # dropping it would tell the user less than the unhandled path did.
+        reason = error.strerror or str(error) or "The file could not be written."
+        detail = reason if reason.endswith(".") else f"{reason}."
+    return f"{detail}\n\nChoose another location. No file was written."
 
 
 __all__ = [

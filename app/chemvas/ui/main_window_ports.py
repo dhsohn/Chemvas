@@ -11,6 +11,14 @@ if TYPE_CHECKING:
     from chemvas.ui.preview_3d import Preview3D
 
 
+def last_export_format_for_window(window) -> str:
+    return window.runtime_state.last_export_format
+
+
+def set_last_export_format_for_window(window, fmt: str) -> None:
+    window.runtime_state.last_export_format = fmt
+
+
 def services_for_window(window) -> MainWindowServices:
     return window._services
 

@@ -221,3 +221,28 @@ def test_refresh_status_context_uses_injected_zoom_port() -> None:
 
     current_zoom_percent_for_window.assert_called_once_with(window)
     service.update_zoom_label.assert_called_once_with(175)
+
+
+def test_empty_status_tip_and_expired_feedback_restore_current_tool_hint(qapp):
+    from PyQt6.QtGui import QStatusTipEvent
+
+    tool = mock.Mock(return_value="bond")
+    service = _service(active_tool_name_for_window=tool)
+    window = QMainWindow()
+    service.init_status_bar(window)
+    bar = window.statusBar()
+    QCoreApplication.sendEvent(window, QStatusTipEvent("Hover feedback"))
+    assert bar.currentMessage() == "Hover feedback"
+    tool.return_value = "select"
+    QCoreApplication.sendEvent(window, QStatusTipEvent(""))
+    assert bar.currentMessage() == "Select: double-click arrows/lines for labels"
+    bar.showMessage("Saved", 10)
+    assert bar.currentMessage() == "Saved"
+    QTest.qWait(30)
+    assert bar.currentMessage() == "Select: double-click arrows/lines for labels"
+    service.show_error_message(window, "Invalid molecule", timeout=10)
+    assert bar.currentMessage() == "Invalid molecule"
+    QTest.qWait(30)
+    assert bar.currentMessage() == "Select: double-click arrows/lines for labels"
+    assert bar.property("statusState") == ""
+    window.close()

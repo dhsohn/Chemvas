@@ -9,6 +9,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Restore background images before molecular graphics when opening a document
+  so structures are visible on the first paint of a native window.
+- Remember the last confirmed Export Figure format within each window; cancelling
+  the options dialog leaves the previous format selected for the next export.
+- Restore the active drawing hint when a toolbar status tip or timed message clears.
+- Calculate Molecule Info identifiers for neutral terminal `OH`, `NH2`, and `SH`
+  labels. Conversion requires one single attachment and no charge or radical mark
+  on these labels, so contradictory hydrogens are rejected instead of dropped.
+
+- Export Figure writes the chosen format under a matching file extension. A
+  name typed with a different format's extension (`figure.pdf` while the dialog
+  is set to SVG) is retargeted to the format being written instead of leaving
+  the other format's bytes under a misleading name; replacing an existing file
+  under the corrected name is confirmed first. Extensions that name no export
+  format are still left alone.
+- Explain a failed export write in the dialog: a missing folder, a permission
+  refusal, or a full disk are described in place of the raw errno text and the
+  temporary staging path the user never chose.
 - Refresh the status-bar drawing hint when keyboard shortcuts or Select All
   change the active tool.
 - Correct the reference guide's SMILES entry instructions to use the Ring

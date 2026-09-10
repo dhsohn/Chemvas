@@ -33,3 +33,34 @@ def test_alias_attachments_preserve_model_bond_order_and_raw_bond_contract() -> 
     assert inventory.bonds == tuple(bond for bond in model.bonds if bond is not None)
     assert inventory.attachments_by_atom[7] == alias_attachments_for_atom(model, 7)
     assert inventory.attachments_by_atom[11] == alias_attachments_for_atom(model, 11)
+
+
+def test_terminal_hydrides_require_one_single_attachment_and_no_electronic_marks():
+    from chemvas.domain.atom_aliases import alias_attachment_error
+
+    for label in ("OH", "NH2", "SH"):
+        single = AliasAttachment("C", 1, "single")
+        for attachments in (
+            (),
+            (single, single),
+            (AliasAttachment("C", 2, "double"),),
+            (AliasAttachment("C", 3, "triple"),),
+        ):
+            error = alias_attachment_error(label, atom_id=7, attachments=attachments)
+            assert error and label in error and "7" in error
+        for annotation in (
+            {"formal_charge": 1},
+            {"formal_charge": -1},
+            {"radical_electrons": 1},
+        ):
+            error = alias_attachment_error(
+                label, atom_id=7, attachments=(single,), annotation=annotation
+            )
+            assert error and "charge" in error and "radical" in error
+        for style in ("single", "wedge", "hash"):
+            assert (
+                alias_attachment_error(
+                    label, atom_id=7, attachments=(AliasAttachment("C", 1, style),)
+                )
+                is None
+            )
