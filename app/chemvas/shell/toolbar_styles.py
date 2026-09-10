@@ -4,12 +4,15 @@ from chemvas.shell.palette import PALETTE
 
 _P = PALETTE
 
-TOOLBAR_THICKNESS = 38
-TOOLBAR_BUTTON_SIZE = 30
-TOOLBAR_ICON_SIZE = 18
-CONTEXT_BAR_CONTENT_HEIGHT = 30
-CONTEXT_BAR_BUTTON_HEIGHT = 24
-CONTEXT_BAR_ICON_SIZE = 16
+# The two bars share one scale: a 20 px glyph in a 32 px button on the tool
+# bar, an 18 px glyph in a 26 px button on the context bar, 4 px between
+# buttons and 12 px between groups.
+TOOLBAR_THICKNESS = 40
+TOOLBAR_BUTTON_SIZE = 32
+TOOLBAR_ICON_SIZE = 20
+CONTEXT_BAR_CONTENT_HEIGHT = 32
+CONTEXT_BAR_BUTTON_HEIGHT = 26
+CONTEXT_BAR_ICON_SIZE = 18
 
 
 def _flat_toolbutton_style(*, extra: str = "") -> str:
@@ -32,9 +35,11 @@ def _flat_toolbutton_style(*, extra: str = "") -> str:
         f" background-color: {_P['pressed']};"
         " border-color: transparent;"
         "}"
+        # The active tool is a tinted pill, no outline: an outline reads
+        # heavier than the line icons it sits around.
         "QToolButton:checked {"
         f" background-color: {_P['checked_bg']};"
-        f" border-color: {_P['checked_border']};"
+        " border-color: transparent;"
         f" color: {_P['checked_text']};"
         "}"
         "QToolButton:disabled {"

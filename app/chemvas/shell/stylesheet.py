@@ -55,7 +55,7 @@ def main_window_chrome_stylesheet(palette: Mapping[str, str]) -> str:
             }}
             QToolButton:checked {{
                 background: {palette["checked_bg"]};
-                border-color: {palette["checked_border"]};
+                border-color: transparent;
                 color: {palette["checked_text"]};
             }}
             QToolButton:disabled {{

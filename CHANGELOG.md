@@ -26,6 +26,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Redraw the toolbar icons in one line language: the atom tool is an A, the
+  text tool a T, the ring tool a benzene hexagon, the orbital tool an upright
+  p orbital, the mark tool a plus over a minus, and the line tool a segment
+  with its two ends. Icons render larger (20 px in the toolbar, 18 px in the
+  options bar) and the active tool is a tinted pill without an outline.
 - Set the top toolbar's button groups apart with a gap instead of a
   divider line.
 - Draw every selection as one thin outline in the accent colour instead of a
