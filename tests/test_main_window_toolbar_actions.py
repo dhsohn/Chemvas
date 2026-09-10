@@ -13,7 +13,7 @@ from PyQt6.QtWidgets import (
 )
 
 from chemvas.bootstrap.main_window import build_main_window
-from chemvas.shell.theme import TOOLBAR_THICKNESS
+from chemvas.shell.theme import TOOLBAR_ICON_SIZE, TOOLBAR_THICKNESS
 from chemvas.ui.canvas_insert_state import insert_state_for
 from chemvas.ui.canvas_tool_settings_state import tool_settings_state_for
 from chemvas.ui.main_window_ports import (
@@ -128,8 +128,8 @@ class MainWindowToolbarActionsTest(unittest.TestCase):
         action_texts = [action.text() for action in actions]
 
         self.assertEqual(action_texts, ["Select", "Perspective"])
-        self.assertEqual(panel_bar.iconSize().width(), 18)
-        self.assertEqual(panel_bar.iconSize().height(), 18)
+        self.assertEqual(panel_bar.iconSize().width(), TOOLBAR_ICON_SIZE)
+        self.assertEqual(panel_bar.iconSize().height(), TOOLBAR_ICON_SIZE)
         for text in ("Select", "Perspective"):
             with self.subTest(text=text):
                 action = next(action for action in actions if action.text() == text)

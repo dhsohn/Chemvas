@@ -7,6 +7,7 @@ from chemvas.shell.icon_design import (
     has_design_icon,
 )
 from chemvas.shell.icon_pixmap_factory import MainWindowIconPixmapFactory
+from chemvas.shell.toolbar_styles import CONTEXT_BAR_ICON_SIZE, TOOLBAR_ICON_SIZE
 
 if TYPE_CHECKING:
     from PyQt6.QtGui import QIcon
@@ -29,10 +30,10 @@ class MainWindowIconFactory:
     def __init__(self, window: object) -> None:
         self._pixmap_icons = MainWindowIconPixmapFactory(default_size=self.ICON_SIZE)
 
-    # Logical sizes the design icons are actually displayed at: 16px in the
-    # context options bar, 18px in the toolbars, plus the 30px base. Rendering an
+    # Logical sizes the design icons are actually displayed at: 18px in the
+    # context options bar, 20px in the toolbars, plus the 30px base. Rendering an
     # exact pixmap per size keeps small icons crisp instead of downscaling one.
-    DESIGN_ICON_SIZES = (16, 18, ICON_SIZE)
+    DESIGN_ICON_SIZES = (CONTEXT_BAR_ICON_SIZE, TOOLBAR_ICON_SIZE, ICON_SIZE)
 
     def make_design_icon(self, name: str) -> QIcon:
         return self._pixmap_icons.make_sized_icon(

@@ -12,8 +12,11 @@ if TYPE_CHECKING:
 
 _ICON_COLOR = PALETTE["icon"]
 
+# One drawing language for every glyph: a 24-unit box, a 1.8-unit round-capped
+# stroke, no filled silhouettes except a dot or a tint that carries meaning, and
+# the figure reaching the 3..21 band so it reads at the 20 px toolbar size.
 _SVG_BY_NAME: dict[str, str] = {
-    "bond": '<line x1="5" y1="17" x2="19" y2="7"/>',
+    "bond": '<line x1="4" y1="19" x2="20" y2="5"/>',
     "bond_double": '<line x1="4" y1="15" x2="18" y2="5"/><line x1="6" y1="19" x2="20" y2="9"/>',
     "bond_triple": (
         '<line x1="3" y1="14" x2="17" y2="4"/>'
@@ -27,44 +30,26 @@ _SVG_BY_NAME: dict[str, str] = {
         '<line x1="11.2" y1="13.7" x2="13.8" y2="10.3"/>'
         '<line x1="14.4" y1="12" x2="17.4" y2="8"/>'
     ),
+    # The ring tool draws what the canvas draws: a hexagon with the three inner
+    # double-bond lines, so the icon and the benzene it places look alike.
     "benzene": (
-        '<polygon points="12,3 19.5,7.5 19.5,16.5 12,21 4.5,16.5 4.5,7.5"/>'
-        '<circle cx="12" cy="12" r="4.2"/>'
+        '<polygon points="12,2.5 20.2,7.25 20.2,16.75 12,21.5 3.8,16.75 3.8,7.25"/>'
+        '<line x1="12" y1="5.6" x2="17.5" y2="8.8"/>'
+        '<line x1="17.5" y1="15.2" x2="12" y2="18.4"/>'
+        '<line x1="6.5" y1="15.2" x2="6.5" y2="8.8"/>'
     ),
     "arrow": '<line x1="3" y1="12" x2="20" y2="12"/><polyline points="15,7 20.5,12 15,17"/>',
     "bracket": '<path d="M9 4 H6 V20 H9"/><path d="M15 4 H18 V20 H15"/>',
-    "orbital": '<ellipse cx="8" cy="12" rx="5" ry="7"/><ellipse cx="16" cy="12" rx="5" ry="7"/>',
-    # Periodic-table silhouette — the "choose a specific element" tool. Filled
-    # cells on the 24 box: row 1 corner pair (H/He), row 2 two towers with the
-    # central notch, row 3 full row, row 4 left block. Cells run slightly tall
-    # (3.0 x 3.7) so the landscape grid fills the icon box and stays legible at
-    # the 18 px toolbar size.
-    "atom": (
-        '<g fill="currentColor" stroke="none">'
-        '<rect x="0.3" y="4.0" width="3.0" height="3.7" rx="0.4"/>'
-        '<rect x="20.7" y="4.0" width="3.0" height="3.7" rx="0.4"/>'
-        '<rect x="0.3" y="8.1" width="3.0" height="3.7" rx="0.4"/>'
-        '<rect x="3.7" y="8.1" width="3.0" height="3.7" rx="0.4"/>'
-        '<rect x="13.9" y="8.1" width="3.0" height="3.7" rx="0.4"/>'
-        '<rect x="17.3" y="8.1" width="3.0" height="3.7" rx="0.4"/>'
-        '<rect x="20.7" y="8.1" width="3.0" height="3.7" rx="0.4"/>'
-        '<rect x="0.3" y="12.2" width="3.0" height="3.7" rx="0.4"/>'
-        '<rect x="3.7" y="12.2" width="3.0" height="3.7" rx="0.4"/>'
-        '<rect x="7.1" y="12.2" width="3.0" height="3.7" rx="0.4"/>'
-        '<rect x="10.5" y="12.2" width="3.0" height="3.7" rx="0.4"/>'
-        '<rect x="13.9" y="12.2" width="3.0" height="3.7" rx="0.4"/>'
-        '<rect x="17.3" y="12.2" width="3.0" height="3.7" rx="0.4"/>'
-        '<rect x="20.7" y="12.2" width="3.0" height="3.7" rx="0.4"/>'
-        '<rect x="0.3" y="16.3" width="3.0" height="3.7" rx="0.4"/>'
-        '<rect x="3.7" y="16.3" width="3.0" height="3.7" rx="0.4"/>'
-        '<rect x="7.1" y="16.3" width="3.0" height="3.7" rx="0.4"/>'
-        '<rect x="10.5" y="16.3" width="3.0" height="3.7" rx="0.4"/>'
-        "</g>"
+    # A p orbital stood upright: two lobes that meet at the nucleus, the
+    # shape the orbital tool draws, rather than a figure eight.
+    "orbital": (
+        '<path d="M12 12 C5.5 11 5.5 3 12 3 C18.5 3 18.5 11 12 12"/>'
+        '<path d="M12 12 C5.5 13 5.5 21 12 21 C18.5 21 18.5 13 12 12"/>'
     ),
-    "note": (
-        '<g transform="translate(12 12) skewX(-14) translate(-12 -12)">'
-        '<path d="M5 4 H19 M12 4 V20"/></g>'
-    ),
+    # The element-label tool is a capital A: the symbol the tool types.
+    "atom": '<path d="M4.5 20 L12 4 L19.5 20"/><path d="M7.4 14 H16.6"/>',
+    # The free-text tool is an upright T.
+    "note": '<path d="M5 5 H19"/><path d="M12 5 V20"/>',
     "text_bold": '<path d="M7.5 5 V19 M7.5 5 H13 C16.5 5 16.5 11.5 13 11.5 H7.5 M7.5 11.5 H14 C17.8 11.5 17.8 19 14 19 H7.5"/><path d="M9.3 5 V19"/>',
     "text_italic": '<path d="M10 5 H17 M7 19 H14 M14.5 5 L9.5 19"/>',
     "text_superscript": '<path d="M5 16.5 11 10 M5 10 11 16.5"/><path d="M14 8.4 C14 6.6 18.6 6.6 18.6 8.9 C18.6 10.8 14 11.1 14 12.6 H18.8"/>',
@@ -74,11 +59,8 @@ _SVG_BY_NAME: dict[str, str] = {
     "align_left": '<path d="M4 6 H20 M4 11 H14 M4 16 H18 M4 21 H12"/>',
     "align_center": '<path d="M4 6 H20 M7 11 H17 M5 16 H19 M8 21 H16"/>',
     "align_right": '<path d="M4 6 H20 M10 11 H20 M6 16 H20 M12 21 H20"/>',
-    "atom_orbit": (
-        '<circle cx="12" cy="12" r="1.4" fill="currentColor" stroke="none"/>'
-        '<ellipse cx="12" cy="12" rx="9.5" ry="4" transform="rotate(45 12 12)"/>'
-        '<ellipse cx="12" cy="12" rx="9.5" ry="4" transform="rotate(-45 12 12)"/>'
-    ),
+    # Charge and radical marks: a plus over a minus, read as one glyph.
+    "atom_orbit": '<path d="M12 3.5 V13"/><path d="M7.25 8.25 H16.75"/><path d="M7.25 19 H16.75"/>',
     "flip_h": (
         '<path d="m3 7 5 5-5 5V7"/><path d="m21 7-5 5 5 5V7"/>'
         '<path d="M12 20v2"/><path d="M12 14v2"/><path d="M12 8v2"/><path d="M12 2v2"/>'
@@ -117,9 +99,10 @@ _SVG_BY_NAME: dict[str, str] = {
     "radical": '<circle cx="12" cy="12" r="2.5" fill="currentColor" stroke="none"/>',
     "circled_plus": '<circle cx="12" cy="12" r="9"/><path d="M12 7.2v9.6"/><path d="M7.2 12h9.6"/>',
     "circled_minus": '<circle cx="12" cy="12" r="9"/><path d="M7.2 12h9.6"/>',
+    # The ring-fill tool is the ring tool's hexagon with its interior tinted.
     "ring_fill": (
-        '<polygon points="12,3 20.56,9.22 17.29,19.28 6.71,19.28 3.44,9.22" '
-        'fill="#ededeb" stroke-width="2"/>'
+        '<polygon points="12,2.5 20.2,7.25 20.2,16.75 12,21.5 3.8,16.75 3.8,7.25" '
+        'fill="#d6ece7"/>'
     ),
     "bond_bold": '<line x1="5" y1="17" x2="19" y2="7" stroke-width="3.6"/>',
     "bond_dotted": '<line x1="5" y1="17" x2="19" y2="7" stroke-dasharray="0.1 3.4"/>',
@@ -157,7 +140,13 @@ _SVG_BY_NAME: dict[str, str] = {
     "orbital_phase_off": '<circle cx="12" cy="7" r="5"/><circle cx="12" cy="17" r="5"/>',
     "orbital_phase_on": '<circle cx="12" cy="7" r="5" fill="currentColor"/><circle cx="12" cy="17" r="5"/>',
     # --- Shapes (decorative) ---
-    "line": '<line x1="3" y1="15" x2="15" y2="3"/><line x1="9" y1="21" x2="21" y2="9" stroke-dasharray="3 2.4"/>',
+    # A drawn segment with its two ends, as the line tool leaves it on the
+    # canvas; the dots tell it apart from the bond tool's bare stroke.
+    "line": (
+        '<line x1="5" y1="19" x2="19" y2="5"/>'
+        '<circle cx="5" cy="19" r="1.9" fill="currentColor" stroke="none"/>'
+        '<circle cx="19" cy="5" r="1.9" fill="currentColor" stroke="none"/>'
+    ),
     "line_plain": '<line x1="3" y1="12" x2="21" y2="12"/>',
     "line_dashed": '<line x1="3" y1="12" x2="21" y2="12" stroke-dasharray="4 3"/>',
     "line_wavy": '<path d="M3 12 C4.5 8 6 8 7.5 12 S10.5 16 12 12 S15 8 16.5 12 S19.5 16 21 12"/>',
@@ -214,10 +203,11 @@ def draw_design_icon(
     renderer = QSvgRenderer(
         QByteArray(_svg_document(name, color or _ICON_COLOR).encode("utf-8"))
     )
-    # Render the 24-unit viewBox into the central 80% of the target size so the
-    # glyph keeps the same 10% padding it has in the default 30px icon canvas.
-    pad = size * 0.1
-    renderer.render(painter, QRectF(pad, pad, size * 0.8, size * 0.8))
+    # Render the 24-unit viewBox into the central 90% of the target size: the
+    # glyphs already keep their own margin inside the box, so a 5% pad is
+    # enough to stop round caps clipping while the figure fills the button.
+    pad = size * 0.05
+    renderer.render(painter, QRectF(pad, pad, size * 0.9, size * 0.9))
 
 
 __all__ = ["draw_design_icon", "has_design_icon"]
