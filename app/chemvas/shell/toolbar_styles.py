@@ -35,11 +35,9 @@ def _flat_toolbutton_style(*, extra: str = "") -> str:
         f" background-color: {_P['pressed']};"
         " border-color: transparent;"
         "}"
-        # The active tool is a tinted pill, no outline: an outline reads
-        # heavier than the line icons it sits around.
         "QToolButton:checked {"
         f" background-color: {_P['checked_bg']};"
-        " border-color: transparent;"
+        f" border-color: {_P['checked_border']};"
         f" color: {_P['checked_text']};"
         "}"
         "QToolButton:disabled {"

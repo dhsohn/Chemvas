@@ -26,8 +26,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Group the status bar's zoom controls into one outlined pill, and show a
-  faint hint on an empty sheet saying how to start drawing.
+- Group the status bar's zoom controls into one outlined pill.
 - Fold the rarely used arrow kinds (favoured equilibria, inhibition and the
   three arcs) into one menu button on the Arrow options bar that shows the
   kind picked last, so the everyday kinds get room.
@@ -42,7 +41,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   text tool a T, the ring tool a benzene hexagon, the orbital tool an upright
   p orbital, the mark tool a plus over a minus, and the line tool a segment
   with its two ends. Icons render larger (20 px in the toolbar, 18 px in the
-  options bar) and the active tool is a tinted pill without an outline.
+  options bar) and the active tool keeps its tinted, outlined pill.
 - Set the top toolbar's button groups apart with a gap instead of a
   divider line.
 - Draw every selection as one thin outline in the accent colour instead of a
