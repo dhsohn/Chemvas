@@ -22,6 +22,7 @@ from chemvas.ui.canvas_window_access import snapshot_canvas_state_for
 from chemvas.ui.handle_overlay_access import show_endpoint_handles_for
 from chemvas.ui.main_window_ports import (
     history_service_for_window,
+    select_all_for_window,
     services_for_window,
     set_zoom_percent_for_window,
 )
