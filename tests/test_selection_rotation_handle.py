@@ -22,13 +22,13 @@ from chemvas.ui.canvas_window_access import snapshot_canvas_state_for
 from chemvas.ui.handle_overlay_access import show_endpoint_handles_for
 from chemvas.ui.main_window_ports import (
     history_service_for_window,
-    select_all_for_window,
     services_for_window,
     set_zoom_percent_for_window,
 )
 from chemvas.ui.pick_radius_access import atom_pick_radius_for
 from chemvas.ui.scene_decoration_access import add_arrow_for
 from chemvas.ui.selection_outline_state import selection_outlines_for
+from chemvas.ui.selection_service_access import refresh_selection_outline_for
 from chemvas.ui.structure_mutation_access import add_atom_for, add_bond_for
 from tests.test_note_editing_workflows import _key
 from tests.test_note_editing_workflows import app as app
@@ -45,6 +45,15 @@ def _bonded_pair(canvas):
     bond_id = add_bond_for(canvas, a, b)
     add_bond_graphics_for(canvas, bond_id)
     return a, b
+
+
+def _select_all(window, canvas) -> None:
+    # Select everything and settle the outline before reading it: under a
+    # loaded CI runner the selection signal can land after the assertion.
+    _select_all(window, canvas)
+    QApplication.processEvents()
+    refresh_selection_outline_for(canvas)
+    QApplication.processEvents()
 
 
 def _positions(canvas, *atom_ids):
@@ -118,7 +127,7 @@ def _assert_rotated(canvas, atom_ids, before, degrees, *, center=ORIGIN):
 def test_two_bonded_atoms_get_a_frame_and_a_rotation_knob(drawing):
     window, canvas = drawing
     _bonded_pair(canvas)
-    select_all_for_window(window)
+    _select_all(window, canvas)
 
     assert len(_outlines(canvas, "frame")) == 1
     knob = _knob(canvas)
@@ -132,7 +141,7 @@ def test_two_bonded_atoms_get_a_frame_and_a_rotation_knob(drawing):
 def test_a_lone_atom_gets_no_frame(drawing):
     window, canvas = drawing
     add_atom_for(canvas, "C", 0.0, 0.0)
-    select_all_for_window(window)
+    _select_all(window, canvas)
 
     assert _outlines(canvas, "frame") == []
     assert [
@@ -143,7 +152,7 @@ def test_a_lone_atom_gets_no_frame(drawing):
 def test_a_single_arrow_gets_a_frame(drawing):
     window, canvas = drawing
     add_arrow_for(canvas, QPointF(-30.0, 0.0), QPointF(30.0, 0.0), "arrow")
-    select_all_for_window(window)
+    _select_all(window, canvas)
 
     assert len(_outlines(canvas, "frame")) == 1
     _knob(canvas)
@@ -153,7 +162,7 @@ def test_dragging_the_knob_rotates_the_selection_as_one_history_step(drawing):
     window, canvas = drawing
     set_zoom_percent_for_window(window, 200)
     a, b = _bonded_pair(canvas)
-    select_all_for_window(window)
+    _select_all(window, canvas)
     before = _positions(canvas, a, b)
     history = history_service_for_window(window)
     count = len(history.state.history)
@@ -174,7 +183,7 @@ def test_escape_cancels_a_rotation_drag(drawing, tmp_path):
     window, canvas = drawing
     set_zoom_percent_for_window(window, 200)
     a, b = _bonded_pair(canvas)
-    select_all_for_window(window)
+    _select_all(window, canvas)
     document_action = services_for_window(window).document_action_service
     assert document_action.save_canvas_to_path(window, str(tmp_path / "turn.chemvas"))
     baseline = snapshot_canvas_state_for(canvas)
@@ -197,7 +206,7 @@ def test_escape_cancels_a_rotation_drag(drawing, tmp_path):
 def test_a_click_on_the_knob_without_moving_changes_nothing(drawing, tmp_path):
     window, canvas = drawing
     a, b = _bonded_pair(canvas)
-    select_all_for_window(window)
+    _select_all(window, canvas)
     document_action = services_for_window(window).document_action_service
     assert document_action.save_canvas_to_path(window, str(tmp_path / "still.chemvas"))
     before = _positions(canvas, a, b)
@@ -219,7 +228,7 @@ def test_a_drag_back_to_its_start_restores_the_positions_exactly(drawing):
     b = add_atom_for(canvas, "C", 19.7, 0.3)
     bond_id = add_bond_for(canvas, a, b)
     add_bond_graphics_for(canvas, bond_id)
-    select_all_for_window(window)
+    _select_all(window, canvas)
     before = _positions(canvas, a, b)
     history = history_service_for_window(window)
     count = len(history.state.history)
@@ -243,7 +252,7 @@ def test_shift_snaps_the_sweep_to_fifteen_degree_steps(drawing):
     window, canvas = drawing
     set_zoom_percent_for_window(window, 200)
     a, b = _bonded_pair(canvas)
-    select_all_for_window(window)
+    _select_all(window, canvas)
     before = _positions(canvas, a, b)
     viewport = canvas.viewport()
     start = _knob_screen_pos(canvas, _knob(canvas))
@@ -272,7 +281,7 @@ def test_the_knob_is_picked_through_the_view_transform(drawing, zoom):
     window, canvas = drawing
     set_zoom_percent_for_window(window, zoom)
     _bonded_pair(canvas)
-    select_all_for_window(window)
+    _select_all(window, canvas)
     knob = _knob(canvas)
     hit_testing = canvas_services_for(canvas).selection.hit_testing_service
     knob_screen = _knob_screen_pos(canvas, knob)
@@ -291,7 +300,7 @@ def test_the_knob_is_picked_through_the_view_transform(drawing, zoom):
 def test_bonded_carbons_share_one_band_without_atom_bubbles(drawing):
     window, canvas = drawing
     a, b = _bonded_pair(canvas)
-    select_all_for_window(window)
+    _select_all(window, canvas)
 
     (component,) = _outlines(canvas, "component")
     bounds = component.path().boundingRect()
@@ -308,7 +317,7 @@ def test_a_labelled_atom_and_a_lone_atom_keep_their_own_marks(drawing):
     bond_id = add_bond_for(canvas, carbon, oxygen)
     add_bond_graphics_for(canvas, bond_id)
     add_atom_for(canvas, "C", 80.0, 0.0)
-    select_all_for_window(window)
+    _select_all(window, canvas)
 
     components = sorted(
         _outlines(canvas, "component"),
