@@ -25,8 +25,9 @@ QT_QPA_PLATFORM=offscreen python scripts/capture_first_scheme.py --output-dir /t
 
 Choose an empty output directory. The script refuses a non-empty directory and
 uses a temporary app-data/config/cache profile. It never opens existing user
-documents or starts session recovery. It inserts the two structures through the
-SMILES controls, rotates each selection, opens the actual atom-label and
+documents or starts session recovery. It chooses the Ring tool and inserts the
+two structures through the SMILES controls on its options bar, rotates each
+selection, opens the actual atom-label and
 arrow-label dialogs, aligns the scheme, saves the document, and exports it
 through the desktop figure-export service. The export-options dialog is real;
 the output path is supplied by the script to avoid recording a user's file picker.
@@ -69,9 +70,7 @@ use the desktop export's 174 mm setting.
 The example SVG includes outlined arrow labels, preserving the canvas's shaped
 glyphs and subscript/superscript positions. The sharing card renders this SVG
 directly; it does not repair the output. The SVG records a width of 173.919 mm
-after the exporter rounds the nominal 174 mm preset. PyPI 0.8.1 predates the
-arrow-label fix; use the development checkout to regenerate these exports until
-the next release.
+after the exporter rounds the nominal 174 mm preset.
 
 ## Regenerate the branding
 

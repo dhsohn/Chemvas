@@ -126,10 +126,12 @@ class MainWindowPanelToolbarTest(unittest.TestCase):
     def tearDown(self) -> None:
         self.app.processEvents()
 
-    def _toolbar_widget_groups(self, toolbar):
-        groups = []
-        group = []
+    def _toolbar_widgets(self, toolbar):
+        names = []
         for action in toolbar.actions():
+            # The buttons form one continuous row: no divider line and no
+            # blank gap widget between the tool groups.
+            self.assertFalse(action.isSeparator())
             widget = (
                 action.defaultWidget()
                 if hasattr(action, "defaultWidget")
@@ -137,20 +139,12 @@ class MainWindowPanelToolbarTest(unittest.TestCase):
             )
             if widget is None:
                 continue
-            # Groups are set apart by a gap widget, not a divider line.
-            if widget.objectName() == "toolbarGroupGap":
-                self.assertFalse(action.isSeparator())
-                if group:
-                    groups.append(group)
-                    group = []
-                continue
+            self.assertNotEqual(widget.objectName(), "toolbarGroupGap")
             if isinstance(widget, QLineEdit):
-                group.append(widget.placeholderText())
+                names.append(widget.placeholderText())
             elif isinstance(widget, QToolButton):
-                group.append(widget.objectName() or widget.toolTip())
-        if group:
-            groups.append(group)
-        return groups
+                names.append(widget.objectName() or widget.toolTip())
+        return names
 
     def test_build_panel_toolbar_wires_actions_inputs_and_buttons(self) -> None:
         window = _HarnessWindow()
@@ -181,8 +175,12 @@ class MainWindowPanelToolbarTest(unittest.TestCase):
                 assembly.panel_bar.findChild(QToolButton, removed_name),
                 removed_name,
             )
+        # One continuous row in the configured order: Brackets is followed
+        # directly by Mark, and Orbital directly by the note (Text) tool. The
+        # SMILES controls live on the Ring options bar now; the eraser closes
+        # the toolbar.
         self.assertEqual(
-            self._toolbar_widget_groups(assembly.panel_bar)[0],
+            self._toolbar_widgets(assembly.panel_bar),
             [
                 "toolButton_select",
                 "toolButton_perspective",
@@ -192,26 +190,14 @@ class MainWindowPanelToolbarTest(unittest.TestCase):
                 "toolButton_arrow",
                 "toolButton_line",
                 "toolButton_ts_bracket",
+                "toolButton_mark",
+                "toolButton_orbital",
+                "toolButton_note",
+                "toolButton_shape",
+                "toolButton_color",
+                "toolButton_ring_fill",
+                "toolButton_delete",
             ],
-        )
-        self.assertIn(
-            ["toolButton_mark", "toolButton_orbital"],
-            self._toolbar_widget_groups(assembly.panel_bar),
-        )
-        # Shape sits just right of the note (Text) tool, in the same partition
-        # as Color; the eraser closes that partition.
-        self.assertIn(
-            [
-                f"toolButton_{key}"
-                for key in ("note", "shape", "color", "ring_fill", "delete")
-            ],
-            self._toolbar_widget_groups(assembly.panel_bar),
-        )
-        # The SMILES controls live on the Ring options bar now; the eraser
-        # closes the toolbar.
-        self.assertEqual(
-            self._toolbar_widget_groups(assembly.panel_bar)[-1][-1],
-            "toolButton_delete",
         )
         primary_button_names = (
             "toolButton_select",
