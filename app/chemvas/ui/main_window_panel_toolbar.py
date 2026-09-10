@@ -88,18 +88,6 @@ def _toolbar_spacer() -> QWidget:
     return spacer
 
 
-# The breathing room between button groups; there is no divider line, the
-# gap alone says where one group ends and the next begins.
-TOOLBAR_GROUP_GAP_PX = 12
-
-
-def _toolbar_group_gap() -> QWidget:
-    gap = QWidget()
-    gap.setObjectName("toolbarGroupGap")
-    gap.setFixedWidth(TOOLBAR_GROUP_GAP_PX)
-    return gap
-
-
 def _build_note_font_menu_button(
     panel_bar: QToolBar,
     window,
@@ -165,14 +153,13 @@ def build_panel_toolbar(
         panel_bar.addAction(action)
         _normalize_tool_action_button(panel_bar, action, action_key, primary=primary)
 
+    # The groups only fix the order; the buttons sit in one continuous row
+    # with no divider line or gap between groups.
     for action_key in TOOLBAR_PRIMARY_TOOL_GROUP:
         add_tool(action_key, primary=True)
-    panel_bar.addWidget(_toolbar_group_gap())
-    for group_index, action_keys in enumerate(TOOLBAR_TOOL_GROUPS[1:]):
+    for action_keys in TOOLBAR_TOOL_GROUPS[1:]:
         for action_key in action_keys:
             add_tool(action_key, primary=False)
-        if group_index < len(TOOLBAR_TOOL_GROUPS[1:]) - 1:
-            panel_bar.addWidget(_toolbar_group_gap())
     panel_bar.addWidget(_toolbar_spacer())
 
     return MainWindowPanelToolbarAssembly(

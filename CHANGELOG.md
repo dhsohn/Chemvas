@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Close the blank gaps between the top toolbar's button groups (after
+  Brackets and after Orbital); the tool buttons now form one continuous row.
+- Recapture the first-scheme walkthrough GIF, still and example exports
+  against the current interface, where the SMILES field sits on the Ring
+  tool's options bar; the walkthrough script chooses that tool first. The
+  example drawing itself is unchanged; its SVG and PNG are re-exported with the
+  current bond-to-label clearance.
+
 ### Fixed
 
 - Restore background images before molecular graphics when opening a document

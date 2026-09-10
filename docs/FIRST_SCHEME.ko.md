@@ -94,10 +94,9 @@ pip install "chemvas[rdkit]"
 [300 DPI PNG](https://raw.githubusercontent.com/dhsohn/Chemvas/main/examples/first-scheme.png)도
 이 설정으로 출력했습니다.
 
-예제 출력물에는 화살표 라벨 아웃라인 수정이 반영되어 SVG에서도 캔버스의
-아래첨자·위첨자 배치를 유지합니다. PyPI 0.8.1에는 이 수정이 없으므로 다음 릴리스
-전까지는 [개발 환경 설치](../CONTRIBUTING.md#development-setup)로 같은 출력을
-재현하세요. 아웃라인은 SVG 텍스트가 아닌 도형이므로 글자 편집에는 원본 문서를 쓰세요.
+화살표 라벨은 글리프 아웃라인으로 출력되어 SVG에서도 캔버스의 아래첨자·위첨자
+배치를 유지합니다. 아웃라인은 SVG 텍스트가 아닌 도형이므로 글자 편집에는 원본
+문서를 쓰세요.
 
 ## 명령줄로도 사용하기
 

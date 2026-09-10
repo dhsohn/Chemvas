@@ -91,11 +91,9 @@ The [downloadable SVG](https://raw.githubusercontent.com/dhsohn/Chemvas/main/exa
 and [300 DPI PNG](https://raw.githubusercontent.com/dhsohn/Chemvas/main/examples/first-scheme.png)
 were exported using these settings.
 
-The example exports include the arrow-label outlining fix, which preserves the
-canvas's subscript/superscript placement in SVG. PyPI 0.8.1 predates this fix;
-until the next release, use the [development setup](../CONTRIBUTING.md#development-setup)
-to reproduce the corrected export. Keep the source document for text editing:
-outlined glyphs are shapes, not editable SVG text.
+Arrow labels are exported as glyph outlines, which preserves the canvas's
+subscript/superscript placement in SVG. Keep the source document for text
+editing: outlined glyphs are shapes, not editable SVG text.
 
 ## Try the command line
 
