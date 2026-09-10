@@ -7,22 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-09-10
+
 ### Added
 
-- Embed original PNG and JPEG images using **File ▸ Insert Image**, clipboard
+- Embed original PNG and JPEG images using **File ▸ Insert Image…**, clipboard
   paste, or `compose-document`. Move images with the selection tool and edit
-  their size, original aspect ratio lock, and opacity in **Edit ▸ Image Properties**.
-  Native documents and editable SVG retain the source bytes; figure exports
-  include the complete raster. See [image objects](docs/IMAGE_OBJECTS.md) for
-  limits and older-reader compatibility.
+  their size, original aspect ratio lock, and opacity in
+  **Edit ▸ Image Properties…**. Native documents and editable SVG retain the
+  source bytes; figure exports include the complete raster. The document format
+  stays version 7: a drawing without images opens in any Chemvas as before, but
+  a drawing that contains an image is rejected by Chemvas 0.10.2 and earlier.
+  See [image objects](docs/IMAGE_OBJECTS.md) for limits.
 - Turn a selection by dragging the rotation handle above its frame. The frame
   appears around two or more selected atoms or a rotatable arrow, line, or
-  orbital; hold Shift to snap the sweep to 15° steps. The drag undoes as one
-  step and Escape cancels it, matching **Edit ▸ Rotate**.
+  orbital; hold Shift to snap the sweep to 15° steps. The selection turns about
+  the same centre as **Edit ▸ Rotate…**, the drag undoes as one step, and
+  Escape cancels it.
 - Export one document to a single-page vector PDF with `render-document`.
-  Reuse the desktop PDF exporter and retain physical sizing, source preservation,
-  and refusal to overwrite an existing output. Minimum-font checking remains
-  available for SVG and PNG.
+  It reuses the desktop PDF exporter, keeps the physical size, leaves the
+  source untouched, and refuses to overwrite an existing output. `--dpi` sets
+  the PDF paint resolution; PDF bytes are not reproducible across runs because
+  Qt writes identifiers and timestamps into the metadata. `--min-font-pt`
+  remains SVG and PNG only.
+- Add **File ▸ Close Window** with the platform's standard shortcut (Command-W
+  on macOS), keeping the existing save, cancel and shutdown handling.
 
 ### Changed
 
@@ -34,9 +43,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Ring tool's options bar, beside the ring templates; Insert is now an
   outlined button like the bar's other actions.
 - Move flip, rotate, align and distribute into the Select tool's options bar,
-  which also opens for the Perspective tool and for **Edit ▸ Rotate...**; the
-  top toolbar now holds only drawing tools. Tools without options leave the
-  bar empty instead of showing a hint.
+  which also opens for the Perspective tool and for **Edit ▸ Rotate…**, which
+  now switches to the Select tool; the top toolbar now holds only drawing
+  tools. Tools without options leave the bar empty instead of showing a hint.
 - Redraw the toolbar icons in one line language: the atom tool is an A, the
   text tool a T, the ring tool a benzene hexagon, the orbital tool an upright
   p orbital, the mark tool a plus over a minus, and the line tool a segment
@@ -54,6 +63,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (edge-midpoint resize handles are smaller than corner and endpoint handles).
   A handle that has taken another item's endpoint is still shown filled.
 - Tint the hover ring with the selection accent instead of grey.
+- Raise the `.chemvas` document limit from 8 MiB to 96 MiB for
+  `compose-document`, `render-document`, `check-layout`, `arrange-scheme` and
+  clipboard payloads, so embedded images fit; editable SVG accepts a 256 MiB
+  file with a 96 MiB native payload. Desktop **File ▸ Open…** and session
+  restore, which had no size cap before, now apply the same 96 MiB limit.
 
 ### Fixed
 
@@ -61,19 +75,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   controls while preserving existing files and command-line diagnostics.
 - Measure PDF height limits against the native page geometry, including
   whole-point rounding and standard-paper matching.
-
 - Keep unchecked checkboxes visible against the desktop dialog background,
   including when an export option is unavailable.
-- Add Close Window with the platform's standard shortcut (Command-W on macOS),
-  retaining the existing save, cancel and shutdown handling.
 - Explain failed minimum-font export checks with measured sizes and corrective
   actions in the desktop dialog while preserving command-line diagnostics.
-
 - Report unrecognized command names before starting Qt. Reject unrecognized
   desktop arguments after Qt consumes its options, before opening a window or
   restoring a session.
 - Show Chemvas in the macOS application menu when launched through the standard
   framework Python bundle. Preserve names supplied by other application bundles.
+
+### Removed
+
+- `SelectionHighlightStyler` and `selection_highlight_styler_for`
+  (`chemvas.ui.selection_highlight_styler`), `selection_highlight_styler_for_access`,
+  the `set_selection_highlight`, `clear_selection_highlight` and
+  `apply_selection_style` methods of `CanvasHandleController`, and the
+  `selected_highlight_items_for`, `set_selected_highlight_items_for` and
+  `selection_stroke_delta_for` accessors with the `selected_items` and
+  `stroke_delta` selection-style fields: selections are outlined, no longer
+  restyled.
+- `SMILES_RENDER_BUTTON_STYLE` from `chemvas.shell.theme` and
+  `chemvas.shell.toolbar_styles`; Insert uses the options bar's action style.
+- `build_rotate_page` and the `rotate` options page, replaced by
+  `build_select_page`. `build_template_page` now requires `begin_smiles_insert`;
+  `build_panel_toolbar` drops its `create_toolbar_button`, transform controller
+  and insert controller arguments, `MainWindowUIAssemblyService` drops the
+  latter two; `create_handle_item` drops `size` and returns an ellipse item.
 
 ## [0.10.2] - 2026-09-09
 
@@ -1547,7 +1575,8 @@ housekeeping.
   `.chemvas` document type (double-clicking a file opens it in Chemvas), and a
   Linux `.desktop` entry with an `application/x-chemvas` MIME type.
 
-[Unreleased]: https://github.com/dhsohn/Chemvas/compare/v0.10.2...HEAD
+[Unreleased]: https://github.com/dhsohn/Chemvas/compare/v0.11.0...HEAD
+[0.11.0]: https://github.com/dhsohn/Chemvas/compare/v0.10.2...v0.11.0
 [0.10.2]: https://github.com/dhsohn/Chemvas/compare/v0.10.1...v0.10.2
 [0.10.1]: https://github.com/dhsohn/Chemvas/compare/v0.10.0...v0.10.1
 [0.10.0]: https://github.com/dhsohn/Chemvas/compare/v0.9.0...v0.10.0
