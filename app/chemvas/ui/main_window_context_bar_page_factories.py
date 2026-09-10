@@ -99,8 +99,95 @@ def _add_group_buttons(group: QButtonGroup, layout, buttons: dict, entries) -> N
 
 
 def build_empty_page() -> QWidget:
+    # Tools without options (the eraser) leave the bar quiet rather than
+    # explaining itself.
     page, layout = new_context_page()
-    layout.addWidget(hint_label("Select a tool to see its options here"))
+    layout.addStretch(1)
+    return page
+
+
+ALIGN_SPECS: tuple[tuple[str, str], ...] = (
+    ("left", "Align left edges"),
+    ("center", "Align horizontal centres"),
+    ("right", "Align right edges"),
+    ("top", "Align top edges"),
+    ("middle", "Align vertical centres"),
+    ("bottom", "Align bottom edges"),
+)
+DISTRIBUTE_SPECS: tuple[tuple[str, str], ...] = (
+    ("horizontal", "Distribute horizontally with equal gaps"),
+    ("vertical", "Distribute vertically with equal gaps"),
+)
+
+
+def build_select_page(
+    window,
+    *,
+    flip_selection,
+    rotate_selection,
+    align_selection,
+    distribute_selection,
+) -> QWidget:
+    """Everything that acts on the current selection: flip, rotate, align, distribute."""
+    icons = icon_factory_for_window(window)
+    page, layout = new_context_page()
+    layout.addWidget(hint_label("Select"))
+    for object_name, icon, tooltip, horizontal in (
+        (
+            "flip_horizontal_button",
+            icons.icon_flip_h(),
+            "Flip Horizontal (Ctrl+Shift+H)",
+            True,
+        ),
+        (
+            "flip_vertical_button",
+            icons.icon_flip_v(),
+            "Flip Vertical (Ctrl+Shift+V)",
+            False,
+        ),
+    ):
+        button = icon_button(icon, tooltip)
+        button.setObjectName(object_name)
+        button.setStatusTip(tooltip)
+        button.clicked.connect(
+            lambda _checked=False, h=horizontal: flip_selection(window, horizontal=h)
+        )
+        layout.addWidget(button)
+
+    layout.addWidget(divider())
+    angle_frame, angle_input = rotate_angle_input()
+    layout.addWidget(angle_frame)
+
+    def apply_rotation() -> None:
+        rotate_selection(window, float(angle_input.value()))
+
+    apply_button = action_button("Rotate", "Rotate the selection by the entered angle")
+    apply_button.setObjectName("rotateApplyButton")
+    apply_button.clicked.connect(lambda _checked=False: apply_rotation())
+    line_edit = angle_input.lineEdit()
+    if line_edit is not None:
+        line_edit.returnPressed.connect(apply_rotation)
+    layout.addWidget(apply_button)
+
+    layout.addWidget(divider())
+    for mode, tooltip in ALIGN_SPECS:
+        button = icon_button(icons.icon_align_objects(mode), tooltip)
+        button.setObjectName(f"align_{mode}_button")
+        button.setStatusTip(tooltip)
+        button.clicked.connect(
+            lambda _checked=False, m=mode: align_selection(window, m)
+        )
+        layout.addWidget(button)
+
+    layout.addWidget(divider())
+    for axis, tooltip in DISTRIBUTE_SPECS:
+        button = icon_button(icons.icon_distribute(axis), tooltip)
+        button.setObjectName(f"distribute_{axis}_button")
+        button.setStatusTip(tooltip)
+        button.clicked.connect(
+            lambda _checked=False, a=axis: distribute_selection(window, a)
+        )
+        layout.addWidget(button)
     layout.addStretch(1)
     return page
 
@@ -492,26 +579,6 @@ def build_line_page(window, tool_state_service) -> QWidget:
     return page
 
 
-def build_rotate_page(window, rotate_selection) -> QWidget:
-    page, layout = new_context_page()
-    layout.addWidget(hint_label("Rotate"))
-    angle_frame, angle_input = rotate_angle_input()
-    layout.addWidget(angle_frame)
-
-    def apply_rotation() -> None:
-        rotate_selection(window, float(angle_input.value()))
-
-    apply_button = action_button("Apply", "Rotate the selection by the entered angle")
-    apply_button.setObjectName("rotateApplyButton")
-    apply_button.clicked.connect(lambda _checked=False: apply_rotation())
-    line_edit = angle_input.lineEdit()
-    if line_edit is not None:
-        line_edit.returnPressed.connect(apply_rotation)
-    layout.addWidget(apply_button)
-    layout.addStretch(1)
-    return page
-
-
 def build_color_palette_page(
     *,
     tooltip_prefix: str,
@@ -544,7 +611,7 @@ __all__ = [
     "build_line_page",
     "build_mark_page",
     "build_orbital_page",
-    "build_rotate_page",
+    "build_select_page",
     "build_shape_page",
     "build_template_page",
     "build_text_page",

@@ -119,7 +119,6 @@ class MainWindowPanelToolbarTest(unittest.TestCase):
             open_recent_path=mock.Mock(),
         )
         self.button_service = MainWindowUIAssemblyService(
-            scene_transform_controller_for_window=self.scene_transform_controller_for_window,
             insert_controller_for_window=self.insert_controller_for_window,
             build_tool_actions_for_window=mock.Mock(),
             panel_toolbar_callbacks=self.panel_callbacks,
@@ -160,9 +159,7 @@ class MainWindowPanelToolbarTest(unittest.TestCase):
 
         assembly = build_panel_toolbar(
             window,
-            create_toolbar_button=self.button_service.create_toolbar_button,
             build_tool_actions=self.build_tool_actions,
-            scene_transform_controller_for_window=self.scene_transform_controller_for_window,
             insert_controller_for_window=self.insert_controller_for_window,
             callbacks=self.panel_callbacks,
         )
@@ -210,10 +207,6 @@ class MainWindowPanelToolbarTest(unittest.TestCase):
                 f"toolButton_{key}"
                 for key in ("note", "shape", "color", "ring_fill", "delete")
             ],
-            self._toolbar_widget_groups(assembly.panel_bar),
-        )
-        self.assertIn(
-            ["flip_horizontal_button", "flip_vertical_button", "rotate_button"],
             self._toolbar_widget_groups(assembly.panel_bar),
         )
         # The SMILES quick-insert bar closes the toolbar. Its "SMILES" QLabel is
@@ -273,18 +266,12 @@ class MainWindowPanelToolbarTest(unittest.TestCase):
         )
         window.set_bond_length.assert_not_called()
 
-        flip_buttons = [
-            button
-            for button in assembly.panel_bar.findChildren(QToolButton)
-            if button.toolTip().startswith("Flip")
-        ]
-        self.assertEqual(len(flip_buttons), 2)
+        # Flip, rotate, align and distribute live on the Select options bar.
         self.assertEqual(
-            [button.objectName() for button in flip_buttons],
-            ["flip_horizontal_button", "flip_vertical_button"],
-        )
-        flip_buttons[0].click()
-        flip_buttons[1].click()
-        window.canvas.scene_transform_controller.flip_selected_items.assert_has_calls(
-            [mock.call(horizontal=True), mock.call(horizontal=False)]
+            [
+                button.objectName()
+                for button in assembly.panel_bar.findChildren(QToolButton)
+                if button.toolTip().startswith(("Flip", "Rotate"))
+            ],
+            [],
         )

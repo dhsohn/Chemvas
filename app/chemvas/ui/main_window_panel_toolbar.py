@@ -28,7 +28,6 @@ from chemvas.ui.main_window_config import (
     TOOLBAR_PRIMARY_TOOL_GROUP,
     TOOLBAR_TOOL_GROUPS,
 )
-from chemvas.ui.main_window_ports import icon_factory_for_window
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -183,9 +182,7 @@ def _build_note_font_menu_button(
 def build_panel_toolbar(
     window,
     *,
-    create_toolbar_button: Callable[..., QToolButton],
     build_tool_actions: Callable[[object, QActionGroup], dict[str, QAction]],
-    scene_transform_controller_for_window,
     insert_controller_for_window,
     callbacks: MainWindowPanelToolbarCallbacks,
 ) -> MainWindowPanelToolbarAssembly:
@@ -196,37 +193,10 @@ def build_panel_toolbar(
     panel_bar.setIconSize(QSize(TOOLBAR_ICON_SIZE, TOOLBAR_ICON_SIZE))
     panel_bar.setStyleSheet(TOOLBAR_BUTTON_STYLE)
     panel_bar.setFixedHeight(TOOLBAR_THICKNESS)
-    icon_factory = icon_factory_for_window(window)
     tool_group = QActionGroup(window)
     tool_group.setExclusive(True)
     tool_actions = build_tool_actions(window, tool_group)
     tool_actions["bond"].setChecked(True)
-
-    flip_h_btn = create_toolbar_button(
-        icon=icon_factory.icon_flip_h(),
-        tooltip="Flip Horizontal (Ctrl+Shift+H)",
-        status_tip="Flip the current selection horizontally",
-        callback=lambda: scene_transform_controller_for_window(
-            window
-        ).flip_selected_items(horizontal=True),
-        object_name="flip_horizontal_button",
-    )
-    flip_v_btn = create_toolbar_button(
-        icon=icon_factory.icon_flip_v(),
-        tooltip="Flip Vertical (Ctrl+Shift+V)",
-        status_tip="Flip the current selection vertically",
-        callback=lambda: scene_transform_controller_for_window(
-            window
-        ).flip_selected_items(horizontal=False),
-        object_name="flip_vertical_button",
-    )
-    rotate_btn = create_toolbar_button(
-        icon=icon_factory.icon_rotate(),
-        tooltip="Rotate",
-        status_tip="Enter an angle to rotate the current selection",
-        callback=lambda: callbacks.show_rotate_options(window),
-        object_name="rotate_button",
-    )
 
     def add_tool(action_key: str, *, primary: bool) -> None:
         action = tool_actions[action_key]
@@ -247,23 +217,8 @@ def build_panel_toolbar(
         if group_index < len(TOOLBAR_TOOL_GROUPS[1:]) - 1:
             panel_bar.addWidget(_toolbar_group_gap())
     panel_bar.addWidget(_toolbar_group_gap())
-    panel_bar.addWidget(flip_h_btn)
-    panel_bar.addWidget(flip_v_btn)
-    panel_bar.addWidget(rotate_btn)
-    panel_bar.addWidget(_toolbar_group_gap())
     _add_smiles_controls(panel_bar, window, insert_controller_for_window)
     panel_bar.addWidget(_toolbar_spacer())
-
-    for button in (
-        flip_h_btn,
-        flip_v_btn,
-        rotate_btn,
-    ):
-        button.setIconSize(panel_bar.iconSize())
-        button.setFixedHeight(TOOLBAR_BUTTON_SIZE)
-        button.setProperty("iconOnly", True)
-        if button.text() == "":
-            button.setFixedWidth(TOOLBAR_BUTTON_SIZE)
 
     return MainWindowPanelToolbarAssembly(
         panel_bar=panel_bar,

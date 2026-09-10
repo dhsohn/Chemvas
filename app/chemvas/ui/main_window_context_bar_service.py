@@ -21,6 +21,10 @@ from chemvas.ui.main_window_context_bar_pages import bond_label_for_state
 
 # Maps the active canvas tool name to the context page key shown in the bar.
 _TOOL_PAGE_KEYS = {
+    # Both selection tools act on a selection; the page holds what a selection
+    # can be done to (flip, rotate, align, distribute).
+    "select": "select",
+    "perspective": "select",
     "bond": "bond",
     "arrow": "arrow",
     "line": "line",

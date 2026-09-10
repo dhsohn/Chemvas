@@ -26,6 +26,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Move flip, rotate, align and distribute into the Select tool's options bar,
+  which also opens for the Perspective tool and for **Edit ▸ Rotate...**; the
+  top toolbar now holds only drawing tools. Tools without options leave the
+  bar empty instead of showing a hint.
 - Redraw the toolbar icons in one line language: the atom tool is an A, the
   text tool a T, the ring tool a benzene hexagon, the orbital tool an upright
   p orbital, the mark tool a plus over a minus, and the line tool a segment
