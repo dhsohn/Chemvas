@@ -14,10 +14,10 @@ chemvas --help        # root CLI help without starting Qt
 chemvas --version     # package version without starting Qt
 ```
 
-Pick a tool from the top toolbar and click/drag on the canvas to draw. Enter a
-SMILES string in the top input and press **Insert** to enter placement mode: move
-the mouse to preview, click to insert, `Esc` to cancel. Templates work the same
-preview-and-click way.
+Pick a tool from the top toolbar and click/drag on the canvas to draw. For SMILES,
+choose **Ring**, enter a string in its options bar, and press **Insert** to enter
+placement mode: move the mouse to preview, click to insert, `Esc` to cancel.
+Templates work the same preview-and-click way.
 
 Open a sample document from [`examples/`](../examples/) via **File ▸ Open** —
 the [examples README](../examples/README.md) describes what each one contains.
@@ -145,8 +145,9 @@ RDKit is an optional backend — Chemvas runs without it. The features marked
 
 ### SMILES import *(RDKit)*
 
-Type a SMILES string in the top input, preview it under the cursor, and click to
-place it on the canvas. `Ts` and `Ac` name the tosyl and acetyl abbreviations on
+Choose **Ring**, type a SMILES string in its options bar, and press **Insert**.
+Preview it under the cursor and click to place it on the canvas.
+`Ts` and `Ac` name the tosyl and acetyl abbreviations on
 the canvas, so a SMILES asking for tennessine or actinium is refused rather than
 drawn as the abbreviation.
 

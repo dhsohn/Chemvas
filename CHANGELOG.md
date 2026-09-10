@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Refresh the status-bar drawing hint when keyboard shortcuts or Select All
+  change the active tool.
+- Correct the reference guide's SMILES entry instructions to use the Ring
+  options bar.
+
 ## [0.11.0] - 2026-09-10
 
 ### Added
