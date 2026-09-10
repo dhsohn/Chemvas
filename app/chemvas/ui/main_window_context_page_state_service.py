@@ -27,6 +27,7 @@ class MainWindowContextPageStateService:
         self._clear_context_bar_page_override_for_window(window)
         self._tool_state.sync_tool_actions_from_canvas(window)
         self._status.update_tool_status_label(window)
+        self._status.show_active_tool_hint(window)
         self._context_bar.refresh_window(window)
 
     def set_tool_with_status(

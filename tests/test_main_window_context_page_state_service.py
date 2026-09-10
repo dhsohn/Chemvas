@@ -49,6 +49,7 @@ def test_sync_tool_actions_clears_override_and_refreshes_tool_context() -> None:
     clear_context_bar_page_override_for_window.assert_called_once_with(window)
     tool_state_service.sync_tool_actions_from_canvas.assert_called_once_with(window)
     status_service.update_tool_status_label.assert_called_once_with(window)
+    status_service.show_active_tool_hint.assert_called_once_with(window)
     context_bar_service.refresh_window.assert_called_once_with(window)
 
 
