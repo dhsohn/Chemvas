@@ -119,9 +119,8 @@ class CanvasSceneResetService:
             insert_state = self.insert_state
             insert_state.smiles_active = False
             insert_state.smiles_preview_model = None
+            insert_state.smiles_preview_picture = None
             insert_state.smiles_preview_items.clear()
-            insert_state.smiles_preview_bond_items.clear()
-            insert_state.smiles_preview_atom_items.clear()
             insert_state.smiles_preview_center = None
             insert_state.smiles_preview_smiles = None
             insert_state.template_active = False

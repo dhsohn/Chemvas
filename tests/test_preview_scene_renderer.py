@@ -4,19 +4,30 @@ from types import SimpleNamespace
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PyQt6.QtGui import QColor, QPen
-from PyQt6.QtWidgets import QApplication, QGraphicsEllipseItem, QGraphicsScene
+from PyQt6.QtCore import QPointF, QRectF
+from PyQt6.QtGui import QColor, QImage, QPainter, QPen, QPicture
+from PyQt6.QtWidgets import QApplication, QGraphicsScene
 
-from chemvas.features.insertion import (
-    SmilesPreviewGeometry,
-    TemplatePreviewGeometry,
-)
+from chemvas.features.insertion import TemplatePreviewGeometry
 from chemvas.ui.preview_scene_renderer import (
-    apply_smiles_preview_geometry,
+    PREVIEW_OPACITY,
+    add_smiles_preview_item,
     apply_template_preview_geometry,
     clear_smiles_preview,
     clear_template_preview,
 )
+
+
+def _crossed_strokes_picture() -> QPicture:
+    picture = QPicture()
+    painter = QPainter(picture)
+    pen = QPen(QColor("black"))
+    pen.setWidthF(4.0)
+    painter.setPen(pen)
+    painter.drawLine(QPointF(-10.0, 0.0), QPointF(10.0, 0.0))
+    painter.drawLine(QPointF(0.0, -10.0), QPointF(0.0, 10.0))
+    painter.end()
+    return picture
 
 
 class PreviewSceneRendererTest(unittest.TestCase):
@@ -35,139 +46,44 @@ class PreviewSceneRendererTest(unittest.TestCase):
             scene=lambda: (_ for _ in ()).throw(RuntimeError("disposed"))
         )
 
-        cleared_items, bond_items, atom_items = clear_smiles_preview(
-            self.scene, [foreign_item, broken_item]
+        self.assertEqual(
+            clear_smiles_preview(self.scene, [foreign_item, broken_item]), []
         )
 
-        self.assertEqual(cleared_items, [])
-        self.assertEqual(bond_items, {})
-        self.assertEqual(atom_items, {})
-
-    def test_apply_smiles_preview_geometry_reuses_existing_items_on_update(
+    def test_add_smiles_preview_item_replays_the_picture_without_hit_testing(
         self,
     ) -> None:
-        geometry = SmilesPreviewGeometry(
-            bond_segments={0: ((0.0, 0.0, 10.0, 0.0),)},
-            atom_rects={0: (-1.0, -1.0, 2.0, 2.0), 1: (9.0, -1.0, 2.0, 2.0)},
-        )
-        items, bond_items, atom_items = apply_smiles_preview_geometry(
-            self.scene,
-            geometry,
-            base_pen=self.base_pen,
-            existing_items=[],
-            existing_bond_items={},
-            existing_atom_items={},
-            action="rebuild",
-        )
-        line = bond_items[0][0]
-        dot = atom_items[0]
+        picture = _crossed_strokes_picture()
 
-        moved_geometry = SmilesPreviewGeometry(
-            bond_segments={0: ((5.0, 3.0, 15.0, 3.0),)},
-            atom_rects={0: (4.0, 2.0, 2.0, 2.0), 1: (14.0, 2.0, 2.0, 2.0)},
-        )
-        updated_items, updated_bond_items, updated_atom_items = (
-            apply_smiles_preview_geometry(
-                self.scene,
-                moved_geometry,
-                base_pen=self.base_pen,
-                existing_items=items,
-                existing_bond_items=bond_items,
-                existing_atom_items=atom_items,
-                action="update",
-            )
-        )
+        item = add_smiles_preview_item(self.scene, picture)
 
-        self.assertIs(updated_items[0], line)
-        self.assertIs(updated_bond_items[0][0], line)
-        self.assertIs(updated_atom_items[0], dot)
-        self.assertEqual(line.line().x1(), 5.0)
-        self.assertEqual(line.line().y1(), 3.0)
-        self.assertEqual(dot.rect().x(), 4.0)
-        self.assertEqual(dot.rect().y(), 2.0)
+        self.assertIs(item.scene(), self.scene)
+        self.assertIs(item.picture(), picture)
+        self.assertTrue(item.boundingRect().contains(QRectF(picture.boundingRect())))
+        # The ghost is never picked: hover and clicks reach the drawing
+        # underneath it.
+        self.assertTrue(item.shape().isEmpty())
+        self.assertEqual(self.scene.items(QPointF(0.0, 0.0)), [])
+        self.assertEqual(clear_smiles_preview(self.scene, [item]), [])
+        self.assertIsNone(item.scene())
 
-    def test_apply_smiles_preview_geometry_rebuilds_when_existing_pool_is_invalid(
-        self,
-    ) -> None:
-        geometry = SmilesPreviewGeometry(
-            bond_segments={0: ((0.0, 0.0, 10.0, 0.0),)},
-            atom_rects={0: (-1.0, -1.0, 2.0, 2.0), 1: (9.0, -1.0, 2.0, 2.0)},
+    def test_smiles_preview_item_blends_overlapping_strokes_once(self) -> None:
+        # Per-primitive opacity would paint the crossing of two strokes
+        # darker than either arm; the ghost blends the whole picture once.
+        add_smiles_preview_item(self.scene, _crossed_strokes_picture())
+        image = QImage(40, 40, QImage.Format.Format_ARGB32)
+        image.fill(QColor("white"))
+        painter = QPainter(image)
+        self.scene.render(
+            painter, QRectF(0.0, 0.0, 40.0, 40.0), QRectF(-20.0, -20.0, 40.0, 40.0)
         )
-        items, bond_items, atom_items = apply_smiles_preview_geometry(
-            self.scene,
-            geometry,
-            base_pen=self.base_pen,
-            existing_items=[],
-            existing_bond_items={},
-            existing_atom_items={},
-            action="rebuild",
-        )
-        old_line = bond_items[0][0]
-        bond_items[0] = [QGraphicsEllipseItem(0.0, 0.0, 1.0, 1.0)]
+        painter.end()
 
-        rebuilt_items, rebuilt_bond_items, rebuilt_atom_items = (
-            apply_smiles_preview_geometry(
-                self.scene,
-                geometry,
-                base_pen=self.base_pen,
-                existing_items=items,
-                existing_bond_items=bond_items,
-                existing_atom_items=atom_items,
-                action="update",
-            )
-        )
+        crossing = QColor(image.pixel(20, 20))
+        arm = QColor(image.pixel(28, 20))
 
-        self.assertIsNot(rebuilt_bond_items[0][0], old_line)
-        self.assertEqual(len(rebuilt_items), 3)
-        self.assertEqual(len(rebuilt_atom_items), 2)
-        self.assertEqual(len(self.scene.items()), 3)
-
-    def test_apply_smiles_preview_geometry_rebuilds_when_segments_or_atom_pool_mismatch(
-        self,
-    ) -> None:
-        geometry = SmilesPreviewGeometry(
-            bond_segments={0: ((0.0, 0.0, 10.0, 0.0),)},
-            atom_rects={0: (-1.0, -1.0, 2.0, 2.0)},
-        )
-        items, bond_items, atom_items = apply_smiles_preview_geometry(
-            self.scene,
-            geometry,
-            base_pen=self.base_pen,
-            existing_items=[],
-            existing_bond_items={},
-            existing_atom_items={},
-            action="rebuild",
-        )
-        old_line = bond_items[0][0]
-        old_dot = atom_items[0]
-
-        rebuilt_items, rebuilt_bond_items, rebuilt_atom_items = (
-            apply_smiles_preview_geometry(
-                self.scene,
-                geometry,
-                base_pen=self.base_pen,
-                existing_items=items,
-                existing_bond_items={0: []},
-                existing_atom_items=atom_items,
-                action="update",
-            )
-        )
-        self.assertIsNot(rebuilt_bond_items[0][0], old_line)
-
-        rebuilt_items, rebuilt_bond_items, rebuilt_atom_items = (
-            apply_smiles_preview_geometry(
-                self.scene,
-                geometry,
-                base_pen=self.base_pen,
-                existing_items=rebuilt_items,
-                existing_bond_items=rebuilt_bond_items,
-                existing_atom_items={},
-                action="update",
-            )
-        )
-
-        self.assertIsNot(rebuilt_atom_items[0], old_dot)
-        self.assertEqual(len(rebuilt_items), 2)
+        self.assertEqual(crossing.red(), arm.red())
+        self.assertAlmostEqual(arm.red(), round(255 * (1 - PREVIEW_OPACITY)), delta=2)
 
     def test_apply_template_preview_geometry_reuses_existing_items_on_update(
         self,

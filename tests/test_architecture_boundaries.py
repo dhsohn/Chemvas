@@ -4182,9 +4182,13 @@ REMOVED_PACKAGE_ROOT_EXPORTS: dict[str, tuple[str, ...]] = {
     "chemvas/features/export/__init__.py": ("MM_PER_INCH",),
     "chemvas/features/hover/__init__.py": ("HoverAction",),
     "chemvas/features/insertion/__init__.py": (
+        "SmilesPreviewGeometry",
         "SmilesPreviewPlan",
         "SmilesPreviewSnapshot",
         "TemplatePreviewPlan",
+        "build_smiles_preview_geometry",
+        "build_smiles_preview_snapshot",
+        "plan_smiles_preview_update",
         "ring_polygon_points_for_atoms",
         "snapshot_smiles_preview_geometry",
     ),

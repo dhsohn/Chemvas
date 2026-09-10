@@ -1329,7 +1329,7 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
             0,
         )
 
-    def test_smiles_preview_reuses_existing_preview_items(self) -> None:
+    def test_smiles_preview_reuses_one_item_and_moves_it(self) -> None:
         model = MoleculeModel()
         left = model.add_atom("C", -10.0, 0.0)
         right = model.add_atom("C", 10.0, 0.0)
@@ -1344,50 +1344,20 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
                 self.window
             ).services.structure.insert_controller.begin_smiles_insert("CC")
 
-        self.assertTrue(
-            insert_state_for(active_canvas_for_window(self.window)).smiles_active
-        )
+        insert_state = insert_state_for(active_canvas_for_window(self.window))
+        self.assertTrue(insert_state.smiles_active)
         self._hover_scene_point(QPointF(-30.0, 0.0))
-        self.assertEqual(
-            len(
-                insert_state_for(
-                    active_canvas_for_window(self.window)
-                ).smiles_preview_bond_items[0]
-            ),
-            1,
-        )
-        preview_line = insert_state_for(
-            active_canvas_for_window(self.window)
-        ).smiles_preview_bond_items[0][0]
-        preview_rect = (
-            insert_state_for(active_canvas_for_window(self.window))
-            .smiles_preview_atom_items[left]
-            .rect()
-        )
-        preview_atom = insert_state_for(
-            active_canvas_for_window(self.window)
-        ).smiles_preview_atom_items[left]
+        self.assertEqual(len(insert_state.smiles_preview_items), 1)
+        preview_item = insert_state.smiles_preview_items[0]
+        self.assertIs(preview_item.picture(), insert_state.smiles_preview_picture)
+        # The model is centred on the origin, so the ghost's offset is the
+        # cursor position itself.
+        self.assertEqual((preview_item.pos().x(), preview_item.pos().y()), (-30.0, 0.0))
 
         self._hover_scene_point(QPointF(30.0, 20.0))
 
-        self.assertIs(
-            insert_state_for(
-                active_canvas_for_window(self.window)
-            ).smiles_preview_bond_items[0][0],
-            preview_line,
-        )
-        self.assertIs(
-            insert_state_for(
-                active_canvas_for_window(self.window)
-            ).smiles_preview_atom_items[left],
-            preview_atom,
-        )
-        self.assertNotEqual(
-            insert_state_for(active_canvas_for_window(self.window))
-            .smiles_preview_atom_items[left]
-            .rect(),
-            preview_rect,
-        )
+        self.assertEqual(insert_state.smiles_preview_items, [preview_item])
+        self.assertEqual((preview_item.pos().x(), preview_item.pos().y()), (30.0, 20.0))
 
     def test_clear_scene_resets_active_smiles_insert_state(self) -> None:
         model = MoleculeModel()

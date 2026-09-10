@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 import contextlib
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, override
 
-from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QColor, QPen
+from PyQt6.QtCore import QPointF, QRectF, Qt
+from PyQt6.QtGui import QColor, QImage, QPainter, QPainterPath, QPen, QTransform
 from PyQt6.QtWidgets import (
     QGraphicsEllipseItem,
     QGraphicsItem,
@@ -12,15 +12,22 @@ from PyQt6.QtWidgets import (
     QGraphicsScene,
 )
 
-from chemvas.features.insertion import (
-    SmilesPreviewGeometry,
-    TemplatePreviewGeometry,
-    build_smiles_preview_snapshot,
-)
 from chemvas.ui.graphics_items import NoSelectLineItem
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping, Sequence
+    from collections.abc import Sequence
+
+    from PyQt6.QtGui import QPicture
+
+    from chemvas.features.insertion import TemplatePreviewGeometry
+
+# Every preview ghost paints at half strength so the existing drawing stays
+# readable underneath it.
+PREVIEW_OPACITY = 0.5
+
+# Above atom labels (z 3) and ring fills so the ghost is never hidden by the
+# drawing it is about to join.
+SMILES_PREVIEW_Z_VALUE = 10.0
 
 
 def clear_scene_items(scene: QGraphicsScene, items: Sequence[QGraphicsItem]) -> None:
@@ -33,46 +40,86 @@ def clear_scene_items(scene: QGraphicsScene, items: Sequence[QGraphicsItem]) -> 
                 scene.removeItem(item)
 
 
+class SmilesPreviewItem(QGraphicsItem):
+    """The structure about to be inserted, replayed from the real renderer.
+
+    The picture holds the same painter commands the canvas will issue once the
+    structure is committed, so ring double bonds, atom labels and trimmed
+    bonds preview exactly as they will land. Moving the ghost only moves this
+    one item.
+    """
+
+    def __init__(self, picture: QPicture) -> None:
+        super().__init__()
+        self._picture = picture
+        # One unit of slack keeps antialiased edges inside the repaint region.
+        self._bounds = QRectF(picture.boundingRect()).adjusted(-1.0, -1.0, 1.0, 1.0)
+        self.setZValue(SMILES_PREVIEW_Z_VALUE)
+        self.setAcceptedMouseButtons(Qt.MouseButton.NoButton)
+        self.setAcceptHoverEvents(False)
+
+    def picture(self) -> QPicture:
+        return self._picture
+
+    @override
+    def boundingRect(self) -> QRectF:
+        return QRectF(self._bounds)
+
+    @override
+    def shape(self) -> QPainterPath:
+        # Never picked: hover and click hit-testing look through the ghost
+        # to the drawing underneath, as the old line-and-dot preview allowed.
+        return QPainterPath()
+
+    @override
+    def paint(self, painter, option, widget=None) -> None:
+        if painter is None:
+            return
+        # Item opacity is applied per primitive, so every bond junction and
+        # label overlap would paint darker than the rest. Replay the picture
+        # at full strength into a device-resolution layer and blend that once.
+        world = painter.worldTransform()
+        device_rect = world.mapRect(self._bounds).toAlignedRect()
+        if device_rect.isEmpty():
+            return
+        ratio = painter.device().devicePixelRatioF()
+        layer = QImage(
+            device_rect.size() * ratio, QImage.Format.Format_ARGB32_Premultiplied
+        )
+        layer.setDevicePixelRatio(ratio)
+        layer.fill(Qt.GlobalColor.transparent)
+        layer_painter = QPainter(layer)
+        try:
+            layer_painter.setRenderHints(painter.renderHints())
+            layer_painter.setWorldTransform(
+                world * QTransform.fromTranslate(-device_rect.x(), -device_rect.y())
+            )
+            layer_painter.drawPicture(QPointF(0.0, 0.0), self._picture)
+        finally:
+            layer_painter.end()
+        painter.save()
+        try:
+            painter.resetTransform()
+            painter.setOpacity(painter.opacity() * PREVIEW_OPACITY)
+            painter.drawImage(device_rect.topLeft(), layer)
+        finally:
+            painter.restore()
+
+
+def add_smiles_preview_item(
+    scene: QGraphicsScene, picture: QPicture
+) -> SmilesPreviewItem:
+    item = SmilesPreviewItem(picture)
+    scene.addItem(item)
+    return item
+
+
 def clear_smiles_preview(
     scene: QGraphicsScene,
     items: list[QGraphicsItem],
-) -> tuple[
-    list[QGraphicsItem], dict[int, list[QGraphicsItem]], dict[int, QGraphicsEllipseItem]
-]:
+) -> list[QGraphicsItem]:
     clear_scene_items(scene, items)
-    return [], {}, {}
-
-
-def smiles_preview_snapshot(
-    bond_items: Mapping[int, list[QGraphicsItem]],
-    atom_items: Mapping[int, QGraphicsEllipseItem],
-):
-    return build_smiles_preview_snapshot(
-        {bond_id: len(items) for bond_id, items in bond_items.items()},
-        atom_items.keys(),
-    )
-
-
-def apply_smiles_preview_geometry(
-    scene: QGraphicsScene,
-    geometry: SmilesPreviewGeometry,
-    *,
-    base_pen: QPen,
-    existing_items: list[QGraphicsItem],
-    existing_bond_items: dict[int, list[QGraphicsItem]],
-    existing_atom_items: dict[int, QGraphicsEllipseItem],
-    action: str,
-) -> tuple[
-    list[QGraphicsItem], dict[int, list[QGraphicsItem]], dict[int, QGraphicsEllipseItem]
-]:
-    if action == "update" and _update_smiles_preview_geometry(
-        geometry, existing_bond_items, existing_atom_items
-    ):
-        return existing_items, existing_bond_items, existing_atom_items
-    empty_items, _, _ = clear_smiles_preview(scene, existing_items)
-    return _build_smiles_preview_geometry(
-        scene, geometry, base_pen=base_pen, existing_items=empty_items
-    )
+    return []
 
 
 def clear_template_preview(
@@ -103,61 +150,6 @@ def apply_template_preview_geometry(
     )
 
 
-def _build_smiles_preview_geometry(
-    scene: QGraphicsScene,
-    geometry: SmilesPreviewGeometry,
-    *,
-    base_pen: QPen,
-    existing_items: list[QGraphicsItem],
-) -> tuple[
-    list[QGraphicsItem], dict[int, list[QGraphicsItem]], dict[int, QGraphicsEllipseItem]
-]:
-    color = preview_color()
-    bond_items: dict[int, list[QGraphicsItem]] = {}
-    atom_items: dict[int, QGraphicsEllipseItem] = {}
-    items = list(existing_items)
-    for bond_id, segments in geometry.bond_segments.items():
-        created_items: list[QGraphicsItem] = []
-        for segment in segments:
-            line = NoSelectLineItem(*segment)
-            line.setPen(preview_pen(base_pen, color))
-            line.setOpacity(0.5)
-            scene.addItem(line)
-            items.append(line)
-            created_items.append(line)
-        bond_items[bond_id] = created_items
-    for atom_id, rect in geometry.atom_rects.items():
-        dot = QGraphicsEllipseItem(*rect)
-        dot.setBrush(color)
-        dot.setPen(QPen(Qt.PenStyle.NoPen))
-        dot.setOpacity(0.5)
-        scene.addItem(dot)
-        items.append(dot)
-        atom_items[atom_id] = dot
-    return items, bond_items, atom_items
-
-
-def _update_smiles_preview_geometry(
-    geometry: SmilesPreviewGeometry,
-    bond_items: dict[int, list[QGraphicsItem]],
-    atom_items: dict[int, QGraphicsEllipseItem],
-) -> bool:
-    for bond_id, segments in geometry.bond_segments.items():
-        items = bond_items.get(bond_id)
-        if not items or len(items) != len(segments):
-            return False
-        for item, segment in zip(items, segments, strict=False):
-            if not isinstance(item, QGraphicsLineItem):
-                return False
-            item.setLine(*segment)
-    for atom_id, rect in geometry.atom_rects.items():
-        dot = atom_items.get(atom_id)
-        if dot is None:
-            return False
-        dot.setRect(*rect)
-    return True
-
-
 def _build_template_preview_geometry(
     scene: QGraphicsScene,
     geometry: TemplatePreviewGeometry,
@@ -172,7 +164,7 @@ def _build_template_preview_geometry(
     for x1, y1, x2, y2 in geometry.line_segments:
         line = NoSelectLineItem(x1, y1, x2, y2)
         line.setPen(preview_pen(base_pen, color))
-        line.setOpacity(0.5)
+        line.setOpacity(PREVIEW_OPACITY)
         scene.addItem(line)
         lines.append(line)
         items.append(line)
@@ -180,7 +172,7 @@ def _build_template_preview_geometry(
         dot = QGraphicsEllipseItem(x, y, width, height)
         dot.setBrush(color)
         dot.setPen(QPen(Qt.PenStyle.NoPen))
-        dot.setOpacity(0.5)
+        dot.setOpacity(PREVIEW_OPACITY)
         scene.addItem(dot)
         dots.append(dot)
         items.append(dot)
