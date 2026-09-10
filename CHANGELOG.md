@@ -26,6 +26,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Group the status bar's zoom controls into one outlined pill, and show a
+  faint hint on an empty sheet saying how to start drawing.
 - Fold the rarely used arrow kinds (favoured equilibria, inhibition and the
   three arcs) into one menu button on the Arrow options bar that shows the
   kind picked last, so the everyday kinds get room.

@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import override
 
 from PyQt6.QtCore import Qt, QTimer
-from PyQt6.QtWidgets import QApplication, QLabel, QToolButton
+from PyQt6.QtWidgets import QApplication, QFrame, QHBoxLayout, QLabel, QToolButton
 
 from chemvas.ui.main_window_document_dialogs import prompt_zoom_percent
 from chemvas.ui.main_window_toolbar_logic import tool_display_name
@@ -172,10 +172,21 @@ class MainWindowStatusService:
         window.statusBar().addPermanentWidget(self.sheet_label)
         window.statusBar().addPermanentWidget(self.selection_label)
         window.statusBar().addPermanentWidget(self.zoom_caption)
-        window.statusBar().addPermanentWidget(self.zoom_out_button)
-        window.statusBar().addPermanentWidget(self.zoom_label)
-        window.statusBar().addPermanentWidget(self.zoom_in_button)
-        window.statusBar().addPermanentWidget(self.zoom_fit_button)
+        # The four zoom controls read as one instrument: a single outlined
+        # pill with the percentage in the middle and Fit set off at the end.
+        zoom_group = QFrame()
+        zoom_group.setObjectName("statusZoomGroup")
+        zoom_layout = QHBoxLayout(zoom_group)
+        zoom_layout.setContentsMargins(2, 0, 2, 0)
+        zoom_layout.setSpacing(0)
+        for widget in (
+            self.zoom_out_button,
+            self.zoom_label,
+            self.zoom_in_button,
+            self.zoom_fit_button,
+        ):
+            zoom_layout.addWidget(widget)
+        window.statusBar().addPermanentWidget(zoom_group)
         self.refresh_status_context(window)
         self.show_active_tool_hint(window)
 

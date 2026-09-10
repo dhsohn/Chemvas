@@ -17,6 +17,10 @@ class SheetSetupState:
     size_name: str = DEFAULT_SHEET_SIZE
     orientation: str = DEFAULT_SHEET_ORIENTATION
     rect: QRectF = field(default_factory=QRectF)
+    # Whether the last background paint found the sheet empty (``None`` until
+    # the first paint). The painter reads it to notice the empty/non-empty
+    # flip and ask for one full viewport repaint.
+    empty_hint_shown: bool | None = None
 
 
 def sheet_setup_state_for(canvas: Any) -> SheetSetupState:
