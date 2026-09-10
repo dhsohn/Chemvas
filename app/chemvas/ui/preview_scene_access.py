@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from chemvas.ui.preview_scene_renderer import (
-    apply_smiles_preview_geometry as apply_smiles_preview_geometry_helper,
+    add_smiles_preview_item as add_smiles_preview_item_helper,
 )
 from chemvas.ui.preview_scene_renderer import (
     apply_template_preview_geometry as apply_template_preview_geometry_helper,
@@ -17,45 +17,22 @@ from chemvas.ui.preview_scene_renderer import (
 from chemvas.ui.scene_item_access import canvas_scene_for
 
 if TYPE_CHECKING:
-    from PyQt6.QtGui import QPen
+    from PyQt6.QtGui import QPen, QPicture
     from PyQt6.QtWidgets import QGraphicsEllipseItem, QGraphicsItem, QGraphicsLineItem
 
-    from chemvas.features.insertion import (
-        SmilesPreviewGeometry,
-        TemplatePreviewGeometry,
-    )
+    from chemvas.features.insertion import TemplatePreviewGeometry
+    from chemvas.ui.preview_scene_renderer import SmilesPreviewItem
 
 
 def clear_smiles_preview_for(
     canvas,
     items: list[QGraphicsItem],
-) -> tuple[
-    list[QGraphicsItem], dict[int, list[QGraphicsItem]], dict[int, QGraphicsEllipseItem]
-]:
+) -> list[QGraphicsItem]:
     return clear_smiles_preview_helper(canvas_scene_for(canvas), items)
 
 
-def apply_smiles_preview_geometry_for(
-    canvas,
-    geometry: SmilesPreviewGeometry,
-    *,
-    base_pen: QPen,
-    existing_items: list[QGraphicsItem],
-    existing_bond_items: dict[int, list[QGraphicsItem]],
-    existing_atom_items: dict[int, QGraphicsEllipseItem],
-    action: str,
-) -> tuple[
-    list[QGraphicsItem], dict[int, list[QGraphicsItem]], dict[int, QGraphicsEllipseItem]
-]:
-    return apply_smiles_preview_geometry_helper(
-        canvas_scene_for(canvas),
-        geometry,
-        base_pen=base_pen,
-        existing_items=existing_items,
-        existing_bond_items=existing_bond_items,
-        existing_atom_items=existing_atom_items,
-        action=action,
-    )
+def add_smiles_preview_item_for(canvas, picture: QPicture) -> SmilesPreviewItem:
+    return add_smiles_preview_item_helper(canvas_scene_for(canvas), picture)
 
 
 def clear_template_preview_for(
@@ -87,7 +64,7 @@ def apply_template_preview_geometry_for(
 
 
 __all__ = [
-    "apply_smiles_preview_geometry_for",
+    "add_smiles_preview_item_for",
     "apply_template_preview_geometry_for",
     "clear_smiles_preview_for",
     "clear_template_preview_for",

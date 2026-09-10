@@ -1,13 +1,10 @@
 import unittest
-from unittest.mock import Mock
 
 from chemvas.domain.document import Bond, MoleculeModel
 from chemvas.features.insertion import (
-    build_smiles_preview_geometry,
-    build_smiles_preview_snapshot,
     plan_smiles_commit,
-    plan_smiles_preview_update,
     smiles_preview_center,
+    smiles_preview_offset,
 )
 
 
@@ -127,114 +124,6 @@ class SmilesInsertLogicTest(unittest.TestCase):
         self.assertEqual(plan.bonds[0].source_bond_id, 1)
         self.assertEqual(plan.bonds[0].order, 1)
 
-    def test_plan_smiles_preview_returns_clear_without_model_center_or_radius(
-        self,
-    ) -> None:
-        resolver = Mock(return_value=[])
-        existing = build_smiles_preview_snapshot({}, ())
-
-        self.assertEqual(
-            plan_smiles_preview_update(
-                None, (0.0, 0.0), (1.0, 1.0), 1.0, existing, resolver
-            ).action,
-            "clear",
-        )
-        self.assertEqual(
-            plan_smiles_preview_update(
-                _build_model(), None, (1.0, 1.0), 1.0, existing, resolver
-            ).action,
-            "clear",
-        )
-        self.assertEqual(
-            plan_smiles_preview_update(
-                _build_model(), (0.0, 0.0), (1.0, 1.0), None, existing, resolver
-            ).action,
-            "clear",
-        )
-
-    def test_plan_smiles_preview_rebuilds_when_topology_changes(self) -> None:
-        model = _build_model()
-        segment_resolver = Mock(
-            return_value=[(0.0, 1.0, 2.0, 3.0), (4.0, 5.0, 6.0, 7.0)]
-        )
-        existing = build_smiles_preview_snapshot({}, ())
-
-        plan = plan_smiles_preview_update(
-            model, (0.0, 0.0), (10.0, 10.0), 2.0, existing, segment_resolver
-        )
-
-        self.assertEqual(plan.action, "rebuild")
-        assert plan.geometry is not None
-        self.assertEqual(
-            plan.geometry.bond_segments[0], ((0.0, 1.0, 2.0, 3.0), (4.0, 5.0, 6.0, 7.0))
-        )
-        self.assertEqual(plan.geometry.atom_rects[0], (-2.0, 8.0, 4.0, 4.0))
-        self.assertEqual(plan.geometry.atom_rects[1], (18.0, 8.0, 4.0, 4.0))
-        segment_resolver.assert_called_once_with(0.0, 10.0, 20.0, 10.0, 2)
-
-    def test_plan_smiles_preview_updates_when_signature_matches(self) -> None:
-        model = _build_model()
-        segment_resolver = Mock(
-            return_value=[(0.0, 1.0, 2.0, 3.0), (4.0, 5.0, 6.0, 7.0)]
-        )
-        existing = build_smiles_preview_snapshot({0: 2}, (0, 1))
-
-        plan = plan_smiles_preview_update(
-            model, (0.0, 0.0), (10.0, 10.0), 2.0, existing, segment_resolver
-        )
-
-        self.assertEqual(plan.action, "update")
-        assert plan.geometry is not None
-        self.assertEqual(len(plan.geometry.bond_segments[0]), 2)
-
-    def test_plan_smiles_preview_rebuilds_when_atom_ids_change_even_if_count_matches(
-        self,
-    ) -> None:
-        model = _build_model()
-        segment_resolver = Mock(
-            return_value=[(0.0, 1.0, 2.0, 3.0), (4.0, 5.0, 6.0, 7.0)]
-        )
-        existing = build_smiles_preview_snapshot({0: 2}, (4, 5))
-
-        plan = plan_smiles_preview_update(
-            model, (0.0, 0.0), (10.0, 10.0), 2.0, existing, segment_resolver
-        )
-
-        self.assertEqual(plan.action, "rebuild")
-
-    def test_plan_smiles_preview_returns_clear_for_invalid_parallel_segment_result(
-        self,
-    ) -> None:
-        model = _build_model()
-        resolver = Mock(return_value=[])
-        existing = build_smiles_preview_snapshot({0: 2}, (0, 1))
-
-        plan = plan_smiles_preview_update(
-            model, (0.0, 0.0), (10.0, 10.0), 2.0, existing, resolver
-        )
-
-        self.assertEqual(plan.action, "clear")
-
-    def test_plan_smiles_preview_returns_clear_for_dangling_bond_endpoint(self) -> None:
-        model = _build_model(include_dangling_bond=True)
-        resolver = Mock(return_value=[(0.0, 1.0, 2.0, 3.0)])
-        existing = build_smiles_preview_snapshot({}, ())
-
-        plan = plan_smiles_preview_update(
-            model, (0.0, 0.0), (0.0, 0.0), 2.0, existing, resolver
-        )
-
-        self.assertEqual(plan.action, "clear")
-
-    def test_build_smiles_preview_geometry_skips_none_bonds_and_uses_single_segment_for_order_one(
-        self,
-    ) -> None:
-        model = _build_single_bond_model_with_sparse_prefix()
-        resolver = Mock(return_value=[(0.0, 1.0, 2.0, 3.0)])
-        geometry = build_smiles_preview_geometry(
-            model, (0.0, 0.0), (2.0, -1.0), 1.5, resolver
-        )
-
-        assert geometry is not None
-        self.assertEqual(geometry.bond_segments, {1: ((-3.0, -1.0, 7.0, -1.0),)})
-        resolver.assert_not_called()
+    def test_smiles_preview_offset_carries_the_center_to_the_cursor(self) -> None:
+        self.assertEqual(smiles_preview_offset((5.0, -2.0), (25.0, 8.0)), (20.0, 10.0))
+        self.assertEqual(smiles_preview_offset((3.0, 3.0), (3.0, 3.0)), (0.0, 0.0))

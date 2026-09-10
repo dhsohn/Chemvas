@@ -11,9 +11,10 @@ if TYPE_CHECKING:
 class CanvasInsertState:
     smiles_active: bool = False
     smiles_preview_model: MoleculeModel | None = None
+    # The model rendered once through the real canvas renderer; the single
+    # preview item in `smiles_preview_items` replays it under the cursor.
+    smiles_preview_picture: Any | None = None
     smiles_preview_items: list[Any] = field(default_factory=list)
-    smiles_preview_bond_items: dict[int, list[Any]] = field(default_factory=dict)
-    smiles_preview_atom_items: dict[int, Any] = field(default_factory=dict)
     smiles_preview_center: Any | None = None
     smiles_preview_smiles: str | None = None
     template_active: bool = False

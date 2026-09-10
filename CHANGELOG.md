@@ -23,6 +23,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Preview an inserted SMILES structure as it will actually be drawn. The
+  hover ghost is now the real canvas rendering of the converted model at half
+  opacity, so ring double bonds sit inside the ring, heteroatoms show their
+  labels and bonds stop short of them; previously the ghost drew every atom
+  as a dot and every double bond as two full-length parallel lines.
 - Restore background images before molecular graphics when opening a document
   so structures are visible on the first paint of a native window.
 - Remember the last confirmed Export Figure format within each window; cancelling

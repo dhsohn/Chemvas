@@ -117,9 +117,6 @@ class InsertController:
     def clear_smiles_preview(self) -> None:
         self.smiles_service.clear_smiles_preview()
 
-    def smiles_preview_snapshot(self):
-        return self.smiles_service.smiles_preview_snapshot()
-
     def render_smiles_preview(self, pos: QPointF) -> None:
         if not scene_pos_in_sheet_for(self.canvas, pos):
             self.clear_smiles_preview()

@@ -11,10 +11,9 @@ from chemvas.features.insertion import (
     annotation_mark_kinds,
     normalized_atom_annotation,
     plan_smiles_commit,
-    plan_smiles_preview_update,
     smiles_preview_center,
+    smiles_preview_offset,
 )
-from chemvas.ui.bond_graphics_access import parallel_bond_segments_for
 from chemvas.ui.canvas_model_access import next_atom_id_for, set_model_for
 from chemvas.ui.canvas_scene_reset_access import clear_scene_for
 from chemvas.ui.canvas_smiles_input_state import set_last_smiles_input_for
@@ -33,23 +32,15 @@ from chemvas.ui.insert_mode_logic import (
     cancel_smiles_insert as cancel_smiles_insert_state,
 )
 from chemvas.ui.insert_smiles_transaction import SmilesLoadTransactionBuilder
-from chemvas.ui.preview_scene_access import (
-    apply_smiles_preview_geometry_for as apply_smiles_preview_geometry_helper,
-)
+from chemvas.ui.preview_scene_access import add_smiles_preview_item_for
 from chemvas.ui.preview_scene_access import (
     clear_smiles_preview_for as clear_smiles_preview_helper,
 )
-from chemvas.ui.preview_scene_renderer import (
-    smiles_preview_snapshot as smiles_preview_snapshot_helper,
-)
 from chemvas.ui.rdkit_adapter_access import rdkit_last_error_for, smiles_to_2d_for
-from chemvas.ui.renderer_style_access import (
-    bond_length_px_for,
-    bond_line_width_for,
-    bond_pen_for,
-)
+from chemvas.ui.renderer_style_access import bond_length_px_for
 from chemvas.ui.scene_decoration_access import materialize_mark_for_atom_for
 from chemvas.ui.scene_signal_blocking import blocked_scene_signals
+from chemvas.ui.smiles_preview_picture import render_smiles_preview_picture
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -144,6 +135,10 @@ class InsertSmilesService:
                 rdkit_last_error_for(self.canvas) or "Failed to render SMILES."
             )
             return
+        self.load_model(model, smiles)
+
+    def load_model(self, model, smiles: str) -> None:
+        """Replace the canvas contents with an already converted ``model``."""
         if self.structure_build_service is None:
             raise RuntimeError("structure_build_service is required to load SMILES")
         snapshot = self.transaction_builder.capture()
@@ -211,15 +206,17 @@ class InsertSmilesService:
                 rdkit_last_error_for(self.canvas) or "Failed to render SMILES."
             )
             return
-        self.insert_state.smiles_preview_model = model
         center_xy = smiles_preview_center(model)
         if center_xy is None:
-            self.insert_state.smiles_preview_model = None
             return
         next_state = begin_smiles_insert_state(smiles, center_xy)
         if next_state is None:
-            self.insert_state.smiles_preview_model = None
             return
+        # Rendered once per insertion; hovering only moves the replayed picture.
+        self.insert_state.smiles_preview_picture = render_smiles_preview_picture(
+            self.canvas, model, smiles
+        )
+        self.insert_state.smiles_preview_model = model
         self._apply_session_state(next_state)
         self._render_smiles_preview(viewport_center_scene_pos_for(self.canvas))
 
@@ -231,6 +228,7 @@ class InsertSmilesService:
 
     def cancel_smiles_insert(self) -> None:
         self.insert_state.smiles_preview_model = None
+        self.insert_state.smiles_preview_picture = None
         next_state = cancel_smiles_insert_state(self._session_state())
         self._apply_session_state(next_state)
 
@@ -263,50 +261,30 @@ class InsertSmilesService:
         self.cancel_smiles_insert()
 
     def clear_smiles_preview(self) -> None:
-        (
-            self.insert_state.smiles_preview_items,
-            self.insert_state.smiles_preview_bond_items,
-            self.insert_state.smiles_preview_atom_items,
-        ) = clear_smiles_preview_helper(
+        self.insert_state.smiles_preview_items = clear_smiles_preview_helper(
             self.canvas, self.insert_state.smiles_preview_items
         )
 
-    def smiles_preview_snapshot(self):
-        return smiles_preview_snapshot_helper(
-            self.insert_state.smiles_preview_bond_items,
-            self.insert_state.smiles_preview_atom_items,
-        )
-
     def render_smiles_preview(self, pos: QPointF) -> None:
-        atom_radius = max(0.6, bond_line_width_for(self.canvas) * 0.6)
-        preview_plan = plan_smiles_preview_update(
-            self.insert_state.smiles_preview_model,
-            None
-            if self.insert_state.smiles_preview_center is None
-            else (
-                self.insert_state.smiles_preview_center.x(),
-                self.insert_state.smiles_preview_center.y(),
-            ),
-            (pos.x(), pos.y()),
-            atom_radius,
-            self.smiles_preview_snapshot(),
-            lambda *args: parallel_bond_segments_for(self.canvas, *args),
-        )
-        if preview_plan.action == "clear" or preview_plan.geometry is None:
+        model = self.insert_state.smiles_preview_model
+        center = self.insert_state.smiles_preview_center
+        picture = self.insert_state.smiles_preview_picture
+        if model is None or center is None or picture is None or not model.atoms:
             self._clear_smiles_preview()
             return
-        (
-            self.insert_state.smiles_preview_items,
-            self.insert_state.smiles_preview_bond_items,
-            self.insert_state.smiles_preview_atom_items,
-        ) = apply_smiles_preview_geometry_helper(
-            self.canvas,
-            preview_plan.geometry,
-            base_pen=bond_pen_for(self.canvas),
-            existing_items=self.insert_state.smiles_preview_items,
-            existing_bond_items=self.insert_state.smiles_preview_bond_items,
-            existing_atom_items=self.insert_state.smiles_preview_atom_items,
-            action=preview_plan.action,
+        items = self.insert_state.smiles_preview_items
+        item = items[0] if items else None
+        if item is not None and item.picture() is not picture:
+            # A new SMILES was inserted while the previous ghost was still up:
+            # the item must show the picture the commit will place, not the
+            # one it was built from.
+            self._clear_smiles_preview()
+            item = None
+        if item is None:
+            item = add_smiles_preview_item_for(self.canvas, picture)
+            self.insert_state.smiles_preview_items = [item]
+        item.setPos(
+            *smiles_preview_offset((center.x(), center.y()), (pos.x(), pos.y()))
         )
 
     def _clear_smiles_preview(self) -> None:

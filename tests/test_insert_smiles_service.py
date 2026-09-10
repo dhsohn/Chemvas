@@ -118,8 +118,6 @@ def _live_canvas_load_snapshot(
     insert_state.smiles_active = True
     insert_state.smiles_preview_model = MoleculeModel(atoms={7: Atom("O", 1.0, 2.0)})
     insert_state.smiles_preview_items = [smiles_bond_item, smiles_atom_item]
-    insert_state.smiles_preview_bond_items = {3: [smiles_bond_item]}
-    insert_state.smiles_preview_atom_items = {7: smiles_atom_item}
     insert_state.smiles_preview_center = QPointF(1.5, 2.5)
     insert_state.smiles_preview_smiles = "preview-smiles"
     insert_state.template_active = True
@@ -191,8 +189,6 @@ def _live_canvas_load_snapshot(
             name: (getattr(insert_state, name), getattr(insert_state, name).copy())
             for name in (
                 "smiles_preview_items",
-                "smiles_preview_bond_items",
-                "smiles_preview_atom_items",
                 "template_preview_items",
                 "template_preview_lines",
                 "template_preview_dots",
@@ -392,8 +388,13 @@ def test_insert_smiles_service_begin_smiles_insert_uses_callbacks_and_preview_st
         render_smiles_preview=render_preview,
     )
 
-    service.begin_smiles_insert(" CO ")
+    with mock.patch(
+        "chemvas.ui.insert_smiles_service.render_smiles_preview_picture",
+        return_value="picture",
+    ):
+        service.begin_smiles_insert(" CO ")
 
+    assert canvas.insert_state.smiles_preview_picture == "picture"
     cancel_template.assert_called_once_with()
     assert canvas.insert_state.smiles_active
     assert canvas.insert_state.smiles_preview_smiles == "CO"
@@ -430,41 +431,78 @@ def test_insert_smiles_service_commit_uses_commit_service_and_cancel_callback() 
     cancel_smiles.assert_called_once_with()
 
 
-def test_insert_smiles_service_render_preview_routes_clear_and_apply_paths() -> None:
+def test_insert_smiles_service_render_preview_routes_clear_and_move_paths() -> None:
+    canvas = _FakeCanvas()
+    canvas.insert_state.smiles_preview_model = MoleculeModel(
+        atoms={0: Atom("C", 0.0, 0.0)}
+    )
+    canvas.insert_state.smiles_preview_center = QPointF(1.0, 1.0)
+    clear_smiles_preview = mock.Mock()
+    service = _service_for(canvas, clear_smiles_preview=clear_smiles_preview)
+
+    # No rendered picture yet: nothing to show, so the stale ghost goes.
+    service.render_smiles_preview(QPointF(1.0, 2.0))
+
+    clear_smiles_preview.assert_called_once_with()
+
+    clear_smiles_preview.reset_mock()
+    canvas.insert_state.smiles_preview_picture = "picture"
+    item = mock.Mock()
+    item.picture.return_value = "picture"
+    with mock.patch(
+        "chemvas.ui.insert_smiles_service.add_smiles_preview_item_for",
+        return_value=item,
+    ) as add_item:
+        service.render_smiles_preview(QPointF(3.0, 4.0))
+        service.render_smiles_preview(QPointF(5.0, 6.0))
+
+    clear_smiles_preview.assert_not_called()
+    add_item.assert_called_once_with(canvas, "picture")
+    assert canvas.insert_state.smiles_preview_items == [item]
+    assert [call.args for call in item.setPos.call_args_list] == [
+        (2.0, 3.0),
+        (4.0, 5.0),
+    ]
+
+
+def test_insert_smiles_service_render_preview_replaces_a_stale_ghost() -> None:
+    # A second Insert while the first ghost is still up swaps the picture; the
+    # item built from the old picture must go, or the ghost and the commit
+    # would disagree again.
     canvas = _FakeCanvas()
     canvas.insert_state.smiles_preview_model = MoleculeModel(
         atoms={0: Atom("C", 0.0, 0.0)}
     )
     canvas.insert_state.smiles_preview_center = QPointF(0.0, 0.0)
-    clear_smiles_preview = mock.Mock()
-    service = _service_for(canvas, clear_smiles_preview=clear_smiles_preview)
+    canvas.insert_state.smiles_preview_picture = "new-picture"
+    stale_item = mock.Mock()
+    stale_item.picture.return_value = "old-picture"
+    canvas.insert_state.smiles_preview_items = [stale_item]
+    service = _service_for(canvas)
+    fresh_item = mock.Mock()
+    fresh_item.picture.return_value = "new-picture"
 
-    with mock.patch(
-        "chemvas.ui.insert_smiles_service.plan_smiles_preview_update",
-        return_value=mock.Mock(action="clear", geometry=None),
-    ):
-        service.render_smiles_preview(QPointF(1.0, 2.0))
-
-    clear_smiles_preview.assert_called_once_with()
-
-    clear_smiles_preview.reset_mock()
     with (
         mock.patch(
-            "chemvas.ui.insert_smiles_service.plan_smiles_preview_update",
-            return_value=mock.Mock(action="update", geometry={"lines": 1}),
-        ),
+            "chemvas.ui.insert_smiles_service.clear_smiles_preview_helper",
+            return_value=[],
+        ) as clear_helper,
         mock.patch(
-            "chemvas.ui.insert_smiles_service.apply_smiles_preview_geometry_helper",
-            return_value=(["items"], {0: ["bond"]}, {0: "atom"}),
-        ) as apply_helper,
+            "chemvas.ui.insert_smiles_service.add_smiles_preview_item_for",
+            return_value=fresh_item,
+        ) as add_item,
     ):
-        service.render_smiles_preview(QPointF(3.0, 4.0))
+        service.render_smiles_preview(QPointF(7.0, 8.0))
+        service.render_smiles_preview(QPointF(9.0, 10.0))
 
-    clear_smiles_preview.assert_not_called()
-    apply_helper.assert_called_once()
-    assert canvas.insert_state.smiles_preview_items == ["items"]
-    assert canvas.insert_state.smiles_preview_bond_items == {0: ["bond"]}
-    assert canvas.insert_state.smiles_preview_atom_items == {0: "atom"}
+    clear_helper.assert_called_once_with(canvas, [stale_item])
+    add_item.assert_called_once_with(canvas, "new-picture")
+    stale_item.setPos.assert_not_called()
+    assert canvas.insert_state.smiles_preview_items == [fresh_item]
+    assert [call.args for call in fresh_item.setPos.call_args_list] == [
+        (7.0, 8.0),
+        (9.0, 10.0),
+    ]
 
 
 def test_load_smiles_clears_detached_highlight_and_pending_selection_info() -> None:

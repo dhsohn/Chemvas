@@ -1,17 +1,14 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Iterable, Mapping, Sequence
+    from collections.abc import Mapping
 
     from chemvas.domain.document import MoleculeModel
 
 Point2D = tuple[float, float]
-LineSegment = tuple[float, float, float, float]
-Rect = tuple[float, float, float, float]
-SmilesPreviewAction = Literal["clear", "rebuild", "update"]
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -51,36 +48,6 @@ class SmilesCommitPlan:
     annotations: dict[int, dict[str, int]] = field(default_factory=dict)
 
 
-@dataclass(frozen=True)
-class SmilesPreviewSnapshot:
-    bond_segment_counts: dict[int, int]
-    atom_ids: tuple[int, ...]
-
-
-@dataclass(frozen=True)
-class SmilesPreviewGeometry:
-    bond_segments: dict[int, tuple[LineSegment, ...]]
-    atom_rects: dict[int, Rect]
-
-
-@dataclass(frozen=True)
-class SmilesPreviewPlan:
-    action: SmilesPreviewAction
-    geometry: SmilesPreviewGeometry | None = None
-
-
-def build_smiles_preview_snapshot(
-    bond_segment_counts: Mapping[int, int],
-    atom_ids: Iterable[int],
-) -> SmilesPreviewSnapshot:
-    return SmilesPreviewSnapshot(
-        bond_segment_counts={
-            bond_id: count for bond_id, count in bond_segment_counts.items()
-        },
-        atom_ids=tuple(atom_ids),
-    )
-
-
 def smiles_preview_center(model: MoleculeModel | None) -> Point2D | None:
     if model is None or not model.atoms:
         return None
@@ -95,7 +62,7 @@ def plan_smiles_commit(
 ) -> SmilesCommitPlan | None:
     if model is None or preview_center is None or not model.atoms:
         return None
-    dx, dy = _offset(preview_center, cursor_pos)
+    dx, dy = smiles_preview_offset(preview_center, cursor_pos)
     atoms = [
         SmilesAtomPlacement(
             source_atom_id=atom_id,
@@ -177,88 +144,13 @@ def annotation_mark_direction(index: int) -> Point2D:
     return directions[index % len(directions)]
 
 
-def build_smiles_preview_geometry(
-    model: MoleculeModel | None,
-    preview_center: Point2D | None,
-    cursor_pos: Point2D,
-    atom_radius: float | None,
-    parallel_bond_segments: Callable[
-        [float, float, float, float, int], Sequence[LineSegment]
-    ],
-) -> SmilesPreviewGeometry | None:
-    if (
-        model is None
-        or preview_center is None
-        or atom_radius is None
-        or atom_radius <= 0.0
-        or not model.atoms
-    ):
-        return None
-    dx, dy = _offset(preview_center, cursor_pos)
-    bond_segments: dict[int, tuple[LineSegment, ...]] = {}
-    for bond_id, bond in enumerate(model.bonds):
-        if bond is None:
-            continue
-        atom_a = model.atoms.get(bond.a)
-        atom_b = model.atoms.get(bond.b)
-        if atom_a is None or atom_b is None:
-            return None
-        x1 = atom_a.x + dx
-        y1 = atom_a.y + dy
-        x2 = atom_b.x + dx
-        y2 = atom_b.y + dy
-        if bond.order <= 1:
-            bond_segments[bond_id] = ((x1, y1, x2, y2),)
-        else:
-            segments = tuple(parallel_bond_segments(x1, y1, x2, y2, bond.order))
-            if not segments:
-                return None
-            bond_segments[bond_id] = segments
-    atom_rects = {
-        atom_id: (
-            atom.x + dx - atom_radius,
-            atom.y + dy - atom_radius,
-            atom_radius * 2.0,
-            atom_radius * 2.0,
-        )
-        for atom_id, atom in model.atoms.items()
-    }
-    return SmilesPreviewGeometry(bond_segments=bond_segments, atom_rects=atom_rects)
+def smiles_preview_offset(preview_center: Point2D, cursor_pos: Point2D) -> Point2D:
+    """The translation that carries the converted model under the cursor.
 
-
-def snapshot_smiles_preview_geometry(
-    geometry: SmilesPreviewGeometry,
-) -> SmilesPreviewSnapshot:
-    return build_smiles_preview_snapshot(
-        {
-            bond_id: len(segments)
-            for bond_id, segments in geometry.bond_segments.items()
-        },
-        geometry.atom_rects.keys(),
-    )
-
-
-def plan_smiles_preview_update(
-    model: MoleculeModel | None,
-    preview_center: Point2D | None,
-    cursor_pos: Point2D,
-    atom_radius: float | None,
-    existing: SmilesPreviewSnapshot,
-    parallel_bond_segments: Callable[
-        [float, float, float, float, int], Sequence[LineSegment]
-    ],
-) -> SmilesPreviewPlan:
-    geometry = build_smiles_preview_geometry(
-        model, preview_center, cursor_pos, atom_radius, parallel_bond_segments
-    )
-    if geometry is None:
-        return SmilesPreviewPlan(action="clear")
-    if snapshot_smiles_preview_geometry(geometry) != existing:
-        return SmilesPreviewPlan(action="rebuild", geometry=geometry)
-    return SmilesPreviewPlan(action="update", geometry=geometry)
-
-
-def _offset(preview_center: Point2D, cursor_pos: Point2D) -> Point2D:
+    The preview ghost is positioned by this offset and the commit plan adds
+    it to every atom, so the placed structure lands exactly where the ghost
+    was shown.
+    """
     return (cursor_pos[0] - preview_center[0], cursor_pos[1] - preview_center[1])
 
 
@@ -267,16 +159,10 @@ __all__ = [
     "SmilesBondPlacement",
     "SmilesCommitPlan",
     "SmilesMarkPlacement",
-    "SmilesPreviewGeometry",
-    "SmilesPreviewPlan",
-    "SmilesPreviewSnapshot",
     "annotation_mark_direction",
     "annotation_mark_kinds",
-    "build_smiles_preview_geometry",
-    "build_smiles_preview_snapshot",
     "normalized_atom_annotation",
     "plan_smiles_commit",
-    "plan_smiles_preview_update",
     "smiles_preview_center",
-    "snapshot_smiles_preview_geometry",
+    "smiles_preview_offset",
 ]
