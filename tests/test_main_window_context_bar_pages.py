@@ -11,6 +11,7 @@ from PyQt6.QtWidgets import (
     QLabel,
     QLineEdit,
     QSlider,
+    QSpinBox,
     QToolButton,
 )
 
@@ -60,6 +61,9 @@ class MainWindowContextBarPagesTest(unittest.TestCase):
         self.apply_color_preset_for_window = mock.Mock()
         self.apply_ring_fill_preset_for_window = mock.Mock()
         self.rotate_selection_for_window = mock.Mock()
+        self.flip_selection_for_window = mock.Mock()
+        self.align_selection_for_window = mock.Mock()
+        self.distribute_selection_for_window = mock.Mock()
         self.note_controller_for_window = mock.Mock(return_value=None)
         self.builder = MainWindowContextBarPageBuilder(
             insert_controller_for_window=self.insert_controller_for_window,
@@ -71,6 +75,9 @@ class MainWindowContextBarPagesTest(unittest.TestCase):
             apply_color_preset_for_window=self.apply_color_preset_for_window,
             apply_ring_fill_preset_for_window=self.apply_ring_fill_preset_for_window,
             rotate_selection_for_window=self.rotate_selection_for_window,
+            flip_selection_for_window=self.flip_selection_for_window,
+            align_selection_for_window=self.align_selection_for_window,
+            distribute_selection_for_window=self.distribute_selection_for_window,
             note_controller_for_window=self.note_controller_for_window,
         )
 
@@ -117,7 +124,7 @@ class MainWindowContextBarPagesTest(unittest.TestCase):
                 "text",
                 "ring",
                 "mark",
-                "rotate",
+                "select",
                 "orbital",
                 "shape",
                 "line",
@@ -298,3 +305,39 @@ class MainWindowContextBarPagesTest(unittest.TestCase):
         self.apply_ring_fill_preset_for_window.assert_called_once_with(
             self.window, "#f4d06f"
         )
+
+    def test_select_page_wires_flip_rotate_align_and_distribute(self) -> None:
+        pages = self.builder.build(self.window)
+        page = pages.pages["select"]
+
+        page.findChild(QToolButton, "flip_horizontal_button").click()
+        page.findChild(QToolButton, "flip_vertical_button").click()
+        self.flip_selection_for_window.assert_has_calls(
+            [
+                mock.call(self.window, horizontal=True),
+                mock.call(self.window, horizontal=False),
+            ]
+        )
+
+        angle = page.findChild(QSpinBox, "rotateAngleInput")
+        angle.setValue(30)
+        page.findChild(QToolButton, "rotateApplyButton").click()
+        self.rotate_selection_for_window.assert_called_once_with(self.window, 30.0)
+
+        for mode in ("left", "center", "right", "top", "middle", "bottom"):
+            page.findChild(QToolButton, f"align_{mode}_button").click()
+        self.assertEqual(
+            [call.args[1] for call in self.align_selection_for_window.call_args_list],
+            ["left", "center", "right", "top", "middle", "bottom"],
+        )
+        for axis in ("horizontal", "vertical"):
+            page.findChild(QToolButton, f"distribute_{axis}_button").click()
+        self.assertEqual(
+            [
+                call.args[1]
+                for call in self.distribute_selection_for_window.call_args_list
+            ],
+            ["horizontal", "vertical"],
+        )
+        # The eraser has no options: its page is quiet.
+        self.assertEqual(pages.pages["empty"].findChildren(QToolButton), [])

@@ -28,14 +28,10 @@ class MainWindowUIAssemblyService:
     def __init__(
         self,
         *,
-        scene_transform_controller_for_window,
         insert_controller_for_window,
         build_tool_actions_for_window,
         panel_toolbar_callbacks: MainWindowPanelToolbarCallbacks,
     ) -> None:
-        self._scene_transform_controller_for_window = (
-            scene_transform_controller_for_window
-        )
         self._insert_controller_for_window = insert_controller_for_window
         self._build_tool_actions_for_window = build_tool_actions_for_window
         self._panel_toolbar_callbacks = panel_toolbar_callbacks
@@ -71,9 +67,7 @@ class MainWindowUIAssemblyService:
     def init_toolbars(self, window) -> MainWindowPanelToolbarAssembly:
         panel_toolbar = build_panel_toolbar(
             window,
-            create_toolbar_button=self.create_toolbar_button,
             build_tool_actions=self._build_tool_actions_for_window,
-            scene_transform_controller_for_window=self._scene_transform_controller_for_window,
             insert_controller_for_window=self._insert_controller_for_window,
             callbacks=self._panel_toolbar_callbacks,
         )

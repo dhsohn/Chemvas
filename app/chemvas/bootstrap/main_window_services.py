@@ -155,6 +155,18 @@ def build_main_window_services() -> MainWindowServices:
         controller = resolve_scene_transform_controller(window)
         controller.rotate_selected_items(angle_degrees)
 
+    def flip_selection_for_window(window: Any, *, horizontal: bool) -> None:
+        controller = resolve_scene_transform_controller(window)
+        controller.flip_selected_items(horizontal=horizontal)
+
+    def align_selection_for_window(window: Any, mode: str) -> None:
+        controller = resolve_scene_transform_controller(window)
+        controller.align_selected_items(mode)
+
+    def distribute_selection_for_window(window: Any, axis: str) -> None:
+        controller = resolve_scene_transform_controller(window)
+        controller.distribute_selected_items(axis)
+
     def note_controller_for_window(window: Any) -> Any | None:
         canvas = active_canvas_or_none(window)
         if canvas is None:
@@ -177,6 +189,9 @@ def build_main_window_services() -> MainWindowServices:
             apply_color_preset_for_window=apply_color_preset_for_window,
             apply_ring_fill_preset_for_window=apply_ring_fill_preset_for_window,
             rotate_selection_for_window=rotate_selection_for_window,
+            flip_selection_for_window=flip_selection_for_window,
+            align_selection_for_window=align_selection_for_window,
+            distribute_selection_for_window=distribute_selection_for_window,
             note_controller_for_window=note_controller_for_window,
         ),
         active_tool_name_for_window=active_tool_name_for_window,
@@ -271,8 +286,11 @@ def build_main_window_services() -> MainWindowServices:
         ),
         open_preview_window=panel_service.open_preview_window,
         new_canvas=open_new_window,
-        show_rotate_options=lambda window: context_page_state_service.show_context_page(
-            window, "rotate"
+        # Edit > Rotate... hands the canvas to the Select tool, whose options
+        # bar carries the angle input; checking the button alone would leave
+        # the canvas in the previous tool.
+        show_rotate_options=lambda window: (
+            context_page_state_service.set_tool_with_status(window, "select")
         ),
         set_note_font_family=set_note_font_family_for_window,
         open_recent_path=lambda window, path: (
@@ -282,7 +300,6 @@ def build_main_window_services() -> MainWindowServices:
         ),
     )
     ui_assembly_service = MainWindowUIAssemblyService(
-        scene_transform_controller_for_window=scene_transform_controller_for_window,
         insert_controller_for_window=insert_controller_for_window,
         build_tool_actions_for_window=tool_action_service.build_tool_actions,
         panel_toolbar_callbacks=panel_toolbar_callbacks,

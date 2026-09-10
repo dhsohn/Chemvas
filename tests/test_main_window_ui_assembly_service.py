@@ -123,7 +123,6 @@ class MainWindowUIAssemblyServiceTest(unittest.TestCase):
             open_recent_path=mock.Mock(),
         )
         self.service = MainWindowUIAssemblyService(
-            scene_transform_controller_for_window=self.scene_transform_controller_for_window,
             insert_controller_for_window=self.insert_controller_for_window,
             build_tool_actions_for_window=self.build_tool_actions_for_window,
             panel_toolbar_callbacks=self.panel_toolbar_callbacks,
@@ -243,7 +242,7 @@ class MainWindowUIAssemblyServiceTest(unittest.TestCase):
             0,
         )
         self.assertEqual(
-            len(assembly.panel_bar.findChildren(QWidget, "toolbarGroupGap")), 4
+            len(assembly.panel_bar.findChildren(QWidget, "toolbarGroupGap")), 3
         )
         self.assertTrue(assembly.tool_actions["bond"].isChecked())
         self.assertIsNotNone(
@@ -293,13 +292,10 @@ class MainWindowUIAssemblyServiceTest(unittest.TestCase):
         window.canvas.insert_controller.begin_smiles_insert.assert_not_called()
         self.insert_controller_for_window.assert_not_called()
         self.scene_transform_controller_for_window.assert_not_called()
-        assembly.panel_bar.findChild(QToolButton, "flip_horizontal_button").click()
-        assembly.panel_bar.findChild(QToolButton, "flip_vertical_button").click()
-        window.canvas.scene_transform_controller.flip_selected_items.assert_has_calls(
-            [mock.call(horizontal=True), mock.call(horizontal=False)]
-        )
-        self.scene_transform_controller_for_window.assert_has_calls(
-            [mock.call(window), mock.call(window)]
+        # Flip moved to the Select options bar; the toolbar no longer
+        # reaches the transform controller.
+        self.assertIsNone(
+            assembly.panel_bar.findChild(QToolButton, "flip_horizontal_button")
         )
 
     def test_init_menu_bar_builds_file_edit_view_help_menus(self) -> None:

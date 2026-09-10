@@ -56,6 +56,16 @@ _SVG_BY_NAME: dict[str, str] = {
     "text_subscript": '<path d="M5 7.5 11 14 M5 14 11 7.5"/><path d="M14 13.4 C14 11.6 18.6 11.6 18.6 13.9 C18.6 15.8 14 16.1 14 17.6 H18.8"/>',
     "text_size_increase": '<path d="M3.5 18 7.5 7 11.5 18 M4.8 14.5 H10.2 M16.5 18 V8.5 M13.5 11.5 16.5 8.5 19.5 11.5"/>',
     "text_size_decrease": '<path d="M4.5 18 8 8.5 11.5 18 M5.6 15 H10.4 M16.5 8.5 V18 M13.5 15 16.5 18 19.5 15"/>',
+    # Object alignment: an edge line and two boxes brought to it.
+    "align_objects_left": '<path d="M4 3v18"/><rect x="7" y="6" width="13" height="5" rx="1"/><rect x="7" y="13" width="8" height="5" rx="1"/>',
+    "align_objects_center": '<path d="M12 3v18"/><rect x="5.5" y="6" width="13" height="5" rx="1"/><rect x="8" y="13" width="8" height="5" rx="1"/>',
+    "align_objects_right": '<path d="M20 3v18"/><rect x="4" y="6" width="13" height="5" rx="1"/><rect x="9" y="13" width="8" height="5" rx="1"/>',
+    "align_objects_top": '<path d="M3 4h18"/><rect x="6" y="7" width="5" height="13" rx="1"/><rect x="13" y="7" width="5" height="8" rx="1"/>',
+    "align_objects_middle": '<path d="M3 12h18"/><rect x="6" y="5.5" width="5" height="13" rx="1"/><rect x="13" y="8" width="5" height="8" rx="1"/>',
+    "align_objects_bottom": '<path d="M3 20h18"/><rect x="6" y="4" width="5" height="13" rx="1"/><rect x="13" y="9" width="5" height="8" rx="1"/>',
+    # Distribution: two bounds and the boxes spaced evenly between them.
+    "distribute_horizontal": '<path d="M3 4v16 M21 4v16"/><rect x="7" y="8" width="3.6" height="8" rx="0.8"/><rect x="13.4" y="8" width="3.6" height="8" rx="0.8"/>',
+    "distribute_vertical": '<path d="M4 3h16 M4 21h16"/><rect x="8" y="7" width="8" height="3.6" rx="0.8"/><rect x="8" y="13.4" width="8" height="3.6" rx="0.8"/>',
     "align_left": '<path d="M4 6 H20 M4 11 H14 M4 16 H18 M4 21 H12"/>',
     "align_center": '<path d="M4 6 H20 M7 11 H17 M5 16 H19 M8 21 H16"/>',
     "align_right": '<path d="M4 6 H20 M10 11 H20 M6 16 H20 M12 21 H20"/>',
@@ -100,9 +110,11 @@ _SVG_BY_NAME: dict[str, str] = {
     "circled_plus": '<circle cx="12" cy="12" r="9"/><path d="M12 7.2v9.6"/><path d="M7.2 12h9.6"/>',
     "circled_minus": '<circle cx="12" cy="12" r="9"/><path d="M7.2 12h9.6"/>',
     # The ring-fill tool is the ring tool's hexagon with its interior tinted.
+    # The tint is a step deeper than the checked-button pill (#d6ece7) so the
+    # fill still shows while the tool is the active one.
     "ring_fill": (
         '<polygon points="12,2.5 20.2,7.25 20.2,16.75 12,21.5 3.8,16.75 3.8,7.25" '
-        'fill="#d6ece7"/>'
+        'fill="#9fd4c9"/>'
     ),
     "bond_bold": '<line x1="5" y1="17" x2="19" y2="7" stroke-width="3.6"/>',
     "bond_dotted": '<line x1="5" y1="17" x2="19" y2="7" stroke-dasharray="0.1 3.4"/>',

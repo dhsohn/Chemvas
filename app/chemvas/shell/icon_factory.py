@@ -104,6 +104,12 @@ class MainWindowIconFactory:
     def icon_align_right(self) -> QIcon:
         return self.make_design_icon("align_right")
 
+    def icon_align_objects(self, mode: str) -> QIcon:
+        return self._design_icon(f"align_objects_{mode}", "align_objects_left")
+
+    def icon_distribute(self, axis: str) -> QIcon:
+        return self._design_icon(f"distribute_{axis}", "distribute_horizontal")
+
     def icon_ring(self) -> QIcon:
         return self.make_design_icon("benzene")
 

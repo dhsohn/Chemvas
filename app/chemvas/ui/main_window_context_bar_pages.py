@@ -14,7 +14,7 @@ from chemvas.ui.main_window_context_bar_page_factories import (
     build_line_page,
     build_mark_page,
     build_orbital_page,
-    build_rotate_page,
+    build_select_page,
     build_shape_page,
     build_template_page,
     build_text_page,
@@ -56,6 +56,9 @@ class MainWindowContextBarPageBuilder:
         apply_color_preset_for_window,
         apply_ring_fill_preset_for_window,
         rotate_selection_for_window,
+        flip_selection_for_window,
+        align_selection_for_window,
+        distribute_selection_for_window,
         note_controller_for_window,
     ) -> None:
         self._insert_controller_for_window = insert_controller_for_window
@@ -67,6 +70,9 @@ class MainWindowContextBarPageBuilder:
         self._apply_color_preset_for_window = apply_color_preset_for_window
         self._apply_ring_fill_preset_for_window = apply_ring_fill_preset_for_window
         self._rotate_selection_for_window = rotate_selection_for_window
+        self._flip_selection_for_window = flip_selection_for_window
+        self._align_selection_for_window = align_selection_for_window
+        self._distribute_selection_for_window = distribute_selection_for_window
         self._note_controller_for_window = note_controller_for_window
 
     def _note_command(self, window, method_name: str, *args) -> None:
@@ -131,7 +137,13 @@ class MainWindowContextBarPageBuilder:
             "text": text_page,
             "ring": ring_page.page,
             "mark": mark_page.page,
-            "rotate": build_rotate_page(window, self._rotate_selection_for_window),
+            "select": build_select_page(
+                window,
+                flip_selection=self._flip_selection_for_window,
+                rotate_selection=self._rotate_selection_for_window,
+                align_selection=self._align_selection_for_window,
+                distribute_selection=self._distribute_selection_for_window,
+            ),
             "orbital": build_orbital_page(window, self._tool_state),
             "shape": build_shape_page(window, self._tool_state),
             "line": build_line_page(window, self._tool_state),
