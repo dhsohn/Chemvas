@@ -63,10 +63,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (edge-midpoint resize handles are smaller than corner and endpoint handles).
   A handle that has taken another item's endpoint is still shown filled.
 - Tint the hover ring with the selection accent instead of grey.
-- Raise the `.chemvas` document limit from 8 MiB to 96 MiB for opening,
+- Raise the `.chemvas` document limit from 8 MiB to 96 MiB for
   `compose-document`, `render-document`, `check-layout`, `arrange-scheme` and
   clipboard payloads, so embedded images fit; editable SVG accepts a 256 MiB
-  file with a 96 MiB native payload.
+  file with a 96 MiB native payload. Desktop **File ▸ Open…** and session
+  restore, which had no size cap before, now apply the same 96 MiB limit.
 
 ### Fixed
 
@@ -98,9 +99,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `chemvas.shell.toolbar_styles`; Insert uses the options bar's action style.
 - `build_rotate_page` and the `rotate` options page, replaced by
   `build_select_page`. `build_template_page` now requires `begin_smiles_insert`;
-  `build_panel_toolbar` and `MainWindowUIAssemblyService` drop their transform
-  and insert controller arguments; `create_handle_item` drops `size` and returns
-  an ellipse item.
+  `build_panel_toolbar` drops its `create_toolbar_button`, transform controller
+  and insert controller arguments, `MainWindowUIAssemblyService` drops the
+  latter two; `create_handle_item` drops `size` and returns an ellipse item.
 
 ## [0.10.2] - 2026-09-09
 
