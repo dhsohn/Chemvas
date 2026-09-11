@@ -45,11 +45,6 @@ its knob, flip, align, and distribute.
 
 ![Select, move, rotate, align: move, rotate knob, flip, align middle, distribute](images/walkthrough-editing.gif)
 
-The older GIF captions overstate two behaviors: the editing drag moves one atom,
-and profile connectors snap to level endpoints but do not stay attached when a
-level is later moved. Select the whole molecule before dragging it as a unit;
-re-snap a connector endpoint after moving a level separately.
-
 - **Bonds** — single / double / triple, bold, wedge & hash; 30° angle snapping and
   a consistent default bond length.
 - **Rings & templates** — benzene, cycloalkanes, and the two chair orientations

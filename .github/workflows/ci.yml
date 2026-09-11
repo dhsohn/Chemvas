@@ -134,6 +134,12 @@ jobs:
         with:
           python-version: "3.13"
 
+      - name: Install system packages for Qt
+        # Real-RDKit canvas tests import QtGui/QtWidgets even when offscreen.
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libegl1 libgl1
+
       - name: Install Python dependencies with RDKit
         run: |
           python -m pip install --upgrade pip
