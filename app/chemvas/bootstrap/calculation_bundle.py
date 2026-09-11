@@ -358,7 +358,10 @@ def _select_precomplex(
         "reactant": reactant_candidate_id,
         "product": product_candidate_id,
     }
-    adapter = RDKitAdapter()
+    precomplexes: dict[str, dict[str, object]] = {}
+    candidate_hashes: dict[str, str] = {}
+    # Validate both endpoint IDs before any RDKit work. In particular, a bad
+    # product ID must not be hidden by an unavailable reactant geometry backend.
     for side in ("reactant", "product"):
         raw_endpoint = raw_step.get(side)
         if not isinstance(raw_endpoint, dict):
@@ -385,25 +388,6 @@ def _select_precomplex(
             raise ValueError(
                 f"Step {step.id} {side} precomplex candidates are stale for this graph or plan."
             )
-        endpoint = step.reactant if side == "reactant" else step.product
-        calculation_state = calculation_state_by_id(plan, endpoint.state_id)
-        calculation_selection = select_calculation_state(
-            document.state, calculation_state
-        )
-        current_artifacts = _state_artifacts(
-            adapter,
-            calculation_selection,
-            state_id=calculation_state.id,
-            charge=calculation_state.charge,
-            multiplicity=calculation_state.multiplicity,
-        )
-        _require_reproducible_precomplex(
-            state=precomplex,
-            calculation_state=calculation_state,
-            current=current_artifacts,
-            step=step,
-            side=side,
-        )
         candidates = precomplex.get("candidates")
         if not isinstance(candidates, list):
             raise ValueError(
@@ -424,9 +408,34 @@ def _select_precomplex(
         xyz_sha256 = candidate.get("xyz_sha256")
         if not isinstance(xyz_sha256, str):
             raise ValueError(f"Step {step.id} has invalid {side} candidate provenance.")
+        precomplexes[side] = precomplex
+        candidate_hashes[side] = xyz_sha256
+
+    adapter = RDKitAdapter()
+    for side in ("reactant", "product"):
+        precomplex = precomplexes[side]
+        endpoint = step.reactant if side == "reactant" else step.product
+        calculation_state = calculation_state_by_id(plan, endpoint.state_id)
+        calculation_selection = select_calculation_state(
+            document.state, calculation_state
+        )
+        current_artifacts = _state_artifacts(
+            adapter,
+            calculation_selection,
+            state_id=calculation_state.id,
+            charge=calculation_state.charge,
+            multiplicity=calculation_state.multiplicity,
+        )
+        _require_reproducible_precomplex(
+            state=precomplex,
+            calculation_state=calculation_state,
+            current=current_artifacts,
+            step=step,
+            side=side,
+        )
         precomplex["selection"] = {
             "candidate_id": selected_ids[side],
-            "candidate_xyz_sha256": xyz_sha256,
+            "candidate_xyz_sha256": candidate_hashes[side],
             "reviewer": reviewer,
             "reviewed_at": reviewed_at,
             "acceptance_statement": "accepted_for_path_endpoint_review",

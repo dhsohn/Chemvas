@@ -16,6 +16,7 @@ from PyQt6.QtWidgets import (
 )
 
 from chemvas.branding import APP_NAME, APP_VERSION, app_icon
+from chemvas.core.rdkit_diagnostics import RDKIT_INSTALL_COMMAND
 
 GITHUB_URL = "https://github.com/dhsohn/Chemvas"
 DESCRIPTION = (
@@ -31,7 +32,13 @@ def rdkit_status() -> str:
     RDKit just to render the About box.
     """
     if importlib.util.find_spec("rdkit") is None:
-        return "Not installed — SMILES, formula, and 3D features are disabled"
+        return (
+            "Not installed — SMILES insertion, Molecule Info (formula/identifiers), "
+            "3D XYZ, abbreviation MOL export, Suggest by structure, "
+            "generate-precomplex, select-precomplex and pack-step require RDKit. "
+            "Drawing, document editing and figure export remain available. "
+            f"Install it with: {RDKIT_INSTALL_COMMAND}."
+        )
     for distribution in ("rdkit", "rdkit-pypi"):
         try:
             return f"Available ({importlib.metadata.version(distribution)})"

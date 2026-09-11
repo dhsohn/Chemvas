@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import builtins
 import hashlib
 import json
 from dataclasses import replace
@@ -10,6 +11,7 @@ import pytest
 from chemvas.bootstrap import calculation_bundle as cli
 from chemvas.bootstrap import document_patch as patch_cli
 from chemvas.core.document_io import read_document, write_document
+from chemvas.core.rdkit_adapter import RDKitAdapter
 from chemvas.domain.document import CANVAS_FILE_VERSION
 from chemvas.domain.document.precomplex_profile import (
     CURRENT_PROFILE_ID,
@@ -672,6 +674,117 @@ def test_candidate_xyz_tamper_is_rejected_on_document_read(
 
     with pytest.raises(ValueError, match="Invalid Chemvas file"):
         read_document(tampered)
+
+
+@pytest.mark.parametrize("side", ["reactant", "product"])
+@pytest.mark.parametrize("candidate_kind", ["unknown", "wrong_side"])
+@pytest.mark.parametrize("rdkit_missing", [False, True])
+def test_selection_checks_both_candidate_ids_before_rdkit(
+    tmp_path, monkeypatch, capsys, side, candidate_kind, rdkit_missing
+):
+    source, payload = _review_candidate_fixture(tmp_path, monkeypatch, capsys)
+    source_bytes = source.read_bytes()
+    step = payload["state"]["calculation_plan"]["steps"][0]
+    selected = {
+        name: step[name]["precomplex"]["candidates"][0]["id"]
+        for name in ("reactant", "product")
+    }
+    other_side = "product" if side == "reactant" else "reactant"
+    selected[side] = (
+        "pc-does-not-exist" if candidate_kind == "unknown" else selected[other_side]
+    )
+    adapter_calls = []
+    import_attempts = []
+    original_import = builtins.__import__
+
+    def import_without_rdkit(name, *args, **kwargs):
+        if name == "rdkit" or name.startswith("rdkit."):
+            import_attempts.append(name)
+            raise ImportError("synthetic missing optional RDKit")
+        return original_import(name, *args, **kwargs)
+
+    def adapter():
+        adapter_calls.append(True)
+        return RDKitAdapter() if rdkit_missing else _StateFakeAdapter()
+
+    monkeypatch.setattr(cli, "RDKitAdapter", adapter)
+    if rdkit_missing:
+        monkeypatch.setattr(builtins, "__import__", import_without_rdkit)
+    output = tmp_path / "not-created.chemvas"
+    with pytest.raises(SystemExit) as error:
+        cli.run(
+            [
+                "select-precomplex",
+                str(source),
+                "--step",
+                "S01",
+                "--reactant-candidate",
+                selected["reactant"],
+                "--product-candidate",
+                selected["product"],
+                "--reviewer",
+                "new-reviewer",
+                "--output",
+                str(output),
+            ]
+        )
+    assert error.value.code == 2
+    message = capsys.readouterr().err
+    assert f"Unknown {side} precomplex candidate: {selected[side]}" in message
+    assert "RDKit is not available" not in message
+    assert adapter_calls == []
+    assert import_attempts == []
+    assert source.read_bytes() == source_bytes
+    assert not output.exists()
+
+
+@pytest.mark.parametrize("reviewed", [False, True])
+def test_valid_candidate_pair_still_requires_rdkit_without_publishing_review(
+    tmp_path, monkeypatch, capsys, reviewed
+):
+    if reviewed:
+        source, payload = _review_candidate_fixture(tmp_path, monkeypatch, capsys)
+    else:
+        _, source, payload = _generate_candidate_fixture(tmp_path, monkeypatch, capsys)
+    source_bytes = source.read_bytes()
+    step = payload["state"]["calculation_plan"]["steps"][0]
+    original_import = builtins.__import__
+    import_attempts = []
+
+    def import_without_rdkit(name, *args, **kwargs):
+        if name == "rdkit" or name.startswith("rdkit."):
+            import_attempts.append(name)
+            raise ImportError("synthetic missing optional RDKit")
+        return original_import(name, *args, **kwargs)
+
+    monkeypatch.setattr(cli, "RDKitAdapter", RDKitAdapter)
+    monkeypatch.setattr(builtins, "__import__", import_without_rdkit)
+    output = tmp_path / "not-reviewed.chemvas"
+    with pytest.raises(SystemExit) as error:
+        cli.run(
+            [
+                "select-precomplex",
+                str(source),
+                "--step",
+                "S01",
+                "--reactant-candidate",
+                step["reactant"]["precomplex"]["candidates"][0]["id"],
+                "--product-candidate",
+                step["product"]["precomplex"]["candidates"][0]["id"],
+                "--reviewer",
+                "new-reviewer",
+                "--output",
+                str(output),
+            ]
+        )
+    assert error.value.code == 2
+    assert import_attempts
+    message = capsys.readouterr().err
+    assert "RDKit is not available in this environment." in message
+    assert 'pip install "chemvas[rdkit]"' in message
+    assert "Unknown" not in message
+    assert source.read_bytes() == source_bytes
+    assert not output.exists()
 
 
 def test_selection_rejects_stale_graph_basis(
