@@ -164,8 +164,16 @@ def test_exports_preserve_link_identity_and_target_mode(tmp_path, kind, link_kin
         assert stat.S_IMODE(target.stat().st_mode) == 0o640
     else:
         os.link(target, link)
-        with pytest.raises(ValueError, match="hard link"):
+        with pytest.raises(
+            ValueError if kind == "xyz" else OSError, match="hard link"
+        ) as failure:
             _write(kind, link)
+        if kind == "xyz":
+            assert f"[Errno {errno.EMLINK}]" in str(failure.value)
+            assert str(link) in str(failure.value)
+        else:
+            assert failure.value.errno == errno.EMLINK
+            assert failure.value.filename == str(link)
         assert target.read_bytes() == link.read_bytes() == b"original bytes"
         assert os.path.samefile(target, link)
     assert set(tmp_path.iterdir()) == {target, link}
@@ -271,8 +279,10 @@ def test_atomic_write_rechecks_hard_links_before_publication(tmp_path):
         staging.write_bytes(b"new")
         os.link(target, alias)
 
-    with pytest.raises(ValueError, match="hard link"):
+    with pytest.raises(OSError, match="hard link") as failure:
         atomic_write_via_temp(target, writer)
+    assert failure.value.errno == errno.EMLINK
+    assert failure.value.filename == str(target)
     assert target.read_bytes() == alias.read_bytes() == b"original"
     assert os.path.samefile(target, alias)
     assert set(tmp_path.iterdir()) == {target, alias}

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import contextlib
+import errno
 import hashlib
 import json
 import os
@@ -115,9 +116,11 @@ def _output_mode(target: Path) -> int | None:
     except FileNotFoundError:
         return None
     if stat.S_ISREG(metadata.st_mode) and metadata.st_nlink > 1:
-        raise ValueError(
+        raise OSError(
+            errno.EMLINK,
             "The destination has multiple hard links. "
-            "Choose another output file to avoid splitting the linked copies."
+            "Choose another output file to avoid splitting the linked copies.",
+            os.fspath(target),
         )
     return stat.S_IMODE(metadata.st_mode)
 

@@ -114,9 +114,11 @@ def _reject_startup_argument(argument: str) -> NoReturn:
 
 
 def _validate_desktop_arguments(arguments: list[str]) -> None:
-    """Reject CLI mistakes before loading Qt, preserving documented Qt options."""
+    """Reject CLI mistakes before loading Qt, preserving Qt's own argv parser."""
     # QApplication/QGuiApplication consume these options themselves. Validate
     # their shape here, but pass the original Unicode argv through unchanged.
+    # Xcb-only options/aliases are checked again after QApplication: another
+    # backend may leave them unconsumed. Do not emulate removed Qt 4 options.
     value_options = {
         "-platform",
         "-platformpluginpath",
@@ -128,10 +130,23 @@ def _validate_desktop_arguments(arguments: list[str]) -> None:
         "-session",
         "-display",
         "-geometry",
+        "-title",
+        "-icon",
+        "-name",
+        "-visual",
         "-style",
         "-stylesheet",
+        "-qmljsdebugger",
     }
-    flag_options = {"-reverse", "-widgetcount"}
+    flag_options = {
+        "-reverse",
+        "-widgetcount",
+        "-nograb",
+        "-dograb",
+        "-testability",
+        "-qdevel",
+        "-qdebug",
+    }
     index = 0
     while index < len(arguments):
         argument = arguments[index]
@@ -141,18 +156,19 @@ def _validate_desktop_arguments(arguments: list[str]) -> None:
         elif option in flag_options:
             index += 1
         elif option in value_options:
-            if index + 1 >= len(arguments) or (
-                arguments[index + 1].startswith("-")
-                and option not in {"-qwindowgeometry", "-geometry", "-qwindowtitle"}
-            ):
+            # Qt consumes the next token verbatim, including negative geometry,
+            # dash-prefixed titles/paths, and strings resembling other options.
+            if index + 1 >= len(arguments):
                 _reject_startup_argument(argument)
             index += 2
-        elif any(
-            option.startswith(prefix) and len(option) > len(prefix)
-            for prefix in ("-style=", "-stylesheet=", "-qmljsdebugger=")
-        ):
+        elif option.startswith(("-style=", "-stylesheet=", "-qmljsdebugger=")):
+            index += 1
+        elif sys.platform == "darwin" and option.startswith("-psn_"):
+            # Finder's process serial number is consumed by Qt on macOS.
             index += 1
         else:
+            # Qt does not implement a standalone '--' sentinel. Require './'
+            # or an absolute path for a document whose basename starts with '-'.
             _reject_startup_argument(argument)
 
 
