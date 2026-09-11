@@ -26,8 +26,13 @@ flowchart LR
     precomplex --> pack["pack-step<br/>machine.json"]
 ```
 
-Every command reads the exact source bytes, validates before it needs Qt where
-it can, and publishes one new file atomically; no command edits its input.
+Every command reads the exact source bytes and validates before it needs Qt
+where it can. Commands that take an output path (`compose-document`,
+`insert-template`, `apply-patch`, `layout-document`, `render-document`,
+`attach-plan`, `generate-precomplex`, `select-precomplex`, `pack-step`)
+publish one new file atomically and never edit their input; `inspect`,
+`inspect-document`, `inspect-plan`, `inspect-precomplex`, `check-layout` and
+every `--dry-run` only print a JSON report and write nothing.
 The figures below are the documented examples rendered with `render-document`.
 
 ## Headless document composition

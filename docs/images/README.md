@@ -93,12 +93,13 @@ QT_QPA_PLATFORM=offscreen python scripts/capture_walkthroughs.py --output-dir /t
 `--topic drawing|arrows|editing|chemistry|images|arrange` regenerates one of
 them. The images topic inserts a synthetic spectrum through the same function
 **File ▸ Insert Image…** calls after its file picker; the arrange topic builds
-two grouped structures off camera and drives the real Arrange Scheme dialog. The chemistry
-topic needs RDKit: it writes an aspirin molfile into the output directory, opens
-it the way **File ▸ Open** does, and drives the Molecule Info window and the MOL
-and XYZ exports through the same services the menu actions call, with the
-output paths supplied by the script instead of a file picker. Copy the reviewed
-GIFs to `docs/images/`.
+two grouped structures off camera and drives the real Arrange Scheme dialog. The editing,
+chemistry and arrange topics place structures from SMILES and therefore need
+the optional RDKit backend. The chemistry topic additionally writes an aspirin
+molfile into the output directory, opens it the way **File ▸ Open** does, and
+drives the Molecule Info window and the MOL and XYZ exports through the same
+services the menu actions call, with the output paths supplied by the script
+instead of a file picker. Copy the reviewed GIFs to `docs/images/`.
 
 ## Regenerate the CLI and publication figures
 

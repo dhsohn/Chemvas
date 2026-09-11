@@ -2,9 +2,11 @@
 """Capture the short reference-guide walkthroughs from the real application.
 
 Each topic drives the main window offscreen with synthetic input and writes
-one GIF: drawing, arrows, editing and chemistry. Run with the development
-environment including RDKit and an empty output directory; only synthetic
-drawing data is used and no user document is opened.
+one GIF: drawing, arrows, editing, chemistry, images and arrange. Run with the
+development environment and an empty output directory; the editing, chemistry
+and arrange topics insert structures from SMILES and therefore need the
+optional RDKit backend. Only synthetic drawing data is used and no user
+document is opened.
 """
 
 from __future__ import annotations
@@ -61,7 +63,10 @@ def _place_smiles(w: Walkthrough, smiles: str, x: float, y: float) -> list[int]:
     w.app.processEvents()
     added = sorted(set(w.canvas.model.atoms) - previous)
     if not added:
-        raise RuntimeError(f"{smiles!r} was not inserted")
+        raise RuntimeError(
+            f"{smiles!r} was not inserted; the editing, chemistry and arrange "
+            "topics need the optional RDKit backend"
+        )
     return added
 
 
