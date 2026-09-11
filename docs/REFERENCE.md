@@ -24,6 +24,24 @@ the [examples README](../examples/README.md) describes what each one contains.
 
 ## Drawing features
 
+Three short walkthroughs captured from the application; the
+[first reaction scheme](FIRST_SCHEME.md) covers SMILES insertion and export.
+
+**Draw a structure** — bonds by dragging, bond order and element hotkeys under
+the pointer, a charge, and a benzene ring fused onto a bond.
+
+![Draw a structure: drag bonds, press 2 on a bond, type o on an atom, fuse a ring](images/walkthrough-drawing.gif)
+
+**Arrows and labels** — reaction, equilibrium and curved arrows, labels typed
+through the arrow dialog, and endpoint snapping.
+
+![Arrows and labels: draw arrows, double-click to label, snap an end](images/walkthrough-arrows.gif)
+
+**Select, move, rotate, align** — move a molecule, rotate the selection with
+its knob, flip, align, and snap a line to the grid.
+
+![Select, move, rotate, align: move, rotate knob, flip, align middle, grid snap](images/walkthrough-editing.gif)
+
 - **Bonds** — single / double / triple, bold, wedge & hash; 30° angle snapping and
   a consistent default bond length.
 - **Rings & templates** — benzene, cycloalkanes, chair/boat conformers placed by
@@ -146,6 +164,8 @@ document payload for round-tripping back into Chemvas.
 
 RDKit is an optional backend — Chemvas runs without it. The features marked
 *(RDKit)* need `pip install "chemvas[rdkit]"`.
+
+![Chemistry I/O: open a molfile, Molecule Info, export MOL and 3D XYZ](images/walkthrough-chemistry.gif)
 
 ### SMILES import *(RDKit)*
 
