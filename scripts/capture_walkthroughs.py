@@ -214,8 +214,9 @@ def arrows(w: Walkthrough) -> None:
 
 def editing(w: Walkthrough) -> None:
     title = "Select, move, rotate, align"
-    benzene = _place_smiles(w, "c1ccccc1", -70.0, -5.0)
-    ethanol = _place_smiles(w, "CCO", 55.0, 28.0)
+    _place_smiles(w, "c1ccccc1", -100.0, -5.0)
+    ethanol = _place_smiles(w, "CCO", 10.0, 28.0)
+    _place_smiles(w, "CC(=O)O", 105.0, -12.0)
     w.set_tool("select")
     w.canvas.scene().clearSelection()
     w.move(0.0, 60.0)
@@ -245,28 +246,21 @@ def editing(w: Walkthrough) -> None:
     w.capture(title, "Flip Horizontal / Flip Vertical act on the selection.", 1500)
     w.action("Middle").trigger()
     w.app.processEvents()
+    w.capture(title, "Edit ▸ Align ▸ Middle lines the structures up.", 1800)
+    w.action("Horizontally").trigger()
+    w.app.processEvents()
     w.capture(
         title,
-        "Edit ▸ Align ▸ Middle lines the structures up; Distribute spaces them.",
+        "Edit ▸ Distribute ▸ Horizontally spaces them with equal gaps.",
         1800,
     )
-    w.click(0.0, 90.0)
-    w.action("Snap to Grid").trigger()
-    w.app.processEvents()
-    w.set_tool("line")
-    w.capture(title, "View ▸ Snap to Grid shows a grid; drawn points land on it.", 1400)
-    w.drag(
-        (-40.0, 70.0),
-        (44.0, 73.0),
-        title=title,
-        detail="The line snaps to the grid as you drag.",
-    )
-    w.set_tool("select")
-    w.move(0.0, 100.0)
+    w.click(0.0, 100.0)
+    w.move(0.0, 110.0)
     w.capture(
-        title, "Endpoints, then Shift, then the grid decide where a point lands.", 2200
+        title,
+        "Whole molecules and groups move as units; one undo step reverses each edit.",
+        2200,
     )
-    del benzene
 
 
 # --- chemistry --------------------------------------------------------------
