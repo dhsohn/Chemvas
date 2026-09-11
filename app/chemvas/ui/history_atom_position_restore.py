@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from PyQt6.QtCore import QPointF
 
+from chemvas.features.selection import translate_projected_point_3d
 from chemvas.ui.atom_coords_access import (
     atom_coords_3d_for,
     set_atom_coords_3d_for_id,
@@ -10,9 +11,11 @@ from chemvas.ui.atom_label_access import atom_label_service
 from chemvas.ui.canvas_atom_graphics_state import atom_dots_for, atom_items_for
 from chemvas.ui.canvas_mark_registry import mark_registry_for
 from chemvas.ui.canvas_model_access import atom_for_id
+from chemvas.ui.canvas_rotation_state import rotation_state_for
 from chemvas.ui.canvas_service_ports import history_hit_testing_service_for
 from chemvas.ui.mark_item_access import set_mark_center_for
 from chemvas.ui.move_access import move_service_from_canvas
+from chemvas.ui.renderer_style_access import bond_length_px_for
 from chemvas.ui.selection_rotation_access import update_ring_fills_for_atoms_for
 from chemvas.ui.selection_service_access import refresh_selection_outline_for
 
@@ -32,14 +35,27 @@ def set_atom_positions_for_history(
         atom = atom_for_id(canvas, atom_id)
         if atom is None:
             continue
+        dx, dy = x - atom.x, y - atom.y
         atom.x = x
         atom.y = y
         atom_ids.add(atom_id)
         if coords_3d is not None and atom_id in coords_3d:
             set_atom_coords_3d_for_id(canvas, atom_id, coords_3d[atom_id])
         elif atom_id in atom_coords_3d_for(canvas):
-            _, _, z = atom_coords_3d_for(canvas)[atom_id]
-            set_atom_coords_3d_for_id(canvas, atom_id, (x, y, z))
+            # Screen coordinates are not world coordinates at nonzero depth.
+            # Preserve both depth and any pre-existing stale projection residual,
+            # exactly as the ordinary move path does.
+            set_atom_coords_3d_for_id(
+                canvas,
+                atom_id,
+                translate_projected_point_3d(
+                    atom_coords_3d_for(canvas)[atom_id],
+                    dx,
+                    dy,
+                    bond_length_px=bond_length_px_for(canvas),
+                    center_3d=rotation_state_for(canvas).projection_center_3d,
+                ),
+            )
         label = atom_items_for(canvas).get(atom_id)
         if label is not None:
             label_service.position_label(label, x, y)

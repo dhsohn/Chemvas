@@ -5,7 +5,7 @@ from typing import override
 from PyQt6.QtCore import Qt
 
 from chemvas.core.tool_overlay_logic import activate_tool_no_drag
-from chemvas.ui.renderer_style_access import bond_length_px_for
+from chemvas.ui.mark_item_access import find_atom_for_mark_for
 from chemvas.ui.scene_decoration_access import add_mark_for, add_mark_for_atom_for
 from chemvas.ui.selection_service_access import (
     clear_note_selection_for,
@@ -28,11 +28,7 @@ class MarkTool(Tool):
         if event.button() != Qt.MouseButton.LeftButton:
             return False
         pos = self.context.scene_pos_from_event(event)
-        atom_id = self.context.find_atom_near(
-            pos.x(),
-            pos.y(),
-            bond_length_px_for(self.canvas) * 0.35,
-        )
+        atom_id = find_atom_for_mark_for(self.canvas, pos)
         if atom_id is not None:
             add_mark_for_atom_for(self.canvas, atom_id, pos)
         else:

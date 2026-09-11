@@ -64,3 +64,19 @@ def test_terminal_hydrides_require_one_single_attachment_and_no_electronic_marks
                 )
                 is None
             )
+
+
+def test_abbreviations_reject_multiple_attachment_bond_orders():
+    from chemvas.domain.atom_aliases import (
+        ATOM_ALIAS_DEFINITIONS,
+        alias_attachment_error,
+    )
+
+    for label in ATOM_ALIAS_DEFINITIONS:
+        for order in (2, 3):
+            error = alias_attachment_error(
+                label,
+                atom_id=7,
+                attachments=(AliasAttachment("C", order, "single"),),
+            )
+            assert error and label in error and "7" in error and "single" in error

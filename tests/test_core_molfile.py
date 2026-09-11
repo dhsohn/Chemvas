@@ -11,6 +11,8 @@ from chemvas.core.molfile import (
 )
 from chemvas.domain.atom_aliases import ATOM_ALIAS_DEFINITIONS
 from chemvas.domain.document import MoleculeModel
+from chemvas.domain.document.state import VALID_BOND_STYLES
+from chemvas.features.rendering import style_for_existing_bond_overlay
 
 try:
     from rdkit import Chem as _RealChem
@@ -54,6 +56,21 @@ def _benzene() -> MoleculeModel:
 
 
 class MolfileWriterTest(unittest.TestCase):
+    def test_every_supported_dotted_contact_is_rejected(self) -> None:
+        overlay = style_for_existing_bond_overlay("double_outer", 2, "dotted", 1)
+        self.assertEqual(overlay, ("dotted_double_outer", 2))
+        styles = sorted(
+            style for style in VALID_BOND_STYLES if style.startswith("dotted")
+        )
+        self.assertIn(overlay[0], styles)
+        for style in styles:
+            with self.subTest(style=style):
+                model = _ethanol()
+                model.bonds[0].style = style
+                model.bonds[0].order = 1 if style == "dotted" else 2
+                with self.assertRaisesRegex(MolfileError, "contact"):
+                    write_molfile(model)
+
     def test_counts_line_and_terminator(self) -> None:
         block = write_molfile(_ethanol())
         lines = block.splitlines()

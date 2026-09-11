@@ -314,7 +314,7 @@ def test_arrow_dash_hit_target_gap_uses_actual_paint() -> None:
         assert check_canvas_layout(canvas)["counts"]["arrow-structure-overlap"] == 1
 
 
-def test_atom_label_hit_rectangle_gap_uses_actual_paint() -> None:
+def test_atom_label_hit_halo_gap_uses_actual_paint() -> None:
     state = _state(
         {7: Atom("N", 0.0, 0.0)},
         arrows=[{"kind": "arrow", "start": [-10.0, 0.0], "end": [10.0, 0.0]}],
@@ -322,6 +322,8 @@ def test_atom_label_hit_rectangle_gap_uses_actual_paint() -> None:
     with offscreen_canvas(state, command="test-layout") as (canvas, _):
         atom = atom_items_for(canvas)[7]
         point = atom.boundingRect().topLeft() + QPointF(0.5, 0.5)
+        assert not atom.contains(point)  # Text-document padding is not a target.
+        atom.set_hit_radius(32)  # An input-only halo must not become painted ink.
         assert atom.shape().contains(point)
         assert _rendered_alpha_near(atom, point) == 0
         arrow = arrow_items_for(canvas)[0]

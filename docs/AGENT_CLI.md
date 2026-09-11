@@ -110,6 +110,8 @@ Arrows require `kind`, `start`, and `end`; optional fields are `control`, `doubl
 `curved_single` and `curved_double`, an omitted `double` flag is derived from
 `kind`; an explicit contradictory flag is rejected. An explicit `control`
 sets the curve's control point; omission keeps the native default curve.
+Only curved arrows accept `control`; other kinds reject it rather than discard it
+on desktop Save. Composition and Graph Patch trim surrounding element whitespace.
 Per-arrow color is stored in the native document and selection clipboard.
 Older Chemvas releases without this field cannot read documents that contain it;
 existing documents without arrow colors remain supported.
@@ -415,6 +417,9 @@ requires a complete atomic reactant/product review pair whose profile, shared
 source/environment provenance, and electronic graph/plan basis still match the
 candidate graph. A patch that would make it stale produces no output.
 `move_atom` also moves dependent ring-fill, bound-mark, and perspective coordinates.
+Its screen-space movement preserves stored depth and the camera projection.
+`remove_bond` removes any ring fill whose cycle contains that edge; it preserves
+unrelated fills and still rejects invalid Calculation Plan references.
 
 `set_terminal_angle` is a limited alternative to handwritten terminal coordinates:
 
@@ -501,7 +506,14 @@ status stays blocked until every included atom on both endpoints has a complete
 one-to-one source map. This status covers the source mapping gate; RDKit geometry
 generation and downstream chemical review are still separate requirements.
 The labels are temporary overlays: closing the dialog removes them without
-changing the drawing, the current canvas selection, or undo history.
+changing the drawing or the current canvas selection. Overlay removal adds no
+history entry; an accepted plan change does, and supports Undo/Redo. Accepting
+an unchanged plan preserves its ordering and reviewed geometry. A charge-only
+correction to a shared state retains its membership and multiplicity but clears
+all reviews tied to the old plan basis. If a graph edit invalidates stored
+component references, the editor keeps the plan and asks you to undo that edit
+or attach a repaired plan; it does not silently start over. Save also asks before
+keeping an inconsistent draft or omitting a topologically stale plan.
 
 Agents can attach and inspect the same contract without Qt:
 

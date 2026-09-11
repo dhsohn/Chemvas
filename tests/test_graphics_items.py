@@ -53,7 +53,9 @@ class GraphicsItemsTest(unittest.TestCase):
         self.assertFalse(item._typographic)
         self.assertRectAlmostEqual(item._hit_rect(), base_rect)
         self.assertRectAlmostEqual(item.boundingRect(), base_rect)
-        self.assertRectAlmostEqual(item.shape().boundingRect(), base_rect)
+        self.assertRectAlmostEqual(
+            item.shape().boundingRect(), item.glyph_path().boundingRect()
+        )
 
     def test_atom_label_item_with_subscript_uses_layout_bounds(self) -> None:
         item = AtomLabelItem("CH3", hit_padding=0.0, hit_radius=None)

@@ -151,6 +151,13 @@ def write_molfile(
             f"(this drawing has {len(atom_ids)} atoms and {len(bonds)} bonds). "
             "Export a smaller selection instead."
         )
+    for bond in bonds:
+        if bond.style in {"dotted", "dotted_double", "dotted_double_outer"}:
+            raise MolfileError(
+                "Cannot export to MOL: dotted contacts cannot be represented as "
+                "ordinary covalent bonds. Export a drawing of the covalent "
+                "structure without contacts instead."
+            )
     _reject_non_element_labels(model, atom_ids)
     scale = _coordinate_scale(model, bonds)
     center_x, center_y = _coordinate_center(model, atom_ids)

@@ -11,13 +11,16 @@ from PyQt6.QtWidgets import QGraphicsItem, QGraphicsScene
 
 from chemvas.core.history import (
     HistoryCommand,
+    SetAtomPositionsCommand,
     capture_history_transaction_for_command,
+    history_transaction_scope,
     release_history_transaction_for_command,
     restore_history_transaction_for_command,
 )
 from chemvas.domain.transactions import add_recovery_error_note, run_rollback_step
-from chemvas.ui.atom_coords_access import atom_coords_3d_for_id
+from chemvas.ui.atom_coords_access import atom_coords_3d_for_id, pop_atom_coords_3d_for
 from chemvas.ui.atom_label_access import add_or_update_atom_label
+from chemvas.ui.canvas_calculation_plan_state import set_calculation_plan_for
 from chemvas.ui.canvas_group_state import (
     CanvasSceneGroup,
     group_state_for,
@@ -53,6 +56,7 @@ from chemvas.ui.scene_item_access import (
     restore_scene_item as _restore_scene_item,
 )
 from chemvas.ui.scene_item_state import scene_item_state_for
+from chemvas.ui.scene_signal_blocking import blocked_scene_signals
 from chemvas.ui.transactions.scene_rect import (
     capture_scene_rect_snapshot,
     release_scene_rect_snapshot,
@@ -270,6 +274,40 @@ def _restore_raw_move_item_state(
 
 
 @dataclass
+class SetCalculationPlanCommand(HistoryCommand):
+    history_transaction_snapshot_covers_state = True
+    history_transaction_owns_exact_state = True
+
+    before_state: dict[str, object] | None
+    after_state: dict[str, object] | None
+
+    def _apply(self, canvas, state, rollback_state) -> None:
+        transaction = capture_history_transaction_for_command(canvas)
+        try:
+            set_calculation_plan_for(canvas, state)
+            release_history_transaction_for_command(canvas, transaction)
+        except Exception as original_error:
+            result = restore_history_transaction_for_command(
+                canvas, transaction, original_error
+            )
+            if result.fallback_to_inverse:
+                run_rollback_step(
+                    original_error,
+                    "restoring the previous calculation plan",
+                    lambda: set_calculation_plan_for(canvas, rollback_state),
+                )
+            raise
+
+    @override
+    def undo(self, canvas) -> None:
+        self._apply(canvas, self.before_state, self.after_state)
+
+    @override
+    def redo(self, canvas) -> None:
+        self._apply(canvas, self.after_state, self.before_state)
+
+
+@dataclass
 class MoveItemsCommand(HistoryCommand):
     history_transaction_snapshot_covers_state = True
     history_transaction_owns_exact_state = True
@@ -437,6 +475,70 @@ class UpdateSceneItemCommand(HistoryCommand):
     @override
     def redo(self, canvas) -> None:
         self._apply(canvas, self.after_state, self.before_state)
+
+
+@dataclass
+class SetSceneGeometryCommand(HistoryCommand):
+    """Exact geometry payload; dependent items follow atoms in both directions.
+
+    This is a selected-geometry command, not a savepoint. Failure recovery and
+    stack policy still belong to the shared document/history transaction owner.
+    """
+
+    history_transaction_snapshot_covers_state = True
+    history_transaction_owns_exact_state = True
+
+    atom_commands: list[SetAtomPositionsCommand]
+    item_commands: list[UpdateSceneItemCommand]
+
+    def _apply_geometry(self, canvas, *, undo: bool) -> None:
+        with history_transaction_scope(canvas), blocked_scene_signals(canvas.scene()):
+            atom_commands = reversed(self.atom_commands) if undo else self.atom_commands
+            for command in atom_commands:
+                positions = (
+                    command.before_positions if undo else command.after_positions
+                )
+                coords = command.before_coords_3d if undo else command.after_coords_3d
+                # Our command records the full inventory for its positioned atoms,
+                # unlike the general setter's optional partial coordinate update.
+                if coords is not None:
+                    for atom_id in positions.keys() - coords.keys():
+                        pop_atom_coords_3d_for(canvas, atom_id)
+                if undo:
+                    command.undo(canvas)
+                else:
+                    command.redo(canvas)
+            item_commands = reversed(self.item_commands) if undo else self.item_commands
+            for item_command in item_commands:
+                state = item_command.before_state if undo else item_command.after_state
+                _apply_scene_item_state(canvas, item_command.item, state)
+                _clear_handles_for_target(canvas, item_command.item)
+        refresh_selection_outline_for_canvas(canvas)
+
+    def _apply(self, canvas, *, undo: bool) -> None:
+        transaction = capture_history_transaction_for_command(canvas)
+        try:
+            self._apply_geometry(canvas, undo=undo)
+            release_history_transaction_for_command(canvas, transaction)
+        except Exception as original_error:
+            result = restore_history_transaction_for_command(
+                canvas, transaction, original_error
+            )
+            if result.fallback_to_inverse:
+                run_rollback_step(
+                    original_error,
+                    "restoring the previous selection geometry",
+                    lambda: self._apply_geometry(canvas, undo=not undo),
+                )
+            raise
+
+    @override
+    def undo(self, canvas) -> None:
+        self._apply(canvas, undo=True)
+
+    @override
+    def redo(self, canvas) -> None:
+        self._apply(canvas, undo=False)
 
 
 @dataclass
@@ -783,6 +885,8 @@ __all__ = [
     "DeleteSceneItemsCommand",
     "GroupSceneItemsCommand",
     "MoveItemsCommand",
+    "SetCalculationPlanCommand",
+    "SetSceneGeometryCommand",
     "UngroupSceneItemsCommand",
     "UpdateSceneItemCommand",
 ]

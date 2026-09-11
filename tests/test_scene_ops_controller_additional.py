@@ -7,12 +7,10 @@ from PyQt6.QtCore import QPointF, QRectF
 from PyQt6.QtWidgets import QApplication
 
 from chemvas.core.history import (
-    CompositeCommand,
-    MoveAtomsCommand,
     SetAtomPositionsCommand,
 )
 from chemvas.domain.document import Atom
-from chemvas.ui.history_commands import MoveItemsCommand, UpdateSceneItemCommand
+from chemvas.ui.history_commands import SetSceneGeometryCommand, UpdateSceneItemCommand
 from chemvas.ui.scene_flip_geometry import (
     center_for_flip_group,
     flip_bounds_for_item,
@@ -174,7 +172,7 @@ class SceneOpsControllerAdditionalTest(unittest.TestCase):
         controller.flip_selected_items(horizontal=True)
 
         self.assertEqual(len(canvas.pushed_commands), 1)
-        self.assertIsInstance(canvas.pushed_commands[0], CompositeCommand)
+        self.assertIsInstance(canvas.pushed_commands[0], SetSceneGeometryCommand)
         self.assertEqual(canvas.update_selection_outline_calls, 1)
         self.assertEqual(
             (canvas.model.atoms[atom_1_id].x, canvas.model.atoms[atom_1_id].y),
@@ -207,7 +205,10 @@ class SceneOpsControllerAdditionalTest(unittest.TestCase):
         controller.rotate_selected_items(90.0)
 
         self.assertEqual(len(canvas.pushed_commands), 1)
-        self.assertIsInstance(canvas.pushed_commands[0], SetAtomPositionsCommand)
+        self.assertIsInstance(canvas.pushed_commands[0], SetSceneGeometryCommand)
+        self.assertIsInstance(
+            canvas.pushed_commands[0].atom_commands[0], SetAtomPositionsCommand
+        )
         self.assertEqual(canvas.update_selection_outline_calls, 1)
         # Rotating (0,0) and (20,0) by 90deg around their center (10,0).
         self.assertAlmostEqual(canvas.model.atoms[atom_1_id].x, 10.0)
@@ -244,7 +245,9 @@ class SceneOpsControllerAdditionalTest(unittest.TestCase):
         # move, but its mark must still rotate 90deg CW: above -> right of atom.
         self.assertEqual(len(canvas.pushed_commands), 1)
         command = canvas.pushed_commands[0]
-        self.assertIsInstance(command, UpdateSceneItemCommand)
+        self.assertIsInstance(command, SetSceneGeometryCommand)
+        self.assertEqual(command.atom_commands, [])
+        self.assertIsInstance(command.item_commands[0], UpdateSceneItemCommand)
         after_state = mark_item.data(9)
         self.assertAlmostEqual(after_state["x"], 5.0)
         self.assertAlmostEqual(after_state["y"], 0.0)
@@ -265,9 +268,15 @@ class SceneOpsControllerAdditionalTest(unittest.TestCase):
 
         self.assertEqual(len(canvas.pushed_commands), 1)
         command = canvas.pushed_commands[0]
-        self.assertIsInstance(command, MoveAtomsCommand)
-        self.assertEqual(command.atom_ids, {atom_1_id, atom_2_id})
-        self.assertEqual((command.dx, command.dy), (10.0, -5.0))
+        self.assertIsInstance(command, SetSceneGeometryCommand)
+        self.assertEqual(
+            command.atom_commands[0].before_positions,
+            {atom_1_id: (0.0, 0.0), atom_2_id: (20.0, 0.0)},
+        )
+        self.assertEqual(
+            command.atom_commands[0].after_positions,
+            {atom_1_id: (10.0, -5.0), atom_2_id: (30.0, -5.0)},
+        )
         self.assertEqual(
             (canvas.model.atoms[atom_1_id].x, canvas.model.atoms[atom_1_id].y),
             (10.0, -5.0),
@@ -294,10 +303,9 @@ class SceneOpsControllerAdditionalTest(unittest.TestCase):
 
         self.assertEqual(len(canvas.pushed_commands), 1)
         command = canvas.pushed_commands[0]
-        self.assertIsInstance(command, CompositeCommand)
-        self.assertIsInstance(command.commands[0], MoveAtomsCommand)
-        self.assertIsInstance(command.commands[1], MoveItemsCommand)
-        self.assertEqual(command.commands[1].items, [arrow_item])
+        self.assertIsInstance(command, SetSceneGeometryCommand)
+        self.assertIsInstance(command.atom_commands[0], SetAtomPositionsCommand)
+        self.assertEqual([entry.item for entry in command.item_commands], [arrow_item])
         self.assertEqual(
             (canvas.model.atoms[atom_id].x, canvas.model.atoms[atom_id].y), (10.0, 0.0)
         )
@@ -313,8 +321,9 @@ class SceneOpsControllerAdditionalTest(unittest.TestCase):
 
         self.assertEqual(len(canvas.pushed_commands), 1)
         command = canvas.pushed_commands[0]
-        self.assertIsInstance(command, MoveItemsCommand)
-        self.assertEqual(command.items, [note_item])
+        self.assertIsInstance(command, SetSceneGeometryCommand)
+        self.assertEqual(command.atom_commands, [])
+        self.assertEqual([entry.item for entry in command.item_commands], [note_item])
         self.assertEqual((note_item.pos().x(), note_item.pos().y()), (40.0, 20.0))
 
     def test_translate_selected_items_noop_without_offset_or_selection(self) -> None:
@@ -356,9 +365,9 @@ class SceneOpsControllerAdditionalTest(unittest.TestCase):
 
         self.assertEqual(len(canvas.pushed_commands), 1)
         command = canvas.pushed_commands[0]
-        self.assertIsInstance(command, CompositeCommand)
-        self.assertIsInstance(command.commands[0], SetAtomPositionsCommand)
-        self.assertIsInstance(command.commands[1], UpdateSceneItemCommand)
+        self.assertIsInstance(command, SetSceneGeometryCommand)
+        self.assertIsInstance(command.atom_commands[0], SetAtomPositionsCommand)
+        self.assertIsInstance(command.item_commands[0], UpdateSceneItemCommand)
         # Combined selection center is (25, 10): atoms span x 0..20 and the
         # arrow bounds span (30..50, 10..20).
         self.assertAlmostEqual(canvas.model.atoms[atom_1_id].x, 35.0)
@@ -410,7 +419,9 @@ class SceneOpsControllerAdditionalTest(unittest.TestCase):
 
         self.assertEqual(len(canvas.pushed_commands), 1)
         command = canvas.pushed_commands[0]
-        self.assertIsInstance(command, UpdateSceneItemCommand)
+        self.assertIsInstance(command, SetSceneGeometryCommand)
+        self.assertEqual(command.atom_commands, [])
+        self.assertIsInstance(command.item_commands[0], UpdateSceneItemCommand)
         arrow_state = arrow_item.data(9)
         self.assertAlmostEqual(arrow_state["start"][0], 45.0)
         self.assertAlmostEqual(arrow_state["start"][1], 5.0)

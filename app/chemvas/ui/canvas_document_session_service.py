@@ -30,6 +30,7 @@ from chemvas.domain.transactions import add_recovery_error_note
 from chemvas.features.export import supports_minimum_font_check
 from chemvas.ui.canvas_calculation_plan_state import set_calculation_plan_for
 from chemvas.ui.canvas_document_export_access import export_canvas_scene_for
+from chemvas.ui.canvas_document_metadata_state import set_document_source_sha256_for
 from chemvas.ui.canvas_document_state import (
     apply_document_settings,
     restore_document_groups,
@@ -722,7 +723,8 @@ class CanvasDocumentSessionService:
             msg = "Chemvas documents must use the .chemvas filename extension."
             raise ValueError(msg)
         state, warnings = self.snapshot_state_with_warnings()
-        write_document(path, state, file_format_version_for(self.canvas))
+        document = write_document(path, state, file_format_version_for(self.canvas))
+        set_document_source_sha256_for(self.canvas, document.source_sha256)
         return warnings
 
     def _build_xyz_payload(self, *, selected_only: bool = False):
@@ -822,8 +824,6 @@ class CanvasDocumentSessionService:
 
         fmt = fmt.lower()
         target = Path(path)
-        guard_plan = None
-        width_pixels, height_pixels = None, None
         if min_font_pt is not None:
             if not supports_minimum_font_check(fmt, scope):
                 raise ValueError(
@@ -835,17 +835,12 @@ class CanvasDocumentSessionService:
                 or min_font_pt <= 0.0
             ):
                 raise ValueError("minimum font size must be a positive finite number")
-        if (
-            max_height_mm is not None
-            or min_font_pt is not None
-            or target_width_mm is not None
-        ):
-            guard_plan = self.plan_figure_export(
-                scope=scope, sizing=sizing, target_width_mm=target_width_mm
-            )
-            width_pixels, height_pixels = validate_export_budget(
-                guard_plan, output_format=fmt, dpi=dpi, max_height_mm=max_height_mm
-            )
+        guard_plan = self.plan_figure_export(
+            scope=scope, sizing=sizing, target_width_mm=target_width_mm
+        )
+        width_pixels, height_pixels = validate_export_budget(
+            guard_plan, output_format=fmt, dpi=dpi, max_height_mm=max_height_mm
+        )
 
         def render_to_temp(tmp: Path) -> None:
             export_canvas_scene_for(
@@ -860,7 +855,7 @@ class CanvasDocumentSessionService:
                 unit_scale=unit_scale,
                 target_width_pt=target_width_pt,
             )
-            if min_font_pt is not None and guard_plan is not None:
+            if min_font_pt is not None:
                 assess_export_readability(
                     self.canvas,
                     guard_plan,

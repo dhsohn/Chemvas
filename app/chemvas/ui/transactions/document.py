@@ -85,6 +85,7 @@ _DELETE_MUTATED_RUNTIME_FIELDS = (
     "rotation_state",
     "smiles_input_state",
     "history_state",
+    "calculation_plan_state",
 )
 
 

@@ -83,6 +83,11 @@ its knob, flip, align, and distribute.
   through exactly one single bond, including wedge/hash. Use an element label
   for a charged or radical atom; these hydride aliases reject those annotations.
   Other aliases do not provide identifiers. SMILES insertion keeps element labels.
+- **Charge marks** — over an atom, `+` / `-` changes its charge by one: an opposite bound charge
+  mark is removed first; otherwise a new mark is placed without overlapping
+  its existing marks. Each shortcut is one undoable edit. Radical and free
+  marks are left alone. Bound marks can be selected, moved, or erased without
+  selecting their atom; the Mark tool previews the same binding its click uses.
 - **Snap to grid** — **View ▸ Snap to Grid** shows a faint grid of half a bond
   length on the sheet and snaps the points arrows and lines are drawn at, and
   the ends dragged with their endpoint handles, curved arrows included, onto
@@ -98,7 +103,8 @@ its knob, flip, align, and distribute.
   select / move, an eraser tool (click or drag to erase; atoms a
   deletion leaves with no bond and nothing visible — no label or mark — are
   removed with it), horizontal & vertical flip, perspective rotation, and
-  delta-based undo/redo.
+  undo/redo. Nudging and aligning selections restore their recorded coordinates
+  exactly, including existing perspective depth.
   With Select, press near a line or arrow's stroke to select it and keep
   dragging to move it in the same gesture. The click margin is measured on
   screen, independent of zoom; a curve's interior is not treated as a filled
@@ -124,6 +130,12 @@ Calculation Plan v2 with bounded precomplex candidates, exact XYZ provenance,
 and explicit endpoint review selections. Earlier document versions and
 Calculation Plan v1 payloads are rejected.
 
+Opening or inserting a drawing preserves overlapping atoms: move or edit them
+on the canvas to correct the layout. Save asks before replacing a file changed
+outside Chemvas, or a recovered document's original file when its saved baseline
+is unknown. Choose No and use Save As to keep both versions. This detects observed
+file changes; it is not a cross-process editing lock.
+
 Chemvas drawings must use the `.chemvas` suffix. Desktop startup arguments, OS
 file-open events, **File ▸ Open**, **Open Recent**, and clean-session reopening
 all reject or ignore `.json` drawing paths; **Save** and **Save As** publish
@@ -147,6 +159,28 @@ reported a warning. It keeps the last good snapshot and shows a persistent
 status-bar warning instead; the warning clears only after a later autosave
 succeeds without warnings.
 
+In sessions confirmed to have stopped, unreadable dirty snapshots and orphaned
+snapshot payloads are retained with a warning, not silently pruned. If ownership
+cannot be established, damaged sessions may be kept without a warning.
+Multiple dirty recoveries of one file are kept;
+additional versions open as unsaved recovered copies without the original path.
+
+Quit resolves Save / Discard / Cancel for all windows before closing any of
+them, then preserves the complete final saved-file reopen list without
+re-serializing discarded drafts. Discarded untitled drawings are not reopened.
+Cancelling or a failed save leaves the windows open. Restored untitled drawings
+receive distinct names.
+File Open and Open Recent reuse an existing blank drawing when possible.
+Imported drawings with content are not blank targets. OS file-open requests
+during Quit are declined with a status message; retry after cancelling Quit or
+restarting Chemvas. They are not queued for automatic reopening.
+
+If the writable app-data location changes, Chemvas also checks its known
+alternate locations for abandoned recovery snapshots. A persistent warning
+gives their location and recovery steps; these snapshots are neither merged
+nor deleted automatically. Copy a `doc-*.json` snapshot to a new `.chemvas`
+file and open that copy, keeping the original recovery file intact.
+
 Unsaved tabs show a `●` marker, the File menu keeps an **Open Recent** list, and
 reopening an already-open file switches to its window instead of duplicating it.
 
@@ -162,6 +196,13 @@ version availability.
 Figure export defaults to plain SVG without Chemvas source metadata. Choose
 **Editable Chemvas SVG** only when you want the SVG to carry the original
 document payload for round-tripping back into Chemvas.
+
+All GUI export presets enforce the same size limits as `render-document`:
+14,400 points per side, and for PNG/TIFF at most 10,000 pixels per side and
+25 million pixels in total. Oversized output is rejected before painting and
+leaves any existing destination unchanged. PDF pages use custom whole-point
+dimensions rather than snapping to nearby standard paper sizes; the drawing
+fits that page with its aspect ratio preserved.
 
 ## Chemistry I/O
 
@@ -187,6 +228,14 @@ Single, double, and triple bonds are supported, including aromatic structures
 that RDKit can Kekulize into those bond orders. Other bond types, such as dative,
 unspecified, and quadruple bonds, are refused rather than approximated. Aromatic
 input that cannot be represented by Kekulization is also refused.
+
+Explicitly drawn hydrogens count toward normal valence; they do not disable all
+remaining implicit hydrogens. For example, unmarked O–H is completed to water;
+use a radical mark when a hydroxyl radical is intended. Abbreviations require
+supported single-bond attachments. Dotted and dotted-double contacts remain
+editable drawing objects, but chemical identifiers, MOL/XYZ, 3D conversion and
+calculation conversion reject selections containing them instead of treating
+them as covalent bonds.
 
 ### MOL interchange
 

@@ -22,9 +22,10 @@ if TYPE_CHECKING:
 # ignored here.
 _snapshot_hook: Callable[[], object] | None = None
 
-# Set once app-wide quit begins (aboutToQuit). A window close deferred snapshot
-# checks it so quit-driven closes never truncate the open-set manifest.
+# Set after app-wide Quit confirmation, before windows close (or when the last
+# ordinary window closes). All snapshot paths then preserve the final open set.
 _quitting = False
+_quit_preparing = False
 
 
 def set_snapshot_hook(hook: Callable[[], object] | None) -> None:
@@ -41,10 +42,21 @@ def is_quitting() -> bool:
     return _quitting
 
 
+def is_quit_pending() -> bool:
+    """Block incoming document opens during close prompts and final shutdown."""
+    return _quit_preparing or _quitting
+
+
+def set_quit_preparing(preparing: bool) -> None:
+    global _quit_preparing
+    _quit_preparing = preparing
+
+
 def reset_quitting() -> None:
     """Test-only: clear the process-wide quitting flag between tests."""
-    global _quitting
+    global _quitting, _quit_preparing
     _quitting = False
+    _quit_preparing = False
 
 
 def snapshot_unless_quitting() -> None:
@@ -63,10 +75,12 @@ def request_snapshot() -> None:
 
 
 __all__ = [
+    "is_quit_pending",
     "is_quitting",
     "mark_quitting",
     "request_snapshot",
     "reset_quitting",
+    "set_quit_preparing",
     "set_snapshot_hook",
     "snapshot_unless_quitting",
 ]

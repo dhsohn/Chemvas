@@ -41,13 +41,18 @@ from chemvas.ui.history_canvas_access import (
     MoveGestureScope,
     capture_history_transaction_for_history,
 )
-from chemvas.ui.history_commands import MoveItemsCommand
+from chemvas.ui.history_commands import (
+    MoveItemsCommand,
+    SetSceneGeometryCommand,
+    UpdateSceneItemCommand,
+)
 from chemvas.ui.move_access import (
     move_atoms_for,
     move_item_for,
     shift_selection_outlines_for,
 )
 from chemvas.ui.scene_decoration_build_access import show_connect_mark_for
+from chemvas.ui.scene_item_state import scene_item_state_for
 from chemvas.ui.selection_collection_access import independent_selection_items
 from chemvas.ui.selection_outline_state import selection_outlines_for
 from chemvas.ui.selection_service_access import refresh_selection_outline_for
@@ -84,6 +89,7 @@ class _DragTransactionToken:
     history_service: Any
     savepoint: Any | None = None
     pushed: bool = False
+    before_mark_states: tuple[tuple[Any, dict], ...] | None = None
 
 
 class SelectionDragMixin:
@@ -422,6 +428,15 @@ class SelectionDragMixin:
                 token,
                 move_scope_factory=self._selection_move_scope,
             )
+            if token.before_mark_states is None:
+                # A charge's bound offset must undo exactly: subtracting the
+                # accumulated pointer delta can leave a dirty float residual.
+                # Marks belonging to moved atoms are not independent items.
+                token.before_mark_states = tuple(
+                    (item, scene_item_state_for(self.canvas, item))
+                    for item in self._selection_items
+                    if item.data(0) == "mark"
+                )
             if not self._suspended_outline:
                 self.context.suspend_selection_outline(True)
             self._suspended_outline = True
@@ -467,12 +482,30 @@ class SelectionDragMixin:
                     else None,
                 )
             )
-        if self._selection_items:
+        relative_items = [
+            item for item in self._selection_items if item.data(0) != "mark"
+        ]
+        if relative_items:
             commands.append(
                 MoveItemsCommand(
-                    items=list(self._selection_items),
+                    items=relative_items,
                     dx=self._total_delta.x(),
                     dy=self._total_delta.y(),
+                )
+            )
+        if any(item.data(0) == "mark" for item in self._selection_items):
+            token = self._require_drag_token()
+            if token.before_mark_states is None:
+                raise RuntimeError("The charge drag has no recorded starting state.")
+            commands.append(
+                SetSceneGeometryCommand(
+                    atom_commands=[],
+                    item_commands=[
+                        UpdateSceneItemCommand(
+                            item, before, scene_item_state_for(self.canvas, item)
+                        )
+                        for item, before in token.before_mark_states
+                    ],
                 )
             )
         if not commands:
@@ -483,6 +516,11 @@ class SelectionDragMixin:
 
     def _commit_selection_drag(self) -> None:
         self._require_drag_token()
+        if self._moved and not self._drag_has_net_movement():
+            # Returning to the press point is a no-op, not an unrecorded float
+            # residual. Reuse the gesture's existing scoped rollback owner.
+            self._cancel_selection_drag()
+            return
         boundary_bond_ids = tuple(self._drag_boundary_bond_ids or ())
 
         def commit(owner: _DragTransactionToken) -> None:

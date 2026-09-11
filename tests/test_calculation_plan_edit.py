@@ -135,6 +135,79 @@ def test_edit_keeps_shared_state_protection() -> None:
         )
 
 
+def test_shared_state_charge_can_be_repaired_after_a_graph_charge_edit() -> None:
+    state = _document_state()
+    raw_plan = _plan()
+    second_step = deepcopy(raw_plan["steps"][0])
+    second_step["id"] = "S02"
+    raw_plan["steps"].append(second_step)
+    state["calculation_plan"] = raw_plan
+    state["marks"] = [{"kind": "plus", "atom_id": 0}]
+    _inventory, plan = prepare_calculation_step_editor(state)
+    assert plan is not None
+
+    accepted = apply_calculation_step_edit(
+        state,
+        current_plan=plan,
+        selected_step_id="S01",
+        reactant_state=replace(plan.states[0], charge=1),
+        product_state=plan.states[1],
+        step=plan.steps[0],
+    )
+
+    assert {step.id for step in accepted.steps} == {"S01", "S02"}
+    assert next(item for item in accepted.states if item.id == "R01").charge == 1
+    validate_calculation_plan(state, calculation_plan_to_state(accepted))
+
+
+def test_equal_endpoint_ids_report_the_actual_error() -> None:
+    state = _document_state()
+    plan = validate_calculation_plan(state, _plan())
+    step = replace(
+        plan.steps[0], product=replace(plan.steps[0].product, state_id="R01")
+    )
+    with pytest.raises(ValueError, match="must connect two different states"):
+        apply_calculation_step_edit(
+            state,
+            current_plan=None,
+            selected_step_id=None,
+            reactant_state=plan.states[0],
+            product_state=replace(plan.states[1], id="R01"),
+            step=step,
+        )
+
+
+@pytest.mark.parametrize("ordered_field", ["members", "roles", "correspondence"])
+def test_reordered_noop_keeps_original_plan_and_review(
+    reviewed_state: dict, ordered_field: str
+) -> None:
+    plan = calculation_plan_for_document(reviewed_state)
+    reactant = plan.states[0]
+    step = plan.steps[0]
+    if ordered_field == "members":
+        reactant = replace(reactant, members=tuple(reversed(reactant.members)))
+    elif ordered_field == "roles":
+        step = replace(
+            step,
+            reactant=replace(step.reactant, roles=tuple(reversed(step.reactant.roles))),
+        )
+    else:
+        step = replace(
+            step, atom_correspondence=tuple(reversed(step.atom_correspondence))
+        )
+
+    accepted = apply_calculation_step_edit(
+        reviewed_state,
+        current_plan=plan,
+        selected_step_id="S01",
+        reactant_state=reactant,
+        product_state=plan.states[1],
+        step=step,
+    )
+
+    assert calculation_plan_to_state(accepted) == reviewed_state["calculation_plan"]
+
+
 def test_noop_edit_preserves_both_reviewed_endpoints_without_mutating_input(
     reviewed_state: dict,
 ) -> None:
@@ -222,3 +295,55 @@ def test_reviewed_report_reuses_inventory_for_both_endpoint_basis_checks(
 
     assert report["steps"][0]["path_precheck"]["ready_for_path_endpoints"] is True
     assert model_construction.call_count == 1
+
+
+def test_noop_edit_keeps_state_and_step_order_in_a_multistep_plan() -> None:
+    state = _document_state()
+    raw_plan = _plan()
+    second = deepcopy(raw_plan["steps"][0])
+    second["id"] = "S02"
+    raw_plan["steps"].append(second)
+    raw_plan["states"].reverse()
+    plan = validate_calculation_plan(state, raw_plan)
+    accepted = apply_calculation_step_edit(
+        state,
+        current_plan=plan,
+        selected_step_id="S01",
+        reactant_state=plan.states[1],
+        product_state=plan.states[0],
+        step=plan.steps[0],
+    )
+    assert calculation_plan_to_state(accepted) == raw_plan
+
+
+def test_shared_charge_correction_drops_reviews_and_rejects_wrong_charge(
+    reviewed_state: dict,
+) -> None:
+    second = deepcopy(reviewed_state["calculation_plan"]["steps"][0])
+    second["id"] = "S02"
+    reviewed_state["calculation_plan"]["steps"].append(second)
+    reviewed_state["marks"] = [{"kind": "plus", "atom_id": 0}]
+    _inventory, plan = prepare_calculation_step_editor(reviewed_state)
+    assert plan is not None
+    with pytest.raises(ValueError, match="declares charge 2"):
+        apply_calculation_step_edit(
+            reviewed_state,
+            current_plan=plan,
+            selected_step_id="S01",
+            reactant_state=replace(plan.states[0], charge=2),
+            product_state=plan.states[1],
+            step=plan.steps[0],
+        )
+    accepted = apply_calculation_step_edit(
+        reviewed_state,
+        current_plan=plan,
+        selected_step_id="S01",
+        reactant_state=replace(plan.states[0], charge=1),
+        product_state=plan.states[1],
+        step=plan.steps[0],
+    )
+    assert all(
+        endpoint.precomplex.kind == "none"
+        for step in accepted.steps
+        for endpoint in (step.reactant, step.product)
+    )

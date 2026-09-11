@@ -7,6 +7,56 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Lead the English README with the editable desktop-to-agent-to-desktop workflow.
+  Remove the duplicate static reaction-scheme image from both READMEs, keeping
+  the walkthrough GIF.
+
+### Fixed
+
+- Separate atom-label picking from document margins so nearby bonds and attached
+  charge marks remain editable. Charge shortcuts cancel an opposite mark or
+  place a non-overlapping new mark; Mark preview and click share their binding.
+- Record exact selection geometry for nudge/alignment Undo/Redo and preserve
+  existing perspective depth through 2D transforms. Batch selection refreshes
+  during movement and paste. Preserve exact independent-mark offsets on drag
+  Undo, and restore the existing savepoint when a drag returns to its origin.
+- Resolve all Quit prompts before closing windows and preserve the final complete
+  session list. Keep restored untitled names distinct, retain the recovery notice
+  through startup, and reuse blank drawings for File Open / Open Recent. Warn
+  about abandoned snapshots in alternate app-data locations without consuming them.
+  Decline new OS file opens during Quit; imported nonempty drawings are not reused
+  as blank windows. After all close prompts are accepted, remember saved paths
+  without requiring a new snapshot of discarded drafts or stale calculation plans.
+- Enforce figure-export size budgets for default and column presets as well as
+  explicit limits. Keep embedded PNG/JPEG text metadata out of rendered SVG
+  images while preserving the original bytes in editable documents. Use custom
+  PDF page sizes and fit painting to their rounded dimensions.
+- Keep bond ends outside the open interiors of atom-label glyphs such as C, N,
+  and H without using the labels' picking padding as drawing geometry.
+- Preserve overlapping atoms when opening, pasting, or inserting SMILES, so an
+  imperfect agent-produced drawing remains editable instead of losing atoms or
+  failing to open. Undo/Redo preserves the inserted and original graphs.
+- Confirm before saving over a file changed externally, or over the original
+  path of a recovered drawing with no verified saved-file baseline. Preserve
+  unreadable recovery snapshots for investigation and open additional dirty
+  recoveries of one path as unbound copies.
+- Make calculation-plan edits undoable and failure-atomic. Opening the editor
+  no longer replaces a topologically stale plan; shared-state charge corrections
+  are supported, no-op edits preserve order and reviews, identical endpoint IDs
+  are rejected, and mapping-table construction avoids repeated document scans.
+  Saving an inconsistent or stale plan now asks before writing or omitting it.
+- Preserve projected depth when Graph Patch moves an atom; remove only ring
+  fills invalidated by a removed cycle edge. Trim created/updated element labels
+  and reject composition control points on non-curved arrows.
+- Regenerate wedge/hash directions after abbreviation-expansion layout, preserve
+  remaining implicit hydrogens on partially explicit heteroatoms, and normalize
+  redundant MOL valence fields only when RDKit confirms an unchanged molecule.
+  Racemic CXSMILES flags, all supported dotted contacts (including outer double
+  variants) at chemical-conversion boundaries, and
+  unsupported multiple-bond abbreviation attachments are rejected explicitly.
+
 ## [0.12.0] - 2026-09-11
 
 ### Added

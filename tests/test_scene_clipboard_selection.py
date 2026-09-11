@@ -58,6 +58,8 @@ class SceneClipboardSelectionTest(unittest.TestCase):
         for item in (atom_item, stale_item, pasted_item, note_item):
             canvas.scene().addItem(item)
         stale_item.setSelected(True)
+        selection_changed = mock.Mock()
+        canvas.scene().selectionChanged.connect(selection_changed)
         clear_note_selection = mock.Mock()
         select_note = mock.Mock()
 
@@ -77,3 +79,27 @@ class SceneClipboardSelectionTest(unittest.TestCase):
         clear_note_selection.assert_called_once_with()
         select_note.assert_called_once_with(note_item)
         canvas.selection_controller.update_selection_outline.assert_called_once_with()
+        selection_changed.assert_not_called()
+        self.assertFalse(canvas.scene().signalsBlocked())
+
+    def test_paste_selection_restores_signal_block_state_after_note_failure(self):
+        atom_item = QGraphicsRectItem(QRectF(0.0, 0.0, 4.0, 4.0))
+        note_item = QGraphicsTextItem("note")
+        note_item.setData(0, "note")
+        canvas = _FakeCanvas(atom_item)
+        canvas.scene().addItem(atom_item)
+        canvas.scene().addItem(note_item)
+        for blocked in (False, True):
+            with self.subTest(blocked=blocked):
+                canvas.scene().blockSignals(blocked)
+                with self.assertRaisesRegex(RuntimeError, "note selection failed"):
+                    select_pasted_content_for_canvas(
+                        canvas,
+                        atom_ids={7},
+                        scene_items=[note_item],
+                        clear_note_selection=mock.Mock(),
+                        select_note=mock.Mock(
+                            side_effect=RuntimeError("note selection failed")
+                        ),
+                    )
+                self.assertEqual(canvas.scene().signalsBlocked(), blocked)

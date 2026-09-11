@@ -5,6 +5,8 @@ import os
 from types import SimpleNamespace
 from unittest.mock import patch
 
+import pytest
+
 from chemvas.bootstrap import calculation_bundle as calculation_bundle_cli
 from chemvas.domain.document import state as document_state_module
 from chemvas.features.insertion import RDKitResult
@@ -37,8 +39,6 @@ from tests.test_precomplex_cli import _generate_candidate_fixture
 if TYPE_CHECKING:
     from collections.abc import Mapping
     from pathlib import Path
-
-    import pytest
 
 
 def _select_component(
@@ -757,6 +757,9 @@ def test_window_editor_injects_and_finally_clears_canvas_highlighter(
         lambda _window: canvas,
     )
     monkeypatch.setattr(
+        dialog_module, "calculation_plan_for", lambda _canvas: None, raising=False
+    )
+    monkeypatch.setattr(
         dialog_module,
         "document_session_service_for_window",
         lambda _window: SimpleNamespace(snapshot_state=_document_state),
@@ -773,6 +776,144 @@ def test_window_editor_injects_and_finally_clears_canvas_highlighter(
     assert received["mapping_highlighter"] is instances[0]
     assert instances[0].canvas is canvas
     assert instances[0].clear_count == 1
+
+
+def test_dialog_keeps_reactive_component_as_context_on_the_other_side() -> None:
+    app = QApplication.instance() or QApplication([])
+    app.setQuitOnLastWindowClosed(False)
+    state = _document_state()
+    raw_plan = _plan()
+    raw_plan["states"][1]["members"].append(
+        {"component_atom_ids": [0, 1], "inclusion": "context_only"}
+    )
+    raw_plan["steps"][0]["product"]["roles"].append(
+        {"component_atom_ids": [0, 1], "role": "spectator"}
+    )
+    state["calculation_plan"] = raw_plan
+    dialog = CalculationStepDialog(state)
+    dialog.step_selector.setCurrentIndex(dialog.step_selector.findData("S01"))
+
+    dialog.accept()
+
+    assert dialog.result_plan_state == raw_plan
+    dialog.deleteLater()
+
+
+def _window_editor_canvas(monkeypatch, state):
+    import chemvas.ui.calculation_step_dialog as dialog_module
+    from chemvas.adapters.qt.renderer import Renderer
+    from chemvas.ui.canvas_service_access import canvas_services_for
+    from chemvas.ui.canvas_view import CanvasView
+
+    app = QApplication.instance() or QApplication([])
+    app.setQuitOnLastWindowClosed(False)
+    canvas = CanvasView(renderer=Renderer())
+    session = canvas_services_for(canvas).document.canvas_document_session_service
+    session.apply_state(state)
+    monkeypatch.setattr(
+        dialog_module, "active_canvas_for_window", lambda _window: canvas
+    )
+    monkeypatch.setattr(
+        dialog_module, "document_session_service_for_window", lambda _window: session
+    )
+    monkeypatch.setattr(
+        dialog_module,
+        "services_for_window",
+        lambda _window: SimpleNamespace(
+            canvas_document_service=SimpleNamespace(
+                refresh_tab_title=lambda *_args: None
+            ),
+            status_service=SimpleNamespace(refresh_status_context=lambda *_args: None),
+        ),
+    )
+    return app, canvas, session
+
+
+def test_window_plan_edit_is_one_undoable_change(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import chemvas.ui.calculation_step_dialog as dialog_module
+    from chemvas.ui.canvas_calculation_plan_state import calculation_plan_for
+    from chemvas.ui.canvas_window_access import history_service_for_canvas
+
+    state = _document_state()
+    _app, canvas, session = _window_editor_canvas(monkeypatch, state)
+    before = session.snapshot_state()
+    accepted_plan = _plan()
+
+    def factory(*_args, **_kwargs):
+        return SimpleNamespace(
+            result_plan_state=accepted_plan,
+            exec=lambda: QDialog.DialogCode.Accepted,
+        )
+
+    assert dialog_module.edit_calculation_plan_for_window(
+        object(), dialog_factory=factory
+    )
+    history = history_service_for_canvas(canvas)
+    assert history.can_undo()
+    history.undo()
+    assert calculation_plan_for(canvas) is None
+    assert session.snapshot_state() == before
+    history.redo()
+    assert calculation_plan_for(canvas) == accepted_plan
+    canvas.deleteLater()
+
+
+def test_stale_plan_editor_refuses_without_replacing_existing_steps(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import chemvas.ui.calculation_step_dialog as dialog_module
+    from chemvas.ui.canvas_calculation_plan_state import calculation_plan_for
+
+    state = _document_state()
+    stale_plan = _plan()
+    stale_plan["states"][0]["members"][0]["component_atom_ids"] = [0]
+    state["calculation_plan"] = stale_plan
+    _app, canvas, _session = _window_editor_canvas(monkeypatch, state)
+    warnings = []
+    monkeypatch.setattr(
+        dialog_module.QMessageBox, "warning", lambda *_args: warnings.append(_args[-1])
+    )
+    opened = []
+
+    def factory(*_args, **_kwargs):
+        opened.append(True)
+        return SimpleNamespace(
+            result_plan_state=_plan(), exec=lambda: QDialog.DialogCode.Accepted
+        )
+
+    assert not dialog_module.edit_calculation_plan_for_window(
+        object(), dialog_factory=factory
+    )
+    assert not opened
+    assert calculation_plan_for(canvas) == stale_plan
+    assert "Undo" in warnings[0]
+    canvas.deleteLater()
+
+
+def test_mapping_candidate_marks_scan_assignments_once() -> None:
+    app = QApplication.instance() or QApplication([])
+    app.setQuitOnLastWindowClosed(False)
+    dialog = CalculationStepDialog(_document_state())
+    _configure_separate_endpoints(dialog)
+
+    class CountingMappings(dict):
+        scans = 0
+
+        def items(self):
+            self.scans += 1
+            return super().items()
+
+        def values(self):
+            self.scans += 1
+            return super().values()
+
+    mappings = CountingMappings(dialog._mapping_by_reactant)
+    dialog._mapping_by_reactant = mappings
+    dialog._refresh_used_candidate_marks()
+    assert mappings.scans <= 1
+    dialog.deleteLater()
 
 
 def test_dialog_tables_reject_input_method_cell_editing() -> None:
@@ -892,3 +1033,101 @@ def test_dialog_dependency_edit_invalidates_precomplex_pair(
     assert step["reactant"]["precomplex"] == {"kind": "none"}
     assert step["product"]["precomplex"] == {"kind": "none"}
     dialog.deleteLater()
+
+
+def test_noop_window_plan_edit_does_not_add_history(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import chemvas.ui.calculation_step_dialog as dialog_module
+    from chemvas.ui.canvas_window_access import history_service_for_canvas
+
+    state = _document_state()
+    state["calculation_plan"] = _plan()
+    _app, canvas, session = _window_editor_canvas(monkeypatch, state)
+    before = session.snapshot_state()
+
+    def factory(*_args, **_kwargs):
+        return SimpleNamespace(
+            result_plan_state=_plan(), exec=lambda: QDialog.DialogCode.Accepted
+        )
+
+    assert not dialog_module.edit_calculation_plan_for_window(
+        object(), dialog_factory=factory
+    )
+    assert not history_service_for_canvas(canvas).can_undo()
+    assert session.snapshot_state() == before
+    canvas.deleteLater()
+
+
+def test_plan_history_publication_failure_restores_plan_and_both_stacks(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import chemvas.ui.calculation_step_dialog as dialog_module
+    from chemvas.core.history import HistoryCommand
+    from chemvas.ui.canvas_calculation_plan_state import calculation_plan_for
+    from chemvas.ui.canvas_window_access import history_service_for_canvas
+
+    _app, canvas, _session = _window_editor_canvas(monkeypatch, _document_state())
+    history = history_service_for_canvas(canvas)
+    previous = HistoryCommand()
+    redo = HistoryCommand()
+    history.state.history.append(previous)
+    history.state.redo_stack.append(redo)
+    push = history.push
+
+    def fail_after_push(command):
+        push(command)
+        raise RuntimeError("injected plan history publication failure")
+
+    monkeypatch.setattr(history, "push", fail_after_push)
+
+    def factory(*_args, **_kwargs):
+        return SimpleNamespace(
+            result_plan_state=_plan(), exec=lambda: QDialog.DialogCode.Accepted
+        )
+
+    with pytest.raises(RuntimeError, match="injected plan history"):
+        dialog_module.edit_calculation_plan_for_window(object(), dialog_factory=factory)
+    assert calculation_plan_for(canvas) is None
+    assert history.state.history == [previous]
+    assert history.state.redo_stack == [redo]
+    canvas.deleteLater()
+
+
+@pytest.mark.parametrize("direction", ["undo", "redo"])
+def test_plan_history_failure_preserves_exact_plan_and_stacks(
+    monkeypatch: pytest.MonkeyPatch, direction: str
+) -> None:
+    import chemvas.ui.calculation_step_dialog as dialog_module
+    import chemvas.ui.history_commands as command_module
+    from chemvas.ui.canvas_calculation_plan_state import calculation_plan_for
+    from chemvas.ui.canvas_window_access import history_service_for_canvas
+
+    _app, canvas, _session = _window_editor_canvas(monkeypatch, _document_state())
+
+    def factory(*_args, **_kwargs):
+        return SimpleNamespace(
+            result_plan_state=_plan(), exec=lambda: QDialog.DialogCode.Accepted
+        )
+
+    dialog_module.edit_calculation_plan_for_window(object(), dialog_factory=factory)
+    history = history_service_for_canvas(canvas)
+    if direction == "redo":
+        history.undo()
+    before_plan = calculation_plan_for(canvas)
+    before_history = tuple(history.state.history)
+    before_redo = tuple(history.state.redo_stack)
+    setter = command_module.set_calculation_plan_for
+
+    def fail_after_set(canvas, state):
+        setter(canvas, state)
+        raise RuntimeError("injected plan mutation failure")
+
+    monkeypatch.setattr(command_module, "set_calculation_plan_for", fail_after_set)
+
+    with pytest.raises(RuntimeError, match="injected plan mutation"):
+        getattr(history, direction)()
+    assert calculation_plan_for(canvas) == before_plan
+    assert tuple(history.state.history) == before_history
+    assert tuple(history.state.redo_stack) == before_redo
+    canvas.deleteLater()

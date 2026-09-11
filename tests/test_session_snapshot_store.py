@@ -51,6 +51,102 @@ def _dead_pids(monkeypatch):
     monkeypatch.setattr(session_snapshot_store, "_pid_alive", lambda pid: False)
 
 
+@pytest.mark.parametrize(
+    "alive,clean,identity,expected",
+    [
+        (False, False, "test-owner", True),
+        (True, False, "test-owner", False),
+        (False, True, "test-owner", False),
+        (True, False, None, False),
+        (True, False, "reused-pid", True),
+    ],
+)
+def test_alternate_snapshot_discovery_is_read_only_and_respects_owners(
+    tmp_path, monkeypatch, alive, clean, identity, expected
+):
+    previous = _store(tmp_path, "previous")
+    previous.begin()
+    previous.save_documents([DocDescriptor(_valid_state(), None, "Unsaved", True)])
+    if clean:
+        previous.mark_clean_exit()
+    monkeypatch.setattr(session_snapshot_store, "_pid_alive", lambda pid: alive)
+    monkeypatch.setattr(
+        session_snapshot_store, "_process_identity", lambda pid: identity
+    )
+    before = {path.name: path.read_bytes() for path in previous.session_dir.iterdir()}
+
+    found = _store(tmp_path, "next").unrestored_snapshot_directories()
+
+    assert found == ([previous.session_dir] if expected else [])
+    assert {
+        path.name: path.read_bytes() for path in previous.session_dir.iterdir()
+    } == before
+
+
+def test_alternate_snapshot_discovery_keeps_a_proved_orphan_manifest(
+    tmp_path, monkeypatch
+):
+    _dead_pids(monkeypatch)
+    previous = _store(tmp_path, "previous")
+    previous.begin()
+    previous.save_documents([DocDescriptor(_valid_state(), None, "Unsaved", True)])
+    (previous.session_dir / "session.json").write_text("{")
+    old = time.time() - 3600
+    os.utime(previous.session_dir, (old, old))
+
+    assert _store(tmp_path, "next").unrestored_snapshot_directories() == [
+        previous.session_dir
+    ]
+    assert (previous.session_dir / "session.json").read_text() == "{"
+
+
+def test_unreadable_dirty_snapshot_is_reported_and_not_pruned(tmp_path, monkeypatch):
+    _dead_pids(monkeypatch)
+    previous = _store(tmp_path, "previous")
+    previous.begin()
+    previous.save_documents([DocDescriptor(_valid_state(), None, "Unsaved", True)])
+    snapshot = next(previous.session_dir.glob("doc-*.json"))
+    snapshot.write_text("{")
+    result = _store(tmp_path, "next").consume_previous_sessions()
+    assert result.docs == []
+    assert result.prune_ids == []
+    assert result.warnings and "Unsaved" in result.warnings[0]
+    assert snapshot.exists()
+
+
+def test_corrupt_manifest_does_not_delete_remaining_snapshots(tmp_path, monkeypatch):
+    _dead_pids(monkeypatch)
+    previous = _store(tmp_path, "previous")
+    previous.begin()
+    previous.save_documents([DocDescriptor(_valid_state(), None, "Unsaved", True)])
+    (previous.session_dir / "session.json").write_text("{")
+    old = time.time() - 3600
+    os.utime(previous.session_dir, (old, old))
+    result = _store(tmp_path, "next").consume_previous_sessions()
+    assert list(previous.session_dir.glob("doc-*.json"))
+    assert result.warnings
+
+
+def test_multiple_recovered_versions_bind_only_one_drawing_to_file(
+    tmp_path, monkeypatch
+):
+    _dead_pids(monkeypatch)
+    path = tmp_path / "shared.chemvas"
+    write_document(path, _valid_state(), CANVAS_FILE_VERSION)
+    root = tmp_path / "sessions"
+    for name in ("one", "two"):
+        previous = _store(root, name)
+        previous.begin()
+        previous.save_documents(
+            [DocDescriptor(_valid_state(name), str(path), "shared.chemvas", True)]
+        )
+    result = _store(root, "next").consume_previous_sessions()
+    assert len(result.docs) == 2
+    assert sum(doc.file_path == str(path) for doc in result.docs) == 1
+    assert {doc.state["last_smiles_input"] for doc in result.docs} == {"one", "two"}
+    assert all(doc.dirty for doc in result.docs)
+
+
 class _FakeFunction:
     def __init__(self, callback):
         self._callback = callback

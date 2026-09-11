@@ -94,6 +94,12 @@ class MainWindow(QMainWindow):
     def runtime_state(self) -> object:
         return self._state
 
+    def close_after_confirmation(self) -> None:
+        """Finish a close already confirmed by the application Quit coordinator."""
+        if self._close_state == "open":
+            self._close_state = "confirmed"
+        self.close()
+
     @override
     def closeEvent(self, event: QCloseEvent | None) -> None:
         if event is None:
@@ -105,10 +111,13 @@ class MainWindow(QMainWindow):
         if self._close_state == "ready":
             self._finalize_close(event)
             return
-        if self._close_state != "open":
+        if self._close_state not in {"open", "confirmed"}:
             event.ignore()
             return
-        if not self._services.document_action_service.confirm_close_window(self):
+        if (
+            self._close_state == "open"
+            and not self._services.document_action_service.confirm_close_window(self)
+        ):
             event.ignore()
             return
         preview_window = self._ui_refs.preview_window
@@ -139,8 +148,8 @@ class MainWindow(QMainWindow):
         self._forget_window(self)
         # Defer a session refresh: it runs only if the app keeps running (a
         # standalone window close drops the closed document from the restore
-        # set). During app-wide quit, aboutToQuit sets the quitting flag before
-        # this fires, so it no-ops and the full open set is preserved.
+        # set). The app-wide Quit coordinator freezes the full set before it
+        # starts closing windows, so these callbacks no-op during that shutdown.
         QTimer.singleShot(0, snapshot_unless_quitting)
         super().closeEvent(event)
         self._close_state = "closed"

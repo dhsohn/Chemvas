@@ -403,7 +403,7 @@ class StructureBuildCommitter:
         record: bool = True,
         show_carbon: bool = False,
     ) -> None:
-        kwargs = {"record": record}
+        kwargs = {"record": record, "allow_merge": False}
         if show_carbon:
             kwargs["show_carbon"] = True
         atom_label_service(self.canvas).add_or_update_atom_label(
@@ -421,6 +421,7 @@ class StructureBuildCommitter:
                     atom_id,
                     atom.element,
                     record=False,
+                    allow_merge=False,
                 )
 
     def add_atom_with_merge(self, point: QPointF, element: str, merge: list) -> int:
@@ -564,6 +565,7 @@ class StructureBuildCommitter:
                         atom.element,
                         clear_smiles=False,
                         record=False,
+                        allow_merge=False,
                         show_carbon=True,
                     )
                 else:
@@ -575,6 +577,7 @@ class StructureBuildCommitter:
                     atom.element,
                     clear_smiles=False,
                     record=False,
+                    allow_merge=False,
                 )
 
 

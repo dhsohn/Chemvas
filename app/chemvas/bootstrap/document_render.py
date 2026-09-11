@@ -219,13 +219,10 @@ def _render_offscreen(
         )
         output_plan = plan
         if output_format == "pdf":
-            from PyQt6.QtCore import QSizeF
-            from PyQt6.QtGui import QPageSize
+            from chemvas.features.export import pdf_page_size
 
             # Match the native PDF writer's whole-point page dimensions.
-            page_size = QPageSize(
-                QSizeF(plan.out_w_pt, plan.out_h_pt), QPageSize.Unit.Point
-            ).sizePoints()
+            page_size = pdf_page_size(plan).sizePoints()
             output_plan = replace(
                 plan,
                 out_w_pt=float(page_size.width()),

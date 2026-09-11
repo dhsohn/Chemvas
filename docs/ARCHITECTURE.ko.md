@@ -107,6 +107,10 @@ content bounds와 물리 크기를 함께 계산한다. 선택 회전, 클립보
 ## 트랜잭션과 복구 소유권
 
 - `CanvasHistoryService`는 undo/redo stack 정책과 불변 `HistoryStackSnapshot` 값의 유일한 소유자다. 최상위 exact undo/redo 연산은 문서 savepoint를 하나만 캡처하고, 중첩 command는 그 연산에 위임한다.
+- 선택 nudge/정렬 command는 기존 깊이 좌표와 종속 mark/ring fill을 포함한
+  선택 영역 geometry의 정확한 before/after를 기록한다. 재생할 때 원자를 먼저,
+  종속 scene item을 나중에 복원하고 선택 외곽선을 한 번 갱신한다. 이 command
+  payload는 별도의 rollback 또는 stack 소유자가 아니다.
 - 문서 교체는 stack capture/restore를 해당 history owner에 맡기고, destructive scene reset도 알림 없는 stack discard를 위임한다. 이 연산은 기존 stack list를 보존한다. 문서 교체의 detached-scene snapshot은 원래 Qt scene item을 별도로 보존한다.
 - 기록되는 구조 삽입은 history 기록 성공까지 작업 전 savepoint를 유지한다. 기록 실패는 기존 rollback authority로 복구하며, 성공한 발행을 검사하기 위해 전체 문서 savepoint를 다시 캡처하지 않는다.
 - 벤젠 template 삽입도 같은 committer 범위 안에서 mutation-only ring builder를 호출하며 recorded build를 중첩하지 않는다. 성공한 삽입은 한 번 캡처하고 no-op·실패 복원도 같은 owner를 따른다. History push 실패 시 recorder가 사용하는 기존 역연산 command의 savepoint는 작업 전 캡처와 별도로 유지한다.
@@ -114,6 +118,11 @@ content bounds와 물리 크기를 함께 계산한다. 선택 회전, 클립보
 - `chemvas.domain.transactions`는 프레임워크와 무관한 `RestoreOutcome` 검증, 복구 오류 note 부착, 1회 restore helper만 소유한다.
 - restore는 한 번 적용하고 한 번 검증한다. exact 복원을 입증하지 못하면 history는 ADR 0002의 보수적인 fail-closed stack 정책을 적용하고 durable recovery는 autosave/session restore에 맡긴다. 제거된 retry, authority channel, compatibility probing, 병렬 stack snapshot 계층은 다시 도입할 수 없다.
 - Autosave session 소유권은 PID와 process-creation identity의 조합에 묶인다. `session.json`은 동시에 실행 중인 이전 바이너리도 읽을 수 있는 엄격한 version-1 형태를 유지하고, 원자적으로 기록되는 `owner.json` sidecar가 새 reader를 위해 PID와 생성 identity를 연결한다. 같은 identity의 live PID 또는 identity를 읽을 수 없는 live PID는 그대로 보존하며, 다른 identity일 때만 PID 재사용이 입증되어 crashed session을 복구할 수 있다. identity가 없는 legacy manifest는 보수적인 live-PID 정책을 유지한다.
+- 애플리케이션 Quit는 모든 창의 확인을 마친 뒤 버린 초안을 직렬화하지 않고
+  다시 열 저장 파일 목록을 기록하며,
+  기존 비동기 preview shutdown으로 창이 닫히는 동안 snapshot을 동결한다.
+  다른 앱 데이터 위치의 복구 파일 탐색은 읽기 전용으로 경로만 알린다.
+  세션을 병합하거나 별도의 영속 복구 장부를 만들지 않는다.
 - Desktop document path는 canonical `.chemvas`다. Startup, OS-open, File Open, Open Recent, clean-session restore는 `.json` drawing path를 거부하거나 무시한다. 비정상 session snapshot은 현재 내부 autosave state를 복구할 수 있지만, 지원하지 않는 원본 path는 지우므로 recovered canvas는 path에 연결되지 않은 미저장 문서다.
 
 ## 데이터/렌더 흐름 (Data/Render Flow)

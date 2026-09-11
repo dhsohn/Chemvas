@@ -211,7 +211,7 @@ def _atoms(
         if type(explicit_label) is not bool:
             raise ValueError(f"atom {index} explicit_label must be a boolean")
         atoms[atom_id] = Atom(
-            element=element,
+            element=element.strip(),
             x=_number(atom.get("x"), f"atom {index} x"),
             y=_number(atom.get("y"), f"atom {index} y"),
             color=color,
@@ -429,6 +429,10 @@ def _arrows(value: object) -> list[dict[str, object]]:
             "end": list(_point(arrow.get("end"), f"arrow {index} end")),
         }
         if "control" in arrow:
+            if kind not in {"curved_single", "curved_double"}:
+                raise ValueError(
+                    f"arrow {index} control is only supported for curved arrows"
+                )
             state["control"] = list(_point(arrow["control"], f"arrow {index} control"))
         if "double" in arrow:
             if type(arrow["double"]) is not bool:

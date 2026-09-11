@@ -463,13 +463,22 @@ class AtomLabelItem(NoSelectTextItem):
     @override
     def shape(self) -> QPainterPath:
         path = QPainterPath()
-        hit_rect = self._hit_rect()
+        # Document margins are paint/layout bounds, not a click target. Keep
+        # every visible run (including long aliases and stacked hydrogens)
+        # pickable without covering the neighbouring bond with that margin.
+        ink = self.glyph_path()
+        if not ink.isEmpty():
+            path.addRect(ink.boundingRect())
         if self._hit_radius is not None and self._hit_radius > 0.0:
-            path.addEllipse(hit_rect)
-            path.addRect(self._base_rect())
-        else:
-            path.addRect(hit_rect)
+            center = self.anchor_center() or self._base_rect().center()
+            path.addEllipse(center, self._hit_radius, self._hit_radius)
+        path.setFillRule(Qt.FillRule.WindingFill)
         return path
+
+    @override
+    def contains(self, point: QPointF) -> bool:
+        # QGraphicsTextItem tests its document rectangle instead of shape().
+        return self.shape().contains(point)
 
     @override
     def paint(self, painter, option, widget=None) -> None:

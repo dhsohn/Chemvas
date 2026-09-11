@@ -18,7 +18,7 @@ import subprocess
 import sys
 import time
 import uuid
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 
 from chemvas.core.document_io import atomic_write_text, create_document, read_document
@@ -30,6 +30,7 @@ from chemvas.features.session import (
     RestoredDoc,
     SessionManifest,
     entries_to_restore,
+    is_consumable,
     is_valid_process_identity,
     manifest_from_json,
     manifest_to_json,
@@ -39,6 +40,7 @@ from chemvas.features.session import (
 )
 from chemvas.ui.canvas_document_metadata_state import canonical_document_digest
 from chemvas.ui.main_window_path_logic import is_canonical_saved_document_path
+from chemvas.ui.open_document_lookup import resolved_document_path
 
 MANIFEST_NAME = "session.json"
 OWNER_NAME = "owner.json"
@@ -124,6 +126,7 @@ class RestoreResult:
     # Consumed session ids to delete only *after* the restored documents have
     # been re-snapshotted into the new session (see SessionRecoveryService).
     prune_ids: list[str] = field(default_factory=list)
+    warnings: list[str] = field(default_factory=list)
 
 
 def _pid_alive(pid: int) -> bool:
@@ -464,6 +467,7 @@ class SessionSnapshotStore:
         """
         manifests: dict[str, SessionManifest] = {}
         order: dict[str, float] = {}
+        result = RestoreResult()
         for child in self._sibling_dirs():
             manifest = self._read_manifest(child)
             if manifest is None:
@@ -471,7 +475,13 @@ class SessionSnapshotStore:
                 # only an old directory whose independently readable sidecar
                 # proves that the recorded process exited or its pid was reused.
                 if _is_old_orphan(child) and self._owner_proves_orphan(child):
-                    shutil.rmtree(child, ignore_errors=True)
+                    if any(child.glob("doc-*.json")):
+                        result.warnings.append(
+                            f"Could not read the recovery manifest in {child}. "
+                            "The saved snapshots have been kept."
+                        )
+                    else:
+                        shutil.rmtree(child, ignore_errors=True)
                 continue
             try:
                 mtime = child.stat().st_mtime
@@ -498,13 +508,23 @@ class SessionSnapshotStore:
             process_identity_for=process_identity_for,
         )
 
-        result = RestoreResult()
+        failed_sessions: set[str] = set()
         for session_id in plan.restore:
             manifest = manifests[session_id]
             for entry in entries_to_restore(manifest):
                 restored = self._restore_entry(
                     self._root / session_id, entry, clean_exit=manifest.clean_exit
                 )
+                if (
+                    not manifest.clean_exit
+                    and entry.dirty
+                    and (restored is None or not restored.dirty)
+                ):
+                    failed_sessions.add(session_id)
+                    result.warnings.append(
+                        f"Could not recover unsaved edits for {entry.display_name}. "
+                        f"Recovery files have been kept in {self._root / session_id}."
+                    )
                 if restored is None:
                     continue
                 result.docs.append(restored)
@@ -517,12 +537,60 @@ class SessionSnapshotStore:
         # Defer deletion: the caller prunes only after these documents are safely
         # snapshotted into the new session, so a crash mid-restore cannot destroy
         # the last on-disk copy of the recovered work.
-        result.prune_ids = plan.prune
+        result.prune_ids = [sid for sid in plan.prune if sid not in failed_sessions]
+        # A clean duplicate has no unique work. Distinct unsaved copies must all
+        # survive, but only one may own the backing file; the others use Save As.
+        unique_docs: list[RestoredDoc] = []
+        bound_paths: dict[str, int] = {}
+        for document in result.docs:
+            key = (
+                resolved_document_path(document.file_path)
+                if document.file_path
+                else None
+            )
+            previous_index = bound_paths.get(key) if key else None
+            if previous_index is not None:
+                if not document.dirty:
+                    continue
+                previous = unique_docs[previous_index]
+                if not previous.dirty:
+                    unique_docs[previous_index] = document
+                    continue
+                document = replace(
+                    document,
+                    file_path=None,
+                    display_name=f"{document.display_name} (recovered copy)",
+                )
+            elif key:
+                bound_paths[key] = len(unique_docs)
+            unique_docs.append(document)
+        result.docs = unique_docs
         return result
 
     def prune_sessions(self, session_ids: list[str]) -> None:
         for session_id in session_ids:
             shutil.rmtree(self._root / session_id, ignore_errors=True)
+
+    def unrestored_snapshot_directories(self) -> list[Path]:
+        """Discover alternate-root crash data without consuming or deleting it.
+
+        The regular recovery owner predicates also apply here: a live or
+        uncertain owner and a clean exit never become a recovery warning.
+        """
+        found: list[Path] = []
+        for child in self._sibling_dirs():
+            manifest = self._read_manifest(child)
+            if manifest is None:
+                recoverable = _is_old_orphan(child) and self._owner_proves_orphan(child)
+            else:
+                recoverable = not manifest.clean_exit and is_consumable(
+                    manifest,
+                    is_alive=_pid_alive,
+                    process_identity_for=_process_identity,
+                )
+            if recoverable and any(child.glob("doc-*.json")):
+                found.append(child)
+        return found
 
     # --- internals --------------------------------------------------------
 
@@ -558,13 +626,17 @@ class SessionSnapshotStore:
                     dirty=entry.dirty,
                 )
         if file_path and Path(file_path).exists():
-            state = self._read_state(Path(file_path))
-            if state is not None:
+            try:
+                document = read_document(file_path)
+            except (OSError, ValueError):
+                document = None
+            if document is not None:
                 return RestoredDoc(
-                    state=state,
+                    state=document.state,
                     file_path=file_path,
                     display_name=entry.display_name,
                     dirty=False,
+                    source_sha256=document.source_sha256,
                 )
         return None
 

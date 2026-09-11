@@ -4,7 +4,13 @@ import math
 from functools import partial
 
 from PyQt6.QtCore import QPointF, QRectF, Qt
-from PyQt6.QtGui import QFontMetricsF, QPainterPath, QPainterPathStroker, QTransform
+from PyQt6.QtGui import (
+    QFontMetricsF,
+    QPainterPath,
+    QPainterPathStroker,
+    QPolygonF,
+    QTransform,
+)
 from PyQt6.QtWidgets import QGraphicsTextItem
 
 from chemvas.core.history import (
@@ -69,6 +75,44 @@ def _bounds(rect: QRectF) -> tuple[float, float, float, float]:
     return rect.left(), rect.top(), rect.right(), rect.bottom()
 
 
+def _glyph_clearance_path(path: QPainterPath) -> QPainterPath:
+    """Close each glyph contour's open interior, not the label's hit box.
+
+    Convex contour envelopes keep a bond out of C/N/H openings while retaining
+    curved letter silhouettes and the gaps between distinct typographic runs.
+    Work in scene space so rotated/scaled labels use the same visible geometry.
+    """
+    result = QPainterPath()
+    result.setFillRule(Qt.FillRule.WindingFill)
+    scale = 64.0
+    for polygon in path.toSubpathPolygons(QTransform.fromScale(scale, scale)):
+        points = sorted(
+            {
+                (point.x() / scale, point.y() / scale)
+                for point in (polygon.at(i) for i in range(polygon.size()))
+            }
+        )
+        if len(points) < 3:
+            continue
+        hulls = []
+        for ordered in (points, list(reversed(points))):
+            half: list[tuple[float, float]] = []
+            for point in ordered:
+                while len(half) >= 2:
+                    a, b = half[-2:]
+                    cross = (b[0] - a[0]) * (point[1] - a[1]) - (b[1] - a[1]) * (
+                        point[0] - a[0]
+                    )
+                    if cross > 0:
+                        break
+                    half.pop()
+                half.append(point)
+            hulls.extend(half[:-1])
+        result.addPolygon(QPolygonF([QPointF(x, y) for x, y in hulls]))
+        result.closeSubpath()
+    return result
+
+
 def _glyph_line_clip_t(
     p1: QPointF,
     p2: QPointF,
@@ -76,12 +120,13 @@ def _glyph_line_clip_t(
     stroke_width: float,
     offsets: tuple[tuple[float, float], ...] = (),
 ) -> tuple[float, float] | None:
-    """First/last ink crossings, including stroke extent and a small air gap.
+    """First/last glyph-envelope crossings with stroke extent and an air gap.
 
     Inspect every contour, not just the filled interval containing the atom:
     the atom may sit in O's counter, or between separate typographic runs.
     Never terminate there and leave another piece of the label on the bond.
     """
+    path = _glyph_clearance_path(path)
     gap = max(0.2, stroke_width * 0.5)
     # A disk enclosing a square cap also covers round/flat bond caps. Keep
     # the small flattening allowance separate from the visible clearance.
@@ -643,8 +688,8 @@ class CanvasGeometryController:
                         t0 = max(t0, exit_t)
                     else:
                         t1 = min(t1, entry_t)
-                # Empty glyphs and rays that miss the ink need no rectangle or
-                # radius fallback. Hit padding must never move visible bonds.
+                # Empty glyphs and rays that miss their envelopes need no hit
+                # rectangle/radius fallback. Picking must not move visible bonds.
                 continue
             label_rect = self.visible_label_rect_for_atom(atom_id)
             if label_rect is not None:

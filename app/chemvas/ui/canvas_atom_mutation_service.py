@@ -57,6 +57,7 @@ class CanvasAtomMutationService:
                 include_default_kwargs=False,
                 clear_smiles=False,
                 record=False,
+                allow_merge=False,
             )
         self.hit_testing_service.mark_spatial_index_dirty()
         return atom_id

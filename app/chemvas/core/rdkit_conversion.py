@@ -33,7 +33,6 @@ class RDKitConversionHelper:
             return None, None
         Chem, _ = rdkit
         rw = Chem.RWMol()
-        adjacency = self._build_model_adjacency(model)
         atom_annotations = model.atom_annotations
         atom_map = {}
         for atom_id in sorted(model.atoms):
@@ -55,8 +54,6 @@ class RDKitConversionHelper:
                     rd_atom = None
             if rd_atom is None:
                 rd_atom = Chem.Atom("C")
-            if self._should_disable_implicit_hydrogens(model, atom_id, adjacency):
-                rd_atom.SetNoImplicit(True)
             self._apply_atom_annotation(
                 rd_atom,
                 formal_charge=formal_charge,
@@ -447,38 +444,6 @@ class RDKitConversionHelper:
             adjacency.setdefault(bond.a, []).append(bond.b)
             adjacency.setdefault(bond.b, []).append(bond.a)
         return adjacency
-
-    @staticmethod
-    def _has_explicit_h_neighbor(
-        model: MoleculeModel,
-        atom_id: int,
-        adjacency: Mapping[int, list[int]],
-    ) -> bool | None:
-        """True/False for a non-carbon atom; None when the check does not apply."""
-        atom = model.atoms.get(atom_id)
-        if atom is None or atom.element.upper() == "C":
-            return None
-        return any(
-            neighbor is not None and neighbor.element.upper() == "H"
-            for neighbor in (
-                model.atoms.get(neighbor_id)
-                for neighbor_id in adjacency.get(atom_id, [])
-            )
-        )
-
-    @classmethod
-    def _should_disable_implicit_hydrogens(
-        cls,
-        model: MoleculeModel,
-        atom_id: int,
-        adjacency: Mapping[int, list[int]],
-    ) -> bool:
-        # Standard drawing convention: hetero atoms carry implicit hydrogens up
-        # to their normal valence (R-NH2, R-OH, ...), so RDKit's completion is
-        # only suppressed when the user drew the hydrogens explicitly — adding
-        # implicit ones on top would double-count them. Both the tolerant
-        # substructure builder and the strict conversion builder share this rule.
-        return bool(cls._has_explicit_h_neighbor(model, atom_id, adjacency))
 
     @staticmethod
     def _component_sort_key(
@@ -940,8 +905,8 @@ class RDKitConversionHelper:
             except Exception:
                 invalid_labels.append(f"{atom.element} (atom {atom_id})")
                 continue
-            if self._should_disable_implicit_hydrogens(model, atom_id, adjacency):
-                rd_atom.SetNoImplicit(True)
+            # RDKit counts explicit H neighbours toward valence before filling
+            # the remainder; a partially drawn NH2 must retain its other H.
             self._apply_atom_annotation(
                 rd_atom,
                 formal_charge=formal_charge,
@@ -973,6 +938,14 @@ class RDKitConversionHelper:
         """Add bonds with stereo directions to ``rw``; False with last_error on failure."""
         seen_bonds: set[tuple[int, int]] = set()
         for bond_id, bond in valid_bonds:
+            if bond.style in {"dotted", "dotted_double", "dotted_double_outer"}:
+                self.adapter.last_error = (
+                    f"Bond {bond_id} is a dotted contact. Chemical conversion "
+                    "cannot treat forming, breaking, or noncovalent contacts as "
+                    "ordinary bonds. Use a drawing of the covalent structure "
+                    "without contacts for identifiers and chemistry exports."
+                )
+                return False
             if bond.a not in atom_map or bond.b not in atom_map:
                 continue
             rd_a = atom_map[bond.a]
@@ -1113,9 +1086,7 @@ class RDKitConversionHelper:
             return None
         mol, origins = built
 
-        mol_2d = Chem.Mol(mol)
-        AllChem.Compute2DCoords(mol_2d)
-        mol_block = Chem.MolToMolBlock(mol_2d)
+        mol_block = self._conversion_mol_block(mol, Chem, AllChem)
 
         mol_h = self.adapter._embed_3d_molecule(mol, Chem, AllChem)
         if mol_h is None:
@@ -1257,8 +1228,39 @@ class RDKitConversionHelper:
         )
         if mol is None:
             return None
-        AllChem.Compute2DCoords(mol)
-        return Chem.MolToMolBlock(mol)
+        return self._conversion_mol_block(mol, Chem, AllChem)
+
+    @staticmethod
+    def _conversion_mol_block(mol, Chem, AllChem) -> str:
+        """Regenerate the depiction and omit only chemically redundant valence."""
+        depicted = Chem.Mol(mol)
+        AllChem.Compute2DCoords(depicted)
+        # Original wedge directions describe the old canvas coordinates. Derive
+        # new wedges from the assigned stereo tags after regenerating the layout.
+        for bond in depicted.GetBonds():
+            bond.SetBondDir(Chem.BondDir.NONE)
+        conformer = depicted.GetConformer()
+        Chem.WedgeMolBonds(depicted, conformer)
+        block = Chem.MolToMolBlock(depicted)
+        lines = block.splitlines()
+        if not lines[3].endswith("V2000"):
+            return block
+        # RDKit writes valence 3 for a carbon radical and 15 for zero-valent
+        # ions even when M RAD/M CHG already convey everything. The native
+        # reader deliberately rejects nonzero valence fields, so omit them
+        # only if an RDKit roundtrip confirms that chemistry is unchanged.
+        for index in range(4, 4 + depicted.GetNumAtoms()):
+            lines[index] = lines[index][:48] + "  0" + lines[index][51:]
+        candidate = "\n".join(lines) + "\n"
+        original_mol = Chem.MolFromMolBlock(block, removeHs=False)
+        candidate_mol = Chem.MolFromMolBlock(candidate, removeHs=False)
+        if (
+            original_mol is not None
+            and candidate_mol is not None
+            and Chem.MolToSmiles(original_mol) == Chem.MolToSmiles(candidate_mol)
+        ):
+            return candidate
+        return block
 
 
 __all__ = ["RDKitConversionHelper"]

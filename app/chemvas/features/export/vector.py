@@ -36,8 +36,12 @@ def configure_svg_generator(
 
 
 def pdf_page_size(plan: ExportPlan) -> QPageSize:
-    """Resolve the native PDF page, including point rounding and paper matching."""
-    return QPageSize(QSizeF(plan.out_w_pt, plan.out_h_pt), QPageSize.Unit.Point)
+    """Resolve whole-point PDF dimensions without matching nearby paper sizes."""
+    return QPageSize(
+        QSizeF(plan.out_w_pt, plan.out_h_pt),
+        QPageSize.Unit.Point,
+        matchPolicy=QPageSize.SizeMatchPolicy.ExactMatch,
+    )
 
 
 def configure_pdf_writer(
@@ -116,8 +120,9 @@ def export_pdf_file(
     with exported_scene(scene, export_items):
         writer = QPdfWriter(path)
         configure_pdf_writer(writer, plan, resolution, title)
-        target_w = plan.out_w_pt / POINTS_PER_INCH * resolution
-        target_h = plan.out_h_pt / POINTS_PER_INCH * resolution
+        # Qt rounds custom pages to whole points. Fit the source to the actual
+        # device so a downward rounding cannot crop the right/bottom edge.
+        target_w, target_h = writer.width(), writer.height()
         painter = QPainter()
         if not painter.begin(writer):
             raise ValueError("Failed to open PDF output for writing.")
@@ -147,7 +152,7 @@ def render_pdf_bytes(
                 raise ValueError("Failed to render PDF clipboard data.")
             try:
                 paint_scene_region(
-                    painter, scene, plan, plan.out_w_pt, plan.out_h_pt, background
+                    painter, scene, plan, writer.width(), writer.height(), background
                 )
             finally:
                 painter.end()

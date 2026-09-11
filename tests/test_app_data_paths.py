@@ -63,3 +63,21 @@ def test_sessions_dir_is_best_effort(tmp_path, monkeypatch):
 
     # Must not raise even though the parent cannot be created.
     assert app_data_paths.sessions_dir() == unusable / "sessions"
+
+
+def test_existing_recovery_roots_are_deduplicated_without_creating_candidates(
+    tmp_path, monkeypatch
+):
+    primary = tmp_path / "primary"
+    fallback = tmp_path / "fallback"
+    missing = tmp_path / "missing"
+    (fallback / "sessions").mkdir(parents=True)
+    monkeypatch.setattr(
+        app_data_paths,
+        "_candidate_dirs",
+        lambda: [primary, fallback, fallback, missing],
+    )
+
+    assert app_data_paths.existing_session_roots() == (fallback / "sessions",)
+    assert not primary.exists()
+    assert not missing.exists()

@@ -35,6 +35,7 @@ def build_scene_decoration_services(
     canvas_mark_scene_service = CanvasMarkSceneService(
         canvas,
         scene_decoration_service=scene_decoration_service,
+        history_service=history_service,
     )
     return SceneDecorationServiceBundle(
         arrow_build_service=arrow_build_service,

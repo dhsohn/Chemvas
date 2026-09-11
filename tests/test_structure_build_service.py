@@ -828,7 +828,7 @@ class StructureBuildServiceTest(unittest.TestCase):
                     {
                         "clear_smiles": True,
                         "record": False,
-                        "allow_merge": True,
+                        "allow_merge": False,
                         "show_carbon": False,
                     },
                 ),
@@ -838,7 +838,7 @@ class StructureBuildServiceTest(unittest.TestCase):
                     {
                         "clear_smiles": True,
                         "record": False,
-                        "allow_merge": True,
+                        "allow_merge": False,
                         "show_carbon": False,
                     },
                 ),
@@ -881,8 +881,8 @@ class StructureBuildServiceTest(unittest.TestCase):
         self.assertEqual(
             canvas.wrapper_label_calls,
             [
-                (1, "C", False, False, True, True),
-                (2, "Cl", False, False, True, False),
+                (1, "C", False, False, False, True),
+                (2, "Cl", False, False, False, False),
             ],
         )
 
@@ -901,7 +901,7 @@ class StructureBuildServiceTest(unittest.TestCase):
         self.assertEqual(canvas.carbon_dots, [0])
         self.assertEqual(
             canvas.wrapper_label_calls,
-            [(1, "c", False, False, True, True)],
+            [(1, "c", False, False, False, True)],
         )
 
     def test_add_bond_between_points_creates_or_updates_bonds_with_history(
@@ -1403,7 +1403,7 @@ class StructureBuildServiceTest(unittest.TestCase):
         )
         self.assertEqual(canvas.added_graphics, [0, 1, 2])
         self.assertEqual(
-            canvas.wrapper_label_calls, [(2, "O", True, False, True, True)]
+            canvas.wrapper_label_calls, [(2, "O", True, False, False, True)]
         )
         self.assertEqual(
             canvas.record_calls,

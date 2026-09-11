@@ -68,6 +68,10 @@ class _SceneDecorationBuildService(Protocol):
 
 
 class _MarkSceneService(Protocol):
+    def find_atom_for_mark(
+        self, pos: QPointF, *, kind: str | None = None
+    ) -> int | None: ...
+
     def mark_center_for_pointer(
         self,
         pos: QPointF,
@@ -214,12 +218,8 @@ class HoverController:
         )
 
     def add_mark_hover_preview(self, pos: QPointF) -> None:
-        atom_id = self.hit_testing_service.find_atom_near(
-            pos.x(),
-            pos.y(),
-            bond_length_px_for(self.canvas) * 0.35,
-        )
         kind = tool_settings_state_for(self.canvas).mark_kind
+        atom_id = self.mark_scene_service.find_atom_for_mark(pos, kind=kind)
         center = self.mark_scene_service.mark_center_for_pointer(
             pos, atom_id, kind=kind
         )

@@ -416,7 +416,7 @@ def test_move_atom_cascades_ring_mark_and_perspective_coordinates() -> None:
     build_document_payload(result.state, CANVAS_FILE_VERSION)
 
 
-def test_remove_ring_bond_fails_closed_without_changing_source() -> None:
+def test_remove_ring_bond_drops_dependent_fill_without_changing_source() -> None:
     model = MoleculeModel(
         atoms={0: Atom("C", 0, 0), 1: Atom("C", 1, 0), 2: Atom("C", 0, 1)},
         bonds=[Bond(0, 1), Bond(1, 2), Bond(2, 0)],
@@ -432,14 +432,67 @@ def test_remove_ring_bond_fails_closed_without_changing_source() -> None:
     ]
     original = deepcopy(state)
 
-    with pytest.raises(ValueError, match="document or Calculation Plan invariant"):
-        apply_document_patch(
-            state,
-            _patch({"op": "remove_bond", "a": 0, "b": 1}),
-            source_sha256=SOURCE_HASH,
-            document_version=CANVAS_FILE_VERSION,
-        )
+    result = apply_document_patch(
+        state,
+        _patch({"op": "remove_bond", "a": 1, "b": 0}),
+        source_sha256=SOURCE_HASH,
+        document_version=CANVAS_FILE_VERSION,
+    )
+    assert result.state["ring_fills"] == []
+    assert len(result.state["model"]["bonds"]) == 2
     assert state == original
+
+
+@pytest.mark.parametrize("element", [" N", "N ", "\tN"])
+@pytest.mark.parametrize("operation", ["add_atom", "update_atom"])
+def test_patch_normalizes_padded_element_labels(element, operation) -> None:
+    state = _state(MoleculeModel(atoms={0: Atom("C", 0, 0)}))
+    change = (
+        {"op": "update_atom", "atom_id": 0, "changes": {"element": element}}
+        if operation == "update_atom"
+        else {
+            "op": "add_atom",
+            "atom_id": 1,
+            "element": element,
+            "x": 20,
+            "y": 0,
+            "color": "#000000",
+            "explicit_label": False,
+        }
+    )
+    result = apply_document_patch(
+        state,
+        _patch(change),
+        source_sha256=SOURCE_HASH,
+        document_version=CANVAS_FILE_VERSION,
+    )
+    assert result.state["model"]["atoms"][change["atom_id"]]["element"] == "N"
+
+
+def test_remove_bond_keeps_fill_when_the_bond_is_not_a_cycle_edge() -> None:
+    model = MoleculeModel(
+        atoms={
+            index: Atom("C", x, y)
+            for index, (x, y) in enumerate([(0, 0), (20, 0), (20, 20), (0, 20)])
+        },
+        bonds=[Bond(0, 1), Bond(1, 2), Bond(2, 3), Bond(3, 0), Bond(0, 2)],
+    )
+    state = _state(model)
+    state["ring_fills"] = [
+        {
+            "points": [[0, 0], [20, 0], [20, 20], [0, 20]],
+            "atom_ids": [0, 1, 2, 3],
+            "color": "#ff0000",
+            "alpha": 0.4,
+        }
+    ]
+    result = apply_document_patch(
+        state,
+        _patch({"op": "remove_bond", "a": 0, "b": 2}),
+        source_sha256=SOURCE_HASH,
+        document_version=CANVAS_FILE_VERSION,
+    )
+    assert result.state["ring_fills"] == state["ring_fills"]
 
 
 def test_semantic_calculation_plan_drift_rejects_entire_patch() -> None:

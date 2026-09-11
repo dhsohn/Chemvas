@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections import Counter
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Protocol, cast, override
@@ -46,13 +47,19 @@ from chemvas.features.calculation_bundle import (
 )
 from chemvas.shell.palette import PALETTE
 from chemvas.ui.calculation_mapping_highlight import CalculationMappingHighlighter
-from chemvas.ui.canvas_calculation_plan_state import set_calculation_plan_for
+from chemvas.ui.canvas_calculation_plan_state import (
+    calculation_plan_for,
+    set_calculation_plan_for,
+)
+from chemvas.ui.canvas_window_access import history_service_for_canvas
+from chemvas.ui.history_commands import SetCalculationPlanCommand
 from chemvas.ui.main_window_ports import (
     active_canvas_for_window,
     document_session_service_for_window,
     services_for_window,
 )
 from chemvas.ui.rdkit_adapter_access import suggest_atom_correspondence_result_for
+from chemvas.ui.transactions.document import document_transaction
 
 if TYPE_CHECKING:
     from chemvas.features.insertion import RDKitResult
@@ -395,6 +402,10 @@ class CalculationStepDialog(QDialog):
         return str(self._role_combos[(side, row)].currentData()) == side
 
     def _side_locked(self, side: str, row: int) -> bool:
+        # Context is not consumed and may legitimately describe the species on
+        # the opposite side of a CLI-authored plan.
+        if self._inclusion_value(side, row) == "context_only":
+            return False
         opposite_side = "product" if side == "reactant" else "reactant"
         return self._reactive_role_active(
             opposite_side, row
@@ -697,7 +708,11 @@ class CalculationStepDialog(QDialog):
         reactant_state, _reactant_endpoint = self._build_endpoint("reactant")
         for atom_id in included_atom_ids(reactant_state):
             self._mapping_by_reactant[atom_id] = None
-        self._refresh_mapping_table()
+            combo = self._mapping_combos[atom_id]
+            blocked = combo.blockSignals(True)
+            combo.setCurrentIndex(0)
+            combo.blockSignals(blocked)
+        self._update_mapping_status()
 
     def _suggest_structural_mapping(self) -> None:
         if self._correspondence_suggester is None:
@@ -862,15 +877,14 @@ class CalculationStepDialog(QDialog):
         # other row's dropdown. Marking only — the pick stays possible and the
         # existing duplicate validation still decides.
         muted = QBrush(QColor(PALETTE["text_faint"]))
+        used_counts = Counter(self._mapping_by_reactant.values())
         for reactant_atom_id, combo in self._mapping_combos.items():
             for index in range(1, combo.count()):
                 product_atom_id = combo.itemData(index)
                 if type(product_atom_id) is not int:
                     continue
-                used_by_other = any(
-                    mapped == product_atom_id
-                    for other_id, mapped in self._mapping_by_reactant.items()
-                    if other_id != reactant_atom_id
+                used_by_other = used_counts[product_atom_id] > (
+                    self._mapping_by_reactant.get(reactant_atom_id) == product_atom_id
                 )
                 combo.setItemData(
                     index,
@@ -953,6 +967,17 @@ def edit_calculation_plan_for_window(
 ) -> bool:
     canvas = active_canvas_for_window(window)
     document_state = document_session_service_for_window(window).snapshot_state()
+    current_plan = calculation_plan_for(canvas)
+    if current_plan is not None and "calculation_plan" not in document_state:
+        QMessageBox.warning(
+            window,
+            "Calculation plan needs its original structures",
+            "The drawing no longer matches the existing calculation plan. "
+            "Its steps have been kept in this window. Undo the structure change "
+            "before editing the plan, or attach a repaired plan using chemvas attach-plan. "
+            "No calculation steps have been replaced.",
+        )
+        return False
     if not inspect_components(document_state):
         QMessageBox.information(
             window,
@@ -976,7 +1001,16 @@ def edit_calculation_plan_for_window(
         return False
     if dialog.result_plan_state is None:
         raise RuntimeError("Accepted calculation dialog did not return a plan.")
-    set_calculation_plan_for(canvas, dialog.result_plan_state)
+    if current_plan == dialog.result_plan_state:
+        return False
+    history = history_service_for_canvas(canvas)
+    command = SetCalculationPlanCommand(current_plan, dialog.result_plan_state)
+    with document_transaction(canvas, history_service=history):
+        set_calculation_plan_for(canvas, dialog.result_plan_state)
+        if not history.push(command):
+            raise RuntimeError(
+                "The calculation plan edit could not be recorded for Undo."
+            )
     services = services_for_window(window)
     services.canvas_document_service.refresh_tab_title(window, canvas)
     services.status_service.refresh_status_context(window)

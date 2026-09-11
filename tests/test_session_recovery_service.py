@@ -126,6 +126,141 @@ def _service(
     return service, doc_service
 
 
+def test_recovery_warning_survives_successful_new_session_snapshot():
+    first = _FakeWindow("first")
+    warning = "An unreadable recovery snapshot was retained."
+    store = _FakeStore(RestoreResult(warnings=[warning]))
+    status = mock.Mock()
+    service, _ = _service(
+        store,
+        open_windows=lambda: [first],
+        status_service=status,
+    )
+
+    service.restore_previous(first)
+    assert service.snapshot_now()
+
+    status.set_autosave_error.assert_called_with(first, warning)
+    with mock.patch.object(store, "save_documents", side_effect=OSError("disk full")):
+        assert not service.snapshot_now()
+    message = status.set_autosave_error.call_args.args[1]
+    assert warning in message
+    assert "disk full" in message
+    assert service.snapshot_now()
+    status.set_autosave_error.assert_called_with(first, warning)
+
+
+def test_quit_stops_if_windows_change_during_confirmation():
+    from chemvas.features.session import is_quit_pending, is_quitting
+
+    first = _FakeWindow("first")
+    windows = [first]
+    status = mock.Mock()
+    store = _FakeStore(RestoreResult())
+
+    def confirm(_window):
+        windows.append(_FakeWindow("unexpected"))
+        return True
+
+    service = SessionRecoveryService(
+        store,
+        open_windows=lambda: tuple(windows),
+        services_for_window=lambda _window: SimpleNamespace(
+            document_action_service=SimpleNamespace(confirm_close_window=confirm),
+            status_service=status,
+        ),
+    )
+    assert service.intercept_application_quit()
+    assert len(windows) == 2
+    assert not is_quit_pending() and not is_quitting()
+    assert not service._closing_application
+    assert not store.saved
+    assert "open windows changed" in status.set_autosave_error.call_args.args[1]
+
+
+def test_start_republishes_recovery_notice_after_startup_duplicate_open(qapp):
+    first = _FakeWindow("first")
+    store = _FakeStore(RestoreResult(recovered_unsaved=2))
+    service, _ = _service(store, open_windows=lambda: (first,))
+    service.restore_previous(first)
+    first.statusBar().showMessage("Already open: a.chemvas")
+
+    service.start(SimpleNamespace(aboutToQuit=_FakeSignal()))
+
+    assert (
+        first.statusBar().messages[-1][0]
+        == "Recovered 2 unsaved documents from your last session."
+    )
+    service._timer.stop()
+
+
+def test_alternate_recovery_warning_has_a_safe_action_and_survives_autosave(
+    tmp_path, monkeypatch, qapp
+):
+    from chemvas.ui import session_recovery_service as module
+
+    primary = tmp_path / "primary"
+    alternate = tmp_path / "fallback"
+    previous = alternate / "previous"
+    primary_store = _FakeStore(RestoreResult())
+    alternate_store = mock.Mock()
+    alternate_store.unrestored_snapshot_directories.return_value = [previous]
+    monkeypatch.setattr(module, "sessions_dir", lambda: primary)
+    monkeypatch.setattr(module, "existing_session_roots", lambda: (primary, alternate))
+    monkeypatch.setattr(
+        module,
+        "new_session_store",
+        lambda root: primary_store if root == primary else alternate_store,
+    )
+    service = module.create_session_recovery_service()
+    first = _FakeWindow("first")
+    status = mock.Mock()
+    service._open_windows = lambda: (first,)
+    service._services_for_window = lambda window: canvas_runtime_services(
+        status_service=status
+    )
+    service._current_documents = list
+
+    service.restore_previous(first)
+    service.start(SimpleNamespace(aboutToQuit=_FakeSignal()))
+    assert service.snapshot_now()
+
+    message = status.set_autosave_error.call_args.args[1]
+    assert str(previous) in message
+    assert "not opened automatically" in message
+    assert "copy a doc-*.json snapshot to a new .chemvas file" in message
+    assert "keep the original" in message
+    alternate_store.consume_previous_sessions.assert_not_called()
+    alternate_store.prune_sessions.assert_not_called()
+    alternate_store.begin.assert_not_called()
+    service._timer.stop()
+
+
+def test_restored_untitled_names_are_reserved_and_windows_cascade_from_previous():
+    from chemvas.bootstrap.window_registry import next_document_name
+
+    first, second, third = (_FakeWindow(name) for name in ("first", "second", "third"))
+    result = RestoreResult(
+        docs=[
+            RestoredDoc({}, None, "Canvas 6", True),
+            RestoredDoc({}, None, "Canvas 6", True),
+            RestoredDoc({}, None, "Canvas 2", True),
+        ]
+    )
+    service, documents = _service(_FakeStore(result), extra_windows=[second, third])
+    service._open_new_window = mock.Mock(side_effect=[second, third])
+
+    service.restore_previous(first)
+
+    restored_names = [canvas.display_name for canvas in documents.opened]
+    new_names = [next_document_name() for _ in range(8)]
+    assert len(set(restored_names + new_names)) == len(restored_names + new_names)
+    assert service._open_new_window.call_args_list == [
+        mock.call(first),
+        mock.call(second),
+    ]
+
+
 def test_restore_previous_rebuilds_windows_and_marks_recovered_dirty():
     first = _FakeWindow("first")
     second = _FakeWindow("second")

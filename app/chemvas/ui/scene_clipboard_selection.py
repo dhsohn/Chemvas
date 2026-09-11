@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from PyQt6.QtWidgets import QGraphicsItem, QGraphicsTextItem
 
 from chemvas.ui.atom_label_access import atom_item_for_id_for
+from chemvas.ui.scene_signal_blocking import blocked_scene_signals
 from chemvas.ui.selection_scene_access import (
     clear_scene_selection_for,
     scene_selected_items_for,
@@ -56,18 +57,19 @@ def select_pasted_content_for_canvas(
     clear_note_selection: Callable[[], None],
     select_note: NoteSelector,
 ) -> None:
-    clear_scene_selection_for(canvas, block_signals=True)
-    clear_note_selection()
-    for atom_id in atom_ids:
-        atom_item = atom_item_for_id_for(canvas, atom_id)
-        if atom_item is not None:
-            atom_item.setSelected(True)
-    for item in scene_items:
-        if item is None:
-            continue
-        if item.data(0) == "note" and isinstance(item, QGraphicsTextItem):
-            select_note(item)
-        item.setSelected(True)
+    with blocked_scene_signals(canvas.scene()):
+        clear_scene_selection_for(canvas, block_signals=True)
+        clear_note_selection()
+        for atom_id in atom_ids:
+            atom_item = atom_item_for_id_for(canvas, atom_id)
+            if atom_item is not None:
+                atom_item.setSelected(True)
+        for item in scene_items:
+            if item is None:
+                continue
+            if item.data(0) == "note" and isinstance(item, QGraphicsTextItem):
+                select_note(item)
+            item.setSelected(True)
     refresh_selection_outline_for(canvas)
 
 

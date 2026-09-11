@@ -16,6 +16,7 @@ if TYPE_CHECKING:
 
 _open_windows: list[Any] = []
 _document_counter = 0
+_reserved_document_names: set[str] = set()
 
 
 def register_window(window: Any) -> None:
@@ -37,13 +38,23 @@ def reset_window_registry() -> None:
     global _document_counter
     _open_windows.clear()
     _document_counter = 0
+    _reserved_document_names.clear()
+
+
+def reserve_document_name(name: str) -> None:
+    """Keep a restored document name out of the new-untitled allocation stream."""
+    _reserved_document_names.add(name)
 
 
 def next_document_name() -> str:
     """Reserve the next application-wide untitled document name."""
     global _document_counter
-    _document_counter += 1
-    return f"Canvas {_document_counter}"
+    while True:
+        _document_counter += 1
+        name = f"Canvas {_document_counter}"
+        if name not in _reserved_document_names:
+            reserve_document_name(name)
+            return name
 
 
 def open_new_window(
@@ -81,5 +92,6 @@ __all__ = [
     "open_new_window",
     "open_windows",
     "register_window",
+    "reserve_document_name",
     "reset_window_registry",
 ]

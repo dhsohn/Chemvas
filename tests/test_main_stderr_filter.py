@@ -25,11 +25,12 @@ class _QApplicationMetadataStub(QObject):
     def __init__(self, args: list[str], parsed_arguments: list[str]) -> None:
         super().__init__()
         self.args = list(args)
+        self.installed_event_filters: list[QObject] = []
         # PyQt updates the supplied list after Qt consumes its own options.
         args[:] = parsed_arguments
 
-    def installEventFilter(self, event_filter: object) -> None:
-        self.installed_event_filter = event_filter
+    def installEventFilter(self, event_filter: QObject) -> None:
+        self.installed_event_filters.append(event_filter)
 
     def setApplicationName(self, name: str) -> None:
         self.application_name = name
@@ -254,8 +255,17 @@ class MainStderrFilterTest(unittest.TestCase):
         self.assertEqual(application.application_version, chemvas.__version__)
         self.assertEqual(application.desktop_file_name, "chemvas")
         self.assertIs(application.window_icon, sentinel_icon)
-        self.assertIsInstance(application.installed_event_filter, FileOpenEventFilter)
-        self.assertIs(application.installed_event_filter.parent(), application)
+        # QApplication keeps both the OS Open and Quit coordination filters.
+        self.assertEqual(len(application.installed_event_filters), 2)
+        self.assertEqual(
+            sum(
+                isinstance(event_filter, FileOpenEventFilter)
+                for event_filter in application.installed_event_filters
+            ),
+            1,
+        )
+        for event_filter in application.installed_event_filters:
+            self.assertIs(event_filter.parent(), application)
         self.assertEqual(
             [event[0] for event in events], ["enter", "show", "exec", "exit"]
         )

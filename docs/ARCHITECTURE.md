@@ -111,6 +111,10 @@ end state is decided.
 ## Transaction and Recovery Ownership
 
 - `CanvasHistoryService` is the sole owner of undo/redo stack policy and of the immutable `HistoryStackSnapshot` value. Exact top-level undo/redo operations capture one document savepoint; nested commands defer to that operation.
+- Selection nudge/alignment commands record exact before/after selected geometry,
+  including existing depth coordinates and dependent marks/ring fills. Replay
+  restores atoms before their dependent scene items, then refreshes the selection
+  outline once. These command payloads are not a second rollback or stack owner.
 - Document replacement delegates stack capture/restore to that history owner, and destructive scene reset delegates silent stack discard. These operations preserve the live stack lists; document replacement separately retains the original Qt scene items through its detached-scene snapshot.
 - Recorded structure builds keep their pre-build savepoint until history recording succeeds. A recording failure uses that existing rollback authority; successful publication does not capture another whole-document savepoint just to verify recording.
 - Benzene template insertion uses that same committer scope around the mutation-only ring builder, without a nested recorded build. Successful insertion captures once; no-op and failed insertion restore through the same owner. The recorder's existing inverse-command savepoint on a failed history push remains separate from the pre-build capture.
@@ -119,6 +123,11 @@ end state is decided.
 - `transactions.recovery` holds the only production call to `BaseException.add_note`, so the secondary-failure sentence is written once and every other module supplies a phase instead of its own wording. A call site either hands that phase to `run_rollback_step`, or — where one handler compensates in several steps, or has to re-raise or return a structured result — calls `add_recovery_error_note` directly; what it must not do is wrap either one back up into a private note helper or a private runner. `test_architecture_boundaries.py` fails if a second module attaches an exception note, or if a second function appears whose whole body is one `try` that does nothing but note the failure.
 - A restore is applied once and verified once. If exact restoration cannot be established, history applies ADR 0002's conservative fail-closed stack policy and leaves durable recovery to autosave/session restore. The removed retry, authority-channel, compatibility-probing, and parallel stack-snapshot layers must not return.
 - Autosave session ownership is bound to a PID plus a process-creation identity. `session.json` stays in the strict version-1 shape understood by older concurrent binaries; an atomic `owner.json` sidecar binds the PID to its creation identity for new readers. A live PID with the same or an unreadable identity remains untouched; a different identity proves PID reuse and makes the crashed session recoverable. Legacy identity-less manifests keep the conservative live-PID policy.
+- Application Quit resolves all window prompts before recording the saved-file
+  reopen list without serializing discarded live drafts, then freezes snapshots
+  while existing asynchronous preview shutdown closes the
+  windows. Alternate app-data recovery discovery is read-only and reports paths;
+  it does not merge sessions or establish another durable recovery journal.
 - Desktop document paths are canonical `.chemvas` paths. Startup, OS-open, File Open, Open Recent, and clean-session restoration reject or ignore `.json` drawing paths. An abnormal-session snapshot may recover current internal autosave state, but an unsupported original path is cleared so the recovered canvas is unbound and unsaved.
 
 ## Data/Render Flow

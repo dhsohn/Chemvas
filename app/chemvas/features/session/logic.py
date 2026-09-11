@@ -70,6 +70,7 @@ class RestoredDoc:
     file_path: str | None
     display_name: str
     dirty: bool
+    source_sha256: str | None = None
 
 
 def should_persist(*, has_path: bool, dirty: bool) -> bool:
