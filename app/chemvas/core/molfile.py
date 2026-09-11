@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import math
 from itertools import batched
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 from chemvas.domain.atom_aliases import ATOM_ALIAS_DEFINITIONS
@@ -321,6 +322,28 @@ def _property_lines(tag: str, entries: Sequence[tuple[int, int]]) -> list[str]:
     return lines
 
 
+def read_molfile(path: str | Path) -> MoleculeModel:
+    """Read a MOL without requiring ignored header text to be UTF-8.
+
+    Only the three descriptive header lines tolerate undecodable bytes. The
+    structural block is decoded strictly, never repaired or reinterpreted.
+    """
+    raw = Path(path).read_bytes()
+    parts = raw.replace(b"\r\n", b"\n").replace(b"\r", b"\n").split(b"\n", 3)
+    header = "\n".join(line.decode("utf-8", errors="replace") for line in parts[:3])
+    if len(parts) < 4:
+        return parse_molfile(header)
+    try:
+        body = parts[3].decode("utf-8")
+    except UnicodeDecodeError as exc:
+        line_number = 4 + parts[3][: exc.start].count(b"\n")
+        raise MolfileParseError(
+            f"Cannot import MOL: structural data on line {line_number} "
+            "is not valid UTF-8."
+        ) from exc
+    return parse_molfile(f"{header}\n{body}")
+
+
 def parse_molfile(text: str) -> MoleculeModel:
     """Parse an MDL Molfile (V2000) block into a :class:`MoleculeModel`.
 
@@ -336,7 +359,9 @@ def parse_molfile(text: str) -> MoleculeModel:
     onto a canvas. Anything outside this subset raises
     :class:`MolfileParseError`.
     """
-    lines = text.splitlines()
+    # MOL records end at CR/LF, not at Unicode/control characters that may
+    # occur in free-text header lines (str.splitlines would split those too).
+    lines = text.replace("\r\n", "\n").replace("\r", "\n").split("\n")
     atom_count, bond_count, property_line_count = _parse_counts_line(lines)
     atom_block_end = 4 + atom_count
     bond_block_end = atom_block_end + bond_count
@@ -749,5 +774,6 @@ __all__ = [
     "MolfileParseError",
     "fit_molfile_model",
     "parse_molfile",
+    "read_molfile",
     "write_molfile",
 ]

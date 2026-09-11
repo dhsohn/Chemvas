@@ -9,6 +9,8 @@ from typing import TYPE_CHECKING, Any
 from uuid import uuid4
 from weakref import WeakKeyDictionary
 
+from chemvas.core.document_io import resolved_output_path
+
 if TYPE_CHECKING:
     from collections.abc import Callable
 
@@ -43,15 +45,11 @@ def normalized_export_target_path(path: str | os.PathLike[str]) -> str:
 
 
 def _absolute_target_path(path: str | os.PathLike[str]) -> Path:
-    target = Path(path).expanduser()
-    if not target.is_absolute():
-        target = Path.cwd() / target
-    return target
+    return resolved_output_path(Path(path).expanduser())
 
 
 def _staging_path_for(target: Path) -> Path:
-    target_name = target.name or "xyz-export"
-    return target.with_name(f".{target_name}.{uuid4().hex}.stage")
+    return target.with_name(f".chemvas-xyz-{uuid4().hex}.stage")
 
 
 class RDKitExportJobRegistry:

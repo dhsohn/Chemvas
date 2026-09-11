@@ -8,7 +8,11 @@ from typing import TYPE_CHECKING, Any, Protocol
 
 from PyQt6.QtCore import QObject, QThread, pyqtSignal, pyqtSlot
 
-from chemvas.core.document_io import atomic_write_text, atomic_write_via_temp
+from chemvas.core.document_io import (
+    atomic_write_text,
+    atomic_write_via_temp,
+    output_error_for,
+)
 from chemvas.ui.rdkit_export_job_state import (
     RDKitExportJob,
     rdkit_export_job_registry,
@@ -43,12 +47,14 @@ class XYZExportWorker(QObject):
         path: str,
         *,
         rdkit_adapter_factory: Callable[[], XYZExportAdapter] | None = None,
+        output_path: str | None = None,
     ) -> None:
         super().__init__()
         self._rdkit = rdkit_adapter
         self._model = model
         self._atom_annotations = atom_annotations
         self._path = path
+        self._output_path = output_path or path
         self._rdkit_adapter_factory = rdkit_adapter_factory
         self.result: tuple[bool, str] | None = None
 
@@ -74,6 +80,8 @@ class XYZExportWorker(QObject):
             self.result = (True, self._path)
             self.succeeded.emit(self._path)
         except Exception as exc:
+            if isinstance(exc, OSError):
+                exc = output_error_for(exc, self._output_path)
             message = str(exc) or "Failed to export 3D XYZ."
             self.result = (False, message)
             self.failed.emit(message)
@@ -128,6 +136,8 @@ class XYZExportCoordinator(QObject):
                 _remove_staging_file(job.staging_path)
         except Exception as exc:
             _remove_staging_file(job.staging_path)
+            if isinstance(exc, OSError):
+                exc = output_error_for(exc, job.callback_path)
             if self.registry.is_latest(job):
                 self._invoke_callback(
                     job, job.on_error, str(exc) or "Failed to export 3D XYZ."
@@ -197,6 +207,7 @@ def export_xyz_in_thread(
             atom_annotations,
             os.fspath(job.staging_path),
             rdkit_adapter_factory=rdkit_adapter_factory,
+            output_path=job.callback_path,
         )
         worker.moveToThread(thread)
         coordinator.registry.attach(job.job_id, thread=thread, worker=worker)

@@ -843,6 +843,13 @@ class CanvasDocumentSessionService:
         )
 
         def render_to_temp(tmp: Path) -> None:
+            try:
+                str(tmp).encode("utf-8")
+            except UnicodeEncodeError:
+                raise ValueError(
+                    "The destination folder cannot be represented as UTF-8. "
+                    "Choose another folder. No file was written."
+                ) from None
             export_canvas_scene_for(
                 self.canvas,
                 str(tmp),
@@ -855,6 +862,10 @@ class CanvasDocumentSessionService:
                 unit_scale=unit_scale,
                 target_width_pt=target_width_pt,
             )
+            if tmp.stat().st_size == 0:
+                raise ValueError(
+                    "The renderer produced an empty file. No file was written."
+                )
             if min_font_pt is not None:
                 assess_export_readability(
                     self.canvas,

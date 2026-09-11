@@ -274,7 +274,7 @@ def test_publish_race_does_not_replace_existing_destination(tmp_path, monkeypatc
         )
     assert source.read_bytes() == original
     assert output.read_bytes() == b"concurrent document"
-    assert not list(tmp_path.glob("*.staging-*"))
+    assert not list(tmp_path.glob(".chemvas-create-*"))
 
 
 def test_candidate_bound_is_checked_before_publish(tmp_path, monkeypatch):

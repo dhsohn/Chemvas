@@ -13,7 +13,11 @@ MAX_GRAPHICS_RECORDS = 20_000
 
 
 def json_text(payload: object) -> str:
-    return json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
+    text = json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
+    # POSIX byte filenames can carry surrogate-escaped characters. Escape only
+    # those unencodable code points as JSON \u sequences; keep normal Unicode
+    # readable and never send raw filesystem bytes into the UTF-8 report.
+    return text.encode("utf-8", errors="backslashreplace").decode("utf-8")
 
 
 def qt_platform(platform: str | None = None) -> str:

@@ -7,7 +7,7 @@ from pathlib import Path
 from PyQt6.QtWidgets import QFileDialog, QMessageBox
 
 from chemvas.core.document_io import read_document as default_read_document
-from chemvas.core.molfile import fit_molfile_model, parse_molfile
+from chemvas.core.molfile import fit_molfile_model, read_molfile
 from chemvas.core.svg_roundtrip import (
     extract_chemvas_document_from_svg as default_read_editable_svg,
 )
@@ -626,7 +626,7 @@ class MainWindowDocumentActionService:
         rest of the state carries the active canvas's settings, like a new
         document would.
         """
-        model = parse_molfile(Path(path).read_text(encoding="utf-8"))
+        model = read_molfile(path)
         template_state = snapshot_canvas_state_for(
             self._active_canvas_for_window(window)
         )

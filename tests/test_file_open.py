@@ -1,3 +1,4 @@
+import errno
 import os
 import tempfile
 import unittest
@@ -205,6 +206,84 @@ class OpenDocumentRoutingTest(unittest.TestCase):
         self.assertEqual(history.capture_stack_snapshot(), before_history)
         history.redo()
         self.assertTrue(snapshot_canvas_state_for(canvas)["model"]["bonds"])
+
+    def test_missing_svg_open_routes_show_filesystem_reason_without_mutation(
+        self,
+    ) -> None:
+        from PyQt6.QtWidgets import QFileDialog, QMessageBox
+
+        from chemvas.bootstrap.window_registry import open_new_window, open_windows
+        from chemvas.ui.canvas_window_access import snapshot_canvas_state_for
+        from chemvas.ui.main_window_ports import active_canvas_for_window
+        from chemvas.ui.recent_documents_store import record_recent
+        from chemvas.ui.structure_mutation_access import add_bond_between_points_for
+
+        window = open_new_window()
+        canvas = active_canvas_for_window(window)
+        add_bond_between_points_for(canvas, QPointF(0, 0), QPointF(40, 0))
+        add_bond_between_points_for(canvas, QPointF(80, 0), QPointF(120, 0))
+        history = canvas.services.history_service
+        history.undo()
+        self.assertTrue(history.can_redo())
+        before = snapshot_canvas_state_for(canvas)
+        stacks = history.capture_stack_snapshot()
+        menu = next(
+            action.menu()
+            for action in window.menuBar().actions()
+            if action.text() == "File"
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "moved-그림.svg"
+            for route in ("Open...", "Open Recent", "startup"):
+                with self.subTest(route=route):
+                    path.write_text('<svg xmlns="http://www.w3.org/2000/svg"/>')
+                    if route == "Open Recent":
+                        record_recent(str(path))
+                        recent = next(
+                            action.menu()
+                            for action in menu.actions()
+                            if action.text() == route
+                        )
+                        recent.aboutToShow.emit()
+                        action = next(
+                            action
+                            for action in recent.actions()
+                            if path.name in action.text()
+                        )
+                    # A file can disappear after the Recent menu was populated.
+                    path.unlink()
+                    with mock.patch.object(QMessageBox, "warning") as warning:
+                        if route == "Open...":
+                            with mock.patch.object(
+                                QFileDialog,
+                                "getOpenFileName",
+                                return_value=(str(path), ""),
+                            ):
+                                next(
+                                    action
+                                    for action in menu.actions()
+                                    if action.text() == route
+                                ).trigger()
+                        elif route == "Open Recent":
+                            action.trigger()
+                        else:
+                            # Both the desktop CLI argument and OS-open event
+                            # invoke this public application entrypoint.
+                            open_document(str(path))
+                    warning.assert_called_once_with(
+                        window,
+                        "Load Error",
+                        "Failed to load file:\n"
+                        + str(
+                            FileNotFoundError(
+                                errno.ENOENT, os.strerror(errno.ENOENT), str(path)
+                            )
+                        ),
+                    )
+                    self.assertEqual(open_windows(), (window,))
+                    self.assertEqual(snapshot_canvas_state_for(canvas), before)
+                    self.assertEqual(history.capture_stack_snapshot(), stacks)
+                    self.assertFalse(path.exists())
 
     def test_clean_import_is_not_a_blank_menu_open_target(self) -> None:
         from PyQt6.QtWidgets import QFileDialog

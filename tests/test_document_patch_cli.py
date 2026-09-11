@@ -231,7 +231,7 @@ def test_failure_after_an_earlier_operation_leaves_no_output(
     assert error.value.code == 2
     assert source.read_bytes() == source_bytes
     assert not output.exists()
-    assert not list(tmp_path.glob(f".{output.name}.staging-*"))
+    assert not list(tmp_path.glob(".chemvas-create-*"))
 
 
 def test_existing_file_and_directory_outputs_are_preserved(tmp_path: Path) -> None:
@@ -293,7 +293,7 @@ def test_atomic_publish_rejects_a_target_created_after_preflight(
         cli.run(["apply-patch", str(source), str(patch_path), "--output", str(output)])
     assert error.value.code == 2
     assert output.read_text(encoding="utf-8") == "racer owns this path"
-    assert not list(tmp_path.glob(f".{output.name}.staging-*"))
+    assert not list(tmp_path.glob(".chemvas-create-*"))
 
 
 def test_headless_module_imports_neither_qt_nor_rdkit() -> None:

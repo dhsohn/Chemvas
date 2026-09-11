@@ -127,7 +127,7 @@ class DocumentIOTest(unittest.TestCase):
                 atomic_create_bytes(path, b"second")
 
             self.assertEqual(path.read_bytes(), b"first")
-            self.assertEqual(list(path.parent.glob(f".{path.name}.staging-*")), [])
+            self.assertEqual(list(path.parent.glob(".chemvas-create-*")), [])
 
     def test_reading_rejects_a_number_decimal_refuses_to_parse(self) -> None:
         # strict_json_loads parses floats as Decimal, which answers an
@@ -195,7 +195,7 @@ class DocumentIOTest(unittest.TestCase):
             # to have closed it, so a leak is a failure here too.
             self.assertEqual([handle.closed for handle in handles], [True])
             self.assertFalse(path.exists())
-            self.assertEqual(list(path.parent.glob(f".{path.name}.staging-*")), [])
+            self.assertEqual(list(path.parent.glob(".chemvas-create-*")), [])
 
     def test_failed_handover_closes_the_descriptor_it_still_owns(self) -> None:
         # The one case where the descriptor is still ours: os.fdopen never took
@@ -226,7 +226,7 @@ class DocumentIOTest(unittest.TestCase):
 
             self.assertEqual(len(closed_while_valid), 1)
             self.assertFalse(path.exists())
-            self.assertEqual(list(path.parent.glob(f".{path.name}.staging-*")), [])
+            self.assertEqual(list(path.parent.glob(".chemvas-create-*")), [])
 
     def test_create_document_wraps_state_in_chemvas_payload(self) -> None:
         state = _canvas_state()
@@ -694,7 +694,9 @@ class DocumentIOTest(unittest.TestCase):
             self.assertNotEqual(temp_paths[0], temp_paths[1])
             for tmp in temp_paths:
                 self.assertEqual(tmp.parent, path.parent)
-                self.assertTrue(tmp.name.startswith(f".{path.name}."))
+                self.assertTrue(tmp.name.startswith(".chemvas-"))
+                self.assertTrue(tmp.name.isascii())
+                self.assertLess(len(tmp.name), 64)
                 self.assertTrue(tmp.name.endswith(".tmp"))
                 self.assertFalse(tmp.exists())
             self.assertEqual(path.read_text(encoding="utf-8"), "write 2")
