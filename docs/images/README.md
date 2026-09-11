@@ -11,6 +11,10 @@ it is not an experimental result.
 | `examples/first-scheme.svg` | Plain SVG using the 174 mm preset, with outlined atom/arrow labels and no embedded source document. |
 | `demo.gif` | Real Qt UI/canvas frames with chapter captions and edited pauses. |
 | `demo.png` | A still of the completed drawing in the app. |
+| `walkthrough-drawing.gif` | Reference-guide walkthrough: bonds by dragging, bond order and element hotkeys, a charge, a fused benzene ring. |
+| `walkthrough-arrows.gif` | Reference-guide walkthrough: reaction, equilibrium and curved arrows, the arrow-label dialog, endpoint snapping. |
+| `walkthrough-editing.gif` | Reference-guide walkthrough: move, rotate with the knob, flip, align, grid snap. |
+| `walkthrough-chemistry.gif` | Reference-guide walkthrough: open a molfile, Molecule Info, export MOL and 3D XYZ (RDKit). |
 | `banner.png` | Existing Chemvas mark and the new tagline, rendered at 1360×270. |
 | `social-preview.png` | 1280×640 sharing card, including the actual example SVG. |
 
@@ -71,6 +75,23 @@ The example SVG includes outlined arrow labels, preserving the canvas's shaped
 glyphs and subscript/superscript positions. The sharing card renders this SVG
 directly; it does not repair the output. The SVG records a width of 173.919 mm
 after the exporter rounds the nominal 174 mm preset.
+
+## Regenerate the reference walkthroughs
+
+The four `walkthrough-*.gif` files come from the same harness
+([walkthrough_capture.py](../../scripts/walkthrough_capture.py)) as the first
+scheme, one topic per GIF:
+
+```bash
+QT_QPA_PLATFORM=offscreen python scripts/capture_walkthroughs.py --output-dir /tmp/chemvas-walkthroughs
+```
+
+`--topic drawing|arrows|editing|chemistry` regenerates one of them. The chemistry
+topic needs RDKit: it writes an aspirin molfile into the output directory, opens
+it the way **File ▸ Open** does, and drives the Molecule Info window and the MOL
+and XYZ exports through the same services the menu actions call, with the
+output paths supplied by the script instead of a file picker. Copy the reviewed
+GIFs to `docs/images/`.
 
 ## Regenerate the branding
 

@@ -9,16 +9,15 @@ exercises an exposed desktop window. Only synthetic drawing data is used.
 from __future__ import annotations
 
 import argparse
-import io
 import os
-import tempfile
+import sys
 from pathlib import Path
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PIL import Image
-from PyQt6.QtCore import QBuffer, QByteArray, QIODevice, QPoint, QPointF, Qt, QTimer
-from PyQt6.QtGui import QAction, QColor, QFont, QImage, QPainter
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from PyQt6.QtCore import QPointF, Qt
 from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import (
     QApplication,
@@ -28,91 +27,22 @@ from PyQt6.QtWidgets import (
     QPushButton,
     QToolButton,
 )
+from walkthrough_capture import LEFT_BUTTON, NO_MODIFIER, Walkthrough, run_with_profile
 
-from chemvas.bootstrap.main_window import build_main_window
 from chemvas.ui.canvas_atom_graphics_state import visible_atom_item_for
 from chemvas.ui.canvas_scene_items_state import arrow_items_for
 from chemvas.ui.canvas_service_access import canvas_services_for
 from chemvas.ui.canvas_window_access import save_canvas_to_file_for
 from chemvas.ui.main_window_document_dialogs import prompt_export_options
 from chemvas.ui.main_window_ports import (
-    active_canvas_for_window,
     document_session_service_for_window,
     services_for_window,
-    set_zoom_percent_for_window,
     tool_action_for_window,
 )
 from chemvas.ui.scene_item_state_serialization import arrow_state_dict
 
-WIDTH, HEIGHT = 1120, 580
-HEADER = 76
-LEFT_BUTTON = Qt.MouseButton.LeftButton
-NO_MODIFIER = Qt.KeyboardModifier.NoModifier
 
-
-class Walkthrough:
-    def __init__(self, app: QApplication, output: Path) -> None:
-        self.app = app
-        self.output = output
-        self.frames: list[Image.Image] = []
-        self.durations: list[int] = []
-        self.window = build_main_window()
-        self.window.resize(WIDTH, HEIGHT)
-        self.window.show()
-        self.canvas = active_canvas_for_window(self.window)
-        self.app.processEvents()
-        set_zoom_percent_for_window(self.window, 270)
-        self.canvas.centerOn(0.0, 0.0)
-        self.cursor: QPoint | None = None
-        QTest.qWait(150)
-
-    def capture(self, title: str, detail: str, duration: int = 1600) -> None:
-        self.app.processEvents()
-        frame = QImage(WIDTH, HEIGHT + HEADER, QImage.Format.Format_RGB32)
-        frame.fill(QColor("#f7faf9"))
-        painter = QPainter(frame)
-        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-        painter.fillRect(0, 0, WIDTH, HEADER, QColor("#123e39"))
-        font = QFont("DejaVu Sans")
-        font.setPixelSize(24)
-        font.setBold(True)
-        painter.setFont(font)
-        painter.setPen(QColor("#ffffff"))
-        painter.drawText(26, 33, title)
-        font.setPixelSize(14)
-        font.setBold(False)
-        painter.setFont(font)
-        painter.setPen(QColor("#c5e9df"))
-        painter.drawText(26, 58, detail)
-        painter.drawPixmap(0, HEADER, self.window.grab())
-        dialog = self.app.activeModalWidget()
-        if dialog is not None:
-            point = dialog.mapToGlobal(QPoint(0, 0))
-            point = self.window.mapFromGlobal(point) + QPoint(0, HEADER)
-            painter.drawPixmap(point, dialog.grab())
-        elif self.cursor is not None:
-            painter.setPen(QColor("#0d9488"))
-            painter.setBrush(QColor(13, 148, 136, 45))
-            painter.drawEllipse(self.cursor + QPoint(0, HEADER), 9, 9)
-        painter.end()
-        data = QByteArray()
-        buffer = QBuffer(data)
-        buffer.open(QIODevice.OpenModeFlag.WriteOnly)
-        if not frame.save(buffer, "PNG"):
-            raise RuntimeError("Could not encode a walkthrough frame")
-        self.frames.append(Image.open(io.BytesIO(bytes(data))).convert("RGB"))
-        self.durations.append(duration)
-
-    def point(self, x: float, y: float) -> QPoint:
-        return self.canvas.mapFromScene(QPointF(x, y))
-
-    def move(self, x: float, y: float) -> QPoint:
-        point = self.point(x, y)
-        QTest.mouseMove(self.canvas.viewport(), point)
-        self.cursor = self.canvas.viewport().mapTo(self.window, point)
-        self.app.processEvents()
-        return point
-
+class FirstScheme(Walkthrough):
     def insert(self, smiles: str, x: float, y: float, title: str) -> None:
         previous_ids = set(self.canvas.model.atoms)
         # The SMILES controls live on the Ring tool's options bar, so the
@@ -150,36 +80,6 @@ class Walkthrough:
         self.capture(
             title, "Select the molecule; Alt + Up rotates it in 15° steps.", 1000
         )
-
-    def action(self, text: str) -> QAction:
-        matches = [
-            action
-            for action in self.window.findChildren(QAction)
-            if action.text().replace("&", "") == text
-        ]
-        if len(matches) != 1:
-            raise RuntimeError(f"Expected one {text!r} action; got {len(matches)}")
-        return matches[0]
-
-    def dialog(self, invoke, title: str, fill):
-        errors: list[Exception] = []
-
-        def drive() -> None:
-            dialog = self.app.activeModalWidget()
-            try:
-                if not isinstance(dialog, QDialog) or dialog.windowTitle() != title:
-                    raise RuntimeError(f"Expected the {title!r} dialog")
-                fill(dialog)
-            except Exception as exc:
-                errors.append(exc)
-                if isinstance(dialog, QDialog):
-                    dialog.reject()
-
-        QTimer.singleShot(150, drive)
-        result = invoke()
-        if errors:
-            raise errors[0]
-        return result
 
     def label_arrow(self) -> None:
         def fill(dialog: QDialog) -> None:
@@ -359,20 +259,7 @@ class Walkthrough:
             "Open first-scheme.chemvas to keep editing. Use the SVG in your manuscript.",
             2500,
         )
-        self.frames[0].save(
-            self.output / "demo.gif",
-            save_all=True,
-            append_images=self.frames[1:],
-            duration=self.durations,
-            loop=0,
-            optimize=True,
-        )
-        print(f"Captured {len(self.frames)} frames; {sum(self.durations) / 1000:g} s")
-
-    def close(self) -> None:
-        services_for_window(self.window).canvas_document_service.mark_clean(self.canvas)
-        self.window.close()
-        self.app.processEvents()
+        self.save_gif("demo.gif")
 
 
 def main() -> int:
@@ -385,18 +272,15 @@ def main() -> int:
         parser.error(
             "--output-dir must be empty; existing artifacts are never replaced"
         )
-    with tempfile.TemporaryDirectory(prefix="chemvas-capture-profile-") as profile:
-        for kind in ("DATA", "CONFIG", "CACHE", "STATE"):
-            os.environ[f"XDG_{kind}_HOME"] = str(Path(profile) / kind.lower())
-        app = QApplication([])
-        app.setApplicationName("Chemvas")
-        app.setQuitOnLastWindowClosed(False)
-        walkthrough = Walkthrough(app, output)
+
+    def run(app: QApplication) -> None:
+        walkthrough = FirstScheme(app, output)
         try:
             walkthrough.run()
         finally:
             walkthrough.close()
-    return 0
+
+    return run_with_profile(output, run, command="capture")
 
 
 if __name__ == "__main__":

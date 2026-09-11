@@ -175,6 +175,18 @@ def test_packaged_readme_has_no_repository_relative_links() -> None:
     )
 
 
+def test_reference_walkthrough_images_exist() -> None:
+    text = _read(REFERENCE)
+    targets = re.findall(r"!\[[^\]]*\]\(([^)\s]+)\)", text)
+    assert targets, f"{REFERENCE.name}: no embedded images found"
+    missing = [
+        target for target in targets if not (REFERENCE.parent / target).is_file()
+    ]
+    assert not missing, (
+        f"{REFERENCE.name} embeds images that are not in the tree: {missing}"
+    )
+
+
 def test_reference_matches_atom_and_text_tool_hotkeys():
     hotkeys = _tool_hotkeys()
     for label in ("Atom", "Text"):

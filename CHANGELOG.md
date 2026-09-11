@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Four short walkthrough GIFs in the reference guide, captured from the
+  application: drawing a structure, arrows and labels, select/move/rotate/align,
+  and chemistry I/O. `scripts/capture_walkthroughs.py` regenerates them on the
+  harness the first-scheme capture now shares.
+
 ### Changed
 
 - Shorten both READMEs to a front page: what Chemvas is, install, the first
