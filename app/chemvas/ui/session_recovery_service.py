@@ -231,7 +231,20 @@ class SessionRecoveryService:
                     "Quit paused: the open windows changed. Try Quit again."
                 )
                 return True
-            if not self.snapshot_now():
+            # Every canvas is now saved or explicitly discarded. Clean-exit
+            # recovery needs only saved paths; serializing live discarded data
+            # could reject stale plans and undo the user's close decision.
+            confirmed_documents = [
+                DocDescriptor(
+                    state={},
+                    file_path=document_file_path_for(canvas),
+                    display_name=document_display_name_for(canvas),
+                    dirty=False,
+                )
+                for window in windows
+                for canvas in all_canvases_for_window(window)
+            ]
+            if not self.snapshot_now(documents=confirmed_documents):
                 # Keep the previous snapshots and every live document. The
                 # persistent autosave error explains why Quit could not finish.
                 return True
@@ -249,16 +262,20 @@ class SessionRecoveryService:
             window.close_after_confirmation()
         return True
 
-    def snapshot_now(self) -> bool:
+    def snapshot_now(self, *, documents: list[DocDescriptor] | None = None) -> bool:
         """Persist the current open set without interrupting editing.
 
         Failures return False, retain source recovery sessions, and remain visible
-        in each window until a later snapshot succeeds.
+        in each window until a later snapshot succeeds. The Quit coordinator may
+        supply path-only descriptors after all close decisions are confirmed;
+        ordinary autosave always collects and validates the full live state.
         """
         if is_quitting():
             return True
         try:
-            self._store.save_documents(self._current_documents())
+            self._store.save_documents(
+                self._current_documents() if documents is None else documents
+            )
             if self._pending_prune:
                 self._store.prune_sessions(self._pending_prune)
                 self._pending_prune = []

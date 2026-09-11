@@ -166,8 +166,10 @@ Multiple dirty recoveries of one file are kept;
 additional versions open as unsaved recovered copies without the original path.
 
 Quit resolves Save / Discard / Cancel for all windows before closing any of
-them, then preserves the complete final reopen list. Cancelling or a failed
-save leaves the windows open. Restored untitled drawings receive distinct names.
+them, then preserves the complete final saved-file reopen list without
+re-serializing discarded drafts. Discarded untitled drawings are not reopened.
+Cancelling or a failed save leaves the windows open. Restored untitled drawings
+receive distinct names.
 File Open and Open Recent reuse an existing blank drawing when possible.
 Imported drawings with content are not blank targets. OS file-open requests
 during Quit are declined with a status message; retry after cancelling Quit or

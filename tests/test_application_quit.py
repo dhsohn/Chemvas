@@ -174,3 +174,151 @@ def test_application_quit_keeps_the_whole_session(tmp_path, mode):
         timeout=8,
     )
     assert result.returncode == 0, result.stdout + result.stderr
+
+
+STALE_PLAN_SCRIPT = r"""
+import hashlib
+import json
+import os
+from pathlib import Path
+import sys
+from copy import deepcopy
+
+from PyQt6.QtCore import QEvent, QObject, QPointF, QTimer
+from PyQt6.QtWidgets import QApplication, QMessageBox
+from chemvas.bootstrap.window_registry import open_new_window, open_windows
+from chemvas.core.document_io import read_document
+from chemvas.features.calculation_bundle import validate_calculation_plan
+from chemvas.features.session import is_quit_pending, is_quitting
+from chemvas.ui.app_data_paths import sessions_dir
+from chemvas.ui.canvas_calculation_plan_state import calculation_plan_for
+from chemvas.ui.main_window_ports import active_canvas_for_window, services_for_window
+from chemvas.ui.session_recovery_service import SessionRecoveryService
+from chemvas.ui.session_snapshot_store import new_session_store
+from chemvas.ui.structure_mutation_access import add_bond_between_points_for, add_bond_for
+from tests.test_calculation_plan import _document_state, _plan
+
+root, mode = Path(sys.argv[1]), sys.argv[2]
+app = QApplication([])
+app.setApplicationName("Chemvas")
+app.setOrganizationName("Chemvas")
+windows = [open_new_window() for _ in range(3)]
+first = active_canvas_for_window(windows[0])
+state = _document_state()
+state["calculation_plan"] = _plan()
+validate_calculation_plan(state, state["calculation_plan"])
+documents = services_for_window(windows[0]).canvas_document_service
+documents.replace_canvas_with_state(windows[0], first, state=state, file_path=None)
+for name, window in zip("abc", windows):
+    if name != "a":
+        add_bond_between_points_for(active_canvas_for_window(window), QPointF(0, 0), QPointF(40, 0))
+    assert services_for_window(window).document_action_service.save_canvas_to_path(window, str(root / (name + ".chemvas")))
+original_file = (root / "a.chemvas").read_bytes()
+if mode == "untitled-discard":
+    documents.set_file_path(first, None)
+    documents.set_display_name(first, "Unsaved plan")
+store = new_session_store(sessions_dir())
+service = SessionRecoveryService(store, interval_ms=20)
+service.start(app)
+# A supported graph edit joins two planned components, making their references stale.
+add_bond_for(first, 0, 2)
+add_bond_between_points_for(active_canvas_for_window(windows[2]), QPointF(0, 80), QPointF(40, 80))
+assert documents.is_dirty(first)
+raw_plan = deepcopy(calculation_plan_for(first))
+assert raw_plan is not None
+assert service.snapshot_now() is False, "Regular autosave must still reject omitted plan data"
+manifest_path = store.session_dir / "session.json"
+before_snapshot = manifest_path.read_bytes()
+before_history = first.services.history_service.capture_stack_snapshot()
+answers = []
+class Answer(QObject):
+    def eventFilter(self, obj, event):
+        if event.type() != QEvent.Type.Show or not isinstance(obj, QMessageBox) or obj.property("answered"):
+            return False
+        obj.setProperty("answered", True)
+        title = obj.windowTitle()
+        if title == "Save Changes":
+            first_prompt = not answers
+            choice = QMessageBox.StandardButton.Save
+            if first_prompt and mode not in {"save", "save-decline"}:
+                choice = QMessageBox.StandardButton.Discard
+            if not first_prompt and mode == "discard-cancel":
+                choice = QMessageBox.StandardButton.Cancel
+        elif title == "Calculation Plan Needs Attention":
+            choice = QMessageBox.StandardButton.No if mode == "save-decline" else QMessageBox.StandardButton.Yes
+        elif title == "Save Adjusted Document":
+            choice = QMessageBox.StandardButton.Ok
+        else:
+            raise AssertionError((title, obj.text()))
+        answers.append((title, choice.name))
+        QTimer.singleShot(50, lambda: obj.button(choice).click())
+        return False
+answer = Answer(app)
+app.installEventFilter(answer)
+cancelled = mode in {"discard-cancel", "save-decline", "failed-final-write"}
+if mode == "failed-final-write":
+    def fail_write(docs):
+        raise OSError("injected final manifest failure")
+    store.save_documents = fail_write
+if cancelled:
+    def check_cancel():
+        assert open_windows() == tuple(windows)
+        assert all(window.isVisible() and window.isEnabled() for window in windows)
+        assert not is_quitting() and not is_quit_pending()
+        assert documents.is_dirty(first)
+        assert len(first.model.bonds) == 3
+        assert calculation_plan_for(first) == raw_plan
+        assert first.services.history_service.capture_stack_snapshot() == before_history
+        assert manifest_path.read_bytes() == before_snapshot
+        assert (root / "a.chemvas").read_bytes() == original_file
+        print(json.dumps({"mode": mode, "cancelled_safely": True, "answers": answers}), flush=True)
+        os._exit(0)
+    QTimer.singleShot(600, check_cancel)
+QTimer.singleShot(0, app.quit)
+QTimer.singleShot(4000, lambda: os._exit(91))
+assert app.exec() == 0
+assert not cancelled, "Quit should have remained cancelled"
+manifest = json.loads(manifest_path.read_text())
+assert manifest["clean_exit"]
+assert not open_windows()
+expected = {"b.chemvas", "c.chemvas"} if mode == "untitled-discard" else {"a.chemvas", "b.chemvas", "c.chemvas"}
+assert {Path(entry["file_path"]).name for entry in manifest["docs"]} == expected
+assert all(not entry["dirty"] and entry["snapshot"] is None for entry in manifest["docs"])
+assert len(read_document(root / "c.chemvas").state["model"]["bonds"]) == 2
+if mode == "save":
+    saved = read_document(root / "a.chemvas").state
+    assert len(saved["model"]["bonds"]) == 3 and "calculation_plan" not in saved
+else:
+    assert (root / "a.chemvas").read_bytes() == original_file
+restored = new_session_store(sessions_dir()).consume_previous_sessions()
+assert {Path(doc.file_path).name for doc in restored.docs} == expected
+assert restored.recovered_unsaved == 0
+print(json.dumps({"mode": mode, "reopened_paths": sorted(expected), "answers": answers,
+                  "original_hash": hashlib.sha256(original_file).hexdigest()}), flush=True)
+"""
+
+
+@pytest.mark.parametrize(
+    "mode",
+    [
+        "discard",
+        "untitled-discard",
+        "discard-cancel",
+        "save",
+        "save-decline",
+        "failed-final-write",
+    ],
+)
+def test_quit_respects_close_decisions_for_a_stale_plan(tmp_path, mode):
+    environment = os.environ.copy()
+    for key in ("XDG_CONFIG_HOME", "XDG_DATA_HOME", "XDG_CACHE_HOME", "XDG_STATE_HOME"):
+        environment[key] = str(tmp_path / key.lower())
+    environment["QT_QPA_PLATFORM"] = "offscreen"
+    result = subprocess.run(
+        [sys.executable, "-c", STALE_PLAN_SCRIPT, str(tmp_path), mode],
+        env=environment,
+        capture_output=True,
+        text=True,
+        timeout=8,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr

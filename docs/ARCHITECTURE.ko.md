@@ -118,7 +118,8 @@ content bounds와 물리 크기를 함께 계산한다. 선택 회전, 클립보
 - `chemvas.domain.transactions`는 프레임워크와 무관한 `RestoreOutcome` 검증, 복구 오류 note 부착, 1회 restore helper만 소유한다.
 - restore는 한 번 적용하고 한 번 검증한다. exact 복원을 입증하지 못하면 history는 ADR 0002의 보수적인 fail-closed stack 정책을 적용하고 durable recovery는 autosave/session restore에 맡긴다. 제거된 retry, authority channel, compatibility probing, 병렬 stack snapshot 계층은 다시 도입할 수 없다.
 - Autosave session 소유권은 PID와 process-creation identity의 조합에 묶인다. `session.json`은 동시에 실행 중인 이전 바이너리도 읽을 수 있는 엄격한 version-1 형태를 유지하고, 원자적으로 기록되는 `owner.json` sidecar가 새 reader를 위해 PID와 생성 identity를 연결한다. 같은 identity의 live PID 또는 identity를 읽을 수 없는 live PID는 그대로 보존하며, 다른 identity일 때만 PID 재사용이 입증되어 crashed session을 복구할 수 있다. identity가 없는 legacy manifest는 보수적인 live-PID 정책을 유지한다.
-- 애플리케이션 Quit는 모든 창의 확인을 마친 뒤 최종 session snapshot을 기록하고,
+- 애플리케이션 Quit는 모든 창의 확인을 마친 뒤 버린 초안을 직렬화하지 않고
+  다시 열 저장 파일 목록을 기록하며,
   기존 비동기 preview shutdown으로 창이 닫히는 동안 snapshot을 동결한다.
   다른 앱 데이터 위치의 복구 파일 탐색은 읽기 전용으로 경로만 알린다.
   세션을 병합하거나 별도의 영속 복구 장부를 만들지 않는다.

@@ -27,7 +27,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   through startup, and reuse blank drawings for File Open / Open Recent. Warn
   about abandoned snapshots in alternate app-data locations without consuming them.
   Decline new OS file opens during Quit; imported nonempty drawings are not reused
-  as blank windows.
+  as blank windows. After all close prompts are accepted, remember saved paths
+  without requiring a new snapshot of discarded drafts or stale calculation plans.
 - Enforce figure-export size budgets for default and column presets as well as
   explicit limits. Keep embedded PNG/JPEG text metadata out of rendered SVG
   images while preserving the original bytes in editable documents. Use custom
