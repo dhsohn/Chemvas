@@ -88,6 +88,76 @@ def test_cli_native_dry_run_and_write_have_identical_hash_and_preserve_source(tm
     assert candidate.state["notes"] == read_document(source).state["notes"]
 
 
+@pytest.mark.parametrize("ring_style", ["regular", "benzene"])
+@pytest.mark.parametrize(
+    "order,bond_style",
+    [
+        (1, "single"),
+        (2, "double"),
+        (2, "double_center"),
+        (2, "double_outer"),
+        (3, "triple"),
+        (1, "wedge"),
+        (1, "hash"),
+        (1, "dotted"),
+        (2, "dotted_double"),
+        (2, "dotted_double_outer"),
+        (1, "bold_in"),
+        (1, "bold_center"),
+        (1, "bold_out"),
+    ],
+)
+def test_public_cli_bond_anchor_style_boundary_is_explicit_and_preserves_source(
+    tmp_path, ring_style, order, bond_style
+):
+    source, request, output = _files(tmp_path)
+    state = compose_document_state(
+        {
+            "format": "chemvas-document-composition",
+            "version": 1,
+            "atoms": [
+                {"id": 0, "element": "C", "x": 0, "y": 0},
+                {"id": 1, "element": "C", "x": 40, "y": 0},
+            ],
+            "bonds": [{"a": 0, "b": 1, "order": order, "style": bond_style}],
+        }
+    )
+    write_document(source, state, CANVAS_FILE_VERSION)
+    original = source.read_bytes()
+    raw = json.loads(request.read_text())
+    raw.update(
+        source_sha256=hashlib.sha256(original).hexdigest(),
+        style=ring_style,
+        position=[20, 20],
+        anchor={"kind": "bond", "a": 0, "b": 1},
+    )
+    request.write_text(json.dumps(raw))
+    dry = _run(source, request, "--dry-run")
+    written = _run(source, request, "--output", output)
+    assert source.read_bytes() == original
+    if bond_style in {"single", "double", "double_center", "double_outer"}:
+        assert dry.returncode == written.returncode == 0, (dry.stderr, written.stderr)
+        assert (
+            json.loads(dry.stdout)["candidate_sha256"]
+            == hashlib.sha256(output.read_bytes()).hexdigest()
+        )
+        candidate = read_document(output).state
+        assert candidate["model"]["bonds"][0] == state["model"]["bonds"][0]
+        original_atoms = read_document(source).state["model"]["atoms"]
+        for atom_id, atom_state in original_atoms.items():
+            assert candidate["model"]["atoms"][atom_id] == atom_state
+    else:
+        assert dry.returncode == written.returncode == 2
+        expected = (
+            "template anchors must not touch wedge/hash stereochemistry"
+            if bond_style in {"wedge", "hash"}
+            else "template bond anchor must be plain single, or plain double"
+        )
+        assert expected in dry.stderr
+        assert expected in written.stderr
+        assert not output.exists()
+
+
 @pytest.mark.parametrize(
     "case",
     [

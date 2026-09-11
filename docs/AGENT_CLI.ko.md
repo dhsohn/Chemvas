@@ -165,6 +165,11 @@ ring_fills, ts_brackets 각각 4,096개입니다. 이미지는 앞서 연결한 
 잘못된 Unicode, 누락/미지의 필드와 범위 밖 설정은 캔버스 복원 전 공유 검증에서
 실패합니다.
 
+원본 문서에서 원자에 붙은 mark의 `atom_id`와 고리 채움 `atom_ids`의 각 값은
+따옴표로 감싼 숫자가 아닌 JSON 정수여야 합니다. `model.atoms`,
+`model.atom_annotations`, `perspective.atom_coords_3d`의 십진 문자열 객체 키는
+계속 지원합니다. 이런 매핑의 키와 원자 ID 값은 구분됩니다.
+
 도형은 `shape_kind`(`circle`, `ellipse`, `rounded_rect`, `rect`),
 `left`, `top`, `right`, `bottom`, `stroke_style`(`solid`, `dashed`,
 `dotted`, `none`)이 필수이고 선택 필드는 `fill`(`#RRGGBB`),
@@ -297,6 +302,14 @@ chemvas insert-template scheme.chemvas --request ring.json --output ring-added.c
 원본 기하와 점유 규칙이 배치를 결정합니다. 의자/보트 원자 앵커, 그룹 안의 앵커,
 쐐기/해시 결합에 인접한 앵커는 거부됩니다. 의자나 보트의 명시적 선택은 그리기
 선택이지 추론된 입체화학이 아닙니다.
+
+CLI의 결합 앵커 허용 범위는 데스크톱의 대화형 고리 융합보다 의도적으로 좁습니다.
+허용되는 앵커 결합 스타일은 `single`, `double`, `double_center`, `double_outer`입니다.
+`regular`와 `benzene`은 결합 차수 1 또는 2를 허용하고, `chair`, `chair_flip`, `boat`는
+차수 1만 허용합니다. 굵은 스타일, 점선/접촉 스타일, 삼중 결합은 거부됩니다.
+쐐기/해시 자체를 앵커로 삼거나 앵커가 쐐기/해시 결합에 닿으면 입체화학 전용
+오류를 표시합니다. 데스크톱 템플릿의 기하를 재사용한다는 말은 모든 대화형 융합
+대상을 CLI에서도 허용한다는 뜻이 아닙니다.
 
 명령은 정확한 원본 바이트를 고정하고, Qt 전에 검증하고, 사설 캔버스에서 원본
 템플릿 계획기와 커밋을 호출하며, 원본 좌표, 기존 그래프/주석, 노트, 설정, 그룹,

@@ -126,6 +126,19 @@ def shortcut_modifiers_for(event) -> Qt.KeyboardModifier:
     return event.modifiers() & mask
 
 
+def chemdraw_shortcut_text_for(event) -> str:
+    """Use Shift, not Caps Lock text casing, for ASCII letter variants."""
+    text = event.text()
+    if len(text) == 1 and ("a" <= text <= "z" or "A" <= text <= "Z"):
+        return (
+            text.upper()
+            if event.modifiers() & Qt.KeyboardModifier.ShiftModifier
+            else text.lower()
+        )
+    # Preserve keyboard-layout punctuation/digits and non-ASCII/IME text.
+    return text
+
+
 def reset_view_transform_for(canvas) -> None:
     state = input_view_state_for(canvas)
     state.base_transform = QTransform()
@@ -312,7 +325,7 @@ def should_override_chemdraw_shortcut_for(canvas, event) -> bool:
         Qt.KeyboardModifier.ShiftModifier,
     ):
         return False
-    text = event.text()
+    text = chemdraw_shortcut_text_for(event)
     if hover_state_for(canvas).atom_id is not None:
         if event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
             return True
@@ -400,6 +413,7 @@ __all__ = [
     "ZOOM_MIN",
     "ZOOM_STEP",
     "CanvasSceneRectStateSnapshot",
+    "chemdraw_shortcut_text_for",
     "device_pixel_ratio_for",
     "fit_canvas_to_view_for",
     "focus_canvas_for",

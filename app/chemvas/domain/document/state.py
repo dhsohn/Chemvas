@@ -1034,6 +1034,8 @@ def _validate_ring_fields(
         points
     ):
         raise ValueError(error)
+    if any(not _is_int(atom_id) or atom_id < 0 for atom_id in ring_atom_ids):
+        raise ValueError(f"{error} atom_ids must contain non-negative integers.")
     if not _is_atom_id_cycle(ring_atom_ids, atom_ids, bond_pairs, clipboard=clipboard):
         raise ValueError(error)
     if not _ring_points_match_atom_positions(
@@ -1110,7 +1112,7 @@ def _validate_ring_fill_states(
     bond_pairs: set[tuple[int, int]],
     atom_positions: Mapping[int, tuple[int | float | Decimal, int | float | Decimal]],
 ) -> None:
-    for ring_state in _validated_scene_state_list(states):
+    for index, ring_state in enumerate(_validated_scene_state_list(states)):
         _validate_ring_fields(
             ring_state,
             atom_ids,
@@ -1118,7 +1120,7 @@ def _validate_ring_fill_states(
             atom_positions,
             required_keys=frozenset(("points", "atom_ids", "color", "alpha")),
             clipboard=False,
-            error="Invalid Chemvas file.",
+            error=f"Invalid Chemvas file. state.ring_fills[{index}]:",
         )
 
 
@@ -1132,7 +1134,7 @@ def _validate_note_states(states: object) -> None:
 
 
 def _validate_mark_states(states: object, atom_ids: set[int]) -> None:
-    for mark_state in _validated_scene_state_list(states):
+    for index, mark_state in enumerate(_validated_scene_state_list(states)):
         if set(mark_state) != {"kind", "text", "atom_id", "dx", "dy", "x", "y"}:
             raise ValueError("Invalid Chemvas file.")
         if not _is_valid_choice(mark_state.get("kind"), VALID_MARK_KINDS):
@@ -1146,9 +1148,11 @@ def _validate_mark_states(states: object, atom_ids: set[int]) -> None:
             if mark_state.get("dx") is not None or mark_state.get("dy") is not None:
                 raise ValueError("Invalid Chemvas file.")
             continue
-        parsed_atom_id = _validated_id(atom_id)
-        if parsed_atom_id not in atom_ids:
-            raise ValueError("Invalid Chemvas file.")
+        if not _is_int(atom_id) or atom_id < 0 or atom_id not in atom_ids:
+            raise ValueError(
+                f"Invalid Chemvas file. state.marks[{index}].atom_id must be "
+                "an existing non-negative integer atom ID or null."
+            )
         dx = mark_state.get("dx")
         dy = mark_state.get("dy")
         if (dx is None and dy is None) or (_is_number(dx) and _is_number(dy)):

@@ -322,6 +322,22 @@ class SelectionRotationController:
             update_axis_preview,
         )
 
+    def cancel_selection_3d_rotation(self) -> None:
+        preview = self._rotation_preview_authority
+        if preview is None:
+            return
+        state = self.rotation
+        selection_ids = state.selection_ids
+        self._rotation_preview_authority = None
+        try:
+            preview.restore()
+            if selection_ids is not None:
+                self.restore_selection_from_ids(*selection_ids)
+        finally:
+            state.clear_session()
+            preview.release()
+        self.emit_selection_info()
+
     def end_selection_3d_rotation(self) -> None:
         preview = self._rotation_preview_authority
         if preview is None:

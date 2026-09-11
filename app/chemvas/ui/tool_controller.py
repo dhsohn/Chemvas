@@ -81,6 +81,13 @@ class ToolController:
         }
         self.active: Tool | None = None
 
+    def cancel_active_gesture(self) -> None:
+        # Perspective alone commits on ordinary deactivation. Escape must
+        # explicitly cancel it before switching tools; other tools retain
+        # their existing deactivation behavior.
+        if isinstance(self.active, PerspectiveTool):
+            self.active.cancel_active_rotation()
+
     def set_active(self, name: str) -> None:
         if self.active:
             self.active.deactivate()

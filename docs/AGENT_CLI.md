@@ -174,6 +174,11 @@ serialization limit, not a usable drawing size. Native mark text is null or at
 most 200 characters. Invalid Unicode, missing/unknown fields and out-of-range
 settings fail shared validation before canvas restoration.
 
+In native documents, a bound mark's `atom_id` and entries in ring-fill `atom_ids`
+must be JSON integers, not quoted numbers. Decimal-string object keys in
+`model.atoms`, `model.atom_annotations`, and `perspective.atom_coords_3d` remain
+supported; those map keys are distinct from atom-ID values.
+
 Shapes require `shape_kind` (`circle`, `ellipse`, `rounded_rect`, `rect`),
 `left`, `top`, `right`, `bottom`, and `stroke_style` (`solid`, `dashed`,
 `dotted`, `none`); optional `fill` is `#RRGGBB` and `fill_alpha` is 0–1.
@@ -319,6 +324,14 @@ placement point, not a promise that it is the ring's centroid. Atom anchoring us
 native geometry and occupancy rules determine placement. Chair/boat atom anchors,
 anchors in groups, and anchors incident to wedge/hash bonds are rejected.
 Explicit choice of a chair or boat is a drawing choice, not inferred stereochemistry.
+
+The CLI intentionally has a narrower bond-anchor boundary than interactive desktop
+fusion. Accepted anchor bond styles are `single`, `double`, `double_center`, and
+`double_outer`. `regular` and `benzene` permit bond orders 1 or 2; `chair`,
+`chair_flip`, and `boat` require order 1. Bold styles, dotted/contact styles, and
+triple bonds are rejected. A wedge/hash anchor, or any anchor touching a wedge/hash
+bond, receives a specific stereo diagnostic. Reusing the desktop's template
+geometry does not mean that every interactive fusion target is accepted by the CLI.
 
 The command pins exact source bytes, validates before Qt, invokes the native
 template planner and commit on a private canvas, and preserves source coordinates,

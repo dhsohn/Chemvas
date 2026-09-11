@@ -633,7 +633,10 @@ class CanvasNoteController:
         current_html = item.toHtml()
         html_changed = bool(committed_html) and current_html != committed_html
         if text:
-            if text != committed_text or html_changed:
+            # Typed notes commit trimmed comparison text; restored notes may
+            # retain outer whitespace. Compare consistently without changing
+            # the live text/HTML (HTML still detects real whitespace edits).
+            if text != committed_text.strip() or html_changed:
                 after_state = note_state_dict_for(self.canvas, item)
                 if not committed_text:
                     command: HistoryCommand = AddSceneItemsCommand(

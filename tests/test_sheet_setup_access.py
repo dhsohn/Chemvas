@@ -136,6 +136,7 @@ def test_set_sheet_setup_updates_scene_rect_and_viewport() -> None:
 def test_smaller_sheet_keeps_existing_outside_content_scrollable() -> None:
     canvas, scene = _qt_sheet_canvas()
     arrow = scene.addLine(330, 0, 410, 0)
+    arrow.setData(0, "line")
     set_sheet_setup_for(canvas, "A4", "portrait")
     assert canvas.sceneRect().contains(arrow.sceneBoundingRect())
     assert scene.sceneRect().contains(arrow.sceneBoundingRect())

@@ -47,6 +47,7 @@ from chemvas.ui.note_item_access import (
     set_committed_note_html_for,
     set_committed_note_text_for,
 )
+from chemvas.ui.ring_fill_state import RING_FILL_ALPHA_ROLE, set_ring_fill_brush
 from chemvas.ui.scene_item_access import attach_scene_item, item_is_in_canvas_scene
 from chemvas.ui.scene_item_state import (
     ARROW_KINDS,
@@ -510,7 +511,7 @@ class CanvasColorMutationService:
         self._record_scene_item_mutation(
             item,
             state_for=ring_state_dict_for,
-            mutation=lambda: item.setBrush(fill),
+            mutation=lambda: set_ring_fill_brush(item, fill),
             runtime_rollback=self._graphics_runtime_rollback(item),
         )
 
@@ -1004,6 +1005,12 @@ class CanvasColorMutationService:
         )
         brush = _captured_graphics_brush(item)
         pen = _captured_graphics_pen(item)
+        is_ring = _graphics_item_data_for_capture(item, 0) == "ring"
+        ring_alpha = (
+            _graphics_item_data_for_capture(item, RING_FILL_ALPHA_ROLE)
+            if is_ring
+            else None
+        )
 
         if text_color is None and brush is None and pen is None:
             raise RuntimeError("color runtime has no exact Qt text/brush/pen authority")
@@ -1016,6 +1023,10 @@ class CanvasColorMutationService:
                 operations.append(lambda: _set_graphics_pen_exact(item, pen))
             if brush is not None:
                 operations.append(lambda: _set_graphics_brush_exact(item, brush))
+            if is_ring:
+                operations.append(
+                    lambda: item.setData(RING_FILL_ALPHA_ROLE, ring_alpha)
+                )
             _run_restore_operations("Graphics color rollback failed", operations)
 
         def verify() -> None:
@@ -1035,6 +1046,8 @@ class CanvasColorMutationService:
                 actual_brush = _captured_graphics_brush(item)
                 if actual_brush != brush:
                     raise RuntimeError("graphics brush did not match its savepoint")
+            if is_ring and item.data(RING_FILL_ALPHA_ROLE) != ring_alpha:
+                raise RuntimeError("ring opacity did not match its savepoint")
 
         return _ColorRuntimeAuthority(restore, verify)
 

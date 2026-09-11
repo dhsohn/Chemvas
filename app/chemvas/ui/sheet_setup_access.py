@@ -6,7 +6,11 @@ from typing import TYPE_CHECKING
 from PyQt6.QtCore import QRectF
 
 from chemvas.domain.transactions import add_recovery_error_note
-from chemvas.features.export import content_bounds, export_item_closure
+from chemvas.features.export import (
+    collect_export_items,
+    content_bounds,
+    export_item_closure,
+)
 from chemvas.ui.input_view_access import (
     CanvasSceneRectStateSnapshot,
     set_scene_rect_for,
@@ -128,7 +132,7 @@ def _apply_sheet_scene_rect_unchecked(canvas) -> None:
     scene_getter = getattr(canvas, "scene", None)
     scene = scene_getter() if callable(scene_getter) else None
     if scene is not None:
-        bounds = content_bounds(export_item_closure(scene.items()))
+        bounds = content_bounds(export_item_closure(collect_export_items(scene)))
         if bounds is not None:
             scene_rect = scene_rect.united(
                 bounds.adjusted(

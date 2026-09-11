@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import override
 
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import QEvent, Qt
 from PyQt6.QtWidgets import QGraphicsItem
 
 from chemvas.ui.canvas_service_ports import note_controller_for_access
@@ -34,6 +34,20 @@ class NoteItem(ExportTextItem):
                 self.setTextWidth(document.idealWidth())
         finally:
             self._fitting_text_width = False
+
+    @override
+    def sceneEvent(self, event) -> bool:
+        if (
+            event.type() == QEvent.Type.KeyPress
+            and event.key() in (Qt.Key.Key_Tab, Qt.Key.Key_Backtab)
+            and event.modifiers() == Qt.KeyboardModifier.ShiftModifier
+            and self.textInteractionFlags() & Qt.TextInteractionFlag.TextEditable
+        ):
+            # Backtab has no note-editing command. Do not let Qt move focus
+            # into the window's toolbar/status-bar tab chain instead.
+            event.accept()
+            return True
+        return super().sceneEvent(event)
 
     @override
     def keyPressEvent(self, event) -> None:
