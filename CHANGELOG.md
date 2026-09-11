@@ -7,9 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-09-11
+
 ### Added
 
-- Korean versions of every user and contributor guide: the reference, CLI,
+- Korean versions of the user and contributor guides: the reference, CLI,
   scheme-layout, publication and image-objects guides, the media, examples and
   packaging READMEs, and CONTRIBUTING, RELEASING and the code of conduct now
   each have a `.ko.md` twin linked from the top of the page, with the same
@@ -37,6 +39,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   linked guides.
 - Close the blank gaps between the top toolbar's button groups (after
   Brackets and after Orbital); the tool buttons now form one continuous row.
+- `OH`, `NH2`, and `SH` labels must carry exactly one single bond (wedge or
+  hash allowed) and no charge or radical mark. A document that breaks this
+  rule is now rejected by `inspect`, `inspect-document`, `compose-document`,
+  `insert-template`, `apply-patch`, `attach-plan`, `pack-step`, and the
+  Calculation dialog; 0.11.0 accepted such a document and silently dropped
+  the drawn hydrogens. Use an element label for a charged or radical atom.
 - Recapture the first-scheme walkthrough GIF, still and example exports
   against the current interface, where the SMILES field sits on the Ring
   tool's options bar; the walkthrough script chooses that tool first. The
@@ -50,28 +58,49 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   opacity, so ring double bonds sit inside the ring, heteroatoms show their
   labels and bonds stop short of them; previously the ghost drew every atom
   as a dot and every double bond as two full-length parallel lines.
-- Restore background images before molecular graphics when opening a document
-  so structures are visible on the first paint of a native window.
+- Show the structures of a reopened document that also contains embedded
+  images on the first paint of a native window; on macOS they could stay
+  invisible until the selection changed. Images are now restored before the
+  molecular graphics.
 - Remember the last confirmed Export Figure format within each window; cancelling
   the options dialog leaves the previous format selected for the next export.
-- Restore the active drawing hint when a toolbar status tip or timed message clears.
+- Keep the status-bar drawing hint current: restore it when a toolbar status
+  tip or timed message clears, and refresh it when keyboard shortcuts or
+  Select All change the active tool.
 - Calculate Molecule Info identifiers for neutral terminal `OH`, `NH2`, and `SH`
-  labels. Conversion requires one single attachment and no charge or radical mark
-  on these labels, so contradictory hydrogens are rejected instead of dropped.
-
+  labels. `NH2` and `SH` join the alias table, so the 3D preview, XYZ export,
+  and calculation handoff accept them as well; the attachment rule these three
+  labels now enforce is listed under Changed.
 - Export Figure writes the chosen format under a matching file extension. A
   name typed with a different format's extension (`figure.pdf` while the dialog
   is set to SVG) is retargeted to the format being written instead of leaving
   the other format's bytes under a misleading name; replacing an existing file
   under the corrected name is confirmed first. Extensions that name no export
   format are still left alone.
-- Explain a failed export write in the dialog: a missing folder, a permission
+- Explain a failed Export Figure write in the dialog: a missing folder, a permission
   refusal, or a full disk are described in place of the raw errno text and the
   temporary staging path the user never chose.
-- Refresh the status-bar drawing hint when keyboard shortcuts or Select All
-  change the active tool.
 - Correct the reference guide's SMILES entry instructions to use the Ring
-  options bar.
+  options bar, and drop the first-scheme guide's note that PyPI 0.8.1 lacked
+  the arrow-label outlining fix.
+
+### Removed
+
+- The preview-geometry API of the SMILES insertion feature, superseded by the
+  rendered preview picture: `SmilesPreviewGeometry`, `SmilesPreviewPlan`,
+  `SmilesPreviewSnapshot`, `build_smiles_preview_geometry`,
+  `build_smiles_preview_snapshot`, `plan_smiles_preview_update`, and
+  `snapshot_smiles_preview_geometry` from `chemvas.features.insertion`;
+  `smiles_preview_snapshot` and `apply_smiles_preview_geometry` from
+  `chemvas.ui.preview_scene_renderer`; `apply_smiles_preview_geometry_for`
+  from `chemvas.ui.preview_scene_access`; the `smiles_preview_snapshot`
+  methods of `InsertController` and `InsertSmilesService`; and the
+  `smiles_preview_bond_items` and `smiles_preview_atom_items` fields of
+  `CanvasInsertState`, replaced by `smiles_preview_picture`.
+  `clear_smiles_preview` and `clear_smiles_preview_for` now return the removed
+  items as one list instead of a three-tuple.
+- `TOOLBAR_GROUP_GAP_PX` from `chemvas.ui.main_window_panel_toolbar`, together
+  with the toolbar group gaps it sized.
 
 ## [0.11.0] - 2026-09-10
 
@@ -1641,7 +1670,8 @@ housekeeping.
   `.chemvas` document type (double-clicking a file opens it in Chemvas), and a
   Linux `.desktop` entry with an `application/x-chemvas` MIME type.
 
-[Unreleased]: https://github.com/dhsohn/Chemvas/compare/v0.11.0...HEAD
+[Unreleased]: https://github.com/dhsohn/Chemvas/compare/v0.12.0...HEAD
+[0.12.0]: https://github.com/dhsohn/Chemvas/compare/v0.11.0...v0.12.0
 [0.11.0]: https://github.com/dhsohn/Chemvas/compare/v0.10.2...v0.11.0
 [0.10.2]: https://github.com/dhsohn/Chemvas/compare/v0.10.1...v0.10.2
 [0.10.1]: https://github.com/dhsohn/Chemvas/compare/v0.10.0...v0.10.1
