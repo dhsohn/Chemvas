@@ -33,9 +33,10 @@ the pointer, a charge, and a benzene ring fused onto a bond.
 ![Draw a structure: drag bonds, press 2 on a bond, type o on an atom, fuse a ring](images/walkthrough-drawing.gif)
 
 **Arrows and labels** — reaction, equilibrium and curved arrows, labels typed
-through the arrow dialog, and endpoint snapping.
+through the arrow dialog, and a reaction profile drawn with the Line tool whose
+connectors snap to the energy-level ends.
 
-![Arrows and labels: draw arrows, double-click to label, snap an end](images/walkthrough-arrows.gif)
+![Arrows and labels: draw arrows, double-click to label, draw a reaction profile with snapping lines](images/walkthrough-arrows.gif)
 
 **Select, move, rotate, align** — move a molecule, rotate the selection with
 its knob, flip, align, and snap a line to the grid.
