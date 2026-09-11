@@ -1,5 +1,7 @@
 # Chemvas reference
 
+[한국어](REFERENCE.ko.md)
+
 User-facing detail for Chemvas: running the app, drawing features, the document
 format, export behavior, and shortcuts. The landing overview is the
 [README](../README.md); headless and agent contracts are in

@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Korean versions of every user and contributor guide: the reference, CLI,
+  scheme-layout, publication and image-objects guides, the media, examples and
+  packaging READMEs, and CONTRIBUTING, RELEASING and the code of conduct now
+  each have a `.ko.md` twin linked from the top of the page, with the same
+  figures, GIFs and diagrams and with every command and example kept verbatim;
+  the Korean README points at the Korean guides.
 - Figures and diagrams in the guides: the CLI guide opens with a flowchart of
   how the commands chain and shows the composition, template-insertion and
   Graph Patch examples rendered; the scheme-layout guide shows arrange, align-y

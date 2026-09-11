@@ -1,5 +1,7 @@
 # Architecture
 
+[한국어](ARCHITECTURE.ko.md)
+
 ## Layers at a glance
 
 A non-normative snapshot of who may import whom. Arrows point from the

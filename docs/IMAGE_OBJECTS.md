@@ -1,5 +1,7 @@
 # Embedded PNG/JPEG images
 
+[한국어](IMAGE_OBJECTS.ko.md)
+
 Chemvas can combine complete PNG/JPEG rasters with native structures, notes,
 arrows, and graphs in one `.chemvas` document. Image positions and display sizes
 are editable canvas properties. Inserting, saving, reopening, copying a selection,

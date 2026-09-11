@@ -1,5 +1,7 @@
 # Repeatable publication figures
 
+[한국어](PUBLICATION_SCHEMES.ko.md)
+
 This recipe makes two **synthetic drawing examples**, not a reaction mechanism or
 research result. It uses public Chemvas commands and retains native editable
 documents alongside every export. It contains no private manuscript or calculation

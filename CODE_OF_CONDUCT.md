@@ -1,5 +1,7 @@
 # Contributor Covenant Code of Conduct
 
+[한국어](CODE_OF_CONDUCT.ko.md)
+
 ## Our Pledge
 
 We as members, contributors, and leaders pledge to make participation in our

@@ -1,5 +1,7 @@
 # Structure and caption layout
 
+[한국어](SCHEME_LAYOUT.ko.md)
+
 `layout-document` arranges existing structures and caption notes into explicit
 rows. It measures native painted text, centers captions beneath each structure,
 aligns the first text baseline at each caption level, and uses common column
