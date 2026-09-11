@@ -20,7 +20,7 @@ from chemvas.bootstrap.file_open import open_document
 from chemvas.bootstrap.window_registry import open_new_window, open_windows
 from chemvas.core.document_io import read_document, write_document
 from chemvas.domain.document import CANVAS_FILE_VERSION
-from chemvas.features.session import is_quitting
+from chemvas.features.session import is_quit_pending, is_quitting
 from chemvas.ui.app_data_paths import sessions_dir
 from chemvas.ui.main_window_ports import active_canvas_for_window, preview_for_window, services_for_window
 from chemvas.ui.session_recovery_service import SessionRecoveryService
@@ -28,6 +28,7 @@ from chemvas.ui.session_snapshot_store import new_session_store
 from chemvas.ui.structure_mutation_access import add_bond_between_points_for
 
 root, mode = Path(sys.argv[1]), sys.argv[2]
+answer_delay_ms = int(sys.argv[3])
 app = QApplication([])
 app.setApplicationName("Chemvas")
 app.setOrganizationName("Chemvas")
@@ -81,7 +82,7 @@ class Answer(QObject):
                     QTimer.singleShot(10, incoming_event)
                 if mode == "nested-quit":
                     QTimer.singleShot(20, app.quit)
-                QTimer.singleShot(70, lambda: obj.button(choice).click())
+                QTimer.singleShot(answer_delay_ms, lambda: obj.button(choice).click())
         return False
 answer = Answer(app)
 app.installEventFilter(answer)
@@ -106,7 +107,7 @@ if mode in cancelled_modes:
     def check_cancel():
         assert len(open_windows()) == len(windows)
         assert all(window.isVisible() and window.isEnabled() for window in windows)
-        assert not is_quitting()
+        assert not is_quitting() and not is_quit_pending()
         manifest = json.loads((store.session_dir / "session.json").read_text())
         assert not manifest["clean_exit"]
         if mode == "failed-snapshot":
@@ -119,9 +120,14 @@ if mode in cancelled_modes:
             assert services_for_window(open_windows()[-1]).canvas_document_service.file_path(canvas) == str(incoming)
         print("cancelled safely", flush=True)
         os._exit(0)
-    QTimer.singleShot(500, check_cancel)
 
-QTimer.singleShot(0, app.quit)
+def request_quit():
+    app.quit()
+    if mode in cancelled_modes:
+        # Quit runs nested modal loops. Observe cancellation only after the
+        # request returns, not from a timer that can fire inside those loops.
+        QTimer.singleShot(0, check_cancel)
+QTimer.singleShot(0, request_quit)
 QTimer.singleShot(4000, lambda: os._exit(91))
 assert app.exec() == 0
 assert mode not in cancelled_modes, "Quit should have been cancelled"
@@ -143,31 +149,32 @@ print("quit preserved all documents", flush=True)
 
 
 @pytest.mark.parametrize(
-    "mode",
+    ("mode", "answer_delay_ms"),
     [
-        "save",
-        "discard",
-        "cancel",
-        "save-as",
-        "worker",
-        "failed-save",
-        "failed-snapshot",
-        "clean",
-        "save-as-cancel",
-        "keep-alive",
-        "nested-quit",
-        "file-open-modal",
-        "file-open-worker",
-        "file-open-cancel",
+        ("save", 70),
+        ("discard", 70),
+        ("cancel", 70),
+        ("save-as", 70),
+        ("worker", 70),
+        ("failed-save", 70),
+        ("failed-snapshot", 70),
+        ("clean", 70),
+        ("save-as-cancel", 70),
+        ("keep-alive", 70),
+        ("nested-quit", 70),
+        ("file-open-modal", 70),
+        ("file-open-worker", 70),
+        ("file-open-cancel", 70),
+        pytest.param("file-open-cancel", 700, id="slow-file-open-cancel"),
     ],
 )
-def test_application_quit_keeps_the_whole_session(tmp_path, mode):
+def test_application_quit_keeps_the_whole_session(tmp_path, mode, answer_delay_ms):
     environment = os.environ.copy()
     for key in ("XDG_CONFIG_HOME", "XDG_DATA_HOME", "XDG_CACHE_HOME", "XDG_STATE_HOME"):
         environment[key] = str(tmp_path / key.lower())
     environment["QT_QPA_PLATFORM"] = "offscreen"
     result = subprocess.run(
-        [sys.executable, "-c", SCRIPT, str(tmp_path), mode],
+        [sys.executable, "-c", SCRIPT, str(tmp_path), mode, str(answer_delay_ms)],
         env=environment,
         capture_output=True,
         text=True,
@@ -199,6 +206,7 @@ from chemvas.ui.structure_mutation_access import add_bond_between_points_for, ad
 from tests.test_calculation_plan import _document_state, _plan
 
 root, mode = Path(sys.argv[1]), sys.argv[2]
+answer_delay_ms = int(sys.argv[3])
 app = QApplication([])
 app.setApplicationName("Chemvas")
 app.setOrganizationName("Chemvas")
@@ -251,7 +259,7 @@ class Answer(QObject):
         else:
             raise AssertionError((title, obj.text()))
         answers.append((title, choice.name))
-        QTimer.singleShot(50, lambda: obj.button(choice).click())
+        QTimer.singleShot(answer_delay_ms, lambda: obj.button(choice).click())
         return False
 answer = Answer(app)
 app.installEventFilter(answer)
@@ -273,8 +281,13 @@ if cancelled:
         assert (root / "a.chemvas").read_bytes() == original_file
         print(json.dumps({"mode": mode, "cancelled_safely": True, "answers": answers}), flush=True)
         os._exit(0)
-    QTimer.singleShot(600, check_cancel)
-QTimer.singleShot(0, app.quit)
+
+def request_quit():
+    app.quit()
+    if cancelled:
+        # All nested confirmations must finish before cancellation assertions.
+        QTimer.singleShot(0, check_cancel)
+QTimer.singleShot(0, request_quit)
 QTimer.singleShot(4000, lambda: os._exit(91))
 assert app.exec() == 0
 assert not cancelled, "Quit should have remained cancelled"
@@ -299,23 +312,33 @@ print(json.dumps({"mode": mode, "reopened_paths": sorted(expected), "answers": a
 
 
 @pytest.mark.parametrize(
-    "mode",
+    ("mode", "answer_delay_ms"),
     [
-        "discard",
-        "untitled-discard",
-        "discard-cancel",
-        "save",
-        "save-decline",
-        "failed-final-write",
+        ("discard", 50),
+        ("untitled-discard", 50),
+        ("discard-cancel", 50),
+        ("save", 50),
+        ("save-decline", 50),
+        ("failed-final-write", 50),
+        pytest.param("discard-cancel", 700, id="slow-discard-cancel"),
     ],
 )
-def test_quit_respects_close_decisions_for_a_stale_plan(tmp_path, mode):
+def test_quit_respects_close_decisions_for_a_stale_plan(
+    tmp_path, mode, answer_delay_ms
+):
     environment = os.environ.copy()
     for key in ("XDG_CONFIG_HOME", "XDG_DATA_HOME", "XDG_CACHE_HOME", "XDG_STATE_HOME"):
         environment[key] = str(tmp_path / key.lower())
     environment["QT_QPA_PLATFORM"] = "offscreen"
     result = subprocess.run(
-        [sys.executable, "-c", STALE_PLAN_SCRIPT, str(tmp_path), mode],
+        [
+            sys.executable,
+            "-c",
+            STALE_PLAN_SCRIPT,
+            str(tmp_path),
+            mode,
+            str(answer_delay_ms),
+        ],
         env=environment,
         capture_output=True,
         text=True,
