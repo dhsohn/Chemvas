@@ -11,6 +11,7 @@ from PyQt6.QtWidgets import (
     QGraphicsItem,
     QGraphicsLineItem,
     QGraphicsScene,
+    QWidget,
 )
 
 from chemvas.ui.graphics_items import NoSelectLineItem
@@ -91,6 +92,9 @@ class SmilesPreviewItem(QGraphicsItem):
         world = painter.worldTransform()
         device = painter.device()
         ratio = device.devicePixelRatioF()
+        # Widget geometry is already in logical pixels. Image/pixmap sizes
+        # are physical pixels and need the DPR conversion exactly once.
+        size_ratio = 1.0 if isinstance(device, QWidget) else ratio
         # A scene render hands every item its whole bounding rectangle as the
         # exposed rectangle, so the paint device itself is the hard cap.
         device_rect = (
@@ -100,8 +104,8 @@ class SmilesPreviewItem(QGraphicsItem):
                 QRect(
                     0,
                     0,
-                    math.ceil(device.width() / ratio),
-                    math.ceil(device.height() / ratio),
+                    math.ceil(device.width() / size_ratio),
+                    math.ceil(device.height() / size_ratio),
                 )
             )
         )
