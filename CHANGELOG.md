@@ -22,6 +22,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Keep SMILES insertion previews visible across high-DPI canvas viewports by
+  distinguishing logical widget dimensions from physical image dimensions.
 - Apply document-wide arrow width/head and orbital phase changes immediately,
   with exact Undo/Redo and synchronized decimal controls. Make sheet orientation
   undoable and keep off-sheet objects reachable after changes and reopening.
