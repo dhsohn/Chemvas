@@ -39,9 +39,9 @@ connectors snap to the energy-level ends.
 ![Arrows and labels: draw arrows, double-click to label, draw a reaction profile with snapping lines](images/walkthrough-arrows.gif)
 
 **Select, move, rotate, align** — move a molecule, rotate the selection with
-its knob, flip, align, and snap a line to the grid.
+its knob, flip, align, and distribute.
 
-![Select, move, rotate, align: move, rotate knob, flip, align middle, grid snap](images/walkthrough-editing.gif)
+![Select, move, rotate, align: move, rotate knob, flip, align middle, distribute](images/walkthrough-editing.gif)
 
 - **Bonds** — single / double / triple, bold, wedge & hash; 30° angle snapping and
   a consistent default bond length.

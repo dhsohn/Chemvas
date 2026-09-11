@@ -13,7 +13,7 @@ it is not an experimental result.
 | `demo.png` | A still of the completed drawing in the app. |
 | `walkthrough-drawing.gif` | Reference-guide walkthrough: bonds by dragging, bond order and element hotkeys, a charge, a fused benzene ring. |
 | `walkthrough-arrows.gif` | Reference-guide walkthrough: reaction, equilibrium and curved arrows, the arrow-label dialog, a Line-tool reaction profile with snapping connectors. |
-| `walkthrough-editing.gif` | Reference-guide walkthrough: move, rotate with the knob, flip, align, grid snap. |
+| `walkthrough-editing.gif` | Reference-guide walkthrough: move, rotate with the knob, flip, align, distribute. |
 | `walkthrough-chemistry.gif` | Reference-guide walkthrough: open a molfile, Molecule Info, export MOL and 3D XYZ (RDKit). |
 | `banner.png` | Existing Chemvas mark and the new tagline, rendered at 1360×270. |
 | `social-preview.png` | 1280×640 sharing card, including the actual example SVG. |
