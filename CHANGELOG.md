@@ -43,8 +43,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   hash allowed) and no charge or radical mark. A document that breaks this
   rule is now rejected by `inspect`, `inspect-document`, `compose-document`,
   `insert-template`, `apply-patch`, `attach-plan`, `pack-step`, and the
-  Calculation dialog; 0.11.0 accepted such a document and silently dropped
-  the drawn hydrogens. Use an element label for a charged or radical atom.
+  Calculation dialog, where 0.11.0 accepted it. Use an element label for a
+  charged or radical atom.
 - Recapture the first-scheme walkthrough GIF, still and example exports
   against the current interface, where the SMILES field sits on the Ring
   tool's options bar; the walkthrough script chooses that tool first. The
