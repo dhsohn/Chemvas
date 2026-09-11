@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
@@ -101,7 +102,9 @@ def plan_smiles_commit(
             continue
         annotations[atom_id] = annotation_values
         for index, kind in enumerate(annotation_mark_kinds(annotation_values)):
-            direction_x, direction_y = annotation_mark_direction(index)
+            direction_x, direction_y = annotation_mark_direction(
+                index, model=model, atom_id=atom_id
+            )
             marks.append(
                 SmilesMarkPlacement(
                     source_atom_id=atom_id,
@@ -139,9 +142,60 @@ def annotation_mark_kinds(annotation: Mapping[str, int]) -> tuple[str, ...]:
     return tuple(kinds)
 
 
-def annotation_mark_direction(index: int) -> Point2D:
-    directions = ((1.0, -1.0), (-1.0, -1.0), (1.0, 1.0), (-1.0, 1.0))
-    return directions[index % len(directions)]
+def annotation_mark_direction(
+    index: int, *, model: MoleculeModel, atom_id: int
+) -> Point2D:
+    """Choose a new annotation's compass direction away from incident bonds.
+
+    This is a deterministic initial-placement heuristic, not a layout repair:
+    saved offsets and manually positioned marks are never passed through it.
+    All directions retain the old diagonal's length so headless composition
+    and label-aware desktop placement use the same angular choice.
+    """
+    root_two = math.sqrt(2.0)
+    candidates = [
+        (1.0, -1.0),
+        (-1.0, -1.0),
+        (1.0, 1.0),
+        (-1.0, 1.0),
+        (0.0, -root_two),
+        (0.0, root_two),
+        (root_two, 0.0),
+        (-root_two, 0.0),
+    ]
+    atom = model.atoms[atom_id]
+    occupied = []
+    for bond in model.bonds:
+        if bond is None or atom_id not in (bond.a, bond.b):
+            continue
+        neighbor = model.atoms.get(bond.b if bond.a == atom_id else bond.a)
+        if neighbor is None:
+            continue
+        dx, dy = neighbor.x - atom.x, neighbor.y - atom.y
+        length = math.hypot(dx, dy)
+        if length > 0.0:
+            occupied.append((dx / length, dy / length))
+
+    def clearance(direction: Point2D) -> float:
+        # Maximizing angular separation is equivalent to minimizing the
+        # largest dot product. Round only the comparison for stable ties.
+        return round(
+            min(
+                (
+                    1.0 - (direction[0] * x + direction[1] * y) / root_two
+                    for x, y in occupied
+                ),
+                default=2.0,
+            ),
+            12,
+        )
+
+    selected = candidates[0]
+    for _ in range(index % len(candidates) + 1):
+        selected = max(candidates, key=clearance)
+        candidates.remove(selected)
+        occupied.append((selected[0] / root_two, selected[1] / root_two))
+    return selected
 
 
 def smiles_preview_offset(preview_center: Point2D, cursor_pos: Point2D) -> Point2D:

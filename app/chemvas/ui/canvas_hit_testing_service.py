@@ -4,6 +4,7 @@ import math
 from typing import TYPE_CHECKING
 
 from PyQt6.QtCore import QPointF, QRectF
+from PyQt6.QtWidgets import QGraphicsPathItem
 
 from chemvas.domain.document import VALID_ARROW_KINDS
 from chemvas.ui.canvas_bond_graphics_state import bond_items_for_id
@@ -19,7 +20,6 @@ from chemvas.ui.canvas_model_access import (
     bonds_for,
     has_atoms_for,
 )
-from chemvas.ui.graphics_items import ArrowPathItem
 from chemvas.ui.mark_item_access import mark_center_for
 from chemvas.ui.pick_radius_access import atom_pick_radius_for, bond_pick_radius_for
 from chemvas.ui.renderer_style_access import bond_length_px_for
@@ -71,6 +71,12 @@ class CanvasHitTestingService:
                 if parent is None:
                     continue
                 item, kind = parent, parent.data(0)
+            if kind is None:
+                # Orbital lobes are Qt children; editing acts on their single
+                # document-level group, not the individual painted ellipse.
+                parent = item.parentItem()
+                if parent is not None and parent.data(0) == "orbital":
+                    item, kind = parent, "orbital"
             if kind == "handle" and handle_item is None:
                 handle_item = item
                 continue
@@ -134,10 +140,10 @@ class CanvasHitTestingService:
             # margin, but picking must not reach through a covering shape.
             if item is stop_at:
                 break
-            if (
-                not isinstance(item, ArrowPathItem)
-                or item.data(0) not in VALID_ARROW_KINDS
-            ):
+            if not isinstance(item, QGraphicsPathItem) or item.data(0) not in {
+                *VALID_ARROW_KINDS,
+                "ts_bracket",
+            }:
                 continue
             # Flatten in view coordinates, so the same reach works for zoom,
             # perspective scaling and translated or rotated scene items.

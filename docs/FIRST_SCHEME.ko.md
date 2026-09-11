@@ -51,7 +51,8 @@ pip install "chemvas[rdkit]"
 ## 2. 화살표와 라벨 작성하기
 
 **Arrow**를 고르고 두 구조 사이를 왼쪽에서 오른쪽으로 드래그하세요.
-**Shift**를 누른 채 드래그하면 각도를 고정할 수 있습니다.
+시작점과 끝점의 높이를 맞춰 수평으로 그리세요. Arrow에는 `Shift` 각도 잠금이
+없습니다(Line 도구에서만 15° 단위 잠금을 지원합니다).
 **Select**로 전환해 화살표를 더블클릭하고 다음 값을 입력하세요.
 
 | 입력란 | 입력값 | 표시 |
@@ -116,7 +117,7 @@ chemvas render-document first-scheme.chemvas --output first-scheme-rendered.svg
 
 명령줄 출력은 기본 결합 길이를 기준으로 크기를 정하므로 데스크톱의 174 mm
 출력과 물리 크기가 다릅니다. 정확한 보장과 지원하는 작업은
-[CLI 안내](AGENT_CLI.md)를 참고하세요.
+[CLI 안내](AGENT_CLI.ko.md)를 참고하세요.
 
 ## 데모 제작 방식
 
@@ -124,4 +125,4 @@ chemvas render-document first-scheme.chemvas --output first-scheme-rendered.svg
 대기 시간을 줄이고 단계 설명을 붙인 것입니다. 스크립트로 재현한 사용 예시이며
 작업 속도를 측정한 영상은 아닙니다.
 [캡처 스크립트](../scripts/capture_first_scheme.py)는 연습용 입력만으로 편집 문서,
-SVG·PNG와 화면을 함께 만듭니다. 재생성 방법은 [미디어 안내](images/README.md)에 있습니다.
+SVG·PNG와 화면을 함께 만듭니다. 재생성 방법은 [미디어 안내](images/README.ko.md)에 있습니다.

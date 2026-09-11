@@ -14,6 +14,22 @@ def _plan(width=72.0, height=144.0):
 
 
 @pytest.mark.parametrize("fmt", ["svg", "pdf", "png", "tiff"])
+@pytest.mark.parametrize("dimension", ["out_w_pt", "out_h_pt"])
+def test_output_that_rounds_to_zero_is_rejected_before_render(fmt, dimension):
+    plan = _plan()
+    setattr(plan, dimension, 0.01)
+    with pytest.raises(ValueError, match="too small"):
+        validate_export_budget(plan, output_format=fmt, dpi=300)
+
+
+@pytest.mark.parametrize("fmt", ["png", "tiff"])
+def test_single_pixel_raster_remains_supported(fmt):
+    assert validate_export_budget(
+        _plan(72 / 300, 72 / 300), output_format=fmt, dpi=300
+    ) == (1, 1)
+
+
+@pytest.mark.parametrize("fmt", ["svg", "pdf", "png", "tiff"])
 def test_maximum_height_is_checked_for_all_gui_formats(fmt):
     plan = _plan(height=73.8567)
     final_points = {"svg": 74, "pdf": 74, "png": 73.92, "tiff": 73.92}[fmt]

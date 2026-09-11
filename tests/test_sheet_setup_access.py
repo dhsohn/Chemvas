@@ -133,6 +133,16 @@ def test_set_sheet_setup_updates_scene_rect_and_viewport() -> None:
     canvas.close()
 
 
+def test_smaller_sheet_keeps_existing_outside_content_scrollable() -> None:
+    canvas, scene = _qt_sheet_canvas()
+    arrow = scene.addLine(330, 0, 410, 0)
+    set_sheet_setup_for(canvas, "A4", "portrait")
+    assert canvas.sceneRect().contains(arrow.sceneBoundingRect())
+    assert scene.sceneRect().contains(arrow.sceneBoundingRect())
+    assert sheet_rect_for(canvas).right() == 297.5
+    canvas.close()
+
+
 def test_scene_pos_in_sheet_uses_configured_sheet_rect_and_allows_uninitialized_rect() -> (
     None
 ):

@@ -409,14 +409,9 @@ def sheet_orientation_for_window(window) -> str:
 
 
 def set_sheet_setup_for_window(window, size: str, orientation: str) -> None:
-    from chemvas.ui.canvas_window_access import notify_document_change_for
-    from chemvas.ui.sheet_setup_access import set_sheet_setup_for, sheet_setup_for
+    from chemvas.ui.sheet_setup_service import change_sheet_setup_for
 
-    canvas = active_canvas_for_window(window)
-    before = sheet_setup_for(canvas)
-    set_sheet_setup_for(canvas, size, orientation)
-    if sheet_setup_for(canvas) != before:
-        notify_document_change_for(canvas)
+    change_sheet_setup_for(active_canvas_for_window(window), size, orientation)
 
 
 def next_canvas_name_for_window(window, prefix: str = "Canvas") -> str:

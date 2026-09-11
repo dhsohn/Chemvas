@@ -21,7 +21,7 @@ from chemvas.ui.main_window_context_bar_page_factories import (
 )
 
 if TYPE_CHECKING:
-    from PyQt6.QtWidgets import QButtonGroup, QLineEdit, QToolButton, QWidget
+    from PyQt6.QtWidgets import QButtonGroup, QLineEdit, QSlider, QToolButton, QWidget
 
     from chemvas.ui.main_window_context_bar_widgets import BondLengthSpinBox
 
@@ -37,6 +37,8 @@ class ContextBarPages:
     mark_buttons: dict[str, QToolButton]
     arrow_group: QButtonGroup | None
     arrow_buttons: dict[str, QToolButton]
+    arrow_width_slider: QSlider
+    arrow_head_slider: QSlider
     bracket_group: QButtonGroup | None
     bracket_buttons: dict[str, QToolButton]
     atom_input: QLineEdit | None
@@ -173,6 +175,8 @@ class MainWindowContextBarPageBuilder:
             mark_buttons=mark_page.buttons,
             arrow_group=arrow_page.group,
             arrow_buttons=arrow_page.buttons,
+            arrow_width_slider=arrow_page.width_slider,
+            arrow_head_slider=arrow_page.head_slider,
             bracket_group=bracket_page.group,
             bracket_buttons=bracket_page.buttons,
             atom_input=atom_page.atom_input,

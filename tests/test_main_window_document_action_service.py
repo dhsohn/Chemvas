@@ -467,12 +467,16 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
             spawned: list = []
             message_box = mock.Mock()
 
-            result = self.service.load_canvas_from_path(
-                self.window,
-                path,
-                message_box=message_box,
-                target_provider=lambda: spawned.append(object()),
-            )
+            with mock.patch(
+                "chemvas.ui.main_window_document_action_service.record_recent"
+            ) as recent:
+                result = self.service.load_canvas_from_path(
+                    self.window,
+                    path,
+                    message_box=message_box,
+                    target_provider=lambda: spawned.append(object()),
+                )
+            recent.assert_called_once_with(path)
 
             self.assertTrue(result)
             self.assertEqual(spawned, [])  # no duplicate window opened

@@ -157,6 +157,9 @@ def generate_precomplex_candidates(
     components: tuple[ComponentGeometry, ...],
 ) -> tuple[GeneratedCandidate, ...]:
     profile = precomplex_placement_profile(request.profile)
+    # State member order is not chemistry. Keep each conformer paired with its
+    # component while matching the document validator's canonical provenance.
+    components = tuple(sorted(components, key=lambda item: item.component_atom_ids))
     _validate_request(request, components)
     root, child, contact = _ordered_components(request.contacts[0], components)
     root_contact = _contact_atom(root, _contact_id_for_component(contact, root))

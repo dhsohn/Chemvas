@@ -21,10 +21,15 @@ from PyQt6.QtWidgets import (
 )
 
 from chemvas.ui.atom_coords_access import CanvasAtomCoords3DState
-from chemvas.ui.canvas_atom_graphics_state import visible_atom_item_for
+from chemvas.ui.canvas_atom_graphics_state import (
+    CanvasAtomGraphicsState,
+    visible_atom_item_for,
+)
 from chemvas.ui.canvas_lifecycle import schedule_canvas_deletion_for
+from chemvas.ui.canvas_mark_registry import CanvasMarkRegistry
 from chemvas.ui.canvas_rotation_state import CanvasRotationState
 from chemvas.ui.canvas_scene_items_state import CanvasSceneItemsState
+from chemvas.ui.history_commands import SetSceneGeometryCommand
 from chemvas.ui.selection_rotation_controller import SelectionRotationController
 from chemvas.ui.selection_rotation_preview_transaction import (
     capture_rotation_preview_authority,
@@ -161,6 +166,8 @@ class _FakeCanvas:
                 coord_atom_ids={999},
             ),
             scene_items_state=CanvasSceneItemsState(),
+            atom_graphics_state=CanvasAtomGraphicsState(),
+            mark_registry=CanvasMarkRegistry(),
         )
         self.renderer = SimpleNamespace(style=SimpleNamespace(bond_length_px=20.0))
         self._scene = _FakeScene()
@@ -506,7 +513,10 @@ class SelectionRotationControllerTest(unittest.TestCase):
         self.assertEqual(canvas.rotation_state.axis_atoms, (0, 1))
         self.assertEqual(canvas.rotation_state.atom_ids, {2})
         self.assertEqual(canvas.rotation_state.selection_ids, ({2}, set()))
-        self.assertEqual(canvas.rotation_state.start_positions, {2: (20.0, 5.0)})
+        self.assertEqual(
+            canvas.rotation_state.start_positions,
+            {0: (0.0, 0.0), 1: (10.0, 0.0), 2: (20.0, 5.0)},
+        )
         self.assertEqual(canvas.rotation_state.center_3d, (5.0, 0.0, 2.0))
         self.assertEqual(canvas.rotation_state.projection_center_3d, (5.0, 0.0, 2.0))
         self.assertEqual(canvas.rotation_state.projection_anchor_2d, (5.0, 0.0))
@@ -673,7 +683,7 @@ class SelectionRotationControllerTest(unittest.TestCase):
 
         self.assertTrue(rotating)
         self.assertEqual(canvas.rotation_state.selection_ids, ({0}, set()))
-        self.assertEqual(canvas.rotation_state.start_coords_3d, {0: (0.0, 0.0, 0.0)})
+        self.assertEqual(canvas.rotation_state.start_coords_3d, {})
         self.assertEqual(canvas.rotation_state.coord_atom_ids, {0})
         self.assertEqual(canvas.rotation_state.atom_ids, {0})
         self.assertEqual(canvas.rotation_state.mode, "rigid")
@@ -793,8 +803,9 @@ class SelectionRotationControllerTest(unittest.TestCase):
 
             counting_bonds.reset_counts()
             self.assertTrue(controller.begin_selection_3d_rotation())
-            # Session setup may validate/rebuild the document-wide graph once.
-            self.assertLessEqual(counting_bonds.yield_count, 1_000)
+            # Session setup validates the graph and checks unsupported stereo
+            # once each. Neither document-wide pass may recur in preview frames.
+            self.assertLessEqual(counting_bonds.yield_count, 2_000)
 
             counting_bonds.reset_counts()
             for _frame in range(100):
@@ -1107,6 +1118,9 @@ class SelectionRotationControllerTest(unittest.TestCase):
 
         self.assertEqual(len(canvas.pushed_commands), 1)
         command = canvas.pushed_commands[0]
+        self.assertIsInstance(command, SetSceneGeometryCommand)
+        self.assertEqual(command.item_commands, [])
+        command = command.atom_commands[0]
         self.assertIsInstance(command, SetAtomPositionsCommand)
         self.assertEqual(command.before_positions, {0: (0.0, 0.0), 2: (20.0, 5.0)})
         self.assertEqual(command.after_positions, {0: (1.0, 1.5), 2: (22.0, 6.5)})

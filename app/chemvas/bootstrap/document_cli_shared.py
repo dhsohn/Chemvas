@@ -63,7 +63,7 @@ def offscreen_canvas(
         os.environ["LC_ALL"] = "C.UTF-8"
         os.environ["LANG"] = "C.UTF-8"
     try:
-        from PyQt6.QtCore import QEvent
+        from PyQt6.QtCore import QEvent, Qt
         from PyQt6.QtWidgets import QApplication
 
         from chemvas.adapters.qt.renderer import Renderer
@@ -75,6 +75,9 @@ def offscreen_canvas(
         existing = QApplication.instance()
         if existing is not None and not isinstance(existing, QApplication):
             raise RuntimeError(f"{command} requires a QApplication instance")
+        if existing is None:
+            # Match desktop scene typography, independently of the screen DPI.
+            QApplication.setAttribute(Qt.ApplicationAttribute.AA_Use96Dpi)
         application = existing or QApplication([f"chemvas-{command}"])
         if existing is None:
             # The offscreen plugin may name a missing generic family on macOS.

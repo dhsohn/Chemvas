@@ -132,15 +132,10 @@ def _arc_frame(
     center_offset = -(chord * 0.5) / math.tan(sweep * 0.5)
     center = (mid[0] + nx * center_offset, mid[1] + ny * center_offset)
     start_angle = math.atan2(start[1] - center[1], start[0] - center[0])
-    for direction in (1.0, -1.0):
-        half = start_angle + direction * sweep * 0.5
-        probe = (
-            center[0] + radius * math.cos(half),
-            center[1] + radius * math.sin(half),
-        )
-        if (probe[0] - mid[0]) * nx + (probe[1] - mid[1]) * ny > 0.0:
-            return center, radius, start_angle, direction * sweep
-    return center, radius, start_angle, sweep
+    # In screen coordinates positive sweep travels through screen-left of
+    # the chord. A midpoint-side probe is ambiguous for major arcs: the wrong
+    # sweep can put its midpoint on that side too, but misses the endpoint.
+    return center, radius, start_angle, sweep if bulge_left else -sweep
 
 
 def arc_points(

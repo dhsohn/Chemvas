@@ -624,6 +624,12 @@ class ArrowLabelDialogTest(unittest.TestCase):
             self.assertEqual(above.text(), "k_1")
             self.assertEqual(below.text(), "")
             self.assertEqual(above.maxLength(), MAX_ARROW_LABEL_CHARS)
+            counter = dialog.findChild(QLabel, "arrowLabelAboveInputLimit")
+            self.assertIsNotNone(counter)
+            self.assertIn("3/200", counter.text())
+            above.insert("x" * 250)
+            self.assertIn("200/200", counter.text())
+            above.setText("k_1")
             below.setText("k_-1")
             next(
                 b for b in dialog.findChildren(QPushButton) if b.text() == "OK"

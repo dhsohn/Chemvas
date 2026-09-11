@@ -810,7 +810,7 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
         warning.assert_called_once_with(
             self.window,
             "Load Error",
-            "Failed to load file:\nInvalid Chemvas file.",
+            "Failed to load file:\nInvalid Chemvas file. Expected only type, version, and state fields.",
         )
         self.assertEqual(self._current_file_path(), "/tmp/original.chemvas")
         self.assertEqual(self.window.statusBar().currentMessage(), "Before load")
@@ -1850,17 +1850,26 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
         self.assertEqual(zoomed_out_size, initial_size)
         self.assertEqual(zoomed_in_size, initial_size)
 
-    def test_arrow_default_preset_matches_legacy_acs_values(self) -> None:
+    def test_arrow_default_preset_matches_new_document_and_acs_stays_distinct(
+        self,
+    ) -> None:
         tool_mode_controller = canvas_services_for(
             active_canvas_for_window(self.window)
         ).input.tool_mode_controller
         tool_state_service = services_for_window(self.window).tool_state_service
+        default_width = tool_mode_controller.get_arrow_line_width()
+        default_head = tool_mode_controller.get_arrow_head_scale()
         tool_mode_controller.set_arrow_line_width(4.0)
         tool_mode_controller.set_arrow_head_scale(0.6)
 
         tool_state_service.set_arrow_preset(self.window, "Default")
-        self.assertAlmostEqual(tool_mode_controller.get_arrow_line_width(), 1.2)
-        self.assertAlmostEqual(tool_mode_controller.get_arrow_head_scale(), 0.3)
+        self.assertAlmostEqual(
+            tool_mode_controller.get_arrow_line_width(), default_width
+        )
+        self.assertAlmostEqual(default_width, 1.5)
+        self.assertAlmostEqual(
+            tool_mode_controller.get_arrow_head_scale(), default_head
+        )
 
         tool_mode_controller.set_arrow_line_width(4.0)
         tool_mode_controller.set_arrow_head_scale(0.6)

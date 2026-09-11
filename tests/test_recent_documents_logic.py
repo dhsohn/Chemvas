@@ -49,6 +49,15 @@ def test_menu_entries_use_basename_as_label():
     ]
 
 
+def test_menu_entries_disambiguate_same_names_with_their_full_parent():
+    paths = ["/lab/one/a.chemvas", "/other/one/a.chemvas", "/lab/b.chemvas"]
+    assert recent_menu_entries(paths) == [
+        ("a.chemvas — /lab/one", paths[0]),
+        ("a.chemvas — /other/one", paths[1]),
+        ("b.chemvas", paths[2]),
+    ]
+
+
 def test_json_round_trips():
     paths = ["/a/x.chemvas", "/a/y.chemvas"]
     assert from_json(to_json(paths)) == paths

@@ -75,7 +75,9 @@ def _annotation_mark_states(model: MoleculeModel) -> list[dict[str, object]]:
             continue
         annotation = normalized_atom_annotation(model.atom_annotations[atom_id])
         for index, kind in enumerate(annotation_mark_kinds(annotation)):
-            direction_x, direction_y = annotation_mark_direction(index)
+            direction_x, direction_y = annotation_mark_direction(
+                index, model=model, atom_id=atom_id
+            )
             marks.append(
                 {
                     "kind": kind,
@@ -564,6 +566,7 @@ class MainWindowDocumentActionService:
         if already_open is not None:
             open_window, open_canvas = already_open
             self._activate_open_document(open_window, open_canvas, path)
+            record_recent(path)
             return True
         # Resolve the destination window only after the file reads successfully so
         # a missing or unreadable file never spawns an empty window.

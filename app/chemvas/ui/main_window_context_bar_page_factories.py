@@ -36,7 +36,10 @@ from chemvas.ui.main_window_context_bar_widgets import (
     slider_dropdown_button,
 )
 from chemvas.ui.main_window_ports import icon_factory_for_window
-from chemvas.ui.main_window_toolbar_logic import BOND_STYLE_BY_LABEL
+from chemvas.ui.main_window_toolbar_logic import (
+    BOND_STYLE_BY_LABEL,
+    ORBITAL_TYPE_BY_LABEL,
+)
 
 _BOND_ORDER_SEGMENTS = [
     ("Single", "icon_bond", "Single bond (1)"),
@@ -69,6 +72,12 @@ class ButtonGroupPage:
     page: QWidget
     group: QButtonGroup
     buttons: dict[str, QToolButton]
+
+
+@dataclass(frozen=True)
+class ArrowContextPage(ButtonGroupPage):
+    width_slider: QSlider
+    head_slider: QSlider
 
 
 @dataclass(frozen=True)
@@ -330,7 +339,7 @@ MORE_ARROW_KINDS: frozenset[str] = frozenset(
 
 def build_arrow_page(
     window, tool_mode_controller, tool_state_service
-) -> ButtonGroupPage:
+) -> ArrowContextPage:
     page, layout = new_context_page()
     icon_factory = icon_factory_for_window(window)
 
@@ -386,10 +395,12 @@ def build_arrow_page(
 
     layout.addWidget(divider())
     width = QSlider(Qt.Orientation.Horizontal)
-    width.setMinimum(1)
-    width.setMaximum(6)
-    width.setValue(int(tool_mode_controller.get_arrow_line_width()))
-    width.valueChanged.connect(lambda v: tool_mode_controller.set_arrow_line_width(v))
+    width.setMinimum(5)
+    width.setMaximum(60)
+    width.setValue(round(tool_mode_controller.get_arrow_line_width() * 10))
+    width.valueChanged.connect(
+        lambda v: tool_mode_controller.set_arrow_line_width(v / 10.0)
+    )
     layout.addWidget(
         slider_dropdown_button(
             icon_factory.icon_arrow_width(), "Arrow line width", width
@@ -398,8 +409,8 @@ def build_arrow_page(
 
     head = QSlider(Qt.Orientation.Horizontal)
     head.setMinimum(10)
-    head.setMaximum(60)
-    head.setValue(int(tool_mode_controller.get_arrow_head_scale() * 100))
+    head.setMaximum(80)
+    head.setValue(round(tool_mode_controller.get_arrow_head_scale() * 100))
     head.valueChanged.connect(
         lambda v: tool_mode_controller.set_arrow_head_scale(v / 100.0)
     )
@@ -410,7 +421,9 @@ def build_arrow_page(
     )
 
     layout.addStretch(1)
-    return ButtonGroupPage(page=page, group=group, buttons=buttons)
+    return ArrowContextPage(
+        page=page, group=group, buttons=buttons, width_slider=width, head_slider=head
+    )
 
 
 def build_bracket_page(window, tool_state_service) -> ButtonGroupPage:
@@ -533,10 +546,14 @@ def build_orbital_page(window, tool_state_service) -> QWidget:
     page, layout = new_context_page()
     icon_factory = icon_factory_for_window(window)
     layout.addWidget(hint_label("Orbital"))
-    for label in ("s", "p", "sp", "sp2", "sp3", "d"):
+    for label, kind in ORBITAL_TYPE_BY_LABEL.items():
         button = icon_button(
-            icon_factory.icon_orbital_preview(label), f"Orbital: {label}"
+            icon_factory.icon_orbital_preview(kind), f"Orbital: {label}"
         )
+        if kind in {"mo_bonding", "mo_antibonding"}:
+            button.setText("MO+" if kind == "mo_bonding" else "MO−")
+            button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextOnly)
+            button.setFixedWidth(40)
         button.clicked.connect(
             lambda _checked=False, value=label: tool_state_service.set_orbital_type(
                 window, value

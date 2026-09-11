@@ -50,6 +50,7 @@ from .template_preview import (
 
 if TYPE_CHECKING:
     from .ring_occupancy import (
+        graph_ring_polygons_for_bond,
         point_inside_any_ring,
         ring_polygon_points_for_bond,
     )
@@ -69,6 +70,7 @@ _LAZY_EXPORTS: dict[str, str] = {
     "alternating_ring_bond_specs": ".structure_growth",
     "crown_ether_elements": ".structure_growth",
     "fused_benzene_centers": ".structure_growth",
+    "graph_ring_polygons_for_bond": ".ring_occupancy",
     "mirrored_local_points": ".structure_growth",
     "other_atom_id_from_bond_result": ".structure_growth",
     "point_inside_any_ring": ".ring_occupancy",
@@ -117,6 +119,7 @@ __all__ = [
     "crown_ether_elements",
     "expand_atom_ids_for_structure",
     "fused_benzene_centers",
+    "graph_ring_polygons_for_bond",
     "mirrored_local_points",
     "model_with_atom_annotations",
     "normalize_template_ring_style",

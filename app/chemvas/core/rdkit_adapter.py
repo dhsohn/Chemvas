@@ -4,6 +4,7 @@ import threading
 from typing import TYPE_CHECKING, Any
 
 from chemvas.core.rdkit_conversion import RDKitConversionHelper
+from chemvas.core.rdkit_diagnostics import RDKIT_UNAVAILABLE_MESSAGE
 from chemvas.core.rdkit_import import RDKitImportHelper
 from chemvas.domain.atom_aliases import alias_fragment_smiles
 from chemvas.features.insertion import (
@@ -30,13 +31,16 @@ class RDKitAdapter:
         self._conversion_helper = RDKitConversionHelper(self)
 
     def _load_rdkit(self) -> tuple[Any, Any]:
+        if self._rdkit == (None, None):
+            self.last_error = RDKIT_UNAVAILABLE_MESSAGE
+            return self._rdkit
         if self._rdkit is None:
             try:
                 from rdkit import Chem, RDLogger
                 from rdkit.Chem import AllChem
             except Exception:
                 self._rdkit = (None, None)
-                self.last_error = "RDKit is not available in this environment."
+                self.last_error = RDKIT_UNAVAILABLE_MESSAGE
                 return self._rdkit
             # rdkit-stubs omits DisableLog even though rdkit provides it at runtime.
             RDLogger.DisableLog("rdApp.*")  # type: ignore[attr-defined]

@@ -256,7 +256,7 @@ class MainWindowContextBarPagesTest(unittest.TestCase):
         self.assertIsNotNone(head_button.menu())
 
         sliders = pages.pages["arrow"].findChildren(QSlider)
-        self.assertEqual([slider.value() for slider in sliders], [2, 40])
+        self.assertEqual([slider.value() for slider in sliders], [20, 40])
         self.assertEqual(
             [slider.objectName() for slider in sliders],
             ["arrowCompactSlider", "arrowCompactSlider"],
@@ -274,9 +274,9 @@ class MainWindowContextBarPagesTest(unittest.TestCase):
             if label.objectName() == "arrowCompactLabel"
         ]
         self.assertEqual(arrow_labels, [])
-        sliders[0].setValue(5)
+        sliders[0].setValue(51)
         sliders[1].setValue(25)
-        self.tool_mode_controller.set_arrow_line_width.assert_called_once_with(5)
+        self.tool_mode_controller.set_arrow_line_width.assert_called_once_with(5.1)
         self.tool_mode_controller.set_arrow_head_scale.assert_called_once_with(0.25)
         pages.atom_input.setText("Cl")
         self.tool_mode_controller.set_atom_symbol.assert_called_once_with("Cl")

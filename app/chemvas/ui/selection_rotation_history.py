@@ -20,16 +20,15 @@ def build_selection_rotation_command(
     positions_changed = bool(
         before_positions and after_positions and before_positions != after_positions
     )
-    coords_changed = bool(
-        before_coords_3d and after_coords_3d and before_coords_3d != after_coords_3d
-    )
+    coords_changed = before_coords_3d != after_coords_3d
     if not positions_changed and not coords_changed:
         return None
     return SetAtomPositionsCommand(
         before_positions=before_positions,
         after_positions=after_positions,
-        before_coords_3d=before_coords_3d or None,
-        after_coords_3d=after_coords_3d or None,
+        before_coords_3d=before_coords_3d,
+        after_coords_3d=after_coords_3d,
+        update_selection=False,
         restore_projection_state=True,
         before_projection_center_3d=before_projection_center_3d,
         after_projection_center_3d=after_projection_center_3d,

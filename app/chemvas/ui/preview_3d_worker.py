@@ -32,6 +32,7 @@ class Preview3DAdapter(Protocol):
 
 
 class Preview3DWorker(QObject):
+    identifiers_ready = pyqtSignal(int, object, object, object, object, object)
     finished = pyqtSignal(int, object, object, object, object, object, object, object)
 
     def __init__(
@@ -74,6 +75,9 @@ class Preview3DWorker(QObject):
             smiles = identifiers.smiles
             inchi = identifiers.inchi
             inchikey = identifiers.inchikey
+            self.identifiers_ready.emit(
+                self._request_id, formula, mw, smiles, inchi, inchikey
+            )
             result = rdkit.model_to_3d_scene_result(
                 self._model, atom_annotations=self._atom_annotations
             )

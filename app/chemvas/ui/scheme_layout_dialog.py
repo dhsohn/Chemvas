@@ -89,6 +89,19 @@ def grouped_layout_request(
         for member in members:
             group = groups[member.group_index]
             references = [tuple(reference) for reference in group["items"]]
+            unsupported = sorted(
+                {
+                    str(kind)
+                    for kind, _index in references
+                    if kind not in {"notes", "ts_brackets", "shapes"}
+                }
+            )
+            if unsupported:
+                raise ValueError(
+                    f"Row {row_number}, group {member.group_index + 1} contains "
+                    f"{', '.join(unsupported)}, which cannot be part of an arranged block. "
+                    "Remove these items from the group or set its row to 0 to skip it."
+                )
             if any(("notes", index) not in references for index in member.captions):
                 raise ValueError("Caption numbers must name notes in their own group.")
             blocks.append(

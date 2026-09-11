@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING
 from chemvas.core.document_io import atomic_write_text
 from chemvas.ui.app_data_paths import recent_documents_file
 from chemvas.ui.main_window_path_logic import is_recent_document_path
+from chemvas.ui.open_document_lookup import normalized_path_key
 from chemvas.ui.recent_documents_logic import (
     add_recent,
     from_json,
@@ -37,7 +38,7 @@ def load_recent(*, path: Path | None = None) -> list[str]:
     except (OSError, ValueError):
         return []
     supported = [entry for entry in from_json(data) if is_recent_document_path(entry)]
-    return prune_missing(supported, exists=os.path.exists)
+    return prune_missing(supported, exists=os.path.exists, path_key=normalized_path_key)
 
 
 def save_recent(paths: list[str], *, path: Path | None = None) -> None:
@@ -51,7 +52,11 @@ def record_recent(new_path: str, *, path: Path | None = None) -> list[str]:
     target = _target(path)
     if not is_recent_document_path(new_path):
         return load_recent(path=target)
-    updated = add_recent(load_recent(path=target), os.path.abspath(new_path))
+    updated = add_recent(
+        load_recent(path=target),
+        os.path.abspath(new_path),
+        path_key=normalized_path_key,
+    )
     save_recent(updated, path=target)
     return updated
 

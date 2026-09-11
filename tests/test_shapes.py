@@ -171,8 +171,10 @@ class ShapeDocumentValidationTest(unittest.TestCase):
             "stroke_style": "solid",
         }
 
-    def test_accepts_valid_shapes_and_none(self) -> None:
-        _validate_shape_states(None)
+    def test_accepts_valid_shapes_and_empty_list_but_rejects_null(self) -> None:
+        _validate_shape_states([])
+        with self.assertRaises(ValueError):
+            _validate_shape_states(None)
         _validate_shape_states([self._valid_shape()])
         with_fill = self._valid_shape()
         with_fill.update({"fill": "#ff0000", "fill_alpha": 0.25})

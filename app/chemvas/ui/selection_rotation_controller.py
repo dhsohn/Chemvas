@@ -3,11 +3,13 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from chemvas.domain.transactions import add_recovery_error_note
+from chemvas.features.graph import adjacency_for_bonds, reachable_from
 from chemvas.features.selection import (
     axis_rotated_coords,
     dominant_axis_angle_from_drag,
     rigid_rotated_coords,
     rigid_rotation_angles_from_drag,
+    selected_atom_ids_with_bond_endpoints,
 )
 from chemvas.ui.atom_coords_access import (
     atom_coords_3d_for,
@@ -20,6 +22,8 @@ from chemvas.ui.canvas_model_access import (
     bonds_for,
 )
 from chemvas.ui.canvas_rotation_state import rotation_state_for
+from chemvas.ui.canvas_window_access import notify_error_for
+from chemvas.ui.history_commands import SetSceneGeometryCommand
 from chemvas.ui.selection_collection_access import selected_ids_for
 from chemvas.ui.selection_info_access import emit_selection_info_for
 from chemvas.ui.selection_rotation_access import (
@@ -36,7 +40,10 @@ from chemvas.ui.selection_rotation_preview_transaction import (
     capture_rotation_preview_authority,
     run_rotation_preview_update,
 )
-from chemvas.ui.selection_rotation_session import begin_selection_rotation_session
+from chemvas.ui.selection_rotation_session import (
+    begin_selection_rotation_session,
+    explicit_rotation_atom_ids_from_items,
+)
 from chemvas.ui.selection_scene_access import scene_selected_items_for
 from chemvas.ui.selection_service_access import refresh_selection_outline_for
 from chemvas.ui.selection_style_access import (
@@ -199,6 +206,36 @@ class SelectionRotationController:
         if self._rotation_preview_authority is not None:
             raise RuntimeError("A selection rotation transaction is already active")
 
+        stereo_atoms = {
+            atom_id
+            for bond in self.bonds
+            if bond is not None and bond.style in {"wedge", "hash"}
+            for atom_id in (bond.a, bond.b)
+        }
+        if stereo_atoms:
+            atom_ids, bond_ids = self.selected_ids()
+            selected = selected_atom_ids_with_bond_endpoints(
+                explicit_rotation_atom_ids_from_items(
+                    atom_ids, self.selected_scene_items()
+                ),
+                bond_ids,
+                bonds=self.bonds,
+            )
+            affected = reachable_from(selected, adjacency_for_bonds(self.bonds))
+            if affected & stereo_atoms:
+                # Perspective stores a drawing depth cache, not a complete
+                # stereochemical conformer. Reprojecting even a partial
+                # component can reverse its depicted tetrahedral configuration.
+                # Refuse before publishing any coordinates or gesture state.
+                notify_error_for(
+                    self.canvas,
+                    "Perspective rotation of a molecule with wedge/hash "
+                    "stereochemistry is not supported because it can change "
+                    "the depicted configuration. Use 2D rotation or move tools "
+                    "to adjust the drawing; the molecule has not been changed.",
+                )
+                return False
+
         def publish_preview() -> None:
             self._rotation_preview_authority = capture_rotation_preview_authority(
                 self,
@@ -291,6 +328,7 @@ class SelectionRotationController:
             return
         state = self.rotation
         pushed = False
+        preview_restore_attempted = False
         try:
             selection_ids = state.selection_ids
             rotated_atoms = set(state.atom_ids)
@@ -306,7 +344,21 @@ class SelectionRotationController:
             }
             after_projection_center_3d = state.projection_center_3d
             after_projection_anchor_2d = state.projection_anchor_2d
-            after_positions = self.atom_positions(rotated_atoms)
+            after_positions = self.atom_positions(set(before_positions))
+            if (
+                before_positions == after_positions
+                and state.total_angle == 0.0
+                and state.free_angle_x == 0.0
+                and state.free_angle_y == 0.0
+            ):
+                preview_restore_attempted = True
+                preview.restore()
+                if selection_ids is not None:
+                    self.restore_selection_from_ids(*selection_ids)
+                state.clear_session()
+                self._rotation_preview_authority = None
+                self.emit_selection_info()
+                return
             command = build_selection_rotation_command(
                 before_positions=before_positions,
                 after_positions=after_positions,
@@ -318,7 +370,10 @@ class SelectionRotationController:
                 after_projection_anchor_2d=after_projection_anchor_2d,
             )
             if command is not None:
-                if self.history.push(command) is False:
+                exact_command = SetSceneGeometryCommand(
+                    atom_commands=[command], item_commands=[]
+                )
+                if self.history.push(exact_command) is False:
                     raise RuntimeError(
                         "Selection rotation history push did not commit its command"
                     )
@@ -350,7 +405,7 @@ class SelectionRotationController:
             # rotated document, so the document must stay rotated.
             self._rotation_preview_authority = None
             try:
-                if pushed:
+                if pushed or preview_restore_attempted:
                     preview.release()
                 else:
                     preview.restore()

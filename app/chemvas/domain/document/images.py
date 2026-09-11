@@ -180,6 +180,28 @@ def _pixel_dimensions(width: object, height: object) -> tuple[int, int]:
     return width, height
 
 
+def _validate_png_end(data: bytes) -> None:
+    # Walk chunk boundaries, not a byte-pattern search: compressed pixel data
+    # can contain IEND-like bytes. Pillow checks the other chunks' CRCs below.
+    offset = 8
+    while offset + 12 <= len(data):
+        size = int.from_bytes(data[offset : offset + 4], "big")
+        end = offset + size + 12
+        if end > len(data):
+            break
+        if data[offset + 4 : offset + 8] == b"IEND":
+            if data[offset:end] != b"\x00\x00\x00\x00IEND\xaeB\x60\x82":
+                break
+            if end != len(data):
+                raise ValueError(
+                    "PNG contains trailing data after IEND. Remove the trailing "
+                    "data or re-export the image before importing it."
+                )
+            return
+        offset = end
+    raise ValueError("Invalid or truncated PNG/JPEG image.")
+
+
 def _inspect_image_bytes(data: bytes) -> tuple[str, int, int]:
     if not isinstance(data, bytes) or not 0 < len(data) <= MAX_IMAGE_BYTES:
         raise ValueError("Image exceeds the 16 MiB byte limit or is empty.")
@@ -194,12 +216,8 @@ def _inspect_image_bytes(data: bytes) -> tuple[str, int, int]:
                 if mime_type is None:
                     raise ValueError("Only PNG and JPEG images are supported.")
                 width, height = _pixel_dimensions(*raster.size)
-                if mime_type == "image/png" and not data.endswith(
-                    b"\x00\x00\x00\x00IEND\xaeB\x60\x82"
-                ):
-                    # Pillow verify/load can accept a truncated IEND CRC because
-                    # all pixel data precedes it. Require the complete end chunk.
-                    raise ValueError("Invalid or truncated PNG/JPEG image.")
+                if mime_type == "image/png":
+                    _validate_png_end(data)
                 if getattr(raster, "n_frames", 1) != 1:
                     raise ValueError(
                         "Animated or multi-frame images are not supported."

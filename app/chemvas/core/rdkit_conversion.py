@@ -2,8 +2,11 @@ from __future__ import annotations
 
 import logging
 import math
+import re
+from dataclasses import replace
 from typing import TYPE_CHECKING
 
+from chemvas.core.rdkit_diagnostics import RDKIT_UNAVAILABLE_MESSAGE
 from chemvas.domain.atom_aliases import (
     alias_attachment_error,
     alias_attachments_for_atom,
@@ -139,9 +142,10 @@ class RDKitConversionHelper:
         Returns element-consistent ``(reactant_id, product_id)`` pairs for the
         atoms RDKit matches by element and connectivity. Bond orders are compared
         loosely, so atoms whose bonds only change order (a typical reaction
-        center, e.g. C-O -> C=O) are mapped too; only atoms whose connectivity
-        actually breaks or forms are left for the researcher. An empty list
-        means the endpoints genuinely share no substructure; ``None`` with
+        center, e.g. C-O -> C=O) are mapped too. This connected-match heuristic
+        can leave other shared components and reaction centres unmapped. An empty
+        list means this search found no usable pairs, not proof that no shared
+        substructure exists; ``None`` with
         ``adapter.last_error`` set means the suggestion could not run. The two
         are distinct on purpose — reporting a failure as an empty result would
         present a tool problem as a chemistry claim about the drawing. This is
@@ -152,10 +156,7 @@ class RDKitConversionHelper:
         """
         rdkit = self.adapter._load_rdkit()
         if rdkit == (None, None):
-            self.adapter.last_error = (
-                "RDKit is not available in this environment. "
-                'Install it with: pip install "chemvas[rdkit]".'
-            )
+            self.adapter.last_error = RDKIT_UNAVAILABLE_MESSAGE
             return None
         Chem, _ = rdkit
         try:
@@ -333,6 +334,18 @@ class RDKitConversionHelper:
         optimization_result = "not_attempted"
         try:
             mol_h = Chem.AddHs(mol)
+            mmff_supported = hasattr(
+                AllChem, "MMFFHasAllMoleculeParams"
+            ) and AllChem.MMFFHasAllMoleculeParams(mol_h)
+            uff_supported = AllChem.UFFHasAllMoleculeParams(mol_h)
+            if not mmff_supported and not uff_supported:
+                self.adapter.last_error = (
+                    "Cannot generate reliable 3D geometry: neither MMFF nor UFF "
+                    "has all force-field parameters for this structure. "
+                    "Use an external geometry method suited to its elements "
+                    "and coordination."
+                )
+                return None
             params = AllChem.ETKDGv3()
             params.randomSeed = 0xC0FFEE
             status = AllChem.EmbedMolecule(mol_h, params)
@@ -343,9 +356,7 @@ class RDKitConversionHelper:
                 self.adapter.last_error = "3D embedding failed."
                 return None
             try:
-                if hasattr(
-                    AllChem, "MMFFHasAllMoleculeParams"
-                ) and AllChem.MMFFHasAllMoleculeParams(mol_h):
+                if mmff_supported:
                     status = AllChem.MMFFOptimizeMolecule(
                         mol_h, maxIters=_GEOMETRY_OPTIMIZATION_MAX_ITERS
                     )
@@ -356,6 +367,12 @@ class RDKitConversionHelper:
                     )
                     optimization_result = self._optimization_result("UFF", status)
             except Exception:
+                if not uff_supported:
+                    self.adapter.last_error = (
+                        "3D optimization failed and UFF fallback parameters "
+                        "are incomplete for this structure."
+                    )
+                    return None
                 logger.debug(
                     "Primary force-field optimization failed; falling back to UFF.",
                     exc_info=True,
@@ -495,10 +512,11 @@ class RDKitConversionHelper:
             atom = model.atoms.get(old_id)
             if atom is None:
                 continue
-            new_id = component_model.add_atom(atom.element, atom.x, atom.y)
-            component_model.atoms[new_id].color = atom.color
-            component_model.atoms[new_id].explicit_label = atom.explicit_label
-            id_map[old_id] = new_id
+            # Preserve document IDs through the preview's component split so
+            # conversion errors still identify the atom the user can edit.
+            component_model.atoms[old_id] = replace(atom)
+            id_map[old_id] = old_id
+        component_model.next_atom_id = max(component_model.atoms, default=-1) + 1
         for bond in model.bonds:
             if bond is None:
                 continue
@@ -1009,6 +1027,49 @@ class RDKitConversionHelper:
                 exc_info=True,
             )
 
+    def _consistent_conversion_wedges(
+        self,
+        mol,
+        Chem,
+        valid_bonds: list[tuple[int, Bond]],
+        atom_map: dict[int, int],
+    ) -> bool:
+        """Require redundant directions to agree independently at their narrow end."""
+        by_start: dict[int, list[tuple[int, Bond]]] = {}
+        for bond_id, bond in valid_bonds:
+            if bond.style in {"wedge", "hash"}:
+                by_start.setdefault(bond.a, []).append((bond_id, bond))
+        for atom_id, directed in by_start.items():
+            if len(directed) < 2:
+                continue
+            atom_idx = atom_map[atom_id]
+            expected = mol.GetAtomWithIdx(atom_idx).GetChiralTag()
+            for chosen_id, _chosen in directed:
+                # RDKit may consume just one of several directions; changing
+                # bond storage order must not choose the opposite enantiomer.
+                # Each clone retains the same neighbour order, so local chiral
+                # tags can be compared without relying on CIP priority labels.
+                probe = Chem.Mol(mol)
+                probe.GetAtomWithIdx(atom_idx).SetChiralTag(
+                    Chem.ChiralType.CHI_UNSPECIFIED
+                )
+                for bond_id, bond in directed:
+                    if bond_id != chosen_id:
+                        probe.GetBondBetweenAtoms(
+                            atom_idx, atom_map[bond.b]
+                        ).SetBondDir(Chem.BondDir.NONE)
+                self._assign_conversion_stereo(probe, Chem)
+                if probe.GetAtomWithIdx(atom_idx).GetChiralTag() != expected:
+                    bond_ids = ", ".join(str(bond_id) for bond_id, _ in directed)
+                    self.adapter.last_error = (
+                        f"Conflicting wedge/hash directions at atom {atom_id}: "
+                        f"bonds {bond_ids} do not independently define the same "
+                        "tetrahedral stereochemistry. Correct the directions "
+                        "before chemical conversion."
+                    )
+                    return False
+        return True
+
     def _build_conversion_rdkit_mol(
         self,
         model: MoleculeModel,
@@ -1029,7 +1090,7 @@ class RDKitConversionHelper:
     ):
         rdkit = self.adapter._load_rdkit()
         if rdkit == (None, None):
-            self.adapter.last_error = "RDKit is not available in this environment."
+            self.adapter.last_error = RDKIT_UNAVAILABLE_MESSAGE
             return None
         Chem, AllChem = rdkit
         rw = Chem.RWMol()
@@ -1058,13 +1119,45 @@ class RDKitConversionHelper:
 
         mol = rw.GetMol()
         self._attach_conversion_conformer(mol, coord_map, Chem)
-        self._assign_conversion_stereo(mol, Chem)
         try:
             Chem.SanitizeMol(mol)
         except Exception as exc:
+
+            def source_atom(match: re.Match[str]) -> str:
+                index = int(match.group(1))
+                origin = origins.get(index)
+                if origin is None:
+                    return f"RDKit atom index {index}"
+                atom_id, origin_kind = origin
+                label = model.atoms[atom_id].element
+                suffix = " alias expansion" if origin_kind == "alias_expansion" else ""
+                return f"Chemvas atom {atom_id} ({label}{suffix})"
+
+            reason = re.sub(r"atom #\s*(\d+)", source_atom, str(exc))
             self.adapter.last_error = (
-                f"3D conversion produced an invalid structure: {exc}"
+                f"3D conversion produced an invalid structure: {reason}"
             )
+            return None
+        # Stereo cleaning needs sanitized hybridization and ring membership;
+        # otherwise supported bridgehead nitrogen centres are discarded.
+        self._assign_conversion_stereo(mol, Chem)
+        for bond_id, bond in valid_bonds:
+            if bond.style not in {"wedge", "hash"}:
+                continue
+            start = mol.GetAtomWithIdx(atom_map[bond.a])
+            if start.GetChiralTag() not in {
+                Chem.ChiralType.CHI_TETRAHEDRAL_CW,
+                Chem.ChiralType.CHI_TETRAHEDRAL_CCW,
+            }:
+                self.adapter.last_error = (
+                    f"Bond {bond_id} ({bond.a}-{bond.b}) has a {bond.style} whose "
+                    f"narrow end at atom {bond.a} does not define supported "
+                    "tetrahedral stereochemistry. Check its direction and "
+                    "substituents; axial and other non-tetrahedral stereo are "
+                    "not supported for chemical conversion."
+                )
+                return None
+        if not self._consistent_conversion_wedges(mol, Chem, valid_bonds, atom_map):
             return None
         return mol, origins
 
@@ -1075,7 +1168,7 @@ class RDKitConversionHelper:
     ) -> CalculationArtifacts | None:
         rdkit = self.adapter._load_rdkit()
         if rdkit == (None, None):
-            self.adapter.last_error = "RDKit is not available in this environment."
+            self.adapter.last_error = RDKIT_UNAVAILABLE_MESSAGE
             return None
         Chem, AllChem = rdkit
         built = self._build_conversion_rdkit_mol_with_origins(
@@ -1170,7 +1263,7 @@ class RDKitConversionHelper:
     ) -> Molecule3DScene | None:
         rdkit = self.adapter._load_rdkit()
         if rdkit == (None, None):
-            self.adapter.last_error = "RDKit is not available in this environment."
+            self.adapter.last_error = RDKIT_UNAVAILABLE_MESSAGE
             return None
         if not model.atoms:
             self.adapter.last_error = "There is no chemical structure to preview."
@@ -1217,7 +1310,7 @@ class RDKitConversionHelper:
     ) -> str | None:
         rdkit = self.adapter._load_rdkit()
         if rdkit == (None, None):
-            self.adapter.last_error = "RDKit is not available in this environment."
+            self.adapter.last_error = RDKIT_UNAVAILABLE_MESSAGE
             return None
         Chem, AllChem = rdkit
         # Reuse the 3D conversion builder so abbreviation labels (Ph, CF3, ...) are

@@ -50,6 +50,25 @@ def _request(style="benzene", anchor=None):
     }
 
 
+@pytest.mark.parametrize("size", [4, 5, 6])
+@pytest.mark.parametrize("bond_style", ["double", "double_center", "double_outer"])
+def test_regular_ring_fuses_to_plain_double_without_rewriting_anchor(size, bond_style):
+    state = _state()
+    state["model"]["bonds"][0].update(order=2, style=bond_style)
+    before = deepcopy(state)
+    raw = _request("regular", {"kind": "bond", "a": 0, "b": 1})
+    raw["ring_size"] = size
+    request = validate_template_request(state, raw, source_sha256=SOURCE_HASH)
+    candidate, added = insert_template(state, request)
+    assert state == before
+    assert len(added) == size - 2
+    assert candidate["model"]["bonds"][0] == before["model"]["bonds"][0]
+    assert candidate["model"]["atoms"][0] == before["model"]["atoms"][0]
+    assert candidate["model"]["atoms"][1] == before["model"]["atoms"][1]
+    assert len(candidate["ring_fills"]) == 1
+    build_document_payload(candidate, CANVAS_FILE_VERSION)
+
+
 @pytest.mark.parametrize("style", ["regular", "benzene", "chair", "chair_flip", "boat"])
 @pytest.mark.parametrize("anchor", [{"kind": "free"}, {"kind": "bond", "a": 0, "b": 1}])
 def test_native_insertion_adds_exact_ring_and_preserves_source(style, anchor):

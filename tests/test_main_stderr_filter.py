@@ -6,7 +6,7 @@ import unittest
 from contextlib import contextmanager
 from unittest import mock
 
-from PyQt6.QtCore import QObject
+from PyQt6.QtCore import QObject, Qt
 
 import chemvas.bootstrap.application as chemvas_main
 import chemvas.branding
@@ -22,7 +22,14 @@ class _QApplicationMetadataStub(QObject):
     raising.
     """
 
+    @classmethod
+    def setAttribute(cls, attribute, enabled=True) -> None:
+        assert attribute == Qt.ApplicationAttribute.AA_Use96Dpi
+        assert enabled
+        cls.font_dpi_fixed = True
+
     def __init__(self, args: list[str], parsed_arguments: list[str]) -> None:
+        assert self.font_dpi_fixed
         super().__init__()
         self.args = list(args)
         self.installed_event_filters: list[QObject] = []

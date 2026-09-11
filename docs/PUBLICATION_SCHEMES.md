@@ -82,6 +82,11 @@ the correct glyph shifts the rest of the abbreviation sideways.
 
 ### Shared physical scale
 
+Desktop startup and headless rendering use a fixed 96 logical DPI for fonts,
+so a screen's 72/96/144 DPI setting does not change text relative to bond geometry.
+Display device-pixel scaling is separate. This does not bundle fonts or promise
+identical geometry across different Qt/font installations; check final exports.
+
 The recipe uses ordinary bond length 40 canvas units, a target of 5 mm per bond,
 Arial, native body font 17 and script-run font 22. Qt reduces script runs as part
 of native layout. These values produce approximately 8.1 pt body/atom text and

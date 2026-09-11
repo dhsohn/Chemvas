@@ -1004,6 +1004,7 @@ class CanvasNoteController:
             box = NoSelectRectItem(item)
             box.setData(0, "note_box")
             box.setZValue(-1)
+            box.setFlag(QGraphicsItem.GraphicsItemFlag.ItemStacksBehindParent, True)
             item.setData(20, box)
         box.setVisible(True)
         box.setRect(rect)

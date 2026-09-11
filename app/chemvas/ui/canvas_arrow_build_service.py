@@ -320,7 +320,7 @@ class CanvasArrowBuildService:
         ny = dx / length
         # "Above" is the side toward smaller y whichever way the arrow was
         # drawn; a vertical arrow puts "above" on its left.
-        if ny > 0.0 or (ny == 0.0 and nx > 0.0):
+        if ny > 1e-9 or (abs(ny) <= 1e-9 and nx > 0.0):
             nx, ny = -nx, -ny
         style = text_style_state_for(self.canvas)
         font = QFont(style.text_font_family, style.text_font_size)

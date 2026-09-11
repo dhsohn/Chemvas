@@ -16,6 +16,7 @@ from chemvas.core.document_io import (
 )
 from chemvas.core.molfile import MolfileError, MolfileLimitError, write_molfile
 from chemvas.core.rdkit_adapter import RDKitAdapter
+from chemvas.core.rdkit_diagnostics import RDKIT_UNAVAILABLE_MESSAGE
 from chemvas.core.svg_roundtrip import (
     CHEMVAS_SVG_SCOPE_SELECTION,
     CHEMVAS_SVG_SCOPE_SHEET,
@@ -80,6 +81,7 @@ from chemvas.ui.selection_collection_access import (
     selection_items_for_copy_for,
 )
 from chemvas.ui.selection_info_state import selection_info_state_for
+from chemvas.ui.sheet_setup_access import apply_sheet_scene_rect_for
 from chemvas.ui.structure_payload_access import (
     build_3d_conversion_payload_for,
     build_selected_3d_conversion_payload_for,
@@ -628,6 +630,7 @@ class CanvasDocumentSessionService:
         self.structure_build_service.render_model()
         restore_document_post_model_items(self.canvas, state)
         restore_document_groups(self.canvas, state)
+        apply_sheet_scene_rect_for(self.canvas)
         self.hit_testing_service.mark_spatial_index_dirty()
 
     def _snapshot_live_canvas_state(self) -> _CanvasRollbackSnapshot:
@@ -783,10 +786,7 @@ class CanvasDocumentSessionService:
             on_error(str(exc) or "Failed to export 3D XYZ.")
             return
         if not rdkit_is_loaded_for(self.canvas) and not preload_rdkit_for(self.canvas):
-            on_error(
-                rdkit_last_error_for(self.canvas)
-                or "RDKit is not available in this environment."
-            )
+            on_error(rdkit_last_error_for(self.canvas) or RDKIT_UNAVAILABLE_MESSAGE)
             return
 
         from chemvas.ui.rdkit_async_jobs import export_xyz_in_thread

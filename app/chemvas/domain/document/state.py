@@ -41,6 +41,8 @@ MAX_SAFE_NUMBER = float(2**53 - 1)
 MAX_SAFE_NUMBER_DECIMAL = Decimal(2**53 - 1)
 # QFont's integer point-size constructor is exposed through a signed C++ int.
 _QT_INT_MAX = 2**31 - 1
+# Derived glyph sizes include a 1.35x TS label; leave room in Qt's signed int.
+MAX_BOND_LENGTH_PX = _QT_INT_MAX // 2
 SETTINGS_KEYS = frozenset(
     (
         "bond_length_px",
@@ -137,6 +139,9 @@ VALID_ARROW_KINDS = (
 # k_1 above and k_-1 below); the text keeps the label mini-syntax, not HTML.
 ARROW_LABEL_SIDES = frozenset(("above", "below"))
 MAX_ARROW_LABEL_CHARS = 200
+# Marks are short electronic annotations, not paragraphs. Bound glyph-path
+# construction before any GUI, render, or layout-check consumer sees the text.
+MAX_MARK_TEXT_CHARS = 200
 VALID_MARK_KINDS = frozenset(
     ("plus", "minus", "circled_plus", "circled_minus", "radical")
 )
@@ -677,12 +682,16 @@ def extract_document_state(payload: object) -> StateDict:
 
 def _extract_wrapped_document_state(payload: Mapping[str, object]) -> StateDict:
     if set(payload) != {"type", "version", "state"}:
-        raise ValueError("Invalid Chemvas file.")
+        raise ValueError(
+            "Invalid Chemvas file. Expected only type, version, and state fields."
+        )
     if payload.get("type") != CHEMVAS_FILE_TYPE:
         raise ValueError("Invalid Chemvas file.")
     version = payload.get("version")
     if type(version) is not int or version not in SUPPORTED_FILE_VERSIONS:
-        raise ValueError("Invalid Chemvas file.")
+        raise ValueError(
+            f"Invalid Chemvas file. version must be {CANVAS_FILE_VERSION}."
+        )
     state = payload.get("state")
     if not isinstance(state, dict):
         raise ValueError("Invalid Chemvas file.")
@@ -713,7 +722,13 @@ def _validate_canvas_state(state: Mapping[str, object], *, version: int) -> None
     if not CANVAS_STATE_KEYS <= keys or not keys <= (
         CANVAS_STATE_KEYS | OPTIONAL_CANVAS_STATE_KEYS
     ):
-        raise ValueError("Invalid Chemvas file.")
+        missing = sorted(CANVAS_STATE_KEYS - keys)
+        unknown = sorted(
+            str(key) for key in keys - CANVAS_STATE_KEYS - OPTIONAL_CANVAS_STATE_KEYS
+        )
+        raise ValueError(
+            f"Invalid Chemvas file. state fields: missing={missing}, unknown={unknown}."
+        )
     model_state = state.get("model")
     if not isinstance(model_state, Mapping):
         raise ValueError("Invalid Chemvas file.")
@@ -725,6 +740,8 @@ def _validate_canvas_state(state: Mapping[str, object], *, version: int) -> None
     _validate_mark_states(state.get("marks"), atom_ids)
     _validate_arrow_states(state.get("arrows"))
     _validate_ts_bracket_states(state.get("ts_brackets"))
+    if not isinstance(state.get("shapes"), list):
+        raise ValueError("Invalid Chemvas file. state.shapes must be a list.")
     _validate_shape_states(state.get("shapes"))
     _validate_orbital_states(state.get("orbitals"))
     validate_image_states(state.get("images", []))
@@ -739,7 +756,9 @@ def _validate_canvas_state(state: Mapping[str, object], *, version: int) -> None
                 bond_pairs=bond_pairs,
             )
         except ValueError as exc:
-            raise ValueError("Invalid Chemvas file.") from exc
+            raise ValueError(
+                f"Invalid Chemvas file. state.calculation_plan: {exc}"
+            ) from exc
     settings = state.get("settings")
     if not isinstance(settings, Mapping):
         raise ValueError("Invalid Chemvas file.")
@@ -772,7 +791,10 @@ def _validate_model_state(
         atom_id = _validated_id(atom_id_value)
         if atom_id in atom_ids or not isinstance(atom_state, Mapping):
             raise ValueError("Invalid Chemvas file.")
-        _validate_atom_state(atom_state)
+        try:
+            _validate_atom_state(atom_state)
+        except ValueError as exc:
+            raise ValueError(f"state.model.atoms[{atom_id}]: {exc}") from exc
         atom_ids.add(atom_id)
         atom_positions[atom_id] = (
             cast("int | float | Decimal", atom_state.get("x")),
@@ -808,8 +830,12 @@ def _validate_atom_fields(atom_state: Mapping[str, object], *, error: str) -> No
     element = atom_state.get("element")
     if not isinstance(element, str) or not element.strip():
         raise ValueError(error)
-    if not _is_number(atom_state.get("x")) or not _is_number(atom_state.get("y")):
-        raise ValueError(error)
+    _validate_utf8(element, error=f"{error} element")
+    for coordinate in ("x", "y"):
+        if not _is_number(atom_state.get(coordinate)):
+            raise ValueError(
+                f"{error} {coordinate} must be a finite, safely representable number."
+            )
     if not _is_hex_color(atom_state.get("color")):
         raise ValueError(error)
     if type(atom_state.get("explicit_label")) is not bool:
@@ -853,8 +879,11 @@ def _validate_note_fields(
         raise ValueError(error)
     if not isinstance(note_state.get("text"), str):
         raise ValueError(error)
+    _validate_utf8(note_state["text"], error=f"{error} text")
     if "html" in note_state and not isinstance(note_state.get("html"), str):
         raise ValueError(error)
+    if "html" in note_state:
+        _validate_utf8(note_state["html"], error=f"{error} html")
     if not _is_number(note_state.get("x")) or not _is_number(note_state.get("y")):
         raise ValueError(error)
 
@@ -869,6 +898,27 @@ def _validate_arrow_labels(labels: object, *, error: str) -> None:
             raise ValueError(error)
         if len(text) > MAX_ARROW_LABEL_CHARS:
             raise ValueError(error)
+        _validate_utf8(text, error=f"{error} arrow label text")
+
+
+def _validate_utf8(text: object, *, error: str) -> None:
+    if isinstance(text, str):
+        try:
+            text.encode("utf-8")
+        except UnicodeEncodeError as exc:
+            raise ValueError(
+                f"{error} must contain valid Unicode (no lone surrogates)."
+            ) from exc
+
+
+def _validate_mark_text(text: object, *, error: str) -> None:
+    if text is None:
+        return
+    if not isinstance(text, str) or len(text) > MAX_MARK_TEXT_CHARS:
+        raise ValueError(
+            f"{error} mark text must be null or at most {MAX_MARK_TEXT_CHARS} characters."
+        )
+    _validate_utf8(text, error=f"{error} mark text")
 
 
 def _validate_arrow_fields(arrow_state: Mapping[str, object], *, error: str) -> None:
@@ -1073,11 +1123,11 @@ def _validate_ring_fill_states(
 
 
 def _validate_note_states(states: object) -> None:
-    for note_state in _validated_scene_state_list(states):
+    for index, note_state in enumerate(_validated_scene_state_list(states)):
         _validate_note_fields(
             note_state,
             required_keys=frozenset(("text", "x", "y")),
-            error="Invalid Chemvas file.",
+            error=f"Invalid Chemvas file. state.notes[{index}]:",
         )
 
 
@@ -1088,8 +1138,7 @@ def _validate_mark_states(states: object, atom_ids: set[int]) -> None:
         if not _is_valid_choice(mark_state.get("kind"), VALID_MARK_KINDS):
             raise ValueError("Invalid Chemvas file.")
         text = mark_state.get("text")
-        if text is not None and not isinstance(text, str):
-            raise ValueError("Invalid Chemvas file.")
+        _validate_mark_text(text, error="Invalid Chemvas file.")
         if not _is_number(mark_state.get("x")) or not _is_number(mark_state.get("y")):
             raise ValueError("Invalid Chemvas file.")
         atom_id = mark_state.get("atom_id")
@@ -1123,8 +1172,6 @@ _SHAPE_STATE_BASE_KEYS = frozenset(
 
 
 def _validate_shape_states(states: object) -> None:
-    if states is None:
-        return
     for shape_state in _validated_scene_state_list(states):
         _validate_shape_fields(shape_state, error="Invalid Chemvas file.")
 
@@ -1163,11 +1210,11 @@ def _validate_group_states(
     *,
     item_keys: frozenset[str] = _GROUPABLE_STATE_ITEM_KEYS,
 ) -> None:
-    group_states = state.get("groups")
-    if group_states is None:
+    if "groups" not in state:
         return
+    group_states = state["groups"]
     if not isinstance(group_states, list):
-        raise ValueError("Invalid Chemvas file.")
+        raise ValueError("Invalid Chemvas file. state.groups must be a list.")
     item_counts: dict[str, int] = {}
     for key in item_keys:
         items = state.get(key)
@@ -1229,78 +1276,119 @@ def _validated_scene_state_list(states: object) -> list[Mapping[str, object]]:
 def validate_settings_state(settings: Mapping[str, object]) -> None:
     keys = set(settings)
     if keys != SETTINGS_KEYS:
-        raise ValueError("Invalid Chemvas file.")
+        missing = sorted(SETTINGS_KEYS - keys)
+        unknown = sorted(str(key) for key in keys - SETTINGS_KEYS)
+        raise ValueError(
+            f"Invalid Chemvas file. settings fields: missing={missing}, unknown={unknown}."
+        )
     if (
         not _is_number(settings.get("bond_length_px"))
-        or cast("float", settings.get("bond_length_px")) <= 0
+        or not 0 < cast("float", settings.get("bond_length_px")) <= MAX_BOND_LENGTH_PX
     ):
-        raise ValueError("Invalid Chemvas file.")
+        raise ValueError(
+            f"Invalid Chemvas file. settings.bond_length_px must be finite, positive, and at most {MAX_BOND_LENGTH_PX} (Qt glyph-size limit)."
+        )
     if (
         not _is_number(settings.get("arrow_line_width"))
         or cast("float", settings.get("arrow_line_width")) < 0.5
     ):
-        raise ValueError("Invalid Chemvas file.")
+        raise ValueError(
+            "Invalid Chemvas file. settings.arrow_line_width must be finite and at least 0.5."
+        )
     if (
         not _is_number(settings.get("arrow_head_scale"))
         or not 0.1 <= cast("float", settings.get("arrow_head_scale")) <= 0.8
     ):
-        raise ValueError("Invalid Chemvas file.")
+        raise ValueError(
+            "Invalid Chemvas file. settings.arrow_head_scale must be between 0.1 and 0.8."
+        )
     if type(settings.get("orbital_phase_enabled")) is not bool:
-        raise ValueError("Invalid Chemvas file.")
+        raise ValueError(
+            "Invalid Chemvas file. settings.orbital_phase_enabled must be boolean."
+        )
     text_font_size = settings.get("text_font_size")
     if not _is_int(text_font_size) or not 6 <= text_font_size <= _QT_INT_MAX:
-        raise ValueError("Invalid Chemvas file.")
+        raise ValueError(
+            f"Invalid Chemvas file. settings.text_font_size must be an integer from 6 to {_QT_INT_MAX}."
+        )
     if (
         not _is_int(settings.get("text_font_weight"))
         or not 1 <= cast("int", settings.get("text_font_weight")) <= 1000
     ):
-        raise ValueError("Invalid Chemvas file.")
+        raise ValueError(
+            "Invalid Chemvas file. settings.text_font_weight must be an integer from 1 to 1000."
+        )
     if type(settings.get("text_italic")) is not bool:
-        raise ValueError("Invalid Chemvas file.")
+        raise ValueError("Invalid Chemvas file. settings.text_italic must be boolean.")
     if not isinstance(settings.get("text_font_family"), str) or not settings.get(
         "text_font_family"
     ):
-        raise ValueError("Invalid Chemvas file.")
+        raise ValueError(
+            "Invalid Chemvas file. settings.text_font_family must be a nonempty string."
+        )
+    _validate_utf8(settings["text_font_family"], error="settings.text_font_family")
     if not _is_hex_color(settings.get("text_color")):
-        raise ValueError("Invalid Chemvas file.")
+        raise ValueError(
+            "Invalid Chemvas file. settings.text_color must be a #RRGGBB color."
+        )
     if not _is_valid_choice(
         settings.get("text_alignment"), {"left", "center", "right", "justify"}
     ):
-        raise ValueError("Invalid Chemvas file.")
+        raise ValueError(
+            "Invalid Chemvas file. settings.text_alignment must be left, center, right, or justify."
+        )
     if (
         not _is_number(settings.get("text_line_spacing"))
         or cast("float", settings.get("text_line_spacing")) < 0.8
     ):
-        raise ValueError("Invalid Chemvas file.")
+        raise ValueError(
+            "Invalid Chemvas file. settings.text_line_spacing must be finite and at least 0.8."
+        )
     if type(settings.get("note_box_enabled")) is not bool:
-        raise ValueError("Invalid Chemvas file.")
+        raise ValueError(
+            "Invalid Chemvas file. settings.note_box_enabled must be boolean."
+        )
     if not _is_hex_color(settings.get("note_box_color")):
-        raise ValueError("Invalid Chemvas file.")
+        raise ValueError(
+            "Invalid Chemvas file. settings.note_box_color must be a #RRGGBB color."
+        )
     if (
         not _is_number(settings.get("note_box_alpha"))
         or not 0.0 <= cast("float", settings.get("note_box_alpha")) <= 1.0
     ):
-        raise ValueError("Invalid Chemvas file.")
+        raise ValueError(
+            "Invalid Chemvas file. settings.note_box_alpha must be between 0 and 1."
+        )
     if type(settings.get("note_border_enabled")) is not bool:
-        raise ValueError("Invalid Chemvas file.")
+        raise ValueError(
+            "Invalid Chemvas file. settings.note_border_enabled must be boolean."
+        )
     if not _is_hex_color(settings.get("note_border_color")):
-        raise ValueError("Invalid Chemvas file.")
+        raise ValueError(
+            "Invalid Chemvas file. settings.note_border_color must be a #RRGGBB color."
+        )
     if (
         not _is_number(settings.get("note_border_width"))
         or cast("float", settings.get("note_border_width")) < 0.5
     ):
-        raise ValueError("Invalid Chemvas file.")
+        raise ValueError(
+            "Invalid Chemvas file. settings.note_border_width must be finite and at least 0.5."
+        )
     if (
         not _is_number(settings.get("note_padding"))
         or cast("float", settings.get("note_padding")) < 2.0
     ):
-        raise ValueError("Invalid Chemvas file.")
+        raise ValueError(
+            "Invalid Chemvas file. settings.note_padding must be finite and at least 2."
+        )
     if not _is_valid_choice(settings.get("sheet_size"), VALID_SHEET_SIZES):
-        raise ValueError("Invalid Chemvas file.")
+        raise ValueError("Invalid Chemvas file. settings.sheet_size must be A4.")
     if not _is_valid_choice(
         settings.get("sheet_orientation"), VALID_SHEET_ORIENTATIONS
     ):
-        raise ValueError("Invalid Chemvas file.")
+        raise ValueError(
+            "Invalid Chemvas file. settings.sheet_orientation must be landscape or portrait."
+        )
 
 
 def validate_clipboard_selection_payload(payload: Mapping[str, object]) -> bool:
@@ -1446,14 +1534,15 @@ def _validate_atom_annotations_state(
         atom_id = _validated_id(atom_id_value)
         if atom_id not in atom_ids:
             raise ValueError("Invalid Chemvas file.")
-        _validate_atom_annotation(annotation)
+        try:
+            _validate_atom_annotation(annotation)
+        except ValueError as exc:
+            raise ValueError(f"state.model.atom_annotations[{atom_id}]: {exc}") from exc
 
 
 def _validate_atom_annotation(annotation: object) -> None:
-    if annotation is None:
-        return
     if not isinstance(annotation, Mapping):
-        raise ValueError("Invalid Chemvas file.")
+        raise ValueError("Invalid Chemvas file. Atom annotation must be an object.")
     if not set(annotation) <= VALID_ATOM_ANNOTATION_KEYS:
         raise ValueError("Invalid Chemvas file.")
     formal_charge = annotation.get("formal_charge", 0)
@@ -1524,8 +1613,7 @@ def _validate_clipboard_mark(
     if not _is_valid_choice(mark_kind, VALID_MARK_KINDS):
         raise ValueError("Invalid clipboard payload.")
     text = mark_state.get("text")
-    if text is not None and not isinstance(text, str):
-        raise ValueError("Invalid clipboard payload.")
+    _validate_mark_text(text, error="Invalid clipboard payload.")
     if not _is_number(mark_state.get("x")) or not _is_number(mark_state.get("y")):
         raise ValueError("Invalid clipboard payload.")
     atom_id = mark_state.get("atom_id")

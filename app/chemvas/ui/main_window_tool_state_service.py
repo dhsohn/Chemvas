@@ -92,8 +92,7 @@ class MainWindowToolStateService:
     def set_arrow_preset(self, window, value: str) -> None:
         width, head = arrow_preset_from_label(value)
         controller = self._tool_mode_controller(window)
-        controller.set_arrow_line_width(width)
-        controller.set_arrow_head_scale(head)
+        controller.set_arrow_style(width, head)
 
 
 __all__ = ["MainWindowToolStateService"]

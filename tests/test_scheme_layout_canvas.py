@@ -39,6 +39,49 @@ if TYPE_CHECKING:
 _HASH = "a" * 64
 
 
+def test_arrangement_preserves_source_region_and_is_translation_equivariant():
+    def state_at(dx, dy):
+        return compose_document_state(
+            {
+                "format": "chemvas-document-composition",
+                "version": 1,
+                "atoms": [
+                    {"id": 0, "element": "O", "x": -300 + dx, "y": 160 + dy},
+                    {"id": 1, "element": "N", "x": -220 + dx, "y": 180 + dy},
+                ],
+                "bonds": [],
+            }
+        )
+
+    plans = []
+    for dx, dy in [(0, 0), (75, -60)]:
+        state = state_at(dx, dy)
+        request = validate_layout_request(
+            state,
+            {
+                "format": "chemvas-scheme-layout",
+                "version": 1,
+                "source_sha256": _HASH,
+                "rows": [{"blocks": [{"atoms": [0]}, {"atoms": [1]}]}],
+            },
+            source_sha256=_HASH,
+        )
+        with offscreen_canvas(state, command="region-regression") as (canvas, _service):
+            original = content_bounds(export_item_closure(canvas.scene().items()))
+            result, report = arrange_canvas(canvas, state, request)
+            arranged = content_bounds(export_item_closure(canvas.scene().items()))
+            assert arranged.left() == pytest.approx(original.left())
+            assert arranged.top() == pytest.approx(original.top())
+            plans.append((result, report))
+    for atom_id in (0, 1):
+        first = plans[0][0]["model"]["atoms"][atom_id]
+        second = plans[1][0]["model"]["atoms"][atom_id]
+        assert second["x"] - first["x"] == pytest.approx(75)
+        assert second["y"] - first["y"] == pytest.approx(-60)
+    assert plans[0][1]["layout_width"] == pytest.approx(plans[1][1]["layout_width"])
+    assert plans[0][1]["layout_height"] == pytest.approx(plans[1][1]["layout_height"])
+
+
 @pytest.fixture(scope="module", autouse=True)
 def application() -> QApplication:
     app = QApplication.instance() or QApplication([])
@@ -557,11 +600,12 @@ def test_wrapped_chain_preserves_entities_styles_and_each_arrow_once() -> None:
             if key not in {"start", "end", "control"}
         }
     with offscreen_canvas(candidate, command="test-wrapped-reopen") as (canvas, _):
+        origin_x = min(_line_bounds(canvas, request, line).left() for line in lines)
         for line in lines:
             bounds = _line_bounds(canvas, request, line)
             assert bounds is not None
-            assert bounds.left() >= -1e-6
-            assert bounds.right() <= 400 + 1e-6
+            assert bounds.left() >= origin_x - 1e-6
+            assert bounds.right() <= origin_x + 400 + 1e-6
             assert line["width"] <= 400 + 1e-6
         assert len(group_state_for(canvas).groups) == 4
 
@@ -667,8 +711,11 @@ def test_wrapped_mode_does_not_expand_opposite_wide_columns_past_budget(
         canvas,
         _,
     ):
+        origin_x = min(
+            _line_bounds(canvas, request, line).left() for line in report["lines"]
+        )
         assert all(
-            _line_bounds(canvas, request, line).right() <= 430 + 1e-6
+            _line_bounds(canvas, request, line).right() <= origin_x + 430 + 1e-6
             for line in report["lines"]
         )
 

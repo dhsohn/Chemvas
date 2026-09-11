@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import override
 
 from PyQt6.QtCore import QPointF, Qt
+from PyQt6.QtWidgets import QApplication
 
 from chemvas.core.tool_overlay_logic import (
     activate_tool_no_drag,
@@ -29,6 +30,8 @@ class PreviewDragTool(Tool):
         super().__init__(name, canvas, context=context)
         self._start_pos: QPointF | None = None
         self._press_pos: QPointF | None = None
+        self._press_view_pos: QPointF | None = None
+        self._drag_threshold_exceeded = False
         self._preview_item = None
 
     @override
@@ -40,13 +43,15 @@ class PreviewDragTool(Tool):
         self._clear_preview()
         self._start_pos = None
         self._press_pos = None
+        self._press_view_pos = None
+        self._drag_threshold_exceeded = False
 
     def _clear_preview(self) -> None:
         clear_temporary_tool_overlay(self.canvas, preview_item=self._preview_item)
         self._preview_item = None
 
     def _click_end_or_none(self, current_pos: QPointF) -> QPointF | None:
-        """The end of a gesture whose pointer never left the press point.
+        """The end of a gesture below the system's screen-pixel drag distance.
 
         The press point goes through the snap funnel once, on press.
         Asking the funnel again on release answers differently whenever
@@ -56,7 +61,13 @@ class PreviewDragTool(Tool):
         """
         if self._start_pos is None or self._press_pos is None:
             return None
-        return self._start_pos if current_pos == self._press_pos else None
+        return self._start_pos if not self._drag_threshold_exceeded else None
+
+    def _update_drag_distance(self, event) -> None:
+        if self._press_view_pos is not None:
+            distance = (event.position() - self._press_view_pos).manhattanLength()
+            if distance >= QApplication.startDragDistance():
+                self._drag_threshold_exceeded = True
 
     def _build_preview(self, current_pos):
         raise NotImplementedError
@@ -70,12 +81,15 @@ class PreviewDragTool(Tool):
             return False
         self._start_pos = self.context.scene_pos_from_event(event)
         self._press_pos = QPointF(self._start_pos)
+        self._press_view_pos = QPointF(event.position())
+        self._drag_threshold_exceeded = False
         return True
 
     @override
     def on_mouse_move(self, event) -> bool:
         if self._start_pos is None:
             return False
+        self._update_drag_distance(event)
         current_pos = self.context.scene_pos_from_event(event)
         self._clear_preview()
         self._preview_item = self._build_preview(current_pos)
@@ -85,6 +99,7 @@ class PreviewDragTool(Tool):
     def on_mouse_release(self, event) -> bool:
         if self._start_pos is None:
             return False
+        self._update_drag_distance(event)
         end_pos = self.context.scene_pos_from_event(event)
         self._clear_preview()
         try:
@@ -92,6 +107,8 @@ class PreviewDragTool(Tool):
         finally:
             self._start_pos = None
             self._press_pos = None
+            self._press_view_pos = None
+            self._drag_threshold_exceeded = False
         return True
 
 

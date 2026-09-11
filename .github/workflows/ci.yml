@@ -61,7 +61,7 @@ jobs:
         run: python -m mypy
 
       - name: Run tests
-        # The two excluded modules gate on RDKit at module level, so in this
+        # The excluded modules gate on RDKit at module level, so in this
         # job (which installs no RDKit) they would run zero tests; the
         # rdkit-smoke job runs them instead. tests/test_ci_rdkit_coverage.py
         # pins the exclusions to those module-level gates in both directions.
@@ -69,6 +69,7 @@ jobs:
           mapfile -t files < <(find tests -name 'test_*.py' \
             ! -name 'test_calculation_bundle_rdkit.py' \
             ! -name 'test_calculation_step_rdkit.py' \
+            ! -name 'test_rdkit_real_use.py' \
             | sort)
           bash scripts/run_test_files.sh --python python "${files[@]}"
 
@@ -155,10 +156,13 @@ jobs:
         # pins the list in both directions.
         run: |
           bash scripts/run_test_files.sh --python python \
+            tests/test_annotation_default_placement.py \
             tests/test_calculation_bundle_rdkit.py \
             tests/test_calculation_step_rdkit.py \
             tests/test_core_molfile.py \
-            tests/test_core_rdkit_adapter.py
+            tests/test_core_rdkit_adapter.py \
+            tests/test_native_geometry_backlog.py \
+            tests/test_rdkit_real_use.py
 
   package-smoke:
     name: Wheel smoke test

@@ -213,7 +213,7 @@ def arrows(w: Walkthrough) -> None:
     w.move(0.0, 130.0)
     w.capture(
         title,
-        "Arrows carry their labels; the profile's connectors stay joined to the levels.",
+        "Arrows carry their labels; connectors snap to level ends without staying attached.",
         2400,
     )
 
@@ -229,13 +229,17 @@ def editing(w: Walkthrough) -> None:
     w.set_tool("select")
     w.canvas.scene().clearSelection()
     w.move(0.0, 60.0)
-    w.capture(title, "Select tool: press on a structure and drag to move it.", 1400)
+    w.capture(
+        title,
+        "Select tool: press on an unselected atom and drag to reshape the structure.",
+        1400,
+    )
     handle = w.canvas.model.atoms[ethanol[1]]
     w.drag(
         (handle.x, handle.y),
         (handle.x + 10.0, handle.y - 30.0),
         title=title,
-        detail="A molecule moves as a whole.",
+        detail="This drag moves one atom. Select the whole molecule first to move it as a unit.",
     )
     w.key(Qt.Key.Key_A, Qt.KeyboardModifier.ControlModifier)
     from chemvas.ui.selection_service_access import refresh_selection_outline_for

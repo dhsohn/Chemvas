@@ -12,6 +12,15 @@ For drawings that are already spaced correctly, the CLI also supports
 `"mode": "align-y"`: align molecular paint vertically without moving captions
 or changing horizontal placement. This mode is explicit, never the default.
 
+Arrange preserves the top-left of the requested source region (structures,
+assigned items/captions and connecting arrows) rather than moving it to (0,0).
+A wrap width measures the resulting region's width, not its absolute X coordinate.
+Unassigned content stays exact; this is not automatic page fitting. Run the sheet
+containment check after arranging. In `align-y`, arrow positions also stay fixed.
+A multi-reactant block has one shared caption stack; use separate blocks for
+separate captions or attached notes to preserve individual offsets. Roles are
+explicit and are not inferred or persisted as a new caption schema.
+
 ## Arrange from the desktop
 
 ![Arrange Scheme walkthrough: group each structure with its caption, open the dialog, choose captions and the arrow, click Arrange](images/walkthrough-arrange.gif)

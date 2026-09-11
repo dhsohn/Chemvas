@@ -4,14 +4,41 @@ from typing import TYPE_CHECKING, Any, cast
 
 from PyQt6.QtCore import QPointF, Qt
 
+from chemvas.features.graph import find_rings
+
 if TYPE_CHECKING:
-    from collections.abc import Sequence
+    from collections.abc import Mapping, Sequence
 
     from PyQt6.QtWidgets import QGraphicsPolygonItem
 
-    from chemvas.domain.document import Bond
+    from chemvas.domain.document import Atom, Bond
 
 Point = tuple[float, float]
+
+
+def graph_ring_polygons_for_bond(
+    bond_id: int,
+    *,
+    atoms: Mapping[int, Atom],
+    bonds: Sequence[Bond | None],
+) -> list[list[Point]]:
+    """Ordered cycle-basis polygons incident to an anchor edge, without fill items.
+
+    Reuse the graph feature's bounded ring basis, not an enumeration of every
+    cycle. Decorations are not the authority for molecular connectivity.
+    """
+    if not 0 <= bond_id < len(bonds) or (bond := bonds[bond_id]) is None:
+        return []
+    edge = {bond.a, bond.b}
+    return [
+        [(atoms[atom_id].x, atoms[atom_id].y) for atom_id in ring]
+        for ring in find_rings(bonds)
+        if all(atom_id in atoms for atom_id in ring)
+        and any(
+            {ring[index], ring[(index + 1) % len(ring)]} == edge
+            for index in range(len(ring))
+        )
+    ]
 
 
 def ring_polygon_points_for_bond(
@@ -64,6 +91,7 @@ def point_inside_any_ring(
 
 
 __all__ = [
+    "graph_ring_polygons_for_bond",
     "point_inside_any_ring",
     "ring_polygon_points_for_atoms",
     "ring_polygon_points_for_bond",

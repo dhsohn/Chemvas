@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import math
 
-from PyQt6.QtCore import QPointF
+from PyQt6.QtCore import QPointF, Qt
+from PyQt6.QtGui import QPolygonF
 
 from chemvas.core.template_geometry import (
     cyclohexane_boat_points,
@@ -11,7 +12,10 @@ from chemvas.core.template_geometry import (
     regular_ring_radius,
     ring_points,
 )
-from chemvas.features.insertion import ring_polygon_points_for_bond
+from chemvas.features.insertion import (
+    graph_ring_polygons_for_bond,
+    ring_polygon_points_for_bond,
+)
 from chemvas.ui.canvas_model_access import (
     atom_for_id,
     atoms_for,
@@ -194,14 +198,36 @@ def _compute_bond_template_geometry_for(
     *,
     center_hint: QPointF | None = None,
 ) -> tuple[list[QPointF], list[tuple[int, float, float]]] | None:
+    occupied = graph_ring_polygons_for_bond(
+        bond_id, atoms=atoms_for(canvas), bonds=bonds_for(canvas)
+    )
+    if not occupied:
+        legacy_polygon = ring_polygon_points_for_bond_for(canvas, bond_id)
+        if legacy_polygon is not None:
+            occupied.append(legacy_polygon)
     result = geometry_fn(
         geometry_input,
         bond_id,
         atoms=atoms_for(canvas),
         bonds=bonds_for(canvas),
         center_hint=point_pair(center_hint),
-        occupied_polygon=ring_polygon_points_for_bond_for(canvas, bond_id),
+        occupied_polygon=occupied[0] if occupied else None,
     )
+    if result is not None and len(occupied) > 1:
+        points, _ = result
+        center = QPointF(
+            sum(x for x, _ in points) / len(points),
+            sum(y for _, y in points) / len(points),
+        )
+        # A shared interior edge can have an occupied ring on both sides.
+        # Never let choosing the first ring conceal an overlap with the other.
+        if any(
+            QPolygonF(qpoints_from_pairs(polygon)).containsPoint(
+                center, Qt.FillRule.WindingFill
+            )
+            for polygon in occupied
+        ):
+            return None
     return template_geometry_result(result)
 
 

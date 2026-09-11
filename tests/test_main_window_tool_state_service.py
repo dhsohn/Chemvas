@@ -231,29 +231,15 @@ class MainWindowToolStateServiceTest(unittest.TestCase):
         self.assertEqual(self.tool_mode_controller_for_window.call_count, 6)
 
     def test_set_arrow_preset_routes_width_and_head_scale(self) -> None:
-        with (
-            mock.patch.object(
-                active_canvas_for_window(
-                    self.window
-                ).services.input.tool_mode_controller,
-                "set_arrow_line_width",
-            ) as set_arrow_line_width,
-            mock.patch.object(
-                active_canvas_for_window(
-                    self.window
-                ).services.input.tool_mode_controller,
-                "set_arrow_head_scale",
-            ) as set_arrow_head_scale,
-        ):
+        with mock.patch.object(
+            active_canvas_for_window(self.window).services.input.tool_mode_controller,
+            "set_arrow_style",
+        ) as set_arrow_style:
             self.service.set_arrow_preset(self.window, "Bold")
             self.service.set_arrow_preset(self.window, "Unknown")
 
         self.assertEqual(
-            [call.args for call in set_arrow_line_width.call_args_list],
-            [(2.2,), (1.2,)],
-        )
-        self.assertEqual(
-            [call.args for call in set_arrow_head_scale.call_args_list],
-            [(0.4,), (0.3,)],
+            [call.args for call in set_arrow_style.call_args_list],
+            [(2.2, 0.4), (1.5, 0.3)],
         )
         self.assertEqual(self.tool_mode_controller_for_window.call_count, 2)

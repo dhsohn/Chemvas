@@ -12,6 +12,7 @@ from chemvas.features.selection import (
     SelectionPressContext,
     plan_selection_press,
 )
+from chemvas.ui.canvas_service_ports import handle_overlay_service_for_access
 from chemvas.ui.handle_overlay_access import (
     clear_handles_for,
     show_curved_handles_for,
@@ -45,8 +46,8 @@ class SelectTool(SelectionDragMixin, Tool):
         self._rotation_session = None
         self._pending_arrow_handle_item = None
         self._pending_arrow_handle_action: str | None = None
-        self._pending_shape_handle_item = None
-        self._pending_shape_handle_action: str | None = None
+        self._pending_object_handle_item = None
+        self._pending_object_handle_action: str | None = None
         self._reset_selection_drag_state()
         self._drag_interval = 1.0 / 60.0
         self._last_drag_time = 0.0
@@ -78,8 +79,8 @@ class SelectTool(SelectionDragMixin, Tool):
     def _clear_pending_handle_toggle(self) -> None:
         self._pending_arrow_handle_item = None
         self._pending_arrow_handle_action = None
-        self._pending_shape_handle_item = None
-        self._pending_shape_handle_action = None
+        self._pending_object_handle_item = None
+        self._pending_object_handle_action = None
 
     def _clear_handle_drag_state(self) -> None:
         self._active_handle = None
@@ -206,14 +207,14 @@ class SelectTool(SelectionDragMixin, Tool):
         self._clear_pending_handle_toggle()
         self._reset_selection_drag_state()
 
-    def _shape_handle_toggle_action_for_item(self, item) -> str:
+    def _object_handle_toggle_action_for_item(self, item) -> str:
         if handle_target_for(self.canvas) is item and bool(
             active_handles_for(self.canvas)
         ):
             return "hide"
         return "show"
 
-    def _begin_shape_handle_toggle_or_drag(
+    def _begin_object_handle_toggle_or_drag(
         self,
         item,
         press_pos,
@@ -226,14 +227,14 @@ class SelectTool(SelectionDragMixin, Tool):
         if not atom_ids and not selection_items:
             return False
         handle_target = handle_target_for(self.canvas)
-        action = self._shape_handle_toggle_action_for_item(item)
+        action = self._object_handle_toggle_action_for_item(item)
         if not self._begin_selection_drag(atom_ids, selection_items, press_pos):
             return False
         try:
             if handle_target is not None and handle_target is not item:
                 clear_handles_for(self.canvas)
-            self._pending_shape_handle_item = item
-            self._pending_shape_handle_action = action
+            self._pending_object_handle_item = item
+            self._pending_object_handle_action = action
         except Exception as original_error:
             self._cancel_selection_drag(original_error)
             raise
@@ -327,7 +328,8 @@ class SelectTool(SelectionDragMixin, Tool):
         snapshot = selection_snapshot_for(self.canvas)
         if (
             item is not None
-            and item.data(0) in {"note", "shape", "image", "mark"}
+            and item.data(0)
+            in {"note", "shape", "image", "mark", "orbital", "ts_bracket"}
             and (snapshot is None or item not in snapshot.selection_items)
         ):
             if event.modifiers() & Qt.KeyboardModifier.ControlModifier:
@@ -367,11 +369,11 @@ class SelectTool(SelectionDragMixin, Tool):
             )
         if (
             item is not None
-            and item.data(0) == "shape"
+            and item.data(0) in {"shape", "orbital"}
             and snapshot is not None
             and item in snapshot.selection_items
         ):
-            return self._begin_shape_handle_toggle_or_drag(
+            return self._begin_object_handle_toggle_or_drag(
                 item,
                 press_pos,
                 snapshot=snapshot,
@@ -512,13 +514,18 @@ class SelectTool(SelectionDragMixin, Tool):
 
             self._commit_pending_handle_toggle(apply_toggle)
             return True
-        if self._pending_shape_handle_item is not None and not self._moved:
-            item = self._pending_shape_handle_item
-            action = self._pending_shape_handle_action
+        if self._pending_object_handle_item is not None and not self._moved:
+            item = self._pending_object_handle_item
+            action = self._pending_object_handle_action
 
             def apply_toggle() -> None:
                 if action == "show":
-                    show_shape_handles_for(self.canvas, item)
+                    if item.data(0) == "orbital":
+                        handle_overlay_service_for_access(
+                            self.canvas
+                        ).show_orbital_handles(item)
+                    else:
+                        show_shape_handles_for(self.canvas, item)
                 elif action == "hide":
                     clear_handles_for(self.canvas)
 

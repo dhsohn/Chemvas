@@ -36,7 +36,9 @@ def compute_sprout_bond_endpoint(
         return None
     origin, neighbor_points = atom_data
     if not cyclic:
-        return default_endpoint
+        return _uncrossed_sprout_endpoint(
+            atom_id, origin, default_endpoint, atoms=atoms, bonds=bonds
+        )
 
     vectors: list[Point] = []
     ox, oy = origin
@@ -61,9 +63,76 @@ def compute_sprout_bond_endpoint(
             angle = math.degrees(math.atan2(vectors[0][1], vectors[0][0])) + 120.0
     snap_angle = round(angle / 60.0) * 60.0
     rad = math.radians(snap_angle)
+    return _uncrossed_sprout_endpoint(
+        atom_id,
+        origin,
+        (ox + math.cos(rad) * bond_length, oy + math.sin(rad) * bond_length),
+        atoms=atoms,
+        bonds=bonds,
+    )
+
+
+def _uncrossed_sprout_endpoint(
+    atom_id: int,
+    origin: Point,
+    endpoint: Point | None,
+    *,
+    atoms: Mapping[int, Atom],
+    bonds: Sequence[Bond | None],
+) -> Point | None:
+    """Keep the preferred direction unless it crosses another drawn bond.
+
+    A concave ring vertex's opposite-neighbor bisector points into the ring.
+    Try the same bounded 60-degree directions used by cyclic sprouting; this
+    is a local drawing correction, not a molecular layout or stereo policy.
+    """
+    if endpoint is None:
+        return None
+    segments = [
+        ((atoms[bond.a].x, atoms[bond.a].y), (atoms[bond.b].x, atoms[bond.b].y))
+        for bond in bonds
+        if bond is not None
+        and atom_id not in (bond.a, bond.b)
+        and bond.a in atoms
+        and bond.b in atoms
+    ]
+
+    def crosses(end: Point) -> bool:
+        dx, dy = end[0] - origin[0], end[1] - origin[1]
+        for a, b in segments:
+            ex, ey = b[0] - a[0], b[1] - a[1]
+            determinant = dx * ey - dy * ex
+            if abs(determinant) <= 1e-9:
+                continue
+            ax, ay = a[0] - origin[0], a[1] - origin[1]
+            t = (ax * ey - ay * ex) / determinant
+            u = (ax * dy - ay * dx) / determinant
+            if 0.0 < t <= 1.0 and 0.0 <= u <= 1.0:
+                return True
+        return False
+
+    if not crosses(endpoint):
+        return endpoint
+    dx, dy = endpoint[0] - origin[0], endpoint[1] - origin[1]
+    candidates = []
+    for degrees in (60, -60, 120, -120, 180):
+        angle = math.radians(degrees)
+        candidate = (
+            origin[0] + dx * math.cos(angle) - dy * math.sin(angle),
+            origin[1] + dx * math.sin(angle) + dy * math.cos(angle),
+        )
+        if not crosses(candidate):
+            # Among unblocked directions, prefer open space rather than a
+            # near-parallel bond ending on (or beside) an existing neighbor.
+            clearance = min(
+                math.hypot(candidate[0] - atom.x, candidate[1] - atom.y)
+                for other_id, atom in atoms.items()
+                if other_id != atom_id
+            )
+            if clearance > 1e-6:
+                candidates.append((clearance, candidate))
     return (
-        ox + math.cos(rad) * bond_length,
-        oy + math.sin(rad) * bond_length,
+        max(candidates, key=lambda candidate: candidate[0])[1] if candidates else None
     )
 
 

@@ -9,7 +9,7 @@ from tests.runtime_state import canvas_runtime_state
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PyQt6.QtCore import QPointF, Qt
+from PyQt6.QtCore import QPoint, QPointF, Qt
 from PyQt6.QtGui import QColor, QPen, QTransform
 from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import QApplication
@@ -45,6 +45,7 @@ from chemvas.ui.main_window_ports import (
     services_for_window,
 )
 from chemvas.ui.preview_tools import ArrowTool
+from chemvas.ui.scene_decoration_access import add_arrow_for
 from chemvas.ui.scene_item_state_serialization import arrow_state_dict
 from chemvas.ui.tool_context import ToolContext
 
@@ -395,13 +396,19 @@ class SnapToolTest(unittest.TestCase):
         self.assertEqual((end.x(), end.y()), (150.0, 50.0))
         self.assertEqual(kind, "arc_90_right")
 
-    def test_short_drag_from_an_endpoint_still_draws_a_short_line_and_arrow(
+    def test_started_drag_can_finish_near_its_start_without_self_snapping(
         self,
     ) -> None:
         for tool_class in (LineTool, ArrowTool):
             canvas = _FakeToolCanvas()
             tool = tool_class(canvas, context=_context(canvas))
             tool.on_mouse_press(_FakeEvent(QPointF(101.0, 1.0)))
+            # Establish an intentional drag before returning close to its start.
+            # The old press→release alone moves only five screen pixels, which
+            # is now correctly a wobble/click, not a request for a short segment.
+            tool.on_mouse_move(
+                _FakeEvent(QPointF(102.0 + QApplication.startDragDistance(), 1.0))
+            )
             tool.on_mouse_release(_FakeEvent(QPointF(104.0, 3.0)))
             start, end, _kind = canvas.add_calls[-1]
             self.assertEqual((start.x(), start.y()), (100.0, 0.0), tool_class)
@@ -460,6 +467,29 @@ class KineticToolsGuiTest(unittest.TestCase):
         )
         self.app.processEvents()
         QTest.qWait(10)
+
+    def test_wobble_on_an_existing_endpoint_does_not_add_a_stub_or_level(self) -> None:
+        canvas = active_canvas_for_window(self.window)
+        add_arrow_for(canvas, QPointF(-20.0, 0.0), QPointF(20.0, 0.0), "line")
+        tool_mode = canvas_services_for(canvas).input.tool_mode_controller
+        history = canvas_services_for(canvas).history_service
+        for tool_kind in ("line", "arrow"):
+            with self.subTest(tool_kind=tool_kind):
+                tool_mode.set_tool(tool_kind)
+                before = snapshot_canvas_state_for(canvas)
+                stacks = history.capture_stack_snapshot()
+                start = canvas.mapFromScene(QPointF(20.0, 0.0))
+                end = start + QPoint(3, 0)
+                QTest.mousePress(
+                    canvas.viewport(), Qt.MouseButton.LeftButton, pos=start
+                )
+                QTest.mouseMove(canvas.viewport(), end)
+                QTest.mouseRelease(
+                    canvas.viewport(), Qt.MouseButton.LeftButton, pos=end
+                )
+                self.app.processEvents()
+                self.assertEqual(snapshot_canvas_state_for(canvas), before)
+                history.verify_stack_snapshot(stacks)
 
     def test_second_line_snaps_to_the_first_and_flipping_an_arc_mirrors_it(
         self,

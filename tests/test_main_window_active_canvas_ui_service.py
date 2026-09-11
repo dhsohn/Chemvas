@@ -164,6 +164,24 @@ class MainWindowActiveCanvasUIServiceTest(unittest.TestCase):
         self._assert_canvas_callbacks(self.window.canvas_a, active=False)
         self._assert_canvas_callbacks(self.window.canvas_b, active=True)
 
+    def test_history_refresh_does_not_announce_a_tool_or_clear_context_override(
+        self,
+    ) -> None:
+        self.service.bind_active_canvas(self.window)
+        self.status_service.reset_mock()
+        self.context_page_state_service.reset_mock()
+        self.context_bar_service.reset_mock()
+
+        self.window.canvas_a.runtime_state.history_service.state.change_callback()
+
+        self.context_bar_service.refresh_window.assert_called_once_with(self.window)
+        self.context_bar_service.reflect_bond_length.assert_called_once_with(
+            self.window
+        )
+        self.context_page_state_service.sync_tool_actions_from_canvas.assert_not_called()
+        self.status_service.assert_not_called()
+        self.assertEqual(self.status_service.method_calls, [])
+
     def test_bound_active_canvas_callbacks_route_through_injected_services(
         self,
     ) -> None:
@@ -189,6 +207,7 @@ class MainWindowActiveCanvasUIServiceTest(unittest.TestCase):
         self.context_page_state_service.sync_tool_actions_from_canvas.assert_called_once_with(
             self.window
         )
+        self.context_bar_service.refresh_window.assert_called_once_with(self.window)
         self.status_service.update_zoom_label.assert_called_once_with(175)
         self.action_availability_service.update_action_availability.assert_has_calls(
             [mock.call(self.window), mock.call(self.window)],

@@ -51,16 +51,20 @@ def rotate_scene_item_state(
         ]
         return after_state
     if kind in {"note", "image"}:
-        rect = item.sceneBoundingRect()
+        rect = item.boundingRect()
         if rect.isValid():
             # Notes and image pixels stay upright: orbit the block's center around the
-            # pivot and carry the anchor along by the same offset.
-            rotated_center = rotated_point(rect.center(), center, angle_radians)
+            # pivot and carry the anchor along by the same offset. Use the captured
+            # anchor, not the live scene center left by a previous preview frame.
+            before_center = rect.center() + QPointF(
+                before_state.get("x", 0.0), before_state.get("y", 0.0)
+            )
+            rotated_center = rotated_point(before_center, center, angle_radians)
             after_state["x"] = (
-                before_state.get("x", 0.0) + rotated_center.x() - rect.center().x()
+                before_state.get("x", 0.0) + rotated_center.x() - before_center.x()
             )
             after_state["y"] = (
-                before_state.get("y", 0.0) + rotated_center.y() - rect.center().y()
+                before_state.get("y", 0.0) + rotated_center.y() - before_center.y()
             )
         else:
             rotated = rotated_point(

@@ -9,9 +9,6 @@ from PyQt6.QtCore import QPointF, QRectF
 
 from chemvas.core.history import HistoryCommand, SetAtomPositionsCommand
 from chemvas.features.rendering import refresh_bond_graphics
-from chemvas.features.selection import (
-    bounding_box_center_for_atoms as bounding_box_center_for_atoms_logic,
-)
 from chemvas.features.selection import rotated_atom_positions, rotation_drag_angle
 from chemvas.ui.atom_coords_access import atom_coords_3d_for
 from chemvas.ui.bond_graphics_access import add_bond_graphics_for
@@ -36,7 +33,6 @@ from chemvas.ui.scene_flip_geometry import (
     bounds_from_points as bounds_from_points_logic,
 )
 from chemvas.ui.scene_flip_geometry import (
-    center_for_flip_group,
     flip_bounds_for_item,
     flip_center_for_selection,
 )
@@ -96,7 +92,14 @@ class _AlignObject:
     items: tuple[object, ...]
 
 
-ROTATION_STATE_ITEM_KINDS = ARROW_KINDS | {"orbital", "mark"}
+ROTATION_STATE_ITEM_KINDS = ARROW_KINDS | {
+    "orbital",
+    "mark",
+    "note",
+    "image",
+    "ts_bracket",
+    "shape",
+}
 
 
 @dataclass(slots=True)
@@ -261,9 +264,6 @@ class SceneTransformController:
     def _record_bond_update(self, *args) -> None:
         record_bond_update_for(self.canvas, *args)
 
-    def _bounding_box_center_for_atoms(self, atom_ids: set[int]):
-        return bounding_box_center_for_atoms_logic(atom_ids, atoms=self._atoms)
-
     def _apply_scene_item_state(self, item, state: dict) -> None:
         apply_scene_item_state_helper(self.canvas, item, state)
 
@@ -351,13 +351,16 @@ class SceneTransformController:
             marks_by_atom=self.marks.by_atom,
         )
 
-        def flip_center(selected_atom_ids, selected_items):
-            return flip_center_for_selection(
-                selected_atom_ids,
-                selected_items,
-                atoms=self._atoms,
-                flip_bounds_getter=self._flip_bounds_for_item,
-            )
+        # Like rotation, flip is one transform of the whole selection. Per-object
+        # pivots would leave a group's caption/image in place and destroy its layout.
+        center = flip_center_for_selection(
+            atom_ids,
+            items,
+            atoms=self._atoms,
+            flip_bounds_getter=self._flip_bounds_for_item,
+        )
+        if center is None:
+            return
 
         def flip_state(item, before_state, center, is_horizontal, transformed):
             return flip_scene_item_state(
@@ -374,14 +377,6 @@ class SceneTransformController:
         for component, component_items in zip(
             atom_components, groups.component_items, strict=False
         ):
-            center = center_for_flip_group(
-                component,
-                component_items,
-                bounding_box_center_for_atoms=self._bounding_box_center_for_atoms,
-                flip_center_for_selection_getter=flip_center,
-            )
-            if center is None:
-                continue
             position_maps = build_flip_atom_position_maps(
                 sorted(component),
                 atoms=self._atoms,
@@ -422,14 +417,6 @@ class SceneTransformController:
             )
 
         for item in groups.standalone_items:
-            center = center_for_flip_group(
-                set(),
-                [item],
-                bounding_box_center_for_atoms=self._bounding_box_center_for_atoms,
-                flip_center_for_selection_getter=flip_center,
-            )
-            if center is None:
-                continue
             command = apply_standalone_flip_transform(
                 item,
                 scene_item_state_getter=self._scene_item_state,

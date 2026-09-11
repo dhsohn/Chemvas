@@ -86,6 +86,8 @@ _DELETE_MUTATED_RUNTIME_FIELDS = (
     "smiles_input_state",
     "history_state",
     "calculation_plan_state",
+    "tool_settings_state",
+    "sheet_setup_state",
 )
 
 

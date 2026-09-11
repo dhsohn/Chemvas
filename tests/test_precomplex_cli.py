@@ -9,22 +9,34 @@ import pytest
 
 from chemvas.bootstrap import calculation_bundle as cli
 from chemvas.bootstrap import document_patch as patch_cli
-from chemvas.core.document_io import read_document
+from chemvas.core.document_io import read_document, write_document
 from chemvas.domain.document import CANVAS_FILE_VERSION
 from chemvas.domain.document.precomplex_profile import (
     CURRENT_PROFILE_ID,
     radius_provenance_for,
 )
-from tests.test_calculation_step_cli import _StateFakeAdapter, _write_document_with_plan
+from tests.test_calculation_step_cli import (
+    _path_ready_state,
+    _StateFakeAdapter,
+    _validate_common_machine,
+    _write_document_with_plan,
+)
 
 
+@pytest.mark.parametrize("reverse_members", [False, True])
 def test_generate_precomplex_creates_non_overwriting_plan_v2_document(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
+    reverse_members: bool,
 ) -> None:
     source = tmp_path / "mechanism.chemvas"
     _write_document_with_plan(source)
+    if reverse_members:
+        payload = json.loads(source.read_text(encoding="utf-8"))
+        for state in payload["state"]["calculation_plan"]["states"]:
+            state["members"].reverse()
+        source.write_text(json.dumps(payload), encoding="utf-8")
     source_bytes = source.read_bytes()
     request_path = tmp_path / "precomplex-request.json"
     request_payload: dict[str, object] = {
@@ -321,6 +333,125 @@ def _generate_candidate_fixture(
             CURRENT_PROFILE_ID
         )
     return source, output, raw
+
+
+def test_inspect_reports_duplicate_geometries_without_rewriting_candidates(
+    tmp_path, monkeypatch, capsys
+):
+    _, output, _ = _generate_candidate_fixture(tmp_path, monkeypatch, capsys)
+    original = output.read_bytes()
+    assert cli.run(["inspect-precomplex", str(output), "--step", "S01"]) == 0
+    report = json.loads(capsys.readouterr().out)
+    for side in ("reactant", "product"):
+        summary = report["candidate_geometry_summary"][side]
+        candidates = report["endpoints"][side]["candidates"]
+        assert summary["candidate_count"] == len(candidates) == 2
+        assert summary["unique_geometry_count"] == 1
+        assert summary["duplicate_geometry_groups"] == [
+            {
+                "xyz_sha256": candidates[0]["xyz_sha256"],
+                "candidate_ids": [candidate["id"] for candidate in candidates],
+            }
+        ]
+    assert output.read_bytes() == original
+
+
+@pytest.mark.parametrize("split_side", ["reactant", "product"])
+def test_unsupported_endpoint_topology_is_reported_before_geometry(
+    tmp_path, monkeypatch, capsys, split_side
+):
+    state = _path_ready_state()
+    plan = state["calculation_plan"]
+    index = 0 if split_side == "reactant" else 1
+    split_ids = [0, 1, 6] if index == 0 else [2, 3, 7]
+    parts = [[0, 1], [6]] if index == 0 else [[2, 3], [7]]
+    broken = {1, 6} if index == 0 else {3, 7}
+    state["model"]["bonds"] = [
+        bond for bond in state["model"]["bonds"] if {bond["a"], bond["b"]} != broken
+    ]
+    members = plan["states"][index]["members"]
+    assert members[0]["component_atom_ids"] == split_ids
+    members[:1] = [
+        {"component_atom_ids": part, "inclusion": "included"} for part in parts
+    ]
+    roles = plan["steps"][0][split_side]["roles"]
+    roles[:1] = [{"component_atom_ids": part, "role": split_side} for part in parts]
+    source = tmp_path / "topology.chemvas"
+    write_document(source, state, CANVAS_FILE_VERSION)
+    before = source.read_bytes()
+    assert cli.run(["inspect-plan", str(source)]) == 0
+    report = json.loads(capsys.readouterr().out)
+    reasons = report["steps"][0]["path_precheck"]["blocking_reasons"]
+    assert reasons == ["precomplex_endpoint_topology_not_supported"]
+    request = tmp_path / "request.json"
+    request.write_text(
+        json.dumps(
+            {
+                "format": "chemvas-precomplex-request",
+                "version": 2,
+                "profile": CURRENT_PROFILE_ID,
+                "source_document_sha256": hashlib.sha256(before).hexdigest(),
+                "step_id": "S01",
+                "candidate_cap": 1,
+                "environment": {"kind": "gas_phase"},
+                "endpoints": {
+                    side: {
+                        "contacts": [
+                            {
+                                "id": "contact",
+                                "first_atom_id": 0,
+                                "second_atom_id": 6,
+                                "target_distance_angstrom": 0.3,
+                                "tolerance_angstrom": 0.1,
+                            }
+                        ]
+                    }
+                    for side in ("reactant", "product")
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    def unexpected_geometry():
+        pytest.fail("unsupported topology must fail before constructing RDKit")
+
+    monkeypatch.setattr(cli, "RDKitAdapter", unexpected_geometry)
+    with pytest.raises(SystemExit) as error:
+        cli.run(
+            [
+                "generate-precomplex",
+                str(source),
+                str(request),
+                "--step",
+                "S01",
+                "--output",
+                str(tmp_path / "out.chemvas"),
+            ]
+        )
+    assert error.value.code == 2
+    assert "exactly two included components on each endpoint" in capsys.readouterr().err
+    assert source.read_bytes() == before
+    assert not (tmp_path / "out.chemvas").exists()
+    monkeypatch.setattr(cli, "RDKitAdapter", _StateFakeAdapter)
+    assert (
+        cli.run(
+            [
+                "pack-step",
+                str(source),
+                "--step",
+                "S01",
+                "--output",
+                str(tmp_path / "machine.json"),
+            ]
+        )
+        == 0
+    )
+    machine = json.loads((tmp_path / "machine.json").read_text())
+    _validate_common_machine(tmp_path / "machine.json")
+    assert machine["handoff"]["codes"] == [
+        "chemvas/precomplex_endpoint_topology_not_supported"
+    ]
 
 
 def _review_candidate_fixture(
