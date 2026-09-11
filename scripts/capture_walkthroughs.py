@@ -12,6 +12,7 @@ from __future__ import annotations
 import argparse
 import os
 import sys
+from itertools import pairwise
 from pathlib import Path
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
@@ -34,6 +35,7 @@ from chemvas.ui.main_window_ports import (
 )
 from chemvas.ui.rdkit_adapter_access import smiles_to_2d_for
 from chemvas.ui.renderer_style_access import bond_length_px_for
+from chemvas.ui.scene_item_state_serialization import arrow_state_dict
 
 TOPICS = ("drawing", "arrows", "editing", "chemistry")
 
@@ -166,19 +168,44 @@ def arrows(w: Walkthrough) -> None:
         title=title,
         detail="Curved arrows follow the drag.",
     )
-    w.click_context_button("Reaction")
-    w.drag(
-        (-8.0, 33.0),
-        (40.0, 80.0),
-        title=title,
-        detail="An end within twelve pixels of another endpoint snaps to it.",
-    )
-    if len(arrow_items_for(w.canvas)) != 4:
-        raise RuntimeError(f"expected 4 arrows, got {len(arrow_items_for(w.canvas))}")
-    w.set_tool("select")
-    w.move(0.0, 70.0)
+    # A reaction profile is where endpoint snapping earns its keep: energy
+    # levels placed by clicking, connectors whose ends join the level ends.
+    w.canvas.centerOn(0.0, 45.0)
+    w.set_tool("line")
+    w.move(-100.0, 100.0)
     w.capture(
-        title, "Reaction, equilibrium and curved arrows with attached labels.", 2200
+        title, "Reaction profile: with Line, a click places a horizontal level.", 1600
+    )
+    levels: list[tuple[float, float, float, float]] = []
+    for x, y in ((-120.0, 105.0), (-30.0, 55.0), (60.0, 95.0)):
+        w.click(x, y)
+        levels.append((x, y, x + 40.0, y))
+    w.capture(title, "Reactant, transition state, product.", 1400)
+    for (_, _, x2, y2), (nx1, ny1, _, _) in pairwise(levels):
+        w.drag(
+            (x2 - 2.0, y2 + 2.0),
+            (nx1 + 2.0, ny1 - 2.0),
+            title=title,
+            detail="Drag from a level's end to the next: both ends snap to the level ends.",
+        )
+    items = arrow_items_for(w.canvas)
+    if len(items) != 8:
+        raise RuntimeError(f"expected 3 arrows and 5 lines, got {len(items)}")
+    connectors = [arrow_state_dict(item) for item in items[-2:]]
+    for connector, ((_, _, x2, y2), (nx1, ny1, _, _)) in zip(
+        connectors, pairwise(levels), strict=True
+    ):
+        if tuple(connector["start"]) != (x2, y2) or tuple(connector["end"]) != (
+            nx1,
+            ny1,
+        ):
+            raise RuntimeError(f"connector did not snap to the level ends: {connector}")
+    w.set_tool("select")
+    w.move(0.0, 130.0)
+    w.capture(
+        title,
+        "Arrows carry their labels; the profile's connectors stay joined to the levels.",
+        2400,
     )
 
 
