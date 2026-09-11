@@ -4,7 +4,7 @@ import pytest
 from PyQt6.QtCore import QRectF, Qt
 from PyQt6.QtGui import QColor
 from PyQt6.QtTest import QTest
-from PyQt6.QtWidgets import QApplication
+from PyQt6.QtWidgets import QApplication, QToolButton
 
 from chemvas.bootstrap.main_window import build_main_window
 from chemvas.features.annotations import BRACKET_KIND_VALUES
@@ -68,6 +68,47 @@ def test_color_tool_live_click_shows_ts_notice_in_status_bar(app, kind):
         app.processEvents()
         assert "per-item color is not supported" in window.statusBar().currentMessage()
         assert snapshot_canvas_state_for(canvas) == before
+        history.verify_stack_snapshot(stacks)
+    finally:
+        services_for_window(window).canvas_document_service.mark_clean(canvas)
+        window.close()
+        app.processEvents()
+
+
+@pytest.mark.parametrize("kind", ["square_pair", "double_dagger", "dagger"])
+def test_selected_ts_palette_click_reports_notice_without_mutation(app, kind):
+    window = build_main_window()
+    window.show()
+    assert QTest.qWaitForWindowExposed(window, 5000)
+    canvas = active_canvas_for_window(window)
+    try:
+        item = add_ts_bracket_for(canvas, QRectF(-35, -45, 70, 90), kind)
+        history = canvas.services.history_service
+        add_ts_bracket_for(canvas, QRectF(100, -45, 70, 90), "square_pair")
+        history.undo()
+        assert history.can_redo()
+        item.setSelected(True)
+        window.ui_references.tool_actions["color"].trigger()
+        app.processEvents()
+        button = next(
+            widget
+            for widget in window.findChildren(QToolButton)
+            if widget.toolTip() == "Color: Red"
+        )
+        before = snapshot_canvas_state_for(canvas)
+        selected = set(canvas.scene().selectedItems())
+        assert item in selected
+        path, brush, pen = item.path(), item.brush(), item.pen()
+        stacks = history.capture_stack_snapshot()
+
+        # Exercise the real palette callback and its deferred selection routing.
+        QTest.mouseClick(button, Qt.MouseButton.LeftButton)
+        app.processEvents()
+
+        assert "per-item color is not supported" in window.statusBar().currentMessage()
+        assert snapshot_canvas_state_for(canvas) == before
+        assert set(canvas.scene().selectedItems()) == selected
+        assert (item.path(), item.brush(), item.pen()) == (path, brush, pen)
         history.verify_stack_snapshot(stacks)
     finally:
         services_for_window(window).canvas_document_service.mark_clean(canvas)
