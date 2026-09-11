@@ -75,6 +75,7 @@ class MainWindowContextBarService:
         self._arrow_buttons: dict[str, QToolButton] = {}
         self._arrow_width_slider: QSlider | None = None
         self._arrow_head_slider: QSlider | None = None
+        self._arrow_slider_default_ranges: dict[QSlider, tuple[int, int]] = {}
         self._bracket_group: QButtonGroup | None = None
         self._bracket_buttons: dict[str, QToolButton] = {}
 
@@ -102,6 +103,10 @@ class MainWindowContextBarService:
         self._arrow_buttons = context_pages.arrow_buttons
         self._arrow_width_slider = context_pages.arrow_width_slider
         self._arrow_head_slider = context_pages.arrow_head_slider
+        self._arrow_slider_default_ranges = {
+            slider: (slider.minimum(), slider.maximum())
+            for slider in (self._arrow_width_slider, self._arrow_head_slider)
+        }
         self._bracket_group = context_pages.bracket_group
         self._bracket_buttons = context_pages.bracket_buttons
         self._bond_length_spin = context_pages.bond_length_spin
@@ -234,8 +239,11 @@ class MainWindowContextBarService:
                 # A loaded document can have a wider supported setting than
                 # the default slider range. Merely reflecting it must not clamp
                 # or write a different value into that document.
-                slider.setMaximum(max(slider.maximum(), value))
-                slider.setMinimum(min(slider.minimum(), value))
+                # Derive the range from its original UI bounds each time, not
+                # a previous document's extension. Undo and document switches
+                # must restore a useful mouse range for ordinary values.
+                minimum, maximum = self._arrow_slider_default_ranges[slider]
+                slider.setRange(min(minimum, value), max(maximum, value))
                 slider.setValue(value)
                 slider.setToolTip(f"{current:g}")
                 slider.blockSignals(blocked)

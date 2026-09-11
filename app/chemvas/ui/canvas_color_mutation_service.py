@@ -529,6 +529,7 @@ class CanvasColorMutationService:
             if _graphics_item_data_for_capture(item, 0) == "ring"
         ]
         selected_atoms: set[int] = set()
+        selected_bond_ids: set[int] = set()
         for item in selected:
             kind = _graphics_item_data_for_capture(item, 0)
             entity_id = _graphics_item_data_for_capture(item, 1)
@@ -539,19 +540,26 @@ class CanvasColorMutationService:
             elif kind == "bond":
                 bond = bond_for_id(self.canvas, entity_id)
                 if bond is not None:
-                    selected_atoms.update((bond.a, bond.b))
+                    selected_bond_ids.add(entity_id)
         created = []
-        if selected_atoms:
+        if selected_atoms or selected_bond_ids:
             atoms = atoms_for(self.canvas)
             existing = {
                 frozenset(item.data(2)): item for item in ring_items_for(self.canvas)
             }
-            selected_bonds = [
+            atom_selection_bonds = [
                 bond
                 for bond in bonds_for(self.canvas)
                 if bond is not None and {bond.a, bond.b} <= selected_atoms
             ]
-            for ring in find_rings(selected_bonds):
+            # A complete atom selection OR a complete bond selection qualifies.
+            # Combining their endpoints would invent unselected cycle edges.
+            selected_rings = find_rings(atom_selection_bonds) + find_rings(
+                bond_for_id(self.canvas, bond_id)
+                for bond_id in sorted(selected_bond_ids)
+            )
+            unique_rings = {frozenset(ring): ring for ring in selected_rings}
+            for ring in unique_rings.values():
                 item = existing.get(frozenset(ring))
                 if item is not None:
                     if item not in targets:

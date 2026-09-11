@@ -170,10 +170,17 @@ def test_graph_ring_fusion_chooses_unoccupied_side_without_fill(
     assert side(center) * side(QPointF()) < 0
 
 
-@pytest.mark.parametrize("size", [5, 6])
-def test_ring_fill_materializes_selected_graph_cycle_in_one_undo(canvas, size):
-    ids, _ = _plain_ring(canvas, size=size)
-    select_all_scene_items_for(canvas)
+@pytest.mark.parametrize("size", [4, 5, 6])
+@pytest.mark.parametrize("selection_kind", ["atoms", "bonds", "both"])
+def test_ring_fill_materializes_selected_graph_cycle_in_one_undo(
+    canvas, size, selection_kind
+):
+    ids, bonds = _plain_ring(canvas, size=size)
+    restore_selection_from_ids_for(
+        canvas,
+        set(ids) if selection_kind in {"atoms", "both"} else set(),
+        set(bonds) if selection_kind in {"bonds", "both"} else set(),
+    )
     before = snapshot_canvas_state_for(canvas)
     history = canvas.runtime_state.history_service
     count = len(history_state_for(canvas).history)
@@ -202,10 +209,17 @@ def test_ring_fill_materializes_selected_graph_cycle_in_one_undo(canvas, size):
 
 
 @pytest.mark.parametrize("stage", ["second_attach", "history_push", "history_false"])
-def test_ring_fill_failure_restores_exact_document_selection_and_stacks(canvas, stage):
-    _plain_ring(canvas)
-    _plain_ring(canvas, offset=100)
-    select_all_scene_items_for(canvas)
+@pytest.mark.parametrize("selection_kind", ["both", "bonds"])
+def test_ring_fill_failure_restores_exact_document_selection_and_stacks(
+    canvas, stage, selection_kind
+):
+    first_atoms, first_bonds = _plain_ring(canvas)
+    second_atoms, second_bonds = _plain_ring(canvas, offset=100)
+    restore_selection_from_ids_for(
+        canvas,
+        set(first_atoms + second_atoms) if selection_kind == "both" else set(),
+        set(first_bonds + second_bonds),
+    )
     before = deepcopy(snapshot_canvas_state_for(canvas))
     history = canvas.runtime_state.history_service
     state = history_state_for(canvas)
@@ -243,10 +257,32 @@ def test_ring_fill_failure_restores_exact_document_selection_and_stacks(canvas, 
     assert set(canvas.scene().items()) == scene_items
 
 
-def test_ring_fill_partial_selection_has_actionable_message_and_no_mutation(canvas):
-    ids, _ = _plain_ring(canvas)
-    restore_selection_from_ids_for(canvas, set(ids[:3]), set())
+@pytest.mark.parametrize("size", [4, 6])
+@pytest.mark.parametrize("selection_kind", ["atoms", "alternating_bonds", "mixed"])
+def test_ring_fill_partial_selection_has_actionable_message_and_no_mutation(
+    canvas, size, selection_kind
+):
+    ids, bonds = _plain_ring(canvas, size=size)
+    if size == 6:
+        for bond_id in bonds[::2]:
+            canvas.model.bonds[bond_id].order = 2
+        canvas.services.structure.structure_build_service.render_model()
+    if selection_kind == "atoms":
+        selected_atoms, selected_bonds = set(ids[:-1]), set()
+    elif selection_kind == "alternating_bonds":
+        # These endpoints cover every atom, but the ring bonds are incomplete.
+        selected_atoms, selected_bonds = set(), set(bonds[::2])
+    else:
+        # Explicit atoms plus a selected bond's endpoints also cover the ring;
+        # neither the atom selection nor the bond selection is complete.
+        selected_atoms, selected_bonds = set(ids[2:]), {bonds[0]}
+    restore_selection_from_ids_for(canvas, selected_atoms, selected_bonds)
     before = snapshot_canvas_state_for(canvas)
+    mark_document_clean_for(canvas, before)
+    state = history_state_for(canvas)
+    stacks = (list(state.history), list(state.redo_stack))
+    selected = set(canvas.scene().selectedItems())
+    scene_items = set(canvas.scene().items())
     errors = []
     callback_state_for(canvas).error = errors.append
     canvas.services.scene_operations.canvas_color_mutation_service.apply_ring_fill_color_to_items(
@@ -254,6 +290,10 @@ def test_ring_fill_partial_selection_has_actionable_message_and_no_mutation(canv
     )
     assert errors and "complete ring" in errors[0]
     assert snapshot_canvas_state_for(canvas) == before
+    assert not document_is_dirty_for(canvas, snapshot_canvas_state_for(canvas))
+    assert (state.history, state.redo_stack) == stacks
+    assert set(canvas.scene().selectedItems()) == selected
+    assert set(canvas.scene().items()) == scene_items
 
 
 def test_stereo_guard_does_not_block_disconnected_nonstereo_molecule(canvas):

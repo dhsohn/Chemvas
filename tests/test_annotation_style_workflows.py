@@ -396,3 +396,53 @@ def test_reflecting_loaded_arrow_width_never_overflows_or_writes_settings(
     assert slider.toolTip() == f"{width:g}"
     assert settings.arrow_line_width == width
     assert len(canvas_services_for(canvas).history_service.state.history) == count
+
+
+@pytest.mark.parametrize("wide_width", [8.1, 1e8, 1e308])
+def test_opening_normal_document_restores_default_arrow_slider_range(
+    drawing, wide_width
+):
+    window, canvas, controller = drawing
+    controller.set_tool("arrow")
+    slider = _slider(window, "Arrow line width")
+    changed_values = []
+    slider.valueChanged.connect(changed_values.append)
+    session = canvas_services_for(canvas).document.canvas_document_session_service
+    documents = services_for_window(window).canvas_document_service
+    state = session.snapshot_state()
+    for width, maximum in (
+        (wide_width, round(min(wide_width * 10, 2**31 - 1))),
+        (1.5, 60),
+        (wide_width, round(min(wide_width * 10, 2**31 - 1))),
+    ):
+        state["settings"]["arrow_line_width"] = width
+        documents.open_state(window, state=state, file_path=None)
+        services_for_window(window).context_bar_service.refresh_window(window)
+        assert (slider.minimum(), slider.maximum()) == (5, maximum)
+        assert slider.value() == round(min(width * 10, 2**31 - 1))
+        assert slider.toolTip() == f"{width:g}"
+        assert session.snapshot_state()["settings"]["arrow_line_width"] == width
+        assert not canvas_services_for(canvas).history_service.state.history
+        assert not changed_values
+
+
+@pytest.mark.parametrize("wide_width", [8.1, 1e8])
+def test_arrow_slider_range_tracks_actual_style_undo_and_redo(drawing, wide_width):
+    window, canvas, controller = drawing
+    controller.set_tool("arrow")
+    slider = _slider(window, "Arrow line width")
+    history = canvas_services_for(canvas).history_service
+    controller.set_arrow_line_width(wide_width)
+    assert slider.maximum() == round(wide_width * 10)
+    changed_values = []
+    slider.valueChanged.connect(changed_values.append)
+
+    history.undo()
+    assert (slider.minimum(), slider.maximum(), slider.value()) == (5, 60, 15)
+    assert tool_settings_state_for(canvas).arrow_line_width == 1.5
+    history.redo()
+    assert slider.maximum() == round(wide_width * 10)
+    assert tool_settings_state_for(canvas).arrow_line_width == wide_width
+    services_for_window(window).tool_state_service.set_arrow_preset(window, "Default")
+    assert (slider.minimum(), slider.maximum(), slider.value()) == (5, 60, 15)
+    assert not changed_values
