@@ -97,8 +97,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   methods of `InsertController` and `InsertSmilesService`; and the
   `smiles_preview_bond_items` and `smiles_preview_atom_items` fields of
   `CanvasInsertState`, replaced by `smiles_preview_picture`.
-  `clear_smiles_preview` and `clear_smiles_preview_for` now return the removed
-  items as one list instead of a three-tuple.
+  `clear_smiles_preview` and `clear_smiles_preview_for` now return an empty
+  list, the replacement item pool, instead of the old three-tuple; the
+  removed items are not handed back.
 - `TOOLBAR_GROUP_GAP_PX` from `chemvas.ui.main_window_panel_toolbar`, together
   with the toolbar group gaps it sized.
 
