@@ -1,5 +1,7 @@
 # Chemvas agent CLI
 
+[한국어](AGENT_CLI.ko.md)
+
 Chemvas exposes its document operations as headless commands, so an agent (or
 any script) can render, inspect, edit, and hand off calculations without
 starting a Qt window. Each command below documents its own guarantees; the

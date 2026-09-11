@@ -1,5 +1,7 @@
 # Examples
 
+[한국어](README.ko.md)
+
 Sample `.chemvas` documents. Open one in Chemvas via **File ▸ Open**.
 
 | File | Description |

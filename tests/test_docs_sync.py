@@ -221,3 +221,85 @@ def test_reference_names_every_supported_atom_alias() -> None:
         f"{REFERENCE.name}: Atom labels list {documented!r} does not match the "
         f"canonical aliases {tuple(ATOM_ALIAS_DEFINITIONS)!r}"
     )
+
+
+# --- Korean twins ----------------------------------------------------------
+
+IMAGE_EMBED = re.compile(r"!\[[^\]]*\]\(([^)\s]+)\)")
+MERMAID_FENCE = re.compile(r"(?m)^```mermaid\s*$")
+TRANSLATED_ROOT_DOCS = (
+    "README.md",
+    "CONTRIBUTING.md",
+    "RELEASING.md",
+    "CODE_OF_CONDUCT.md",
+    "examples/README.md",
+    "packaging/README.md",
+    "packaging/windows/README.md",
+    "docs/images/README.md",
+)
+
+
+def _translated_docs() -> list[Path]:
+    """Every English guide that ships with a Korean twin: the listed root and
+    package READMEs plus every top-level docs/*.md (ADRs are English only)."""
+    guides = [ROOT / rel for rel in TRANSLATED_ROOT_DOCS]
+    guides += [
+        path
+        for path in sorted((ROOT / "docs").glob("*.md"))
+        if not path.name.endswith(".ko.md")
+    ]
+    return guides
+
+
+def _korean_twin(path: Path) -> Path:
+    return path.with_name(path.name[: -len(".md")] + ".ko.md")
+
+
+def test_every_guide_has_a_korean_twin_with_the_same_media() -> None:
+    """A Korean reader must get the same figures, GIFs and diagrams as the
+    English reader, and each page must link to its other-language twin."""
+    guides = _translated_docs()
+    assert guides
+    for path in guides:
+        twin = _korean_twin(path)
+        rel = path.relative_to(ROOT).as_posix()
+        assert twin.is_file(), f"{rel}: missing Korean twin {twin.name}"
+        english = _read(path)
+        korean = _read(twin)
+        assert sorted(set(IMAGE_EMBED.findall(english))) == sorted(
+            set(IMAGE_EMBED.findall(korean))
+        ), f"{rel}: the Korean twin does not embed the same images"
+        assert len(MERMAID_FENCE.findall(english)) == len(
+            MERMAID_FENCE.findall(korean)
+        ), f"{rel}: the Korean twin does not carry the same mermaid diagrams"
+        assert f"({twin.name})" in english or twin.name in english, (
+            f"{rel}: does not link to its Korean twin {twin.name}"
+        )
+        assert f"({path.name})" in korean or path.name in korean, (
+            f"{twin.name}: does not link back to {path.name}"
+        )
+
+
+FENCED_BLOCK = re.compile(r"(?ms)^```([^\n]*)\n(.*?)^```")
+
+
+def _code_blocks(text: str) -> list[tuple[str, str]]:
+    """Fenced blocks other than mermaid diagrams, whose labels are translated."""
+    return [
+        (label.strip(), body)
+        for label, body in FENCED_BLOCK.findall(text)
+        if label.strip() != "mermaid"
+    ]
+
+
+def test_korean_twins_keep_commands_and_examples_verbatim() -> None:
+    """Commands, JSON requests and file examples are the contract; a Korean
+    twin must carry them byte-for-byte, in the same order."""
+    for path in _translated_docs():
+        rel = path.relative_to(ROOT).as_posix()
+        english = _code_blocks(_read(path))
+        korean = _code_blocks(_read(_korean_twin(path)))
+        assert english == korean, (
+            f"{rel}: fenced code blocks differ from the Korean twin "
+            f"({len(english)} vs {len(korean)} blocks)"
+        )

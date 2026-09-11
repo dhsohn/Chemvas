@@ -1,5 +1,7 @@
 # Packaging assets
 
+[한국어](README.ko.md)
+
 Platform icon files for desktop bundles, all generated from the single master
 SVG at [`app/chemvas/assets/icon/chemvas.svg`](../app/chemvas/assets/icon/chemvas.svg).
 

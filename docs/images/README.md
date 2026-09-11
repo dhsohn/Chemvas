@@ -1,5 +1,7 @@
 # Demo and branding media
 
+[한국어](README.ko.md)
+
 The introduction leads with the actual figure exported from
 [first-scheme.chemvas](../../examples/first-scheme.chemvas), followed by a short
 walkthrough of the desktop workflow. The example is a schematic drawing exercise;

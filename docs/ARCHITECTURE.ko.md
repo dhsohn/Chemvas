@@ -1,5 +1,7 @@
 # 아키텍처
 
+[English](ARCHITECTURE.md)
+
 ## 한눈에 보는 계층
 
 누가 누구를 import할 수 있는지에 대한 규범 아닌 스냅샷이다. 화살표는

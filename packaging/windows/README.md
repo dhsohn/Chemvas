@@ -1,5 +1,7 @@
 # Windows distribution preparation
 
+[한국어](README.ko.md)
+
 This is a local, unsigned Windows build path, not a published desktop release.
 The Python package remains the released distribution. Build on 64-bit Windows
 with Python 3.12+; PyInstaller is not a Windows cross-compiler on Linux or macOS.

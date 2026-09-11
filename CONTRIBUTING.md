@@ -1,5 +1,7 @@
 # Contributing to Chemvas
 
+[한국어](CONTRIBUTING.ko.md)
+
 Thanks for your interest in Chemvas! This guide covers local setup, how to run the
 checks, and — most importantly — the **architecture conventions** the codebase
 follows. Please read the architecture section before moving code around: the module

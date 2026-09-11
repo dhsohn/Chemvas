@@ -1,5 +1,7 @@
 # Releasing Chemvas
 
+[한국어](RELEASING.ko.md)
+
 Chemvas publishes to [PyPI](https://pypi.org/project/chemvas/) from GitHub
 Actions using **Trusted Publishing** (OIDC) — no API tokens are stored. Pushing a
 `v*` tag runs [`.github/workflows/release.yml`](.github/workflows/release.yml),
