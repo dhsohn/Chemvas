@@ -273,9 +273,28 @@ def _inspect_precomplex(source: Path, *, step_id: str) -> dict[str, object]:
     step = calculation_step_by_id(plan, step_id)
     endpoints: dict[str, object] = {}
     placement_profiles: dict[str, object] = {}
+    candidate_geometry_summary: dict[str, object] = {}
     for side, endpoint in (("reactant", step.reactant), ("product", step.product)):
         state = precomplex_state_from_json(endpoint.precomplex.payload_json)
         endpoints[side] = state
+        # Distinct transform IDs need not mean distinct geometry. Report this
+        # without rewriting profile-2 ensembles or invalidating existing reviews.
+        by_geometry: dict[str, list[str]] = {}
+        candidates = state.get("candidates", [])
+        if isinstance(candidates, list):
+            for candidate in candidates:
+                by_geometry.setdefault(candidate["xyz_sha256"], []).append(
+                    candidate["id"]
+                )
+        candidate_geometry_summary[side] = {
+            "candidate_count": sum(len(ids) for ids in by_geometry.values()),
+            "unique_geometry_count": len(by_geometry),
+            "duplicate_geometry_groups": [
+                {"xyz_sha256": digest, "candidate_ids": ids}
+                for digest, ids in by_geometry.items()
+                if len(ids) > 1
+            ],
+        }
         profile_id = state.get("profile")
         if isinstance(profile_id, str):
             profile = precomplex_placement_profile(profile_id)
@@ -292,6 +311,7 @@ def _inspect_precomplex(source: Path, *, step_id: str) -> dict[str, object]:
         "step_id": step.id,
         "endpoints": endpoints,
         "placement_profiles": placement_profiles,
+        "candidate_geometry_summary": candidate_geometry_summary,
     }
 
 
@@ -338,7 +358,10 @@ def _select_precomplex(
         "reactant": reactant_candidate_id,
         "product": product_candidate_id,
     }
-    adapter = RDKitAdapter()
+    precomplexes: dict[str, dict[str, object]] = {}
+    candidate_hashes: dict[str, str] = {}
+    # Validate both endpoint IDs before any RDKit work. In particular, a bad
+    # product ID must not be hidden by an unavailable reactant geometry backend.
     for side in ("reactant", "product"):
         raw_endpoint = raw_step.get(side)
         if not isinstance(raw_endpoint, dict):
@@ -365,25 +388,6 @@ def _select_precomplex(
             raise ValueError(
                 f"Step {step.id} {side} precomplex candidates are stale for this graph or plan."
             )
-        endpoint = step.reactant if side == "reactant" else step.product
-        calculation_state = calculation_state_by_id(plan, endpoint.state_id)
-        calculation_selection = select_calculation_state(
-            document.state, calculation_state
-        )
-        current_artifacts = _state_artifacts(
-            adapter,
-            calculation_selection,
-            state_id=calculation_state.id,
-            charge=calculation_state.charge,
-            multiplicity=calculation_state.multiplicity,
-        )
-        _require_reproducible_precomplex(
-            state=precomplex,
-            calculation_state=calculation_state,
-            current=current_artifacts,
-            step=step,
-            side=side,
-        )
         candidates = precomplex.get("candidates")
         if not isinstance(candidates, list):
             raise ValueError(
@@ -404,9 +408,34 @@ def _select_precomplex(
         xyz_sha256 = candidate.get("xyz_sha256")
         if not isinstance(xyz_sha256, str):
             raise ValueError(f"Step {step.id} has invalid {side} candidate provenance.")
+        precomplexes[side] = precomplex
+        candidate_hashes[side] = xyz_sha256
+
+    adapter = RDKitAdapter()
+    for side in ("reactant", "product"):
+        precomplex = precomplexes[side]
+        endpoint = step.reactant if side == "reactant" else step.product
+        calculation_state = calculation_state_by_id(plan, endpoint.state_id)
+        calculation_selection = select_calculation_state(
+            document.state, calculation_state
+        )
+        current_artifacts = _state_artifacts(
+            adapter,
+            calculation_selection,
+            state_id=calculation_state.id,
+            charge=calculation_state.charge,
+            multiplicity=calculation_state.multiplicity,
+        )
+        _require_reproducible_precomplex(
+            state=precomplex,
+            calculation_state=calculation_state,
+            current=current_artifacts,
+            step=step,
+            side=side,
+        )
         precomplex["selection"] = {
             "candidate_id": selected_ids[side],
-            "candidate_xyz_sha256": xyz_sha256,
+            "candidate_xyz_sha256": candidate_hashes[side],
             "reviewer": reviewer,
             "reviewed_at": reviewed_at,
             "acceptance_statement": "accepted_for_path_endpoint_review",
@@ -451,6 +480,20 @@ def _generate_precomplex(
             source_document_sha256=_sha256(source_bytes),
         )
     )
+    counts = tuple(
+        sum(member.inclusion == "included" for member in state.members)
+        for state in (
+            calculation_state_by_id(plan, step.reactant.state_id),
+            calculation_state_by_id(plan, step.product.state_id),
+        )
+    )
+    if counts != (2, 2):
+        raise ValueError(
+            f"Step {step.id}: the placement profile requires exactly two included "
+            f"components on each endpoint; received {counts[0]} -> {counts[1]}. "
+            "This endpoint topology is not supported; changing contact distances "
+            "cannot make it supported."
+        )
     adapter = RDKitAdapter()
     endpoint_payloads: dict[str, dict[str, object]] = {}
     candidate_counts: dict[str, int] = {}
@@ -568,6 +611,15 @@ def _read_precomplex_request(path: Path) -> Mapping[str, object]:
     return payload
 
 
+def _require_precomplex_fields(
+    value: Mapping[str, object], expected: set[str], error: str
+) -> None:
+    if set(value) != expected:
+        missing = sorted(expected - set(value))
+        unexpected = sorted(str(key) for key in set(value) - expected)
+        raise ValueError(f"{error} missing={missing}, unexpected={unexpected}.")
+
+
 def _parse_precomplex_request(
     request: Mapping[str, object],
     *,
@@ -595,8 +647,9 @@ def _parse_precomplex_request(
         or version != 2
     ):
         raise ValueError("Unsupported precomplex request format or version.")
-    if set(request) != base_fields | {"profile"}:
-        raise ValueError("Invalid precomplex request fields.")
+    _require_precomplex_fields(
+        request, base_fields | {"profile"}, "Invalid precomplex request fields."
+    )
     profile_value = request.get("profile")
     if not isinstance(profile_value, str):
         raise ValueError("precomplex request profile is required.")
@@ -620,16 +673,21 @@ def _parse_precomplex_request(
         )
     environment = _precomplex_environment(request.get("environment"))
     endpoints = request.get("endpoints")
-    if not isinstance(endpoints, Mapping) or set(endpoints) != {
-        "reactant",
-        "product",
-    }:
+    if not isinstance(endpoints, Mapping):
         raise ValueError("precomplex request must define both endpoints.")
+    _require_precomplex_fields(
+        endpoints,
+        {"reactant", "product"},
+        "precomplex request must define both endpoints.",
+    )
     contacts_by_side: dict[str, tuple[ContactRequest, ...]] = {}
     for side in ("reactant", "product"):
         endpoint = endpoints.get(side)
-        if not isinstance(endpoint, Mapping) or set(endpoint) != {"contacts"}:
+        if not isinstance(endpoint, Mapping):
             raise ValueError(f"Invalid {side} precomplex request endpoint.")
+        _require_precomplex_fields(
+            endpoint, {"contacts"}, f"Invalid {side} precomplex request endpoint."
+        )
         contacts = endpoint.get("contacts")
         if not isinstance(contacts, list) or len(contacts) != 1:
             raise ValueError(
@@ -644,9 +702,13 @@ def _parse_precomplex_request(
 def _precomplex_environment(value: object) -> dict[str, object]:
     if not isinstance(value, Mapping):
         raise ValueError("precomplex environment is required.")
-    if value.get("kind") == "gas_phase" and set(value) == {"kind"}:
+    if value.get("kind") == "gas_phase":
+        _require_precomplex_fields(value, {"kind"}, "Invalid precomplex environment.")
         return {"kind": "gas_phase"}
-    if value.get("kind") == "solvent" and set(value) == {"kind", "model", "name"}:
+    if value.get("kind") == "solvent":
+        _require_precomplex_fields(
+            value, {"kind", "model", "name"}, "Invalid precomplex solvent environment."
+        )
         model = value.get("model")
         name = value.get("name")
         if (
@@ -663,14 +725,19 @@ def _precomplex_environment(value: object) -> dict[str, object]:
 
 
 def _contact_request(value: object, *, side: str, step_id: str) -> ContactRequest:
-    if not isinstance(value, Mapping) or set(value) != {
-        "id",
-        "first_atom_id",
-        "second_atom_id",
-        "target_distance_angstrom",
-        "tolerance_angstrom",
-    }:
+    if not isinstance(value, Mapping):
         raise ValueError(f"Invalid {side} contact for step {step_id}.")
+    _require_precomplex_fields(
+        value,
+        {
+            "id",
+            "first_atom_id",
+            "second_atom_id",
+            "target_distance_angstrom",
+            "tolerance_angstrom",
+        },
+        f"Invalid {side} contact for step {step_id}.",
+    )
     contact_id = value.get("id")
     first = value.get("first_atom_id")
     second = value.get("second_atom_id")
@@ -842,6 +909,8 @@ def _pack_step(
     reviewed_precomplex_pair = (
         not precheck.single_component_endpoints
         and "multicomponent_precomplex_geometry_not_provided"
+        not in precheck.blocking_reasons
+        and "precomplex_endpoint_topology_not_supported"
         not in precheck.blocking_reasons
     )
     interaction_geometry_guarantee = "not_provided"
@@ -1123,7 +1192,7 @@ def _state_artifacts(
     )
     if artifacts is None:
         raise ValueError(
-            adapter.last_error or f"RDKit conversion failed for state {state_id}"
+            f"State {state_id}: " + (adapter.last_error or "RDKit conversion failed.")
         )
     validate_calculation_artifacts(
         artifacts,

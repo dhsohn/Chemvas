@@ -22,6 +22,7 @@ from chemvas.features.annotations import (
 from chemvas.ui.canvas_atom_graphics_state import atom_items_for
 from chemvas.ui.canvas_model_access import atom_annotation_for, atom_for_id
 from chemvas.ui.image_item import ImageItem
+from chemvas.ui.ring_fill_state import ring_fill_alpha
 
 MarkCenterGetter = Callable[[Any], QPointF]
 
@@ -86,7 +87,7 @@ def ring_state_dict(ring_item: QGraphicsPolygonItem) -> dict:
     ]
     brush = ring_item.brush()
     color = brush.color().name() if brush.style() != Qt.BrushStyle.NoBrush else None
-    alpha = brush.color().alphaF() if brush.style() != Qt.BrushStyle.NoBrush else 0.0
+    alpha = ring_fill_alpha(ring_item)
     return {
         "kind": "ring",
         "points": points,

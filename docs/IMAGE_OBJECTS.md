@@ -126,7 +126,10 @@ document/selection. Native document and selection envelopes allow 96 MiB includi
 base64 and other document data. The composition JSON itself remains limited to
 1 MiB because it contains file paths rather than embedded image bytes. Files are
 checked with a full bounded decode; malformed, truncated, unsupported, animated,
-and multi-frame images are rejected. Pixel dimensions describe stored pixels;
+and multi-frame images are rejected. PNG data after the first IEND chunk,
+including a trailing newline or a second IEND, is rejected with an explicit
+trailing-data message. Re-export a clean PNG; Chemvas does not trim or rewrite
+source bytes on import. Pixel dimensions describe stored pixels;
 EXIF orientation is not applied to or rewritten into the original source.
 
 ## Export behavior

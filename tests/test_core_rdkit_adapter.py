@@ -8,6 +8,7 @@ from unittest import mock
 
 from chemvas.core.molfile import write_molfile
 from chemvas.core.rdkit_adapter import RDKitAdapter
+from chemvas.core.rdkit_diagnostics import RDKIT_UNAVAILABLE_MESSAGE
 from chemvas.domain.atom_aliases import ATOM_ALIAS_DEFINITIONS
 from chemvas.domain.document import Bond, MoleculeModel
 
@@ -439,7 +440,7 @@ class _FakeChem:
         self._sanitize_error = sanitize_error
         self.sanitized_molecules = []
 
-    def MolFromSmiles(self, smiles: str):
+    def MolFromSmiles(self, smiles: str, *, sanitize: bool = True):
         return self._mols_by_smiles.get(smiles)
 
     def MolToSmiles(self, mol, canonical: bool = True) -> str:
@@ -510,6 +511,9 @@ class _FakeAllChem3D:
         if self._optimize_error is not None:
             raise self._optimize_error
         return 0
+
+    def UFFHasAllMoleculeParams(self, mol) -> bool:
+        return True
 
 
 class _FakeAliasAtom:
@@ -622,6 +626,11 @@ class _FakeWritableMol:
 
     def GetNumAtoms(self) -> int:
         return len(self.atoms)
+
+    def GetAtomWithIdx(self, index: int):
+        # This wiring double models successful tetrahedral perception. Real
+        # invalid-direction chemistry is tested with RDKit, not this fake graph.
+        return SimpleNamespace(GetChiralTag=lambda: "cw")
 
     def AddConformer(
         self, conformer: _FakeSettableConformer, assignId: bool = True
@@ -826,9 +835,7 @@ class RDKitAdapterTest(unittest.TestCase):
             loaded = adapter.preload()
 
         self.assertFalse(loaded)
-        self.assertEqual(
-            adapter.last_error, "RDKit is not available in this environment."
-        )
+        self.assertEqual(adapter.last_error, RDKIT_UNAVAILABLE_MESSAGE)
         self.assertFalse(adapter.is_loaded())
         self.assertTrue(adapter.is_unavailable())
         self.assertEqual(adapter._rdkit, (None, None))
@@ -1585,9 +1592,7 @@ class RDKitAdapterTest(unittest.TestCase):
         adapter._rdkit = (None, None)
 
         self.assertIsNone(adapter.model_to_mol_block(self._simple_model()))
-        self.assertEqual(
-            adapter.last_error, "RDKit is not available in this environment."
-        )
+        self.assertEqual(adapter.last_error, RDKIT_UNAVAILABLE_MESSAGE)
 
     @unittest.skipUnless(_RealChem is not None, "RDKit is required for chemistry tests")
     def test_partial_explicit_hydrogens_preserve_heteroatom_valence(self) -> None:
@@ -1758,9 +1763,7 @@ class RDKitAdapterTest(unittest.TestCase):
         scene = adapter.model_to_3d_scene(self._simple_model())
 
         self.assertIsNone(scene)
-        self.assertEqual(
-            adapter.last_error, "RDKit is not available in this environment."
-        )
+        self.assertEqual(adapter.last_error, RDKIT_UNAVAILABLE_MESSAGE)
 
     def test_model_to_3d_scene_result_returns_local_error(self) -> None:
         adapter = RDKitAdapter()
@@ -1770,7 +1773,7 @@ class RDKitAdapterTest(unittest.TestCase):
         result = adapter.model_to_3d_scene_result(self._simple_model())
 
         self.assertIsNone(result.value)
-        self.assertEqual(result.error, "RDKit is not available in this environment.")
+        self.assertEqual(result.error, RDKIT_UNAVAILABLE_MESSAGE)
 
     def test_result_helpers_clear_stale_error_on_success_and_use_fallbacks(
         self,
@@ -3008,9 +3011,7 @@ class RDKitConversionEdgeTest(unittest.TestCase):
         adapter = RDKitAdapter()
         adapter._rdkit = (None, None)
         self.assertIsNone(adapter._build_conversion_rdkit_mol(MoleculeModel()))
-        self.assertEqual(
-            adapter.last_error, "RDKit is not available in this environment."
-        )
+        self.assertEqual(adapter.last_error, RDKIT_UNAVAILABLE_MESSAGE)
 
         adapter = RDKitAdapter()
         alias_model = MoleculeModel()
@@ -3134,7 +3135,7 @@ class WarmRdkitInBackgroundTest(unittest.TestCase):
         self.assertTrue(captured[0].is_unavailable())
         self.assertEqual(
             captured[0].last_error,
-            "RDKit is not available in this environment.",
+            RDKIT_UNAVAILABLE_MESSAGE,
         )
 
 

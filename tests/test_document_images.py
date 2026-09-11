@@ -52,6 +52,14 @@ def test_png_incomplete_end_chunk_is_rejected(removed):
         image_state_from_bytes(_raster()[:-removed])
 
 
+@pytest.mark.parametrize(
+    "suffix", [b"\n", b"extra data", b"\x00\x00\x00\x00IEND\xaeB\x60\x82"]
+)
+def test_png_trailing_data_has_an_actionable_distinct_error(suffix):
+    with pytest.raises(ValueError, match="trailing data after IEND"):
+        image_state_from_bytes(_raster() + suffix)
+
+
 def _selection(image: dict[str, object]) -> dict[str, object]:
     return {
         "format": "chemvas-selection",

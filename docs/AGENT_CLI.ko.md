@@ -35,6 +35,9 @@ flowchart LR
 `inspect-plan`, `inspect-precomplex`, `check-layout`과 모든 `--dry-run`은 JSON
 보고서만 출력하고 아무것도 쓰지 않습니다. 아래 그림들은 문서화된 예제를
 `render-document`로 렌더링한 것입니다.
+POSIX에서 원자적으로 게시한 새 파일은 소유자 전용 권한(0600)입니다. 공유할 때
+읽기 권한을 명시적으로 부여하세요. 디렉터리에서 공개 공유 의도를 추정하지 않습니다.
+최상위 CLI 옵션 오타는 데스크톱 시작 전에 실패합니다.
 
 ## 헤드리스 문서 구성
 
@@ -135,6 +138,55 @@ TS 장식은 별도 선분이 아니라 기존 원본 괄호 객체를 씁니다
 검증하며, 기존 또는 심링크 출력을 거부하고, 새 정규 파일 하나를 원자적으로
 게시합니다. 표준 출력은 출력 SHA-256, 문서 버전, 원자/결합 수를 담은 결정적 JSON
 보고서입니다. 기존 원본 그림은 이 명령의 입력이 아니며 절대 수정되지 않습니다.
+
+### 작성 필드와 한계
+
+모든 수는 유한해야 하며 boolean은 수가 아닙니다. 선택 배열은 생략할 수 있지만
+목록/객체 대신 JSON `null`을 넣지 마세요. 좌표는 출력 이미지 픽셀이 아닌 캔버스
+단위입니다. 구성 한계는 원자 4,096개, 결합 8,192개이며 notes, arrows, shapes,
+ring_fills, ts_brackets 각각 4,096개입니다. 이미지는 앞서 연결한 별도 한계를 씁니다.
+
+`settings`는 아래 필드의 부분집합을 받으며 다른 키는 오류입니다.
+
+| 필드 | 허용값 |
+| --- | --- |
+| `bond_length_px` | 양수, 최대 1,073,741,823(Qt 글리프 크기 경계); 보통 그림은 약 20 |
+| `arrow_line_width`, `arrow_head_scale` | 각각 0.5 이상; 0.1–0.8 |
+| `text_font_size`, `text_font_weight` | 각각 정수 6–96; 정수 1–1000 |
+| `text_font_family`, `text_color` | 비어 있지 않은 UTF-8 문자열; `#RRGGBB` |
+| `text_alignment`, `text_line_spacing` | `left`, `center`, `right`, `justify`; 0.8 이상 |
+| `text_italic`, `orbital_phase_enabled`, `note_box_enabled`, `note_border_enabled` | Boolean |
+| `note_box_color`, `note_border_color` | `#RRGGBB` |
+| `note_box_alpha`, `note_border_width`, `note_padding` | 각각 0–1; 0.5 이상; 2 이상 |
+| `sheet_size`, `sheet_orientation` | `A4`; `landscape` 또는 `portrait` |
+
+원본 v7 파일은 더 넓은 저장 글꼴 범위(6–2,147,483,647)를 유지합니다. 이는 직렬화
+한계이지 실사용 크기가 아닙니다. 원본 mark text는 null 또는 200자 이하입니다.
+잘못된 Unicode, 누락/미지의 필드와 범위 밖 설정은 캔버스 복원 전 공유 검증에서
+실패합니다.
+
+원본 문서에서 원자에 붙은 mark의 `atom_id`와 고리 채움 `atom_ids`의 각 값은
+따옴표로 감싼 숫자가 아닌 JSON 정수여야 합니다. `model.atoms`,
+`model.atom_annotations`, `perspective.atom_coords_3d`의 십진 문자열 객체 키는
+계속 지원합니다. 이런 매핑의 키와 원자 ID 값은 구분됩니다.
+
+도형은 `shape_kind`(`circle`, `ellipse`, `rounded_rect`, `rect`),
+`left`, `top`, `right`, `bottom`, `stroke_style`(`solid`, `dashed`,
+`dotted`, `none`)이 필수이고 선택 필드는 `fill`(`#RRGGBB`),
+`fill_alpha`(0–1)입니다. 고리 채움은 `atom_ids`(순환 순서의 서로 다른 기존 원자
+최소 3개), `color`(`#RRGGBB`), `alpha`(0–1)가 필수이며 참조하는 순환이
+실제로 존재해야 합니다.
+
+`arrows[].kind`는 `arrow`, `equilibrium`, `equilibrium_forward`,
+`equilibrium_reverse`, `resonance`, `curved_single`, `curved_double`,
+`inhibit`, `dotted`, `line`, `line_dashed`, `line_wavy`, `line_bold`,
+`arc_90_left/right`, `arc_180_left/right`, `arc_270_left/right`입니다.
+슬래시는 각각 별개의 두 이름을 뜻합니다.
+라벨은 한 줄용이며 [작은 라벨 문법](REFERENCE.ko.md)을 사용하고, 별도 장면 노트가
+아닙니다. `inspect-document`는 일부 종속 항목(고리 채움, 붙은 표시, 그룹)의 개수를
+보고하며 노트나 화살표 라벨 개수는 보고하지 않습니다. 초기 전하 표시는 결합 방향을
+피해 배치하는 휴리스틱이므로
+복잡한 그림은 `check-layout` 후 필요한 부분을 수동 조정하세요.
 
 ## 헤드리스 배치 진단
 
@@ -251,6 +303,14 @@ chemvas insert-template scheme.chemvas --request ring.json --output ring-added.c
 쐐기/해시 결합에 인접한 앵커는 거부됩니다. 의자나 보트의 명시적 선택은 그리기
 선택이지 추론된 입체화학이 아닙니다.
 
+CLI의 결합 앵커 허용 범위는 데스크톱의 대화형 고리 융합보다 의도적으로 좁습니다.
+허용되는 앵커 결합 스타일은 `single`, `double`, `double_center`, `double_outer`입니다.
+`regular`와 `benzene`은 결합 차수 1 또는 2를 허용하고, `chair`, `chair_flip`, `boat`는
+차수 1만 허용합니다. 굵은 스타일, 점선/접촉 스타일, 삼중 결합은 거부됩니다.
+쐐기/해시 자체를 앵커로 삼거나 앵커가 쐐기/해시 결합에 닿으면 입체화학 전용
+오류를 표시합니다. 데스크톱 템플릿의 기하를 재사용한다는 말은 모든 대화형 융합
+대상을 CLI에서도 허용한다는 뜻이 아닙니다.
+
 명령은 정확한 원본 바이트를 고정하고, Qt 전에 검증하고, 사설 캔버스에서 원본
 템플릿 계획기와 커밋을 호출하며, 원본 좌표, 기존 그래프/주석, 노트, 설정, 그룹,
 고리 메타데이터를 보존합니다. `last_smiles_input`의 원본 삽입 초기화는
@@ -278,7 +338,7 @@ chemvas insert-template scheme.chemvas --request ring.json --output ring-added.c
 chemvas render-document scheme.chemvas --output scheme.svg
 chemvas render-document scheme.chemvas --output scheme.pdf --width-mm 174
 chemvas render-document scheme.chemvas --output scheme.png --dpi 600
-chemvas render-document scheme.chemvas --output journal.svg --width-mm 174 --max-height-mm 120
+chemvas render-document scheme.chemvas --output journal.svg --width-mm 70 --max-height-mm 120
 chemvas render-document scheme.chemvas --output readable.svg --width-mm 174 --min-font-pt 6
 chemvas render-document scheme.chemvas --output scheme-transparent.png \
   --background transparent
@@ -341,20 +401,26 @@ null로 보고하고, PDF는 요청한 DPI를 보고합니다. 반복된 SVG/PNG
 20,000개, 출력 64 MiB, 변당 14,400 포인트, 그리고 PNG는 변당 10,000 픽셀 또는 총
 2,500만 픽셀에서 실패로 닫힙니다.
 
+두 반올림된 출력 변은 SVG/PDF에서 최소 1 point, PNG/TIFF에서는 요청 DPI 기준
+최소 1 pixel이어야 합니다. 더 작으면 조용히 늘리지 않고 거부합니다. 이는 형식의
+표현 가능 경계이지 출판 크기 권장치가 아닙니다.
+
 ## Graph Patch v1
 
 에이전트는 모든 안정된 원자 ID를 검사한 뒤 Qt를 시작하거나 `.chemvas` 문서 전체를
 다시 쓰지 않고 유계 Graph Patch를 제안할 수 있습니다.
 
 ```bash
-chemvas inspect-document scheme.chemvas > inspection.json
-chemvas apply-patch scheme.chemvas patch.json --dry-run
-chemvas apply-patch scheme.chemvas patch.json --output revised.chemvas
+chemvas inspect-document ring-added.chemvas > inspection.json
+chemvas apply-patch ring-added.chemvas patch.json --dry-run
+chemvas apply-patch ring-added.chemvas patch.json --output revised.chemvas
 ```
 
 `inspect-document`는 정확한 원본 파일 SHA-256, 문서 버전, `next_atom_id`, 완전한
 원자/결합 목록, 실효 전하/라디칼 주석, 연결 성분, 종속 장면 상태 수를 보고합니다.
-에이전트는 그 정확한 해시를 Graph Patch v1 전제 조건에 복사합니다.
+에이전트는 그 정확한 해시를 Graph Patch v1 전제 조건에 복사합니다. 이 예제는 위의
+최소 구성과 자유 벤젠 삽입 결과를 이어 사용합니다. 고리 원자는 2–7이고
+`next_atom_id`는 8입니다. 다른 입력에는 먼저 그 문서의 ID와 좌표를 검사하세요.
 
 ```json
 {
@@ -362,25 +428,29 @@ chemvas apply-patch scheme.chemvas patch.json --output revised.chemvas
   "version": 1,
   "source_sha256": "<64 lowercase hexadecimal characters>",
   "operations": [
-    {"op": "add_atom", "atom_id": 12, "element": "O",
-     "x": 216.0, "y": 72.0, "color": "#000000", "explicit_label": true},
-    {"op": "add_bond", "a": 4, "b": 12, "order": 1,
+    {"op": "update_bond", "a": 2, "b": 3,
+     "changes": {"order": 1, "style": "single"}},
+    {"op": "add_atom", "atom_id": 8, "element": "O",
+     "x": 237.32050807568876, "y": 110.0, "color": "#000000", "explicit_label": true},
+    {"op": "add_bond", "a": 2, "b": 8, "order": 1,
      "style": "single", "color": "#000000"},
-    {"op": "update_bond", "a": 4, "b": 12,
+    {"op": "update_bond", "a": 2, "b": 8,
      "changes": {"order": 2, "style": "double"}}
   ]
 }
 ```
 
-정확히 이 모양의 패치로 위 문서의 고리 탄소에 산소를 더한 뒤 그 결합을 이중으로
-만든 전/후입니다.
+인접한 고리 이중 결합을 먼저 단일로 바꾼 뒤 C=O를 더해 탄소의 결합 차수 합이 5가
+되지 않도록 한 그림 편집 예제입니다. 반응 제안이 아닙니다. 변경 전/후입니다.
 
 ![패치 전: O⁻–P⁺ 쌍, 노트, 벤젠 고리](images/cli-apply-patch-before.png)
 
 ![패치 후: 고리에 C=O가 붙음](images/cli-apply-patch-after.png)
 
 지원 연산은 `add_atom`, `update_atom`(원소/색/명시적 라벨), `move_atom`,
-`set_terminal_angle`, `add_bond`, `update_bond`, `remove_bond`입니다. 연산은 사설
+`set_terminal_angle`, `add_bond`, `update_bond`, `remove_bond`입니다. 최대 256개 연산을
+받으며 각 `add_atom.atom_id`는 그 시점의 `next_atom_id`와 같아야 합니다(추가 후 증가).
+연산은 사설
 사본에서 순서대로 실행되고 전체 문서와 Calculation Plan 검증 뒤에만 게시됩니다.
 문서가 검토된 반응 전 복합체 선택을 담고 있으면, 그 검증은 프로필, 공유
 원본/환경 출처, 전자 그래프/계획 기반이 후보 그래프와 여전히 일치하는 완전한
@@ -390,7 +460,9 @@ chemvas apply-patch scheme.chemvas patch.json --output revised.chemvas
 해당 간선을 순환 경로에 포함하는 고리 채움만 제거합니다. 다른 채움은 유지하며,
 계산 계획의 참조가 무효가 되면 여전히 패치를 거부합니다.
 
-`set_terminal_angle`은 손으로 쓴 말단 좌표의 제한된 대안입니다.
+`set_terminal_angle`은 손으로 쓴 말단 좌표의 제한된 대안입니다. 아래 연산은
+[실행 가능한 출판 예제](../examples/publication_scheme.py)의 별도 aryl–O–Me 입력에
+쓰는 것이며, 위의 ring-added 문서에 이어 적용하는 연산이 **아닙니다**.
 
 ```json
 {"op":"set_terminal_angle", "pivot_id":6, "reference_id":2,
@@ -426,7 +498,12 @@ chemvas inspect scheme.chemvas
 ```
 
 `inspect`는 RDKit이 필요 없으며 안정된 원자 ID, 형식 전하, 주석 합계가 있는 연결
-성분의 JSON 목록을 출력합니다. 기하의 기계 전달은 아래 `pack-step`이 게시하는
+성분의 JSON 목록을 출력합니다. 각 성분의 `formula_labels`는 그려진 라벨 문자열의
+개수이지 **분자식이 아닙니다**. 약어 확장이나 암시적 수소를 포함하지 않습니다.
+`Ph`/`OTs`는 라벨 그대로이며 `Ac`/`Ts`도 자동으로 원소 기호로 해석하면 안 됩니다.
+`bond_count`는 결합 차수 합이 아닌 그래프 간선 수이며, `bounds`는 원자 좌표의
+[최소 X, 최소 Y, 최대 X, 최대 Y]입니다. 라벨을 그린 범위나 출력 사각형이 아닙니다.
+기하의 기계 전달은 아래 `pack-step`이 게시하는
 기본 단계 `machine.json`을 통해서만 이루어지며, 종별 번들 형식은 따로 없습니다.
 
 ## 계산 상태와 기본 단계
@@ -438,7 +515,7 @@ pip install "chemvas[rdkit]"
 ```
 
 계획을 붙이고 검사하는 것은 RDKit을 호출하지 않지만, **Suggest by structure**,
-`generate-precomplex`, `pack-step`은 RDKit이 필요합니다.
+`generate-precomplex`, `select-precomplex`, `pack-step`은 RDKit이 필요합니다.
 
 반응물, 생성물, 촉매, 방관자를 한 캔버스에 그린 뒤 **Calculation ▸ Edit States and
 Steps...**를 엽니다. 각 종점에서 모든 연결 성분에 다음 포함 모드 중 하나를
@@ -455,8 +532,10 @@ S02의 반응물일 수 있습니다. 성분을 한 종점의 자기 반응물�
 모두에서 편집 가능합니다. 원자 대응표는 포함된 반응물 원자만 나열하고 같은
 원소의 생성물 원자를 안정된 Chemvas ID로 제시합니다. **Suggest by structure**
 _(RDKit)_는 최대 공통 부분 구조의 매핑되지 않은 원자를 채웁니다. 결합 차수는 느슨하게
-맞추므로 결합 차수만 바뀌는 반응 중심(예: C-O → C=O)도 제안되며, 연결이 끊기거나
-생기는 원자만 사용자 몫으로 남습니다. 사용자가 만든 매핑을 절대 덮어쓰지 않으며,
+맞추므로 결합 차수만 바뀌는 반응 중심(예: C-O → C=O)도 제안할 수 있습니다.
+단일 연결 매치 휴리스틱이므로 대칭 조각, 여러 반응 성분, 이미 매핑된 촉매 때문에
+다른 원자들도 미매핑으로 남을 수 있습니다. 새 매핑이 없다고 기질에 공통 부분
+구조가 없다는 뜻은 아닙니다. 사용자가 만든 매핑을 절대 덮어쓰지 않으며,
 검토 전용 출발점이지 자동 메커니즘 추론이 아닙니다. 대화상자가 열려 있는 동안
 포함된 각 원자는 그림에 Chemvas ID로 표시됩니다. 매핑된 반응물 원자는 파랑,
 매핑된 생성물 원자는 주황, 매핑되지 않은 원자는 회색이므로 매핑 진행이 구조에서
@@ -522,6 +601,72 @@ Chemvas의 문턱은 여전히 결정적 기하 휴리스틱을 정의합니다.
 씁니다. 이것은 강체 구 물리 모델도, 에너지도, 안정성 주장도 아닙니다. Fe/Co 스핀과
 배위는 현재 입력 모델에 표현되지 않으므로 문서화된 저스핀 선택자는 추론되지
 않고 고정됩니다. 연구자 검토와 이후 양자 최적화는 여전히 필요합니다.
+
+### 완전한 precomplex 요청 v2
+
+아래를 `precomplex-request.json`으로 저장합니다. 이것은 **별도의 2→2 예제**로,
+반응물 성분은 [0,1]과 [2], 생성물 성분은 [3,4]와 [5]입니다.
+아래 1→1 계획 예제에는 적용하지 않습니다. 계획을 붙인 실제 원본을 검사해
+정확한 해시를 넣고, 실제 성분 간 접촉 원자 ID와 거리를 선택하세요.
+
+```json
+{
+  "format": "chemvas-precomplex-request",
+  "version": 2,
+  "profile": "chemvas-rigid-precomplex-placement/2",
+  "source_document_sha256": "<64 lowercase hexadecimal characters>",
+  "step_id": "S01",
+  "candidate_cap": 16,
+  "environment": {"kind": "gas_phase"},
+  "endpoints": {
+    "reactant": {"contacts": [{
+      "id": "nucleophile", "first_atom_id": 2, "second_atom_id": 0,
+      "target_distance_angstrom": 3.0, "tolerance_angstrom": 0.2
+    }]},
+    "product": {"contacts": [{
+      "id": "leaving", "first_atom_id": 4, "second_atom_id": 5,
+      "target_distance_angstrom": 3.2, "tolerance_angstrom": 0.2
+    }]}
+  }
+}
+```
+
+표시된 모든 필드는 필수이고, 각 수준에서 알 수 없는 키를 거부합니다.
+`candidate_cap`은 정수 1–16입니다. 종점마다 접촉은 정확히 하나이며, 64자 이하의
+비어 있지 않은 ID, 서로 다른 포함 성분에 속한 두 정수 Chemvas 원자 ID,
+유한한 양의 목표 거리(Å), 유한한 허용 오차 0–1 Å를 지정합니다.
+허용 오차는 거리 검증 기준이지 **방사 방향 샘플링 범위가 아닙니다**. 배치는 목표
+거리를 지향하므로 허용 오차를 바꿔도 좌표가 같을 수 있습니다.
+환경은 정확히 `{"kind":"gas_phase"}` 또는
+`{"kind":"solvent","model":"CPCM","name":"THF"}`이며, 용매 model/name은
+128자 이하의 비어 있지 않은 문자열입니다. 이것은 출처 기록이지 용매화 계산이나
+특정 모델을 권장하는 뜻이 아닙니다.
+
+현재 배치는 포함 성분이 정확히 2→2인 경우만 지원합니다. 직접 1→1 패킹에는 이
+요청이 필요하지 않습니다. 2→1, 1→2와 더 큰 종점은 현재 프로필에서 명시적으로
+미지원입니다. 후보 ID 수가 서로 다른 기하 수는 아닙니다.
+`inspect-precomplex.candidate_geometry_summary`에서 후보 수, 고유 XYZ 해시 수,
+중복 그룹을 확인하세요. 완전히 같은 기하도 후보 상한을 차지할 수 있으며 프로필 2는
+중복 제거, 대칭 동등성, 원자 번호 변경에 독립적인 탐색을 보장하지 않습니다.
+후보가 없다는 것은 유계 탐색의 실패이지 반응 불가능의 증거가 아닙니다.
+
+### 화학적 해석의 한계
+
+- 그려진 알켄/이민 E/Z 및 축/atropisomer 입체는 현재 변환 모델에 표현되지 않습니다.
+  3D나 식별정보 결과를 해당 입체가 보존되었다는 증거로 사용하지 마세요.
+  해석되지 않은 wedge/hash는 Chemvas 원자/결합 ID와 함께 거부하며 원본 그림은
+  계속 편집할 수 있습니다.
+- 지정된 사면체 SMILES 입체는 원본 그림으로 변환 후 유지되어야 하며, 그렇지 않으면
+  삽입을 거부합니다. 외부 MOL의 이중 결합 입체 플래그 3(미지정/either)은 외부 도구에
+  유효하지만 Chemvas 원본 MOL 가져오기는 지원하지 않습니다. 모든 MOL 내보내기를
+  무손실로 다시 열 수 있다고 가정하지 마세요.
+- 3D 생성에는 완전한 MMFF 또는 UFF 매개변수가 필요합니다. 매개변수 보유와 수렴만으로
+  물리적 최소점이 보장되지는 않으며, 특이한 배위 화학에서는 특히 기하 검토와
+  후속 검증이 필요합니다.
+- 변환 그래프가 수소를 펼치므로 정규 SMILES에 명시적 수소가 들어갈 수 있습니다.
+  더 짧은 표기와 다르다는 사실만으로 화학 오류는 아닙니다.
+- `machine.json`은 앞서 설명한 공유 버전 계약을 유지합니다. 위 검사 진단은 해당
+  페이로드에 필드를 추가하지 않습니다.
 
 `plan.json`은 Calculation Plan v2를 씁니다. 상태가 계산 소속과 전하/다중도를
 소유하고, 단계 종점이 역할을 소유합니다.

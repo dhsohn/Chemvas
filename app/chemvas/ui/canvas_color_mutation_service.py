@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, override
 
 from PyQt6 import sip
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import QPointF, Qt
 from PyQt6.QtGui import QBrush, QColor, QPen, QTextCharFormat, QTextCursor
 from PyQt6.QtWidgets import (
     QGraphicsEllipseItem,
@@ -18,7 +18,8 @@ from chemvas.core.history import (
     HistoryCommand,
     UpdateAtomColorCommand,
 )
-from chemvas.domain.transactions import run_rollback_step
+from chemvas.domain.transactions import restore_snapshot, run_rollback_step
+from chemvas.features.graph import find_rings
 from chemvas.ui.atom_label_access import implicit_carbon_dot_brush_for
 from chemvas.ui.bond_graphics_access import apply_color_to_bond_item_for
 from chemvas.ui.canvas_atom_graphics_state import (
@@ -31,8 +32,13 @@ from chemvas.ui.canvas_bond_graphics_state import (
 )
 from chemvas.ui.canvas_model_access import (
     atom_for_id,
+    atoms_for,
     bond_for_id,
+    bonds_for,
 )
+from chemvas.ui.canvas_ring_fill_scene_access import create_ring_fill_item_for
+from chemvas.ui.canvas_scene_items_state import ring_items_for
+from chemvas.ui.canvas_window_access import notify_error_for
 from chemvas.ui.graphics_items import AtomDotItem
 from chemvas.ui.history_commands import AddSceneItemsCommand, UpdateSceneItemCommand
 from chemvas.ui.note_item_access import (
@@ -41,7 +47,8 @@ from chemvas.ui.note_item_access import (
     set_committed_note_html_for,
     set_committed_note_text_for,
 )
-from chemvas.ui.scene_item_access import item_is_in_canvas_scene
+from chemvas.ui.ring_fill_state import RING_FILL_ALPHA_ROLE, set_ring_fill_brush
+from chemvas.ui.scene_item_access import attach_scene_item, item_is_in_canvas_scene
 from chemvas.ui.scene_item_state import (
     ARROW_KINDS,
     arrow_state_dict_for,
@@ -49,6 +56,7 @@ from chemvas.ui.scene_item_state import (
     ring_state_dict_for,
     shape_state_dict_for,
 )
+from chemvas.ui.transactions.document import DocumentSavepoint
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable, Iterator
@@ -380,6 +388,13 @@ class CanvasColorMutationService:
             if kind == "shape":
                 self._apply_shape_fill(item, color)
                 return
+            if kind == "ts_bracket":
+                notify_error_for(
+                    self.canvas,
+                    "TS brackets and daggers use the document bond color; "
+                    "per-item color is not supported.",
+                )
+                return
             if kind in ARROW_KINDS:
                 self._apply_arrow_color(item, color)
 
@@ -496,7 +511,7 @@ class CanvasColorMutationService:
         self._record_scene_item_mutation(
             item,
             state_for=ring_state_dict_for,
-            mutation=lambda: item.setBrush(fill),
+            mutation=lambda: set_ring_fill_brush(item, fill),
             runtime_rollback=self._graphics_runtime_rollback(item),
         )
 
@@ -506,20 +521,109 @@ class CanvasColorMutationService:
         color: QColor,
         alpha: float = 0.25,
     ) -> None:
-        items = tuple(items)
-        rollback = self._batch_runtime_rollback(
-            items,
-            expand_ring_structures=False,
+        if not color.isValid():
+            return
+        selected = tuple(items)
+        targets = [
+            item
+            for item in selected
+            if _graphics_item_data_for_capture(item, 0) == "ring"
+        ]
+        selected_atoms: set[int] = set()
+        selected_bond_ids: set[int] = set()
+        for item in selected:
+            kind = _graphics_item_data_for_capture(item, 0)
+            entity_id = _graphics_item_data_for_capture(item, 1)
+            if not isinstance(entity_id, int):
+                continue
+            if kind == "atom":
+                selected_atoms.add(entity_id)
+            elif kind == "bond":
+                bond = bond_for_id(self.canvas, entity_id)
+                if bond is not None:
+                    selected_bond_ids.add(entity_id)
+        created = []
+        if selected_atoms or selected_bond_ids:
+            atoms = atoms_for(self.canvas)
+            existing = {
+                frozenset(item.data(2)): item for item in ring_items_for(self.canvas)
+            }
+            atom_selection_bonds = [
+                bond
+                for bond in bonds_for(self.canvas)
+                if bond is not None and {bond.a, bond.b} <= selected_atoms
+            ]
+            # A complete atom selection OR a complete bond selection qualifies.
+            # Combining their endpoints would invent unselected cycle edges.
+            selected_rings = find_rings(atom_selection_bonds) + find_rings(
+                bond_for_id(self.canvas, bond_id)
+                for bond_id in sorted(selected_bond_ids)
+            )
+            unique_rings = {frozenset(ring): ring for ring in selected_rings}
+            for ring in unique_rings.values():
+                item = existing.get(frozenset(ring))
+                if item is not None:
+                    if item not in targets:
+                        targets.append(item)
+                elif alpha > 0:
+                    item = create_ring_fill_item_for(
+                        self.canvas,
+                        [
+                            QPointF(atoms[atom_id].x, atoms[atom_id].y)
+                            for atom_id in ring
+                        ],
+                        ring,
+                    )
+                    item.setBrush(self._pastel_fill(color, min(1.0, float(alpha))))
+                    created.append(item)
+        if not targets and not created:
+            if alpha > 0:
+                notify_error_for(
+                    self.canvas,
+                    "Ring Fill: select a complete ring (all its atoms or bonds) first.",
+                )
+            return
+
+        snapshot = (
+            DocumentSavepoint.capture(self.canvas, history_service=self.history)
+            if created
+            else None
         )
+        if snapshot is None:
+            rollback = self._batch_runtime_rollback(
+                targets, expand_ring_structures=False
+            )
+        else:
+
+            def rollback() -> None:
+                outcome = restore_snapshot(
+                    snapshot.restore, description="ring fill creation"
+                )
+                if outcome.errors:
+                    raise BaseExceptionGroup(
+                        "Ring fill rollback failed", outcome.errors
+                    )
 
         def apply_all() -> None:
-            for item in items:
+            for item in created:
+                attach_scene_item(self.canvas, item)
+            if created and self.history is not None:
+                self.history.push(
+                    AddSceneItemsCommand(
+                        items=created,
+                        item_states=[
+                            ring_state_dict_for(self.canvas, item) for item in created
+                        ],
+                    )
+                )
+            for item in targets:
                 self.apply_ring_fill_color(item, color, alpha)
 
-        self._run_history_transaction(
-            apply_all,
-            rollback=rollback,
-        )
+        try:
+            self._run_history_transaction(apply_all, rollback=rollback)
+        finally:
+            if snapshot is not None:
+                snapshot.release()
 
     def _run_history_transaction(
         self,
@@ -562,7 +666,8 @@ class CanvasColorMutationService:
             else CompositeCommand(commands=collected)
         )
         try:
-            real_history.push(command)
+            if real_history.push(command) is False:
+                raise RuntimeError("Color history push did not commit")
         except Exception as error:
             runtime_rollback = (
                 rollback if rollback is not None else lambda: command.undo(self.canvas)
@@ -900,6 +1005,12 @@ class CanvasColorMutationService:
         )
         brush = _captured_graphics_brush(item)
         pen = _captured_graphics_pen(item)
+        is_ring = _graphics_item_data_for_capture(item, 0) == "ring"
+        ring_alpha = (
+            _graphics_item_data_for_capture(item, RING_FILL_ALPHA_ROLE)
+            if is_ring
+            else None
+        )
 
         if text_color is None and brush is None and pen is None:
             raise RuntimeError("color runtime has no exact Qt text/brush/pen authority")
@@ -912,6 +1023,10 @@ class CanvasColorMutationService:
                 operations.append(lambda: _set_graphics_pen_exact(item, pen))
             if brush is not None:
                 operations.append(lambda: _set_graphics_brush_exact(item, brush))
+            if is_ring:
+                operations.append(
+                    lambda: item.setData(RING_FILL_ALPHA_ROLE, ring_alpha)
+                )
             _run_restore_operations("Graphics color rollback failed", operations)
 
         def verify() -> None:
@@ -931,6 +1046,8 @@ class CanvasColorMutationService:
                 actual_brush = _captured_graphics_brush(item)
                 if actual_brush != brush:
                     raise RuntimeError("graphics brush did not match its savepoint")
+            if is_ring and item.data(RING_FILL_ALPHA_ROLE) != ring_alpha:
+                raise RuntimeError("ring opacity did not match its savepoint")
 
         return _ColorRuntimeAuthority(restore, verify)
 

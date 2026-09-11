@@ -18,6 +18,9 @@ LABEL_SYNTAX_HINT = (
     "Use _{...} for subscripts and ^{...} for superscripts. "
     "Examples: K_{2}CO_{3}, H_{2}SO_{4}, ΔG^{‡}.\n"
     "Without braces, _ or ^ applies until the next space, _ or ^. "
+    "Braces do not nest and backslash escaping is not supported. "
+    "A trailing _ or ^, or one followed by a space, is literal. "
+    "Each field is limited to 200 characters; use a Note for longer text. "
     "Leave a field empty to remove that label."
 )
 
@@ -32,6 +35,10 @@ def _label_input(layout: QVBoxLayout, caption: str, name: str, text: str) -> QLi
     field.setMaxLength(MAX_ARROW_LABEL_CHARS)
     field.setText(text)
     layout.addWidget(field)
+    counter = QLabel()
+    counter.setObjectName(f"{name}Limit")
+    counter.setTextFormat(Qt.TextFormat.PlainText)
+    layout.addWidget(counter)
 
     preview = QLabel()
     preview.setObjectName(f"{name.removesuffix('Input')}Preview")
@@ -51,6 +58,7 @@ def _label_input(layout: QVBoxLayout, caption: str, name: str, text: str) -> QLi
     layout.addLayout(preview_row)
 
     def update_preview(value: str) -> None:
+        counter.setText(f"{len(value)}/{MAX_ARROW_LABEL_CHARS} characters")
         preview.setText(arrow_label_html(value) if value else "No label")
 
     field.textChanged.connect(update_preview)

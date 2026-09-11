@@ -3,7 +3,8 @@ from __future__ import annotations
 from contextlib import contextmanager
 from typing import TYPE_CHECKING
 
-from PyQt6.QtCore import QRectF
+from PyQt6.QtCore import QRectF, Qt
+from PyQt6.QtWidgets import QGraphicsPathItem
 
 if TYPE_CHECKING:
     from collections.abc import Iterator, Sequence
@@ -31,6 +32,12 @@ def collect_export_items(scene: QGraphicsScene) -> list[QGraphicsItem]:
 
 
 def item_export_bounds(item: QGraphicsItem) -> QRectF:
+    if item.data(0) == "shape" and isinstance(item, QGraphicsPathItem):
+        pen, brush = item.pen(), item.brush()
+        has_stroke = pen.style() != Qt.PenStyle.NoPen and pen.color().alpha() > 0
+        has_fill = brush.style() != Qt.BrushStyle.NoBrush and brush.color().alpha() > 0
+        if item.effectiveOpacity() == 0 or not (has_stroke or has_fill):
+            return QRectF()
     bounds_getter = getattr(item, "export_scene_bounding_rect", None)
     if callable(bounds_getter):
         rect = bounds_getter()

@@ -7,7 +7,7 @@ from pathlib import Path
 from PyQt6.QtWidgets import QFileDialog, QMessageBox
 
 from chemvas.core.document_io import read_document as default_read_document
-from chemvas.core.molfile import fit_molfile_model, parse_molfile
+from chemvas.core.molfile import fit_molfile_model, read_molfile
 from chemvas.core.svg_roundtrip import (
     extract_chemvas_document_from_svg as default_read_editable_svg,
 )
@@ -75,7 +75,9 @@ def _annotation_mark_states(model: MoleculeModel) -> list[dict[str, object]]:
             continue
         annotation = normalized_atom_annotation(model.atom_annotations[atom_id])
         for index, kind in enumerate(annotation_mark_kinds(annotation)):
-            direction_x, direction_y = annotation_mark_direction(index)
+            direction_x, direction_y = annotation_mark_direction(
+                index, model=model, atom_id=atom_id
+            )
             marks.append(
                 {
                     "kind": kind,
@@ -564,6 +566,7 @@ class MainWindowDocumentActionService:
         if already_open is not None:
             open_window, open_canvas = already_open
             self._activate_open_document(open_window, open_canvas, path)
+            record_recent(path)
             return True
         # Resolve the destination window only after the file reads successfully so
         # a missing or unreadable file never spawns an empty window.
@@ -623,7 +626,7 @@ class MainWindowDocumentActionService:
         rest of the state carries the active canvas's settings, like a new
         document would.
         """
-        model = parse_molfile(Path(path).read_text(encoding="utf-8"))
+        model = read_molfile(path)
         template_state = snapshot_canvas_state_for(
             self._active_canvas_for_window(window)
         )

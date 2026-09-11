@@ -36,6 +36,9 @@ publish one new file atomically and never edit their input; `inspect`,
 `inspect-document`, `inspect-plan`, `inspect-precomplex`, `check-layout` and
 every `--dry-run` only print a JSON report and write nothing.
 The figures below are the documented examples rendered with `render-document`.
+On POSIX, new atomically published files are private to their owner (mode 0600).
+Grant wider read access explicitly when sharing; Chemvas does not infer a public
+sharing policy from the directory. Root CLI typos fail before desktop startup.
 
 ## Headless document composition
 
@@ -143,6 +146,55 @@ symlink output, and publishes one new canonical file atomically. Standard output
 is a deterministic JSON report with the output SHA-256, document version, and
 atom/bond counts. Existing source drawings are not inputs to this command and
 are never modified.
+
+### Authoring fields and limits
+
+All numbers must be finite; booleans are not numbers. Arrays may be omitted when
+optional, but do not use JSON `null` in place of a list/object. Coordinates are
+canvas units, not pixels of a rendered image. Composition limits are 4,096 atoms,
+8,192 bonds and 4,096 entries each for notes, arrows, shapes, ring fills and TS
+brackets (images have the separate limits above).
+
+`settings` accepts any subset of these fields; other keys are errors:
+
+| Fields | Accepted value |
+| --- | --- |
+| `bond_length_px` | Positive, at most 1,073,741,823 (Qt glyph-size bound); ordinary drawings use about 20 |
+| `arrow_line_width`, `arrow_head_scale` | At least 0.5; 0.1–0.8 respectively |
+| `text_font_size`, `text_font_weight` | Integer 6–96; integer 1–1000 respectively |
+| `text_font_family`, `text_color` | Nonempty UTF-8 string; `#RRGGBB` |
+| `text_alignment`, `text_line_spacing` | `left`, `center`, `right`, `justify`; at least 0.8 |
+| `text_italic`, `orbital_phase_enabled`, `note_box_enabled`, `note_border_enabled` | Boolean |
+| `note_box_color`, `note_border_color` | `#RRGGBB` |
+| `note_box_alpha`, `note_border_width`, `note_padding` | 0–1; at least 0.5; at least 2 respectively |
+| `sheet_size`, `sheet_orientation` | `A4`; `landscape` or `portrait` |
+
+Native v7 files retain their broader saved-font range (6–2,147,483,647); that is a
+serialization limit, not a usable drawing size. Native mark text is null or at
+most 200 characters. Invalid Unicode, missing/unknown fields and out-of-range
+settings fail shared validation before canvas restoration.
+
+In native documents, a bound mark's `atom_id` and entries in ring-fill `atom_ids`
+must be JSON integers, not quoted numbers. Decimal-string object keys in
+`model.atoms`, `model.atom_annotations`, and `perspective.atom_coords_3d` remain
+supported; those map keys are distinct from atom-ID values.
+
+Shapes require `shape_kind` (`circle`, `ellipse`, `rounded_rect`, `rect`),
+`left`, `top`, `right`, `bottom`, and `stroke_style` (`solid`, `dashed`,
+`dotted`, `none`); optional `fill` is `#RRGGBB` and `fill_alpha` is 0–1.
+Ring fills require `atom_ids` (at least three distinct existing atoms in cycle
+order), `color` (`#RRGGBB`) and `alpha` (0–1); the referenced cycle must exist.
+
+The `arrows[].kind` values are `arrow`, `equilibrium`,
+`equilibrium_forward`, `equilibrium_reverse`, `resonance`, `curved_single`,
+`curved_double`, `inhibit`, `dotted`, `line`, `line_dashed`, `line_wavy`,
+`line_bold`, and `arc_90_left/right`, `arc_180_left/right`,
+`arc_270_left/right` (each slash denotes two separate names).
+Labels are single-line, use the [small label grammar](REFERENCE.md), and are
+not separate scene notes. `inspect-document` reports selected dependency counts
+(ring fills, attached marks, groups), not note or arrow-label counts.
+Initial charge-mark placement avoids incident bond directions heuristically;
+run `check-layout` and make local adjustments for crowded drawings.
 
 ## Headless layout diagnostics
 
@@ -273,6 +325,14 @@ native geometry and occupancy rules determine placement. Chair/boat atom anchors
 anchors in groups, and anchors incident to wedge/hash bonds are rejected.
 Explicit choice of a chair or boat is a drawing choice, not inferred stereochemistry.
 
+The CLI intentionally has a narrower bond-anchor boundary than interactive desktop
+fusion. Accepted anchor bond styles are `single`, `double`, `double_center`, and
+`double_outer`. `regular` and `benzene` permit bond orders 1 or 2; `chair`,
+`chair_flip`, and `boat` require order 1. Bold styles, dotted/contact styles, and
+triple bonds are rejected. A wedge/hash anchor, or any anchor touching a wedge/hash
+bond, receives a specific stereo diagnostic. Reusing the desktop's template
+geometry does not mean that every interactive fusion target is accepted by the CLI.
+
 The command pins exact source bytes, validates before Qt, invokes the native
 template planner and commit on a private canvas, and preserves source coordinates,
 existing graph/annotations, notes, settings, groups and ring metadata. It retains
@@ -301,7 +361,7 @@ the desktop app without opening a window or loading RDKit:
 chemvas render-document scheme.chemvas --output scheme.svg
 chemvas render-document scheme.chemvas --output scheme.pdf --width-mm 174
 chemvas render-document scheme.chemvas --output scheme.png --dpi 600
-chemvas render-document scheme.chemvas --output journal.svg --width-mm 174 --max-height-mm 120
+chemvas render-document scheme.chemvas --output journal.svg --width-mm 70 --max-height-mm 120
 chemvas render-document scheme.chemvas --output readable.svg --width-mm 174 --min-font-pt 6
 chemvas render-document scheme.chemvas --output scheme-transparent.png \
   --background transparent
@@ -317,7 +377,11 @@ and symlinks and publishes the new output atomically.
 
 Omitting `--width-mm` retains preset bond-length sizing. A positive finite width
 requests the padded figure width through the same physical-size planner as GUI
-export, preserving aspect ratio. PNG dimensions round to pixels at the chosen
+export, preserving aspect ratio. Both rounded dimensions must be at least one
+native output unit: one point for SVG/PDF, one pixel at the requested DPI for
+PNG/TIFF. Smaller dimensions are rejected, not silently clamped; this is a format
+representability bound, not a publication-size recommendation.
+PNG dimensions round to pixels at the chosen
 DPI; Qt's SVG physical viewport rounds to whole points while its viewBox and the
 report retain the planned fractional point dimensions. PDF pages round to whole
 points through Qt; their report uses the actual page dimensions. Optional
@@ -375,15 +439,17 @@ An agent can inspect every stable atom ID and then propose a bounded Graph Patch
 without starting Qt or rewriting the whole `.chemvas` document:
 
 ```bash
-chemvas inspect-document scheme.chemvas > inspection.json
-chemvas apply-patch scheme.chemvas patch.json --dry-run
-chemvas apply-patch scheme.chemvas patch.json --output revised.chemvas
+chemvas inspect-document ring-added.chemvas > inspection.json
+chemvas apply-patch ring-added.chemvas patch.json --dry-run
+chemvas apply-patch ring-added.chemvas patch.json --output revised.chemvas
 ```
 
 `inspect-document` reports the exact source-file SHA-256, document version,
 `next_atom_id`, complete atom/bond inventory, effective charge/radical annotations,
 connected components, and dependent scene-state counts. The agent copies that exact
-hash into a Graph Patch v1 precondition:
+hash into a Graph Patch v1 precondition. This example continues from the minimal
+composition and free benzene insertion above: atoms 2–7 are the ring and
+`next_atom_id` is 8. On any other input, inspect its IDs and coordinates first:
 
 ```json
 {
@@ -391,18 +457,21 @@ hash into a Graph Patch v1 precondition:
   "version": 1,
   "source_sha256": "<64 lowercase hexadecimal characters>",
   "operations": [
-    {"op": "add_atom", "atom_id": 12, "element": "O",
-     "x": 216.0, "y": 72.0, "color": "#000000", "explicit_label": true},
-    {"op": "add_bond", "a": 4, "b": 12, "order": 1,
+    {"op": "update_bond", "a": 2, "b": 3,
+     "changes": {"order": 1, "style": "single"}},
+    {"op": "add_atom", "atom_id": 8, "element": "O",
+     "x": 237.32050807568876, "y": 110.0, "color": "#000000", "explicit_label": true},
+    {"op": "add_bond", "a": 2, "b": 8, "order": 1,
      "style": "single", "color": "#000000"},
-    {"op": "update_bond", "a": 4, "b": 12,
+    {"op": "update_bond", "a": 2, "b": 8,
      "changes": {"order": 2, "style": "double"}}
   ]
 }
 ```
 
-A patch of exactly this shape, adding an oxygen to a ring carbon of the
-document above and then making that bond double; before and after:
+This drawing-edit example first reduces the adjacent ring double bond, then
+adds C=O without giving carbon five bond orders. It is not a proposed reaction.
+Before and after:
 
 ![Before the patch: the O⁻–P⁺ pair, the note and the benzene ring](images/cli-apply-patch-before.png)
 
@@ -410,7 +479,8 @@ document above and then making that bond double; before and after:
 
 Supported operations are `add_atom`, `update_atom` (element/color/explicit label),
 `move_atom`, `set_terminal_angle`, `add_bond`, `update_bond`, and `remove_bond`.
-Operations run in order on
+There are at most 256 operations. Each `add_atom.atom_id` must equal the current
+`next_atom_id` (which advances after an addition). Operations run in order on
 a private copy and publish only after full document and Calculation Plan validation.
 If the document carries a reviewed precomplex selection, that validation also
 requires a complete atomic reactant/product review pair whose profile, shared
@@ -421,7 +491,10 @@ Its screen-space movement preserves stored depth and the camera projection.
 `remove_bond` removes any ring fill whose cycle contains that edge; it preserves
 unrelated fills and still rejects invalid Calculation Plan references.
 
-`set_terminal_angle` is a limited alternative to handwritten terminal coordinates:
+`set_terminal_angle` is a limited alternative to handwritten terminal coordinates.
+The following operation belongs to the separate aryl–O–Me fixture in
+[the runnable publication example](../examples/publication_scheme.py), **not**
+to the ring-added document above:
 
 ```json
 {"op":"set_terminal_angle", "pivot_id":6, "reference_id":2,
@@ -459,7 +532,13 @@ chemvas inspect scheme.chemvas
 ```
 
 `inspect` needs no RDKit and prints a JSON inventory of connected components
-with stable atom IDs, formal charges, and annotation totals. Machine handoff of
+with stable atom IDs, formal charges, and annotation totals.
+Each component's `formula_labels` counts literal canvas labels, **not** a molecular
+formula: it neither expands abbreviations nor includes implicit hydrogens.
+For example, `Ph`/`OTs` remain labels, and `Ac`/`Ts` must not automatically be
+interpreted as element symbols. `bond_count` counts graph edges, not bond orders;
+`bounds` is [minimum X, minimum Y, maximum X, maximum Y] of atom coordinates,
+not the painted-label/export rectangle. Machine handoff of
 geometries happens exclusively through the elementary-step `machine.json`
 published by `pack-step` below; there is no separate per-species bundle format.
 
@@ -472,7 +551,7 @@ pip install "chemvas[rdkit]"
 ```
 
 Attaching and inspecting a plan do not invoke RDKit, but **Suggest by
-structure**, `generate-precomplex`, and `pack-step` require it.
+structure**, `generate-precomplex`, `select-precomplex`, and `pack-step` require it.
 
 Draw the reactant, product, catalyst, and spectators on one canvas, then open
 **Calculation ▸ Edit States and Steps...**. For each endpoint, assign every
@@ -492,8 +571,11 @@ stay editable on both. The atom-correspondence table lists
 only included reactant atoms and offers same-element product atoms by stable
 Chemvas ID. **Suggest by structure** _(RDKit)_ fills the unmapped atoms of the
 maximum common substructure; bond orders are matched loosely, so a reaction
-center whose bonds only change order (e.g. C-O → C=O) is suggested too, and only
-atoms whose connectivity breaks or forms are left for you. It never overwrites a
+center whose bonds only change order (e.g. C-O → C=O) can be suggested too.
+It is a single connected-match heuristic: symmetric fragments, multiple reacting
+components, or an already-mapped catalyst can leave additional atoms unmapped.
+No new pairs does not prove that the substrates share no substructure.
+It never overwrites a
 mapping you made and is a review-only starting point, not an automated mechanism
 inference. While the dialog is open, each included atom is labelled with its
 Chemvas ID on the drawing. Mapped reactant atoms are blue, mapped product atoms
@@ -570,6 +652,74 @@ not a hard-sphere physical model, energy, or stability claim. Fe/Co spin and
 coordination are not represented in the current input model, so the documented
 low-spin selector is fixed rather than inferred. Researcher review and
 downstream quantum optimization remain required.
+
+### Complete precomplex request v2
+
+Save this as `precomplex-request.json`. This is a **separate 2→2 example**:
+reactant components [0,1] and [2], product components [3,4] and [5].
+It is not applicable to the 1→1 plan example below. Inspect your planned source,
+substitute its exact hash, and choose actual intercomponent contact IDs/distances.
+
+```json
+{
+  "format": "chemvas-precomplex-request",
+  "version": 2,
+  "profile": "chemvas-rigid-precomplex-placement/2",
+  "source_document_sha256": "<64 lowercase hexadecimal characters>",
+  "step_id": "S01",
+  "candidate_cap": 16,
+  "environment": {"kind": "gas_phase"},
+  "endpoints": {
+    "reactant": {"contacts": [{
+      "id": "nucleophile", "first_atom_id": 2, "second_atom_id": 0,
+      "target_distance_angstrom": 3.0, "tolerance_angstrom": 0.2
+    }]},
+    "product": {"contacts": [{
+      "id": "leaving", "first_atom_id": 4, "second_atom_id": 5,
+      "target_distance_angstrom": 3.2, "tolerance_angstrom": 0.2
+    }]}
+  }
+}
+```
+
+Every field shown is required; unknown keys are rejected at every level.
+`candidate_cap` is an integer 1–16. Each endpoint has exactly one contact:
+a nonblank ID of at most 64 characters, two integer Chemvas atom IDs from
+different included components, a finite positive target distance in Å, and
+finite tolerance 0–1 Å. Tolerance validates distance; it is **not** a radial
+sampling range. Placement aims at the target, so different tolerances can
+produce identical coordinates.
+Environment is exactly `{"kind":"gas_phase"}` or
+`{"kind":"solvent","model":"CPCM","name":"THF"}`; solvent model/name are
+nonblank strings of at most 128 characters. These record provenance, not a
+solvation calculation or an endorsement of the named model.
+
+Current placement supports exactly 2→2 included components; direct 1→1
+packing does not use this request. 2→1, 1→2 and larger endpoints are explicitly
+unsupported by the current profile. Candidate IDs are not counts of unique
+geometries: `inspect-precomplex.candidate_geometry_summary` reports candidate
+and unique-XYZ-hash counts plus duplicate groups. Exact duplicates can consume
+the cap; deduplication, symmetry equivalence and renumbering-independent sampling
+are not promised by profile 2. No surviving candidate is a bounded-search
+failure, not evidence that the reaction is impossible.
+
+### Chemical interpretation limits
+
+- Drawn alkene/imine E/Z and axial/atropisomeric stereo are not represented by
+  the current conversion model. Do not treat a 3D/identifier result as proof that
+  such drawn stereo was retained. Unconsumed wedge/hash stereo is rejected with
+  Chemvas atom/bond IDs; the original drawing remains editable.
+- Specified tetrahedral SMILES stereo must survive native depiction or insertion
+  is refused. External MOL double-bond stereo flag 3 (unspecified/either) remains
+  valid for external readers but is not supported by Chemvas's native MOL import;
+  do not assume every exported MOL can be reopened losslessly.
+- 3D generation requires complete MMFF or UFF parameters. Parameter coverage and
+  convergence still do not certify a physical minimum, especially for unusual
+  coordination chemistry. Review geometry and perform downstream validation.
+- Canonical SMILES can contain explicit hydrogens because the conversion graph
+  expands them. A different compact spelling is not by itself a chemistry error.
+- `machine.json` retains the shared, versioned contract above; these inspection
+  diagnostics do not add fields to that payload.
 
 `plan.json` uses Calculation Plan v2. States own calculation membership and
 charge/multiplicity; step endpoints own roles:

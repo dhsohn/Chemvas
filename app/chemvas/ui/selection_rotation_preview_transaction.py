@@ -17,6 +17,7 @@ from typing import TYPE_CHECKING
 from chemvas.domain.transactions import add_recovery_error_note
 from chemvas.ui.atom_coords_access import (
     atom_coords_3d_for,
+    pop_atom_coords_3d_for,
     set_atom_coords_3d_for_id,
 )
 from chemvas.ui.canvas_model_access import atom_for_id
@@ -85,6 +86,8 @@ class _RotationPreviewAuthority:
                     atom.x, atom.y = position
             if coords is not None:
                 set_atom_coords_3d_for_id(canvas, atom_id, coords)
+            else:
+                pop_atom_coords_3d_for(canvas, atom_id)
         sync_atom_scene_items_for(canvas, set(self.atom_ids))
         self.controller.refresh_atom_geometry(set(self.atom_ids))
 
@@ -100,6 +103,8 @@ class _RotationPreviewAuthority:
                     atom.x, atom.y = position
             for atom_id, coords in state.start_coords_3d.items():
                 set_atom_coords_3d_for_id(canvas, atom_id, coords)
+            for atom_id in state.coord_atom_ids - state.start_coords_3d.keys():
+                pop_atom_coords_3d_for(canvas, atom_id)
             state.projection_center_3d = state.start_projection_center_3d
             state.projection_anchor_2d = state.start_projection_anchor_2d
             restored_ids = set(state.start_positions) | set(state.start_coords_3d)

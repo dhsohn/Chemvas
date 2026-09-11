@@ -8,6 +8,7 @@ from PyQt6.QtGui import QFont, QFontMetricsF, QIcon, QPainter
 from PyQt6.QtWidgets import QApplication, QToolButton, QWidget
 
 from chemvas.core.rdkit_adapter import Molecule3DScene, RDKitAdapter
+from chemvas.core.rdkit_diagnostics import RDKIT_UNAVAILABLE_MESSAGE
 from chemvas.features.insertion import model_with_atom_annotations
 from chemvas.shell.palette import PALETTE
 from chemvas.ui.preview_3d_interaction import (
@@ -112,6 +113,7 @@ class Preview3D(QWidget):
         self._set_canvas_structure(model, atom_annotations)
 
     def _set_canvas_structure(self, model, atom_annotations) -> None:
+        self.set_structure(model, atom_annotations)
         if not self._async_enabled:
             identifier_model = model_with_atom_annotations(model, atom_annotations)
             identifiers = self._rdkit.compute_identifiers(identifier_model)
@@ -122,7 +124,6 @@ class Preview3D(QWidget):
                 identifiers.inchi or "",
                 identifiers.inchikey or "",
             )
-        self.set_structure(model, atom_annotations)
 
     def set_structure(self, model, atom_annotations=None) -> None:
         if self._disposed or self._updates_paused:
@@ -138,7 +139,16 @@ class Preview3D(QWidget):
         self._current_signature = signature
         self._pending_model = model
         self._pending_annotations = atom_annotations
+        # Metadata and coordinates must describe the same requested structure.
+        # Its identifiers can arrive before the slower coordinate calculation.
+        self._scene = None
+        self._formula_text = ""
+        self._mw_text = ""
+        self._smiles_text = ""
+        self._inchi_text = ""
+        self._inchikey_text = ""
         self._message = "Updating 3D preview..."
+        self._sync_export_xyz_button()
         self._safe_update()
         self._update_timer.start()
 
@@ -219,7 +229,11 @@ class Preview3D(QWidget):
         scene = result.value
         error = result.error
         if scene is None:
-            self.clear_preview(error or "Failed to build 3D preview.")
+            self._scene = None
+            self._current_signature = None
+            self._message = error or "Failed to build 3D preview."
+            self._sync_export_xyz_button()
+            self._safe_update()
             return
         self._scene = scene
         self._message = ""
@@ -231,9 +245,7 @@ class Preview3D(QWidget):
             return True
         if self._rdkit.preload():
             return True
-        self.clear_preview(
-            self._rdkit.last_error or "RDKit is not available in this environment."
-        )
+        self.clear_preview(self._rdkit.last_error or RDKIT_UNAVAILABLE_MESSAGE)
         return False
 
     def _start_preview_worker(self) -> None:
@@ -257,6 +269,7 @@ class Preview3D(QWidget):
         worker.moveToThread(thread)
         self._preview_jobs[request_id] = (thread, worker)
         thread.started.connect(worker.run)
+        worker.identifiers_ready.connect(self._handle_preview_identifiers_ready)
         worker.finished.connect(self._handle_preview_worker_finished)
         worker.finished.connect(thread.quit)
         worker.finished.connect(worker.deleteLater)
@@ -280,6 +293,29 @@ class Preview3D(QWidget):
             # RDKit job while the user is still mid-drag.
             self._handle_update_timer_timeout()
 
+    def _handle_preview_identifiers_ready(
+        self,
+        request_id: int,
+        formula: str | None,
+        mw: float | None,
+        smiles: str | None,
+        inchi: str | None,
+        inchikey: str | None,
+    ) -> None:
+        if (
+            self._disposed
+            or self._updates_paused
+            or request_id != self._preview_request_id
+        ):
+            return
+        self.set_info(
+            formula or "",
+            "" if mw is None else f"{mw:.2f}",
+            smiles or "",
+            inchi or "",
+            inchikey or "",
+        )
+
     def _handle_preview_worker_finished(
         self,
         request_id: int,
@@ -297,23 +333,16 @@ class Preview3D(QWidget):
             or request_id != self._preview_request_id
         ):
             return
+        self._handle_preview_identifiers_ready(
+            request_id, formula, mw, smiles, inchi, inchikey
+        )
         if error or scene is None:
             self._scene = None
             self._current_signature = None
-            self._formula_text = ""
-            self._mw_text = ""
-            self._smiles_text = ""
-            self._inchi_text = ""
-            self._inchikey_text = ""
             self._message = error or "Failed to build 3D preview."
             self._sync_export_xyz_button()
             self._safe_update()
             return
-        self._formula_text = formula or ""
-        self._mw_text = "" if mw is None else f"{mw:.2f}"
-        self._smiles_text = smiles or ""
-        self._inchi_text = inchi or ""
-        self._inchikey_text = inchikey or ""
         self._scene = scene
         self._message = ""
         self._sync_export_xyz_button()
@@ -530,29 +559,31 @@ class Preview3D(QWidget):
     def _sync_copy_buttons(self) -> None:
         self._ensure_copy_buttons()
         export = self._export_xyz_button
-        # Lay out [SMILES] [InChI] [InChIKey] [Export] right-aligned: each copy
-        # button is anchored to the left edge of the one to its right. They only
-        # appear when a structure is present and the identifier value exists.
+        # Identifier controls are useful while coordinates are still building
+        # or unavailable. Only the Export 3D control needs a completed scene.
         specs = [
             (self._copy_inchikey_button, "Copy InChIKey", self._inchikey_text),
             (self._copy_inchi_button, "Copy InChI", self._inchi_text),
             (self._copy_smiles_button, "Copy canonical SMILES", self._smiles_text),
         ]
-        # Gate on scene presence (mirroring the Export button's own visibility
-        # flag), NOT on export.isVisible(): the preview can be refreshed while
-        # the Molecule Info window is still closed, and isVisible() is False
-        # then. The Export button's geometry is set even while hidden, so the
-        # copy buttons can still be positioned and will appear with it on show.
-        if self._scene is None or export is None:
-            for button, _tooltip, _value in specs:
-                if button is not None:
-                    button.setVisible(False)
-                    button.setEnabled(False)
-            self._set_header_controls_left(None)
-            return
-        geometry = export.geometry()
-        right_edge = float(geometry.x())
+        font = preview_caption_font(self.font())
+        font.setWeight(QFont.Weight.DemiBold)
+        if self._scene is not None and export is not None:
+            geometry = export.geometry()
+            right_edge = float(geometry.x())
+            top, height = geometry.y(), geometry.height()
+        else:
+            header = preview_layout_for_widget(QRectF(self.rect()), [], self.font())[
+                "header"
+            ]
+            badge_text = preview_status_badge(self._scene, self._message)[0]
+            badge_width = status_badge_width(badge_text, QFontMetricsF(font))
+            right_edge = header.right() - badge_width - 8.0
+            top, height = round(header.top() + 4.0), 22
         gap = 6
+        controls_left = (
+            right_edge if self._scene is not None and export is not None else None
+        )
         for button, base_tooltip, value in specs:
             if button is None:
                 continue
@@ -561,16 +592,17 @@ class Preview3D(QWidget):
             button.setEnabled(has_value)
             if not has_value:
                 continue
-            button.setFont(export.font())
+            button.setFont(font)
             button.setToolTip(f"{base_tooltip}\n{value}")
             metrics = QFontMetricsF(button.font())
             width = max(56.0, metrics.horizontalAdvance(button.text()) + 20.0)
             x = right_edge - gap - width
-            button.setGeometry(round(x), geometry.y(), round(width), geometry.height())
+            button.setGeometry(round(x), top, round(width), height)
             right_edge = x
+            controls_left = float(round(x))
         # Report where the button row actually starts on screen (geometry is
         # set with rounded x), so the painted title elides exactly at it.
-        self._set_header_controls_left(float(round(right_edge)))
+        self._set_header_controls_left(controls_left)
 
     def _set_header_controls_left(self, value: float | None) -> None:
         if value == self._header_controls_left:

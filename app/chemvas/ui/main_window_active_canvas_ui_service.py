@@ -71,6 +71,9 @@ class MainWindowActiveCanvasUIService:
         # Undo/redo can change the bond length without re-showing the bond page,
         # so keep its spin box in sync to avoid writing a stale value later.
         self._context_bar.reflect_bond_length(window)
+        # Exact rollback publishes here after restoring document settings. Keep
+        # annotation controls in sync even if their earlier tool callback failed.
+        self._context_bar.refresh_window(window)
         # Every edit can flip the document's saved/unsaved state, so refresh the
         # tab's unsaved marker (and window-modified hint) live.
         self._refresh_document_chrome_for_window(window)

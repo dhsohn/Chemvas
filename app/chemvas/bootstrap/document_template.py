@@ -225,15 +225,8 @@ def validate_template_request(
         bond = model.bonds[bond_id]
         assert bond is not None
         anchor_ids = {bond.a, bond.b}
-        allowed_orders = {1, 2} if style == "benzene" else {1}
-        if bond.order not in allowed_orders or bond.style not in {
-            "single",
-            "double",
-            "double_outer",
-        }:
-            raise ValueError(
-                "template bond anchor must be plain single, or plain double for benzene"
-            )
+    # Report stereo on the anchor itself as well as on adjacent bonds before
+    # the narrower CLI style allowlist can hide it behind a generic message.
     for bond in model.bonds:
         if (
             bond is not None
@@ -242,6 +235,20 @@ def validate_template_request(
         ):
             raise ValueError(
                 "template anchors must not touch wedge/hash stereochemistry"
+            )
+    if bond_id is not None:
+        bond = model.bonds[bond_id]
+        assert bond is not None
+        allowed_orders = {1, 2} if style in {"regular", "benzene"} else {1}
+        if bond.order not in allowed_orders or bond.style not in {
+            "single",
+            "double",
+            "double_center",
+            "double_outer",
+        }:
+            raise ValueError(
+                "template bond anchor must be plain single, or plain double "
+                "for regular rings and benzene"
             )
     for group in state.get("groups", []):
         if anchor_ids.intersection(group.get("atoms", [])):

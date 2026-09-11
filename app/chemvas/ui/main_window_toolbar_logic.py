@@ -22,7 +22,7 @@ ORBITAL_TYPE_BY_LABEL: dict[str, str] = {
 }
 
 ARROW_PRESET_BY_LABEL: dict[str, tuple[float, float]] = {
-    "Default": (1.2, 0.3),
+    "Default": (1.5, 0.3),
     "ACS": (1.2, 0.3),
     "Bold": (2.2, 0.4),
     "Fine": (0.8, 0.25),
@@ -55,7 +55,7 @@ def orbital_type_from_label(value: str) -> str:
 
 
 def arrow_preset_from_label(value: str) -> tuple[float, float]:
-    return ARROW_PRESET_BY_LABEL.get(value, (1.2, 0.3))
+    return ARROW_PRESET_BY_LABEL.get(value, ARROW_PRESET_BY_LABEL["Default"])
 
 
 def tool_display_name(tool: str) -> str:

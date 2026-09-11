@@ -305,7 +305,9 @@ class InsertSmilesService:
                 continue
             annotation_values = normalized_atom_annotation(annotation)
             for index, kind in enumerate(annotation_mark_kinds(annotation_values)):
-                direction_x, direction_y = annotation_mark_direction(index)
+                direction_x, direction_y = annotation_mark_direction(
+                    index, model=model, atom_id=atom_id
+                )
                 item = materialize_mark_for_atom_for(
                     self.canvas,
                     atom_id,

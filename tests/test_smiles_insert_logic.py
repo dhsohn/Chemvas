@@ -1,3 +1,4 @@
+import math
 import unittest
 
 from chemvas.domain.document import Bond, MoleculeModel
@@ -101,9 +102,9 @@ class SmilesInsertLogicTest(unittest.TestCase):
         self.assertEqual(
             [(mark.source_atom_id, mark.kind, mark.x, mark.y) for mark in plan.marks],
             [
-                (1, "plus", 36.0, -6.0),
-                (1, "radical", 34.0, -6.0),
-                (1, "radical", 36.0, -4.0),
+                (1, "plus", 35.0 + math.sqrt(2.0), -5.0),
+                (1, "radical", 35.0, -5.0 - math.sqrt(2.0)),
+                (1, "radical", 35.0, -5.0 + math.sqrt(2.0)),
             ],
         )
 

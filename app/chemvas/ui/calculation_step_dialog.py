@@ -763,8 +763,9 @@ class CalculationStepDialog(QDialog):
             )
         else:
             note = (
-                "No new structural suggestion — RDKit found no shared substructure "
-                "beyond what is already mapped."
+                "No new structural suggestion — this connected-substructure "
+                "heuristic found no additional pairs. Existing mappings are kept; "
+                "review the remaining atoms manually."
             )
         self.suggestion_status.setText(note)
 

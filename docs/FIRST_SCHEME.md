@@ -50,8 +50,8 @@ bottom right to make the structures comfortable to work on.
 
 ## 2. Draw and label the arrow
 
-Choose **Arrow** and drag from left to right between the structures. Hold
-**Shift** while dragging to lock the angle. Switch to **Select** and
+Choose **Arrow** and drag horizontally from left to right between the structures.
+Shift angle locking is available for Line, not Arrow. Switch to **Select** and
 double-click the arrow:
 
 | Field | Enter | Appearance |

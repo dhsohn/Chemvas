@@ -31,15 +31,19 @@ on the canvas.
 
 ## Install
 
-Requires **Python 3.12+**. The optional RDKit backend adds SMILES insertion:
+Requires **Python 3.12+**. Install the optional RDKit backend for SMILES insertion,
+Molecule Info (formula and identifiers), 3D XYZ export, abbreviation MOL export,
+**Suggest by structure**, and `generate-precomplex` / `select-precomplex` / `pack-step`:
 
 ```bash
 pip install "chemvas[rdkit]"
 chemvas
 ```
 
-`pip install chemvas` skips RDKit; drawing and export still work. Local
-Windows builds: [packaging notes](https://github.com/dhsohn/Chemvas/blob/main/packaging/windows/README.md).
+`pip install chemvas` skips RDKit. Drawing, `.chemvas` save/open, figure export
+(SVG/PDF/PNG/TIFF, including editable SVG), and plain MOL import/export remain
+available. Local Windows builds:
+[packaging notes](https://github.com/dhsohn/Chemvas/blob/main/packaging/windows/README.md).
 
 ## Your first reaction scheme
 

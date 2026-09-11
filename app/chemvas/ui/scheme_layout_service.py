@@ -369,7 +369,18 @@ def plan_canvas_layout(
     wrapped = request.max_row_width is not None
     lines, columns, slots, row_widths = _line_geometry(request, rows, arrow_bounds)
     total_width = max(row_widths.values())
-    top = 0.0
+    # Keep the requested content in its source region, not at the sheet centre.
+    # Unassigned annotations do not participate in this anchor and stay put.
+    source_bounds = QRectF(rows[0][0].bounds)
+    for measured_row in rows:
+        for block in measured_row:
+            source_bounds = source_bounds.united(block.bounds)
+            for caption in block.captions:
+                source_bounds = source_bounds.united(caption.bounds)
+    for bounds in arrow_bounds.values():
+        source_bounds = source_bounds.united(bounds)
+    origin_x, origin_y = source_bounds.left(), source_bounds.top()
+    top = origin_y
     atom_moves: list[tuple[LayoutBlock, float, float]] = []
     item_moves: dict[tuple[str, int], tuple[float, float]] = {}
     placements: list[dict[str, object]] = []
@@ -389,12 +400,15 @@ def plan_canvas_layout(
             above = max(above, arrow_axes[index] - arrow_bounds[index].top())
             below = max(below, arrow_bounds[index].bottom() - arrow_axes[index])
         axis = top + above
-        cursor = 0.0 if wrapped else (total_width - row_widths[key]) / 2
+        cursor = origin_x + (0.0 if wrapped else (total_width - row_widths[key]) / 2)
         if line.leading_arrow is not None:
             index = line.leading_arrow
             bounds = arrow_bounds[index]
-            item_moves[("arrows", index)] = (-bounds.left(), axis - arrow_axes[index])
-            cursor = bounds.width() + request.gap
+            item_moves[("arrows", index)] = (
+                origin_x - bounds.left(),
+                axis - arrow_axes[index],
+            )
+            cursor = origin_x + bounds.width() + request.gap
         if wrapped:
             line_provenance.append(
                 {
@@ -462,7 +476,7 @@ def plan_canvas_layout(
         "row_count": len(lines),
         "block_count": len(atom_moves),
         "layout_width": total_width,
-        "layout_height": top - request.row_gap,
+        "layout_height": top - request.row_gap - origin_y,
         "placements": placements,
     }
     if wrapped:

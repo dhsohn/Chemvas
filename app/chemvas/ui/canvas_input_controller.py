@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from PyQt6.QtCore import QEvent, Qt
 from PyQt6.QtGui import QKeySequence, QNativeGestureEvent
 from PyQt6.QtWidgets import QGraphicsTextItem, QGraphicsView
@@ -25,6 +27,9 @@ from chemvas.ui.scene_group_operations import group_selection_for, ungroup_selec
 from chemvas.ui.select_all_access import select_all_scene_items_for
 from chemvas.ui.selection_collection_access import selected_scene_items_for
 
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
 
 class CanvasInputController:
     def __init__(
@@ -37,6 +42,7 @@ class CanvasInputController:
         hover_controller,
         chemdraw_shortcut_service=None,
         tool_mode_controller,
+        cancel_active_gesture: Callable[[], None] | None = None,
     ) -> None:
         self.canvas = canvas
         self.insert_state = insert_state_for(canvas)
@@ -46,6 +52,7 @@ class CanvasInputController:
         self.hover = hover_controller
         self.chemdraw_shortcut_service = chemdraw_shortcut_service
         self.tool_mode_controller = tool_mode_controller
+        self._cancel_active_gesture = cancel_active_gesture
 
     @property
     def history(self):
@@ -189,6 +196,8 @@ class CanvasInputController:
         elif self.insert_state.smiles_active:
             cancel_smiles_insert_for(self.canvas)
         else:
+            if self._cancel_active_gesture is not None:
+                self._cancel_active_gesture()
             # Tool deactivation owns gesture rollback and note commits.
             # Re-enter Select even when already active to cancel its drag.
             self.tool_mode_controller.set_tool("select")

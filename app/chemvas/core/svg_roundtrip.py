@@ -113,11 +113,10 @@ def extract_chemvas_svg_payload(path: PathType) -> dict[str, Any]:
 def _parse_svg_tree(
     path: PathType, *, error_message: str
 ) -> ET.ElementTree[ET.Element[str]]:
-    try:
-        with Path(path).open("rb") as stream:
-            data = stream.read(_MAX_SVG_FILE_BYTES + 1)
-    except OSError as exc:
-        raise ValueError(error_message) from exc
+    # Filesystem failures are not corrupt SVG metadata. Preserve the original
+    # OSError (including errno and filename) for the caller's load/export error.
+    with Path(path).open("rb") as stream:
+        data = stream.read(_MAX_SVG_FILE_BYTES + 1)
     if len(data) > _MAX_SVG_FILE_BYTES:
         raise ValueError(error_message)
     # xml.etree expands internal entities, so a crafted DTD ("billion laughs")

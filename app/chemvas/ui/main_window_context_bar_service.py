@@ -4,6 +4,7 @@ from PyQt6.QtCore import QSize, Qt
 from PyQt6.QtWidgets import (
     QButtonGroup,
     QSizePolicy,
+    QSlider,
     QStackedWidget,
     QToolBar,
     QToolButton,
@@ -72,6 +73,9 @@ class MainWindowContextBarService:
         self._mark_buttons: dict[str, QToolButton] = {}
         self._arrow_group: QButtonGroup | None = None
         self._arrow_buttons: dict[str, QToolButton] = {}
+        self._arrow_width_slider: QSlider | None = None
+        self._arrow_head_slider: QSlider | None = None
+        self._arrow_slider_default_ranges: dict[QSlider, tuple[int, int]] = {}
         self._bracket_group: QButtonGroup | None = None
         self._bracket_buttons: dict[str, QToolButton] = {}
 
@@ -97,6 +101,12 @@ class MainWindowContextBarService:
         self._mark_buttons = context_pages.mark_buttons
         self._arrow_group = context_pages.arrow_group
         self._arrow_buttons = context_pages.arrow_buttons
+        self._arrow_width_slider = context_pages.arrow_width_slider
+        self._arrow_head_slider = context_pages.arrow_head_slider
+        self._arrow_slider_default_ranges = {
+            slider: (slider.minimum(), slider.maximum())
+            for slider in (self._arrow_width_slider, self._arrow_head_slider)
+        }
         self._bracket_group = context_pages.bracket_group
         self._bracket_buttons = context_pages.bracket_buttons
         self._bond_length_spin = context_pages.bond_length_spin
@@ -215,7 +225,28 @@ class MainWindowContextBarService:
         canvas = self._active_canvas_or_none_for_window(window)
         if canvas is None:
             return
-        kind = tool_settings_state_for(canvas).active_arrow_type
+        settings = tool_settings_state_for(canvas)
+        kind = settings.active_arrow_type
+        for slider, current, factor in (
+            (self._arrow_width_slider, settings.arrow_line_width, 10),
+            (self._arrow_head_slider, settings.arrow_head_scale, 100),
+        ):
+            if slider is not None:
+                # Qt sliders take signed 32-bit integers; keep an extreme but
+                # finite loaded setting from overflowing the UI conversion.
+                value = round(min(current * factor, 2**31 - 1))
+                blocked = slider.blockSignals(True)
+                # A loaded document can have a wider supported setting than
+                # the default slider range. Merely reflecting it must not clamp
+                # or write a different value into that document.
+                # Derive the range from its original UI bounds each time, not
+                # a previous document's extension. Undo and document switches
+                # must restore a useful mouse range for ordinary values.
+                minimum, maximum = self._arrow_slider_default_ranges[slider]
+                slider.setRange(min(minimum, value), max(maximum, value))
+                slider.setValue(value)
+                slider.setToolTip(f"{current:g}")
+                slider.blockSignals(blocked)
         target = self._arrow_buttons.get(kind)
         if isinstance(target, KindMenuButton):
             target.show_kind(kind)

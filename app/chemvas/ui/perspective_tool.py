@@ -29,6 +29,17 @@ class PerspectiveTool(Tool):
     def deactivate(self) -> None:
         self._commit_active_rotation()
 
+    def cancel_active_rotation(self) -> None:
+        try:
+            if self._rotating:
+                self.context.cancel_selection_3d_rotation()
+        finally:
+            # A delayed release or tool switch must not commit the cancelled
+            # preview, even when a rollback observer reports an error.
+            self._last_pos = None
+            self._rotating = False
+            self._axis_lock = None
+
     def _commit_active_rotation(self) -> None:
         if not self._rotating:
             self._last_pos = None

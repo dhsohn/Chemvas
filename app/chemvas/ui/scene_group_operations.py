@@ -6,6 +6,7 @@ from chemvas.domain.transactions import run_rollback_step
 from chemvas.features.graph import (
     adjacency_for_bonds,
     connected_components_for_nodes,
+    reachable_from,
 )
 from chemvas.ui.canvas_atom_graphics_state import visible_atom_item_for
 from chemvas.ui.canvas_bond_graphics_state import bond_items_for_id
@@ -62,7 +63,8 @@ def _atomic_group_change(operation):
 def _push_group_command(canvas, command) -> None:
     history = history_service_for_canvas(canvas)
     try:
-        history.push(command)
+        if history.push(command) is False:
+            raise RuntimeError("Group history push did not commit")
     except Exception as original_error:
         # The ``undo`` attribute is looked up inside this body rather than in a
         # ``partial`` argument, so a command without it becomes a note instead
@@ -135,30 +137,42 @@ def group_selection_for(canvas) -> bool:
     atom_ids, items = _selected_group_members_for(canvas)
     if not atom_ids and not items:
         return False
-    if _selection_unit_count_for(canvas, atom_ids, items) < 2:
-        return False
+    # A persistent group owns whole molecules. Literal partial-atom selection
+    # remains available for direct reshaping, but must not create a group whose
+    # later drag stretches bonds to ungrouped atoms in the same molecule.
+    adjacency = adjacency_for_bonds(bonds_for(canvas))
+    atom_ids = reachable_from(atom_ids, adjacency)
     state = group_state_for(canvas)
     overlapping = group_ids_for_members_for(canvas, atom_ids, items)
+    if not overlapping and _selection_unit_count_for(canvas, atom_ids, items) < 2:
+        return False
+    merged_atom_ids = set(atom_ids)
+    merged_items = list(items)
+    merged_item_ids = set(map(id, merged_items))
+    absorbed_ids: set[int] = set()
+    # Older documents may contain partial-molecule groups. Only normalize those
+    # explicitly absorbed by this Group action, including groups reached when
+    # their remaining molecule atoms join the new group.
+    while remaining := overlapping - absorbed_ids:
+        for group_id in sorted(remaining):
+            group = state.groups[group_id]
+            merged_atom_ids |= group.atom_ids
+            for member in group.items:
+                if id(member) not in merged_item_ids:
+                    merged_item_ids.add(id(member))
+                    merged_items.append(member)
+        absorbed_ids |= remaining
+        merged_atom_ids = reachable_from(merged_atom_ids, adjacency)
+        overlapping = group_ids_for_members_for(canvas, merged_atom_ids, merged_items)
     if len(overlapping) == 1:
         # Selection adds nothing beyond the one group it overlaps: no-op.
         existing = state.groups[next(iter(overlapping))]
         existing_items = set(map(id, existing.items))
-        if atom_ids <= existing.atom_ids and all(
-            id(item) in existing_items for item in items
+        if merged_atom_ids <= existing.atom_ids and all(
+            id(item) in existing_items for item in merged_items
         ):
             return False
     absorbed = [(group_id, state.groups[group_id]) for group_id in sorted(overlapping)]
-    # Union semantics: an absorbed group's unselected members must join the
-    # new group rather than silently losing their membership.
-    merged_atom_ids = set(atom_ids)
-    merged_items = list(items)
-    merged_item_ids = set(map(id, merged_items))
-    for _, group in absorbed:
-        merged_atom_ids |= group.atom_ids
-        for member in group.items:
-            if id(member) not in merged_item_ids:
-                merged_item_ids.add(id(member))
-                merged_items.append(member)
     command = GroupSceneItemsCommand(
         atom_ids=set(merged_atom_ids), items=list(merged_items), absorbed=absorbed
     )
@@ -166,6 +180,7 @@ def group_selection_for(canvas) -> bool:
         remove_group_for(canvas, absorbed_id)
     command.group_id = register_group_for(canvas, merged_atom_ids, merged_items)
     _push_group_command(canvas, command)
+    expand_selection_to_groups_for(canvas)
     refresh_selection_outline_for(canvas)
     return True
 

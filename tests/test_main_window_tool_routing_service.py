@@ -111,7 +111,7 @@ class MainWindowToolRoutingServiceTest(unittest.TestCase):
         self.assertEqual(apply_color.call_args.args[1].name(), "#2f6ed3")
         apply_color.assert_called_once()
         self.assertEqual(
-            [item.data(0) for item in apply_fill.call_args.args[0]], ["ring"]
+            [item.data(0) for item in apply_fill.call_args.args[0]], ["atom", "ring"]
         )
         self.assertEqual(apply_fill.call_args.args[1].name(), "#f4d06f")
         apply_fill.assert_called_once()

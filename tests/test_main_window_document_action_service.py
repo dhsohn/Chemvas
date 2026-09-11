@@ -467,12 +467,16 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
             spawned: list = []
             message_box = mock.Mock()
 
-            result = self.service.load_canvas_from_path(
-                self.window,
-                path,
-                message_box=message_box,
-                target_provider=lambda: spawned.append(object()),
-            )
+            with mock.patch(
+                "chemvas.ui.main_window_document_action_service.record_recent"
+            ) as recent:
+                result = self.service.load_canvas_from_path(
+                    self.window,
+                    path,
+                    message_box=message_box,
+                    target_provider=lambda: spawned.append(object()),
+                )
+            recent.assert_called_once_with(path)
 
             self.assertTrue(result)
             self.assertEqual(spawned, [])  # no duplicate window opened
@@ -1266,6 +1270,74 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
         min_x, min_y, max_x, max_y = model.bounds()
         self.assertAlmostEqual(min_x + (max_x - min_x) / 2.0, 0.0, delta=0.1)
         self.assertAlmostEqual(min_y + (max_y - min_y) / 2.0, 0.0, delta=0.1)
+
+    def test_mol_headers_accept_non_utf8_bytes_without_changing_structure(self) -> None:
+        self.assertTrue(QTest.qWaitForWindowExposed(self.window, 5000))
+        source = MoleculeModel()
+        a = source.add_atom("C", 0.0, 0.0)
+        b = source.add_atom("O", 30.0, 0.0)
+        source.add_bond(a, b)
+        original = write_molfile(source).encode("utf-8")
+        with tempfile.TemporaryDirectory() as temp_dir:
+            for ending in (b"\n", b"\r\n", b"\r"):
+                for header_index in range(3):
+                    with self.subTest(ending=ending, header=header_index):
+                        lines = original.split(b"\n")
+                        lines[header_index] = b"Ester \xc5\x0b\x85 title"
+                        raw = ending.join(lines)
+                        path = Path(temp_dir) / "header.mol"
+                        path.write_bytes(raw)
+                        message_box = mock.Mock()
+                        self.assertTrue(
+                            self.service.load_canvas_from_path(
+                                self.window,
+                                str(path),
+                                message_box=message_box,
+                                target_provider=lambda: self.window,
+                            )
+                        )
+                        message_box.warning.assert_not_called()
+                        canvas = active_canvas_for_window(self.window)
+                        self.assertEqual(
+                            [atom.element for atom in canvas.model.atoms.values()],
+                            ["C", "O"],
+                        )
+                        self.assertEqual(len(canvas.model.bonds), 1)
+                        self.assertIsNone(document_file_path_for(canvas))
+                        self.assertEqual(path.read_bytes(), raw)
+
+    def test_mol_structural_encoding_error_preserves_drawing_and_redo(self) -> None:
+        canvas = active_canvas_for_window(self.window)
+        add_bond_between_points_for(canvas, QPointF(0, 0), QPointF(20, 0))
+        history = history_service_for_window(self.window)
+        history.undo()
+        self.assertTrue(history.can_redo())
+        before = snapshot_canvas_state_for(canvas)
+        stacks = history.capture_stack_snapshot()
+        lines = write_molfile(MoleculeModel()).encode().split(b"\n")
+        lines[3] += b"\xff"
+        raw = b"\n".join(lines)
+        message_box, target_provider = mock.Mock(), mock.Mock()
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "invalid-body.mol"
+            path.write_bytes(raw)
+            self.assertFalse(
+                self.service.load_canvas_from_path(
+                    self.window,
+                    str(path),
+                    message_box=message_box,
+                    target_provider=target_provider,
+                )
+            )
+            self.assertEqual(path.read_bytes(), raw)
+        target_provider.assert_not_called()
+        message_box.warning.assert_called_once()
+        self.assertIn(
+            "structural data on line 4 is not valid UTF-8",
+            message_box.warning.call_args.args[2],
+        )
+        self.assertEqual(snapshot_canvas_state_for(canvas), before)
+        history.verify_stack_snapshot(stacks)
 
     def test_mol_annotation_mark_failure_restores_the_previous_document(self) -> None:
         canvas = active_canvas_for_window(self.window)

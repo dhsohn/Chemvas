@@ -70,7 +70,7 @@ def export_raster_file(
             save_tiff_with_pillow(image, path, dpi)
             return
         if not image.save(path, image_format):
-            raise ValueError(f"Failed to write {image_format} to {path}.")
+            raise ValueError(f"Failed to write {image_format} output.")
 
 
 __all__ = ["export_raster_file", "save_tiff_with_pillow"]

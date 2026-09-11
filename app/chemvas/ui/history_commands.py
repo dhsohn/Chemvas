@@ -3,7 +3,7 @@ from __future__ import annotations
 import contextlib
 from dataclasses import dataclass, field
 from functools import partial
-from typing import Any, override
+from typing import TYPE_CHECKING, Any, override
 
 from PyQt6 import sip
 from PyQt6.QtCore import Qt
@@ -18,6 +18,9 @@ from chemvas.core.history import (
     restore_history_transaction_for_command,
 )
 from chemvas.domain.transactions import add_recovery_error_note, run_rollback_step
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 from chemvas.ui.atom_coords_access import atom_coords_3d_for_id, pop_atom_coords_3d_for
 from chemvas.ui.atom_label_access import add_or_update_atom_label
 from chemvas.ui.canvas_calculation_plan_state import set_calculation_plan_for
@@ -271,6 +274,68 @@ def _restore_raw_move_item_state(
                 phase=f"restoring a moved item's raw data slot {index}",
             )
     return restored
+
+
+@dataclass
+class SetAnnotationStyleCommand(HistoryCommand):
+    history_transaction_snapshot_covers_state = True
+    history_transaction_owns_exact_state = True
+
+    before_state: dict[str, float | bool]
+    after_state: dict[str, float | bool]
+    apply_style: Callable[[Any, dict[str, float | bool]], None]
+
+    def _apply(self, canvas, state, rollback_state) -> None:
+        transaction = capture_history_transaction_for_command(canvas)
+        try:
+            self.apply_style(canvas, state)
+            release_history_transaction_for_command(canvas, transaction)
+        except Exception as original_error:
+            result = restore_history_transaction_for_command(
+                canvas, transaction, original_error
+            )
+            if result.fallback_to_inverse:
+                run_rollback_step(
+                    original_error,
+                    "restoring annotation settings",
+                    lambda: self.apply_style(canvas, rollback_state),
+                )
+            raise
+
+    @override
+    def undo(self, canvas) -> None:
+        self._apply(canvas, self.before_state, self.after_state)
+
+    @override
+    def redo(self, canvas) -> None:
+        self._apply(canvas, self.after_state, self.before_state)
+
+
+@dataclass
+class SetSheetSetupCommand(HistoryCommand):
+    history_transaction_snapshot_covers_state = True
+    history_transaction_owns_exact_state = True
+
+    before: tuple[str, str]
+    after: tuple[str, str]
+    apply_setup: Callable[[Any, str, str], None]
+
+    def _apply(self, canvas, state) -> None:
+        transaction = capture_history_transaction_for_command(canvas)
+        try:
+            self.apply_setup(canvas, *state)
+            release_history_transaction_for_command(canvas, transaction)
+        except Exception as original_error:
+            restore_history_transaction_for_command(canvas, transaction, original_error)
+            raise
+
+    @override
+    def undo(self, canvas) -> None:
+        self._apply(canvas, self.before)
+
+    @override
+    def redo(self, canvas) -> None:
+        self._apply(canvas, self.after)
 
 
 @dataclass
@@ -885,8 +950,10 @@ __all__ = [
     "DeleteSceneItemsCommand",
     "GroupSceneItemsCommand",
     "MoveItemsCommand",
+    "SetAnnotationStyleCommand",
     "SetCalculationPlanCommand",
     "SetSceneGeometryCommand",
+    "SetSheetSetupCommand",
     "UngroupSceneItemsCommand",
     "UpdateSceneItemCommand",
 ]

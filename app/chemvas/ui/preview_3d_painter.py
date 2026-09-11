@@ -114,11 +114,7 @@ def paint_preview_3d_panel(
     painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
     painter.fillRect(widget_rect, QColor(PALETTE["surface_app"]))
 
-    info_items = (
-        preview_info_items(state.formula_text, state.mw_text)
-        if state.scene is not None
-        else []
-    )
+    info_items = preview_info_items(state.formula_text, state.mw_text)
     info_lines = [f"{label}: {value}" for label, value in info_items]
     layout = preview_layout_for_widget(widget_rect, info_lines, base_font)
     caption_font = preview_caption_font(base_font)
@@ -135,6 +131,14 @@ def paint_preview_3d_panel(
         controls_left=state.header_controls_left,
     )
     draw_viewport(painter, layout["viewport"])
+    draw_footer(
+        painter,
+        layout["footer"],
+        items=info_items,
+        item_rects=preview_footer_item_rects(layout["footer"], len(info_items)),
+        label_font=caption_font,
+        value_font=overlay_font,
+    )
 
     if state.scene is None:
         title, detail = preview_empty_state_text(state.message)
@@ -170,14 +174,6 @@ def paint_preview_3d_panel(
 
     draw_projected_scene(painter, state.scene, projected_atoms)
     draw_interaction_hints(painter, layout["viewport"], font=caption_font)
-    draw_footer(
-        painter,
-        layout["footer"],
-        items=info_items,
-        item_rects=preview_footer_item_rects(layout["footer"], len(info_items)),
-        label_font=caption_font,
-        value_font=overlay_font,
-    )
 
 
 __all__ = [

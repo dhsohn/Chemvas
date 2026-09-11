@@ -112,7 +112,7 @@ def compose_document_state(
 
     model = MoleculeModel(atoms=atoms, bonds=bonds, atom_annotations=annotations)
     marks = _annotation_marks(
-        atoms,
+        model,
         annotations,
         mark_distance=(
             float(cast("Any", settings["bond_length_px"]))
@@ -154,6 +154,9 @@ def _images(
         source = image.get("source")
         if not isinstance(source, str) or not source.strip() or "\x00" in source:
             raise ValueError(f"{name} source must be a non-empty file path")
+        _text(source, f"{name} source")
+        if "://" in source or source.lower().startswith("data:"):
+            raise ValueError(f"{name} source must be a local file path, not a URL")
         if source_reader is None:
             raise ValueError("Image compositions require an image_source_reader.")
         x = _number(image.get("x"), f"{name} x")
@@ -166,7 +169,10 @@ def _images(
         lock_aspect = image.get("lock_aspect", True)
         if type(lock_aspect) is not bool:
             raise ValueError(f"{name} lock_aspect must be a boolean")
-        data = source_reader(source)
+        try:
+            data = source_reader(source)
+        except (OSError, ValueError) as exc:
+            raise ValueError(f"{name} source: {exc}") from exc
         byte_count += len(data)
         if byte_count > MAX_DOCUMENT_IMAGE_BYTES:
             raise ValueError("Combined image bytes exceed the 64 MiB document limit.")
@@ -282,12 +288,15 @@ def _settings(value: object) -> dict[str, object]:
     # requires the full key set, which `validate_settings_state` enforces
     # below once the defaults have been filled in.
     if not set(overrides) <= SETTINGS_KEYS:
-        raise ValueError("settings has unknown keys")
+        unknown = sorted(str(key) for key in set(overrides) - SETTINGS_KEYS)
+        raise ValueError(f"settings has unknown keys: {unknown}")
     # Composition v1 is a bounded authoring API even though persisted v7
     # documents retain their older, unbounded-above compatibility contract.
     overridden_font_size = overrides.get("text_font_size")
     if type(overridden_font_size) is int and overridden_font_size > 96:
-        raise ValueError("Invalid Chemvas file.")
+        raise ValueError(
+            "Invalid Chemvas file. settings.text_font_size must be an integer from 6 to 96 in compositions."
+        )
     settings.update(overrides)
     # Overridden values feed the mark-distance arithmetic before the final
     # document validation runs, so they must be proven valid here first.
@@ -311,9 +320,7 @@ def _notes(value: object) -> list[dict[str, object]]:
         if "runs" in note:
             state["text"], state["html"] = _note_runs(note, index)
         else:
-            text = note.get("text")
-            if not isinstance(text, str):
-                raise ValueError(f"note {index} text must be a string")
+            text = _text(note.get("text"), f"note {index} text")
             state["text"] = text
             if "style" in note:
                 state["html"] = _styled_note_html(text, note.get("style"), index)
@@ -374,9 +381,7 @@ def _note_runs(note: Mapping[str, object], index: int) -> tuple[str, str]:
         name = f"note {index} run {run_index}"
         run = _mapping(raw, name)
         _keys(run, required=frozenset(("text",)), allowed={"text", "style"}, name=name)
-        text = run.get("text")
-        if not isinstance(text, str):
-            raise ValueError(f"{name} text must be a string")
+        text = _text(run.get("text"), f"{name} text")
         texts.append(text)
         # A CRLF belongs to the concatenated source, even across empty runs.
         html_text = (
@@ -403,6 +408,18 @@ def _note_text_html(text: str) -> str:
     return escape(normalized, quote=False).replace("\n", "<br>")
 
 
+def _text(value: object, name: str) -> str:
+    if not isinstance(value, str):
+        raise ValueError(f"{name} must be a string")
+    try:
+        value.encode("utf-8")
+    except UnicodeEncodeError as exc:
+        raise ValueError(
+            f"{name} must contain valid Unicode (no lone surrogates)"
+        ) from exc
+    return value
+
+
 def _safe_note_html(raw_html: str, index: int) -> str:
     sanitized = sanitize_note_html(raw_html)
     if sanitized is None:
@@ -422,7 +439,9 @@ def _arrows(value: object) -> list[dict[str, object]]:
         )
         kind = arrow.get("kind")
         if not isinstance(kind, str) or kind not in VALID_ARROW_KINDS:
-            raise ValueError(f"arrow {index} kind is not supported")
+            raise ValueError(
+                f"arrow {index} kind is not supported; choose from {sorted(VALID_ARROW_KINDS)}"
+            )
         state: dict[str, object] = {
             "kind": kind,
             "start": list(_point(arrow.get("start"), f"arrow {index} start")),
@@ -562,16 +581,18 @@ def _ring_fills(value: object, atoms: Mapping[int, Atom]) -> list[dict[str, obje
 
 
 def _annotation_marks(
-    atoms: Mapping[int, Atom],
+    model: MoleculeModel,
     annotations: Mapping[int, Mapping[str, int]],
     *,
     mark_distance: float,
 ) -> list[dict[str, object]]:
     marks: list[dict[str, object]] = []
     for atom_id, annotation in sorted(annotations.items()):
-        atom = atoms[atom_id]
+        atom = model.atoms[atom_id]
         for mark_index, kind in enumerate(annotation_mark_kinds(annotation)):
-            direction_x, direction_y = annotation_mark_direction(mark_index)
+            direction_x, direction_y = annotation_mark_direction(
+                mark_index, model=model, atom_id=atom_id
+            )
             dx = direction_x * mark_distance
             dy = direction_y * mark_distance
             marks.append(
@@ -634,7 +655,11 @@ def _keys(
     name: str,
 ) -> None:
     if not required <= set(value) or not set(value) <= set(allowed):
-        raise ValueError(f"{name} has missing or unknown keys")
+        missing = sorted(required - set(value))
+        unknown = sorted(str(key) for key in set(value) - set(allowed))
+        raise ValueError(
+            f"{name} has missing or unknown keys: missing={missing}, unknown={unknown}"
+        )
 
 
 def _id(value: object, name: str) -> int:

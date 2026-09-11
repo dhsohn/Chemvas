@@ -89,23 +89,8 @@ def flip_center_for_selection(
     return QPointF((min(xs) + max(xs)) / 2.0, (min(ys) + max(ys)) / 2.0)
 
 
-def center_for_flip_group(
-    atom_ids: set[int],
-    items: Sequence[QGraphicsItem],
-    *,
-    bounding_box_center_for_atoms: Callable[[set[int]], QPointF | None],
-    flip_center_for_selection_getter: Callable[
-        [set[int], Sequence[QGraphicsItem]], QPointF | None
-    ],
-) -> QPointF | None:
-    if atom_ids:
-        return bounding_box_center_for_atoms(atom_ids)
-    return flip_center_for_selection_getter(set(), items)
-
-
 __all__ = [
     "bounds_from_points",
-    "center_for_flip_group",
     "flip_bounds_for_item",
     "flip_center_for_selection",
     "flip_point",

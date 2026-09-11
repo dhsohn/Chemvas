@@ -16,7 +16,10 @@ from chemvas.features.rendering import (
 from chemvas.ui.atom_label_access import add_or_update_atom_label, prompt_atom_label_for
 from chemvas.ui.canvas_hover_state import hover_state_for
 from chemvas.ui.canvas_model_access import atom_for_id, bond_for_id
-from chemvas.ui.input_view_access import shortcut_modifiers_for
+from chemvas.ui.input_view_access import (
+    chemdraw_shortcut_text_for,
+    shortcut_modifiers_for,
+)
 from chemvas.ui.structure_build_access import (
     fuse_benzene_to_bond_for,
     fuse_chair_to_bond_for,
@@ -198,7 +201,7 @@ class CanvasChemdrawShortcutService:
         if event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
             prompt_atom_label_for(self.canvas, atom_id)
             return True
-        text = event.text()
+        text = chemdraw_shortcut_text_for(event)
         if not text:
             return False
         if text == "+":
@@ -284,7 +287,7 @@ class CanvasChemdrawShortcutService:
                     bond_id, DOTTED_DOUBLE_STYLE_DEFAULT, 2
                 )
                 return True
-        text = event.text()
+        text = chemdraw_shortcut_text_for(event)
         if text == "d":
             self.scene_transform.apply_bond_style(bond_id, "dotted", 1)
             return True

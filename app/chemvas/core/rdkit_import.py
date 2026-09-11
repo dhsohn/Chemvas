@@ -23,6 +23,18 @@ class RDKitImportHelper:
         Chem, AllChem = rdkit
         mol = Chem.MolFromSmiles(smiles)
         if mol is None:
+            unsanitized = Chem.MolFromSmiles(smiles, sanitize=False)
+            if unsanitized is not None:
+                try:
+                    Chem.SanitizeMol(unsanitized)
+                except Exception as exc:
+                    self.adapter.last_error = (
+                        "Cannot insert this SMILES: the aromatic system cannot be "
+                        "Kekulized."
+                        if isinstance(exc, Chem.KekulizeException)
+                        else f"Invalid SMILES chemical structure: {exc}"
+                    )
+                    return None
             self.adapter.last_error = (
                 "Invalid SMILES string. Example: CC(=O)O (acetic acid), "
                 "c1ccccc1 (benzene), C1CCCCC1 (cyclohexane)."
@@ -98,6 +110,13 @@ class RDKitImportHelper:
                 "and relative or racemic stereochemistry are not supported."
             )
             return None
+        has_specified_stereo = any(
+            atom.GetChiralTag() != Chem.ChiralType.CHI_UNSPECIFIED
+            for atom in mol.GetAtoms()
+        )
+        expected_stereo_smiles = (
+            Chem.MolToSmiles(mol, canonical=True) if has_specified_stereo else None
+        )
         mol = self._kekulized_import_mol(Chem, mol)
         bond_orders = {
             Chem.BondType.SINGLE: 1,
@@ -182,6 +201,17 @@ class RDKitImportHelper:
                     "wedge" if direction == Chem.BondDir.BEGINWEDGE else "hash"
                 )
 
+        if expected_stereo_smiles is not None:
+            restored = self.adapter._build_conversion_rdkit_mol(model)
+            if restored is None or (
+                Chem.MolToSmiles(restored, canonical=True) != expected_stereo_smiles
+            ):
+                self.adapter.last_error = (
+                    "Cannot insert this SMILES: the generated 2D depiction does "
+                    "not preserve its specified tetrahedral stereochemistry. "
+                    "No structure was inserted."
+                )
+                return None
         return model
 
     @staticmethod
@@ -253,8 +283,13 @@ class RDKitImportHelper:
         # InChI is computed separately so that a failure in the InChI backend
         # cannot blank out the formula/MW/SMILES we already have.
         try:
-            inchi = Chem.MolToInchi(mol) or None
-            inchikey = Chem.MolToInchiKey(mol) or None
+            # Use the same assigned chemical graph as SMILES. InChI otherwise
+            # re-perceives stereo from the drawing's coordinates and can erase a
+            # valid tetrahedral tag (for example quinine's vinyl-bearing carbon).
+            identifier_mol = Chem.Mol(mol)
+            identifier_mol.RemoveAllConformers()
+            inchi = Chem.MolToInchi(identifier_mol) or None
+            inchikey = Chem.MolToInchiKey(identifier_mol) or None
         except Exception:
             inchi = None
             inchikey = None

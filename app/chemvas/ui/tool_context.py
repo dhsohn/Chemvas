@@ -230,6 +230,9 @@ class ToolContext:
     def end_selection_3d_rotation(self) -> None:
         self.selection_rotation_controller.end_selection_3d_rotation()
 
+    def cancel_selection_3d_rotation(self) -> None:
+        self.selection_rotation_controller.cancel_selection_3d_rotation()
+
     def apply_bond_style(self, bond_id: int, style: str, order: int) -> None:
         self.scene_transform_controller.apply_bond_style(bond_id, style, order)
 

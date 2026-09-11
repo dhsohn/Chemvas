@@ -499,7 +499,12 @@ class MainWindowToolbarActionsTest(unittest.TestCase):
         active_canvas_for_window(self.window).services.tool_controller.tools[
             "color"
         ] = color_tool
-        selected_items = [_FakeItem("atom"), _FakeItem("ring"), _FakeItem("note")]
+        selected_items = [
+            _FakeItem("atom"),
+            _FakeItem("bond"),
+            _FakeItem("ring"),
+            _FakeItem("note"),
+        ]
         scene = SimpleNamespace(selectedItems=lambda: selected_items)
 
         with (
@@ -542,12 +547,12 @@ class MainWindowToolbarActionsTest(unittest.TestCase):
         apply_color.assert_called_once()
         self.assertEqual(
             [item.data(0) for item in apply_color.call_args.args[0]],
-            ["atom", "ring", "note"],
+            ["atom", "bond", "ring", "note"],
         )
         self.assertEqual(apply_color.call_args.args[1].name(), "#2f6ed3")
         apply_fill.assert_called_once()
         self.assertEqual(
             [item.data(0) for item in apply_fill.call_args.args[0]],
-            ["ring"],
+            ["atom", "bond", "ring"],
         )
         self.assertEqual(apply_fill.call_args.args[1].name(), "#f4d06f")

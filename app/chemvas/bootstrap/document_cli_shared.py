@@ -13,7 +13,11 @@ MAX_GRAPHICS_RECORDS = 20_000
 
 
 def json_text(payload: object) -> str:
-    return json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
+    text = json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
+    # POSIX byte filenames can carry surrogate-escaped characters. Escape only
+    # those unencodable code points as JSON \u sequences; keep normal Unicode
+    # readable and never send raw filesystem bytes into the UTF-8 report.
+    return text.encode("utf-8", errors="backslashreplace").decode("utf-8")
 
 
 def qt_platform(platform: str | None = None) -> str:
@@ -63,7 +67,7 @@ def offscreen_canvas(
         os.environ["LC_ALL"] = "C.UTF-8"
         os.environ["LANG"] = "C.UTF-8"
     try:
-        from PyQt6.QtCore import QEvent
+        from PyQt6.QtCore import QEvent, Qt
         from PyQt6.QtWidgets import QApplication
 
         from chemvas.adapters.qt.renderer import Renderer
@@ -75,6 +79,9 @@ def offscreen_canvas(
         existing = QApplication.instance()
         if existing is not None and not isinstance(existing, QApplication):
             raise RuntimeError(f"{command} requires a QApplication instance")
+        if existing is None:
+            # Match desktop scene typography, independently of the screen DPI.
+            QApplication.setAttribute(Qt.ApplicationAttribute.AA_Use96Dpi)
         application = existing or QApplication([f"chemvas-{command}"])
         if existing is None:
             # The offscreen plugin may name a missing generic family on macOS.

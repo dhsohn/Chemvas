@@ -520,7 +520,11 @@ def _path_precheck(
         blocking_reasons.append("endpoint_charge_mismatch")
     if not multiplicity_matches:
         blocking_reasons.append("endpoint_multiplicity_mismatch")
-    if not single_component_endpoints:
+    if not single_component_endpoints and (
+        reactant_component_count != 2 or product_component_count != 2
+    ):
+        blocking_reasons.append("precomplex_endpoint_topology_not_supported")
+    elif not single_component_endpoints:
         try:
             _validate_reviewed_precomplex_pair(
                 document_state, plan, step, inventory=inventory

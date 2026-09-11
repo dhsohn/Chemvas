@@ -40,31 +40,47 @@ connectors snap to the energy-level ends.
 
 ![Arrows and labels: draw arrows, double-click to label, draw a reaction profile with snapping lines](images/walkthrough-arrows.gif)
 
-**Select, move, rotate, align** — move a molecule, rotate the selection with
+**Select, move, rotate, align** — move an atom, rotate the selection with
 its knob, flip, align, and distribute.
 
 ![Select, move, rotate, align: move, rotate knob, flip, align middle, distribute](images/walkthrough-editing.gif)
 
 - **Bonds** — single / double / triple, bold, wedge & hash; 30° angle snapping and
   a consistent default bond length.
-- **Rings & templates** — benzene, cycloalkanes, chair/boat conformers placed by
-  live preview and click-to-insert.
+- **Rings & templates** — benzene, cycloalkanes, and the two chair orientations
+  placed by live preview and click-to-insert. The boat template is available
+  through [`insert-template`](AGENT_CLI.md), not the desktop Ring bar.
+  Fusion detects occupied sides from graph rings, including imports without
+  decorative fills. Ring Fill accepts a complete selected graph cycle; select
+  all its atoms/bonds, not a partial arc. Ambiguous ring perception may still
+  require a manual choice.
 - **Arrows** — reaction, equilibrium (balanced, or favored in either direction
   with a shortened harpoon), resonance, curved, dashed, and arc arrows (90°,
   180°, 270° for catalytic cycles; hold `Shift` while dragging to bulge the
-  arc to the other side) with adjustable width and head scale. Arrow and line
+  arc to the other side). Width and head scale are document-wide: changing them
+  restyles existing arrows immediately and supports Undo. Default is 1.5 / 0.3;
+  ACS is 1.2 / 0.3. Width controls step by 0.1 and reflect presets and loaded
+  settings. `Shift` does not lock an Arrow drag's angle; that lock belongs to
+  the Line tool. Arrow and line
   endpoints snap to nearby arrow and line endpoints while drawing, within
   twelve pixels of the cursor whatever the zoom, and a ring marks an end
   that has taken one. A snap takes precedence over the `Shift` angle lock.
   Moving an arrow or line — or a selection containing one — connects the
   same way: carrying an end within reach of another item's end joins them
   exactly, and carrying on past it leaves the drag where the pointer is.
+  Snapping aligns endpoints once; it does not create a persistent attachment.
 - **Arrow labels** — double-click an arrow or line to give it a label above and
   below, such as rate constants. `_` starts a subscript and `^` a superscript,
-  and braces set the exact range: `K_{2}CO_{3}`, `H_{2}SO_{4}`, `ΔG^{‡}`.
+  and a non-nesting braced group sets the range: `K_{2}CO_{3}`, `H_{2}SO_{4}`, `ΔG^{‡}`.
   Without braces, a marker applies until the next space, `_`, or `^`;
   `K_2CO_3` therefore also puts `CO` in the subscript. The dialog previews
   both labels as you type so you can check their scope before choosing OK.
+  A group ends at the first `}`; backslash escaping is not supported. A marker
+  at the end or followed by whitespace is literal (`t_ Bu` keeps the underscore
+  and the space; `t\_Bu` does not escape it). Each single-line field has a
+  200-character limit and a counter; pastes beyond the limit are truncated.
+  Use a Note for longer or multiline text. Embedded line breaks in externally
+  supplied labels are not a supported multiline layout and render as spaces.
   Labels take
   the text font settings in force when they are created or edited, and move
   with their arrow.
@@ -75,7 +91,14 @@ its knob, flip, align, and distribute.
   follow the arrow line width; bold lines use the bold bond width. Lines are
   saved in the document's arrow list.
 - **Brackets & annotations** — square / round / curly brackets, dagger (`†`) and
-  double dagger (`‡`) annotation objects.
+  double dagger (`‡`) annotation objects. In Select, pick near a bracket stroke
+  and continue dragging to move it.
+- **Orbitals** — s, p, sp, sp2, sp3, d, MO bonding and MO antibonding. Select an
+  orbital, then click it again to show scale and rotation handles. Phase On/Off
+  is document-wide and updates existing orbitals with Undo support.
+- **Notes** — Return/Enter retains empty paragraphs. Center/right alignment
+  uses the longest natural line's width; notes still auto-size without a saved
+  wrapping width. A note's background box is painted behind its text.
 - **Atom labels** — elements, charges, radicals, and common alias labels
   (`Me`, `Et`, `OH`, `NH2`, `SH`, `Ph`, `PPh3`, `OMe`, `Boc`, `CO2Me`, `t-Bu`, `tBu`,
   `i-Pr`, `CF3`, `OTs`, `Ts`, `OMs`, `Ms`, `OTf`, `Tf`, `Ns`, `OAc`, `Ac`).
@@ -103,7 +126,19 @@ its knob, flip, align, and distribute.
   select / move, an eraser tool (click or drag to erase; atoms a
   deletion leaves with no bond and nothing visible — no label or mark — are
   removed with it), horizontal & vertical flip, perspective rotation, and
-  undo/redo. Nudging and aligning selections restore their recorded coordinates
+  undo/redo. Flip mirrors geometry without swapping wedge/hash styles and can
+  invert stereocentres; mirroring a whole chiral molecule gives its enantiomer.
+  Check the chemistry after flipping; use in-plane rotation for orientation
+  changes that should not mirror the molecule.
+  Perspective refuses affected components with wedge/hash stereo before changing
+  the drawing; use in-plane transforms for those components. Group includes
+  complete connected molecules, and explicitly regrouping an older partial group
+  repairs its membership without changing groups automatically on load.
+  Rotation and flips share one selection/group pivot. Notes, images, shapes and
+  TS brackets orbit that pivot but remain upright/axis-aligned.
+  Pressing an unselected atom and dragging moves that atom; pressing a bond
+  moves its two atoms. Select the whole molecule first to drag it as a unit.
+  Nudging and aligning selections restore their recorded coordinates
   exactly, including existing perspective depth.
   With Select, press near a line or arrow's stroke to select it and keep
   dragging to move it in the same gesture. The click margin is measured on
@@ -112,7 +147,9 @@ its knob, flip, align, and distribute.
   threshold leave the drawing and undo/redo stacks unchanged. Click an already
   selected stroke to toggle its endpoint handles.
 - **Desktop menus** — standard File / Edit / View menus, including a
-  **Canvas Size** dialog for the sheet size and orientation.
+  **Canvas Size** dialog for the sheet size and orientation. Changes support
+  Undo/Redo; off-sheet objects remain reachable by scrolling, not deleted or fitted
+  into the sheet. Sheet-only export/check boundaries still use the actual sheet.
 - **Keyboard shortcuts** — tool selection and atom/bond editing under the pointer
   (see [Keyboard shortcuts](#keyboard-shortcuts)).
 
@@ -300,15 +337,15 @@ edit it with the keys below.
 
 - **Empty canvas (tool hotkeys):** Select/Marquee `Space`, Bond `X`, Atom `A`,
   Text `T`, Arrow `E`, Benzene `J`, Brackets `Shift+T`, Orbitals `Shift+G`,
-  Chemical symbols `Shift+E`, Perspective `Alt+D`
-- **Atom hotkeys (hover over an atom):** element/alias labels
-  `c n o s p f h b i l m e r x d` and `Shift+f/p/a/b/s/n/e/z/m/l/o/q/h/y`, charge `+`/`-`,
+  Charge / Radical (Mark) `Shift+E`, Perspective `Alt+D`
+- **Atom hotkeys (hover over an atom):** [element/alias label map](#atom-label-hotkey-map), charge `+`/`-`,
   edit label `Enter`, sprout `0/1/2/3/a/4/5/6/7/8/9/z/v/u` (`9` = gem-dimethyl)
 - **Bond hotkeys (hover over a bond):** Single `1`, Double `2`, Triple `3`,
   Bold `b`/`Shift+B`, Wedge `w`, Hash `h`/`Shift+H`, Dashed `d`/`Shift+D`,
   double-bond position `l`/`c`/`r`, Benzene fusion `a`,
   Ring fusion `4/5/6/7/8`, Chair fusion `9/0`
 - **Objects:** Flip Horizontal `Ctrl+Shift+H`, Flip Vertical `Ctrl+Shift+V`,
+  both mirror geometry and can invert stereocentres (see Editing above);
   Rotate selection `Alt+Up/Down` (15°) and `Alt+Left/Right` (1°),
   Nudge selection `Shift+Arrows` (10 pt); **Edit ▸ Align** (left, center,
   right, top, middle, bottom) and **Edit ▸ Distribute** (horizontally,
@@ -323,6 +360,41 @@ edit it with the keys below.
   `Delete`/`Backspace` (delete selection, or edit/delete the hovered atom/bond),
   `Esc` (cancel template / SMILES insertion; otherwise cancel the active gesture
   and return to Select, or commit and leave note editing)
+
+### Atom-label hotkey map
+
+These keys replace the hovered atom's label; uppercase entries mean `Shift` plus
+the key. A displayed label is not a guarantee of chemical conversion support.
+
+| Key | Label | With Shift → label |
+| --- | --- | --- |
+| `a` | — (sprout benzene) | `Ac` |
+| `b` | `Br` | `B` |
+| `c` | `C` | `Cl` |
+| `d` | `D` | — |
+| `e` | `Et` | `CO2Me` |
+| `f` | `F` | `CF3` |
+| `h` | `H` | `Cbz` |
+| `i` | `I` | — |
+| `k` | `SO2` | `t-Bu` |
+| `l` | `Cl` | `Li` |
+| `m` | `Me` | `MgBr` |
+| `n` | `N` | `NO2` |
+| `o` | `O` | `OMe` |
+| `p` | `P` | `Ph` |
+| `q` | `O` | `Fmoc` |
+| `r` | `R` | — |
+| `s` | `S` | `Si` |
+| `w` | `N` | — |
+| `x` | `X` | — |
+| `y` | — | `Boc` |
+| `z` | — (sprout) | `N3` |
+
+`NO2`, `N3`, `MgBr`, `Fmoc`, `Cbz`, `SO2`, `R`, `X`, and `D` are drawing labels
+without supported chemical conversion; they do not provide Molecule Info
+identifiers or 3D export. In particular, `D` does not implement isotope support.
+Other abbreviation labels still have the attachment and conversion limits in
+[Chemistry I/O](#chemistry-io).
 
 ### Shortcut compatibility
 
@@ -342,4 +414,5 @@ These are known gaps, not bugs — contributions welcome:
 - **Multi-molecule / reaction-scheme 3D export** and richer template libraries.
 - **Deliberately out of scope for now:** printing (export a PDF instead),
   persistent preferences (every document starts from the ACS 1996 defaults),
-  pasting external clipboard content, and drag-and-drop file open.
+  general external text/structure clipboard import, and drag-and-drop file open.
+  External clipboard images can already be pasted; see [Image objects](IMAGE_OBJECTS.md).

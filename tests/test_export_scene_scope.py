@@ -2,12 +2,16 @@ from __future__ import annotations
 
 import os
 
+import pytest
+
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PyQt6.QtCore import QRectF
+from PyQt6.QtCore import QRectF, Qt
+from PyQt6.QtGui import QBrush, QColor, QPainterPath, QPen
 from PyQt6.QtWidgets import (
     QApplication,
     QGraphicsItemGroup,
+    QGraphicsPathItem,
     QGraphicsRectItem,
     QGraphicsScene,
 )
@@ -59,6 +63,22 @@ def test_export_scene_scope_prefers_custom_export_bounds() -> None:
     item = _ExportBoundsRectItem(0.0, 0.0, 100.0, 100.0)
 
     assert item_export_bounds(item) == QRectF(2.0, 3.0, 4.0, 5.0)
+
+
+@pytest.mark.parametrize("outline,fill", [(False, False), (True, False), (False, True)])
+def test_shape_export_bounds_exclude_only_shapes_without_visible_paint(outline, fill):
+    app = QApplication.instance() or QApplication([])
+    path = QPainterPath()
+    path.addRect(QRectF(300, 200, 60, 50))
+    item = QGraphicsPathItem(path)
+    item.setData(0, "shape")
+    item.setPen(QPen(Qt.GlobalColor.black) if outline else QPen(Qt.PenStyle.NoPen))
+    item.setBrush(QColor("red") if fill else QBrush(Qt.BrushStyle.NoBrush))
+    bounds = item_export_bounds(item)
+    assert bounds.isNull() == (not outline and not fill)
+    if outline or fill:
+        assert bounds == item.sceneBoundingRect()
+    assert app is not None
 
 
 def test_exported_scene_hides_non_export_items_and_restores_outline_mode() -> None:

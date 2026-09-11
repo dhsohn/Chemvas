@@ -583,6 +583,8 @@ def test_structural_suggestion_reports_when_nothing_new() -> None:
     dialog.suggest_mapping_button.click()
 
     assert "No new structural suggestion" in dialog.suggestion_status.text()
+    assert "heuristic found no additional pairs" in dialog.suggestion_status.text()
+    assert "no shared substructure" not in dialog.suggestion_status.text()
     dialog.deleteLater()
 
 

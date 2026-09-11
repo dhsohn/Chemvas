@@ -271,6 +271,16 @@ def begin_selection_rotation_session(
                     start_projection_center_3d=start_projection_center_3d,
                     start_projection_anchor_2d=start_projection_anchor_2d,
                 )
+        if rotating:
+            # The fallback planar coordinates are input to the projection, not
+            # persisted before-state. Keep the exact cache inventory (including
+            # absence) so a first rotation can be undone without dirty residue.
+            state.start_coords_3d = {
+                atom_id: snapshot.coords_3d[atom_id]
+                for atom_id in state.coord_atom_ids
+                if atom_id in snapshot.coords_3d
+            }
+            state.start_positions = ports.atom_positions(state.coord_atom_ids)
         if rotating and on_session_started is not None:
             # The callback publishes the gesture guard. It runs inside the
             # begin savepoint so a failed publication cannot strand a

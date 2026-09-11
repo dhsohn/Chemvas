@@ -64,6 +64,22 @@ def _choices():
     return [GroupLayoutChoice(0, 1, 1, (0,), 0), GroupLayoutChoice(1, 1, 2, (1,))]
 
 
+def test_unsupported_group_image_error_uses_dialog_row_and_group_numbers():
+    from io import BytesIO
+
+    from PIL import Image
+
+    from chemvas.domain.document import image_state_from_bytes
+
+    source = _source()
+    stream = BytesIO()
+    Image.new("RGB", (1, 1), "white").save(stream, format="PNG")
+    source["images"] = [image_state_from_bytes(stream.getvalue())]
+    source["groups"][0]["items"].append(["images", 0])
+    with pytest.raises(ValueError, match=r"Row 1, group 1 contains images.*Remove"):
+        grouped_layout_request(source, _choices())
+
+
 def _snapshot(canvas):
     source, warnings = snapshot_canvas_document_state_with_warnings(canvas)
     assert not warnings

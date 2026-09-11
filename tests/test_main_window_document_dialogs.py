@@ -293,7 +293,7 @@ class MainWindowDocumentDialogsTest(unittest.TestCase):
         ):
             run_sheet_setup_dialog(self.window)
 
-    def test_confirmed_sheet_change_updates_document_chrome_without_history(
+    def test_confirmed_sheet_change_updates_document_chrome_with_one_undo_step(
         self,
     ) -> None:
         canvas = active_canvas_for_window(self.window)
@@ -315,9 +315,18 @@ class MainWindowDocumentDialogsTest(unittest.TestCase):
             "Canvas: ● Canvas 1",
         )
         self.assertEqual(self.window.statusBar().currentMessage(), "Keep this feedback")
-        self.assertEqual(
-            (tuple(history.history), tuple(history.redo_stack)), before_history
-        )
+        self.assertEqual(tuple(history.history[:-1]), before_history[0])
+        self.assertEqual(len(history.history), len(before_history[0]) + 1)
+        self.assertEqual(tuple(history.redo_stack), ())
+        history_service_for_window(self.window).undo()
+        self.assertEqual(sheet_setup_for(canvas), ("A4", "landscape"))
+        self.assertFalse(services.canvas_document_service.is_dirty(canvas))
+        self.assertFalse(self.window.isWindowModified())
+        self.assertEqual(tuple(history.history), before_history[0])
+        self.assertEqual(self.window.statusBar().currentMessage(), "Keep this feedback")
+        history_service_for_window(self.window).redo()
+        self.assertEqual(sheet_setup_for(canvas), ("A4", "portrait"))
+        self.assertTrue(services.canvas_document_service.is_dirty(canvas))
 
     def test_sheet_change_chrome_tracks_saved_orientation_checkpoint(self) -> None:
         services = services_for_window(self.window)

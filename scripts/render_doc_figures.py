@@ -140,6 +140,11 @@ def patch_figure(work: Path, out: Path, document: Path) -> None:
     ring_atoms = [atom for atom in inspection["atoms"] if atom["element"] == "C"]
     pivot = max(ring_atoms, key=lambda atom: atom["x"])
     new_id = inspection["next_atom_id"]
+    adjacent_double = next(
+        bond
+        for bond in inspection["bonds"]
+        if pivot["id"] in (bond["a"], bond["b"]) and bond["order"] == 2
+    )
     patch = write_json(
         work / "patch.json",
         {
@@ -147,6 +152,12 @@ def patch_figure(work: Path, out: Path, document: Path) -> None:
             "version": 1,
             "source_sha256": inspection["source_sha256"],
             "operations": [
+                {
+                    "op": "update_bond",
+                    "a": adjacent_double["a"],
+                    "b": adjacent_double["b"],
+                    "changes": {"order": 1, "style": "single"},
+                },
                 {
                     "op": "add_atom",
                     "atom_id": new_id,

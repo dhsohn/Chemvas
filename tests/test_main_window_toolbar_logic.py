@@ -16,7 +16,7 @@ class MainWindowToolbarLogicTest(unittest.TestCase):
         self.assertEqual(orbital_type_from_label("sp2"), "sp2")
         self.assertEqual(orbital_type_from_label("Unknown"), "s")
         self.assertEqual(arrow_preset_from_label("Bold"), (2.2, 0.4))
-        self.assertEqual(arrow_preset_from_label("Unknown"), (1.2, 0.3))
+        self.assertEqual(arrow_preset_from_label("Unknown"), (1.5, 0.3))
         self.assertEqual(tool_display_name("text"), "Atom")
         self.assertEqual(tool_display_name("note"), "Text")
         self.assertEqual(tool_display_name("benzene"), "Ring")

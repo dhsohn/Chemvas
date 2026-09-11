@@ -16,10 +16,7 @@ from PyQt6.QtWidgets import (
 
 from chemvas.bootstrap.main_window import build_main_window
 from chemvas.core.history import MoveAtomsCommand
-from chemvas.ui.atom_coords_access import (
-    atom_coords_3d_for,
-    current_atom_coords_3d_for,
-)
+from chemvas.ui.atom_coords_access import atom_coords_3d_for
 from chemvas.ui.atom_label_access import (
     add_or_update_atom_label,
     clear_atom_label_for,
@@ -2743,7 +2740,9 @@ class GuiShortcutSmokeTest(unittest.TestCase):
                 stroke_color,
             )
 
-    def test_object_shortcuts_flip_selected_structures_in_place(self) -> None:
+    def test_object_shortcuts_flip_selected_structures_about_one_selection_pivot(
+        self,
+    ) -> None:
         left_a = add_atom_for(active_canvas_for_window(self.window), "C", -60.0, 0.0)
         right_a = add_atom_for(active_canvas_for_window(self.window), "O", -20.0, 20.0)
         add_bond_for(active_canvas_for_window(self.window), left_a, right_a)
@@ -2763,16 +2762,19 @@ class GuiShortcutSmokeTest(unittest.TestCase):
         )
 
         self._select_atom_ids(left_a, right_a, left_b, right_b)
+        # The selected structures share center (10, 15); the unselected third
+        # structure must neither affect that pivot nor move with the selection.
+        before_state = snapshot_canvas_state_for(active_canvas_for_window(self.window))
 
         self._press_key(
             Qt.Key.Key_H,
             Qt.KeyboardModifier.ControlModifier | Qt.KeyboardModifier.ShiftModifier,
         )
         self.assertAlmostEqual(
-            active_canvas_for_window(self.window).model.atoms[left_a].x, -20.0
+            active_canvas_for_window(self.window).model.atoms[left_a].x, 80.0
         )
         self.assertAlmostEqual(
-            active_canvas_for_window(self.window).model.atoms[right_a].x, -60.0
+            active_canvas_for_window(self.window).model.atoms[right_a].x, 40.0
         )
         self.assertAlmostEqual(
             active_canvas_for_window(self.window).model.atoms[left_a].y, 0.0
@@ -2781,10 +2783,10 @@ class GuiShortcutSmokeTest(unittest.TestCase):
             active_canvas_for_window(self.window).model.atoms[right_a].y, 20.0
         )
         self.assertAlmostEqual(
-            active_canvas_for_window(self.window).model.atoms[left_b].x, 80.0
+            active_canvas_for_window(self.window).model.atoms[left_b].x, -20.0
         )
         self.assertAlmostEqual(
-            active_canvas_for_window(self.window).model.atoms[right_b].x, 40.0
+            active_canvas_for_window(self.window).model.atoms[right_b].x, -60.0
         )
         self.assertAlmostEqual(
             active_canvas_for_window(self.window).model.atoms[left_b].y, 10.0
@@ -2804,28 +2806,28 @@ class GuiShortcutSmokeTest(unittest.TestCase):
             Qt.KeyboardModifier.ControlModifier | Qt.KeyboardModifier.ShiftModifier,
         )
         self.assertAlmostEqual(
-            active_canvas_for_window(self.window).model.atoms[left_a].x, -20.0
+            active_canvas_for_window(self.window).model.atoms[left_a].x, 80.0
         )
         self.assertAlmostEqual(
-            active_canvas_for_window(self.window).model.atoms[right_a].x, -60.0
+            active_canvas_for_window(self.window).model.atoms[right_a].x, 40.0
         )
         self.assertAlmostEqual(
-            active_canvas_for_window(self.window).model.atoms[left_a].y, 20.0
+            active_canvas_for_window(self.window).model.atoms[left_a].y, 30.0
         )
         self.assertAlmostEqual(
-            active_canvas_for_window(self.window).model.atoms[right_a].y, 0.0
+            active_canvas_for_window(self.window).model.atoms[right_a].y, 10.0
         )
         self.assertAlmostEqual(
-            active_canvas_for_window(self.window).model.atoms[left_b].x, 80.0
+            active_canvas_for_window(self.window).model.atoms[left_b].x, -20.0
         )
         self.assertAlmostEqual(
-            active_canvas_for_window(self.window).model.atoms[right_b].x, 40.0
+            active_canvas_for_window(self.window).model.atoms[right_b].x, -60.0
         )
         self.assertAlmostEqual(
-            active_canvas_for_window(self.window).model.atoms[left_b].y, 30.0
+            active_canvas_for_window(self.window).model.atoms[left_b].y, 20.0
         )
         self.assertAlmostEqual(
-            active_canvas_for_window(self.window).model.atoms[right_b].y, 10.0
+            active_canvas_for_window(self.window).model.atoms[right_b].y, 0.0
         )
         self.assertAlmostEqual(
             active_canvas_for_window(self.window).model.atoms[untouched_left].x, 140.0
@@ -2833,6 +2835,15 @@ class GuiShortcutSmokeTest(unittest.TestCase):
         self.assertAlmostEqual(
             active_canvas_for_window(self.window).model.atoms[untouched_right].x, 180.0
         )
+
+        canvas = active_canvas_for_window(self.window)
+        after_state = snapshot_canvas_state_for(canvas)
+        canvas.runtime_state.history_service.undo()
+        canvas.runtime_state.history_service.undo()
+        self.assertEqual(snapshot_canvas_state_for(canvas), before_state)
+        canvas.runtime_state.history_service.redo()
+        canvas.runtime_state.history_service.redo()
+        self.assertEqual(snapshot_canvas_state_for(canvas), after_state)
 
     def test_object_shortcuts_flip_selected_arrow(self) -> None:
         arrow = add_arrow_for(
@@ -3412,12 +3423,12 @@ class GuiShortcutSmokeTest(unittest.TestCase):
             )
             for atom_id in ring_atom_ids
         }
-        before_coords = {
-            atom_id: current_atom_coords_3d_for(
-                active_canvas_for_window(self.window), atom_id
-            )
-            for atom_id in ring_atom_ids
-        }
+        # Planar fallback coordinates are derived inputs, not persisted cache.
+        # Undo must preserve the actual pre-gesture absence rather than create
+        # zero-depth entries that would leave the document dirty.
+        before_coords = dict(atom_coords_3d_for(active_canvas_for_window(self.window)))
+        self.assertEqual(before_coords, {})
+        before_state = snapshot_canvas_state_for(active_canvas_for_window(self.window))
 
         self._select_atom_ids(*ring_atom_ids)
         rotating = active_canvas_for_window(
@@ -3434,6 +3445,7 @@ class GuiShortcutSmokeTest(unittest.TestCase):
         active_canvas_for_window(
             self.window
         ).services.interaction.selection_rotation_controller.end_selection_3d_rotation()
+        after_state = snapshot_canvas_state_for(active_canvas_for_window(self.window))
 
         active_canvas_for_window(self.window).runtime_state.history_service.undo()
 
@@ -3446,17 +3458,19 @@ class GuiShortcutSmokeTest(unittest.TestCase):
             before_x, before_y = before_positions[atom_id]
             self.assertAlmostEqual(atom.x, before_x)
             self.assertAlmostEqual(atom.y, before_y)
-            coords = atom_coords_3d_for(active_canvas_for_window(self.window)).get(
-                atom_id
-            )
-            self.assertIsNotNone(coords)
-            assert coords is not None
-            before_coord = before_coords[atom_id]
-            self.assertIsNotNone(before_coord)
-            assert before_coord is not None
-            self.assertAlmostEqual(coords[0], before_coord[0])
-            self.assertAlmostEqual(coords[1], before_coord[1])
-            self.assertAlmostEqual(coords[2], before_coord[2])
+        self.assertEqual(
+            dict(atom_coords_3d_for(active_canvas_for_window(self.window))),
+            before_coords,
+        )
+        self.assertEqual(
+            snapshot_canvas_state_for(active_canvas_for_window(self.window)),
+            before_state,
+        )
+        active_canvas_for_window(self.window).runtime_state.history_service.redo()
+        self.assertEqual(
+            snapshot_canvas_state_for(active_canvas_for_window(self.window)),
+            after_state,
+        )
 
     def test_undo_second_perspective_rotation_restores_previous_projection_for_multi_ring_molecule(
         self,

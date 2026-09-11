@@ -207,7 +207,20 @@ def test_startup_path_keeps_windows_unicode_spaces_and_ampersand() -> None:
     assert application._startup_document_path(["chemvas.exe", path]) == path
 
 
-@pytest.mark.parametrize("arguments", [["render", "--help"], ["typo"], ["legacy.json"]])
+@pytest.mark.parametrize(
+    "arguments",
+    [
+        ["render", "--help"],
+        ["typo"],
+        ["legacy.json"],
+        ["--versio"],
+        ["-V"],
+        ["--bogus"],
+        ["drawing.chemvas", "--bogus"],
+        ["-platform", "offscreen", "--bogus"],
+        ["-platform"],
+    ],
+)
 def test_unknown_command_exits_without_importing_qt(
     arguments: list[str], tmp_path: Path
 ) -> None:
@@ -233,7 +246,8 @@ def test_unknown_command_exits_without_importing_qt(
     )
     assert result.returncode == 2, result.stderr
     assert result.stdout == ""
-    assert f"unrecognized argument: {arguments[0]}" in result.stderr
+    offending = "--bogus" if "--bogus" in arguments else arguments[0]
+    assert f"unrecognized argument: {offending}" in result.stderr
     assert "chemvas --help" in result.stderr
     assert "imported PyQt6" not in result.stderr
 
@@ -279,19 +293,23 @@ def test_unknown_arguments_do_not_create_windows_or_restore_sessions(
 @pytest.mark.parametrize(
     "document", [None, "그림 폴더/OH & OMe.MOL", "drawing.svg", "drawing.CHEMVAS"]
 )
+@pytest.mark.parametrize("logical_dpi", [72, 96])
 def test_qt_options_are_consumed_before_desktop_document_selection(
     document: str | None,
+    logical_dpi: int,
 ) -> None:
     script = textwrap.dedent("""
         import sys
         from types import SimpleNamespace
         from PyQt6.QtWidgets import QApplication
+        from PyQt6.QtCore import Qt
         from chemvas.bootstrap import application, file_open, window_registry
         from chemvas.core import rdkit_adapter
         from chemvas.ui import session_recovery_service
-        expected = sys.argv[5:]
+        expected = sys.argv[9:]
         opened = []
         def desktop_boundary(app):
+            assert app.testAttribute(Qt.ApplicationAttribute.AA_Use96Dpi)
             assert sys.argv[1:] == expected, (sys.argv[1:], expected)
             assert app.style().objectName() == 'fusion'
             assert opened == expected[:1], (opened, expected[:1])
@@ -307,7 +325,17 @@ def test_qt_options_are_consumed_before_desktop_document_selection(
     env = os.environ.copy()
     env["PYTHONPATH"] = str(APP_ROOT)
     env["QT_QPA_PLATFORM"] = "offscreen"
-    arguments = ["-platform", "offscreen", "-style", "Fusion"]
+    env["QT_FONT_DPI"] = str(logical_dpi)
+    arguments = [
+        "-platform",
+        "offscreen",
+        "-style",
+        "Fusion",
+        "-qwindowgeometry",
+        "-10-20",
+        "-qwindowtitle",
+        "-draft",
+    ]
     if document is not None:
         arguments.append(document)
     result = subprocess.run(

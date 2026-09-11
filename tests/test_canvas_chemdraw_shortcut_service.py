@@ -306,7 +306,12 @@ class CanvasChemDrawShortcutServiceTest(unittest.TestCase):
             service.handle_atom_hotkey(_FakeKeyEvent(Qt.Key.Key_Minus, text="-"), 1)
         )
         self.assertTrue(
-            service.handle_atom_hotkey(_FakeKeyEvent(Qt.Key.Key_F, text="F"), 1)
+            service.handle_atom_hotkey(
+                _FakeKeyEvent(
+                    Qt.Key.Key_F, Qt.KeyboardModifier.ShiftModifier, text="F"
+                ),
+                1,
+            )
         )
         self.assertTrue(
             service.handle_atom_hotkey(_FakeKeyEvent(Qt.Key.Key_0, text="0"), 1)

@@ -25,7 +25,7 @@ def _rotate_state(item, before_state, *, transformed=None, atoms=None):
 
 def _item(kind: str, *, bounding_rect: QRectF | None = None):
     rect = bounding_rect if bounding_rect is not None else QRectF()
-    return SimpleNamespace(data=lambda _key: kind, sceneBoundingRect=lambda: rect)
+    return SimpleNamespace(data=lambda _key: kind, boundingRect=lambda: rect)
 
 
 class SceneRotationStateTest(unittest.TestCase):
@@ -57,7 +57,7 @@ class SceneRotationStateTest(unittest.TestCase):
 
     def test_rotate_state_orbits_note_center_while_keeping_text_upright(self) -> None:
         note_state = _rotate_state(
-            _item("note", bounding_rect=QRectF(10.0, 0.0, 10.0, 10.0)),
+            _item("note", bounding_rect=QRectF(0.0, 0.0, 10.0, 10.0)),
             {"kind": "note", "text": "hi", "x": 10.0, "y": 0.0},
         )
         self.assertAlmostEqual(note_state["x"], -10.0)

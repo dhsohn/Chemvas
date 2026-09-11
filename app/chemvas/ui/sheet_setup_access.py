@@ -6,12 +6,20 @@ from typing import TYPE_CHECKING
 from PyQt6.QtCore import QRectF
 
 from chemvas.domain.transactions import add_recovery_error_note
+from chemvas.features.export import (
+    collect_export_items,
+    content_bounds,
+    export_item_closure,
+)
 from chemvas.ui.input_view_access import (
     CanvasSceneRectStateSnapshot,
     set_scene_rect_for,
     update_viewport_for,
 )
-from chemvas.ui.sheet_setup_logic import SHEET_MARGIN_PX, sheet_dimensions_px
+from chemvas.ui.sheet_setup_logic import (
+    SHEET_MARGIN_PX,
+    sheet_dimensions_px,
+)
 from chemvas.ui.sheet_setup_state import (
     set_sheet_setup_state_for,
     sheet_setup_state_for,
@@ -121,6 +129,16 @@ def _expected_rects(
 
 def _apply_sheet_scene_rect_unchecked(canvas) -> None:
     sheet_rect, scene_rect = _expected_rects(*sheet_setup_for(canvas))
+    scene_getter = getattr(canvas, "scene", None)
+    scene = scene_getter() if callable(scene_getter) else None
+    if scene is not None:
+        bounds = content_bounds(export_item_closure(collect_export_items(scene)))
+        if bounds is not None:
+            scene_rect = scene_rect.united(
+                bounds.adjusted(
+                    -SHEET_MARGIN_PX, -SHEET_MARGIN_PX, SHEET_MARGIN_PX, SHEET_MARGIN_PX
+                )
+            )
     sheet_setup_state_for(canvas).rect = sheet_rect
     set_scene_rect_for(canvas, scene_rect)
 

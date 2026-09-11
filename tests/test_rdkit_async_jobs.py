@@ -188,12 +188,14 @@ class _FakeWorker:
         path: str,
         *,
         rdkit_adapter_factory=None,
+        output_path=None,
     ) -> None:
         self.rdkit_adapter = rdkit_adapter
         self.rdkit_adapter_factory = rdkit_adapter_factory
         self.model = model
         self.atom_annotations = atom_annotations
         self.path = path
+        self.output_path = output_path
         self.succeeded = _FakeSignal()
         self.failed = _FakeSignal()
         self.finished = _FakeSignal()
@@ -253,6 +255,7 @@ class ExportXYZInThreadTest(unittest.TestCase):
             self.assertEqual(worker.model, "model")
             self.assertEqual(worker.atom_annotations, {"a": 1})
             self.assertNotEqual(worker.path, str(path))
+            self.assertEqual(worker.output_path, str(path))
             self.assertEqual(Path(worker.path).parent, path.parent)
             self.assertIs(worker.moved_to, thread)
             self.assertEqual(rdkit_export_jobs_for(owner), [(thread, worker)])
@@ -423,7 +426,7 @@ assert target.read_text(encoding="utf-8") == "0\ncompleted after owner close\n"
 assert successes == []
 assert errors == []
 assert active_rdkit_export_jobs() == ()
-assert list(target.parent.glob(f".{target.name}.*.stage")) == []
+assert list(target.parent.glob(".chemvas-xyz-*.stage")) == []
 """
         with tempfile.TemporaryDirectory() as temp_dir:
             path = Path(temp_dir) / "shutdown.xyz"

@@ -19,6 +19,7 @@ from chemvas.ui.note_item_access import (
     set_committed_note_html_for,
     set_committed_note_text_for,
 )
+from chemvas.ui.ring_fill_state import set_ring_fill_brush
 from chemvas.ui.scene_item_state import (
     ARROW_KINDS,
     ArrowLabelSetter,
@@ -60,8 +61,9 @@ def create_ring_item_from_state(
     alpha = ring_state.get("alpha", 0.0)
     if color:
         fill = QColor(str(color))
-        fill.setAlphaF(float(alpha) if isinstance(alpha, (int, float)) else 0.0)
-        ring_item.setBrush(fill)
+        source_alpha = float(alpha) if isinstance(alpha, (int, float)) else 0.0
+        fill.setAlphaF(source_alpha)
+        set_ring_fill_brush(ring_item, fill, source_alpha=source_alpha)
     else:
         ring_item.setBrush(ring_fill_brush_getter())
     ring_item.setPen(QPen(Qt.PenStyle.NoPen))
@@ -83,8 +85,6 @@ def create_note_item_from_state(
         item.setHtml(html)
     else:
         item.setPlainText(str(note_state.get("text", "")))
-    set_committed_note_text_for(item, item.toPlainText())
-    set_committed_note_html_for(item, item.toHtml())
     item.setData(0, "note")
     item.setPos(
         QPointF(
@@ -93,6 +93,10 @@ def create_note_item_from_state(
         )
     )
     note_style_applier(item)
+    # The committed baseline must match the styled live document, otherwise
+    # merely entering/leaving a restored note records a false format edit.
+    set_committed_note_text_for(item, item.toPlainText())
+    set_committed_note_html_for(item, item.toHtml())
     item.setTextInteractionFlags(Qt.TextInteractionFlag.NoTextInteraction)
     return item
 

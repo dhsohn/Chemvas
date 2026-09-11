@@ -3,8 +3,8 @@ import os
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 import pytest
-from PyQt6.QtCore import QPointF, Qt
-from PyQt6.QtGui import QTextCursor
+from PyQt6.QtCore import QPointF, QRectF, Qt
+from PyQt6.QtGui import QColor, QImage, QKeySequence, QPainter, QTextCursor
 from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import QApplication, QToolButton
 
@@ -12,13 +12,20 @@ from chemvas.bootstrap.main_window import build_main_window
 from chemvas.ui.canvas_callback_state import callback_state_for
 from chemvas.ui.canvas_scene_items_state import note_items_for
 from chemvas.ui.canvas_service_ports import note_controller_for_access
+from chemvas.ui.canvas_text_style_state import set_text_style_for
 from chemvas.ui.main_window_ports import (
     active_canvas_for_window,
+    copy_selection_for_window,
     history_service_for_window,
+    paste_selection_for_window,
     services_for_window,
     set_zoom_percent_for_window,
     tool_action_for_window,
 )
+from chemvas.ui.note_item import NoteItem
+from chemvas.ui.scene_item_restore import create_note_item_from_state
+from chemvas.ui.scene_item_state_serialization import note_state_dict
+from chemvas.ui.structure_mutation_access import add_atom_for
 
 
 @pytest.fixture(scope="module")
@@ -35,6 +42,7 @@ def drawing(app):
     window.show()
     window.activateWindow()
     assert QTest.qWaitForWindowExposed(window, 5000)
+    assert QTest.qWaitForWindowActive(window, 5000)
     canvas = active_canvas_for_window(window)
     set_zoom_percent_for_window(window, 180)
     canvas.centerOn(0, 0)
@@ -68,6 +76,11 @@ def _key(canvas, key, modifiers=Qt.KeyboardModifier.NoModifier):
     QApplication.processEvents()
 
 
+def _redo(canvas):
+    QTest.keySequence(canvas, QKeySequence(QKeySequence.StandardKey.Redo))
+    QApplication.processEvents()
+
+
 def _saved_note(drawing, tmp_path):
     window, canvas = drawing
     _tool(window, "note")
@@ -84,6 +97,118 @@ def _saved_note(drawing, tmp_path):
     assert note.hasFocus()
     _key(canvas, Qt.Key.Key_End)
     return note
+
+
+@pytest.mark.parametrize("key", [Qt.Key.Key_Return, Qt.Key.Key_Enter])
+@pytest.mark.parametrize("reedit", [False, True])
+def test_two_enters_preserve_an_empty_note_paragraph(drawing, tmp_path, key, reedit):
+    window, canvas = drawing
+    if reedit:
+        note = _saved_note(drawing, tmp_path)
+        _key(canvas, Qt.Key.Key_A, Qt.KeyboardModifier.ControlModifier)
+    else:
+        _tool(window, "note")
+        _click(canvas, QPointF(-80, 35))
+        note = note_items_for(canvas)[0]
+    QTest.keyClicks(canvas, "a")
+    _key(canvas, key)
+    _key(canvas, key)
+    QTest.keyClicks(canvas, "b")
+    assert note.toPlainText() == "a\n\nb"
+    heights = []
+    block = note.document().begin()
+    while block.isValid():
+        heights.append(block.blockFormat().lineHeight())
+        block = block.next()
+    assert heights == [heights[0]] * 3
+
+
+@pytest.mark.parametrize(
+    "alignment,fraction", [("left", 0), ("center", 0.5), ("right", 1)]
+)
+def test_note_alignment_moves_short_line_within_longest_line(
+    drawing, alignment, fraction
+):
+    _window, canvas = drawing
+    controller = note_controller_for_access(canvas)
+    note = controller.create_text_note(QPointF(0, 0), "Hi\na much longer second line")
+    controller.begin_note_edit(note)
+    controller.set_text_alignment(alignment)
+    first = note.document().firstBlock().layout().lineAt(0)
+    second = note.document().lastBlock().layout().lineAt(0)
+    start = first.cursorToX(0)[0] - second.cursorToX(0)[0]
+    expected = fraction * (second.naturalTextWidth() - first.naturalTextWidth())
+    assert start == pytest.approx(expected, abs=0.1)
+    assert note.toPlainText() == "Hi\na much longer second line"
+
+
+def test_note_natural_width_tracks_edits_and_restores_alignment(drawing):
+    _window, canvas = drawing
+    controller = note_controller_for_access(canvas)
+    note = controller.create_text_note(QPointF(0, 0), "Hi\na much longer second line")
+    controller.begin_note_edit(note)
+    controller.set_text_alignment("right")
+    initial_width = note.textWidth()
+    _key(canvas, Qt.Key.Key_End, Qt.KeyboardModifier.ControlModifier)
+    QTest.keyClicks(canvas, " extended several words")
+    assert note.textWidth() > initial_width
+    _key(canvas, Qt.Key.Key_Z, Qt.KeyboardModifier.ControlModifier)
+    assert note.textWidth() == pytest.approx(initial_width)
+    controller.finish_note_edit()
+    state = note_state_dict(note)
+    restored = create_note_item_from_state(
+        state,
+        note_item_factory=lambda: NoteItem(canvas),
+        note_style_applier=controller.apply_note_style,
+    )
+    assert restored.toPlainText() == note.toPlainText()
+    assert restored.textWidth() == pytest.approx(initial_width)
+    for item in (note, restored):
+        first = item.document().firstBlock().layout().lineAt(0)
+        last = item.document().lastBlock().layout().lineAt(0)
+        assert first.cursorToX(0)[0] > last.cursorToX(0)[0]
+        assert item.document().firstBlock().layout().lineCount() == 1
+        assert item.document().lastBlock().layout().lineCount() == 1
+    assert note_state_dict(note) == state
+
+
+def test_return_keeps_native_list_exit_and_shift_line_break(drawing):
+    _window, canvas = drawing
+    controller = note_controller_for_access(canvas)
+    note = controller.create_text_note(QPointF(0, 0), "")
+    note.setHtml("<ul><li>one</li></ul>")
+    controller.begin_note_edit(note)
+    _key(canvas, Qt.Key.Key_End, Qt.KeyboardModifier.ControlModifier)
+    assert note.textCursor().currentList() is not None
+    _key(canvas, Qt.Key.Key_Return)
+    assert note.textCursor().currentList() is not None
+    assert not note.textCursor().block().text()
+    _key(canvas, Qt.Key.Key_Return)
+    assert note.textCursor().currentList() is None
+    block_count = note.document().blockCount()
+    _key(canvas, Qt.Key.Key_Return, Qt.KeyboardModifier.ShiftModifier)
+    assert note.document().blockCount() == block_count
+    assert note.toPlainText() == "one\n\n"
+
+
+def test_opaque_note_box_paints_behind_text(drawing):
+    _window, canvas = drawing
+    set_text_style_for(canvas, "note_box_enabled", True)
+    set_text_style_for(canvas, "note_box_color", QColor("white"))
+    set_text_style_for(canvas, "note_box_alpha", 1.0)
+    note = note_controller_for_access(canvas).create_text_note(
+        QPointF(0, 0), "HHHHHHHH"
+    )
+    image = QImage(400, 120, QImage.Format.Format_ARGB32)
+    image.fill(Qt.GlobalColor.white)
+    painter = QPainter(image)
+    canvas.scene().render(painter, QRectF(0, 0, 400, 120), note.sceneBoundingRect())
+    painter.end()
+    assert any(
+        image.pixelColor(x, y).lightness() < 100
+        for y in range(image.height())
+        for x in range(image.width())
+    )
 
 
 def test_tool_switch_commits_note_and_routes_undo_to_drawing(drawing, tmp_path):
@@ -112,7 +237,7 @@ def test_text_undo_stays_inside_reopened_edit_session(drawing, tmp_path):
     assert note.toPlainText() == "alpha beta gamma"
     _key(canvas, Qt.Key.Key_Z, Qt.KeyboardModifier.ControlModifier)
     assert note.toPlainText() == "alpha beta gamma"
-    _key(canvas, Qt.Key.Key_Y, Qt.KeyboardModifier.ControlModifier)
+    _redo(canvas)
     assert note.toPlainText() == "alpha beta gamma changed"
     assert len(history.state.history) == count
 
@@ -248,7 +373,7 @@ def test_tool_switch_deletes_empty_existing_note_and_undo_restores_it(
     assert note_items_for(canvas) == [note]
     assert note.toPlainText() == "alpha beta gamma"
     assert not window.isWindowModified()
-    _key(canvas, Qt.Key.Key_Y, Qt.KeyboardModifier.ControlModifier)
+    _redo(canvas)
     assert not note_items_for(canvas)
     _key(canvas, Qt.Key.Key_Z, Qt.KeyboardModifier.ControlModifier)
     assert note.toPlainText() == "alpha beta gamma"
@@ -277,7 +402,7 @@ def test_save_while_editing_keeps_session_undo_and_updates_chrome(drawing, tmp_p
     _key(canvas, Qt.Key.Key_Z, Qt.KeyboardModifier.ControlModifier)
     assert note.toPlainText() == "alpha beta gamma"
     assert window.isWindowModified()
-    _key(canvas, Qt.Key.Key_Y, Qt.KeyboardModifier.ControlModifier)
+    _redo(canvas)
     assert note.toPlainText() == "alpha beta gamma changed"
     assert not window.isWindowModified()
 
@@ -340,3 +465,110 @@ def test_dirty_observer_failure_does_not_lose_editor_text_or_history(drawing, tm
         assert note.toPlainText() == "alpha beta gamma"
     finally:
         callback_state.document_change = original
+
+
+@pytest.mark.parametrize("origin", ["typed", "reopened", "pasted"])
+@pytest.mark.parametrize("finish", ["escape", "tool"])
+@pytest.mark.parametrize("rich", [False, True])
+@pytest.mark.parametrize("padded", [False, True])
+def test_note_reentry_without_edit_preserves_document_redo(
+    drawing, tmp_path, origin, finish, rich, padded
+):
+    import json
+
+    window, canvas = drawing
+    note = _saved_note(drawing, tmp_path)
+    if padded:
+        _key(canvas, Qt.Key.Key_A, Qt.KeyboardModifier.ControlModifier)
+        QTest.keyClicks(canvas, "  padded note  ")
+    if rich:
+        _key(canvas, Qt.Key.Key_A, Qt.KeyboardModifier.ControlModifier)
+        note_controller_for_access(canvas).toggle_text_bold()
+    _key(canvas, Qt.Key.Key_Escape)
+    services = services_for_window(window)
+    path = tmp_path / "reentry.chemvas"
+    assert services.document_action_service.save_canvas_to_path(window, str(path))
+    if origin == "reopened":
+        state = json.loads(path.read_text(encoding="utf-8"))["state"]
+        services.canvas_document_service.replace_canvas_with_state(
+            window, canvas, state=state, file_path=str(path)
+        )
+        note = note_items_for(canvas)[0]
+    elif origin == "pasted":
+        _tool(window, "select")
+        _click(canvas, note.sceneBoundingRect().center())
+        assert copy_selection_for_window(window)
+        paste_selection_for_window(window)
+        note = next(item for item in note_items_for(canvas) if item is not note)
+    history = history_service_for_window(window)
+    set_zoom_percent_for_window(window, 180)
+    canvas.centerOn(0, 0)
+    _tool(window, "bond")
+    start, end = [canvas.mapFromScene(QPointF(x, 100)) for x in (160, 210)]
+    QTest.mousePress(canvas.viewport(), Qt.MouseButton.LeftButton, pos=start)
+    QTest.mouseMove(canvas.viewport(), end)
+    QTest.mouseRelease(canvas.viewport(), Qt.MouseButton.LeftButton, pos=end)
+    assert sum(atom is not None for atom in canvas.model.atoms) == 2
+    history.undo()
+    assert not any(atom is not None for atom in canvas.model.atoms)
+    before_stacks = history.capture_stack_snapshot()
+    before_note = note_state_dict(note)
+    before_dirty = window.isWindowModified()
+    _tool(window, "note")
+    _click(canvas, note.sceneBoundingRect().center())
+    assert note.hasFocus()
+    if finish == "escape":
+        _key(canvas, Qt.Key.Key_Escape)
+    else:
+        _tool(window, "bond")
+    history.verify_stack_snapshot(before_stacks)
+    assert note_state_dict(note) == before_note
+    assert window.isWindowModified() == before_dirty
+    if padded:
+        assert note.toPlainText() == "  padded note  "
+    _redo(canvas)
+    assert sum(atom is not None for atom in canvas.model.atoms) == 2
+
+
+@pytest.mark.parametrize("key", [Qt.Key.Key_Backtab, Qt.Key.Key_Tab])
+def test_note_shift_tab_keeps_editor_and_canvas_keyboard_focus(
+    drawing, monkeypatch, key
+):
+    window, canvas = drawing
+    atom_id = add_atom_for(canvas, "C", 80, -30)
+    _tool(window, "note")
+    _click(canvas, QPointF(-80, 35))
+    QTest.keyClicks(canvas, "abc")
+    note = note_items_for(canvas)[0]
+    history = history_service_for_window(window)
+    stacks = history.capture_stack_snapshot()
+    _key(canvas, key, Qt.KeyboardModifier.ShiftModifier)
+    assert note.hasFocus()
+    assert QApplication.focusWidget() in (canvas, canvas.viewport())
+    assert note.toPlainText() == "abc"
+    history.verify_stack_snapshot(stacks)
+    _key(canvas, Qt.Key.Key_Tab)
+    assert note.toPlainText() == "abc\t"
+    _key(canvas, Qt.Key.Key_Escape)
+    # Wayland may prohibit QTest's pointer warp; provide only the global
+    # cursor source. Key dispatch and the hover hit test remain real.
+    monkeypatch.setattr(
+        "chemvas.ui.hover.QCursor.pos",
+        lambda: canvas.viewport().mapToGlobal(canvas.mapFromScene(QPointF(80, -30))),
+    )
+    _key(canvas, Qt.Key.Key_N)
+    assert canvas.model.atoms[atom_id].element == "N"
+    monkeypatch.setattr(
+        "chemvas.ui.hover.QCursor.pos",
+        lambda: canvas.viewport().mapToGlobal(canvas.mapFromScene(QPointF(160, 100))),
+    )
+    _key(canvas, Qt.Key.Key_X)
+    assert (
+        services_for_window(window).context_bar_service.active_tool_name(window)
+        == "bond"
+    )
+    _key(canvas, Qt.Key.Key_Space)
+    assert (
+        services_for_window(window).context_bar_service.active_tool_name(window)
+        == "select"
+    )

@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING, Any, ClassVar
 
 from chemvas.domain.document import VALID_LINE_KINDS
 from chemvas.features.annotations import BRACKET_KIND_VALUES, SHAPE_KINDS, STROKE_STYLES
+from chemvas.ui.annotation_style_service import apply_annotation_style_for
 from chemvas.ui.canvas_callback_state import callback_state_for
 from chemvas.ui.canvas_insert_state import insert_state_for
 from chemvas.ui.canvas_tool_settings_state import (
@@ -12,7 +13,10 @@ from chemvas.ui.canvas_tool_settings_state import (
     tool_settings_state_for,
 )
 from chemvas.ui.canvas_window_access import history_service_for_canvas
-from chemvas.ui.history_commands import UpdateSceneItemCommand
+from chemvas.ui.history_commands import (
+    SetAnnotationStyleCommand,
+    UpdateSceneItemCommand,
+)
 from chemvas.ui.scene_item_access import apply_scene_item_state
 from chemvas.ui.scene_item_state import shape_state_dict_for
 from chemvas.ui.selection_collection_access import selected_scene_items_for
@@ -128,7 +132,28 @@ class CanvasToolModeController:
         self._refresh_tool_mode()
 
     def set_orbital_phase_enabled(self, enabled: bool) -> None:
-        set_tool_setting_for(self.canvas, "orbital_phase_enabled", enabled)
+        self._set_annotation_style({"orbital_phase_enabled": enabled})
+
+    def _set_annotation_style(self, values: dict[str, float | bool]) -> None:
+        changed = {
+            name: value
+            for name, value in values.items()
+            if getattr(self.settings, name) != value
+        }
+        if not changed:
+            return
+        before = {name: getattr(self.settings, name) for name in changed}
+        history = history_service_for_canvas(self.canvas)
+        with document_transaction(self.canvas, history_service=history):
+            apply_annotation_style_for(self.canvas, changed)
+            if history is not None:
+                committed = history.push(
+                    SetAnnotationStyleCommand(
+                        before, changed, apply_annotation_style_for
+                    )
+                )
+                if committed is False:
+                    raise RuntimeError("Annotation style history push did not commit")
 
     def set_shape_type(self, shape_type: str) -> None:
         if shape_type not in SHAPE_KINDS:
@@ -184,13 +209,21 @@ class CanvasToolModeController:
         self._refresh_tool_mode()
 
     def set_arrow_line_width(self, width: float) -> None:
-        set_tool_setting_for(self.canvas, "arrow_line_width", max(0.5, float(width)))
+        self.set_arrow_style(width, self.settings.arrow_head_scale)
+
+    def set_arrow_style(self, width: float, head_scale: float) -> None:
+        self._set_annotation_style(
+            {
+                "arrow_line_width": max(0.5, float(width)),
+                "arrow_head_scale": max(0.1, min(0.8, head_scale)),
+            }
+        )
 
     def get_arrow_line_width(self) -> float:
         return self.settings.arrow_line_width
 
     def set_arrow_head_scale(self, scale: float) -> None:
-        set_tool_setting_for(self.canvas, "arrow_head_scale", max(0.1, min(0.8, scale)))
+        self.set_arrow_style(self.settings.arrow_line_width, scale)
 
     def get_arrow_head_scale(self) -> float:
         return self.settings.arrow_head_scale

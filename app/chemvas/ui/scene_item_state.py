@@ -23,6 +23,7 @@ from chemvas.ui.note_item_access import (
     set_committed_note_html_for,
     set_committed_note_text_for,
 )
+from chemvas.ui.ring_fill_state import set_ring_fill_brush
 from chemvas.ui.scene_item_state_serialization import (
     ARROW_KINDS,
     MarkCenterGetter,
@@ -231,10 +232,11 @@ def apply_scene_item_state(
         alpha = state.get("alpha", 0.0)
         if color:
             fill = QColor(str(color))
-            fill.setAlphaF(float(alpha) if isinstance(alpha, (int, float)) else 0.0)
-            item.setBrush(fill)
+            source_alpha = float(alpha) if isinstance(alpha, (int, float)) else 0.0
+            fill.setAlphaF(source_alpha)
+            set_ring_fill_brush(item, fill, source_alpha=source_alpha)
         else:
-            item.setBrush(ring_fill_brush_getter())
+            set_ring_fill_brush(item, ring_fill_brush_getter())
         return
     if kind == "ts_bracket" and isinstance(item, QGraphicsPathItem):
         rect = ts_bracket_rect_from_state(state)

@@ -1,5 +1,7 @@
 import math
+import tempfile
 import unittest
+from pathlib import Path
 
 from chemvas.core.molfile import (
     MolfileError,
@@ -7,6 +9,7 @@ from chemvas.core.molfile import (
     MolfileParseError,
     fit_molfile_model,
     parse_molfile,
+    read_molfile,
     write_molfile,
 )
 from chemvas.domain.atom_aliases import ATOM_ALIAS_DEFINITIONS
@@ -290,6 +293,57 @@ def _replaced_line(block: str, index: int, line: str) -> str:
 
 
 class MolfileParserRoundTripTest(unittest.TestCase):
+    def test_byte_reader_tolerates_only_ignored_header_encoding(self) -> None:
+        original = write_molfile(_ethanol()).encode("utf-8")
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "header.mol"
+            for encoding in ("utf-8", "latin-1"):
+                with self.subTest(encoding=encoding):
+                    lines = original.split(b"\n")
+                    lines[0] = "Ester Å".encode(encoding)
+                    raw = b"\n".join(lines)
+                    path.write_bytes(raw)
+                    self.assertEqual(
+                        write_molfile(read_molfile(path)),
+                        write_molfile(parse_molfile(original.decode())),
+                    )
+                    self.assertEqual(path.read_bytes(), raw)
+            for line_index in (3, 4, 7, 9):
+                with self.subTest(structural_line=line_index + 1):
+                    lines = original.split(b"\n")
+                    lines[line_index] += b"\xff"
+                    raw = b"\n".join(lines)
+                    path.write_bytes(raw)
+                    with self.assertRaisesRegex(
+                        MolfileParseError,
+                        f"structural data on line {line_index + 1} is not valid UTF-8",
+                    ):
+                        read_molfile(path)
+                    self.assertEqual(path.read_bytes(), raw)
+
+    def test_header_controls_do_not_create_extra_records(self) -> None:
+        original = write_molfile(_ethanol())
+        expected = write_molfile(parse_molfile(original))
+        for separator in ("\n", "\r\n", "\r"):
+            for index in range(3):
+                for control in (
+                    "\f",
+                    "\v",
+                    "\x1c",
+                    "\x1d",
+                    "\x1e",
+                    "\x85",
+                    "\u2028",
+                    "\u2029",
+                ):
+                    with self.subTest(
+                        separator=repr(separator), header=index, control=repr(control)
+                    ):
+                        lines = original.split("\n")
+                        lines[index] = f"header{control}text"
+                        parsed = parse_molfile(separator.join(lines))
+                        self.assertEqual(write_molfile(parsed), expected)
+
     def test_graph_charges_stereo_and_coordinates_survive_round_trip(self) -> None:
         model, annotations = _annotated_stereo_model()
 

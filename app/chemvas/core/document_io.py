@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import contextlib
+import errno
 import hashlib
 import json
 import os
@@ -20,7 +21,7 @@ from chemvas.domain.document import (
 from chemvas.domain.json_io import strict_json_loads
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Callable, Iterator
 
 PathType = str | PathLike[str]
 
@@ -90,33 +91,63 @@ def _write_text_payload(path: Path, text: str, *, encoding: str) -> None:
         handle.write(text)
 
 
-def atomic_write_via_temp(path: PathType, writer: Callable[[Path], None]) -> None:
-    target = Path(path)
+def output_error_for(error: OSError, path: PathType) -> OSError:
+    """Keep the OS reason, but report the user's destination, never staging names."""
+    reason = error.strerror or str(error) or "Failed to write the output file"
+    return OSError(error.errno, reason, os.fspath(path))
+
+
+@contextlib.contextmanager
+def _output_errors(path: PathType) -> Iterator[None]:
     try:
-        target_mode = stat.S_IMODE(target.stat().st_mode)
+        yield
+    except OSError as exc:
+        raise output_error_for(exc, path) from exc
+
+
+def resolved_output_path(path: PathType) -> Path:
+    """Use the same resolved-leaf/parent policy as document Save."""
+    return Path(os.path.realpath(os.path.abspath(path)))
+
+
+def _output_mode(target: Path) -> int | None:
+    try:
+        metadata = target.stat()
     except FileNotFoundError:
-        target_mode = None
-    # Atomic write: render/write to a sibling temp file, flush to disk, then
-    # replace. A crash/IO error mid-write leaves the previous file intact.
-    with tempfile.NamedTemporaryFile(
-        prefix=f".{target.name}.",
-        suffix=".tmp",
-        dir=target.parent,
-        delete=False,
-    ) as tmp_handle:
-        tmp = Path(tmp_handle.name)
-    try:
-        writer(tmp)
-        if target_mode is not None:
-            tmp.chmod(target_mode)
-        with tmp.open("rb+") as handle:
-            os.fsync(handle.fileno())
-        tmp.replace(target)
-    except BaseException:
-        # Never leave a stray temp file behind on failure.
-        with contextlib.suppress(OSError):
-            tmp.unlink()
-        raise
+        return None
+    if stat.S_ISREG(metadata.st_mode) and metadata.st_nlink > 1:
+        raise OSError(
+            errno.EMLINK,
+            "The destination has multiple hard links. "
+            "Choose another output file to avoid splitting the linked copies.",
+            os.fspath(target),
+        )
+    return stat.S_IMODE(metadata.st_mode)
+
+
+def atomic_write_via_temp(path: PathType, writer: Callable[[Path], None]) -> None:
+    with _output_errors(path):
+        target = resolved_output_path(path)
+        target_mode = _output_mode(target)
+        # A short ASCII basename avoids both NAME_MAX truncation and Qt's
+        # replacement of surrogate-escaped bytes in a user-chosen basename.
+        with tempfile.NamedTemporaryFile(
+            prefix=".chemvas-", suffix=".tmp", dir=target.parent, delete=False
+        ) as tmp_handle:
+            tmp = Path(tmp_handle.name)
+        try:
+            writer(tmp)
+            # Refuse a hard link introduced while the writer was running too.
+            _output_mode(target)
+            if target_mode is not None:
+                tmp.chmod(target_mode)
+            with tmp.open("rb+") as handle:
+                os.fsync(handle.fileno())
+            tmp.replace(target)
+        except BaseException:
+            with contextlib.suppress(OSError):
+                tmp.unlink()
+            raise
 
 
 def read_document(path: PathType) -> ChemvasDocument:
@@ -148,9 +179,14 @@ def read_exact_document(
 
 def atomic_create_bytes(path: PathType, content: bytes) -> None:
     """Atomically publish a new file without ever replacing an existing path."""
+    with _output_errors(path):
+        _create_bytes(path, content)
+
+
+def _create_bytes(path: PathType, content: bytes) -> None:
     output = Path(path)
     fd, raw_staging = tempfile.mkstemp(
-        prefix=f".{output.name}.staging-",
+        prefix=".chemvas-create-",
         dir=output.parent,
     )
     staging = Path(raw_staging)

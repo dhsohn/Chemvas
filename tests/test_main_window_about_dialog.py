@@ -31,7 +31,24 @@ class AboutDialogTest(unittest.TestCase):
 
     def test_rdkit_status_reports_not_installed(self) -> None:
         with mock.patch("importlib.util.find_spec", return_value=None):
-            self.assertTrue(rdkit_status().startswith("Not installed"))
+            status = rdkit_status()
+        self.assertTrue(status.startswith("Not installed"))
+        for feature in (
+            "SMILES insertion",
+            "Molecule Info",
+            "formula",
+            "identifiers",
+            "3D XYZ",
+            "abbreviation MOL export",
+            "Suggest by structure",
+            "generate-precomplex",
+            "select-precomplex",
+            "pack-step",
+            "figure export remain available",
+            'pip install "chemvas[rdkit]"',
+        ):
+            with self.subTest(feature=feature):
+                self.assertIn(feature, status)
 
     def test_show_about_dialog_presents_identity_and_links(self) -> None:
         captured: dict[str, object] = {}

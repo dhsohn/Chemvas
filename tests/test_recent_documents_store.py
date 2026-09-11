@@ -92,3 +92,34 @@ def test_most_recent_first_ordering(tmp_path):
         "b.chemvas",
         "a.chemvas",
     ]
+
+
+def test_record_dedupes_symlinks_preserving_the_latest_spelling(tmp_path):
+    recent = tmp_path / "recent.json"
+    target = tmp_path / "target.chemvas"
+    target.write_text("{}")
+    link = tmp_path / "link.chemvas"
+    link.symlink_to(target)
+    record_recent(str(link), path=recent)
+    assert record_recent(str(target), path=recent) == [str(target)]
+    assert record_recent(str(link), path=recent) == [str(link)]
+
+
+def test_load_dedupes_existing_symlink_entries_without_rewriting(tmp_path):
+    recent = tmp_path / "recent.json"
+    target = tmp_path / "target.chemvas"
+    target.write_text("{}")
+    link = tmp_path / "link.chemvas"
+    link.symlink_to(target)
+    save_recent([str(link), str(target)], path=recent)
+    before = recent.read_bytes()
+    assert load_recent(path=recent) == [str(link)]
+    assert recent.read_bytes() == before
+
+
+def test_invalid_recent_path_does_not_block_other_entries(tmp_path):
+    recent = tmp_path / "recent.json"
+    target = tmp_path / "target.chemvas"
+    target.write_text("{}")
+    save_recent(["invalid\0.chemvas", str(target)], path=recent)
+    assert load_recent(path=recent) == [str(target)]

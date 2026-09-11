@@ -9,7 +9,6 @@ from PyQt6.QtWidgets import QApplication
 
 from chemvas.ui.scene_flip_geometry import (
     bounds_from_points,
-    center_for_flip_group,
     flip_bounds_for_item,
     flip_center_for_selection,
     flip_point,
@@ -225,21 +224,14 @@ class SceneTransformLogicTest(unittest.TestCase):
             QPointF(6.0, 5.0),
         )
         self.assertEqual(
-            center_for_flip_group(
+            flip_center_for_selection(
                 {1, 2},
                 [],
-                bounding_box_center_for_atoms=canvas._bounding_box_center_for_atoms,
-                flip_center_for_selection_getter=lambda atom_ids, items: (
-                    flip_center_for_selection(
-                        atom_ids,
-                        items,
-                        atoms=canvas.model.atoms,
-                        flip_bounds_getter=lambda item: flip_bounds_for_item(
-                            item,
-                            scene_item_state_getter=canvas.scene_item_state,
-                            bounds_from_points=canvas._bounds_from_points,
-                        ),
-                    )
+                atoms=canvas.model.atoms,
+                flip_bounds_getter=lambda item: flip_bounds_for_item(
+                    item,
+                    scene_item_state_getter=canvas.scene_item_state,
+                    bounds_from_points=canvas._bounds_from_points,
                 ),
             ),
             QPointF(10.0, 5.0),

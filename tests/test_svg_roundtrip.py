@@ -1,5 +1,7 @@
 import base64
+import errno
 import json
+import os
 import tempfile
 import unittest
 import zlib
@@ -100,6 +102,78 @@ class SvgRoundtripTest(unittest.TestCase):
                 extract_chemvas_svg_payload(path)["scope"], CHEMVAS_SVG_SCOPE_SHEET
             )
             self.assertEqual(extract_chemvas_document_from_svg(path).state, state)
+
+    def test_svg_readers_preserve_filesystem_errors(self) -> None:
+        payload = create_editable_svg_payload(
+            _sheet_state(),
+            document_version=CANVAS_FILE_VERSION,
+            scope=CHEMVAS_SVG_SCOPE_SHEET,
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            missing = Path(tmp) / "missing.svg"
+            directory = Path(tmp) / "directory.svg"
+            directory.mkdir()
+            cases = [missing, directory]
+            if os.name == "posix":
+                loop = Path(tmp) / "loop.svg"
+                loop.symlink_to(loop.name)
+                cases.append(loop)
+            readers = (
+                extract_chemvas_svg_payload,
+                extract_chemvas_document_from_svg,
+                lambda path: embed_chemvas_document_in_svg(path, payload),
+            )
+            for path in cases:
+                # Windows may report a directory as access denied rather than
+                # EISDIR. Preserve the platform's actual exception in either case.
+                with self.assertRaises(OSError) as original:
+                    with path.open("rb"):
+                        pass
+                for reader in readers:
+                    with self.subTest(path=path.name, reader=reader):
+                        with self.assertRaises(OSError) as raised:
+                            reader(path)
+                        self.assertIs(type(raised.exception), type(original.exception))
+                        self.assertEqual(
+                            raised.exception.errno, original.exception.errno
+                        )
+                        self.assertEqual(raised.exception.filename, str(path))
+            self.assertFalse(missing.exists())
+            self.assertEqual(list(directory.iterdir()), [])
+            if os.name == "posix":
+                self.assertEqual(loop.readlink(), Path(loop.name))
+
+    def test_svg_permission_and_stream_errors_preserve_original_exception(self) -> None:
+        # Injection also covers permission failures when tests run as root or on
+        # platforms where chmod(000) does not make the file unreadable.
+        payload = create_editable_svg_payload(
+            _sheet_state(),
+            document_version=CANVAS_FILE_VERSION,
+            scope=CHEMVAS_SVG_SCOPE_SHEET,
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self._svg_path(tmp)
+            original = path.read_bytes()
+            for phase, failure in (
+                ("open", PermissionError(errno.EACCES, "Permission denied", str(path))),
+                ("read", OSError(errno.EIO, "Input/output error", str(path))),
+            ):
+                for reader in (
+                    extract_chemvas_svg_payload,
+                    extract_chemvas_document_from_svg,
+                    lambda path: embed_chemvas_document_in_svg(path, payload),
+                ):
+                    with self.subTest(phase=phase, reader=reader):
+                        with mock.patch.object(Path, "open") as opener:
+                            if phase == "open":
+                                opener.side_effect = failure
+                            else:
+                                stream = opener.return_value.__enter__.return_value
+                                stream.read.side_effect = failure
+                            with self.assertRaises(OSError) as raised:
+                                reader(path)
+                        self.assertIs(raised.exception, failure)
+                        self.assertEqual(path.read_bytes(), original)
 
     def test_embed_rejects_extra_svg_payload_key_before_normalizing(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

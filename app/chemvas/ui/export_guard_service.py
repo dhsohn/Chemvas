@@ -61,6 +61,24 @@ def validate_export_budget(
             "rendered dimensions must be positive and no larger than "
             f"{MAX_VECTOR_DIMENSION_POINTS:g} points per side"
         )
+    if output_format in {"svg", "pdf"} and (
+        round(width_points) < 1 or round(height_points) < 1
+    ):
+        raise ValueError(
+            "rendered dimensions are too small: each vector side must round "
+            "to at least one point; output was not resized"
+        )
+    width_pixels = height_pixels = None
+    if output_format in {"png", "tiff"}:
+        if isinstance(dpi, bool) or not math.isfinite(dpi) or dpi <= 0:
+            raise ValueError("resolution must be a positive finite number")
+        width_pixels = round(width_points / POINTS_PER_INCH * dpi)
+        height_pixels = round(height_points / POINTS_PER_INCH * dpi)
+        if width_pixels < 1 or height_pixels < 1:
+            raise ValueError(
+                "rendered dimensions are too small: each raster side must round "
+                "to at least one pixel at the requested resolution; output was not resized"
+            )
     if max_height_mm is not None:
         if (
             isinstance(max_height_mm, bool)
@@ -76,10 +94,7 @@ def validate_export_budget(
     if output_format not in {"png", "tiff"}:
         return None, None
 
-    if isinstance(dpi, bool) or not math.isfinite(dpi) or dpi <= 0:
-        raise ValueError("resolution must be a positive finite number")
-    width_pixels = max(1, round(width_points / POINTS_PER_INCH * dpi))
-    height_pixels = max(1, round(height_points / POINTS_PER_INCH * dpi))
+    assert width_pixels is not None and height_pixels is not None
     if (
         width_pixels > MAX_RASTER_DIMENSION_PIXELS
         or height_pixels > MAX_RASTER_DIMENSION_PIXELS

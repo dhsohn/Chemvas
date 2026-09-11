@@ -9,12 +9,55 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Complete the English/Korean agent authoring reference with settings, scene
+  fields, request v2 and tested composition → template → patch examples. Clarify
+  private output permissions, stereo/geometry/mapping limits and profile-2
+  sampling semantics without changing the machine handoff contract or profile.
+- Make GUI Group include whole connected molecules; explicitly regrouping an
+  older partial group repairs its membership without migrating documents on load.
+  Keep direct ungrouped atom movement available for local drawing corrections.
 - Lead the English README with the editable desktop-to-agent-to-desktop workflow.
   Remove the duplicate static reaction-scheme image from both READMEs, keeping
   the walkthrough GIF.
 
 ### Fixed
 
+- Apply document-wide arrow width/head and orbital phase changes immediately,
+  with exact Undo/Redo and synchronized decimal controls. Make sheet orientation
+  undoable and keep off-sheet objects reachable after changes and reopening.
+- Preserve blank paragraphs and natural-width multiline note alignment; paint
+  note boxes behind text. Expose orbital resize handles and molecular-orbital
+  controls, and allow the first drag to move TS brackets. Disambiguate recent
+  filenames, deduplicate symlink aliases and promote already-open documents.
+- Rotate notes, images, shapes and brackets around the common selection pivot
+  while keeping their contents upright; flip complete selections around one
+  pivot. Restore exact document/selection/history on grouping or transform failure.
+- Refuse perspective rotation of affected wedge/hash components before mutation,
+  and remove newly created perspective caches on first-gesture Undo or cancellation.
+- Find occupied ring sides and selected ring fills from graph cycles, including
+  SMILES imports without decorative fills. Keep fill/history failures atomic and
+  allow native CLI regular-ring fusion on plain double bonds. Avoid local chair
+  sprout crossings, correct right 270-degree arcs and near-vertical label sides,
+  and distinguish clicks from small pointer wobble for Line/Arrow gestures.
+- Keep an arranged region near its original location, with relative wrap budgets;
+  identify unsupported image groups using the dialog's row/group numbers.
+- Use fixed 96 logical DPI for desktop and CLI scene fonts. Reject dimensions
+  that round below one output point/pixel and exclude completely unpainted shapes
+  from export bounds without removing them from editable documents.
+- Reject unknown startup options before Qt, while retaining supported Qt window
+  options. Diagnose invalid native fields, Unicode, oversized mark text and PNG
+  trailing data at shared input boundaries. Display arrow-label length limits.
+- Use one assigned graph for SMILES/InChI, preserve supported bridgehead-N stereo,
+  and reject lossy tetrahedral SMILES depictions or unconsumed wedge/hash stereo
+  instead of silently changing interpretation. Distinguish aromatic sanitation
+  failures and report conversion failures using Chemvas atom IDs.
+- Require complete force-field parameters for 3D generation. Canonicalize paired
+  component/conformer order in precomplex provenance, preflight supported endpoint
+  topology, and expose exact-geometry duplicate counts in inspection only.
+  Geometry convergence remains distinct from scientific acceptance.
+- Show and enable copying molecule identifiers before slow 3D work completes,
+  retaining stale-request/cancellation guards. Place initial charge marks away
+  from incident bonds and unify actionable missing-RDKit installation messages.
 - Separate atom-label picking from document margins so nearby bonds and attached
   charge marks remain editable. Charge shortcuts cancel an opposite mark or
   place a non-overlapping new mark; Mark preview and click share their binding.

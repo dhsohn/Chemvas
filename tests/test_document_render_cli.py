@@ -474,7 +474,7 @@ def test_physical_size_limits_fail_before_painting(
     assert message in capsys.readouterr().err
     assert source.read_bytes() == source_bytes
     assert not output.exists()
-    assert not list(tmp_path.glob(f".{output.name}.staging-*"))
+    assert not list(tmp_path.glob(".chemvas-create-*"))
 
 
 def test_empty_document_and_extreme_geometry_publish_nothing(
@@ -494,7 +494,7 @@ def test_empty_document_and_extreme_geometry_publish_nothing(
             cli.run(["render-document", str(source), "--output", str(output)])
         assert error.value.code == 2
         assert not output.exists()
-        assert not list(tmp_path.glob(f".{output.name}.staging-*"))
+        assert not list(tmp_path.glob(".chemvas-create-*"))
 
 
 def test_source_and_graphics_limits_fail_before_render(
@@ -533,7 +533,7 @@ def test_rendered_output_limit_leaves_no_final_or_staging_file(
 
     assert error.value.code == 2
     assert not output.exists()
-    assert not list(tmp_path.glob(f".{output.name}.staging-*"))
+    assert not list(tmp_path.glob(".chemvas-create-*"))
 
 
 @pytest.mark.parametrize("output_format", ["svg", "pdf"])
@@ -600,7 +600,7 @@ def test_atomic_publish_rejects_target_created_after_preflight(
 
     assert error.value.code == 2
     assert output.read_text(encoding="utf-8") == "racer owns this path"
-    assert not list(tmp_path.glob(f".{output.name}.staging-*"))
+    assert not list(tmp_path.glob(".chemvas-create-*"))
 
 
 @pytest.mark.parametrize(

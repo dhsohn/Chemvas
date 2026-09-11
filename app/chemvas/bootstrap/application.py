@@ -113,6 +113,65 @@ def _reject_startup_argument(argument: str) -> NoReturn:
     raise SystemExit(2)
 
 
+def _validate_desktop_arguments(arguments: list[str]) -> None:
+    """Reject CLI mistakes before loading Qt, preserving Qt's own argv parser."""
+    # QApplication/QGuiApplication consume these options themselves. Validate
+    # their shape here, but pass the original Unicode argv through unchanged.
+    # Xcb-only options/aliases are checked again after QApplication: another
+    # backend may leave them unconsumed. Do not emulate removed Qt 4 options.
+    value_options = {
+        "-platform",
+        "-platformpluginpath",
+        "-platformtheme",
+        "-plugin",
+        "-qwindowgeometry",
+        "-qwindowicon",
+        "-qwindowtitle",
+        "-session",
+        "-display",
+        "-geometry",
+        "-title",
+        "-icon",
+        "-name",
+        "-visual",
+        "-style",
+        "-stylesheet",
+        "-qmljsdebugger",
+    }
+    flag_options = {
+        "-reverse",
+        "-widgetcount",
+        "-nograb",
+        "-dograb",
+        "-testability",
+        "-qdevel",
+        "-qdebug",
+    }
+    index = 0
+    while index < len(arguments):
+        argument = arguments[index]
+        option = argument[1:] if argument.startswith("--") else argument
+        if not argument.startswith("-") and is_desktop_document_path(argument):
+            index += 1
+        elif option in flag_options:
+            index += 1
+        elif option in value_options:
+            # Qt consumes the next token verbatim, including negative geometry,
+            # dash-prefixed titles/paths, and strings resembling other options.
+            if index + 1 >= len(arguments):
+                _reject_startup_argument(argument)
+            index += 2
+        elif option.startswith(("-style=", "-stylesheet=", "-qmljsdebugger=")):
+            index += 1
+        elif sys.platform == "darwin" and option.startswith("-psn_"):
+            # Finder's process serial number is consumed by Qt on macOS.
+            index += 1
+        else:
+            # Qt does not implement a standalone '--' sentinel. Require './'
+            # or an absolute path for a document whose basename starts with '-'.
+            _reject_startup_argument(argument)
+
+
 def _stderr_filter_loop(
     read_fd: int,
     write_fd: int,
@@ -215,14 +274,10 @@ def main() -> None:
 
         raise SystemExit(run(sys.argv[1:]))
 
-    if (
-        len(sys.argv) > 1
-        and not sys.argv[1].startswith("-")
-        and not is_desktop_document_path(sys.argv[1])
-    ):
-        _reject_startup_argument(sys.argv[1])
+    _validate_desktop_arguments(sys.argv[1:])
 
     with _filtered_stderr():
+        from PyQt6.QtCore import Qt
         from PyQt6.QtWidgets import QApplication
 
         from chemvas.adapters.macos_app_identity import apply_macos_app_name
@@ -235,6 +290,10 @@ def main() -> None:
         # while it builds the Cocoa menu bar.
         apply_macos_app_name(APP_NAME)
 
+        # A document's point-sized text must keep the same size relative to its
+        # scene-unit bonds on 72-DPI (Cocoa) and 96-DPI displays. Qt still handles
+        # device-pixel-ratio scaling; only the points-to-scene-pixels rule is fixed.
+        QApplication.setAttribute(Qt.ApplicationAttribute.AA_Use96Dpi)
         app = QApplication(sys.argv)
         # PyQt removes Qt options from the supplied Python list. Keep its Unicode
         # strings: Qt's arguments() can recode document paths on Windows.

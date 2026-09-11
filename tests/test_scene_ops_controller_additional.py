@@ -12,7 +12,6 @@ from chemvas.core.history import (
 from chemvas.domain.document import Atom
 from chemvas.ui.history_commands import SetSceneGeometryCommand, UpdateSceneItemCommand
 from chemvas.ui.scene_flip_geometry import (
-    center_for_flip_group,
     flip_bounds_for_item,
     flip_center_for_selection,
 )
@@ -74,21 +73,14 @@ class SceneOpsControllerAdditionalTest(unittest.TestCase):
         bogus_item = _make_rect_item("mystery")
 
         self.assertEqual(
-            center_for_flip_group(
+            flip_center_for_selection(
                 {1, 2},
                 [],
-                bounding_box_center_for_atoms=canvas._bounding_box_center_for_atoms,
-                flip_center_for_selection_getter=lambda atom_ids, items: (
-                    flip_center_for_selection(
-                        atom_ids,
-                        items,
-                        atoms=canvas.model.atoms,
-                        flip_bounds_getter=lambda item: flip_bounds_for_item(
-                            item,
-                            scene_item_state_getter=canvas.scene_item_state,
-                            bounds_from_points=canvas._bounds_from_points,
-                        ),
-                    )
+                atoms=canvas.model.atoms,
+                flip_bounds_getter=lambda item: flip_bounds_for_item(
+                    item,
+                    scene_item_state_getter=canvas.scene_item_state,
+                    bounds_from_points=canvas._bounds_from_points,
                 ),
             ),
             QPointF(10.0, 5.0),
@@ -168,6 +160,10 @@ class SceneOpsControllerAdditionalTest(unittest.TestCase):
             canvas.add_item(item, selected=True)
         canvas.mark_registry.by_atom[atom_1_id] = [mark_item]
 
+        # The fake orbital's stroke extends left of x=0 and the note is the
+        # rightmost member. Every item mirrors around this one selection pivot.
+        left_edge = orbital_item.sceneBoundingRect().left()
+        mirror_sum = left_edge + note_item.sceneBoundingRect().right()
         controller = scene_transform_controller_for(canvas)
         controller.flip_selected_items(horizontal=True)
 
@@ -176,18 +172,20 @@ class SceneOpsControllerAdditionalTest(unittest.TestCase):
         self.assertEqual(canvas.update_selection_outline_calls, 1)
         self.assertEqual(
             (canvas.model.atoms[atom_1_id].x, canvas.model.atoms[atom_1_id].y),
-            (20.0, 0.0),
+            (mirror_sum, 0.0),
         )
         self.assertEqual(
             (canvas.model.atoms[atom_2_id].x, canvas.model.atoms[atom_2_id].y),
-            (0.0, 0.0),
+            (mirror_sum - 20.0, 0.0),
         )
-        self.assertEqual(mark_item.data(9)["x"], 18.0)
+        self.assertEqual(mark_item.data(9)["x"], mirror_sum - 2.0)
         self.assertEqual(mark_item.data(9)["dx"], -2.0)
-        self.assertEqual(ring_item.data(9)["points"][0], (20.0, 0.0))
-        self.assertEqual(arrow_item.data(9)["start"], (50.0, 10.0))
-        self.assertEqual(arrow_item.data(9)["end"], (30.0, 10.0))
-        self.assertEqual(arrow_item.data(9)["control"], (40.0, 20.0))
+        self.assertEqual(ring_item.data(9)["points"][0], (mirror_sum, 0.0))
+        self.assertEqual(arrow_item.data(9)["start"], (mirror_sum - 30.0, 10.0))
+        self.assertEqual(arrow_item.data(9)["end"], (mirror_sum - 50.0, 10.0))
+        self.assertEqual(arrow_item.data(9)["control"], (mirror_sum - 40.0, 20.0))
+        self.assertAlmostEqual(note_item.data(9)["x"], left_edge)
+        self.assertEqual(orbital_item.data(9)["center"], (mirror_sum - 60.0, 15.0))
         self.assertEqual(orbital_item.data(9)["rotation"], 165.0)
 
     def test_rotate_selected_items_rotates_atoms_around_center(self) -> None:
@@ -382,7 +380,7 @@ class SceneOpsControllerAdditionalTest(unittest.TestCase):
         self.assertAlmostEqual(arrow_state["control"][0], 15.0)
         self.assertAlmostEqual(arrow_state["control"][1], 25.0)
 
-    def test_rotate_selected_items_ignores_upright_items(self) -> None:
+    def test_rotate_selected_items_orbits_notes_without_rotating_text(self) -> None:
         canvas = _FakeCanvas()
         atom_1_id = canvas.add_atom("C", 0.0, 0.0)
         atom_2_id = canvas.add_atom("O", 20.0, 0.0)
@@ -390,15 +388,23 @@ class SceneOpsControllerAdditionalTest(unittest.TestCase):
             atom_item = canvas._atom_item_for_id(atom_id)
             assert atom_item is not None
             atom_item.setSelected(True)
-        note_item = _make_note_item("stay put", 40.0, 10.0)
+        note_item = _make_note_item("upright", 40.0, 10.0)
         canvas.add_item(note_item, selected=True)
+        before_rect = note_item.sceneBoundingRect()
+        pivot = QPointF(before_rect.right() / 2, before_rect.bottom() / 2)
+        note_center = before_rect.center()
+        turned_center = QPointF(
+            pivot.x() - (note_center.y() - pivot.y()),
+            pivot.y() + note_center.x() - pivot.x(),
+        )
 
         scene_transform_controller_for(canvas).rotate_selected_items(90.0)
 
-        self.assertEqual(
-            note_item.data(9),
-            {"kind": "note", "text": "stay put", "x": 40.0, "y": 10.0},
-        )
+        state = note_item.data(9)
+        self.assertEqual(state["text"], "upright")
+        self.assertAlmostEqual(state["x"], 40 + turned_center.x() - note_center.x())
+        self.assertAlmostEqual(state["y"], 10 + turned_center.y() - note_center.y())
+        self.assertEqual(note_item.rotation(), 0.0)
         self.assertEqual(len(canvas.pushed_commands), 1)
 
     def test_rotate_selected_items_rotates_standalone_scene_items(self) -> None:

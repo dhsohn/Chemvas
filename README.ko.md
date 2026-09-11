@@ -17,14 +17,19 @@ Chemvas는 **화학 구조와 반응식을 그리는 오픈소스 데스크톱 �
 
 ## 설치
 
-**Python 3.12+**가 필요합니다. 선택적 RDKit 백엔드를 넣으면 SMILES 삽입이 됩니다.
+**Python 3.12+**가 필요합니다. SMILES 삽입, Molecule Info(분자식·식별자),
+3D XYZ 출력, 약어 라벨을 포함한 MOL 출력, **Suggest by structure**와
+`generate-precomplex` / `select-precomplex` / `pack-step`에는 선택적 RDKit
+백엔드가 필요합니다.
 
 ```bash
 pip install "chemvas[rdkit]"
 chemvas
 ```
 
-`pip install chemvas`는 RDKit을 뺀 설치이며 그리기와 출력은 그대로 됩니다.
+`pip install chemvas`는 RDKit을 뺀 설치입니다. 그리기, `.chemvas` 저장·열기,
+그림 출력(편집 가능한 SVG를 포함한 SVG/PDF/PNG/TIFF), 일반 MOL 가져오기·내보내기는
+그대로 사용할 수 있습니다.
 Windows 로컬 빌드는 [패키징 안내](https://github.com/dhsohn/Chemvas/blob/main/packaging/windows/README.ko.md)를 보세요.
 
 ## 첫 반응식 만들기

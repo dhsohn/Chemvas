@@ -7,6 +7,11 @@ list is most-recent-first; entries are absolute path strings.
 from __future__ import annotations
 
 import os
+from collections import Counter
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 MAX_RECENT = 10
 
@@ -21,36 +26,47 @@ def _key(path: str) -> str:
 
 
 def add_recent(
-    paths: list[str], new_path: str, *, max_entries: int = MAX_RECENT
+    paths: list[str],
+    new_path: str,
+    *,
+    max_entries: int = MAX_RECENT,
+    path_key: Callable[[str], str] = _key,
 ) -> list[str]:
     """Return a new list with ``new_path`` promoted to the front, deduped and
     capped at ``max_entries``. The original spelling of ``new_path`` is kept."""
-    new_key = _key(new_path)
+    new_key = path_key(new_path)
     result = [new_path]
     for path in paths:
-        if _key(path) != new_key:
+        if path_key(path) != new_key:
             result.append(path)
     return result[:max_entries]
 
 
-def prune_missing(paths: list[str], *, exists) -> list[str]:
+def prune_missing(
+    paths: list[str], *, exists, path_key: Callable[[str], str] = _key
+) -> list[str]:
     """Drop entries for which ``exists(path)`` is falsey (injected for testing)."""
     seen: set[str] = set()
     kept: list[str] = []
     for path in paths:
-        key = _key(path)
+        if not exists(path):
+            continue
+        key = path_key(path)
         if key in seen:
             continue
-        if exists(path):
-            seen.add(key)
-            kept.append(path)
+        seen.add(key)
+        kept.append(path)
     return kept
 
 
 def recent_menu_entries(paths: list[str]) -> list[tuple[str, str]]:
-    """Map paths to ``(label, full_path)`` for the menu. Label is the file name;
-    the full path is the tooltip / the value to open."""
-    return [(os.path.basename(path) or path, path) for path in paths]
+    """Disambiguate duplicate filenames without changing their open targets."""
+    names = [os.path.basename(path) or path for path in paths]
+    counts = Counter(names)
+    return [
+        (f"{name} — {os.path.dirname(path)}" if counts[name] > 1 else name, path)
+        for name, path in zip(names, paths, strict=True)
+    ]
 
 
 def to_json(paths: list[str]) -> dict:

@@ -41,7 +41,8 @@ class MainWindowToolRoutingService:
                 item
                 for item in self._selected_scene_items(window)
                 if item.data(0)
-                in {"bond", "atom", "ring", "note", "shape"} | VALID_ARROW_KINDS
+                in {"bond", "atom", "ring", "note", "shape", "ts_bracket"}
+                | VALID_ARROW_KINDS
             ]
             color_service.apply_color_to_items(items, color)
 
@@ -55,7 +56,7 @@ class MainWindowToolRoutingService:
             items = [
                 item
                 for item in self._selected_scene_items(window)
-                if item.data(0) == "ring"
+                if item.data(0) in {"ring", "atom", "bond"}
             ]
             color_service.apply_ring_fill_color_to_items(items, color)
 
