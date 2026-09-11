@@ -15,6 +15,10 @@ it is not an experimental result.
 | `walkthrough-arrows.gif` | Reference-guide walkthrough: reaction, equilibrium and curved arrows, the arrow-label dialog, a Line-tool reaction profile with snapping connectors. |
 | `walkthrough-editing.gif` | Reference-guide walkthrough: move, rotate with the knob, flip, align, distribute. |
 | `walkthrough-chemistry.gif` | Reference-guide walkthrough: open a molfile, Molecule Info, export MOL and 3D XYZ (RDKit). |
+| `walkthrough-images.gif` | Image-objects walkthrough: insert a synthetic PNG, move it, resize and lighten it in Image Properties. |
+| `walkthrough-arrange.gif` | Scheme-layout walkthrough: group structures with captions, Edit ▸ Arrange Scheme…, one arranged row. |
+| `cli-*.png` | CLI guide and scheme-layout figures: the documented example commands run on small synthetic inputs and rendered with `render-document` (compose, insert-template, apply-patch before/after, layout-document arrange, align-y and wrap before/after). |
+| `publication-*.png` | The final PNGs of `examples/publication_scheme.py` (`pair`, `independent-parts`) and `examples/publication_comparison.py` (`comparison`). |
 | `banner.png` | Existing Chemvas mark and the new tagline, rendered at 1360×270. |
 | `social-preview.png` | 1280×640 sharing card, including the actual example SVG. |
 
@@ -86,12 +90,27 @@ scheme, one topic per GIF:
 QT_QPA_PLATFORM=offscreen python scripts/capture_walkthroughs.py --output-dir /tmp/chemvas-walkthroughs
 ```
 
-`--topic drawing|arrows|editing|chemistry` regenerates one of them. The chemistry
+`--topic drawing|arrows|editing|chemistry|images|arrange` regenerates one of
+them. The images topic inserts a synthetic spectrum through the same function
+**File ▸ Insert Image…** calls after its file picker; the arrange topic builds
+two grouped structures off camera and drives the real Arrange Scheme dialog. The chemistry
 topic needs RDKit: it writes an aspirin molfile into the output directory, opens
 it the way **File ▸ Open** does, and drives the Molecule Info window and the MOL
 and XYZ exports through the same services the menu actions call, with the
 output paths supplied by the script instead of a file picker. Copy the reviewed
 GIFs to `docs/images/`.
+
+## Regenerate the CLI and publication figures
+
+```bash
+QT_QPA_PLATFORM=offscreen python scripts/render_doc_figures.py --output-dir /tmp/chemvas-doc-figures
+```
+
+The script writes each documented example input into `work/`, runs the public
+commands exactly as the guides show them, renders the results with
+`render-document` at 300 dpi, runs the two publication examples, and leaves the
+figures in `figures/`. Review them, then copy `figures/*.png` to `docs/images/`.
+RDKit is not needed; repeated runs give byte-identical PNGs in one environment.
 
 ## Regenerate the branding
 

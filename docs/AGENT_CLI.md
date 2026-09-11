@@ -7,6 +7,29 @@ common theme is narrow contracts that fail closed instead of guessing.
 User-facing detail (GUI, file format, shortcuts) is in
 [REFERENCE.md](REFERENCE.md).
 
+## How the commands fit together
+
+```mermaid
+flowchart LR
+    compose["compose-document<br/>Composition v1 JSON"] --> doc[("scheme.chemvas")]
+    template["insert-template"] --> doc
+    desktop["Desktop app<br/>File ▸ Save"] --> doc
+    doc --> inspect["inspect-document<br/>exact SHA-256 + atom IDs"]
+    inspect --> patch["apply-patch<br/>Graph Patch v1"]
+    inspect --> layout["layout-document<br/>scheme layout"]
+    patch --> revised[("new .chemvas")]
+    layout --> revised
+    revised --> check["check-layout<br/>warnings, exit 0/1/2"]
+    revised --> render["render-document<br/>SVG · PDF · PNG"]
+    doc --> plan["attach-plan → inspect-plan"]
+    plan --> precomplex["generate-precomplex → select-precomplex"]
+    precomplex --> pack["pack-step<br/>machine.json"]
+```
+
+Every command reads the exact source bytes, validates before it needs Qt where
+it can, and publishes one new file atomically; no command edits its input.
+The figures below are the documented examples rendered with `render-document`.
+
 ## Headless document composition
 
 An agent can create a canonical, reopenable Chemvas v7 document from the smaller
@@ -40,6 +63,8 @@ A minimal composition is:
   ]
 }
 ```
+
+![The minimal composition rendered: an O⁻–P⁺ bond above a bold blue "Condition" note](images/cli-compose.png)
 
 Atom IDs must be contiguous and ordered from zero. Optional atom fields are
 `color`, `explicit_label`, `formal_charge`, and `radical_electrons`; Chemvas
@@ -228,6 +253,8 @@ chemvas insert-template scheme.chemvas --request ring.json --output ring-added.c
 }
 ```
 
+![The request above applied to the composed document: a benzene ring placed at (200, 120) beside the O⁻–P⁺ pair](images/cli-insert-template.png)
+
 All root fields are required. `regular` supports ring sizes 3–12; `benzene`,
 `chair`, `chair_flip`, and `boat` require size 6. Position is the native template
 placement point, not a promise that it is the ring's centroid. Atom anchoring uses
@@ -364,6 +391,13 @@ hash into a Graph Patch v1 precondition:
   ]
 }
 ```
+
+A patch of exactly this shape, adding an oxygen to a ring carbon of the
+document above and then making that bond double; before and after:
+
+![Before the patch: the O⁻–P⁺ pair, the note and the benzene ring](images/cli-apply-patch-before.png)
+
+![After the patch: the ring carries a C=O](images/cli-apply-patch-after.png)
 
 Supported operations are `add_atom`, `update_atom` (element/color/explicit label),
 `move_atom`, `set_terminal_angle`, `add_bond`, `update_bond`, and `remove_bond`.
