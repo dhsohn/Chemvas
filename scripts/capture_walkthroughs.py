@@ -2,14 +2,17 @@
 """Capture the short reference-guide walkthroughs from the real application.
 
 Each topic drives the main window offscreen with synthetic input and writes
-one GIF: drawing, arrows, editing and chemistry. Run with the development
-environment including RDKit and an empty output directory; only synthetic
-drawing data is used and no user document is opened.
+one GIF: drawing, arrows, editing, chemistry, images and arrange. Run with the
+development environment and an empty output directory; the editing, chemistry
+and arrange topics insert structures from SMILES and therefore need the
+optional RDKit backend. Only synthetic drawing data is used and no user
+document is opened.
 """
 
 from __future__ import annotations
 
 import argparse
+import io
 import os
 import sys
 from itertools import pairwise
@@ -25,9 +28,11 @@ from PyQt6.QtWidgets import QApplication, QDialog, QLineEdit, QPushButton
 from walkthrough_capture import WIDTH, Walkthrough, run_with_profile
 
 from chemvas.core.molfile import write_molfile
+from chemvas.ui.canvas_atom_graphics_state import visible_atom_item_for
 from chemvas.ui.canvas_insert_state import insert_state_for
 from chemvas.ui.canvas_scene_items_state import arrow_items_for
 from chemvas.ui.canvas_service_access import canvas_services_for
+from chemvas.ui.image_actions import insert_image_bytes
 from chemvas.ui.main_window_ports import (
     document_session_service_for_window,
     preview_window_for_window,
@@ -35,9 +40,10 @@ from chemvas.ui.main_window_ports import (
 )
 from chemvas.ui.rdkit_adapter_access import smiles_to_2d_for
 from chemvas.ui.renderer_style_access import bond_length_px_for
+from chemvas.ui.scene_decoration_access import add_arrow_for
 from chemvas.ui.scene_item_state_serialization import arrow_state_dict
 
-TOPICS = ("drawing", "arrows", "editing", "chemistry")
+TOPICS = ("drawing", "arrows", "editing", "chemistry", "images", "arrange")
 
 
 def _bond_midpoint(canvas, index: int) -> tuple[float, float]:
@@ -57,7 +63,10 @@ def _place_smiles(w: Walkthrough, smiles: str, x: float, y: float) -> list[int]:
     w.app.processEvents()
     added = sorted(set(w.canvas.model.atoms) - previous)
     if not added:
-        raise RuntimeError(f"{smiles!r} was not inserted")
+        raise RuntimeError(
+            f"{smiles!r} was not inserted; the editing, chemistry and arrange "
+            "topics need the optional RDKit backend"
+        )
     return added
 
 
@@ -329,11 +338,150 @@ def chemistry(w: Walkthrough) -> None:
     w.extra_windows.clear()
 
 
+# --- images -----------------------------------------------------------------
+
+
+def _synthetic_spectrum_png() -> bytes:
+    """A stand-in for an NMR panel: a baseline with a few peaks and ticks.
+    Nothing measured; only synthetic pixels."""
+    from PIL import Image, ImageDraw
+
+    width, height = 600, 220
+    image = Image.new("RGB", (width, height), "white")
+    draw = ImageDraw.Draw(image)
+    baseline = height - 40
+    draw.line((30, baseline, width - 20, baseline), fill="black", width=2)
+    for x in range(40, width - 20, 70):
+        draw.line((x, baseline, x, baseline + 8), fill="black", width=2)
+    for x, peak in (
+        (110, 150),
+        (128, 120),
+        (300, 90),
+        (318, 100),
+        (336, 95),
+        (470, 60),
+    ):
+        draw.line((x, baseline, x, baseline - peak), fill="#1f3b73", width=3)
+    draw.rectangle((30, 20, width - 20, baseline), outline="#bbbbbb")
+    buffer = io.BytesIO()
+    image.save(buffer, format="PNG")
+    return buffer.getvalue()
+
+
+def images(w: Walkthrough) -> None:
+    title = "Embedded images"
+    w.capture(
+        title,
+        "File ▸ Insert Image… puts a PNG or JPEG panel beside native objects.",
+        1200,
+    )
+    item = insert_image_bytes(w.canvas, _synthetic_spectrum_png())
+    w.app.processEvents()
+    center = item.sceneBoundingRect().center()
+    w.move(center.x(), center.y())
+    w.capture(
+        title,
+        "The original bytes are embedded; the new image is selected (synthetic spectrum).",
+        1800,
+    )
+    w.drag(
+        (center.x(), center.y()),
+        (center.x() - 40.0, center.y() - 30.0),
+        title=title,
+        detail="Select: drag the image to move it.",
+    )
+
+    def fill(dialog: QDialog) -> None:
+        dialog.fields["width"].setValue(200.0)
+        dialog.opacity.setValue(70.0)
+        w.capture(
+            title,
+            "Edit ▸ Image Properties…: width follows the locked aspect ratio; opacity is a canvas property.",
+            2600,
+        )
+        next(b for b in dialog.findChildren(QPushButton) if b.text() == "OK").click()
+
+    w.dialog(
+        lambda: w.action("Image Properties...").trigger(), "Image Properties", fill
+    )
+    w.click(0.0, 120.0)
+    w.move(0.0, 130.0)
+    w.capture(
+        title,
+        "Resized and lighter; the source pixels are untouched and export intact.",
+        2200,
+    )
+
+
+# --- arrange scheme ---------------------------------------------------------
+
+
+def _group(w: Walkthrough, atom_ids: list[int], note) -> None:
+    w.canvas.scene().clearSelection()
+    for atom_id in atom_ids:
+        atom_item = visible_atom_item_for(w.canvas, atom_id)
+        if atom_item is not None:
+            atom_item.setSelected(True)
+    w.canvas.services.selection.selection_controller.select_note(note)
+    w.app.processEvents()
+    w.action("Group").trigger()
+    w.app.processEvents()
+
+
+def arrange(w: Walkthrough) -> None:
+    title = "Arrange Scheme"
+    left = _place_smiles(w, "CCO", -100.0, -12.0)
+    right = _place_smiles(w, "CC=O", 70.0, 24.0)
+    notes = canvas_services_for(w.canvas).interaction.note_controller
+    caption_left = notes.create_text_note(QPointF(-118.0, 26.0), "ethanol")
+    caption_right = notes.create_text_note(QPointF(30.0, 74.0), "acetaldehyde")
+    add_arrow_for(w.canvas, QPointF(-40.0, 0.0), QPointF(20.0, 0.0), "arrow")
+    w.set_tool("select")
+    w.canvas.scene().clearSelection()
+    w.move(0.0, 100.0)
+    w.capture(
+        title, "Two structures, two captions and an arrow, not yet aligned.", 1600
+    )
+    _group(w, left, caption_left)
+    _group(w, right, caption_right)
+    w.capture(
+        title, "Select each structure with its caption and use Edit ▸ Group.", 1800
+    )
+
+    def fill(dialog: QDialog) -> None:
+        widgets = dialog.group_widgets
+        widgets[0].captions.setText("1")
+        widgets[1].captions.setText("2")
+        widgets[0].arrow.setCurrentIndex(1)
+        w.capture(
+            title,
+            "Edit ▸ Arrange Scheme…: row and order per group, caption numbers, the arrow after block 1.",
+            3000,
+        )
+        next(
+            b for b in dialog.findChildren(QPushButton) if b.text() == "Arrange"
+        ).click()
+
+    w.dialog(lambda: w.action("Arrange Scheme...").trigger(), "Arrange Scheme", fill)
+    # The arranged row starts at the first block's origin; bring it back into view.
+    arranged = w.canvas.scene().itemsBoundingRect().center()
+    w.canvas.centerOn(arranged)
+    w.click(arranged.x(), arranged.y() + 90.0)
+    w.move(arranged.x(), arranged.y() + 100.0)
+    w.capture(
+        title,
+        "One row: captions centred below each structure, the arrow between them. Ctrl+Z undoes it all.",
+        2600,
+    )
+
+
 TOPIC_RUNNERS = {
     "drawing": drawing,
     "arrows": arrows,
     "editing": editing,
     "chemistry": chemistry,
+    "images": images,
+    "arrange": arrange,
 }
 
 

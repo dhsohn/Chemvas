@@ -9,6 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- Figures and diagrams in the guides: the CLI guide opens with a flowchart of
+  how the commands chain and shows the composition, template-insertion and
+  Graph Patch examples rendered; the scheme-layout guide shows arrange, align-y
+  and wrapping before and after, plus an Arrange Scheme walkthrough GIF; the
+  publication recipe shows its three output figures; the image-objects guide
+  opens with an Insert Image / Image Properties walkthrough GIF; the
+  architecture guide gains a layer diagram and a render-flow diagram.
+  `scripts/render_doc_figures.py` regenerates the figures from the documented
+  commands.
 - Four short walkthrough GIFs in the reference guide, captured from the
   application: drawing a structure, arrows and labels, select/move/rotate/align,
   and chemistry I/O. `scripts/capture_walkthroughs.py` regenerates them on the

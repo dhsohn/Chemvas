@@ -175,16 +175,21 @@ def test_packaged_readme_has_no_repository_relative_links() -> None:
     )
 
 
-def test_reference_walkthrough_images_exist() -> None:
-    text = _read(REFERENCE)
-    targets = re.findall(r"!\[[^\]]*\]\(([^)\s]+)\)", text)
-    assert targets, f"{REFERENCE.name}: no embedded images found"
-    missing = [
-        target for target in targets if not (REFERENCE.parent / target).is_file()
-    ]
-    assert not missing, (
-        f"{REFERENCE.name} embeds images that are not in the tree: {missing}"
-    )
+def test_docs_embedded_images_exist() -> None:
+    """Every image a guide embeds by relative path is in the tree."""
+    docs = sorted((ROOT / "docs").glob("*.md"))
+    assert docs
+    missing: list[str] = []
+    embedded = 0
+    for path in docs:
+        for target in re.findall(r"!\[[^\]]*\]\(([^)\s]+)\)", _read(path)):
+            if target.startswith("https://"):
+                continue
+            embedded += 1
+            if not (path.parent / target).is_file():
+                missing.append(f"{path.name}: {target}")
+    assert embedded, "no relative image embeds found under docs/"
+    assert not missing, f"guides embed images that are not in the tree: {missing}"
 
 
 def test_reference_matches_atom_and_text_tool_hotkeys():

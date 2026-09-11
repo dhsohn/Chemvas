@@ -8,6 +8,8 @@ embedded, so the original files are not needed to reopen the document.
 
 ## GUI
 
+![Embedded images walkthrough: insert a PNG, drag it with Select, resize and lighten it in Image Properties](images/walkthrough-images.gif)
+
 Choose **File → Insert Image…** and select a `.png`, `.jpg`, or `.jpeg` file.
 Use the Select tool to move the resulting image. Select one image and choose
 **Edit → Image Properties…** to set X, Y, width, height, aspect locking, and opacity.

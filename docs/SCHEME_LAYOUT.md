@@ -12,6 +12,8 @@ or changing horizontal placement. This mode is explicit, never the default.
 
 ## Arrange from the desktop
 
+![Arrange Scheme walkthrough: group each structure with its caption, open the dialog, choose captions and the arrow, click Arrange](images/walkthrough-arrange.gif)
+
 1. Select each complete structure together with its caption notes and use
    **Edit ▸ Group**. Include disconnected fragments and TS brackets in the same
    group when they belong to that state.
@@ -87,6 +89,13 @@ source document. This example requires the corresponding atoms and items:
 }
 ```
 
+This request applied to two structures with two captions each, a TS bracket
+on the second and one arrow; before and after:
+
+![Before layout: the second structure sits higher, its captions further down and the bracket loosely around it](images/cli-layout-arrange-before.png)
+
+![After layout: both blocks share a row, captions are centred below each structure at common baselines, the bracket moved with its block](images/cli-layout-arrange-after.png)
+
 Each block must include whole connected structures. Explicitly include separated
 reactants or products that belong to the same state. `captions` lists existing
 notes from top to bottom, for example identifier then energy. `items` adds notes,
@@ -148,6 +157,14 @@ neighbours but the captions and horizontal spacing are already correct:
 }
 ```
 
+The same request on a product that floats above the reactant, with a separate
+chloride ion as its own part; captions and every X coordinate stay where they
+were:
+
+![Before align-y: the product chain and the Cl⁻ sit well above the reactant](images/cli-layout-align-y-before.png)
+
+![After align-y: both parts moved down to the reactant's molecular midline, captions untouched](images/cli-layout-align-y-after.png)
+
 `reference_blocks` contains zero-based block indices in that row. The target is
 the vertical midpoint of the **union of those blocks' original molecular painted
 bounds**, not the average of their atom positions and not a designated P atom.
@@ -188,6 +205,10 @@ Add optional `"max_row_width": 900` at the request root to wrap each specified
 row into lines no wider than 900 canvas units. The value must be positive,
 finite and at most 100,000. Omit it to retain explicit rows and shared column
 widths. This is a layout budget, not an output width in millimetres.
+
+![Before wrapping: four states and three arrows in one long row](images/cli-layout-wrap-before.png)
+
+![After wrapping with max_row_width 320: two lines, the continuation arrow at the start of the second line](images/cli-layout-wrap-after.png)
 
 Wrapping follows the listed block order. Each complete structure/caption block
 stays together, including any explicitly grouped fragments and TS symbols. A

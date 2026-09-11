@@ -1,5 +1,32 @@
 # 아키텍처
 
+## 한눈에 보는 계층
+
+누가 누구를 import할 수 있는지에 대한 규범 아닌 스냅샷이다. 화살표는
+import하는 패키지에서 의존 대상 패키지로 향한다. 목표 경계는
+[ADR 0001](adr/0001-feature-oriented-modularization.md)이 정한다.
+
+```mermaid
+flowchart TB
+    bootstrap["bootstrap<br/>CLI 분기 · 앱 시작 · 서비스 조립"]
+    shell["shell<br/>메인 창 크롬 · 아이콘 · 테마"]
+    ui["ui<br/>CanvasView · 도구 · 서비스 (Qt)"]
+    adapters["adapters.qt<br/>Renderer · 파일 열기 이벤트"]
+    features["features<br/>export · insertion · selection · hover · rendering · scheme_layout … (Qt 없는 정책)"]
+    core["core<br/>history · rdkit_adapter · molfile · document_io (Qt 없음)"]
+    domain["domain<br/>문서 모델 · 계산 계획 · 트랜잭션 (Qt 없음)"]
+    bootstrap --> ui
+    bootstrap --> shell
+    bootstrap --> adapters
+    ui --> shell
+    ui --> adapters
+    ui --> features
+    ui --> core
+    adapters --> features
+    features --> domain
+    core --> domain
+```
+
 ## 현재 구현 지도 (규범 아님)
 
 이 절은 마이그레이션 중인 현재 코드를 설명한다. 목표 패키지 경계와
@@ -89,6 +116,11 @@ content bounds와 물리 크기를 함께 계산한다. 선택 회전, 클립보
 
 ## 데이터/렌더 흐름 (Data/Render Flow)
 Tools -> CanvasView -> MoleculeModel 변경(mutation) -> Renderer/BondRenderer -> QGraphicsScene 업데이트 -> HistoryCommand 푸시.
+
+```mermaid
+flowchart LR
+    tool["도구<br/>(포인터 / 키)"] --> view["CanvasView"] --> model["MoleculeModel<br/>변경"] --> renderer["Renderer /<br/>BondRenderer"] --> scene["QGraphicsScene<br/>아이템"] --> history["HistoryCommand<br/>푸시"]
+```
 
 3D 흐름: 내보내기 커맨드 또는 미리보기 새로고침 -> 현재 분자 / 활성 원자-결합 선택 -> MoleculeModel 서브그래프 + 원자 마크 주석(atom mark annotations) -> RDKitAdapter 변환 그래프 구성 -> RDKit 3D 임베딩 -> `.xyz` 라이터(writer) 또는 미리보기 씬.
 

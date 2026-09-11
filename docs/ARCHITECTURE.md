@@ -1,5 +1,32 @@
 # Architecture
 
+## Layers at a glance
+
+A non-normative snapshot of who may import whom. Arrows point from the
+importing package to the one it depends on; the target boundaries are set by
+[ADR 0001](adr/0001-feature-oriented-modularization.md).
+
+```mermaid
+flowchart TB
+    bootstrap["bootstrap<br/>CLI dispatch · app startup · service assembly"]
+    shell["shell<br/>main-window chrome · icons · theme"]
+    ui["ui<br/>CanvasView · tools · services (Qt)"]
+    adapters["adapters.qt<br/>Renderer · file-open events"]
+    features["features<br/>export · insertion · selection · hover · rendering · scheme_layout … (Qt-free policies)"]
+    core["core<br/>history · rdkit_adapter · molfile · document_io (Qt-free)"]
+    domain["domain<br/>document model · calculation plan · transactions (Qt-free)"]
+    bootstrap --> ui
+    bootstrap --> shell
+    bootstrap --> adapters
+    ui --> shell
+    ui --> adapters
+    ui --> features
+    ui --> core
+    adapters --> features
+    features --> domain
+    core --> domain
+```
+
 ## Current Implementation Map (Non-Normative)
 
 This section describes the code as it exists during migration. The target
@@ -94,6 +121,11 @@ end state is decided.
 
 ## Data/Render Flow
 Tools -> CanvasView -> MoleculeModel mutation -> Renderer/BondRenderer -> QGraphicsScene updates -> HistoryCommand push.
+
+```mermaid
+flowchart LR
+    tool["Tool<br/>(pointer / keys)"] --> view["CanvasView"] --> model["MoleculeModel<br/>mutation"] --> renderer["Renderer /<br/>BondRenderer"] --> scene["QGraphicsScene<br/>items"] --> history["HistoryCommand<br/>push"]
+```
 
 3D flow: export command or preview refresh -> current molecule / active atom-bond selection -> MoleculeModel subgraph + atom mark annotations -> RDKitAdapter conversion graph build -> RDKit 3D embedding -> `.xyz` writer or preview scene.
 
