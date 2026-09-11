@@ -31,7 +31,7 @@ chemvas
 ```
 
 `pip install chemvas`는 RDKit을 뺀 설치이며 그리기와 출력은 그대로 됩니다.
-Windows 로컬 빌드는 [패키징 안내](https://github.com/dhsohn/Chemvas/blob/main/packaging/windows/README.md)를 보세요.
+Windows 로컬 빌드는 [패키징 안내](https://github.com/dhsohn/Chemvas/blob/main/packaging/windows/README.ko.md)를 보세요.
 
 ## 첫 반응식 만들기
 
@@ -74,10 +74,10 @@ chemvas render-document first-scheme.chemvas --output first-scheme.pdf --width-m
 - [계산 전달 (RDKit)](https://github.com/dhsohn/Chemvas/blob/main/docs/AGENT_CLI.ko.md#계산-상태와-기본-단계): 반응 단계와 검토한 반응 전 복합체를 단계별 `machine.json`으로 내보냅니다.
 - 문서는 편집 가능한 `.chemvas` JSON 파일(version 7)입니다.
   [다른 예제](https://github.com/dhsohn/Chemvas/tree/main/examples)
-- [기여 안내](https://github.com/dhsohn/Chemvas/blob/main/CONTRIBUTING.md) ·
+- [기여 안내](https://github.com/dhsohn/Chemvas/blob/main/CONTRIBUTING.ko.md) ·
   [아키텍처](https://github.com/dhsohn/Chemvas/blob/main/docs/ARCHITECTURE.ko.md) ·
   [변경 이력](https://github.com/dhsohn/Chemvas/blob/main/CHANGELOG.md) ·
-  [릴리스](https://github.com/dhsohn/Chemvas/blob/main/RELEASING.md) ·
+  [릴리스](https://github.com/dhsohn/Chemvas/blob/main/RELEASING.ko.md) ·
   [MIT License](https://github.com/dhsohn/Chemvas/blob/main/LICENSE)
 
 불편한 점이 있었다면 [이슈로 알려주세요](https://github.com/dhsohn/Chemvas/issues).
