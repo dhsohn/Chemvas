@@ -166,6 +166,17 @@ def alias_attachment_error(
     annotation: Mapping[str, int] | None = None,
 ) -> str | None:
     definition = ATOM_ALIAS_DEFINITIONS.get(label)
+    if (
+        definition is not None
+        and definition.terminal_hydrogens is None
+        and definition.attachment_contract is None
+        and any(attachment.bond_order != 1 for attachment in attachments)
+    ):
+        return (
+            f"Alias label '{label}' on atom {atom_id} requires a single attachment "
+            "bond to preserve the abbreviated group; use explicit element atoms "
+            "for a double or triple bond."
+        )
     if definition is not None and definition.terminal_hydrogens is not None:
         if len(attachments) != 1 or attachments[0].bond_order != 1:
             return (

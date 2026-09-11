@@ -143,6 +143,12 @@ The original 16-bit PNG file and its SVG raster can retain that precision;
 PDF and whole-figure PNG export are 8-bit display outputs. Use the native
 embedded source when the original pixel precision is needed.
 
+The rendered raster omits source-image text metadata such as PNG text chunks
+and JPEG comments, including in plain SVG and vector clipboard output. The
+native document and Editable Chemvas SVG still preserve the exact encoded
+source bytes, including that metadata; share plain figure exports when the
+original image metadata should not travel with the editable document.
+
 Images with zero effective object opacity do not contribute to whole-canvas or
 selection figure export bounds; a figure containing only those images has nothing
 to export. Positive-opacity images retain their full rectangle, including

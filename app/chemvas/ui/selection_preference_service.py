@@ -47,6 +47,8 @@ class SelectionPreferenceService:
     def preferred_structure_hit_at_scene_pos(self, pos: QPointF) -> StructureHit | None:
         item = self.item_at_scene_pos(pos)
         item_hit, _, _ = self.structure_service.structure_hit_from_item(item)
+        if item is not None and item.data(0) == "mark":
+            return item_hit
         if item_hit is not None and item_hit.kind == "atom":
             return item_hit
         atom_hit = self.nearest_atom_hit(pos)

@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 import contextlib
+import hashlib
 import json
 import os
 import stat
 import tempfile
-from dataclasses import dataclass
+from dataclasses import dataclass, field, replace
 from os import PathLike
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
@@ -28,6 +29,7 @@ PathType = str | PathLike[str]
 class ChemvasDocument:
     payload: dict[str, Any]
     state: dict[str, Any]
+    source_sha256: str | None = field(default=None, compare=False)
 
 
 def create_document(state: dict[str, Any], version: int) -> ChemvasDocument:
@@ -56,11 +58,18 @@ def write_document(
     path: PathType, state: dict[str, Any], version: int
 ) -> ChemvasDocument:
     document = create_document(state, version)
-    atomic_write_via_temp(
-        path,
-        lambda tmp: _write_document_payload(tmp, document.payload),
-    )
-    return document
+    source_sha256: str | None = None
+
+    def write_payload(tmp: Path) -> None:
+        nonlocal source_sha256
+        _write_document_payload(tmp, document.payload)
+        # Bind the baseline to our exact staged bytes, never a later writer's
+        # replacement of the destination after the atomic publication.
+        with tmp.open("rb") as source:
+            source_sha256 = hashlib.file_digest(source, "sha256").hexdigest()
+
+    atomic_write_via_temp(path, write_payload)
+    return replace(document, source_sha256=source_sha256)
 
 
 def _write_document_payload(path: Path, payload: dict[str, Any]) -> None:
@@ -131,7 +140,10 @@ def read_exact_document(
         payload = strict_json_loads(source_bytes)
     except (ValueError, RecursionError, UnicodeError) as exc:
         raise ValueError("Invalid Chemvas file.") from exc
-    return source_bytes, parse_document(payload)
+    return source_bytes, replace(
+        parse_document(payload),
+        source_sha256=hashlib.sha256(source_bytes).hexdigest(),
+    )
 
 
 def atomic_create_bytes(path: PathType, content: bytes) -> None:

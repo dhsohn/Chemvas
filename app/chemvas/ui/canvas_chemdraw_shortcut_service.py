@@ -27,7 +27,6 @@ from chemvas.ui.structure_build_access import (
     sprout_dimethyl_from_atom_for,
     sprout_regular_ring_from_atom_for,
 )
-from chemvas.ui.structure_geometry_access import atom_point_for
 
 
 class CanvasChemdrawShortcutService:
@@ -110,8 +109,8 @@ class CanvasChemdrawShortcutService:
     def _add_mark_for_atom(self, atom_id: int, *, kind: str) -> None:
         if self.mark_scene_service is None:
             return
-        self.mark_scene_service.add_mark_for_atom(
-            atom_id, atom_point_for(self.canvas, atom_id), kind=kind
+        self.mark_scene_service.change_charge_for_atom(
+            atom_id, 1 if kind == "plus" else -1
         )
 
     def handle_shortcut(self, event) -> bool:

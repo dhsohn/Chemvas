@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+import re
 from typing import TYPE_CHECKING, Any, cast
 
 from chemvas.domain.atom_aliases import ATOM_ALIAS_DEFINITIONS
@@ -25,6 +26,19 @@ class RDKitImportHelper:
             self.adapter.last_error = (
                 "Invalid SMILES string. Example: CC(=O)O (acetic acid), "
                 "c1ccccc1 (benzene), C1CCCCC1 (cyclohexane)."
+            )
+            return None
+        # The whole-molecule racemic flag does not create a StereoGroup. Read
+        # the extension retained by RDKit: legal atom labels may themselves
+        # contain pipes, so splitting the user's text at a pipe is ambiguous.
+        cx_fields = (
+            mol.GetProp("_CXSMILES_Data")[1:-1] if mol.HasProp("_CXSMILES_Data") else ""
+        )
+        cx_fields = re.sub(r"\$[^$]*\$", "", cx_fields)
+        if re.search(r"(?:^|,)\s*r\s*(?:,|$)", cx_fields):
+            self.adapter.last_error = (
+                "Cannot insert this SMILES: relative or racemic stereochemistry "
+                "cannot be preserved as absolute wedge/hash bonds."
             )
             return None
         # "Ts" (tosyl) and "Ac" (acetyl) are element symbols too, so RDKit

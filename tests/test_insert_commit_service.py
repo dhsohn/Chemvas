@@ -893,7 +893,7 @@ class InsertCommitServiceTest(unittest.TestCase):
                     {
                         "clear_smiles": False,
                         "record": False,
-                        "allow_merge": True,
+                        "allow_merge": False,
                         "show_carbon": False,
                     },
                 ),
@@ -903,7 +903,7 @@ class InsertCommitServiceTest(unittest.TestCase):
                     {
                         "clear_smiles": False,
                         "record": False,
-                        "allow_merge": True,
+                        "allow_merge": False,
                         "show_carbon": False,
                     },
                 ),

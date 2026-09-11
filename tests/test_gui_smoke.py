@@ -1697,14 +1697,17 @@ class GuiShortcutSmokeTest(unittest.TestCase):
             record=False,
         )
         label = atom_items_for(active_canvas_for_window(self.window))[atom_id]
-        rect = label.sceneBoundingRect()
+        glyph = label.mapToScene(label.glyph_path())
+        rect = glyph.boundingRect()
         hit_rect = label.shape().boundingRect()
         self.assertGreater(
             hit_rect.width(),
             atom_pick_radius_for(active_canvas_for_window(self.window)) * 2.0,
         )
 
-        self._click_scene_point(QPointF(rect.left() + 1.0, rect.center().y()))
+        point = QPointF(rect.left() + 1.0, rect.center().y())
+        self.assertTrue(glyph.contains(point))
+        self._click_scene_point(point)
 
         atom_ids, bond_ids = selected_ids_for(active_canvas_for_window(self.window))
         self.assertEqual(atom_ids, {atom_id})
@@ -1778,9 +1781,12 @@ class GuiShortcutSmokeTest(unittest.TestCase):
         add_bond_for(active_canvas_for_window(self.window), left, right)
         add_bond_graphics_for(active_canvas_for_window(self.window), 0)
         label = atom_items_for(active_canvas_for_window(self.window))[left]
-        rect = label.sceneBoundingRect()
+        glyph = label.mapToScene(label.glyph_path())
+        rect = glyph.boundingRect()
 
-        self._click_scene_point(QPointF(rect.left() + 1.0, rect.center().y()))
+        point = QPointF(rect.left() + 1.0, rect.center().y())
+        self.assertTrue(glyph.contains(point))
+        self._click_scene_point(point)
 
         atom_ids, bond_ids = selected_ids_for(active_canvas_for_window(self.window))
         self.assertEqual(atom_ids, {left})

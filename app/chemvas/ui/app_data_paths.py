@@ -75,4 +75,22 @@ def sessions_dir() -> Path:
     return directory
 
 
-__all__ = ["app_data_dir", "recent_documents_file", "sessions_dir"]
+def existing_session_roots() -> tuple[Path, ...]:
+    """Find only existing known recovery roots without probing or creating them."""
+    roots: list[Path] = []
+    for candidate in _candidate_dirs():
+        try:
+            root = (candidate / "sessions").resolve()
+            if root.is_dir() and root not in roots:
+                roots.append(root)
+        except OSError:
+            continue
+    return tuple(roots)
+
+
+__all__ = [
+    "app_data_dir",
+    "existing_session_roots",
+    "recent_documents_file",
+    "sessions_dir",
+]

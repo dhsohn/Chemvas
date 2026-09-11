@@ -36,6 +36,28 @@ class ImageItem(QGraphicsRectItem):
             raise ValueError(
                 "The embedded image could not be decoded at its original dimensions."
             )
+        if image.textKeys():
+            # The document keeps the encoded source, but a rendered figure must
+            # not inherit its comments/authorship text through QSvgGenerator.
+            # Construct from pixels: setText(key, "") retains the text keys.
+            pixels = image.constBits()
+            assert pixels is not None
+            # SIP accepts a const pixel pointer; the stubs list only bytes.
+            rendered = QImage(  # type: ignore[call-overload]
+                pixels,
+                image.width(),
+                image.height(),
+                image.bytesPerLine(),
+                image.format(),
+            ).copy()
+            if rendered.isNull():
+                raise ValueError(
+                    "The embedded image pixels could not be copied for rendering."
+                )
+            if image.colorTable():
+                rendered.setColorTable(image.colorTable())
+            rendered.setColorSpace(image.colorSpace())
+            image = rendered
         image.setDevicePixelRatio(1.0)
         self._image = image
         self.setPen(QPen(Qt.PenStyle.NoPen))

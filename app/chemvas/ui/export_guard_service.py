@@ -1,4 +1,4 @@
-"""Shared pre-render dimension limits for opt-in GUI and public CLI export."""
+"""Shared pre-render dimension limits for GUI and public CLI export."""
 
 from __future__ import annotations
 

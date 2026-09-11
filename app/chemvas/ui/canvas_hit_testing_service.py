@@ -20,6 +20,7 @@ from chemvas.ui.canvas_model_access import (
     has_atoms_for,
 )
 from chemvas.ui.graphics_items import ArrowPathItem
+from chemvas.ui.mark_item_access import mark_center_for
 from chemvas.ui.pick_radius_access import atom_pick_radius_for, bond_pick_radius_for
 from chemvas.ui.renderer_style_access import bond_length_px_for
 from chemvas.ui.spatial_index_state import (
@@ -54,6 +55,7 @@ class CanvasHitTestingService:
     def item_at_scene_pos(self, pos: QPointF):
         handle_item = None
         atom_item = None
+        mark_item = None
         bond_item = None
         ring_item = None
         other_item = None
@@ -75,6 +77,9 @@ class CanvasHitTestingService:
             if kind == "atom" and atom_item is None:
                 atom_item = item
                 continue
+            if kind == "mark" and mark_item is None:
+                mark_item = item
+                continue
             if kind == "bond" and bond_item is None:
                 bond_item = item
                 continue
@@ -89,6 +94,15 @@ class CanvasHitTestingService:
             # priority below outrank them makes arrow endpoints and resize
             # grips unreachable wherever they touch the structure.
             return handle_item
+        if mark_item is not None:
+            if atom_item is None:
+                return mark_item
+            atom = atom_for_id(self.canvas, atom_item.data(1))
+            center = mark_center_for(self.canvas, mark_item)
+            if atom is not None and math.hypot(
+                center.x() - pos.x(), center.y() - pos.y()
+            ) < math.hypot(atom.x - pos.x(), atom.y - pos.y()):
+                return mark_item
         if atom_item is not None:
             return atom_item
         if bond_item is None:

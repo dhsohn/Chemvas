@@ -171,6 +171,7 @@ class CanvasAtomMutationServiceTest(unittest.TestCase):
             "O",
             clear_smiles=False,
             record=False,
+            allow_merge=False,
         )
 
     def test_remove_atom_only_cleans_scene_state_graph_links_and_bond_ids(self) -> None:

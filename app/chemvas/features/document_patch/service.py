@@ -18,6 +18,7 @@ from chemvas.domain.document import (
     is_hex_color,
     serialize_model_state,
 )
+from chemvas.domain.document.perspective import translate_projected_point_3d
 from chemvas.features.calculation_bundle import (
     inspect_component_inventory,
     inspect_components,
@@ -227,7 +228,7 @@ def _apply_operation(
         return _add_bond(model, operation)
     if op == "update_bond":
         return _update_bond(model, operation)
-    return _remove_bond(model, operation)
+    return _remove_bond(state, model, operation)
 
 
 def _add_atom(
@@ -445,13 +446,20 @@ def _update_bond(
 
 
 def _remove_bond(
-    model: MoleculeModel, operation: Mapping[str, object]
+    state: dict[str, Any], model: MoleculeModel, operation: Mapping[str, object]
 ) -> dict[str, object]:
     _require_exact_keys(operation, {"op", "a", "b"}, "remove_bond")
     a = _atom_id(operation.get("a"), "a")
     b = _atom_id(operation.get("b"), "b")
     bond = _existing_bond(model, a, b)
     model.bonds.remove(bond)
+    remaining_fills = []
+    for ring in state.get("ring_fills", []):
+        atom_ids = ring["atom_ids"]
+        edges = zip(atom_ids, atom_ids[1:] + atom_ids[:1], strict=True)
+        if not any(_pair(first, second) == _pair(a, b) for first, second in edges):
+            remaining_fills.append(ring)
+    state["ring_fills"] = remaining_fills
     return {"op": "remove_bond", "a": bond.a, "b": bond.b}
 
 
@@ -486,7 +494,20 @@ def _move_perspective_coordinate(
     coords = coordinates.get(key)
     if not isinstance(coords, (list, tuple)) or len(coords) != 3:
         return
-    coordinates[key] = [float(coords[0]) + dx, float(coords[1]) + dy, coords[2]]
+    center = perspective.get("projection_center_3d")
+    coordinates[key] = list(
+        translate_projected_point_3d(
+            (float(coords[0]), float(coords[1]), float(coords[2])),
+            dx,
+            dy,
+            bond_length_px=float(state["settings"]["bond_length_px"]),
+            center_3d=(
+                (float(center[0]), float(center[1]), float(center[2]))
+                if center is not None
+                else None
+            ),
+        )
+    )
 
 
 def _document_model(state: Mapping[str, object]) -> MoleculeModel:
@@ -553,7 +574,7 @@ def _state_atom_id(value: object) -> int | None:
 def _element(value: object) -> str:
     if not isinstance(value, str) or not value.strip():
         raise ValueError("element must be a non-empty string")
-    return value
+    return value.strip()
 
 
 def _number(value: object, field: str) -> float:

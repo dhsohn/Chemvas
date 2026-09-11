@@ -13,6 +13,7 @@ class CanvasDocumentMetadataState:
     file_path: str | None = None
     display_name: str = "Canvas 1"
     clean_digest: str | None = None
+    source_sha256: str | None = None
 
 
 def document_metadata_state_for(canvas: Any) -> CanvasDocumentMetadataState:
@@ -49,6 +50,15 @@ def mark_document_dirty_for(canvas: Any) -> None:
 def set_document_file_path_for(canvas: Any, path: str | None) -> None:
     validate_document_file_path(path)
     document_metadata_state_for(canvas).file_path = path
+    document_metadata_state_for(canvas).source_sha256 = None
+
+
+def document_source_sha256_for(canvas: Any) -> str | None:
+    return document_metadata_state_for(canvas).source_sha256
+
+
+def set_document_source_sha256_for(canvas: Any, digest: str | None) -> None:
+    document_metadata_state_for(canvas).source_sha256 = digest
 
 
 def validate_document_file_path(path: str | None) -> None:
@@ -81,9 +91,11 @@ __all__ = [
     "document_file_path_for",
     "document_is_dirty_for",
     "document_metadata_state_for",
+    "document_source_sha256_for",
     "mark_document_clean_for",
     "mark_document_dirty_for",
     "set_document_display_name_for",
     "set_document_file_path_for",
+    "set_document_source_sha256_for",
     "validate_document_file_path",
 ]

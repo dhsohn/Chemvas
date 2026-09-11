@@ -256,8 +256,8 @@ class CanvasChemDrawShortcutServiceTest(unittest.TestCase):
             _shortcut_modifiers=shortcut_modifiers_for,
             services=canvas_runtime_services(
                 canvas_mark_scene_service=SimpleNamespace(
-                    add_mark_for_atom=lambda atom_id, pos, kind: calls.append(
-                        ("mark", atom_id, pos.x(), pos.y(), kind)
+                    change_charge_for_atom=lambda atom_id, delta: calls.append(
+                        ("charge", atom_id, delta)
                     )
                 ),
                 atom_label_service=SimpleNamespace(
@@ -352,8 +352,8 @@ class CanvasChemDrawShortcutServiceTest(unittest.TestCase):
         )
 
         self.assertIn(("prompt", 1), calls)
-        self.assertIn(("mark", 1, 1.0, 2.0, "plus"), calls)
-        self.assertIn(("mark", 1, 1.0, 2.0, "minus"), calls)
+        self.assertIn(("charge", 1, 1), calls)
+        self.assertIn(("charge", 1, -1), calls)
         self.assertIn(("label", 1, "CF3", True), calls)
         self.assertIn(("bond", 1, "single", 1, True), calls)
         self.assertIn(("bond", 1, "hash", 1, False), calls)

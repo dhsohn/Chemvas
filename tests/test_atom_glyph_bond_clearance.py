@@ -156,6 +156,32 @@ def test_counter_does_not_emit_bond_inside_oxygen(app):
     assert end == 1
 
 
+@pytest.mark.parametrize(
+    "text,axis", [("C", "right"), ("N", "up"), ("N", "down"), ("H", "up")]
+)
+def test_open_letters_keep_bond_outside_the_glyph_interior(app, text, axis):
+    item, controller = _label_controller(text)
+    ink = item.mapToScene(item.glyph_path()).boundingRect()
+    endpoint = {
+        "right": QPointF(100, 0),
+        "up": QPointF(0, -100),
+        "down": QPointF(0, 100),
+    }[axis]
+    before = (item.pos(), item.boundingRect(), item.shape())
+    start, end = controller.trim_line_for_labels(
+        1, None, 0, 0, endpoint.x(), endpoint.y()
+    )
+    boundary = {"right": ink.right(), "up": -ink.top(), "down": ink.bottom()}[axis]
+    assert start * 100 > boundary
+    assert end == 1
+    # Picking padding is not a typography/figure spacing setting.
+    item.set_hit_radius(80)
+    assert controller.trim_line_for_labels(
+        1, None, 0, 0, endpoint.x(), endpoint.y()
+    ) == (start, end)
+    assert item.pos() == before[0]
+
+
 def test_fully_occluded_short_bond_does_not_force_span_through_ink(app):
     item, controller = _label_controller("O")
     # Ending inside the right stroke cannot be repaired by forcing a 2% span.

@@ -107,6 +107,185 @@ class OpenDocumentRoutingTest(unittest.TestCase):
         self.assertEqual(len(open_windows()), 1)
         self.assertIs(open_windows()[0], window)
 
+    def test_menu_open_and_recent_reuse_the_same_blank_rule(self) -> None:
+        from PyQt6.QtWidgets import QFileDialog
+
+        from chemvas.bootstrap.window_registry import open_new_window, open_windows
+        from chemvas.ui.main_window_ports import (
+            active_canvas_for_window,
+            services_for_window,
+        )
+
+        for route in ("Open...", "Open Recent"):
+            with self.subTest(route=route):
+                window = open_new_window()
+                menu = next(
+                    action.menu()
+                    for action in window.menuBar().actions()
+                    if action.text() == "File"
+                )
+                if route == "Open...":
+                    with mock.patch.object(
+                        QFileDialog, "getOpenFileName", return_value=(self.example, "")
+                    ):
+                        next(
+                            action
+                            for action in menu.actions()
+                            if action.text() == route
+                        ).trigger()
+                else:
+                    from chemvas.ui.recent_documents_store import record_recent
+
+                    record_recent(self.example)
+                    recent = next(
+                        action.menu()
+                        for action in menu.actions()
+                        if action.text() == route
+                    )
+                    recent.aboutToShow.emit()
+                    next(
+                        action
+                        for action in recent.actions()
+                        if "template1.chemvas" in action.text()
+                    ).trigger()
+                self.assertEqual(open_windows(), (window,))
+                self.assertEqual(
+                    services_for_window(window).canvas_document_service.file_path(
+                        active_canvas_for_window(window)
+                    ),
+                    self.example,
+                )
+                window.close()
+                self.app.processEvents()
+
+    def test_failed_menu_open_keeps_blank_document_and_redo_history(self) -> None:
+        from PyQt6.QtWidgets import QFileDialog, QMessageBox
+
+        from chemvas.bootstrap.window_registry import open_new_window, open_windows
+        from chemvas.ui.canvas_window_access import snapshot_canvas_state_for
+        from chemvas.ui.main_window_ports import (
+            active_canvas_for_window,
+            services_for_window,
+        )
+        from chemvas.ui.structure_mutation_access import add_bond_between_points_for
+
+        window = open_new_window()
+        canvas = active_canvas_for_window(window)
+        add_bond_between_points_for(canvas, QPointF(0, 0), QPointF(40, 0))
+        history = canvas.services.history_service
+        history.undo()
+        before = snapshot_canvas_state_for(canvas)
+        before_history = history.capture_stack_snapshot()
+        self.assertIsNotNone(
+            services_for_window(window).canvas_document_service.reusable_open_target(
+                window
+            )
+        )
+        menu = next(
+            action.menu()
+            for action in window.menuBar().actions()
+            if action.text() == "File"
+        )
+        with (
+            mock.patch.object(
+                QFileDialog, "getOpenFileName", return_value=(self.example, "")
+            ),
+            mock.patch.object(QMessageBox, "warning"),
+            mock.patch(
+                "chemvas.ui.canvas_document_session_service.restore_document_pre_model_items",
+                side_effect=RuntimeError("injected load failure"),
+            ),
+        ):
+            next(
+                action for action in menu.actions() if action.text() == "Open..."
+            ).trigger()
+
+        self.assertEqual(open_windows(), (window,))
+        self.assertEqual(snapshot_canvas_state_for(canvas), before)
+        self.assertEqual(history.capture_stack_snapshot(), before_history)
+        history.redo()
+        self.assertTrue(snapshot_canvas_state_for(canvas)["model"]["bonds"])
+
+    def test_clean_import_is_not_a_blank_menu_open_target(self) -> None:
+        from PyQt6.QtWidgets import QFileDialog
+
+        from chemvas.bootstrap.window_registry import open_new_window, open_windows
+        from chemvas.core.molfile import write_molfile
+        from chemvas.core.svg_roundtrip import (
+            CHEMVAS_SVG_SCOPE_SHEET,
+            create_editable_svg_payload,
+            embed_chemvas_document_in_svg,
+        )
+        from chemvas.domain.document import CANVAS_FILE_VERSION, deserialize_model_state
+        from chemvas.features.document_composition import compose_document_state
+        from chemvas.ui.canvas_window_access import snapshot_canvas_state_for
+        from chemvas.ui.main_window_ports import (
+            active_canvas_for_window,
+            services_for_window,
+        )
+
+        state = compose_document_state(
+            {
+                "format": "chemvas-document-composition",
+                "version": 1,
+                "atoms": [{"id": 0, "element": "N", "x": 0, "y": 0}],
+                "bonds": [],
+            }
+        )
+        for suffix in (".mol", ".svg"):
+            with (
+                self.subTest(suffix=suffix),
+                tempfile.TemporaryDirectory() as directory,
+            ):
+                path = Path(directory) / ("imported" + suffix)
+                if suffix == ".mol":
+                    path.write_text(
+                        write_molfile(deserialize_model_state(state["model"]))
+                    )
+                else:
+                    path.write_text('<svg xmlns="http://www.w3.org/2000/svg"/>')
+                    embed_chemvas_document_in_svg(
+                        path,
+                        create_editable_svg_payload(
+                            state,
+                            document_version=CANVAS_FILE_VERSION,
+                            scope=CHEMVAS_SVG_SCOPE_SHEET,
+                        ),
+                    )
+                window = open_new_window()
+                menu = next(
+                    action.menu()
+                    for action in window.menuBar().actions()
+                    if action.text() == "File"
+                )
+                action = next(
+                    action for action in menu.actions() if action.text() == "Open..."
+                )
+                with mock.patch.object(
+                    QFileDialog, "getOpenFileName", return_value=(str(path), "")
+                ):
+                    action.trigger()
+                canvas = active_canvas_for_window(window)
+                documents = services_for_window(window).canvas_document_service
+                self.assertFalse(documents.is_dirty(canvas))
+                self.assertIsNone(documents.file_path(canvas))
+                before = snapshot_canvas_state_for(canvas)
+                self.assertTrue(before["model"]["atoms"])
+                with mock.patch.object(
+                    QFileDialog, "getOpenFileName", return_value=("", "")
+                ):
+                    action.trigger()
+                self.assertEqual(open_windows(), (window,))
+                with mock.patch.object(
+                    QFileDialog, "getOpenFileName", return_value=(self.example, "")
+                ):
+                    action.trigger()
+                self.assertEqual(len(open_windows()), 2)
+                self.assertEqual(snapshot_canvas_state_for(canvas), before)
+                for opened in open_windows():
+                    opened.close()
+                self.app.processEvents()
+
     def test_opens_new_window_when_current_holds_a_document(self) -> None:
         from chemvas.bootstrap.window_registry import open_new_window, open_windows
         from chemvas.ui.main_window_ports import services_for_window

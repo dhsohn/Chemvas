@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import os
 from pathlib import Path
 
@@ -11,6 +12,7 @@ from chemvas.core.svg_roundtrip import (
     extract_chemvas_document_from_svg as default_read_editable_svg,
 )
 from chemvas.domain.document import MoleculeModel, serialize_model_state
+from chemvas.features.calculation_bundle import validate_calculation_plan
 from chemvas.features.export import (
     default_export_path,
     export_error_message,
@@ -23,6 +25,11 @@ from chemvas.features.insertion import (
     normalized_atom_annotation,
 )
 from chemvas.features.session import request_snapshot
+from chemvas.ui.canvas_calculation_plan_state import calculation_plan_for
+from chemvas.ui.canvas_document_metadata_state import (
+    document_source_sha256_for,
+    set_document_source_sha256_for,
+)
 from chemvas.ui.canvas_view import CanvasView
 from chemvas.ui.canvas_window_access import (
     save_canvas_to_file_for,
@@ -181,12 +188,64 @@ class MainWindowDocumentActionService:
         # keep ``path`` as the user-facing document path and recent-file entry.
         write_path = resolved_document_path(path)
         try:
+            plan = calculation_plan_for(target)
+            if plan is not None:
+                state = snapshot_canvas_state_for(target)
+                try:
+                    validate_calculation_plan(state, plan)
+                except ValueError as exc:
+                    consequence = (
+                        "Saving will keep the calculation plan as an invalid draft. "
+                        "Repair it in Calculation > Edit States and Steps before export."
+                        if "calculation_plan" in state
+                        else "Saving will omit the stale calculation plan from this file. "
+                        "Choose No and undo the graph edit to recover its references, "
+                        "or use Save As to keep the previously saved plan separately."
+                    )
+                    answer = message_box.question(
+                        window,
+                        "Calculation Plan Needs Attention",
+                        f"The calculation plan no longer matches this drawing:\n{exc}\n\n"
+                        f"{consequence}\nSave anyway?",
+                        QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                        QMessageBox.StandardButton.No,
+                    )
+                    if answer != QMessageBox.StandardButton.Yes:
+                        return False
+            current_path = self.current_file_path(window, canvas=target)
+            if current_path and resolved_document_path(current_path) == write_path:
+                expected = document_source_sha256_for(target)
+                try:
+                    with open(write_path, "rb") as source:
+                        observed = hashlib.file_digest(source, "sha256").hexdigest()
+                except FileNotFoundError:
+                    observed = None
+                if expected is None or observed != expected:
+                    reason = (
+                        "This recovered document has no verified saved-file baseline."
+                        if expected is None
+                        else "This file changed or was removed outside Chemvas."
+                    )
+                    answer = message_box.question(
+                        window,
+                        "File Changed",
+                        reason + "\nReplace the file with this drawing?\n"
+                        "Choose No to keep both versions, then use Save As to save elsewhere.",
+                        QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                        QMessageBox.StandardButton.No,
+                    )
+                    if answer != QMessageBox.StandardButton.Yes:
+                        return False
             warnings = save_canvas_to_file_for(target, write_path)
         except Exception as exc:
             message_box.warning(window, "Save Error", f"Failed to save file:\n{exc}")
             return False
         documents = self._canvas_documents_for_window(window)
+        source_digest = document_source_sha256_for(target)
         documents.set_file_path(target, path)
+        # The session writer captured its staged bytes before publication.
+        # Re-reading here could adopt a concurrent writer's newer file.
+        set_document_source_sha256_for(target, source_digest)
         documents.set_display_name(
             target, documents.display_name_for_path(path) or path
         )
@@ -542,9 +601,10 @@ class MainWindowDocumentActionService:
             target = target_provider() if target_provider is not None else window
             # The destination owns its UI callbacks; another window's service
             # would bind this canvas to that window's status and options widgets.
-            self._canvas_documents_for_window(target).open_state(
+            canvas = self._canvas_documents_for_window(target).open_state(
                 target, state=document.state, file_path=path
             )
+            set_document_source_sha256_for(canvas, document.source_sha256)
         except Exception as exc:
             message_box.warning(window, "Load Error", f"Failed to load file:\n{exc}")
             return False

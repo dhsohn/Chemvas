@@ -143,8 +143,8 @@ def snapshot_canvas_document_state_with_warnings(canvas) -> tuple[dict, list[str
         except ValueError:
             warnings.append(
                 "The calculation plan was not saved because the molecular graph "
-                "no longer matches its component references. Reopen Calculation > "
-                "Edit States and Steps and assign the changed components again."
+                "no longer matches its component references. Undo the graph edit "
+                "to recover those references, or reopen a previously saved copy."
             )
         else:
             state["calculation_plan"] = calculation_plan

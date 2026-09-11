@@ -47,6 +47,9 @@ def test_build_scene_decoration_services_wires_explicit_collaborators(
     assert services.scene_decoration_service.kwargs == {
         "history_service": history_service
     }
+    assert services.canvas_mark_scene_service.service_name == "CanvasMarkSceneService"
+    assert services.canvas_mark_scene_service.args == (canvas,)
     assert services.canvas_mark_scene_service.kwargs == {
-        "scene_decoration_service": services.scene_decoration_service
+        "scene_decoration_service": services.scene_decoration_service,
+        "history_service": history_service,
     }

@@ -7,17 +7,13 @@ from typing import TYPE_CHECKING
 
 from PyQt6.QtCore import QPointF, QRectF
 
-from chemvas.core.history import (
-    CompositeCommand,
-    HistoryCommand,
-    MoveAtomsCommand,
-    SetAtomPositionsCommand,
-)
+from chemvas.core.history import HistoryCommand, SetAtomPositionsCommand
 from chemvas.features.rendering import refresh_bond_graphics
 from chemvas.features.selection import (
     bounding_box_center_for_atoms as bounding_box_center_for_atoms_logic,
 )
 from chemvas.features.selection import rotated_atom_positions, rotation_drag_angle
+from chemvas.ui.atom_coords_access import atom_coords_3d_for
 from chemvas.ui.bond_graphics_access import add_bond_graphics_for
 from chemvas.ui.canvas_atom_graphics_state import visible_atom_item_for
 from chemvas.ui.canvas_bond_graphics_state import bond_items_for
@@ -28,9 +24,11 @@ from chemvas.ui.canvas_model_access import (
     atoms_for,
     bonds_for,
 )
+from chemvas.ui.canvas_rotation_state import rotation_state_for
+from chemvas.ui.canvas_scene_items_state import ring_items_for
 from chemvas.ui.canvas_smiles_input_state import last_smiles_input_for
 from chemvas.ui.history_canvas_access import set_atom_positions_for_history
-from chemvas.ui.history_commands import MoveItemsCommand, UpdateSceneItemCommand
+from chemvas.ui.history_commands import SetSceneGeometryCommand, UpdateSceneItemCommand
 from chemvas.ui.history_recording_access import record_bond_update_for
 from chemvas.ui.move_access import move_atoms_for, move_item_for
 from chemvas.ui.scene_align_logic import align_deltas, distribute_deltas
@@ -61,6 +59,7 @@ from chemvas.ui.scene_item_state import (
     ts_bracket_rect_from_state,
 )
 from chemvas.ui.scene_rotation_state import rotate_scene_item_state, rotated_point
+from chemvas.ui.scene_signal_blocking import blocked_scene_signals
 from chemvas.ui.scene_single_item_mutation_logic import (
     apply_bond_style_with_history,
     cycle_bond_style_with_history,
@@ -113,15 +112,19 @@ class RotationDragSession:
     press_pos: QPointF
     before_positions: dict[int, tuple[float, float]]
     item_states: tuple[tuple[QGraphicsItem, dict], ...]
+    before_coords_3d: dict[int, tuple[float, float, float]]
     angle_degrees: float = 0.0
 
 
 def _atomic_history_transform(operation):
     @wraps(operation)
     def run(controller, *args, **kwargs):
-        with document_transaction(
-            controller.canvas,
-            history_service=controller.history,
+        with (
+            document_transaction(
+                controller.canvas,
+                history_service=controller.history,
+            ),
+            blocked_scene_signals(controller.canvas.scene()),
         ):
             return operation(controller, *args, **kwargs)
 
@@ -166,9 +169,79 @@ class SceneTransformController:
         positions: dict[int, tuple[float, float]],
         *,
         update_selection: bool = True,
+        coords_3d: dict[int, tuple[float, float, float]] | None = None,
     ) -> None:
         set_atom_positions_for_history(
-            self.canvas, positions, update_selection=update_selection
+            self.canvas,
+            positions,
+            update_selection=update_selection,
+            coords_3d=coords_3d,
+        )
+
+    def _atom_coords_3d(self, atom_ids):
+        coords = atom_coords_3d_for(self.canvas)
+        return {atom_id: coords[atom_id] for atom_id in atom_ids if atom_id in coords}
+
+    def _atom_geometry_command(self, before_positions, before_coords_3d):
+        rotation = rotation_state_for(self.canvas)
+        return SetAtomPositionsCommand(
+            before_positions=before_positions,
+            after_positions={
+                atom_id: (self._atoms[atom_id].x, self._atoms[atom_id].y)
+                for atom_id in before_positions
+            },
+            before_coords_3d=before_coords_3d,
+            after_coords_3d=self._atom_coords_3d(before_positions),
+            restore_projection_state=True,
+            before_projection_center_3d=rotation.projection_center_3d,
+            after_projection_center_3d=rotation.projection_center_3d,
+            before_projection_anchor_2d=rotation.projection_anchor_2d,
+            after_projection_anchor_2d=rotation.projection_anchor_2d,
+            update_selection=False,
+        )
+
+    def _translate_geometry(self, atom_ids, items, dx, dy):
+        before_positions = {
+            atom_id: (self._atoms[atom_id].x, self._atoms[atom_id].y)
+            for atom_id in atom_ids
+        }
+        before_coords = self._atom_coords_3d(atom_ids)
+        # Bound marks and ring fills are moved by the atom operation. Record
+        # them too, and restore them *after* their atoms in both directions.
+        dependent_items = self._atom_bound_marks(atom_ids) + [
+            item
+            for item in ring_items_for(self.canvas)
+            if atom_ids.intersection(item.data(2) or ())
+        ]
+        before_items = [
+            (item, self._scene_item_state(item))
+            for item in dict.fromkeys([*dependent_items, *items])
+        ]
+        if atom_ids:
+            bond_ids, boundary_ids = self._graph_service().bond_sets_for_atoms(atom_ids)
+            move_atoms_for(
+                self.canvas,
+                atom_ids,
+                dx,
+                dy,
+                bond_ids=bond_ids,
+                redraw_bond_ids=boundary_ids,
+                update_selection=False,
+                rebuild_stale_bond_topology=True,
+            )
+        for item in items:
+            move_item_for(self.canvas, item, dx, dy, update_selection=False)
+        return SetSceneGeometryCommand(
+            atom_commands=(
+                [self._atom_geometry_command(before_positions, before_coords)]
+                if before_positions
+                else []
+            ),
+            item_commands=[
+                UpdateSceneItemCommand(item, before, self._scene_item_state(item))
+                for item, before in before_items
+                if before
+            ],
         )
 
     def _redraw_connected_bonds(
@@ -269,7 +342,8 @@ class SceneTransformController:
         if not atom_ids and not items:
             return
 
-        commands: list[HistoryCommand] = []
+        atom_commands: list[SetAtomPositionsCommand] = []
+        item_commands: list[UpdateSceneItemCommand] = []
         atom_components = self.selected_atom_components_for_transform(atom_ids)
         groups = group_items_for_flip_transform(
             items,
@@ -316,17 +390,35 @@ class SceneTransformController:
                     point, pivot, horizontal
                 ),
             )
-            commands.extend(
-                apply_component_flip_transform(
-                    component_items=component_items,
-                    scene_item_state_getter=self._scene_item_state,
-                    position_maps=position_maps,
-                    center=center,
-                    horizontal=horizontal,
-                    flip_state_getter=flip_state,
-                    set_atom_positions=self._set_atom_positions,
-                    apply_scene_item_state=self._apply_scene_item_state,
+            before_coords = self._atom_coords_3d(component)
+            component_commands = apply_component_flip_transform(
+                component_items=component_items,
+                scene_item_state_getter=self._scene_item_state,
+                position_maps=position_maps,
+                center=center,
+                horizontal=horizontal,
+                flip_state_getter=flip_state,
+                set_atom_positions=self._set_atom_positions,
+                apply_scene_item_state=self._apply_scene_item_state,
+            )
+            atom_command = next(
+                (
+                    command
+                    for command in component_commands
+                    if isinstance(command, SetAtomPositionsCommand)
+                ),
+                None,
+            )
+            if atom_command is not None:
+                atom_commands.append(
+                    self._atom_geometry_command(
+                        atom_command.before_positions, before_coords
+                    )
                 )
+            item_commands.extend(
+                command
+                for command in component_commands
+                if isinstance(command, UpdateSceneItemCommand)
             )
 
         for item in groups.standalone_items:
@@ -348,15 +440,14 @@ class SceneTransformController:
             )
             if command is None:
                 continue
-            commands.append(command)
+            item_commands.append(command)
 
-        if not commands:
+        if not atom_commands and not item_commands:
             return
         refresh_selection_outline_for(self.canvas)
-        if len(commands) == 1:
-            self.history.push(commands[0])
-            return
-        self.history.push(CompositeCommand(commands))
+        geometry_command = SetSceneGeometryCommand(atom_commands, item_commands)
+        if self.history.push(geometry_command) is False:
+            raise RuntimeError("Selection flip history push did not commit")
 
     @_atomic_history_transform
     def translate_selected_items(self, dx: float, dy: float) -> bool:
@@ -368,19 +459,10 @@ class SceneTransformController:
         )
         if not atom_ids and not items:
             return False
-        commands: list[HistoryCommand] = []
-        if atom_ids:
-            move_atoms_for(self.canvas, atom_ids, dx, dy, update_selection=False)
-            commands.append(MoveAtomsCommand(atom_ids=set(atom_ids), dx=dx, dy=dy))
-        if items:
-            for item in items:
-                move_item_for(self.canvas, item, dx, dy, update_selection=False)
-            commands.append(MoveItemsCommand(items=list(items), dx=dx, dy=dy))
+        command = self._translate_geometry(atom_ids, items, dx, dy)
         refresh_selection_outline_for(self.canvas)
-        if len(commands) == 1:
-            self.history.push(commands[0])
-        else:
-            self.history.push(CompositeCommand(commands))
+        if self.history.push(command) is False:
+            raise RuntimeError("Selection translation history push did not commit")
         return True
 
     def _object_rect(self, atom_ids: set[int], items: list) -> QRectF | None:
@@ -452,27 +534,32 @@ class SceneTransformController:
     def _apply_object_deltas(
         self, objects: list[_AlignObject], deltas: list[tuple[float, float]]
     ) -> bool:
-        commands: list[HistoryCommand] = []
+        commands: list[SetSceneGeometryCommand] = []
         for target, (dx, dy) in zip(objects, deltas, strict=True):
             if abs(dx) < 1e-9 and abs(dy) < 1e-9:
                 continue
-            if target.atom_ids:
-                atom_ids = set(target.atom_ids)
-                move_atoms_for(self.canvas, atom_ids, dx, dy, update_selection=False)
-                commands.append(MoveAtomsCommand(atom_ids=atom_ids, dx=dx, dy=dy))
-            if target.items:
-                for item in target.items:
-                    move_item_for(self.canvas, item, dx, dy, update_selection=False)
-                commands.append(
-                    MoveItemsCommand(items=list(target.items), dx=dx, dy=dy)
+            commands.append(
+                self._translate_geometry(
+                    set(target.atom_ids), list(target.items), dx, dy
                 )
+            )
         if not commands:
             return False
         refresh_selection_outline_for(self.canvas)
-        if len(commands) == 1:
-            self.history.push(commands[0])
-        else:
-            self.history.push(CompositeCommand(commands))
+        command = SetSceneGeometryCommand(
+            atom_commands=[
+                atom_command
+                for entry in commands
+                for atom_command in entry.atom_commands
+            ],
+            item_commands=[
+                item_command
+                for entry in commands
+                for item_command in entry.item_commands
+            ],
+        )
+        if self.history.push(command) is False:
+            raise RuntimeError("Selection alignment history push did not commit")
         return True
 
     @_atomic_history_transform
@@ -540,6 +627,7 @@ class SceneTransformController:
         if center is None:
             return
         before_positions: dict[int, tuple[float, float]] = {}
+        before_coords = self._atom_coords_3d(atom_ids)
         for atom_id in atom_ids:
             atom = self._atoms.get(atom_id)
             if atom is None:
@@ -568,25 +656,28 @@ class SceneTransformController:
             if not before_state or not after_state or before_state == after_state:
                 continue
             item_updates.append((item, before_state, after_state))
-        commands: list[HistoryCommand] = []
+        atom_command = None
         if after_positions and before_positions != after_positions:
             self._set_atom_positions(after_positions, update_selection=False)
-            commands.append(
-                SetAtomPositionsCommand(
-                    before_positions=before_positions,
-                    after_positions=after_positions,
-                )
-            )
+            atom_command = self._atom_geometry_command(before_positions, before_coords)
+        item_commands = []
         for item, before_state, after_state in item_updates:
             self._apply_scene_item_state(item, after_state)
-            commands.append(UpdateSceneItemCommand(item, before_state, after_state))
-        if not commands:
+            item_commands.append(
+                UpdateSceneItemCommand(item, before_state, after_state)
+            )
+        if atom_command is None and not item_commands:
             return
         refresh_selection_outline_for(self.canvas)
-        if len(commands) == 1:
-            self.history.push(commands[0])
-            return
-        self.history.push(CompositeCommand(commands))
+        if (
+            self.history.push(
+                SetSceneGeometryCommand(
+                    [atom_command] if atom_command else [], item_commands
+                )
+            )
+            is False
+        ):
+            raise RuntimeError("Selection rotation history push did not commit")
 
     def begin_rotation_drag(self, press_pos: QPointF) -> RotationDragSession | None:
         """Capture what a rotation-handle drag turns, or ``None`` if nothing."""
@@ -612,6 +703,7 @@ class SceneTransformController:
             press_pos=QPointF(press_pos),
             before_positions=before_positions,
             item_states=item_states,
+            before_coords_3d=self._atom_coords_3d(before_positions),
         )
 
     def update_rotation_drag(
@@ -629,7 +721,11 @@ class SceneTransformController:
         session.angle_degrees = angle
         after_positions, item_updates = self._rotation_drag_result(session)
         if after_positions:
-            self._set_atom_positions(after_positions, update_selection=False)
+            self._set_atom_positions(
+                after_positions,
+                update_selection=False,
+                coords_3d=session.before_coords_3d if angle == 0.0 else None,
+            )
         if angle == 0.0:
             # Back at the start: items that turned earlier in this drag return
             # to the state captured at the press.
@@ -647,21 +743,21 @@ class SceneTransformController:
     ) -> HistoryCommand | None:
         """The one history command for a finished drag; ``None`` if it did not turn."""
         after_positions, item_updates = self._rotation_drag_result(session)
-        commands: list[HistoryCommand] = []
+        atom_command = None
         if after_positions and session.before_positions != after_positions:
-            commands.append(
-                SetAtomPositionsCommand(
-                    before_positions=dict(session.before_positions),
-                    after_positions=after_positions,
-                )
+            atom_command = self._atom_geometry_command(
+                dict(session.before_positions), session.before_coords_3d
             )
+        item_commands = []
         for item, before_state, after_state in item_updates:
-            commands.append(UpdateSceneItemCommand(item, before_state, after_state))
-        if not commands:
+            item_commands.append(
+                UpdateSceneItemCommand(item, before_state, after_state)
+            )
+        if atom_command is None and not item_commands:
             return None
-        if len(commands) == 1:
-            return commands[0]
-        return CompositeCommand(commands)
+        return SetSceneGeometryCommand(
+            [atom_command] if atom_command else [], item_commands
+        )
 
     def _rotation_drag_result(
         self, session: RotationDragSession

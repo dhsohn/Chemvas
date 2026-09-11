@@ -15,12 +15,6 @@ Chemvas는 **화학 구조와 반응식을 그리는 오픈소스 데스크톱 �
 데스크톱에서 그리고, 논문 단 너비 그대로 SVG·PDF·PNG·TIFF로 출력하고,
 같은 문서를 스크립트로도 다룰 수 있습니다.
 
-![Chemvas에서 직접 출력한 벤질 알코올 산화 반응식](https://raw.githubusercontent.com/dhsohn/Chemvas/main/examples/first-scheme.png)
-
-[편집 가능한 그림 받기](https://raw.githubusercontent.com/dhsohn/Chemvas/main/examples/first-scheme.chemvas) ·
-[SVG 받기](https://raw.githubusercontent.com/dhsohn/Chemvas/main/examples/first-scheme.svg) ·
-[따라 그리기](https://github.com/dhsohn/Chemvas/blob/main/docs/FIRST_SCHEME.ko.md)
-
 ## 설치
 
 **Python 3.12+**가 필요합니다. 선택적 RDKit 백엔드를 넣으면 SMILES 삽입이 됩니다.

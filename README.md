@@ -11,15 +11,23 @@
 
 <p align="center"><b>English</b> · <a href="https://github.com/dhsohn/Chemvas/blob/main/README.ko.md">한국어</a></p>
 
-Chemvas is an **open-source desktop canvas for chemical structures and reaction
-schemes**. Draw on the desktop, export publication-ready SVG, PDF, PNG or TIFF
-at real column widths, and drive the same documents from scripts.
+Chemvas is an **open-source chemical drawing app where chemists and AI agents
+work on the same editable canvas**. Start in the desktop app, let an agent
+continue through a purpose-built CLI, then open the editable result right back
+on the canvas.
 
-![A benzyl alcohol oxidation scheme exported directly from Chemvas](https://raw.githubusercontent.com/dhsohn/Chemvas/main/examples/first-scheme.png)
+## Draw it yourself. Hand it to AI. Keep editing.
 
-[Open the editable drawing](https://raw.githubusercontent.com/dhsohn/Chemvas/main/examples/first-scheme.chemvas) ·
-[Get the SVG](https://raw.githubusercontent.com/dhsohn/Chemvas/main/examples/first-scheme.svg) ·
-[Follow the walkthrough](https://github.com/dhsohn/Chemvas/blob/main/docs/FIRST_SCHEME.md)
+- **Draw it yourself.** Sketch structures, insert SMILES, label reaction arrows,
+  and align molecules on the desktop canvas, with autosave and crash recovery.
+  SMILES insertion needs the optional RDKit backend.
+- **Hand the same drawing to an AI agent.** The CLI can compose documents,
+  inspect stable atom IDs, apply bounded graph patches, check layouts, and render
+  figures without opening the desktop app. Graph Patch binds each proposal to the
+  exact source hash and validates the complete result before writing a new file.
+- **Keep editing the result.** Composed and patched drawings remain native,
+  reopenable `.chemvas` documents. Export SVG, PDF, PNG, or TIFF at explicit
+  physical sizes while keeping the editable drawing alongside the figure.
 
 ## Install
 

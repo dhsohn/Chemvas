@@ -498,7 +498,8 @@ class _OrbitalMarkNoteCanvas:
                 add_orbital=self.add_orbital,
             ),
             canvas_mark_scene_service=SimpleNamespace(
-                add_mark_for_atom=self.add_mark_for_atom
+                add_mark_for_atom=self.add_mark_for_atom,
+                find_atom_for_mark=lambda pos, kind=None: self.atom_near,
             ),
             note_controller=SimpleNamespace(
                 create_text_note=self.add_text_note,

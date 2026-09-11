@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any, cast
 
 from chemvas.adapters.qt.renderer import Renderer
+from chemvas.bootstrap.file_open import document_open_target
 from chemvas.bootstrap.window_registry import open_new_window
 from chemvas.ui.canvas_service_ports import note_controller_for_access
 from chemvas.ui.canvas_view import CanvasView
@@ -278,7 +279,7 @@ def build_main_window_services() -> MainWindowServices:
         save_canvas=document_action_service.save_canvas,
         save_canvas_as=document_action_service.save_canvas_as,
         load_canvas=lambda window: document_action_service.load_canvas(
-            window, target_provider=lambda: open_new_window(window)
+            window, target_provider=lambda: document_open_target(window)
         ),
         export_figure=document_action_service.export_figure,
         export_mol=lambda window: document_action_service.export_mol(
@@ -295,7 +296,7 @@ def build_main_window_services() -> MainWindowServices:
         set_note_font_family=set_note_font_family_for_window,
         open_recent_path=lambda window, path: (
             document_action_service.load_canvas_from_path(
-                window, path, target_provider=lambda: open_new_window(window)
+                window, path, target_provider=lambda: document_open_target(window)
             )
         ),
     )

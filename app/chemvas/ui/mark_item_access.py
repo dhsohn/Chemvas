@@ -37,6 +37,10 @@ def mark_center_for_pointer_for(canvas, pos, atom_id: int | None, *, kind: str |
     )
 
 
+def find_atom_for_mark_for(canvas, pos, *, kind: str | None = None):
+    return mark_scene_service_for_access(canvas).find_atom_for_mark(pos, kind=kind)
+
+
 def mark_selection_radius_for(canvas) -> float:
     return atom_pick_radius_for(canvas)
 
@@ -62,6 +66,7 @@ def mark_kinds_by_atom_for(canvas) -> dict[int, list[str]]:
 
 __all__ = [
     "build_mark_item_for",
+    "find_atom_for_mark_for",
     "mark_center_for",
     "mark_center_for_pointer_for",
     "mark_kinds_by_atom_for",

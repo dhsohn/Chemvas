@@ -733,6 +733,8 @@ def plan_with_replaced_step(
     product_state: CalculationState,
     step: CalculationStep,
 ) -> CalculationPlan:
+    if reactant_state.id == product_state.id:
+        raise ValueError(f"Step {step.id} must connect two different states.")
     if current_plan_state is None:
         existing_plan = CalculationPlan(states=(), steps=())
     else:
@@ -753,17 +755,22 @@ def plan_with_replaced_step(
         product_state.id: product_state,
     }
     existing_states = {state.id: state for state in existing_plan.states}
+    repaired_shared_charge = False
     for state_id, replacement in replacements.items():
         existing = existing_states.get(state_id)
-        if (
-            existing is not None
-            and existing != replacement
-            and state_id in referenced_by_retained
-        ):
-            raise ValueError(
-                f"State {state_id} is used by another step. Choose a new state id "
-                "instead of changing its structure or calculation settings."
-            )
+        if existing is not None and _same_state(existing, replacement):
+            replacements[state_id] = existing
+            continue
+        if existing is not None and state_id in referenced_by_retained:
+            if not _same_state(existing, replace(replacement, charge=existing.charge)):
+                raise ValueError(
+                    f"State {state_id} is used by another step. Choose a new state id "
+                    "instead of changing its structure or calculation settings."
+                )
+            # Charge is derived from the current drawing. Correcting it updates
+            # the one shared state; whole-plan validation below still rejects
+            # a charge that disagrees with that drawing.
+            repaired_shared_charge = True
     retained_state_ids = referenced_by_retained | set(replacements)
     merged_states: list[CalculationState] = []
     for state in existing_plan.states:
@@ -775,12 +782,33 @@ def plan_with_replaced_step(
             merged_states.append(replacements[state_id])
     candidate = CalculationPlan(
         states=tuple(merged_states),
-        steps=retained_steps + (step,),
+        steps=tuple(
+            _without_precomplex(item) if repaired_shared_charge else item
+            for item in retained_steps + (step,)
+        ),
         version=existing_plan.version,
     )
     return validate_calculation_plan(
         document_state,
         calculation_plan_to_state(candidate),
+    )
+
+
+def _same_state(left: CalculationState, right: CalculationState) -> bool:
+    return (
+        left.id == right.id
+        and left.charge == right.charge
+        and left.multiplicity == right.multiplicity
+        and sorted(left.members, key=lambda member: member.component_atom_ids)
+        == sorted(right.members, key=lambda member: member.component_atom_ids)
+    )
+
+
+def _without_precomplex(step: CalculationStep) -> CalculationStep:
+    return replace(
+        step,
+        reactant=replace(step.reactant, precomplex=NO_PRECOMPLEX),
+        product=replace(step.product, precomplex=NO_PRECOMPLEX),
     )
 
 
@@ -804,11 +832,7 @@ def apply_calculation_step_edit(
         )
     # An edited endpoint starts without a review, even if a caller built its
     # draft by replacing fields on an existing step rather than from widgets.
-    step = replace(
-        step,
-        reactant=replace(step.reactant, precomplex=NO_PRECOMPLEX),
-        product=replace(step.product, precomplex=NO_PRECOMPLEX),
-    )
+    step = _without_precomplex(step)
     existing_step = (
         next(
             (
@@ -830,22 +854,32 @@ def apply_calculation_step_edit(
             current_plan, existing_step.product.state_id
         )
         if (
-            reactant_state == existing_reactant_state
-            and product_state == existing_product_state
+            step.id == existing_step.id
+            and _same_state(reactant_state, existing_reactant_state)
+            and _same_state(product_state, existing_product_state)
             and step.reactant.state_id == existing_step.reactant.state_id
-            and step.reactant.roles == existing_step.reactant.roles
+            and sorted(step.reactant.roles, key=lambda role: role.component_atom_ids)
+            == sorted(
+                existing_step.reactant.roles, key=lambda role: role.component_atom_ids
+            )
             and step.product.state_id == existing_step.product.state_id
-            and step.product.roles == existing_step.product.roles
-            and step.atom_correspondence == existing_step.atom_correspondence
+            and sorted(step.product.roles, key=lambda role: role.component_atom_ids)
+            == sorted(
+                existing_step.product.roles, key=lambda role: role.component_atom_ids
+            )
+            and sorted(
+                step.atom_correspondence,
+                key=lambda entry: (entry.reactant_atom_id, entry.product_atom_id),
+            )
+            == sorted(
+                existing_step.atom_correspondence,
+                key=lambda entry: (entry.reactant_atom_id, entry.product_atom_id),
+            )
         ):
-            step = replace(
-                step,
-                reactant=replace(
-                    step.reactant, precomplex=existing_step.reactant.precomplex
-                ),
-                product=replace(
-                    step.product, precomplex=existing_step.product.precomplex
-                ),
+            # Preserve persisted ordering as well as the review: the precomplex
+            # basis binds the serialized plan, including the original order.
+            return validate_calculation_plan(
+                document_state, calculation_plan_to_state(current_plan)
             )
     return plan_with_replaced_step(
         document_state,

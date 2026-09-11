@@ -1177,7 +1177,22 @@ class _FakeCanvas:
             history_service=self.history_service,
             scene_item_controller=_FakeSceneItemController(self),
             graph_service=SimpleNamespace(
-                connected_components=self.connected_components
+                connected_components=self.connected_components,
+                bond_sets_for_atoms=lambda atom_ids: (
+                    {
+                        index
+                        for index, bond in enumerate(self.model.bonds)
+                        if bond is not None
+                        and bond.a in atom_ids
+                        and bond.b in atom_ids
+                    },
+                    {
+                        index
+                        for index, bond in enumerate(self.model.bonds)
+                        if bond is not None
+                        and ((bond.a in atom_ids) != (bond.b in atom_ids))
+                    },
+                ),
             ),
             atom_label_service=SimpleNamespace(
                 add_or_update_atom_label=self.add_or_update_atom_label,
@@ -1385,6 +1400,7 @@ class _FakeCanvas:
         bond_ids: set[int] | None = None,
         redraw_bond_ids: set[int] | None = None,
         update_selection: bool = True,
+        rebuild_stale_bond_topology: bool = False,
     ) -> None:
         for atom_id in atom_ids:
             atom = self.model.atoms.get(atom_id)

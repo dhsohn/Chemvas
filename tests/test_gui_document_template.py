@@ -10,7 +10,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 from PyQt6.QtCore import QEvent, QPointF, Qt
 from PyQt6.QtGui import QMouseEvent
 from PyQt6.QtTest import QTest
-from PyQt6.QtWidgets import QApplication
+from PyQt6.QtWidgets import QApplication, QMessageBox
 
 from chemvas.bootstrap.main_window import build_main_window
 from chemvas.core.document_io import read_document
@@ -547,6 +547,11 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
             patch(
                 "chemvas.ui.main_window_document_action_service.QFileDialog.getSaveFileName"
             ) as dialog_mock,
+            # This fixture binds a path without loading verified file bytes.
+            patch(
+                "chemvas.ui.main_window_document_action_service.QMessageBox.question",
+                return_value=QMessageBox.StandardButton.Yes,
+            ) as overwrite_question,
         ):
             self.assertFalse(
                 hasattr(active_canvas_for_window(self.window), "save_to_file")
@@ -555,6 +560,11 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
 
         save_mock.assert_called_once_with(os.path.realpath(expected_path))
         dialog_mock.assert_not_called()
+        overwrite_question.assert_called_once()
+        self.assertEqual(overwrite_question.call_args.args[1], "File Changed")
+        self.assertIn(
+            "no verified saved-file baseline", overwrite_question.call_args.args[2]
+        )
         self.assertEqual(self._current_file_path(), expected_path)
         self.assertEqual(
             self.window.statusBar().currentMessage(), f"Saved: {expected_path}"
@@ -739,6 +749,11 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
             patch.object(
                 doc_service, "save_to_file", side_effect=OSError("disk full")
             ) as save_mock,
+            # Reach the write failure after consenting to this unverified path.
+            patch(
+                "chemvas.ui.main_window_document_action_service.QMessageBox.question",
+                return_value=QMessageBox.StandardButton.Yes,
+            ) as overwrite_question,
             patch(
                 "chemvas.ui.main_window_document_action_service.QMessageBox.warning"
             ) as warning,
@@ -749,6 +764,11 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
             self._document_actions().save_canvas(self.window)
 
         save_mock.assert_called_once_with(attempted_path)
+        overwrite_question.assert_called_once()
+        self.assertEqual(overwrite_question.call_args.args[1], "File Changed")
+        self.assertIn(
+            "no verified saved-file baseline", overwrite_question.call_args.args[2]
+        )
         warning.assert_called_once_with(
             self.window,
             "Save Error",

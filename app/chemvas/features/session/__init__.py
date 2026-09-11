@@ -1,10 +1,12 @@
 """Session autosave and crash-recovery policy."""
 
 from .autosave import (
+    is_quit_pending,
     is_quitting,
     mark_quitting,
     request_snapshot,
     reset_quitting,
+    set_quit_preparing,
     set_snapshot_hook,
     snapshot_unless_quitting,
 )
@@ -30,6 +32,7 @@ __all__ = [
     "SessionManifest",
     "entries_to_restore",
     "is_consumable",
+    "is_quit_pending",
     "is_quitting",
     "is_valid_process_identity",
     "manifest_from_json",
@@ -39,6 +42,7 @@ __all__ = [
     "plan_restore",
     "request_snapshot",
     "reset_quitting",
+    "set_quit_preparing",
     "set_snapshot_hook",
     "should_persist",
     "snapshot_unless_quitting",

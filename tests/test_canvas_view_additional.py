@@ -58,6 +58,7 @@ from chemvas.ui.canvas_ring_fill_scene_access import (
     create_ring_fill_item_for,
     update_ring_fills_for_atoms_for,
 )
+from chemvas.ui.canvas_rotation_state import CanvasRotationState
 from chemvas.ui.canvas_scene_items_state import (
     CanvasSceneItemsState,
     selected_notes_for,
@@ -1454,6 +1455,7 @@ class CanvasViewAdditionalTest(unittest.TestCase):
         mark_with_offset = _FakeItem("mark", data1={"dx": 1.5, "dy": -2.0})
         mark_without_offset = _FakeItem("mark", data1={})
         view = SimpleNamespace(
+            renderer=SimpleNamespace(style=SimpleNamespace(bond_length_px=20.0)),
             model=SimpleNamespace(
                 atoms={
                     1: Atom("C", 0.0, 0.0),
@@ -1462,6 +1464,7 @@ class CanvasViewAdditionalTest(unittest.TestCase):
                 }
             ),
             runtime_state=canvas_runtime_state(
+                rotation_state=CanvasRotationState(),
                 atom_coords_3d_state=CanvasAtomCoords3DState(
                     atom_coords_3d={1: (0.0, 0.0, 1.0), 3: (9.0, 9.0, 3.0)}
                 ),

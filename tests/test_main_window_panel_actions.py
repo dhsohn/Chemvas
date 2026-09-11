@@ -1,7 +1,6 @@
 import os
 import unittest
 from pathlib import Path
-from types import SimpleNamespace
 from unittest import mock
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
@@ -9,8 +8,12 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 from PyQt6.QtWidgets import QApplication, QLineEdit, QToolButton
 
 from chemvas.bootstrap.main_window import build_main_window
+from chemvas.core.document_io import ChemvasDocument
 from chemvas.ui.canvas_atom_graphics_state import atom_items_for
-from chemvas.ui.canvas_document_metadata_state import document_file_path_for
+from chemvas.ui.canvas_document_metadata_state import (
+    document_file_path_for,
+    document_source_sha256_for,
+)
 from chemvas.ui.canvas_history_state import history_state_for
 from chemvas.ui.canvas_window_access import snapshot_canvas_state_for
 from chemvas.ui.main_window_ports import (
@@ -160,7 +163,9 @@ class MainWindowPanelActionsTest(unittest.TestCase):
 
         load_action = self._find_action("Open...")
         input_path = os.path.abspath("/tmp/input.chemvas")
-        state = snapshot_canvas_state_for(active_canvas_for_window(self.window))
+        original_canvas = active_canvas_for_window(self.window)
+        state = snapshot_canvas_state_for(original_canvas)
+        source_sha256 = "a" * 64
         existing = set(open_windows())
 
         with (
@@ -170,7 +175,9 @@ class MainWindowPanelActionsTest(unittest.TestCase):
             ) as dialog,
             mock.patch(
                 "chemvas.ui.main_window_document_action_service.default_read_document",
-                return_value=SimpleNamespace(state=state),
+                return_value=ChemvasDocument(
+                    payload={}, state=state, source_sha256=source_sha256
+                ),
             ) as read_document,
         ):
             load_action.trigger()
@@ -181,17 +188,21 @@ class MainWindowPanelActionsTest(unittest.TestCase):
 
         dialog.assert_called_once()
         read_document.assert_called_once_with(input_path)
-        # The file opens in its own window; the triggering window keeps its document.
-        self.assertEqual(len(spawned), 1)
-        loaded_window = spawned[0]
+        # Menu Open reuses an actually empty, clean, unbound canvas.
+        self.assertEqual(spawned, [])
+        loaded_window = self.window
+        self.assertIs(active_canvas_for_window(loaded_window), original_canvas)
         self.assertEqual(
             document_file_path_for(active_canvas_for_window(loaded_window)),
             input_path,
         )
         self.assertEqual(
+            document_source_sha256_for(active_canvas_for_window(loaded_window)),
+            source_sha256,
+        )
+        self.assertEqual(
             loaded_window.statusBar().currentMessage(), f"Loaded: {input_path}"
         )
-        self.assertIsNone(document_file_path_for(active_canvas_for_window(self.window)))
 
         with (
             mock.patch(
@@ -227,7 +238,9 @@ class MainWindowPanelActionsTest(unittest.TestCase):
             ),
             mock.patch(
                 "chemvas.ui.main_window_document_action_service.default_read_document",
-                return_value=SimpleNamespace(state={"model": {}}),
+                return_value=ChemvasDocument(
+                    payload={}, state={"model": {}}, source_sha256=source_sha256
+                ),
             ),
             mock.patch(
                 "chemvas.ui.main_window_document_action_service.QMessageBox.warning"

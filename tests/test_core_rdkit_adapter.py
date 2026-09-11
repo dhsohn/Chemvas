@@ -337,6 +337,9 @@ class _FakeMol:
     def GetStereoGroups(self):
         return []
 
+    def HasProp(self, _name):
+        return False
+
 
 class _Fake3DMol:
     def __init__(
@@ -1201,7 +1204,7 @@ class RDKitAdapterTest(unittest.TestCase):
         self.assertEqual(mol.bonds, [(0, 1, "single")])
         self.assertEqual(len(chem.sanitized_molecules), 1)
 
-    def test_model_to_rdkit_with_map_tolerant_disables_implicit_hydrogen_completion_for_explicit_hydrogen_on_hetero_atom(
+    def test_model_to_rdkit_with_map_tolerant_keeps_implicit_hydrogen_completion_with_drawn_hydrogen(
         self,
     ) -> None:
         adapter = RDKitAdapter()
@@ -1215,15 +1218,14 @@ class RDKitAdapterTest(unittest.TestCase):
         mol, atom_map = adapter.model_to_rdkit_with_map_tolerant(model)
 
         self.assertEqual(atom_map, {0: 0, 1: 1})
-        self.assertTrue(mol.atoms[0].no_implicit)
+        self.assertFalse(mol.atoms[0].no_implicit)
         self.assertFalse(mol.atoms[1].no_implicit)
 
     def test_build_conversion_rdkit_mol_keeps_implicit_hydrogen_completion_for_bare_hetero_atom(
         self,
     ) -> None:
         # A drawn C-O must embed as methanol, not an H-less oxygen: hetero
-        # atoms follow the standard convention of implicit hydrogens up to
-        # normal valence unless the user drew the hydrogens explicitly.
+        # atoms complete their normal valence, counting any drawn hydrogens.
         adapter = RDKitAdapter()
         chem = _FakeChem({})
         adapter._rdkit = (chem, _FakeAllChem())
@@ -1238,7 +1240,7 @@ class RDKitAdapterTest(unittest.TestCase):
         self.assertFalse(mol.atoms[0].no_implicit)
         self.assertFalse(mol.atoms[1].no_implicit)
 
-    def test_build_conversion_rdkit_mol_disables_implicit_hydrogen_for_explicit_hydrogen_neighbor(
+    def test_build_conversion_rdkit_mol_keeps_implicit_hydrogen_with_drawn_hydrogen(
         self,
     ) -> None:
         adapter = RDKitAdapter()
@@ -1252,7 +1254,7 @@ class RDKitAdapterTest(unittest.TestCase):
         mol = adapter._build_conversion_rdkit_mol(model)
 
         self.assertIsNotNone(mol)
-        self.assertTrue(mol.atoms[0].no_implicit)
+        self.assertFalse(mol.atoms[0].no_implicit)
         self.assertFalse(mol.atoms[1].no_implicit)
 
     def test_build_conversion_rdkit_mol_keeps_implicit_hydrogen_completion_for_annotated_hetero_atom(
@@ -1586,6 +1588,148 @@ class RDKitAdapterTest(unittest.TestCase):
         self.assertEqual(
             adapter.last_error, "RDKit is not available in this environment."
         )
+
+    @unittest.skipUnless(_RealChem is not None, "RDKit is required for chemistry tests")
+    def test_partial_explicit_hydrogens_preserve_heteroatom_valence(self) -> None:
+        from chemvas.core.molfile import parse_molfile, write_molfile
+
+        for nitrogen_hydrogens in (0, 1, 2):
+            with self.subTest(nitrogen_hydrogens=nitrogen_hydrogens):
+                model = MoleculeModel()
+                model.add_atom("C", 0.0, 0.0)
+                model.add_atom("N", 1.5, 0.0)
+                model.add_bond(0, 1)
+                for index in range(nitrogen_hydrogens):
+                    hydrogen = model.add_atom("H", 2.0, index + 1.0)
+                    model.add_bond(1, hydrogen)
+                adapter = RDKitAdapter()
+                self.assertEqual(adapter.compute_identifiers(model).formula, "CH5N")
+                reopened = parse_molfile(write_molfile(model))
+                self.assertEqual(adapter.compute_identifiers(reopened).formula, "CH5N")
+                xyz = adapter.model_to_xyz_block(model)
+                self.assertIsNotNone(xyz)
+                self.assertEqual(xyz.splitlines()[0], "7")
+
+        model.atom_annotations[1] = {"radical_electrons": 1}
+        # The drawn NH2 plus an explicit radical exceeds neutral N's valence;
+        # use one drawn hydrogen for the methylaminyl control instead.
+        model.bonds[-1] = None
+        del model.atoms[max(model.atoms)]
+        self.assertEqual(adapter.compute_identifiers(model).formula, "CH4N")
+
+    @unittest.skipUnless(_RealChem is not None, "RDKit is required for chemistry tests")
+    def test_alias_mol_export_rewedges_the_new_layout_and_reopens(self) -> None:
+        from chemvas.core.molfile import parse_molfile
+
+        model = MoleculeModel()
+        for element, x, y in (
+            ("C", 200.0, 200.0),
+            ("C", 187.529, 207.2),
+            ("O", 200.0, 185.6),
+            ("Ph", 212.471, 207.2),
+        ):
+            model.add_atom(element, x, y)
+        model.add_bond(0, 1)
+        wedge_id = model.add_bond(0, 2)
+        model.bonds[wedge_id].style = "wedge"
+        model.add_bond(0, 3)
+        adapter = RDKitAdapter()
+        for style, expected in (
+            ("wedge", "C[C@@H](O)c1ccccc1"),
+            ("hash", "C[C@H](O)c1ccccc1"),
+        ):
+            with self.subTest(style=style):
+                model.bonds[wedge_id].style = style
+                block = adapter.model_to_mol_block(model)
+                self.assertIsNotNone(block)
+                self.assertEqual(
+                    _RealChem.MolToSmiles(_RealChem.MolFromMolBlock(block)), expected
+                )
+                self.assertEqual(
+                    adapter.compute_identifiers(parse_molfile(block)).smiles, expected
+                )
+                artifacts = adapter.model_to_calculation_artifacts(model)
+                self.assertIsNotNone(artifacts)
+                self.assertEqual(
+                    _RealChem.MolToSmiles(
+                        _RealChem.MolFromMolBlock(artifacts.mol_block)
+                    ),
+                    expected,
+                )
+
+    @unittest.skipUnless(_RealChem is not None, "RDKit is required for chemistry tests")
+    def test_alias_mol_export_reopens_charges_and_radicals(self) -> None:
+        from chemvas.core.molfile import parse_molfile
+
+        for smiles, label_atom in (
+            ("[CH2]C", 1),
+            ("[Na+].[O-]C(=O)C", 4),
+        ):
+            with self.subTest(smiles=smiles):
+                adapter = RDKitAdapter()
+                model = adapter.smiles_to_2d(smiles)
+                model.atoms[label_atom].element = "Ph"
+                block = adapter.model_to_mol_block(model)
+                self.assertIsNotNone(block)
+                reopened = parse_molfile(block)
+                expected = _RealChem.MolToSmiles(
+                    adapter._build_conversion_rdkit_mol(model)
+                )
+                self.assertEqual(adapter.compute_identifiers(reopened).smiles, expected)
+
+    @unittest.skipUnless(_RealChem is not None, "RDKit is required for chemistry tests")
+    def test_alias_mol_export_keeps_unspecified_double_bond_stereo_unspecified(self):
+        adapter = RDKitAdapter()
+        model = adapter.smiles_to_2d("CC=CC")
+        model.atoms[0].element = "Ph"
+        block = adapter.model_to_mol_block(model)
+        self.assertIsNotNone(block)
+        reopened = _RealChem.MolFromMolBlock(block)
+        self.assertEqual(_RealChem.MolToSmiles(reopened), "CC=Cc1ccccc1")
+
+    @unittest.skipUnless(_RealChem is not None, "RDKit is required for chemistry tests")
+    def test_dotted_contacts_are_refused_by_chemical_conversion(self) -> None:
+        from chemvas.core.molfile import MolfileError, write_molfile
+
+        for style in ("dotted", "dotted_double"):
+            with self.subTest(style=style):
+                model = MoleculeModel()
+                model.add_atom("C", 0.0, 0.0)
+                model.add_atom("C", 1.5, 0.0)
+                bond_id = model.add_bond(0, 1)
+                model.bonds[bond_id].style = style
+                with self.assertRaisesRegex(MolfileError, "contact"):
+                    write_molfile(model)
+                adapter = RDKitAdapter()
+                for method in (
+                    adapter.model_to_xyz_block_result,
+                    adapter.model_to_mol_block_result,
+                    adapter.model_to_calculation_artifacts_result,
+                    adapter.model_to_3d_scene_result,
+                ):
+                    result = method(model)
+                    self.assertIsNone(result.value)
+                    self.assertIn("contact", result.error)
+                self.assertIsNone(adapter.compute_identifiers(model).formula)
+
+    @unittest.skipUnless(_RealChem is not None, "RDKit is required for chemistry tests")
+    def test_smiles_import_rejects_whole_molecule_racemic_flag(self) -> None:
+        adapter = RDKitAdapter()
+        for smiles in (
+            "C[C@H](O)CC |r|",
+            "C[C@H](O)CC |r,a:1|",
+            "C[C@H](O)CC | r|",
+            "C[C@H](O)CC |r |",
+            "C[C@H](O)CC |$;a|r;;;$,r|",
+        ):
+            with self.subTest(smiles=smiles):
+                self.assertIsNone(adapter.smiles_to_2d(smiles))
+                self.assertIn("racemic", adapter.last_error)
+        self.assertIsNotNone(adapter.smiles_to_2d("C[C@H](O)CC"))
+        # An atom label or the molecule name containing r is not the flag.
+        self.assertIsNotNone(adapter.smiles_to_2d("C[C@H](O)CC |$;r;;;$|"))
+        self.assertIsNotNone(adapter.smiles_to_2d("C[C@H](O)CC |$;a|r;;;$|"))
+        self.assertIsNotNone(adapter.smiles_to_2d("CC name|r|"))
 
     @unittest.skipUnless(_RealChem is not None, "RDKit is required for MOL export")
     def test_model_to_mol_block_expands_abbreviation_into_valid_molfile(self) -> None:
@@ -2524,7 +2668,7 @@ class RDKitAdapterTest(unittest.TestCase):
     @unittest.skipUnless(
         _RealChem is not None, "RDKit is required for explicit-hydrogen tests"
     )
-    def test_model_to_3d_scene_keeps_explicit_hydrogen_fragment_uncompleted(
+    def test_model_to_3d_scene_completes_drawn_hydrogen_unless_radical_is_marked(
         self,
     ) -> None:
         adapter = RDKitAdapter()
@@ -2537,7 +2681,14 @@ class RDKitAdapterTest(unittest.TestCase):
 
         self.assertIsNotNone(scene)
         assert scene is not None
-        self.assertEqual(sorted(atom.symbol for atom in scene.atoms), ["H", "O"])
+        self.assertEqual(sorted(atom.symbol for atom in scene.atoms), ["H", "H", "O"])
+        model.atom_annotations[oxygen] = {"radical_electrons": 1}
+        radical_scene = adapter.model_to_3d_scene(model)
+        self.assertIsNotNone(radical_scene)
+        assert radical_scene is not None
+        self.assertEqual(
+            sorted(atom.symbol for atom in radical_scene.atoms), ["H", "O"]
+        )
 
     @unittest.skipUnless(
         _RealChem is not None, "RDKit is required for implicit-hydrogen tests"

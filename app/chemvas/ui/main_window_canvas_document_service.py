@@ -161,7 +161,17 @@ class MainWindowCanvasDocumentService:
         canvas = canvases[0]
         if document_file_path_for(canvas) is not None:
             return None
-        if self.is_dirty(canvas):
+        state = snapshot_canvas_state_for(canvas)
+        if document_is_dirty_for(canvas, state):
+            return None
+        # Imported MOL/editable SVG documents can be clean but unbound. Only
+        # an actually empty canvas may be replaced without keeping its window.
+        # Ignore settings and the allocation counter, not scene/model content.
+        if any(
+            value for key, value in state.items() if key not in {"model", "settings"}
+        ):
+            return None
+        if any(value for key, value in state["model"].items() if key != "next_atom_id"):
             return None
         return canvas
 

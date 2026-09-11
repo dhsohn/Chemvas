@@ -218,6 +218,163 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
             )
             message_box.warning.assert_called_once()
 
+    def test_save_confirms_external_replacement_and_cancel_keeps_both_versions(self):
+        canvas = active_canvas_for_window(self.window)
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "shared.chemvas"
+            self.assertTrue(self.service.save_canvas_to_path(self.window, str(path)))
+            add_bond_between_points_for(canvas, QPointF(-20, 0), QPointF(20, 0))
+            external_bytes = path.read_bytes() + b"\n"
+            path.write_bytes(external_bytes)
+            before = snapshot_canvas_state_for(canvas)
+            message_box = mock.Mock()
+            message_box.question.return_value = QMessageBox.StandardButton.No
+
+            self.assertFalse(
+                self.service.save_canvas_to_path(
+                    self.window, str(path), message_box=message_box
+                )
+            )
+            message_box.question.assert_called_once()
+            self.assertEqual(path.read_bytes(), external_bytes)
+            self.assertEqual(snapshot_canvas_state_for(canvas), before)
+            message_box.question.return_value = QMessageBox.StandardButton.Yes
+            self.assertTrue(
+                self.service.save_canvas_to_path(
+                    self.window, str(path), message_box=message_box
+                )
+            )
+            message_box.question.reset_mock()
+            self.assertTrue(
+                self.service.save_canvas_to_path(
+                    self.window, str(path), message_box=message_box
+                )
+            )
+            message_box.question.assert_not_called()
+
+    def test_save_does_not_adopt_another_writers_post_save_bytes(self) -> None:
+        from chemvas.ui.canvas_window_access import save_canvas_to_file_for
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "shared.chemvas"
+
+            def write_then_external_change(canvas, write_path):
+                warnings = save_canvas_to_file_for(canvas, write_path)
+                path.write_bytes(path.read_bytes() + b"\n")
+                return warnings
+
+            with mock.patch(
+                "chemvas.ui.main_window_document_action_service.save_canvas_to_file_for",
+                side_effect=write_then_external_change,
+            ):
+                self.assertTrue(
+                    self.service.save_canvas_to_path(self.window, str(path))
+                )
+            external_bytes = path.read_bytes()
+            message_box = mock.Mock()
+            message_box.question.return_value = QMessageBox.StandardButton.No
+            self.assertFalse(
+                self.service.save_canvas_to_path(
+                    self.window,
+                    str(path),
+                    message_box=message_box,
+                )
+            )
+            message_box.question.assert_called_once()
+            self.assertEqual(path.read_bytes(), external_bytes)
+
+    def test_open_records_source_bytes_and_recovery_requires_confirmation(self):
+        canvas = active_canvas_for_window(self.window)
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "shared.chemvas"
+            write_document(path, snapshot_canvas_state_for(canvas), CANVAS_FILE_VERSION)
+            self.assertTrue(self.service.load_canvas_from_path(self.window, str(path)))
+            message_box = mock.Mock()
+            message_box.question.return_value = QMessageBox.StandardButton.No
+            self.assertTrue(
+                self.service.save_canvas_to_path(
+                    self.window, str(path), message_box=message_box
+                )
+            )
+            message_box.question.assert_not_called()
+            # Recovery opens a state, not the original file bytes. Its baseline
+            # is unknown, so Save must never silently replace the bound path.
+            documents = services_for_window(self.window).canvas_document_service
+            documents.replace_canvas_with_state(
+                self.window,
+                canvas,
+                state=snapshot_canvas_state_for(canvas),
+                file_path=str(path),
+            )
+            documents.mark_dirty(canvas)
+            self.assertFalse(
+                self.service.save_canvas_to_path(
+                    self.window, str(path), message_box=message_box
+                )
+            )
+            message_box.question.assert_called_once()
+
+    def test_save_checks_stale_or_inconsistent_plan_before_writing(self) -> None:
+        from chemvas.ui.canvas_calculation_plan_state import (
+            calculation_plan_for,
+            set_calculation_plan_for,
+        )
+        from tests.test_calculation_plan import _document_state, _plan
+
+        canvas = active_canvas_for_window(self.window)
+        documents = services_for_window(self.window).canvas_document_service
+        for stale in (False, True):
+            with self.subTest(stale=stale), tempfile.TemporaryDirectory() as temp_dir:
+                state = _document_state()
+                documents.replace_canvas_with_state(
+                    self.window,
+                    canvas,
+                    state=state,
+                    file_path=None,
+                    display_name="draft",
+                )
+                plan = _plan()
+                if stale:
+                    plan["states"][0]["members"][0]["component_atom_ids"] = [999]
+                else:
+                    plan["states"][0]["charge"] = 1
+                set_calculation_plan_for(canvas, plan)
+                documents.mark_dirty(canvas)
+                message_box = mock.Mock()
+                message_box.question.return_value = QMessageBox.StandardButton.No
+                path = Path(temp_dir) / "draft.chemvas"
+
+                self.assertFalse(
+                    self.service.save_canvas_to_path(
+                        self.window,
+                        str(path),
+                        message_box=message_box,
+                    )
+                )
+                self.assertFalse(path.exists())
+                self.assertEqual(calculation_plan_for(canvas), plan)
+                self.assertTrue(documents.is_dirty(canvas))
+                message_box.question.assert_called_once()
+                self.assertIn(
+                    "calculation plan", message_box.question.call_args.args[2]
+                )
+
+                message_box.question.return_value = QMessageBox.StandardButton.Yes
+                self.assertTrue(
+                    self.service.save_canvas_to_path(
+                        self.window,
+                        str(path),
+                        message_box=message_box,
+                    )
+                )
+                from chemvas.core.document_io import read_document
+
+                saved = read_document(path).state
+                if stale:
+                    self.assertNotIn("calculation_plan", saved)
+                else:
+                    self.assertEqual(saved["calculation_plan"], plan)
+
     def test_save_canvas_to_path_rejects_a_path_owned_by_another_canvas(
         self,
     ) -> None:

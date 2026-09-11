@@ -6,7 +6,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 from PyQt6.QtCore import QRectF
 from PyQt6.QtWidgets import QApplication, QGraphicsItem, QGraphicsTextItem
 
-from chemvas.core.history import CompositeCommand
+from chemvas.ui.history_commands import SetSceneGeometryCommand
 from tests.test_scene_ops_controller import (
     _FakeCanvas,
     _make_rect_item,
@@ -66,7 +66,7 @@ class SceneOpsControllerDeleteFlipEdgesTest(unittest.TestCase):
         controller.flip_selected_items(horizontal=True)
 
         self.assertEqual(len(canvas.pushed_commands), 1)
-        self.assertIsInstance(canvas.pushed_commands[0], CompositeCommand)
+        self.assertIsInstance(canvas.pushed_commands[0], SetSceneGeometryCommand)
         self.assertEqual(canvas.update_selection_outline_calls, 1)
         self.assertEqual(
             ring_item.data(9)["points"], [(12.0, 0.0), (0.0, 0.0), (6.0, 10.0)]

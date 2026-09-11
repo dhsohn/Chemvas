@@ -70,6 +70,7 @@ def _build_harness(
         QGraphicsTextItem(kind)
     )
     mark_scene_service = mock.Mock()
+    mark_scene_service.find_atom_for_mark.return_value = None
     mark_scene_service.mark_center_for_pointer.side_effect = (
         lambda pos, _atom_id=None, *, kind=None: QPointF(pos)
     )
@@ -178,7 +179,7 @@ def test_mark_preview_uses_required_collaborators_and_skips_duplicate() -> None:
         active_tool_name="mark",
         mark_kind="plus",
     )
-    harness.hit_testing_service.find_atom_near.return_value = atom_id
+    harness.mark_scene_service.find_atom_for_mark.return_value = atom_id
     harness.mark_scene_service.mark_center_for_pointer.side_effect = None
     harness.mark_scene_service.mark_center_for_pointer.return_value = QPointF(
         12.0, 18.0
@@ -188,8 +189,8 @@ def test_mark_preview_uses_required_collaborators_and_skips_duplicate() -> None:
     harness.controller.update_hover_highlight(pos)
     harness.controller.update_hover_highlight(pos)
 
-    harness.hit_testing_service.find_atom_near.assert_has_calls(
-        [mock.call(4.0, 5.0, 7.0), mock.call(4.0, 5.0, 7.0)]
+    harness.mark_scene_service.find_atom_for_mark.assert_has_calls(
+        [mock.call(pos, kind="plus"), mock.call(pos, kind="plus")]
     )
     harness.mark_scene_service.mark_center_for_pointer.assert_has_calls(
         [

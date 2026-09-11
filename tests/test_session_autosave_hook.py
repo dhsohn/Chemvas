@@ -2,9 +2,12 @@ from __future__ import annotations
 
 from chemvas.features.session import autosave as session_autosave_hook
 from chemvas.features.session import (
+    is_quit_pending,
+    is_quitting,
     mark_quitting,
     request_snapshot,
     reset_quitting,
+    set_quit_preparing,
     set_snapshot_hook,
     snapshot_unless_quitting,
 )
@@ -55,3 +58,15 @@ def test_snapshot_unless_quitting_is_a_noop_during_quit():
     snapshot_unless_quitting()
 
     assert calls == []
+
+
+def test_quit_preparation_blocks_opening_without_freezing_snapshots():
+    calls = []
+    set_snapshot_hook(lambda: calls.append(1))
+    set_quit_preparing(True)
+    assert is_quit_pending() and not is_quitting()
+    request_snapshot()
+    snapshot_unless_quitting()
+    assert calls == [1, 1]
+    set_quit_preparing(False)
+    assert not is_quit_pending()

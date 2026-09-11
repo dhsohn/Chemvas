@@ -23,11 +23,16 @@ from chemvas.adapters.qt.renderer import Renderer
 from chemvas.core.svg_roundtrip import extract_chemvas_document_from_svg
 from chemvas.domain.document import MoleculeModel, serialize_settings
 from chemvas.features.document_composition import compose_document_state
+from chemvas.features.export import ExportPlan
 from chemvas.ui.atom_coords_access import CanvasAtomCoords3DState
 from chemvas.ui.bond_graphics_access import add_bond_graphics_for
 from chemvas.ui.canvas_atom_graphics_state import atom_dots_for, atom_items_for
 from chemvas.ui.canvas_bond_graphics_state import bond_items_for_id
 from chemvas.ui.canvas_calculation_plan_state import CanvasCalculationPlanState
+from chemvas.ui.canvas_document_metadata_state import (
+    CanvasDocumentMetadataState,
+    document_source_sha256_for,
+)
 from chemvas.ui.canvas_document_session_service import (
     CanvasDocumentSessionService,
     _DetachedSceneSnapshot,
@@ -56,6 +61,10 @@ from chemvas.ui.transactions.scene_rect import (
     set_explicit_view_scene_rect,
 )
 from tests.canvas_factory import build_canvas_view
+
+_EXPORT_PLAN = ExportPlan(
+    source_x=0, source_y=0, source_w=10, source_h=10, out_w_pt=10, out_h_pt=10
+)
 
 
 class _SceneItem:
@@ -117,6 +126,7 @@ def _document_runtime_state(**states):
     states.setdefault("selection_info_state", SelectionInfoState.create())
     states.setdefault("scene_items_state", CanvasSceneItemsState())
     states.setdefault("calculation_plan_state", CanvasCalculationPlanState())
+    states.setdefault("document_metadata_state", CanvasDocumentMetadataState())
     states.setdefault("group_state", CanvasGroupState())
     states.setdefault("atom_coords_3d_state", CanvasAtomCoords3DState())
     states.setdefault("rotation_state", CanvasRotationState())
@@ -1264,7 +1274,8 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
                 return_value=({"state": 1}, ["adjusted"]),
             ) as snapshot_state,
             mock.patch(
-                "chemvas.ui.canvas_document_session_service.write_document"
+                "chemvas.ui.canvas_document_session_service.write_document",
+                return_value=SimpleNamespace(source_sha256="a" * 64),
             ) as write_document,
         ):
             warnings = service.save_to_file("/tmp/example.chemvas")
@@ -1272,6 +1283,7 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
         snapshot_state.assert_called_once_with()
         write_document.assert_called_once_with("/tmp/example.chemvas", {"state": 1}, 7)
         self.assertEqual(warnings, ["adjusted"])
+        self.assertEqual(document_source_sha256_for(canvas), "a" * 64)
 
     def test_save_rejects_noncanonical_document_suffix_before_snapshot(self) -> None:
         canvas = SimpleNamespace(
@@ -1348,6 +1360,9 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             path = Path(temp_dir) / "out.svg"
             with (
+                mock.patch.object(
+                    service, "plan_figure_export", return_value=_EXPORT_PLAN
+                ),
                 mock.patch(
                     "chemvas.ui.canvas_document_session_service.export_canvas_scene_for",
                     side_effect=lambda _canvas, path, **_kwargs: Path(path).write_text(
@@ -1534,12 +1549,17 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as temp_dir:
             path = Path(temp_dir) / "out.png"
-            with mock.patch(
-                "chemvas.ui.canvas_document_session_service.export_canvas_scene_for",
-                side_effect=lambda _canvas, path, **_kwargs: Path(path).write_text(
-                    "PNG", encoding="utf-8"
+            with (
+                mock.patch.object(
+                    service, "plan_figure_export", return_value=_EXPORT_PLAN
                 ),
-            ) as export_canvas_scene:
+                mock.patch(
+                    "chemvas.ui.canvas_document_session_service.export_canvas_scene_for",
+                    side_effect=lambda _canvas, path, **_kwargs: Path(path).write_text(
+                        "PNG", encoding="utf-8"
+                    ),
+                ) as export_canvas_scene,
+            ):
                 service.export_figure(str(path), fmt="png", sizing="col1")
 
         self.assertIsNone(export_canvas_scene.call_args.kwargs["items"])
@@ -1680,11 +1700,13 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
                 service.export_figure("unused", **options)
             atomic_write.assert_not_called()
 
-    def test_unguarded_export_does_not_invoke_plan_or_font_check(self) -> None:
+    def test_default_export_checks_plan_but_does_not_check_fonts(self) -> None:
         _canvas, service = self._canvas_with_export_note()
         with (
             tempfile.TemporaryDirectory() as tmp,
-            mock.patch.object(service, "plan_figure_export") as plan,
+            mock.patch.object(
+                service, "plan_figure_export", wraps=service.plan_figure_export
+            ) as plan,
             mock.patch(
                 "chemvas.ui.canvas_document_session_service.assess_export_readability"
             ) as font_check,
@@ -1699,7 +1721,7 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
                 target_width_mm=None,
             )
             self.assertEqual(default_path.read_bytes(), explicit_path.read_bytes())
-        plan.assert_not_called()
+        self.assertEqual(plan.call_count, 2)
         font_check.assert_not_called()
 
     def test_export_figure_plain_svg_does_not_embed_sheet_payload_by_default(
@@ -1727,9 +1749,14 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as tmp:
             path = str(Path(tmp) / "figure.svg")
-            with mock.patch(
-                "chemvas.ui.canvas_document_session_service.export_canvas_scene_for",
-                side_effect=write_svg,
+            with (
+                mock.patch.object(
+                    service, "plan_figure_export", return_value=_EXPORT_PLAN
+                ),
+                mock.patch(
+                    "chemvas.ui.canvas_document_session_service.export_canvas_scene_for",
+                    side_effect=write_svg,
+                ),
             ):
                 service.export_figure(path, fmt="svg", scope="sheet")
 
@@ -1761,9 +1788,14 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as tmp:
             path = str(Path(tmp) / "figure.svg")
-            with mock.patch(
-                "chemvas.ui.canvas_document_session_service.export_canvas_scene_for",
-                side_effect=write_svg,
+            with (
+                mock.patch.object(
+                    service, "plan_figure_export", return_value=_EXPORT_PLAN
+                ),
+                mock.patch(
+                    "chemvas.ui.canvas_document_session_service.export_canvas_scene_for",
+                    side_effect=write_svg,
+                ),
             ):
                 service.export_figure(path, fmt="svg", scope="sheet", editable_svg=True)
 
@@ -1795,6 +1827,9 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
             path = Path(tmp) / "figure.svg"
             path.write_text("ORIGINAL", encoding="utf-8")
             with (
+                mock.patch.object(
+                    service, "plan_figure_export", return_value=_EXPORT_PLAN
+                ),
                 mock.patch(
                     "chemvas.ui.canvas_document_session_service.export_canvas_scene_for",
                     side_effect=write_svg,

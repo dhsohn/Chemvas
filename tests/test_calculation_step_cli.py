@@ -99,15 +99,24 @@ def _path_ready_state(
         MoleculeModel(
             atoms={
                 0: Atom("C", 0.0, 0.0),
-                1: Atom("Me", 1.0, 0.0),
+                1: Atom("C", 1.0, 0.0),
                 2: Atom("Me", 4.0, 0.0),
                 3: Atom("C", 5.0, 0.0),
                 4: Atom("Pt", 2.5, 3.0),
                 5: Atom("Cl", 2.5, -3.0),
+                6: Atom("Me", 2.0, 0.0),
+                7: Atom("C", 6.0, 0.0),
             },
-            bonds=[Bond(0, 1, order=2), Bond(2, 3, order=1)],
+            # Change an explicit C=C bond; both Me abbreviations retain their
+            # required single attachment while product atom order is reversed.
+            bonds=[
+                Bond(0, 1, order=2),
+                Bond(1, 6, order=1),
+                Bond(2, 3, order=1),
+                Bond(3, 7, order=1),
+            ],
             atom_annotations=(
-                {2: {"formal_charge": product_charge}} if product_charge else {}
+                {3: {"formal_charge": product_charge}} if product_charge else {}
             ),
         )
     )
@@ -115,22 +124,27 @@ def _path_ready_state(
         {
             "kind": "plus" if product_charge > 0 else "minus",
             "text": "+" if product_charge > 0 else "-",
-            "atom_id": 2,
+            "atom_id": 3,
             "dx": None,
             "dy": None,
-            "x": 4.0,
+            "x": 5.0,
             "y": 0.0,
         }
         for _ in range(abs(product_charge))
     ]
     plan = _plan()
+    plan["states"][0]["members"][0]["component_atom_ids"] = [0, 1, 6]  # type: ignore[index]
+    plan["states"][1]["members"][0]["component_atom_ids"] = [2, 3, 7]  # type: ignore[index]
     plan["states"][0]["members"][1]["inclusion"] = "context_only"  # type: ignore[index]
     plan["states"][1]["members"][1]["inclusion"] = "context_only"  # type: ignore[index]
     plan["states"][1]["charge"] = product_charge  # type: ignore[index]
     plan["states"][1]["multiplicity"] = product_multiplicity  # type: ignore[index]
+    plan["steps"][0]["reactant"]["roles"][0]["component_atom_ids"] = [0, 1, 6]  # type: ignore[index]
+    plan["steps"][0]["product"]["roles"][0]["component_atom_ids"] = [2, 3, 7]  # type: ignore[index]
     plan["steps"][0]["atom_correspondence"] = [  # type: ignore[index]
-        {"reactant_atom_id": 0, "product_atom_id": 3},
-        {"reactant_atom_id": 1, "product_atom_id": 2},
+        {"reactant_atom_id": 0, "product_atom_id": 7},
+        {"reactant_atom_id": 1, "product_atom_id": 3},
+        {"reactant_atom_id": 6, "product_atom_id": 2},
     ]
     state["calculation_plan"] = plan
     return state
@@ -332,13 +346,14 @@ def test_pack_step_writes_identity_ordered_path_endpoints(
     assert observation == json.loads(output.read_text(encoding="utf-8"))
     _validate_common_machine(output)
     assert observation["handoff"] == {"status": "ready", "codes": []}
-    assert [row.split()[0] for row in reactant_rows] == ["C", "C"]
-    assert [row.split()[0] for row in product_rows] == ["C", "C"]
-    assert [float(row.split()[1]) for row in product_rows] == [2.0, 1.0]
+    assert [row.split()[0] for row in reactant_rows] == ["C", "C", "C"]
+    assert [row.split()[0] for row in product_rows] == ["C", "C", "C"]
+    assert [float(row.split()[1]) for row in product_rows] == [3.0, 2.0, 1.0]
     assert [
         entry["product_xyz_index"] for entry in endpoint_pair["ordering"]["atom_order"]
-    ] == [2, 1]
+    ] == [3, 2, 1]
     assert [entry["origin"] for entry in endpoint_pair["ordering"]["atom_order"]] == [
+        "chemvas_atom",
         "chemvas_atom",
         "alias_attachment",
     ]
@@ -347,6 +362,45 @@ def test_pack_step_writes_identity_ordered_path_endpoints(
         content = embedded["content"].encode("utf-8")
         assert embedded["sha256"] == hashlib.sha256(content).hexdigest()
         assert embedded["bytes"] == len(content)
+
+
+def test_pack_step_rejects_double_bond_alias_before_rdkit_or_output(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    state = _path_ready_state()
+    state["model"]["bonds"][1]["order"] = 2  # type: ignore[index]
+    source = tmp_path / "invalid-alias.chemvas"
+    write_document(source, state, CANVAS_FILE_VERSION)
+    source_bytes = source.read_bytes()
+    output = tmp_path / "machine.json"
+
+    class _ShouldNotConstruct:
+        def __init__(self) -> None:
+            raise AssertionError("RDKit must not run for a double-bond Me alias")
+
+    monkeypatch.setattr(cli, "RDKitAdapter", _ShouldNotConstruct)
+    with pytest.raises(SystemExit) as error:
+        cli.run(
+            [
+                "pack-step",
+                str(source),
+                "--step",
+                "S01",
+                "--output",
+                str(output),
+            ]
+        )
+
+    assert error.value.code == 2
+    captured = capsys.readouterr()
+    assert "Alias label 'Me' on atom 6 requires a single attachment bond" in (
+        captured.err
+    )
+    assert captured.out == ""
+    assert source.read_bytes() == source_bytes
+    assert not output.exists()
 
 
 def test_pack_step_writes_blocked_artifact_when_endpoint_electronic_state_differs(

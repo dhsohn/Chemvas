@@ -31,6 +31,25 @@ def test_composition_uses_live_canvas_defaults() -> None:
     assert settings["sheet_orientation"] == "landscape"
 
 
+@pytest.mark.parametrize("element", [" N", "N ", "\tN"])
+def test_composition_normalizes_padded_element_labels(element) -> None:
+    composition = _composition()
+    composition["atoms"][0]["element"] = element
+
+    assert compose_document_state(composition)["model"]["atoms"][0]["element"] == "N"
+
+
+@pytest.mark.parametrize("kind", ["arrow", "equilibrium", "line", "arc_90_left"])
+def test_composition_rejects_control_on_non_curved_arrows(kind) -> None:
+    composition = _composition()
+    composition["arrows"] = [
+        {"kind": kind, "start": [0, 0], "end": [20, 0], "control": [10, 10]}
+    ]
+
+    with pytest.raises(ValueError, match="arrow 0 control.*curved"):
+        compose_document_state(composition)
+
+
 def test_composition_rejects_canvas_font_size_above_supported_limit() -> None:
     composition = _composition()
     composition["settings"] = {"text_font_size": 97}
