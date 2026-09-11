@@ -152,7 +152,7 @@ def write_molfile(
             "Export a smaller selection instead."
         )
     for bond in bonds:
-        if bond.style in {"dotted", "dotted_double"}:
+        if bond.style in {"dotted", "dotted_double", "dotted_double_outer"}:
             raise MolfileError(
                 "Cannot export to MOL: dotted contacts cannot be represented as "
                 "ordinary covalent bonds. Export a drawing of the covalent "

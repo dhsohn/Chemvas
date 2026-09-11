@@ -1690,13 +1690,17 @@ class RDKitAdapterTest(unittest.TestCase):
     @unittest.skipUnless(_RealChem is not None, "RDKit is required for chemistry tests")
     def test_dotted_contacts_are_refused_by_chemical_conversion(self) -> None:
         from chemvas.core.molfile import MolfileError, write_molfile
+        from chemvas.domain.document.state import VALID_BOND_STYLES
 
-        for style in ("dotted", "dotted_double"):
+        styles = sorted(
+            style for style in VALID_BOND_STYLES if style.startswith("dotted")
+        )
+        for style in styles:
             with self.subTest(style=style):
                 model = MoleculeModel()
                 model.add_atom("C", 0.0, 0.0)
                 model.add_atom("C", 1.5, 0.0)
-                bond_id = model.add_bond(0, 1)
+                bond_id = model.add_bond(0, 1, 1 if style == "dotted" else 2)
                 model.bonds[bond_id].style = style
                 with self.assertRaisesRegex(MolfileError, "contact"):
                     write_molfile(model)

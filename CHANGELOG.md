@@ -53,7 +53,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Regenerate wedge/hash directions after abbreviation-expansion layout, preserve
   remaining implicit hydrogens on partially explicit heteroatoms, and normalize
   redundant MOL valence fields only when RDKit confirms an unchanged molecule.
-  Racemic CXSMILES flags, dotted contacts at chemical-conversion boundaries, and
+  Racemic CXSMILES flags, all supported dotted contacts (including outer double
+  variants) at chemical-conversion boundaries, and
   unsupported multiple-bond abbreviation attachments are rejected explicitly.
 
 ## [0.12.0] - 2026-09-11

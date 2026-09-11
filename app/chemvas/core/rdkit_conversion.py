@@ -938,7 +938,7 @@ class RDKitConversionHelper:
         """Add bonds with stereo directions to ``rw``; False with last_error on failure."""
         seen_bonds: set[tuple[int, int]] = set()
         for bond_id, bond in valid_bonds:
-            if bond.style in {"dotted", "dotted_double"}:
+            if bond.style in {"dotted", "dotted_double", "dotted_double_outer"}:
                 self.adapter.last_error = (
                     f"Bond {bond_id} is a dotted contact. Chemical conversion "
                     "cannot treat forming, breaking, or noncovalent contacts as "
