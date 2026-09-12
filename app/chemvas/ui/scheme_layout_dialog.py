@@ -25,16 +25,20 @@ from PyQt6.QtWidgets import (
     QWidget,
 )
 
-from chemvas.core.history import CompositeCommand, HistoryCommand, MoveAtomsCommand
+from chemvas.core.history import history_transaction_scope
 from chemvas.features.scheme_layout import MAX_LAYOUT_BLOCKS, validate_layout_request
 from chemvas.ui.canvas_document_state import (
     document_item_lists_for,
     snapshot_canvas_document_state_with_warnings,
 )
-from chemvas.ui.canvas_service_ports import history_service_for_access
-from chemvas.ui.history_commands import MoveItemsCommand, UpdateSceneItemCommand
+from chemvas.ui.canvas_service_ports import (
+    history_service_for_access,
+    scene_transform_controller_for_access,
+)
+from chemvas.ui.history_commands import SetSceneGeometryCommand, UpdateSceneItemCommand
 from chemvas.ui.main_window_ports import active_canvas_for_window
 from chemvas.ui.scene_item_state import arrow_state_dict_for
+from chemvas.ui.scene_signal_blocking import blocked_scene_signals
 from chemvas.ui.scheme_layout_service import plan_canvas_layout
 from chemvas.ui.selection_service_access import refresh_selection_outline_for
 from chemvas.ui.transactions.document import document_transaction
@@ -163,28 +167,52 @@ def arrange_grouped_canvas(
         raise ValueError("The drawing changed. Close and reopen Arrange Scheme.")
     plan = plan_canvas_layout(canvas, source, request)
     items = document_item_lists_for(canvas)
-    commands: list[HistoryCommand] = []
+    color_commands: list[UpdateSceneItemCommand] = []
     for index, color in plan.arrow_colors.items():
         item = items["arrows"][index]
         before = arrow_state_dict_for(canvas, item)
         after = {**before, "color": color}
         if before != after:
-            commands.append(UpdateSceneItemCommand(item, before, after))
-    commands.extend(
-        MoveAtomsCommand(atom_ids=set(block.atoms), dx=dx, dy=dy)
+            color_commands.append(UpdateSceneItemCommand(item, before, after))
+    translations: list[tuple[set[int], list[Any], float, float]] = [
+        (set(block.atoms), [], dx, dy)
         for block, dx, dy in plan.atom_moves
         if abs(dx) > 1e-9 or abs(dy) > 1e-9
-    )
-    commands.extend(
-        MoveItemsCommand(items=[items[kind][index]], dx=dx, dy=dy)
+    ]
+    translations.extend(
+        (set(), [items[kind][index]], dx, dy)
         for (kind, index), (dx, dy) in plan.item_moves.items()
         if abs(dx) > 1e-9 or abs(dy) > 1e-9
     )
-    if commands:
+    if color_commands or translations:
         history = history_service_for_access(canvas)
-        with document_transaction(canvas, history_service=history):
-            command = CompositeCommand(commands)
-            command.redo(canvas)
+        transform = scene_transform_controller_for_access(canvas)
+        with (
+            document_transaction(canvas, history_service=history),
+            history_transaction_scope(canvas),
+            blocked_scene_signals(canvas.scene()),
+        ):
+            for color_command in color_commands:
+                color_command.redo(canvas)
+            geometry = [
+                transform.translate_geometry(atom_ids, scene_items, dx, dy)
+                for atom_ids, scene_items, dx, dy in translations
+            ]
+            command = SetSceneGeometryCommand(
+                atom_commands=[
+                    atom_command
+                    for entry in geometry
+                    for atom_command in entry.atom_commands
+                ],
+                item_commands=[
+                    *color_commands,
+                    *(
+                        item_command
+                        for entry in geometry
+                        for item_command in entry.item_commands
+                    ),
+                ],
+            )
             refresh_selection_outline_for(canvas)
             if not history.push(command):
                 raise ValueError("History is disabled; the layout was not applied.")

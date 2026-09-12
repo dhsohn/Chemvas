@@ -5,6 +5,7 @@ from unittest import mock
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
+from PyQt6.QtCore import QPointF
 from PyQt6.QtWidgets import QApplication, QTabWidget, QWidget
 
 from chemvas.ui.canvas_callback_state import callback_state_for
@@ -13,6 +14,7 @@ from chemvas.ui.main_window_active_canvas_ui_service import (
     MainWindowActiveCanvasUIService,
 )
 from chemvas.ui.selection_info_state import selection_info_state_for
+from chemvas.ui.structure_mutation_access import add_bond_between_points_for
 from tests.canvas_factory import build_canvas_view
 
 
@@ -163,6 +165,30 @@ class MainWindowActiveCanvasUIServiceTest(unittest.TestCase):
         self.all_canvases_for_window.assert_called_once_with(self.window)
         self._assert_canvas_callbacks(self.window.canvas_a, active=False)
         self._assert_canvas_callbacks(self.window.canvas_b, active=True)
+
+    def test_activation_refreshes_an_inactive_canvas_without_mutating_other_views(
+        self,
+    ) -> None:
+        self.service.bind_active_canvas(self.window)
+        inactive = self.window.canvas_b
+        active_rect = self.window.canvas_a.sceneRect()
+        stale_rect = inactive.sceneRect()
+        add_bond_between_points_for(inactive, QPointF(2600, 0), QPointF(2620, 0))
+        self.assertEqual(inactive.sceneRect(), stale_rect)
+        history = inactive.services.history_service.capture_stack_snapshot()
+
+        self.window.canvas_tabs.setCurrentWidget(inactive)
+        self.service.refresh_active_canvas_ui(self.window)
+
+        self.assertTrue(inactive.sceneRect().contains(QPointF(2620, 0)))
+        self.assertEqual(inactive.sceneRect(), inactive.scene().sceneRect())
+        self.assertEqual(self.window.canvas_a.sceneRect(), active_rect)
+        self.assertEqual(
+            inactive.services.history_service.capture_stack_snapshot(), history
+        )
+        self._assert_canvas_callbacks(self.window.canvas_a, active=False)
+        self._assert_canvas_callbacks(inactive, active=True)
+        self.app.processEvents()
 
     def test_history_refresh_does_not_announce_a_tool_or_clear_context_override(
         self,
