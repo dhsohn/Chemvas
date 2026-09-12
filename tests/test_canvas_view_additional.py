@@ -68,7 +68,6 @@ from chemvas.ui.canvas_scene_items_state import (
 from chemvas.ui.canvas_scene_reset_access import clear_scene_for
 from chemvas.ui.canvas_service_access import canvas_services_for
 from chemvas.ui.canvas_smiles_input_state import CanvasSmilesInputState
-from chemvas.ui.canvas_style_controller import CanvasStyleController
 from chemvas.ui.canvas_text_style_state import (
     CanvasTextStyleState,
     set_text_style_for,
@@ -1158,50 +1157,16 @@ class CanvasViewAdditionalTest(unittest.TestCase):
     def test_style_and_text_setting_helpers_guard_inputs_and_apply_presets(
         self,
     ) -> None:
-        note_controller = SimpleNamespace(apply_text_style_to_selected=mock.Mock())
-        style_view = SimpleNamespace(
-            runtime_state=canvas_runtime_state(
-                tool_settings_state=CanvasToolSettingsState(atom_symbol="C"),
-                selection_style_state=SelectionStyleState(
-                    color=QColor("#000000"),
-                ),
-                text_style_state=CanvasTextStyleState(
-                    text_font_family="Helvetica",
-                    text_font_size=11,
-                    text_font_weight=QFont.Weight.Normal,
-                    text_italic=False,
-                    text_color=QColor("#222222"),
-                    text_alignment=Qt.AlignmentFlag.AlignLeft,
-                    text_line_spacing=1.0,
-                    note_box_enabled=False,
-                    note_box_color=QColor("#ffffff"),
-                    note_box_alpha=0.3,
-                    note_border_enabled=False,
-                    note_border_color=QColor("#111111"),
-                    note_border_width=1.0,
-                    note_padding=4.0,
-                ),
-            ),
-            renderer=SimpleNamespace(
-                style=SimpleNamespace(font_size_pt=12, atom_color="#123456")
-            ),
-            refresh_selection_outline=mock.Mock(),
-            services=canvas_runtime_services(
-                note_controller=note_controller,
-                tool_controller=SimpleNamespace(set_active=mock.Mock()),
-            ),
-        )
-        style_view.services.selection.selection_controller = SimpleNamespace(
-            update_selection_outline=style_view.refresh_selection_outline
-        )
+        from chemvas.adapters.qt.renderer import Renderer
+        from chemvas.features.rendering import ACS1996Style
+        from chemvas.ui.canvas_view import CanvasView
 
-        style_controller = CanvasStyleController(
-            style_view, note_controller=note_controller
-        )
-        tool_mode_controller = CanvasToolModeController(
-            style_view,
-            set_active_tool=style_view.services.tool_controller.set_active,
-        )
+        style_view = CanvasView(renderer=Renderer(ACS1996Style(atom_color="#123456")))
+        self.addCleanup(style_view.close)
+        note_controller = style_view.services.interaction.note_controller
+        note = note_controller.create_text_note(QPointF(), "Caption")
+        style_controller = style_view.services.scene_operations.style_controller
+        tool_mode_controller = style_view.services.input.tool_mode_controller
         text_style = text_style_state_for(style_view)
 
         style_controller.set_text_color(QColor("#ff00aa"))
@@ -1239,9 +1204,9 @@ class CanvasViewAdditionalTest(unittest.TestCase):
         self.assertEqual(text_style.note_border_color.name(), "#445566")
         style_controller.set_note_border_color(QColor())
         self.assertEqual(text_style.note_border_color.name(), "#445566")
-        self.assertGreaterEqual(
-            note_controller.apply_text_style_to_selected.call_count, 6
-        )
+        self.assertTrue(note.data(20).isVisible())
+        self.assertEqual(note.data(20).brush().color().name(), "#00ff00")
+        self.assertEqual(note.data(20).pen().color().name(), "#445566")
 
     def test_note_selection_and_text_style_helpers_update_boxes_and_focus(self) -> None:
         scene = QGraphicsScene()

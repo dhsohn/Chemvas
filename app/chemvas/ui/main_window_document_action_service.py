@@ -12,7 +12,10 @@ from chemvas.core.svg_roundtrip import (
     extract_chemvas_document_from_svg as default_read_editable_svg,
 )
 from chemvas.domain.document import MoleculeModel, serialize_model_state
-from chemvas.features.calculation_bundle import validate_calculation_plan
+from chemvas.features.calculation_bundle import (
+    validate_calculation_plan,
+    validate_reviewed_precomplex_pairs,
+)
 from chemvas.features.export import (
     default_export_path,
     export_error_message,
@@ -193,9 +196,12 @@ class MainWindowDocumentActionService:
             plan = calculation_plan_for(target)
             if plan is not None:
                 state = snapshot_canvas_state_for(target)
+                plan_problem: str | None = None
+                consequence = ""
                 try:
-                    validate_calculation_plan(state, plan)
+                    validated_plan = validate_calculation_plan(state, plan)
                 except ValueError as exc:
+                    plan_problem = str(exc)
                     consequence = (
                         "Saving will keep the calculation plan as an invalid draft. "
                         "Repair it in Calculation > Edit States and Steps before export."
@@ -204,10 +210,25 @@ class MainWindowDocumentActionService:
                         "Choose No and undo the graph edit to recover its references, "
                         "or use Save As to keep the previously saved plan separately."
                     )
+                else:
+                    try:
+                        validate_reviewed_precomplex_pairs(state, validated_plan)
+                    except ValueError as exc:
+                        plan_problem = str(exc)
+                        consequence = (
+                            "Saving will keep this drawing and its reviewed precomplex "
+                            "data as a draft, but the review is no longer valid for "
+                            "calculation export. Choose No to cancel; Undo the "
+                            "invalidating edit if it is still in history. Otherwise "
+                            "regenerate and review the affected pair before pack-step. "
+                            "Save As can keep the previously saved drawing separately."
+                        )
+                if plan_problem is not None:
                     answer = message_box.question(
                         window,
                         "Calculation Plan Needs Attention",
-                        f"The calculation plan no longer matches this drawing:\n{exc}\n\n"
+                        "The calculation plan no longer matches this drawing:\n"
+                        f"{plan_problem}\n\n"
                         f"{consequence}\nSave anyway?",
                         QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
                         QMessageBox.StandardButton.No,

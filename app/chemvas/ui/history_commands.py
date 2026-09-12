@@ -277,13 +277,13 @@ def _restore_raw_move_item_state(
 
 
 @dataclass
-class SetAnnotationStyleCommand(HistoryCommand):
+class SetAnnotationStyleCommand[StyleState](HistoryCommand):
     history_transaction_snapshot_covers_state = True
     history_transaction_owns_exact_state = True
 
-    before_state: dict[str, float | bool]
-    after_state: dict[str, float | bool]
-    apply_style: Callable[[Any, dict[str, float | bool]], None]
+    before_state: StyleState
+    after_state: StyleState
+    apply_style: Callable[[Any, StyleState], None]
 
     def _apply(self, canvas, state, rollback_state) -> None:
         transaction = capture_history_transaction_for_command(canvas)

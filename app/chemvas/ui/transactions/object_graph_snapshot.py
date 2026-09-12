@@ -3,7 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass, fields, is_dataclass
 from typing import TYPE_CHECKING, Any
 
-from PyQt6.QtWidgets import QGraphicsItem
+from PyQt6.QtGui import QTextOption
+from PyQt6.QtWidgets import QGraphicsItem, QGraphicsTextItem
 
 from chemvas.ui.transactions.scene_runtime import (
     BondPrimitiveGraphicsSnapshot,
@@ -50,6 +51,18 @@ def _exact_value_matches(actual: object, expected: object) -> bool:
 def _semantic_value_matches(actual: object, expected: object) -> bool:
     if actual is expected:
         return True
+    if isinstance(actual, QTextOption) and isinstance(expected, QTextOption):
+        return (
+            actual.alignment() == expected.alignment()
+            and actual.flags() == expected.flags()
+            and actual.textDirection() == expected.textDirection()
+            and actual.useDesignMetrics() == expected.useDesignMetrics()
+            and actual.wrapMode() == expected.wrapMode()
+            and actual.tabStopDistance() == expected.tabStopDistance()
+            # Native Tab equality includes its delimiter without invoking
+            # PyQt's unsafe QChar-returning delimiter property getter.
+            and actual.tabs() == expected.tabs()
+        )
     try:
         return bool(actual == expected)
     except Exception:
@@ -331,6 +344,12 @@ class SceneItemExactSnapshot:
                 )
                 try:
                     getter = getattr(primitive.item, getter_name, None)
+                    if setter_name == "setDocumentTextOption" and isinstance(
+                        primitive.item, QGraphicsTextItem
+                    ):
+                        document = primitive.item.document()
+                        assert document is not None
+                        getter = document.defaultTextOption
                     if not callable(getter) or not _semantic_value_matches(
                         getter(),
                         expected,

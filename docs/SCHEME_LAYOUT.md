@@ -236,9 +236,10 @@ it never shrinks structures or produces a line containing only an arrow.
 At most 128 display lines are supported. The wrapped report identifies the
 source row/block positions and each continuation arrow for inspection.
 
-The budget describes painted layout bounds, not the complete export's text-box
-padding or outer margin. Unlisted objects still stay in place and can also
-enlarge the complete export.
+The budget describes painted layout bounds, not the complete export's outer
+margin or the layout-box space still retained for Notes and arrow labels.
+Atom labels use their painted glyph bounds in figure export. Unlisted objects
+still stay in place and can also enlarge the complete export.
 After arranging, choose the physical export width and inspect the result at that
 size. A separate font-size guard can reject unreadably small text:
 

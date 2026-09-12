@@ -96,6 +96,7 @@ def build_main_window_services() -> MainWindowServices:
         "Callable[[Any], Any | None]", active_canvas_or_none_for_window
     )
     note_controller_for = cast("Callable[[Any], Any]", note_controller_for_access)
+    style_controller_for = cast("Callable[[Any], Any]", style_controller_for_window)
 
     action_availability_service = MainWindowActionAvailabilityService(
         history_service_for_window=history_service_for_window,
@@ -106,7 +107,7 @@ def build_main_window_services() -> MainWindowServices:
         grid_snap_action_for_window=grid_snap_action_for_window,
     )
     text_style_service = MainWindowTextStyleService(
-        style_controller_for_window=style_controller_for_window,
+        style_controller_for_window=style_controller_for,
     )
     status_service = MainWindowStatusService(
         active_tool_name_for_window=active_tool_name_for_window,
@@ -177,7 +178,10 @@ def build_main_window_services() -> MainWindowServices:
     def set_note_font_family_for_window(window: Any, family: str) -> None:
         controller = note_controller_for_window(window)
         if controller is not None:
-            controller.set_text_font_family(family)
+            if controller.text_format_targets():
+                controller.set_text_font_family(family)
+            else:
+                text_style_service.set_text_font_family_default(window, family)
 
     context_bar_service = MainWindowContextBarService(
         page_builder=MainWindowContextBarPageBuilder(

@@ -46,7 +46,8 @@ def test_native_oxygen_bond_clears_ink_without_document_box_gap(app):
         line = line_item.line()
         ink = _atom_label_scene_path(item)
         # Native baseline: x1=10.32375 at length 40 (document margins).
-        assert line.x1() < item.export_scene_bounding_rect().right() - 1.0
+        assert line.x1() < item.layout_scene_bounding_rect().right() - 1.0
+        assert item.export_scene_bounding_rect() == ink.boundingRect()
         assert line.x1() > ink.boundingRect().right()
         centerline = QPainterPath(line.p1())
         centerline.lineTo(line.p2())
@@ -85,7 +86,7 @@ def _label_controller(
         item.set_anchor(text[0])
     center = item.anchor_center()
     if center is None:
-        center = item.mapFromScene(item.export_scene_bounding_rect().center())
+        center = item.mapFromScene(item.layout_scene_bounding_rect().center())
     item.setPos(-center)
     if transformed:
         item.setTransformOriginPoint(center)

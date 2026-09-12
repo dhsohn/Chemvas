@@ -12,6 +12,7 @@ from PyQt6.QtWidgets import (
 )
 
 from chemvas.ui.canvas_atom_graphics_state import visible_atom_item_for
+from chemvas.ui.graphics_items import AtomLabelItem
 from chemvas.ui.pick_radius_access import atom_pick_radius_for
 from chemvas.ui.selection_style_access import atom_center_point_for
 
@@ -107,7 +108,12 @@ class CalculationMappingHighlighter:
         clearance_top = center.y() - atom_pick_radius_for(self._canvas)
         atom_item = visible_atom_item_for(self._canvas, atom_id)
         if atom_item is not None:
-            bounds_getter = getattr(atom_item, "export_scene_bounding_rect", None)
+            # Keep ID placement independent of output-only glyph fitting.
+            bounds_getter = (
+                atom_item.layout_scene_bounding_rect
+                if isinstance(atom_item, AtomLabelItem)
+                else getattr(atom_item, "export_scene_bounding_rect", None)
+            )
             try:
                 visible_bounds = bounds_getter() if callable(bounds_getter) else None
             except RuntimeError:

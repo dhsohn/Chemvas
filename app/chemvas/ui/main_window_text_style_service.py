@@ -2,7 +2,9 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, ClassVar
 
-from PyQt6.QtWidgets import QColorDialog
+from PyQt6.QtWidgets import QColorDialog, QDialog, QMessageBox
+
+from chemvas.ui.note_appearance_dialog import NoteAppearanceDialog
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -58,6 +60,22 @@ class MainWindowTextStyleService:
         if apply_preset is None:
             return
         apply_preset(self._style_controller(window))
+
+    def edit_note_appearance(self, window) -> None:
+        controller = self._style_controller(window)
+        dialog = NoteAppearanceDialog(controller.note_appearance(), window)
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return
+        try:
+            controller.set_note_appearance(dialog.appearance_values())
+        except (ValueError, RuntimeError) as error:
+            QMessageBox.warning(window, "Note Appearance", str(error))
+
+    def set_text_font_family_default(self, window, family: str) -> None:
+        try:
+            self._style_controller(window).set_text_font_family_default(family)
+        except (ValueError, RuntimeError) as error:
+            QMessageBox.warning(window, "Text Font", str(error))
 
 
 __all__ = ["MainWindowTextStyleService"]

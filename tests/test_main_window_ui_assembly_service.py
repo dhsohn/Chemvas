@@ -363,6 +363,7 @@ class MainWindowUIAssemblyServiceTest(unittest.TestCase):
                 "Select All",
                 "Group",
                 "Ungroup",
+                "Note Appearance...",
                 "Image Properties...",
                 "Arrange Scheme...",
                 "Flip Horizontal",
@@ -405,6 +406,17 @@ class MainWindowUIAssemblyServiceTest(unittest.TestCase):
         ) as arrange_scheme:
             self._menu_action(edit_menu, "Arrange Scheme...").trigger()
             arrange_scheme.assert_called_once_with(window)
+        with mock.patch(
+            "chemvas.ui.main_window_menu_bar.note_appearance_for_window"
+        ) as note_appearance:
+            action = self._menu_action(edit_menu, "Note Appearance...")
+            self.assertEqual(
+                action.statusTip(),
+                "Set document-wide note backgrounds, borders, padding and line spacing",
+            )
+            self.assertTrue(action.shortcut().isEmpty())
+            action.trigger()
+            note_appearance.assert_called_once_with(window)
         with (
             mock.patch(
                 "chemvas.ui.main_window_menu_bar.cut_selection_for_window"

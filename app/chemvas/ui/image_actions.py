@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import cast
+from typing import TYPE_CHECKING, cast
 
 from PyQt6.QtCore import QBuffer, QIODevice, QMimeData
 from PyQt6.QtGui import QImage, QPixmap
@@ -12,6 +12,7 @@ from PyQt6.QtWidgets import (
     QDoubleSpinBox,
     QFileDialog,
     QFormLayout,
+    QInputDialog,
     QLabel,
     QMessageBox,
 )
@@ -29,7 +30,6 @@ from chemvas.ui.canvas_service_ports import (
     tool_mode_controller_for_access,
 )
 from chemvas.ui.history_commands import AddSceneItemsCommand, UpdateSceneItemCommand
-from chemvas.ui.image_item import ImageItem
 from chemvas.ui.main_window_ports import active_canvas_for_window
 from chemvas.ui.selection_scene_access import clear_scene_selection_for
 from chemvas.ui.selection_service_access import (
@@ -38,6 +38,9 @@ from chemvas.ui.selection_service_access import (
 )
 from chemvas.ui.sheet_setup_access import sheet_rect_for
 from chemvas.ui.transactions.document import document_transaction
+
+if TYPE_CHECKING:
+    from chemvas.ui.image_item import ImageItem
 
 
 def image_bytes_from_mime(mime: QMimeData) -> bytes | None:
@@ -217,15 +220,35 @@ class ImagePropertiesDialog(QDialog):
 def image_properties_for_window(window) -> None:
     canvas = active_canvas_for_window(window)
     items = [
-        item for item in canvas.scene().selectedItems() if isinstance(item, ImageItem)
+        item for item in document_item_lists_for(canvas)["images"] if item.isSelected()
     ]
-    if len(items) != 1:
-        QMessageBox.information(window, "Image Properties", "Select one image first.")
+    if not items:
+        QMessageBox.information(window, "Image Properties", "Select an image first.")
         return
-    dialog = ImagePropertiesDialog(items[0].image_state(), window)
+    item = items[0]
+    if len(items) > 1:
+        choices = []
+        for index, candidate in enumerate(items, start=1):
+            state = candidate.image_state()
+            choices.append(
+                f"Image {index}: {state['pixel_width']} × {state['pixel_height']} pixels, "
+                f"at ({state['x']:g}, {state['y']:g})"
+            )
+        choice, accepted = QInputDialog.getItem(
+            window,
+            "Image Properties",
+            "Choose an image to edit. The group stays together.",
+            choices,
+            0,
+            False,
+        )
+        if not accepted:
+            return
+        item = items[choices.index(choice)]
+    dialog = ImagePropertiesDialog(item.image_state(), window)
     if dialog.exec() != QDialog.DialogCode.Accepted:
         return
     try:
-        update_image_properties(canvas, items[0], dialog.image_state())
+        update_image_properties(canvas, item, dialog.image_state())
     except ValueError as error:
         QMessageBox.warning(window, "Image Properties", str(error))

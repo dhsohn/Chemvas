@@ -241,6 +241,14 @@ def _prepare_document_edit_for_window(window) -> None:
         ).tool_controller.prepare_for_document_edit()
 
 
+def note_appearance_for_window(window) -> None:
+    _prepare_document_edit_for_window(window)
+    _active_canvas_services_for_window(
+        window
+    ).interaction.note_controller.finish_note_edit()
+    services_for_window(window).text_style_service.edit_note_appearance(window)
+
+
 def undo_for_window(window) -> None:
     if not _edit_text_for_window(window, "Undo"):
         _prepare_document_edit_for_window(window)
@@ -498,6 +506,7 @@ __all__ = [
     "icon_factory_for_window",
     "insert_controller_for_window",
     "next_canvas_name_for_window",
+    "note_appearance_for_window",
     "paste_selection_for_window",
     "preview_for_window",
     "preview_window_for_window",

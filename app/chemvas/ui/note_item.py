@@ -83,6 +83,10 @@ class NoteItem(ExportTextItem):
     @override
     def focusOutEvent(self, event) -> None:
         super().focusOutEvent(event)
+        if event.reason() == Qt.FocusReason.PopupFocusReason:
+            # A font/menu popup temporarily borrows focus from the editor.
+            # Keep its cursor and native text Undo until a real editor exit.
+            return
         note_controller_for_access(self._canvas).handle_note_focus_out(self)
 
 

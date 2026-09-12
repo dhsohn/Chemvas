@@ -54,7 +54,10 @@ def test_build_scene_operation_services_wires_explicit_collaborators(
     )
 
     assert isinstance(services, SceneOperationServiceBundle)
-    assert services.style_controller.kwargs == {"note_controller": note_controller}
+    assert services.style_controller.kwargs == {
+        "note_controller": note_controller,
+        "history_service": history_service,
+    }
     assert services.scene_clipboard_controller.kwargs == {
         "selection_controller": selection_controller,
         "bond_mutation_service": bond_mutation_service,

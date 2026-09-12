@@ -116,6 +116,12 @@ end state is decided.
   tracker. Focused text editors retain their own editing route. Ordinary
   Perspective tool switching still commits, while this boundary cancels.
 - `CanvasHistoryService` is the sole owner of undo/redo stack policy and of the immutable `HistoryStackSnapshot` value. Exact top-level undo/redo operations capture one document savepoint; nested commands defer to that operation.
+- Note formatting reads the existing scene/note selection union; an active text
+  editor keeps its native cursor and Undo across temporary menu-popup focus.
+  `CanvasStyleController` owns document-wide note appearance and new-note defaults.
+  Its existing annotation-style history command carries exact settings and affected
+  note HTML/font/color/default text-option payloads; `DocumentSavepoint` remains
+  the rollback owner.
 - Selection nudge/alignment and Select/Move drag commands record exact before/after geometry,
   including existing depth coordinates and dependent marks/ring fills. Replay
   restores atoms before their dependent scene items, then refreshes the selection

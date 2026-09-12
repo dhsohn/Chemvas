@@ -35,7 +35,7 @@ def save_tiff_with_pillow(image: QImage, path: str, dpi: int) -> None:
         rgba.bytesPerLine(),
         1,
     )
-    pil_image.save(path, format="TIFF", dpi=(dpi, dpi))
+    pil_image.save(path, format="TIFF", dpi=(dpi, dpi), compression="tiff_lzw")
 
 
 def export_raster_file(
