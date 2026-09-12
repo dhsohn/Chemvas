@@ -910,7 +910,17 @@ class CanvasViewAdditionalTest(unittest.TestCase):
         )
 
         arrow_service.preview_arrow.assert_called_once_with(start, end, "reaction")
-        arrow_service.build_arrow_item.assert_called_once_with(start, end, "dotted")
+        arrow_service.build_arrow_item.assert_called_once_with(
+            start, end, "dotted", False
+        )
+        arrow_service.build_arrow_item.reset_mock()
+        self.assertIs(
+            build_arrow_item_for(view, start, end, "equilibrium", mirrored=True),
+            arrow_service.build_arrow_item.return_value,
+        )
+        arrow_service.build_arrow_item.assert_called_once_with(
+            start, end, "equilibrium", True
+        )
         arrow_service.build_curved_arrow_path.assert_called_once_with(
             start, end, control, True
         )
