@@ -327,9 +327,12 @@ TIFF uses lossless LZW compression, preserving the rendered RGBA pixels and
 chosen DPI. White-background output retains its opaque alpha channel; transparent
 output retains transparency.
 
-Figure fitting measures atom labels from their painted glyphs, excluding their
-editing and picking space. Notes and arrow labels still retain their layout-box
-bounds; their rich-text decorations and automatic list markers are not cropped.
+Figure fitting measures atom labels and attached arrow labels from their painted
+glyphs, excluding empty text-layout margins. Their editing, picking and on-canvas
+placement stay unchanged. Notes retain their layout-box bounds so rich-text
+decorations and automatic list markers are not cropped.
+Arrow labels retain their layout-box bounds when bitmap/color-font tables are detected.
+This fitting change does not add bitmap/color glyph support to outlined exports.
 
 Figure export defaults to plain SVG without Chemvas source metadata. Choose
 **Editable Chemvas SVG** only when you want the SVG to carry the original

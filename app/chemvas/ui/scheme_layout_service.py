@@ -21,7 +21,7 @@ from chemvas.ui.canvas_document_state import document_item_lists_for
 from chemvas.ui.canvas_mark_registry import mark_registry_for
 from chemvas.ui.canvas_model_access import model_for
 from chemvas.ui.canvas_scene_items_state import ring_items_for
-from chemvas.ui.layout_qa_service import note_paint_scene_path
+from chemvas.ui.graphics_items import note_paint_scene_path
 from chemvas.ui.move_access import move_atoms_for, move_item_for
 from chemvas.ui.scene_item_access import apply_scene_item_state
 from chemvas.ui.scene_item_state import scene_item_state_for

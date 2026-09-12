@@ -683,7 +683,7 @@ def test_rich_text_border_collision_matches_native_paint(
     ],
 )
 def test_rich_background_visual_runs_match_native_paint(html: str, width: int) -> None:
-    from chemvas.ui.layout_qa_service import note_paint_scene_path
+    from chemvas.ui.graphics_items import note_paint_scene_path
 
     app = QApplication.instance() or QApplication([])
     app.setQuitOnLastWindowClosed(False)
@@ -727,7 +727,7 @@ def test_fragment_geometry_visits_only_intersecting_lines(
 ) -> None:
     from PyQt6.QtGui import QTextLayout
 
-    from chemvas.ui.layout_qa_service import note_paint_scene_path
+    from chemvas.ui.graphics_items import note_paint_scene_path
 
     app = QApplication.instance() or QApplication([])
     app.setQuitOnLastWindowClosed(False)

@@ -15,7 +15,7 @@ from chemvas.features.document_composition import compose_document_state
 from chemvas.features.scheme_layout import validate_layout_request
 from chemvas.ui.canvas_bond_graphics_state import bond_items_for
 from chemvas.ui.canvas_document_state import document_item_lists_for
-from chemvas.ui.layout_qa_service import note_paint_scene_path
+from chemvas.ui.graphics_items import note_paint_scene_path
 from chemvas.ui.scheme_layout_service import arrange_canvas, plan_canvas_layout
 
 

@@ -29,7 +29,7 @@ from chemvas.ui.canvas_model_access import model_for
 from chemvas.ui.canvas_scene_items_state import ring_items_for
 from chemvas.ui.canvas_service_access import canvas_services_for
 from chemvas.ui.canvas_service_ports import history_service_for_access
-from chemvas.ui.layout_qa_service import note_paint_scene_path
+from chemvas.ui.graphics_items import note_paint_scene_path
 from chemvas.ui.scene_group_operations import expand_selection_to_groups_for
 from chemvas.ui.scheme_layout_service import arrange_canvas
 

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import math
-from typing import TYPE_CHECKING, Any, override
+from typing import Any, override
 
 from PyQt6.QtCore import QRectF, Qt
 from PyQt6.QtGui import (
@@ -9,9 +9,6 @@ from PyQt6.QtGui import (
     QPainterPath,
     QPainterPathStroker,
     QPicture,
-    QTextCharFormat,
-    QTextCursor,
-    QTransform,
 )
 from PyQt6.QtWidgets import (
     QGraphicsEllipseItem,
@@ -38,10 +35,8 @@ from chemvas.ui.canvas_scene_items_state import (
     shape_items_for,
     ts_bracket_items_for,
 )
+from chemvas.ui.graphics_items import note_paint_scene_path
 from chemvas.ui.sheet_setup_access import sheet_rect_for
-
-if TYPE_CHECKING:
-    from PyQt6.QtGui import QRawFont, QTextBlock, QTextFragment
 
 WARNING_CODES = (
     "arrow-structure-overlap",
@@ -554,149 +549,6 @@ def _has_visible_shape_paint(item: Any) -> bool:
     return brush.style() != Qt.BrushStyle.NoBrush and brush.color().alpha() > 0
 
 
-def note_paint_scene_path(item: QGraphicsTextItem) -> QPainterPath:
-    """Use the shaped text that Qt paints, not its rectangular hit target."""
-    path = QPainterPath()
-    path.setFillRule(Qt.FillRule.WindingFill)
-    document = item.document()
-    if document is None:
-        return path
-    # Force layout before reading block/run positions, including fresh notes.
-    item.boundingRect()
-    block = document.begin()
-    while block.isValid():
-        layout = block.layout()
-        if layout is not None:
-            background = block.blockFormat().background()
-            if (
-                background.style() != Qt.BrushStyle.NoBrush
-                and background.color().alpha()
-            ):
-                document_layout = document.documentLayout()
-                assert document_layout is not None
-                bounds = document_layout.blockBoundingRect(block)
-                frame = document.rootFrame()
-                if (
-                    frame is not None
-                    and QTextCursor(block).currentFrame() == frame
-                    and document.pageSize().width() <= 0
-                ):
-                    bounds.setRight(
-                        document_layout.frameBoundingRect(frame).right()
-                        - frame.frameFormat().rightMargin()
-                    )
-                path.addRect(bounds)
-            fragment_iterator = block.begin()
-            while not fragment_iterator.atEnd():
-                fragment = fragment_iterator.fragment()
-                brush = fragment.charFormat().foreground()
-                color = (
-                    item.defaultTextColor()
-                    if brush.style() == Qt.BrushStyle.NoBrush
-                    else brush.color()
-                )
-                path.addPath(
-                    _fragment_decoration_path(block, fragment, color.alpha() > 0)
-                )
-                if color.alpha() > 0:
-                    runs = layout.glyphRuns(
-                        fragment.position() - block.position(), fragment.length()
-                    )
-                    for run in runs:
-                        font = run.rawFont()
-                        baseline_shift = _fragment_baseline_shift(
-                            fragment.charFormat(), font
-                        )
-                        for glyph, position in zip(
-                            run.glyphIndexes(), run.positions(), strict=True
-                        ):
-                            offset = layout.position() + position
-                            transform = QTransform.fromTranslate(
-                                offset.x(), offset.y() + baseline_shift
-                            )
-                            path.addPath(transform.map(font.pathForGlyph(glyph)))
-                fragment_iterator += 1
-        block = block.next()
-    return item.mapToScene(path)
-
-
-def _fragment_baseline_shift(format_: QTextCharFormat, font: QRawFont) -> float:
-    height = font.ascent() + font.descent()
-    if (
-        format_.verticalAlignment()
-        == QTextCharFormat.VerticalAlignment.AlignSuperScript
-    ):
-        return -height * format_.superScriptBaseline() / 100
-    if format_.verticalAlignment() == QTextCharFormat.VerticalAlignment.AlignSubScript:
-        return height * format_.subScriptBaseline() / 100
-    return 0.0
-
-
-def _fragment_decoration_path(
-    block: QTextBlock, fragment: QTextFragment, visible_text: bool
-) -> QPainterPath:
-    path = QPainterPath()
-    path.setFillRule(Qt.FillRule.WindingFill)
-    format_ = fragment.charFormat()
-    background = format_.background()
-    visible_background = (
-        background.style() != Qt.BrushStyle.NoBrush and background.color().alpha() > 0
-    )
-    layout = block.layout()
-    assert layout is not None
-    format_font = format_.font().resolve(layout.font())
-    if not visible_background and (
-        not visible_text
-        or not (
-            format_font.underline() or format_font.overline() or format_font.strikeOut()
-        )
-    ):
-        return path
-    start = fragment.position() - block.position()
-    end = start + fragment.length()
-    first_line = layout.lineForTextPosition(start).lineNumber()
-    last_line = layout.lineForTextPosition(end - 1).lineNumber()
-    for index in range(first_line, last_line + 1):
-        line = layout.lineAt(index)
-        first = max(start, line.textStart())
-        last = min(end, line.textStart() + line.textLength())
-        if first >= last:
-            continue
-        top = layout.position().y() + line.y()
-        # Visual runs preserve bidi gaps and omit trailing wrap whitespace.
-        for run in line.glyphRuns(first, last - first):
-            bounds = run.boundingRect()
-            left = layout.position().x() + bounds.left()
-            right = layout.position().x() + bounds.right()
-            if visible_background:
-                path.addRect(QRectF(left, top, right - left, line.height()))
-            if not visible_text:
-                continue
-            font = run.rawFont()
-            thickness = font.lineThickness()
-            offsets = []
-            if run.underline():
-                offset = math.ceil(font.underlinePosition()) + thickness / 2
-                if font.underlinePosition() <= font.descent():
-                    offset = min(offset, font.descent() - thickness / 2)
-                offsets.append(offset)
-            if run.overline():
-                offsets.append(-font.ascent())
-            if run.strikeOut():
-                offsets.append(-font.ascent() / 3)
-            baseline = top + line.ascent() + _fragment_baseline_shift(format_, font)
-            for offset in offsets:
-                path.addRect(
-                    QRectF(
-                        math.floor(left),
-                        baseline + offset - thickness / 2,
-                        math.floor(right) - math.floor(left),
-                        thickness,
-                    )
-                )
-    return path
-
-
 def _graphics_paint_scene_path(item: Any) -> QPainterPath:
     if not item.isVisible() or item.effectiveOpacity() <= 0.0:
         return QPainterPath()
@@ -774,4 +626,4 @@ def _warning_sort_key(warning: dict[str, object]) -> tuple[str, str]:
     return str(warning["code"]), repr(warning["items"])
 
 
-__all__ = ["WARNING_CODES", "check_canvas_layout", "note_paint_scene_path"]
+__all__ = ["WARNING_CODES", "check_canvas_layout"]
