@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import override
 
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import QPointF, Qt
 from PyQt6.QtGui import QColor
 
 from chemvas.core.tool_overlay_logic import activate_tool_no_drag
@@ -95,6 +95,7 @@ class DeleteTool(Tool):
         self._commands: list = []
         self._before_smiles_input: str | None = None
         self._delete_session = None
+        self._last_erase_scene_pos: QPointF | None = None
 
     @property
     @override
@@ -118,6 +119,7 @@ class DeleteTool(Tool):
         self._commands = []
         self._before_smiles_input = None
         self._delete_session = None
+        self._last_erase_scene_pos = None
 
     def _rollback_active_session(
         self, original_error: BaseException | None = None
@@ -172,6 +174,12 @@ class DeleteTool(Tool):
 
     def _erase_or_rollback(self, event) -> None:
         try:
+            position = self.context.scene_pos_from_event(event)
+            if position == self._last_erase_scene_pos:
+                return
+            # A consumed point must not hit a newly exposed item on a repeated
+            # stationary frame. Real movement or a new press may erase it.
+            self._last_erase_scene_pos = QPointF(position)
             self._erase_at_event(event)
         except Exception as original_error:
             self._rollback_active_session(original_error)

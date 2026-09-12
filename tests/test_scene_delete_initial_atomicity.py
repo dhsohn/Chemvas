@@ -59,12 +59,17 @@ from tests.test_scene_ops_controller import (
 class _DeleteGestureEvent:
     def __init__(
         self,
+        position: QPointF | None = None,
         *,
         button=Qt.MouseButton.LeftButton,
         buttons=Qt.MouseButton.LeftButton,
     ) -> None:
         self._button = button
         self._buttons = buttons
+        self._position = QPointF() if position is None else position
+
+    def position(self):
+        return self._position
 
     def button(self):
         return self._button
@@ -1407,7 +1412,7 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
             side_effect=[atom_item, shape_item],
         ):
             self.assertTrue(tool.on_mouse_press(_DeleteGestureEvent()))
-            self.assertTrue(tool.on_mouse_move(_DeleteGestureEvent()))
+            self.assertTrue(tool.on_mouse_move(_DeleteGestureEvent(QPointF(1.0, 1.0))))
 
         self.assertNotIn(atom_id, canvas.model.atoms)
         self.assertIsNone(shape_item.scene())
@@ -1679,7 +1684,7 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
             side_effect=[atom_item, shape_item],
         ):
             self.assertTrue(tool.on_mouse_press(_DeleteGestureEvent()))
-            self.assertTrue(tool.on_mouse_move(_DeleteGestureEvent()))
+            self.assertTrue(tool.on_mouse_move(_DeleteGestureEvent(QPointF(1.0, 1.0))))
         self.assertTrue(tool.on_mouse_release(_DeleteGestureEvent()))
 
         history = canvas.services.history_service

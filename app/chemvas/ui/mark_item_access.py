@@ -41,6 +41,12 @@ def sync_marks_for_atom_for(canvas, atom_id: int) -> None:
     mark_scene_service_for_access(canvas).sync_marks_for_atom(atom_id)
 
 
+def reveal_unmarked_isolated_carbons_for(canvas, atom_ids: set[int]):
+    return mark_scene_service_for_access(canvas).reveal_unmarked_isolated_carbons(
+        atom_ids
+    )
+
+
 def mark_center_for_pointer_for(canvas, pos, atom_id: int | None, *, kind: str | None):
     return mark_scene_service_for_access(canvas).mark_center_for_pointer(
         pos, atom_id, kind=kind
@@ -85,6 +91,7 @@ __all__ = [
     "refresh_mark_item_geometry_for",
     "remove_mark_item_for",
     "remove_marks_for_atom_for",
+    "reveal_unmarked_isolated_carbons_for",
     "set_mark_center_for",
     "sync_marks_for_atom_for",
 ]

@@ -929,6 +929,7 @@ class UngroupSceneItemsCommand(HistoryCommand):
 @dataclass(kw_only=True)
 class ChangeAtomLabelCommand(HistoryCommand):
     history_transaction_snapshot_covers_state = True
+    history_transaction_owns_exact_state = True
 
     atom_id: int
     before_element: str
@@ -948,8 +949,7 @@ class ChangeAtomLabelCommand(HistoryCommand):
         rollback_explicit_label: bool,
         rollback_smiles_input: str | None,
     ) -> None:
-        runtime_snapshot = capture_scene_runtime(canvas)
-        scene_rect_snapshot = capture_scene_rect_snapshot(runtime_snapshot.scene)
+        transaction = capture_history_transaction_for_command(canvas)
         try:
             add_or_update_atom_label(
                 canvas,
@@ -962,30 +962,31 @@ class ChangeAtomLabelCommand(HistoryCommand):
                 literal_label=explicit_label,
             )
             set_last_smiles_input_for(canvas, smiles_input)
-            release_scene_rect_snapshot(scene_rect_snapshot)
+            release_history_transaction_for_command(canvas, transaction)
         except Exception as original_error:
-            run_rollback_step(
-                original_error,
-                "restoring the prior atom label",
-                lambda: add_or_update_atom_label(
-                    canvas,
-                    self.atom_id,
-                    rollback_element,
-                    clear_smiles=False,
-                    record=False,
-                    allow_merge=False,
-                    show_carbon=rollback_explicit_label,
-                    literal_label=rollback_explicit_label,
-                ),
+            result = restore_history_transaction_for_command(
+                canvas, transaction, original_error
             )
-            run_rollback_step(
-                original_error,
-                "restoring the prior SMILES input",
-                lambda: set_last_smiles_input_for(canvas, rollback_smiles_input),
-            )
-            restore_absolute_snapshots(
-                runtime_snapshot, scene_rect_snapshot, original_error
-            )
+            if result.fallback_to_inverse:
+                run_rollback_step(
+                    original_error,
+                    "restoring the prior atom label",
+                    lambda: add_or_update_atom_label(
+                        canvas,
+                        self.atom_id,
+                        rollback_element,
+                        clear_smiles=False,
+                        record=False,
+                        allow_merge=False,
+                        show_carbon=rollback_explicit_label,
+                        literal_label=rollback_explicit_label,
+                    ),
+                )
+                run_rollback_step(
+                    original_error,
+                    "restoring the prior SMILES input",
+                    lambda: set_last_smiles_input_for(canvas, rollback_smiles_input),
+                )
             raise
 
     @override

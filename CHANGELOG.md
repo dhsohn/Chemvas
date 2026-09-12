@@ -26,6 +26,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Keep otherwise invisible isolated carbon as an explicit `C` when its last
+  bound charge/radical mark is removed or reassigned, in the same undoable edit.
+  Ignore repeated stationary eraser frames that could remove the newly shown
+  atom. Preserve ordinary atom/bond deletion and document-opening behavior.
 - Apply document text font/color changes to existing arrow labels immediately,
   keeping their appearance consistent through Undo, reopening and figure export
   while preserving explicit arrow colors and individually formatted note text.

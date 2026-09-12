@@ -344,7 +344,10 @@ class _DeleteCanvas:
             scene_item_controller=SimpleNamespace(
                 remove_scene_item=self.remove_scene_item
             ),
-            hit_testing_service=SimpleNamespace(item_at_event=self.item_at_event),
+            hit_testing_service=SimpleNamespace(
+                item_at_event=self.item_at_event,
+                scene_pos_from_event=lambda event: event.position(),
+            ),
         )
 
     def setDragMode(self, mode) -> None:
@@ -1089,6 +1092,28 @@ class ToolsAdditionalTest(unittest.TestCase):
             canvas.pushed_commands[-1].commands[0], SetSmilesInputCommand
         )
         self.assertEqual(canvas.pushed_commands[-1].commands[1], "atom-5")
+
+    def test_delete_tool_consumes_stationary_point_once_until_move_or_new_press(self):
+        canvas = _DeleteCanvas()
+        tool = DeleteTool(canvas, context=_tool_context_for(canvas))
+        canvas.item = _DataItem("atom", 1, scene_obj=canvas.scene())
+        tool.on_mouse_press(_Event(QPointF(2.0, 3.0)))
+        canvas.item = _DataItem("atom", 2, scene_obj=canvas.scene())
+        for _ in range(2):
+            self.assertTrue(
+                tool.on_mouse_move(
+                    _Event(QPointF(2.0, 3.0), buttons=Qt.MouseButton.LeftButton)
+                )
+            )
+        self.assertEqual(canvas.deleted_atoms, [(1, False)])
+        tool.on_mouse_move(_Event(QPointF(3.0, 3.0), buttons=Qt.MouseButton.LeftButton))
+        self.assertEqual(canvas.deleted_atoms, [(1, False), (2, False)])
+        tool.on_mouse_release(_Event(QPointF(3.0, 3.0)))
+        self.assertIsNone(tool._last_erase_scene_pos)
+        canvas.item = _DataItem("atom", 3, scene_obj=canvas.scene())
+        tool.on_mouse_press(_Event(QPointF(3.0, 3.0)))
+        tool.on_mouse_release(_Event(QPointF(3.0, 3.0)))
+        self.assertEqual(canvas.deleted_atoms, [(1, False), (2, False), (3, False)])
 
     def test_delete_tool_preserves_session_when_rollback_stays_active(self) -> None:
         canvas = _DeleteCanvas()
