@@ -197,6 +197,13 @@ its knob, flip, align, and distribute.
   invert stereocentres; mirroring a whole chiral molecule gives its enantiomer.
   Check the chemistry after flipping; use in-plane rotation for orientation
   changes that should not mirror the molecule.
+  Equilibrium arrows mirror both harpoons exactly, including unequal lengths,
+  while each label stays associated with its harpoon and remains readable.
+  The reflection survives Undo/Redo, copy/paste and save/reopen. Saved reflected
+  equilibrium arrows require a version that supports the optional `mirrored`
+  field; older versions reject those documents rather than draw them incorrectly.
+  If a selected equilibrium arrow has coincident endpoints, Flip refuses the
+  selection without changing it; separate its endpoints first.
   Perspective refuses affected components with wedge/hash stereo before changing
   the drawing; use in-plane transforms for those components. Group includes
   complete connected molecules, and explicitly regrouping an older partial group

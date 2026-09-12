@@ -164,8 +164,9 @@ class _FakeCanvas:
         item.setPos(center)
 
     def record_build_arrow_item(
-        self, start: QPointF, end: QPointF, kind: str
+        self, start: QPointF, end: QPointF, kind: str, mirrored: bool = False
     ) -> QGraphicsPathItem:
+        assert mirrored is False
         item = QGraphicsPathItem(QPainterPath())
         self.built_arrow_calls.append((QPointF(start), QPointF(end), kind, item))
         return item

@@ -135,6 +135,9 @@ VALID_ARROW_KINDS = (
     | VALID_LINE_KINDS
     | VALID_ARC_KINDS
 )
+VALID_EQUILIBRIUM_KINDS = frozenset(
+    kind for kind in VALID_ARROW_KINDS if kind.startswith("equilibrium")
+)
 # An arrow may carry one short label on each side (rate constants such as
 # k_1 above and k_-1 below); the text keeps the label mini-syntax, not HTML.
 ARROW_LABEL_SIDES = frozenset(("above", "below"))
@@ -945,7 +948,7 @@ def _validate_mark_text(text: object, *, error: str) -> None:
 def _validate_arrow_fields(arrow_state: Mapping[str, object], *, error: str) -> None:
     keys = set(arrow_state)
     required_keys = {"kind", "start", "end"}
-    optional_keys = {"control", "double", "labels", "color"}
+    optional_keys = {"control", "double", "labels", "color", "mirrored"}
     if not required_keys <= keys or not keys <= required_keys | optional_keys:
         raise ValueError(error)
     if "color" in keys and not _is_hex_color(arrow_state["color"]):
@@ -954,6 +957,11 @@ def _validate_arrow_fields(arrow_state: Mapping[str, object], *, error: str) -> 
         _validate_arrow_labels(arrow_state["labels"], error=error)
     if not _is_valid_choice(arrow_state.get("kind"), VALID_ARROW_KINDS):
         raise ValueError(error)
+    if "mirrored" in keys and (
+        arrow_state["kind"] not in VALID_EQUILIBRIUM_KINDS
+        or type(arrow_state["mirrored"]) is not bool
+    ):
+        raise ValueError(f"{error} mirrored must be a boolean on an equilibrium arrow.")
     if not _is_point(arrow_state.get("start")) or not _is_point(arrow_state.get("end")):
         raise ValueError(error)
     control = arrow_state.get("control")

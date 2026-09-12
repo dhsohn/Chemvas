@@ -75,7 +75,7 @@ class SceneItemStateUnitTest(unittest.TestCase):
             ring_fill_brush_getter=lambda: QBrush(QColor("#AA4400")),
             ts_bracket_path_builder=lambda rect: QPainterPath(),
             bond_color="#000000",
-            build_arrow_item=lambda start, end, kind: QGraphicsPathItem(),
+            build_arrow_item=lambda start, end, kind, mirrored: QGraphicsPathItem(),
             set_curved_arrow_path=lambda *args: None,
             orbital_base_handle_dist=18.0,
         )
@@ -101,7 +101,7 @@ class SceneItemStateUnitTest(unittest.TestCase):
             ring_fill_brush_getter=lambda: QBrush(QColor("#AA4400")),
             ts_bracket_path_builder=lambda rect: QPainterPath(),
             bond_color="#000000",
-            build_arrow_item=lambda start, end, kind: QGraphicsPathItem(),
+            build_arrow_item=lambda start, end, kind, mirrored: QGraphicsPathItem(),
             set_curved_arrow_path=lambda *args: None,
             orbital_base_handle_dist=18.0,
         )
@@ -124,7 +124,7 @@ class SceneItemStateUnitTest(unittest.TestCase):
             ring_fill_brush_getter=lambda: QBrush(QColor("#AA4400")),
             ts_bracket_path_builder=lambda rect: QPainterPath(),
             bond_color="#000000",
-            build_arrow_item=lambda start, end, kind: QGraphicsPathItem(),
+            build_arrow_item=lambda start, end, kind, mirrored: QGraphicsPathItem(),
             set_curved_arrow_path=lambda *args: None,
             orbital_base_handle_dist=18.0,
         )
@@ -161,7 +161,7 @@ class SceneItemStateUnitTest(unittest.TestCase):
             ring_fill_brush_getter=lambda: QBrush(QColor("#AA4400")),
             ts_bracket_path_builder=lambda rect: QPainterPath(),
             bond_color="#000000",
-            build_arrow_item=lambda start, end, kind: QGraphicsPathItem(),
+            build_arrow_item=lambda start, end, kind, mirrored: QGraphicsPathItem(),
             set_curved_arrow_path=lambda *args: None,
             orbital_base_handle_dist=18.0,
         )
@@ -214,7 +214,7 @@ class SceneItemStateUnitTest(unittest.TestCase):
             ring_fill_brush_getter=lambda: QBrush(QColor("#AA4400")),
             ts_bracket_path_builder=lambda rect: QPainterPath(),
             bond_color="#000000",
-            build_arrow_item=lambda start, end, kind: QGraphicsPathItem(),
+            build_arrow_item=lambda start, end, kind, mirrored: QGraphicsPathItem(),
             set_curved_arrow_path=lambda *args: None,
             orbital_base_handle_dist=18.0,
         )
@@ -297,7 +297,7 @@ class SceneItemStateUnitTest(unittest.TestCase):
             ring_fill_brush_getter=lambda: QBrush(QColor("#AA4400")),
             ts_bracket_path_builder=build_path,
             bond_color="#123456",
-            build_arrow_item=lambda start, end, kind: QGraphicsPathItem(),
+            build_arrow_item=lambda start, end, kind, mirrored: QGraphicsPathItem(),
             set_curved_arrow_path=lambda *args: None,
             orbital_base_handle_dist=18.0,
         )
@@ -336,7 +336,7 @@ class SceneItemStateUnitTest(unittest.TestCase):
             ring_fill_brush_getter=lambda: QBrush(QColor("#AA4400")),
             ts_bracket_path_builder=lambda rect: QPainterPath(),
             bond_color="#000000",
-            build_arrow_item=lambda start, end, kind: QGraphicsPathItem(),
+            build_arrow_item=lambda start, end, kind, mirrored: QGraphicsPathItem(),
             set_curved_arrow_path=lambda *args: None,
             orbital_base_handle_dist=24.0,
         )
@@ -373,7 +373,7 @@ class SceneItemStateUnitTest(unittest.TestCase):
             ring_fill_brush_getter=lambda: QBrush(QColor("#AA4400")),
             ts_bracket_path_builder=lambda rect: QPainterPath(),
             bond_color="#000000",
-            build_arrow_item=lambda start, end, kind: QGraphicsPathItem(),
+            build_arrow_item=lambda start, end, kind, mirrored: QGraphicsPathItem(),
             set_curved_arrow_path=lambda *args: None,
             orbital_base_handle_dist=18.0,
         )
@@ -461,7 +461,7 @@ class SceneItemStateUnitTest(unittest.TestCase):
             ring_fill_brush_getter=lambda: QBrush(QColor("#AA4400")),
             ts_bracket_path_builder=lambda rect: QPainterPath(),
             bond_color="#000000",
-            build_arrow_item=lambda start, end, kind: rebuilt,
+            build_arrow_item=lambda start, end, kind, mirrored: rebuilt,
             set_curved_arrow_path=lambda *args: None,
             orbital_base_handle_dist=18.0,
         )
@@ -490,7 +490,7 @@ class SceneItemStateUnitTest(unittest.TestCase):
             ring_fill_brush_getter=lambda: QBrush(QColor("#AA4400")),
             ts_bracket_path_builder=lambda rect, bracket_kind: QPainterPath(),
             bond_color="#000000",
-            build_arrow_item=lambda start, end, kind: QGraphicsPathItem(),
+            build_arrow_item=lambda start, end, kind, mirrored: QGraphicsPathItem(),
             set_curved_arrow_path=lambda *args: None,
             orbital_base_handle_dist=18.0,
         )
@@ -558,7 +558,7 @@ class SceneItemStateUnitTest(unittest.TestCase):
             ring_fill_brush_getter=lambda: QBrush(QColor("#AA4400")),
             ts_bracket_path_builder=lambda rect: QPainterPath(),
             bond_color="#000000",
-            build_arrow_item=lambda start, end, kind: QGraphicsPathItem(),
+            build_arrow_item=lambda start, end, kind, mirrored: QGraphicsPathItem(),
             set_curved_arrow_path=lambda *args: None,
             orbital_base_handle_dist=18.0,
         )
@@ -572,7 +572,7 @@ class SceneItemStateUnitTest(unittest.TestCase):
             ring_fill_brush_getter=lambda: QBrush(QColor("#AA4400")),
             ts_bracket_path_builder=lambda rect: QPainterPath(),
             bond_color="#000000",
-            build_arrow_item=lambda start, end, kind: QGraphicsPathItem(),
+            build_arrow_item=lambda start, end, kind, mirrored: QGraphicsPathItem(),
             set_curved_arrow_path=lambda *args: None,
             orbital_base_handle_dist=18.0,
         )
@@ -606,7 +606,7 @@ class SceneItemStateUnitTest(unittest.TestCase):
             ring_fill_brush_getter=lambda: QBrush(QColor("#AA4400")),
             ts_bracket_path_builder=lambda rect: QPainterPath(),
             bond_color="#000000",
-            build_arrow_item=lambda start, end, kind: QGraphicsPathItem(),
+            build_arrow_item=lambda start, end, kind, mirrored: QGraphicsPathItem(),
             set_curved_arrow_path=lambda *args: None,
             orbital_base_handle_dist=18.0,
         )
@@ -627,7 +627,7 @@ class SceneItemStateUnitTest(unittest.TestCase):
             ring_fill_brush_getter=lambda: QBrush(QColor("#AA4400")),
             ts_bracket_path_builder=lambda rect: QPainterPath(),
             bond_color="#000000",
-            build_arrow_item=lambda start, end, kind: QGraphicsPathItem(),
+            build_arrow_item=lambda start, end, kind, mirrored: QGraphicsPathItem(),
             set_curved_arrow_path=lambda *args: None,
             orbital_base_handle_dist=18.0,
         )
@@ -652,7 +652,7 @@ class SceneItemStateUnitTest(unittest.TestCase):
             ring_fill_brush_getter=lambda: QBrush(QColor("#55AA11")),
             ts_bracket_path_builder=lambda rect: QPainterPath(),
             bond_color="#000000",
-            build_arrow_item=lambda start, end, kind: QGraphicsPathItem(),
+            build_arrow_item=lambda start, end, kind, mirrored: QGraphicsPathItem(),
             set_curved_arrow_path=lambda *args: None,
             orbital_base_handle_dist=18.0,
         )
@@ -677,7 +677,7 @@ class SceneItemStateUnitTest(unittest.TestCase):
             ring_fill_brush_getter=lambda: QBrush(QColor("#AA4400")),
             ts_bracket_path_builder=path_builder,
             bond_color="#000000",
-            build_arrow_item=lambda start, end, kind: QGraphicsPathItem(),
+            build_arrow_item=lambda start, end, kind, mirrored: QGraphicsPathItem(),
             set_curved_arrow_path=lambda *args: None,
             orbital_base_handle_dist=18.0,
         )
@@ -695,7 +695,7 @@ class SceneItemStateUnitTest(unittest.TestCase):
             ring_fill_brush_getter=lambda: QBrush(QColor("#AA4400")),
             ts_bracket_path_builder=lambda rect: QPainterPath(),
             bond_color="#000000",
-            build_arrow_item=lambda start, end, kind: QGraphicsPathItem(),
+            build_arrow_item=lambda start, end, kind, mirrored: QGraphicsPathItem(),
             set_curved_arrow_path=lambda *args: None,
             orbital_base_handle_dist=24.0,
         )

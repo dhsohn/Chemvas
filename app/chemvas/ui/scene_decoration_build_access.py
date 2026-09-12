@@ -8,8 +8,10 @@ from chemvas.ui.canvas_service_ports import (
 from chemvas.ui.scene_item_access import add_item_to_canvas_scene
 
 
-def build_arrow_item_for(canvas, start, end, kind: str):
-    return arrow_build_service_for_access(canvas).build_arrow_item(start, end, kind)
+def build_arrow_item_for(canvas, start, end, kind: str, mirrored: bool = False):
+    return arrow_build_service_for_access(canvas).build_arrow_item(
+        start, end, kind, mirrored
+    )
 
 
 def show_connect_mark_for(canvas, point):

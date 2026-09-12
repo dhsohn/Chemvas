@@ -4,7 +4,12 @@ from typing import TYPE_CHECKING
 
 from PyQt6.QtCore import QPointF, QRectF
 
-from chemvas.domain.document import VALID_ARC_KINDS, mirrored_arc_kind
+from chemvas.domain.document import (
+    VALID_ARC_KINDS,
+    VALID_EQUILIBRIUM_KINDS,
+    mirrored_arc_kind,
+)
+from chemvas.features.annotations import arrow_label_normal
 from chemvas.ui.scene_item_state import ARROW_KINDS
 
 if TYPE_CHECKING:
@@ -121,6 +126,24 @@ def flip_scene_item_state(
             # A mirror swaps handedness: the arc must bulge to the other side
             # of its (mirrored) drag direction to stay the mirror image.
             after_state["kind"] = mirrored_arc_kind(str(kind))
+        if kind in VALID_EQUILIBRIUM_KINDS:
+            if before_state.get("mirrored", False):
+                after_state.pop("mirrored", None)
+            else:
+                after_state["mirrored"] = True
+            start, end = before_state["start"], before_state["end"]
+            nx, ny = arrow_label_normal(end[0] - start[0], end[1] - start[1])
+            mirrored_normal = (-nx, ny) if horizontal else (nx, -ny)
+            start, end = after_state["start"], after_state["end"]
+            ax, ay = arrow_label_normal(end[0] - start[0], end[1] - start[1])
+            labels = before_state.get("labels")
+            if labels and mirrored_normal[0] * ax + mirrored_normal[1] * ay < 0:
+                # Keep each readable label beside the mirror of its harpoon,
+                # even when the reflected Above side is now called Below.
+                after_state["labels"] = {
+                    "below" if side == "above" else "above": text
+                    for side, text in labels.items()
+                }
         return after_state
     return {}
 

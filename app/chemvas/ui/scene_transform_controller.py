@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING
 from PyQt6.QtCore import QPointF, QRectF
 
 from chemvas.core.history import HistoryCommand, SetAtomPositionsCommand
+from chemvas.domain.document import VALID_EQUILIBRIUM_KINDS
 from chemvas.features.rendering import refresh_bond_graphics
 from chemvas.features.selection import rotated_atom_positions, rotation_drag_angle
 from chemvas.ui.atom_coords_access import atom_coords_3d_for
@@ -24,6 +25,7 @@ from chemvas.ui.canvas_model_access import (
 from chemvas.ui.canvas_rotation_state import rotation_state_for
 from chemvas.ui.canvas_scene_items_state import ring_items_for
 from chemvas.ui.canvas_smiles_input_state import last_smiles_input_for
+from chemvas.ui.canvas_window_access import notify_error_for
 from chemvas.ui.history_canvas_access import set_atom_positions_for_history
 from chemvas.ui.history_commands import SetSceneGeometryCommand, UpdateSceneItemCommand
 from chemvas.ui.history_recording_access import record_bond_update_for
@@ -357,6 +359,16 @@ class SceneTransformController:
         atom_ids = selected_atom_ids_for_transform_for(self.canvas)
         if not atom_ids and not items:
             return
+        for item in items:
+            if item.data(0) in VALID_EQUILIBRIUM_KINDS:
+                state = self._scene_item_state(item)
+                if state.get("start") == state.get("end"):
+                    notify_error_for(
+                        self.canvas,
+                        "Cannot flip a zero-length equilibrium arrow: its direction "
+                        "is undefined. Move an endpoint before flipping this selection.",
+                    )
+                    return
 
         atom_commands: list[SetAtomPositionsCommand] = []
         item_commands: list[UpdateSceneItemCommand] = []

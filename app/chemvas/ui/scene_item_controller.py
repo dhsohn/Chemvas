@@ -90,8 +90,8 @@ class SceneItemController:
     def _set_mark_center(self, item, center) -> None:
         set_mark_center_for(self.canvas, item, center)
 
-    def _build_arrow_item(self, start, end, kind: str):
-        return build_arrow_item_for(self.canvas, start, end, kind)
+    def _build_arrow_item(self, start, end, kind: str, mirrored: bool = False):
+        return build_arrow_item_for(self.canvas, start, end, kind, mirrored)
 
     def _set_curved_arrow_path(self, item, start, end, control, double: bool) -> None:
         set_curved_arrow_path_for(self.canvas, item, start, end, control, double)

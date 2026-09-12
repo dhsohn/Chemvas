@@ -9,6 +9,7 @@ shown literally.
 from __future__ import annotations
 
 import html
+import math
 
 from .label_layout import LabelRun
 
@@ -22,6 +23,15 @@ def _append_run(runs: list[LabelRun], text: str, role: str) -> None:
         runs[-1] = LabelRun(runs[-1].text + text, role)
         return
     runs.append(LabelRun(text, role))
+
+
+def arrow_label_normal(dx: float, dy: float) -> tuple[float, float]:
+    """The readable Above side: toward smaller y, or left for vertical arrows."""
+    length = math.hypot(dx, dy) or 1.0
+    nx, ny = -dy / length, dx / length
+    if ny > 1e-9 or (abs(ny) <= 1e-9 and nx > 0.0):
+        nx, ny = -nx, -ny
+    return nx, ny
 
 
 def parse_arrow_label(text: str) -> tuple[LabelRun, ...]:
@@ -78,4 +88,4 @@ def arrow_label_html(text: str) -> str:
     return "".join(parts)
 
 
-__all__ = ["arrow_label_html", "parse_arrow_label"]
+__all__ = ["arrow_label_html", "arrow_label_normal", "parse_arrow_label"]

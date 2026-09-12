@@ -164,6 +164,8 @@ def arrow_state_dict(item: QGraphicsPathItem) -> dict:
     if isinstance(color, str):
         state["color"] = color
     labels = data.get("labels")
+    if data.get("mirrored"):
+        state["mirrored"] = True
     if isinstance(labels, dict) and labels:
         state["labels"] = dict(labels)
     return state
