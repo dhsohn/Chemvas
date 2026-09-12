@@ -203,6 +203,13 @@ def prompt_export_options(window) -> FigureExportOptions | None:
         editable_svg_warning.setVisible(
             editable_enabled and editable_svg_check.isChecked()
         )
+        editable_svg_warning.setText(
+            "Embeds selected objects, fully selected groups and styles, "
+            "not the Calculation Plan or the whole sheet. Reopens as a new "
+            "drawing using the original sheet settings."
+            if scope_combo.currentData() == "selection"
+            else "Embeds the whole drawing as Chemvas document data in SVG metadata."
+        )
         limits.sync(
             sizing=size_combo.currentData(), fmt=fmt, scope=scope_combo.currentData()
         )

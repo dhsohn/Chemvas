@@ -22,6 +22,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Preserve current bond selection through bond-edit Undo/Redo so subsequent
+  MOL and selected-molecule conversions retain the selected chemistry.
+- Keep atom-bound charge/radical marks attached and restyled during bond-length
+  changes, with exact geometry restoration through history. Reflect loaded
+  lengths above 200 px and fractional values without accidental focus commits.
+  Independent annotations retain their existing absolute-placement behavior.
+- Apply Single, Double and Triple Bond-bar choices directly to existing bonds,
+  preserving no-op history, and explain unsupported dotted-double overlays.
+- Open Ring Fill as a palette with Select active, keeping the toolbar and
+  status consistent instead of leaving a previous destructive tool armed.
+- Select or erase a foreground note instead of reaching through it to a bond
+  or invisible carbon hit target; keep visible structure and handle priority.
+- Apply Save's calculation-plan draft consent to whole-document editable SVG.
+  Preserve copied groups in selection editable SVG and disclose that partial
+  exports omit the Calculation Plan and reopen using the original sheet settings.
 - Preserve existing calculation-step and surviving-state order when editing,
   appending only new IDs. Reviewed geometry still binds the whole plan, so an
   unrelated step edit can still make a review stale.

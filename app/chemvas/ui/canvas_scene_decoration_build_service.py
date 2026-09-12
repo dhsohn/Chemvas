@@ -96,6 +96,11 @@ class _ChargeCircleMarkItem(NoSelectPathItem):
         super().__init__(path)
         self._hit_padding = max(0.0, float(hit_padding))
 
+    def set_hit_padding(self, padding: float) -> None:
+        self.prepareGeometryChange()
+        self._hit_padding = max(0.0, float(padding))
+        self.update()
+
     @override
     def boundingRect(self):
         rect = super().boundingRect()
@@ -155,27 +160,56 @@ class CanvasSceneDecorationBuildService:
         self.canvas = canvas
 
     def build_mark_item(self, kind: str):
-        selection_radius = mark_selection_radius_for(self.canvas)
         if kind == "radical":
-            radius = max(1.2, bond_line_width_for(self.canvas) * 0.7)
-            hit_padding = max(0.0, selection_radius - radius)
-            item = AtomDotItem(
-                -radius, -radius, radius * 2.0, radius * 2.0, hit_padding=hit_padding
-            )
+            item = AtomDotItem(0.0, 0.0, 0.0, 0.0)
+            self.refresh_mark_item_geometry(item, kind)
             item.setBrush(QColor(atom_color_for(self.canvas)))
             item.setPen(QPen(Qt.PenStyle.NoPen))
             return item
         if kind in {"plus", "minus"}:
-            text_item = AtomLabelItem(hit_radius=selection_radius)
-            text_item.setFont(atom_font_for(self.canvas))
+            text_item = AtomLabelItem()
+            self.refresh_mark_item_geometry(text_item, kind)
             text_item.setDefaultTextColor(QColor(atom_color_for(self.canvas)))
             text_item.setPlainText("+" if kind == "plus" else "-")
             return text_item
         if kind in {"circled_plus", "circled_minus"}:
-            return self._build_circled_charge_mark(kind, selection_radius)
+            circle_item = _ChargeCircleMarkItem(QPainterPath())
+            self.refresh_mark_item_geometry(circle_item, kind)
+            pen = circle_item.pen()
+            pen.setColor(QColor(atom_color_for(self.canvas)))
+            pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+            pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
+            circle_item.setPen(pen)
+            circle_item.setBrush(QBrush(Qt.BrushStyle.NoBrush))
+            return circle_item
         return None
 
-    def _build_circled_charge_mark(self, kind: str, selection_radius: float):
+    def refresh_mark_item_geometry(self, item, kind: str) -> None:
+        """Use native mark dimensions without replacing identity, color or text."""
+        selection_radius = mark_selection_radius_for(self.canvas)
+        if kind == "radical" and isinstance(item, AtomDotItem):
+            radius = max(1.2, bond_line_width_for(self.canvas) * 0.7)
+            rect = QRectF(-radius, -radius, radius * 2.0, radius * 2.0)
+            item.setRect(rect)
+            item.set_hit_padding(max(0.0, selection_radius - radius))
+            if item.rect() != rect:
+                raise RuntimeError(
+                    "mark geometry setter did not apply the requested rect"
+                )
+            return
+        if kind in {"plus", "minus"} and isinstance(item, AtomLabelItem):
+            font = atom_font_for(self.canvas)
+            item.setFont(font)
+            item.set_hit_radius(selection_radius)
+            if item.font() != font:
+                raise RuntimeError(
+                    "mark geometry setter did not apply the requested font"
+                )
+            return
+        if kind not in {"circled_plus", "circled_minus"} or not isinstance(
+            item, _ChargeCircleMarkItem
+        ):
+            raise ValueError(f"Cannot refresh mark geometry for {kind!r}")
         radius = max(4.0, QFontMetricsF(atom_font_for(self.canvas)).height() * 0.26)
         stroke_width = max(0.9, bond_line_width_for(self.canvas) * 0.65)
         symbol_extent = radius * 0.48
@@ -186,17 +220,15 @@ class CanvasSceneDecorationBuildService:
         if kind == "circled_plus":
             path.moveTo(0.0, -symbol_extent)
             path.lineTo(0.0, symbol_extent)
-        item = _ChargeCircleMarkItem(
-            path, hit_padding=max(0.0, selection_radius - radius)
-        )
-        pen = QPen(
-            QColor(atom_color_for(self.canvas)), stroke_width, Qt.PenStyle.SolidLine
-        )
-        pen.setCapStyle(Qt.PenCapStyle.RoundCap)
-        pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
+        item.setPath(path)
+        item.set_hit_padding(max(0.0, selection_radius - radius))
+        pen = item.pen()
+        pen.setWidthF(stroke_width)
         item.setPen(pen)
-        item.setBrush(QBrush(Qt.BrushStyle.NoBrush))
-        return item
+        if item.path() != path or item.pen() != pen:
+            raise RuntimeError(
+                "mark geometry setter did not apply the requested path/pen"
+            )
 
     def mark_center(self, item) -> QPointF:
         if isinstance(item, QGraphicsTextItem):

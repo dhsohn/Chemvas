@@ -1886,7 +1886,8 @@ class ToolsUnitTest(unittest.TestCase):
 
         set_tool_setting_for(canvas, "active_bond_style", "single")
         self.assertTrue(tool.on_mouse_press(_FakeEvent(QPointF(1.0, 1.0))))
-        self.assertEqual(canvas.cycle_calls[-1], 0)
+        self.assertEqual(canvas.bond_style_calls[-1], (0, "single", 1))
+        self.assertEqual(canvas.cycle_calls, [])
 
         canvas.model.bonds[0] = Bond(1, 2, 2, style="double")
         set_tool_setting_for(canvas, "active_bond_style", "dotted")
@@ -1911,7 +1912,8 @@ class ToolsUnitTest(unittest.TestCase):
         canvas.preferred_item = _FakeItem("bond", 0)
         set_tool_setting_for(canvas, "active_bond_style", "single")
         self.assertTrue(tool.on_mouse_press(_FakeEvent(QPointF(3.0, 3.0))))
-        self.assertEqual(canvas.cycle_calls[-1], 0)
+        self.assertEqual(canvas.bond_style_calls[-1], (0, "single", 1))
+        self.assertEqual(canvas.cycle_calls, [])
         canvas.preferred_item = None
 
         with mock.patch.object(tool, "_set_preview_items") as preview:

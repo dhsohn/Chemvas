@@ -60,7 +60,10 @@ from chemvas.ui.canvas_scene_items_state import (
     set_scene_item_collection_for,
 )
 from chemvas.ui.graphics_items import AtomLabelItem
-from chemvas.ui.history_commands import UpdateSceneItemCommand
+from chemvas.ui.history_commands import (
+    SetBondLengthGeometryCommand,
+    UpdateSceneItemCommand,
+)
 from chemvas.ui.renderer_style_access import bond_length_px_for
 from chemvas.ui.selection_rotation_access import (
     apply_projected_atom_positions_for,
@@ -581,6 +584,7 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
                 }
             ),
             runtime_state=canvas_runtime_state(
+                mark_registry=CanvasMarkRegistry(),
                 atom_coords_3d_state=CanvasAtomCoords3DState(),
                 atom_graphics_state=CanvasAtomGraphicsState(),
                 bond_graphics_state=CanvasBondGraphicsState(),
@@ -630,9 +634,14 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
         self.assertIsInstance(command, CompositeCommand)
         self.assertEqual(
             [type(entry) for entry in command.commands],
-            [UpdateBondLengthCommand, SetAtomPositionsCommand, SetRingPolygonsCommand],
+            [SetBondLengthGeometryCommand, SetRingPolygonsCommand],
         )
-        atom_positions_command = command.commands[1]
+        self.assertEqual(
+            command.commands[0].length_command, UpdateBondLengthCommand(20.0, 30.0)
+        )
+        self.assertEqual(command.commands[0].item_commands, [])
+        atom_positions_command = command.commands[0].atom_commands[0]
+        self.assertIsInstance(atom_positions_command, SetAtomPositionsCommand)
         self.assertEqual(
             atom_positions_command.before_coords_3d,
             {1: (0.25, 0.0, 4.0), 2: (19.75, 0.0, 4.0)},

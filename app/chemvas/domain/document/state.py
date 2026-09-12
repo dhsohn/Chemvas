@@ -573,9 +573,13 @@ def selection_payload_to_canvas_state(
         for mark_state in marks
     ]
 
-    for item_state in scene_items:
+    item_refs: dict[tuple[str, int], tuple[str, int]] = {
+        ("marks", index): ("marks", index) for index in range(len(mark_states))
+    }
+    for index, item_state in enumerate(scene_items):
         kind = item_state.get("kind")
         if kind == "note":
+            item_refs["scene_items", index] = ("notes", len(note_states))
             note_state = {
                 "text": item_state["text"],
                 "x": item_state["x"],
@@ -586,14 +590,19 @@ def selection_payload_to_canvas_state(
                 note_state["html"] = html
             note_states.append(note_state)
         elif kind in VALID_ARROW_KINDS:
+            item_refs["scene_items", index] = ("arrows", len(arrow_states))
             arrow_states.append(dict(item_state))
         elif kind == "ts_bracket":
+            item_refs["scene_items", index] = ("ts_brackets", len(ts_bracket_states))
             ts_bracket_states.append(dict(item_state))
         elif kind == "shape":
+            item_refs["scene_items", index] = ("shapes", len(shape_states))
             shape_states.append(dict(item_state))
         elif kind == "image":
+            item_refs["scene_items", index] = ("images", len(image_states))
             image_states.append(dict(item_state))
         elif kind == "orbital":
+            item_refs["scene_items", index] = ("orbitals", len(orbital_states))
             orbital_states.append(
                 {
                     "kind": item_state["orbital_kind"],
@@ -630,6 +639,17 @@ def selection_payload_to_canvas_state(
         state["perspective"] = perspective_state
     if image_states:
         state["images"] = image_states
+    groups = cast("list[StateDict]", selection_payload.get("groups", []))
+    if groups:
+        # Clipboard scene_items become separate document collections. Keep the
+        # already-selected groups, translating their selection-local references.
+        state["groups"] = [
+            {
+                "atoms": list(group["atoms"]),
+                "items": [list(item_refs[key, index]) for key, index in group["items"]],
+            }
+            for group in groups
+        ]
     _validate_canvas_state(state, version=CANVAS_FILE_VERSION)
     return state
 

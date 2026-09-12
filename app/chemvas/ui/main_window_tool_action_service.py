@@ -55,6 +55,7 @@ class MainWindowToolActionService:
         self._tool_state.set_bond_style(window, value)
 
     def activate_ring_fill_tool(self, window) -> None:
+        self._context_page_state.set_tool_with_status(window, "select")
         self._context_page_state.show_context_page(window, "ring_fill")
         self._status.refresh_status_context(window)
 
@@ -74,14 +75,12 @@ class MainWindowToolActionService:
             for key, label, tool, icon_method, tooltip in TOOL_ACTION_SPECS
         )
         key, label, icon_method, tooltip = RING_FILL_TOOL_ACTION_SPEC
-        _, ring_fill_action = self.build_checkable_tool_action(
-            window,
-            tool_group,
-            key=key,
-            label=label,
-            icon_method=icon_method,
-            tooltip=tooltip,
-            callback=lambda: self.activate_ring_fill_tool(window),
+        icon = getattr(self._icon_factory_for_window(window), icon_method)()
+        ring_fill_action = QAction(icon, label, window)
+        ring_fill_action.setToolTip(tooltip)
+        ring_fill_action.setStatusTip(tooltip)
+        ring_fill_action.triggered.connect(
+            lambda checked=False: self.activate_ring_fill_tool(window)
         )
         actions[key] = ring_fill_action
         actions.update(

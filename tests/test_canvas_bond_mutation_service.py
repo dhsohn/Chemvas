@@ -150,7 +150,7 @@ class CanvasBondMutationServiceTest(unittest.TestCase):
             services=_services(graph=graph, hit_testing=hit_testing),
             scene=lambda: scene,
             model=SimpleNamespace(bonds=[Bond(1, 2, 1)]),
-            bond_renderer=SimpleNamespace(add_bond_graphics=mock.Mock()),
+            bond_renderer=SimpleNamespace(redraw_bond=mock.Mock()),
             runtime_state=_runtime_state(),
         )
         set_bond_items_for(canvas, {0: [old_item]})
@@ -160,15 +160,16 @@ class CanvasBondMutationServiceTest(unittest.TestCase):
             {"a": 2, "b": 3, "order": 2, "style": "double", "color": "#334455"},
         )
 
-        self.assertEqual(scene.removed_items, [old_item])
+        # The refresh owner receives the existing graphics and their selection.
+        self.assertEqual(scene.removed_items, [])
         self.assertEqual((canvas.model.bonds[0].a, canvas.model.bonds[0].b), (2, 3))
         graph.remove_bond_index.assert_called_once_with(0, 1, 2)
         graph.remove_bond_neighbors.assert_called_once_with(1, 2, skip_bond_id=0)
         graph.add_bond_neighbors.assert_called_once_with(2, 3)
         graph.add_bond_index.assert_called_once_with(0, 2, 3)
-        canvas.bond_renderer.add_bond_graphics.assert_called_once_with(0)
+        canvas.bond_renderer.redraw_bond.assert_called_once_with(0)
         hit_testing.mark_spatial_index_dirty.assert_called_once_with()
-        self.assertNotIn(0, bond_items_for(canvas))
+        self.assertEqual(bond_items_for(canvas)[0], [old_item])
 
     def test_restore_bond_from_state_extends_sparse_bond_list(self) -> None:
         graph = _graph_service()
@@ -177,7 +178,7 @@ class CanvasBondMutationServiceTest(unittest.TestCase):
             services=_services(graph=graph, hit_testing=hit_testing),
             scene=lambda: _FakeScene(),
             model=SimpleNamespace(bonds=[]),
-            bond_renderer=SimpleNamespace(add_bond_graphics=mock.Mock()),
+            bond_renderer=SimpleNamespace(redraw_bond=mock.Mock()),
             runtime_state=_runtime_state(),
         )
         set_bond_items_for(canvas, {})
@@ -195,7 +196,7 @@ class CanvasBondMutationServiceTest(unittest.TestCase):
         graph.remove_bond_neighbors.assert_not_called()
         graph.add_bond_neighbors.assert_called_once_with(8, 9)
         graph.add_bond_index.assert_called_once_with(2, 8, 9)
-        canvas.bond_renderer.add_bond_graphics.assert_called_once_with(2)
+        canvas.bond_renderer.redraw_bond.assert_called_once_with(2)
         hit_testing.mark_spatial_index_dirty.assert_called_once_with()
 
     def test_remove_bond_by_id_cleans_graphics_and_indexes(self) -> None:

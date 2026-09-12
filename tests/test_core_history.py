@@ -99,7 +99,9 @@ class _FakeCanvas:
             atom_coords_3d_state=CanvasAtomCoords3DState(),
             atom_graphics_state=CanvasAtomGraphicsState(),
             bond_graphics_state=CanvasBondGraphicsState(),
-            mark_registry=SimpleNamespace(get_for_atom=lambda _atom_id: []),
+            mark_registry=SimpleNamespace(
+                get_for_atom=lambda _atom_id: [], items=lambda: ()
+            ),
             rotation_state=CanvasRotationState(
                 projection_center_3d="before-center",
                 projection_anchor_2d="before-anchor",

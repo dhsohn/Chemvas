@@ -11,6 +11,12 @@ def build_mark_item_for(canvas, kind: str):
     return scene_decoration_build_service_for_access(canvas).build_mark_item(kind)
 
 
+def refresh_mark_item_geometry_for(canvas, item, kind: str) -> None:
+    scene_decoration_build_service_for_access(canvas).refresh_mark_item_geometry(
+        item, kind
+    )
+
+
 def mark_center_for(canvas, item):
     return scene_decoration_build_service_for_access(canvas).mark_center(item)
 
@@ -71,6 +77,7 @@ __all__ = [
     "mark_center_for_pointer_for",
     "mark_kinds_by_atom_for",
     "mark_selection_radius_for",
+    "refresh_mark_item_geometry_for",
     "remove_mark_item_for",
     "remove_marks_for_atom_for",
     "set_mark_center_for",

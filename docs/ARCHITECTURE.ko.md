@@ -116,6 +116,10 @@ content bounds와 물리 크기를 함께 계산한다. 선택 회전, 클립보
   선택 영역 geometry의 정확한 before/after를 기록한다. 재생할 때 원자를 먼저,
   종속 scene item을 나중에 복원하고 선택 외곽선을 한 번 갱신한다. 이 command
   payload는 별도의 rollback 또는 stack 소유자가 아니다.
+- 결합 길이 history는 같은 exact-geometry command를 확장한다. Undo/Redo 양쪽에서
+  렌더러 길이와 mark 글리프 크기를 먼저 복원하고 원자 좌표, 부착 mark의 정확한
+  위치를 뒤에 복원한다. 별도의 savepoint 소유자 없이 offset뿐 아니라 절대 좌표로
+  부착 위치를 표현한 mark도 보존한다.
 - 드래그 command payload는 기존 scoped savepoint와 함께 첫 유효 이동에서만
   캡처한다. 원자에 붙은 mark는 history 안에서만 정확한 Qt 로컬 위치도 보존하며,
   저장되는 결합 offset의 의미는 바꾸지 않는다.

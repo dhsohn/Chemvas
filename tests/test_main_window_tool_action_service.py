@@ -126,15 +126,19 @@ class MainWindowToolActionServiceTest(unittest.TestCase):
     def test_activate_ring_fill_tool_shows_ring_fill_context(self) -> None:
         self.service.activate_ring_fill_tool(self.window)
 
+        self.context_page_state_service.set_tool_with_status.assert_called_once_with(
+            self.window, "select"
+        )
         self.context_page_state_service.show_context_page.assert_called_once_with(
             self.window, "ring_fill"
         )
         self.status_service.refresh_status_context.assert_called_once_with(self.window)
 
     def test_build_tool_actions_wires_tool_bond_and_mark_callbacks(self) -> None:
-        actions = self.service.build_tool_actions(
-            self.window, QActionGroup(self.window)
-        )
+        tool_group = QActionGroup(self.window)
+        actions = self.service.build_tool_actions(self.window, tool_group)
+        self.assertFalse(actions["ring_fill"].isCheckable())
+        self.assertNotIn(actions["ring_fill"], tool_group.actions())
 
         actions["select"].trigger()
         actions["color"].trigger()

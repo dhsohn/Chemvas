@@ -44,7 +44,7 @@ class MainWindowContextPageStateService:
     def show_context_page(self, window, page_key: str) -> None:
         self._set_context_bar_page_override_for_window(window, page_key)
         action = self._tool_action_for_window(window, page_key)
-        if action is not None:
+        if action is not None and action.isCheckable():
             action.setChecked(True)
         self._context_bar.refresh_window(window)
 

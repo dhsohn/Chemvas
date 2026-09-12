@@ -17,6 +17,7 @@ from PyQt6.QtWidgets import QGraphicsTextItem
 
 from chemvas.core.history import (
     CompositeCommand,
+    HistoryCommand,
     SetAtomPositionsCommand,
     SetRingPolygonsCommand,
     UpdateBondLengthCommand,
@@ -41,6 +42,7 @@ from chemvas.ui.canvas_geometry_logic import (
 from chemvas.ui.canvas_geometry_logic import (
     segment_intersection_t as segment_intersection_t_helper,
 )
+from chemvas.ui.canvas_mark_registry import mark_registry_for
 from chemvas.ui.canvas_model_access import (
     atom_for_id,
     atoms_for,
@@ -59,6 +61,10 @@ from chemvas.ui.history_canvas_access import (
     set_atom_positions_for_history,
     set_ring_polygons_for_history,
 )
+from chemvas.ui.history_commands import (
+    SetBondLengthGeometryCommand,
+    UpdateSceneItemCommand,
+)
 from chemvas.ui.renderer_style_access import (
     atom_font_for,
     bond_length_px_for,
@@ -67,6 +73,7 @@ from chemvas.ui.renderer_style_access import (
     renderer_for,
     set_bond_length_for,
 )
+from chemvas.ui.scene_item_state import mark_state_dict_for
 
 
 def _xy(point: QPointF) -> tuple[float, float]:
@@ -435,6 +442,12 @@ class CanvasGeometryController:
         ]
         renderer = renderer_for(self.canvas)
         before_renderer_style = renderer.style
+        before_marks = []
+        for _atom_id, marks in mark_registry_for(self.canvas).items():
+            for item in marks:
+                state = mark_state_dict_for(self.canvas, item)
+                state["item_pos"] = _xy(item.pos())
+                before_marks.append((item, state))
         transaction = capture_history_transaction_for_history(
             self.canvas,
             history_service=self.history,
@@ -444,6 +457,16 @@ class CanvasGeometryController:
             center_x, center_y = self._model_center()
             rescale_model_for(self.canvas, scale)
             self._rescale_perspective_state(scale, center_x, center_y)
+            for item, state in before_marks:
+                data = dict(item.data(1))
+                atom_x, atom_y = before_positions[data["atom_id"]]
+                data["dx"] = (
+                    state["dx"] if state["dx"] is not None else state["x"] - atom_x
+                ) * scale
+                data["dy"] = (
+                    state["dy"] if state["dy"] is not None else state["y"] - atom_y
+                ) * scale
+                item.setData(1, data)
             self.hit_testing_service.mark_spatial_index_dirty()
             refresh_bond_length_graphics_for(self.canvas)
             after_positions = {
@@ -457,28 +480,39 @@ class CanvasGeometryController:
                 [(point.x(), point.y()) for point in ring_item.polygon()]
                 for ring_item in current_ring_items
             ]
-            commands = [
-                UpdateBondLengthCommand(
-                    before_length=old_length, after_length=length_px
+            atom_command = SetAtomPositionsCommand(
+                before_positions=before_positions,
+                after_positions=after_positions,
+                before_coords_3d=before_coords_3d or None,
+                after_coords_3d=after_coords_3d or None,
+                restore_projection_state=bool(
+                    before_coords_3d
+                    or after_coords_3d
+                    or before_projection_center_3d is not None
+                    or after_projection_center_3d is not None
+                    or before_projection_anchor_2d is not None
+                    or after_projection_anchor_2d is not None
                 ),
-                SetAtomPositionsCommand(
-                    before_positions=before_positions,
-                    after_positions=after_positions,
-                    before_coords_3d=before_coords_3d or None,
-                    after_coords_3d=after_coords_3d or None,
-                    restore_projection_state=bool(
-                        before_coords_3d
-                        or after_coords_3d
-                        or before_projection_center_3d is not None
-                        or after_projection_center_3d is not None
-                        or before_projection_anchor_2d is not None
-                        or after_projection_anchor_2d is not None
+                before_projection_center_3d=before_projection_center_3d,
+                after_projection_center_3d=after_projection_center_3d,
+                before_projection_anchor_2d=before_projection_anchor_2d,
+                after_projection_anchor_2d=after_projection_anchor_2d,
+            )
+            mark_commands = []
+            for item, before_state in before_marks:
+                after_state = mark_state_dict_for(self.canvas, item)
+                after_state["item_pos"] = _xy(item.pos())
+                mark_commands.append(
+                    UpdateSceneItemCommand(item, before_state, after_state)
+                )
+            commands: list[HistoryCommand] = [
+                SetBondLengthGeometryCommand(
+                    atom_commands=[atom_command],
+                    item_commands=mark_commands,
+                    length_command=UpdateBondLengthCommand(
+                        before_length=old_length, after_length=length_px
                     ),
-                    before_projection_center_3d=before_projection_center_3d,
-                    after_projection_center_3d=after_projection_center_3d,
-                    before_projection_anchor_2d=before_projection_anchor_2d,
-                    after_projection_anchor_2d=after_projection_anchor_2d,
-                ),
+                )
             ]
             if current_ring_items:
                 commands.append(
@@ -488,7 +522,11 @@ class CanvasGeometryController:
                         after_polygons=after_ring_polygons,
                     )
                 )
-            self.history.push(CompositeCommand(commands))
+            if (
+                self.history.push(CompositeCommand(commands)) is False
+                and self.history.is_enabled()
+            ):
+                raise RuntimeError("Bond-length change did not commit to history")
             release_history_transaction_for_history(self.canvas, transaction)
         except Exception as exc:
             self._restore_failed_bond_length_change(

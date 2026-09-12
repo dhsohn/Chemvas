@@ -46,14 +46,29 @@ its knob, flip, align, and distribute.
 ![Select, move, rotate, align: move, rotate knob, flip, align middle, distribute](images/walkthrough-editing.gif)
 
 - **Bonds** — single / double / triple, bold, wedge & hash; 30° angle snapping and
-  a consistent default bond length.
+  a consistent default bond length. Single, Double and Triple in the Bond bar
+  apply the named order to an existing bond; repeating the same choice leaves
+  it unchanged. Undo/Redo retains the current bond selection, including the
+  selection used by chemical exports.
+  Dotted overlay requires an inner/outer plain double when the target is a
+  double bond; unsupported centered/bold variants give guidance without changing
+  the bond. Returning from Single to Double does not remember an earlier
+  double-line position. The `d`/`Shift+D` shortcuts still explicitly request
+  a dotted single/double rather than preserving the previous order.
+  Changing bond length rescales molecular geometry about the overall model
+  center, including ring fills and atom-bound charge/radical marks. Free marks,
+  arrows, notes, brackets and other independent annotations keep their positions;
+  this is not a whole-figure scaling command. The length field reflects loaded
+  values such as 300 px without the former 200 px clamp; simply focusing it
+  does not rescale the drawing.
 - **Rings & templates** — benzene, cycloalkanes, and the two chair orientations
   placed by live preview and click-to-insert. The boat template is available
   through [`insert-template`](AGENT_CLI.md), not the desktop Ring bar.
   Fusion detects occupied sides from graph rings, including imports without
   decorative fills. Ring Fill accepts a complete selected graph cycle; select
   all its atoms/bonds, not a partial arc. Ambiguous ring perception may still
-  require a manual choice.
+  require a manual choice. Ring Fill opens its palette with Select active;
+  it is not a separate drawing tool and does not leave Eraser armed.
 - **Arrows** — reaction, equilibrium (balanced, or favored in either direction
   with a shortened harpoon), resonance, curved, dashed, and arc arrows (90°,
   180°, 270° for catalytic cycles; hold `Shift` while dragging to bulge the
@@ -138,8 +153,11 @@ its knob, flip, align, and distribute.
   curve),
   select / move, an eraser tool (click or drag to erase; atoms a
   deletion leaves with no bond and nothing visible — no label or mark — are
-  removed with it), horizontal & vertical flip, perspective rotation, and
-  undo/redo. Flip mirrors geometry without swapping wedge/hash styles and can
+  removed with it). A foreground note wins over underlying structure and
+  invisible carbon hit targets when selecting or erasing; visible foreground
+  structure and editing handles remain pickable. Other editing tools include
+  horizontal & vertical flip, perspective rotation, and undo/redo.
+  Flip mirrors geometry without swapping wedge/hash styles and can
   invert stereocentres; mirroring a whole chiral molecule gives its enantiomer.
   Check the chemistry after flipping; use in-plane rotation for orientation
   changes that should not mirror the molecule.
@@ -269,7 +287,16 @@ bounds; their rich-text decorations and automatic list markers are not cropped.
 
 Figure export defaults to plain SVG without Chemvas source metadata. Choose
 **Editable Chemvas SVG** only when you want the SVG to carry the original
-document payload for round-tripping back into Chemvas.
+document payload for round-tripping back into Chemvas. Whole-document editable
+SVG uses the same calculation-plan draft checks as Save: it asks before
+omitting stale references or retaining invalid plan/review data. Choose No to
+leave the destination unchanged; a saved draft is not calculation approval.
+With **Selection** scope, the editable payload contains the selected objects,
+their complete copied groups and document settings, not the Calculation Plan
+or unselected objects. It opens as a new drawing using the original sheet
+settings. The export dialog states this distinction even when everything is selected.
+Reopening restores the embedded drawing data; edits to the SVG's visible vectors
+in another application do not update that embedded drawing.
 
 All GUI export presets enforce the same size limits as `render-document`:
 14,400 points per side, and for PNG/TIFF at most 10,000 pixels per side and
