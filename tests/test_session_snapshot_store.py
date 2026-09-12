@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import time
+from unittest.mock import Mock
 
 import pytest
 
@@ -952,6 +953,129 @@ def test_unchanged_tick_is_a_no_op(tmp_path, monkeypatch):
     )
 
     assert writes == []  # identical open set → nothing rewritten
+
+
+def test_clean_saved_documents_never_hash_or_store_a_payload(tmp_path, monkeypatch):
+    store = _store(tmp_path / "sessions", "cur")
+    store.begin()
+    digest = Mock(wraps=session_snapshot_store.canonical_document_digest)
+    monkeypatch.setattr(session_snapshot_store, "canonical_document_digest", digest)
+    descriptor = DocDescriptor(
+        _valid_state("saved"), str(tmp_path / "saved.chemvas"), "Saved", False
+    )
+    store.save_documents([descriptor])
+    before = (store.session_dir / "session.json").read_bytes()
+    # A clean descriptor only represents a path. Its payload is not persisted;
+    # ordinary collection, not this store, establishes that the canvas is clean.
+    descriptor.state["last_smiles_input"] = "irrelevant clean payload"
+    store.save_documents([descriptor])
+
+    assert digest.call_count == 0
+    assert (store.session_dir / "session.json").read_bytes() == before
+    assert list(store.session_dir.glob("doc-*.json")) == []
+    manifest = json.loads(before)
+    assert manifest["docs"] == [
+        {
+            "file_path": descriptor.file_path,
+            "display_name": "Saved",
+            "dirty": False,
+            "snapshot": None,
+        }
+    ]
+
+
+def test_clean_signature_still_tracks_open_paths_names_and_order(tmp_path, monkeypatch):
+    store = _store(tmp_path / "sessions", "cur")
+    store.begin()
+    digest = Mock(wraps=session_snapshot_store.canonical_document_digest)
+    monkeypatch.setattr(session_snapshot_store, "canonical_document_digest", digest)
+    first = DocDescriptor({}, str(tmp_path / "first.chemvas"), "First", False)
+    second = DocDescriptor({}, str(tmp_path / "second.chemvas"), "Second", False)
+    store.save_documents([first, second])
+    store.save_documents([second, first])
+    manifest_path = store.session_dir / "session.json"
+    assert [
+        entry["file_path"] for entry in json.loads(manifest_path.read_bytes())["docs"]
+    ] == [
+        second.file_path,
+        first.file_path,
+    ]
+    saved_as = DocDescriptor({}, str(tmp_path / "renamed.chemvas"), "Renamed", False)
+    store.save_documents([saved_as])
+    assert json.loads(manifest_path.read_bytes())["docs"] == [
+        {
+            "file_path": saved_as.file_path,
+            "display_name": "Renamed",
+            "dirty": False,
+            "snapshot": None,
+        }
+    ]
+    digest.assert_not_called()
+
+
+def test_dirty_signature_still_hashes_each_tick_and_detects_in_place_edits(
+    tmp_path, monkeypatch
+):
+    store = _store(tmp_path / "sessions", "cur")
+    store.begin()
+    digest = Mock(wraps=session_snapshot_store.canonical_document_digest)
+    monkeypatch.setattr(session_snapshot_store, "canonical_document_digest", digest)
+    state = _valid_state("first")
+    descriptor = DocDescriptor(state, None, "Unsaved", True)
+    store.save_documents([descriptor])
+    before = (store.session_dir / "session.json").read_bytes()
+    store.save_documents([descriptor])
+    assert digest.call_count == 2
+    assert (store.session_dir / "session.json").read_bytes() == before
+
+    state["last_smiles_input"] = "changed without history"
+    store.save_documents([descriptor])
+    assert digest.call_count == 3
+    manifest = json.loads((store.session_dir / "session.json").read_bytes())
+    snapshot = store.session_dir / manifest["docs"][0]["snapshot"]
+    assert (
+        json.loads(snapshot.read_bytes())["state"]["last_smiles_input"]
+        == state["last_smiles_input"]
+    )
+
+
+def test_clean_dirty_save_transitions_retry_failed_manifest_without_losing_payload(
+    tmp_path, monkeypatch
+):
+    store = _store(tmp_path / "sessions", "cur")
+    store.begin()
+    path = str(tmp_path / "saved.chemvas")
+    clean = DocDescriptor(_valid_state("saved"), path, "Saved", False)
+    dirty = DocDescriptor(_valid_state("edited"), path, "Saved", True)
+    store.save_documents([clean])
+    clean_manifest = (store.session_dir / "session.json").read_bytes()
+
+    def fail_manifest(_manifest):
+        raise OSError("injected manifest write failure")
+
+    with monkeypatch.context() as failure:
+        failure.setattr(store, "_write_manifest", fail_manifest)
+        with pytest.raises(OSError, match="injected manifest"):
+            store.save_documents([dirty])
+    assert (store.session_dir / "session.json").read_bytes() == clean_manifest
+    store.save_documents([dirty])
+    dirty_manifest = (store.session_dir / "session.json").read_bytes()
+    entry = json.loads(dirty_manifest)["docs"][0]
+    snapshot = store.session_dir / entry["snapshot"]
+    snapshot_bytes = snapshot.read_bytes()
+    assert json.loads(snapshot_bytes)["state"]["last_smiles_input"] == "edited"
+
+    # A failed post-save transition cannot prune the last recoverable draft.
+    saved_again = DocDescriptor(dirty.state, path, "Saved", False)
+    with monkeypatch.context() as failure:
+        failure.setattr(store, "_write_manifest", fail_manifest)
+        with pytest.raises(OSError, match="injected manifest"):
+            store.save_documents([saved_again])
+    assert (store.session_dir / "session.json").read_bytes() == dirty_manifest
+    assert snapshot.read_bytes() == snapshot_bytes
+    store.save_documents([saved_again])
+    assert (store.session_dir / "session.json").read_bytes() == clean_manifest
+    assert list(store.session_dir.glob("doc-*.json")) == []
 
 
 def test_consume_tolerates_a_non_directory_sessions_root(tmp_path, monkeypatch):

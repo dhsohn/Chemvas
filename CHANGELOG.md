@@ -22,6 +22,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Preserve existing calculation-step and surviving-state order when editing,
+  appending only new IDs. Reviewed geometry still binds the whole plan, so an
+  unrelated step edit can still make a review stale.
+- Report the first rejected precomplex placement's measured clash/contact
+  details and distinguish missing candidates from candidates awaiting review.
+  Keep candidate generation, ranking and blocked handoff behavior unchanged.
+- Support multiline arrow labels across editing, preview and figure exports.
+  Preserve nonblank raw text, edge line breaks and no-op Redo history; keep long
+  previews scrollable and block over-limit input without silently truncating it.
+- Avoid redundant autosave hashes for clean saved and recovered-unsaved
+  documents. Keep strict snapshots and recovery checks; full-state collection
+  and ordinary dirty/edit hashing remain.
 - Apply Text commands consistently to an editing range or whole selected notes,
   including marquee selections. Adjust mixed font sizes per run, keep text
   selections across font-menu popups, and set the new-note font default when

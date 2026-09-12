@@ -410,7 +410,9 @@ class SessionSnapshotStore:
                 doc.file_path,
                 doc.display_name,
                 doc.dirty,
-                canonical_document_digest(doc.state),
+                # Clean documents reopen from their paths; no payload is stored.
+                # Collection already checked the full live state for dirtiness.
+                canonical_document_digest(doc.state) if doc.dirty else None,
             )
             for doc in persisted
         )

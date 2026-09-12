@@ -652,7 +652,7 @@ def test_pack_step_stays_blocked_without_a_complete_reviewed_pair(
     observation = json.loads(capsys.readouterr().out)
     assert observation["handoff"] == {
         "status": "blocked",
-        "codes": ["chemvas/multicomponent_precomplex_geometry_not_provided"],
+        "codes": ["chemvas/multicomponent_precomplex_review_required"],
     }
     assert observation["payload"]["data"]["endpoint_pair"] is None
 

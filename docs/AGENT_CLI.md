@@ -634,7 +634,10 @@ changing the drawing or the current canvas selection. Overlay removal adds no
 history entry; an accepted plan change does, and supports Undo/Redo. Accepting
 an unchanged plan preserves its ordering and reviewed geometry. A charge-only
 correction to a shared state retains its membership and multiplicity but clears
-all reviews tied to the old plan basis. If a graph edit invalidates stored
+all reviews tied to the old plan basis. Editing an existing step also keeps its
+position and the order of surviving states; new steps and new state IDs append.
+Reviewed geometry still binds the whole serialized plan, so changing another
+step can make an otherwise untouched review stale. If a graph edit invalidates stored
 component references, the editor keeps the plan and asks you to undo that edit
 or attach a repaired plan; it does not silently start over. Save also asks before
 keeping an inconsistent draft or omitting a topologically stale plan. A stale or
@@ -677,6 +680,12 @@ regenerates both bounded ensembles from the current graph, plan, RDKit
 provenance, contacts, and profile and rejects any mismatch. Placement scores are
 geometric clash and contact metrics, not energies or stability rankings.
 Unreviewed or partially reviewed multicomponent endpoints remain blocked.
+Missing candidate ensembles report
+`multicomponent_precomplex_geometry_not_provided`: run `generate-precomplex`.
+When both ensembles exist but either selection is absent, the reason is
+`multicomponent_precomplex_review_required`: inspect the candidates with
+`inspect-precomplex`, then review a pair with `select-precomplex`. A missing
+ensemble takes priority over an unreviewed one on the opposite endpoint.
 
 Precomplex generation accepts request format v2 only and requires
 `"profile": "chemvas-rigid-precomplex-placement/2"`. This profile uses the
@@ -748,6 +757,12 @@ and unique-XYZ-hash counts plus duplicate groups. Exact duplicates can consume
 the cap; deduplication, symmetry equivalence and renumbering-independent sampling
 are not promised by profile 2. No surviving candidate is a bounded-search
 failure, not evidence that the reaction is impossible.
+The generation error retains `chemvas/precomplex_no_candidates_survived` and
+reports the first rejected placement's clash/contact failure count, contact
+error, and, when present, limiting pair with distance and threshold. Path indices
+are 0-based; accompanying Chemvas IDs identify source atoms or the source parents
+of generated hydrogens. This is one deterministic sample, not a best failed
+geometry, a count of the most common blocking pair, or a unique cause of failure.
 
 ### Chemical interpretation limits
 

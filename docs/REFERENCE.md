@@ -77,10 +77,14 @@ its knob, flip, align, and distribute.
   both labels as you type so you can check their scope before choosing OK.
   A group ends at the first `}`; backslash escaping is not supported. A marker
   at the end or followed by whitespace is literal (`t_ Bu` keeps the underscore
-  and the space; `t\_Bu` does not escape it). Each single-line field has a
-  200-character limit and a counter; pastes beyond the limit are truncated.
-  Use a Note for longer or multiline text. Embedded line breaks in externally
-  supplied labels are not a supported multiline layout and render as spaces.
+  and the space; `t\_Bu` does not escape it). Each field supports multiple lines:
+  Enter inserts a line break, Tab moves to the next field, and OK applies the
+  edit. Line breaks are preserved in the preview, canvas and exported label.
+  Each field has a 200-character limit and a counter; text is not silently
+  truncated, and OK is disabled while either field exceeds the limit.
+  A field containing only whitespace removes that label; otherwise its text,
+  including leading and trailing line breaks, is preserved.
+  Use a Note for longer text.
   Labels take
   the text font settings in force when they are created or edited, and move
   with their arrow.
@@ -215,6 +219,11 @@ Autosave never replaces a complete recovery snapshot with one whose capture
 reported a warning. It keeps the last good snapshot and shows a persistent
 status-bar warning instead; the warning clears only after a later autosave
 succeeds without warnings.
+
+Unchanged ticks avoid disk writes. Saved, clean documents also skip the second
+content digest used by the snapshot store, but every canvas is still collected
+and checked for changes. Large embedded images can therefore still slow idle
+ticks and editing; this is not a constant-time change detector.
 
 In sessions confirmed to have stopped, unreadable dirty snapshots and orphaned
 snapshot payloads are retained with a warning, not silently pruned. If ownership

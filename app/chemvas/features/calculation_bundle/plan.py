@@ -376,21 +376,25 @@ def _validate_reviewed_precomplex_pair(
     profiles: list[tuple[str, object]] = []
     generation_provenance: list[tuple[object, object]] = []
     stale_sides: list[str] = []
-    for side, endpoint in (
+    endpoints = (
         ("reactant", step.reactant),
         ("product", step.product),
-    ):
+    )
+    for side, endpoint in endpoints:
         if endpoint.precomplex.kind != "candidate_ensemble":
             raise _ReviewedPrecomplexPairError(
                 "multicomponent_precomplex_geometry_not_provided",
-                "Precomplex review pair is incomplete.",
+                f"Step {step.id} has no {side} precomplex candidates. "
+                "Run generate-precomplex with explicit contacts before reviewing the pair.",
             )
+    for side, endpoint in endpoints:
         state = precomplex_state_from_json(endpoint.precomplex.payload_json)
         selection = state.get("selection")
         if not isinstance(selection, Mapping):
             raise _ReviewedPrecomplexPairError(
-                "multicomponent_precomplex_geometry_not_provided",
-                "Precomplex review pair is incomplete.",
+                "multicomponent_precomplex_review_required",
+                f"Step {step.id} has {side} precomplex candidates but no reviewed selection. "
+                "Run inspect-precomplex, then select-precomplex to review one endpoint pair.",
             )
         identities.append(
             (
@@ -778,17 +782,22 @@ def plan_with_replaced_step(
     retained_state_ids = referenced_by_retained | set(replacements)
     merged_states: list[CalculationState] = []
     for state in existing_plan.states:
-        if state.id not in retained_state_ids or state.id in replacements:
+        if state.id not in retained_state_ids:
             continue
-        merged_states.append(state)
+        merged_states.append(replacements.get(state.id, state))
     for state_id in (reactant_state.id, product_state.id):
         if state_id not in {state.id for state in merged_states}:
             merged_states.append(replacements[state_id])
+    merged_steps = tuple(
+        step if item.id == step.id else item for item in existing_plan.steps
+    )
+    if all(item.id != step.id for item in existing_plan.steps):
+        merged_steps += (step,)
     candidate = CalculationPlan(
         states=tuple(merged_states),
         steps=tuple(
             _without_precomplex(item) if repaired_shared_charge else item
-            for item in retained_steps + (step,)
+            for item in merged_steps
         ),
         version=existing_plan.version,
     )

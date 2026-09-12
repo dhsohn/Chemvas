@@ -63,7 +63,12 @@ def parse_arrow_label(text: str) -> tuple[LabelRun, ...]:
 def arrow_label_html(text: str) -> str:
     parts: list[str] = []
     for run in parse_arrow_label(text):
-        escaped = html.escape(run.text)
+        escaped = (
+            html.escape(run.text)
+            .replace("\r\n", "\n")
+            .replace("\r", "\n")
+            .replace("\n", "<br>")
+        )
         if run.role == "sub":
             parts.append(f"<sub>{escaped}</sub>")
         elif run.role == "super":

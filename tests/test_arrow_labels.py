@@ -21,7 +21,7 @@ from PyQt6.QtWidgets import (
     QGraphicsPathItem,
     QGraphicsScene,
     QLabel,
-    QLineEdit,
+    QPlainTextEdit,
     QPushButton,
 )
 
@@ -288,6 +288,9 @@ class ArrowLabelBuildTest(unittest.TestCase):
             ("^{22}", False, False, 0),
             ("K_{eq}^‡", True, True, 0),
             ("ΔG^‡ < 0 & k_-1", False, True, 37),
+            ("K_{2}CO_{3}\nDMSO, rt", False, False, 0),
+            ("ΔG^{‡}\r\n\r\n68%, 96% ee", True, True, 37),
+            ("k_{a\rb} < 2", False, True, 0),
         ):
             with self.subTest(text=text, angle=angle):
                 service = _build_service()
@@ -619,18 +622,23 @@ class ArrowLabelDialogTest(unittest.TestCase):
 
     def test_dialog_prefills_and_returns_edited_text(self) -> None:
         def drive_dialog(dialog: QDialog):
-            above = dialog.findChild(QLineEdit, "arrowLabelAboveInput")
-            below = dialog.findChild(QLineEdit, "arrowLabelBelowInput")
-            self.assertEqual(above.text(), "k_1")
-            self.assertEqual(below.text(), "")
-            self.assertEqual(above.maxLength(), MAX_ARROW_LABEL_CHARS)
+            above = dialog.findChild(QPlainTextEdit, "arrowLabelAboveInput")
+            below = dialog.findChild(QPlainTextEdit, "arrowLabelBelowInput")
+            self.assertEqual(above.toPlainText(), "k_1")
+            self.assertEqual(below.toPlainText(), "")
             counter = dialog.findChild(QLabel, "arrowLabelAboveInputLimit")
             self.assertIsNotNone(counter)
             self.assertIn("3/200", counter.text())
-            above.insert("x" * 250)
-            self.assertIn("200/200", counter.text())
-            above.setText("k_1")
-            below.setText("k_-1")
+            above.insertPlainText("x" * 250)
+            self.assertIn("253/200", counter.text())
+            self.assertEqual(len(above.toPlainText()), 253)
+            self.assertFalse(
+                next(
+                    b for b in dialog.findChildren(QPushButton) if b.text() == "OK"
+                ).isEnabled()
+            )
+            above.setPlainText("k_1")
+            below.setPlainText("k_-1")
             next(
                 b for b in dialog.findChildren(QPushButton) if b.text() == "OK"
             ).click()
@@ -655,8 +663,8 @@ class ArrowLabelDialogTest(unittest.TestCase):
 
     def test_live_previews_show_initial_scope_and_follow_each_input(self) -> None:
         def drive_dialog(dialog: QDialog):
-            above = dialog.findChild(QLineEdit, "arrowLabelAboveInput")
-            below = dialog.findChild(QLineEdit, "arrowLabelBelowInput")
+            above = dialog.findChild(QPlainTextEdit, "arrowLabelAboveInput")
+            below = dialog.findChild(QPlainTextEdit, "arrowLabelBelowInput")
             above_preview = dialog.findChild(QLabel, "arrowLabelAbovePreview")
             below_preview = dialog.findChild(QLabel, "arrowLabelBelowPreview")
             self.assertIsNotNone(above_preview)
@@ -671,8 +679,8 @@ class ArrowLabelDialogTest(unittest.TestCase):
             self.assertEqual(below_preview.text(), "k<sub>-1</sub>")
             below.clear()
             self.assertEqual(below_preview.text(), "No label")
-            self.assertEqual(above.text(), "MeI, K_{2}CO_{3}")
-            self.assertEqual(below.text(), "")
+            self.assertEqual(above.toPlainText(), "MeI, K_{2}CO_{3}")
+            self.assertEqual(below.toPlainText(), "")
             return QDialog.DialogCode.Accepted
 
         with mock.patch("chemvas.ui.arrow_label_dialog.QDialog.exec", new=drive_dialog):
@@ -688,22 +696,22 @@ class ArrowLabelDialogTest(unittest.TestCase):
         before = snapshot_canvas_state_for(canvas)
 
         def drive_dialog(dialog: QDialog):
-            above = dialog.findChild(QLineEdit, "arrowLabelAboveInput")
-            below = dialog.findChild(QLineEdit, "arrowLabelBelowInput")
+            above = dialog.findChild(QPlainTextEdit, "arrowLabelAboveInput")
+            below = dialog.findChild(QPlainTextEdit, "arrowLabelBelowInput")
             preview = dialog.findChild(QLabel, "arrowLabelAbovePreview")
             self.assertIsNotNone(preview)
-            above.setText("<b>실온 & 산화</b>^‡")
+            above.setPlainText("<b>실온 & 산화</b>^‡")
             self.assertEqual(
                 preview.text(), "&lt;b&gt;실온 &amp; 산화&lt;/b&gt;<sup>‡</sup>"
             )
-            self.assertEqual(above.text(), "<b>실온 & 산화</b>^‡")
-            below.setText("x" * (MAX_ARROW_LABEL_CHARS + 1))
-            self.assertEqual(len(below.text()), MAX_ARROW_LABEL_CHARS)
+            self.assertEqual(above.toPlainText(), "<b>실온 & 산화</b>^‡")
+            below.setPlainText("x" * (MAX_ARROW_LABEL_CHARS + 1))
+            self.assertEqual(len(below.toPlainText()), MAX_ARROW_LABEL_CHARS + 1)
             self.assertEqual(
                 dialog.findChild(QLabel, "arrowLabelBelowPreview").text(),
-                "x" * MAX_ARROW_LABEL_CHARS,
+                "x" * (MAX_ARROW_LABEL_CHARS + 1),
             )
-            above.setText("&" * MAX_ARROW_LABEL_CHARS)
+            above.setPlainText("&" * MAX_ARROW_LABEL_CHARS)
             self.assertEqual(preview.text(), "&amp;" * MAX_ARROW_LABEL_CHARS)
             dialog.adjustSize()
             available = dialog.screen().availableGeometry()
@@ -789,6 +797,8 @@ class ArrowLabelGuiTest(unittest.TestCase):
         QTest.qWait(10)
 
     def test_double_click_labels_arrow_with_undo_move_flip_and_round_trip(self) -> None:
+        # Nonblank labels preserve the typed text, including edge whitespace.
+        expected_labels = {"above": " k_1 ", "below": "k_-1"}
         canvas = active_canvas_for_window(self.window)
         self._draw_arrow(canvas, QPointF(-40.0, 0.0), QPointF(40.0, 0.0))
         (arrow,) = arrow_items_for(canvas)
@@ -796,14 +806,14 @@ class ArrowLabelGuiTest(unittest.TestCase):
 
         with mock.patch(
             "chemvas.ui.scene_decoration_service.prompt_arrow_labels",
-            return_value={"above": " k_1 ", "below": "k_-1"},
+            return_value=expected_labels,
         ) as prompt:
             self._double_click(canvas, QPointF(0.0, 0.0))
         prompt.assert_called_once()
         self.assertEqual(prompt.call_args.kwargs, {"above": "", "below": ""})
 
         state = arrow_state_dict(arrow)
-        self.assertEqual(state["labels"], {"above": "k_1", "below": "k_-1"})
+        self.assertEqual(state["labels"], expected_labels)
         children = _label_children(arrow)
         self.assertEqual(len(children), 2)
         self.assertIs(children[0].scene(), canvas.scene())
@@ -836,19 +846,15 @@ class ArrowLabelGuiTest(unittest.TestCase):
         self.app.processEvents()
         flipped = arrow_state_dict(arrow)
         self.assertGreater(flipped["start"][0], flipped["end"][0])
-        self.assertEqual(flipped["labels"], {"above": "k_1", "below": "k_-1"})
+        self.assertEqual(flipped["labels"], expected_labels)
         self.assertEqual(len(_label_children(arrow)), 2)
 
         snapshot = snapshot_canvas_state_for(canvas)
-        self.assertEqual(
-            snapshot["arrows"][0]["labels"], {"above": "k_1", "below": "k_-1"}
-        )
+        self.assertEqual(snapshot["arrows"][0]["labels"], expected_labels)
         payload = build_document_payload(snapshot, CANVAS_FILE_VERSION)
         restore_canvas_state_for(canvas, extract_document_state(payload))
         (restored,) = arrow_items_for(canvas)
-        self.assertEqual(
-            arrow_state_dict(restored)["labels"], {"above": "k_1", "below": "k_-1"}
-        )
+        self.assertEqual(arrow_state_dict(restored)["labels"], expected_labels)
         self.assertEqual(len(_label_children(restored)), 2)
 
     def test_arrow_tool_double_click_edits_the_arrow_without_adding_a_stub(
