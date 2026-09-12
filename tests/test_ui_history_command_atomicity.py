@@ -2134,6 +2134,13 @@ def test_change_atom_label_command_compensates_smiles_failure_after_label_mutati
             raise RuntimeError("smiles failed after label mutation")
 
     with (
+        # This headless double stores fields outside DocumentSavepoint's model
+        # contract. Explicitly omit the optional exact-transaction capability
+        # so this existing test continues to exercise inverse compensation.
+        mock.patch(
+            "chemvas.core.history._history_canvas_port",
+            return_value=SimpleNamespace(),
+        ),
         mock.patch(
             "chemvas.ui.history_commands.add_or_update_atom_label",
             side_effect=apply_label,

@@ -6,21 +6,26 @@ from typing import TYPE_CHECKING
 from PyQt6 import sip
 from PyQt6.QtCore import QPointF, QRectF
 
-from chemvas.core.history import history_transaction_scope
+from chemvas.core.history import CompositeCommand, history_transaction_scope
 from chemvas.features.insertion import build_atom_annotations
+from chemvas.ui.atom_label_access import atom_has_visible_label_for
 from chemvas.ui.canvas_geometry_access import mark_target_distance_for_atom_for
 from chemvas.ui.canvas_hit_testing_scene_access import scene_items_in_rect_for_canvas
 from chemvas.ui.canvas_mark_registry import mark_registry_for
 from chemvas.ui.canvas_model_access import (
     atom_annotations_for,
     atom_for_id,
+    bonds_for,
+    required_atom_for,
     sync_atom_annotation_from_marks_for,
 )
 from chemvas.ui.canvas_scene_items_state import remove_scene_item_from_collection_for
+from chemvas.ui.canvas_smiles_input_state import last_smiles_input_for
 from chemvas.ui.canvas_tool_settings_state import tool_settings_state_for
 from chemvas.ui.graphics_items import AtomLabelItem
 from chemvas.ui.history_commands import (
     AddSceneItemsCommand,
+    ChangeAtomLabelCommand,
     DeleteSceneItemsCommand,
     RebindMarkCommand,
 )
@@ -78,6 +83,9 @@ class CanvasMarkSceneService:
                     self.canvas, [mark_state_dict_for(self.canvas, cancel)], [cancel]
                 )
                 command.redo(self.canvas)
+                labels = self.reveal_unmarked_isolated_carbons({atom_id})
+                if labels:
+                    command = CompositeCommand([command, *labels])
             else:
                 item = self._add_mark_for_atom(
                     atom_id,
@@ -94,6 +102,49 @@ class CanvasMarkSceneService:
                 )
             if self.history.push(command) is False:
                 raise RuntimeError("Failed to record charge change in history.")
+
+    def reveal_unmarked_isolated_carbons(
+        self, atom_ids: set[int]
+    ) -> list[ChangeAtomLabelCommand]:
+        """Apply visibility for affected survivors of a user mark-removal edit.
+
+        The caller owns the active transaction and appends these commands to
+        its one history entry. Loading, low-level removal and Undo do not call
+        this: existing invisible carbons and ordinary atom deletion stay intact.
+        """
+        candidates = {
+            atom_id
+            for atom_id in atom_ids
+            if (atom := atom_for_id(self.canvas, atom_id)) is not None
+            and atom.element.upper() == "C"
+            and not atom_has_visible_label_for(self.canvas, atom_id)
+            and not self.marks.get_for_atom(atom_id)
+        }
+        if not candidates:
+            return []
+        # Check live model bonds once for the affected candidates, not all
+        # document atoms; stale adjacency must not reveal a bonded carbon.
+        for bond in bonds_for(self.canvas):
+            if bond is not None:
+                candidates.discard(bond.a)
+                candidates.discard(bond.b)
+        commands = []
+        smiles_input = last_smiles_input_for(self.canvas)
+        with history_transaction_scope(self.canvas):
+            for atom_id in sorted(candidates):
+                atom = required_atom_for(self.canvas, atom_id)
+                command = ChangeAtomLabelCommand(
+                    atom_id=atom_id,
+                    before_element=atom.element,
+                    after_element=atom.element,
+                    before_explicit_label=atom.explicit_label,
+                    after_explicit_label=True,
+                    before_smiles_input=smiles_input,
+                    after_smiles_input=smiles_input,
+                )
+                command.redo(self.canvas)
+                commands.append(command)
+        return commands
 
     @staticmethod
     def _mark_ink_rect(item) -> QRectF:
@@ -314,7 +365,7 @@ class CanvasMarkSceneService:
         after = dict(
             before, atom_id=atom_id, dx=center.x() - atom.x, dy=center.y() - atom.y
         )
-        command = RebindMarkCommand(
+        command: HistoryCommand = RebindMarkCommand(
             item,
             before,
             after,
@@ -328,6 +379,11 @@ class CanvasMarkSceneService:
             history_transaction_scope(self.canvas),
         ):
             command.redo(self.canvas)
+            labels = self.reveal_unmarked_isolated_carbons(
+                {old_id} if old_id is not None else set()
+            )
+            if labels:
+                command = CompositeCommand([command, *labels])
             if self.history.push(command) is False:
                 raise RuntimeError(
                     "Mark reassignment could not be recorded in Undo history."

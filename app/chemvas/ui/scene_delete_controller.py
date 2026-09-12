@@ -43,6 +43,7 @@ from chemvas.ui.history_commands import (
     GroupSceneItemsCommand,
     UngroupSceneItemsCommand,
 )
+from chemvas.ui.mark_item_access import reveal_unmarked_isolated_carbons_for
 from chemvas.ui.scene_delete_apply_logic import apply_delete_selection_plan
 from chemvas.ui.scene_delete_plan import (
     build_delete_selection_plan,
@@ -1240,6 +1241,11 @@ class SceneDeleteController:
             items=[item],
         )
         self._remove_scene_item(item)
+        atom_id = state.get("atom_id") if state.get("kind") == "mark" else None
+        if isinstance(atom_id, int):
+            labels = reveal_unmarked_isolated_carbons_for(self.canvas, {atom_id})
+            if labels:
+                command = CompositeCommand([command, *labels])
         return self._with_group_cleanup(command, removed_groups)
 
     def delete_selected_items(self) -> bool:
@@ -1295,6 +1301,12 @@ class SceneDeleteController:
             before_smiles_input = last_smiles_input_for(self.canvas)
             if plan.clear_smiles_input:
                 clear_last_smiles_input_for(self.canvas)
+            mark_owner_ids = {
+                atom_id
+                for item in plan.scene_items
+                if item.data(0) == "mark"
+                and isinstance(atom_id := (item.data(1) or {}).get("atom_id"), int)
+            } - set(plan.atom_ids)
             commands = apply_delete_selection_plan(
                 plan,
                 bonds=self._bonds,
@@ -1316,6 +1328,10 @@ class SceneDeleteController:
                     self.canvas
                 ).get(atom_id),
             )
+            if mark_owner_ids:
+                commands.extend(
+                    reveal_unmarked_isolated_carbons_for(self.canvas, mark_owner_ids)
+                )
 
             if any(
                 isinstance(command, (DeleteAtomsCommand, DeleteBondCommand))

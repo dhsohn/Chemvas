@@ -157,6 +157,12 @@ its knob, flip, align, and distribute.
   a free mark or transfers charge to a nearby atom. Figure exports and
   `check-layout` do not validate chemical ownership; inspect the selected mark
   before sharing a drawing whose marks are distant from their owners.
+  If cancelling, deleting, cutting, erasing or reassigning the last bound mark
+  would leave a surviving isolated carbon invisible, that carbon is kept and
+  shown with an explicit `C` label in the same undoable edit. The label is saved
+  and remains explicit if you later attach a bond. Atoms deliberately included
+  in a deletion are still deleted; opening an existing document does not change
+  its label choices.
 - **Color** — choose a swatch before painting; entering the tool alone does not
   choose a color. The active swatch is highlighted. Charge and radical marks,
   including free marks, have independent colors: coloring a mark does not color
@@ -175,9 +181,9 @@ its knob, flip, align, and distribute.
   endpoints — a handle sitting on another item's endpoint is drawn filled
   rather than hollow — and curved arrows keep their third handle for the
   curve),
-  select / move, an eraser tool (click or drag to erase; atoms a
-  deletion leaves with no bond and nothing visible — no label or mark — are
-  removed with it). A foreground note wins over underlying structure and
+  select / move, an eraser tool (click or drag to erase; atom or bond deletion
+  also removes any newly isolated atoms with no visible label or mark).
+  A foreground note wins over underlying structure and
   invisible carbon hit targets when selecting or erasing; visible foreground
   structure and editing handles remain pickable. Other editing tools include
   horizontal & vertical flip, perspective rotation, and undo/redo.

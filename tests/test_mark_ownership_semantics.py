@@ -261,6 +261,49 @@ def _image_bytes(image):
     return image.size(), pixels
 
 
+@pytest.mark.parametrize(
+    "kind", ["plus", "minus", "circled_plus", "circled_minus", "radical"]
+)
+def test_retained_carbon_visibility_does_not_add_a_second_chemical_change(
+    canvas_factory, kind
+):
+    pytest.importorskip("rdkit")
+    canvas = canvas_factory()
+    owner = add_atom_for(canvas, "C", 0, 0)
+    mark = add_mark_for_atom_for(canvas, owner, QPointF(12, -12), kind=kind)
+    mark.setSelected(True)
+    canvas.services.history_service.clear()
+    before = snapshot_canvas_state_for(canvas)
+    canvas.services.scene_operations.scene_delete_controller.delete_selected_items()
+    atom = canvas.model.atoms[owner]
+    assert atom.element == "C" and atom.explicit_label
+    assert not canvas.model.atom_annotations
+    model, annotations, _bounds = _payload(canvas)
+    assert not annotations
+    implicit = deepcopy(model)
+    implicit.atoms[owner].explicit_label = False
+    # Removing the last electronic mark changes charge/spin intentionally. The
+    # additional visibility bit must leave that final neutral chemistry alone.
+    assert write_molfile(model, atom_annotations=annotations) == write_molfile(
+        implicit, atom_annotations=annotations
+    )
+    adapter = RDKitAdapter()
+    actual = adapter.compute_identifiers(
+        model_with_atom_annotations(model, annotations)
+    )
+    control = adapter.compute_identifiers(
+        model_with_atom_annotations(implicit, annotations)
+    )
+    assert actual == control
+    assert actual.smiles == "C"
+    assert actual.inchikey
+    after = snapshot_canvas_state_for(canvas)
+    canvas.services.history_service.undo()
+    assert snapshot_canvas_state_for(canvas) == before
+    canvas.services.history_service.redo()
+    assert snapshot_canvas_state_for(canvas) == after
+
+
 def test_owner_feedback_is_visible_but_absent_from_figures_clipboard_and_state(
     canvas_factory, tmp_path
 ):
