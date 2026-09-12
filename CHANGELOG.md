@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.13.0] - 2026-09-12
+
 ### Changed
 
 - Give charge and radical marks independent display colors, preserved through
@@ -56,7 +58,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   keeping their appearance consistent through Undo, reopening and figure export
   while preserving explicit arrow colors and individually formatted note text.
 - Restore exact structure, caption and arrow geometry when undoing Arrange
-  Scheme, so an undone layout clears the document's modified marker.
+  Scheme. Returning to the saved document clears its modified marker; earlier
+  unsaved edits remain marked as modified.
 - Refresh scroll bounds after committed edits, Undo/Redo and canvas activation,
   keeping off-sheet content reachable and shrinking empty margins after deletion.
   Fit to Window refreshes the scroll range while continuing to fit the sheet.
@@ -191,7 +194,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   from incident bonds and unify actionable missing-RDKit installation messages.
 - Separate atom-label picking from document margins so nearby bonds and attached
   charge marks remain editable. Charge shortcuts cancel an opposite mark or
-  place a non-overlapping new mark; Mark preview and click share their binding.
+  place a new mark without overlapping that atom's existing marks; Mark preview
+  and click share their binding.
 - Record exact selection geometry for nudge/alignment Undo/Redo and preserve
   existing perspective depth through 2D transforms. Batch selection refreshes
   during movement and paste. Preserve exact independent-mark offsets on drag
@@ -1895,7 +1899,8 @@ housekeeping.
   `.chemvas` document type (double-clicking a file opens it in Chemvas), and a
   Linux `.desktop` entry with an `application/x-chemvas` MIME type.
 
-[Unreleased]: https://github.com/dhsohn/Chemvas/compare/v0.12.0...HEAD
+[Unreleased]: https://github.com/dhsohn/Chemvas/compare/v0.13.0...HEAD
+[0.13.0]: https://github.com/dhsohn/Chemvas/compare/v0.12.0...v0.13.0
 [0.12.0]: https://github.com/dhsohn/Chemvas/compare/v0.11.0...v0.12.0
 [0.11.0]: https://github.com/dhsohn/Chemvas/compare/v0.10.2...v0.11.0
 [0.10.2]: https://github.com/dhsohn/Chemvas/compare/v0.10.1...v0.10.2

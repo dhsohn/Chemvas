@@ -209,8 +209,9 @@ field. Format versions are unchanged: existing documents still load, while older
 readers without this field reject documents containing it. Editable SVG retains
 the field in its embedded document. This does not add a `mirrored` field to
 `compose-document` requests.
-Labels are single-line, use the [small label grammar](REFERENCE.md), and are
-not separate scene notes. `inspect-document` reports selected dependency counts
+Labels support multiple lines (up to 200 characters per side), use the
+[small label grammar](REFERENCE.md), and are not separate scene notes.
+`inspect-document` reports selected dependency counts
 (ring fills, attached marks, groups), not note or arrow-label counts.
 Initial charge-mark placement avoids incident bond directions heuristically;
 run `check-layout` and make local adjustments for crowded drawings.
