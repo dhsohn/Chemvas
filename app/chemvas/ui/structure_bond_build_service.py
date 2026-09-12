@@ -5,9 +5,17 @@ from functools import partial
 from typing import TYPE_CHECKING
 
 from chemvas.domain.transactions import add_recovery_error_note, run_rollback_step
-from chemvas.features.rendering import style_for_existing_bond_overlay
+from chemvas.features.rendering import (
+    BOLD_BOND_STYLES,
+    DOTTED_DOUBLE_STYLE_DEFAULT,
+    DOTTED_DOUBLE_STYLE_OUTER,
+    DOUBLE_STYLE_CENTER,
+    DOUBLE_STYLE_OUTER,
+    style_for_existing_bond_overlay,
+)
 from chemvas.ui.canvas_model_access import bond_for_id
 from chemvas.ui.canvas_smiles_input_state import last_smiles_input_for
+from chemvas.ui.canvas_window_access import notify_error_for
 from chemvas.ui.history_recording_access import record_bond_update_for
 from chemvas.ui.renderer_style_access import bond_length_px_for
 from chemvas.ui.scene_group_operations import group_connection_allowed_for
@@ -60,6 +68,26 @@ class StructureBondBuildService:
             # (tombstones fail its atom-match check), so no stale-id guard is
             # needed here; a missing bond simply means "draw a new one".
             existing_bond_id = self.graph_service.bond_id_between(start_id, end_id)
+        existing_bond = bond_for_id(self.canvas, existing_bond_id)
+        if (
+            existing_bond is not None
+            and existing_bond.style == "double_either"
+            and style
+            in {
+                *BOLD_BOND_STYLES,
+                DOTTED_DOUBLE_STYLE_DEFAULT,
+                DOTTED_DOUBLE_STYLE_OUTER,
+                "dotted",
+                DOUBLE_STYLE_CENTER,
+                DOUBLE_STYLE_OUTER,
+            }
+        ):
+            notify_error_for(
+                self.canvas,
+                "This appearance change would erase unknown double-bond stereo. "
+                "Choose Double (2) first to clear it explicitly.",
+            )
+            return None
         anchors = {atom_id for atom_id in (start_id, end_id) if atom_id is not None}
         if (
             existing_bond_id is None

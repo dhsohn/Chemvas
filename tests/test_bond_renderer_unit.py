@@ -197,6 +197,7 @@ _EXPECTED_BOND_TOPOLOGIES = {
         3: ("line", "line", "line"),
     },
     "wedge": {1: ("polygon",)},
+    "double_either": {2: ("line", "line")},
     "hash": {1: ("line", "line", "line")},
     "dotted": {1: ("path",), 2: ("path",), 3: ("path",)},
     "dotted_double": {
@@ -326,7 +327,7 @@ class BondRendererUnitTest(unittest.TestCase):
             for order in sorted(VALID_BOND_ORDERS)
             if order in _EXPECTED_BOND_TOPOLOGIES[style]
         ]
-        self.assertEqual(len(public_cases), 35)
+        self.assertEqual(len(public_cases), 36)
 
         for ring in (False, True):
             for style, order in public_cases:
@@ -342,7 +343,7 @@ class BondRendererUnitTest(unittest.TestCase):
                         _EXPECTED_BOND_TOPOLOGIES[style][order],
                     )
 
-    def test_all_35_public_style_order_pairs_share_build_and_update_geometry(
+    def test_all_public_style_order_pairs_share_build_and_update_geometry(
         self,
     ) -> None:
         public_cases = [
@@ -351,7 +352,7 @@ class BondRendererUnitTest(unittest.TestCase):
             for order in sorted(VALID_BOND_ORDERS)
             if order in _EXPECTED_BOND_TOPOLOGIES[style]
         ]
-        self.assertEqual(len(public_cases), 35)
+        self.assertEqual(len(public_cases), 36)
 
         for ring in (False, True):
             for style, order in public_cases:

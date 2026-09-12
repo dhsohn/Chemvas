@@ -1693,6 +1693,144 @@ class RDKitAdapterTest(unittest.TestCase):
         self.assertEqual(_RealChem.MolToSmiles(reopened), "CC=Cc1ccccc1")
 
     @unittest.skipUnless(_RealChem is not None, "RDKit is required for chemistry tests")
+    def test_double_either_conversion_and_mol_exports_preserve_explicit_unknown(self):
+        from chemvas.core.molfile import parse_molfile
+
+        for terminal in ("C", "Ph", "Et"):
+            for terminal_y in (-30.0, 30.0):
+                with self.subTest(terminal=terminal, terminal_y=terminal_y):
+                    model = MoleculeModel()
+                    for element, x, y in (
+                        (terminal, 0.0, 30.0),
+                        ("C", 30.0, 0.0),
+                        ("C", 60.0, 0.0),
+                        ("C", 90.0, terminal_y),
+                    ):
+                        model.add_atom(element, x, y)
+                    model.add_bond(0, 1)
+                    model.add_bond(1, 2, 2)
+                    model.add_bond(2, 3)
+                    model.bonds[1].style = "double_either"
+                    before = repr(vars(model))
+                    adapter = RDKitAdapter()
+                    mol = adapter._build_conversion_rdkit_mol(model)
+                    self.assertIsNotNone(mol, adapter.last_error)
+                    marked = [
+                        bond
+                        for bond in mol.GetBonds()
+                        if bond.GetStereo() == _RealChem.BondStereo.STEREOANY
+                    ]
+                    self.assertEqual(len(marked), 1)
+                    self.assertEqual(
+                        marked[0].GetBondDir(), _RealChem.BondDir.EITHERDOUBLE
+                    )
+                    self.assertNotIn("/", _RealChem.MolToSmiles(mol))
+                    self.assertNotIn("\\", _RealChem.MolToSmiles(mol))
+                    artifacts = adapter.model_to_calculation_artifacts(model)
+                    self.assertIsNotNone(artifacts, adapter.last_error)
+                    for block in (
+                        adapter.model_to_mol_block(model),
+                        artifacts.mol_block,
+                    ):
+                        self.assertIsNotNone(block, adapter.last_error)
+                        reopened = parse_molfile(block)
+                        self.assertEqual(
+                            sum(b.style == "double_either" for b in reopened.bonds), 1
+                        )
+                        rd_reopened = _RealChem.MolFromMolBlock(block)
+                        self.assertIsNotNone(rd_reopened)
+                        self.assertEqual(
+                            sum(
+                                b.GetStereo() == _RealChem.BondStereo.STEREOANY
+                                for b in rd_reopened.GetBonds()
+                            ),
+                            1,
+                        )
+                        self.assertFalse(
+                            any(
+                                b.GetStereo()
+                                in (
+                                    _RealChem.BondStereo.STEREOE,
+                                    _RealChem.BondStereo.STEREOZ,
+                                )
+                                for b in rd_reopened.GetBonds()
+                            )
+                        )
+                    Chem, AllChem = adapter._load_rdkit()
+                    embedded = adapter._embed_3d_molecule(mol, Chem, AllChem)
+                    self.assertIsNotNone(embedded, adapter.last_error)
+                    self.assertEqual(
+                        sum(
+                            b.GetStereo() == Chem.BondStereo.STEREOANY
+                            for b in embedded.GetBonds()
+                        ),
+                        1,
+                    )
+                    self.assertEqual(repr(vars(model)), before)
+
+    @unittest.skipUnless(_RealChem is not None, "RDKit is required for chemistry tests")
+    def test_double_either_nonstereogenic_marker_is_not_cleaned_from_mol(self):
+        from chemvas.core.molfile import parse_molfile
+
+        for smiles in ("C=C", "CC=O"):
+            with self.subTest(smiles=smiles):
+                adapter = RDKitAdapter()
+                model = adapter.smiles_to_2d(smiles)
+                next(
+                    bond for bond in model.bonds if bond.order == 2
+                ).style = "double_either"
+                block = adapter.model_to_mol_block(model)
+                self.assertIsNotNone(block, adapter.last_error)
+                self.assertEqual(
+                    sum(b.style == "double_either" for b in parse_molfile(block).bonds),
+                    1,
+                )
+
+    @unittest.skipUnless(_RealChem is not None, "RDKit is required for chemistry tests")
+    def test_double_either_identifiers_do_not_invent_e_z_or_expand_smiles_import(self):
+        adapter = RDKitAdapter()
+        model = adapter.smiles_to_2d("CC=CC")
+        self.assertIsNotNone(model)
+        double = next(bond for bond in model.bonds if bond.order == 2)
+        self.assertNotEqual(double.style, "double_either")
+        plain = adapter.compute_identifiers(model)
+        double.style = "double_either"
+        before = repr(vars(model))
+
+        identifiers = adapter.compute_identifiers(model)
+
+        self.assertEqual(identifiers.smiles, "CC=CC")
+        self.assertEqual(identifiers.formula, plain.formula)
+        self.assertEqual(identifiers.mw, plain.mw)
+        self.assertEqual(repr(vars(model)), before)
+        # Ordinary SMILES does not distinguish explicit either from no stereo
+        # annotation. This change does not introduce specified E/Z insertion.
+        for specified in ("C/C=C/C", "C/C=C\\C"):
+            with self.subTest(specified=specified):
+                self.assertIsNone(adapter.smiles_to_2d(specified))
+                self.assertIn("Double-bond", adapter.last_error)
+
+    @unittest.skipUnless(_RealChem is not None, "RDKit is required for chemistry tests")
+    def test_double_either_rejects_incompatible_orders_before_conversion(self):
+        for order in (1, 3):
+            with self.subTest(order=order):
+                model = MoleculeModel()
+                model.add_atom("C", 0.0, 0.0)
+                model.add_atom("C", 30.0, 0.0)
+                model.add_bond(0, 1, order)
+                model.bonds[0].style = "double_either"
+                adapter = RDKitAdapter()
+                for method in (
+                    adapter.model_to_mol_block_result,
+                    adapter.model_to_xyz_block_result,
+                    adapter.model_to_calculation_artifacts_result,
+                ):
+                    result = method(model)
+                    self.assertIsNone(result.value)
+                    self.assertIn("double_either", result.error)
+                    self.assertIn("order 2", result.error)
+
+    @unittest.skipUnless(_RealChem is not None, "RDKit is required for chemistry tests")
     def test_dotted_contacts_are_refused_by_chemical_conversion(self) -> None:
         from chemvas.core.molfile import MolfileError, write_molfile
         from chemvas.domain.document.state import VALID_BOND_STYLES

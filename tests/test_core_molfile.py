@@ -126,6 +126,19 @@ class MolfileWriterTest(unittest.TestCase):
         self.assertEqual(int(bond_lines[0][9:12]), 1)  # wedge -> up
         self.assertEqual(int(bond_lines[1][9:12]), 6)  # hash -> down
 
+    def test_double_either_style_writes_only_order_two_stereo_three(self) -> None:
+        for order in (1, 2, 3):
+            with self.subTest(order=order):
+                model = _ethanol()
+                model.bonds[0].order = order
+                model.bonds[0].style = "double_either"
+                if order == 2:
+                    bond_line = write_molfile(model).splitlines()[7]
+                    self.assertEqual(bond_line[6:12], "  2  3")
+                else:
+                    with self.assertRaisesRegex(MolfileError, "double_either.*order 2"):
+                        write_molfile(model)
+
     def test_unsupported_label_raises(self) -> None:
         # Every abbreviation label is rejected so the caller's RDKit expansion
         # fallback runs. "Ts" (tosyl) and "Ac" (acetyl) are also the symbols for
@@ -293,6 +306,25 @@ def _replaced_line(block: str, index: int, line: str) -> str:
 
 
 class MolfileParserRoundTripTest(unittest.TestCase):
+    def test_double_either_flag_survives_native_mol_round_trip(self) -> None:
+        # The external flag, not a native writer, provides the import oracle.
+        for endpoints in ((1, 2), (2, 1)):
+            with self.subTest(endpoints=endpoints):
+                original = _replaced_line(
+                    write_molfile(_ethanol()),
+                    7,
+                    f"{endpoints[0]:>3}{endpoints[1]:>3}  2  3  0  0  0",
+                )
+                model = parse_molfile(original)
+                self.assertEqual(model.bonds[0].style, "double_either")
+                self.assertEqual(model.bonds[0].order, 2)
+                rewritten = write_molfile(model)
+                self.assertEqual(
+                    rewritten.splitlines()[7][0:12], original.splitlines()[7][0:12]
+                )
+                reopened = parse_molfile(rewritten)
+                self.assertEqual(reopened.bonds[0], model.bonds[0])
+
     def test_byte_reader_tolerates_only_ignored_header_encoding(self) -> None:
         original = write_molfile(_ethanol()).encode("utf-8")
         with tempfile.TemporaryDirectory() as directory:
@@ -559,6 +591,15 @@ class MolfileParserErrorTest(unittest.TestCase):
 
         with self.assertRaisesRegex(MolfileParseError, "stereo flag 4"):
             parse_molfile(block)
+
+    def test_double_either_flag_on_non_double_bond_is_rejected(self) -> None:
+        for order in (1, 3):
+            with self.subTest(order=order):
+                block = _replaced_line(
+                    write_molfile(_ethanol()), 7, f"  1  2{order:>3}  3  0  0  0"
+                )
+                with self.assertRaisesRegex(MolfileParseError, "flag 3.*order 2"):
+                    parse_molfile(block)
 
     def test_every_unsupported_bond_field_rejects_non_zero_data(self) -> None:
         original = write_molfile(_ethanol())

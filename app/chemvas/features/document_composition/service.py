@@ -257,6 +257,8 @@ def _bonds(raw_bonds: list[object], atoms: Mapping[int, Atom]) -> list[Bond | No
             raise ValueError(f"bond {index} style is not supported")
         if style in {"wedge", "hash"} and normalized_order != 1:
             raise ValueError(f"bond {index} wedge/hash style requires order 1")
+        if style == "double_either" and normalized_order != 2:
+            raise ValueError(f"bond {index} double_either style requires order 2")
         bonds.append(
             Bond(
                 a=a,

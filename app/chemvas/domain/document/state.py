@@ -76,6 +76,7 @@ VALID_BOND_STYLES = frozenset(
         "double",
         "double_center",
         "double_outer",
+        "double_either",
         "triple",
         "wedge",
         "hash",
@@ -416,6 +417,8 @@ def _normalized_bond_state(bond_state: StateDict) -> StateDict:
         bond_state["style"] = "single"
     if bond_state["style"] in {"wedge", "hash"} and bond_state["order"] != 1:
         bond_state["order"] = 1
+    if bond_state["style"] == "double_either" and bond_state["order"] != 2:
+        bond_state["order"] = 2
     if not _is_hex_color(bond_state.get("color")):
         bond_state["color"] = "#000000"
     return bond_state
@@ -886,6 +889,8 @@ def _validate_bond_fields(
     if not _is_valid_choice(style, VALID_BOND_STYLES):
         raise ValueError(error)
     if style in {"wedge", "hash"} and order != 1:
+        raise ValueError(error)
+    if style == "double_either" and order != 2:
         raise ValueError(error)
     if not _is_hex_color(bond_state.get("color")):
         raise ValueError(error)

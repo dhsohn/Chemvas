@@ -104,6 +104,15 @@ class BondTool(Tool):
             return False
         settings = tool_settings_state_for(self.canvas)
         active_bond_style = settings.active_bond_style
+        if bond.style == "double_either" and (
+            active_bond_style in BOLD_BOND_STYLES or active_bond_style == "dotted"
+        ):
+            notify_error_for(
+                self.canvas,
+                "This appearance change would erase unknown double-bond stereo. "
+                "Choose Double (2) first to clear it explicitly.",
+            )
+            return True
         if active_bond_style in {"wedge", "hash"}:
             self.context.apply_bond_style(bond_id, active_bond_style, 1)
             return True

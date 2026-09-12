@@ -30,6 +30,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   unchanged release, cancellation and history behavior. Keep drawing and
   hover-based atom/bond editing sheet-limited, and explain blocked attempts with
   guidance to move existing content back onto the sheet.
+- Preserve MOL V2000 double-bond stereo flag 3 as an explicitly unspecified
+  `double_either` bond, drawn with crossed lines and retained through native
+  documents, clipboard, editable SVG, history and MOL export (including aliases).
+  Reject non-double uses and prevent display-only bold/dotted/position edits from
+  clearing the marker. Native v7 and clipboard v2 accept the new style; older
+  readers reject it. This does not add E/Z inference or stereoisomer guarantees.
 - Mirror equilibrium arrows exactly, preserving long/short harpoons and their
   label associations through history, native documents, clipboard selections and
   editable SVG. Native v7 and clipboard v2 accept an optional equilibrium-only
