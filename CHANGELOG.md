@@ -26,6 +26,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Reopen documents and recover unsaved snapshots made with the minimum arrow
+  head size (0.1) or note line spacing (0.8). Compare decimal settings bounds
+  consistently while retaining strict rejection of invalid or lossy numbers.
 - Require an explicit Color-tool swatch before painting, show the chosen swatch,
   and support coloring bound and free charge/radical marks without recoloring
   their atoms. Explain why coloring an implicit carbon has no visible effect.

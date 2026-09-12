@@ -3,17 +3,25 @@ import os
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 import pytest
-from PyQt6.QtCore import QPointF, Qt
+from PyQt6.QtCore import QPointF, Qt, QTimer
 from PyQt6.QtTest import QTest
-from PyQt6.QtWidgets import QApplication, QGraphicsEllipseItem, QSlider, QToolButton
+from PyQt6.QtWidgets import (
+    QApplication,
+    QDialogButtonBox,
+    QGraphicsEllipseItem,
+    QSlider,
+    QToolButton,
+)
 
 from chemvas.bootstrap.main_window import build_main_window
+from chemvas.core.document_io import read_document
 from chemvas.ui.canvas_callback_state import callback_state_for
 from chemvas.ui.canvas_scene_items_state import arrow_items_for, orbital_items_for
 from chemvas.ui.canvas_service_access import canvas_services_for
 from chemvas.ui.canvas_tool_settings_state import tool_settings_state_for
 from chemvas.ui.main_window_ports import active_canvas_for_window, services_for_window
 from chemvas.ui.move_access import move_item_for
+from chemvas.ui.note_appearance_dialog import NoteAppearanceDialog
 from chemvas.ui.scene_decoration_access import add_arrow_for, add_orbital_for
 from chemvas.ui.scene_item_access import apply_scene_item_state
 from chemvas.ui.scene_item_state import scene_item_state_for
@@ -141,6 +149,47 @@ def test_arrow_presets_sliders_and_open_reflect_document_settings(drawing):
     assert (width.value(), head.value()) == (51, 70)
     width.setValue(width.value() + 1)
     assert tool_settings_state_for(canvas).arrow_line_width == pytest.approx(5.2)
+
+
+def test_minimum_arrow_and_note_controls_save_and_reopen(drawing, app, tmp_path):
+    window, canvas, controller = drawing
+    controller.set_tool("arrow")
+    add_arrow_for(canvas, QPointF(-60, 0), QPointF(60, 0), "reaction")
+    head = _slider(window, "Arrow head size")
+    QTest.keyClick(head, Qt.Key.Key_Home)
+    assert head.value() == head.minimum() == 10
+    completed = []
+
+    def edit():
+        dialog = app.activeModalWidget()
+        try:
+            assert isinstance(dialog, NoteAppearanceDialog)
+            spacing = dialog.numbers["text_line_spacing"]
+            spacing.setFocus()
+            spacing.selectAll()
+            QTest.keyClicks(spacing, "0.8")
+            buttons = dialog.findChild(QDialogButtonBox)
+            QTest.mouseClick(
+                buttons.button(QDialogButtonBox.StandardButton.Ok),
+                Qt.MouseButton.LeftButton,
+            )
+            completed.append(True)
+        finally:
+            if dialog is not None and dialog.isVisible():
+                dialog.reject()
+
+    QTimer.singleShot(0, edit)
+    services_for_window(window).text_style_service.edit_note_appearance(window)
+    assert completed == [True]
+    session = canvas_services_for(canvas).document.canvas_document_session_service
+    before = session.snapshot_state()
+    assert before["settings"]["arrow_head_scale"] == 0.1
+    assert before["settings"]["text_line_spacing"] == 0.8
+    path = tmp_path / "minimum-controls.chemvas"
+    assert session.save_to_file(str(path)) == []
+    reopened = read_document(path)
+    session.apply_state(reopened.state)
+    assert session.snapshot_state() == before
 
 
 @pytest.mark.parametrize("phase", ["edit", "push", "undo", "redo"])
