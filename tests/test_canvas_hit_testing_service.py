@@ -176,6 +176,38 @@ class CanvasHitTestingServiceTest(unittest.TestCase):
             empty_fallback_service.item_at_scene_pos(QPointF(2.0, 2.0)).data(0), "other"
         )
 
+    def test_explicit_mark_preference_preserves_foreground_and_normal_selection(
+        self,
+    ) -> None:
+        atom_item = _FakeItem("atom", data1=1)
+        mark_item = _FakeItem("mark")
+        point = QPointF(0.0, 0.0)
+        for foreground_kind in (None, "handle", "note"):
+            with self.subTest(foreground=foreground_kind):
+                foreground = _FakeItem(foreground_kind) if foreground_kind else None
+                items = [atom_item, mark_item]
+                if foreground is not None:
+                    items.insert(0, foreground)
+                canvas = SimpleNamespace(
+                    model=SimpleNamespace(atoms={1: Atom("N", 0.0, 0.0)}),
+                    viewportTransform=QTransform,
+                    scene=lambda items=items: _FakeScene(items),
+                )
+                service = CanvasHitTestingService(
+                    canvas, scene_pos_mapper=lambda _event: point
+                )
+                with mock.patch(
+                    "chemvas.ui.canvas_hit_testing_service.mark_center_for",
+                    return_value=point,
+                ):
+                    self.assertIs(
+                        service.item_at_event(object()), foreground or atom_item
+                    )
+                    self.assertIs(
+                        service.item_at_event(object(), prefer_marks=True),
+                        foreground or mark_item,
+                    )
+
     def test_item_lookup_uses_scene_access_helper_without_canvas_scene_facade(
         self,
     ) -> None:

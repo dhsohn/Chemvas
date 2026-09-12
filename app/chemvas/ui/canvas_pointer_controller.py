@@ -165,7 +165,7 @@ class CanvasPointerController:
         self.hover.clear_hover_highlight()
 
     def _show_mark_context_menu(self, event, *, menu_factory=QMenu) -> bool:
-        item = self.hit_testing_service.item_at_event(event)
+        item = self.hit_testing_service.item_at_event(event, prefer_marks=True)
         if item is None or item.data(0) != "mark":
             return False
         self.tool_controller.prepare_for_document_edit()

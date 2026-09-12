@@ -128,8 +128,28 @@ def test_real_nudge_and_deselect_preserve_binding_and_clear_owner_overlay(drawin
 def test_actual_context_menu_previews_atom_before_explicit_reassignment(
     drawing, app, outcome
 ):
+    _context_menu_reassignment(drawing, app, outcome)
+
+
+@pytest.mark.parametrize("outcome", ["accept", "cancel", "unchanged"])
+def test_actual_context_menu_reassigns_mark_centered_on_another_atom(
+    drawing, app, outcome
+):
+    _context_menu_reassignment(drawing, app, outcome, overlap_target=True)
+
+
+def _context_menu_reassignment(drawing, app, outcome, *, overlap_target=False):
     window, canvas, mark, owner, target = drawing
     position = _select_mark(canvas, mark)
+    if overlap_target:
+        # A supported placement edit can put the glyph exactly on another atom;
+        # it must remain accessible without first moving it away from that atom.
+        center = mark_center_for(canvas, mark)
+        atom = canvas.model.atoms[target]
+        move_item_for(canvas, mark, atom.x - center.x(), atom.y - center.y())
+        assert mark_center_for(canvas, mark) == QPointF(atom.x, atom.y)
+        assert mark.data(1)["atom_id"] == owner
+        position = canvas.mapFromScene(mark_center_for(canvas, mark))
     before = snapshot_canvas_state_for(canvas)
     before_position = mark.pos()
     scroll = (canvas.horizontalScrollBar().value(), canvas.verticalScrollBar().value())
