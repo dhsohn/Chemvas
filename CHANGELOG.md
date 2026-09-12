@@ -26,6 +26,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Make New Canvas inherit the current document's sheet, bond, arrow and text/note
+  settings into an independent empty window, without copying contents, backing
+  paths or history. Keep startup defaults and opened documents' own settings.
 - Keep otherwise invisible isolated carbon as an explicit `C` when its last
   bound charge/radical mark is removed or reassigned, in the same undoable edit.
   Ignore repeated stationary eraser frames that could remove the newly shown

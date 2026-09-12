@@ -23,6 +23,12 @@ chemvas --version     # package version without starting Qt
 **File ▸ Open**으로 [`examples/`](../examples/)의 예제 문서를 열 수 있습니다.
 각 파일의 내용은 [예제 README](../examples/README.ko.md)에 있습니다.
 
+**File ▸ New Canvas** (`Ctrl+N`)는 현재 문서의 용지 크기·방향, 결합 길이,
+화살표 모양 설정, 오비탈 위상 설정과 텍스트·노트 모양을 이어받은 빈 창을 엽니다.
+그림 내용·파일 경로·편집 이력은 복사하지 않으며, 이후 설정 변경은 서로 독립적입니다.
+앱 시작 시 새로 만드는 빈 캔버스는 기본 설정을 사용하며, 열거나 세션에서 복구한
+문서는 각자의 설정을 유지합니다.
+
 ## 그리기 기능
 
 애플리케이션에서 캡처한 짧은 워크스루 세 편입니다. SMILES 삽입과 출력은
