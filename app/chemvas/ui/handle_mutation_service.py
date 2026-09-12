@@ -104,7 +104,9 @@ class HandleMutationService:
         ):
             return
         kind = str(item.data(0) or "arrow")
-        rebuilt = build_arrow_item_for(self.canvas, start, end, kind)
+        rebuilt = build_arrow_item_for(
+            self.canvas, start, end, kind, bool(data.get("mirrored", False))
+        )
         # Arrow geometry is absolute, but a moved item carries its offset in
         # pos(); clear it or the rebuilt path renders shifted by that delta.
         item.setPos(0.0, 0.0)

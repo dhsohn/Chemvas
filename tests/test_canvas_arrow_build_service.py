@@ -102,9 +102,9 @@ class CanvasArrowBuildServiceTest(unittest.TestCase):
         self.assertEqual(
             service.build_equilibrium_item.call_args_list,
             [
-                mock.call(start, end),
-                mock.call(start, end, favored="forward"),
-                mock.call(start, end, favored="reverse"),
+                mock.call(start, end, mirrored=False),
+                mock.call(start, end, favored="forward", mirrored=False),
+                mock.call(start, end, favored="reverse", mirrored=False),
             ],
         )
         service.build_double_head_arrow.assert_called_once_with(start, end)

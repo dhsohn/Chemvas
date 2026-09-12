@@ -26,6 +26,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Mirror equilibrium arrows exactly, preserving long/short harpoons and their
+  label associations through history, native documents, clipboard selections and
+  editable SVG. Native v7 and clipboard v2 accept an optional equilibrium-only
+  `mirrored` Boolean; older readers reject documents containing the new field.
+  Refuse Flip before changes when a selected equilibrium arrow has coincident
+  endpoints, with guidance to separate them first.
 - Reuse the dirty check's document digest within the same autosave collection,
   avoiding a second full-state hash for ordinary modified drawings. Live-state
   collection and dirty checking still run; this is not an idle snapshot cache.

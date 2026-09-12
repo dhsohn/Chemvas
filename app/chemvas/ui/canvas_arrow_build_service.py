@@ -7,7 +7,7 @@ from PyQt6.QtCore import QPointF, Qt
 from PyQt6.QtGui import QBrush, QColor, QFont, QPainterPath, QPen
 
 from chemvas.domain.document import ARC_KIND_SWEEPS, VALID_ARC_KINDS, VALID_LINE_KINDS
-from chemvas.features.annotations import arrow_label_html
+from chemvas.features.annotations import arrow_label_html, arrow_label_normal
 from chemvas.features.rendering import arc_midpoint, arc_points, wavy_line_points
 from chemvas.features.selection import HANDLE_ACCENT_COLOR, default_curved_control
 from chemvas.ui.canvas_text_style_state import text_style_state_for
@@ -79,17 +79,23 @@ class CanvasArrowBuildService:
         for point in snapped_points_among_for(self.canvas, points):
             self.build_snap_mark(point).setParentItem(item)
 
-    def build_arrow_item(self, start: QPointF, end: QPointF, kind: str):
+    def build_arrow_item(
+        self, start: QPointF, end: QPointF, kind: str, mirrored: bool = False
+    ):
         if kind in VALID_LINE_KINDS:
             return self.build_line_item(start, end, kind)
         if kind in VALID_ARC_KINDS:
             return self.build_arc_arrow(start, end, kind)
         if kind == "equilibrium":
-            return self.build_equilibrium_item(start, end)
+            return self.build_equilibrium_item(start, end, mirrored=mirrored)
         if kind == "equilibrium_forward":
-            return self.build_equilibrium_item(start, end, favored="forward")
+            return self.build_equilibrium_item(
+                start, end, favored="forward", mirrored=mirrored
+            )
         if kind == "equilibrium_reverse":
-            return self.build_equilibrium_item(start, end, favored="reverse")
+            return self.build_equilibrium_item(
+                start, end, favored="reverse", mirrored=mirrored
+            )
         if kind == "resonance":
             return self.build_double_head_arrow(start, end)
         if kind == "curved_single":
@@ -229,7 +235,12 @@ class CanvasArrowBuildService:
         return item
 
     def build_equilibrium_item(
-        self, start: QPointF, end: QPointF, favored: str | None = None
+        self,
+        start: QPointF,
+        end: QPointF,
+        favored: str | None = None,
+        *,
+        mirrored: bool = False,
     ):
         dx = end.x() - start.x()
         dy = end.y() - start.y()
@@ -240,6 +251,8 @@ class CanvasArrowBuildService:
         offset = max(
             bond_spacing_px_for(self.canvas) * 0.5, self.settings.arrow_line_width
         )
+        if mirrored:
+            offset = -offset
         forward_start = QPointF(start.x() - nx * offset, start.y() - ny * offset)
         forward_end = QPointF(end.x() - nx * offset, end.y() - ny * offset)
         reverse_start = QPointF(end.x() + nx * offset, end.y() + ny * offset)
@@ -252,13 +265,16 @@ class CanvasArrowBuildService:
             forward_start, forward_end = self._centered_half(forward_start, forward_end)
 
         path = QPainterPath()
-        self.add_harpoon(path, forward_start, forward_end)
-        self.add_harpoon(path, reverse_start, reverse_end)
+        self.add_harpoon(path, forward_start, forward_end, mirrored=mirrored)
+        self.add_harpoon(path, reverse_start, reverse_end, mirrored=mirrored)
 
         item = ArrowPathItem(path)
         item.setPen(self.arrow_pen())
         item.setBrush(QBrush(Qt.BrushStyle.NoBrush))
-        item.setData(2, {"start": start, "end": end, "control": None, "double": False})
+        data = {"start": start, "end": end, "control": None, "double": False}
+        if mirrored:
+            data["mirrored"] = True
+        item.setData(2, data)
         return item
 
     @staticmethod
@@ -315,13 +331,7 @@ class CanvasArrowBuildService:
             mid = QPointF((start.x() + end.x()) * 0.5, (start.y() + end.y()) * 0.5)
         dx = end.x() - start.x()
         dy = end.y() - start.y()
-        length = math.hypot(dx, dy) or 1.0
-        nx = -dy / length
-        ny = dx / length
-        # "Above" is the side toward smaller y whichever way the arrow was
-        # drawn; a vertical arrow puts "above" on its left.
-        if ny > 1e-9 or (abs(ny) <= 1e-9 and nx > 0.0):
-            nx, ny = -nx, -ny
+        nx, ny = arrow_label_normal(dx, dy)
         style = text_style_state_for(self.canvas)
         font = QFont(style.text_font_family, style.text_font_size)
         font.setWeight(style.text_font_weight)
@@ -361,10 +371,19 @@ class CanvasArrowBuildService:
             )
             child.setPos(item.mapFromScene(top_left))
 
-    def add_harpoon(self, path: QPainterPath, start: QPointF, end: QPointF) -> None:
+    def add_harpoon(
+        self,
+        path: QPainterPath,
+        start: QPointF,
+        end: QPointF,
+        *,
+        mirrored: bool = False,
+    ) -> None:
         path.moveTo(start)
         path.lineTo(end)
-        self.add_arrow_head(path, start, end, double=False, half=True)
+        self.add_arrow_head(
+            path, start, end, double=False, half=True, mirrored=mirrored
+        )
 
     def add_arrow_head(
         self,
@@ -373,10 +392,11 @@ class CanvasArrowBuildService:
         end: QPointF,
         double: bool,
         half: bool = False,
+        mirrored: bool = False,
     ) -> None:
         angle = math.atan2(end.y() - start.y(), end.x() - start.x())
         head_len = bond_length_px_for(self.canvas) * self.settings.arrow_head_scale
-        head_angle = math.radians(25)
+        head_angle = math.radians(-25 if mirrored else 25)
         offsets = [0.0]
         if double:
             offset_mag = max(1.4, self.settings.arrow_line_width * 1.2)

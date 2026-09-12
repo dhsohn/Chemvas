@@ -201,6 +201,14 @@ The `arrows[].kind` values are `arrow`, `equilibrium`,
 `curved_double`, `inhibit`, `dotted`, `line`, `line_dashed`, `line_wavy`,
 `line_bold`, and `arc_90_left/right`, `arc_180_left/right`,
 `arc_270_left/right` (each slash denotes two separate names).
+Native v7 and selection-clipboard v2 equilibrium arrows (`equilibrium`,
+`equilibrium_forward`, `equilibrium_reverse`) also accept an optional Boolean
+`mirrored`. It records reflected harpoon geometry; omission means `false`, and
+normal canvas serialization omits false values. Other arrow kinds reject the
+field. Format versions are unchanged: existing documents still load, while older
+readers without this field reject documents containing it. Editable SVG retains
+the field in its embedded document. This does not add a `mirrored` field to
+`compose-document` requests.
 Labels are single-line, use the [small label grammar](REFERENCE.md), and are
 not separate scene notes. `inspect-document` reports selected dependency counts
 (ring fills, attached marks, groups), not note or arrow-label counts.

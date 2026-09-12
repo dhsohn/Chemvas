@@ -192,6 +192,14 @@ Graph Patch에 표시색 편집 연산이 추가되는 것은 아닙니다.
 `inhibit`, `dotted`, `line`, `line_dashed`, `line_wavy`, `line_bold`,
 `arc_90_left/right`, `arc_180_left/right`, `arc_270_left/right`입니다.
 슬래시는 각각 별개의 두 이름을 뜻합니다.
+원본 v7과 선택 클립보드 v2의 평형 화살표(`equilibrium`,
+`equilibrium_forward`, `equilibrium_reverse`)에는 선택 Boolean 필드
+`mirrored`를 넣을 수 있습니다. 거울 반사한 화살촉 형태를 기록하며, 생략하면
+`false`이고 일반 캔버스 직렬화는 false 값을 생략합니다. 다른 화살표 종류는 이
+필드를 거부합니다. 형식 버전은 그대로입니다. 기존 문서는 계속 열리지만 이 필드를
+지원하지 않는 이전 reader는 해당 필드를 포함한 문서를 거부합니다. 편집 가능한
+SVG도 내장 문서에 이 필드를 보존합니다. `compose-document` 요청에 `mirrored`
+필드를 추가하는 것은 아닙니다.
 라벨은 한 줄용이며 [작은 라벨 문법](REFERENCE.ko.md)을 사용하고, 별도 장면 노트가
 아닙니다. `inspect-document`는 일부 종속 항목(고리 채움, 붙은 표시, 그룹)의 개수를
 보고하며 노트나 화살표 라벨 개수는 보고하지 않습니다. 초기 전하 표시는 결합 방향을

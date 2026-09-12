@@ -22,6 +22,7 @@ from chemvas.ui.note_item_access import (
 from chemvas.ui.ring_fill_state import set_ring_fill_brush
 from chemvas.ui.scene_item_state import (
     ARROW_KINDS,
+    ArrowItemBuilder,
     ArrowLabelSetter,
     MarkColorSetter,
     arrow_labels_from_state,
@@ -40,7 +41,6 @@ NoteItemFactory = Callable[[], QGraphicsTextItem]
 NoteStyleApplier = Callable[[QGraphicsTextItem], None]
 MarkItemBuilder = Callable[[str], Any | None]
 MarkCenterSetter = Callable[[Any, QPointF], None]
-ArrowItemBuilder = Callable[[QPointF, QPointF, str], QGraphicsPathItem]
 CurvedArrowPathSetter = Callable[
     [QGraphicsPathItem, QPointF, QPointF, QPointF, bool], None
 ]
@@ -152,7 +152,9 @@ def create_arrow_item_from_state(
         return None
     start_pt = QPointF(*cast("Any", start))
     end_pt = QPointF(*cast("Any", end))
-    item = build_arrow_item(start_pt, end_pt, kind)
+    item = build_arrow_item(
+        start_pt, end_pt, kind, bool(arrow_state.get("mirrored", False))
+    )
     item.setData(0, kind)
     control = arrow_state.get("control")
     double = bool(arrow_state.get("double", False))
@@ -162,6 +164,8 @@ def create_arrow_item_from_state(
         "control": None,
         "double": double,
     }
+    if arrow_state.get("mirrored"):
+        data["mirrored"] = True
     if kind in {"curved_single", "curved_double"} and control is not None:
         control_pt = QPointF(*cast("Any", control))
         set_curved_arrow_path(item, start_pt, end_pt, control_pt, double)

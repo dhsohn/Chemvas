@@ -54,7 +54,7 @@ NoteStyleApplier = Callable[[QGraphicsTextItem], None]
 RingFillBrushGetter = Callable[[], QBrush]
 TsBracketPathBuilder = Callable[..., Any]
 ShapeItemBuilder = Callable[..., QGraphicsPathItem]
-ArrowItemBuilder = Callable[[QPointF, QPointF, str], QGraphicsPathItem]
+ArrowItemBuilder = Callable[[QPointF, QPointF, str, bool], QGraphicsPathItem]
 CurvedArrowPathSetter = Callable[
     [QGraphicsPathItem, QPointF, QPointF, QPointF, bool], None
 ]
@@ -325,11 +325,15 @@ def apply_scene_item_state(
                 "double": double,
             }
         else:
-            rebuilt = build_arrow_item(start_pt, end_pt, str(kind))
+            rebuilt = build_arrow_item(
+                start_pt, end_pt, str(kind), bool(state.get("mirrored", False))
+            )
             item.setPath(rebuilt.path())
             item.setPen(rebuilt.pen())
             item.setBrush(rebuilt.brush())
             data = {"start": start_pt, "end": end_pt, "control": None, "double": double}
+        if state.get("mirrored"):
+            data["mirrored"] = True
         color = state.get("color")
         if isinstance(color, str):
             data["color"] = color
