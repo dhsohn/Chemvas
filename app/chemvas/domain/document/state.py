@@ -1326,7 +1326,11 @@ def validate_settings_state(settings: Mapping[str, object]) -> None:
         )
     if (
         not _is_number(settings.get("arrow_head_scale"))
-        or not 0.1 <= cast("float", settings.get("arrow_head_scale")) <= 0.8
+        # JSON readers retain Decimal values until validation. Compare decimal
+        # bounds in the same representation as the document, not binary floats.
+        or not Decimal("0.1")
+        <= Decimal(str(settings.get("arrow_head_scale")))
+        <= Decimal("0.8")
     ):
         raise ValueError(
             "Invalid Chemvas file. settings.arrow_head_scale must be between 0.1 and 0.8."
@@ -1366,10 +1370,9 @@ def validate_settings_state(settings: Mapping[str, object]) -> None:
         raise ValueError(
             "Invalid Chemvas file. settings.text_alignment must be left, center, right, or justify."
         )
-    if (
-        not _is_number(settings.get("text_line_spacing"))
-        or cast("float", settings.get("text_line_spacing")) < 0.8
-    ):
+    if not _is_number(settings.get("text_line_spacing")) or Decimal(
+        str(settings.get("text_line_spacing"))
+    ) < Decimal("0.8"):
         raise ValueError(
             "Invalid Chemvas file. settings.text_line_spacing must be finite and at least 0.8."
         )
