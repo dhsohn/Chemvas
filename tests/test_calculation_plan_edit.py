@@ -155,7 +155,8 @@ def test_shared_state_charge_can_be_repaired_after_a_graph_charge_edit() -> None
         step=plan.steps[0],
     )
 
-    assert {step.id for step in accepted.steps} == {"S01", "S02"}
+    assert [step.id for step in accepted.steps] == ["S01", "S02"]
+    assert [item.id for item in accepted.states] == [item.id for item in plan.states]
     assert next(item for item in accepted.states if item.id == "R01").charge == 1
     validate_calculation_plan(state, calculation_plan_to_state(accepted))
 
@@ -347,3 +348,5 @@ def test_shared_charge_correction_drops_reviews_and_rejects_wrong_charge(
         for step in accepted.steps
         for endpoint in (step.reactant, step.product)
     )
+    assert [step.id for step in accepted.steps] == [step.id for step in plan.steps]
+    assert [item.id for item in accepted.states] == [item.id for item in plan.states]

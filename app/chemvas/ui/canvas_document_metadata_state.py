@@ -81,6 +81,8 @@ def document_display_name_for(canvas: Any) -> str:
 
 def document_is_dirty_for(canvas: Any, state: dict) -> bool:
     clean_digest = document_metadata_state_for(canvas).clean_digest
+    if clean_digest == _RECOVERED_DIRTY_DIGEST:
+        return True
     return clean_digest is not None and canonical_document_digest(state) != clean_digest
 
 

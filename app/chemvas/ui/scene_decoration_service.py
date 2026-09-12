@@ -116,7 +116,7 @@ class SceneDecorationService:
 
     def set_arrow_labels(self, item, labels: Mapping[str, str]) -> bool:
         cleaned = {
-            side: text.strip()
+            side: text
             for side, text in labels.items()
             if side in ARROW_LABEL_SIDES and text.strip()
         }

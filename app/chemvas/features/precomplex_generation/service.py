@@ -167,6 +167,7 @@ def generate_precomplex_candidates(
     directions = _fibonacci_sphere(profile.approach_sample_count)
     component_conformer_ids = tuple(component.conformer_id for component in components)
     candidates: list[GeneratedCandidate] = []
+    first_rejection: tuple[int, int, ValidationMetrics] | None = None
     for approach_index, direction in enumerate(directions):
         aligned = _align_child_contact_outward(child, child_contact, direction)
         for rotation_index in range(profile.rotation_sample_count):
@@ -201,6 +202,8 @@ def generate_precomplex_candidates(
                 radii=profile.radii,
             )
             if validation.hard_clash_count:
+                if first_rejection is None:
+                    first_rejection = (approach_index, rotation_index, validation)
                 continue
             xyz = _xyz_block(request, atoms)
             xyz_sha256 = hashlib.sha256(xyz.encode("ascii")).hexdigest()
@@ -239,9 +242,49 @@ def generate_precomplex_candidates(
         )
     )
     if not candidates:
+        assert first_rejection is not None
+        approach, rotation, metrics = first_rejection
+        detail = (
+            f"All {profile.approach_sample_count * profile.rotation_sample_count} "
+            f"placements were rejected on {request.side}. The first rejected placement "
+            f"(approach {approach}, rotation {rotation}) had "
+            f"{metrics.hard_clash_count} hard clash/contact failures; "
+            f"contact error {metrics.contact_error_angstrom:.12g} A "
+            f"(tolerance {contact.tolerance_angstrom:.12g} A). "
+        )
+        if metrics.limiting_pair is not None:
+            assert metrics.limiting_distance_angstrom is not None
+            assert metrics.limiting_threshold_angstrom is not None
+            by_index = {
+                atom.path_index: atom
+                for component in components
+                for atom in component.atoms
+            }
+            pair = tuple(by_index[index] for index in metrics.limiting_pair)
+            owners = tuple(
+                atom.source_atom_id
+                if atom.source_atom_id is not None
+                else atom.parent_source_atom_id
+                for atom in pair
+            )
+            owner_label = (
+                "Chemvas source/parent atoms"
+                if any(atom.source_atom_id is None for atom in pair)
+                else "Chemvas atoms"
+            )
+            detail += (
+                f"Its limiting pair has 0-based path indices {metrics.limiting_pair} "
+                f"({owner_label} {owners}), distance "
+                f"{metrics.limiting_distance_angstrom:.12g} A below threshold "
+                f"{metrics.limiting_threshold_angstrom:.12g} A. "
+            )
+        else:
+            detail += "That placement has no limiting atom pair. "
         raise ValueError(
             "chemvas/precomplex_no_candidates_survived: every deterministic "
-            "placement failed clash or contact validation."
+            "placement failed clash or contact validation. "
+            + detail
+            + "This is one sampled rejection, not an optimized geometry or a unique failure cause."
         )
     return tuple(candidates[: request.candidate_cap])
 

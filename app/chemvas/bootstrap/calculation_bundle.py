@@ -910,6 +910,7 @@ def _pack_step(
         not precheck.single_component_endpoints
         and "multicomponent_precomplex_geometry_not_provided"
         not in precheck.blocking_reasons
+        and "multicomponent_precomplex_review_required" not in precheck.blocking_reasons
         and "precomplex_endpoint_topology_not_supported"
         not in precheck.blocking_reasons
     )
