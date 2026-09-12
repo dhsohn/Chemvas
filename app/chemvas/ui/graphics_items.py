@@ -457,8 +457,18 @@ class AtomLabelItem(NoSelectTextItem):
     def boundingRect(self):
         return self._base_rect().united(self._hit_rect())
 
-    def export_scene_bounding_rect(self) -> QRectF:
+    def layout_scene_bounding_rect(self) -> QRectF:
+        """Text layout without the pick halo, retained for annotation placement."""
         return self.mapRectToScene(self._base_rect())
+
+    def export_scene_bounding_rect(self) -> QRectF:
+        if (
+            not self.isVisible()
+            or self.effectiveOpacity() <= 0.0
+            or self.defaultTextColor().alphaF() <= 0.0
+        ):
+            return QRectF()
+        return self.mapToScene(self.glyph_path()).boundingRect()
 
     @override
     def shape(self) -> QPainterPath:

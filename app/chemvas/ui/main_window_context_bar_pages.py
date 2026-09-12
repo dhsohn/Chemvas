@@ -81,6 +81,11 @@ class MainWindowContextBarPageBuilder:
         controller = self._note_controller_for_window(window)
         if controller is None:
             return
+        if not controller.text_format_targets():
+            window.statusBar().showMessage(
+                "Select a note or edit its text to use Text formatting.", 6000
+            )
+            return
         getattr(controller, method_name)(*args)
 
     def build(self, window) -> ContextBarPages:

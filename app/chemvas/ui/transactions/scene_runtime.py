@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Any, cast
 
 from PyQt6 import sip
 from PyQt6.QtCore import QObject, QRectF, Qt
+from PyQt6.QtGui import QTextOption
 from PyQt6.QtWidgets import (
     QAbstractGraphicsShapeItem,
     QGraphicsEllipseItem,
@@ -278,6 +279,11 @@ def _restore_primitive_graphics_property(
     # can be the persistently failing callback that triggered rollback; calling
     # it again would make the raw savepoint unable to repair the item.
     if isinstance(item, QGraphicsTextItem):
+        if setter_name == "setDocumentTextOption":
+            document = item.document()
+            assert document is not None
+            document.setDefaultTextOption(cast("QTextOption", value))
+            return
         if setter_name == "setFont":
             item.setFont(cast("QFont", value))
             return
@@ -342,6 +348,15 @@ class BondPrimitiveGraphicsSnapshot:
                 continue
             value = getter()
             properties.append((setter_name, value))
+        if isinstance(item, QGraphicsTextItem):
+            document = item.document()
+            assert document is not None
+            properties.append(
+                (
+                    "setDocumentTextOption",
+                    QTextOption(document.defaultTextOption()),
+                )
+            )
         direct_attribute_values: list[tuple[str, object]] = []
         for name in _ATOM_GRAPHICS_DIRECT_ATTRIBUTES:
             value = _snapshot_attribute(item, name)

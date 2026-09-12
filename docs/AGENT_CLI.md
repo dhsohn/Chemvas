@@ -637,7 +637,11 @@ correction to a shared state retains its membership and multiplicity but clears
 all reviews tied to the old plan basis. If a graph edit invalidates stored
 component references, the editor keeps the plan and asks you to undo that edit
 or attach a repaired plan; it does not silently start over. Save also asks before
-keeping an inconsistent draft or omitting a topologically stale plan.
+keeping an inconsistent draft or omitting a topologically stale plan. A stale or
+invalid reviewed precomplex pair also prompts before saving: **No** keeps the
+current drawing and destination unchanged; **Yes** retains an editable draft and
+the review data, not calculation readiness. Undo the invalidating edit or
+regenerate and review the affected pair before `pack-step`.
 
 Agents can attach and inspect the same contract without Qt:
 

@@ -22,6 +22,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Apply Text commands consistently to an editing range or whole selected notes,
+  including marquee selections. Adjust mixed font sizes per run, keep text
+  selections across font-menu popups, and set the new-note font default when
+  no note is selected. Explain Text commands that have no selected target.
+- Expose document-wide Note Appearance controls for fill, border, padding and
+  line spacing. Keep existing/new/reopened notes consistent and preserve exact
+  prior rich text through Undo/Redo and failed style/history changes.
+- Choose an individual image in Image Properties when several images are
+  selected or grouped, without breaking the group or changing other panels.
+- Fit atom-label exports to painted glyphs instead of text layout boxes, keeping
+  normal label picking, charge/radical placement and calculation ID positions.
+  Notes and arrow labels retain their existing layout bounds.
+- Ask before saving a drawing whose reviewed precomplex pair is stale or invalid.
+  Cancelling preserves the drawing and destination; saving keeps an editable
+  draft and its review data without claiming calculation readiness.
+- Compress TIFF exports with lossless LZW while preserving pixel values,
+  transparency and output DPI.
 - Copy induced bonds, complete ring fills and atom-bound marks with atom/bond
   selections, matching native clipboard content and selection figure exports.
   Keep Qt text-selection frames out of copied images and visibly explain invalid

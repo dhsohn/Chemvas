@@ -36,6 +36,7 @@ def build_scene_operation_services(
     style_controller = CanvasStyleController(
         canvas,
         note_controller=note_controller,
+        history_service=history_service,
     )
     scene_clipboard_controller = SceneClipboardController(
         canvas,

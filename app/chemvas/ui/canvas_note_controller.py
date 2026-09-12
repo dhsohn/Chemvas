@@ -9,6 +9,7 @@ from PyQt6.QtGui import (
     QBrush,
     QColor,
     QFont,
+    QFontInfo,
     QPen,
     QTextBlockFormat,
     QTextCharFormat,
@@ -46,6 +47,7 @@ from chemvas.ui.note_item_access import (
 from chemvas.ui.note_selection_box import update_note_selection_box_for
 from chemvas.ui.scene_item_access import attach_scene_item, remove_scene_item
 from chemvas.ui.scene_item_state import note_state_dict_for
+from chemvas.ui.selection_collection_access import selected_scene_items_for
 from chemvas.ui.selection_service_access import (
     refresh_selection_outline_for,
     selection_service_from_canvas,
@@ -306,7 +308,8 @@ class CanvasNoteController:
         history_snapshot: HistoryStackSnapshot | None = None
         try:
             history_snapshot = self.history.capture_stack_snapshot()
-            self.history.push(command)
+            if self.history.push(command) is False and history_snapshot.enabled:
+                raise RuntimeError("note history publication was declined")
             if after_push is not None:
                 after_push()
         except Exception as original_error:
@@ -760,27 +763,45 @@ class CanvasNoteController:
             return item
         return None
 
-    def _merge_editing_char_format(self, mutate) -> None:
-        item = self._editing_note()
-        if item is None:
-            return
-        cursor = item.textCursor()
-        fmt = QTextCharFormat()
-        mutate(cursor.charFormat(), fmt)
-        cursor.mergeCharFormat(fmt)
-        item.setTextCursor(cursor)
-        self.update_note_box(item)
-        update_note_selection_box_for(self.canvas, item)
+    def text_format_targets(self) -> list[QGraphicsTextItem]:
+        editing = self._editing_note()
+        if editing is not None:
+            return [editing]
+        # A marquee uses Qt selection, while note clicks use the note registry.
+        # Read the same union as move/copy/delete without changing either owner.
+        return [
+            item
+            for item in selected_scene_items_for(self.canvas, excluded_kinds=set())
+            if isinstance(item, QGraphicsTextItem) and item.data(0) == "note"
+        ]
+
+    def _text_format_cursor(self, item: QGraphicsTextItem) -> QTextCursor:
+        if item is self._editing_note():
+            return item.textCursor()
+        cursor = QTextCursor(item.document())
+        cursor.select(QTextCursor.SelectionType.Document)
+        return cursor
+
+    def _merge_text_char_format(self, mutate) -> None:
+        def apply(item: QGraphicsTextItem) -> None:
+            cursor = self._text_format_cursor(item)
+            fmt = QTextCharFormat()
+            mutate(cursor.charFormat(), fmt)
+            cursor.mergeCharFormat(fmt)
+            if item is self._editing_note():
+                item.setTextCursor(cursor)
+
+        self._apply_to_target_notes(apply)
 
     def toggle_text_bold(self) -> None:
         def mutate(current: QTextCharFormat, fmt: QTextCharFormat) -> None:
             is_bold = current.fontWeight() > QFont.Weight.Normal
             fmt.setFontWeight(QFont.Weight.Normal if is_bold else QFont.Weight.Bold)
 
-        self._merge_editing_char_format(mutate)
+        self._merge_text_char_format(mutate)
 
     def toggle_text_italic(self) -> None:
-        self._merge_editing_char_format(
+        self._merge_text_char_format(
             lambda current, fmt: fmt.setFontItalic(not current.fontItalic())
         )
 
@@ -803,26 +824,64 @@ class CanvasNoteController:
             else:
                 fmt.setVerticalAlignment(alignment)
 
-        self._merge_editing_char_format(mutate)
+        self._merge_text_char_format(mutate)
 
     def adjust_text_size(self, delta: int) -> None:
-        def mutate(current: QTextCharFormat, fmt: QTextCharFormat) -> None:
-            size = current.fontPointSize()
-            if size <= 0:
-                size = float(text_style_state_for(self.canvas).text_font_size)
-            fmt.setFontPointSize(max(6.0, min(96.0, size + delta)))
+        def apply(item: QGraphicsTextItem) -> None:
+            cursor = self._text_format_cursor(item)
 
-        self._merge_editing_char_format(mutate)
+            def stepped_format(current: QTextCharFormat) -> QTextCharFormat:
+                size = current.fontPointSize()
+                if size <= 0:
+                    font = current.font().resolve(item.font())
+                    size = font.pointSizeF()
+                    if size <= 0:
+                        size = QFontInfo(font).pointSizeF()
+                fmt = QTextCharFormat()
+                fmt.setFontPointSize(max(6.0, min(96.0, size + delta)))
+                return fmt
+
+            if cursor.hasSelection():
+                start, end = cursor.selectionStart(), cursor.selectionEnd()
+                runs: list[tuple[int, int, QTextCharFormat]] = []
+                document = cursor.document()
+                if document is None:
+                    raise RuntimeError("cannot format text without its document")
+                block = document.findBlock(start)
+                while block.isValid() and block.position() < end:
+                    fragments = block.begin()
+                    while not fragments.atEnd():
+                        fragment = fragments.fragment()
+                        first = max(start, fragment.position())
+                        last = min(end, fragment.position() + fragment.length())
+                        if fragment.isValid() and first < last:
+                            runs.append(
+                                (first, last, stepped_format(fragment.charFormat()))
+                            )
+                        fragments.__iadd__(1)
+                    block = block.next()
+                # Capture every run before merging: format changes may coalesce
+                # adjacent QTextFragments. One click is one native text Undo.
+                work = QTextCursor(cursor)
+                work.beginEditBlock()
+                try:
+                    for first, last, fmt in runs:
+                        work.setPosition(first)
+                        work.setPosition(last, QTextCursor.MoveMode.KeepAnchor)
+                        work.mergeCharFormat(fmt)
+                finally:
+                    work.endEditBlock()
+            else:
+                cursor.mergeCharFormat(stepped_format(cursor.charFormat()))
+            if item is self._editing_note():
+                item.setTextCursor(cursor)
+
+        self._apply_to_target_notes(apply)
 
     def set_text_font_family(self, family: str) -> None:
-        def mutate(item: QGraphicsTextItem) -> None:
-            cursor = QTextCursor(item.document())
-            cursor.select(QTextCursor.SelectionType.Document)
-            char_format = QTextCharFormat()
-            char_format.setFontFamilies([family])
-            cursor.mergeCharFormat(char_format)
-
-        self._apply_to_target_notes(mutate)
+        self._merge_text_char_format(
+            lambda _current, fmt: fmt.setFontFamilies([family])
+        )
 
     def set_text_alignment(self, alignment: str) -> None:
         qt_alignment = {
@@ -832,8 +891,7 @@ class CanvasNoteController:
         }.get(alignment, Qt.AlignmentFlag.AlignLeft)
 
         def mutate(item: QGraphicsTextItem) -> None:
-            cursor = QTextCursor(item.document())
-            cursor.select(QTextCursor.SelectionType.Document)
+            cursor = self._text_format_cursor(item)
             block_format = QTextBlockFormat()
             block_format.setAlignment(qt_alignment)
             cursor.mergeBlockFormat(block_format)
@@ -878,7 +936,7 @@ class CanvasNoteController:
                 committed_html=committed_note_html_for(item),
                 interaction_flags=item.textInteractionFlags(),
             )
-            for item in list(selected_notes_for(self.canvas))
+            for item in self.text_format_targets()
         ]
         if not snapshots:
             return
@@ -979,16 +1037,31 @@ class CanvasNoteController:
         option = doc.defaultTextOption()
         option.setAlignment(style.text_alignment)
         doc.setDefaultTextOption(option)
+        self.apply_note_appearance(item, line_spacing=True)
+
+    def apply_note_appearance(
+        self, item: QGraphicsTextItem, *, line_spacing: bool
+    ) -> None:
+        """Restyle document-wide boxes/spacing without changing text runs."""
+        style = text_style_state_for(self.canvas)
+        doc = item.document()
+        if doc is None:
+            return
+        if line_spacing:
+            self._apply_note_line_spacing(doc, style.text_line_spacing)
+        self.update_note_box(item)
+        update_note_selection_box_for(self.canvas, item)
+
+    @staticmethod
+    def _apply_note_line_spacing(doc, spacing: float) -> None:
         cursor = QTextCursor(doc)
         cursor.select(QTextCursor.SelectionType.Document)
         block_format = QTextBlockFormat()
         height_type = cast(
             "int", QTextBlockFormat.LineHeightTypes.ProportionalHeight.value
         )
-        block_format.setLineHeight(int(style.text_line_spacing * 100), height_type)
+        block_format.setLineHeight(int(spacing * 100), height_type)
         cursor.mergeBlockFormat(block_format)
-        self.update_note_box(item)
-        update_note_selection_box_for(self.canvas, item)
 
     def update_note_box(self, item: QGraphicsTextItem) -> None:
         style = text_style_state_for(self.canvas)

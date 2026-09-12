@@ -25,6 +25,7 @@ from chemvas.ui.main_window_ports import (
     fit_canvas_to_view_for_window,
     flip_selection_for_window,
     group_selection_for_window,
+    note_appearance_for_window,
     paste_selection_for_window,
     redo_for_window,
     reset_zoom_for_window,
@@ -280,6 +281,13 @@ def _build_edit_menu(
         "Ungroup",
         status_tip="Ungroup the selected group (Ctrl+Shift+G)",
         triggered=lambda: ungroup_selection_for_window(window),
+    )
+    _add_action(
+        edit_menu,
+        window,
+        "Note Appearance...",
+        status_tip="Set document-wide note backgrounds, borders, padding and line spacing",
+        triggered=lambda: note_appearance_for_window(window),
     )
     _add_action(
         edit_menu,

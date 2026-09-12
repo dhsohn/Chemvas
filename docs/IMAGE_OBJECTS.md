@@ -15,6 +15,9 @@ embedded, so the original files are not needed to reopen the document.
 Choose **File → Insert Image…** and select a `.png`, `.jpg`, or `.jpeg` file.
 Use the Select tool to move the resulting image. Select one image and choose
 **Edit → Image Properties…** to set X, Y, width, height, aspect locking, and opacity.
+When a group or selection contains several images, first choose the image to
+edit from the numbered list with pixel dimensions and canvas positions. Only
+that image is changed; the group and selection remain intact.
 Coordinates and sizes use canvas units, not source pixels. The whole raster is
 displayed, including transparent margins; changing its size does not crop it.
 Convert other file formats to PNG or JPEG before importing; renaming the extension

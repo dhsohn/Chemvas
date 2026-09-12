@@ -309,12 +309,10 @@ class CanvasGeometryController:
         # covers the one-line plain text set via setPlainText, so it under-
         # reports the vertical extent a mark (charge/radical) must clear and
         # can overlap the second line. AtomLabelItem exposes the real box via
-        # export_scene_bounding_rect; plain text items fall back to the doc rect.
-        content_rect = getattr(item, "export_scene_bounding_rect", None)
-        if callable(content_rect):
-            rect = content_rect()
-            if isinstance(rect, QRectF):
-                return QRectF(rect)
+        # layout_scene_bounding_rect; output-only glyph bounds must not change
+        # existing mark placement. Plain text items retain the document rect.
+        if isinstance(item, AtomLabelItem):
+            return item.layout_scene_bounding_rect()
         return item.mapRectToScene(QGraphicsTextItem.boundingRect(item))
 
     def visible_label_rect_for_atom(self, atom_id: int) -> QRectF | None:

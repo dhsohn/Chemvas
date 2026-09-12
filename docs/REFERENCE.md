@@ -99,6 +99,15 @@ its knob, flip, align, and distribute.
 - **Notes** — Return/Enter retains empty paragraphs. Center/right alignment
   uses the longest natural line's width; notes still auto-size without a saved
   wrapping width. A note's background box is painted behind its text.
+  Text formatting applies to the current text selection (or typing position)
+  while editing, and to whole selected notes otherwise, including drag selection.
+  Size buttons adjust each mixed-size run; alignment affects the selected
+  paragraphs. The font-family menu keeps the text selection while open; with no
+  note selected or being edited, it sets the default for new notes in this document.
+  **Edit ▸ Note Appearance…** controls background fill/color/opacity, border
+  color/width, padding and line spacing for every existing and new note in the
+  document. It preserves character formatting and supports Undo/Redo; it does
+  not provide per-note box styling.
 - **Atom labels** — elements, charges, radicals, and common alias labels
   (`Me`, `Et`, `OH`, `NH2`, `SH`, `Ph`, `PPh3`, `OMe`, `Boc`, `CO2Me`, `t-Bu`, `tBu`,
   `i-Pr`, `CF3`, `OTs`, `Ts`, `OMs`, `Ms`, `OTf`, `Tf`, `Ns`, `OAc`, `Ac`).
@@ -240,6 +249,14 @@ in vector exports, preserving the shaped glyphs and subscript/superscript
 positions. Other text items retain their own rendering behavior. See the
 [worked example](FIRST_SCHEME.md#4-export-the-figure) for output settings and
 version availability.
+
+TIFF uses lossless LZW compression, preserving the rendered RGBA pixels and
+chosen DPI. White-background output retains its opaque alpha channel; transparent
+output retains transparency.
+
+Figure fitting measures atom labels from their painted glyphs, excluding their
+editing and picking space. Notes and arrow labels still retain their layout-box
+bounds; their rich-text decorations and automatic list markers are not cropped.
 
 Figure export defaults to plain SVG without Chemvas source metadata. Choose
 **Editable Chemvas SVG** only when you want the SVG to carry the original
