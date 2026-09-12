@@ -242,7 +242,7 @@ def test_layout_cli_centers_captions_and_preserves_geometry_and_source(
     with offscreen_canvas(arranged, command="test-layout-reopen") as (canvas, _):
         from chemvas.ui.canvas_document_state import document_item_lists_for
         from chemvas.ui.canvas_group_state import group_state_for
-        from chemvas.ui.layout_qa_service import note_paint_scene_path
+        from chemvas.ui.graphics_items import note_paint_scene_path
 
         notes = document_item_lists_for(canvas)["notes"]
         assert len(group_state_for(canvas).groups) == 2

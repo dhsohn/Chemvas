@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Fit attached arrow labels to their shaped glyph bounds when sizing figures,
+  excluding empty text-layout margins while retaining multiline and script
+  placement. Picking and on-canvas label placement stay unchanged. The existing
+  glyph measurement is shared with layout checks, including Qt's script-baseline
+  rounding. Arrow labels using bitmap/color fonts retain their layout-box bounds;
+  free Notes also retain layout-box bounds to protect rich-text decorations and
+  automatic list markers.
+
 ## [0.13.0] - 2026-09-12
 
 ### Changed
