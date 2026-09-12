@@ -16,6 +16,7 @@ from chemvas.features.rendering import (
 from chemvas.ui.atom_label_access import add_or_update_atom_label, prompt_atom_label_for
 from chemvas.ui.canvas_hover_state import hover_state_for
 from chemvas.ui.canvas_model_access import atom_for_id, bond_for_id
+from chemvas.ui.canvas_window_access import notify_error_for
 from chemvas.ui.input_view_access import (
     chemdraw_shortcut_text_for,
     shortcut_modifiers_for,
@@ -269,6 +270,20 @@ class CanvasChemdrawShortcutService:
             Qt.KeyboardModifier.ShiftModifier,
         ):
             return False
+        text = chemdraw_shortcut_text_for(event)
+        if bond.style == "double_either" and (
+            text in {"b", "d", *self.DOUBLE_POSITION_STYLES}
+            or (
+                modifiers == Qt.KeyboardModifier.ShiftModifier
+                and event.key() in {Qt.Key.Key_B, Qt.Key.Key_D}
+            )
+        ):
+            notify_error_for(
+                self.canvas,
+                "This appearance change would erase unknown double-bond stereo. "
+                "Choose Double (2) first to clear it explicitly.",
+            )
+            return True
         if modifiers == Qt.KeyboardModifier.ShiftModifier:
             if event.key() == Qt.Key.Key_B:
                 # 'b' applies a bold single; Shift+B upgrades to a bold double
@@ -287,7 +302,6 @@ class CanvasChemdrawShortcutService:
                     bond_id, DOTTED_DOUBLE_STYLE_DEFAULT, 2
                 )
                 return True
-        text = chemdraw_shortcut_text_for(event)
         if text == "d":
             self.scene_transform.apply_bond_style(bond_id, "dotted", 1)
             return True

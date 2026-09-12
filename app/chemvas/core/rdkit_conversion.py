@@ -956,6 +956,12 @@ class RDKitConversionHelper:
         """Add bonds with stereo directions to ``rw``; False with last_error on failure."""
         seen_bonds: set[tuple[int, int]] = set()
         for bond_id, bond in valid_bonds:
+            if bond.style == "double_either" and bond.order != 2:
+                self.adapter.last_error = (
+                    f"Bond {bond_id} uses double_either without bond order 2. "
+                    "Explicitly unspecified double bonds must have order 2."
+                )
+                return False
             if bond.style in {"dotted", "dotted_double", "dotted_double_outer"}:
                 self.adapter.last_error = (
                     f"Bond {bond_id} is a dotted contact. Chemical conversion "
@@ -1142,6 +1148,14 @@ class RDKitConversionHelper:
         # otherwise supported bridgehead nitrogen centres are discarded.
         self._assign_conversion_stereo(mol, Chem)
         for bond_id, bond in valid_bonds:
+            if bond.style == "double_either":
+                # Stereo cleaning can discard an explicit either flag (including
+                # on non-stereogenic doubles). Restore the native user's marker;
+                # the drawing's coordinates must not choose an E/Z assignment.
+                rd_bond = mol.GetBondBetweenAtoms(atom_map[bond.a], atom_map[bond.b])
+                rd_bond.SetStereo(Chem.BondStereo.STEREOANY)
+                rd_bond.SetBondDir(Chem.BondDir.EITHERDOUBLE)
+                continue
             if bond.style not in {"wedge", "hash"}:
                 continue
             start = mol.GetAtomWithIdx(atom_map[bond.a])
@@ -1331,7 +1345,8 @@ class RDKitConversionHelper:
         # Original wedge directions describe the old canvas coordinates. Derive
         # new wedges from the assigned stereo tags after regenerating the layout.
         for bond in depicted.GetBonds():
-            bond.SetBondDir(Chem.BondDir.NONE)
+            if bond.GetBondDir() != Chem.BondDir.EITHERDOUBLE:
+                bond.SetBondDir(Chem.BondDir.NONE)
         conformer = depicted.GetConformer()
         Chem.WedgeMolBonds(depicted, conformer)
         block = Chem.MolToMolBlock(depicted)

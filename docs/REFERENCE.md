@@ -395,6 +395,16 @@ are limited to `M  CHG` / `M  RAD`, wedge/hash stereo to single bonds, and the
 counts-line chiral flag to zero. Singlet `M  RAD` code 1 is rejected until the
 annotation model can preserve spin multiplicity.
 
+Double-bond stereo flag 3 (explicitly unspecified/either) is imported as
+`double_either`, drawn as two crossed lines, and retained on MOL export, including
+abbreviation expansion. Native v7 documents, clipboard v2 selections, editable
+SVG and Undo/Redo preserve this style; older readers that lack it reject those
+documents. It requires bond order 2. Bold, dotted and double-position commands
+refuse to erase the marker; choosing a different bond type explicitly (for
+example, Double or `2`) replaces it and can be undone. This is not E/Z inference:
+ordinary SMILES cannot preserve the distinction between explicit unknown stereo
+and no stereo annotation, and a generated 3D geometry does not resolve it.
+
 ### Molecule Info window *(RDKit)*
 
 **View ▸ Molecule Info** opens a separate window with a 3D preview (drag to

@@ -612,6 +612,8 @@ def _bond_values(
         raise ValueError("bond style is not supported")
     if style_value in {"wedge", "hash"} and order_value != 1:
         raise ValueError("wedge/hash bonds must have order 1")
+    if style_value == "double_either" and order_value != 2:
+        raise ValueError("double_either bonds must have order 2")
     return cast("int", order_value), style_value, _color(color_value)
 
 

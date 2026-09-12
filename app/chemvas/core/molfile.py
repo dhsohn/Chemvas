@@ -34,11 +34,11 @@ _ALIAS_ELEMENT_SYMBOLS = _ELEMENTS & frozenset(ATOM_ALIAS_DEFINITIONS)
 # written as a single MDL atom, so MOL export fails loudly instead of guessing.
 _UNAMBIGUOUS_ELEMENTS = _ELEMENTS - _ALIAS_ELEMENT_SYMBOLS
 
-# MDL bond stereo flags for single bonds drawn with a wedge/hash style.
-_STEREO_BY_STYLE = {"wedge": 1, "hash": 6}
+# MDL stereo flags for single-bond wedges and explicitly unspecified doubles.
+_STEREO_BY_STYLE = {"wedge": 1, "hash": 6, "double_either": 3}
 
 # Import-side inverses. A plain bond takes the canvas style that matches its
-# order; stereo flags 1/6 map back to the wedge/hash styles the writer encodes.
+# order; stereo flags map back to the styles the writer encodes.
 _STYLE_BY_STEREO = {stereo: style for style, stereo in _STEREO_BY_STYLE.items()}
 _STYLE_BY_ORDER = {1: "single", 2: "double", 3: "triple"}
 
@@ -129,7 +129,7 @@ def write_molfile(
 ) -> str:
     """Serialise ``model`` as an MDL Molfile (V2000) block.
 
-    The drawn 2D coordinates, bond orders, and wedge/hash stereo are preserved.
+    Drawn 2D coordinates, bond orders, wedge/hash and double-either flags survive.
     Formal charges and radicals are read from ``atom_annotations`` (the same
     per-atom mapping the 3D export uses). RDKit is not required.
     """
@@ -153,6 +153,10 @@ def write_molfile(
             "Export a smaller selection instead."
         )
     for bond in bonds:
+        if bond.style == "double_either" and bond.order != 2:
+            raise MolfileError(
+                "Cannot export to MOL: double_either requires bond order 2."
+            )
         if bond.style in {"dotted", "dotted_double", "dotted_double_outer"}:
             raise MolfileError(
                 "Cannot export to MOL: dotted contacts cannot be represented as "
@@ -349,7 +353,7 @@ def parse_molfile(text: str) -> MoleculeModel:
 
     Supports the V2000 subset that :func:`write_molfile` emits: the counts
     line, the atom block (element symbol, 2D coordinates), the bond block
-    (orders 1/2/3, wedge/hash stereo flags), and ``M  CHG`` / ``M  RAD``
+    (orders 1/2/3, wedge/hash and double-either flags), and ``M  CHG`` / ``M  RAD``
     property lines terminated by ``M  END``. The property-line count may be
     the writer's ``999`` sentinel or the exact number of lines through
     ``M  END``. Formal charges and radicals are stored in
@@ -591,9 +595,14 @@ def _parse_bond_line(
         raise MolfileParseError(
             f"Cannot import MOL: bond line {line_number} has unsupported "
             f"stereo flag {stereo}; Chemvas supports 0 (plain), 1 (wedge), "
-            "and 6 (hash)."
+            "3 (double either), and 6 (hash)."
         )
-    if stereo != 0 and order != 1:
+    if stereo == 3 and order != 2:
+        raise MolfileParseError(
+            f"Cannot import MOL: bond line {line_number} uses stereo flag 3 "
+            "without bond order 2; double-either bonds must be double."
+        )
+    if stereo in (1, 6) and order != 1:
         raise MolfileParseError(
             f"Cannot import MOL: bond line {line_number} puts a wedge/hash "
             "stereo flag on a bond of order "

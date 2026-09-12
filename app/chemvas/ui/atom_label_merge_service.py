@@ -148,6 +148,10 @@ class AtomLabelMergeService:
     def _bond_rank(bond: Bond, bond_id: int) -> tuple[int, int, int]:
         order = int(bond.order or 1)
         special_style = 1 if bond.style not in STANDARD_BOND_STYLES else 0
+        if bond.style == "double_either":
+            # For equal orders, retain explicit unknown stereo before a purely
+            # visual style; bond-list order must not erase the chemical marker.
+            special_style = 2
         return (order, special_style, -bond_id)
 
 

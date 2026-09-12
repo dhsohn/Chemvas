@@ -790,9 +790,14 @@ geometry, a count of the most common blocking pair, or a unique cause of failure
   such drawn stereo was retained. Unconsumed wedge/hash stereo is rejected with
   Chemvas atom/bond IDs; the original drawing remains editable.
 - Specified tetrahedral SMILES stereo must survive native depiction or insertion
-  is refused. External MOL double-bond stereo flag 3 (unspecified/either) remains
-  valid for external readers but is not supported by Chemvas's native MOL import;
-  do not assume every exported MOL can be reopened losslessly.
+  is refused. MOL V2000 double-bond stereo flag 3 (explicitly unspecified/either)
+  is preserved as `style: "double_either"`, `order: 2`, displayed with crossed
+  lines. Native v7, clipboard v2 and editable SVG retain it; older readers reject
+  the new style. Composition and graph patches accept it only with order 2.
+  MOL import/export preserves the marker, including abbreviation-expanded export.
+  Ordinary SMILES cannot distinguish explicit unknown from unannotated stereo;
+  3D output does not establish which stereoisomer was intended. Other documented
+  MOL restrictions still apply; this is not a universal lossless import promise.
 - 3D generation requires complete MMFF or UFF parameters. Parameter coverage and
   convergence still do not certify a physical minimum, especially for unusual
   coordination chemistry. Review geometry and perform downstream validation.

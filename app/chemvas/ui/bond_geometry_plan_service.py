@@ -250,6 +250,22 @@ class BondGeometryPlanService:
         )
         return tuple(self._line(segment) for segment in segments)
 
+    def _either_double_primitives(self, bond, a, b) -> tuple[BondPrimitive, ...]:
+        # Reuse the centered double's spacing, perspective and label clearance.
+        # Crossing its endpoints makes explicit unknown stereo visible without
+        # changing the atom coordinates or relying on a ring's inner/outer side.
+        first, second = self.renderer.parallel_bond_segments(
+            a.x, a.y, b.x, b.y, 2, bond.a, bond.b
+        )
+        if first[:2] == first[2:]:
+            # Labels consumed the whole visible span. Swapping these endpoints
+            # would join the two collapsed lines into a new bar through a label.
+            return self._line(first), self._line(second)
+        return (
+            self._line((*first[:2], *second[2:])),
+            self._line((*second[:2], *first[2:])),
+        )
+
     def _single_primitives(self, bond, a, b) -> tuple[BondPrimitive, ...]:
         t0, t1 = self.renderer.trim_line_for_labels(bond.a, bond.b, a.x, a.y, b.x, b.y)
         return (
@@ -282,6 +298,8 @@ class BondGeometryPlanService:
             )
         if bond.style == "dotted":
             return self._dotted_primitives(bond, a, b)
+        if bond.style == "double_either" and bond.order == 2:
+            return self._either_double_primitives(bond, a, b)
         if is_dotted_double_bond_style(bond.style, bond.order):
             return self._dotted_double_primitives(bond, a, b)
         if bond.style in BOLD_BOND_STYLES:
