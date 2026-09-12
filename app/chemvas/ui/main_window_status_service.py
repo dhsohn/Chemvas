@@ -34,6 +34,24 @@ class _ZoomPercentButton(QToolButton):
             self._on_single()
 
     @override
+    def keyPressEvent(self, event) -> None:
+        if event.modifiers() == Qt.KeyboardModifier.NoModifier and event.key() in (
+            Qt.Key.Key_Space,
+            Qt.Key.Key_Return,
+            Qt.Key.Key_Enter,
+        ):
+            self._timer.stop()
+            self._pending_single = False
+            if not event.isAutoRepeat():
+                if event.key() == Qt.Key.Key_Space:
+                    self._on_single()
+                else:
+                    self._on_double()
+            event.accept()
+            return
+        super().keyPressEvent(event)
+
+    @override
     def mouseReleaseEvent(self, event) -> None:
         super().mouseReleaseEvent(event)
         if self._suppress_release:
@@ -146,10 +164,10 @@ class MainWindowStatusService:
         )
         self.zoom_label.setText("100%")
         self.zoom_label.setToolTip(
-            "Click to reset to 100% · double-click to type a value"
+            "Click or Space to reset to 100% · double-click or Enter to type a value"
         )
         self.zoom_label.setStatusTip(
-            "Click to reset zoom, double-click to enter a value"
+            "Click or Space to reset zoom, double-click or Enter to enter a value"
         )
         self.zoom_label.setAutoRaise(True)
         self.zoom_label.setCursor(Qt.CursorShape.PointingHandCursor)

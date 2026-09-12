@@ -21,11 +21,19 @@ class AtomLabelHistoryRecorder:
         self.canvas = canvas
         self.history = history_service
 
-    def _push_or_rollback(self, command: HistoryCommand) -> None:
+    def _push_or_rollback(
+        self,
+        command: HistoryCommand,
+        *,
+        merged_atom_id: int | None = None,
+        merged_atom_ids=(),
+    ) -> None:
         CanvasHistoryRecordingService(
             self.canvas,
             history_service=self.history,
-        ).push_history(command)
+        ).push_history(
+            command, merged_atom_id=merged_atom_id, merged_atom_ids=merged_atom_ids
+        )
 
     def record_label_change(
         self,
@@ -66,6 +74,12 @@ class AtomLabelHistoryRecorder:
                 )
             )
         if not commands:
+            return
+        if merge_ids:
+            command = commands[0] if len(commands) == 1 else CompositeCommand(commands)
+            self._push_or_rollback(
+                command, merged_atom_id=atom_id, merged_atom_ids=merge_ids
+            )
             return
         if len(commands) == 1:
             self._push_or_rollback(commands[0])

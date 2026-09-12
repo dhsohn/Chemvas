@@ -19,7 +19,8 @@ from chemvas.ui import history_canvas_access
 from chemvas.ui.canvas_history_state import CanvasHistoryState, history_state_for
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable
+    from collections.abc import Callable, Iterable
+    from contextlib import AbstractContextManager
 
 
 @dataclass(frozen=True)
@@ -40,9 +41,12 @@ class CanvasHistoryService:
         self,
         canvas,
         state: CanvasHistoryState | None = None,
+        *,
+        replay_context: Callable[[], AbstractContextManager[None]],
     ) -> None:
         self.canvas = canvas
         self.state = state if state is not None else history_state_for(canvas)
+        self._replay_context = replay_context
         self._history_mutation_active = False
         self._history_publication_active = False
 
@@ -260,7 +264,7 @@ class CanvasHistoryService:
             raise
 
         try:
-            with history_transaction_scope(self.canvas):
+            with history_transaction_scope(self.canvas), self._replay_context():
                 getattr(command, direction)(self.canvas)
             history_canvas_access.release_history_transaction_for_history(
                 self.canvas,
@@ -341,7 +345,8 @@ class CanvasHistoryService:
             inflight_history = snapshot.history[:-1]
             self.state.history[:] = inflight_history
             try:
-                command.undo(self.canvas)
+                with self._replay_context():
+                    command.undo(self.canvas)
             except Exception as original_error:
                 self.state.redo_stack.clear()
                 self._notify_failed_operation(original_error)
@@ -375,7 +380,8 @@ class CanvasHistoryService:
             inflight_redo = snapshot.redo_stack[:-1]
             self.state.redo_stack[:] = inflight_redo
             try:
-                command.redo(self.canvas)
+                with self._replay_context():
+                    command.redo(self.canvas)
             except Exception as original_error:
                 self.state.redo_stack.clear()
                 self._notify_failed_operation(original_error)

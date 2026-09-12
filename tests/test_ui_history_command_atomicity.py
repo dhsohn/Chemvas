@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+from contextlib import nullcontext
 from types import SimpleNamespace
 from unittest import mock
 
@@ -1726,7 +1727,7 @@ def test_move_exact_restore_keeps_data_identity_and_history_retryable(
     history = [history_sentinel]
     redo_stack = [redo_sentinel, command]
     state = CanvasHistoryState(history=history, redo_stack=redo_stack)  # type: ignore[list-item]
-    service = CanvasHistoryService(canvas, state)
+    service = CanvasHistoryService(canvas, state, replay_context=nullcontext)
     primary = RuntimeError("move failed after replacing item data")
 
     def snapshot_state(_canvas, _item) -> dict[str, object]:
@@ -1788,7 +1789,7 @@ def test_move_live_membership_failure_keeps_history_stacks_retryable() -> None:
     history = [history_sentinel]
     redo_stack = [redo_sentinel, command]
     state = CanvasHistoryState(history=history, redo_stack=redo_stack)  # type: ignore[list-item]
-    service = CanvasHistoryService(canvas, state)
+    service = CanvasHistoryService(canvas, state, replay_context=nullcontext)
 
     with (
         mock.patch("chemvas.ui.history_commands.move_item_for") as move_item,

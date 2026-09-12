@@ -114,23 +114,6 @@ class SceneClipboardAccessTest(unittest.TestCase):
         self.assertEqual(payload["rings"], [{"kind": "ring", "id": "attached"}])
         self.assertEqual(payload["marks"], [{"kind": "mark", "id": "attached"}])
 
-    def test_visible_canvas_items_to_hide_for_copy_queries_canvas_scene_source(
-        self,
-    ) -> None:
-        selected = _Item(visible=True)
-        visible_unselected = _Item(visible=True)
-        hidden_unselected = _Item(visible=False)
-        scene = _Scene([selected, visible_unselected, hidden_unselected])
-        canvas = _Canvas(scene)
-        source = QRectF(1, 2, 3, 4)
-
-        hidden = access.visible_canvas_items_to_hide_for_copy(
-            canvas, source, selected_items={selected}
-        )
-
-        self.assertEqual(hidden, [visible_unselected])
-        self.assertEqual(scene.items_calls, [(source,)])
-
     def test_render_canvas_scene_region_builds_target_from_source(self) -> None:
         scene = _Scene()
         canvas = _Canvas(scene)

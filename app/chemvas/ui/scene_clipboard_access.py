@@ -18,11 +18,10 @@ from chemvas.ui.canvas_model_access import model_for
 from chemvas.ui.canvas_rotation_state import rotation_state_for
 from chemvas.ui.scene_clipboard_logic import build_selection_clipboard_payload
 from chemvas.ui.scene_clipboard_state import scene_clipboard_state_for
-from chemvas.ui.scene_clipboard_transaction_logic import visible_items_to_hide_for_copy
 from chemvas.ui.scene_item_access import canvas_scene_for
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Collection, Mapping, Sequence
+    from collections.abc import Callable, Mapping, Sequence
 
     from PyQt6.QtWidgets import QGraphicsItem
 
@@ -105,18 +104,6 @@ def _selection_perspective_state_for_canvas(canvas, atom_ids: set[int]) -> dict 
     }
 
 
-def visible_canvas_items_to_hide_for_copy(
-    canvas,
-    source: QRectF,
-    *,
-    selected_items: Collection[QGraphicsItem],
-) -> list[QGraphicsItem]:
-    return visible_items_to_hide_for_copy(
-        canvas_scene_for(canvas).items(source),
-        selected_items=selected_items,
-    )
-
-
 def render_canvas_scene_region(canvas, painter, *, source: QRectF) -> None:
     target = QRectF(0, 0, source.width(), source.height())
     canvas_scene_for(canvas).render(painter, target, source)
@@ -144,5 +131,4 @@ __all__ = [
     "render_canvas_selection_vector_bytes",
     "set_clipboard_paste_count_for",
     "set_clipboard_paste_source_json_for",
-    "visible_canvas_items_to_hide_for_copy",
 ]

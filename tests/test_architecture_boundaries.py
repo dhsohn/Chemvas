@@ -2904,13 +2904,25 @@ def test_scene_clipboard_controller_delegates_copy_paste_workflows_to_services()
         "build_clipboard_copy_plan",
         "build_clipboard_paste_plan",
         "build_clipboard_mime_data",
-        "visible_canvas_items_to_hide_for_copy",
+        "exported_scene",
         "apply_paste_payload",
         "record_additions_for",
         "clipboard_copy_cache_values",
         "translated_scene_item_state",
     ):
         assert forbidden not in controller_source
+
+
+def test_clipboard_copy_uses_canonical_export_scope_without_parallel_visibility_owner():
+    ui = APP_ROOT / "chemvas" / "ui"
+    assert "with exported_scene(" in (ui / "scene_clipboard_copy_service.py").read_text(
+        encoding="utf-8"
+    )
+    for filename, helper in (
+        ("scene_clipboard_access.py", "visible_canvas_items_to_hide_for_copy"),
+        ("scene_clipboard_transaction_logic.py", "visible_items_to_hide_for_copy"),
+    ):
+        assert helper not in (ui / filename).read_text(encoding="utf-8")
 
 
 def test_selection_rotation_planarity_owns_planar_graph_helpers() -> None:

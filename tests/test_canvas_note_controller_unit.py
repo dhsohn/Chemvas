@@ -1,5 +1,6 @@
 import os
 import unittest
+from contextlib import nullcontext
 from types import SimpleNamespace
 from unittest import mock
 
@@ -40,7 +41,9 @@ from chemvas.ui.selection_style_state import SelectionStyleState
 
 
 def _history_service(push=None):
-    owner = CanvasHistoryService(SimpleNamespace(), CanvasHistoryState())
+    owner = CanvasHistoryService(
+        SimpleNamespace(), CanvasHistoryState(), replay_context=nullcontext
+    )
     if push is not None:
         owner.push = push
     return owner

@@ -134,6 +134,12 @@ its knob, flip, align, and distribute.
   the drawing; use in-plane transforms for those components. Group includes
   complete connected molecules, and explicitly regrouping an older partial group
   repairs its membership without changing groups automatically on load.
+  New atoms and fused rings inherit their molecule's group. Erasing members
+  keeps the surviving members together; Undo/Redo restores the matching group
+  membership with the drawing. Connecting different groups requires selecting
+  both structures and using **Edit ▸ Group** before retrying the connection.
+  Creating a new group requires at least two objects; a connected molecule counts as one, so
+  include its caption or another object when preparing an Arrange Scheme block.
   Rotation and flips share one selection/group pivot. Notes, images, shapes and
   TS brackets orbit that pivot but remain upright/axis-aligned.
   Pressing an unselected atom and dragging moves that atom; pressing a bond
@@ -152,6 +158,11 @@ its knob, flip, align, and distribute.
   into the sheet. Sheet-only export/check boundaries still use the actual sheet.
 - **Keyboard shortcuts** — tool selection and atom/bond editing under the pointer
   (see [Keyboard shortcuts](#keyboard-shortcuts)).
+  New windows focus the canvas. Outside an active note editor, `Tab` and
+  `Shift+Tab` traverse the window controls and return to the canvas; styled
+  context/status buttons show a focus border. A focused zoom-percentage button
+  accepts `Space` to reset to 100% and `Enter` to open Set Zoom. Inside a note
+  editor, the existing text-editing Tab behavior is retained.
 
 ## The `.chemvas` file format
 

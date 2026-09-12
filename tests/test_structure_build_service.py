@@ -16,6 +16,7 @@ from chemvas.ui.atom_coords_access import CanvasAtomCoords3DState
 from chemvas.ui.canvas_atom_graphics_state import CanvasAtomGraphicsState
 from chemvas.ui.canvas_bond_graphics_state import CanvasBondGraphicsState
 from chemvas.ui.canvas_graph_state import CanvasGraphState
+from chemvas.ui.canvas_group_state import CanvasGroupState
 from chemvas.ui.canvas_history_recording_service import CanvasHistoryRecordingService
 from chemvas.ui.canvas_mark_registry import CanvasMarkRegistry
 from chemvas.ui.canvas_scene_items_state import (
@@ -106,6 +107,7 @@ class _FakeCanvas:
             bond_graphics_state=CanvasBondGraphicsState(),
             atom_coords_3d_state=CanvasAtomCoords3DState(),
             graph_state=CanvasGraphState(),
+            group_state=CanvasGroupState(),
             mark_registry=CanvasMarkRegistry(),
         )
         set_last_smiles_input_for(self, "before")

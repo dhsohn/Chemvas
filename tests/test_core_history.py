@@ -1,4 +1,5 @@
 import unittest
+from contextlib import nullcontext
 from copy import deepcopy
 from types import SimpleNamespace
 from unittest import mock
@@ -1286,7 +1287,7 @@ class HistoryCommandTest(unittest.TestCase):
         state = CanvasHistoryState(history=[composite], redo_stack=[stale_redo])
         history = state.history
         redo_stack = state.redo_stack
-        service = CanvasHistoryService(canvas, state)
+        service = CanvasHistoryService(canvas, state, replay_context=nullcontext)
         before = _atomic_canvas_snapshot(canvas)
 
         with mock.patch("chemvas.core.history._history_canvas_port", return_value=port):
@@ -1316,7 +1317,9 @@ class HistoryCommandTest(unittest.TestCase):
             enabled=False,
             change_callback=count_callback,
         )
-        service = CanvasHistoryService(SimpleNamespace(), state)
+        service = CanvasHistoryService(
+            SimpleNamespace(), state, replay_context=nullcontext
+        )
 
         committed = service.push(command)
 
@@ -1330,8 +1333,12 @@ class HistoryCommandTest(unittest.TestCase):
         inner = _RecorderCommand("inner", [])
         outer_state = CanvasHistoryState()
         inner_state = CanvasHistoryState()
-        outer_service = CanvasHistoryService(SimpleNamespace(), outer_state)
-        inner_service = CanvasHistoryService(SimpleNamespace(), inner_state)
+        outer_service = CanvasHistoryService(
+            SimpleNamespace(), outer_state, replay_context=nullcontext
+        )
+        inner_service = CanvasHistoryService(
+            SimpleNamespace(), inner_state, replay_context=nullcontext
+        )
         inner_results: list[bool] = []
 
         def publish_to_independent_service() -> None:
@@ -1353,7 +1360,9 @@ class HistoryCommandTest(unittest.TestCase):
     def test_history_observer_self_unsubscribe_is_preserved(self) -> None:
         command = _RecorderCommand("commit", [])
         state = CanvasHistoryState()
-        service = CanvasHistoryService(SimpleNamespace(), state)
+        service = CanvasHistoryService(
+            SimpleNamespace(), state, replay_context=nullcontext
+        )
         callback_calls = 0
 
         def unsubscribe() -> None:
@@ -1410,7 +1419,7 @@ class HistoryCommandTest(unittest.TestCase):
         )
         stale_redo = _RecorderCommand("stale", [])
         state = CanvasHistoryState(history=[composite], redo_stack=[stale_redo])
-        service = CanvasHistoryService(canvas, state)
+        service = CanvasHistoryService(canvas, state, replay_context=nullcontext)
 
         with (
             mock.patch("chemvas.core.history._history_canvas_port", return_value=port),

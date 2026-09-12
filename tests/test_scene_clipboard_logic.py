@@ -309,12 +309,11 @@ class SceneClipboardLogicTest(unittest.TestCase):
         mime_data.setData(_FakeCanvas.CLIPBOARD_SELECTION_MIME, b"\xff")
         mime_data.setImageData(QImage(4, 4, QImage.Format.Format_ARGB32))
 
-        candidates = clipboard_payload_candidates(
-            mime_data,
-            mime_type=_FakeCanvas.CLIPBOARD_SELECTION_MIME,
-        )
-
-        self.assertEqual(candidates, [])
+        with self.assertRaisesRegex(ValueError, "UTF-8"):
+            clipboard_payload_candidates(
+                mime_data,
+                mime_type=_FakeCanvas.CLIPBOARD_SELECTION_MIME,
+            )
 
     def test_decode_clipboard_selection_payload_skips_invalid_candidates_until_valid_dict(
         self,
@@ -413,9 +412,8 @@ class SceneClipboardLogicTest(unittest.TestCase):
             mime_type, b"{" + (b" " * MAX_CLIPBOARD_SELECTION_PAYLOAD_BYTES) + b"}"
         )
 
-        self.assertEqual(
-            clipboard_payload_candidates(mime_data, mime_type=mime_type), []
-        )
+        with self.assertRaisesRegex(ValueError, "too large"):
+            clipboard_payload_candidates(mime_data, mime_type=mime_type)
 
     def test_decode_clipboard_selection_payload_rejects_deep_json_that_raises_recursion_error(
         self,
@@ -471,23 +469,17 @@ class SceneClipboardLogicTest(unittest.TestCase):
         valid_payload["version"] = 1
         valid_payload_json = json.dumps(valid_payload, separators=(",", ":"))
 
-        payload, payload_json = decode_clipboard_selection_payload(
-            [valid_payload_json], version=2
-        )
-
-        self.assertIsNone(payload)
-        self.assertIsNone(payload_json)
+        with self.assertRaisesRegex(ValueError, "unsupported version"):
+            decode_clipboard_selection_payload([valid_payload_json], version=2)
 
     def test_decode_clipboard_selection_payload_rejects_float_v2(self) -> None:
         payload = _valid_note_clipboard_payload()
         payload["version"] = 2.0
 
-        decoded, source = decode_clipboard_selection_payload(
-            [json.dumps(payload, separators=(",", ":"))], version=2
-        )
-
-        self.assertIsNone(decoded)
-        self.assertIsNone(source)
+        with self.assertRaisesRegex(ValueError, "unsupported version"):
+            decode_clipboard_selection_payload(
+                [json.dumps(payload, separators=(",", ":"))], version=2
+            )
 
     def test_selection_payload_extends_atom_and_bond_selection_and_keeps_related_scene_items(
         self,
@@ -793,14 +785,16 @@ class SceneClipboardLogicTest(unittest.TestCase):
         clipboard.setMimeData(
             canvas.new_mime_data(b'{"format":"not-chemvas-selection","version":1}')
         )
-        self.assertEqual(controller.clipboard_selection_payload(), (None, None))
+        with self.assertRaisesRegex(ValueError, "format"):
+            controller.clipboard_selection_payload()
 
         invalid_version_mime = canvas.new_mime_data(
             b'{"format":"chemvas-selection","version":999}'
         )
         invalid_version_mime.setImageData(QImage(4, 4, QImage.Format.Format_ARGB32))
         clipboard.setMimeData(invalid_version_mime)
-        self.assertEqual(controller.clipboard_selection_payload(), (None, None))
+        with self.assertRaisesRegex(ValueError, "unsupported version"):
+            controller.clipboard_selection_payload()
 
 
 class _FakeCanvas:

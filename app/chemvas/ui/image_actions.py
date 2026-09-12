@@ -20,8 +20,8 @@ from chemvas.domain.document import (
     MAX_IMAGE_BYTES,
     MAX_IMAGE_PIXELS,
     image_state_from_bytes,
+    validate_image_collection_budget,
     validate_image_state,
-    validate_image_states,
 )
 from chemvas.ui.canvas_document_state import document_item_lists_for
 from chemvas.ui.canvas_service_ports import (
@@ -92,7 +92,9 @@ def insert_image_bytes(canvas, data: bytes) -> ImageItem:
     existing = [
         item.image_state() for item in document_item_lists_for(canvas)["images"]
     ]
-    validate_image_states([*existing, state])
+    # Incoming bytes were validated above; existing live sources were validated
+    # when their ImageItems were constructed and cannot be replaced in-place.
+    validate_image_collection_budget([*existing, state])
     history = history_service_for_access(canvas)
     with document_transaction(canvas, history_service=history):
         command = AddSceneItemsCommand([state])

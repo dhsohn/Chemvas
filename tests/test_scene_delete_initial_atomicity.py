@@ -1083,6 +1083,7 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
                     def mutate_group_then_fail(
                         canvas_arg,
                         group_id_to_remove: int,
+                        _replacement,
                         *,
                         _canvas=canvas,
                         _group_object=group_object,
@@ -1095,7 +1096,9 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
                         raise RuntimeError("persistent group removal failure")
 
                     patcher = mock.patch(
-                        "chemvas.ui.scene_delete_controller.remove_group_for",
+                        # Surviving atoms now keep a replacement group rather
+                        # than dissolving it. Inject at that actual update port.
+                        "chemvas.ui.scene_delete_controller.restore_group_for",
                         side_effect=mutate_group_then_fail,
                     )
                 else:

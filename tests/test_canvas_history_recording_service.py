@@ -1,5 +1,6 @@
 import os
 import unittest
+from contextlib import nullcontext
 from types import SimpleNamespace
 from unittest import mock
 
@@ -21,6 +22,7 @@ from chemvas.ui.atom_coords_access import (
     set_atom_coords_3d_for,
 )
 from chemvas.ui.canvas_atom_graphics_state import CanvasAtomGraphicsState
+from chemvas.ui.canvas_group_state import CanvasGroupState
 from chemvas.ui.canvas_history_recording_service import (
     CanvasHistoryRecordingService,
 )
@@ -119,6 +121,7 @@ def _make_canvas(
             next_atom_id=next_atom_id,
         ),
         runtime_state=canvas_runtime_state(
+            group_state=CanvasGroupState(),
             atom_coords_3d_state=CanvasAtomCoords3DState(),
             atom_graphics_state=CanvasAtomGraphicsState(),
             smiles_input_state=CanvasSmilesInputState(
@@ -459,6 +462,7 @@ class CanvasHistoryRecordingServiceTest(unittest.TestCase):
         disabled_canvas.services.history_service = CanvasHistoryService(
             disabled_canvas,
             history_state_for(disabled_canvas),
+            replay_context=nullcontext,
         )
         _recording_service(disabled_canvas).record_bond_update(
             bond_id=1,

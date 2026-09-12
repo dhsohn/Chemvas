@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING
 from chemvas.ui.scene_item_state import ARROW_KINDS
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Collection, Sequence
+    from collections.abc import Callable, Sequence
 
     from PyQt6.QtCore import QRectF
     from PyQt6.QtWidgets import QGraphicsItem
@@ -162,21 +162,6 @@ def translated_scene_item_state(
     return translated
 
 
-def visible_items_to_hide_for_copy(
-    scene_items: Sequence[QGraphicsItem],
-    *,
-    selected_items: Collection[QGraphicsItem],
-) -> list[QGraphicsItem]:
-    hidden: list[QGraphicsItem] = []
-    for item in scene_items:
-        if item in selected_items:
-            continue
-        if not item.isVisible():
-            continue
-        hidden.append(item)
-    return hidden
-
-
 def build_clipboard_paste_plan(
     *,
     payload: dict | None,
@@ -232,5 +217,4 @@ __all__ = [
     "clipboard_paste_offset",
     "translated_point_value",
     "translated_scene_item_state",
-    "visible_items_to_hide_for_copy",
 ]

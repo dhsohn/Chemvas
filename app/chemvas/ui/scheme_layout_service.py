@@ -4,7 +4,8 @@ from copy import deepcopy
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
-from PyQt6.QtCore import QPointF, QRectF
+from PyQt6.QtCore import QPointF, QRectF, Qt
+from PyQt6.QtWidgets import QGraphicsRectItem
 
 from chemvas.features.export import content_bounds, export_item_closure
 from chemvas.features.scheme_layout import (
@@ -84,6 +85,21 @@ def _caption(index: int, item: QGraphicsTextItem) -> _Caption:
     bounds = note_paint_scene_path(item).boundingRect()
     if bounds.isEmpty():
         raise ValueError(f"caption note {index} has no visible text")
+    for child in export_item_closure([item]):
+        if (
+            not isinstance(child, QGraphicsRectItem)
+            or child.data(0) != "note_box"
+            or not child.isVisible()
+            or child.effectiveOpacity() == 0
+        ):
+            continue
+        pen, brush = child.pen(), child.brush()
+        has_stroke = pen.style() != Qt.PenStyle.NoPen and pen.color().alpha() > 0
+        has_fill = brush.style() != Qt.BrushStyle.NoBrush and brush.color().alpha() > 0
+        if has_stroke:
+            bounds = bounds.united(child.sceneBoundingRect())
+        elif has_fill:
+            bounds = bounds.united(child.mapRectToScene(child.rect()))
     layout = document.firstBlock().layout()
     if layout is None or layout.lineCount() == 0:
         raise ValueError(f"caption note {index} has no text baseline")

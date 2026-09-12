@@ -1,5 +1,6 @@
 import os
 import unittest
+from contextlib import nullcontext
 from types import SimpleNamespace
 from unittest import mock
 
@@ -309,7 +310,7 @@ class CanvasViewAdditionalTest(unittest.TestCase):
             ),
         )
         history_view.runtime_state.history_service = CanvasHistoryService(
-            history_view, history_state_for(history_view)
+            history_view, history_state_for(history_view), replay_context=nullcontext
         )
 
         history_service = history_view.runtime_state.history_service
@@ -335,6 +336,7 @@ class CanvasViewAdditionalTest(unittest.TestCase):
         failing_push_history = CanvasHistoryService(
             failing_push_view,
             history_state_for(failing_push_view),
+            replay_context=nullcontext,
         )
         failing_push_history.push(third)
         self.assertEqual(history_state_for(failing_push_view).history, [first, third])
@@ -349,7 +351,7 @@ class CanvasViewAdditionalTest(unittest.TestCase):
             ),
         )
         disabled_view.runtime_state.history_service = CanvasHistoryService(
-            disabled_view, history_state_for(disabled_view)
+            disabled_view, history_state_for(disabled_view), replay_context=nullcontext
         )
         disabled_view.runtime_state.history_service.push(first)
         self.assertEqual(history_state_for(disabled_view).history, [])
@@ -361,7 +363,9 @@ class CanvasViewAdditionalTest(unittest.TestCase):
             )
         )
         undo_redo_view.runtime_state.history_service = CanvasHistoryService(
-            undo_redo_view, history_state_for(undo_redo_view)
+            undo_redo_view,
+            history_state_for(undo_redo_view),
+            replay_context=nullcontext,
         )
         undo_redo_history = undo_redo_view.runtime_state.history_service
         undo_redo_history.undo()
@@ -384,6 +388,7 @@ class CanvasViewAdditionalTest(unittest.TestCase):
         failing_undo_history = CanvasHistoryService(
             failing_undo_view,
             history_state_for(failing_undo_view),
+            replay_context=nullcontext,
         )
         # A command whose undo fails part-way is dropped: leaving it on the
         # stack would re-apply its completed parts on the next attempt.
@@ -402,6 +407,7 @@ class CanvasViewAdditionalTest(unittest.TestCase):
         failing_redo_history = CanvasHistoryService(
             failing_redo_view,
             history_state_for(failing_redo_view),
+            replay_context=nullcontext,
         )
         with self.assertRaisesRegex(RuntimeError, "redo failed"):
             failing_redo_history.redo()
@@ -412,7 +418,7 @@ class CanvasViewAdditionalTest(unittest.TestCase):
             runtime_state=canvas_runtime_state(history_state=CanvasHistoryState())
         )
         noop_view.runtime_state.history_service = CanvasHistoryService(
-            noop_view, history_state_for(noop_view)
+            noop_view, history_state_for(noop_view), replay_context=nullcontext
         )
         noop_history = noop_view.runtime_state.history_service
         noop_history.undo()

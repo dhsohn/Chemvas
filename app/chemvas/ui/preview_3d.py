@@ -535,9 +535,13 @@ class Preview3D(QWidget):
         button.setCursor(Qt.CursorShape.PointingHandCursor)
         button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonTextOnly)
         button.setStyleSheet(self._header_button_style(object_name))
+        feedback_timer = QTimer(button)
+        feedback_timer.setSingleShot(True)
+        feedback_timer.setInterval(1200)
+        feedback_timer.timeout.connect(lambda b=button, t=text: b.setText(t))
         button.clicked.connect(
-            lambda _checked=False, b=button, g=value_getter, t=text: (
-                self._handle_copy_clicked(g(), b, t)
+            lambda _checked=False, b=button, g=value_getter, timer=feedback_timer: (
+                self._handle_copy_clicked(g(), b, timer)
             )
         )
         return button
@@ -610,14 +614,16 @@ class Preview3D(QWidget):
         self._header_controls_left = value
         self._safe_update()
 
-    def _handle_copy_clicked(self, value: str, button: QToolButton, label: str) -> None:
+    def _handle_copy_clicked(
+        self, value: str, button: QToolButton, feedback_timer: QTimer
+    ) -> None:
         if not value:
             return
         clipboard = QApplication.clipboard()
         if clipboard is not None:
             clipboard.setText(value)
         button.setText("Copied")
-        QTimer.singleShot(1200, lambda b=button, t=label: b.setText(t))
+        feedback_timer.start()
 
     @override
     def paintEvent(self, event) -> None:

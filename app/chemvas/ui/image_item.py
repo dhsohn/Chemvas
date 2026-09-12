@@ -67,7 +67,8 @@ class ImageItem(QGraphicsRectItem):
         self.setData(0, "image")
         self.setData(1, {key: state[key] for key in _SOURCE_KEYS})
         self.setFlag(self.GraphicsItemFlag.ItemIsSelectable, True)
-        self.apply_image_state(state)
+        # image_bytes_from_state already validated this exact constructor input.
+        self._apply_image_geometry(state)
 
     def image(self) -> QImage:
         return QImage(self._image)
@@ -96,6 +97,9 @@ class ImageItem(QGraphicsRectItem):
             raise ValueError(
                 "An image source cannot be replaced; insert a new image instead."
             )
+        self._apply_image_geometry(state)
+
+    def _apply_image_geometry(self, state: Mapping[str, object]) -> None:
         self.setRect(
             0.0,
             0.0,
@@ -104,7 +108,7 @@ class ImageItem(QGraphicsRectItem):
         )
         self.setPos(float(cast("float", state["x"])), float(cast("float", state["y"])))
         self.setOpacity(float(cast("float", state["opacity"])))
-        self.setData(1, {**source, "lock_aspect": state["lock_aspect"]})
+        self.setData(1, {**self.data(1), "lock_aspect": state["lock_aspect"]})
 
     @override
     def paint(

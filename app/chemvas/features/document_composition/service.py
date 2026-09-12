@@ -176,15 +176,18 @@ def _images(
         byte_count += len(data)
         if byte_count > MAX_DOCUMENT_IMAGE_BYTES:
             raise ValueError("Combined image bytes exceed the 64 MiB document limit.")
-        image_state = image_state_from_bytes(
-            data,
-            x=x,
-            y=y,
-            width=width,
-            height=height,
-            opacity=opacity,
-            lock_aspect=lock_aspect,
-        )
+        try:
+            image_state = image_state_from_bytes(
+                data,
+                x=x,
+                y=y,
+                width=width,
+                height=height,
+                opacity=opacity,
+                lock_aspect=lock_aspect,
+            )
+        except ValueError as exc:
+            raise ValueError(f"{name}: {exc}") from exc
         pixel_count += cast("int", image_state["pixel_width"]) * cast(
             "int", image_state["pixel_height"]
         )

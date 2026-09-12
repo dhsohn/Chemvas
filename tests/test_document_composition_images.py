@@ -116,6 +116,41 @@ def test_bad_source_produces_clean_error_and_no_output(
     assert not output.exists()
 
 
+@pytest.mark.parametrize(
+    "bad_data,reason",
+    [
+        (_image_bytes("PNG")[:-5], "Invalid or truncated"),
+        (_image_bytes("BMP"), "Only PNG and JPEG"),
+        (b"not an image", "Only PNG and JPEG"),
+    ],
+    ids=["truncated-png", "unsupported-bmp", "unrecognized-data"],
+)
+def test_third_image_decode_error_keeps_index_and_leaves_sources_unchanged(
+    tmp_path: Path, bad_data: bytes, reason: str
+) -> None:
+    sources = [tmp_path / f"image-{index}.png" for index in range(3)]
+    for index, source in enumerate(sources):
+        source.write_bytes(bad_data if index == 2 else _image_bytes("PNG"))
+    composition = _composition()
+    composition["images"] = [
+        {"source": source.name, "x": index * 40, "y": 0}
+        for index, source in enumerate(sources)
+    ]
+    request = tmp_path / "composition.json"
+    request.write_text(json.dumps(composition), encoding="utf-8")
+    before = {path: path.read_bytes() for path in [request, *sources]}
+    output = tmp_path / "result.chemvas"
+
+    result = _run(request, output)
+
+    assert result.returncode == 2
+    assert f"image 2: {reason}" in result.stderr
+    assert "Traceback" not in result.stderr
+    assert not result.stdout
+    assert not output.exists()
+    assert all(path.read_bytes() == original for path, original in before.items())
+
+
 def test_empty_images_do_not_add_a_new_native_key() -> None:
     composition = _composition()
     composition["images"] = []

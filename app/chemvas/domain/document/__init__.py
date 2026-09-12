@@ -22,6 +22,7 @@ from .images import (
     MAX_IMAGE_PIXELS,
     image_bytes_from_state,
     image_state_from_bytes,
+    validate_image_collection_budget,
     validate_image_state,
     validate_image_states,
 )
@@ -112,6 +113,7 @@ __all__ = [
     "serialize_model_state_with_warnings",
     "serialize_settings",
     "validate_clipboard_selection_payload",
+    "validate_image_collection_budget",
     "validate_image_state",
     "validate_image_states",
 ]

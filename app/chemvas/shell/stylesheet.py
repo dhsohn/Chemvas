@@ -375,7 +375,7 @@ def main_window_status_stylesheet(palette: Mapping[str, str]) -> str:
             QStatusBar QToolButton#statusZoomButton {{
                 color: {palette["text_muted"]};
                 background: transparent;
-                border: none;
+                border: 1px solid transparent;
                 border-radius: 4px;
                 font-size: 13px;
                 min-width: 18px;
@@ -392,6 +392,8 @@ def main_window_status_stylesheet(palette: Mapping[str, str]) -> str:
             QStatusBar QToolButton#statusZoomLabel {{
                 color: {palette["text"]};
                 font-weight: 500;
+                border: 1px solid transparent;
+                border-radius: 4px;
             }}
             QStatusBar QToolButton#statusZoomLabel:hover {{
                 background: {palette["hover"]};
@@ -407,7 +409,7 @@ def main_window_status_stylesheet(palette: Mapping[str, str]) -> str:
             QStatusBar QToolButton#statusZoomFitButton {{
                 color: {palette["text_muted"]};
                 background: transparent;
-                border: none;
+                border: 1px solid transparent;
                 border-left: 1px solid {palette["border"]};
                 border-radius: 0;
                 font-size: 12px;
@@ -422,6 +424,11 @@ def main_window_status_stylesheet(palette: Mapping[str, str]) -> str:
             }}
             QStatusBar QToolButton#statusZoomFitButton:pressed {{
                 background: {palette["pressed"]};
+            }}
+            QStatusBar QToolButton#statusZoomButton:focus,
+            QStatusBar QToolButton#statusZoomLabel:focus,
+            QStatusBar QToolButton#statusZoomFitButton:focus {{
+                border-color: {palette["accent"]};
             }}
 """
 

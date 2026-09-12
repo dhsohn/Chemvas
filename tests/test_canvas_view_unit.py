@@ -1,5 +1,6 @@
 import os
 import unittest
+from contextlib import nullcontext
 from types import SimpleNamespace
 from unittest import mock
 
@@ -103,7 +104,9 @@ class _FakeNoteCanvas:
         )
         set_selected_notes_for(self, [])
         self.updated_boxes = []
-        self.history_service = CanvasHistoryService(self, CanvasHistoryState())
+        self.history_service = CanvasHistoryService(
+            self, CanvasHistoryState(), replay_context=nullcontext
+        )
         self.history_service.push = self.push_command
         self.services = canvas_runtime_services(
             history_service=self.history_service,

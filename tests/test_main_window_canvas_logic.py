@@ -1,4 +1,5 @@
 import unittest
+from contextlib import nullcontext
 from types import SimpleNamespace
 from unittest import mock
 
@@ -35,7 +36,9 @@ class MainWindowCanvasLogicTest(unittest.TestCase):
         history_state = CanvasHistoryState()
         canvas.runtime_state = canvas_runtime_state(
             history_state=history_state,
-            history_service=CanvasHistoryService(canvas, history_state),
+            history_service=CanvasHistoryService(
+                canvas, history_state, replay_context=nullcontext
+            ),
             callback_state=CanvasCallbackState(),
             selection_info_state=SelectionInfoState.create(),
         )

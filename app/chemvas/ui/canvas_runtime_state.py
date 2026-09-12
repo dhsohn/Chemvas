@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from functools import partial
 from typing import Any
 from weakref import ref
 
@@ -31,6 +32,7 @@ from chemvas.ui.selection_info_access import maybe_warm_rdkit_for
 from chemvas.ui.selection_info_state import SelectionInfoState, selection_info_state_for
 from chemvas.ui.selection_outline_state import SelectionOutlineState
 from chemvas.ui.selection_style_state import SelectionStyleState
+from chemvas.ui.selection_update_batch import batch_selection_updates
 from chemvas.ui.sheet_setup_state import SheetSetupState
 from chemvas.ui.spatial_index_state import CanvasSpatialIndexState
 
@@ -112,7 +114,11 @@ class CanvasRuntimeState:
             group_state=CanvasGroupState(),
             insert_state=CanvasInsertState(),
             history_state=history_state,
-            history_service=CanvasHistoryService(canvas, history_state),
+            history_service=CanvasHistoryService(
+                canvas,
+                history_state,
+                replay_context=partial(batch_selection_updates, canvas),
+            ),
             atom_coords_3d_state=CanvasAtomCoords3DState(),
             atom_graphics_state=CanvasAtomGraphicsState(),
             bond_graphics_state=CanvasBondGraphicsState(),
