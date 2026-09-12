@@ -71,6 +71,7 @@ class MainWindowToolRoutingServiceTest(unittest.TestCase):
             _FakeItem("ring"),
             _FakeItem("note"),
             _FakeItem("shape"),
+            _FakeItem("mark"),
         ]
         self.selected_scene_items_for_window.return_value = selected_items
 
@@ -103,10 +104,13 @@ class MainWindowToolRoutingServiceTest(unittest.TestCase):
 
         color_tool.set_color.assert_called_once()
         self.assertEqual(color_tool.set_color.call_args.args[0].name(), "#2f6ed3")
-        set_tool.assert_called_once_with("color")
+        set_tool.assert_not_called()
+        self.context_page_state_service.set_tool_with_status.assert_called_once_with(
+            self.window, "color"
+        )
         self.assertEqual(
             [item.data(0) for item in apply_color.call_args.args[0]],
-            ["atom", "ring", "note", "shape"],
+            ["atom", "ring", "note", "shape", "mark"],
         )
         self.assertEqual(apply_color.call_args.args[1].name(), "#2f6ed3")
         apply_color.assert_called_once()
@@ -115,8 +119,11 @@ class MainWindowToolRoutingServiceTest(unittest.TestCase):
         )
         self.assertEqual(apply_fill.call_args.args[1].name(), "#f4d06f")
         apply_fill.assert_called_once()
-        self.color_tool_for_window.assert_called_once_with(self.window)
-        self.tool_mode_controller_for_window.assert_called_once_with(self.window)
+        self.assertEqual(
+            self.color_tool_for_window.call_args_list,
+            [mock.call(self.window), mock.call(self.window)],
+        )
+        self.tool_mode_controller_for_window.assert_not_called()
         self.assertEqual(self.color_mutation_service_for_window.call_count, 2)
         self.assertEqual(
             self.selected_scene_items_for_window.call_args_list,

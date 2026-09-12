@@ -139,6 +139,12 @@ its knob, flip, align, and distribute.
   its existing marks. Each shortcut is one undoable edit. Radical and free
   marks are left alone. Bound marks can be selected, moved, or erased without
   selecting their atom; the Mark tool previews the same binding its click uses.
+- **Color** — choose a swatch before painting; entering the tool alone does not
+  choose a color. The active swatch is highlighted. Charge and radical marks,
+  including free marks, have independent colors: coloring a mark does not color
+  its atom, or vice versa. Colors survive Undo/Redo, copy/paste and save/reopen.
+  Coloring an implicit carbon does not reveal a label or recolor its bonds;
+  choose a visible label or bond when you need a visible color change.
 - **Snap to grid** — **View ▸ Snap to Grid** shows a faint grid of half a bond
   length on the sheet and snaps the points arrows and lines are drawn at, and
   the ends dragged with their endpoint handles, curved arrows included, onto
@@ -355,6 +361,9 @@ annotation model can preserve spin multiplicity.
 rotate, scroll to zoom), the molecular formula and weight, and one-click copy of
 the canonical SMILES, InChI, and InChIKey for the current selection. The
 `Export 3D XYZ` button exports the selected molecule.
+The initial view fits the projected atom footprints, including depth. Rotation
+and zoom stay inside the molecule viewport, leaving the title, formula and
+weight readable; zooming in can crop the molecule at that viewport's edges.
 Identifiers preserve drawn wedge/hash stereochemistry using the same conversion
 as the preview. They remain unavailable for abbreviation labels; preview and
 3D export can still expand supported abbreviations.

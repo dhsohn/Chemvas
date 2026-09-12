@@ -21,7 +21,11 @@ from chemvas.ui.canvas_window_access import (
     snapshot_canvas_state_for,
 )
 from chemvas.ui.main_window_context_bar_widgets import bond_length_input
-from chemvas.ui.mark_item_access import build_mark_item_for, mark_center_for
+from chemvas.ui.mark_item_access import (
+    apply_mark_color_for,
+    build_mark_item_for,
+    mark_center_for,
+)
 from chemvas.ui.move_access import move_item_for
 from chemvas.ui.scene_decoration_access import (
     add_arrow_for,
@@ -228,7 +232,7 @@ def test_disabled_history_retains_existing_non_recording_policy_and_command_cove
 def test_rescale_keeps_bound_mark_color_and_free_annotations_unchanged(drawing):
     canvas, atom_id = drawing
     bound = add_mark_for_atom_for(canvas, atom_id, QPointF(20, 10), kind="plus")
-    bound.setDefaultTextColor(QColor("#12ab34"))
+    apply_mark_color_for(canvas, bound, "#12ab34")
     free = add_mark_for(canvas, QPointF(110, 70), kind="plus")
     arrow = add_arrow_for(canvas, QPointF(80, 60), QPointF(160, 60), "forward")
     free_state = scene_item_state_for(canvas, free)

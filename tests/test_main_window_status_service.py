@@ -28,6 +28,7 @@ def _service(
     context_bar_page_override_for_window=None,
 ):
     return MainWindowStatusService(
+        color_tool_for_window=lambda _window: None,
         active_tool_name_for_window=active_tool_name_for_window or mock.Mock(),
         current_zoom_percent_for_window=current_zoom_percent_for_window
         or mock.Mock(return_value=100),

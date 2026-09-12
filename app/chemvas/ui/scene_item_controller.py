@@ -6,6 +6,7 @@ from chemvas.features.annotations import DEFAULT_BRACKET_KIND
 from chemvas.ui.canvas_model_access import atoms_for
 from chemvas.ui.handle_mutation_access import set_curved_arrow_path_for
 from chemvas.ui.mark_item_access import (
+    apply_mark_color_for,
     build_mark_item_for,
     set_mark_center_for,
 )
@@ -83,6 +84,9 @@ class SceneItemController:
     def _build_mark_item(self, kind: str):
         return build_mark_item_for(self.canvas, kind)
 
+    def _set_mark_color(self, item, color: str | None) -> None:
+        apply_mark_color_for(self.canvas, item, color)
+
     def _set_mark_center(self, item, center) -> None:
         set_mark_center_for(self.canvas, item, center)
 
@@ -132,6 +136,7 @@ class SceneItemController:
             model_atoms=atoms_for(self.canvas),
             build_mark_item=self._build_mark_item,
             set_mark_center=self._set_mark_center,
+            set_mark_color=self._set_mark_color,
         )
         self.attach_scene_item(item)
         return item
@@ -179,6 +184,7 @@ class SceneItemController:
             note_style_applier=self._apply_note_style,
             build_mark_item=self._build_mark_item,
             set_mark_center=self._set_mark_center,
+            set_mark_color=self._set_mark_color,
             ring_fill_brush_getter=self._ring_fill_brush,
             build_arrow_item=self._build_arrow_item,
             set_curved_arrow_path=self._set_curved_arrow_path,
@@ -215,6 +221,7 @@ class SceneItemController:
             model_atoms=atoms_for(self.canvas),
             note_style_applier=self._apply_note_style,
             mark_center_setter=self._set_mark_center,
+            mark_color_setter=self._set_mark_color,
             ring_fill_brush_getter=self._ring_fill_brush,
             ts_bracket_path_builder=self._ts_bracket_path,
             bond_color=bond_color_for(self.canvas),

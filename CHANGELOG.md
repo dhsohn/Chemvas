@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Give charge and radical marks independent display colors, preserved through
+  history, native documents, clipboard selections and editable SVG. Native v7
+  and clipboard v2 accept optional hex mark colors; older releases without this
+  field reject explicitly colored marks. Existing uncolored documents still load.
 - Complete the English/Korean agent authoring reference with settings, scene
   fields, request v2 and tested composition → template → patch examples. Clarify
   private output permissions, stereo/geometry/mapping limits and profile-2
@@ -22,6 +26,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Require an explicit Color-tool swatch before painting, show the chosen swatch,
+  and support coloring bound and free charge/radical marks without recoloring
+  their atoms. Explain why coloring an implicit carbon has no visible effect.
+- Fit the initial 3D preview to depth-adjusted atom footprints and clip molecule
+  painting to its viewport, keeping the title, formula and molecular weight
+  clear during zoom and rotation.
 - Preserve current bond selection through bond-edit Undo/Redo so subsequent
   MOL and selected-molecule conversions retain the selected chemistry.
 - Keep atom-bound charge/radical marks attached and restyled during bond-length

@@ -10,7 +10,11 @@ from chemvas.bootstrap.main_window import build_main_window
 from chemvas.features.annotations import BRACKET_KIND_VALUES
 from chemvas.ui.canvas_callback_state import callback_state_for
 from chemvas.ui.canvas_window_access import snapshot_canvas_state_for
-from chemvas.ui.main_window_ports import active_canvas_for_window, services_for_window
+from chemvas.ui.main_window_ports import (
+    active_canvas_for_window,
+    color_tool_for_window,
+    services_for_window,
+)
 from chemvas.ui.scene_decoration_access import add_ts_bracket_for
 from tests.canvas_factory import build_canvas_view
 
@@ -57,6 +61,7 @@ def test_color_tool_live_click_shows_ts_notice_in_status_bar(app, kind):
     try:
         item = add_ts_bracket_for(canvas, QRectF(-35, -45, 70, 90), kind)
         canvas.services.input.tool_mode_controller.set_tool("color")
+        color_tool_for_window(window).set_color("#cc3344")
         app.processEvents()
         before = snapshot_canvas_state_for(canvas)
         history = canvas.services.history_service

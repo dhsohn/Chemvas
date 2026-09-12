@@ -9,11 +9,11 @@ from chemvas.core.tool_overlay_logic import activate_tool_no_drag
 from chemvas.domain.document import VALID_ARROW_KINDS
 from chemvas.domain.transactions import add_recovery_error_note
 from chemvas.ui.canvas_smiles_input_state import last_smiles_input_for
+from chemvas.ui.canvas_window_access import notify_error_for
 from chemvas.ui.delete_tool_logic import (
     build_delete_tool_history_command,
     erase_delete_tool_item,
 )
-from chemvas.ui.renderer_style_access import atom_color_for
 from chemvas.ui.scene_item_access import item_is_in_canvas_scene
 from chemvas.ui.tool_base import Tool
 
@@ -29,7 +29,11 @@ class ColorTool(Tool):
 
     def set_color(self, color) -> None:
         qcolor = color if isinstance(color, QColor) else QColor(color)
-        self._last_color = qcolor.name() if qcolor.isValid() else str(color)
+        self._last_color = qcolor.name() if qcolor.isValid() else None
+
+    @property
+    def current_color(self) -> str | None:
+        return self._last_color
 
     def _apply_color_to_items(self, items, color: QColor) -> None:
         self.context.apply_color_to_items(items, color)
@@ -38,6 +42,9 @@ class ColorTool(Tool):
     def on_mouse_press(self, event) -> bool:
         if event.button() != Qt.MouseButton.LeftButton:
             return False
+        if self._last_color is None:
+            notify_error_for(self.canvas, "Color: choose a swatch before painting.")
+            return True
         item = self.context.item_at_event(event)
         targets = []
         if item is not None:
@@ -46,11 +53,13 @@ class ColorTool(Tool):
             targets = [
                 sel
                 for sel in self.context.selected_scene_items(excluded_kinds=set())
-                if sel.data(0) in {"bond", "atom", "ring", "shape"} | VALID_ARROW_KINDS
+                if sel.data(0)
+                in {"bond", "atom", "ring", "shape", "note", "mark", "ts_bracket"}
+                | VALID_ARROW_KINDS
             ]
             if not targets:
                 return True
-        color = QColor(self._last_color or atom_color_for(self.canvas))
+        color = QColor(self._last_color)
         if not color.isValid():
             return True
         self._apply_color_to_items(targets, color)

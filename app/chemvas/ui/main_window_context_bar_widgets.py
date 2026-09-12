@@ -432,6 +432,7 @@ def color_swatch_button(label: str, hex_value: str, tooltip_prefix: str) -> QToo
         "}"
         f"QToolButton:hover {{ border: 2px solid {_P['accent']}; }}"
         f"QToolButton:pressed {{ border: 2px solid {_P['accent_pressed']}; }}"
+        f"QToolButton:checked {{ border: 3px solid {_P['text']}; }}"
     )
     return button
 

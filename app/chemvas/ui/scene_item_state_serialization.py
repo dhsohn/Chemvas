@@ -133,6 +133,7 @@ def mark_state_dict(item, *, mark_center_getter: MarkCenterGetter) -> dict:
         "dy": data.get("dy"),
         "x": center.x(),
         "y": center.y(),
+        **({"color": data["color"]} if "color" in data else {}),
     }
 
 

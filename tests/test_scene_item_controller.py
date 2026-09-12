@@ -22,6 +22,9 @@ from PyQt6.QtWidgets import (
 
 from chemvas.ui.canvas_mark_registry import CanvasMarkRegistry
 from chemvas.ui.canvas_mark_scene_service import CanvasMarkSceneService
+from chemvas.ui.canvas_scene_decoration_build_service import (
+    CanvasSceneDecorationBuildService,
+)
 from chemvas.ui.canvas_scene_items_state import (
     SCENE_ITEM_COLLECTION_ATTRS,
     CanvasSceneItemsState,
@@ -37,7 +40,9 @@ class _FakeCanvas:
     def __init__(self) -> None:
         self._scene = QGraphicsScene()
         self.renderer = SimpleNamespace(
-            style=SimpleNamespace(bond_length_px=20.0, bond_color="#000000"),
+            style=SimpleNamespace(
+                bond_length_px=20.0, bond_color="#000000", atom_color="#000000"
+            ),
             ring_fill_brush=lambda: QBrush(QColor("#AA4400")),
         )
         self.bond_renderer = SimpleNamespace(
@@ -79,6 +84,9 @@ class _FakeCanvas:
             ),
             scene_decoration_build_service=SimpleNamespace(
                 build_mark_item=self.record_build_mark_item,
+                apply_mark_color=CanvasSceneDecorationBuildService(
+                    self
+                ).apply_mark_color,
                 set_mark_center=self.record_set_mark_center,
                 build_ts_bracket_item=self.record_build_ts_bracket_item,
                 build_orbital_items=self.record_build_orbital_items,

@@ -11,6 +11,10 @@ def build_mark_item_for(canvas, kind: str):
     return scene_decoration_build_service_for_access(canvas).build_mark_item(kind)
 
 
+def apply_mark_color_for(canvas, item, color: str | None) -> None:
+    scene_decoration_build_service_for_access(canvas).apply_mark_color(item, color)
+
+
 def refresh_mark_item_geometry_for(canvas, item, kind: str) -> None:
     scene_decoration_build_service_for_access(canvas).refresh_mark_item_geometry(
         item, kind
@@ -71,6 +75,7 @@ def mark_kinds_by_atom_for(canvas) -> dict[int, list[str]]:
 
 
 __all__ = [
+    "apply_mark_color_for",
     "build_mark_item_for",
     "find_atom_for_mark_for",
     "mark_center_for",

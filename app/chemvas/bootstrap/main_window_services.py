@@ -110,6 +110,7 @@ def build_main_window_services() -> MainWindowServices:
         style_controller_for_window=style_controller_for,
     )
     status_service = MainWindowStatusService(
+        color_tool_for_window=color_tool_for_window,
         active_tool_name_for_window=active_tool_name_for_window,
         current_zoom_percent_for_window=current_zoom_percent_for_window,
         active_canvas_or_none_for_window=active_canvas_or_none_for_window,
@@ -184,6 +185,7 @@ def build_main_window_services() -> MainWindowServices:
                 text_style_service.set_text_font_family_default(window, family)
 
     context_bar_service = MainWindowContextBarService(
+        color_tool_for_window=color_tool_for_window,
         page_builder=MainWindowContextBarPageBuilder(
             insert_controller_for_window=insert_controller_for_window,
             tool_mode_controller_for_window=tool_mode_controller_for_window,
