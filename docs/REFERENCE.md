@@ -100,9 +100,11 @@ its knob, flip, align, and distribute.
   A field containing only whitespace removes that label; otherwise its text,
   including leading and trailing line breaks, is preserved.
   Use a Note for longer text.
-  Labels take
-  the text font settings in force when they are created or edited, and move
-  with their arrow.
+  Labels follow the document's text font and color settings immediately,
+  including after preset changes and Undo/Redo, and move with their arrow.
+  An explicit arrow color also colors its labels and takes precedence over
+  the document text color. Saved and reopened labels use the same settings;
+  there is no separately stored label font.
 - **Lines** — plain, dashed, wavy, and bold lines that are not bonds, for
   energy-level diagrams, connectors, and annotations. Hold `Shift` while
   dragging to lock the angle to 15° steps; a click without a drag places a
@@ -122,7 +124,9 @@ its knob, flip, align, and distribute.
   while editing, and to whole selected notes otherwise, including drag selection.
   Size buttons adjust each mixed-size run; alignment affects the selected
   paragraphs. The font-family menu keeps the text selection while open; with no
-  note selected or being edited, it sets the default for new notes in this document.
+  note selected or being edited, it sets the default for new notes in this document
+  without restyling existing notes. That document font-family change also updates
+  existing arrow labels.
   **Edit ▸ Note Appearance…** controls background fill/color/opacity, border
   color/width, padding and line spacing for every existing and new note in the
   document. It preserves character formatting and supports Undo/Redo; it does

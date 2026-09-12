@@ -7,12 +7,13 @@ from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QColor, QFont, QTextOption
 
 from chemvas.domain.document import is_document_number, is_hex_color
-from chemvas.ui.canvas_scene_items_state import note_items_for
+from chemvas.ui.canvas_scene_items_state import arrow_items_for, note_items_for
 from chemvas.ui.canvas_text_style_state import set_text_style_for, text_style_state_for
 from chemvas.ui.history_commands import SetAnnotationStyleCommand
 from chemvas.ui.note_item_access import set_committed_note_html_for
 from chemvas.ui.note_selection_box import update_note_selection_box_for
 from chemvas.ui.renderer_style_access import atom_color_for, font_size_pt_for
+from chemvas.ui.scene_decoration_build_access import apply_arrow_labels_for
 from chemvas.ui.selection_service_access import refresh_selection_outline_for
 from chemvas.ui.selection_style_state import selection_style_state_for
 from chemvas.ui.transactions.document import document_transaction
@@ -30,6 +31,16 @@ NOTE_APPEARANCE_FIELDS = frozenset(
         "note_border_width",
         "note_padding",
         "text_line_spacing",
+    }
+)
+
+_ARROW_LABEL_STYLE_FIELDS = frozenset(
+    {
+        "text_font_family",
+        "text_font_size",
+        "text_font_weight",
+        "text_italic",
+        "text_color",
     }
 )
 
@@ -75,7 +86,10 @@ class CanvasStyleController:
                 name,
                 QColor(str(value)) if name.endswith("color") else value,
             )
-        if restyle_text or NOTE_APPEARANCE_FIELDS.intersection(values):
+        restyle_notes = restyle_text or bool(
+            NOTE_APPEARANCE_FIELDS.intersection(values)
+        )
+        if restyle_notes:
             for item in note_items_for(canvas):
                 if restyle_text:
                     self.note_controller.apply_note_style(item)
@@ -84,7 +98,23 @@ class CanvasStyleController:
                         item, line_spacing="text_line_spacing" in values
                     )
                 set_committed_note_html_for(item, item.toHtml())
+        restyled_labels = self._restyle_arrow_labels(canvas, values)
+        if restyle_notes or restyled_labels:
             refresh_selection_outline_for(canvas)
+
+    @staticmethod
+    def _restyle_arrow_labels(canvas, values: dict[str, object]) -> bool:
+        if not _ARROW_LABEL_STYLE_FIELDS.intersection(values):
+            return False
+        changed = False
+        for item in arrow_items_for(canvas):
+            labels = (item.data(2) or {}).get("labels")
+            if labels:
+                # Use the same layout and explicit arrow-color precedence as
+                # document restore, without rebuilding the arrow's own path.
+                apply_arrow_labels_for(canvas, item, labels)
+                changed = True
+        return changed
 
     @staticmethod
     def _capture_notes(items) -> tuple[_NoteStyle, ...]:
@@ -114,7 +144,8 @@ class CanvasStyleController:
             self.note_controller.update_note_box(note.item)
             update_note_selection_box_for(canvas, note.item)
             set_committed_note_html_for(note.item, note.item.toHtml())
-        if state.notes:
+        restyled_labels = self._restyle_arrow_labels(canvas, state.settings)
+        if state.notes or restyled_labels:
             refresh_selection_outline_for(canvas)
 
     def _change_text_settings(

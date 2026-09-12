@@ -330,7 +330,7 @@ class CanvasArrowBuildService:
         # from the axis along the normal, so the label clears them at any
         # bond length; a curved arrow's or arc's chord ends are not part of
         # that, since their labels sit at the curve midpoint instead.
-        path = item.path()
+        path = item.mapToScene(item.path())
         arrow_extent = 0.0
         if not isinstance(control, QPointF) and kind not in ARC_KIND_SWEEPS:
             for index in range(path.elementCount()):

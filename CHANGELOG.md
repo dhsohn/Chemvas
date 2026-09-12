@@ -26,6 +26,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Apply document text font/color changes to existing arrow labels immediately,
+  keeping their appearance consistent through Undo, reopening and figure export
+  while preserving explicit arrow colors and individually formatted note text.
 - Show selected charge/radical marks' chemical owners with transient guides and
   a distance warning; moving a mark retains its owner. Add explicit right-click
   reassignment with a highlighted atom chooser, preserving position/color and
