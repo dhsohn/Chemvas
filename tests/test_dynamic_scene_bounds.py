@@ -5,7 +5,8 @@ import os
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 import pytest
-from PyQt6.QtCore import QPoint, QPointF, QRectF, Qt
+from PyQt6.QtCore import QEvent, QPoint, QPointF, QRectF, Qt
+from PyQt6.QtGui import QMouseEvent
 from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import QApplication, QGraphicsRectItem
 
@@ -86,10 +87,26 @@ def _drag(canvas, app, *, release=True):
     end = start + QPoint(480, 0)
     assert canvas.viewport().rect().contains(start)
     assert canvas.viewport().rect().contains(end)
-    QTest.mouseMove(canvas.viewport(), start - QPoint(10, 0))
+
+    def move(position, buttons):
+        # Deliver actual viewport events; Wayland does not permit cursor warps.
+        QApplication.sendEvent(
+            canvas.viewport(),
+            QMouseEvent(
+                QEvent.Type.MouseMove,
+                QPointF(position),
+                QPointF(canvas.viewport().mapToGlobal(position)),
+                Qt.MouseButton.NoButton,
+                buttons,
+                Qt.KeyboardModifier.NoModifier,
+            ),
+        )
+
+    move(start - QPoint(10, 0), Qt.MouseButton.NoButton)
     QTest.mousePress(canvas.viewport(), Qt.MouseButton.LeftButton, pos=start)
-    QTest.mouseMove(canvas.viewport(), start + QPoint(20, 0), delay=20)
-    QTest.mouseMove(canvas.viewport(), end, delay=20)
+    move(start + QPoint(20, 0), Qt.MouseButton.LeftButton)
+    QTest.qWait(20)  # The Select tool intentionally throttles preview frames.
+    move(end, Qt.MouseButton.LeftButton)
     QTest.qWait(20)
     app.processEvents()
     if release:
@@ -117,12 +134,15 @@ def test_real_drag_refreshes_only_after_release_and_history_restores_bounds(
     assert not updates
     assert canvas.sceneRect() == sheet_range
     assert canvas.scene().sceneRect() == sheet_range
-    # The existing pointer owner previews only inside the sheet, then applies
-    # the final release point even outside it. Do not change that policy here.
-    assert _bounds(canvas).left() > 250
+    # Off-sheet movement previews continuously, without changing the scroll
+    # range or publishing the gesture before release.
+    assert _bounds(canvas).left() > 2500
+    preview = snapshot_canvas_state_for(canvas)
+    assert not history.can_undo()
     QTest.mouseRelease(canvas.viewport(), Qt.MouseButton.LeftButton, pos=end)
     assert _bounds(canvas).left() > 2500
     after = snapshot_canvas_state_for(canvas)
+    assert after == preview
     assert len(updates) == 1
     assert updates[0] == after
     assert document.is_dirty(canvas)
@@ -201,6 +221,8 @@ def test_cancelled_drag_does_not_expand_scroll_range_or_publish_history(drawing,
     rect = QRectF(canvas.sceneRect())
     stacks = canvas.services.history_service.capture_stack_snapshot()
     end = _drag(canvas, app, release=False)
+    assert _bounds(canvas).left() > 2500
+    assert snapshot_canvas_state_for(canvas) != before
     QTest.keyClick(canvas.viewport(), Qt.Key.Key_Escape)
     QTest.mouseRelease(canvas.viewport(), Qt.MouseButton.LeftButton, pos=end)
     assert snapshot_canvas_state_for(canvas) == before

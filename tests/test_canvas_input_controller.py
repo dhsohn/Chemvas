@@ -30,6 +30,7 @@ from chemvas.ui.canvas_scene_items_state import (
 )
 from chemvas.ui.input_view_access import input_view_state_for
 from chemvas.ui.input_view_state import InputViewState
+from chemvas.ui.sheet_setup_state import SheetSetupState
 from tests.runtime_state import canvas_runtime_state
 
 
@@ -95,6 +96,7 @@ class _Canvas(QGraphicsView):
             input_view_state=InputViewState(),
             insert_state=insert_state,
             scene_items_state=CanvasSceneItemsState(),
+            sheet_setup_state=SheetSetupState(),
         )
         insert_controller = SimpleNamespace(
             cancel_template_insert=mock.Mock(),

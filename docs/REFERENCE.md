@@ -230,6 +230,9 @@ its knob, flip, align, and distribute.
   **Canvas Size** dialog for the sheet size and orientation. Changes support
   Undo/Redo; off-sheet objects remain reachable by scrolling, not deleted or fitted
   into the sheet. Sheet-only export/check boundaries still use the actual sheet.
+  Select/Move drag previews continue outside the sheet. Drawing and hover-based
+  atom/bond editing remain sheet-limited; a blocked attempt shows a status message
+  explaining how to move the content back onto the sheet for editing.
 - **Keyboard shortcuts** — tool selection and atom/bond editing under the pointer
   (see [Keyboard shortcuts](#keyboard-shortcuts)).
   New windows focus the canvas. Outside an active note editor, `Tab` and

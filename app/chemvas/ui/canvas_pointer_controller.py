@@ -14,6 +14,7 @@ from chemvas.features.rendering import (
 )
 from chemvas.ui.canvas_insert_state import insert_state_for
 from chemvas.ui.canvas_model_access import bond_for_id
+from chemvas.ui.canvas_window_access import notify_error_for
 from chemvas.ui.input_view_access import (
     global_pos_from_event_for,
     reset_view_transform_for,
@@ -24,7 +25,10 @@ from chemvas.ui.input_view_access import (
 )
 from chemvas.ui.mark_reassignment_dialog import reassign_mark_with_dialog
 from chemvas.ui.scene_decoration_access import edit_arrow_labels_for
-from chemvas.ui.sheet_setup_access import scene_pos_in_sheet_for
+from chemvas.ui.sheet_setup_access import (
+    OFF_SHEET_EDIT_GUIDANCE,
+    scene_pos_in_sheet_for,
+)
 
 _DRAWING_TOOL_NAMES = frozenset(
     {
@@ -65,6 +69,7 @@ class CanvasPointerController:
         self.hover = hover_controller
         self.tool_controller = tool_controller
         self.scene_transform = scene_transform_controller
+        self._offsheet_gesture_notified = False
 
     @staticmethod
     def _accept_event(event) -> None:
@@ -94,6 +99,16 @@ class CanvasPointerController:
     def _outside_sheet(self, scene_pos) -> bool:
         return not scene_pos_in_sheet_for(self.canvas, scene_pos)
 
+    def _notify_offsheet_gesture(self) -> None:
+        if not self._offsheet_gesture_notified:
+            notify_error_for(self.canvas, OFF_SHEET_EDIT_GUIDANCE)
+            self._offsheet_gesture_notified = True
+
+    def _cancel_offsheet_drawing(self, tool, buttons) -> None:
+        self._reset_tool_preview(tool)
+        if buttons & Qt.MouseButton.LeftButton:
+            self._notify_offsheet_gesture()
+
     def _dispatch_press_event(
         self,
         event,
@@ -102,6 +117,8 @@ class CanvasPointerController:
         allow_select_tool: bool,
     ) -> None:
         touch_interaction_for(self.canvas)
+        if event.button() == Qt.MouseButton.LeftButton:
+            self._offsheet_gesture_notified = False
         if event.button() == Qt.MouseButton.RightButton and (
             self._show_mark_context_menu(event)
             or self._show_double_bond_context_menu(event)
@@ -116,6 +133,7 @@ class CanvasPointerController:
             if self._outside_sheet(scene_pos):
                 self._clear_insert_preview("template")
                 self.hover.clear_hover_highlight()
+                self._notify_offsheet_gesture()
                 self._accept_event(event)
                 return
             self.insert_controller.commit_template_insert(scene_pos)
@@ -129,6 +147,7 @@ class CanvasPointerController:
             if self._outside_sheet(scene_pos):
                 self._clear_insert_preview("smiles")
                 self.hover.clear_hover_highlight()
+                self._notify_offsheet_gesture()
                 self._accept_event(event)
                 return
             self.insert_controller.commit_smiles_insert(scene_pos)
@@ -143,6 +162,7 @@ class CanvasPointerController:
             scene_pos = self.hit_testing_service.scene_pos_from_event(event)
             if self._outside_sheet(scene_pos):
                 self.hover.clear_hover_highlight()
+                self._notify_offsheet_gesture()
                 self._accept_event(event)
                 return
         if active_tool and (allow_select_tool or active_tool.name != "select"):
@@ -262,13 +282,16 @@ class CanvasPointerController:
                 return
             active_tool = getattr(self.tool_controller, "active", None)
             if (
-                event.buttons() != Qt.MouseButton.NoButton
-                and active_tool
-                and self._tool_draws_on_sheet(active_tool)
+                event.buttons() == Qt.MouseButton.NoButton
+                or active_tool is None
+                or self._tool_draws_on_sheet(active_tool)
             ):
-                self._reset_tool_preview(active_tool)
-            self.hover.clear_hover_highlight()
-            return
+                if event.buttons() != Qt.MouseButton.NoButton and active_tool:
+                    self._cancel_offsheet_drawing(active_tool, event.buttons())
+                self.hover.clear_hover_highlight()
+                return
+            # These tools already accept off-sheet press/release. Keep their
+            # held-pointer preview on the same normal dispatch path too.
         if self.insert_state.template_active:
             self.insert_controller.render_template_preview(scene_pos)
             return
@@ -290,7 +313,7 @@ class CanvasPointerController:
         if active_tool and self._tool_draws_on_sheet(active_tool):
             scene_pos = self.hit_testing_service.scene_pos_from_event(event)
             if self._outside_sheet(scene_pos):
-                self._reset_tool_preview(active_tool)
+                self._cancel_offsheet_drawing(active_tool, event.button())
                 self.hover.clear_hover_highlight()
                 self.hover.refresh()
                 self._accept_event(event)
@@ -319,7 +342,7 @@ class CanvasPointerController:
                 ):
                     active_tool = getattr(self.tool_controller, "active", None)
                     if active_tool and self._tool_draws_on_sheet(active_tool):
-                        self._reset_tool_preview(active_tool)
+                        self._cancel_offsheet_drawing(active_tool, event.buttons())
                 self.hover.clear_hover_highlight()
             elif self.insert_state.template_active:
                 self.insert_controller.render_template_preview(scene_pos)

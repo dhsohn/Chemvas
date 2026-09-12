@@ -324,6 +324,13 @@ def fit_canvas_to_view_for(canvas, *, margin: float = 0.92) -> float:
 
 
 def should_override_chemdraw_shortcut_for(canvas, event) -> bool:
+    hover = hover_state_for(canvas)
+    return structure_edit_shortcut_matches(
+        event, atom=hover.atom_id is not None, bond=hover.bond_id is not None
+    )
+
+
+def structure_edit_shortcut_matches(event, *, atom: bool, bond: bool) -> bool:
     modifiers = shortcut_modifiers_for(event)
     if modifiers not in (
         Qt.KeyboardModifier.NoModifier,
@@ -331,7 +338,7 @@ def should_override_chemdraw_shortcut_for(canvas, event) -> bool:
     ):
         return False
     text = chemdraw_shortcut_text_for(event)
-    if hover_state_for(canvas).atom_id is not None:
+    if atom:
         if event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter):
             return True
         return text in {
@@ -386,7 +393,7 @@ def should_override_chemdraw_shortcut_for(canvas, event) -> bool:
             "Y",
             "Z",
         }
-    if hover_state_for(canvas).bond_id is not None:
+    if bond:
         return text in {
             "1",
             "2",
@@ -434,6 +441,7 @@ __all__ = [
     "set_zoom_for",
     "shortcut_modifiers_for",
     "should_override_chemdraw_shortcut_for",
+    "structure_edit_shortcut_matches",
     "touch_interaction_for",
     "update_view_transform_for",
     "update_viewport_for",
