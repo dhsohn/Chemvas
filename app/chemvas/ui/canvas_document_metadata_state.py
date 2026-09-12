@@ -80,15 +80,24 @@ def document_display_name_for(canvas: Any) -> str:
 
 
 def document_is_dirty_for(canvas: Any, state: dict) -> bool:
+    return document_dirty_status_for(canvas, state)[0]
+
+
+def document_dirty_status_for(canvas: Any, state: dict) -> tuple[bool, str | None]:
+    """Return dirtiness and the digest already computed for this exact snapshot."""
     clean_digest = document_metadata_state_for(canvas).clean_digest
     if clean_digest == _RECOVERED_DIRTY_DIGEST:
-        return True
-    return clean_digest is not None and canonical_document_digest(state) != clean_digest
+        return True, None
+    if clean_digest is None:
+        return False, None
+    digest = canonical_document_digest(state)
+    return digest != clean_digest, digest
 
 
 __all__ = [
     "CanvasDocumentMetadataState",
     "canonical_document_digest",
+    "document_dirty_status_for",
     "document_display_name_for",
     "document_file_path_for",
     "document_is_dirty_for",

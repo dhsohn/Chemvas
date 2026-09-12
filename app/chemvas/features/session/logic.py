@@ -36,12 +36,18 @@ JsonObject = dict[str, Any]
 
 @dataclass(frozen=True)
 class DocDescriptor:
-    """A live document the service hands to the store each autosave tick."""
+    """A live document the service hands to the store each autosave tick.
+
+    ``state_digest`` may accompany a freshly collected, unmodified snapshot. It
+    is only an in-memory handoff, not a cache across collection or an on-disk
+    field. Callers retaining a mutable state omit it so the store hashes afresh.
+    """
 
     state: JsonObject
     file_path: str | None
     display_name: str
     dirty: bool
+    state_digest: str | None = None
 
 
 @dataclass

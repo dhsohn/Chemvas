@@ -35,9 +35,9 @@ from chemvas.features.session import (
 )
 from chemvas.ui.app_data_paths import existing_session_roots, sessions_dir
 from chemvas.ui.canvas_document_metadata_state import (
+    document_dirty_status_for,
     document_display_name_for,
     document_file_path_for,
-    document_is_dirty_for,
     set_document_source_sha256_for,
 )
 from chemvas.ui.canvas_window_access import snapshot_canvas_state_with_warnings_for
@@ -80,12 +80,14 @@ def collect_open_documents() -> list[DocDescriptor]:
             if warnings:
                 detail = " ".join(warnings)
                 raise AutosaveSnapshotError(f"{display_name}: {detail}")
+            dirty, state_digest = document_dirty_status_for(canvas, state)
             documents.append(
                 DocDescriptor(
                     state=state,
                     file_path=document_file_path_for(canvas),
                     display_name=display_name,
-                    dirty=document_is_dirty_for(canvas, state),
+                    dirty=dirty,
+                    state_digest=state_digest,
                 )
             )
     return documents
