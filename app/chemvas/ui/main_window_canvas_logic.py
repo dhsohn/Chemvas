@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from copy import copy
 from typing import TYPE_CHECKING
 
 from chemvas.ui.canvas_text_style_state import set_text_style_for, text_style_state_for
@@ -29,9 +30,20 @@ CANVAS_TEMPLATE_TOOL_FIELDS = (
 )
 
 CANVAS_TEMPLATE_TEXT_FIELDS = (
+    "text_font_family",
     "text_font_size",
     "text_font_weight",
     "text_italic",
+    "text_color",
+    "text_alignment",
+    "text_line_spacing",
+    "note_box_enabled",
+    "note_box_color",
+    "note_box_alpha",
+    "note_border_enabled",
+    "note_border_color",
+    "note_border_width",
+    "note_padding",
 )
 
 
@@ -80,7 +92,7 @@ def copy_canvas_template_settings(canvas, template) -> None:
         set_tool_setting_for(canvas, field_name, getattr(tool_settings, field_name))
     text_style = text_style_state_for(template)
     for field_name in CANVAS_TEMPLATE_TEXT_FIELDS:
-        set_text_style_for(canvas, field_name, getattr(text_style, field_name))
+        set_text_style_for(canvas, field_name, copy(getattr(text_style, field_name)))
 
 
 def bind_active_canvas_callbacks(

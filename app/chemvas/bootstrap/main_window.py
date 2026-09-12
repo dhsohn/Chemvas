@@ -23,9 +23,13 @@ def build_main_window() -> MainWindow:
     )
 
 
-def initialize_main_window_document(window: MainWindow) -> None:
-    """Apply bootstrap-only naming after a new window enters the registry."""
+def initialize_main_window_document(
+    window: MainWindow, *, template_window: MainWindow | None = None
+) -> None:
+    """Initialize the new document before its window is shown."""
+    from chemvas.ui.main_window_canvas_logic import copy_canvas_template_settings
     from chemvas.ui.main_window_ports import (
+        active_canvas_for_window,
         services_for_window,
         tab_references_for_window,
     )
@@ -36,6 +40,10 @@ def initialize_main_window_document(window: MainWindow) -> None:
     if current_widget is None:
         return
     canvas = cast("CanvasView", current_widget)
+    if template_window is not None:
+        copy_canvas_template_settings(canvas, active_canvas_for_window(template_window))
+        services.canvas_document_service.mark_clean(canvas)
+        services.active_canvas_ui_service.refresh_active_canvas_ui(window)
     services.canvas_document_service.set_display_name(canvas, name)
     services.canvas_document_service.refresh_tab_title(window, canvas)
     services.status_service.refresh_status_context(window)

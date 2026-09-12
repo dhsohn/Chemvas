@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import contextlib
+from functools import partial
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
@@ -61,6 +62,7 @@ def open_new_window(
     reference_window: Any | None = None,
     *,
     window_factory: Callable[[], Any] | None = None,
+    inherit_settings: bool = False,
 ) -> Any:
     initialize_window: Callable[[Any], None] | None = None
     if window_factory is None:
@@ -70,7 +72,12 @@ def open_new_window(
         )
 
         window_factory = build_main_window
-        initialize_window = initialize_main_window_document
+        if inherit_settings:
+            initialize_window = partial(
+                initialize_main_window_document, template_window=reference_window
+            )
+        else:
+            initialize_window = initialize_main_window_document
     window = window_factory()
     register_window(window)
     if initialize_window is not None:

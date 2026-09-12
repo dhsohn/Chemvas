@@ -24,6 +24,12 @@ Templates work the same preview-and-click way.
 Open a sample document from [`examples/`](../examples/) via **File ▸ Open** —
 the [examples README](../examples/README.md) describes what each one contains.
 
+**File ▸ New Canvas** (`Ctrl+N`) opens an empty window with the current document's
+sheet size/orientation, bond length, arrow appearance, orbital phase setting and
+text/note appearance. Drawing contents, file paths and edit history are not
+copied, and later setting changes are independent. A fresh empty startup canvas
+uses factory defaults; opened files and restored sessions keep their own settings.
+
 ## Drawing features
 
 Three short walkthroughs captured from the application; the

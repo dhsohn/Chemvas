@@ -292,7 +292,7 @@ def build_main_window_services() -> MainWindowServices:
             window, selected_only=True
         ),
         open_preview_window=panel_service.open_preview_window,
-        new_canvas=open_new_window,
+        new_canvas=lambda window: open_new_window(window, inherit_settings=True),
         # Edit > Rotate... hands the canvas to the Select tool, whose options
         # bar carries the angle input; checking the button alone would leave
         # the canvas in the previous tool.
