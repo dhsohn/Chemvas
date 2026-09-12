@@ -273,6 +273,91 @@ class CanvasViewEventWrapperTest(unittest.TestCase):
         hover_view.services.hover.update_hover_highlight.assert_not_called()
         hover_view.services.hover.clear_hover_highlight.assert_called_once_with()
 
+    def test_offsheet_drag_dispatches_existing_nondrawing_tools(self) -> None:
+        for name in ("select", "move", "perspective", "delete", "color"):
+            for handled in (True, False):
+                with self.subTest(name=name, handled=handled):
+                    tool = SimpleNamespace(
+                        name=name, on_mouse_move=mock.Mock(return_value=handled)
+                    )
+                    view = self._new_view(tool_active=tool)
+                    view.services.selection.hit_testing_service.scene_pos_from_event.return_value = QPointF(
+                        999, 999
+                    )
+                    event = _FakeEvent(buttons=Qt.MouseButton.LeftButton)
+                    base = mock.Mock()
+
+                    view.services.input.pointer_controller.mouse_move_event(
+                        event, base_mouse_move_event=base
+                    )
+
+                    tool.on_mouse_move.assert_called_once_with(event)
+                    self.assertEqual(base.call_count, 0 if handled else 1)
+                    if not handled:
+                        base.assert_called_once_with(event)
+                    view.services.hover.clear_hover_highlight.assert_called_once_with()
+                    view.services.hover.update_hover_highlight.assert_not_called()
+
+    def test_offsheet_move_keeps_drawing_insert_and_hover_restrictions(self) -> None:
+        for name in (
+            "bond",
+            "text",
+            "mark",
+            "note",
+            "arrow",
+            "line",
+            "ts_bracket",
+            "shape",
+            "orbital",
+            "select",
+        ):
+            with self.subTest(name=name):
+                tool = SimpleNamespace(
+                    name=name,
+                    on_mouse_move=mock.Mock(),
+                    activate=mock.Mock(),
+                    deactivate=mock.Mock(),
+                )
+                view = self._new_view(tool_active=tool)
+                view.services.selection.hit_testing_service.scene_pos_from_event.return_value = QPointF(
+                    999, 999
+                )
+                buttons = (
+                    Qt.MouseButton.NoButton
+                    if name == "select"
+                    else Qt.MouseButton.LeftButton
+                )
+                base = mock.Mock()
+                view.services.input.pointer_controller.mouse_move_event(
+                    _FakeEvent(buttons=buttons), base_mouse_move_event=base
+                )
+                tool.on_mouse_move.assert_not_called()
+                base.assert_not_called()
+                self.assertEqual(
+                    tool.deactivate.call_count, 0 if name == "select" else 1
+                )
+                self.assertEqual(tool.activate.call_count, 0 if name == "select" else 1)
+                view.services.hover.update_hover_highlight.assert_not_called()
+
+        for kind in ("template", "smiles"):
+            with self.subTest(insert=kind):
+                tool = SimpleNamespace(name="select", on_mouse_move=mock.Mock())
+                view = self._new_view(tool_active=tool)
+                view.services.selection.hit_testing_service.scene_pos_from_event.return_value = QPointF(
+                    999, 999
+                )
+                setattr(insert_state_for(view), f"{kind}_active", True)
+                base = mock.Mock()
+                view.services.input.pointer_controller.mouse_move_event(
+                    _FakeEvent(buttons=Qt.MouseButton.LeftButton),
+                    base_mouse_move_event=base,
+                )
+                tool.on_mouse_move.assert_not_called()
+                base.assert_not_called()
+                getattr(
+                    view.services.structure.insert_controller, f"clear_{kind}_preview"
+                ).assert_called_once_with()
+
     def test_mouse_release_event_refreshes_hover_after_tool_handler(self) -> None:
         tool = SimpleNamespace(on_mouse_release=mock.Mock(return_value=True))
         view = self._new_view(tool_active=tool)

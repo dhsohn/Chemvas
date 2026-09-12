@@ -26,6 +26,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Keep Select/Move drag previews following the pointer outside the sheet, with
+  unchanged release, cancellation and history behavior. Keep drawing and
+  hover-based atom/bond editing sheet-limited, and explain blocked attempts with
+  guidance to move existing content back onto the sheet.
 - Mirror equilibrium arrows exactly, preserving long/short harpoons and their
   label associations through history, native documents, clipboard selections and
   editable SVG. Native v7 and clipboard v2 accept an optional equilibrium-only

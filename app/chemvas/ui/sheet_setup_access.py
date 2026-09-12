@@ -30,6 +30,11 @@ from chemvas.ui.sheet_setup_state import (
 if TYPE_CHECKING:
     from collections.abc import Callable
 
+OFF_SHEET_EDIT_GUIDANCE = (
+    "Drawing and hover edits are only available inside the sheet. "
+    "Move the pointer inside, or use Select to move the object onto the sheet."
+)
+
 
 @dataclass(slots=True)
 class _SheetSetupSavepoint:
@@ -186,6 +191,7 @@ def set_sheet_setup_for(canvas, size_name: str, orientation: str) -> None:
 
 
 __all__ = [
+    "OFF_SHEET_EDIT_GUIDANCE",
     "apply_sheet_scene_rect_for",
     "refresh_canvas_scroll_range_for",
     "scene_pos_in_sheet_for",
