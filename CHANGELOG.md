@@ -26,6 +26,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Reuse the dirty check's document digest within the same autosave collection,
+  avoiding a second full-state hash for ordinary modified drawings. Live-state
+  collection and dirty checking still run; this is not an idle snapshot cache.
 - Make New Canvas inherit the current document's sheet, bond, arrow and text/note
   settings into an independent empty window, without copying contents, backing
   paths or history. Keep startup defaults and opened documents' own settings.
