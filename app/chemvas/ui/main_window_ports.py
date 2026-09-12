@@ -310,6 +310,29 @@ def ungroup_selection_for_window(window) -> None:
         ungroup_selection_for(canvas)
 
 
+def flip_selection_for_window(window, *, horizontal: bool) -> None:
+    if active_canvas_or_none_for_window(window) is None:
+        return
+    _prepare_document_edit_for_window(window)
+    scene_transform_controller_for_window(window).flip_selected_items(
+        horizontal=horizontal
+    )
+
+
+def align_selection_for_window(window, mode: str) -> None:
+    if active_canvas_or_none_for_window(window) is None:
+        return
+    _prepare_document_edit_for_window(window)
+    scene_transform_controller_for_window(window).align_selected_items(mode)
+
+
+def distribute_selection_for_window(window, axis: str) -> None:
+    if active_canvas_or_none_for_window(window) is None:
+        return
+    _prepare_document_edit_for_window(window)
+    scene_transform_controller_for_window(window).distribute_selected_items(axis)
+
+
 def active_tool_name_for_window(window):
     from chemvas.ui.canvas_service_access import canvas_services_for
 
@@ -451,6 +474,7 @@ __all__ = [
     "active_canvas_name_for_window",
     "active_canvas_or_none_for_window",
     "active_tool_name_for_window",
+    "align_selection_for_window",
     "all_canvases_for_window",
     "apply_preview_window_assembly_for_window",
     "atom_input_for_window",
@@ -463,8 +487,10 @@ __all__ = [
     "copy_selection_for_window",
     "current_zoom_percent_for_window",
     "cut_selection_for_window",
+    "distribute_selection_for_window",
     "document_session_service_for_window",
     "fit_canvas_to_view_for_window",
+    "flip_selection_for_window",
     "geometry_controller_for_window",
     "grid_snap_action_for_window",
     "group_selection_for_window",
