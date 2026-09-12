@@ -199,6 +199,10 @@ class DeleteTool(Tool):
 
     @override
     def on_mouse_release(self, event) -> bool:
+        if not self._erasing:
+            # An incomplete cancellation retains the session for an explicit
+            # retry, not for publication by a delayed pointer release.
+            return True
         self._erasing = False
         if not self._changed:
             self._finish_active_session()

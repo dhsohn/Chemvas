@@ -24,6 +24,7 @@ from chemvas.ui.scene_decoration_access import add_arrow_for
 from chemvas.ui.scene_item_state import scene_item_state_for
 from chemvas.ui.select_all_access import select_all_scene_items_for
 from chemvas.ui.structure_mutation_access import add_bond_between_points_for
+from chemvas.ui.transactions.document import DocumentSavepoint
 from tests.test_note_editing_workflows import app as app
 from tests.test_note_editing_workflows import drawing as drawing
 
@@ -253,6 +254,72 @@ def test_cancel_failure_does_not_run_requested_history_operation(drawing, route)
     history.verify_stack_snapshot(stacks)
     cancel()
     release(canvas, end)
+
+
+@pytest.mark.parametrize("route", ["window", "canvas"])
+@pytest.mark.parametrize("retry", ["document-edit", "new-press"])
+def test_failed_eraser_cancel_cannot_publish_on_late_release(
+    drawing, qt_errors, route, retry
+):
+    window, canvas = drawing
+    point, item = populate(canvas, "molecule")
+    history = canvas.services.history_service
+    add_arrow_for(canvas, QPointF(130, 90), QPointF(175, 90), "arrow")
+    history.undo()
+    original = snapshot_canvas_state_for(canvas)
+    stacks = history.capture_stack_snapshot()
+    assert stacks.redo_stack
+    end = start_drag(canvas, "delete", point, item)
+    tool = canvas.services.tool_controller.active
+    session = tool._delete_session
+    assert session is not None and session.active and tool._changed
+    pending = snapshot_canvas_state_for(canvas)
+    assert pending != original
+    commands = tuple(tool._commands)
+    restore = DocumentSavepoint.restore
+
+    def fail_this_restore(savepoint, *args, **kwargs):
+        if savepoint is session.snapshot:
+            raise RuntimeError("delete snapshot restore failed")
+        return restore(savepoint, *args, **kwargs)
+
+    with (
+        mock.patch.object(DocumentSavepoint, "restore", fail_this_restore),
+        mock.patch.object(history, "undo", wraps=history.undo) as undo,
+    ):
+        with pytest.raises(RuntimeError, match="delete snapshot restore failed"):
+            if route == "window":
+                from chemvas.ui.main_window_ports import undo_for_window
+
+                undo_for_window(window)
+            else:
+                invoke(window, canvas, "undo", route)
+        undo.assert_not_called()
+    assert not tool._erasing
+    assert tool._delete_session is session and session.active
+    history.verify_stack_snapshot(stacks)
+    release(canvas, end)
+    assert not qt_errors
+    assert snapshot_canvas_state_for(canvas) == pending
+    history.verify_stack_snapshot(stacks)
+    assert tool._delete_session is session and session.active
+    assert tuple(tool._commands) == commands
+
+    # The failed cancellation still has its original recovery owner. A new
+    # explicit cancellation or the next press can retry after the fault clears.
+    if retry == "document-edit":
+        canvas.services.tool_controller.prepare_for_document_edit()
+    else:
+        empty = canvas.mapFromScene(QPointF(120, 160))
+        QTest.mousePress(canvas.viewport(), Qt.MouseButton.LeftButton, pos=empty)
+        QTest.mouseRelease(canvas.viewport(), Qt.MouseButton.LeftButton, pos=empty)
+    assert not session.active
+    assert not tool.has_active_gesture
+    assert snapshot_canvas_state_for(canvas) == original
+    history.verify_stack_snapshot(stacks)
+    release(canvas, end)
+    assert snapshot_canvas_state_for(canvas) == original
+    history.verify_stack_snapshot(stacks)
 
 
 def test_idle_history_action_does_not_reset_select_handles(drawing):
