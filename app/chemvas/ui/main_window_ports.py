@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from PyQt6.QtWidgets import QGraphicsTextItem, QLineEdit
 
+    from chemvas.ui.canvas_view import CanvasView
     from chemvas.ui.main_window_service_types import MainWindowServices
     from chemvas.ui.main_window_tab_references import MainWindowTabReferences
     from chemvas.ui.main_window_ui_references import MainWindowUiReferences
@@ -88,14 +89,14 @@ def set_grid_snap_for_window(window, enabled: bool) -> None:
     update_viewport_for(canvas)
 
 
-def active_canvas_for_window(window):
+def active_canvas_for_window(window) -> CanvasView:
     canvas = active_canvas_or_none_for_window(window)
     if canvas is not None:
         return canvas
     raise RuntimeError("No active canvas.")
 
 
-def active_canvas_or_none_for_window(window):
+def active_canvas_or_none_for_window(window) -> CanvasView | None:
     return tab_references_for_window(window).active_canvas_or_none(
         window.runtime_state.last_canvas_tab_index
     )
