@@ -220,9 +220,7 @@ def apply_scene_item_state(
             }
         )
         item.setData(1, data)
-        center = mark_center_from_state(state, model_atoms)
-        if center is not None:
-            mark_center_setter(item, center)
+        _restore_mark_position(item, state, model_atoms, mark_center_setter)
         return
     if kind == "ring" and isinstance(item, QGraphicsPolygonItem):
         points = _points_from_state(state.get("points"))
@@ -346,6 +344,21 @@ def apply_scene_item_state(
         item.setData(0, kind)
         item.setData(2, data)
         set_arrow_labels_from_state(set_arrow_labels, item, state)
+
+
+def _restore_mark_position(item, state, model_atoms, mark_center_setter) -> None:
+    position = _point_from_state(state.get("item_pos"))
+    if position is not None:
+        # Exact geometry history may carry the original local position.
+        # Qt ignores fuzzy-equal positions; atom restore may have put this
+        # mark one ulp from its recorded location, so reset the translation.
+        item.setPos(0.0, 0.0)
+        item.setPos(position)
+    else:
+        # Document/clipboard states retain their atom-relative semantics.
+        center = mark_center_from_state(state, model_atoms)
+        if center is not None:
+            mark_center_setter(item, center)
 
 
 def mark_center_from_state(

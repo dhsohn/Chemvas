@@ -98,6 +98,7 @@ def _clipboard_window(*, copy_result: bool):
     services = canvas_runtime_services(
         scene_clipboard_controller=clipboard,
         scene_delete_controller=delete,
+        tool_controller=SimpleNamespace(prepare_for_document_edit=mock.Mock()),
     )
     window = _window_with_active_canvas(SimpleNamespace(services=services))
     return window, clipboard, delete

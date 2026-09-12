@@ -87,6 +87,11 @@ class DeleteTool(Tool):
         self._before_smiles_input: str | None = None
         self._delete_session = None
 
+    @property
+    @override
+    def has_active_gesture(self) -> bool:
+        return self._delete_session is not None
+
     @override
     def activate(self) -> None:
         activate_tool_no_drag(self.canvas)

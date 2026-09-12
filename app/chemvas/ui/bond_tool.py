@@ -47,6 +47,11 @@ class BondTool(Tool):
         self._preview_items: list = []
         self._preview_signature: str | None = None
 
+    @property
+    @override
+    def has_active_gesture(self) -> bool:
+        return self._start_pos is not None
+
     @override
     def activate(self) -> None:
         activate_tool_no_drag(self.canvas)

@@ -62,6 +62,7 @@ def build_canvas_input_services(
         hover_controller=hover_controller,
         chemdraw_shortcut_service=chemdraw_shortcut_service,
         tool_mode_controller=tool_mode_controller,
+        prepare_for_document_edit=tool_controller.prepare_for_document_edit,
         cancel_active_gesture=tool_controller.cancel_active_gesture,
     )
     return CanvasInputServiceBundle(

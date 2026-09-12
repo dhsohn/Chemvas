@@ -28,6 +28,11 @@ class Tool:
     def context(self, value: ToolContext | None) -> None:
         self._context = value
 
+    @property
+    def has_active_gesture(self) -> bool:
+        """Whether a later pointer frame can still mutate this document."""
+        return False
+
     def activate(self) -> None:
         pass
 

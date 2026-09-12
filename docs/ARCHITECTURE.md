@@ -110,11 +110,24 @@ end state is decided.
 
 ## Transaction and Recovery Ownership
 
+- `ToolController.prepare_for_document_edit` cancels an active pointer gesture
+  through that tool's existing owner before keyboard/menu document mutations.
+  Tools expose their existing gesture state; there is no parallel mouse-state
+  tracker. Focused text editors retain their own editing route. Ordinary
+  Perspective tool switching still commits, while this boundary cancels.
 - `CanvasHistoryService` is the sole owner of undo/redo stack policy and of the immutable `HistoryStackSnapshot` value. Exact top-level undo/redo operations capture one document savepoint; nested commands defer to that operation.
-- Selection nudge/alignment commands record exact before/after selected geometry,
+- Selection nudge/alignment and Select/Move drag commands record exact before/after geometry,
   including existing depth coordinates and dependent marks/ring fills. Replay
   restores atoms before their dependent scene items, then refreshes the selection
   outline once. These command payloads are not a second rollback or stack owner.
+- Drag command payloads are captured lazily at the first effective movement,
+  alongside the existing scoped savepoint. Bound marks additionally retain exact
+  local Qt positions in history only; persisted attachment offsets stay unchanged.
+- Perspective session setup re-expresses unrelated cached drawing coordinates
+  when replacing the global projection frame. Their screen positions and depth
+  stay unchanged; cache-only edits join the existing rotation history and rollback
+  payload without moving unrelated scene items. These are drawing coordinates,
+  not a guarantee of a scientific conformer's geometry.
 - Document replacement delegates stack capture/restore to that history owner, and destructive scene reset delegates silent stack discard. These operations preserve the live stack lists; document replacement separately retains the original Qt scene items through its detached-scene snapshot.
 - Recorded structure builds keep their pre-build savepoint until history recording succeeds. A recording failure uses that existing rollback authority; successful publication does not capture another whole-document savepoint just to verify recording.
 - Benzene template insertion uses that same committer scope around the mutation-only ring builder, without a nested recorded build. Successful insertion captures once; no-op and failed insertion restore through the same owner. The recorder's existing inverse-command savepoint on a failed history push remains separate from the pre-build capture.

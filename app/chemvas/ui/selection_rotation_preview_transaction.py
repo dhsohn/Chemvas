@@ -107,8 +107,8 @@ class _RotationPreviewAuthority:
                 pop_atom_coords_3d_for(canvas, atom_id)
             state.projection_center_3d = state.start_projection_center_3d
             state.projection_anchor_2d = state.start_projection_anchor_2d
-            restored_ids = set(state.start_positions) | set(state.start_coords_3d)
-            sync_atom_scene_items_for(canvas, restored_ids)
+            # Cache-only camera re-expression did not move unrelated items.
+            sync_atom_scene_items_for(canvas, set(state.start_positions))
             refresh_ids = set(state.atom_ids) or set(self.atom_ids)
             if refresh_ids:
                 self.controller.refresh_atom_geometry(refresh_ids)

@@ -234,13 +234,22 @@ def _edit_text_for_window(window, operation: str) -> bool:
     return True
 
 
+def _prepare_document_edit_for_window(window) -> None:
+    if active_canvas_or_none_for_window(window) is not None:
+        _active_canvas_services_for_window(
+            window
+        ).tool_controller.prepare_for_document_edit()
+
+
 def undo_for_window(window) -> None:
     if not _edit_text_for_window(window, "Undo"):
+        _prepare_document_edit_for_window(window)
         history_service_for_window(window).undo()
 
 
 def redo_for_window(window) -> None:
     if not _edit_text_for_window(window, "Redo"):
+        _prepare_document_edit_for_window(window)
         history_service_for_window(window).redo()
 
 
@@ -257,6 +266,7 @@ def copy_selection_for_window(window) -> bool:
 def cut_selection_for_window(window) -> None:
     if _edit_text_for_window(window, "Cut"):
         return
+    _prepare_document_edit_for_window(window)
     if copy_selection_for_window(window):
         scene_delete_controller_for_window(window).delete_selected_items()
 
@@ -266,6 +276,7 @@ def paste_selection_for_window(window) -> None:
         return
     if active_canvas_or_none_for_window(window) is None:
         return
+    _prepare_document_edit_for_window(window)
     scene_clipboard_controller_for_window(window).paste_selection_from_clipboard()
 
 
@@ -286,6 +297,7 @@ def group_selection_for_window(window) -> None:
 
     canvas = active_canvas_or_none_for_window(window)
     if canvas is not None:
+        _prepare_document_edit_for_window(window)
         group_selection_for(canvas)
 
 
@@ -294,6 +306,7 @@ def ungroup_selection_for_window(window) -> None:
 
     canvas = active_canvas_or_none_for_window(window)
     if canvas is not None:
+        _prepare_document_edit_for_window(window)
         ungroup_selection_for(canvas)
 
 

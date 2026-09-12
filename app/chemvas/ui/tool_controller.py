@@ -88,6 +88,20 @@ class ToolController:
         if isinstance(self.active, PerspectiveTool):
             self.active.cancel_active_rotation()
 
+    def prepare_for_document_edit(self) -> None:
+        """Cancel a pending pointer edit before another command changes state.
+
+        Each tool retains its existing rollback owner. In particular, cancel
+        Perspective explicitly: normal tool switching intentionally commits it.
+        Idle tools and focused text editors do not enter this boundary.
+        """
+        active = self.active
+        if active is None or not active.has_active_gesture:
+            return
+        self.cancel_active_gesture()
+        active.deactivate()
+        active.activate()
+
     def set_active(self, name: str) -> None:
         if self.active:
             self.active.deactivate()

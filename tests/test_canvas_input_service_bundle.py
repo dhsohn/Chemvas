@@ -35,7 +35,9 @@ def test_build_canvas_input_services_wires_explicit_collaborators(monkeypatch) -
     insert_controller = object()
     hover_controller = SimpleNamespace(refresh=object())
     tool_controller = SimpleNamespace(
-        set_active=object(), cancel_active_gesture=object()
+        set_active=object(),
+        cancel_active_gesture=object(),
+        prepare_for_document_edit=object(),
     )
     scene_delete_controller = object()
     scene_clipboard_controller = object()
@@ -83,4 +85,5 @@ def test_build_canvas_input_services_wires_explicit_collaborators(monkeypatch) -
         "chemdraw_shortcut_service": services.chemdraw_shortcut_service,
         "tool_mode_controller": services.tool_mode_controller,
         "cancel_active_gesture": tool_controller.cancel_active_gesture,
+        "prepare_for_document_edit": tool_controller.prepare_for_document_edit,
     }

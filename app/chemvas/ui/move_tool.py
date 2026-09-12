@@ -7,8 +7,8 @@ from PyQt6.QtCore import QPointF, Qt
 
 from chemvas.core.tool_overlay_logic import activate_tool_no_drag
 from chemvas.domain.document import VALID_ARROW_KINDS
-from chemvas.ui.history_commands import MoveItemsCommand
-from chemvas.ui.move_access import move_item_for
+from chemvas.ui.canvas_scene_items_state import ring_items_for_atoms
+from chemvas.ui.move_access import move_atoms_for, move_item_for
 from chemvas.ui.selection_collection_access import selection_snapshot_for
 from chemvas.ui.selection_drag_tool import (
     SelectionDragMixin,
@@ -49,6 +49,11 @@ class MoveTool(SelectionDragMixin, Tool):
     def deactivate(self) -> None:
         self._cancel_active_interaction()
 
+    @property
+    @override
+    def has_active_gesture(self) -> bool:
+        return self._drag_transaction is not None
+
     def _cancel_direct_item_drag(
         self,
         original_error: BaseException | None = None,
@@ -83,6 +88,9 @@ class MoveTool(SelectionDragMixin, Tool):
     def _commit_direct_item_drag(self) -> None:
         item = self._drag_item
         self._require_drag_token()
+        if self._moved and not self._drag_has_net_movement():
+            self._cancel_direct_item_drag()
+            return
 
         def commit(owner) -> None:
             if not self._moved or not self._drag_has_net_movement() or item is None:
@@ -92,14 +100,9 @@ class MoveTool(SelectionDragMixin, Tool):
                 owner,
                 phase="refreshing its directly moved item",
             )
-            self._push_drag_history(
-                owner,
-                MoveItemsCommand(
-                    items=[item],
-                    dx=self._total_delta.x(),
-                    dy=self._total_delta.y(),
-                ),
-            )
+            command = self._build_move_command()
+            if command is not None:
+                self._push_drag_history(owner, command)
 
         try:
             self._commit_drag_transaction(commit)
@@ -158,7 +161,33 @@ class MoveTool(SelectionDragMixin, Tool):
             token = self._require_drag_token()
             try:
                 self._prepare_drag_mutation(token)
-                move_item_for(self.canvas, self._drag_item, delta.x(), delta.y())
+                kind = self._drag_item.data(0)
+                atom_ids = atom_ids_with_bonds(
+                    self.canvas,
+                    {self._drag_item.data(1)} if kind == "atom" else set(),
+                    {self._drag_item.data(1)} if kind == "bond" else set(),
+                )
+                if token.before_positions is None and atom_ids:
+                    self._drag_affected_ring_items = tuple(
+                        ring_items_for_atoms(self.canvas, atom_ids)
+                    )
+                self._capture_move_geometry(
+                    token,
+                    atom_ids,
+                    [] if atom_ids else [self._drag_item],
+                    self._drag_affected_ring_items or (),
+                )
+                if atom_ids:
+                    move_atoms_for(
+                        self.canvas,
+                        atom_ids,
+                        delta.x(),
+                        delta.y(),
+                        affected_ring_items=self._drag_affected_ring_items,
+                        rebuild_stale_bond_topology=True,
+                    )
+                else:
+                    move_item_for(self.canvas, self._drag_item, delta.x(), delta.y())
                 self._ensure_drag_owner(
                     token,
                     phase="moving its directly grabbed item",

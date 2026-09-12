@@ -52,6 +52,11 @@ class SelectTool(SelectionDragMixin, Tool):
         self._drag_interval = 1.0 / 60.0
         self._last_drag_time = 0.0
 
+    @property
+    @override
+    def has_active_gesture(self) -> bool:
+        return self._drag_transaction is not None
+
     @override
     def activate(self) -> None:
         self.context.set_rubber_band_drag_mode()

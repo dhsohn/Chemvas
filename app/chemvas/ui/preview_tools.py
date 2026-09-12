@@ -34,6 +34,11 @@ class PreviewDragTool(Tool):
         self._drag_threshold_exceeded = False
         self._preview_item = None
 
+    @property
+    @override
+    def has_active_gesture(self) -> bool:
+        return self._start_pos is not None
+
     @override
     def activate(self) -> None:
         activate_tool_no_drag(self.canvas)

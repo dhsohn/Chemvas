@@ -518,7 +518,17 @@ class SelectionRotationControllerTest(unittest.TestCase):
             {0: (0.0, 0.0), 1: (10.0, 0.0), 2: (20.0, 5.0)},
         )
         self.assertEqual(canvas.rotation_state.center_3d, (5.0, 0.0, 2.0))
-        self.assertEqual(canvas.rotation_state.projection_center_3d, (5.0, 0.0, 2.0))
+        # The local camera uses the axis' original depth, before the injected
+        # planar-fragment fixture changes the axis center.
+        self.assertEqual(canvas.rotation_state.projection_center_3d, (5.0, 0.0, 0.0))
+        self.assertEqual(
+            canvas.unproject_calls,
+            [
+                ((0.0, 0.0), 0.0, (5.0, 0.0, 0.0), (5.0, 0.0)),
+                ((10.0, 0.0), 0.0, (5.0, 0.0, 0.0), (5.0, 0.0)),
+                ((20.0, 5.0), 3.0, (5.0, 0.0, 0.0), (5.0, 0.0)),
+            ],
+        )
         self.assertEqual(canvas.rotation_state.projection_anchor_2d, (5.0, 0.0))
         self.assertEqual(
             canvas.rotation_state.start_projection_center_3d, (100.0, 200.0, 300.0)
@@ -586,7 +596,13 @@ class SelectionRotationControllerTest(unittest.TestCase):
         self.assertEqual(canvas.rotation_state.atom_ids, {2})
         self.assertEqual(canvas.rotation_state.selection_ids, (set(), set()))
         self.assertEqual(canvas.rotation_state.start_positions, {2: (20.0, 5.0)})
-        self.assertEqual(canvas.rotation_state.coord_atom_ids, {2})
+        # Only atom 2 moves; atoms 0/1 retain depth in the new camera and are
+        # included in the exact coordinate-only Undo payload.
+        self.assertEqual(canvas.rotation_state.coord_atom_ids, {0, 1, 2})
+        self.assertEqual(
+            canvas.rotation_state.start_coords_3d,
+            {0: (0.0, 0.0, 0.0), 1: (10.0, 0.0, 0.0), 2: (20.0, 5.0, 3.0)},
+        )
         self.assertEqual(canvas.rotation_state.center_3d, (20.0, 5.0, 3.0))
         self.assertEqual(canvas.rotation_state.projection_anchor_2d, (20.0, 5.0))
         self.assertEqual(canvas.rotation_state.base_coords, {2: (20.5, 4.75, 4.0)})
