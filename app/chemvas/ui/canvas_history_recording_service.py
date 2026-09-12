@@ -17,6 +17,10 @@ from chemvas.ui.canvas_model_access import (
 )
 from chemvas.ui.canvas_smiles_input_state import last_smiles_input_for
 from chemvas.ui.history_commands import AddSceneItemsCommand, GroupSceneItemsCommand
+from chemvas.ui.scene_group_operations import (
+    group_extensions_for_added_bonds,
+    group_updates_for_atom_merge,
+)
 from chemvas.ui.scene_item_state import (
     atom_state_dict_for,
     bond_state_dict,
@@ -29,12 +33,43 @@ class CanvasHistoryRecordingService:
         self.canvas = canvas
         self.history = history_service
 
-    def push_history(self, command: HistoryCommand) -> None:
-        self._push_history(command)
+    def push_history(
+        self,
+        command: HistoryCommand,
+        *,
+        merged_atom_id: int | None = None,
+        merged_atom_ids=(),
+    ) -> None:
+        self._push_history(
+            command, merged_atom_id=merged_atom_id, merged_atom_ids=merged_atom_ids
+        )
 
-    def _push_history(self, command: HistoryCommand) -> None:
+    def _push_history(
+        self,
+        command: HistoryCommand,
+        *,
+        added_bond_ids=(),
+        merged_atom_id: int | None = None,
+        merged_atom_ids=(),
+    ) -> None:
         try:
-            self.history.push(command)
+            group_updates = []
+            if added_bond_ids:
+                group_updates.extend(
+                    group_extensions_for_added_bonds(self.canvas, added_bond_ids)
+                )
+            if merged_atom_id is not None and merged_atom_ids:
+                group_updates.extend(
+                    group_updates_for_atom_merge(
+                        self.canvas, merged_atom_id, set(merged_atom_ids)
+                    )
+                )
+            if group_updates:
+                command = CompositeCommand([command, *group_updates])
+                for update in group_updates:
+                    update.redo(self.canvas)
+            if self.history.push(command) is False and self.history.is_enabled():
+                raise ValueError("History did not accept the edit.")
         except Exception as original_error:
             # ``command.undo`` is looked up inside the callable, so a command
             # without an inverse is noted rather than escaping past the step and
@@ -109,10 +144,11 @@ class CanvasHistoryRecordingService:
             commands.extend(added_groups)
         if not commands:
             return
-        if len(commands) == 1:
-            self._push_history(commands[0])
-            return
-        self._push_history(CompositeCommand(commands))
+        command = commands[0] if len(commands) == 1 else CompositeCommand(commands)
+        self._push_history(
+            command,
+            added_bond_ids=range(before_bond_count, bond_count_for(self.canvas)),
+        )
 
     def record_bond_update(
         self,

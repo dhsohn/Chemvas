@@ -164,6 +164,14 @@ def test_unsupported_or_truncated_encoded_files_are_rejected(data: bytes) -> Non
         image_state_from_bytes(data)
 
 
+@pytest.mark.parametrize("format_name", ["BMP", "TIFF", "WEBP", "GIF"])
+def test_unsupported_image_format_reports_conversion_not_corruption(format_name):
+    with pytest.raises(ValueError, match="Only PNG and JPEG") as error:
+        image_state_from_bytes(_raster(format_name))
+    assert "Invalid or truncated" not in str(error.value)
+    assert "convert" in str(error.value).lower()
+
+
 def test_animation_is_rejected_instead_of_silently_discarding_frames() -> None:
     stream = BytesIO()
     Image.new("RGB", (8, 4), "red").save(

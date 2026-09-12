@@ -205,8 +205,8 @@ def place_template_on_bond(
     center_b = _points_center(points_b)
 
     if occupied_polygon is not None:
-        a_in = _polygon_contains_point(center_a, occupied_polygon)
-        b_in = _polygon_contains_point(center_b, occupied_polygon)
+        a_in = bond_side_is_occupied(center_a, bond_start, bond_end, occupied_polygon)
+        b_in = bond_side_is_occupied(center_b, bond_start, bond_end, occupied_polygon)
         if a_in and not b_in:
             return points_b
         if b_in and not a_in:
@@ -245,8 +245,8 @@ def regular_ring_points_for_bond(
     center_b = (mid[0] - nx * apothem, mid[1] - ny * apothem)
     use_center = center_a
     if occupied_polygon is not None:
-        a_in = _polygon_contains_point(center_a, occupied_polygon)
-        b_in = _polygon_contains_point(center_b, occupied_polygon)
+        a_in = bond_side_is_occupied(center_a, bond_start, bond_end, occupied_polygon)
+        b_in = bond_side_is_occupied(center_b, bond_start, bond_end, occupied_polygon)
         if a_in and not b_in:
             use_center = center_b
         elif b_in and not a_in:
@@ -292,6 +292,37 @@ def _center_points_on_bounds(points: Sequence[Point2D]) -> list[Point2D]:
     return [(x - cx, y - cy) for x, y in points]
 
 
+def bond_side_is_occupied(
+    center: Point2D,
+    bond_start: Point2D,
+    bond_end: Point2D,
+    polygon: Sequence[Point2D],
+) -> bool:
+    """Test the ring interior beside a shared edge, not at a distant centre."""
+    for index, start in enumerate(polygon):
+        end = polygon[(index + 1) % len(polygon)]
+        if (start, end) not in ((bond_start, bond_end), (bond_end, bond_start)):
+            continue
+        # A concave chair can leave both candidate centres outside its polygon.
+        # Winding still identifies the interior side at the actual shared edge.
+        # Translate before the area sum to avoid cancellation far from the origin.
+        ox, oy = bond_start
+        area = sum(
+            (x - ox) * (polygon[(i + 1) % len(polygon)][1] - oy)
+            - (y - oy) * (polygon[(i + 1) % len(polygon)][0] - ox)
+            for i, (x, y) in enumerate(polygon)
+        )
+        if area:
+            side = (end[0] - start[0]) * (center[1] - start[1]) - (
+                end[1] - start[1]
+            ) * (center[0] - start[0])
+            return side * area > 0
+        break
+    # An occupancy polygon need not share this bond; retain point containment
+    # for those polygons and for degenerate outlines without a winding.
+    return _polygon_contains_point(center, polygon)
+
+
 def _distance(a: Point2D, b: Point2D) -> float:
     return math.hypot(b[0] - a[0], b[1] - a[1])
 
@@ -324,6 +355,7 @@ def _polygon_contains_point(point: Point2D, polygon: Sequence[Point2D]) -> bool:
 
 __all__ = [
     "Point2D",
+    "bond_side_is_occupied",
     "cyclohexane_boat_points",
     "cyclohexane_chair_flipped_points",
     "cyclohexane_chair_points",

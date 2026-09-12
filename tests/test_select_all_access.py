@@ -30,6 +30,7 @@ from chemvas.ui.canvas_scene_items_state import (
     append_scene_item_for,
 )
 from chemvas.ui.select_all_access import select_all_scene_items_for
+from chemvas.ui.selection_style_state import SelectionStyleState
 
 
 class _Canvas(QGraphicsView):
@@ -39,6 +40,7 @@ class _Canvas(QGraphicsView):
             atom_graphics_state=CanvasAtomGraphicsState(),
             bond_graphics_state=CanvasBondGraphicsState(),
             scene_items_state=CanvasSceneItemsState(),
+            selection_style_state=SelectionStyleState(),
         )
         self.selection_controller = SimpleNamespace(
             select_note=mock.Mock(),

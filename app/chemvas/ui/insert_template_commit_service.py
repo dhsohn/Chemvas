@@ -14,6 +14,7 @@ from chemvas.ui.canvas_model_access import (
     bond_ids_from,
 )
 from chemvas.ui.canvas_smiles_input_state import set_last_smiles_input_for
+from chemvas.ui.scene_group_operations import group_connection_allowed_for
 from chemvas.ui.structure_build_committer import StructureBuildCommitter
 from chemvas.ui.structure_insert_access import (
     add_atom_with_merge_for,
@@ -45,6 +46,12 @@ def apply_template_commit_resolution(
     after_smiles_input: str | None = None,
     bond_exists: Callable[[int, int], bool] | None = None,
 ) -> bool:
+    anchors = {plan.atom_id} if plan.atom_id is not None else set()
+    bond = bond_for_id(canvas, plan.bond_id)
+    if bond is not None:
+        anchors.update((bond.a, bond.b))
+    if anchors and not group_connection_allowed_for(canvas, anchors):
+        return False
     if plan.generator == "benzene":
         return _apply_benzene_template_commit(
             canvas,

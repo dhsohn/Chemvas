@@ -294,6 +294,8 @@ class CanvasViewSelectionClipboardWrappersTest(unittest.TestCase):
             runtime_state=canvas_runtime_state(
                 atom_graphics_state=CanvasAtomGraphicsState(),
                 bond_graphics_state=CanvasBondGraphicsState(),
+                scene_items_state=CanvasSceneItemsState(),
+                mark_registry=CanvasMarkRegistry(),
             ),
         )
         set_bond_items_for(view, {0: [bond_graphic]})

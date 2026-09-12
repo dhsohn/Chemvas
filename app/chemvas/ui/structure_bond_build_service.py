@@ -10,6 +10,7 @@ from chemvas.ui.canvas_model_access import bond_for_id
 from chemvas.ui.canvas_smiles_input_state import last_smiles_input_for
 from chemvas.ui.history_recording_access import record_bond_update_for
 from chemvas.ui.renderer_style_access import bond_length_px_for
+from chemvas.ui.scene_group_operations import group_connection_allowed_for
 from chemvas.ui.scene_item_state import bond_state_dict
 
 if TYPE_CHECKING:
@@ -59,6 +60,13 @@ class StructureBondBuildService:
             # (tombstones fail its atom-match check), so no stale-id guard is
             # needed here; a missing bond simply means "draw a new one".
             existing_bond_id = self.graph_service.bond_id_between(start_id, end_id)
+        anchors = {atom_id for atom_id in (start_id, end_id) if atom_id is not None}
+        if (
+            existing_bond_id is None
+            and anchors
+            and not group_connection_allowed_for(self.canvas, anchors)
+        ):
+            return None
         snapshot = self.committer.begin_recorded_change()
         before_smiles_input = snapshot.before_smiles_input
         try:

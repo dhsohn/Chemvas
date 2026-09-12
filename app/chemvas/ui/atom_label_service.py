@@ -47,6 +47,7 @@ from chemvas.ui.renderer_style_access import (
     bond_length_px_for,
     bond_line_width_for,
 )
+from chemvas.ui.scene_group_operations import group_connection_allowed_for
 from chemvas.ui.scene_item_access import (
     add_item_to_canvas_scene,
     remove_item_from_canvas_scene,
@@ -439,6 +440,12 @@ class AtomLabelService:
         text = text.strip()
         show_carbon = bool(show_carbon)
         atom = required_atom_for(self.canvas, atom_id)
+        if allow_merge and text and (text.upper() != "C" or show_carbon):
+            merge_ids = self.merge_service._overlapping_atom_ids(atom_id)
+            if merge_ids and not group_connection_allowed_for(
+                self.canvas, {atom_id, *merge_ids}
+            ):
+                return
         before_element = atom.element
         before_explicit_label = atom.explicit_label
         before_smiles_input = last_smiles_input_for(self.canvas)

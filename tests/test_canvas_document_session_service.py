@@ -1,6 +1,7 @@
 import os
 import tempfile
 import unittest
+from contextlib import nullcontext
 from copy import deepcopy
 from pathlib import Path
 from types import SimpleNamespace
@@ -139,7 +140,9 @@ def _attach_history_service(canvas):
     if runtime_state is None:
         runtime_state = _document_runtime_state()
         canvas.runtime_state = runtime_state
-    service = CanvasHistoryService(canvas, history_state_for(canvas))
+    service = CanvasHistoryService(
+        canvas, history_state_for(canvas), replay_context=nullcontext
+    )
     services = getattr(canvas, "services", None)
     if services is None:
         services = canvas_runtime_services()

@@ -13,7 +13,6 @@ from chemvas.ui.scene_clipboard_transaction_logic import (
     clipboard_paste_offset,
     translated_point_value,
     translated_scene_item_state,
-    visible_items_to_hide_for_copy,
 )
 
 
@@ -89,20 +88,6 @@ class SceneClipboardTransactionLogicTest(unittest.TestCase):
             ),
         )
         self.assertEqual(clipboard_copy_cache_values(None), (None, 0))
-
-    def test_visible_items_to_hide_for_copy_skips_selected_and_invisible_items(
-        self,
-    ) -> None:
-        selected = _make_rect_item(QRectF(0.0, 0.0, 10.0, 10.0))
-        visible_other = _make_rect_item(QRectF(12.0, 0.0, 10.0, 10.0))
-        hidden_other = _make_rect_item(QRectF(24.0, 0.0, 10.0, 10.0), visible=False)
-
-        items_to_hide = visible_items_to_hide_for_copy(
-            [selected, visible_other, hidden_other],
-            selected_items={selected},
-        )
-
-        self.assertEqual(items_to_hide, [visible_other])
 
     def test_build_clipboard_paste_plan_resets_or_advances_count_and_captures_snapshots(
         self,

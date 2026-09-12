@@ -17,6 +17,10 @@ Use the Select tool to move the resulting image. Select one image and choose
 **Edit → Image Properties…** to set X, Y, width, height, aspect locking, and opacity.
 Coordinates and sizes use canvas units, not source pixels. The whole raster is
 displayed, including transparent margins; changing its size does not crop it.
+Convert other file formats to PNG or JPEG before importing; renaming the extension
+does not convert the image. Unrecognized or unsupported bytes are reported separately
+from malformed recognized PNG/JPEG content. Individual image errors in compositions
+identify the zero-based image entry (for example, `image 2` is the third image).
 Initial insertion fits the visible part of the sheet, or the sheet itself when
 it is offscreen. Later manual moves can put pixels outside the exported sheet.
 

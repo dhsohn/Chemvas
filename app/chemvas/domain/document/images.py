@@ -108,6 +108,18 @@ def validate_image_state(state: Mapping[str, object]) -> None:
 
 def validate_image_states(states: object) -> None:
     """Bound totals before allocating or decoding any complete raster."""
+    validate_image_collection_budget(states)
+    for state in cast("list[Mapping[str, object]]", states):
+        validate_image_state(state)
+
+
+def validate_image_collection_budget(states: object) -> None:
+    """Check fields and aggregate bounds, not encoded raster authenticity.
+
+    Full document/clipboard input still uses ``validate_image_states``. UI
+    insertion can also count its already-materialized images without decoding
+    those immutable sources again; incoming images must be validated separately.
+    """
     if not isinstance(states, list) or len(states) > MAX_DOCUMENT_IMAGES:
         raise ValueError(
             f"Images must be an array of at most {MAX_DOCUMENT_IMAGES} items."
@@ -119,7 +131,8 @@ def validate_image_states(states: object) -> None:
             raise ValueError("An image must be an object.")
         _validate_fields(state)
         encoded = cast("str", state["data_base64"])
-        byte_count += len(encoded) // 4 * 3 - (len(encoded) - len(encoded.rstrip("=")))
+        padding = int(encoded.endswith("=")) + int(encoded.endswith("=="))
+        byte_count += len(encoded) // 4 * 3 - padding
         pixel_count += cast("int", state["pixel_width"]) * cast(
             "int", state["pixel_height"]
         )
@@ -129,8 +142,6 @@ def validate_image_states(states: object) -> None:
             raise ValueError(
                 "Combined image pixels exceed the 100 million document limit."
             )
-    for state in states:
-        validate_image_state(state)
 
 
 def _validate_fields(state: Mapping[str, object]) -> None:
@@ -142,7 +153,7 @@ def _validate_fields(state: Mapping[str, object]) -> None:
     encoded = state.get("data_base64")
     if not isinstance(encoded, str) or not 0 < len(encoded) <= MAX_IMAGE_BASE64_CHARS:
         raise ValueError("Image data exceeds the 16 MiB byte limit or is empty.")
-    if len(encoded) % 4 or len(encoded) - len(encoded.rstrip("=")) > 2:
+    if len(encoded) % 4 or encoded.endswith("==="):
         raise ValueError("Image data_base64 must be canonical base64.")
     _pixel_dimensions(state.get("pixel_width"), state.get("pixel_height"))
     for key in ("x", "y", "width", "height", "opacity"):
@@ -226,10 +237,14 @@ def _inspect_image_bytes(data: bytes) -> tuple[str, int, int]:
             # JPEG verify() does not read scan data; force a bounded full decode.
             with Image.open(BytesIO(data), formats=("PNG", "JPEG")) as raster:
                 raster.load()
+    except UnidentifiedImageError as exc:
+        raise ValueError(
+            "Only PNG and JPEG images are supported. The image format is "
+            "unrecognized or unsupported; convert other formats before importing."
+        ) from exc
     except (
         OSError,
         SyntaxError,
-        UnidentifiedImageError,
         Image.DecompressionBombError,
         Image.DecompressionBombWarning,
     ) as exc:

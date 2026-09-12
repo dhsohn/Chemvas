@@ -14,6 +14,7 @@ from chemvas.ui.canvas_model_access import (
     bonds_for,
 )
 from chemvas.ui.canvas_ring_fill_scene_access import create_ring_fill_item_for
+from chemvas.ui.scene_group_operations import group_connection_allowed_for
 from chemvas.ui.structure_benzene_build_service import StructureBenzeneBuildService
 from chemvas.ui.structure_bond_build_service import StructureBondBuildService
 from chemvas.ui.structure_build_committer import StructureBuildCommitter
@@ -206,19 +207,38 @@ class StructureBuildService:
         return self.growth_builder.sprout_benzene_from_atom(atom_id)
 
     def sprout_acetyl_from_atom(self, atom_id: int) -> None:
+        if not self._group_growth_allowed(atom_id=atom_id):
+            return
         self.growth_builder.sprout_acetyl_from_atom(atom_id)
 
     def sprout_dimethyl_from_atom(self, atom_id: int) -> None:
+        if not self._group_growth_allowed(atom_id=atom_id):
+            return
         self.growth_builder.sprout_dimethyl_from_atom(atom_id)
 
     def sprout_regular_ring_from_atom(self, atom_id: int, n: int) -> None:
+        if not self._group_growth_allowed(atom_id=atom_id):
+            return
         self.growth_builder.sprout_regular_ring_from_atom(atom_id, n)
 
     def fuse_regular_ring_to_bond(self, bond_id: int, n: int) -> None:
+        if not self._group_growth_allowed(bond_id=bond_id):
+            return
         self.growth_builder.fuse_regular_ring_to_bond(bond_id, n)
 
     def fuse_chair_to_bond(self, bond_id: int, mirrored: bool = False) -> None:
+        if not self._group_growth_allowed(bond_id=bond_id):
+            return
         self.growth_builder.fuse_chair_to_bond(bond_id, mirrored=mirrored)
+
+    def _group_growth_allowed(
+        self, *, atom_id: int | None = None, bond_id: int | None = None
+    ) -> bool:
+        anchors = {atom_id} if atom_id is not None else set()
+        bond = bond_for_id(self.canvas, bond_id)
+        if bond is not None:
+            anchors.update((bond.a, bond.b))
+        return not anchors or group_connection_allowed_for(self.canvas, anchors)
 
     def fuse_benzene_to_bond(self, bond_id: int) -> object | None:
         return self.growth_builder.fuse_benzene_to_bond(bond_id)
@@ -254,6 +274,10 @@ class StructureBuildService:
         *,
         before_smiles_input: str | None = None,
     ) -> object | None:
+        if not self._group_growth_allowed(
+            atom_id=attach_atom_id, bond_id=attach_bond_id
+        ):
+            return None
         return self.benzene_builder.add_benzene_ring(
             center,
             attach_atom_id,

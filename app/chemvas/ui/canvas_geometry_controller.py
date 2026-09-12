@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import math
+from dataclasses import dataclass
 from functools import partial
+from weakref import WeakKeyDictionary
 
 from PyQt6.QtCore import QPointF, QRectF, Qt
 from PyQt6.QtGui import (
@@ -113,19 +115,17 @@ def _glyph_clearance_path(path: QPainterPath) -> QPainterPath:
     return result
 
 
-def _glyph_line_clip_t(
-    p1: QPointF,
-    p2: QPointF,
-    path: QPainterPath,
-    stroke_width: float,
-    offsets: tuple[tuple[float, float], ...] = (),
-) -> tuple[float, float] | None:
-    """First/last glyph-envelope crossings with stroke extent and an air gap.
+@dataclass(frozen=True)
+class _GlyphClipGeometry:
+    path: QPainterPath
+    stroke_width: float
+    outlines: tuple[tuple[QPainterPath, tuple[QPolygonF, ...]], ...]
 
-    Inspect every contour, not just the filled interval containing the atom:
-    the atom may sit in O's counter, or between separate typographic runs.
-    Never terminate there and leave another piece of the label on the bond.
-    """
+
+def _prepare_glyph_clip_geometry(
+    path: QPainterPath, stroke_width: float
+) -> _GlyphClipGeometry:
+    original_path = path
     path = _glyph_clearance_path(path)
     gap = max(0.2, stroke_width * 0.5)
     # A disk enclosing a square cap also covers round/flat bond caps. Keep
@@ -139,6 +139,35 @@ def _glyph_line_clip_t(
     # at 64x to keep scene error below the 0.01 allowance, including curves.
     scale = 64.0
     transform = QTransform.fromScale(scale, scale)
+    return _GlyphClipGeometry(
+        original_path,
+        stroke_width,
+        tuple(
+            (outline, tuple(outline.toSubpathPolygons(transform)))
+            for outline in (path, stroker.createStroke(path))
+        ),
+    )
+
+
+def _glyph_line_clip_t(
+    p1: QPointF,
+    p2: QPointF,
+    path: QPainterPath,
+    stroke_width: float,
+    offsets: tuple[tuple[float, float], ...] = (),
+    *,
+    prepared: _GlyphClipGeometry | None = None,
+) -> tuple[float, float] | None:
+    """First/last glyph-envelope crossings with stroke extent and an air gap.
+
+    Inspect every contour, not just the filled interval containing the atom:
+    the atom may sit in O's counter, or between separate typographic runs.
+    Never terminate there and leave another piece of the label on the bond.
+    """
+    if prepared is None:
+        prepared = _prepare_glyph_clip_geometry(path, stroke_width)
+    scale = 64.0
+    transform = QTransform.fromScale(scale, scale)
     start, end = transform.map(p1), transform.map(p2)
     hits = []
     length = math.hypot(p2.x() - p1.x(), p2.y() - p1.y())
@@ -146,12 +175,12 @@ def _glyph_line_clip_t(
     along = [ux * x + uy * y for x, y in offsets] or [0.0]
     across = [-uy * x + ux * y for x, y in offsets] or [0.0]
     low, high = min(across), max(across)
-    for outline in (path, stroker.createStroke(path)):
+    for outline, polygons in prepared.outlines:
         if outline.contains(p1):
             hits.append(0.0)
         if outline.contains(p2):
             hits.append(1.0)
-        for polygon in outline.toSubpathPolygons(transform):
+        for polygon in polygons:
             if offsets:
                 # Inspect the entire band occupied by parallel strokes or a
                 # filled strip, including ink between (not only on) its edges.
@@ -195,6 +224,30 @@ class CanvasGeometryController:
         self.canvas = canvas
         self.hit_testing_service = hit_testing_service
         self.history = history_service
+        # One current geometry per live label, never a document/revision cache.
+        # Translation changes the segment's origin, not upright label ink.
+        self._glyph_clip_geometry: WeakKeyDictionary[
+            AtomLabelItem, _GlyphClipGeometry
+        ] = WeakKeyDictionary()
+
+    def _clip_label_line(self, item, p1, p2, width, offsets):
+        transform = item.sceneTransform()
+        if not transform.isAffine():
+            return _glyph_line_clip_t(
+                p1, p2, item.mapToScene(item.glyph_path()), width, offsets
+            )
+        linear = QTransform(
+            transform.m11(), transform.m12(), transform.m21(), transform.m22(), 0, 0
+        )
+        path = linear.map(item.glyph_path())
+        prepared = self._glyph_clip_geometry.get(item)
+        if prepared is None or prepared.path != path or prepared.stroke_width != width:
+            prepared = _prepare_glyph_clip_geometry(path, width)
+            self._glyph_clip_geometry[item] = prepared
+        origin = QPointF(transform.dx(), transform.dy())
+        return _glyph_line_clip_t(
+            p1 - origin, p2 - origin, path, width, offsets, prepared=prepared
+        )
 
     @staticmethod
     def _ring_atom_ids(ring_item) -> list[int] | None:
@@ -674,10 +727,10 @@ class CanvasGeometryController:
                     if stroke_width is None
                     else stroke_width
                 )
-                clipped = _glyph_line_clip_t(
+                clipped = self._clip_label_line(
+                    item,
                     p1,
                     p2,
-                    item.mapToScene(item.glyph_path()),
                     max(0.0, float(width)),
                     offsets,
                 )

@@ -256,6 +256,10 @@ cell and a row arrow; a cell includes its widest caption. The other gaps separat
 rows, structure paint from captions, and caption levels. All distances are at
 most 10,000; gap must be positive and the others may be zero.
 
+Caption bounds include visible note-box fills and border strokes as well as text.
+Structure–caption and caption-line gaps therefore clear the painted boxes too;
+hidden or fully transparent boxes do not add spacing.
+
 Requests are limited to 1 MiB, 128 rows, 128 blocks, 4,096 atom references and
 4,096 item references. Inputs retain the 96 MiB / 20,000 graphics-record bounds.
 Existing output files and symlinks are refused; a new output is published

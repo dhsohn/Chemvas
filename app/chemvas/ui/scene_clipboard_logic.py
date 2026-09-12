@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import contextlib
 from typing import TYPE_CHECKING, cast
 
 from chemvas.domain.document import (
@@ -220,9 +219,13 @@ def clipboard_payload_candidates(
     if mime_data is not None and mime_data.hasFormat(mime_type):
         payload_data = mime_data.data(mime_type)
         if payload_data.size() > MAX_CLIPBOARD_SELECTION_PAYLOAD_BYTES:
-            return payload_candidates
-        with contextlib.suppress(UnicodeDecodeError):
+            raise ValueError("The Chemvas clipboard selection is too large to paste.")
+        try:
             payload_candidates.append(payload_data.data().decode("utf-8"))
+        except UnicodeDecodeError as error:
+            raise ValueError(
+                "The Chemvas clipboard selection is not valid UTF-8."
+            ) from error
     return payload_candidates
 
 
@@ -232,6 +235,7 @@ def decode_clipboard_selection_payload(
     version: int,
 ) -> tuple[dict | None, str | None]:
     for payload_json in payload_candidates:
+        refusal = "The Chemvas clipboard selection is damaged or invalid."
         try:
             payload = strict_json_loads(payload_json)
         except (ValueError, RecursionError):
@@ -239,16 +243,23 @@ def decode_clipboard_selection_payload(
         if not isinstance(payload, dict):
             continue
         if payload.get("format") != CLIPBOARD_SELECTION_FORMAT:
+            refusal = "The clipboard data is not a supported Chemvas selection format."
             continue
         if not _is_supported_selection_payload_version(
             payload.get("version"), current_version=version
         ):
+            refusal = (
+                "This Chemvas clipboard selection uses an unsupported version. "
+                "Copy it again with the same Chemvas version as this window."
+            )
             continue
         # Clipboard MIME is outside the trust boundary: reject any payload whose
         # content does not pass the same whitelist used for .chemvas files.
         if not validate_clipboard_selection_payload(payload):
             continue
         return cast("dict", normalize_json_numbers(payload)), payload_json
+    if payload_candidates:
+        raise ValueError(refusal)
     return None, None
 
 

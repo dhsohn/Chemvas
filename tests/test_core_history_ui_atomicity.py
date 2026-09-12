@@ -1,5 +1,6 @@
 import os
 import unittest
+from contextlib import nullcontext
 from unittest import mock
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
@@ -543,7 +544,7 @@ class CoreHistoryUiAtomicityTest(unittest.TestCase):
             limit=2,
             change_callback=callback,
         )
-        service = CanvasHistoryService(canvas, state)
+        service = CanvasHistoryService(canvas, state, replay_context=nullcontext)
         first = mock.Mock()
         second = mock.Mock()
 

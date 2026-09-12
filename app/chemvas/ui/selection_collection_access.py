@@ -5,7 +5,15 @@ from PyQt6.QtCore import QPointF, Qt
 from chemvas.features.selection import build_selection_snapshot
 from chemvas.ui.canvas_atom_graphics_state import atom_dots_for, atom_items_for
 from chemvas.ui.canvas_bond_graphics_state import bond_items_for_id
-from chemvas.ui.canvas_model_access import atom_for_id, atoms_for, bond_for_id
+from chemvas.ui.canvas_mark_registry import mark_registry_for
+from chemvas.ui.canvas_model_access import (
+    atom_for_id,
+    atoms_for,
+    bond_for_id,
+    bonds_for,
+)
+from chemvas.ui.canvas_scene_items_state import ring_items_for
+from chemvas.ui.scene_item_access import canvas_scene_for, item_is_in_scene
 from chemvas.ui.selection_scene_access import (
     scene_selected_items_for,
     selected_scene_notes_for,
@@ -241,6 +249,7 @@ def selection_items_for_copy_for(canvas) -> list:
     )
     if not selected:
         return []
+    atom_ids, _ = selected_ids_from_items_for(canvas, selected)
     items: list = []
     seen: set = set()
 
@@ -272,10 +281,39 @@ def selection_items_for_copy_for(canvas) -> list:
                 for bond_item in bond_items_for_id(canvas, bond_id):
                     add_with_children(bond_item)
                 if bond is not None:
+                    atom_ids.update((bond.a, bond.b))
                     add_atom_graphics(bond.a)
                     add_atom_graphics(bond.b)
                 continue
         add_with_children(item)
+    # Match the native selection payload: endpoints, induced bonds, complete
+    # ring fills, and atom-bound marks. Do not expand to the whole component;
+    # an explicitly selected mark alone must remain a standalone decoration.
+    if atom_ids:
+        for atom_id in sorted(atom_ids):
+            add_atom_graphics(atom_id)
+        for bond_id, bond in enumerate(bonds_for(canvas)):
+            if bond is not None and bond.a in atom_ids and bond.b in atom_ids:
+                for bond_item in bond_items_for_id(canvas, bond_id):
+                    add_with_children(bond_item)
+        for ring in ring_items_for(canvas):
+            if not item_is_in_scene(canvas_scene_for(canvas), ring):
+                continue
+            ring_ids = ring.data(2)
+            if (
+                isinstance(ring_ids, list)
+                and ring_ids
+                and all(
+                    isinstance(atom_id, int) and atom_id in atom_ids
+                    for atom_id in ring_ids
+                )
+            ):
+                add_with_children(ring)
+        marks = mark_registry_for(canvas)
+        for atom_id in sorted(atom_ids):
+            for mark in marks.get_for_atom(atom_id) or ():
+                if item_is_in_scene(canvas_scene_for(canvas), mark):
+                    add_with_children(mark)
     return items
 
 

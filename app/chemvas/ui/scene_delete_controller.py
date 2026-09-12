@@ -40,6 +40,7 @@ from chemvas.ui.canvas_smiles_input_state import (
 from chemvas.ui.handle_overlay_access import clear_handles_for
 from chemvas.ui.history_commands import (
     DeleteSceneItemsCommand,
+    GroupSceneItemsCommand,
     UngroupSceneItemsCommand,
 )
 from chemvas.ui.scene_delete_apply_logic import apply_delete_selection_plan
@@ -75,6 +76,29 @@ if TYPE_CHECKING:
 
 
 _DELETED_RING_ITEM = object()
+
+
+def _shrink_group_members(
+    canvas,
+    group_id: int,
+    *,
+    atom_ids: set[int],
+    item_ids: set[int],
+) -> CanvasSceneGroup | None:
+    """Replace the remaining membership, retaining the original Undo object."""
+    groups = group_state_for(canvas).groups
+    original = groups.get(group_id)
+    if original is None:
+        return None
+    remaining = CanvasSceneGroup(
+        original.atom_ids - atom_ids,
+        [item for item in original.items if id(item) not in item_ids],
+    )
+    if remaining.atom_ids or remaining.items:
+        restore_group_for(canvas, group_id, remaining)
+    else:
+        remove_group_for(canvas, group_id)
+    return original
 
 
 class _RingDataItem(Protocol):
@@ -281,7 +305,10 @@ class SceneDeleteTransactionSession:
         self._require_active()
         if not isinstance(atom_id, int) or not self.controller._has_atom(atom_id):
             return None
-        removed_groups = self._take_groups(atom_ids={atom_id})
+        removed_groups = self._take_groups(
+            atom_ids={atom_id},
+            items=list(self.controller.marks.by_atom.get(atom_id, ())),
+        )
         candidate_ring_ids = set(self.pending_broken_ring_ids)
         candidate_ring_ids.update(self.ring_ids_by_atom.get(atom_id, ()))
         bond_ids = set(self.atom_bond_ids.get(atom_id, ()))
@@ -474,11 +501,34 @@ class SceneDeleteTransactionSession:
         for item in items or ():
             group_ids.update(self.group_ids_by_item.get(id(item), ()))
         removed: list[tuple[int, CanvasSceneGroup]] = []
+        deleted_atoms = atom_ids or set()
+        deleted_items = {id(item) for item in items or ()}
         for group_id in sorted(group_ids):
-            group = remove_group_for(self.controller.canvas, group_id)
-            self._forget_group(group_id)
+            group = _shrink_group_members(
+                self.controller.canvas,
+                group_id,
+                atom_ids=deleted_atoms,
+                item_ids=deleted_items,
+            )
             if group is not None:
                 removed.append((group_id, group))
+            if group_id not in group_state_for(self.controller.canvas).groups:
+                self._forget_group(group_id)
+                continue
+            # Keep the surviving group discoverable on subsequent erase hits.
+            # Update only removed reverse-index entries, not every survivor.
+            member_atoms, member_items = self.group_members_by_id[group_id]
+            for members, deleted, reverse in (
+                (member_atoms, deleted_atoms, self.group_ids_by_atom),
+                (member_items, deleted_items, self.group_ids_by_item),
+            ):
+                for member in deleted & members:
+                    indexed = reverse.get(member)
+                    if indexed is not None:
+                        indexed.discard(group_id)
+                        if not indexed:
+                            reverse.pop(member, None)
+                members.difference_update(deleted)
         return removed
 
     def _take_groups_for_items(self, items: list) -> list[tuple[int, CanvasSceneGroup]]:
@@ -519,6 +569,7 @@ class SceneDeleteTransactionSession:
     def _restore_groups(self, removed: list[tuple[int, CanvasSceneGroup]]) -> None:
         for group_id, group in removed:
             restore_group_for(self.controller.canvas, group_id, group)
+            self._forget_group(group_id)
             self._index_group(group_id, group)
 
     def _ring_items(self, ring_ids: set[int]) -> list:
@@ -638,7 +689,8 @@ class SceneDeleteController:
         remove_scene_item_helper(self.canvas, item)
 
     def _push_history(self, command: HistoryCommand) -> None:
-        self.history.push(command)
+        if self.history.push(command) is False and self.history.is_enabled():
+            raise RuntimeError("Delete history push did not commit")
 
     def _remove_overlapping_groups(
         self,
@@ -653,22 +705,46 @@ class SceneDeleteController:
         )
         removed: list[tuple[int, CanvasSceneGroup]] = []
         for group_id in sorted(group_ids):
-            group = remove_group_for(self.canvas, group_id)
+            group = _shrink_group_members(
+                self.canvas,
+                group_id,
+                atom_ids=atom_ids or set(),
+                item_ids={id(item) for item in items or ()},
+            )
             if group is not None:
                 removed.append((group_id, group))
         return removed
 
-    @staticmethod
     def _with_group_cleanup(
+        self,
         command: HistoryCommand,
         removed_groups: list[tuple[int, CanvasSceneGroup]],
     ) -> HistoryCommand:
         if not removed_groups:
             return command
-        group_command = UngroupSceneItemsCommand(removed=removed_groups)
+        # Atom removal, orphan cleanup and broken ring cleanup may shrink the
+        # same group repeatedly in one command. Undo needs the *first* object.
+        originals: dict[int, CanvasSceneGroup] = {}
+        for group_id, group in removed_groups:
+            originals.setdefault(group_id, group)
+        groups = group_state_for(self.canvas).groups
+        group_commands: list[HistoryCommand] = []
+        for group_id, original in originals.items():
+            remaining = groups.get(group_id)
+            if remaining is None:
+                group_commands.append(UngroupSceneItemsCommand([(group_id, original)]))
+            else:
+                group_commands.append(
+                    GroupSceneItemsCommand(
+                        atom_ids=set(remaining.atom_ids),
+                        items=list(remaining.items),
+                        absorbed=[(group_id, original)],
+                        group_id=group_id,
+                    )
+                )
         if isinstance(command, CompositeCommand):
-            return CompositeCommand([group_command, *command.commands])
-        return CompositeCommand([group_command, command])
+            return CompositeCommand([*group_commands, *command.commands])
+        return CompositeCommand([*group_commands, command])
 
     def _delete_broken_ring_fills(
         self,
@@ -920,7 +996,9 @@ class SceneDeleteController:
         if not isinstance(atom_id, int) or not self._has_atom(atom_id):
             return None
         if removed_groups is None:
-            removed_groups = self._remove_overlapping_groups(atom_ids={atom_id})
+            removed_groups = self._remove_overlapping_groups(
+                atom_ids={atom_id}, items=list(self.marks.by_atom.get(atom_id, ()))
+            )
         before_smiles_input = last_smiles_input_for(self.canvas)
         neighbor_atom_ids = self._neighbor_atom_ids(atom_id, bond_ids=bond_ids)
         command = self._atom_delete_command(

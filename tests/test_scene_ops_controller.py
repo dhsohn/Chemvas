@@ -782,9 +782,8 @@ class SceneOpsControllerTest(unittest.TestCase):
         ):
             mime_data = canvas.new_mime_data(raw_payload)
             clipboard.setMimeData(mime_data)
-            payload, payload_json = controller.clipboard_selection_payload()
-            self.assertIsNone(payload)
-            self.assertIsNone(payload_json)
+            with self.assertRaisesRegex(ValueError, "format|version"):
+                controller.clipboard_selection_payload()
 
     def test_clipboard_selection_payload_rejects_image_only_clipboard(self) -> None:
         canvas = _FakeCanvas()

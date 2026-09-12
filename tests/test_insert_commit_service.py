@@ -24,6 +24,7 @@ from chemvas.ui.atom_coords_access import (
 from chemvas.ui.canvas_atom_graphics_state import CanvasAtomGraphicsState
 from chemvas.ui.canvas_bond_graphics_state import CanvasBondGraphicsState
 from chemvas.ui.canvas_graph_state import CanvasGraphState
+from chemvas.ui.canvas_group_state import CanvasGroupState
 from chemvas.ui.canvas_mark_registry import CanvasMarkRegistry
 from chemvas.ui.canvas_runtime_services import CanvasRuntimeServices
 from chemvas.ui.canvas_scene_items_state import (
@@ -77,6 +78,7 @@ class _FakeCanvas:
     def __init__(self) -> None:
         self.model = MoleculeModel()
         self.runtime_state = canvas_runtime_state(
+            group_state=CanvasGroupState(),
             smiles_input_state=CanvasSmilesInputState(),
             scene_items_state=CanvasSceneItemsState(),
             atom_coords_3d_state=CanvasAtomCoords3DState(),

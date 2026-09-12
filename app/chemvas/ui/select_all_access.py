@@ -15,9 +15,9 @@ from chemvas.ui.canvas_scene_items_state import (
 from chemvas.ui.scene_item_access import attached_canvas_scene_items
 from chemvas.ui.selection_scene_access import set_scene_items_selected_for
 from chemvas.ui.selection_service_access import (
-    refresh_selection_outline_for,
     select_note_for,
 )
+from chemvas.ui.selection_update_batch import batch_selection_updates
 
 
 def _all_selectable_scene_items_for(canvas) -> tuple[list, list]:
@@ -45,10 +45,10 @@ def select_all_scene_items_for(canvas) -> bool:
     items, notes = _all_selectable_scene_items_for(canvas)
     if not items and not notes:
         return False
-    set_scene_items_selected_for(canvas, items, True)
-    for note in notes:
-        select_note_for(canvas, note, additive=True)
-    refresh_selection_outline_for(canvas)
+    with batch_selection_updates(canvas):
+        set_scene_items_selected_for(canvas, items, True)
+        for note in notes:
+            select_note_for(canvas, note, additive=True)
     return True
 
 

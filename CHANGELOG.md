@@ -22,6 +22,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Copy induced bonds, complete ring fills and atom-bound marks with atom/bond
+  selections, matching native clipboard content and selection figure exports.
+  Keep Qt text-selection frames out of copied images and visibly explain invalid
+  native clipboard data without falling through to an unrelated image flavor.
+- Tie molecule-identifier copy feedback to the button's lifetime and restart it
+  on repeated clicks, avoiding callbacks into a closed 3D information window.
+- Coalesce selection-outline work during Select All and Undo/Redo. Reuse current
+  atom-label clipping geometry across movement while checking changed text,
+  font, transforms and stroke width; document validation remains uncached.
+- Fuse rings onto the unoccupied side of concave chair edges, including rotated
+  and reversed-winding drawings. Include visible caption-box fills and borders
+  in Arrange Scheme spacing so boxes clear structures and neighbouring captions.
+- Explain unsupported image imports with PNG/JPEG conversion advice and retain
+  the offending image entry number in composition errors.
+- Avoid decoding existing embedded images again when inserting or pasting new
+  images. Keep strict incoming-image validation and aggregate resource limits.
+- Restore initial canvas focus and Tab traversal after note editing; show focus
+  on styled context/status buttons and enable keyboard reset/exact zoom entry.
+- Update group membership with structure additions and member deletion, retaining
+  the surviving group and restoring membership through Undo/Redo. Guide users to
+  regroup before connecting different groups, and explain why Group needs more
+  than a single molecule.
 - Cancel pending pointer edits before Undo/Redo, Cut/Delete, Paste, grouping and
   object-edit shortcuts, preserving the selected tool and focused text editing.
   A late mouse release cannot publish a discarded gesture or erase Redo.

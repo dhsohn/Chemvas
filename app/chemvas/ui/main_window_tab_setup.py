@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QTabWidget
 
 if TYPE_CHECKING:
@@ -32,6 +33,11 @@ def build_canvas_tab_assembly(
     # Single-document-per-window model: each window holds one canvas and the tab
     # strip is hidden. "New canvas" / "open" spawn separate windows instead.
     tab_bar.setVisible(False)
+    # QTabWidget's default focus proxy is that hidden strip. It otherwise traps
+    # both initial window focus and forward Tab traversal at the end of a cycle.
+    canvas_tabs.setFocusProxy(None)
+    canvas_tabs.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+    tab_bar.setFocusPolicy(Qt.FocusPolicy.NoFocus)
     canvas_tabs.currentChanged.connect(on_canvas_tab_changed)
     canvas_tabs.tabCloseRequested.connect(on_canvas_tab_close_requested)
     canvas_tabs.setParent(parent)

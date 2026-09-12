@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING
 
 from PyQt6.QtCore import QEvent, Qt
 from PyQt6.QtGui import QKeySequence, QNativeGestureEvent
-from PyQt6.QtWidgets import QGraphicsTextItem, QGraphicsView
+from PyQt6.QtWidgets import QGraphicsTextItem, QGraphicsView, QWidget
 
 from chemvas.ui.atom_label_access import atom_has_visible_label_for, atom_label_service
 from chemvas.ui.canvas_hover_state import hover_state_for
@@ -238,6 +238,27 @@ class CanvasInputController:
         return should_override_chemdraw_shortcut_for(self.canvas, event)
 
     def event(self, event, *, native_gesture_event_type=QNativeGestureEvent) -> bool:
+        if (
+            event.type() == QEvent.Type.KeyPress
+            and event.key() in (Qt.Key.Key_Tab, Qt.Key.Key_Backtab)
+            and event.modifiers()
+            in (Qt.KeyboardModifier.NoModifier, Qt.KeyboardModifier.ShiftModifier)
+        ):
+            focus_item = focused_scene_item_for(self.canvas)
+            editing_text = isinstance(focus_item, QGraphicsTextItem) and bool(
+                focus_item.textInteractionFlags()
+                & Qt.TextInteractionFlag.TextEditorInteraction
+            )
+            # A committed note can remain the scene's remembered focus item.
+            # The scene then consumes Tab without moving focus. Outside a live
+            # text editor, traversal belongs to the containing widget chain.
+            if not editing_text:
+                forward = event.key() != Qt.Key.Key_Backtab and not (
+                    event.modifiers() & Qt.KeyboardModifier.ShiftModifier
+                )
+                if QWidget.focusNextPrevChild(self.canvas, forward):
+                    event.accept()
+                    return True
         if (
             event.type() == QEvent.Type.ShortcutOverride
             and self.should_override_chemdraw_shortcut(event)

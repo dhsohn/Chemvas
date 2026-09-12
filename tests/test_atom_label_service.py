@@ -39,6 +39,7 @@ from chemvas.ui.canvas_bond_graphics_state import (
     bond_items_for_id,
     set_bond_items_for,
 )
+from chemvas.ui.canvas_group_state import CanvasGroupState
 from chemvas.ui.canvas_history_state import CanvasHistoryState
 from chemvas.ui.canvas_service_access import canvas_services_for
 from chemvas.ui.canvas_smiles_input_state import (
@@ -100,6 +101,7 @@ class _FakeCanvas:
             smiles_input_state=CanvasSmilesInputState(),
             history_state=self.history_state,
             hover_preview_state=HoverState(),
+            group_state=CanvasGroupState(),
         )
         set_atom_items_for(self, {})
         set_atom_dots_for(self, {})

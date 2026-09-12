@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING
 from chemvas.ui.scene_group_operations import group_selection_targets_for
 from chemvas.ui.selection_collection_access import selected_ids_for
 from chemvas.ui.selection_scene_access import set_scene_items_selected_for
+from chemvas.ui.selection_style_state import selection_style_state_for
 
 if TYPE_CHECKING:
     from PyQt6.QtCore import QPointF
@@ -117,6 +118,8 @@ class SelectionController:
         return self.hit_test_service.selection_hit_test(pos, snapshot=snapshot)
 
     def update_selection_outline(self) -> None:
+        if selection_style_state_for(self.canvas).suspend_outline:
+            return
         self.outline_service.update_selection_outline()
 
     def shift_selection_outlines(self, dx: float, dy: float) -> None:

@@ -2,10 +2,10 @@ from __future__ import annotations
 
 import math
 
-from PyQt6.QtCore import QPointF, Qt
-from PyQt6.QtGui import QPolygonF
+from PyQt6.QtCore import QPointF
 
 from chemvas.core.template_geometry import (
+    bond_side_is_occupied,
     cyclohexane_boat_points,
     cyclohexane_chair_flipped_points,
     cyclohexane_chair_points,
@@ -198,9 +198,9 @@ def _compute_bond_template_geometry_for(
     *,
     center_hint: QPointF | None = None,
 ) -> tuple[list[QPointF], list[tuple[int, float, float]]] | None:
-    occupied = graph_ring_polygons_for_bond(
-        bond_id, atoms=atoms_for(canvas), bonds=bonds_for(canvas)
-    )
+    atoms = atoms_for(canvas)
+    bonds = bonds_for(canvas)
+    occupied = graph_ring_polygons_for_bond(bond_id, atoms=atoms, bonds=bonds)
     if not occupied:
         legacy_polygon = ring_polygon_points_for_bond_for(canvas, bond_id)
         if legacy_polygon is not None:
@@ -208,23 +208,25 @@ def _compute_bond_template_geometry_for(
     result = geometry_fn(
         geometry_input,
         bond_id,
-        atoms=atoms_for(canvas),
-        bonds=bonds_for(canvas),
+        atoms=atoms,
+        bonds=bonds,
         center_hint=point_pair(center_hint),
         occupied_polygon=occupied[0] if occupied else None,
     )
     if result is not None and len(occupied) > 1:
+        bond = bonds[bond_id]
+        assert bond is not None
+        start, end = atoms[bond.a], atoms[bond.b]
+        bond_start, bond_end = (start.x, start.y), (end.x, end.y)
         points, _ = result
-        center = QPointF(
+        center = (
             sum(x for x, _ in points) / len(points),
             sum(y for _, y in points) / len(points),
         )
         # A shared interior edge can have an occupied ring on both sides.
         # Never let choosing the first ring conceal an overlap with the other.
         if any(
-            QPolygonF(qpoints_from_pairs(polygon)).containsPoint(
-                center, Qt.FillRule.WindingFill
-            )
+            bond_side_is_occupied(center, bond_start, bond_end, polygon)
             for polygon in occupied
         ):
             return None

@@ -412,16 +412,16 @@ class SceneOpsControllerClipboardPayloadTest(unittest.TestCase):
         clipboard.setMimeData(
             canvas.new_mime_data(b'{"format":"not-chemvas-selection","version":1}')
         )
-        payload, returned_json = controller.clipboard_selection_payload()
-        self.assertIsNone(payload)
-        self.assertIsNone(returned_json)
+        with self.assertRaisesRegex(ValueError, "format"):
+            controller.clipboard_selection_payload()
 
         invalid_version_mime = canvas.new_mime_data(
             b'{"format":"chemvas-selection","version":999}'
         )
         invalid_version_mime.setImageData(QImage(4, 4, QImage.Format.Format_ARGB32))
         clipboard.setMimeData(invalid_version_mime)
-        self.assertEqual(controller.clipboard_selection_payload(), (None, None))
+        with self.assertRaisesRegex(ValueError, "unsupported version"):
+            controller.clipboard_selection_payload()
 
 
 class _FakeCanvas:
