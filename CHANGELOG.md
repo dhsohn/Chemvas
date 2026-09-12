@@ -22,6 +22,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Cancel pending pointer edits before Undo/Redo, Cut/Delete, Paste, grouping and
+  object-edit shortcuts, preserving the selected tool and focused text editing.
+  A late mouse release cannot publish a discarded gesture or erase Redo.
+- Preserve other molecules' drawing depth when a Perspective gesture changes
+  the projection frame; restore the complete coordinate inventory on Undo/Redo
+  and cancellation, and retain it through save/reopen.
+- Allow explicit graph patches to repair invalid alias attachments in a
+  structurally valid drawing. Inspection remains strict, and the complete result
+  must pass document, electronic annotation and Calculation Plan validation.
+- Restore exact atom and scene-item geometry for Select/Move drag Undo/Redo,
+  including bound charge positions and ring fills, without dirty float residue.
+  Direct atom/bond drags update ring fills immediately.
 - Keep SMILES insertion previews visible across high-DPI canvas viewports by
   distinguishing logical widget dimensions from physical image dimensions.
 - Apply document-wide arrow width/head and orbital phase changes immediately,

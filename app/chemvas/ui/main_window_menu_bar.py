@@ -18,14 +18,16 @@ from chemvas.ui.image_actions import (
 from chemvas.ui.main_window_about_dialog import GITHUB_URL, show_about_dialog
 from chemvas.ui.main_window_document_dialogs import prompt_sheet_setup
 from chemvas.ui.main_window_ports import (
+    align_selection_for_window,
     copy_selection_for_window,
     cut_selection_for_window,
+    distribute_selection_for_window,
     fit_canvas_to_view_for_window,
+    flip_selection_for_window,
     group_selection_for_window,
     paste_selection_for_window,
     redo_for_window,
     reset_zoom_for_window,
-    scene_transform_controller_for_window,
     select_all_for_window,
     services_for_window,
     set_grid_snap_for_window,
@@ -299,18 +301,14 @@ def _build_edit_menu(
         window,
         "Flip Horizontal",
         status_tip="Flip the current selection horizontally (Ctrl+Shift+H)",
-        triggered=lambda: scene_transform_controller_for_window(
-            window
-        ).flip_selected_items(horizontal=True),
+        triggered=lambda: flip_selection_for_window(window, horizontal=True),
     )
     _add_action(
         edit_menu,
         window,
         "Flip Vertical",
         status_tip="Flip the current selection vertically (Ctrl+Shift+V)",
-        triggered=lambda: scene_transform_controller_for_window(
-            window
-        ).flip_selected_items(horizontal=False),
+        triggered=lambda: flip_selection_for_window(window, horizontal=False),
     )
     _add_action(
         edit_menu,
@@ -326,9 +324,7 @@ def _build_edit_menu(
             window,
             text,
             status_tip=f"Align the selected structures and objects by their {text.lower()}",
-            triggered=lambda mode=mode: scene_transform_controller_for_window(
-                window
-            ).align_selected_items(mode),
+            triggered=lambda mode=mode: align_selection_for_window(window, mode),
         )
     distribute_menu = edit_menu.addMenu("Distribute")
     for text, axis in DISTRIBUTE_MENU_SPECS:
@@ -337,9 +333,7 @@ def _build_edit_menu(
             window,
             text,
             status_tip=f"Spread the selected structures and objects {text.lower()} with equal gaps",
-            triggered=lambda axis=axis: scene_transform_controller_for_window(
-                window
-            ).distribute_selected_items(axis),
+            triggered=lambda axis=axis: distribute_selection_for_window(window, axis),
         )
     return undo_action, redo_action
 

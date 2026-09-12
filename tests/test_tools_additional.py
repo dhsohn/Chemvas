@@ -21,9 +21,11 @@ from chemvas.core.history import (
 )
 from chemvas.domain.document import Atom, Bond, MoleculeModel
 from chemvas.features.hover import HoverState
+from chemvas.ui.atom_coords_access import CanvasAtomCoords3DState
 from chemvas.ui.benzene_tool import BenzeneTool
 from chemvas.ui.canvas_callback_state import CanvasCallbackState
 from chemvas.ui.canvas_hover_state import hover_state_for
+from chemvas.ui.canvas_mark_registry import CanvasMarkRegistry
 from chemvas.ui.canvas_rotation_state import CanvasRotationState
 from chemvas.ui.canvas_scene_items_state import CanvasSceneItemsState
 from chemvas.ui.canvas_smiles_input_state import (
@@ -33,7 +35,7 @@ from chemvas.ui.canvas_smiles_input_state import (
 from chemvas.ui.canvas_tool_settings_state import CanvasToolSettingsState
 from chemvas.ui.canvas_window_access import set_error_callback_for
 from chemvas.ui.edit_tools import ColorTool, DeleteTool, FlipTool
-from chemvas.ui.history_commands import DeleteSceneItemsCommand, MoveItemsCommand
+from chemvas.ui.history_commands import DeleteSceneItemsCommand, SetSceneGeometryCommand
 from chemvas.ui.interaction_tools import MarkTool, NoteTool
 from chemvas.ui.move_tool import MoveTool
 from chemvas.ui.perspective_tool import PerspectiveTool
@@ -421,7 +423,11 @@ class _MoveCanvas:
         self.selected_items_for_transform = []
         self.selected_atom_ids = set()
         self.selected_bond_ids = set()
-        self.model = SimpleNamespace(bonds=[Bond(1, 2, 1)])
+        self.model = SimpleNamespace(atoms={}, bonds=[Bond(1, 2, 1)])
+        self.runtime_state = canvas_runtime_state(
+            atom_coords_3d_state=CanvasAtomCoords3DState(),
+            mark_registry=CanvasMarkRegistry(),
+        )
         self.item = None
         self.pushed_commands = []
         self.history_service = SimpleNamespace(
@@ -1201,13 +1207,22 @@ class ToolsAdditionalTest(unittest.TestCase):
             self.assertTrue(move_tool.on_mouse_press(_Event(QPointF(1.0, 1.0))))
         move_tool._start_pos = QPointF(0.0, 0.0)
         self.assertTrue(move_tool.on_mouse_move(_Event(QPointF(1.0, 1.0))))
-        move_tool._begin_drag_transaction()
+        token = move_tool._begin_drag_transaction()
         move_tool._drag_item = _DataItem("arrow", 2)
+        before = {"kind": "arrow", "x": 0.0, "y": 0.0}
+        after = {"kind": "arrow", "x": 3.0, "y": 4.0}
+        move_tool._drag_item.setData(9, before)
+        move_tool._capture_move_geometry(token, set(), [move_tool._drag_item], ())
+        move_tool._drag_item.setData(9, after)
         move_tool._start_pos = QPointF(1.0, 1.0)
         move_tool._moved = True
         move_tool._total_delta = QPointF(3.0, 4.0)
         self.assertTrue(move_tool.on_mouse_release(_Event(QPointF(1.0, 1.0))))
-        self.assertIsInstance(move_canvas.pushed_commands[-1], MoveItemsCommand)
+        command = move_canvas.pushed_commands[-1]
+        self.assertIsInstance(command, SetSceneGeometryCommand)
+        self.assertEqual(command.atom_commands, [])
+        self.assertEqual(command.item_commands[0].before_state, before)
+        self.assertEqual(command.item_commands[0].after_state, after)
 
         delete_canvas = _DeleteCanvas()
         delete_tool = DeleteTool(

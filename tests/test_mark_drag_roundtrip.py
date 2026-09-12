@@ -37,8 +37,11 @@ def test_mixed_move_undo_redo_no_double_moved_mark(canvas):
     before = snapshot(canvas)
     before_mark = scene_item_state_for(canvas, independent)
     frame(tool)
-    assert len(tool._require_drag_token().before_mark_states) == 2
-    assert tool._require_drag_token().before_mark_states[0][1] == before_mark
+    states = dict(tool._require_drag_token().before_item_states)
+    assert set(states) == {dependent, independent, free}
+    assert {
+        key: value for key, value in states[independent].items() if key != "item_pos"
+    } == before_mark
     tool._commit_selection_drag()
     after = snapshot(canvas)
     history = canvas.services.history_service
@@ -59,7 +62,7 @@ def test_cancel_and_failure_keep_baseline_redo(canvas, phase):
     stacks = history.capture_stack_snapshot()
     if phase == "no-op":
         tool._apply_drag_delta(QPointF())
-        assert tool._require_drag_token().before_mark_states is None
+        assert tool._require_drag_token().before_item_states is None
         assert tool._require_drag_token().savepoint is None
         tool._commit_selection_drag()
     elif phase == "move-fail":

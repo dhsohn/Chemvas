@@ -21,6 +21,11 @@ class PerspectiveTool(Tool):
         self._rotating = False
         self._axis_lock = None
 
+    @property
+    @override
+    def has_active_gesture(self) -> bool:
+        return self._rotating
+
     @override
     def activate(self) -> None:
         self.context.set_rubber_band_drag_mode()

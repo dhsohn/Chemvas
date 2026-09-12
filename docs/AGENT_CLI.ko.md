@@ -460,6 +460,47 @@ chemvas apply-patch ring-added.chemvas patch.json --output revised.chemvas
 해당 간선을 순환 경로에 포함하는 고리 채움만 제거합니다. 다른 채움은 유지하며,
 계산 계획의 참조가 무효가 되면 여전히 패치를 거부합니다.
 
+### 잘못 연결된 별칭 그림 수리
+
+저장된 그림이 문서 구조상 유효해도 별칭의 연결 규칙을 위반할 수 있습니다. 예를
+들어 `OH`, `NH2`, `SH`에 결합이 두 개이거나 이중 결합이 붙은 경우입니다.
+`inspect`와 `inspect-document`는 이런 의미 오류를 계속 거부합니다. `apply-patch`는
+이를 수리할 수 있습니다. 편집 전에 원본 구조, 정확한 해시, 패치 요청을 검증하고,
+편집 뒤 **최종 후보 전체**의 별칭 연결, 전하/라디칼 주석 일관성, Calculation Plan,
+검토된 반응 전 복합체 쌍을 검증합니다. 변경하지 않았거나 일부만 수리하여 여전히
+무효인 그림은 출력을 만들지 않습니다. 기존 검증 규칙을 적용하는 것이지, 일반적인
+화학적 정확성을 보증하는 것은 아닙니다. 수리 내용을 자동으로 추론하지 않습니다.
+
+검사가 막히면 네이티브 JSON의 `state.model.atoms` 키에서 안정된 원자 ID를,
+`state.model.bonds`에서 결합 끝점을 읽고, 원본 파일의 정확한 바이트로 SHA-256을
+계산하세요. 아래 읽기 전용 코드는 원시 필드를 보여줄 뿐 화학 의미를 검증하지
+않습니다.
+
+```bash
+python - <<'PY'
+import hashlib, json
+from pathlib import Path
+data = Path("drawing.chemvas").read_bytes()
+model = json.loads(data)["state"]["model"]
+print(json.dumps({"source_sha256": hashlib.sha256(data).hexdigest(),
+                  "atoms": model["atoms"], "bonds": model["bonds"]}, indent=2))
+PY
+```
+
+사용자가 원자 `1`이 `OH`가 아니라 명시적 산소여야 한다고 확인했다면, 해당 원본
+해시와 함께 Graph Patch 요청에 아래 연산을 넣으세요.
+
+```json
+{"op":"update_atom", "atom_id":1, "changes":{"element":"O"}}
+```
+
+위 흐름처럼 `--dry-run` 뒤 새 `--output` 경로에 쓰고 결과를 검사하고 다시 여세요.
+올바른 수리가 결합 편집일 수도 있으므로 검증 오류를 없애기 위해서가 아니라 의도한
+그림에 맞게 결정해야 합니다. 이 흐름은 GUI 저장 경고를 추가하거나 검사 명령의
+규칙을 완화하지 않습니다.
+
+### 말단 각도 편집
+
 `set_terminal_angle`은 손으로 쓴 말단 좌표의 제한된 대안입니다. 아래 연산은
 [실행 가능한 출판 예제](../examples/publication_scheme.py)의 별도 aryl–O–Me 입력에
 쓰는 것이며, 위의 ring-added 문서에 이어 적용하는 연산이 **아닙니다**.

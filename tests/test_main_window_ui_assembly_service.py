@@ -435,11 +435,16 @@ class MainWindowUIAssemblyServiceTest(unittest.TestCase):
             ):
                 self._menu_action(edit_menu, text).trigger()
                 port.assert_called_once_with(window)
-        with mock.patch(
-            "chemvas.ui.main_window_menu_bar.scene_transform_controller_for_window",
-            side_effect=lambda w: (
-                w.canvas.services.scene_operations.scene_transform_controller
-            ),
+        with (
+            mock.patch(
+                "chemvas.ui.main_window_menu_bar.flip_selection_for_window"
+            ) as flip_port,
+            mock.patch(
+                "chemvas.ui.main_window_menu_bar.align_selection_for_window"
+            ) as align_port,
+            mock.patch(
+                "chemvas.ui.main_window_menu_bar.distribute_selection_for_window"
+            ) as distribute_port,
         ):
             self._menu_action(edit_menu, "Flip Horizontal").trigger()
             self._menu_action(edit_menu, "Flip Vertical").trigger()
@@ -448,16 +453,15 @@ class MainWindowUIAssemblyServiceTest(unittest.TestCase):
             self._menu_action(
                 self._menu(edit_menu, "Distribute"), "Horizontally"
             ).trigger()
-        window.canvas.scene_transform_controller.flip_selected_items.assert_has_calls(
-            [mock.call(horizontal=True), mock.call(horizontal=False)]
+        self.assertEqual(
+            flip_port.call_args_list,
+            [mock.call(window, horizontal=True), mock.call(window, horizontal=False)],
         )
         self.assertEqual(
-            window.canvas.scene_transform_controller.align_selected_items.call_args_list,
-            [mock.call("left"), mock.call("bottom")],
+            align_port.call_args_list,
+            [mock.call(window, "left"), mock.call(window, "bottom")],
         )
-        window.canvas.scene_transform_controller.distribute_selected_items.assert_called_once_with(
-            "horizontal"
-        )
+        distribute_port.assert_called_once_with(window, "horizontal")
 
         view_menu = self._menu(menu_bar, "View")
         view_texts = [

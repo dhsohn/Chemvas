@@ -23,17 +23,17 @@ from typing import TYPE_CHECKING, Any
 from PyQt6.QtCore import QPointF
 
 from chemvas.core.history import (
-    CompositeCommand,
     HistoryCommand,
-    MoveAtomsCommand,
+    SetAtomPositionsCommand,
 )
 from chemvas.core.tool_overlay_logic import clear_temporary_tool_overlay
 from chemvas.domain.transactions import add_recovery_error_note
+from chemvas.ui.atom_coords_access import atom_coords_3d_for
 from chemvas.ui.bond_renderer_access import update_bond_geometry_for
 from chemvas.ui.canvas_atom_graphics_state import atom_dots_for, atom_items_for
 from chemvas.ui.canvas_bond_graphics_state import bond_items_for_id
 from chemvas.ui.canvas_mark_registry import mark_registry_for
-from chemvas.ui.canvas_model_access import bond_for_id
+from chemvas.ui.canvas_model_access import atoms_for, bond_for_id
 from chemvas.ui.canvas_scene_items_state import ring_items_for_atoms
 from chemvas.ui.endpoint_snap_access import connection_for
 from chemvas.ui.handle_state import active_handles_for
@@ -42,7 +42,6 @@ from chemvas.ui.history_canvas_access import (
     capture_history_transaction_for_history,
 )
 from chemvas.ui.history_commands import (
-    MoveItemsCommand,
     SetSceneGeometryCommand,
     UpdateSceneItemCommand,
 )
@@ -89,7 +88,9 @@ class _DragTransactionToken:
     history_service: Any
     savepoint: Any | None = None
     pushed: bool = False
-    before_mark_states: tuple[tuple[Any, dict], ...] | None = None
+    before_positions: dict[int, tuple[float, float]] | None = None
+    before_coords_3d: dict[int, tuple[float, float, float]] | None = None
+    before_item_states: tuple[tuple[Any, dict], ...] | None = None
 
 
 class SelectionDragMixin:
@@ -413,6 +414,40 @@ class SelectionDragMixin:
         # would survive without an undo command while redo stayed intact.
         return self._total_delta.x() != 0.0 or self._total_delta.y() != 0.0
 
+    def _capture_move_geometry(self, token, atom_ids, items, ring_items) -> None:
+        """Record the command payload once, before the first effective frame.
+
+        This captures only moved geometry. The existing document savepoint
+        remains the sole owner of cancellation and failed-commit recovery.
+        """
+        if token.before_positions is not None:
+            return
+        atoms = atoms_for(self.canvas)
+        coords = atom_coords_3d_for(self.canvas)
+        token.before_positions = {
+            atom_id: (atoms[atom_id].x, atoms[atom_id].y) for atom_id in atom_ids
+        }
+        token.before_coords_3d = {
+            atom_id: coords[atom_id] for atom_id in atom_ids if atom_id in coords
+        }
+        marks = mark_registry_for(self.canvas)
+        dependent_items = [
+            mark for atom_id in atom_ids for mark in marks.get_for_atom(atom_id) or ()
+        ]
+        token.before_item_states = tuple(
+            (item, self._move_item_state(item))
+            for item in dict.fromkeys([*dependent_items, *ring_items, *items])
+        )
+
+    def _move_item_state(self, item) -> dict:
+        state = scene_item_state_for(self.canvas, item)
+        if state.get("kind") == "mark":
+            # A mark's offset is semantic attachment data, not an exact Qt
+            # position: summing atom+offset can round differently after drag.
+            pos = item.pos()
+            state["item_pos"] = (pos.x(), pos.y())
+        return state
+
     def _apply_drag_delta(self, delta: QPointF) -> None:
         if not self._drag_selection:
             return
@@ -428,15 +463,12 @@ class SelectionDragMixin:
                 token,
                 move_scope_factory=self._selection_move_scope,
             )
-            if token.before_mark_states is None:
-                # A charge's bound offset must undo exactly: subtracting the
-                # accumulated pointer delta can leave a dirty float residual.
-                # Marks belonging to moved atoms are not independent items.
-                token.before_mark_states = tuple(
-                    (item, scene_item_state_for(self.canvas, item))
-                    for item in self._selection_items
-                    if item.data(0) == "mark"
-                )
+            self._capture_move_geometry(
+                token,
+                self._selection_atom_ids,
+                self._selection_items,
+                self._drag_affected_ring_items or (),
+            )
             if not self._suspended_outline:
                 self.context.suspend_selection_outline(True)
             self._suspended_outline = True
@@ -469,50 +501,38 @@ class SelectionDragMixin:
     def _build_move_command(self) -> HistoryCommand | None:
         if not self._drag_has_net_movement():
             return None
-        commands: list[HistoryCommand] = []
-        if self._selection_atom_ids:
-            commands.append(
-                MoveAtomsCommand(
-                    atom_ids=set(self._selection_atom_ids),
-                    dx=self._total_delta.x(),
-                    dy=self._total_delta.y(),
-                    bond_ids=set(self._drag_bond_ids) if self._drag_bond_ids else None,
-                    redraw_bond_ids=set(self._drag_boundary_bond_ids)
-                    if self._drag_boundary_bond_ids
-                    else None,
+        token = self._require_drag_token()
+        if token.before_positions is None or token.before_item_states is None:
+            raise RuntimeError("The drag has no recorded starting geometry.")
+        atoms = atoms_for(self.canvas)
+        coords = atom_coords_3d_for(self.canvas)
+        atom_commands = []
+        if token.before_positions:
+            atom_commands.append(
+                SetAtomPositionsCommand(
+                    before_positions=token.before_positions,
+                    after_positions={
+                        atom_id: (atoms[atom_id].x, atoms[atom_id].y)
+                        for atom_id in token.before_positions
+                    },
+                    before_coords_3d=token.before_coords_3d,
+                    after_coords_3d={
+                        atom_id: coords[atom_id]
+                        for atom_id in token.before_positions
+                        if atom_id in coords
+                    },
+                    update_selection=False,
                 )
             )
-        relative_items = [
-            item for item in self._selection_items if item.data(0) != "mark"
-        ]
-        if relative_items:
-            commands.append(
-                MoveItemsCommand(
-                    items=relative_items,
-                    dx=self._total_delta.x(),
-                    dy=self._total_delta.y(),
-                )
-            )
-        if any(item.data(0) == "mark" for item in self._selection_items):
-            token = self._require_drag_token()
-            if token.before_mark_states is None:
-                raise RuntimeError("The charge drag has no recorded starting state.")
-            commands.append(
-                SetSceneGeometryCommand(
-                    atom_commands=[],
-                    item_commands=[
-                        UpdateSceneItemCommand(
-                            item, before, scene_item_state_for(self.canvas, item)
-                        )
-                        for item, before in token.before_mark_states
-                    ],
-                )
-            )
-        if not commands:
-            return None
-        if len(commands) == 1:
-            return commands[0]
-        return CompositeCommand(commands)
+        # Restore atoms before their attached marks/ring fills in both
+        # directions, avoiding cumulative floating-point translation drift.
+        return SetSceneGeometryCommand(
+            atom_commands=atom_commands,
+            item_commands=[
+                UpdateSceneItemCommand(item, before, self._move_item_state(item))
+                for item, before in token.before_item_states
+            ],
+        )
 
     def _commit_selection_drag(self) -> None:
         self._require_drag_token()

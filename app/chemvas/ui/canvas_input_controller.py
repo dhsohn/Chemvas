@@ -42,6 +42,7 @@ class CanvasInputController:
         hover_controller,
         chemdraw_shortcut_service=None,
         tool_mode_controller,
+        prepare_for_document_edit: Callable[[], None],
         cancel_active_gesture: Callable[[], None] | None = None,
     ) -> None:
         self.canvas = canvas
@@ -52,6 +53,7 @@ class CanvasInputController:
         self.hover = hover_controller
         self.chemdraw_shortcut_service = chemdraw_shortcut_service
         self.tool_mode_controller = tool_mode_controller
+        self._prepare_for_document_edit = prepare_for_document_edit
         self._cancel_active_gesture = cancel_active_gesture
 
     @property
@@ -80,10 +82,12 @@ class CanvasInputController:
             return
         self.hover.refresh()
         if event.matches(QKeySequence.StandardKey.Undo):
+            self._prepare_for_document_edit()
             self.history.undo()
             event.accept()
             return
         if event.matches(QKeySequence.StandardKey.Redo):
+            self._prepare_for_document_edit()
             self.history.redo()
             event.accept()
             return
@@ -131,19 +135,17 @@ class CanvasInputController:
         ):
             event.accept()
             return
-        if (
-            event.matches(QKeySequence.StandardKey.Cut)
-            and self.scene_clipboard.copy_selection_to_clipboard()
-        ):
-            self.scene_delete.delete_selected_items()
-            event.accept()
-            return
-        if (
-            event.matches(QKeySequence.StandardKey.Paste)
-            and self.scene_clipboard.paste_selection_from_clipboard()
-        ):
-            event.accept()
-            return
+        if event.matches(QKeySequence.StandardKey.Cut):
+            self._prepare_for_document_edit()
+            if self.scene_clipboard.copy_selection_to_clipboard():
+                self.scene_delete.delete_selected_items()
+                event.accept()
+                return
+        if event.matches(QKeySequence.StandardKey.Paste):
+            self._prepare_for_document_edit()
+            if self.scene_clipboard.paste_selection_from_clipboard():
+                event.accept()
+                return
         if event.matches(QKeySequence.StandardKey.SelectAll):
             self.tool_mode_controller.set_tool("select")
             select_all_scene_items_for(self.canvas)
@@ -153,6 +155,7 @@ class CanvasInputController:
             event.modifiers() & Qt.KeyboardModifier.ControlModifier
             and event.key() == Qt.Key.Key_G
         ):
+            self._prepare_for_document_edit()
             if event.modifiers() & Qt.KeyboardModifier.ShiftModifier:
                 ungroup_selection_for(self.canvas)
             else:
@@ -160,6 +163,10 @@ class CanvasInputController:
             event.accept()
             return
         if event.key() in (Qt.Key.Key_Backspace, Qt.Key.Key_Delete):
+            self._prepare_for_document_edit()
+            # Cancellation restored the pre-drag geometry; resolve any hover
+            # deletion against that state, never the discarded preview.
+            self.hover.refresh()
             if selected_scene_items_for(
                 self.canvas, excluded_kinds={"handle", "note_box", "note_select"}
             ):
@@ -203,6 +210,22 @@ class CanvasInputController:
             self.tool_mode_controller.set_tool("select")
 
     def handle_chemdraw_shortcut(self, event) -> bool:
+        modifiers = shortcut_modifiers_for(event)
+        object_edit = (
+            modifiers
+            == (Qt.KeyboardModifier.ControlModifier | Qt.KeyboardModifier.ShiftModifier)
+            and event.key() in (Qt.Key.Key_H, Qt.Key.Key_V)
+        ) or (
+            modifiers
+            in (Qt.KeyboardModifier.ShiftModifier, Qt.KeyboardModifier.AltModifier)
+            and event.key()
+            in (Qt.Key.Key_Left, Qt.Key.Key_Right, Qt.Key.Key_Up, Qt.Key.Key_Down)
+        )
+        if object_edit or should_override_chemdraw_shortcut_for(self.canvas, event):
+            # Do not cancel on modifier presses alone: Shift is also the live
+            # gesture's snapping modifier. Only an editing shortcut cancels.
+            self._prepare_for_document_edit()
+            self.hover.refresh()
         handle_shortcut = getattr(
             self.chemdraw_shortcut_service, "handle_shortcut", None
         )

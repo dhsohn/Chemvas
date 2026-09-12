@@ -87,6 +87,11 @@ class DeleteTool(Tool):
         self._before_smiles_input: str | None = None
         self._delete_session = None
 
+    @property
+    @override
+    def has_active_gesture(self) -> bool:
+        return self._delete_session is not None
+
     @override
     def activate(self) -> None:
         activate_tool_no_drag(self.canvas)
@@ -194,6 +199,10 @@ class DeleteTool(Tool):
 
     @override
     def on_mouse_release(self, event) -> bool:
+        if not self._erasing:
+            # An incomplete cancellation retains the session for an explicit
+            # retry, not for publication by a delayed pointer release.
+            return True
         self._erasing = False
         if not self._changed:
             self._finish_active_session()

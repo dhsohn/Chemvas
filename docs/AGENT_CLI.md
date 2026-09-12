@@ -491,6 +491,48 @@ Its screen-space movement preserves stored depth and the camera projection.
 `remove_bond` removes any ring fill whose cycle contains that edge; it preserves
 unrelated fills and still rejects invalid Calculation Plan references.
 
+### Repairing an invalid alias drawing
+
+A saved drawing can be structurally valid while violating an alias attachment
+rule—for example, `OH`, `NH2`, or `SH` with two bonds or a double bond.
+`inspect` and `inspect-document` still reject these semantic errors. `apply-patch`
+can repair them: it validates the source structure, exact hash, and patch request
+before editing, then validates **the entire final candidate**, including alias
+attachments, charge/radical annotation consistency, Calculation Plans, and reviewed
+precomplex pairs. An unchanged or only partly repaired invalid drawing produces
+no output. These are the existing validation rules, not a general chemical
+correctness guarantee; no repair is inferred automatically.
+
+When inspection is blocked, read stable atom IDs from the native JSON's
+`state.model.atoms` keys and bond endpoints from `state.model.bonds`, and compute
+SHA-256 from the exact original file bytes. This read-only snippet reports the raw
+fields; it does not validate their chemistry:
+
+```bash
+python - <<'PY'
+import hashlib, json
+from pathlib import Path
+data = Path("drawing.chemvas").read_bytes()
+model = json.loads(data)["state"]["model"]
+print(json.dumps({"source_sha256": hashlib.sha256(data).hexdigest(),
+                  "atoms": model["atoms"], "bonds": model["bonds"]}, indent=2))
+PY
+```
+
+If a user confirms that atom `1` should be an explicit oxygen rather than `OH`,
+put this operation in the Graph Patch request with that source hash:
+
+```json
+{"op":"update_atom", "atom_id":1, "changes":{"element":"O"}}
+```
+
+Use `--dry-run`, write to a new `--output` path, and inspect/reopen the result as
+above. The correct repair may instead be a bond edit; choose it from the intended
+drawing, not merely to silence validation. This workflow does not add a GUI save
+warning or relax the inspection commands.
+
+### Terminal angle edits
+
 `set_terminal_angle` is a limited alternative to handwritten terminal coordinates.
 The following operation belongs to the separate aryl–O–Me fixture in
 [the runnable publication example](../examples/publication_scheme.py), **not**

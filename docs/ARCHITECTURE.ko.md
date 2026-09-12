@@ -106,11 +106,23 @@ content bounds와 물리 크기를 함께 계산한다. 선택 회전, 클립보
 
 ## 트랜잭션과 복구 소유권
 
+- `ToolController.prepare_for_document_edit`는 키보드/메뉴의 문서 변경 전에
+  진행 중인 포인터 제스처를 각 도구의 기존 소유자를 통해 취소한다. 도구의 기존
+  상태를 읽으며 별도 마우스 상태를 만들지 않는다. 포커스가 있는 텍스트 편집기는
+  기존 편집 경로를 유지한다. 일반 Perspective 도구 전환은 여전히 commit하며,
+  이 변경 경계에서는 취소한다.
 - `CanvasHistoryService`는 undo/redo stack 정책과 불변 `HistoryStackSnapshot` 값의 유일한 소유자다. 최상위 exact undo/redo 연산은 문서 savepoint를 하나만 캡처하고, 중첩 command는 그 연산에 위임한다.
-- 선택 nudge/정렬 command는 기존 깊이 좌표와 종속 mark/ring fill을 포함한
+- 선택 nudge/정렬 및 Select/Move 드래그 command는 기존 깊이 좌표와 종속 mark/ring fill을 포함한
   선택 영역 geometry의 정확한 before/after를 기록한다. 재생할 때 원자를 먼저,
   종속 scene item을 나중에 복원하고 선택 외곽선을 한 번 갱신한다. 이 command
   payload는 별도의 rollback 또는 stack 소유자가 아니다.
+- 드래그 command payload는 기존 scoped savepoint와 함께 첫 유효 이동에서만
+  캡처한다. 원자에 붙은 mark는 history 안에서만 정확한 Qt 로컬 위치도 보존하며,
+  저장되는 결합 offset의 의미는 바꾸지 않는다.
+- Perspective session은 전역 투영 프레임을 교체할 때 다른 분자의 캐시 좌표를
+  새 프레임으로 재표현한다. 화면 위치와 깊이는 유지하며, 캐시만 바뀐 원자는
+  scene item을 이동하지 않고 기존 회전 history/rollback payload에 포함한다.
+  이 좌표는 drawing 좌표이며 과학적 conformer 기하의 보존을 보장하지 않는다.
 - 문서 교체는 stack capture/restore를 해당 history owner에 맡기고, destructive scene reset도 알림 없는 stack discard를 위임한다. 이 연산은 기존 stack list를 보존한다. 문서 교체의 detached-scene snapshot은 원래 Qt scene item을 별도로 보존한다.
 - 기록되는 구조 삽입은 history 기록 성공까지 작업 전 savepoint를 유지한다. 기록 실패는 기존 rollback authority로 복구하며, 성공한 발행을 검사하기 위해 전체 문서 savepoint를 다시 캡처하지 않는다.
 - 벤젠 template 삽입도 같은 committer 범위 안에서 mutation-only ring builder를 호출하며 recorded build를 중첩하지 않는다. 성공한 삽입은 한 번 캡처하고 no-op·실패 복원도 같은 owner를 따른다. History push 실패 시 recorder가 사용하는 기존 역연산 command의 savepoint는 작업 전 캡처와 별도로 유지한다.

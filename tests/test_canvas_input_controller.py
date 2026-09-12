@@ -183,6 +183,7 @@ def _input_controller(canvas: _Canvas) -> CanvasInputController:
         hover_controller=canvas.hover_controller,
         chemdraw_shortcut_service=canvas.chemdraw_shortcut_service,
         tool_mode_controller=canvas.tool_mode_controller,
+        prepare_for_document_edit=mock.Mock(),
     )
 
 

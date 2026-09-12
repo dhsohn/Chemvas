@@ -1254,6 +1254,75 @@ def test_graph_patch_preserves_review_after_readding_the_same_bond(
     assert inspection["steps"][0]["path_precheck"]["ready_for_path_endpoints"] is True
 
 
+@pytest.mark.parametrize("stale_geometry", [False, True])
+@pytest.mark.parametrize("dry_run", [False, True])
+def test_alias_repair_still_validates_the_complete_reviewed_precomplex_pair(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    stale_geometry: bool,
+    dry_run: bool,
+) -> None:
+    _reviewed, payload = _review_candidate_fixture(tmp_path, monkeypatch, capsys)
+    plan = payload["state"]["calculation_plan"]
+    atom = payload["state"]["model"]["atoms"]["0"]
+    original_element = atom["element"]
+    atom["element"] = "OH"
+    source = tmp_path / "invalid-alias.chemvas"
+    write_document(source, payload["state"], payload["version"])
+    before = source.read_bytes()
+    with pytest.raises(SystemExit) as error:
+        patch_cli.run(["inspect-document", str(source)])
+    assert error.value.code == 2
+    assert "exactly one single attachment" in capsys.readouterr().err
+
+    operations = [
+        {"op": "update_atom", "atom_id": 0, "changes": {"element": original_element}}
+    ]
+    if stale_geometry:
+        operations.append(
+            {"op": "move_atom", "atom_id": 0, "x": atom["x"] + 0.25, "y": atom["y"]}
+        )
+    patch = tmp_path / "repair.json"
+    patch.write_text(
+        json.dumps(
+            {
+                "format": "chemvas-graph-patch",
+                "version": 1,
+                "source_sha256": hashlib.sha256(before).hexdigest(),
+                "operations": operations,
+            }
+        ),
+        encoding="utf-8",
+    )
+    output = tmp_path / "repaired.chemvas"
+    argv = ["apply-patch", str(source), str(patch)] + (
+        ["--dry-run"] if dry_run else ["--output", str(output)]
+    )
+    if stale_geometry:
+        with pytest.raises(SystemExit) as error:
+            patch_cli.run(argv)
+        assert error.value.code == 2
+        assert "reviewed precomplex is stale" in capsys.readouterr().err
+        assert not output.exists()
+    else:
+        assert patch_cli.run(argv) == 0
+        report = json.loads(capsys.readouterr().out)
+        assert report["calculation_plan"] == {"present": True, "validation": "passed"}
+        assert report["written"] is not dry_run
+        if dry_run:
+            assert not output.exists()
+        else:
+            assert read_document(output).state["calculation_plan"] == plan
+            assert cli.run(["inspect-plan", str(output)]) == 0
+            inspection = json.loads(capsys.readouterr().out)
+            assert (
+                inspection["steps"][0]["path_precheck"]["ready_for_path_endpoints"]
+                is True
+            )
+    assert source.read_bytes() == before
+
+
 def test_graph_patch_rejects_reversing_a_reviewed_wedge_bond(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

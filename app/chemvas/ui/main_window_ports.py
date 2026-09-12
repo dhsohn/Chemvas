@@ -234,13 +234,22 @@ def _edit_text_for_window(window, operation: str) -> bool:
     return True
 
 
+def _prepare_document_edit_for_window(window) -> None:
+    if active_canvas_or_none_for_window(window) is not None:
+        _active_canvas_services_for_window(
+            window
+        ).tool_controller.prepare_for_document_edit()
+
+
 def undo_for_window(window) -> None:
     if not _edit_text_for_window(window, "Undo"):
+        _prepare_document_edit_for_window(window)
         history_service_for_window(window).undo()
 
 
 def redo_for_window(window) -> None:
     if not _edit_text_for_window(window, "Redo"):
+        _prepare_document_edit_for_window(window)
         history_service_for_window(window).redo()
 
 
@@ -257,6 +266,7 @@ def copy_selection_for_window(window) -> bool:
 def cut_selection_for_window(window) -> None:
     if _edit_text_for_window(window, "Cut"):
         return
+    _prepare_document_edit_for_window(window)
     if copy_selection_for_window(window):
         scene_delete_controller_for_window(window).delete_selected_items()
 
@@ -266,6 +276,7 @@ def paste_selection_for_window(window) -> None:
         return
     if active_canvas_or_none_for_window(window) is None:
         return
+    _prepare_document_edit_for_window(window)
     scene_clipboard_controller_for_window(window).paste_selection_from_clipboard()
 
 
@@ -286,6 +297,7 @@ def group_selection_for_window(window) -> None:
 
     canvas = active_canvas_or_none_for_window(window)
     if canvas is not None:
+        _prepare_document_edit_for_window(window)
         group_selection_for(canvas)
 
 
@@ -294,7 +306,31 @@ def ungroup_selection_for_window(window) -> None:
 
     canvas = active_canvas_or_none_for_window(window)
     if canvas is not None:
+        _prepare_document_edit_for_window(window)
         ungroup_selection_for(canvas)
+
+
+def flip_selection_for_window(window, *, horizontal: bool) -> None:
+    if active_canvas_or_none_for_window(window) is None:
+        return
+    _prepare_document_edit_for_window(window)
+    scene_transform_controller_for_window(window).flip_selected_items(
+        horizontal=horizontal
+    )
+
+
+def align_selection_for_window(window, mode: str) -> None:
+    if active_canvas_or_none_for_window(window) is None:
+        return
+    _prepare_document_edit_for_window(window)
+    scene_transform_controller_for_window(window).align_selected_items(mode)
+
+
+def distribute_selection_for_window(window, axis: str) -> None:
+    if active_canvas_or_none_for_window(window) is None:
+        return
+    _prepare_document_edit_for_window(window)
+    scene_transform_controller_for_window(window).distribute_selected_items(axis)
 
 
 def active_tool_name_for_window(window):
@@ -438,6 +474,7 @@ __all__ = [
     "active_canvas_name_for_window",
     "active_canvas_or_none_for_window",
     "active_tool_name_for_window",
+    "align_selection_for_window",
     "all_canvases_for_window",
     "apply_preview_window_assembly_for_window",
     "atom_input_for_window",
@@ -450,8 +487,10 @@ __all__ = [
     "copy_selection_for_window",
     "current_zoom_percent_for_window",
     "cut_selection_for_window",
+    "distribute_selection_for_window",
     "document_session_service_for_window",
     "fit_canvas_to_view_for_window",
+    "flip_selection_for_window",
     "geometry_controller_for_window",
     "grid_snap_action_for_window",
     "group_selection_for_window",

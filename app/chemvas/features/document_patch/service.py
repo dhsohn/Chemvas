@@ -13,6 +13,7 @@ from chemvas.domain.document import (
     Bond,
     MoleculeModel,
     build_document_payload,
+    connected_atom_components,
     deserialize_model_state,
     is_document_number,
     is_hex_color,
@@ -141,10 +142,9 @@ def apply_document_patch(
     operations = _validated_patch_operations(patch, source_sha256=source_sha256)
     candidate = cast("dict[str, Any]", deepcopy(dict(state)))
     model = _document_model(candidate)
-    # Resolve the dual mark/model representation before mutating anything so an
-    # already-conflicting source cannot be laundered through a graph patch.
-    inspect_components(candidate)
-    before = _counts(candidate, model)
+    # A structurally valid drawing may need this patch to repair an invalid
+    # alias attachment. Count topology without interpreting source chemistry.
+    before = _counts(model)
     evidence: list[dict[str, object]] = []
     for index, operation in enumerate(operations):
         try:
@@ -156,6 +156,9 @@ def apply_document_patch(
     candidate["model"] = serialize_model_state(model)
     try:
         build_document_payload(candidate, document_version)
+        # Validate the complete result, including alias attachment contracts
+        # and dual mark/model annotation consistency, even without a plan.
+        inspect_components(candidate)
         if candidate.get("calculation_plan") is not None:
             plan = validate_calculation_plan(candidate, candidate["calculation_plan"])
             validate_reviewed_precomplex_pairs(candidate, plan)
@@ -164,7 +167,7 @@ def apply_document_patch(
             "patched document would violate a document or Calculation Plan invariant: "
             f"{exc}"
         ) from exc
-    after = _counts(candidate, model)
+    after = _counts(model)
     return DocumentPatchResult(
         state=candidate,
         operations=tuple(evidence),
@@ -517,11 +520,16 @@ def _document_model(state: Mapping[str, object]) -> MoleculeModel:
     return deserialize_model_state(cast("Mapping[str, object]", model_state))
 
 
-def _counts(state: Mapping[str, object], model: MoleculeModel) -> dict[str, int]:
+def _counts(model: MoleculeModel) -> dict[str, int]:
     return {
         "atoms": len(model.atoms),
         "bonds": sum(item is not None for item in model.bonds),
-        "components": len(inspect_components(state)),
+        "components": len(
+            connected_atom_components(
+                model.atoms,
+                ((bond.a, bond.b) for bond in model.bonds if bond is not None),
+            )
+        ),
     }
 
 

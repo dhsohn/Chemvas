@@ -21,12 +21,10 @@ import chemvas.ui.canvas_move_controller as canvas_move_controller_module
 import chemvas.ui.move_tool as move_tool_module
 import chemvas.ui.select_tool as select_tool_module
 import chemvas.ui.selection_drag_tool as selection_drag_tool_module
-from chemvas.core.history import (
-    CompositeCommand,
-    MoveAtomsCommand,
-)
+from chemvas.core.history import SetAtomPositionsCommand
 from chemvas.domain.document import Atom, Bond
 from chemvas.features.hover import HoverState
+from chemvas.ui.atom_coords_access import CanvasAtomCoords3DState
 from chemvas.ui.bond_tool import BondTool
 from chemvas.ui.canvas_atom_graphics_state import (
     CanvasAtomGraphicsState,
@@ -53,7 +51,11 @@ from chemvas.ui.canvas_tool_settings_state import (
     set_tool_setting_for,
 )
 from chemvas.ui.handle_state import CanvasHandleState
-from chemvas.ui.history_commands import MoveItemsCommand, UpdateSceneItemCommand
+from chemvas.ui.history_commands import (
+    MoveItemsCommand,
+    SetSceneGeometryCommand,
+    UpdateSceneItemCommand,
+)
 from chemvas.ui.move_tool import MoveTool
 from chemvas.ui.perspective_tool import PerspectiveTool
 from chemvas.ui.preview_tools import ArrowTool, PreviewDragTool, TSBracketTool
@@ -149,6 +151,8 @@ def _tool_context_for(canvas):
 class _FakeItem:
     def __init__(self, kind=None, item_id=None, extra=None) -> None:
         self._data = {0: kind, 1: item_id}
+        if kind in {"note", "arrow"}:
+            self._data[9] = {"kind": kind, "x": 0.0, "y": 0.0}
         if extra is not None:
             self._data[2] = extra
         self.selected = False
@@ -231,7 +235,12 @@ class _FakeSelectCanvas:
         self.drag_mode = None
         self.scene_obj = _FakeScene()
         self.handle_state = CanvasHandleState()
+        self.model = SimpleNamespace(
+            atoms={atom_id: Atom("C", float(atom_id), 0.0) for atom_id in range(1, 5)},
+            bonds=[],
+        )
         self.runtime_state = canvas_runtime_state(
+            atom_coords_3d_state=CanvasAtomCoords3DState(),
             atom_graphics_state=CanvasAtomGraphicsState(),
             bond_graphics_state=CanvasBondGraphicsState(),
             handle_state=self.handle_state,
@@ -401,9 +410,15 @@ class _FakeSelectCanvas:
         self.moved_atoms.append(
             (set(atom_ids), dx, dy, bond_ids, redraw_bond_ids, update_selection)
         )
+        for atom_id in atom_ids:
+            self.model.atoms[atom_id].x += dx
+            self.model.atoms[atom_id].y += dy
 
     def move_item(self, item, dx, dy, update_selection=True) -> None:
         self.moved_items.append((item, dx, dy, update_selection))
+        state = item.data(9)
+        if isinstance(state, dict) and "x" in state and "y" in state:
+            item.setData(9, {**state, "x": state["x"] + dx, "y": state["y"] + dy})
 
     def shift_selection_outlines(self, dx, dy) -> None:
         self.shift_calls.append((dx, dy))
@@ -533,10 +548,11 @@ class _FakeMoveCanvas(_FakeSelectCanvas):
         self.selected_atom_ids = set()
         self.selected_bond_ids = set()
         self.model = SimpleNamespace(
+            atoms=self.model.atoms,
             bonds=[
                 Bond(1, 2, 1),
                 Bond(2, 3, 1),
-            ]
+            ],
         )
 
     def _selected_items_for_transform(self):
@@ -675,17 +691,24 @@ class ToolsUnitTest(unittest.TestCase):
         self.assertEqual(tool._drag_bond_ids, set())
         self.assertEqual(tool._drag_boundary_bond_ids, set())
         self.assertIsNone(tool._build_move_command())
-        tool._total_delta = QPointF(1.0, 0.0)
+        tool._apply_drag_delta(QPointF(1.0, 0.0))
         item_only_command = tool._build_move_command()
-        self.assertIsInstance(item_only_command, MoveItemsCommand)
-
-        tool._selection_atom_ids = set()
-        tool._selection_items = []
+        self.assertIsInstance(item_only_command, SetSceneGeometryCommand)
+        self.assertEqual(item_only_command.atom_commands, [])
+        self.assertEqual(
+            item_only_command.item_commands[0].before_state,
+            {"kind": "note", "x": 0.0, "y": 0.0},
+        )
+        self.assertEqual(
+            item_only_command.item_commands[0].after_state,
+            {"kind": "note", "x": 1.0, "y": 0.0},
+        )
+        tool._cancel_selection_drag()
+        self.assertFalse(tool._begin_selection_drag(set(), [], QPointF()))
+        self.assertTrue(tool._begin_selection_drag(set(), [selection_item], QPointF()))
         self.assertIsNone(tool._build_move_command())
-        tool._moved = True
-        tool._suspended_outline = False
         tool._commit_selection_drag()
-        self.assertEqual(canvas.updated_outline, 1)
+        self.assertEqual(canvas.updated_outline, 0)
         self.assertEqual(canvas.pushed_commands, [])
 
     def test_switching_away_from_select_clears_handle_hit_targets(self) -> None:
@@ -911,9 +934,24 @@ class ToolsUnitTest(unittest.TestCase):
         self.assertEqual(tool._total_delta, QPointF(2.0, -1.0))
 
         move_command = tool._build_move_command()
-        self.assertIsInstance(move_command, CompositeCommand)
-        self.assertIsInstance(move_command.commands[0], MoveAtomsCommand)
-        self.assertIsInstance(move_command.commands[1], MoveItemsCommand)
+        self.assertIsInstance(move_command, SetSceneGeometryCommand)
+        self.assertIsInstance(move_command.atom_commands[0], SetAtomPositionsCommand)
+        self.assertEqual(
+            move_command.atom_commands[0].before_positions,
+            {1: (1.0, 0.0), 2: (2.0, 0.0)},
+        )
+        self.assertEqual(
+            move_command.atom_commands[0].after_positions,
+            {1: (3.0, -1.0), 2: (4.0, -1.0)},
+        )
+        self.assertEqual(
+            move_command.item_commands[0].before_state,
+            {"kind": "note", "x": 0.0, "y": 0.0},
+        )
+        self.assertEqual(
+            move_command.item_commands[0].after_state,
+            {"kind": "note", "x": 2.0, "y": -1.0},
+        )
         tool._cancel_selection_drag()
 
         handle = _FakeItem("handle")
@@ -985,7 +1023,7 @@ class ToolsUnitTest(unittest.TestCase):
         self.assertTrue(canvas.shift_calls)
         self.assertIsNone(tool._pending_arrow_handle_item)
 
-    def test_move_tool_selection_drag_builds_composite_move_command(self) -> None:
+    def test_move_tool_selection_drag_builds_exact_geometry_command(self) -> None:
         canvas = _FakeMoveCanvas()
         tool = MoveTool(canvas, context=_tool_context_for(canvas))
         tool.activate()
@@ -1013,11 +1051,26 @@ class ToolsUnitTest(unittest.TestCase):
 
         self.assertTrue(tool.on_mouse_release(_FakeEvent(QPointF(16.0, 16.0))))
         self.assertEqual(canvas.suspend_calls[-1], False)
-        self.assertIsInstance(canvas.pushed_commands[-1], CompositeCommand)
+        command = canvas.pushed_commands[-1]
+        self.assertIsInstance(command, SetSceneGeometryCommand)
+        self.assertEqual(
+            command.atom_commands[0].before_positions,
+            {1: (1.0, 0.0), 2: (2.0, 0.0), 3: (3.0, 0.0)},
+        )
+        self.assertEqual(
+            command.atom_commands[0].after_positions,
+            {1: (13.0, -8.0), 2: (14.0, -8.0), 3: (15.0, -8.0)},
+        )
+        self.assertEqual(
+            command.item_commands[0].before_state, {"kind": "note", "x": 0.0, "y": 0.0}
+        )
+        self.assertEqual(
+            command.item_commands[0].after_state, {"kind": "note", "x": 12.0, "y": -8.0}
+        )
         self.assertFalse(tool._drag_selection)
         self.assertIsNone(tool._drag_item)
 
-    def test_move_tool_item_drag_pushes_move_items_command(self) -> None:
+    def test_move_tool_item_drag_pushes_exact_geometry_command(self) -> None:
         canvas = _FakeMoveCanvas()
         tool = MoveTool(canvas, context=_tool_context_for(canvas))
         moved_item = _FakeItem("arrow")
@@ -1030,7 +1083,15 @@ class ToolsUnitTest(unittest.TestCase):
         self.assertEqual(canvas.moved_items[0], (moved_item, 5.0, 3.0, True))
 
         self.assertTrue(tool.on_mouse_release(_FakeEvent(QPointF(6.0, 4.0))))
-        self.assertIsInstance(canvas.pushed_commands[-1], MoveItemsCommand)
+        command = canvas.pushed_commands[-1]
+        self.assertIsInstance(command, SetSceneGeometryCommand)
+        self.assertEqual(command.atom_commands, [])
+        self.assertEqual(
+            command.item_commands[0].before_state, {"kind": "arrow", "x": 0.0, "y": 0.0}
+        )
+        self.assertEqual(
+            command.item_commands[0].after_state, {"kind": "arrow", "x": 10.0, "y": 6.0}
+        )
         self.assertEqual(canvas.updated_outline, 1)
         self.assertIsNone(tool._drag_item)
 
@@ -1234,9 +1295,12 @@ class ToolsUnitTest(unittest.TestCase):
             self.assertEqual(scene_item_state_for(canvas, shape), moved_state)
             self.assertEqual(len(history.state.history), 1)
             command = history.state.history[0]
-            self.assertIsInstance(command, MoveItemsCommand)
-            self.assertEqual(command.dx, expected_dx)
-            self.assertEqual(command.dy, 0.0)
+            self.assertIsInstance(command, SetSceneGeometryCommand)
+            self.assertEqual(command.atom_commands, [])
+            self.assertEqual(command.item_commands[0].before_state, before_state)
+            self.assertEqual(command.item_commands[0].after_state, moved_state)
+            self.assertEqual(moved_state["left"] - before_state["left"], expected_dx)
+            self.assertEqual(moved_state["top"], before_state["top"])
             self.assertEqual(history.state.redo_stack, [])
             self.assertIsNone(tool._drag_transaction)
 
@@ -1478,9 +1542,16 @@ class ToolsUnitTest(unittest.TestCase):
         self.assertIs(history.state.history, history_list)
         self.assertIs(history.state.redo_stack, redo_list)
         self.assertEqual(len(history_list), 1)
-        self.assertIsInstance(history_list[0], MoveItemsCommand)
-        self.assertEqual(history_list[0].dx, 4.0)
-        self.assertEqual(history_list[0].dy, -2.0)
+        self.assertIsInstance(history_list[0], SetSceneGeometryCommand)
+        self.assertEqual(history_list[0].atom_commands, [])
+        self.assertEqual(
+            history_list[0].item_commands[0].before_state,
+            {"kind": "note", "x": 0.0, "y": 0.0},
+        )
+        self.assertEqual(
+            history_list[0].item_commands[0].after_state,
+            {"kind": "note", "x": 4.0, "y": -2.0},
+        )
         self.assertEqual(redo_list, [])
         self.assertEqual(history.push_calls, history_list)
         self.assertIsNone(tool._drag_transaction)

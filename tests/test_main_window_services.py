@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 from types import SimpleNamespace
+from unittest import mock
+
+import pytest
 
 from chemvas.bootstrap.main_window_services import build_main_window_services
 from chemvas.ui.main_window_action_availability_service import (
@@ -11,11 +14,14 @@ from chemvas.ui.main_window_context_page_state_service import (
 )
 from chemvas.ui.main_window_ports import (
     active_tool_name_for_window,
+    align_selection_for_window,
     color_mutation_service_for_window,
     color_tool_for_window,
     copy_selection_for_window,
     cut_selection_for_window,
+    distribute_selection_for_window,
     document_session_service_for_window,
+    flip_selection_for_window,
     geometry_controller_for_window,
     insert_controller_for_window,
     paste_selection_for_window,
@@ -98,6 +104,7 @@ def _clipboard_window(*, copy_result: bool):
     services = canvas_runtime_services(
         scene_clipboard_controller=clipboard,
         scene_delete_controller=delete,
+        tool_controller=SimpleNamespace(prepare_for_document_edit=mock.Mock()),
     )
     window = _window_with_active_canvas(SimpleNamespace(services=services))
     return window, clipboard, delete
@@ -138,6 +145,49 @@ def test_clipboard_ports_are_noops_without_an_active_canvas() -> None:
     cut_selection_for_window(window)
     paste_selection_for_window(window)
     select_all_for_window(window)
+
+
+_TRANSFORM_PORTS = [
+    (flip_selection_for_window, "flip_selected_items", (), {"horizontal": True}),
+    (align_selection_for_window, "align_selected_items", ("left",), {}),
+    (distribute_selection_for_window, "distribute_selected_items", ("vertical",), {}),
+]
+
+
+@pytest.mark.parametrize("port,operation,args,kwargs", _TRANSFORM_PORTS)
+@pytest.mark.parametrize("cancel_fails", [False, True])
+def test_transform_ports_prepare_before_edit_and_stop_on_cancel_failure(
+    port, operation, args, kwargs, cancel_fails
+) -> None:
+    calls = mock.Mock()
+    cancellation_error = RuntimeError("pending gesture rollback failed")
+    if cancel_fails:
+        calls.prepare.side_effect = cancellation_error
+    transform = SimpleNamespace(**{operation: calls.transform})
+    services = canvas_runtime_services(
+        scene_transform_controller=transform,
+        tool_controller=SimpleNamespace(prepare_for_document_edit=calls.prepare),
+    )
+    window = _window_with_active_canvas(SimpleNamespace(services=services))
+
+    if cancel_fails:
+        with pytest.raises(RuntimeError) as error:
+            port(window, *args, **kwargs)
+        assert error.value is cancellation_error
+        assert calls.mock_calls == [mock.call.prepare()]
+    else:
+        port(window, *args, **kwargs)
+        assert calls.mock_calls == [
+            mock.call.prepare(),
+            mock.call.transform(*args, **kwargs),
+        ]
+
+
+@pytest.mark.parametrize("port,operation,args,kwargs", _TRANSFORM_PORTS)
+def test_transform_ports_are_noops_without_an_active_canvas(
+    port, operation, args, kwargs
+) -> None:
+    port(_window_with_active_canvas(None), *args, **kwargs)
 
 
 def test_build_main_window_services_includes_action_availability_service() -> None:
