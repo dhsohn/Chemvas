@@ -46,11 +46,20 @@ pending publisher와 일치해야 합니다.
    git tag -a v0.1.0 -m "Chemvas 0.1.0"
    git push origin v0.1.0
    ```
-5. **Release** 워크플로를 지켜봅니다. 성공하면 확인합니다.
+5. **Release** 워크플로를 지켜봅니다. 성공하면 소스 체크아웃 밖의 빈 디렉터리에서
+   새 가상 환경을 만들어 게시된 버전을 검증합니다. 아래 `0.1.0`은 방금 릴리스한
+   버전으로 바꿉니다. 기존 환경을 재사용하면 버전을 지정하지 않은 설치가 이전
+   버전을 그대로 남길 수 있습니다.
    ```bash
-   pip install chemvas
-   chemvas
+   python -m venv .release-check
+   .release-check/bin/python -m pip install "chemvas==0.1.0"
+   .release-check/bin/chemvas --version
+   .release-check/bin/chemvas
    ```
+   출력된 버전이 태그와 같고 앱이 열리는지 확인합니다. Windows에서는
+   `.release-check\Scripts\python.exe`와 `.release-check\Scripts\chemvas.exe`를
+   사용합니다. 선택적 화학 변환도 검증하려면 `chemvas[rdkit]==0.1.0`을 설치합니다.
+   평소 쓰는 사용자 설치본의 업그레이드는 별도 작업입니다.
 
 ## 참고
 

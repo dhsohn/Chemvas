@@ -46,11 +46,21 @@ match the pending publisher above.
    git tag -a v0.1.0 -m "Chemvas 0.1.0"
    git push origin v0.1.0
    ```
-5. Watch the **Release** workflow. On success, verify:
+5. Watch the **Release** workflow. On success, verify the published version in a
+   fresh virtual environment, from an empty directory outside the source checkout.
+   Replace `0.1.0` below with the version just released; do not reuse an existing
+   environment, where an unpinned install can leave an older version in place.
    ```bash
-   pip install chemvas
-   chemvas
+   python -m venv .release-check
+   .release-check/bin/python -m pip install "chemvas==0.1.0"
+   .release-check/bin/chemvas --version
+   .release-check/bin/chemvas
    ```
+   Confirm that the printed version matches the tag and the app opens. On
+   Windows, use `.release-check\Scripts\python.exe` and
+   `.release-check\Scripts\chemvas.exe`. Install `chemvas[rdkit]==0.1.0` when
+   checking optional chemistry conversions as well. Upgrading ordinary user
+   installations is a separate operation.
 
 ## Notes
 
