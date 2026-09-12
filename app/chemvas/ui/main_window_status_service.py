@@ -7,7 +7,9 @@ from PyQt6.QtWidgets import QApplication, QFrame, QHBoxLayout, QLabel, QToolButt
 
 from chemvas.ui.main_window_document_dialogs import prompt_zoom_percent
 from chemvas.ui.main_window_toolbar_logic import tool_display_name
+from chemvas.ui.mark_ownership import mark_is_distant_for, mark_owner_text_for
 from chemvas.ui.selection_collection_access import selection_status_count_for
+from chemvas.ui.selection_scene_access import scene_selected_items_for
 
 
 class _ZoomPercentButton(QToolButton):
@@ -257,7 +259,28 @@ class MainWindowStatusService:
     def update_selection_status_label(self, window) -> None:
         selection_count = self.current_selection_count(window)
         if self.selection_label is not None:
-            self.selection_label.setText(f"Selection: {selection_count}")
+            text = f"Selection: {selection_count}"
+            canvas = self._active_canvas_or_none_for_window(window)
+            marks = (
+                []
+                if canvas is None
+                else [
+                    item
+                    for item in scene_selected_items_for(canvas)
+                    if item.data(0) == "mark"
+                ]
+            )
+            if len(marks) == 1:
+                text += " | " + mark_owner_text_for(canvas, marks[0])
+            elif marks:
+                distant = sum(mark_is_distant_for(canvas, item) for item in marks)
+                text += f" | Marks: {len(marks)}, far from owner: {distant}"
+            self.selection_label.setText(text)
+            self.selection_label.setToolTip(
+                "Moving marks keeps their chemical owner. Dashed lines show their owners; amber means far away. Right-click a mark to reassign it."
+                if marks
+                else ""
+            )
 
     def update_zoom_label(self, zoom_percent: int) -> None:
         if self.zoom_label is None:

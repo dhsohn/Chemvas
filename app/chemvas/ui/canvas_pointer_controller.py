@@ -22,6 +22,7 @@ from chemvas.ui.input_view_access import (
     touch_interaction_for,
     zoom_factor_for,
 )
+from chemvas.ui.mark_reassignment_dialog import reassign_mark_with_dialog
 from chemvas.ui.scene_decoration_access import edit_arrow_labels_for
 from chemvas.ui.sheet_setup_access import scene_pos_in_sheet_for
 
@@ -101,9 +102,9 @@ class CanvasPointerController:
         allow_select_tool: bool,
     ) -> None:
         touch_interaction_for(self.canvas)
-        if (
-            event.button() == Qt.MouseButton.RightButton
-            and self._show_double_bond_context_menu(event)
+        if event.button() == Qt.MouseButton.RightButton and (
+            self._show_mark_context_menu(event)
+            or self._show_double_bond_context_menu(event)
         ):
             self.hover.clear_hover_highlight()
             return
@@ -162,6 +163,19 @@ class CanvasPointerController:
             return
         base_event(event)
         self.hover.clear_hover_highlight()
+
+    def _show_mark_context_menu(self, event, *, menu_factory=QMenu) -> bool:
+        item = self.hit_testing_service.item_at_event(event)
+        if item is None or item.data(0) != "mark":
+            return False
+        self.tool_controller.prepare_for_document_edit()
+        self.hover.clear_hover_highlight()
+        menu = menu_factory(self.canvas)
+        action = menu.addAction("Reassign to atom…")
+        if menu.exec(global_pos_from_event_for(self.canvas, event)) is action:
+            reassign_mark_with_dialog(self.canvas, item)
+        self._accept_event(event)
+        return True
 
     def _show_double_bond_context_menu(self, event, *, menu_factory=QMenu) -> bool:
         bond_id = self._context_bond_id(event)

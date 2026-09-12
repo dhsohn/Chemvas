@@ -3,19 +3,27 @@ from __future__ import annotations
 import math
 from typing import TYPE_CHECKING
 
+from PyQt6 import sip
 from PyQt6.QtCore import QPointF, QRectF
 
+from chemvas.core.history import history_transaction_scope
+from chemvas.features.insertion import build_atom_annotations
 from chemvas.ui.canvas_geometry_access import mark_target_distance_for_atom_for
 from chemvas.ui.canvas_hit_testing_scene_access import scene_items_in_rect_for_canvas
 from chemvas.ui.canvas_mark_registry import mark_registry_for
 from chemvas.ui.canvas_model_access import (
+    atom_annotations_for,
     atom_for_id,
     sync_atom_annotation_from_marks_for,
 )
 from chemvas.ui.canvas_scene_items_state import remove_scene_item_from_collection_for
 from chemvas.ui.canvas_tool_settings_state import tool_settings_state_for
 from chemvas.ui.graphics_items import AtomLabelItem
-from chemvas.ui.history_commands import AddSceneItemsCommand, DeleteSceneItemsCommand
+from chemvas.ui.history_commands import (
+    AddSceneItemsCommand,
+    DeleteSceneItemsCommand,
+    RebindMarkCommand,
+)
 from chemvas.ui.input_view_access import zoom_factor_for
 from chemvas.ui.mark_item_access import mark_center_for, set_mark_center_for
 from chemvas.ui.renderer_style_access import bond_length_px_for
@@ -239,6 +247,92 @@ class CanvasMarkSceneService:
             self.marks.get_for_atom(atom_id) or (),
         )
         emit_selection_info_for(self.canvas)
+
+    def rebind_mark(self, item, atom_id: int) -> bool:
+        """Transfer only on an explicit user choice; ordinary moves never call this."""
+        if (
+            sip.isdeleted(item)
+            or item.scene() is not self.canvas.scene()
+            or item.data(0) != "mark"
+        ):
+            raise ValueError("The mark is no longer in this document.")
+        atom = atom_for_id(self.canvas, atom_id)
+        if type(atom_id) is not int or atom is None:
+            raise ValueError("Choose an existing atom in this document.")
+        old_id = (item.data(1) or {}).get("atom_id")
+        if atom_id == old_id:
+            return False
+        if old_id is not None and atom_for_id(self.canvas, old_id) is None:
+            raise ValueError("The mark's original atom no longer exists.")
+        affected_ids = {atom_id} | ({old_id} if old_id is not None else set())
+        before_marks = {
+            key: tuple(self.marks.get_for_atom(key) or ()) for key in affected_ids
+        }
+        if old_id is not None and item not in before_marks[old_id]:
+            raise ValueError(
+                "The mark's binding is inconsistent; reload the document before reassigning."
+            )
+        annotations = atom_annotations_for(self.canvas)
+        before_annotations = {
+            key: dict(annotations[key]) for key in affected_ids if key in annotations
+        }
+        expected = build_atom_annotations(
+            affected_ids,
+            {key: key for key in affected_ids},
+            {
+                key: [(mark.data(1) or {})["kind"] for mark in items]
+                for key, items in before_marks.items()
+            },
+        )
+        normalized = {
+            key: {k: v for k, v in value.items() if v}
+            for key, value in before_annotations.items()
+        }
+        normalized = {key: value for key, value in normalized.items() if value}
+        if normalized != expected:
+            raise ValueError(
+                "Atom annotations and marks disagree; resolve them before reassigning a mark."
+            )
+        after_marks = dict(before_marks)
+        if old_id is not None:
+            after_marks[old_id] = tuple(
+                mark for mark in before_marks[old_id] if mark is not item
+            )
+        after_marks[atom_id] = (*before_marks[atom_id], item)
+        after_annotations = build_atom_annotations(
+            affected_ids,
+            {key: key for key in affected_ids},
+            {
+                key: [(mark.data(1) or {})["kind"] for mark in items]
+                for key, items in after_marks.items()
+            },
+        )
+        before = mark_state_dict_for(self.canvas, item)
+        pos = item.pos()
+        before["item_pos"] = (pos.x(), pos.y())
+        center = mark_center_for(self.canvas, item)
+        after = dict(
+            before, atom_id=atom_id, dx=center.x() - atom.x, dy=center.y() - atom.y
+        )
+        command = RebindMarkCommand(
+            item,
+            before,
+            after,
+            before_marks,
+            after_marks,
+            before_annotations,
+            after_annotations,
+        )
+        with (
+            document_transaction(self.canvas, history_service=self.history),
+            history_transaction_scope(self.canvas),
+        ):
+            command.redo(self.canvas)
+            if self.history.push(command) is False:
+                raise RuntimeError(
+                    "Mark reassignment could not be recorded in Undo history."
+                )
+        return True
 
     def mark_offset_from_click(
         self, atom_id: int, click_pos: QPointF, *, kind: str | None = None
