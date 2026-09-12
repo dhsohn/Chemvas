@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from chemvas.domain.document import Bond
-from chemvas.ui.bond_graphics_access import add_bond_graphics_for
+from chemvas.ui.bond_renderer_access import bond_renderer_for
 from chemvas.ui.canvas_bond_graphics_state import bond_items_for_id, pop_bond_items_for
 from chemvas.ui.canvas_model_access import (
     add_bond_to_model_for,
@@ -55,7 +55,6 @@ class CanvasBondMutationService:
     def restore_bond_from_state(self, bond_id: int, bond_state: dict) -> None:
         if not bond_state:
             return
-        self._clear_bond_graphics(bond_id)
         graph_service = self.graph_service
         existing_bond = bond_for_id(self.canvas, bond_id)
         bond = Bond(
@@ -81,7 +80,9 @@ class CanvasBondMutationService:
         ):
             graph_service.add_bond_neighbors(bond.a, bond.b)
             graph_service.add_bond_index(bond_id, bond.a, bond.b)
-        add_bond_graphics_for(self.canvas, bond_id)
+        # Reuse the forward-edit refresh: it transfers the live selected flag
+        # before discarding old graphics. Chemistry exports consume that flag.
+        bond_renderer_for(self.canvas).redraw_bond(bond_id)
         self._relayout_atom_labels(old_atom_ids | {bond.a, bond.b})
         self.hit_testing_service.mark_spatial_index_dirty()
 

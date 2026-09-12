@@ -163,6 +163,7 @@ jobs:
         run: |
           bash scripts/run_test_files.sh --python python \
             tests/test_annotation_default_placement.py \
+            tests/test_bond_history_selection.py \
             tests/test_calculation_bundle_rdkit.py \
             tests/test_calculation_step_rdkit.py \
             tests/test_core_molfile.py \

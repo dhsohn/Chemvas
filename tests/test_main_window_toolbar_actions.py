@@ -214,13 +214,14 @@ class MainWindowToolbarActionsTest(unittest.TestCase):
             self.window.runtime_state.context_bar_page_override, "ring_fill"
         )
         self.assertEqual(
-            self.window.statusBar().currentMessage(), "Ring Fill: choose fill color"
+            self.window.statusBar().currentMessage(),
+            "Ring Fill: select a complete ring, then choose a fill color",
         )
         self.assertEqual(
             services_for_window(self.window).status_service.status_context_texts()[
                 "tool"
             ],
-            "Tool: Ring Fill",
+            "Tool: Select",
         )
         self.assertIsNotNone(ring_fill_button)
 

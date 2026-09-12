@@ -26,8 +26,10 @@ from chemvas.ui.canvas_bond_graphics_state import (
 )
 from chemvas.ui.canvas_geometry_controller import CanvasGeometryController
 from chemvas.ui.canvas_graph_state import CanvasGraphState, graph_state_for
+from chemvas.ui.canvas_mark_registry import CanvasMarkRegistry
 from chemvas.ui.canvas_rotation_state import CanvasRotationState
 from chemvas.ui.canvas_scene_items_state import CanvasSceneItemsState
+from chemvas.ui.history_commands import SetBondLengthGeometryCommand
 from chemvas.ui.scene_clipboard_transaction_logic import translated_scene_item_state
 from chemvas.ui.selection_collection_access import append_selected_item_ids
 from chemvas.ui.selection_rotation_access import average_bond_length_for_atoms_for
@@ -206,6 +208,7 @@ class RendererCanvasTailCoverageTest(unittest.TestCase):
                 atoms={1: Atom("C", 0.0, 0.0), 2: Atom("C", 10.0, 0.0)}
             ),
             runtime_state=canvas_runtime_state(
+                mark_registry=CanvasMarkRegistry(),
                 scene_items_state=CanvasSceneItemsState(),
                 bond_graphics_state=CanvasBondGraphicsState(),
                 atom_graphics_state=CanvasAtomGraphicsState(),
@@ -235,7 +238,12 @@ class RendererCanvasTailCoverageTest(unittest.TestCase):
         self.assertEqual(view.renderer.style.bond_length_px, 30.0)
         self.assertEqual(len(pushed), 1)
         self.assertIsInstance(pushed[0], CompositeCommand)
-        self.assertEqual(len(pushed[0].commands), 2)
+        self.assertEqual(len(pushed[0].commands), 1)
+        self.assertIsInstance(pushed[0].commands[0], SetBondLengthGeometryCommand)
+        self.assertEqual(pushed[0].commands[0].item_commands, [])
+        self.assertEqual(pushed[0].commands[0].length_command.before_length, 20.0)
+        self.assertEqual(pushed[0].commands[0].length_command.after_length, 30.0)
+        self.assertEqual(len(pushed[0].commands[0].atom_commands), 1)
         self.assertFalse(
             any(
                 isinstance(command, SetRingPolygonsCommand)

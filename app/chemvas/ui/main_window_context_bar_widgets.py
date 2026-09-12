@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from decimal import Decimal
 from typing import override
 
 from PyQt6.QtCore import QPointF, QSize, Qt
@@ -20,6 +21,7 @@ from PyQt6.QtWidgets import (
     QWidgetAction,
 )
 
+from chemvas.domain.document import MAX_BOND_LENGTH_PX
 from chemvas.shell.palette import PALETTE
 from chemvas.shell.theme import (
     CONTEXT_ACTION_BUTTON_STYLE,
@@ -331,6 +333,10 @@ class BondLengthSpinBox(QDoubleSpinBox):
 
     def sync_value(self, value: float) -> None:
         blocked = self.blockSignals(True)
+        # Preserve the precision already present in a legal document. The UI
+        # range must not become a second, narrower document validation policy.
+        exponent = Decimal(str(value)).as_tuple().exponent
+        self.setDecimals(max(1, min(323, -int(exponent))))
         self.setValue(float(value))
         self.blockSignals(blocked)
         self._baseline = self.value()
@@ -340,6 +346,9 @@ class BondLengthSpinBox(QDoubleSpinBox):
 
     def mark_committed(self) -> None:
         self._baseline = self.value()
+
+    def restore_baseline(self) -> None:
+        self.sync_value(self._baseline)
 
 
 def bond_length_input(
@@ -362,22 +371,28 @@ def bond_length_input(
     spin = BondLengthSpinBox()
     spin.setObjectName("bondLengthInput")
     spin.setDecimals(1)
-    spin.setRange(10.0, 200.0)
+    spin.setRange(0.0, float(MAX_BOND_LENGTH_PX))
     spin.setSingleStep(1.0)
     spin.setSuffix(" px")
     spin.setButtonSymbols(QDoubleSpinBox.ButtonSymbols.NoButtons)
     spin.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
     spin.setFixedWidth(64)
     spin.setFixedHeight(CONTEXT_BAR_BUTTON_HEIGHT + 4)
-    spin.setToolTip("Default bond length")
-    spin.setStatusTip("Set the default bond length in pixels")
+    spin.setToolTip("Bond length: rescale molecular geometry and attached marks")
+    spin.setStatusTip(
+        "Set bond length in pixels and rescale molecular geometry and attached marks; "
+        "free annotations keep their positions"
+    )
     spin.sync_value(current_px)
 
     def commit() -> None:
         if not spin.is_changed():
             return
-        spin.mark_committed()
+        if spin.value() <= 0.0:
+            spin.restore_baseline()
+            return
         on_commit(spin.value())
+        spin.mark_committed()
 
     spin.editingFinished.connect(commit)
 

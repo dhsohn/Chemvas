@@ -120,3 +120,17 @@ def test_show_context_page_allows_missing_action() -> None:
         window, "ring_fill"
     )
     context_bar_service.refresh_window.assert_called_once_with(window)
+
+
+def test_show_command_page_does_not_claim_tool_check() -> None:
+    service, _, _, context_bar, _, set_override, resolve_action = _make_service()
+    action = mock.Mock()
+    action.isCheckable.return_value = False
+    resolve_action.return_value = action
+    window = SimpleNamespace()
+
+    service.show_context_page(window, "ring_fill")
+
+    set_override.assert_called_once_with(window, "ring_fill")
+    action.setChecked.assert_not_called()
+    context_bar.refresh_window.assert_called_once_with(window)

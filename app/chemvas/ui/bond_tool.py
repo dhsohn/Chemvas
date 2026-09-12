@@ -13,6 +13,7 @@ from chemvas.core.tool_overlay_logic import activate_tool_no_drag
 from chemvas.features.rendering import (
     BOLD_BOND_STYLES,
     bold_double_style_for_style,
+    is_dotted_double_bond_style,
     style_for_existing_bond_overlay,
 )
 from chemvas.ui.bond_preview_access import (
@@ -25,6 +26,7 @@ from chemvas.ui.canvas_hover_state import hover_state_for
 from chemvas.ui.canvas_model_access import bond_for_id, model_for
 from chemvas.ui.canvas_scene_items_state import selected_notes_for
 from chemvas.ui.canvas_tool_settings_state import tool_settings_state_for
+from chemvas.ui.canvas_window_access import notify_error_for
 from chemvas.ui.renderer_style_access import bond_length_px_for
 from chemvas.ui.selection_scene_access import (
     clear_scene_selection_for,
@@ -100,7 +102,8 @@ class BondTool(Tool):
         bond = bond_for_id(self.canvas, bond_id)
         if bond is None:
             return False
-        active_bond_style = tool_settings_state_for(self.canvas).active_bond_style
+        settings = tool_settings_state_for(self.canvas)
+        active_bond_style = settings.active_bond_style
         if active_bond_style in {"wedge", "hash"}:
             self.context.apply_bond_style(bond_id, active_bond_style, 1)
             return True
@@ -124,7 +127,25 @@ class BondTool(Tool):
                 "dotted",
                 1,
             )
+            if bond.order == 2 and not is_dotted_double_bond_style(
+                next_style, next_order
+            ):
+                notify_error_for(
+                    self.canvas,
+                    "Dotted overlay needs an inner or outer plain double bond. "
+                    "Choose Double, then its position, and try Dotted again.",
+                )
+                return True
             self.context.apply_bond_style(bond_id, next_style, next_order)
+            return True
+        if active_bond_style in {"single", "double", "triple"}:
+            if (bond.style, bond.order) != (
+                active_bond_style,
+                settings.active_bond_order,
+            ):
+                self.context.apply_bond_style(
+                    bond_id, active_bond_style, settings.active_bond_order
+                )
             return True
         self.context.cycle_bond_style(bond_id)
         return True

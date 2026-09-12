@@ -12,6 +12,7 @@ from PyQt6.QtWidgets import QGraphicsItem, QGraphicsScene
 from chemvas.core.history import (
     HistoryCommand,
     SetAtomPositionsCommand,
+    UpdateBondLengthCommand,
     capture_history_transaction_for_command,
     history_transaction_scope,
     release_history_transaction_for_command,
@@ -604,6 +605,21 @@ class SetSceneGeometryCommand(HistoryCommand):
     @override
     def redo(self, canvas) -> None:
         self._apply(canvas, undo=False)
+
+
+@dataclass
+class SetBondLengthGeometryCommand(SetSceneGeometryCommand):
+    """Restore style before atom and exact dependent-mark geometry both ways."""
+
+    length_command: UpdateBondLengthCommand
+
+    @override
+    def _apply_geometry(self, canvas, *, undo: bool) -> None:
+        if undo:
+            self.length_command.undo(canvas)
+        else:
+            self.length_command.redo(canvas)
+        super()._apply_geometry(canvas, undo=undo)
 
 
 @dataclass

@@ -126,6 +126,10 @@ end state is decided.
   including existing depth coordinates and dependent marks/ring fills. Replay
   restores atoms before their dependent scene items, then refreshes the selection
   outline once. These command payloads are not a second rollback or stack owner.
+- Bond-length history specializes that same exact-geometry command: restore
+  the renderer length and mark glyph dimensions before atom positions and exact
+  attached-mark positions in either direction. This preserves absolute-anchor
+  marks as well as stored offsets without adding another savepoint owner.
 - Drag command payloads are captured lazily at the first effective movement,
   alongside the existing scoped savepoint. Bound marks additionally retain exact
   local Qt positions in history only; persisted attachment offsets stay unchanged.

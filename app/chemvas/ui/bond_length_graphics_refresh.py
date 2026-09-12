@@ -10,8 +10,14 @@ from chemvas.ui.atom_label_access import (
 from chemvas.ui.bond_renderer_access import update_bond_geometry_for
 from chemvas.ui.canvas_atom_graphics_state import atom_dots_for, atom_items_for
 from chemvas.ui.canvas_bond_graphics_state import bond_items_for, bond_items_for_id
+from chemvas.ui.canvas_mark_registry import mark_registry_for
 from chemvas.ui.canvas_model_access import atoms_for, bonds_for
 from chemvas.ui.graphics_items import AtomDotItem, AtomLabelItem
+from chemvas.ui.mark_item_access import (
+    mark_center_for,
+    refresh_mark_item_geometry_for,
+    set_mark_center_for,
+)
 from chemvas.ui.pick_radius_access import atom_pick_radius_for
 from chemvas.ui.renderer_style_access import (
     atom_font_for,
@@ -214,6 +220,17 @@ def refresh_bond_length_graphics_for(canvas) -> None:
 
     _refresh_atom_graphics(canvas)
     _refresh_bond_graphics(canvas)
+    for atom_id, marks in mark_registry_for(canvas).items():
+        atom = atoms_for(canvas).get(atom_id)
+        if atom is None:
+            continue
+        for item in marks:
+            data = item.data(1)
+            center = mark_center_for(canvas, item)
+            if data.get("dx") is not None and data.get("dy") is not None:
+                center = QPointF(atom.x + data["dx"], atom.y + data["dy"])
+            refresh_mark_item_geometry_for(canvas, item, data["kind"])
+            set_mark_center_for(canvas, item, center)
     refresh_selection_outline_for(canvas)
 
 

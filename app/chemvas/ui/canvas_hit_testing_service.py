@@ -20,6 +20,7 @@ from chemvas.ui.canvas_model_access import (
     bonds_for,
     has_atoms_for,
 )
+from chemvas.ui.graphics_items import AtomDotItem
 from chemvas.ui.mark_item_access import mark_center_for
 from chemvas.ui.pick_radius_access import atom_pick_radius_for, bond_pick_radius_for
 from chemvas.ui.renderer_style_access import bond_length_px_for
@@ -59,6 +60,7 @@ class CanvasHitTestingService:
         bond_item = None
         ring_item = None
         other_item = None
+        foreground_note = None
         for item in scene_items_at_pos_for_canvas(self.canvas, pos):
             kind = item.data(0)
             if kind == "selection_outline":
@@ -92,6 +94,21 @@ class CanvasHitTestingService:
             if kind == "ring" and ring_item is None:
                 ring_item = item
                 continue
+            if (
+                kind == "note"
+                and all(
+                    candidate is None
+                    for candidate in (mark_item, bond_item, other_item)
+                )
+                and (
+                    atom_item is None
+                    or (
+                        isinstance(atom_item, AtomDotItem)
+                        and atom_item.export_scene_bounding_rect().isEmpty()
+                    )
+                )
+            ):
+                foreground_note = item
             if other_item is None:
                 other_item = item
         if handle_item is not None:
@@ -100,6 +117,11 @@ class CanvasHitTestingService:
             # priority below outrank them makes arrow endpoints and resize
             # grips unreachable wherever they touch the structure.
             return handle_item
+        if foreground_note is not None:
+            # The descending Qt stack puts this note above any structure ink
+            # at the pointer. Invisible carbon hit targets and nearby-bond
+            # margins must not let an edit reach through the visible caption.
+            return foreground_note
         if mark_item is not None:
             if atom_item is None:
                 return mark_item

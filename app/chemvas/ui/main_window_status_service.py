@@ -83,7 +83,7 @@ TOOL_HINTS: dict[str, str] = {
     "orbital": "Orbital: click to place",
     "perspective": "Perspective: drag selection to rotate",
     "color": "Color: choose a swatch",
-    "ring_fill": "Ring Fill: choose fill color",
+    "ring_fill": "Ring Fill: select a complete ring, then choose a fill color",
 }
 
 
@@ -314,9 +314,6 @@ class MainWindowStatusService:
         return self.zoom_label is not None
 
     def active_tool_status_text(self, window) -> str:
-        page_override = self._context_bar_page_override_for_window(window)
-        if page_override == "ring_fill":
-            return "Tool: Ring Fill"
         canvas = self._active_canvas_or_none_for_window(window)
         if canvas is None:
             return "Tool: None"

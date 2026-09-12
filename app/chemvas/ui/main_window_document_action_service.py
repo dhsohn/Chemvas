@@ -151,6 +151,55 @@ class MainWindowDocumentActionService:
     ) -> str:
         return self.current_file_path(window, canvas=canvas) or ""
 
+    def _confirm_calculation_plan_draft(
+        self, window, canvas: CanvasView, *, message_box, exporting: bool = False
+    ) -> bool:
+        """Share the draft-consent policy for whole-document Save and SVG export."""
+        plan = calculation_plan_for(canvas)
+        if plan is None:
+            return True
+        state = snapshot_canvas_state_for(canvas)
+        plan_problem: str | None = None
+        consequence = ""
+        action = "Exporting" if exporting else "Saving"
+        try:
+            validated_plan = validate_calculation_plan(state, plan)
+        except ValueError as exc:
+            plan_problem = str(exc)
+            consequence = (
+                f"{action} will keep the calculation plan as an invalid draft. "
+                "Repair it in Calculation > Edit States and Steps before export."
+                if "calculation_plan" in state
+                else f"{action} will omit the stale calculation plan from this file. "
+                "Choose No and undo the graph edit to recover its references, "
+                "or use Save As to keep the previously saved plan separately."
+            )
+        else:
+            try:
+                validate_reviewed_precomplex_pairs(state, validated_plan)
+            except ValueError as exc:
+                plan_problem = str(exc)
+                consequence = (
+                    f"{action} will keep this drawing and its reviewed precomplex "
+                    "data as a draft, but the review is no longer valid for "
+                    "calculation export. Choose No to cancel; Undo the "
+                    "invalidating edit if it is still in history. Otherwise "
+                    "regenerate and review the affected pair before pack-step. "
+                    "Save As can keep the previously saved drawing separately."
+                )
+        if plan_problem is None:
+            return True
+        verb = "Export" if exporting else "Save"
+        answer = message_box.question(
+            window,
+            "Calculation Plan Needs Attention",
+            "The calculation plan no longer matches this drawing:\n"
+            f"{plan_problem}\n\n{consequence}\n{verb} anyway?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        return answer == QMessageBox.StandardButton.Yes
+
     def save_canvas_to_path(
         self,
         window,
@@ -193,48 +242,10 @@ class MainWindowDocumentActionService:
         # keep ``path`` as the user-facing document path and recent-file entry.
         write_path = resolved_document_path(path)
         try:
-            plan = calculation_plan_for(target)
-            if plan is not None:
-                state = snapshot_canvas_state_for(target)
-                plan_problem: str | None = None
-                consequence = ""
-                try:
-                    validated_plan = validate_calculation_plan(state, plan)
-                except ValueError as exc:
-                    plan_problem = str(exc)
-                    consequence = (
-                        "Saving will keep the calculation plan as an invalid draft. "
-                        "Repair it in Calculation > Edit States and Steps before export."
-                        if "calculation_plan" in state
-                        else "Saving will omit the stale calculation plan from this file. "
-                        "Choose No and undo the graph edit to recover its references, "
-                        "or use Save As to keep the previously saved plan separately."
-                    )
-                else:
-                    try:
-                        validate_reviewed_precomplex_pairs(state, validated_plan)
-                    except ValueError as exc:
-                        plan_problem = str(exc)
-                        consequence = (
-                            "Saving will keep this drawing and its reviewed precomplex "
-                            "data as a draft, but the review is no longer valid for "
-                            "calculation export. Choose No to cancel; Undo the "
-                            "invalidating edit if it is still in history. Otherwise "
-                            "regenerate and review the affected pair before pack-step. "
-                            "Save As can keep the previously saved drawing separately."
-                        )
-                if plan_problem is not None:
-                    answer = message_box.question(
-                        window,
-                        "Calculation Plan Needs Attention",
-                        "The calculation plan no longer matches this drawing:\n"
-                        f"{plan_problem}\n\n"
-                        f"{consequence}\nSave anyway?",
-                        QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-                        QMessageBox.StandardButton.No,
-                    )
-                    if answer != QMessageBox.StandardButton.Yes:
-                        return False
+            if not self._confirm_calculation_plan_draft(
+                window, target, message_box=message_box
+            ):
+                return False
             current_path = self.current_file_path(window, canvas=target)
             if current_path and resolved_document_path(current_path) == write_path:
                 expected = document_source_sha256_for(target)
@@ -494,6 +505,18 @@ class MainWindowDocumentActionService:
         ):
             return
         try:
+            if (
+                fmt == "svg"
+                and options.editable_svg
+                and options.scope == "sheet"
+                and not self._confirm_calculation_plan_draft(
+                    window,
+                    self._active_canvas_for_window(window),
+                    message_box=message_box,
+                    exporting=True,
+                )
+            ):
+                return
             self._document_session_service_for_window(window).export_figure(
                 path,
                 fmt=fmt,

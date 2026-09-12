@@ -245,16 +245,15 @@ class CoreHistoryUiAtomicityTest(unittest.TestCase):
         history_state.history.append(reference_command)
         history_list = history_state.history
 
-        from chemvas.ui import canvas_bond_mutation_service as mutation_module
+        original_add = canvas.bond_renderer.add_bond_graphics
 
-        original_add = mutation_module.add_bond_graphics_for
-
-        def add_then_fail(target_canvas, target_bond_id) -> None:
-            original_add(target_canvas, target_bond_id)
+        def add_then_fail(target_bond_id) -> None:
+            original_add(target_bond_id)
             raise RuntimeError("bond graphics add failed")
 
-        with mock.patch(
-            "chemvas.ui.canvas_bond_mutation_service.add_bond_graphics_for",
+        with mock.patch.object(
+            canvas.bond_renderer,
+            "add_bond_graphics",
             side_effect=add_then_fail,
         ):
             with self.assertRaisesRegex(RuntimeError, "bond graphics add failed"):

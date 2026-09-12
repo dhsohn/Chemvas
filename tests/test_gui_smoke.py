@@ -1266,7 +1266,7 @@ class GuiShortcutSmokeTest(unittest.TestCase):
             ring_count_before,
         )
 
-    def test_clicking_bond_toggles_single_and_double_without_variant_cycle(
+    def test_clicking_bond_applies_named_order_without_variant_cycle(
         self,
     ) -> None:
         add_bond_between_points_for(
@@ -1281,24 +1281,20 @@ class GuiShortcutSmokeTest(unittest.TestCase):
         )
         midpoint = QPointF(0.0, 0.0)
 
-        canvas_services_for(
-            active_canvas_for_window(self.window)
-        ).input.tool_mode_controller.set_bond_style("single", 1)
-        self._click_scene_point(midpoint)
-        bond = active_canvas_for_window(self.window).model.bonds[bond_id]
-        self.assertEqual((bond.style, bond.order), ("double", 2))
-
-        self._click_scene_point(midpoint)
-        bond = active_canvas_for_window(self.window).model.bonds[bond_id]
-        self.assertEqual((bond.style, bond.order), ("single", 1))
-
-        self._click_scene_point(midpoint)
-        bond = active_canvas_for_window(self.window).model.bonds[bond_id]
-        self.assertEqual((bond.style, bond.order), ("double", 2))
-
-        self._click_scene_point(midpoint)
-        bond = active_canvas_for_window(self.window).model.bonds[bond_id]
-        self.assertEqual((bond.style, bond.order), ("single", 1))
+        for style, order in (
+            ("single", 1),
+            ("double", 2),
+            ("triple", 3),
+            ("single", 1),
+        ):
+            with self.subTest(style=style, order=order):
+                canvas_services_for(
+                    active_canvas_for_window(self.window)
+                ).input.tool_mode_controller.set_bond_style(style, order)
+                for _ in range(2):
+                    self._click_scene_point(midpoint)
+                    bond = active_canvas_for_window(self.window).model.bonds[bond_id]
+                    self.assertEqual((bond.style, bond.order), (style, order))
 
     def test_drawing_single_bond_over_existing_double_upgrades_it_to_triple(
         self,
