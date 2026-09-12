@@ -203,7 +203,14 @@ class SceneTransformController:
             update_selection=False,
         )
 
-    def _translate_geometry(self, atom_ids, items, dx, dy):
+    def translate_geometry(
+        self, atom_ids: set[int], items: list, dx: float, dy: float
+    ) -> SetSceneGeometryCommand:
+        """Apply one translation and return its exact before/after payload.
+
+        The caller owns the document transaction and history publication, so a
+        multi-block layout can reuse this move without publishing partial edits.
+        """
         before_positions = {
             atom_id: (self._atoms[atom_id].x, self._atoms[atom_id].y)
             for atom_id in atom_ids
@@ -217,7 +224,7 @@ class SceneTransformController:
             if atom_ids.intersection(item.data(2) or ())
         ]
         before_items = [
-            (item, self._scene_item_state(item))
+            (item, self._translation_item_state(item))
             for item in dict.fromkeys([*dependent_items, *items])
         ]
         if atom_ids:
@@ -241,11 +248,20 @@ class SceneTransformController:
                 else []
             ),
             item_commands=[
-                UpdateSceneItemCommand(item, before, self._scene_item_state(item))
+                UpdateSceneItemCommand(item, before, self._translation_item_state(item))
                 for item, before in before_items
                 if before
             ],
         )
+
+    def _translation_item_state(self, item) -> dict:
+        state = self._scene_item_state(item)
+        if state.get("kind") == "mark":
+            # As in drag history, attachment offsets alone cannot preserve the
+            # exact Qt glyph position when atom+offset arithmetic rounds.
+            position = item.pos()
+            state["item_pos"] = (position.x(), position.y())
+        return state
 
     def _redraw_connected_bonds(
         self, atom_id: int, skip_bond_id: int | None = None
@@ -446,7 +462,7 @@ class SceneTransformController:
         )
         if not atom_ids and not items:
             return False
-        command = self._translate_geometry(atom_ids, items, dx, dy)
+        command = self.translate_geometry(atom_ids, items, dx, dy)
         refresh_selection_outline_for(self.canvas)
         if self.history.push(command) is False:
             raise RuntimeError("Selection translation history push did not commit")
@@ -526,7 +542,7 @@ class SceneTransformController:
             if abs(dx) < 1e-9 and abs(dy) < 1e-9:
                 continue
             commands.append(
-                self._translate_geometry(
+                self.translate_geometry(
                     set(target.atom_ids), list(target.items), dx, dy
                 )
             )
