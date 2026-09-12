@@ -35,7 +35,7 @@ def project_3d_scene(
     zoom: float,
     content_rect: QRectF,
 ) -> list[ProjectedAtom]:
-    if not scene.atoms:
+    if not scene.atoms or content_rect.isEmpty():
         return []
     cx = sum(atom.x for atom in scene.atoms) / len(scene.atoms)
     cy = sum(atom.y for atom in scene.atoms) / len(scene.atoms)
@@ -59,18 +59,41 @@ def project_3d_scene(
         max_extent = max(max_extent, math.sqrt(x1 * x1 + y1 * y1 + z2 * z2))
 
     available = max(40.0, min(content_rect.width(), content_rect.height()))
-    scale = (available * 0.36 * zoom) / max_extent
+    scale = (available * 0.36) / max_extent
     center_x = content_rect.center().x()
     center_y = content_rect.top() + content_rect.height() * 0.55
     projected = []
     for atom, (x, y, z) in zip(scene.atoms, rotated, strict=False):
         depth = 7.0 / max(1.5, 7.0 - z)
-        px = center_x + x * scale * depth
-        py = center_y - y * scale * depth
+        px = x * scale * depth
+        py = -y * scale * depth
         base_radius = 6.0 if atom.symbol == "H" else 9.0
         radius = max(3.0, base_radius * depth)
         projected.append((px, py, z, radius))
-    return projected
+    # Fit the depth-magnified footprint at zoom=1, including the existing
+    # renderer's atom shadows and the widest bond's round shadow cap. Keep the
+    # original framing whenever it already fits. Shrinking the radii as well
+    # lets shallow, wide panels fit near-camera atoms without cutting them off.
+    paint_margin = max(
+        3.0,
+        max(
+            ((1.4 + max(0, bond.order - 1) + 1.8) / 2.0 + 2.2 for bond in scene.bonds),
+            default=0.0,
+        ),
+    )
+    fit = min(
+        1.0,
+        max(0.0, content_rect.width() * 0.5 - paint_margin)
+        / max(abs(x) + radius * 1.04 for x, _y, _z, radius in projected),
+        max(0.0, content_rect.height() * 0.45 - paint_margin)
+        / max(abs(y) + radius * 1.04 for _x, y, _z, radius in projected),
+    )
+    # User zoom follows the fit: it can intentionally crop the molecule, but
+    # must not be cancelled by another fit or change the atom radii with zoom.
+    return [
+        (center_x + x * fit * zoom, center_y + y * fit * zoom, z, radius * fit)
+        for x, y, z, radius in projected
+    ]
 
 
 def project_preview_scene(

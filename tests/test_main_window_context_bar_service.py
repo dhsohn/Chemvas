@@ -16,6 +16,7 @@ def _context_bar_service(
     bond_length_px_for_window=None,
 ) -> MainWindowContextBarService:
     return MainWindowContextBarService(
+        color_tool_for_window=lambda _window: None,
         page_builder=page_builder or object(),
         active_tool_name_for_window=active_tool_name_for_window
         or mock.Mock(return_value=None),

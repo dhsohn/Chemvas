@@ -41,6 +41,7 @@ from chemvas.ui.canvas_scene_items_state import ring_items_for
 from chemvas.ui.canvas_window_access import notify_error_for
 from chemvas.ui.graphics_items import AtomDotItem
 from chemvas.ui.history_commands import AddSceneItemsCommand, UpdateSceneItemCommand
+from chemvas.ui.mark_item_access import apply_mark_color_for
 from chemvas.ui.note_item_access import (
     committed_note_html_for,
     committed_note_text_for,
@@ -52,6 +53,7 @@ from chemvas.ui.scene_item_access import attach_scene_item, item_is_in_canvas_sc
 from chemvas.ui.scene_item_state import (
     ARROW_KINDS,
     arrow_state_dict_for,
+    mark_state_dict_for,
     note_state_dict_for,
     ring_state_dict_for,
     shape_state_dict_for,
@@ -388,6 +390,16 @@ class CanvasColorMutationService:
             if kind == "shape":
                 self._apply_shape_fill(item, color)
                 return
+            if kind == "mark":
+                self._record_scene_item_mutation(
+                    item,
+                    state_for=mark_state_dict_for,
+                    mutation=lambda: apply_mark_color_for(
+                        self.canvas, item, color.name()
+                    ),
+                    runtime_rollback=self._graphics_runtime_rollback(item),
+                )
+                return
             if kind == "ts_bracket":
                 notify_error_for(
                     self.canvas,
@@ -413,6 +425,22 @@ class CanvasColorMutationService:
             self._run_history_transaction(
                 apply_all,
                 rollback=rollback,
+            )
+        if (
+            color.isValid()
+            and items
+            and all(
+                isinstance(item, AtomDotItem)
+                and item_is_in_canvas_scene(self.canvas, item)
+                and item.data(0) == "atom"
+                and item.brush().color().alpha() == 0
+                for item in items
+            )
+        ):
+            notify_error_for(
+                self.canvas,
+                "Color stored for implicit carbon; hidden carbon vertices stay hidden. "
+                "Color the bonds or show an explicit atom label for visible color.",
             )
 
     # Shape panels and ring fills stack behind the structure as ChemDraw-style
@@ -1006,6 +1034,11 @@ class CanvasColorMutationService:
         brush = _captured_graphics_brush(item)
         pen = _captured_graphics_pen(item)
         is_ring = _graphics_item_data_for_capture(item, 0) == "ring"
+        mark_data = (
+            dict(item.data(1))
+            if _graphics_item_data_for_capture(item, 0) == "mark"
+            else None
+        )
         ring_alpha = (
             _graphics_item_data_for_capture(item, RING_FILL_ALPHA_ROLE)
             if is_ring
@@ -1027,6 +1060,8 @@ class CanvasColorMutationService:
                 operations.append(
                     lambda: item.setData(RING_FILL_ALPHA_ROLE, ring_alpha)
                 )
+            if mark_data is not None:
+                operations.append(lambda: item.setData(1, dict(mark_data)))
             _run_restore_operations("Graphics color rollback failed", operations)
 
         def verify() -> None:
@@ -1048,6 +1083,8 @@ class CanvasColorMutationService:
                     raise RuntimeError("graphics brush did not match its savepoint")
             if is_ring and item.data(RING_FILL_ALPHA_ROLE) != ring_alpha:
                 raise RuntimeError("ring opacity did not match its savepoint")
+            if mark_data is not None and item.data(1) != mark_data:
+                raise RuntimeError("mark color metadata did not match its savepoint")
 
         return _ColorRuntimeAuthority(restore, verify)
 
@@ -1181,7 +1218,7 @@ class CanvasColorMutationService:
             seen_ids.add(id(item))
             if kind is _DELETED_GRAPHICS_ITEM:
                 return True
-            if kind not in {"atom", "bond", "note", "shape", "ring"}:
+            if kind not in {"atom", "bond", "note", "shape", "ring", "mark"}:
                 # Keep the generic command-based transaction behavior for test
                 # doubles and extension items whose runtime state this service
                 # does not know how to snapshot exactly.

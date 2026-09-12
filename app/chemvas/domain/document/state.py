@@ -569,6 +569,7 @@ def selection_payload_to_canvas_state(
             "dy": mark_state["dy"],
             "x": mark_state["x"],
             "y": mark_state["y"],
+            **({"color": mark_state["color"]} if "color" in mark_state else {}),
         }
         for mark_state in marks
     ]
@@ -1155,8 +1156,12 @@ def _validate_note_states(states: object) -> None:
 
 def _validate_mark_states(states: object, atom_ids: set[int]) -> None:
     for index, mark_state in enumerate(_validated_scene_state_list(states)):
-        if set(mark_state) != {"kind", "text", "atom_id", "dx", "dy", "x", "y"}:
+        keys = set(mark_state)
+        required = {"kind", "text", "atom_id", "dx", "dy", "x", "y"}
+        if not required <= keys or keys - required - {"color"}:
             raise ValueError("Invalid Chemvas file.")
+        if "color" in keys and not _is_hex_color(mark_state["color"]):
+            raise ValueError("Invalid Chemvas file. Mark color must be a hex color.")
         if not _is_valid_choice(mark_state.get("kind"), VALID_MARK_KINDS):
             raise ValueError("Invalid Chemvas file.")
         text = mark_state.get("text")
@@ -1622,7 +1627,7 @@ def _validate_clipboard_mark(
 ) -> None:
     if mark_state.get("kind") != "mark":
         raise ValueError("Invalid clipboard payload.")
-    if set(mark_state) != {
+    required = {
         "kind",
         "mark_kind",
         "text",
@@ -1631,8 +1636,12 @@ def _validate_clipboard_mark(
         "dy",
         "x",
         "y",
-    }:
+    }
+    keys = set(mark_state)
+    if not required <= keys or keys - required - {"color"}:
         raise ValueError("Invalid clipboard payload.")
+    if "color" in keys and not _is_hex_color(mark_state["color"]):
+        raise ValueError("Invalid clipboard payload. Mark color must be a hex color.")
     mark_kind = mark_state.get("mark_kind")
     if not _is_valid_choice(mark_kind, VALID_MARK_KINDS):
         raise ValueError("Invalid clipboard payload.")

@@ -98,6 +98,7 @@ class MainWindowStatusService:
         active_canvas_name_for_window,
         active_canvas_index_for_window,
         context_bar_page_override_for_window,
+        color_tool_for_window,
         zoom_in_for_window=None,
         zoom_out_for_window=None,
         reset_zoom_for_window=None,
@@ -105,6 +106,7 @@ class MainWindowStatusService:
         set_zoom_percent_for_window=None,
     ) -> None:
         self._active_tool_name_for_window = active_tool_name_for_window
+        self._color_tool_for_window = color_tool_for_window
         self._current_zoom_percent_for_window = current_zoom_percent_for_window
         self._active_canvas_or_none_for_window = active_canvas_or_none_for_window
         self._canvas_count_for_window = canvas_count_for_window
@@ -333,6 +335,10 @@ class MainWindowStatusService:
         if not tool_name:
             return "Choose a drawing tool"
         key = str(tool_name)
+        if key == "color":
+            tool = self._color_tool_for_window(window)
+            if tool is not None and tool.current_color is not None:
+                return f"Color: {tool.current_color} — click an item or choose a swatch"
         return TOOL_HINTS.get(key, f"{tool_display_name(key)}: ready")
 
     def show_active_tool_hint(self, window) -> None:

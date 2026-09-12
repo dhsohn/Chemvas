@@ -658,17 +658,23 @@ def build_color_palette_page(
     *,
     tooltip_prefix: str,
     apply_preset,
-) -> QWidget:
+    checkable: bool,
+) -> ButtonGroupPage:
     page, layout = new_context_page()
+    group = QButtonGroup(page)
+    buttons = {}
     layout.addWidget(hint_label(tooltip_prefix))
     for label, hex_value in COLOR_PALETTE_SPECS:
         button = color_swatch_button(label, hex_value, tooltip_prefix)
+        button.setCheckable(checkable)
+        group.addButton(button)
+        buttons[hex_value] = button
         button.clicked.connect(
             lambda _checked=False, value=hex_value: apply_preset(value)
         )
         layout.addWidget(button)
     layout.addStretch(1)
-    return page
+    return ButtonGroupPage(page, group, buttons)
 
 
 __all__ = [

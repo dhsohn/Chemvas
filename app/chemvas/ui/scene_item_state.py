@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Mapping
-from typing import Any
+from typing import Any, cast
 
 from PyQt6.QtCore import QPointF, QRectF, Qt
 from PyQt6.QtGui import QBrush, QColor, QPen, QPolygonF
@@ -49,6 +49,7 @@ from chemvas.ui.scene_item_state_serialization import (
 )
 
 MarkCenterSetter = Callable[[Any, QPointF], None]
+MarkColorSetter = Callable[[Any, str | None], None]
 NoteStyleApplier = Callable[[QGraphicsTextItem], None]
 RingFillBrushGetter = Callable[[], QBrush]
 TsBracketPathBuilder = Callable[..., Any]
@@ -186,6 +187,7 @@ def apply_scene_item_state(
     model_atoms: Mapping[int, Any],
     note_style_applier: NoteStyleApplier,
     mark_center_setter: MarkCenterSetter,
+    mark_color_setter: MarkColorSetter,
     ring_fill_brush_getter: RingFillBrushGetter,
     ts_bracket_path_builder: TsBracketPathBuilder,
     bond_color: str,
@@ -220,6 +222,7 @@ def apply_scene_item_state(
             }
         )
         item.setData(1, data)
+        mark_color_setter(item, cast("str | None", state.get("color")))
         _restore_mark_position(item, state, model_atoms, mark_center_setter)
         return
     if kind == "ring" and isinstance(item, QGraphicsPolygonItem):

@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QColor, QFont, QFontMetricsF, QPainter
 
 from chemvas.shell.palette import PALETTE
@@ -172,7 +173,12 @@ def paint_preview_3d_panel(
         )
         return
 
-    draw_projected_scene(painter, state.scene, projected_atoms)
+    painter.save()
+    try:
+        painter.setClipRect(layout["molecule"], Qt.ClipOperation.IntersectClip)
+        draw_projected_scene(painter, state.scene, projected_atoms)
+    finally:
+        painter.restore()
     draw_interaction_hints(painter, layout["viewport"], font=caption_font)
 
 

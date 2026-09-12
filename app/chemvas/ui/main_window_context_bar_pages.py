@@ -29,6 +29,8 @@ if TYPE_CHECKING:
 @dataclass(frozen=True, kw_only=True)
 class ContextBarPages:
     pages: dict[str, QWidget]
+    color_group: QButtonGroup
+    color_buttons: dict[str, QToolButton]
     bond_group: QButtonGroup | None
     bond_buttons: dict[str, QToolButton]
     ring_group: QButtonGroup | None
@@ -138,6 +140,13 @@ class MainWindowContextBarPageBuilder:
                 window, "set_text_alignment", name
             ),
         )
+        color_page = build_color_palette_page(
+            tooltip_prefix="Color",
+            apply_preset=lambda value: self._apply_color_preset_for_window(
+                window, value
+            ),
+            checkable=True,
+        )
         pages = {
             "empty": build_empty_page(),
             "bond": bond_page.page,
@@ -157,21 +166,19 @@ class MainWindowContextBarPageBuilder:
             "orbital": build_orbital_page(window, self._tool_state),
             "shape": build_shape_page(window, self._tool_state),
             "line": build_line_page(window, self._tool_state),
-            "color": build_color_palette_page(
-                tooltip_prefix="Color",
-                apply_preset=lambda value: self._apply_color_preset_for_window(
-                    window, value
-                ),
-            ),
+            "color": color_page.page,
             "ring_fill": build_color_palette_page(
                 tooltip_prefix="Ring Fill",
                 apply_preset=lambda value: self._apply_ring_fill_preset_for_window(
                     window, value
                 ),
-            ),
+                checkable=False,
+            ).page,
         }
         return ContextBarPages(
             pages=pages,
+            color_group=color_page.group,
+            color_buttons=color_page.buttons,
             bond_group=bond_page.group,
             bond_buttons=bond_page.buttons,
             ring_group=ring_page.group,

@@ -20,6 +20,7 @@ from PyQt6.QtWidgets import (
     QGraphicsTextItem,
 )
 
+from chemvas.domain.document import is_hex_color
 from chemvas.features.annotations import (
     DEFAULT_BRACKET_KIND,
     DEFAULT_SHAPE_KIND,
@@ -158,6 +159,28 @@ class _BracketGlyphItem(NoSelectPathItem):
 class CanvasSceneDecorationBuildService:
     def __init__(self, canvas) -> None:
         self.canvas = canvas
+
+    def apply_mark_color(self, item, color: str | None) -> None:
+        """Apply an explicit mark override, or restore the document default."""
+        if color is not None and not is_hex_color(color):
+            raise ValueError("Mark color must be a hex color.")
+        painted = QColor(color if color is not None else atom_color_for(self.canvas))
+        if isinstance(item, QGraphicsTextItem):
+            item.setDefaultTextColor(painted)
+        elif isinstance(item, QGraphicsEllipseItem):
+            item.setBrush(QBrush(painted))
+        elif isinstance(item, _ChargeCircleMarkItem):
+            pen = item.pen()
+            pen.setColor(painted)
+            item.setPen(pen)
+        else:
+            raise ValueError("Unsupported mark graphics item.")
+        data = dict(item.data(1) or {})
+        if color is None:
+            data.pop("color", None)
+        else:
+            data["color"] = color
+        item.setData(1, data)
 
     def build_mark_item(self, kind: str):
         if kind == "radical":

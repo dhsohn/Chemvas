@@ -23,6 +23,7 @@ from chemvas.ui.ring_fill_state import set_ring_fill_brush
 from chemvas.ui.scene_item_state import (
     ARROW_KINDS,
     ArrowLabelSetter,
+    MarkColorSetter,
     arrow_labels_from_state,
     mark_center_from_state,
     set_arrow_labels_from_state,
@@ -107,6 +108,7 @@ def create_mark_item_from_state(
     model_atoms: Mapping[int, Any],
     build_mark_item: MarkItemBuilder,
     set_mark_center: MarkCenterSetter,
+    set_mark_color: MarkColorSetter,
 ) -> Any | None:
     center = mark_center_from_state(mark_state, model_atoms)
     if center is None:
@@ -131,6 +133,7 @@ def create_mark_item_from_state(
         data["text"] = str(text)
     item.setData(0, "mark")
     item.setData(1, data)
+    set_mark_color(item, cast("str | None", mark_state.get("color")))
     set_mark_center(item, center)
     return item
 
@@ -250,6 +253,7 @@ def create_scene_item_from_state(
     note_style_applier: NoteStyleApplier,
     build_mark_item: MarkItemBuilder,
     set_mark_center: MarkCenterSetter,
+    set_mark_color: MarkColorSetter,
     ring_fill_brush_getter: RingFillBrushGetter,
     build_arrow_item: ArrowItemBuilder,
     set_curved_arrow_path: CurvedArrowPathSetter,
@@ -278,6 +282,7 @@ def create_scene_item_from_state(
             model_atoms=model_atoms,
             build_mark_item=build_mark_item,
             set_mark_center=set_mark_center,
+            set_mark_color=set_mark_color,
         )
     if kind == "ts_bracket":
         return create_ts_bracket_item_from_state(

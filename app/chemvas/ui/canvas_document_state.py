@@ -334,6 +334,7 @@ def restore_document_post_model_items(canvas, state: dict) -> None:
                 "dy": mark_state["dy"],
                 "x": mark_state["x"],
                 "y": mark_state["y"],
+                **({"color": mark_state["color"]} if "color" in mark_state else {}),
             },
         )
 
@@ -522,6 +523,7 @@ def _snapshot_marks(canvas, items: list) -> list[dict]:
                 "dy": dy,
                 "x": mark_state["x"],
                 "y": mark_state["y"],
+                **({"color": mark_state["color"]} if "color" in mark_state else {}),
             }
         )
     return marks

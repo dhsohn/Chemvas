@@ -165,6 +165,16 @@ ring_fills, ts_brackets 각각 4,096개입니다. 이미지는 앞서 연결한 
 잘못된 Unicode, 누락/미지의 필드와 범위 밖 설정은 캔버스 복원 전 공유 검증에서
 실패합니다.
 
+원본 v7과 선택 클립보드 v2의 mark에는 선택적으로 `#RGB` 또는 `#RRGGBB`
+형태의 `color`를 넣을 수 있습니다. `plus`, `minus`, `circled_plus`,
+`circled_minus`, `radical` 각각에 독립적으로 적용되며 원자 부착·자유 표시 모두
+지원합니다. 생략하면 부착 원자의 색이 아닌 문서의 기본 표시색을 사용합니다.
+명시적 색은 원본 문서·선택 클립보드·편집 가능한 SVG에 보존되며 형식 전하,
+라디칼 전자 수, precomplex 검토 기준을 바꾸지 않습니다. 미지의 필드와 잘못된
+색은 거부합니다. 형식 버전은 그대로지만 이 필드가 없는 옛 릴리스는 해당 필드를
+담은 표시를 거부합니다. 표시색이 없는 기존 문서는 계속 지원합니다.
+Graph Patch에 표시색 편집 연산이 추가되는 것은 아닙니다.
+
 원본 문서에서 원자에 붙은 mark의 `atom_id`와 고리 채움 `atom_ids`의 각 값은
 따옴표로 감싼 숫자가 아닌 JSON 정수여야 합니다. `model.atoms`,
 `model.atom_annotations`, `perspective.atom_coords_3d`의 십진 문자열 객체 키는

@@ -174,6 +174,17 @@ serialization limit, not a usable drawing size. Native mark text is null or at
 most 200 characters. Invalid Unicode, missing/unknown fields and out-of-range
 settings fail shared validation before canvas restoration.
 
+Native v7 and selection-clipboard v2 marks accept an optional `color` in `#RGB`
+or `#RRGGBB` form. This applies independently to each `plus`, `minus`,
+`circled_plus`, `circled_minus` and `radical`, whether bound to an atom or free.
+Omitting it uses the document's default mark color, not the bound atom's color.
+Explicit colors persist in native documents, clipboard selections and editable
+SVG; they do not change formal charge, radical electrons or the precomplex
+review basis. Unknown fields and invalid colors are rejected. The format
+versions remain unchanged, but older releases without this field reject marks
+that contain it; documents without mark colors remain supported. Graph Patch
+does not gain a mark-color editing operation.
+
 In native documents, a bound mark's `atom_id` and entries in ring-fill `atom_ids`
 must be JSON integers, not quoted numbers. Decimal-string object keys in
 `model.atoms`, `model.atom_annotations`, and `perspective.atom_coords_3d` remain

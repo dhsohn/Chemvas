@@ -52,6 +52,7 @@ class MainWindowContextBarService:
         active_canvas_or_none_for_window,
         context_bar_page_override_for_window,
         set_atom_input_for_window,
+        color_tool_for_window,
         bond_length_px_for_window=None,
     ) -> None:
         self._page_builder = page_builder
@@ -61,6 +62,9 @@ class MainWindowContextBarService:
             context_bar_page_override_for_window
         )
         self._set_atom_input_for_window = set_atom_input_for_window
+        self._color_tool_for_window = color_tool_for_window
+        self._color_group: QButtonGroup | None = None
+        self._color_buttons: dict[str, QToolButton] = {}
         self._bond_length_px_for_window = bond_length_px_for_window
         self._bond_length_spin = None
         self._stack: QStackedWidget | None = None
@@ -93,6 +97,8 @@ class MainWindowContextBarService:
         self._stack = stack
         context_pages = self._page_builder.build(window)
         self._pages = context_pages.pages
+        self._color_group = context_pages.color_group
+        self._color_buttons = context_pages.color_buttons
         self._bond_group = context_pages.bond_group
         self._bond_buttons = context_pages.bond_buttons
         self._ring_group = context_pages.ring_group
@@ -136,6 +142,23 @@ class MainWindowContextBarService:
             self.reflect_arrow_state(window)
         elif key == "bracket":
             self.reflect_bracket_state(window)
+        elif key == "color":
+            self.reflect_color_state(window)
+
+    def reflect_color_state(self, window) -> None:
+        if self._color_group is None:
+            return
+        canvas = self._active_canvas_or_none_for_window(window)
+        tool = self._color_tool_for_window(window) if canvas is not None else None
+        target = (
+            self._color_buttons.get(tool.current_color) if tool is not None else None
+        )
+        self._color_group.setExclusive(False)
+        for button in self._color_buttons.values():
+            blocked = button.blockSignals(True)
+            button.setChecked(button is target)
+            button.blockSignals(blocked)
+        self._color_group.setExclusive(True)
 
     def refresh_window(self, window) -> None:
         self.refresh(

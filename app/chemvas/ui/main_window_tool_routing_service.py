@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from PyQt6 import sip
 from PyQt6.QtCore import QTimer
 from PyQt6.QtGui import QColor
 
@@ -35,13 +36,21 @@ class MainWindowToolRoutingService:
             set_color(color)
 
         def apply_color() -> None:
-            self._tool_mode_controller_for_window(window).set_tool("color")
+            if sip.isdeleted(window):
+                return
+            if self._color_tool_for_window(window) is not tool:
+                window.statusBar().showMessage(
+                    "Color not applied: active canvas changed; choose a swatch again.",
+                    6000,
+                )
+                return
+            self._context_page_state.set_tool_with_status(window, "color")
             color_service = self._color_mutation_service_for_window(window)
             items = [
                 item
                 for item in self._selected_scene_items(window)
                 if item.data(0)
-                in {"bond", "atom", "ring", "note", "shape", "ts_bracket"}
+                in {"bond", "atom", "ring", "note", "shape", "mark", "ts_bracket"}
                 | VALID_ARROW_KINDS
             ]
             color_service.apply_color_to_items(items, color)

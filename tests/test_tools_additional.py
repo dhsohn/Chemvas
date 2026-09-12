@@ -267,6 +267,7 @@ class _MiscCanvas:
     DragMode = SimpleNamespace(NoDrag="none")
 
     def __init__(self) -> None:
+        self.runtime_state = SimpleNamespace(callback_state=CanvasCallbackState())
         self.drag_mode = None
         self.renderer = SimpleNamespace(style=SimpleNamespace(atom_color="#224466"))
         self.scene_obj = _Scene()
@@ -1022,14 +1023,15 @@ class ToolsAdditionalTest(unittest.TestCase):
         ]
 
         color_tool.activate()
+        color_tool.set_color("#cc3344")
         self.assertTrue(color_tool.on_mouse_press(_Event(QPointF())))
         self.assertEqual(misc_canvas.colored[-1][0], target)
         self.assertEqual(misc_canvas.color_batches[-1][0], [target])
         misc_canvas.item = None
         self.assertTrue(color_tool.on_mouse_press(_Event(QPointF())))
-        self.assertEqual(len(misc_canvas.colored), 3)
+        self.assertEqual(len(misc_canvas.colored), 4)
         self.assertEqual(len(misc_canvas.color_batches), 2)
-        self.assertEqual(len(misc_canvas.color_batches[-1][0]), 2)
+        self.assertEqual(len(misc_canvas.color_batches[-1][0]), 3)
 
         flip_tool.activate()
         misc_canvas.item = _DataItem("bond", 9)

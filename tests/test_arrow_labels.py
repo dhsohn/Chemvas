@@ -581,6 +581,7 @@ class ArrowLabelCodecTest(unittest.TestCase):
             model_atoms={},
             note_style_applier=lambda item: None,
             mark_center_setter=lambda item, center: None,
+            mark_color_setter=lambda item, color: None,
             ring_fill_brush_getter=lambda: QBrush(QColor("#000000")),
             ts_bracket_path_builder=lambda rect: QPainterPath(),
             bond_color="#000000",
