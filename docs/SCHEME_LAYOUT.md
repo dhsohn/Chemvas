@@ -239,7 +239,7 @@ source row/block positions and each continuation arrow for inspection.
 The budget describes painted layout bounds, not the complete export's outer
 margin or the layout-box space still retained for Notes.
 Atom and attached arrow labels use their painted glyph bounds in figure export.
-Arrow labels using bitmap/color fonts retain their layout-box bounds instead.
+Arrow labels retain their layout-box bounds when bitmap/color-font tables are detected.
 Unlisted objects still stay in place and can also enlarge the complete export.
 After arranging, choose the physical export width and inspect the result at that
 size. A separate font-size guard can reject unreadably small text:

@@ -407,10 +407,10 @@ class ArrowLabelItem(_NoSelectPaintMixin, ExportTextItem):
                     # Bitmap/color fonts need their old layout extent. Asking
                     # Qt for an absent outline can also poison native glyph
                     # painting; inspect tables before calling pathForGlyph.
-                    # CBLC/CPAL are indexes/palettes, not the bitmap payload.
+                    # CBLC/EBLC/CPAL are indexes/palettes, not bitmap payloads.
                     if any(
                         run.rawFont().fontTable(tag)
-                        for tag in ("CBLC", "CPAL", "sbix", "SVG ")
+                        for tag in ("CBLC", "EBLC", "CPAL", "sbix", "SVG ")
                     ):
                         return self.sceneBoundingRect()
             block = block.next()

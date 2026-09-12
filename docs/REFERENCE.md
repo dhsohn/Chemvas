@@ -331,7 +331,7 @@ Figure fitting measures atom labels and attached arrow labels from their painted
 glyphs, excluding empty text-layout margins. Their editing, picking and on-canvas
 placement stay unchanged. Notes retain their layout-box bounds so rich-text
 decorations and automatic list markers are not cropped.
-Arrow labels using bitmap/color fonts also retain their layout-box bounds.
+Arrow labels retain their layout-box bounds when bitmap/color-font tables are detected.
 This fitting change does not add bitmap/color glyph support to outlined exports.
 
 Figure export defaults to plain SVG without Chemvas source metadata. Choose

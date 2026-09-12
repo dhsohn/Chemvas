@@ -10,7 +10,7 @@ from types import SimpleNamespace
 import pytest
 from PIL import Image
 from PyQt6.QtCore import QRectF, Qt
-from PyQt6.QtGui import QColor, QFont, QImage, QPainter, QPen, QTextCharFormat
+from PyQt6.QtGui import QColor, QFont, QImage, QPainter, QPen, QRawFont, QTextCharFormat
 from PyQt6.QtWidgets import QApplication, QGraphicsRectItem, QGraphicsScene
 
 from chemvas.features.annotations import arrow_label_html
@@ -275,3 +275,52 @@ def test_color_font_keeps_native_paint_and_conservative_bounds(mode):
     assert top <= ink[1] + 0.25
     assert right >= ink[2] - 0.25
     assert bottom >= ink[3] - 0.25
+
+
+@pytest.mark.parametrize("table", ["EBLC", "CBLC", "CPAL", "sbix", "SVG "])
+def test_bitmap_font_table_preflight_precedes_outline_extraction(monkeypatch, table):
+    # Exercise actual Qt shaping independently of installed bitmap fonts. Only
+    # the table-presence boundary is simulated; an outline request is a failure.
+    label = _label("H_{2}O\nA")
+    label.setRotation(37)
+    layout = label.sceneBoundingRect()
+    before = label.toHtml(), label.pos(), label.shape()
+    requested = []
+
+    def font_table(_font, tag):
+        requested.append(tag)
+        assert tag not in {"EBDT", "CBDT"}, "Do not read bitmap payloads"
+        return b"present" if tag == table else b""
+
+    def no_outline(_font, _glyph):
+        pytest.fail("Bitmap preflight must run before pathForGlyph")
+
+    monkeypatch.setattr(QRawFont, "fontTable", font_table)
+    monkeypatch.setattr(QRawFont, "pathForGlyph", no_outline)
+    assert item_export_bounds(label) == layout
+    assert requested[-1] == table
+    assert (label.toHtml(), label.pos(), label.shape()) == before
+
+
+def test_outline_font_without_bitmap_tables_keeps_tight_bounds(monkeypatch):
+    label = _label("H_{2}O")
+    requested = []
+    glyphs = []
+    original = QRawFont.pathForGlyph
+
+    def font_table(_font, tag):
+        requested.append(tag)
+        assert tag not in {"EBDT", "CBDT"}
+        return b""
+
+    def outline(font, glyph):
+        glyphs.append(glyph)
+        return original(font, glyph)
+
+    monkeypatch.setattr(QRawFont, "fontTable", font_table)
+    monkeypatch.setattr(QRawFont, "pathForGlyph", outline)
+    bounds = item_export_bounds(label)
+    assert glyphs
+    assert requested
+    assert not bounds.isEmpty()
+    assert bounds.height() < label.sceneBoundingRect().height()
