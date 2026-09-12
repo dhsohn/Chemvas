@@ -32,7 +32,12 @@ from chemvas.ui.canvas_group_state import (
     remove_group_for,
     restore_group_for,
 )
-from chemvas.ui.canvas_model_access import atom_for_id, bond_for_id
+from chemvas.ui.canvas_mark_registry import mark_registry_for
+from chemvas.ui.canvas_model_access import (
+    atom_annotations_for,
+    atom_for_id,
+    bond_for_id,
+)
 from chemvas.ui.canvas_scene_items_state import (
     SCENE_ITEM_COLLECTION_ATTRS,
     scene_item_collection_for,
@@ -496,6 +501,54 @@ class MoveItemsCommand(HistoryCommand):
     @override
     def redo(self, canvas) -> None:
         self._apply(canvas, self.dx, self.dy)
+
+
+@dataclass
+class RebindMarkCommand(HistoryCommand):
+    """One explicit transfer; geometry and both electronic owners replay together."""
+
+    history_transaction_snapshot_covers_state = True
+    history_transaction_owns_exact_state = True
+
+    item: object
+    before_state: dict
+    after_state: dict
+    before_marks: dict[int, tuple[object, ...]]
+    after_marks: dict[int, tuple[object, ...]]
+    before_annotations: dict[int, dict[str, int]]
+    after_annotations: dict[int, dict[str, int]]
+
+    def _apply(self, canvas, *, undo: bool) -> None:
+        transaction = capture_history_transaction_for_command(canvas)
+        try:
+            state = self.before_state if undo else self.after_state
+            marks = self.before_marks if undo else self.after_marks
+            annotations = self.before_annotations if undo else self.after_annotations
+            _apply_scene_item_state(canvas, self.item, state)
+            registry = mark_registry_for(canvas)
+            model_annotations = atom_annotations_for(canvas)
+            for atom_id, items in marks.items():
+                if items:
+                    registry.by_atom.setdefault(atom_id, [])[:] = items
+                else:
+                    registry.by_atom.pop(atom_id, None)
+                if atom_id in annotations:
+                    model_annotations[atom_id] = dict(annotations[atom_id])
+                else:
+                    model_annotations.pop(atom_id, None)
+            refresh_selection_outline_for_canvas(canvas)
+            release_history_transaction_for_command(canvas, transaction)
+        except Exception as original_error:
+            restore_history_transaction_for_command(canvas, transaction, original_error)
+            raise
+
+    @override
+    def undo(self, canvas) -> None:
+        self._apply(canvas, undo=True)
+
+    @override
+    def redo(self, canvas) -> None:
+        self._apply(canvas, undo=False)
 
 
 @dataclass

@@ -26,6 +26,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Show selected charge/radical marks' chemical owners with transient guides and
+  a distance warning; moving a mark retains its owner. Add explicit right-click
+  reassignment with a highlighted atom chooser, preserving position/color and
+  recording both atoms' electronic states in one Undo/Redo edit.
 - Reopen documents and recover unsaved snapshots made with the minimum arrow
   head size (0.1) or note line spacing (0.8). Compare decimal settings bounds
   consistently while retaining strict rejection of invalid or lossy numbers.

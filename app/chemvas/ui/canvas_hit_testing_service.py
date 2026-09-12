@@ -53,7 +53,7 @@ class CanvasHitTestingService:
             "CanvasHitTestingService requires an injected scene_pos_mapper"
         )
 
-    def item_at_scene_pos(self, pos: QPointF):
+    def item_at_scene_pos(self, pos: QPointF, *, prefer_marks: bool = False):
         handle_item = None
         atom_item = None
         mark_item = None
@@ -123,7 +123,9 @@ class CanvasHitTestingService:
             # margins must not let an edit reach through the visible caption.
             return foreground_note
         if mark_item is not None:
-            if atom_item is None:
+            # Explicit mark actions must still reach a glyph placed exactly
+            # on an atom. Ordinary selection keeps its distance-based choice.
+            if atom_item is None or prefer_marks:
                 return mark_item
             atom = atom_for_id(self.canvas, atom_item.data(1))
             center = mark_center_for(self.canvas, mark_item)
@@ -184,8 +186,10 @@ class CanvasHitTestingService:
                 nearest, best_distance = item, distance
         return nearest
 
-    def item_at_event(self, event):
-        return self.item_at_scene_pos(self.scene_pos_from_event(event))
+    def item_at_event(self, event, *, prefer_marks: bool = False):
+        return self.item_at_scene_pos(
+            self.scene_pos_from_event(event), prefer_marks=prefer_marks
+        )
 
     def grid_cell_size(self) -> float:
         return max(8.0, bond_length_px_for(self.canvas))

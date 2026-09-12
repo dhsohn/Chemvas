@@ -139,6 +139,20 @@ its knob, flip, align, and distribute.
   its existing marks. Each shortcut is one undoable edit. Radical and free
   marks are left alone. Bound marks can be selected, moved, or erased without
   selecting their atom; the Mark tool previews the same binding its click uses.
+  Dragging or nudging a bound mark changes its position, **not its chemical
+  owner**. In Select/Move, selecting it shows a dashed line to its owner and an
+  owner outline; amber and the selection status warn when it is far away. This
+  is a drawing aid, not a chemical-validity check: the warning starts beyond one
+  bond length, extended for long atom labels. The guides are not saved, copied,
+  or exported. To change ownership, right-click the mark → **Reassign to atom…**,
+  choose the purple-highlighted atom, then click **Reassign**. The current owner
+  is the initial choice; Cancel or accepting that choice changes nothing.
+  Reassignment keeps the mark's position, kind and independent color, transfers
+  its charge/radical contribution, and is one Undo/Redo operation. A free mark
+  can be attached through the same explicit chooser. Moving alone never attaches
+  a free mark or transfers charge to a nearby atom. Figure exports and
+  `check-layout` do not validate chemical ownership; inspect the selected mark
+  before sharing a drawing whose marks are distant from their owners.
 - **Color** — choose a swatch before painting; entering the tool alone does not
   choose a color. The active swatch is highlighted. Charge and radical marks,
   including free marks, have independent colors: coloring a mark does not color

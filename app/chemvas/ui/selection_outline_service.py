@@ -28,6 +28,7 @@ from chemvas.ui.canvas_atom_graphics_state import atom_items_for
 from chemvas.ui.canvas_bond_graphics_state import bond_items_for_id
 from chemvas.ui.canvas_model_access import atom_for_id, atoms_for, bond_for_id
 from chemvas.ui.mark_item_access import mark_center_for, mark_selection_radius_for
+from chemvas.ui.mark_ownership import mark_is_distant_for
 from chemvas.ui.pick_radius_access import atom_pick_radius_for
 from chemvas.ui.renderer_style_access import bond_length_px_for, bond_spacing_px_for
 from chemvas.ui.scene_group_operations import selected_group_rects_for
@@ -43,6 +44,7 @@ from chemvas.ui.selection_outline_items import (
     selection_frame_outline_items,
     selection_group_outline_item,
     selection_object_outline_item,
+    selection_outline_pen,
 )
 from chemvas.ui.selection_outline_state import (
     append_selection_outline_for,
@@ -146,6 +148,11 @@ class SelectionOutlineService:
 
         for item in object_items:
             self.add_selection_object_overlay(item, color)
+            if item.data(0) == "mark" and self._active_tool_name() in {
+                "select",
+                "move",
+            }:
+                self.add_mark_owner_overlay(item)
         for group_rect in group_rects:
             self.add_selection_group_overlay(group_rect)
         rotatable_items = [
@@ -165,8 +172,66 @@ class SelectionOutlineService:
     def shift_selection_outlines(self, dx: float, dy: float) -> None:
         if not selection_outlines_for(self.canvas):
             return
+        has_owners = any(
+            (item.data(2) or {}).get("kind") == "mark_owner"
+            for item in selection_outlines_for(self.canvas)
+        )
+        marks = {
+            id(item): item
+            for item in (scene_selected_items_for(self.canvas) if has_owners else ())
+            if item.data(0) == "mark"
+        }
         for outline in selection_outlines_for(self.canvas):
-            outline.moveBy(dx, dy)
+            data = outline.data(2) or {}
+            if data.get("kind") == "mark_owner":
+                mark = marks.get(data["mark_id"])
+                if mark is not None:
+                    self._update_mark_owner_overlay(outline, mark)
+            else:
+                outline.moveBy(dx, dy)
+
+    def _update_mark_owner_overlay(self, outline, mark) -> None:
+        atom_id = (mark.data(1) or {}).get("atom_id")
+        if not isinstance(atom_id, int):
+            return
+        atom = atom_for_id(self.canvas, atom_id)
+        if atom is None:
+            return
+        path = QPainterPath()
+        path.addEllipse(selection_indicator_rect_for_atom_for(self.canvas, atom_id))
+        path.moveTo(atom.x, atom.y)
+        path.lineTo(mark_center_for(self.canvas, mark))
+        outline.setPath(path)
+        outline.setPos(0, 0)
+        color = (
+            QColor("#b45309")
+            if mark_is_distant_for(self.canvas, mark)
+            else selection_color_for(self.canvas)
+        )
+        pen = selection_outline_pen(color)
+        pen.setStyle(Qt.PenStyle.DashLine)
+        outline.setPen(pen)
+
+    def add_mark_owner_overlay(self, mark) -> None:
+        atom_id = (mark.data(1) or {}).get("atom_id")
+        atom = atom_for_id(self.canvas, atom_id)
+        if atom is None:
+            return
+        outline = selection_object_outline_item(
+            QPainterPath(), selection_color_for(self.canvas)
+        )
+        outline.setData(
+            2, {"kind": "mark_owner", "mark_id": id(mark), "atom_id": atom_id}
+        )
+        # Keep the tooltip invariant during a drag. Only path/pen/position,
+        # already covered by the move savepoint, change frame by frame.
+        outline.setToolTip(
+            f"Owner: {atom.element} #{atom_id}. Amber means far from owner. "
+            "Moving keeps this owner. Right-click the mark to reassign it."
+        )
+        self._update_mark_owner_overlay(outline, mark)
+        add_item_to_canvas_scene(self.canvas, outline)
+        append_selection_outline_for(self.canvas, outline)
 
     def selection_line_stroke_path(
         self,
