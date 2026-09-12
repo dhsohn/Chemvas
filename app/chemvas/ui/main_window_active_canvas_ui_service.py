@@ -6,6 +6,7 @@ from chemvas.ui.canvas_view import CanvasView
 from chemvas.ui.main_window_canvas_logic import bind_active_canvas_callbacks
 from chemvas.ui.rdkit_adapter_access import rdkit_adapter_for
 from chemvas.ui.selection_info_access import emit_selection_info_for
+from chemvas.ui.sheet_setup_access import refresh_canvas_scroll_range_for
 
 
 class MainWindowActiveCanvasUIService:
@@ -77,6 +78,9 @@ class MainWindowActiveCanvasUIService:
         # Every edit can flip the document's saved/unsaved state, so refresh the
         # tab's unsaved marker (and window-modified hint) live.
         self._refresh_document_chrome_for_window(window)
+        # History publishes after a gesture commits (or is restored on failure),
+        # not during pointer movement. Recompute from persistent content only.
+        refresh_canvas_scroll_range_for(self._active_canvas_for_window(window))
 
     def handle_selection_info(self, window) -> None:
         try:
@@ -92,6 +96,8 @@ class MainWindowActiveCanvasUIService:
 
     def refresh_active_canvas_ui(self, window) -> None:
         self.bind_active_canvas(window)
+        # Inactive canvases have no history callback; catch up on activation.
+        refresh_canvas_scroll_range_for(self._active_canvas_for_window(window))
         self._action_availability.sync_grid_snap_action(window)
         atom_input = self._atom_input_for_window(window)
         if atom_input is not None:

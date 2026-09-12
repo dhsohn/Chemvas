@@ -298,8 +298,13 @@ def reset_zoom_for(canvas) -> float:
 
 
 def fit_canvas_to_view_for(canvas, *, margin: float = 0.92) -> float:
-    from chemvas.ui.sheet_setup_access import sheet_rect_for
+    from chemvas.ui.sheet_setup_access import (
+        refresh_canvas_scroll_range_for,
+        sheet_rect_for,
+    )
 
+    if not refresh_canvas_scroll_range_for(canvas):
+        return zoom_factor_for(canvas)
     sheet = sheet_rect_for(canvas)
     viewport = canvas.viewport().rect()
     if (

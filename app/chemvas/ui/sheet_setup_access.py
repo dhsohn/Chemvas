@@ -11,6 +11,7 @@ from chemvas.features.export import (
     content_bounds,
     export_item_closure,
 )
+from chemvas.ui.canvas_window_access import notify_error_for
 from chemvas.ui.input_view_access import (
     CanvasSceneRectStateSnapshot,
     set_scene_rect_for,
@@ -150,6 +151,20 @@ def apply_sheet_scene_rect_for(canvas) -> None:
     _run_sheet_setup_transaction(canvas, apply)
 
 
+def refresh_canvas_scroll_range_for(canvas) -> bool:
+    """Refresh view-only bounds without invalidating an already committed edit."""
+    try:
+        apply_sheet_scene_rect_for(canvas)
+    except Exception:
+        if not notify_error_for(
+            canvas,
+            "The scroll range could not be refreshed. Use Fit to Window to try again.",
+        ):
+            raise
+        return False
+    return True
+
+
 def sheet_rect_for(canvas) -> QRectF:
     return QRectF(sheet_setup_state_for(canvas).rect)
 
@@ -172,6 +187,7 @@ def set_sheet_setup_for(canvas, size_name: str, orientation: str) -> None:
 
 __all__ = [
     "apply_sheet_scene_rect_for",
+    "refresh_canvas_scroll_range_for",
     "scene_pos_in_sheet_for",
     "set_sheet_setup_for",
     "sheet_orientation_for",

@@ -31,6 +31,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   while preserving explicit arrow colors and individually formatted note text.
 - Restore exact structure, caption and arrow geometry when undoing Arrange
   Scheme, so an undone layout clears the document's modified marker.
+- Refresh scroll bounds after committed edits, Undo/Redo and canvas activation,
+  keeping off-sheet content reachable and shrinking empty margins after deletion.
+  Fit to Window refreshes the scroll range while continuing to fit the sheet.
 - Show selected charge/radical marks' chemical owners with transient guides and
   a distance warning; moving a mark retains its owner. Add explicit right-click
   reassignment with a highlighted atom chooser, preserving position/color and
