@@ -15,9 +15,9 @@ python examples/publication_scheme.py --output-dir /absolute/existing-parent/new
 
 The two figures it produces, at the shared 5 mm-per-bond scale:
 
-![pair.png: two anisole drawings with subscript identifiers and a superscript footnote mark, captions arranged below](images/publication-pair.png)
+![pair.png: two anisole drawings with subscript identifiers and a superscript footnote mark, captions arranged below](../examples/publication-pair.png)
 
-![independent-parts.png: one caption describing two independently aligned molecular parts](images/publication-independent-parts.png)
+![independent-parts.png: one caption describing two independently aligned molecular parts](../examples/publication-independent-parts.png)
 
 The output directory must not exist. Requests, intermediate drawings, measured
 layout/font reports, SVG, 600 dpi PNG and `manifest.json` are retained for review.
@@ -154,7 +154,7 @@ complete instead of making the reader reconstruct a shared reactant or product:
 python examples/publication_comparison.py --output-dir /absolute/existing-parent/new-comparison
 ```
 
-![comparison.png: two complete rows, each with an input, a labelled arrow and an output, sharing column widths](images/publication-comparison.png)
+![comparison.png: two complete rows, each with an input, a labelled arrow and an output, sharing column widths](../examples/publication-comparison.png)
 
 This is a **symbolic connectivity example only**. R₁–R₄ denote abstract fragments,
 not specified compounds. Each input and output contains all four fragment labels

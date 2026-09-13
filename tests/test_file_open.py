@@ -72,14 +72,31 @@ class OpenDocumentRoutingTest(unittest.TestCase):
     def setUpClass(cls) -> None:
         cls.app = QApplication.instance() or QApplication([])
         cls.app.setQuitOnLastWindowClosed(False)
-        examples = Path(__file__).resolve().parents[1] / "examples"
-        cls.example = str(examples / "template1.chemvas")
-        cls.other = str(examples / "template2.chemvas")
 
     def setUp(self) -> None:
         from chemvas.bootstrap.window_registry import reset_window_registry
+        from chemvas.core.document_io import write_document
+        from chemvas.domain.document import CANVAS_FILE_VERSION
+        from chemvas.features.document_composition import compose_document_state
 
         reset_window_registry()
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        self.example = str(Path(directory.name) / "first.chemvas")
+        self.other = str(Path(directory.name) / "second.chemvas")
+        for path, element in ((self.example, "O"), (self.other, "N")):
+            state = compose_document_state(
+                {
+                    "format": "chemvas-document-composition",
+                    "version": 1,
+                    "atoms": [
+                        {"id": 0, "element": "C", "x": 0, "y": 0},
+                        {"id": 1, "element": element, "x": 40, "y": 0},
+                    ],
+                    "bonds": [{"a": 0, "b": 1, "order": 1}],
+                }
+            )
+            write_document(path, state, version=CANVAS_FILE_VERSION)
 
     def tearDown(self) -> None:
         from chemvas.bootstrap.window_registry import (
@@ -147,7 +164,7 @@ class OpenDocumentRoutingTest(unittest.TestCase):
                     next(
                         action
                         for action in recent.actions()
-                        if "template1.chemvas" in action.text()
+                        if Path(self.example).name in action.text()
                     ).trigger()
                 self.assertEqual(open_windows(), (window,))
                 self.assertEqual(
