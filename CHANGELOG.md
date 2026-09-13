@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Replace the two template documents in `examples` with a gallery of three
+  existing 600 DPI publication PNGs. Keep the editable first-scheme starter and
+  link the recipes for recreating the gallery's native documents and SVGs.
+
 ## [0.14.1] - 2026-09-13
 
 ### Fixed

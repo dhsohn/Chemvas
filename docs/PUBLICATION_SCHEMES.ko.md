@@ -14,9 +14,9 @@ python examples/publication_scheme.py --output-dir /absolute/existing-parent/new
 
 공통 5 mm/결합 배율로 만들어지는 두 그림입니다.
 
-![pair.png: 아래 첨자 식별자와 위 첨자 각주 표시가 있는 아니솔 그림 두 개, 캡션은 아래 정렬](images/publication-pair.png)
+![pair.png: 아래 첨자 식별자와 위 첨자 각주 표시가 있는 아니솔 그림 두 개, 캡션은 아래 정렬](../examples/publication-pair.png)
 
-![independent-parts.png: 독립적으로 정렬된 두 분자 part를 설명하는 캡션 하나](images/publication-independent-parts.png)
+![independent-parts.png: 독립적으로 정렬된 두 분자 part를 설명하는 캡션 하나](../examples/publication-independent-parts.png)
 
 출력 디렉터리는 존재하지 않아야 합니다. 요청, 중간 그림, 측정된 배치/글꼴
 보고서, SVG, 600 dpi PNG, `manifest.json`이 검토용으로 남습니다. 실패한 실행은
@@ -143,7 +143,7 @@ PDF에서 위·아래 첨자와 최종 그림 크기를 다시 확인하세요.
 python examples/publication_comparison.py --output-dir /absolute/existing-parent/new-comparison
 ```
 
-![comparison.png: 각각 입력, 라벨 붙은 화살표, 출력이 있고 열 너비를 공유하는 완전한 두 행](images/publication-comparison.png)
+![comparison.png: 각각 입력, 라벨 붙은 화살표, 출력이 있고 열 너비를 공유하는 완전한 두 행](../examples/publication-comparison.png)
 
 이것은 **기호적 연결성 예제일 뿐입니다**. R₁–R₄는 특정 화합물이 아니라 추상
 조각을 뜻합니다. 각 입력과 출력은 네 조각 라벨을 한 번씩 담으며, 두 생성물

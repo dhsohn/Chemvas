@@ -5,7 +5,8 @@ Every figure is the output of a documented public command run on a small
 synthetic input written by this script, so the pictures show exactly what the
 commands do. The publication figures come from the two runnable examples.
 Run with the development environment (RDKit is not needed) and an empty output
-directory, review the PNGs, then copy them to ``docs/images/``.
+directory, review the PNGs, then copy ``figures/cli-*.png`` to ``docs/images/``
+and ``figures/publication-*.png`` to ``examples/``.
 """
 
 from __future__ import annotations
