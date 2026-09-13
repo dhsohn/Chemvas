@@ -20,7 +20,7 @@ it is not an experimental result.
 | `walkthrough-images.gif` | Image-objects walkthrough: insert a synthetic PNG, move it, resize and lighten it in Image Properties. |
 | `walkthrough-arrange.gif` | Scheme-layout walkthrough: group structures with captions, Edit ▸ Arrange Scheme…, one arranged row. |
 | `cli-*.png` | CLI guide and scheme-layout figures: the documented example commands run on small synthetic inputs and rendered with `render-document` (compose, insert-template, apply-patch before/after, layout-document arrange, align-y and wrap before/after). |
-| `publication-*.png` | The final PNGs of `examples/publication_scheme.py` (`pair`, `independent-parts`) and `examples/publication_comparison.py` (`comparison`). |
+| `examples/publication-*.png` | The final PNGs of `examples/publication_scheme.py` (`pair`, `independent-parts`) and `examples/publication_comparison.py` (`comparison`), shown in the [example gallery](../../examples/README.md). |
 | `banner.png` | Existing Chemvas mark and the new tagline, rendered at 1360×270. |
 | `social-preview.png` | 1280×640 sharing card, including the actual example SVG. |
 
@@ -111,8 +111,15 @@ QT_QPA_PLATFORM=offscreen python scripts/render_doc_figures.py --output-dir /tmp
 
 The script writes each documented example input into `work/`, runs the public
 commands exactly as the guides show them, renders the results with
-`render-document` at 300 dpi, runs the two publication examples, and leaves the
-figures in `figures/`. Review them, then copy `figures/*.png` to `docs/images/`.
+`render-document` at 300 dpi, runs the two publication examples at 600 dpi, and
+leaves the figures in `figures/`. Review them, then copy the CLI figures to
+`docs/images/` and the publication figures to `examples/`:
+
+```bash
+cp /tmp/chemvas-doc-figures/figures/cli-*.png docs/images/
+cp /tmp/chemvas-doc-figures/figures/publication-*.png examples/
+```
+
 RDKit is not needed; repeated runs give byte-identical PNGs in one environment.
 
 ## Regenerate the branding

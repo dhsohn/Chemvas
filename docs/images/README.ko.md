@@ -19,7 +19,7 @@
 | `walkthrough-images.gif` | 이미지 객체 워크스루: 합성 PNG 삽입, 이동, Image Properties에서 크기 조절과 밝게 하기. |
 | `walkthrough-arrange.gif` | 반응식 배치 워크스루: 구조와 캡션 그룹화, Edit ▸ Arrange Scheme…, 정렬된 한 행. |
 | `cli-*.png` | CLI 안내와 반응식 배치 그림: 문서화된 예제 명령을 작은 합성 입력에 실행하고 `render-document`로 렌더링한 것(compose, insert-template, apply-patch 전/후, layout-document arrange, align-y, wrap 전/후). |
-| `publication-*.png` | `examples/publication_scheme.py`(`pair`, `independent-parts`)와 `examples/publication_comparison.py`(`comparison`)의 최종 PNG. |
+| `examples/publication-*.png` | `examples/publication_scheme.py`(`pair`, `independent-parts`)와 `examples/publication_comparison.py`(`comparison`)의 최종 PNG. [예제 갤러리](../../examples/README.ko.md)에 표시됩니다. |
 | `banner.png` | 기존 Chemvas 마크와 새 태그라인을 1360×270으로 렌더링. |
 | `social-preview.png` | 실제 예제 SVG를 담은 1280×640 공유 카드. |
 
@@ -105,9 +105,15 @@ QT_QPA_PLATFORM=offscreen python scripts/render_doc_figures.py --output-dir /tmp
 
 스크립트는 문서화된 예제 입력을 `work/`에 쓰고, 안내서에 보이는 그대로 공개
 명령을 실행하고, 결과를 `render-document`로 300 dpi에 렌더링하고, 두 출판 예제를
-실행한 뒤 그림을 `figures/`에 남깁니다. 검토한 뒤 `figures/*.png`를
-`docs/images/`로 복사하세요. RDKit은 필요 없으며, 한 환경에서 반복 실행하면
-바이트 동일한 PNG가 나옵니다.
+600 dpi로 실행한 뒤 그림을 `figures/`에 남깁니다. 검토한 뒤 CLI 그림은
+`docs/images/`로, 출판 그림은 `examples/`로 복사하세요.
+
+```bash
+cp /tmp/chemvas-doc-figures/figures/cli-*.png docs/images/
+cp /tmp/chemvas-doc-figures/figures/publication-*.png examples/
+```
+
+RDKit은 필요 없으며, 한 환경에서 반복 실행하면 바이트 동일한 PNG가 나옵니다.
 
 ## 브랜딩 재생성
 
