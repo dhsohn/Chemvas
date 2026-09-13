@@ -634,8 +634,12 @@ only included reactant atoms and offers same-element product atoms by stable
 Chemvas ID. **Suggest by structure** _(RDKit)_ fills the unmapped atoms of the
 maximum common substructure; bond orders are matched loosely, so a reaction
 center whose bonds only change order (e.g. C-O → C=O) can be suggested too.
-It is a single connected-match heuristic: symmetric fragments, multiple reacting
-components, or an already-mapped catalyst can leave additional atoms unmapped.
+Fully identity-mapped, complete components shared by both endpoints (such as an
+already-mapped catalyst) are retained outside the search, allowing the remaining
+reacting structure to be suggested without removing its existing mappings.
+Partially mapped or separately drawn components are not excluded this way.
+It is still a single connected-match heuristic: symmetric fragments and multiple
+reacting components can leave additional atoms unmapped.
 No new pairs does not prove that the substrates share no substructure.
 It never overwrites a
 mapping you made and is a review-only starting point, not an automated mechanism
@@ -786,29 +790,43 @@ geometry, a count of the most common blocking pair, or a unique cause of failure
 
 ### Chemical interpretation limits
 
-- Drawn alkene/imine E/Z and axial/atropisomeric stereo are not represented by
-  the current conversion model. Do not treat a 3D/identifier result as proof that
-  such drawn stereo was retained. Unconsumed wedge/hash stereo is rejected with
-  Chemvas atom/bond IDs; the original drawing remains editable.
+- Unambiguous ordinary C=C/C=N drawings carry their E/Z geometry into chemical
+  identifiers, 3D XYZ and calculation conversion, including applicable imines,
+  oximes and nitrones. A stereogenic ordinary double bond with ambiguous,
+  overlapping or nearly collinear substituents is refused with Chemvas IDs:
+  correct the drawing. For intentionally unspecified stereo, use the crossed
+  `double_either` style via a graph patch, unspecified SMILES insertion or MOL
+  import with an explicit either marker.
+  Axial/atropisomeric stereo and double-bond stereo outside C=C/C=N are not added
+  by this support. Unconsumed wedge/hash stereo is also rejected with Chemvas
+  atom/bond IDs; the original drawing remains editable.
 - Specified tetrahedral SMILES stereo must survive native depiction or insertion
   is refused. MOL V2000 double-bond stereo flag 3 (explicitly unspecified/either)
   is preserved as `style: "double_either"`, `order: 2`, displayed with crossed
   lines. Native v7, clipboard v2 and editable SVG retain it; older readers reject
   the new style. Composition and graph patches accept it only with order 2.
   MOL import/export preserves the marker, including abbreviation-expanded export.
+  SMILES insertion uses the same crossed marker for potentially stereogenic
+  double bonds whose stereo was not specified, so automatic 2D placement cannot
+  invent a specified isomer. Specified E/Z SMILES insertion remains unsupported.
   Ordinary SMILES cannot distinguish explicit unknown from unannotated stereo;
   3D output does not establish which stereoisomer was intended. Other documented
   MOL restrictions still apply; this is not a universal lossless import promise.
 - 3D generation requires complete MMFF or UFF parameters. Parameter coverage and
   convergence still do not certify a physical minimum, especially for unusual
   coordination chemistry. Review geometry and perform downstream validation.
+  Automatic 3D generation refuses six-coordinate phosphorus (including PF6-):
+  the available UFF parameters can generate collapsed geometry despite reporting
+  convergence. Drawing, native save/reopen, identifiers and MOL output are not
+  blocked; use an external geometry method appropriate to this coordination.
+  This targeted refusal is not a general geometry-quality certification.
 - Molecule Info canonical SMILES omits ordinary drawn hydrogens on a display-only
   copy; the drawing, saved document and calculation graph retain their atoms.
   Necessary hydrogen counts and tetrahedral stereo remain in bracket notation
   such as `[C@H]`. Special hydrogens, including isotopic, mapped and
   stereo-defining hydrogens, are retained. Molecules containing charged or
   radical hydrogens conservatively keep their explicit-hydrogen spelling.
-  These safeguards do not add native isotope, atom-map or alkene E/Z support.
+  These hydrogen safeguards do not add native isotope or atom-map support.
 - `machine.json` retains the shared, versioned contract above; these inspection
   diagnostics do not add fields to that payload.
 

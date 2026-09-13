@@ -377,8 +377,10 @@ drawn as the abbreviation.
 
 Absolute tetrahedral stereochemistry (`@` / `@@`) is drawn with wedge/hash
 bonds. Specified double-bond stereochemistry (`/` / `\`), non-tetrahedral
-stereochemistry, and relative or racemic CXSMILES stereo groups are refused
-because the canvas cannot preserve them. Isotope labels are also unsupported.
+stereochemistry, and relative or racemic CXSMILES stereo groups remain unsupported
+by SMILES insertion. Isotope labels are also unsupported. Potentially stereogenic
+double bonds with unspecified stereo are inserted with the existing crossed
+`double_either` style: automatic placement must not invent a specific E/Z isomer.
 
 Single, double, and triple bonds are supported, including aromatic structures
 that RDKit can Kekulize into those bond orders. Other bond types, such as dative,
@@ -410,9 +412,10 @@ abbreviation expansion. Native v7 documents, clipboard v2 selections, editable
 SVG and Undo/Redo preserve this style; older readers that lack it reject those
 documents. It requires bond order 2. Bold, dotted and double-position commands
 refuse to erase the marker; choosing a different bond type explicitly (for
-example, Double or `2`) replaces it and can be undone. This is not E/Z inference:
-ordinary SMILES cannot preserve the distinction between explicit unknown stereo
-and no stereo annotation, and a generated 3D geometry does not resolve it.
+example, Double or `2`) replaces it and can be undone. The crossed marker is not
+assigned a specific E/Z isomer. Ordinary SMILES cannot preserve the distinction
+between explicit unknown stereo and no stereo annotation, and a generated 3D
+geometry does not resolve it.
 
 ### Molecule Info window *(RDKit)*
 
@@ -424,7 +427,21 @@ The initial view fits the projected atom footprints, including depth. Rotation
 and zoom stay inside the molecule viewport, leaving the title, formula and
 weight readable; zooming in can crop the molecule at that viewport's edges.
 Identifiers preserve drawn wedge/hash stereochemistry using the same conversion
-as the preview. Canonical SMILES omits ordinary drawn hydrogens without removing
+as the preview. Unambiguous ordinary C=C/C=N geometry also supplies E/Z stereo
+to identifiers, 3D XYZ and calculation conversion. Potentially stereogenic
+ordinary bonds with ambiguous, overlapping or nearly collinear substituents are
+refused with their Chemvas IDs; correct the drawing. For intentionally unspecified
+stereo, insert an unspecified SMILES or import a MOL with the explicit either
+marker to obtain crossed `double_either` bonds. This does not add
+axial/atropisomeric stereo or specified E/Z SMILES insertion.
+General abbreviation identifiers remain subject
+to the restriction below, even when their expanded MOL/3D conversion is supported.
+Automatic 3D generation also refuses six-coordinate phosphorus, including PF6-,
+because available force-field parameters can generate collapsed geometry.
+Drawing, native save/reopen, identifiers and MOL remain available for this case.
+Parameter coverage or convergence alone does not certify other generated geometry.
+
+Canonical SMILES omits ordinary drawn hydrogens without removing
 them from the drawing, saved document or calculation graph. Necessary hydrogen
 counts and tetrahedral stereo remain in bracket notation such as `[C@H]`.
 Special hydrogens (including isotopic, mapped and stereo-defining hydrogens) are
