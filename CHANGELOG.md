@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.14.1] - 2026-09-13
+
 ### Fixed
 
 - Carry unambiguous ordinary C=C/C=N drawing geometry through identifiers,
@@ -1949,7 +1951,8 @@ housekeeping.
   `.chemvas` document type (double-clicking a file opens it in Chemvas), and a
   Linux `.desktop` entry with an `application/x-chemvas` MIME type.
 
-[Unreleased]: https://github.com/dhsohn/Chemvas/compare/v0.14.0...HEAD
+[Unreleased]: https://github.com/dhsohn/Chemvas/compare/v0.14.1...HEAD
+[0.14.1]: https://github.com/dhsohn/Chemvas/compare/v0.14.0...v0.14.1
 [0.14.0]: https://github.com/dhsohn/Chemvas/compare/v0.13.0...v0.14.0
 [0.13.0]: https://github.com/dhsohn/Chemvas/compare/v0.12.0...v0.13.0
 [0.12.0]: https://github.com/dhsohn/Chemvas/compare/v0.11.0...v0.12.0
