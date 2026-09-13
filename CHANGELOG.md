@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Normalize Molecule Info canonical SMILES to omit ordinary drawn hydrogens
+  while preserving tetrahedral stereo and special hydrogens. Molecules with
+  charged or radical hydrogens retain their explicit-hydrogen spelling.
+  Drawing, document and calculation atoms remain unchanged; this does not add
+  native isotope, atom-map or alkene E/Z support.
 - Fit attached arrow labels to their shaped glyph bounds when sizing figures,
   excluding empty text-layout margins while retaining multiline and script
   placement. Picking and on-canvas label placement stay unchanged. The existing

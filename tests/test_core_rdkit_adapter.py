@@ -472,6 +472,12 @@ class _FakeChem:
             return self._add_hs_result
         return mol
 
+    def RemoveHsParameters(self):
+        return SimpleNamespace()
+
+    def RemoveHs(self, mol, params):
+        return mol
+
 
 class _FakeAllChem:
     def Compute2DCoords(self, mol) -> None:
@@ -1469,7 +1475,7 @@ class RDKitAdapterTest(unittest.TestCase):
         with mock.patch.object(
             adapter,
             "_build_conversion_rdkit_mol",
-            return_value=SimpleNamespace(canonical_smiles="CO"),
+            return_value=SimpleNamespace(canonical_smiles="CO", GetAtoms=list),
         ):
             with _patch_descriptor_modules(formula="CH4O", mw=32.042):
                 formula, mw, smiles = adapter.compute_props(model)
@@ -1507,7 +1513,7 @@ class RDKitAdapterTest(unittest.TestCase):
         with mock.patch.object(
             adapter,
             "_build_conversion_rdkit_mol",
-            return_value=SimpleNamespace(canonical_smiles="CO"),
+            return_value=SimpleNamespace(canonical_smiles="CO", GetAtoms=list),
         ):
             with _patch_descriptor_modules(mw_error=RuntimeError("descriptor failure")):
                 self.assertEqual(
@@ -1558,7 +1564,7 @@ class RDKitAdapterTest(unittest.TestCase):
         with mock.patch.object(
             adapter,
             "_build_conversion_rdkit_mol",
-            return_value=SimpleNamespace(canonical_smiles="CO"),
+            return_value=SimpleNamespace(canonical_smiles="CO", GetAtoms=list),
         ):
             with _patch_descriptor_modules(formula="CH4O", mw=32.042):
                 identifiers = adapter.compute_identifiers(self._simple_model())

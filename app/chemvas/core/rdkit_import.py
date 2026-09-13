@@ -277,7 +277,27 @@ class RDKitImportHelper:
 
             formula = rdMolDescriptors.CalcMolFormula(mol_h)
             mw = cast("Any", Descriptors).MolWt(mol_h)
-            smiles = Chem.MolToSmiles(mol, canonical=True)
+            # Compact the display spelling only; drawing/calculation atoms and
+            # the graph used for formula, mass and InChI remain untouched.
+            smiles_mol = mol
+            if not any(
+                atom.GetAtomicNum() == 1
+                and (atom.GetFormalCharge() or atom.GetNumRadicalElectrons())
+                for atom in mol.GetAtoms()
+            ):
+                params = Chem.RemoveHsParameters()
+                params.removeIsotopes = False
+                params.removeMapped = False
+                params.removeHydrides = False
+                params.removeDegreeZero = False
+                params.removeHigherDegrees = False
+                params.removeOnlyHNeighbors = False
+                params.removeDefiningBondStereo = False
+                params.removeWithWedgedBond = True
+                smiles_mol = Chem.RemoveHs(mol, params)
+            # RemoveHs can erase a bonded H+'s charge. Keep the original
+            # spelling for charged/radical H instead of changing its identity.
+            smiles = Chem.MolToSmiles(smiles_mol, canonical=True)
         except Exception:
             return MoleculeIdentifiers()
         # InChI is computed separately so that a failure in the InChI backend
