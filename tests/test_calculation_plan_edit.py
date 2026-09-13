@@ -19,7 +19,7 @@ from chemvas.features.calculation_bundle import (
     prepare_calculation_step_editor,
     validate_calculation_plan,
 )
-from tests.test_calculation_plan import _document_state, _plan
+from tests.calculation_plan_support import _document_state, _plan
 from tests.test_precomplex_cli import _generate_candidate_fixture
 
 if TYPE_CHECKING:

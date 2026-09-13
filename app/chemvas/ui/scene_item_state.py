@@ -61,6 +61,19 @@ CurvedArrowPathSetter = Callable[
 ArrowLabelSetter = Callable[[QGraphicsPathItem, Mapping[str, str] | None], None]
 
 
+def scene_item_history_state(item, state: dict) -> dict:
+    """Add exact local mark geometry to an already serialized history payload.
+
+    Attachment offsets remain the document/clipboard contract, but atom+offset
+    arithmetic can round differently from the original Qt glyph position.
+    Keep this history-only field out of the caller's serialized state.
+    """
+    if state.get("kind") != "mark":
+        return state
+    position = item.pos()
+    return {**state, "item_pos": (position.x(), position.y())}
+
+
 def arrow_labels_from_state(state: Mapping[str, object]) -> dict[str, str] | None:
     labels = state.get("labels")
     if not isinstance(labels, Mapping) or not labels:
@@ -407,6 +420,7 @@ __all__ = [
     "orbital_state_dict_for",
     "ring_state_dict",
     "ring_state_dict_for",
+    "scene_item_history_state",
     "scene_item_state",
     "scene_item_state_for",
     "set_arrow_labels_from_state",

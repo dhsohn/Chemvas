@@ -7,16 +7,16 @@ from chemvas.ui.canvas_window_access import snapshot_canvas_state_for
 from chemvas.ui.main_window_menu_bar import ALIGN_MENU_SPECS, DISTRIBUTE_MENU_SPECS
 from chemvas.ui.main_window_ports import redo_action_for_window, undo_action_for_window
 from chemvas.ui.scene_decoration_access import add_arrow_for
-from tests.test_active_gesture_document_edits import (
+from tests.gui_workflow_support import app as app
+from tests.gui_workflow_support import drawing as drawing
+from tests.gui_workflow_support import (
     populate,
     release,
     start_drag,
 )
-from tests.test_active_gesture_document_edits import (
+from tests.gui_workflow_support import (
     qt_errors as qt_errors,
 )
-from tests.test_note_editing_workflows import app as app
-from tests.test_note_editing_workflows import drawing as drawing
 
 
 @pytest.mark.parametrize(

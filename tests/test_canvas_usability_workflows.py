@@ -28,9 +28,9 @@ from chemvas.ui.scene_clipboard_logic import build_selection_clipboard_payload
 from chemvas.ui.scene_item_state import scene_item_state_for
 from chemvas.ui.scene_item_state_serialization import arrow_state_dict
 from chemvas.ui.selection_collection_access import selection_status_count_for
-from tests.test_note_editing_workflows import _click, _key, _tool
-from tests.test_note_editing_workflows import app as app
-from tests.test_note_editing_workflows import drawing as drawing
+from tests.gui_workflow_support import _click, _key, _tool
+from tests.gui_workflow_support import app as app
+from tests.gui_workflow_support import drawing as drawing
 
 
 def _ctrl(canvas, key):

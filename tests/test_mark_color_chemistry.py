@@ -18,7 +18,7 @@ from chemvas.features.calculation_bundle import (
     inspect_component_inventory,
     precomplex_basis_sha256,
 )
-from tests.test_calculation_plan import _document_state, _plan
+from tests.calculation_plan_support import _document_state, _plan
 
 
 def _mark(kind, atom_id):

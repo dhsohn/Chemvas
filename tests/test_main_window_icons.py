@@ -61,6 +61,39 @@ class MainWindowIconGeometryTest(unittest.TestCase):
         ):
             self.assertIsNotNone(_opaque_bounds(icon.pixmap(30, 30).toImage()))
 
+    def test_toolbar_accessors_render_their_design_glyphs(self) -> None:
+        glyphs = {
+            "icon_bond": "bond",
+            "icon_bond_double": "bond_double",
+            "icon_bond_triple": "bond_triple",
+            "icon_bond_wedge": "wedge",
+            "icon_bond_hash": "hash",
+            "icon_ring": "benzene",
+            "icon_bond_bold": "bond_bold",
+            "icon_bond_dotted": "bond_dotted",
+            "icon_select": "move",
+            "icon_text": "atom",
+            "icon_flip_h": "flip_h",
+            "icon_flip_v": "flip_v",
+            "icon_ts_bracket": "bracket",
+            "icon_orbital": "orbital",
+            "icon_color": "color",
+            "icon_perspective": "perspective",
+            "icon_mark_circled_plus": "circled_plus",
+            "icon_mark_circled_minus": "circled_minus",
+            "icon_mark": "atom_orbit",
+            "icon_mark_plus": "plus",
+            "icon_mark_minus": "minus",
+            "icon_mark_radical": "radical",
+            "icon_ring_fill": "ring_fill",
+        }
+        for accessor, glyph in glyphs.items():
+            for size in self.factory.DESIGN_ICON_SIZES:
+                with self.subTest(accessor=accessor, size=size):
+                    actual = getattr(self.factory, accessor)().pixmap(size, size)
+                    expected = self.factory.make_design_icon(glyph).pixmap(size, size)
+                    self.assertEqual(actual.toImage(), expected.toImage())
+
     def test_basic_toolbar_icons_render_non_empty_bounds(self) -> None:
         for icon in (
             self.factory.icon_select(),
@@ -130,10 +163,19 @@ class MainWindowIconGeometryTest(unittest.TestCase):
             "resonance",
             "inhibit",
         ):
-            bounds = _opaque_bounds(
-                self.factory.icon_arrow_preview(kind).pixmap(30, 30).toImage()
-            )
-            self.assertIsNotNone(bounds, kind)
+            with self.subTest(kind=kind):
+                actual = self.factory.icon_arrow_preview(kind).pixmap(30, 30).toImage()
+                expected = (
+                    self.factory.make_design_icon(f"arrow_{kind}")
+                    .pixmap(30, 30)
+                    .toImage()
+                )
+                self.assertIsNotNone(_opaque_bounds(actual), kind)
+                self.assertEqual(actual, expected)
+        self.assertEqual(
+            self.factory.icon_arrow_preview("unknown").pixmap(30, 30).toImage(),
+            self.factory.make_design_icon("arrow_reaction").pixmap(30, 30).toImage(),
+        )
         for icon in (
             self.factory.icon_arrow_preset("Default"),
             self.factory.icon_arrow_preset("Bold"),

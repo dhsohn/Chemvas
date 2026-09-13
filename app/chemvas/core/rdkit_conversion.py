@@ -11,12 +11,12 @@ from chemvas.domain.atom_aliases import (
     alias_attachment_error,
     alias_attachments_for_atom,
 )
-from chemvas.domain.document import Bond, MoleculeModel
+from chemvas.domain.document import Bond, MoleculeModel, connected_atom_components
 from chemvas.features.calculation_bundle import AtomMapEntry, CalculationArtifacts
 from chemvas.features.insertion import Molecule3DAtom, Molecule3DBond, Molecule3DScene
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
+    from collections.abc import Iterable, Mapping
 
     from chemvas.core.rdkit_adapter import RDKitAdapter
 
@@ -467,7 +467,7 @@ class RDKitConversionHelper:
         model: MoleculeModel, atom_ids: set[int]
     ) -> tuple[float, float, int]:
         # Every component comes from _model_components, which seeds from
-        # model.atoms and walks an adjacency built over the same keys: the ids
+        # model.atoms and walks components built over the same keys: the ids
         # are always live and a component is never empty.
         xs = [model.atoms[atom_id].x for atom_id in atom_ids]
         ys = [model.atoms[atom_id].y for atom_id in atom_ids]
@@ -476,24 +476,13 @@ class RDKitConversionHelper:
         return center_x, center_y, min(atom_ids)
 
     def _model_components(self, model: MoleculeModel) -> list[set[int]]:
-        adjacency = self._build_model_adjacency(model)
-        seen: set[int] = set()
-        components: list[set[int]] = []
-        for start_atom_id in sorted(model.atoms):
-            if start_atom_id in seen:
-                continue
-            component: set[int] = set()
-            stack = [start_atom_id]
-            seen.add(start_atom_id)
-            while stack:
-                current = stack.pop()
-                component.add(current)
-                for neighbor_id in adjacency.get(current, []):
-                    if neighbor_id in seen:
-                        continue
-                    seen.add(neighbor_id)
-                    stack.append(neighbor_id)
-            components.append(component)
+        components = [
+            set(atom_ids)
+            for atom_ids in connected_atom_components(
+                model.atoms,
+                ((bond.a, bond.b) for bond in model.bonds if bond is not None),
+            )
+        ]
         components.sort(key=lambda atom_ids: self._component_sort_key(model, atom_ids))
         return components
 
@@ -502,6 +491,8 @@ class RDKitConversionHelper:
         model: MoleculeModel,
         atom_ids: set[int],
         atom_annotations: Mapping[int, Mapping[str, int]] | None = None,
+        *,
+        bonds: Iterable[Bond | None],
     ) -> tuple[MoleculeModel, dict[int, dict[str, int]]]:
         component_model = MoleculeModel()
         active_annotations = (
@@ -517,7 +508,7 @@ class RDKitConversionHelper:
             component_model.atoms[old_id] = replace(atom)
             id_map[old_id] = old_id
         component_model.next_atom_id = max(component_model.atoms, default=-1) + 1
-        for bond in model.bonds:
+        for bond in bonds:
             if bond is None:
                 continue
             if bond.a not in id_map or bond.b not in id_map:
@@ -1283,12 +1274,28 @@ class RDKitConversionHelper:
             self.adapter.last_error = "There is no chemical structure to preview."
             return None
         Chem, AllChem = rdkit
+        components = self._model_components(model)
+        component_for_atom = {
+            atom_id: index
+            for index, atom_ids in enumerate(components)
+            for atom_id in atom_ids
+        }
+        component_bonds: list[list[Bond]] = [[] for _ in components]
+        # Partition once in source order; scanning the whole bond list for each
+        # disconnected component makes preview preparation quadratic.
+        for bond in model.bonds:
+            if bond is None:
+                continue
+            index = component_for_atom.get(bond.a)
+            if index is not None and component_for_atom.get(bond.b) == index:
+                component_bonds[index].append(bond)
         component_scenes: list[Molecule3DScene] = []
-        for component_atom_ids in self._model_components(model):
+        for component_atom_ids, bonds in zip(components, component_bonds, strict=True):
             component_model, component_annotations = self._build_component_model(
                 model,
                 component_atom_ids,
                 atom_annotations=atom_annotations,
+                bonds=bonds,
             )
             mol = self.adapter._build_conversion_rdkit_mol(
                 component_model,

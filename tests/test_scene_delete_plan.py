@@ -17,7 +17,7 @@ from chemvas.ui.scene_delete_plan import (
     build_delete_selection_plan,
     classify_delete_selection,
 )
-from tests.test_scene_ops_controller import (
+from tests.scene_operation_support import (
     _FakeCanvas,
     _make_note_item,
     _make_rect_item,

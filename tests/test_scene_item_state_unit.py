@@ -1,3 +1,4 @@
+import math
 import os
 import unittest
 from types import SimpleNamespace
@@ -21,7 +22,10 @@ from chemvas.ui.scene_item_state import (
     apply_scene_item_state,
     arrow_state_dict,
     mark_center_from_state,
+    mark_state_dict_for,
+    scene_item_history_state,
     scene_item_state,
+    scene_item_state_for,
     ts_bracket_rect_from_state,
 )
 
@@ -41,6 +45,76 @@ class SceneItemStateUnitTest(unittest.TestCase):
         self.assertEqual(
             scene_item_state(item, mark_center_getter=lambda _: QPointF()), {}
         )
+
+    def test_history_mark_state_keeps_exact_local_position_without_mutating_input(
+        self,
+    ) -> None:
+        for kind in ("plus", "minus", "radical", "circled_plus", "circled_minus"):
+            for atom_id in (None, 7):
+                with self.subTest(kind=kind, atom_id=atom_id):
+                    item = QGraphicsTextItem("mark")
+                    item.setData(0, "mark")
+                    item.setData(1, {"kind": kind, "atom_id": atom_id})
+                    item.setPos(0.1, math.nextafter(0.3, 1.0))
+                    original = {
+                        "kind": "mark",
+                        "mark_kind": kind,
+                        "atom_id": atom_id,
+                        "dx": 4.125,
+                        "dy": -6.375,
+                        "x": 100.1,
+                        "y": -50.3,
+                        "color": "#Aa22Cc",
+                    }
+                    state = dict(original)
+                    metadata = dict(item.data(1))
+
+                    history = scene_item_history_state(item, state)
+
+                    self.assertEqual(
+                        history,
+                        {**original, "item_pos": (0.1, math.nextafter(0.3, 1.0))},
+                    )
+                    self.assertEqual(state, original)
+                    self.assertEqual(item.data(1), metadata)
+                    self.assertNotIn("item_pos", state)
+
+    def test_history_nonmark_state_does_not_read_or_add_a_position(self) -> None:
+        item = mock.Mock()
+        item.pos.side_effect = AssertionError("Only marks need local history positions")
+        for state in ({}, {"kind": "note", "x": 0.1, "y": 0.3}):
+            with self.subTest(state=state):
+                self.assertEqual(scene_item_history_state(item, state), state)
+                self.assertNotIn("item_pos", state)
+        item.pos.assert_not_called()
+
+    def test_history_capture_preserves_the_callers_serialization_precedence(
+        self,
+    ) -> None:
+        item = QGraphicsTextItem("+")
+        item.setData(0, "mark")
+        item.setData(1, {"kind": "plus", "atom_id": 7, "dx": 4.0, "dy": -6.0})
+        embedded = {"kind": "mark", "mark_kind": "minus", "x": 99.5, "y": 50.25}
+        item.setData(9, embedded)
+        item.setPos(0.1, 0.3)
+        with mock.patch(
+            "chemvas.ui.mark_item_access.mark_center_for",
+            return_value=QPointF(1.25, 2.5),
+        ):
+            generic = scene_item_state_for(object(), item)
+            typed = mark_state_dict_for(object(), item)
+
+        self.assertEqual(generic["mark_kind"], "plus")
+        self.assertEqual(generic["x"], 1.25)
+        self.assertEqual(typed, embedded)
+        for state in (generic, typed):
+            with self.subTest(state=state):
+                self.assertEqual(
+                    scene_item_history_state(item, state),
+                    {**state, "item_pos": (0.1, 0.3)},
+                )
+                self.assertNotIn("item_pos", state)
+        self.assertEqual(item.data(9), embedded)
 
     def test_scene_item_state_serializes_ring_and_apply_restores_fallback_brush(
         self,

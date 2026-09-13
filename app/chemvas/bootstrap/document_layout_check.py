@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import argparse
-import hashlib
 import sys
 from collections.abc import Mapping
 from pathlib import Path
@@ -25,7 +24,7 @@ def run(argv: list[str]) -> int:
     try:
         source = Path(args.document)
         _validate_source(source)
-        source_bytes, document = read_exact_document(
+        _source_bytes, document = read_exact_document(
             source, max_bytes=MAX_DOCUMENT_BYTES
         )
         graphics_records = graphics_record_count(
@@ -49,7 +48,7 @@ def run(argv: list[str]) -> int:
             "format": "chemvas-layout-check-report",
             "version": 1,
             "source": str(source),
-            "source_sha256": hashlib.sha256(source_bytes).hexdigest(),
+            "source_sha256": document.source_sha256,
             "chemvas_document_version": int(document.payload["version"]),
             **analysis,
         }

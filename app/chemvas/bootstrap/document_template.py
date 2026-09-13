@@ -57,10 +57,10 @@ def run(argv: list[str]) -> int:
         source, request_path = Path(args.document), Path(args.request)
         output = Path(args.output) if args.output is not None else None
         _validate_paths(source, request_path, output)
-        source_bytes, document = read_exact_document(
+        _source_bytes, document = read_exact_document(
             source, max_bytes=MAX_DOCUMENT_BYTES
         )
-        source_hash = hashlib.sha256(source_bytes).hexdigest()
+        source_hash = cast("str", document.source_sha256)
         with request_path.open("rb") as stream:
             request_bytes = stream.read(MAX_REQUEST_BYTES + 1)
         if len(request_bytes) > MAX_REQUEST_BYTES:

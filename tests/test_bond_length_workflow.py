@@ -10,8 +10,8 @@ from chemvas.ui.main_window_context_bar_widgets import BondLengthSpinBox
 from chemvas.ui.main_window_ports import services_for_window, tool_action_for_window
 from chemvas.ui.scene_decoration_access import add_arrow_for, add_mark_for_atom_for
 from chemvas.ui.scene_item_access import create_scene_item_from_state
-from tests.test_note_editing_workflows import app as app
-from tests.test_note_editing_workflows import drawing as drawing
+from tests.gui_workflow_support import app as app
+from tests.gui_workflow_support import drawing as drawing
 
 
 @pytest.mark.parametrize("kind", ["plus", "radical", "circled_minus"])

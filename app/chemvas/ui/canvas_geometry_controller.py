@@ -73,7 +73,7 @@ from chemvas.ui.renderer_style_access import (
     renderer_for,
     set_bond_length_for,
 )
-from chemvas.ui.scene_item_state import mark_state_dict_for
+from chemvas.ui.scene_item_state import mark_state_dict_for, scene_item_history_state
 
 
 def _xy(point: QPointF) -> tuple[float, float]:
@@ -445,8 +445,9 @@ class CanvasGeometryController:
         before_marks = []
         for _atom_id, marks in mark_registry_for(self.canvas).items():
             for item in marks:
-                state = mark_state_dict_for(self.canvas, item)
-                state["item_pos"] = _xy(item.pos())
+                state = scene_item_history_state(
+                    item, mark_state_dict_for(self.canvas, item)
+                )
                 before_marks.append((item, state))
         transaction = capture_history_transaction_for_history(
             self.canvas,
@@ -500,8 +501,9 @@ class CanvasGeometryController:
             )
             mark_commands = []
             for item, before_state in before_marks:
-                after_state = mark_state_dict_for(self.canvas, item)
-                after_state["item_pos"] = _xy(item.pos())
+                after_state = scene_item_history_state(
+                    item, mark_state_dict_for(self.canvas, item)
+                )
                 mark_commands.append(
                     UpdateSceneItemCommand(item, before_state, after_state)
                 )

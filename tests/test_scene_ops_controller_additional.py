@@ -15,7 +15,7 @@ from chemvas.ui.scene_flip_geometry import (
     flip_bounds_for_item,
     flip_center_for_selection,
 )
-from tests.test_scene_ops_controller import (
+from tests.scene_operation_support import (
     _FakeCanvas,
     _make_note_item,
     _make_rect_item,

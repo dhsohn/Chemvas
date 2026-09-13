@@ -180,9 +180,6 @@ class _FakeCanvas:
         self.flatten_calls: list[
             tuple[set[int], dict[int, tuple[float, float, float]]]
         ] = []
-        self.average_bond_length_calls: list[
-            tuple[set[int], dict[int, tuple[float, float, float]]]
-        ] = []
         self.unproject_calls: list[
             tuple[
                 tuple[float, float],
@@ -365,14 +362,6 @@ class _FakeSelectionRotationPorts:
             return dict(self.canvas.flattened_coords)
         return dict(coords)
 
-    def average_bond_length_for_atoms(
-        self,
-        atom_ids: set[int],
-        coords: dict[int, tuple[float, float, float]],
-    ) -> float:
-        self.canvas.average_bond_length_calls.append((set(atom_ids), dict(coords)))
-        return 12.5
-
     def unproject_scene_point_3d(
         self,
         point: QPointF,
@@ -439,7 +428,6 @@ def _controller_for(canvas: _FakeCanvas) -> SelectionRotationController:
         "axis_from_rotation_hint",
         "current_atom_coords_3d",
         "flatten_planar_fragments",
-        "average_bond_length_for_atoms",
         "unproject_scene_point_3d",
         "apply_projected_atom_positions",
         "refresh_atom_geometry",
@@ -537,10 +525,6 @@ class SelectionRotationControllerTest(unittest.TestCase):
         self.assertEqual(canvas.rotation_state.coord_atom_ids, {0, 1, 2})
         self.assertEqual(canvas.rotation_state.base_coords, canvas.flattened_coords)
         self.assertEqual(canvas.atom_coords_3d[2], (22.0, 7.0, 5.0))
-        self.assertEqual(
-            canvas.average_bond_length_calls,
-            [({0, 1, 2}, dict(canvas.flattened_coords))],
-        )
 
     def test_begin_selection_3d_rotation_falls_back_to_rigid_mode(self) -> None:
         canvas = _FakeCanvas()
@@ -576,10 +560,6 @@ class SelectionRotationControllerTest(unittest.TestCase):
         )
         self.assertEqual(canvas.rotation_state.base_coords[0], (0.5, -0.25, 1.0))
         self.assertEqual(canvas.rotation_state.base_coords[2], (20.5, 4.75, 4.0))
-        self.assertEqual(
-            canvas.average_bond_length_calls,
-            [({0, 1, 2}, dict(canvas.rotation_state.base_coords))],
-        )
 
     def test_begin_selection_3d_rotation_promotes_selected_marks_to_atom_ids(
         self,
@@ -607,10 +587,6 @@ class SelectionRotationControllerTest(unittest.TestCase):
         self.assertEqual(canvas.rotation_state.projection_anchor_2d, (20.0, 5.0))
         self.assertEqual(canvas.rotation_state.base_coords, {2: (20.5, 4.75, 4.0)})
         self.assertEqual(canvas.atom_coords_3d[2], (20.5, 4.75, 4.0))
-        self.assertEqual(
-            canvas.average_bond_length_calls,
-            [({2}, dict(canvas.rotation_state.base_coords))],
-        )
 
     def test_begin_selection_3d_rotation_returns_false_for_missing_axis_bond(
         self,
@@ -649,10 +625,6 @@ class SelectionRotationControllerTest(unittest.TestCase):
         self.assertEqual(canvas.rotation_state.atom_ids, {2, 99})
         self.assertNotIn(99, canvas.rotation_state.base_coords)
         self.assertEqual(canvas.rotation_state.projection_anchor_2d, (5.0, 0.0))
-        self.assertEqual(
-            canvas.average_bond_length_calls,
-            [({0, 1, 2, 99}, dict(canvas.flattened_coords))],
-        )
 
     def test_begin_selection_3d_rotation_returns_false_when_axis_path_flattens_to_empty(
         self,
@@ -1107,7 +1079,6 @@ class SelectionRotationControllerTest(unittest.TestCase):
         canvas.rotation_state.mode = "rigid"
         canvas.rotation_state.free_angle_x = 0.3
         canvas.rotation_state.free_angle_y = 0.4
-        canvas.rotation_state.base_bond_length = 9.0
         canvas.rotation_state.axis_bond_id = 1
         canvas.rotation_state.axis_atoms = (1, 2)
         canvas.rotation_state.start_positions = {0: (0.0, 0.0), 2: (20.0, 5.0)}
@@ -1160,7 +1131,6 @@ class SelectionRotationControllerTest(unittest.TestCase):
         self.assertIsNone(canvas.rotation_state.mode)
         self.assertEqual(canvas.rotation_state.free_angle_x, 0.0)
         self.assertEqual(canvas.rotation_state.free_angle_y, 0.0)
-        self.assertIsNone(canvas.rotation_state.base_bond_length)
         self.assertIsNone(canvas.rotation_state.selection_ids)
         self.assertIsNone(canvas.rotation_state.axis_bond_id)
         self.assertIsNone(canvas.rotation_state.axis_atoms)

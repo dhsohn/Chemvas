@@ -17,9 +17,9 @@ from chemvas.domain.document.precomplex_profile import (
     CURRENT_PROFILE_ID,
     radius_provenance_for,
 )
+from tests.calculation_artifact_support import _StateFakeAdapter
 from tests.test_calculation_step_cli import (
     _path_ready_state,
-    _StateFakeAdapter,
     _validate_common_machine,
     _write_document_with_plan,
 )

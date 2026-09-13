@@ -15,7 +15,7 @@ from chemvas.domain.document import (
     MoleculeModel,
     serialize_model_state,
 )
-from tests.test_calculation_plan import _document_state
+from tests.calculation_plan_support import _document_state
 
 if TYPE_CHECKING:
     from pathlib import Path

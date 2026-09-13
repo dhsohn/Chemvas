@@ -66,21 +66,6 @@ def release_history_transaction_for_history(
     snapshot.release()
 
 
-def verify_history_transaction_for_history(
-    canvas,
-    snapshot: DocumentSavepoint,
-) -> None:
-    del canvas
-    errors = tuple(snapshot.verify())
-    if len(errors) == 1:
-        raise errors[0]
-    if errors:
-        raise BaseExceptionGroup(
-            "document savepoint verification failed",
-            list(errors),
-        )
-
-
 def move_atoms_for_history(
     canvas,
     atom_ids: set[int],
@@ -239,5 +224,4 @@ __all__ = [
     "set_last_smiles_input_for_history",
     "set_ring_polygons_for_history",
     "trim_bonds_for_history",
-    "verify_history_transaction_for_history",
 ]

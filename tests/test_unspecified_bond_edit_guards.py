@@ -17,11 +17,11 @@ from chemvas.ui.canvas_tool_settings_state import CanvasToolSettingsState
 from chemvas.ui.canvas_window_access import snapshot_canvas_state_for
 from chemvas.ui.main_window_ports import services_for_window
 from chemvas.ui.structure_mutation_access import add_bond_between_points_for
+from tests.gui_workflow_support import app as app
+from tests.gui_workflow_support import drawing as drawing
 from tests.test_canvas_chemdraw_shortcut_service import _FakeKeyEvent
 from tests.test_caps_lock_shortcuts import pointer as pointer
 from tests.test_edit_target_integrity import _button, _click, _load, _tool
-from tests.test_note_editing_workflows import app as app
-from tests.test_note_editing_workflows import drawing as drawing
 from tests.test_structure_bond_build_service import _builder_for
 from tests.test_structure_build_service import _FakeCanvas
 

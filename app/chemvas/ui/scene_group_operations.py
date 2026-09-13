@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from functools import wraps
 
-from chemvas.domain.transactions import run_rollback_step
 from chemvas.features.graph import (
     adjacency_for_bonds,
     connected_components_for_nodes,
@@ -144,23 +143,10 @@ def _atomic_group_change(operation):
 
 
 def _push_group_command(canvas, command) -> None:
+    """Publish within the caller's document transaction; it owns failed edits."""
     history = history_service_for_canvas(canvas)
-    try:
-        if history.push(command) is False:
-            raise RuntimeError("Group history push did not commit")
-    except Exception as original_error:
-        # The ``undo`` attribute is looked up inside this body rather than in a
-        # ``partial`` argument, so a command without it becomes a note instead
-        # of an AttributeError that escapes and masks the push failure.
-        def undo_group_command() -> None:
-            command.undo(canvas)
-
-        run_rollback_step(
-            original_error,
-            "undoing a group mutation after its history push failed",
-            undo_group_command,
-        )
-        raise
+    if history.push(command) is False:
+        raise RuntimeError("Group history push did not commit")
 
 
 def _bound_mark_atom_id(canvas, item) -> int | None:

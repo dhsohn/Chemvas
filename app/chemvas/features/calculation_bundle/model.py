@@ -19,12 +19,6 @@ class ComponentSummary:
 
 
 @dataclass(frozen=True)
-class ComponentSelection:
-    model: MoleculeModel
-    summary: ComponentSummary
-
-
-@dataclass(frozen=True)
 class ComponentInventory:
     model: MoleculeModel
     components: tuple[ComponentSummary, ...]
@@ -72,6 +66,5 @@ __all__ = [
     "CalculationArtifacts",
     "CalculationStateSelection",
     "ComponentInventory",
-    "ComponentSelection",
     "ComponentSummary",
 ]

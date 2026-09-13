@@ -53,6 +53,7 @@ from chemvas.ui.scene_item_access import remove_item_from_canvas_scene
 from chemvas.ui.scene_item_state import (
     ARROW_KINDS,
     bond_state_dict,
+    scene_item_history_state,
     scene_item_state_for,
     ts_bracket_rect_from_state,
 )
@@ -226,7 +227,7 @@ class SceneTransformController:
             if atom_ids.intersection(item.data(2) or ())
         ]
         before_items = [
-            (item, self._translation_item_state(item))
+            (item, scene_item_history_state(item, self._scene_item_state(item)))
             for item in dict.fromkeys([*dependent_items, *items])
         ]
         if atom_ids:
@@ -250,20 +251,15 @@ class SceneTransformController:
                 else []
             ),
             item_commands=[
-                UpdateSceneItemCommand(item, before, self._translation_item_state(item))
+                UpdateSceneItemCommand(
+                    item,
+                    before,
+                    scene_item_history_state(item, self._scene_item_state(item)),
+                )
                 for item, before in before_items
                 if before
             ],
         )
-
-    def _translation_item_state(self, item) -> dict:
-        state = self._scene_item_state(item)
-        if state.get("kind") == "mark":
-            # As in drag history, attachment offsets alone cannot preserve the
-            # exact Qt glyph position when atom+offset arithmetic rounds.
-            position = item.pos()
-            state["item_pos"] = (position.x(), position.y())
-        return state
 
     def _redraw_connected_bonds(
         self, atom_id: int, skip_bond_id: int | None = None

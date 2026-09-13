@@ -9,7 +9,7 @@ from PyQt6.QtWidgets import QApplication
 from chemvas.adapters.qt.renderer import Renderer
 from chemvas.ui.canvas_service_access import canvas_services_for
 from chemvas.ui.canvas_view import CanvasView
-from tests.test_calculation_plan import _document_state, _plan
+from tests.calculation_plan_support import _document_state, _plan
 
 
 def test_calculation_plan_survives_canvas_apply_snapshot_and_old_document_clear() -> (

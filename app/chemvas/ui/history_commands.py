@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import contextlib
 from dataclasses import dataclass, field
 from functools import partial
 from typing import TYPE_CHECKING, Any, override
@@ -18,11 +17,11 @@ from chemvas.core.history import (
     release_history_transaction_for_command,
     restore_history_transaction_for_command,
 )
-from chemvas.domain.transactions import add_recovery_error_note, run_rollback_step
+from chemvas.domain.transactions import run_rollback_step
 
 if TYPE_CHECKING:
     from collections.abc import Callable
-from chemvas.ui.atom_coords_access import atom_coords_3d_for_id, pop_atom_coords_3d_for
+from chemvas.ui.atom_coords_access import pop_atom_coords_3d_for
 from chemvas.ui.atom_label_access import add_or_update_atom_label
 from chemvas.ui.canvas_calculation_plan_state import set_calculation_plan_for
 from chemvas.ui.canvas_group_state import (
@@ -35,8 +34,6 @@ from chemvas.ui.canvas_group_state import (
 from chemvas.ui.canvas_mark_registry import mark_registry_for
 from chemvas.ui.canvas_model_access import (
     atom_annotations_for,
-    atom_for_id,
-    bond_for_id,
 )
 from chemvas.ui.canvas_scene_items_state import (
     SCENE_ITEM_COLLECTION_ATTRS,
@@ -45,18 +42,11 @@ from chemvas.ui.canvas_scene_items_state import (
 from chemvas.ui.canvas_smiles_input_state import set_last_smiles_input_for
 from chemvas.ui.canvas_view_event_router import route_scene_selection_group_changed
 from chemvas.ui.handle_overlay_access import clear_handles_for
-from chemvas.ui.history_atom_position_restore import (
-    set_atom_positions_for_history as _set_atom_positions_for_history,
-)
 from chemvas.ui.move_access import (
-    move_item_for,
     refresh_selection_outline_for_canvas,
 )
 from chemvas.ui.scene_item_access import (
     apply_scene_item_state as _apply_scene_item_state,
-)
-from chemvas.ui.scene_item_access import (
-    item_is_in_canvas_scene as _item_is_in_canvas_scene,
 )
 from chemvas.ui.scene_item_access import (
     remove_scene_item as _remove_scene_item,
@@ -64,14 +54,12 @@ from chemvas.ui.scene_item_access import (
 from chemvas.ui.scene_item_access import (
     restore_scene_item as _restore_scene_item,
 )
-from chemvas.ui.scene_item_state import scene_item_state_for
 from chemvas.ui.scene_signal_blocking import blocked_scene_signals
 from chemvas.ui.transactions.scene_rect import (
     capture_scene_rect_snapshot,
     release_scene_rect_snapshot,
 )
 from chemvas.ui.transactions.scene_runtime import (
-    _UNAVAILABLE_ITEM_VALUE,
     capture_scene_runtime,
     create_scene_items_atomically,
     mutate_existing_scene_items_atomically,
@@ -110,8 +98,7 @@ def _restore_group_state(snapshot: _GroupStateSnapshot) -> None:
 def _clear_handles_for_target(canvas, item) -> None:
     """Drop handles that were placed from the geometry this command replaced.
 
-    Reads the handle slot the way ``_active_handle_position_snapshots`` does,
-    so a lightweight canvas without a runtime container is simply a canvas
+    A lightweight canvas without a runtime container is simply a canvas
     with no handles rather than an error inside an undo.
     """
     runtime_state = getattr(canvas, "runtime_state", None)
@@ -119,167 +106,6 @@ def _clear_handles_for_target(canvas, item) -> None:
     if handle_state is None or getattr(handle_state, "target", None) is not item:
         return
     clear_handles_for(canvas)
-
-
-def _active_handle_position_snapshots(canvas) -> list[tuple[object, object]]:
-    runtime_state = getattr(canvas, "runtime_state", None)
-    handle_state = getattr(runtime_state, "handle_state", None)
-    handles = getattr(handle_state, "active_handles", ())
-    snapshots: list[tuple[object, object]] = []
-    for handle in handles:
-        position_method = getattr(handle, "pos", None)
-        if not callable(position_method):
-            continue
-        try:
-            snapshots.append((handle, position_method()))
-        except RuntimeError:
-            continue
-    return snapshots
-
-
-def _restore_active_handle_positions(
-    snapshots: list[tuple[object, object]],
-    *,
-    original_error: BaseException,
-) -> None:
-    for handle, position in snapshots:
-        set_position = getattr(handle, "setPos", None)
-        if not callable(set_position):
-            continue
-        run_rollback_step(
-            original_error,
-            "restoring an active handle position",
-            partial(set_position, position),
-        )
-
-
-@dataclass(slots=True, kw_only=True)
-class _MoveItemSnapshot:
-    item: object
-    state: dict
-    position: object
-    data_1: object
-    data_2: object
-    atom_positions: dict[int, tuple[float, float]]
-    atom_coords_3d: dict[int, tuple[float, float, float]]
-
-
-def _move_item_atom_ids(canvas, item) -> set[int]:
-    data_method = getattr(item, "data", None)
-    if not callable(data_method):
-        return set()
-    try:
-        kind = data_method(0)
-        item_id = data_method(1)
-    except RuntimeError:
-        return set()
-    if kind == "atom" and isinstance(item_id, int):
-        return {item_id}
-    if kind != "bond" or not isinstance(item_id, int):
-        return set()
-    try:
-        bond = bond_for_id(canvas, item_id)
-    except (AttributeError, RuntimeError):
-        return set()
-    if bond is None:
-        return set()
-    return {
-        atom_id
-        for atom_id in (getattr(bond, "a", None), getattr(bond, "b", None))
-        if isinstance(atom_id, int)
-    }
-
-
-def _model_move_snapshots(
-    canvas,
-    item,
-) -> tuple[
-    dict[int, tuple[float, float]],
-    dict[int, tuple[float, float, float]],
-]:
-    positions: dict[int, tuple[float, float]] = {}
-    coords_3d: dict[int, tuple[float, float, float]] = {}
-    for atom_id in _move_item_atom_ids(canvas, item):
-        try:
-            atom = atom_for_id(canvas, atom_id)
-        except (AttributeError, RuntimeError):
-            continue
-        if atom is None:
-            continue
-        positions[atom_id] = (float(atom.x), float(atom.y))
-        try:
-            coord = atom_coords_3d_for_id(canvas, atom_id)
-        except (AttributeError, RuntimeError):
-            coord = None
-        if coord is not None:
-            coords_3d[atom_id] = coord
-    return positions, coords_3d
-
-
-def _move_item_snapshot(canvas, item) -> _MoveItemSnapshot:
-    position: object = _UNAVAILABLE_ITEM_VALUE
-    position_method = getattr(item, "pos", None)
-    if callable(position_method):
-        with contextlib.suppress(RuntimeError):
-            position = position_method()
-
-    data_values: list[object] = []
-    data_method = getattr(item, "data", None)
-    for index in (1, 2):
-        value: object = _UNAVAILABLE_ITEM_VALUE
-        if callable(data_method):
-            with contextlib.suppress(RuntimeError):
-                current = data_method(index)
-                value = dict(current) if isinstance(current, dict) else current
-        data_values.append(value)
-
-    atom_positions, atom_coords_3d = _model_move_snapshots(canvas, item)
-    return _MoveItemSnapshot(
-        item=item,
-        state=scene_item_state_for(canvas, item),
-        position=position,
-        data_1=data_values[0],
-        data_2=data_values[1],
-        atom_positions=atom_positions,
-        atom_coords_3d=atom_coords_3d,
-    )
-
-
-def _restore_raw_move_item_state(
-    snapshot: _MoveItemSnapshot,
-    *,
-    original_error: BaseException,
-) -> bool:
-    restored = False
-    if snapshot.position is not _UNAVAILABLE_ITEM_VALUE:
-        set_position = getattr(snapshot.item, "setPos", None)
-        if callable(set_position):
-            try:
-                set_position(snapshot.position)
-                restored = True
-            except Exception as rollback_error:
-                add_recovery_error_note(
-                    original_error,
-                    rollback_error,
-                    phase="restoring a moved item's raw position",
-                )
-
-    set_data = getattr(snapshot.item, "setData", None)
-    if not callable(set_data):
-        return restored
-    for index, value in ((1, snapshot.data_1), (2, snapshot.data_2)):
-        if value is _UNAVAILABLE_ITEM_VALUE:
-            continue
-        try:
-            set_data(index, value)
-            restored = True
-        except Exception as rollback_error:
-            add_recovery_error_note(
-                original_error,
-                rollback_error,
-                phase=f"restoring a moved item's raw data slot {index}",
-            )
-    return restored
 
 
 @dataclass
@@ -376,131 +202,6 @@ class SetCalculationPlanCommand(HistoryCommand):
     @override
     def redo(self, canvas) -> None:
         self._apply(canvas, self.after_state, self.before_state)
-
-
-@dataclass
-class MoveItemsCommand(HistoryCommand):
-    history_transaction_snapshot_covers_state = True
-    history_transaction_owns_exact_state = True
-
-    items: list
-    dx: float
-    dy: float
-
-    def _apply(self, canvas, dx: float, dy: float) -> None:
-        attempted: list[_MoveItemSnapshot] = []
-        transaction = capture_history_transaction_for_command(canvas)
-        handle_snapshots: list[tuple[object, object]] = []
-        try:
-            snapshots = [
-                _move_item_snapshot(canvas, item)
-                for item in self.items
-                if item is not None and _item_is_in_canvas_scene(canvas, item)
-            ]
-            handle_snapshots = _active_handle_position_snapshots(canvas)
-            for snapshot in snapshots:
-                attempted.append(snapshot)
-                move_item_for(canvas, snapshot.item, dx, dy, update_selection=False)
-            refresh_selection_outline_for_canvas(canvas)
-            release_history_transaction_for_command(canvas, transaction)
-        except Exception as original_error:
-            atom_positions: dict[int, tuple[float, float]] = {}
-            atom_coords_3d: dict[int, tuple[float, float, float]] = {}
-            for snapshot in attempted:
-                atom_positions.update(snapshot.atom_positions)
-                atom_coords_3d.update(snapshot.atom_coords_3d)
-            if atom_positions:
-                # Atom and bond moves mutate model coordinates, bound marks,
-                # 3D coordinates, the spatial index, bonds, and ring fills in
-                # addition to the grabbed graphics item. Restore those absolute
-                # savepoints before normalizing each graphics item below.
-                run_rollback_step(
-                    original_error,
-                    "restoring absolute atom positions after a move",
-                    lambda: _set_atom_positions_for_history(
-                        canvas,
-                        atom_positions,
-                        update_selection=False,
-                        coords_3d=atom_coords_3d or None,
-                    ),
-                )
-            for snapshot in reversed(attempted):
-                raw_restored = _restore_raw_move_item_state(
-                    snapshot,
-                    original_error=original_error,
-                )
-                if snapshot.state:
-                    try:
-                        _apply_scene_item_state(canvas, snapshot.item, snapshot.state)
-                        continue
-                    except Exception as rollback_error:
-                        add_recovery_error_note(
-                            original_error,
-                            rollback_error,
-                            phase="canonically restoring a moved scene item",
-                        )
-                        # Canonical apply can mutate before raising. Reapply the
-                        # raw savepoint last so its partial state cannot leak.
-                        raw_restored = (
-                            _restore_raw_move_item_state(
-                                snapshot,
-                                original_error=original_error,
-                            )
-                            or raw_restored
-                        )
-                if raw_restored:
-                    continue
-                run_rollback_step(
-                    original_error,
-                    "inversely moving a scene item",
-                    partial(
-                        move_item_for,
-                        canvas,
-                        snapshot.item,
-                        -dx,
-                        -dy,
-                        update_selection=False,
-                    ),
-                )
-            _restore_active_handle_positions(
-                handle_snapshots,
-                original_error=original_error,
-            )
-            run_rollback_step(
-                original_error,
-                "refreshing the selection outline after a move",
-                lambda: refresh_selection_outline_for_canvas(canvas),
-            )
-            # A bulk position setter can restore one mutable Atom and then
-            # terminate before later atoms, labels, rings, or 3D coordinates.
-            # Make the full pre-command transaction savepoint authoritative
-            # after every local best-effort repair.
-            restore_result = run_rollback_step(
-                original_error,
-                "restoring the exact move transaction",
-                partial(
-                    restore_history_transaction_for_command,
-                    canvas,
-                    transaction,
-                    original_error,
-                ),
-            )
-            if restore_result is not None:
-                for exact_restore_error in restore_result.errors:
-                    add_recovery_error_note(
-                        original_error,
-                        exact_restore_error,
-                        phase="restoring the exact move transaction",
-                    )
-            raise
-
-    @override
-    def undo(self, canvas) -> None:
-        self._apply(canvas, -self.dx, -self.dy)
-
-    @override
-    def redo(self, canvas) -> None:
-        self._apply(canvas, self.dx, self.dy)
 
 
 @dataclass
@@ -1019,7 +720,6 @@ __all__ = [
     "ChangeAtomLabelCommand",
     "DeleteSceneItemsCommand",
     "GroupSceneItemsCommand",
-    "MoveItemsCommand",
     "SetAnnotationStyleCommand",
     "SetCalculationPlanCommand",
     "SetSceneGeometryCommand",

@@ -10,9 +10,9 @@ from PyQt6.QtTest import QTest
 from chemvas.core.document_io import read_document
 from chemvas.ui.atom_coords_access import atom_coords_3d_for
 from chemvas.ui.canvas_window_access import snapshot_canvas_state_for
+from tests.native_canvas_support import app as app
+from tests.native_canvas_support import canvas as canvas
 from tests.test_document_patch_alias_repair import _cli, _operation, _patch, _state
-from tests.test_native_geometry_backlog import app as app
-from tests.test_native_geometry_backlog import canvas as canvas
 from tests.test_perspective_components import _assert_live_depth, _chains, _select
 
 

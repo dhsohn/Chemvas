@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import math
-
 from PyQt6.QtCore import QPointF
 
 from chemvas.features.selection import (
@@ -61,61 +59,6 @@ def bond_ids_within_atom_ids_for(canvas, atom_ids: set[int]) -> set[int]:
         if bond.a in atom_ids and bond.b in atom_ids:
             selected_bond_ids.add(bond_id)
     return selected_bond_ids
-
-
-def average_bond_length_for_atoms_for(
-    canvas,
-    atom_ids: set[int],
-    coords: dict[int, tuple[float, float, float]],
-) -> float | None:
-    if not atom_ids:
-        return None
-    bond_ids = bond_ids_within_atom_ids_for(canvas, atom_ids)
-    if not bond_ids:
-        return None
-    total = 0.0
-    count = 0
-    for bond_id in bond_ids:
-        bond = bond_for_id(canvas, bond_id)
-        if bond is None:
-            continue
-        if bond.a not in atom_ids or bond.b not in atom_ids:
-            continue
-        a_coords = coords.get(bond.a)
-        b_coords = coords.get(bond.b)
-        if a_coords is None or b_coords is None:
-            continue
-        dist = math.hypot(a_coords[0] - b_coords[0], a_coords[1] - b_coords[1])
-        if dist > 1e-9:
-            total += dist
-            count += 1
-    if count == 0:
-        return None
-    return total / count
-
-
-def rotation_scale_for_coords_for(
-    canvas,
-    atom_ids: set[int],
-    rotated_coords: dict[int, tuple[float, float, float]],
-    extra_atom_ids: set[int] | tuple[int, ...] = (),
-) -> float:
-    rotation = rotation_state_for(canvas)
-    if not rotation.base_bond_length:
-        return 1.0
-    scale_atom_ids = set(atom_ids)
-    scale_atom_ids.update(extra_atom_ids)
-    current_coords = dict(rotation.base_coords)
-    current_coords.update(rotated_coords)
-    current_avg = average_bond_length_for_atoms_for(
-        canvas, scale_atom_ids, current_coords
-    )
-    if not current_avg or current_avg <= 1e-9:
-        return 1.0
-    scale = rotation.base_bond_length / current_avg
-    if not math.isfinite(scale) or scale <= 0.0:
-        return 1.0
-    return scale
 
 
 def unproject_scene_point_3d_for(
@@ -206,7 +149,6 @@ def rotate_point_around_axis_for(
 __all__ = [
     "apply_projected_atom_positions_for",
     "atom_in_planar_system_for",
-    "average_bond_length_for_atoms_for",
     "bond_ids_for_atom_ids_for",
     "bond_ids_within_atom_ids_for",
     "bond_in_cycle_for",
@@ -217,7 +159,6 @@ __all__ = [
     "normalize_3d",
     "planar_fragment_components_for",
     "rotate_point_around_axis_for",
-    "rotation_scale_for_coords_for",
     "unproject_scene_point_3d_for",
     "update_ring_fills_for_atoms_for",
 ]

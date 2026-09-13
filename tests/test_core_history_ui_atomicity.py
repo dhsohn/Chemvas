@@ -31,7 +31,8 @@ from chemvas.ui.canvas_history_state import CanvasHistoryState
 from chemvas.ui.canvas_rotation_state import rotation_state_for
 from chemvas.ui.canvas_view import CanvasView
 from chemvas.ui.graphics_items import AtomLabelItem
-from chemvas.ui.history_commands import MoveItemsCommand, UpdateSceneItemCommand
+from chemvas.ui.history_commands import SetSceneGeometryCommand, UpdateSceneItemCommand
+from chemvas.ui.scene_item_state import scene_item_state_for
 from chemvas.ui.structure_mutation_access import add_atom_for, add_bond_for
 from tests.canvas_factory import build_canvas_view
 
@@ -282,7 +283,20 @@ class CoreHistoryUiAtomicityTest(unittest.TestCase):
         original_data = dict(note.data(2))
         command = CompositeCommand(
             [
-                MoveItemsCommand([note], 11.0, 13.0),
+                SetSceneGeometryCommand(
+                    atom_commands=[],
+                    item_commands=[
+                        UpdateSceneItemCommand(
+                            note,
+                            scene_item_state_for(canvas, note),
+                            {
+                                **scene_item_state_for(canvas, note),
+                                "x": 14.0,
+                                "y": 20.0,
+                            },
+                        )
+                    ],
+                ),
                 UpdateBondLengthCommand(20.0, 30.0),
             ]
         )
@@ -372,8 +386,18 @@ class CoreHistoryUiAtomicityTest(unittest.TestCase):
                             item.setPos(QPointF(3.0, 7.0))
                             canvas.scene().addItem(item)
                             original_state = QPointF(item.pos())
-                            leaf_command = MoveItemsCommand([item], 5.0, 9.0)
-                            original_mutation = history_commands_module.move_item_for
+                            before = scene_item_state_for(canvas, item)
+                            leaf_command = SetSceneGeometryCommand(
+                                atom_commands=[],
+                                item_commands=[
+                                    UpdateSceneItemCommand(
+                                        item, before, {**before, "x": 8.0, "y": 16.0}
+                                    )
+                                ],
+                            )
+                            original_mutation = (
+                                history_commands_module._apply_scene_item_state
+                            )
 
                             def mutate_then_fail(
                                 *args,
@@ -386,7 +410,7 @@ class CoreHistoryUiAtomicityTest(unittest.TestCase):
 
                             mutation_patch = mock.patch.object(
                                 history_commands_module,
-                                "move_item_for",
+                                "_apply_scene_item_state",
                                 side_effect=mutate_then_fail,
                             )
 

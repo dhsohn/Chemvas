@@ -2,6 +2,8 @@ import os
 import unittest
 from unittest.mock import Mock
 
+from tests.scene_operation_support import _RecordingFakeCanvas
+
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PyQt6.QtCore import QRectF
@@ -14,65 +16,10 @@ from chemvas.ui.canvas_atom_graphics_state import visible_atom_item_for
 from chemvas.ui.canvas_rotation_state import rotation_state_for
 from chemvas.ui.canvas_service_access import canvas_services_for
 from chemvas.ui.canvas_view import CanvasView
-from tests.test_scene_ops_controller import (
-    _FakeCanvas,
+from tests.scene_operation_support import (
     _make_note_item,
     scene_clipboard_controller_for,
 )
-
-
-class _RecordingFakeCanvas(_FakeCanvas):
-    def __init__(self) -> None:
-        super().__init__()
-        self.atom_color_calls: list[tuple[int, str]] = []
-        self.atom_label_calls: list[dict] = []
-        self.select_note_calls: list[tuple[QGraphicsItem, bool]] = []
-        self.translate_empty_kinds: set[str] = set()
-
-    def apply_atom_color(self, atom_id: int, color: str) -> None:
-        self.atom_color_calls.append((atom_id, color))
-        super().apply_atom_color(atom_id, color)
-
-    def add_or_update_atom_label(
-        self,
-        atom_id: int,
-        element: str,
-        clear_smiles: bool = False,
-        record: bool = False,
-        allow_merge: bool = False,
-        show_carbon: bool = False,
-        literal_label: bool | None = None,
-    ) -> None:
-        call = {
-            "atom_id": atom_id,
-            "element": element,
-            "clear_smiles": clear_smiles,
-            "record": record,
-            "allow_merge": allow_merge,
-        }
-        if show_carbon:
-            call["show_carbon"] = True
-        if literal_label is not None:
-            call["literal_label"] = literal_label
-        self.atom_label_calls.append(call)
-        super().add_or_update_atom_label(
-            atom_id,
-            element,
-            clear_smiles=clear_smiles,
-            record=record,
-            allow_merge=allow_merge,
-            show_carbon=show_carbon,
-            literal_label=literal_label,
-        )
-
-    def select_note(self, item, additive: bool = True) -> None:
-        self.select_note_calls.append((item, additive))
-        super().select_note(item, additive=additive)
-
-    def create_scene_item_from_state(self, state: dict):
-        if isinstance(state, dict) and state.get("kind") in self.translate_empty_kinds:
-            return None
-        return super().create_scene_item_from_state(state)
 
 
 class _ZeroBoundsItem(QGraphicsItem):

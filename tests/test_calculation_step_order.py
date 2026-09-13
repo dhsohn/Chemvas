@@ -11,7 +11,7 @@ from chemvas.features.calculation_bundle import (
     calculation_state_by_id,
     validate_calculation_plan,
 )
-from tests.test_calculation_plan import _document_state, _plan
+from tests.calculation_plan_support import _document_state, _plan
 
 
 def _multistep_document():

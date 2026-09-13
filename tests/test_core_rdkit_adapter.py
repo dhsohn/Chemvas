@@ -2914,6 +2914,7 @@ class RDKitConversionEdgeTest(unittest.TestCase):
             model,
             {atom_id, 99},
             atom_annotations={atom_id: {}},
+            bonds=model.bonds,
         )
         self.assertEqual(sorted(component_model.atoms), [0])
         self.assertEqual(component_model.bonds, [])

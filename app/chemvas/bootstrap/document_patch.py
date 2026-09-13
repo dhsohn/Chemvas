@@ -75,11 +75,11 @@ def _argument_parser() -> argparse.ArgumentParser:
 
 def _inspect_document(source: Path) -> dict[str, object]:
     _validate_source(source)
-    source_bytes, document = read_exact_document(source)
+    _source_bytes, document = read_exact_document(source)
     return {
         **inspect_document_graph(document.state),
         "source": str(source),
-        "source_sha256": _sha256(source_bytes),
+        "source_sha256": document.source_sha256,
         "chemvas_document_version": int(document.payload["version"]),
     }
 
@@ -96,8 +96,8 @@ def _apply_patch(
         if output is None:
             raise ValueError("--output is required unless --dry-run is used")
         _validate_new_output(source, output)
-    source_bytes, document = read_exact_document(source)
-    source_hash = _sha256(source_bytes)
+    _source_bytes, document = read_exact_document(source)
+    source_hash = cast("str", document.source_sha256)
     patch = _read_patch(patch_path)
     result = apply_document_patch(
         document.state,

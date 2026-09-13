@@ -31,9 +31,9 @@ from chemvas.ui.scene_decoration_access import add_arrow_for
 from chemvas.ui.selection_outline_state import selection_outlines_for
 from chemvas.ui.selection_service_access import refresh_selection_outline_for
 from chemvas.ui.structure_mutation_access import add_atom_for, add_bond_for
-from tests.test_note_editing_workflows import _key
-from tests.test_note_editing_workflows import app as app
-from tests.test_note_editing_workflows import drawing as drawing
+from tests.gui_workflow_support import _key
+from tests.gui_workflow_support import app as app
+from tests.gui_workflow_support import drawing as drawing
 
 
 def _ctrl(canvas, key):

@@ -26,13 +26,12 @@ from chemvas.ui.preview_3d_painter import (
     preview_footer_height_for_lines,
     preview_layout_for_widget,
     preview_title_font,
-    project_preview_paint_scene,
 )
+from chemvas.ui.preview_3d_projection import project_3d_scene
 from chemvas.ui.preview_3d_renderer import status_badge_width
 from chemvas.ui.preview_3d_state import (
     preview_empty_state_text,
     preview_info_items,
-    preview_info_lines,
     preview_metadata_summary,
     preview_payload_signature,
     preview_status_badge,
@@ -361,12 +360,14 @@ class Preview3DRecoveryTest(unittest.TestCase):
         safe_update.assert_called_once_with()
 
         self.assertEqual(
-            project_preview_paint_scene(
+            project_3d_scene(
                 Molecule3DScene(atoms=(), bonds=()),
                 rotation_x=preview._rotation_x,
                 rotation_y=preview._rotation_y,
                 zoom=preview._zoom,
-                widget_rect=QRectF(preview.rect()),
+                content_rect=preview_layout_for_widget(
+                    QRectF(preview.rect()), [], preview.font()
+                )["molecule"],
             ),
             [],
         )
@@ -445,12 +446,12 @@ class Preview3DRecoveryTest(unittest.TestCase):
         )
         preview._message = "No projection"
         with mock.patch(
-            "chemvas.ui.preview_3d_painter.project_preview_paint_scene", return_value=[]
+            "chemvas.ui.preview_3d_painter.project_3d_scene", return_value=[]
         ):
             preview.paintEvent(None)
 
         with mock.patch(
-            "chemvas.ui.preview_3d_painter.project_preview_paint_scene",
+            "chemvas.ui.preview_3d_painter.project_3d_scene",
             return_value=[(40.0, 50.0, 0.0, 8.0)],
         ):
             preview.paintEvent(None)
@@ -476,21 +477,24 @@ class Preview3DRecoveryTest(unittest.TestCase):
         )
         self.assertEqual(preview._pending_model, model)
         self.assertEqual(preview._pending_annotations, {0: {"formal_charge": 1}})
-        info_lines = preview_info_lines("C2H6O", "46.07")
-        self.assertEqual(info_lines, ["Formula: C2H6O", "MW: 46.07"])
+        info_lines = [
+            f"{label}: {value}" for label, value in preview_info_items("C2H6O", "46.07")
+        ]
+        self.assertEqual(info_lines, ["FORMULA: C2H6O", "MW: 46.07"])
         self.assertGreater(
             preview_footer_height_for_lines(info_lines, preview.font()), 0.0
         )
         self.assertEqual(start.call_count, 1)
         self.assertEqual(safe_update.call_count, 2)
 
-        projected = project_preview_paint_scene(
+        projected = project_3d_scene(
             self._make_scene(),
             rotation_x=preview._rotation_x,
             rotation_y=preview._rotation_y,
             zoom=preview._zoom,
-            widget_rect=QRectF(preview.rect()),
-            footer_height=80.0,
+            content_rect=preview_layout_for_widget(
+                QRectF(preview.rect()), info_lines, preview.font()
+            )["molecule"],
         )
         self.assertEqual(len(projected), 2)
 
@@ -596,7 +600,9 @@ class Preview3DRecoveryTest(unittest.TestCase):
             preview_info_items("C2H6O", "46.07"),
             [("FORMULA", "C2H6O"), ("MW", "46.07")],
         )
-        info_lines = preview_info_lines("C2H6O", "46.07")
+        info_lines = [
+            f"{label}: {value}" for label, value in preview_info_items("C2H6O", "46.07")
+        ]
         self.assertGreaterEqual(
             preview_footer_height_for_lines(info_lines, preview.font()), 68.0
         )
@@ -664,13 +670,12 @@ class Preview3DRecoveryTest(unittest.TestCase):
         self.assertTrue(layout["viewport"].contains(layout["molecule"]))
         self.assertTrue(layout["footer"].isNull())
 
-        projected = project_preview_paint_scene(
+        projected = project_3d_scene(
             preview._scene,
             rotation_x=preview._rotation_x,
             rotation_y=preview._rotation_y,
             zoom=preview._zoom,
-            widget_rect=QRectF(preview.rect()),
-            viewport_rect=QRectF(40.0, 70.0, 220.0, 120.0),
+            content_rect=QRectF(40.0, 70.0, 220.0, 120.0),
         )
         self.assertEqual(len(projected), 2)
         self.assertTrue(all(40.0 <= atom[0] <= 260.0 for atom in projected))

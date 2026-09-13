@@ -33,7 +33,7 @@ from chemvas.ui.input_view_access import zoom_factor_for
 from chemvas.ui.mark_item_access import mark_center_for, set_mark_center_for
 from chemvas.ui.renderer_style_access import bond_length_px_for
 from chemvas.ui.scene_item_access import remove_item_from_canvas_scene
-from chemvas.ui.scene_item_state import mark_state_dict_for
+from chemvas.ui.scene_item_state import mark_state_dict_for, scene_item_history_state
 from chemvas.ui.selection_info_access import emit_selection_info_for
 from chemvas.ui.transactions.document import document_transaction
 
@@ -358,9 +358,7 @@ class CanvasMarkSceneService:
                 for key, items in after_marks.items()
             },
         )
-        before = mark_state_dict_for(self.canvas, item)
-        pos = item.pos()
-        before["item_pos"] = (pos.x(), pos.y())
+        before = scene_item_history_state(item, mark_state_dict_for(self.canvas, item))
         center = mark_center_for(self.canvas, item)
         after = dict(
             before, atom_id=atom_id, dx=center.x() - atom.x, dy=center.y() - atom.y

@@ -10,9 +10,9 @@ from chemvas.ui.main_window_ports import (
     set_zoom_percent_for_window,
     tool_mode_controller_for_window,
 )
-from tests.test_note_editing_workflows import _key, _tool
-from tests.test_note_editing_workflows import app as app
-from tests.test_note_editing_workflows import drawing as drawing
+from tests.gui_workflow_support import _key, _tool
+from tests.gui_workflow_support import app as app
+from tests.gui_workflow_support import drawing as drawing
 
 
 @pytest.mark.parametrize(

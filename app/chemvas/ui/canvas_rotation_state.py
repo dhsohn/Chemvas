@@ -16,7 +16,6 @@ class CanvasRotationState:
     mode: str | None = None
     free_angle_x: float = 0.0
     free_angle_y: float = 0.0
-    base_bond_length: float | None = None
     atom_ids: set[int] = field(default_factory=set)
     center_3d: Coords3D | None = None
     projection_center_3d: Coords3D | None = None
@@ -36,7 +35,6 @@ class CanvasRotationState:
         self.mode = None
         self.free_angle_x = 0.0
         self.free_angle_y = 0.0
-        self.base_bond_length = None
         self.atom_ids = set()
         self.center_3d = None
         self.start_projection_center_3d = None

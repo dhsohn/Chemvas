@@ -4,8 +4,6 @@ import os
 from types import SimpleNamespace
 from unittest import mock
 
-from tests.runtime_services import canvas_runtime_services
-
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PyQt6 import sip
@@ -60,7 +58,7 @@ def _window(
         state=object(),
         ui_refs=SimpleNamespace(preview_window=_PreviewWindow()),
         tab_refs=object(),
-        services=canvas_runtime_services(document_action_service=_DocumentActions()),
+        services=SimpleNamespace(document_action_service=_DocumentActions()),
         preview_3d=preview,
     )
     return (

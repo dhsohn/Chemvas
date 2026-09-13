@@ -52,7 +52,6 @@ from chemvas.ui.canvas_tool_settings_state import (
 )
 from chemvas.ui.handle_state import CanvasHandleState
 from chemvas.ui.history_commands import (
-    MoveItemsCommand,
     SetSceneGeometryCommand,
     UpdateSceneItemCommand,
 )
@@ -1277,7 +1276,7 @@ class ToolsUnitTest(unittest.TestCase):
         shape.setSelected(True)
         tool = MoveTool(canvas, context=canvas.services.tool_controller.context)
         history = canvas.services.history_service
-        redo_entry = MoveItemsCommand(items=[], dx=3.0, dy=-2.0)
+        redo_entry = object()
         history.state.redo_stack[:] = [redo_entry]
         before_state = scene_item_state_for(canvas, shape)
         expected_dx = 1.0 - 0.9999995
@@ -1446,8 +1445,8 @@ class ToolsUnitTest(unittest.TestCase):
         shape.setSelected(True)
         tool = MoveTool(canvas, context=canvas.services.tool_controller.context)
         history = canvas.services.history_service
-        baseline = MoveItemsCommand(items=[], dx=0.0, dy=0.0)
-        redo_entry = MoveItemsCommand(items=[], dx=1.0, dy=1.0)
+        baseline = object()
+        redo_entry = object()
         history.state.history[:] = [baseline]
         history.state.redo_stack[:] = [redo_entry]
         history_list = history.state.history
@@ -1496,8 +1495,8 @@ class ToolsUnitTest(unittest.TestCase):
         shape.setSelected(True)
         tool = MoveTool(canvas, context=canvas.services.tool_controller.context)
         history = canvas.services.history_service
-        baseline = MoveItemsCommand(items=[], dx=0.0, dy=0.0)
-        redo_entry = MoveItemsCommand(items=[], dx=1.0, dy=1.0)
+        baseline = object()
+        redo_entry = object()
         history.state.history[:] = [baseline]
         history.state.redo_stack[:] = [redo_entry]
         history.state.enabled = False

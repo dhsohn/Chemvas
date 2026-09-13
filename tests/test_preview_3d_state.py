@@ -9,7 +9,6 @@ from chemvas.ui.preview_3d_state import (
     is_empty_preview_message,
     preview_empty_state_text,
     preview_info_items,
-    preview_info_lines,
     preview_metadata_summary,
     preview_payload_signature,
     preview_status_badge,
@@ -35,13 +34,13 @@ def test_preview_payload_signature_captures_atoms_bonds_and_annotations() -> Non
 
 
 def test_preview_info_text_helpers_skip_empty_fields() -> None:
-    assert preview_info_lines("C2H6O", "46.07") == ["Formula: C2H6O", "MW: 46.07"]
-    assert preview_info_lines("", "46.07") == ["MW: 46.07"]
     assert preview_info_items("C2H6O", "46.07") == [
         ("FORMULA", "C2H6O"),
         ("MW", "46.07"),
     ]
     assert preview_info_items("C2H6O", "") == [("FORMULA", "C2H6O")]
+    assert preview_info_items("", "46.07") == [("MW", "46.07")]
+    assert preview_info_items("", "") == []
 
 
 def test_preview_status_text_helpers_cover_empty_building_issue_and_ready_states() -> (

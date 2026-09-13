@@ -18,7 +18,7 @@ from chemvas.ui.scene_flip_grouping import (
     group_items_for_flip_transform,
 )
 from chemvas.ui.scene_flip_state import flip_scene_item_state
-from tests.test_scene_ops_controller import (
+from tests.scene_operation_support import (
     _FakeCanvas,
     _make_note_item,
     _make_rect_item,

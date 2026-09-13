@@ -13,7 +13,7 @@ from chemvas.ui.scene_transform_apply_logic import (
     apply_component_flip_transform,
     apply_standalone_flip_transform,
 )
-from tests.test_scene_ops_controller import _make_rect_item
+from tests.scene_operation_support import _make_rect_item
 
 
 class SceneTransformApplyLogicTest(unittest.TestCase):

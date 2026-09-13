@@ -43,15 +43,6 @@ def preview_payload_signature(model: Any, atom_annotations: Any) -> tuple:
     return atom_sig, bond_sig, annotation_sig
 
 
-def preview_info_lines(formula: str, mw: str) -> list[str]:
-    lines: list[str] = []
-    if formula:
-        lines.append(f"Formula: {formula}")
-    if mw:
-        lines.append(f"MW: {mw}")
-    return lines
-
-
 def preview_info_items(formula: str, mw: str) -> list[tuple[str, str]]:
     items: list[tuple[str, str]] = []
     if formula:
@@ -133,7 +124,6 @@ __all__ = [
     "is_empty_preview_message",
     "preview_empty_state_text",
     "preview_info_items",
-    "preview_info_lines",
     "preview_metadata_summary",
     "preview_payload_signature",
     "preview_status_badge",

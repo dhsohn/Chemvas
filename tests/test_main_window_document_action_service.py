@@ -319,7 +319,7 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
             calculation_plan_for,
             set_calculation_plan_for,
         )
-        from tests.test_calculation_plan import _document_state, _plan
+        from tests.calculation_plan_support import _document_state, _plan
 
         canvas = active_canvas_for_window(self.window)
         documents = services_for_window(self.window).canvas_document_service

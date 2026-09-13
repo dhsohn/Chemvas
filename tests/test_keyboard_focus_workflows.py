@@ -5,38 +5,18 @@ from PyQt6.QtCore import QPointF, Qt, QTimer
 from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import QApplication, QDialog, QLineEdit, QSpinBox, QToolButton
 
-from chemvas.bootstrap.main_window import build_main_window
 from chemvas.ui.canvas_scene_items_state import note_items_for
 from chemvas.ui.canvas_window_access import snapshot_canvas_state_for
 from chemvas.ui.main_window_ports import (
-    active_canvas_for_window,
     active_tool_name_for_window,
     current_zoom_percent_for_window,
-    services_for_window,
     set_zoom_percent_for_window,
 )
 from chemvas.ui.main_window_status_service import _ZoomPercentButton
-from tests.test_active_gesture_document_edits import qt_errors as qt_errors
-from tests.test_note_editing_workflows import _click, _tool
-from tests.test_note_editing_workflows import app as app
-
-
-@pytest.fixture
-def fresh_window(app, qt_errors):
-    window = build_main_window()
-    window.resize(1120, 700)
-    window.show()
-    window.activateWindow()
-    assert QTest.qWaitForWindowExposed(window, 5000)
-    assert QTest.qWaitForWindowActive(window, 5000)
-    app.processEvents()
-    canvas = active_canvas_for_window(window)
-    yield window, canvas
-    canvas.scene().clearFocus()
-    services_for_window(window).canvas_document_service.mark_clean(canvas)
-    window.close()
-    app.processEvents()
-    assert not qt_errors
+from tests.gui_workflow_support import _click, _tool
+from tests.gui_workflow_support import app as app
+from tests.gui_workflow_support import fresh_window as fresh_window
+from tests.gui_workflow_support import qt_errors as qt_errors
 
 
 def _tab_cycle(window, canvas, backwards):

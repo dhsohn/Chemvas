@@ -46,7 +46,7 @@ from chemvas.ui.transactions.document import (
     document_transaction,
 )
 from tests.canvas_factory import build_canvas_view
-from tests.test_scene_ops_controller import (
+from tests.scene_operation_support import (
     _FakeCanvas,
     _make_model_ring_item,
     _make_note_item,

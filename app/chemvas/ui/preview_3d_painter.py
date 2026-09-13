@@ -13,7 +13,7 @@ from chemvas.ui.preview_3d_layout import (
     preview_layout_rects,
 )
 from chemvas.ui.preview_3d_molecule_renderer import draw_projected_scene
-from chemvas.ui.preview_3d_projection import project_preview_scene
+from chemvas.ui.preview_3d_projection import project_3d_scene
 from chemvas.ui.preview_3d_renderer import (
     draw_empty_state,
     draw_footer,
@@ -85,27 +85,6 @@ def preview_layout_for_widget(
     )
 
 
-def project_preview_paint_scene(
-    scene: Molecule3DScene,
-    *,
-    rotation_x: float,
-    rotation_y: float,
-    zoom: float,
-    widget_rect: QRectF,
-    footer_height: float = 0.0,
-    viewport_rect: QRectF | None = None,
-) -> list[tuple[float, float, float, float]]:
-    return project_preview_scene(
-        scene,
-        rotation_x=rotation_x,
-        rotation_y=rotation_y,
-        zoom=zoom,
-        widget_rect=widget_rect,
-        footer_height=footer_height,
-        viewport_rect=viewport_rect,
-    )
-
-
 def paint_preview_3d_panel(
     painter: QPainter,
     widget_rect: QRectF,
@@ -153,13 +132,12 @@ def paint_preview_3d_panel(
         )
         return
 
-    projected_atoms = project_preview_paint_scene(
+    projected_atoms = project_3d_scene(
         state.scene,
         rotation_x=state.rotation_x,
         rotation_y=state.rotation_y,
         zoom=state.zoom,
-        widget_rect=widget_rect,
-        viewport_rect=layout["molecule"],
+        content_rect=layout["molecule"],
     )
     if not projected_atoms:
         title, detail = preview_empty_state_text(state.message)
@@ -190,5 +168,4 @@ __all__ = [
     "preview_layout_for_widget",
     "preview_overlay_font",
     "preview_title_font",
-    "project_preview_paint_scene",
 ]

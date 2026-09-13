@@ -3,16 +3,14 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, override
 
 from PyQt6.QtCore import QPointF, Qt
-from PyQt6.QtGui import QColor, QIcon, QPainter, QPolygonF
+from PyQt6.QtGui import QColor, QPainter, QPolygonF
 from PyQt6.QtWidgets import QToolButton
 
 from chemvas.shell.palette import PALETTE
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
-
     from PyQt6.QtCore import QPoint
-    from PyQt6.QtGui import QCursor, QKeySequence, QMouseEvent, QPaintEvent
+    from PyQt6.QtGui import QMouseEvent, QPaintEvent
     from PyQt6.QtWidgets import QWidget
 
 
@@ -95,48 +93,8 @@ class CornerMenuToolButton(CornerMenuButton):
         super().mousePressEvent(event)
 
 
-class MainWindowToolbarButtonFactory:
-    def create_toolbar_button(
-        self,
-        *,
-        icon: QIcon | None = None,
-        tooltip: str | None = None,
-        status_tip: str | None = None,
-        callback: Callable[[], None] | None = None,
-        shortcut: QKeySequence | QKeySequence.StandardKey | str | None = None,
-        text: str | None = None,
-        object_name: str | None = None,
-        style_sheet: str | None = None,
-        auto_raise: bool = True,
-        cursor: QCursor | Qt.CursorShape | None = None,
-    ) -> QToolButton:
-        button = QToolButton()
-        if icon is not None:
-            button.setIcon(icon)
-        if tooltip is not None:
-            button.setToolTip(tooltip)
-        resolved_status_tip = status_tip if status_tip is not None else tooltip
-        if resolved_status_tip is not None:
-            button.setStatusTip(resolved_status_tip)
-        if shortcut is not None:
-            button.setShortcut(shortcut)
-        if text is not None:
-            button.setText(text)
-        if object_name is not None:
-            button.setObjectName(object_name)
-        if style_sheet is not None:
-            button.setStyleSheet(style_sheet)
-        button.setAutoRaise(auto_raise)
-        if cursor is not None:
-            button.setCursor(cursor)
-        if callback is not None:
-            button.clicked.connect(callback)
-        return button
-
-
 __all__ = [
     "ArrowButton",
     "CornerMenuButton",
     "CornerMenuToolButton",
-    "MainWindowToolbarButtonFactory",
 ]

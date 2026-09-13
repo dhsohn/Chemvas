@@ -33,7 +33,7 @@ from chemvas.ui.calculation_step_dialog import (
     _correspondence_suggester_for,
     _MappingProductCombo,
 )
-from tests.test_calculation_plan import _document_state, _plan
+from tests.calculation_plan_support import _document_state, _plan
 from tests.test_precomplex_cli import _generate_candidate_fixture
 
 if TYPE_CHECKING:

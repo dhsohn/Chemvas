@@ -32,7 +32,6 @@ from chemvas.ui.canvas_scene_items_state import CanvasSceneItemsState
 from chemvas.ui.history_commands import SetBondLengthGeometryCommand
 from chemvas.ui.scene_clipboard_transaction_logic import translated_scene_item_state
 from chemvas.ui.selection_collection_access import append_selected_item_ids
-from chemvas.ui.selection_rotation_access import average_bond_length_for_atoms_for
 from chemvas.ui.selection_style_access import restore_selection_from_ids_for
 
 
@@ -133,23 +132,6 @@ class _DataItem:
 
     def data(self, key: int):
         return self._values.get(key)
-
-
-class _ChangingBonds:
-    def __init__(self) -> None:
-        self._calls = {0: 0, 1: 0, 2: 0}
-
-    def __len__(self) -> int:
-        return 3
-
-    def __getitem__(self, bond_id: int):
-        calls = self._calls[bond_id]
-        self._calls[bond_id] += 1
-        if bond_id == 0:
-            return Bond(1, 2, 1) if calls == 0 else None
-        if bond_id == 1:
-            return Bond(1, 2, 1) if calls == 0 else Bond(1, 99, 1)
-        return Bond(1, 2, 1)
 
 
 class RendererCanvasTailCoverageTest(unittest.TestCase):
@@ -284,19 +266,3 @@ class RendererCanvasTailCoverageTest(unittest.TestCase):
         restore_selection_from_ids_for(restore_view, {99}, {42})
         scene.clearSelection.assert_called_once_with()
         selection_controller.update_selection_outline.assert_called_once_with()
-
-    def test_average_bond_length_and_order_sum_cover_defensive_tail_branches(
-        self,
-    ) -> None:
-        average_view = SimpleNamespace(
-            model=SimpleNamespace(bonds=_ChangingBonds()),
-            runtime_state=canvas_runtime_state(
-                graph_state=CanvasGraphState(
-                    atom_bond_ids={1: {0, 1, 2}, 2: {0, 1, 2}}
-                ),
-            ),
-        )
-        coords = {1: (0.0, 0.0, 0.0), 2: (10.0, 0.0, 0.0)}
-        self.assertEqual(
-            average_bond_length_for_atoms_for(average_view, {1, 2}, coords), 10.0
-        )

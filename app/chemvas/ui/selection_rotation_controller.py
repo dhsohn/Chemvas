@@ -28,7 +28,6 @@ from chemvas.ui.selection_collection_access import selected_ids_for
 from chemvas.ui.selection_info_access import emit_selection_info_for
 from chemvas.ui.selection_rotation_access import (
     apply_projected_atom_positions_for,
-    average_bond_length_for_atoms_for,
     flatten_planar_fragments_for,
     rotate_point_around_axis_for,
     unproject_scene_point_3d_for,
@@ -127,13 +126,6 @@ class SelectionRotationController:
             coords,
             bond_in_cycle=self.graph_service.bond_in_cycle,
         )
-
-    def average_bond_length_for_atoms(
-        self,
-        atom_ids: set[int],
-        coords: dict[int, tuple[float, float, float]],
-    ) -> float | None:
-        return average_bond_length_for_atoms_for(self.canvas, atom_ids, coords)
 
     def unproject_scene_point_3d(
         self,

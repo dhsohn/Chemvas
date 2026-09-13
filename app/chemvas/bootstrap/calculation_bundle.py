@@ -9,7 +9,7 @@ from dataclasses import asdict, replace
 from datetime import UTC, datetime
 from decimal import Decimal
 from pathlib import Path
-from typing import TypedDict
+from typing import TypedDict, cast
 
 from chemvas import __version__
 from chemvas.bootstrap.document_cli_shared import json_text
@@ -469,7 +469,8 @@ def _generate_precomplex(
     _validate_source(source)
     _validate_new_chemvas_output(source, output)
     request = _read_precomplex_request(request_path)
-    source_bytes, document = read_exact_document(source)
+    _source_bytes, document = read_exact_document(source)
+    source_hash = cast("str", document.source_sha256)
     plan = calculation_plan_for_document(document.state)
     step = calculation_step_by_id(plan, step_id)
     require_step_ready(plan, step)
@@ -477,7 +478,7 @@ def _generate_precomplex(
         _parse_precomplex_request(
             request,
             step_id=step.id,
-            source_document_sha256=_sha256(source_bytes),
+            source_document_sha256=source_hash,
         )
     )
     counts = tuple(
@@ -527,7 +528,7 @@ def _generate_precomplex(
         )
         candidates = generate_precomplex_candidates(
             PlacementRequest(
-                source_sha256=_sha256(source_bytes),
+                source_sha256=source_hash,
                 plan_sha256=basis_sha256,
                 step_id=step.id,
                 side=side,
@@ -539,7 +540,7 @@ def _generate_precomplex(
         )
         endpoint_payloads[side] = _precomplex_endpoint_state(
             side=side,
-            source_document_sha256=_sha256(source_bytes),
+            source_document_sha256=source_hash,
             basis_sha256=basis_sha256,
             environment=environment,
             contacts=contacts_by_side[side],
@@ -968,7 +969,7 @@ def _pack_step(
     payload = {
         "step_id": step.id,
         "source": {
-            "document_sha256": _sha256(source_bytes),
+            "document_sha256": document.source_sha256,
             "document_bytes": len(source_bytes),
             "chemvas_document_version": int(document.payload["version"]),
         },
