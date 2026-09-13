@@ -117,6 +117,16 @@ class RDKitImportHelper:
         expected_stereo_smiles = (
             Chem.MolToSmiles(mol, canonical=True) if has_specified_stereo else None
         )
+        # Automatic depiction must not strengthen an unspecified SMILES into a
+        # particular E/Z isomer when its drawing is converted back to chemistry.
+        # The existing crossed-double marker preserves that explicit unknown;
+        # non-stereogenic terminal/carbonyl/aromatic bonds stay ordinary.
+        unspecified_double_bonds = {
+            info.centeredOn
+            for info in Chem.FindPotentialStereo(mol)
+            if info.type == Chem.StereoType.Bond_Double
+            and info.specified == Chem.StereoSpecified.Unspecified
+        }
         mol = self._kekulized_import_mol(Chem, mol)
         bond_orders = {
             Chem.BondType.SINGLE: 1,
@@ -193,6 +203,10 @@ class RDKitImportHelper:
                 atom_id_by_rd_idx[bond.GetEndAtomIdx()],
                 bond_orders[bond.GetBondType()],
             )
+            if unspecified_double_bonds and bond.GetIdx() in unspecified_double_bonds:
+                imported_bond = model.bonds[bond_id]
+                assert imported_bond is not None
+                imported_bond.style = "double_either"
             direction = bond.GetBondDir()
             if direction in (Chem.BondDir.BEGINWEDGE, Chem.BondDir.BEGINDASH):
                 imported_bond = model.bonds[bond_id]
@@ -295,6 +309,14 @@ class RDKitImportHelper:
                 params.removeDefiningBondStereo = False
                 params.removeWithWedgedBond = True
                 smiles_mol = Chem.RemoveHs(mol, params)
+                if any(
+                    bond.GetStereo()
+                    in (Chem.BondStereo.STEREOE, Chem.BondStereo.STEREOZ)
+                    for bond in smiles_mol.GetBonds()
+                ):
+                    # H removal invalidates double-stereo ranking used by the
+                    # SMILES writer. Keep assigned drawing tags, not geometry.
+                    Chem.AssignStereochemistry(smiles_mol, force=True, cleanIt=False)
             # RemoveHs can erase a bonded H+'s charge. Keep the original
             # spelling for charged/radical H instead of changing its identity.
             smiles = Chem.MolToSmiles(smiles_mol, canonical=True)

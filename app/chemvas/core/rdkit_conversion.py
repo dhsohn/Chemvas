@@ -152,7 +152,9 @@ class RDKitConversionHelper:
         a review-only suggestion and decides no chemistry on its own. Existing
         correspondence is a hard constraint on symmetry-equivalent MCS
         embeddings; a suggestion is refused instead of mixing an incompatible
-        automorphism into the researcher's mapping.
+        automorphism into the researcher's mapping. Fully identity-mapped,
+        complete components shared by both endpoints are retained separately
+        so an already-reviewed catalyst cannot crowd out the reacting structure.
         """
         rdkit = self.adapter._load_rdkit()
         if rdkit == (None, None):
@@ -167,11 +169,19 @@ class RDKitConversionHelper:
                 "(rdkit.Chem.rdFMCS) failed to import."
             )
             return None
+        retained_ids = self._mapped_shared_components(
+            model, reactant_atom_ids, product_atom_ids, existing_correspondence or {}
+        )
+        retained_pairs = [(atom_id, atom_id) for atom_id in sorted(retained_ids)]
+        remaining_reactants = reactant_atom_ids - retained_ids
+        remaining_products = product_atom_ids - retained_ids
+        if retained_ids and (not remaining_reactants or not remaining_products):
+            return retained_pairs
         reactant_mol, reactant_map = self.model_to_rdkit_with_map_tolerant(
-            self._submodel(model, reactant_atom_ids)
+            self._submodel(model, remaining_reactants)
         )
         product_mol, product_map = self.model_to_rdkit_with_map_tolerant(
-            self._submodel(model, product_atom_ids)
+            self._submodel(model, remaining_products)
         )
         for side, mol, atom_map in (
             ("reactant", reactant_mol, reactant_map),
@@ -212,7 +222,7 @@ class RDKitConversionHelper:
             )
             return None
         if result.numAtoms == 0:
-            return []
+            return retained_pairs
         query = Chem.MolFromSmarts(result.smartsString)
         if query is None:
             self.adapter.last_error = (
@@ -247,8 +257,8 @@ class RDKitConversionHelper:
             return None
         reactant_id_by_idx = {idx: atom_id for atom_id, idx in reactant_map.items()}
         product_id_by_idx = {idx: atom_id for atom_id, idx in product_map.items()}
-        pairs: list[tuple[int, int]] = []
-        used_products: set[int] = set()
+        pairs = retained_pairs
+        used_products = set(retained_ids)
         for reactant_idx, product_idx in zip(
             reactant_match, product_match, strict=True
         ):
@@ -265,6 +275,39 @@ class RDKitConversionHelper:
             used_products.add(product_id)
             pairs.append((reactant_id, product_id))
         return pairs
+
+    @staticmethod
+    def _mapped_shared_components(
+        model: MoleculeModel,
+        reactant_atom_ids: frozenset[int] | set[int],
+        product_atom_ids: frozenset[int] | set[int],
+        existing_correspondence: Mapping[int, int],
+    ) -> set[int]:
+        shared = reactant_atom_ids & product_atom_ids
+        identity_ids = {
+            atom_id
+            for atom_id in shared
+            if existing_correspondence.get(atom_id) == atom_id
+        }
+        # A conflicting non-identity anchor must still reach constrained MCS,
+        # not disappear merely because its target belongs to a shared component.
+        identity_ids.difference_update(
+            target
+            for source, target in existing_correspondence.items()
+            if source != target
+        )
+        if not identity_ids:
+            return set()
+        components = connected_atom_components(
+            model.atoms,
+            ((bond.a, bond.b) for bond in model.bonds if bond is not None),
+        )
+        return {
+            atom_id
+            for component in components
+            if identity_ids.issuperset(component)
+            for atom_id in component
+        }
 
     @staticmethod
     def _mcs_embeddings_honoring_correspondence(
@@ -334,6 +377,17 @@ class RDKitConversionHelper:
         optimization_result = "not_attempted"
         try:
             mol_h = Chem.AddHs(mol)
+            if any(
+                atom.GetSymbol() == "P" and atom.GetDegree() == 6
+                for atom in mol_h.GetAtoms()
+            ):
+                self.adapter.last_error = (
+                    "Cannot generate 3D geometry for six-coordinate phosphorus: "
+                    "this force-field path does not reliably preserve its "
+                    "coordination geometry. Keep the drawing or export MOL, "
+                    "and use an external geometry method suited to this structure."
+                )
+                return None
             mmff_supported = hasattr(
                 AllChem, "MMFFHasAllMoleculeParams"
             ) and AllChem.MMFFHasAllMoleculeParams(mol_h)
@@ -1024,6 +1078,110 @@ class RDKitConversionHelper:
                 exc_info=True,
             )
 
+    @staticmethod
+    def _unambiguous_double_depiction(
+        model: MoleculeModel, bond: Bond, adjacency: dict[int, list[int]]
+    ) -> bool:
+        """Require visible, separated substituent sides at both drawn endpoints."""
+        # Match RDKit's two-degree near-linear depiction tolerance. Check both
+        # directions (including coincident/overlapping substituents), rather
+        # than letting a degenerate drawing choose a stereo-controlling bond.
+        minimum_sine = math.sin(math.radians(2.0))
+        for atom_id, other_id in ((bond.a, bond.b), (bond.b, bond.a)):
+            atom, other = model.atoms[atom_id], model.atoms[other_id]
+            axis_x, axis_y = other.x - atom.x, other.y - atom.y
+            axis_length = math.hypot(axis_x, axis_y)
+            neighbors = set(adjacency[atom_id]) - {other_id}
+            if axis_length == 0.0 or not 1 <= len(neighbors) <= 2:
+                return False
+            sides = []
+            for neighbor_id in neighbors:
+                neighbor = model.atoms[neighbor_id]
+                dx, dy = neighbor.x - atom.x, neighbor.y - atom.y
+                length = math.hypot(dx, dy)
+                cross = axis_x * dy - axis_y * dx
+                if length == 0.0 or abs(cross) <= minimum_sine * axis_length * length:
+                    return False
+                sides.append(cross > 0.0)
+            if len(sides) == 2 and sides[0] == sides[1]:
+                return False
+        return True
+
+    def _assign_drawn_double_stereo(
+        self, mol, Chem, model: MoleculeModel, valid_bonds, atom_map, adjacency
+    ) -> bool:
+        """Perceive ordinary drawn C=C/C=N without changing wedge/hash owners."""
+        drawn = [
+            (bond_id, bond)
+            for bond_id, bond in valid_bonds
+            if bond.order == 2
+            and bond.style != "double_either"
+            and {model.atoms[bond.a].element, model.atoms[bond.b].element}
+            in ({"C"}, {"C", "N"})
+        ]
+        if not drawn:
+            return True
+        try:
+            potential = {
+                info.centeredOn
+                for info in Chem.FindPotentialStereo(mol)
+                if info.type == Chem.StereoType.Bond_Double
+            }
+            if not potential:
+                return True
+            candidates = []
+            for bond_id, bond in drawn:
+                rd_bond = mol.GetBondBetweenAtoms(atom_map[bond.a], atom_map[bond.b])
+                if rd_bond.GetIdx() not in potential:
+                    continue
+                if not self._unambiguous_double_depiction(model, bond, adjacency):
+                    self.adapter.last_error = (
+                        f"Cannot determine drawn double-bond stereochemistry for "
+                        f"bond {bond_id} (atoms {bond.a}-{bond.b}): ambiguous "
+                        "substituent positions. Correct the drawing or use an "
+                        "explicitly unspecified crossed double bond (double_either)."
+                    )
+                    return False
+                candidates.append((bond_id, bond))
+            if not candidates:
+                return True
+            # RDKit's conformer-aware neighbour-direction API is also used by
+            # its molfile stereo reader. Work on a clone: temporary directions
+            # must not consume or replace the original tetrahedral wedges.
+            probe = Chem.Mol(mol)
+            for rd_bond in probe.GetBonds():
+                if rd_bond.GetBondDir() in (
+                    Chem.BondDir.BEGINWEDGE,
+                    Chem.BondDir.BEGINDASH,
+                ):
+                    rd_bond.SetBondDir(Chem.BondDir.NONE)
+            Chem.SetDoubleBondNeighborDirections(probe, probe.GetConformer())
+            Chem.SetBondStereoFromDirections(probe)
+            Chem.AssignStereochemistry(probe, force=True, cleanIt=True)
+            for bond_id, bond in candidates:
+                a, b = atom_map[bond.a], atom_map[bond.b]
+                perceived = probe.GetBondBetweenAtoms(a, b)
+                if perceived.GetStereo() not in (
+                    Chem.BondStereo.STEREOE,
+                    Chem.BondStereo.STEREOZ,
+                ):
+                    self.adapter.last_error = (
+                        f"Cannot determine drawn double-bond stereochemistry for "
+                        f"bond {bond_id} (atoms {bond.a}-{bond.b}). Correct the "
+                        "drawing or use an explicitly unspecified crossed double "
+                        "bond (double_either)."
+                    )
+                    return False
+                original = mol.GetBondBetweenAtoms(a, b)
+                original.SetStereoAtoms(*perceived.GetStereoAtoms())
+                original.SetStereo(perceived.GetStereo())
+        except Exception as exc:
+            self.adapter.last_error = (
+                "Cannot determine drawn double-bond stereochemistry: " + str(exc)
+            )
+            return False
+        return True
+
     def _consistent_conversion_wedges(
         self,
         mol,
@@ -1163,6 +1321,10 @@ class RDKitConversionHelper:
                 )
                 return None
         if not self._consistent_conversion_wedges(mol, Chem, valid_bonds, atom_map):
+            return None
+        if not self._assign_drawn_double_stereo(
+            mol, Chem, model, valid_bonds, atom_map, adjacency
+        ):
             return None
         return mol, origins
 

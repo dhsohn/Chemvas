@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Carry unambiguous ordinary C=C/C=N drawing geometry through identifiers,
+  3D XYZ and calculation conversion without altering tetrahedral wedges.
+  Ambiguous stereogenic ordinary double bonds require a corrected drawing or
+  explicit crossed `double_either` marker. Unspecified SMILES double stereo uses
+  that existing marker instead of acquiring an isomer from automatic placement.
+  Specified E/Z SMILES insertion and axial stereo remain outside this support.
+- Refuse automatic 3D preview, XYZ and calculation geometry for six-coordinate
+  phosphorus, whose available UFF parameters can produce collapsed geometry.
+  Drawing, native documents, identifiers and MOL output remain available; other
+  parameterized structures are not blanket-rejected.
+- Keep fully identity-mapped shared components out of the structural mapping
+  search, so an already-mapped catalyst does not hide the reacting substrate.
+  Existing substrate mappings remain constraints; suggestions still require
+  review and do not infer a reaction mechanism.
+
 ## [0.14.0] - 2026-09-13
 
 ### Changed

@@ -412,12 +412,16 @@ class _FakeChem:
         CHI_TETRAHEDRAL_CW="cw",
         CHI_TETRAHEDRAL_CCW="ccw",
     )
-    BondStereo = SimpleNamespace(STEREONONE="none")
+    BondStereo = SimpleNamespace(STEREONONE="none", STEREOE="e", STEREOZ="z")
     StereoGroupType = SimpleNamespace(STEREO_ABSOLUTE="absolute")
     BondDir = SimpleNamespace(BEGINWEDGE="beginwedge", BEGINDASH="begindash")
 
     def WedgeMolBonds(self, mol, conf):
         pass
+
+    def FindPotentialStereo(self, mol):
+        # Wiring fixtures do not model stereo perception; real RDKit tests do.
+        return []
 
     class BondType:
         SINGLE = "single"
@@ -1475,7 +1479,9 @@ class RDKitAdapterTest(unittest.TestCase):
         with mock.patch.object(
             adapter,
             "_build_conversion_rdkit_mol",
-            return_value=SimpleNamespace(canonical_smiles="CO", GetAtoms=list),
+            return_value=SimpleNamespace(
+                canonical_smiles="CO", GetAtoms=list, GetBonds=list
+            ),
         ):
             with _patch_descriptor_modules(formula="CH4O", mw=32.042):
                 formula, mw, smiles = adapter.compute_props(model)
@@ -1513,7 +1519,9 @@ class RDKitAdapterTest(unittest.TestCase):
         with mock.patch.object(
             adapter,
             "_build_conversion_rdkit_mol",
-            return_value=SimpleNamespace(canonical_smiles="CO", GetAtoms=list),
+            return_value=SimpleNamespace(
+                canonical_smiles="CO", GetAtoms=list, GetBonds=list
+            ),
         ):
             with _patch_descriptor_modules(mw_error=RuntimeError("descriptor failure")):
                 self.assertEqual(
@@ -1564,7 +1572,9 @@ class RDKitAdapterTest(unittest.TestCase):
         with mock.patch.object(
             adapter,
             "_build_conversion_rdkit_mol",
-            return_value=SimpleNamespace(canonical_smiles="CO", GetAtoms=list),
+            return_value=SimpleNamespace(
+                canonical_smiles="CO", GetAtoms=list, GetBonds=list
+            ),
         ):
             with _patch_descriptor_modules(formula="CH4O", mw=32.042):
                 identifiers = adapter.compute_identifiers(self._simple_model())
@@ -1798,7 +1808,7 @@ class RDKitAdapterTest(unittest.TestCase):
         model = adapter.smiles_to_2d("CC=CC")
         self.assertIsNotNone(model)
         double = next(bond for bond in model.bonds if bond.order == 2)
-        self.assertNotEqual(double.style, "double_either")
+        self.assertEqual(double.style, "double_either")
         plain = adapter.compute_identifiers(model)
         double.style = "double_either"
         before = repr(vars(model))
@@ -1809,8 +1819,8 @@ class RDKitAdapterTest(unittest.TestCase):
         self.assertEqual(identifiers.formula, plain.formula)
         self.assertEqual(identifiers.mw, plain.mw)
         self.assertEqual(repr(vars(model)), before)
-        # Ordinary SMILES does not distinguish explicit either from no stereo
-        # annotation. This change does not introduce specified E/Z insertion.
+        # Unspecified SMILES uses the existing marker so its automatic layout
+        # cannot invent E/Z. Specified E/Z insertion remains unsupported.
         for specified in ("C/C=C/C", "C/C=C\\C"):
             with self.subTest(specified=specified):
                 self.assertIsNone(adapter.smiles_to_2d(specified))
