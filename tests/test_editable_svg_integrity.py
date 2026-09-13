@@ -43,7 +43,7 @@ from chemvas.ui.main_window_ports import (
     services_for_window,
 )
 from chemvas.ui.structure_mutation_access import add_bond_for
-from tests.test_calculation_plan import _document_state, _plan
+from tests.calculation_plan_support import _document_state, _plan
 from tests.test_calculation_step_dialog import _reviewed_precomplex_state
 from tests.test_document_images import _raster
 

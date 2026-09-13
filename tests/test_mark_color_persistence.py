@@ -29,8 +29,8 @@ from chemvas.ui.scene_item_access import apply_scene_item_state
 from chemvas.ui.scene_item_state import mark_state_dict_for
 from chemvas.ui.select_all_access import select_all_scene_items_for
 from chemvas.ui.structure_mutation_access import add_atom_for
+from tests.calculation_plan_support import _document_state
 from tests.canvas_factory import build_canvas_view
-from tests.test_calculation_plan import _document_state
 
 KINDS = ("plus", "minus", "radical", "circled_plus", "circled_minus")
 

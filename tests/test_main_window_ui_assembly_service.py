@@ -7,8 +7,7 @@ from tests.runtime_services import canvas_runtime_services
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QAction, QIcon, QKeySequence, QPixmap
+from PyQt6.QtGui import QAction, QIcon, QKeySequence
 from PyQt6.QtWidgets import (
     QApplication,
     QLabel,
@@ -21,7 +20,6 @@ from PyQt6.QtWidgets import (
 )
 
 from chemvas.shell.theme import MAIN_WINDOW_STYLESHEET
-from chemvas.shell.toolbar_buttons import ArrowButton, CornerMenuButton
 from chemvas.ui import main_window_menu_bar
 from chemvas.ui.main_window_config import TOOLBAR_TOOL_ACTION_ORDER
 from chemvas.ui.main_window_panel_toolbar import MainWindowPanelToolbarCallbacks
@@ -141,11 +139,6 @@ class MainWindowUIAssemblyServiceTest(unittest.TestCase):
             actions[key] = action
         return actions
 
-    def _filled_icon(self) -> QIcon:
-        pixmap = QPixmap(8, 8)
-        pixmap.fill(Qt.GlobalColor.black)
-        return QIcon(pixmap)
-
     def _menu(self, menu_bar, title: str) -> QMenu:
         return next(
             menu
@@ -155,64 +148,6 @@ class MainWindowUIAssemblyServiceTest(unittest.TestCase):
 
     def _menu_action(self, menu: QMenu, text: str) -> QAction:
         return next(action for action in menu.actions() if action.text() == text)
-
-    def test_create_toolbar_button_sets_properties_and_callback(self) -> None:
-        callback = mock.Mock()
-        shortcut = QKeySequence("Ctrl+L")
-
-        button = self.service.create_toolbar_button(
-            icon=QIcon(),
-            tooltip="Load",
-            callback=callback,
-            shortcut=shortcut,
-            text="Load",
-            object_name="load_button",
-            style_sheet="color: red;",
-            auto_raise=False,
-            cursor=Qt.CursorShape.PointingHandCursor,
-        )
-
-        self.assertEqual(button.toolTip(), "Load")
-        self.assertEqual(button.statusTip(), "Load")
-        self.assertEqual(button.text(), "Load")
-        self.assertEqual(button.objectName(), "load_button")
-        self.assertEqual(button.styleSheet(), "color: red;")
-        self.assertFalse(button.autoRaise())
-        self.assertEqual(button.cursor().shape(), Qt.CursorShape.PointingHandCursor)
-
-        button.click()
-        callback.assert_called_once_with(False)
-
-    def test_button_factories_cover_icon_only_and_paint_paths(self) -> None:
-        owner = QWidget()
-        self.addCleanup(owner.close)
-
-        toolbar_button = self.service.create_toolbar_button(
-            icon=self._filled_icon(),
-            tooltip="Plain",
-        )
-        self.assertEqual(toolbar_button.toolTip(), "Plain")
-        self.assertEqual(toolbar_button.statusTip(), "Plain")
-        self.assertTrue(toolbar_button.autoRaise())
-        self.assertFalse(toolbar_button.icon().isNull())
-        toolbar_button.click()
-
-        up_button = ArrowButton("up", owner)
-        down_button = ArrowButton("down", owner)
-        menu_indicator = CornerMenuButton(owner)
-        self.assertTrue(up_button.autoRaise())
-        self.assertEqual(up_button.focusPolicy(), Qt.FocusPolicy.NoFocus)
-
-        for widget, size in (
-            (up_button, (8, 6)),
-            (down_button, (20, 20)),
-            (menu_indicator, (18, 18)),
-        ):
-            widget.resize(*size)
-            widget.show()
-            self.app.processEvents()
-            pixmap = widget.grab()
-            self.assertFalse(pixmap.isNull())
 
     def test_init_toolbars_builds_slim_drawing_bar(self) -> None:
         window = _HarnessWindow()

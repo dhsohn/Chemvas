@@ -8,11 +8,11 @@ from chemvas.ui.canvas_group_state import group_state_for
 from chemvas.ui.canvas_window_access import snapshot_canvas_state_for
 from chemvas.ui.select_all_access import select_all_scene_items_for
 from chemvas.ui.structure_mutation_access import add_atom_for, add_bond_for
-from tests.test_active_gesture_document_edits import qt_errors as qt_errors
+from tests.gui_workflow_support import _click, _tool
+from tests.gui_workflow_support import app as app
+from tests.gui_workflow_support import fresh_window as fresh_window
+from tests.gui_workflow_support import qt_errors as qt_errors
 from tests.test_group_membership_additions import _group
-from tests.test_keyboard_focus_workflows import fresh_window as fresh_window
-from tests.test_note_editing_workflows import _click, _tool
-from tests.test_note_editing_workflows import app as app
 
 
 def test_bond_drag_extends_group_then_keyboard_move_undo_reopen(

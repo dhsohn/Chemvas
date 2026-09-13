@@ -8,95 +8,29 @@ from PyQt6.QtGui import QColor, QImage, QKeySequence, QPainter, QTextCursor
 from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import QApplication, QToolButton
 
-from chemvas.bootstrap.main_window import build_main_window
 from chemvas.ui.canvas_callback_state import callback_state_for
 from chemvas.ui.canvas_scene_items_state import note_items_for
 from chemvas.ui.canvas_service_ports import note_controller_for_access
 from chemvas.ui.canvas_text_style_state import set_text_style_for
 from chemvas.ui.main_window_ports import (
-    active_canvas_for_window,
     copy_selection_for_window,
     history_service_for_window,
     paste_selection_for_window,
     services_for_window,
     set_zoom_percent_for_window,
-    tool_action_for_window,
 )
 from chemvas.ui.note_item import NoteItem
 from chemvas.ui.scene_item_restore import create_note_item_from_state
 from chemvas.ui.scene_item_state_serialization import note_state_dict
 from chemvas.ui.structure_mutation_access import add_atom_for
-
-
-@pytest.fixture(scope="module")
-def app():
-    application = QApplication.instance() or QApplication([])
-    application.setQuitOnLastWindowClosed(False)
-    return application
-
-
-@pytest.fixture
-def drawing(app):
-    window = build_main_window()
-    window.resize(1120, 700)
-    window.show()
-    window.activateWindow()
-    assert QTest.qWaitForWindowExposed(window, 5000)
-    assert QTest.qWaitForWindowActive(window, 5000)
-    canvas = active_canvas_for_window(window)
-    set_zoom_percent_for_window(window, 180)
-    canvas.centerOn(0, 0)
-    QTest.qWait(30)
-    yield window, canvas
-    canvas.scene().clearFocus()
-    services_for_window(window).canvas_document_service.mark_clean(canvas)
-    window.close()
-    app.processEvents()
-
-
-def _tool(window, name):
-    action = tool_action_for_window(window, name)
-    button = next(
-        b for b in window.findChildren(QToolButton) if b.defaultAction() is action
-    )
-    assert button.isVisible() and button.isEnabled()
-    QTest.mouseClick(button, Qt.MouseButton.LeftButton)
-    QApplication.processEvents()
-
-
-def _click(canvas, scene_pos):
-    QTest.mouseClick(
-        canvas.viewport(), Qt.MouseButton.LeftButton, pos=canvas.mapFromScene(scene_pos)
-    )
-    QApplication.processEvents()
-
-
-def _key(canvas, key, modifiers=Qt.KeyboardModifier.NoModifier):
-    QTest.keyClick(canvas, key, modifiers)
-    QApplication.processEvents()
+from tests.gui_workflow_support import _click, _key, _saved_note, _tool
+from tests.gui_workflow_support import app as app
+from tests.gui_workflow_support import drawing as drawing
 
 
 def _redo(canvas):
     QTest.keySequence(canvas, QKeySequence(QKeySequence.StandardKey.Redo))
     QApplication.processEvents()
-
-
-def _saved_note(drawing, tmp_path):
-    window, canvas = drawing
-    _tool(window, "note")
-    _click(canvas, QPointF(-80, 35))
-    QTest.keyClicks(canvas, "alpha beta gamma")
-    note = note_items_for(canvas)[0]
-    _tool(window, "select")
-    _click(canvas, QPointF(160, 100))
-    actions = services_for_window(window).document_action_service
-    assert actions.save_canvas_to_path(window, str(tmp_path / "note.chemvas"))
-    assert not window.isWindowModified()
-    _tool(window, "note")
-    _click(canvas, note.sceneBoundingRect().center())
-    assert note.hasFocus()
-    _key(canvas, Qt.Key.Key_End)
-    return note
 
 
 @pytest.mark.parametrize("key", [Qt.Key.Key_Return, Qt.Key.Key_Enter])

@@ -22,9 +22,9 @@ from chemvas.ui.structure_mutation_access import (
     add_bond_between_points_for,
     add_bond_for,
 )
-from tests.test_active_gesture_document_edits import qt_errors as qt_errors
-from tests.test_note_editing_workflows import app as app
-from tests.test_note_editing_workflows import drawing as drawing
+from tests.gui_workflow_support import app as app
+from tests.gui_workflow_support import drawing as drawing
+from tests.gui_workflow_support import qt_errors as qt_errors
 
 
 def _populate(canvas, *, overlap=False, grouping="different"):
@@ -287,8 +287,8 @@ def test_partial_group_publication_failure_rolls_back_label_merge(drawing, monke
 def test_legacy_split_groups_refuse_growth_before_mutation(
     drawing, qt_errors, monkeypatch, route
 ):
+    from tests.gui_workflow_support import _click, _tool
     from tests.test_chair_fusion_workflows import _ring_button
-    from tests.test_note_editing_workflows import _click, _tool
 
     window, canvas = drawing
     ids = _populate(canvas)

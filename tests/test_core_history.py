@@ -40,7 +40,6 @@ from chemvas.ui.history_commands import (
     AddSceneItemsCommand,
     ChangeAtomLabelCommand,
     DeleteSceneItemsCommand,
-    MoveItemsCommand,
     UpdateSceneItemCommand,
 )
 from tests.runtime_services import canvas_runtime_services
@@ -1594,33 +1593,17 @@ class HistoryCommandTest(unittest.TestCase):
         self.assertEqual(canvas.smiles_input, "before")
         self.assertEqual(port.capture_calls, 1)
 
-    def test_move_commands_delegate_to_canvas(self) -> None:
+    def test_move_atoms_command_delegates_to_canvas(self) -> None:
         canvas = _FakeCanvas()
         move_atoms = MoveAtomsCommand(
             {1, 2}, 3.5, -4.0, bond_ids={7}, redraw_bond_ids={8}
         )
-        scene_item = _FakeItem(canvas.scene())
-        off_scene_item = _FakeItem(object())
-        move_items = MoveItemsCommand([scene_item, None, off_scene_item], 2.0, 5.0)
 
         move_atoms.undo(canvas)
         move_atoms.redo(canvas)
-        move_items.undo(canvas)
-        move_items.redo(canvas)
 
         self.assertIn(("move_atoms", {1, 2}, -3.5, 4.0, {7}, {8}, True), canvas.calls)
         self.assertIn(("move_atoms", {1, 2}, 3.5, -4.0, {7}, {8}, True), canvas.calls)
-        self.assertEqual(
-            canvas.calls.count(("move_item", scene_item, -2.0, -5.0, False)), 1
-        )
-        self.assertEqual(
-            canvas.calls.count(("move_item", scene_item, 2.0, 5.0, False)), 1
-        )
-        self.assertEqual(canvas.calls.count(("refresh_selection_outline",)), 2)
-
-        dead_item = _FakeItem(canvas.scene(), raises=True)
-        with self.assertRaisesRegex(RuntimeError, "item deleted"):
-            MoveItemsCommand([dead_item], 2.0, 5.0).redo(canvas)
 
     def test_position_and_polygon_commands_apply_history_ports(self) -> None:
         canvas = _FakeCanvas()

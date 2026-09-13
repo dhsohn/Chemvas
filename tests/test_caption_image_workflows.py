@@ -18,8 +18,8 @@ from chemvas.ui.canvas_document_state import (
 from chemvas.ui.canvas_history_state import history_state_for
 from chemvas.ui.canvas_service_ports import history_service_for_access
 from chemvas.ui.scheme_layout_dialog import SchemeLayoutDialog, arrange_grouped_canvas
-from tests.test_native_geometry_backlog import app as app
-from tests.test_native_geometry_backlog import canvas as canvas
+from tests.native_canvas_support import app as app
+from tests.native_canvas_support import canvas as canvas
 from tests.test_scheme_layout_caption_boxes import _source
 
 

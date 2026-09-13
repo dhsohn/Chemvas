@@ -31,10 +31,10 @@ def run(argv: list[str]) -> int:
             Path(args.output),
         )
         _validate_paths(source, layout, output)
-        source_bytes, document = read_exact_document(
+        _source_bytes, document = read_exact_document(
             source, max_bytes=MAX_DOCUMENT_BYTES
         )
-        source_sha256 = hashlib.sha256(source_bytes).hexdigest()
+        source_sha256 = cast("str", document.source_sha256)
         with layout.open("rb") as stream:
             layout_bytes = stream.read(MAX_LAYOUT_BYTES + 1)
         if len(layout_bytes) > MAX_LAYOUT_BYTES:

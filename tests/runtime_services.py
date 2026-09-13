@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import fields
 from types import SimpleNamespace
 from typing import Any
 
@@ -88,11 +89,22 @@ _GROUP_NAMES = (
     "structure",
 )
 
+_SERVICE_NAMES = {
+    field.name for field in fields(CanvasRuntimeServices)
+} | SERVICE_PATHS.keys()
+
 
 class CanvasRuntimeServicesDouble(CanvasRuntimeServices):
     """Partial canonical service graph for focused legacy UI tests."""
 
+    __slots__ = ()
+
     def __init__(self, **services: Any) -> None:
+        unknown = services.keys() - _SERVICE_NAMES
+        if unknown:
+            raise TypeError(
+                f"Unknown canvas runtime services: {', '.join(sorted(unknown))}"
+            )
         groups = {
             group_name: services.pop(group_name, SimpleNamespace())
             for group_name in _GROUP_NAMES

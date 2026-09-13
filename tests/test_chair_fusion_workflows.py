@@ -14,11 +14,11 @@ from chemvas.ui.canvas_window_access import (
     snapshot_canvas_state_for,
 )
 from chemvas.ui.scene_decoration_access import add_arrow_for
-from tests.test_active_gesture_document_edits import qt_errors as qt_errors
+from tests.gui_workflow_support import _click, _tool
+from tests.gui_workflow_support import app as app
+from tests.gui_workflow_support import drawing as drawing
+from tests.gui_workflow_support import qt_errors as qt_errors
 from tests.test_chair_fusion_geometry import proper_crossings
-from tests.test_note_editing_workflows import _click, _tool
-from tests.test_note_editing_workflows import app as app
-from tests.test_note_editing_workflows import drawing as drawing
 
 
 def _ring_button(window, label):

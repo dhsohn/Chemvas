@@ -29,26 +29,9 @@ from chemvas.ui.select_all_access import select_all_scene_items_for
 from chemvas.ui.selection_style_access import restore_selection_from_ids_for
 from chemvas.ui.structure_geometry_access import regular_ring_points_for_bond_for
 from chemvas.ui.structure_mutation_access import add_atom_for, add_bond_for
-from tests.canvas_factory import build_canvas_view
-
-
-@pytest.fixture(scope="module")
-def app():
-    application = QApplication.instance() or QApplication([])
-    application.setQuitOnLastWindowClosed(False)
-    return application
-
-
-@pytest.fixture
-def canvas(app):
-    view = build_canvas_view()
-    view.resize(800, 600)
-    view.show()
-    app.processEvents()
-    yield view
-    view.services.document.canvas_scene_reset_service.clear_scene()
-    view.close()
-    app.processEvents()
+from tests.native_canvas_support import _plain_ring
+from tests.native_canvas_support import app as app
+from tests.native_canvas_support import canvas as canvas
 
 
 @pytest.mark.parametrize("kind", ["line", "arrow"])
@@ -125,24 +108,6 @@ def test_stereo_perspective_refusal_preserves_document_and_history(
     assert snapshot_canvas_state_for(canvas) == before
     assert (state.history, state.redo_stack) == stacks
     assert not document_is_dirty_for(canvas, snapshot_canvas_state_for(canvas))
-
-
-def _plain_ring(canvas, size=6, angle=0.0, offset=0.0):
-    ids = [
-        add_atom_for(
-            canvas,
-            "C",
-            offset + 20 * math.cos(angle + index * 2 * math.pi / size),
-            20 * math.sin(angle + index * 2 * math.pi / size),
-        )
-        for index in range(size)
-    ]
-    bonds = [
-        add_bond_for(canvas, ids[index], ids[(index + 1) % size])
-        for index in range(size)
-    ]
-    canvas.services.structure.structure_build_service.render_model()
-    return ids, bonds
 
 
 @pytest.mark.parametrize("bond_index", range(6))

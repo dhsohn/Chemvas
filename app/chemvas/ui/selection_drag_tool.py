@@ -51,7 +51,7 @@ from chemvas.ui.move_access import (
     shift_selection_outlines_for,
 )
 from chemvas.ui.scene_decoration_build_access import show_connect_mark_for
-from chemvas.ui.scene_item_state import scene_item_state_for
+from chemvas.ui.scene_item_state import scene_item_history_state, scene_item_state_for
 from chemvas.ui.selection_collection_access import independent_selection_items
 from chemvas.ui.selection_outline_state import selection_outlines_for
 from chemvas.ui.selection_service_access import refresh_selection_outline_for
@@ -435,18 +435,12 @@ class SelectionDragMixin:
             mark for atom_id in atom_ids for mark in marks.get_for_atom(atom_id) or ()
         ]
         token.before_item_states = tuple(
-            (item, self._move_item_state(item))
+            (
+                item,
+                scene_item_history_state(item, scene_item_state_for(self.canvas, item)),
+            )
             for item in dict.fromkeys([*dependent_items, *ring_items, *items])
         )
-
-    def _move_item_state(self, item) -> dict:
-        state = scene_item_state_for(self.canvas, item)
-        if state.get("kind") == "mark":
-            # A mark's offset is semantic attachment data, not an exact Qt
-            # position: summing atom+offset can round differently after drag.
-            pos = item.pos()
-            state["item_pos"] = (pos.x(), pos.y())
-        return state
 
     def _apply_drag_delta(self, delta: QPointF) -> None:
         if not self._drag_selection:
@@ -529,7 +523,13 @@ class SelectionDragMixin:
         return SetSceneGeometryCommand(
             atom_commands=atom_commands,
             item_commands=[
-                UpdateSceneItemCommand(item, before, self._move_item_state(item))
+                UpdateSceneItemCommand(
+                    item,
+                    before,
+                    scene_item_history_state(
+                        item, scene_item_state_for(self.canvas, item)
+                    ),
+                )
                 for item, before in token.before_item_states
             ],
         )

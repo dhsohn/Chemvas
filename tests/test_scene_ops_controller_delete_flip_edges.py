@@ -7,7 +7,7 @@ from PyQt6.QtCore import QRectF
 from PyQt6.QtWidgets import QApplication, QGraphicsItem, QGraphicsTextItem
 
 from chemvas.ui.history_commands import SetSceneGeometryCommand
-from tests.test_scene_ops_controller import (
+from tests.scene_operation_support import (
     _FakeCanvas,
     _make_rect_item,
     _make_ring_item,

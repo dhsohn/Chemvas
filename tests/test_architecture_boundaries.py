@@ -2692,17 +2692,7 @@ def test_main_window_bond_icons_use_only_static_design_mapping() -> None:
     ).exists()
     assert "MainWindowBondIconRenderer" not in factory_source
     assert "benzene_icon_inner_segments" not in factory_source
-    for icon_name in (
-        "bond",
-        "bond_double",
-        "bond_triple",
-        "wedge",
-        "hash",
-        "benzene",
-        "bond_bold",
-        "bond_dotted",
-    ):
-        assert f'self.make_design_icon("{icon_name}")' in factory_source
+    # Glyph mappings are checked against rendered output in test_main_window_icons.
     assert "def icon_bond_length(" not in factory_source
     assert "bold_bond_pen()" not in factory_source
     assert "hash_spacing_px()" not in factory_source
@@ -2720,7 +2710,6 @@ def test_main_window_arrow_icons_use_only_static_design_mapping() -> None:
         APP_ROOT / "chemvas" / "ui" / "main_window_arrow_icon_renderer.py"
     ).exists()
     assert "MainWindowArrowIconRenderer" not in factory_source
-    assert 'self._design_icon(f"arrow_{kind}"' in factory_source
     assert "def draw_arrow_head" not in factory_source
     assert "quadTo(15, 6, 24, 15)" not in factory_source
 
@@ -2807,26 +2796,8 @@ def test_main_window_tool_icons_use_only_static_design_mapping() -> None:
         APP_ROOT / "chemvas" / "ui" / "main_window_tool_icon_renderer.py"
     ).exists()
     assert "MainWindowToolIconRenderer" not in factory_source
-    for icon_name in (
-        "atom",
-        "flip_h",
-        "flip_v",
-        "bracket",
-        "orbital",
-        "color",
-        "perspective",
-        "circled_plus",
-        "circled_minus",
-        "atom_orbit",
-        "plus",
-        "minus",
-        "radical",
-        "ring_fill",
-    ):
-        assert f'self.make_design_icon("{icon_name}")' in factory_source
     # `icon_select` is the one accessor left drawing the move glyph; the
     # `icon_move` alias that duplicated it had no caller and is gone.
-    assert factory_source.count('self.make_design_icon("move")') == 1
     assert "def icon_move(" not in factory_source
     # Orbital and bracket previews now resolve to shared SVG design icons.
 
@@ -2915,14 +2886,88 @@ def test_scene_clipboard_controller_delegates_copy_paste_workflows_to_services()
 
 def test_clipboard_copy_uses_canonical_export_scope_without_parallel_visibility_owner():
     ui = APP_ROOT / "chemvas" / "ui"
-    assert "with exported_scene(" in (ui / "scene_clipboard_copy_service.py").read_text(
-        encoding="utf-8"
+    tree = ast.parse(
+        (ui / "scene_clipboard_copy_service.py").read_text(encoding="utf-8")
+    )
+    scope_names = {
+        alias.asname or alias.name
+        for node in tree.body
+        if isinstance(node, ast.ImportFrom) and node.module == "chemvas.features.export"
+        for alias in node.names
+        if alias.name == "exported_scene"
+    }
+    assert any(
+        isinstance(item.context_expr, ast.Call)
+        and isinstance(item.context_expr.func, ast.Name)
+        and item.context_expr.func.id in scope_names
+        for function in tree.body
+        if isinstance(function, ast.FunctionDef)
+        and function.name == "copy_selection_to_clipboard_for_canvas"
+        for node in ast.walk(function)
+        if isinstance(node, ast.With)
+        for item in node.items
     )
     for filename, helper in (
         ("scene_clipboard_access.py", "visible_canvas_items_to_hide_for_copy"),
         ("scene_clipboard_transaction_logic.py", "visible_items_to_hide_for_copy"),
     ):
         assert helper not in (ui / filename).read_text(encoding="utf-8")
+
+
+@pytest.mark.parametrize(
+    ("variant", "allowed"),
+    [
+        ("parenthesized", True),
+        ("import_alias", True),
+        ("wrong_import", False),
+        ("missing_scope", False),
+        ("unscoped_call", False),
+    ],
+)
+def test_clipboard_export_scope_guard_checks_structure(monkeypatch, variant, allowed):
+    service = APP_ROOT / "chemvas" / "ui" / "scene_clipboard_copy_service.py"
+    source = (
+        "from chemvas.features.export import exported_scene\n\n"
+        "def copy_selection_to_clipboard_for_canvas(canvas, items):\n"
+        "    with exported_scene(canvas_scene_for(canvas), items):\n"
+        "        build_clipboard_mime_data(canvas)\n"
+    )
+    scope = "with exported_scene(canvas_scene_for(canvas), items):"
+    assert scope in source
+    if variant == "parenthesized":
+        changed = source.replace(
+            scope, "with (exported_scene(canvas_scene_for(canvas), items)):"
+        )
+        assert ast.dump(ast.parse(changed)) == ast.dump(ast.parse(source))
+    elif variant == "import_alias":
+        changed = source.replace(
+            "from chemvas.features.export import exported_scene",
+            "from chemvas.features.export import exported_scene as export_scope",
+        ).replace("with exported_scene(", "with export_scope(")
+    elif variant == "wrong_import":
+        changed = source.replace(
+            "from chemvas.features.export import exported_scene",
+            "from contextlib import nullcontext as exported_scene",
+        )
+    elif variant == "missing_scope":
+        changed = source.replace(scope, "with nullcontext():")
+    else:
+        changed = source.replace(
+            scope,
+            "exported_scene(canvas_scene_for(canvas), items)\n    with nullcontext():",
+        )
+    assert changed != source
+    read_text = Path.read_text
+
+    def read_source(path, *args, **kwargs):
+        return changed if path == service else read_text(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "read_text", read_source)
+    if allowed:
+        test_clipboard_copy_uses_canonical_export_scope_without_parallel_visibility_owner()
+    else:
+        with pytest.raises(AssertionError):
+            test_clipboard_copy_uses_canonical_export_scope_without_parallel_visibility_owner()
 
 
 def test_selection_rotation_planarity_owns_planar_graph_helpers() -> None:

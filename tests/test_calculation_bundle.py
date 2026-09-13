@@ -15,7 +15,6 @@ from chemvas.features.calculation_bundle import (
     AtomMapEntry,
     CalculationArtifacts,
     inspect_components,
-    select_component,
     select_components,
     validate_calculation_artifacts,
 )
@@ -253,9 +252,9 @@ def test_bonded_component_apis_precompute_bonds_and_alias_attachments_once(
     assert bonds.iterations == 2
 
     bonds.iterations = 0
-    selected = select_component(state, component_count - 1)
-    assert selected.summary.bond_count == 1
-    assert selected.summary.formal_charge == 1
+    selected = select_components(state, [inspected[-1].atom_ids])
+    assert selected.component_indices == (component_count - 1,)
+    assert selected.formal_charge == 1
     assert selected.model.bonds == [
         Bond((component_count - 1) * 2, (component_count - 1) * 2 + 1)
     ]
@@ -343,7 +342,6 @@ def test_pph3_rejects_cancelling_explicit_charge_marks_across_component_apis(
     state = _state(model, marks)
     operations = (
         lambda: inspect_components(state),
-        lambda: select_component(state, 0),
         lambda: select_components(state, [[0, 1]]),
     )
 
@@ -355,19 +353,22 @@ def test_pph3_rejects_cancelling_explicit_charge_marks_across_component_apis(
             operation()
 
 
-def test_select_component_preserves_original_atom_ids_bonds_and_annotations() -> None:
+def test_select_components_preserves_original_atom_ids_bonds_and_annotations() -> None:
     model = MoleculeModel(
         atoms={3: Atom("N", 0.0, 0.0), 7: Atom("H", 1.0, 0.0)},
         bonds=[Bond(3, 7)],
         atom_annotations={3: {"formal_charge": 1}},
     )
 
-    selected = select_component(_state(model, [_mark("plus", 3)]), 0)
+    selected = select_components(_state(model, [_mark("plus", 3)]), [[3, 7]])
 
     assert sorted(selected.model.atoms) == [3, 7]
     assert selected.model.bonds == [Bond(3, 7)]
     assert selected.model.atom_annotations == {3: {"formal_charge": 1}}
-    assert selected.summary.formal_charge == 1
+    assert selected.formal_charge == 1
+    assert selected.atom_ids == (3, 7)
+    assert selected.component_indices == (0,)
+    assert selected.model.next_atom_id == 8
 
 
 def test_conflicting_mark_and_model_annotations_fail_closed() -> None:
@@ -390,10 +391,10 @@ def test_model_annotation_without_matching_visible_mark_fails_closed() -> None:
         inspect_components(_state(model, []))
 
 
-def test_select_component_rejects_empty_and_out_of_range_documents() -> None:
-    with pytest.raises(ValueError, match="no chemical structure"):
-        select_component(_state(MoleculeModel(), []), 0)
+def test_select_components_rejects_empty_and_stale_component_requests() -> None:
+    with pytest.raises(ValueError, match="must include at least one component"):
+        select_components(_state(MoleculeModel(), []), [])
 
     one_atom = MoleculeModel(atoms={0: Atom("C", 0.0, 0.0)})
-    with pytest.raises(ValueError, match="choose 0 to 0"):
-        select_component(_state(one_atom, []), 1)
+    with pytest.raises(ValueError, match="no longer matches a connected component"):
+        select_components(_state(one_atom, []), [[1]])

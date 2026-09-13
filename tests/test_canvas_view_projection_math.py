@@ -68,7 +68,6 @@ from chemvas.ui.renderer_style_access import bond_length_px_for
 from chemvas.ui.selection_rotation_access import (
     apply_projected_atom_positions_for,
     atom_in_planar_system_for,
-    average_bond_length_for_atoms_for,
     bond_ids_for_atom_ids_for,
     bond_ids_within_atom_ids_for,
     bond_is_planar_fragment_edge_for,
@@ -77,7 +76,6 @@ from chemvas.ui.selection_rotation_access import (
     fragment_plane_normal_for,
     planar_fragment_components_for,
     rotate_point_around_axis_for,
-    rotation_scale_for_coords_for,
     unproject_scene_point_3d_for,
 )
 from chemvas.ui.structure_mutation_access import add_atom_for, add_bond_for
@@ -1049,7 +1047,7 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
         self.assertEqual((first_mark_pos.x(), first_mark_pos.y()), (13.0, -6.0))
         self.assertEqual((second_mark_pos.x(), second_mark_pos.y()), (11.0, -3.0))
 
-    def test_apply_projected_positions_average_lengths_and_rotation_scale_cover_noop_cases(
+    def test_apply_projected_positions_handles_missing_atoms_and_scene_items(
         self,
     ) -> None:
         view = SimpleNamespace(
@@ -1085,95 +1083,7 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
         self.assertEqual(atom_coords_3d_for(view)[2], (4.0, 5.0, 6.0))
         self.assertEqual((view.model.atoms[1].x, view.model.atoms[1].y), (1.0, 2.0))
 
-        sparse_view = SimpleNamespace(
-            model=SimpleNamespace(bonds=[Bond(1, 2, 1), None]),
-            runtime_state=canvas_runtime_state(
-                graph_state=CanvasGraphState(
-                    atom_bond_ids={1: {0, 99}, 2: {0}, 3: {1}}
-                ),
-                rotation_state=CanvasRotationState(
-                    base_bond_length=10.0,
-                    base_coords={1: (0.0, 0.0, 0.0), 2: (5.0, 0.0, 0.0)},
-                ),
-            ),
-        )
-        self.assertEqual(bond_ids_within_atom_ids_for(sparse_view, set()), set())
-        self.assertIsNone(
-            average_bond_length_for_atoms_for(
-                sparse_view,
-                {1, 2, 3},
-                {
-                    1: (0.0, 0.0, 0.0),
-                    3: (0.0, 0.0, 0.0),
-                },
-            )
-        )
-        self.assertEqual(rotation_scale_for_coords_for(sparse_view, {1, 2}, {}), 2.0)
-        with mock.patch(
-            "chemvas.ui.selection_rotation_access.average_bond_length_for_atoms_for",
-            return_value=float("nan"),
-        ):
-            self.assertEqual(
-                rotation_scale_for_coords_for(sparse_view, {1, 2}, {}), 1.0
-            )
-        with mock.patch(
-            "chemvas.ui.selection_rotation_access.average_bond_length_for_atoms_for",
-            return_value=0.0,
-        ):
-            self.assertEqual(
-                rotation_scale_for_coords_for(sparse_view, {1, 2}, {}), 1.0
-            )
-
-        tail_view = SimpleNamespace(
-            model=SimpleNamespace(
-                bonds=[
-                    None,
-                    Bond(1, 3, 1),
-                    Bond(1, 2, 1),
-                ]
-            ),
-            runtime_state=canvas_runtime_state(
-                graph_state=CanvasGraphState(
-                    atom_bond_ids={1: {0, 1, 2}, 2: {0, 2}, 3: {1}}
-                )
-            ),
-        )
-        self.assertIsNone(
-            average_bond_length_for_atoms_for(
-                tail_view,
-                {1, 2},
-                {
-                    1: (0.0, 0.0, 0.0),
-                    2: (0.0, 0.0, 0.0),
-                    3: (2.0, 0.0, 0.0),
-                },
-            )
-        )
-
-        forced_tail_view = SimpleNamespace(
-            model=SimpleNamespace(
-                bonds=[
-                    None,
-                    Bond(1, 3, 1),
-                    Bond(1, 2, 1),
-                ]
-            ),
-            runtime_state=canvas_runtime_state(graph_state=CanvasGraphState()),
-        )
-        self.assertAlmostEqual(
-            average_bond_length_for_atoms_for(
-                forced_tail_view,
-                {1, 2},
-                {
-                    1: (0.0, 0.0, 0.0),
-                    2: (3.0, 4.0, 0.0),
-                    3: (2.0, 0.0, 0.0),
-                },
-            ),
-            5.0,
-        )
-
-    def test_bond_lookup_average_scale_and_axis_rotation_helpers(self) -> None:
+    def test_bond_lookup_and_axis_rotation_helpers(self) -> None:
         indexed_view = SimpleNamespace(
             model=SimpleNamespace(
                 bonds=[Bond(1, 2, 1), Bond(2, 3, 1), Bond(3, 4, 1), None]
@@ -1181,14 +1091,6 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
             runtime_state=canvas_runtime_state(
                 graph_state=CanvasGraphState(
                     atom_bond_ids={1: {0, 99}, 2: {0, 1}, 3: {1, 2}}
-                ),
-                rotation_state=CanvasRotationState(
-                    base_bond_length=10.0,
-                    base_coords={
-                        1: (0.0, 0.0, 0.0),
-                        2: (8.0, 0.0, 0.0),
-                        3: (18.0, 0.0, 0.0),
-                    },
                 ),
             ),
             _redraw_bond=mock.Mock(),
@@ -1198,27 +1100,7 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
             bond_ids_for_atom_ids_for(indexed_view, {1, 2, 99}), {0, 1, 99}
         )
         self.assertEqual(bond_ids_within_atom_ids_for(indexed_view, {1, 2, 3}), {0, 1})
-        self.assertAlmostEqual(
-            average_bond_length_for_atoms_for(
-                indexed_view,
-                {1, 2, 3},
-                {
-                    1: (0.0, 0.0, 0.0),
-                    2: (3.0, 4.0, 0.0),
-                    3: (3.0, 8.0, 0.0),
-                },
-            ),
-            4.5,
-        )
-        self.assertAlmostEqual(
-            rotation_scale_for_coords_for(
-                indexed_view,
-                {2},
-                {2: (6.0, 0.0, 0.0)},
-                extra_atom_ids={1, 3},
-            ),
-            10.0 / 9.0,
-        )
+        self.assertEqual(bond_ids_within_atom_ids_for(indexed_view, set()), set())
 
         redraw_view = SimpleNamespace(
             bond_renderer=SimpleNamespace(redraw_bond=mock.Mock()),
@@ -1244,12 +1126,6 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
             runtime_state=canvas_runtime_state(graph_state=CanvasGraphState()),
         )
         self.assertEqual(bond_ids_within_atom_ids_for(fallback_view, {1, 2, 3}), {0, 2})
-        self.assertIsNone(average_bond_length_for_atoms_for(fallback_view, set(), {}))
-
-        no_scale_view = SimpleNamespace(
-            runtime_state=canvas_runtime_state(rotation_state=CanvasRotationState())
-        )
-        self.assertEqual(rotation_scale_for_coords_for(no_scale_view, set(), {}), 1.0)
 
         rotated = rotate_point_around_axis_for(
             SimpleNamespace(),

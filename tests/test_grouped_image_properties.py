@@ -21,9 +21,9 @@ from chemvas.ui.canvas_group_state import group_state_for, register_group_for
 from chemvas.ui.canvas_window_access import snapshot_canvas_state_for
 from chemvas.ui.image_actions import ImagePropertiesDialog
 from chemvas.ui.scene_item_access import create_scene_item_from_state
-from tests.test_active_gesture_document_edits import qt_errors as qt_errors
-from tests.test_keyboard_focus_workflows import fresh_window as fresh_window
-from tests.test_note_editing_workflows import app as app
+from tests.gui_workflow_support import app as app
+from tests.gui_workflow_support import fresh_window as fresh_window
+from tests.gui_workflow_support import qt_errors as qt_errors
 
 
 def _panels(canvas, count=2):

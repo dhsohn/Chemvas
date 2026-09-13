@@ -6,7 +6,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 from PyQt6.QtWidgets import QApplication
 
 from chemvas.ui.scene_paste_apply_logic import apply_paste_payload
-from tests.test_scene_ops_controller_paste_edges import _RecordingFakeCanvas
+from tests.scene_operation_support import _RecordingFakeCanvas
 
 
 class _RecordingPasteCanvas(_RecordingFakeCanvas):

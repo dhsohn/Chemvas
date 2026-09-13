@@ -12,8 +12,8 @@ from chemvas.ui.scene_group_operations import group_selection_for
 from chemvas.ui.scene_item_access import create_scene_item_from_state
 from chemvas.ui.select_all_access import select_all_scene_items_for
 from chemvas.ui.structure_mutation_access import add_atom_for, add_bond_for
-from tests.test_native_geometry_backlog import app as app
-from tests.test_native_geometry_backlog import canvas as canvas
+from tests.native_canvas_support import app as app
+from tests.native_canvas_support import canvas as canvas
 
 
 def _group(canvas):

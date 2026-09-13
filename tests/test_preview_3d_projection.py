@@ -5,11 +5,8 @@ import math
 from PyQt6.QtCore import QRectF
 
 from chemvas.features.insertion import Molecule3DAtom, Molecule3DBond, Molecule3DScene
-from chemvas.ui.preview_3d_projection import (
-    preview_projection_rect,
-    project_3d_scene,
-    project_preview_scene,
-)
+from chemvas.ui.preview_3d_layout import preview_layout_rects
+from chemvas.ui.preview_3d_projection import project_3d_scene
 
 
 def _scene() -> Molecule3DScene:
@@ -36,43 +33,40 @@ def test_project_3d_scene_returns_empty_for_empty_scene() -> None:
     )
 
 
-def test_preview_projection_rect_uses_viewport_override_and_footer_space() -> None:
-    widget_rect = QRectF(0.0, 0.0, 240.0, 180.0)
-    viewport_rect = QRectF(20.0, 30.0, 120.0, 90.0)
-
-    assert (
-        preview_projection_rect(widget_rect, viewport_rect=viewport_rect)
-        == viewport_rect
-    )
-
-    without_footer = preview_projection_rect(widget_rect)
-    with_footer = preview_projection_rect(widget_rect, footer_height=60.0)
+def test_preview_layout_reserves_footer_space_outside_molecular_content() -> None:
+    widget_rect = QRectF(0.0, 0.0, 320.0, 260.0)
+    plain_layout = preview_layout_rects(widget_rect, footer_height=0.0)
+    footer_layout = preview_layout_rects(widget_rect, footer_height=60.0)
+    without_footer = plain_layout["molecule"]
+    with_footer = footer_layout["molecule"]
 
     assert with_footer.top() == without_footer.top()
     assert with_footer.bottom() < without_footer.bottom()
     assert with_footer.height() >= 40.0
+    assert plain_layout["footer"].isNull()
+    assert footer_layout["footer"].height() == 60.0
+    assert footer_layout["viewport"].contains(with_footer)
+    assert with_footer.bottom() < footer_layout["footer"].top()
 
 
-def test_project_preview_scene_keeps_atoms_inside_content_rect_and_scales_with_zoom() -> (
+def test_project_3d_scene_keeps_atoms_inside_content_rect_and_scales_with_zoom() -> (
     None
 ):
     content_rect = QRectF(40.0, 70.0, 220.0, 120.0)
 
-    projected = project_preview_scene(
+    projected = project_3d_scene(
         _scene(),
         rotation_x=math.radians(-18.0),
         rotation_y=math.radians(22.0),
         zoom=1.0,
-        widget_rect=QRectF(0.0, 0.0, 320.0, 260.0),
-        viewport_rect=content_rect,
+        content_rect=content_rect,
     )
-    zoomed = project_preview_scene(
+    zoomed = project_3d_scene(
         _scene(),
         rotation_x=math.radians(-18.0),
         rotation_y=math.radians(22.0),
         zoom=1.8,
-        widget_rect=QRectF(0.0, 0.0, 320.0, 260.0),
-        viewport_rect=content_rect,
+        content_rect=content_rect,
     )
 
     assert len(projected) == 3

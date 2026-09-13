@@ -3,6 +3,8 @@ from __future__ import annotations
 from dataclasses import fields
 from types import SimpleNamespace
 
+import pytest
+
 from chemvas.ui.atom_coords_access import CanvasAtomCoords3DState
 from chemvas.ui.canvas_rotation_state import CanvasRotationState
 from chemvas.ui.selection_rotation_session import (
@@ -42,7 +44,6 @@ class _RigidPorts:
             2: (10.0, 4.0, 2.0),
         }
         self.unproject_calls = []
-        self.average_calls = []
 
     def atom(self, atom_id: int):
         return self.atoms.get(atom_id)
@@ -60,10 +61,6 @@ class _RigidPorts:
 
     def flatten_planar_fragments(self, atom_ids, coords):
         return dict(coords)
-
-    def average_bond_length_for_atoms(self, atom_ids, coords):
-        self.average_calls.append((set(atom_ids), dict(coords)))
-        return 8.0
 
     def unproject_scene_point_3d(self, point, z, *, center_3d, anchor_2d):
         self.unproject_calls.append(((point.x(), point.y()), z, center_3d, anchor_2d))
@@ -111,10 +108,6 @@ class _SelectionPorts(_RigidPorts):
         self._raise_at("atom_positions")
         return super().atom_positions(atom_ids)
 
-    def average_bond_length_for_atoms(self, atom_ids, coords):
-        self._raise_at("average")
-        return super().average_bond_length_for_atoms(atom_ids, coords)
-
 
 def _rotation_prestate() -> tuple[CanvasRotationState, CanvasAtomCoords3DState]:
     selection_atom_ids = {701}
@@ -127,7 +120,6 @@ def _rotation_prestate() -> tuple[CanvasRotationState, CanvasAtomCoords3DState]:
         mode="old-mode",
         free_angle_x=2.5,
         free_angle_y=3.5,
-        base_bond_length=17.0,
         atom_ids={700, 701},
         center_3d=(10.0, 11.0, 12.0),
         projection_center_3d=(13.0, 14.0, 15.0),
@@ -220,7 +212,6 @@ def test_begin_rigid_rotation_session_populates_rotation_state_and_canvas_coords
         ports.canvas.runtime_state.atom_coords_3d_state.atom_coords_3d
         == state.base_coords
     )
-    assert ports.average_calls == [({1, 2}, dict(state.base_coords))]
 
 
 def test_begin_selection_rotation_false_paths_restore_exact_state_and_retry() -> None:
@@ -276,3 +267,42 @@ def test_begin_selection_rotation_false_paths_restore_exact_state_and_retry() ->
         )
 
     assert begin_selection_rotation_session(ports, state)
+
+
+@pytest.mark.parametrize("axis", [False, True])
+@pytest.mark.parametrize("stage", ["atom_positions", "publish"])
+def test_begin_failure_after_coordinate_mutation_restores_live_state_and_retries(
+    axis, stage
+) -> None:
+    ports = _SelectionPorts()
+    state, coords_state = _rotation_prestate()
+    ports.canvas.runtime_state.atom_coords_3d_state = coords_state
+    ports.axis = (0, {2}) if axis else None
+    axis_hint = 0 if axis else None
+    before = _capture_exact_rotation_prestate(state, coords_state)
+    failure = RuntimeError("rotation begin failed after coordinates changed")
+    observed = []
+
+    def fail_after_mutation(current_stage):
+        if current_stage == stage:
+            observed.append(_capture_exact_rotation_prestate(state, coords_state))
+            raise failure
+
+    ports._raise_at = fail_after_mutation
+    with pytest.raises(RuntimeError) as raised:
+        begin_selection_rotation_session(
+            ports,
+            state,
+            axis_hint=axis_hint,
+            on_session_started=lambda: fail_after_mutation("publish"),
+        )
+
+    assert raised.value is failure
+    assert len(observed) == 1
+    assert observed[0][1] != before[1]
+    _assert_exact_rotation_prestate(state, coords_state, before)
+
+    ports._raise_at = lambda _stage: None
+    assert begin_selection_rotation_session(ports, state, axis_hint=axis_hint)
+    assert state.mode == ("bond" if axis else "rigid")
+    assert {1, 2} <= set(coords_state.atom_coords_3d)

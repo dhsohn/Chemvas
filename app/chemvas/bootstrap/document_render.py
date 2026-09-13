@@ -135,7 +135,7 @@ def _render_document(
     output_format = _validate_paths(source, output)
     if output_format == "pdf" and min_font_pt is not None:
         raise ValueError("--min-font-pt supports SVG and PNG output only")
-    source_bytes, document = read_exact_document(source, max_bytes=MAX_DOCUMENT_BYTES)
+    _source_bytes, document = read_exact_document(source, max_bytes=MAX_DOCUMENT_BYTES)
     state = cast("Mapping[str, object]", document.state)
     graphics_records = graphics_record_count(state)
     if graphics_records > MAX_GRAPHICS_RECORDS:
@@ -159,7 +159,7 @@ def _render_document(
         "format": "chemvas-document-render-report",
         "version": 1,
         "source": str(source),
-        "source_sha256": _sha256(source_bytes),
+        "source_sha256": document.source_sha256,
         "chemvas_document_version": int(document.payload["version"]),
         "output": str(output),
         "output_format": output_format,

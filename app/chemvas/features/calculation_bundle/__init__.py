@@ -5,7 +5,6 @@ from .model import (
     CalculationArtifacts,
     CalculationStateSelection,
     ComponentInventory,
-    ComponentSelection,
     ComponentSummary,
 )
 from .plan import (
@@ -36,7 +35,6 @@ from .plan import (
 from .service import (
     inspect_component_inventory,
     inspect_components,
-    select_component,
     select_components,
     validate_calculation_artifacts,
 )
@@ -46,7 +44,6 @@ __all__ = [
     "CalculationArtifacts",
     "CalculationStateSelection",
     "ComponentInventory",
-    "ComponentSelection",
     "ComponentSummary",
     "apply_calculation_step_edit",
     "calculate_bond_changes",
@@ -67,7 +64,6 @@ __all__ = [
     "prepare_calculation_step_editor",
     "require_step_ready",
     "select_calculation_state",
-    "select_component",
     "select_components",
     "step_atom_correspondence",
     "step_readiness",

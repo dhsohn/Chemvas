@@ -18,6 +18,7 @@ from PyQt6.QtWidgets import (
     QGraphicsTextItem,
 )
 
+from chemvas.core.history import SetAtomPositionsCommand
 from chemvas.ui.canvas_callback_state import CanvasCallbackState
 from chemvas.ui.canvas_group_state import (
     CanvasGroupState,
@@ -31,10 +32,9 @@ from chemvas.ui.history_commands import (
     ChangeAtomLabelCommand,
     DeleteSceneItemsCommand,
     GroupSceneItemsCommand,
-    MoveItemsCommand,
+    SetSceneGeometryCommand,
     UngroupSceneItemsCommand,
     UpdateSceneItemCommand,
-    _active_handle_position_snapshots,
 )
 from chemvas.ui.transactions.document import (
     DocumentSavepoint,
@@ -146,30 +146,6 @@ class _RawStateSceneItem(_SceneItem):
             self.metadata_x = float(value["metadata_x"])
 
 
-class _ModelBackedSceneItem(_SceneItem):
-    def __init__(self, name: str, kind: str, item_id: int) -> None:
-        super().__init__(name)
-        self.kind = kind
-        self.item_id = item_id
-
-    def pos(self) -> float:
-        return self.x
-
-    def setPos(self, position: float) -> None:
-        self.x = float(position)
-
-    def data(self, index: int):
-        if index == 0:
-            return self.kind
-        if index == 1:
-            return self.item_id
-        return None
-
-    def setData(self, index: int, value) -> None:
-        if index == 1:
-            self.item_id = int(value)
-
-
 class _VisualRectSceneItem(_SceneItem):
     def __init__(self, name: str) -> None:
         super().__init__(name)
@@ -232,21 +208,6 @@ def _install_scene_runtime_state(canvas: _Canvas) -> None:
         rdkit_warmup_pending=False,
         last_interaction_time=1.0,
     )
-
-
-def test_active_handle_snapshots_ignore_plain_canvas_state_aliases() -> None:
-    runtime_handle = _RawStateSceneItem("runtime-handle")
-    public_handle = _RawStateSceneItem("public-handle")
-    canvas = _Canvas()
-    canvas.runtime_state.handle_state = SimpleNamespace(
-        active_handles=[runtime_handle],
-    )
-    canvas.handle_state = SimpleNamespace(active_handles=[public_handle])
-
-    snapshots = _active_handle_position_snapshots(canvas)
-
-    assert snapshots == [(runtime_handle, runtime_handle.pos())]
-    assert _active_handle_position_snapshots(canvas.handle_state) == []
 
 
 def _restore_scene_item(canvas: _Canvas, item: _SceneItem) -> None:
@@ -981,11 +942,14 @@ def test_actual_qt_runtime_consumers_restore_parent_topology_and_z_value(
 
         with (
             mock.patch(
-                "chemvas.ui.history_commands.move_item_for", side_effect=fail_move
+                "chemvas.ui.history_commands._apply_scene_item_state",
+                side_effect=fail_move,
             ),
             pytest.raises(RuntimeError, match="move damaged scene topology"),
         ):
-            MoveItemsCommand([child], 4.0, 5.0).redo(canvas)
+            SetSceneGeometryCommand(
+                [], [UpdateSceneItemCommand(child, {}, {"x": 4.0, "y": 5.0})]
+            ).redo(canvas)
 
     assert child.parentItem() is parent
     assert parent.zValue() == 2.0
@@ -1525,99 +1489,78 @@ def test_handle_target_remove_failure_restores_handles_scene_order_and_container
 
 
 @pytest.mark.parametrize(("method_name", "direction"), [("redo", 1.0), ("undo", -1.0)])
-def test_move_items_command_rolls_back_a_second_item_that_mutates_then_raises(
+@pytest.mark.parametrize("failure_point", ["position", "metadata"])
+def test_geometry_command_restores_second_item_after_partial_mutation(
     method_name: str,
     direction: float,
+    failure_point: str,
 ) -> None:
     canvas = _Canvas()
-    items = [_SceneItem("first"), _SceneItem("second")]
-    for item in items:
+    items = [_RawStateSceneItem("first"), _RawStateSceneItem("second")]
+    for index, item in enumerate(items):
+        item.x = float(index)
+        item.metadata_x = float(index * 10)
         canvas.scene().attach(item)
-    before = [(item.x, item.y) for item in items]
-    failed = False
+    before = [(item.x, item.metadata_x) for item in items]
+    command = SetSceneGeometryCommand(
+        [],
+        [
+            UpdateSceneItemCommand(
+                item,
+                {"x": item.x - 3.0, "metadata_x": item.metadata_x - 5.0},
+                {"x": item.x + 3.0, "metadata_x": item.metadata_x + 5.0},
+            )
+            for item in items
+        ],
+    )
+    # Undo applies children in reverse: fail on the second attempted item in
+    # either direction, after the first has already changed both fields.
+    failed_item = items[1] if method_name == "redo" else items[0]
+    primary = RuntimeError("geometry failed after partial mutation")
+    attempted = []
 
-    def move_with_failure(_canvas, item, dx, dy, *, update_selection) -> None:
-        nonlocal failed
-        assert not update_selection
-        item.x += dx
-        item.y += dy
-        if item is items[1] and dx == direction * 3.0 and not failed:
-            failed = True
-            raise RuntimeError("move failed after mutation")
+    def apply_with_failure(_canvas, item, state) -> None:
+        attempted.append(item)
+        item.x = state["x"]
+        if failure_point == "metadata":
+            item.metadata_x = state["metadata_x"]
+        if item is failed_item:
+            raise primary
+        item.metadata_x = state["metadata_x"]
 
-    command = MoveItemsCommand(items, 3.0, 5.0)
     with (
         mock.patch(
-            "chemvas.ui.history_commands.move_item_for", side_effect=move_with_failure
+            "chemvas.ui.history_commands._apply_scene_item_state",
+            side_effect=apply_with_failure,
         ),
         mock.patch("chemvas.ui.history_commands.refresh_selection_outline_for_canvas"),
-        pytest.raises(RuntimeError, match="move failed after mutation"),
+        pytest.raises(RuntimeError) as caught,
     ):
         getattr(command, method_name)(canvas)
 
-    assert [(item.x, item.y) for item in items] == before
+    assert caught.value is primary
+    assert attempted == (items if method_name == "redo" else list(reversed(items)))
+    assert [(item.x, item.metadata_x) for item in items] == before
 
-
-def test_move_items_command_restores_absolute_state_after_partial_field_mutation() -> (
-    None
-):
-    canvas = _Canvas()
-    items = [_SceneItem("first"), _SceneItem("second")]
-    for index, item in enumerate(items):
-        item.x = float(index)
-        item.metadata_x = float(index)
-        canvas.scene().attach(item)
-    before = [(item.x, item.metadata_x) for item in items]
-    failed = False
-
-    def snapshot_state(_canvas, item):
-        return {"kind": "test", "x": item.x, "metadata_x": item.metadata_x}
-
-    def apply_state(_canvas, item, state) -> None:
+    def apply_successfully(_canvas, item, state) -> None:
         item.x = state["x"]
         item.metadata_x = state["metadata_x"]
 
-    def move_with_partial_failure(_canvas, item, dx, _dy, *, update_selection) -> None:
-        nonlocal failed
-        assert not update_selection
-        item.x += dx
-        if item is items[1] and not failed:
-            failed = True
-            raise RuntimeError("move failed between geometry and metadata")
-        item.metadata_x += dx
-
-    command = MoveItemsCommand(items, 4.0, 0.0)
     with (
         mock.patch(
-            "chemvas.ui.history_commands.scene_item_state_for",
-            side_effect=snapshot_state,
-        ),
-        mock.patch(
             "chemvas.ui.history_commands._apply_scene_item_state",
-            side_effect=apply_state,
-        ),
-        mock.patch(
-            "chemvas.ui.history_commands.move_item_for",
-            side_effect=move_with_partial_failure,
+            side_effect=apply_successfully,
         ),
         mock.patch("chemvas.ui.history_commands.refresh_selection_outline_for_canvas"),
-        pytest.raises(RuntimeError, match="between geometry and metadata"),
     ):
-        command.redo(canvas)
+        getattr(command, method_name)(canvas)
+    assert [(item.x, item.metadata_x) for item in items] == [
+        (x + direction * 3.0, metadata + direction * 5.0) for x, metadata in before
+    ]
 
-    assert [(item.x, item.metadata_x) for item in items] == before
 
-
-@pytest.mark.parametrize(
-    ("kind", "item_id", "moved_atom_ids"),
-    [
-        ("atom", 7, (7,)),
-        ("bond", 0, (7, 8)),
-    ],
-)
-def test_move_model_backed_item_restores_absolute_model_and_3d_state_on_refresh_failure(
-    kind: str,
-    item_id: int,
+@pytest.mark.parametrize("moved_atom_ids", [(7,), (7, 8)])
+def test_geometry_command_restores_model_and_3d_state_on_refresh_failure(
     moved_atom_ids: tuple[int, ...],
 ) -> None:
     canvas = _Canvas()
@@ -1625,56 +1568,52 @@ def test_move_model_backed_item_restores_absolute_model_and_3d_state_on_refresh_
         7: SimpleNamespace(x=1.0, y=2.0),
         8: SimpleNamespace(x=5.0, y=6.0),
     }
-    canvas.model = SimpleNamespace(
-        atoms=atoms,
-        bonds=[SimpleNamespace(a=7, b=8)],
-    )
-    coords_3d = {
-        7: (1.0, 2.0, 3.0),
-        8: (5.0, 6.0, 7.0),
-    }
+    canvas.model = SimpleNamespace(atoms=atoms, bonds=[])
+    coords_3d = {7: (1.0, 2.0, 3.0), 8: (5.0, 6.0, 7.0)}
     canvas.runtime_state.atom_coords_3d_state = SimpleNamespace(
         atom_coords_3d=coords_3d
     )
-    item = _ModelBackedSceneItem(kind, kind, item_id)
-    canvas.scene().attach(item)
-    before_positions = {
-        atom_id: (atoms[atom_id].x, atoms[atom_id].y) for atom_id in moved_atom_ids
+    before_positions = {atom_id: (atom.x, atom.y) for atom_id, atom in atoms.items()}
+    before_coords = dict(coords_3d)
+    after_positions = {
+        atom_id: (atoms[atom_id].x + 4.0, atoms[atom_id].y + 9.0)
+        for atom_id in moved_atom_ids
     }
-    before_coords = {atom_id: coords_3d[atom_id] for atom_id in moved_atom_ids}
+    after_coords = {
+        atom_id: (x + 4.0, y + 9.0, z)
+        for atom_id, (x, y, z) in coords_3d.items()
+        if atom_id in moved_atom_ids
+    }
+    command = SetSceneGeometryCommand(
+        [
+            SetAtomPositionsCommand(
+                before_positions={
+                    atom_id: before_positions[atom_id] for atom_id in moved_atom_ids
+                },
+                after_positions=after_positions,
+                update_selection=False,
+                before_coords_3d={
+                    atom_id: before_coords[atom_id] for atom_id in moved_atom_ids
+                },
+                after_coords_3d=after_coords,
+            )
+        ],
+        [],
+    )
+    calls = []
 
-    def move_model_item(_canvas, current_item, dx, dy, *, update_selection) -> None:
+    def set_positions(_canvas, positions, *, update_selection, coords_3d) -> None:
         assert not update_selection
-        current_item.x += dx
-        for atom_id in moved_atom_ids:
-            atoms[atom_id].x += dx
-            atoms[atom_id].y += dy
-            x, y, z = coords_3d[atom_id]
-            coords_3d[atom_id] = (x + dx, y + dy, z)
-
-    restore_calls: list[tuple[dict, dict | None]] = []
-
-    def restore_model_state(
-        _canvas, positions, *, update_selection, coords_3d=None
-    ) -> None:
-        assert not update_selection
-        restore_calls.append(
-            (dict(positions), dict(coords_3d) if coords_3d is not None else None)
-        )
+        calls.append((dict(positions), dict(coords_3d)))
         for atom_id, (x, y) in positions.items():
             atoms[atom_id].x = x
             atoms[atom_id].y = y
-        if coords_3d is not None:
-            canvas.runtime_state.atom_coords_3d_state.atom_coords_3d.update(coords_3d)
+        canvas.runtime_state.atom_coords_3d_state.atom_coords_3d.update(coords_3d)
 
-    command = MoveItemsCommand([item], 4.0, 9.0)
     with (
         mock.patch(
-            "chemvas.ui.history_commands.move_item_for", side_effect=move_model_item
-        ),
-        mock.patch(
-            "chemvas.ui.history_commands._set_atom_positions_for_history",
-            side_effect=restore_model_state,
+            "chemvas.ui.history_canvas_access.set_atom_positions_for_history",
+            side_effect=set_positions,
         ),
         mock.patch(
             "chemvas.ui.history_commands.refresh_selection_outline_for_canvas",
@@ -1684,148 +1623,150 @@ def test_move_model_backed_item_restores_absolute_model_and_3d_state_on_refresh_
     ):
         command.redo(canvas)
 
-    assert item.x == 0.0
     assert {
-        atom_id: (atoms[atom_id].x, atoms[atom_id].y) for atom_id in moved_atom_ids
+        (atom_id): (atom.x, atom.y) for atom_id, atom in atoms.items()
     } == before_positions
-    assert {atom_id: coords_3d[atom_id] for atom_id in moved_atom_ids} == before_coords
-    assert restore_calls == [(before_positions, before_coords)]
+    assert coords_3d == before_coords
+    # The exact owner restores once, without replaying relative compensation.
+    assert calls == [(after_positions, after_coords)]
 
 
 @pytest.mark.parametrize(("kind", "data_role"), [("shape", 1), ("arrow", 2)])
-def test_move_exact_restore_keeps_data_identity_and_history_retryable(
+def test_geometry_exact_restore_keeps_data_identity_and_history_retryable(
     kind: str,
     data_role: int,
 ) -> None:
     class ExactDataSceneItem(_SceneItem):
         def __init__(self) -> None:
             super().__init__(kind)
-            self._data: dict[int, object] = {
-                0: kind,
-                data_role: {"point": (3.0, 7.0)},
-            }
+            self._data = {0: kind, data_role: {"point": (3.0, 7.0)}}
 
-        def pos(self) -> tuple[float, float]:
+        def pos(self):
             return (self.x, self.y)
 
-        def setPos(self, position: tuple[float, float]) -> None:
+        def setPos(self, position) -> None:
             self.x, self.y = position
 
-        def data(self, role: int):
+        def data(self, role):
             return self._data.get(role)
 
-        def setData(self, role: int, value) -> None:
+        def setData(self, role, value) -> None:
             self._data[role] = value
 
     canvas = _Canvas()
     item = ExactDataSceneItem()
     canvas.scene().attach(item)
     original_data = item.data(data_role)
-    command = MoveItemsCommand([item], 5.0, 9.0)
-    history_sentinel = object()
-    redo_sentinel = object()
+    command = SetSceneGeometryCommand(
+        [],
+        [
+            UpdateSceneItemCommand(
+                item, {"point": (3.0, 7.0)}, {"point": (100.0, 200.0)}
+            )
+        ],
+    )
+    history_sentinel, redo_sentinel = object(), object()
     history = [history_sentinel]
     redo_stack = [redo_sentinel, command]
     state = CanvasHistoryState(history=history, redo_stack=redo_stack)  # type: ignore[list-item]
     service = CanvasHistoryService(canvas, state, replay_context=nullcontext)
-    primary = RuntimeError("move failed after replacing item data")
+    primary = RuntimeError("geometry failed after replacing item data")
 
-    def snapshot_state(_canvas, _item) -> dict[str, object]:
-        return {"kind": kind, "data": dict(original_data)}
-
-    def apply_state(_canvas, current_item, state) -> None:
-        current_item.setData(data_role, dict(state["data"]))
-
-    def move_then_fail(_canvas, current_item, _dx, _dy, *, update_selection) -> None:
-        assert not update_selection
-        current_item.setData(data_role, {"point": (100.0, 200.0)})
+    def apply_then_fail(_canvas, current_item, target) -> None:
+        current_item.setData(data_role, dict(target))
         raise primary
 
     with (
         mock.patch(
-            "chemvas.ui.history_commands.scene_item_state_for",
-            side_effect=snapshot_state,
-        ),
-        mock.patch(
             "chemvas.ui.history_commands._apply_scene_item_state",
-            side_effect=apply_state,
-        ),
-        mock.patch(
-            "chemvas.ui.history_commands.move_item_for",
-            side_effect=move_then_fail,
+            side_effect=apply_then_fail,
         ),
         mock.patch("chemvas.ui.history_commands.refresh_selection_outline_for_canvas"),
         pytest.raises(RuntimeError) as caught,
     ):
         service.redo()
-
     assert caught.value is primary
     assert item.data(data_role) is original_data
-    assert item.data(data_role) == {"point": (3.0, 7.0)}
-    assert state.history is history
-    assert state.redo_stack is redo_stack
-    assert state.history == [history_sentinel]
-    assert state.redo_stack == [redo_sentinel, command]
+    assert original_data == {"point": (3.0, 7.0)}
+    assert state.history is history and state.redo_stack is redo_stack
+    assert history == [history_sentinel]
+    assert redo_stack == [redo_sentinel, command]
+
+    with (
+        mock.patch(
+            "chemvas.ui.history_commands._apply_scene_item_state",
+            side_effect=lambda _canvas, target, payload: target.setData(
+                data_role, dict(payload)
+            ),
+        ),
+        mock.patch("chemvas.ui.history_commands.refresh_selection_outline_for_canvas"),
+    ):
+        service.redo()
+    assert item.data(data_role) == {"point": (100.0, 200.0)}
+    assert history == [history_sentinel, command]
+    assert redo_stack == [redo_sentinel]
 
 
-def test_move_live_membership_failure_keeps_history_stacks_retryable() -> None:
-    primary = RuntimeError("live item scene lookup failed")
-
-    class FailOnceMembershipItem(_SceneItem):
-        scene_calls = 0
-
-        def scene(self) -> _Scene | None:
-            self.scene_calls += 1
-            if self.scene_calls == 1:
-                raise primary
-            return super().scene()
-
+def test_geometry_capture_failure_keeps_document_and_fails_closed() -> None:
+    primary = RuntimeError("live scene inventory lookup failed")
     canvas = _Canvas()
-    item = FailOnceMembershipItem("moved")
+    item = _SceneItem("moved")
     canvas.scene().attach(item)
-    command = MoveItemsCommand([item], 5.0, 9.0)
-    history_sentinel = object()
-    redo_sentinel = object()
+    command = SetSceneGeometryCommand(
+        [], [UpdateSceneItemCommand(item, {}, {"x": 5.0})]
+    )
+    history_sentinel, redo_sentinel = object(), object()
     history = [history_sentinel]
     redo_stack = [redo_sentinel, command]
     state = CanvasHistoryState(history=history, redo_stack=redo_stack)  # type: ignore[list-item]
     service = CanvasHistoryService(canvas, state, replay_context=nullcontext)
-
     with (
-        mock.patch("chemvas.ui.history_commands.move_item_for") as move_item,
-        mock.patch("chemvas.ui.history_commands.refresh_selection_outline_for_canvas"),
+        mock.patch.object(canvas.scene(), "items", side_effect=primary),
+        mock.patch(
+            "chemvas.ui.history_commands._apply_scene_item_state"
+        ) as apply_state,
         pytest.raises(RuntimeError) as caught,
     ):
         service.redo()
-
     assert caught.value is primary
-    move_item.assert_not_called()
+    apply_state.assert_not_called()
     assert item.scene() is canvas.scene()
-    assert state.history is history
-    assert state.redo_stack is redo_stack
-    assert state.history == [history_sentinel]
-    assert state.redo_stack == [redo_sentinel, command]
+    assert state.history is history and state.redo_stack is redo_stack
+    assert history == [history_sentinel]
+    # Capture itself failed, so no authoritative savepoint exists. Keep the
+    # existing fail-closed stack policy rather than claiming a safe retry.
+    assert redo_stack == []
 
 
-def test_move_items_restores_exact_outline_runtime_after_persistent_refresh_failure() -> (
+def test_geometry_restores_exact_outline_runtime_after_persistent_refresh_failure() -> (
     None
 ):
+    class PositionedSceneItem(_SceneItem):
+        def pos(self):
+            return self.x, self.y
+
+        def setPos(self, position) -> None:
+            self.x, self.y = position
+
     canvas = _Canvas()
     _install_scene_runtime_state(canvas)
-    item = _SceneItem("moved")
+    item = PositionedSceneItem("moved")
     canvas.scene().attach(item)
     old_outline, outlines, partial_outlines, refresh_then_fail = (
         _persistent_outline_failure(canvas)
     )
+    command = SetSceneGeometryCommand(
+        [], [UpdateSceneItemCommand(item, {"x": 0.0, "y": 0.0}, {"x": 4.0, "y": 9.0})]
+    )
 
-    def move_item(_canvas, target, dx, dy, *, update_selection) -> None:
-        assert not update_selection
-        target.x += dx
-        target.y += dy
+    def apply_state(_canvas, target, state) -> None:
+        target.x, target.y = state["x"], state["y"]
 
-    command = MoveItemsCommand([item], 4.0, 9.0)
     with (
-        mock.patch("chemvas.ui.history_commands.move_item_for", side_effect=move_item),
+        mock.patch(
+            "chemvas.ui.history_commands._apply_scene_item_state",
+            side_effect=apply_state,
+        ),
         mock.patch(
             "chemvas.ui.history_commands.refresh_selection_outline_for_canvas",
             side_effect=refresh_then_fail,
@@ -1833,117 +1774,12 @@ def test_move_items_restores_exact_outline_runtime_after_persistent_refresh_fail
         pytest.raises(RuntimeError, match="persistent outline rebuild failure"),
     ):
         command.redo(canvas)
-
     assert (item.x, item.y) == (0.0, 0.0)
-    _assert_original_outline_restored(
-        canvas,
-        old_outline,
-        outlines,
-        partial_outlines,
-    )
+    _assert_original_outline_restored(canvas, old_outline, outlines, partial_outlines)
 
 
-def test_move_rollback_uses_raw_savepoint_when_canonical_apply_mutates_then_raises() -> (
-    None
-):
-    canvas = _Canvas()
-    items = [_RawStateSceneItem("first"), _RawStateSceneItem("second")]
-    for index, item in enumerate(items):
-        item.x = float(index)
-        item.metadata_x = float(index)
-        canvas.scene().attach(item)
-    before = [(item.x, item.metadata_x) for item in items]
-    move_failed = False
-
-    def snapshot_state(_canvas, item):
-        return {"kind": "test", "x": item.x, "metadata_x": item.metadata_x}
-
-    def partially_failing_apply(_canvas, item, state) -> None:
-        item.x = state["x"] + 100.0
-        item.metadata_x = state["metadata_x"] + 100.0
-        raise RuntimeError("canonical apply failed after mutation")
-
-    def move_with_failure(_canvas, item, dx, _dy, *, update_selection) -> None:
-        nonlocal move_failed
-        assert not update_selection
-        item.x += dx
-        item.metadata_x += dx
-        if item is items[1] and not move_failed:
-            move_failed = True
-            raise RuntimeError("move failed after mutation")
-
-    command = MoveItemsCommand(items, 4.0, 0.0)
-    with (
-        mock.patch(
-            "chemvas.ui.history_commands.scene_item_state_for",
-            side_effect=snapshot_state,
-        ),
-        mock.patch(
-            "chemvas.ui.history_commands._apply_scene_item_state",
-            side_effect=partially_failing_apply,
-        ),
-        mock.patch(
-            "chemvas.ui.history_commands.move_item_for", side_effect=move_with_failure
-        ),
-        mock.patch("chemvas.ui.history_commands.refresh_selection_outline_for_canvas"),
-        pytest.raises(RuntimeError, match="move failed after mutation"),
-    ):
-        command.redo(canvas)
-
-    assert [(item.x, item.metadata_x) for item in items] == before
-
-
-def test_move_rollback_restores_raw_orbital_center_before_canonical_apply() -> None:
-    canvas = _Canvas()
-    items = [_RawStateSceneItem("first"), _RawStateSceneItem("second")]
-    for index, item in enumerate(items, start=1):
-        item.x = float(index)
-        item.metadata_x = float(index * 10)
-        canvas.scene().attach(item)
-    before = [(item.x, item.metadata_x) for item in items]
-    move_failed = False
-
-    def snapshot_state(_canvas, item):
-        return {"kind": "orbital", "center": item.metadata_x}
-
-    def apply_orbital_state(_canvas, item, state) -> None:
-        desired_center = state["center"]
-        item.x += desired_center - item.metadata_x
-        item.metadata_x = desired_center
-
-    def move_before_center_failure(_canvas, item, dx, _dy, *, update_selection) -> None:
-        nonlocal move_failed
-        assert not update_selection
-        item.x += dx
-        if item is items[1] and not move_failed:
-            move_failed = True
-            raise RuntimeError("orbital move failed before center update")
-        item.metadata_x += dx
-
-    command = MoveItemsCommand(items, 4.0, 0.0)
-    with (
-        mock.patch(
-            "chemvas.ui.history_commands.scene_item_state_for",
-            side_effect=snapshot_state,
-        ),
-        mock.patch(
-            "chemvas.ui.history_commands._apply_scene_item_state",
-            side_effect=apply_orbital_state,
-        ),
-        mock.patch(
-            "chemvas.ui.history_commands.move_item_for",
-            side_effect=move_before_center_failure,
-        ),
-        mock.patch("chemvas.ui.history_commands.refresh_selection_outline_for_canvas"),
-        pytest.raises(RuntimeError, match="before center update"),
-    ):
-        command.redo(canvas)
-
-    assert [(item.x, item.metadata_x) for item in items] == before
-
-
-@pytest.mark.parametrize("kind", ["arrow", "ts_bracket"])
-def test_move_exact_restore_is_final_after_canonical_absolute_path_repair(
+@pytest.mark.parametrize("kind", ["arrow", "ts_bracket", "orbital"])
+def test_geometry_exact_restore_is_final_after_partial_absolute_item_apply(
     kind: str,
 ) -> None:
     class AbsolutePathSceneItem(_RawStateSceneItem):
@@ -1955,43 +1791,27 @@ def test_move_exact_restore_is_final_after_canonical_absolute_path_repair(
 
     canvas = _Canvas()
     item = AbsolutePathSceneItem(kind)
-    item.x = 3.0
-    item.metadata_x = 13.0
-    item.geometry_x = 10.0
+    item.x, item.metadata_x, item.geometry_x = 3.0, 13.0, 10.0
     canvas.scene().attach(item)
+    command = SetSceneGeometryCommand(
+        [], [UpdateSceneItemCommand(item, {"absolute_x": 13.0}, {"absolute_x": 17.0})]
+    )
 
-    def snapshot_state(_canvas, current_item):
-        return {"kind": kind, "absolute_x": current_item.metadata_x}
-
-    def apply_absolute_state(_canvas, current_item, state) -> None:
+    def apply_then_fail(_canvas, current_item, state) -> None:
         current_item.x = 0.0
         current_item.geometry_x = state["absolute_x"]
         current_item.metadata_x = state["absolute_x"]
+        raise RuntimeError("absolute item apply failed")
 
-    def move_then_fail(_canvas, current_item, dx, _dy, *, update_selection) -> None:
-        assert not update_selection
-        current_item.x += dx
-        current_item.metadata_x += dx
-        raise RuntimeError("absolute item move failed")
-
-    command = MoveItemsCommand([item], 4.0, 0.0)
     with (
         mock.patch(
-            "chemvas.ui.history_commands.scene_item_state_for",
-            side_effect=snapshot_state,
-        ),
-        mock.patch(
             "chemvas.ui.history_commands._apply_scene_item_state",
-            side_effect=apply_absolute_state,
-        ),
-        mock.patch(
-            "chemvas.ui.history_commands.move_item_for", side_effect=move_then_fail
+            side_effect=apply_then_fail,
         ),
         mock.patch("chemvas.ui.history_commands.refresh_selection_outline_for_canvas"),
-        pytest.raises(RuntimeError, match="absolute item move failed"),
+        pytest.raises(RuntimeError, match="absolute item apply failed"),
     ):
         command.redo(canvas)
-
     assert item.x == 3.0
     assert item.geometry_x == 10.0
     assert item.metadata_x == 13.0

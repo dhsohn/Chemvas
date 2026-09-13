@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.14.0] - 2026-09-13
+
+### Changed
+
+- Simplify editing-history, rotation and 3D-preview internals, share connected-
+  component traversal and CLI source-digest handling, and consolidate test
+  fixtures. Existing document formats and CLI commands are unchanged.
+- Avoid scanning the complete bond list for each disconnected component when
+  preparing 3D previews and XYZ exports. Component order, atom IDs and chemical
+  annotations are preserved.
+
+### Removed
+
+- Remove the unused Python `select_component` function and `ComponentSelection`
+  result type. Direct callers should use `select_components(state, [atom_ids])`
+  with a complete component's atom IDs from `inspect_components(state)`.
+  Desktop and CLI commands and document formats are unchanged.
+
 ### Fixed
 
 - Normalize Molecule Info canonical SMILES to omit ordinary drawn hydrogens
@@ -1914,7 +1932,8 @@ housekeeping.
   `.chemvas` document type (double-clicking a file opens it in Chemvas), and a
   Linux `.desktop` entry with an `application/x-chemvas` MIME type.
 
-[Unreleased]: https://github.com/dhsohn/Chemvas/compare/v0.13.0...HEAD
+[Unreleased]: https://github.com/dhsohn/Chemvas/compare/v0.14.0...HEAD
+[0.14.0]: https://github.com/dhsohn/Chemvas/compare/v0.13.0...v0.14.0
 [0.13.0]: https://github.com/dhsohn/Chemvas/compare/v0.12.0...v0.13.0
 [0.12.0]: https://github.com/dhsohn/Chemvas/compare/v0.11.0...v0.12.0
 [0.11.0]: https://github.com/dhsohn/Chemvas/compare/v0.10.2...v0.11.0

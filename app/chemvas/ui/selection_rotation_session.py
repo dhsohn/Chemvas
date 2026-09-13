@@ -198,11 +198,6 @@ def begin_axis_rotation_session(
     state.projection_anchor_2d = anchor_2d or (axis_center[0], axis_center[1])
     state.start_projection_center_3d = start_projection_center_3d
     state.start_projection_anchor_2d = start_projection_anchor_2d
-    scale_atom_ids = set(state.atom_ids)
-    scale_atom_ids.update((axis_a, axis_b))
-    state.base_bond_length = ports.average_bond_length_for_atoms(
-        scale_atom_ids, state.base_coords
-    )
     return True
 
 
@@ -261,9 +256,6 @@ def begin_rigid_rotation_session(
     state.projection_anchor_2d = anchor_2d
     state.start_projection_center_3d = start_projection_center_3d
     state.start_projection_anchor_2d = start_projection_anchor_2d
-    state.base_bond_length = ports.average_bond_length_for_atoms(
-        set(state.atom_ids), state.base_coords
-    )
     return True
 
 

@@ -18,7 +18,7 @@ from chemvas.ui.canvas_atom_graphics_state import visible_atom_item_for
 from chemvas.ui.canvas_service_access import canvas_services_for
 from chemvas.ui.canvas_view import CanvasView
 from chemvas.ui.input_view_access import set_zoom_for
-from tests.test_calculation_plan import _document_state
+from tests.calculation_plan_support import _document_state
 
 if TYPE_CHECKING:
     import pytest

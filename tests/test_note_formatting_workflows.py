@@ -19,9 +19,9 @@ from chemvas.ui.canvas_text_style_state import text_style_state_for
 from chemvas.ui.canvas_window_access import snapshot_canvas_state_for
 from chemvas.ui.main_window_ports import services_for_window
 from chemvas.ui.selection_service_access import selection_service_from_canvas
-from tests.test_note_editing_workflows import _tool
-from tests.test_note_editing_workflows import app as app
-from tests.test_note_editing_workflows import drawing as drawing
+from tests.gui_workflow_support import _tool
+from tests.gui_workflow_support import app as app
+from tests.gui_workflow_support import drawing as drawing
 
 
 def _select(note, start, end):

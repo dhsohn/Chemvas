@@ -142,7 +142,6 @@ def _live_canvas_load_snapshot(
     rotation.mode = "free"
     rotation.free_angle_x = 3.0
     rotation.free_angle_y = 4.0
-    rotation.base_bond_length = 37.0
     rotation.atom_ids = {atom_id, 11}
     rotation.center_3d = (1.0, 2.0, 3.0)
     rotation.projection_center_3d = (4.0, 5.0, 6.0)
@@ -229,7 +228,6 @@ def _live_canvas_load_snapshot(
                 "mode",
                 "free_angle_x",
                 "free_angle_y",
-                "base_bond_length",
                 "center_3d",
                 "projection_center_3d",
                 "projection_anchor_2d",

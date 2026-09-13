@@ -3,28 +3,12 @@ from __future__ import annotations
 import math
 from typing import TYPE_CHECKING
 
-from PyQt6.QtCore import QRectF
-
 if TYPE_CHECKING:
+    from PyQt6.QtCore import QRectF
+
     from chemvas.features.insertion import Molecule3DScene
 
 ProjectedAtom = tuple[float, float, float, float]
-
-
-def preview_projection_rect(
-    widget_rect: QRectF,
-    *,
-    footer_height: float = 0.0,
-    viewport_rect: QRectF | None = None,
-) -> QRectF:
-    if viewport_rect is not None:
-        return QRectF(viewport_rect)
-    content_rect = QRectF(widget_rect).adjusted(18.0, 18.0, -18.0, -18.0)
-    if footer_height > 0.0:
-        content_rect.setBottom(
-            max(content_rect.top() + 40.0, content_rect.bottom() - footer_height)
-        )
-    return content_rect
 
 
 def project_3d_scene(
@@ -96,32 +80,7 @@ def project_3d_scene(
     ]
 
 
-def project_preview_scene(
-    scene: Molecule3DScene,
-    *,
-    rotation_x: float,
-    rotation_y: float,
-    zoom: float,
-    widget_rect: QRectF,
-    footer_height: float = 0.0,
-    viewport_rect: QRectF | None = None,
-) -> list[ProjectedAtom]:
-    return project_3d_scene(
-        scene,
-        rotation_x=rotation_x,
-        rotation_y=rotation_y,
-        zoom=zoom,
-        content_rect=preview_projection_rect(
-            widget_rect,
-            footer_height=footer_height,
-            viewport_rect=viewport_rect,
-        ),
-    )
-
-
 __all__ = [
     "ProjectedAtom",
-    "preview_projection_rect",
     "project_3d_scene",
-    "project_preview_scene",
 ]

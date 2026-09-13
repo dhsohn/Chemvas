@@ -21,8 +21,8 @@ from chemvas.ui.main_window_ports import (
     tool_action_for_window,
 )
 from chemvas.ui.scene_decoration_access import add_arrow_for
-from tests.test_note_editing_workflows import app as app
-from tests.test_note_editing_workflows import drawing as drawing
+from tests.gui_workflow_support import app as app
+from tests.gui_workflow_support import drawing as drawing
 
 
 def _tool(window, name):

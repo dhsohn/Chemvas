@@ -203,7 +203,7 @@ from chemvas.ui.main_window_ports import active_canvas_for_window, services_for_
 from chemvas.ui.session_recovery_service import SessionRecoveryService
 from chemvas.ui.session_snapshot_store import new_session_store
 from chemvas.ui.structure_mutation_access import add_bond_between_points_for, add_bond_for
-from tests.test_calculation_plan import _document_state, _plan
+from tests.calculation_plan_support import _document_state, _plan
 
 root, mode = Path(sys.argv[1]), sys.argv[2]
 answer_delay_ms = int(sys.argv[3])

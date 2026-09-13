@@ -22,8 +22,12 @@ def connected_atom_components(
 
     remaining = set(nodes)
     components: list[tuple[int, ...]] = []
-    while remaining:
-        stack = [min(remaining)]
+    # Sorting seeds once avoids rescanning every remaining atom for each
+    # isolated component while retaining the same minimum-atom order.
+    for start in sorted(nodes):
+        if start not in remaining:
+            continue
+        stack = [start]
         component: set[int] = set()
         while stack:
             atom_id = stack.pop()

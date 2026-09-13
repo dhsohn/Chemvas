@@ -22,7 +22,6 @@ from .model import (
     CalculationArtifacts,
     CalculationStateSelection,
     ComponentInventory,
-    ComponentSelection,
     ComponentSummary,
 )
 
@@ -67,52 +66,6 @@ def _component_inventory(
                 attachments_by_atom=graph.attachments_by_atom,
             )
             for index, atom_ids in enumerate(graph.components)
-        ),
-    )
-
-
-def select_component(
-    state: Mapping[str, object], component_index: int
-) -> ComponentSelection:
-    model = _document_model(state)
-    annotations = _document_annotations(state, model)
-    graph = _graph_index(model)
-    if not graph.components:
-        raise ValueError("The Chemvas document contains no chemical structure.")
-    if component_index < 0 or component_index >= len(graph.components):
-        raise ValueError(
-            f"Component {component_index} does not exist; choose 0 to "
-            f"{len(graph.components) - 1}."
-        )
-
-    atom_ids = graph.components[component_index]
-    # atom_ids is one component of model.atoms, so every id is live.
-    atoms = {atom_id: _copy_atom(model.atoms[atom_id]) for atom_id in atom_ids}
-    bonds: list[Bond | None] = [
-        _copy_bond(bond)
-        for index, bond in graph.indexed_bonds
-        if index == component_index
-    ]
-    selected_annotations = {
-        atom_id: dict(annotations[atom_id])
-        for atom_id in atom_ids
-        if atom_id in annotations
-    }
-    selected_model = MoleculeModel(
-        atoms=atoms,
-        bonds=bonds,
-        next_atom_id=max(atoms, default=-1) + 1,
-        atom_annotations=selected_annotations,
-    )
-    return ComponentSelection(
-        model=selected_model,
-        summary=_component_summary(
-            model,
-            component_index,
-            atom_ids,
-            annotations,
-            bond_count=graph.bond_counts[component_index],
-            attachments_by_atom=graph.attachments_by_atom,
         ),
     )
 
@@ -413,6 +366,5 @@ def _copy_bond(bond: Bond) -> Bond:
 __all__ = [
     "inspect_component_inventory",
     "inspect_components",
-    "select_component",
     "select_components",
 ]

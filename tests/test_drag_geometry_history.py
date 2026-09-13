@@ -23,9 +23,9 @@ from chemvas.ui.scene_decoration_access import (
 from chemvas.ui.scene_item_state import scene_item_state_for
 from chemvas.ui.select_all_access import select_all_scene_items_for
 from chemvas.ui.structure_mutation_access import add_atom_for, add_bond_for
-from tests.test_native_geometry_backlog import _plain_ring
-from tests.test_native_geometry_backlog import app as app
-from tests.test_native_geometry_backlog import canvas as canvas
+from tests.native_canvas_support import _plain_ring
+from tests.native_canvas_support import app as app
+from tests.native_canvas_support import canvas as canvas
 
 
 def prepare(canvas):

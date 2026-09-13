@@ -1,18 +1,14 @@
 """Document actions cancel an unfinished pointer edit before changing history."""
 
-import sys
 from unittest import mock
 
 import pytest
-from PyQt6.QtCore import QEvent, QPoint, QPointF, Qt
+from PyQt6.QtCore import QEvent, QPointF, Qt
 from PyQt6.QtGui import QKeyEvent, QKeySequence
 from PyQt6.QtTest import QTest
 
-from chemvas.features.selection import ROTATION_HANDLE_TYPE
 from chemvas.ui.canvas_window_access import snapshot_canvas_state_for
 from chemvas.ui.handle_overlay_access import show_endpoint_handles_for
-from chemvas.ui.handle_state import active_handles_for
-from chemvas.ui.history_commands import AddSceneItemsCommand
 from chemvas.ui.main_window_ports import (
     cut_selection_for_window,
     group_selection_for_window,
@@ -21,78 +17,12 @@ from chemvas.ui.main_window_ports import (
     undo_action_for_window,
 )
 from chemvas.ui.scene_decoration_access import add_arrow_for
-from chemvas.ui.scene_item_state import scene_item_state_for
 from chemvas.ui.select_all_access import select_all_scene_items_for
-from chemvas.ui.structure_mutation_access import add_bond_between_points_for
 from chemvas.ui.transactions.document import DocumentSavepoint
-from tests.test_note_editing_workflows import app as app
-from tests.test_note_editing_workflows import drawing as drawing
-
-
-@pytest.fixture
-def qt_errors(monkeypatch):
-    errors = []
-    # Qt otherwise aborts when a Python release handler raises. Keep the real
-    # event route and report that failure as a normal regression assertion.
-    monkeypatch.setattr(
-        sys, "excepthook", lambda _type, error, _tb: errors.append(error)
-    )
-    return errors
-
-
-def populate(canvas, kind):
-    if kind == "note":
-        item = canvas.services.tool_controller.context.create_text_note(
-            QPointF(-30.3, -20.7), "editable note"
-        )
-        canvas.services.history_service.push(
-            AddSceneItemsCommand([scene_item_state_for(canvas, item)], [item])
-        )
-        return item.sceneBoundingRect().center(), item
-    if kind in {"arrow", "handle", "move"}:
-        item = add_arrow_for(canvas, QPointF(-65.2, -13.7), QPointF(25.3, 8.9), "arrow")
-        return QPointF(-20, -2.4), item
-    add_bond_between_points_for(canvas, QPointF(-45.3, -20.7), QPointF(25.2, 15.8))
-    atoms = list(canvas.model.atoms.values())
-    return QPointF((atoms[0].x + atoms[1].x) / 2, (atoms[0].y + atoms[1].y) / 2), None
-
-
-def start_drag(canvas, kind, point, item=None):
-    name = (
-        kind
-        if kind in {"perspective", "bond", "delete", "move", "line", "shape"}
-        else "select"
-    )
-    canvas.services.input.tool_mode_controller.set_tool(name)
-    if kind != "move":
-        select_all_scene_items_for(canvas)
-    else:
-        canvas.scene().clearSelection()
-    if kind == "handle":
-        show_endpoint_handles_for(canvas, item)
-        point = active_handles_for(canvas)[0].sceneBoundingRect().center()
-    elif kind == "rotation":
-        knob = next(
-            item
-            for item in canvas.scene().items()
-            if item.data(1) == ROTATION_HANDLE_TYPE
-        )
-        point = knob.sceneBoundingRect().center()
-    elif kind == "perspective":
-        atom = next(iter(canvas.model.atoms.values()))
-        point = QPointF(atom.x, atom.y)
-    elif kind == "bond":
-        atom = next(iter(canvas.model.atoms.values()))
-        point = QPointF(atom.x, atom.y)
-    elif kind in {"line", "shape"}:
-        point = QPointF(90, 70)
-    canvas.setFocus()
-    start = canvas.mapFromScene(point)
-    end = start + QPoint(60, 37)
-    QTest.mousePress(canvas.viewport(), Qt.MouseButton.LeftButton, pos=start)
-    QTest.mouseMove(canvas.viewport(), start + QPoint(25, 14), delay=20)
-    QTest.mouseMove(canvas.viewport(), end, delay=20)
-    return end
+from tests.gui_workflow_support import app as app
+from tests.gui_workflow_support import drawing as drawing
+from tests.gui_workflow_support import populate, release, start_drag
+from tests.gui_workflow_support import qt_errors as qt_errors
 
 
 def invoke(window, canvas, operation, route):
@@ -126,13 +56,6 @@ def invoke(window, canvas, operation, route):
     # The canvas has a standalone key route in addition to window QActions.
     canvas.services.input.input_controller.key_press_event(
         QKeyEvent(QEvent.Type.KeyPress, key, modifiers)
-    )
-
-
-def release(canvas, end):
-    QTest.mouseMove(canvas.viewport(), end + QPoint(10, 5), delay=20)
-    QTest.mouseRelease(
-        canvas.viewport(), Qt.MouseButton.LeftButton, pos=end + QPoint(10, 5)
     )
 
 

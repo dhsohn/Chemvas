@@ -17,7 +17,6 @@ from chemvas.ui.session_recovery_service import (
     collect_open_documents,
 )
 from chemvas.ui.session_snapshot_store import RestoreResult
-from tests.runtime_services import canvas_runtime_services
 
 
 @pytest.fixture(scope="module")
@@ -111,7 +110,7 @@ def _service(
     status_service=None,
 ):
     doc_service = _FakeDocService()
-    services = canvas_runtime_services(
+    services = SimpleNamespace(
         canvas_document_service=doc_service,
         status_service=status_service or mock.Mock(),
     )
@@ -216,9 +215,7 @@ def test_alternate_recovery_warning_has_a_safe_action_and_survives_autosave(
     first = _FakeWindow("first")
     status = mock.Mock()
     service._open_windows = lambda: (first,)
-    service._services_for_window = lambda window: canvas_runtime_services(
-        status_service=status
-    )
+    service._services_for_window = lambda window: SimpleNamespace(status_service=status)
     service._current_documents = list
 
     service.restore_previous(first)

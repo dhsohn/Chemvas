@@ -20,8 +20,8 @@ from chemvas.ui.move_access import move_item_for
 from chemvas.ui.scene_decoration_access import add_mark_for, add_mark_for_atom_for
 from chemvas.ui.scene_item_state import mark_state_dict_for
 from chemvas.ui.structure_mutation_access import add_atom_for
-from tests.test_note_editing_workflows import app as app
-from tests.test_note_editing_workflows import drawing as drawing
+from tests.gui_workflow_support import app as app
+from tests.gui_workflow_support import drawing as drawing
 
 
 def _color_mode(window):

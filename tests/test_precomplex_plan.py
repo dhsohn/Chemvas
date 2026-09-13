@@ -19,7 +19,7 @@ from chemvas.features.calculation_bundle import (
     plan_with_replaced_step,
     validate_calculation_plan,
 )
-from tests.test_calculation_plan import _document_state, _plan
+from tests.calculation_plan_support import _document_state, _plan
 
 
 def test_canonical_precomplex_json_rejects_duplicate_object_keys() -> None:

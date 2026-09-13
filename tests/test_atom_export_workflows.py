@@ -20,8 +20,8 @@ from chemvas.ui.scene_clipboard_copy_service import (
     copy_selection_to_clipboard_for_canvas,
 )
 from chemvas.ui.select_all_access import select_all_scene_items_for
-from tests.test_native_geometry_backlog import app as app
-from tests.test_native_geometry_backlog import canvas as canvas
+from tests.native_canvas_support import app as app
+from tests.native_canvas_support import canvas as canvas
 
 
 def _draw_ring(canvas, app, monkeypatch):

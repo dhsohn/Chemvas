@@ -11,10 +11,10 @@ from chemvas.ui.canvas_text_style_state import set_text_style_for, text_style_st
 from chemvas.ui.canvas_window_access import snapshot_canvas_state_for
 from chemvas.ui.note_appearance_dialog import NoteAppearanceDialog
 from chemvas.ui.scene_item_access import create_scene_item_from_state
-from tests.test_active_gesture_document_edits import populate, start_drag
-from tests.test_active_gesture_document_edits import qt_errors as qt_errors
-from tests.test_keyboard_focus_workflows import fresh_window as fresh_window
-from tests.test_note_editing_workflows import app as app
+from tests.gui_workflow_support import app as app
+from tests.gui_workflow_support import fresh_window as fresh_window
+from tests.gui_workflow_support import populate, start_drag
+from tests.gui_workflow_support import qt_errors as qt_errors
 
 
 @pytest.mark.parametrize("failure", [None, "push_false", "undo"])

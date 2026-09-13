@@ -7,9 +7,9 @@ from PyQt6.QtWidgets import QApplication, QLineEdit
 from chemvas.ui.canvas_scene_items_state import note_items_for
 from chemvas.ui.canvas_window_access import snapshot_canvas_state_for
 from chemvas.ui.main_window_ports import history_service_for_window
-from tests.test_note_editing_workflows import _click, _key, _saved_note, _tool
-from tests.test_note_editing_workflows import app as app
-from tests.test_note_editing_workflows import drawing as drawing
+from tests.gui_workflow_support import _click, _key, _saved_note, _tool
+from tests.gui_workflow_support import app as app
+from tests.gui_workflow_support import drawing as drawing
 
 
 def _edit_menu(window):

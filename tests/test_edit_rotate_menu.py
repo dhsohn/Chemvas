@@ -4,8 +4,8 @@ from PyQt6.QtWidgets import QMenuBar, QToolButton
 
 from chemvas.ui.canvas_service_access import canvas_services_for
 from chemvas.ui.main_window_ports import active_tool_name_for_window
-from tests.test_note_editing_workflows import app as app
-from tests.test_note_editing_workflows import drawing as drawing
+from tests.gui_workflow_support import app as app
+from tests.gui_workflow_support import drawing as drawing
 
 
 def _menu_action(window, menu_title: str, text: str):
