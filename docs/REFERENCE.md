@@ -208,6 +208,12 @@ its knob, flip, align, and distribute.
   the drawing; use in-plane transforms for those components. Group includes
   complete connected molecules, and explicitly regrouping an older partial group
   repairs its membership without changing groups automatically on load.
+  In Select mode, selecting a member, including a caption touched by a selection
+  band, selects its whole group. Check the highlighted structures and dashed
+  group outline.
+  **Edit ▸ Group** merges selected groups immediately, without a confirmation
+  dialog; Undo restores the previous grouping. To inspect just one molecule in
+  a larger group, Ungroup first, then select that molecule for Molecule Info.
   New atoms and fused rings inherit their molecule's group. Erasing members
   keeps the surviving members together; Undo/Redo restores the matching group
   membership with the drawing. Connecting different groups requires selecting
@@ -418,8 +424,16 @@ The initial view fits the projected atom footprints, including depth. Rotation
 and zoom stay inside the molecule viewport, leaving the title, formula and
 weight readable; zooming in can crop the molecule at that viewport's edges.
 Identifiers preserve drawn wedge/hash stereochemistry using the same conversion
-as the preview. They remain unavailable for abbreviation labels; preview and
-3D export can still expand supported abbreviations.
+as the preview. Canonical SMILES omits ordinary drawn hydrogens without removing
+them from the drawing, saved document or calculation graph. Necessary hydrogen
+counts and tetrahedral stereo remain in bracket notation such as `[C@H]`.
+Special hydrogens (including isotopic, mapped and stereo-defining hydrogens) are
+retained by the display conversion. Molecules containing charged or radical
+hydrogens conservatively keep their explicit-hydrogen spelling. These safeguards
+do not add native isotope, atom-map or alkene E/Z import support.
+Identifiers remain unavailable for general abbreviation labels; neutral terminal
+hydrides `OH`, `NH2` and `SH` with one single attachment bond are supported.
+Preview and 3D export can still expand other supported abbreviations.
 
 ### 2D→3D `.xyz` export *(RDKit)*
 

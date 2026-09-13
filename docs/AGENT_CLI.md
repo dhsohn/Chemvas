@@ -802,8 +802,13 @@ geometry, a count of the most common blocking pair, or a unique cause of failure
 - 3D generation requires complete MMFF or UFF parameters. Parameter coverage and
   convergence still do not certify a physical minimum, especially for unusual
   coordination chemistry. Review geometry and perform downstream validation.
-- Canonical SMILES can contain explicit hydrogens because the conversion graph
-  expands them. A different compact spelling is not by itself a chemistry error.
+- Molecule Info canonical SMILES omits ordinary drawn hydrogens on a display-only
+  copy; the drawing, saved document and calculation graph retain their atoms.
+  Necessary hydrogen counts and tetrahedral stereo remain in bracket notation
+  such as `[C@H]`. Special hydrogens, including isotopic, mapped and
+  stereo-defining hydrogens, are retained. Molecules containing charged or
+  radical hydrogens conservatively keep their explicit-hydrogen spelling.
+  These safeguards do not add native isotope, atom-map or alkene E/Z support.
 - `machine.json` retains the shared, versioned contract above; these inspection
   diagnostics do not add fields to that payload.
 
