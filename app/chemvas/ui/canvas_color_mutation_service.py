@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import contextlib
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, override
+from typing import TYPE_CHECKING, Protocol, override
 
 from PyQt6 import sip
 from PyQt6.QtCore import QPointF, Qt
@@ -198,7 +198,7 @@ def _bond_graphics_style_restore(item) -> Callable[[], None]:
     return restore
 
 
-def _apply_bond_color_in_place(canvas, bond_id: int, color: QColor | str) -> None:
+def apply_bond_color_in_place(canvas, bond_id: int, color: QColor | str) -> None:
     bond = bond_for_id(canvas, bond_id)
     if bond is None:
         return
@@ -229,6 +229,10 @@ def _apply_bond_color_in_place(canvas, bond_id: int, color: QColor | str) -> Non
         raise
 
 
+class HistoryBondColorOperations(Protocol):
+    def apply_bond_color(self, bond_id: int, color: str) -> None: ...
+
+
 @dataclass
 class UpdateBondColorCommand(HistoryCommand):
     bond_id: int
@@ -236,12 +240,12 @@ class UpdateBondColorCommand(HistoryCommand):
     after_color: str
 
     @override
-    def undo(self, canvas) -> None:
-        _apply_bond_color_in_place(canvas, self.bond_id, self.before_color)
+    def undo(self, operations: HistoryBondColorOperations) -> None:
+        operations.apply_bond_color(self.bond_id, self.before_color)
 
     @override
-    def redo(self, canvas) -> None:
-        _apply_bond_color_in_place(canvas, self.bond_id, self.after_color)
+    def redo(self, operations: HistoryBondColorOperations) -> None:
+        operations.apply_bond_color(self.bond_id, self.after_color)
 
 
 @dataclass(kw_only=True)
@@ -307,13 +311,13 @@ class UpdateNoteColorCommand(HistoryCommand):
             raise
 
     @override
-    def undo(self, canvas) -> None:
-        del canvas
+    def undo(self, operations) -> None:
+        del operations
         self._apply(self.before_state, self.after_state)
 
     @override
-    def redo(self, canvas) -> None:
-        del canvas
+    def redo(self, operations) -> None:
+        del operations
         self._apply(self.after_state, self.before_state)
 
 
@@ -335,21 +339,27 @@ class _CommitPendingNoteEditCommand(HistoryCommand):
             raise
 
     @override
-    def undo(self, canvas) -> None:
-        del canvas
+    def undo(self, operations) -> None:
+        del operations
         self._apply(self.before_state, self.after_state)
 
     @override
-    def redo(self, canvas) -> None:
-        del canvas
+    def redo(self, operations) -> None:
+        del operations
         self._apply(self.after_state, self.before_state)
 
 
 class CanvasColorMutationService:
     def __init__(
-        self, canvas: CanvasView, *, graph_service, history_service=None
+        self,
+        canvas: CanvasView,
+        *,
+        graph_service,
+        history_operations,
+        history_service=None,
     ) -> None:
         self.canvas = canvas
+        self.operations = history_operations
         self.history = history_service
         self.graph_service = graph_service
         self._ring_targets: list[tuple[object, tuple[object, ...]]] | None = None
@@ -478,7 +488,7 @@ class CanvasColorMutationService:
                     rollback=(
                         runtime_rollback
                         if runtime_rollback is not None
-                        else lambda: rollback.undo(self.canvas)
+                        else lambda: rollback.undo(self.operations)
                     ),
                 )
         except Exception as original_error:
@@ -698,7 +708,9 @@ class CanvasColorMutationService:
                 raise RuntimeError("Color history push did not commit")
         except Exception as error:
             runtime_rollback = (
-                rollback if rollback is not None else lambda: command.undo(self.canvas)
+                rollback
+                if rollback is not None
+                else lambda: command.undo(self.operations)
             )
             run_rollback_step(
                 error,
@@ -727,7 +739,7 @@ class CanvasColorMutationService:
         for command in reversed(tuple(commands)):
 
             def undo_command(command_to_undo: HistoryCommand = command) -> None:
-                command_to_undo.undo(self.canvas)
+                command_to_undo.undo(self.operations)
 
             run_rollback_step(
                 original_error,
@@ -898,7 +910,7 @@ class CanvasColorMutationService:
         before_color = bond.color
         rollback = self._bond_runtime_rollback(item)
         try:
-            _apply_bond_color_in_place(self.canvas, bond_id, color)
+            apply_bond_color_in_place(self.canvas, bond_id, color)
             after_color = bond.color
             if before_color != after_color and self.history is not None:
                 self._push_history_command(

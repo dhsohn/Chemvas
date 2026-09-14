@@ -6,10 +6,7 @@ import json
 import pytest
 
 from chemvas.core.document_io import create_document
-from chemvas.domain.document import (
-    CANVAS_FILE_VERSION,
-    calculation_plan_to_state,
-)
+from chemvas.domain.document import calculation_plan_to_state
 from chemvas.domain.document.precomplex import precomplex_state_from_json
 from chemvas.domain.document.precomplex_profile import (
     CURRENT_PROFILE_ID,
@@ -49,7 +46,7 @@ def test_calculation_plan_v2_round_trips_explicit_empty_precomplex_endpoints() -
     assert calculation_plan_to_state(parsed) == plan_state
 
 
-def test_plan_v2_requires_current_document_version() -> None:
+def test_plan_v2_accepts_supported_v7_and_rejects_v6() -> None:
     document_state = _document_state()
     plan_state = _plan()
     plan_state["version"] = 2
@@ -58,11 +55,11 @@ def test_plan_v2_requires_current_document_version() -> None:
         step["product"]["precomplex"] = {"kind": "none"}
     document_state["calculation_plan"] = plan_state
 
-    document = create_document(document_state, CANVAS_FILE_VERSION)
+    document = create_document(document_state, 7)
 
-    assert document.payload["version"] == CANVAS_FILE_VERSION
+    assert document.payload["version"] == 7
     with pytest.raises(ValueError, match="Failed to save"):
-        create_document(document_state, CANVAS_FILE_VERSION - 1)
+        create_document(document_state, 6)
 
 
 def test_plan_v2_round_trips_bounded_candidate_ensemble() -> None:

@@ -4,6 +4,7 @@ from itertools import combinations
 
 import pytest
 
+import chemvas.domain.document.inspection as document_inspection
 from chemvas.domain.document import (
     Atom,
     Bond,
@@ -11,14 +12,13 @@ from chemvas.domain.document import (
     connected_atom_components,
     serialize_model_state,
 )
+from chemvas.domain.document.inspection import inspect_components
 from chemvas.features.calculation_bundle import (
     AtomMapEntry,
     CalculationArtifacts,
-    inspect_components,
     select_components,
     validate_calculation_artifacts,
 )
-from chemvas.features.calculation_bundle import service as calculation_bundle_service
 
 
 class _CountingBondList(list[Bond | None]):
@@ -239,7 +239,7 @@ def test_bonded_component_apis_precompute_bonds_and_alias_attachments_once(
     model = MoleculeModel(atoms=atoms, bonds=bonds)
     state = _state(model, [])
     monkeypatch.setattr(
-        calculation_bundle_service,
+        document_inspection,
         "deserialize_model_state",
         lambda _model_state: model,
     )

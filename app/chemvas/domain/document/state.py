@@ -12,10 +12,10 @@ from .model import Atom, Bond, MoleculeModel
 StateDict = dict[Any, Any]
 
 CHEMVAS_FILE_TYPE = "chemvas"
-# v7 is the sole supported document contract. It requires canonical current
-# scene/settings payloads and Calculation Plan v2 whenever a plan is present.
+# New documents use this version. Supported durable readers are independent:
+# advancing the writer must not retire v7 (docs/DOCUMENT_COMPATIBILITY.md).
 CANVAS_FILE_VERSION = 7
-SUPPORTED_FILE_VERSIONS = frozenset((CANVAS_FILE_VERSION,))
+SUPPORTED_FILE_VERSIONS = frozenset((7,))
 CANVAS_STATE_KEYS = frozenset(
     (
         "model",
@@ -657,7 +657,7 @@ def selection_payload_to_canvas_state(
             }
             for group in groups
         ]
-    _validate_canvas_state(state, version=CANVAS_FILE_VERSION)
+    _validate_canvas_state(state)
     return state
 
 
@@ -715,9 +715,14 @@ def _extract_wrapped_document_state(payload: Mapping[str, object]) -> StateDict:
     if payload.get("type") != CHEMVAS_FILE_TYPE:
         raise ValueError("Invalid Chemvas file.")
     version = payload.get("version")
-    if type(version) is not int or version not in SUPPORTED_FILE_VERSIONS:
+    if type(version) is not int:
+        raise ValueError("Invalid Chemvas file. version must be an integer.")
+    if version not in SUPPORTED_FILE_VERSIONS:
+        supported = ", ".join(str(value) for value in sorted(SUPPORTED_FILE_VERSIONS))
         raise ValueError(
-            f"Invalid Chemvas file. version must be {CANVAS_FILE_VERSION}."
+            f"Unsupported Chemvas document version {version}. "
+            f"This release reads document versions: {supported}. "
+            "Open it with a Chemvas release that supports this version."
         )
     state = payload.get("state")
     if not isinstance(state, dict):
@@ -732,7 +737,7 @@ def _validate_document_state(state: Mapping[str, object], version: int) -> None:
     state_kind = _state_kind(state)
     if state_kind != "canvas":
         raise ValueError("Invalid Chemvas file.")
-    _validate_canvas_state(state, version=version)
+    _validate_canvas_state(state)
 
 
 def _state_kind(state: Mapping[str, object]) -> str | None:
@@ -742,9 +747,7 @@ def _state_kind(state: Mapping[str, object]) -> str | None:
     return None
 
 
-def _validate_canvas_state(state: Mapping[str, object], *, version: int) -> None:
-    if version != CANVAS_FILE_VERSION:
-        raise ValueError("Invalid Chemvas file.")
+def _validate_canvas_state(state: Mapping[str, object]) -> None:
     keys = set(state)
     if not CANVAS_STATE_KEYS <= keys or not keys <= (
         CANVAS_STATE_KEYS | OPTIONAL_CANVAS_STATE_KEYS
@@ -1575,10 +1578,16 @@ def _validate_atom_annotations_state(
 ) -> None:
     if not isinstance(annotations_state, Mapping):
         raise ValueError("Invalid Chemvas file.")
+    seen: set[int] = set()
     for atom_id_value, annotation in annotations_state.items():
         atom_id = _validated_id(atom_id_value)
         if atom_id not in atom_ids:
             raise ValueError("Invalid Chemvas file.")
+        if atom_id in seen:
+            raise ValueError(
+                f"Invalid Chemvas file. Duplicate atom annotation ID: {atom_id}."
+            )
+        seen.add(atom_id)
         try:
             _validate_atom_annotation(annotation)
         except ValueError as exc:

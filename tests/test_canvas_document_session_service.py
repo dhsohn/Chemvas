@@ -46,6 +46,7 @@ from chemvas.ui.canvas_runtime_state import attach_canvas_runtime_state
 from chemvas.ui.canvas_scene_items_state import CanvasSceneItemsState
 from chemvas.ui.canvas_scene_reset_service import CanvasSceneResetService
 from chemvas.ui.history_commands import AddSceneItemsCommand, UpdateSceneItemCommand
+from chemvas.ui.history_operations import CanvasHistoryOperations
 from chemvas.ui.selection_info_state import (
     SelectionInfoState,
     selection_info_state_for,
@@ -136,12 +137,13 @@ def _document_runtime_state(**states):
 
 
 def _attach_history_service(canvas):
+    operations = CanvasHistoryOperations(canvas)
     runtime_state = getattr(canvas, "runtime_state", None)
     if runtime_state is None:
         runtime_state = _document_runtime_state()
         canvas.runtime_state = runtime_state
     service = CanvasHistoryService(
-        canvas, history_state_for(canvas), replay_context=nullcontext
+        operations, history_state_for(canvas), replay_context=nullcontext
     )
     services = getattr(canvas, "services", None)
     if services is None:
@@ -889,11 +891,11 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
                 "chemvas.ui.canvas_document_session_service.restore_document_groups"
             ),
             mock.patch(
-                "chemvas.ui.history_commands._apply_scene_item_state",
+                "chemvas.ui.history_operations.apply_scene_item_state",
                 side_effect=lambda _canvas, item, state: item.setPos(state["x"], 0.0),
             ),
             mock.patch(
-                "chemvas.ui.history_commands.refresh_selection_outline_for_canvas"
+                "chemvas.ui.history_operations.refresh_selection_outline_for_canvas"
             ),
         ):
             with self.assertRaisesRegex(RuntimeError, "post-model failure"):
@@ -1363,8 +1365,12 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             path = Path(temp_dir) / "out.svg"
             with (
-                mock.patch.object(
-                    service, "plan_figure_export", return_value=_EXPORT_PLAN
+                mock.patch(
+                    "chemvas.features.export.resolve_export_plan",
+                    side_effect=lambda _scene, **kwargs: (
+                        kwargs["items"],
+                        _EXPORT_PLAN,
+                    ),
                 ),
                 mock.patch(
                     "chemvas.ui.canvas_document_session_service.export_canvas_scene_for",
@@ -1399,12 +1405,10 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
                 {
                     "fmt": "svg",
                     "items": [selected_item],
-                    "margin": 3.0,
+                    "plan": _EXPORT_PLAN,
                     "dpi": 144,
                     "background": "white",
                     "title": "Chemvas drawing",
-                    "unit_scale": 0.5,
-                    "target_width_pt": None,
                 },
             )
             embed_editable_svg.assert_called_once_with(
@@ -1412,7 +1416,6 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
             )
             self.assertEqual(path.read_text(encoding="utf-8"), "<svg />")
             self.assertFalse(tmp_path.exists())
-        self.assertEqual(canvas.scene.call_count, 2)
 
     def test_export_mol_writes_molfile_from_payload(self) -> None:
         model = MoleculeModel()
@@ -1539,24 +1542,17 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
         export_canvas_scene.assert_not_called()
 
     def test_export_figure_column_sizing_sets_target_width(self) -> None:
-        canvas = SimpleNamespace(
-            renderer=SimpleNamespace(
-                style=SimpleNamespace(
-                    bond_line_width=1.0,
-                    bond_length_px=30.0,
-                    bond_length_pt=15.0,
-                )
-            ),
-        )
-        _attach_history_service(canvas)
-        service = _session_service(canvas)
+        from chemvas.features.export import resolve_export_plan
+
+        _canvas, service = self._canvas_with_export_note()
 
         with tempfile.TemporaryDirectory() as temp_dir:
             path = Path(temp_dir) / "out.png"
             with (
-                mock.patch.object(
-                    service, "plan_figure_export", return_value=_EXPORT_PLAN
-                ),
+                mock.patch(
+                    "chemvas.features.export.resolve_export_plan",
+                    wraps=resolve_export_plan,
+                ) as resolve_plan,
                 mock.patch(
                     "chemvas.ui.canvas_document_session_service.export_canvas_scene_for",
                     side_effect=lambda _canvas, path, **_kwargs: Path(path).write_text(
@@ -1566,10 +1562,10 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
             ):
                 service.export_figure(str(path), fmt="png", sizing="col1")
 
-        self.assertIsNone(export_canvas_scene.call_args.kwargs["items"])
-        self.assertEqual(export_canvas_scene.call_args.kwargs["unit_scale"], 1.0)
+        self.assertIsNone(resolve_plan.call_args.kwargs["items"])
+        self.assertEqual(resolve_plan.call_args.kwargs["unit_scale"], 1.0)
         self.assertAlmostEqual(
-            export_canvas_scene.call_args.kwargs["target_width_pt"], 84.0 / 25.4 * 72.0
+            export_canvas_scene.call_args.kwargs["plan"].out_w_pt, 84.0 / 25.4 * 72.0
         )
 
     def _canvas_with_export_note(self):
@@ -1704,12 +1700,21 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
                 service.export_figure("unused", **options)
             atomic_write.assert_not_called()
 
+    def test_export_does_not_reuse_an_earlier_standalone_plan(self) -> None:
+        canvas, service = self._canvas_with_export_note()
+        first = service.plan_figure_export()
+        note = next(item for item in canvas.scene().items() if item.data(0) == "note")
+        note.setPlainText("A much longer replacement caption than the original")
+        with tempfile.TemporaryDirectory() as tmp:
+            plan = service.export_figure(str(Path(tmp) / "fresh.svg"))
+        self.assertGreater(plan.source_w, first.source_w)
+
     def test_default_export_checks_plan_but_does_not_check_fonts(self) -> None:
         _canvas, service = self._canvas_with_export_note()
         with (
             tempfile.TemporaryDirectory() as tmp,
             mock.patch.object(
-                service, "plan_figure_export", wraps=service.plan_figure_export
+                service, "_resolve_figure_export", wraps=service._resolve_figure_export
             ) as plan,
             mock.patch(
                 "chemvas.ui.canvas_document_session_service.assess_export_readability"
@@ -1755,7 +1760,7 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
             path = str(Path(tmp) / "figure.svg")
             with (
                 mock.patch.object(
-                    service, "plan_figure_export", return_value=_EXPORT_PLAN
+                    service, "_resolve_figure_export", return_value=([], _EXPORT_PLAN)
                 ),
                 mock.patch(
                     "chemvas.ui.canvas_document_session_service.export_canvas_scene_for",
@@ -1794,7 +1799,7 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
             path = str(Path(tmp) / "figure.svg")
             with (
                 mock.patch.object(
-                    service, "plan_figure_export", return_value=_EXPORT_PLAN
+                    service, "_resolve_figure_export", return_value=([], _EXPORT_PLAN)
                 ),
                 mock.patch(
                     "chemvas.ui.canvas_document_session_service.export_canvas_scene_for",
@@ -1832,7 +1837,7 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
             path.write_text("ORIGINAL", encoding="utf-8")
             with (
                 mock.patch.object(
-                    service, "plan_figure_export", return_value=_EXPORT_PLAN
+                    service, "_resolve_figure_export", return_value=([], _EXPORT_PLAN)
                 ),
                 mock.patch(
                     "chemvas.ui.canvas_document_session_service.export_canvas_scene_for",

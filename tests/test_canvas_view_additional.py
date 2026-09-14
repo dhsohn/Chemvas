@@ -5,6 +5,7 @@ from types import SimpleNamespace
 from unittest import mock
 
 from chemvas.core.history import HistoryCommand
+from chemvas.ui.history_operations import CanvasHistoryOperations
 from tests.runtime_services import canvas_runtime_services
 from tests.runtime_state import canvas_runtime_state
 
@@ -93,9 +94,6 @@ from chemvas.ui.handle_overlay_access import (
 from chemvas.ui.history_canvas_access import (
     apply_atom_color_for_history,
     remove_atom_for_history,
-    remove_bond_for_history,
-    restore_atom_from_state_for_history,
-    restore_bond_from_state_for_history,
     set_atom_positions_for_history,
     trim_bonds_for_history,
 )
@@ -197,6 +195,7 @@ def _color_service_for(view, *, graph_service=None):
         )
     return CanvasColorMutationService(
         view,
+        history_operations=CanvasHistoryOperations(view),
         graph_service=graph_service,
         history_service=getattr(
             getattr(view, "services", None), "history_service", None
@@ -309,7 +308,9 @@ class CanvasViewAdditionalTest(unittest.TestCase):
             ),
         )
         history_view.runtime_state.history_service = CanvasHistoryService(
-            history_view, history_state_for(history_view), replay_context=nullcontext
+            CanvasHistoryOperations(history_view),
+            history_state_for(history_view),
+            replay_context=nullcontext,
         )
 
         history_service = history_view.runtime_state.history_service
@@ -333,7 +334,7 @@ class CanvasViewAdditionalTest(unittest.TestCase):
             ),
         )
         failing_push_history = CanvasHistoryService(
-            failing_push_view,
+            CanvasHistoryOperations(failing_push_view),
             history_state_for(failing_push_view),
             replay_context=nullcontext,
         )
@@ -350,7 +351,9 @@ class CanvasViewAdditionalTest(unittest.TestCase):
             ),
         )
         disabled_view.runtime_state.history_service = CanvasHistoryService(
-            disabled_view, history_state_for(disabled_view), replay_context=nullcontext
+            CanvasHistoryOperations(disabled_view),
+            history_state_for(disabled_view),
+            replay_context=nullcontext,
         )
         disabled_view.runtime_state.history_service.push(first)
         self.assertEqual(history_state_for(disabled_view).history, [])
@@ -362,7 +365,7 @@ class CanvasViewAdditionalTest(unittest.TestCase):
             )
         )
         undo_redo_view.runtime_state.history_service = CanvasHistoryService(
-            undo_redo_view,
+            CanvasHistoryOperations(undo_redo_view),
             history_state_for(undo_redo_view),
             replay_context=nullcontext,
         )
@@ -385,7 +388,7 @@ class CanvasViewAdditionalTest(unittest.TestCase):
             )
         )
         failing_undo_history = CanvasHistoryService(
-            failing_undo_view,
+            CanvasHistoryOperations(failing_undo_view),
             history_state_for(failing_undo_view),
             replay_context=nullcontext,
         )
@@ -404,7 +407,7 @@ class CanvasViewAdditionalTest(unittest.TestCase):
             )
         )
         failing_redo_history = CanvasHistoryService(
-            failing_redo_view,
+            CanvasHistoryOperations(failing_redo_view),
             history_state_for(failing_redo_view),
             replay_context=nullcontext,
         )
@@ -417,7 +420,9 @@ class CanvasViewAdditionalTest(unittest.TestCase):
             runtime_state=canvas_runtime_state(history_state=CanvasHistoryState())
         )
         noop_view.runtime_state.history_service = CanvasHistoryService(
-            noop_view, history_state_for(noop_view), replay_context=nullcontext
+            CanvasHistoryOperations(noop_view),
+            history_state_for(noop_view),
+            replay_context=nullcontext,
         )
         noop_history = noop_view.runtime_state.history_service
         noop_history.undo()
@@ -945,8 +950,8 @@ class CanvasViewAdditionalTest(unittest.TestCase):
         bond_mutation_service.add_bond.return_value = 7
 
         self.assertEqual(add_bond_for(view, 1, 2, order=2), 7)
-        restore_bond_from_state_for_history(view, 4, bond_state)
-        remove_bond_for_history(view, 5)
+        CanvasHistoryOperations(view).restore_bond_from_state_for_history(4, bond_state)
+        CanvasHistoryOperations(view).remove_bond_for_history(5)
         trim_bonds_for_history(view, 6)
 
         bond_mutation_service.add_bond.assert_called_once_with(1, 2, 2)
@@ -1044,12 +1049,11 @@ class CanvasViewAdditionalTest(unittest.TestCase):
         )
 
         self.assertEqual(add_bond_for(mutation_view, 1, 2, order=3), 9)
-        restore_bond_from_state_for_history(
-            mutation_view,
+        CanvasHistoryOperations(mutation_view).restore_bond_from_state_for_history(
             4,
             {"a": 2, "b": 3, "order": 2, "style": "double", "color": "#334455"},
         )
-        remove_bond_for_history(mutation_view, 5)
+        CanvasHistoryOperations(mutation_view).remove_bond_for_history(5)
         trim_bonds_for_history(mutation_view, 6)
 
         bond_mutation_service.add_bond.assert_called_once_with(1, 2, 3)
@@ -1093,8 +1097,7 @@ class CanvasViewAdditionalTest(unittest.TestCase):
 
         self.assertEqual(add_atom_for(mutation_view, "N", 1.5, -2.5), 7)
         remove_atom_for_history(mutation_view, 1, remove_marks=False)
-        restore_atom_from_state_for_history(
-            mutation_view,
+        CanvasHistoryOperations(mutation_view).restore_atom_from_state_for_history(
             4,
             {
                 "element": "C",

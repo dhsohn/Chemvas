@@ -106,7 +106,7 @@ def test_explicit_rebind_preserves_glyph_and_both_electronic_states_exactly(
 def test_rebind_failure_restores_scene_registry_annotations_and_stacks(
     drawing, monkeypatch, failure
 ):
-    import chemvas.ui.history_commands as commands
+    import chemvas.ui.history_operations as commands
 
     canvas, old, new = drawing
     item = add_mark_for_atom_for(canvas, old, QPointF(-35, -15), kind="plus")
@@ -122,7 +122,7 @@ def test_rebind_failure_restores_scene_registry_annotations_and_stacks(
         monkeypatch.setattr(history, "push", lambda command: False)
     else:
         name = (
-            "_apply_scene_item_state"
+            "apply_scene_item_state"
             if failure == "apply"
             else "refresh_selection_outline_for_canvas"
         )
@@ -172,7 +172,7 @@ def test_rebind_same_owner_invalid_target_and_conflicting_annotation_are_no_edit
 def test_failed_rebind_history_replay_remains_exact_and_retryable(
     drawing, monkeypatch, operation
 ):
-    import chemvas.ui.history_commands as commands
+    import chemvas.ui.history_operations as commands
 
     canvas, old, new = drawing
     item = add_mark_for_atom_for(canvas, old, QPointF(-35, -15), kind="radical")

@@ -1,0 +1,64 @@
+{
+  "type": "chemvas",
+  "version": 7,
+  "state": {
+    "model": {
+      "atoms": {
+        "0": {
+          "element": "C",
+          "x": 72.0,
+          "y": 72.0,
+          "color": "#000000",
+          "explicit_label": false
+        },
+        "1": {
+          "element": "O",
+          "x": 90.0,
+          "y": 72.0,
+          "color": "#000000",
+          "explicit_label": false
+        }
+      },
+      "bonds": [
+        {
+          "a": 0,
+          "b": 1,
+          "order": 1,
+          "style": "single",
+          "color": "#000000"
+        }
+      ],
+      "next_atom_id": 2
+    },
+    "ring_fills": [],
+    "notes": [],
+    "marks": [],
+    "arrows": [],
+    "ts_brackets": [],
+    "shapes": [],
+    "orbitals": [],
+    "settings": {
+      "bond_length_px": 18.0,
+      "arrow_line_width": 1.5,
+      "arrow_head_scale": 0.4,
+      "orbital_phase_enabled": true,
+      "text_font_family": "Arial",
+      "text_font_size": 13,
+      "text_font_weight": 600,
+      "text_italic": false,
+      "text_color": "#222222",
+      "text_alignment": "left",
+      "text_line_spacing": 1.0,
+      "note_box_enabled": false,
+      "note_box_color": "#ffffff",
+      "note_box_alpha": 1.0,
+      "note_border_enabled": false,
+      "note_border_color": "#333333",
+      "note_border_width": 1.0,
+      "note_padding": 6.0,
+      "sheet_size": "A4",
+      "sheet_orientation": "portrait"
+    },
+    "last_smiles_input": null
+  }
+}

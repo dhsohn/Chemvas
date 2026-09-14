@@ -7,6 +7,7 @@ from types import SimpleNamespace
 from unittest import mock
 
 from tests.runtime_services import canvas_runtime_services
+from tests.subprocess_support import source_subprocess_env
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 from PyQt6 import sip
@@ -351,6 +352,7 @@ class CanvasSceneResetServiceTest(unittest.TestCase):
         result = subprocess.run(
             [sys.executable, "-c", script],
             cwd=os.getcwd(),
+            env=source_subprocess_env(),
             capture_output=True,
             text=True,
             check=False,

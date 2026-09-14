@@ -1,5 +1,6 @@
 import math
 import unittest
+from copy import deepcopy
 
 from chemvas.domain.document import (
     CANVAS_FILE_VERSION,
@@ -353,8 +354,8 @@ class DocumentStateTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             build_document_payload(state, version=CANVAS_FILE_VERSION)
 
-    def test_document_payload_rejects_all_previous_versions(self) -> None:
-        for version in range(1, CANVAS_FILE_VERSION):
+    def test_document_payload_rejects_unsupported_pre_v7_versions(self) -> None:
+        for version in range(1, 7):
             with self.subTest(version=version), self.assertRaises(ValueError):
                 build_document_payload(_canvas_state(), version=version)
 
@@ -399,7 +400,7 @@ class DocumentStateTest(unittest.TestCase):
         build_document_payload(state, version=CANVAS_FILE_VERSION)
 
         with self.assertRaises(ValueError):
-            build_document_payload(state, version=CANVAS_FILE_VERSION - 1)
+            build_document_payload(state, version=6)
 
     def test_document_payload_rejects_duplicate_bond_pairs(self) -> None:
         atoms = {
@@ -966,6 +967,61 @@ class DocumentStateTest(unittest.TestCase):
                 state["model"]["atom_annotations"] = atom_annotations
                 with self.assertRaises(ValueError):
                     build_document_payload(state, version=CANVAS_FILE_VERSION)
+
+    def test_document_rejects_colliding_atom_annotation_ids(self) -> None:
+        for keys in (("0", "00"), (0, "0"), ("0", "０")):
+            for annotations in (
+                ({"formal_charge": 1}, {"formal_charge": -1}),
+                ({"radical_electrons": 1}, {"radical_electrons": 2}),
+                ({"formal_charge": -1}, {"formal_charge": -1}),
+            ):
+                entries = list(zip(keys, annotations, strict=True))
+                for ordered in (entries, entries[::-1]):
+                    with self.subTest(entries=ordered):
+                        state = _canvas_state(
+                            _model_state(atoms={"0": _atom_state()}, next_atom_id=1)
+                        )
+                        state["model"]["atom_annotations"] = dict(ordered)
+                        payload = {
+                            "type": CHEMVAS_FILE_TYPE,
+                            "version": CANVAS_FILE_VERSION,
+                            "state": state,
+                        }
+                        original = deepcopy(payload)
+                        with self.assertRaisesRegex(
+                            ValueError, "Duplicate atom annotation ID: 0"
+                        ):
+                            build_document_payload(state, CANVAS_FILE_VERSION)
+                        with self.assertRaisesRegex(
+                            ValueError, "Duplicate atom annotation ID: 0"
+                        ):
+                            extract_document_state(payload)
+                        self.assertEqual(payload, original)
+
+    def test_unique_atom_annotation_ids_keep_existing_normalization(self) -> None:
+        expected = {
+            0: {"formal_charge": -1, "radical_electrons": 1},
+            1: {"formal_charge": 1},
+        }
+        for key in (0, "0", "00", "０"):
+            with self.subTest(key=key):
+                state = _canvas_state(
+                    _model_state(
+                        atoms={"0": _atom_state(), "1": _atom_state()}, next_atom_id=2
+                    )
+                )
+                state["model"]["atom_annotations"] = {
+                    key: expected[0],
+                    "1": expected[1],
+                }
+                payload = build_document_payload(state, CANVAS_FILE_VERSION)
+                restored = deserialize_model_state(
+                    extract_document_state(payload)["model"]
+                )
+                self.assertEqual(restored.atom_annotations, expected)
+                self.assertEqual(
+                    serialize_model_state(restored)["atom_annotations"], expected
+                )
 
     def test_selection_payload_rejects_wedge_hash_on_non_single_bonds(self) -> None:
         payload = {

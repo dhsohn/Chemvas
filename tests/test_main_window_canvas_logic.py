@@ -16,6 +16,7 @@ from chemvas.ui.canvas_tool_settings_state import (
     set_tool_setting_for,
     tool_settings_state_for,
 )
+from chemvas.ui.history_operations import CanvasHistoryOperations
 from chemvas.ui.main_window_canvas_logic import (
     active_canvas_index,
     active_canvas_tab_index,
@@ -33,11 +34,12 @@ class MainWindowCanvasLogicTest(unittest.TestCase):
     @staticmethod
     def _canvas_with_history() -> SimpleNamespace:
         canvas = SimpleNamespace()
+        operations = CanvasHistoryOperations(canvas)
         history_state = CanvasHistoryState()
         canvas.runtime_state = canvas_runtime_state(
             history_state=history_state,
             history_service=CanvasHistoryService(
-                canvas, history_state, replay_context=nullcontext
+                operations, history_state, replay_context=nullcontext
             ),
             callback_state=CanvasCallbackState(),
             selection_info_state=SelectionInfoState.create(),

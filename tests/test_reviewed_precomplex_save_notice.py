@@ -19,7 +19,7 @@ from chemvas.ui.canvas_calculation_plan_state import set_calculation_plan_for
 from chemvas.ui.canvas_document_metadata_state import document_file_path_for
 from chemvas.ui.canvas_window_access import snapshot_canvas_state_for
 from chemvas.ui.main_window_ports import active_canvas_for_window, services_for_window
-from tests.test_calculation_step_dialog import _reviewed_precomplex_state
+from tests.precomplex_workflow_support import _review_candidate_fixture
 
 
 @pytest.fixture(scope="module", autouse=True)
@@ -31,7 +31,7 @@ def application():
 
 @pytest.fixture
 def reviewed_window(tmp_path, monkeypatch, capsys, application):
-    state = _reviewed_precomplex_state(tmp_path, monkeypatch, capsys)
+    state = _review_candidate_fixture(tmp_path, monkeypatch, capsys)[1]["state"]
     window = build_main_window()
     window.show()
     canvas = active_canvas_for_window(window)

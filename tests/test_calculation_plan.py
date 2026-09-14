@@ -6,7 +6,6 @@ from unittest.mock import patch
 import pytest
 
 from chemvas.domain.document import (
-    CANVAS_FILE_VERSION,
     Atom,
     Bond,
     CalculationAtomCorrespondence,
@@ -383,11 +382,11 @@ def test_v7_document_round_trips_calculation_plan_v2_and_v6_rejects_it() -> None
     state = _document_state()
     state["calculation_plan"] = _plan()
 
-    payload = build_document_payload(state, CANVAS_FILE_VERSION)
+    payload = build_document_payload(state, 7)
 
     assert extract_document_state(payload)["calculation_plan"] == _plan()
     with pytest.raises(ValueError, match="Invalid Chemvas file"):
-        build_document_payload(state, CANVAS_FILE_VERSION - 1)
+        build_document_payload(state, 6)
 
 
 @pytest.mark.parametrize("version", [1, 2.0, True])

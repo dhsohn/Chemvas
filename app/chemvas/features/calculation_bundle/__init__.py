@@ -1,13 +1,19 @@
 """Qt- and provider-free contracts for calculation bundle export."""
 
+from chemvas.domain.document.inspection import (
+    ComponentInventory,
+    ComponentSummary,
+    inspect_component_inventory,
+    inspect_components,
+)
+
 from .model import (
     AtomMapEntry,
     CalculationArtifacts,
     CalculationStateSelection,
-    ComponentInventory,
-    ComponentSummary,
 )
 from .plan import (
+    CalculationStepPreparation,
     apply_calculation_step_edit,
     calculate_bond_changes,
     calculation_plan_for_document,
@@ -22,6 +28,7 @@ from .plan import (
     path_precheck,
     plan_with_replaced_step,
     precomplex_basis_sha256,
+    prepare_calculation_step,
     prepare_calculation_step_editor,
     require_step_ready,
     select_calculation_state,
@@ -33,8 +40,6 @@ from .plan import (
     validate_reviewed_precomplex_pairs,
 )
 from .service import (
-    inspect_component_inventory,
-    inspect_components,
     select_components,
     validate_calculation_artifacts,
 )
@@ -43,6 +48,7 @@ __all__ = [
     "AtomMapEntry",
     "CalculationArtifacts",
     "CalculationStateSelection",
+    "CalculationStepPreparation",
     "ComponentInventory",
     "ComponentSummary",
     "apply_calculation_step_edit",
@@ -61,6 +67,7 @@ __all__ = [
     "path_precheck",
     "plan_with_replaced_step",
     "precomplex_basis_sha256",
+    "prepare_calculation_step",
     "prepare_calculation_step_editor",
     "require_step_ready",
     "select_calculation_state",

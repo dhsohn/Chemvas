@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import hashlib
+import io
 import json
 import subprocess
 import sys
 from typing import TYPE_CHECKING
+from unittest.mock import Mock
 
 import pytest
 
@@ -18,6 +20,7 @@ from chemvas.domain.document import (
     serialize_model_state,
     serialize_settings,
 )
+from chemvas.features.document_composition import compose_document_state
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -144,6 +147,67 @@ def test_inspect_document_hashes_exact_bytes_and_lists_full_graph(
     assert report["bonds"][0]["a"] == 0
 
 
+@pytest.mark.parametrize("command", ["inspect-document", "dry-run", "apply-patch"])
+@pytest.mark.parametrize(
+    "field,values", [("formal_charge", [1, -1]), ("radical_electrons", [1, 2])]
+)
+@pytest.mark.parametrize("reverse", [False, True])
+def test_document_commands_reject_colliding_annotation_ids_before_output(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    command: str,
+    field: str,
+    values: list[int],
+    reverse: bool,
+) -> None:
+    entries = list(zip(("0", "00"), values, strict=True))
+    if reverse:
+        entries.reverse()
+    # Keep the visible mark consistent with the last entry, so the existing
+    # semantic charge/radical check cannot hide a missing duplicate-ID guard.
+    state = compose_document_state(
+        {
+            "format": "chemvas-document-composition",
+            "version": 1,
+            "atoms": [
+                {"id": 0, "element": "O", "x": 0.0, "y": 0.0, field: entries[-1][1]}
+            ],
+            "bonds": [],
+        }
+    )
+    source = tmp_path / "source.chemvas"
+    write_document(source, state, CANVAS_FILE_VERSION)
+    payload = json.loads(source.read_text())
+    payload["state"]["model"]["atom_annotations"] = {
+        key: {field: value} for key, value in entries
+    }
+    source.write_text(json.dumps(payload))
+    source_bytes = source.read_bytes()
+    patch = _patch(source_bytes)
+    patch["operations"] = [{"op": "move_atom", "atom_id": 0, "x": 1.0, "y": 0.0}]
+    patch_path = tmp_path / "patch.json"
+    patch_path.write_text(json.dumps(patch))
+    patch_bytes = patch_path.read_bytes()
+    output = tmp_path / "revised.chemvas"
+    if command == "inspect-document":
+        argv = [command, str(source)]
+    else:
+        destination = (
+            ["--dry-run"] if command == "dry-run" else ["--output", str(output)]
+        )
+        argv = ["apply-patch", str(source), str(patch_path), *destination]
+
+    with pytest.raises(SystemExit) as error:
+        cli.run(argv)
+    assert error.value.code == 2
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert "Duplicate atom annotation ID: 0" in captured.err
+    assert source.read_bytes() == source_bytes
+    assert patch_path.read_bytes() == patch_bytes
+    assert set(tmp_path.iterdir()) == {source, patch_path}
+
+
 def test_dry_run_and_apply_share_candidate_hash_without_overwriting_source(
     tmp_path: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -202,6 +266,31 @@ def test_patch_parser_rejects_duplicate_keys_and_nonstandard_numbers(
     with pytest.raises(SystemExit) as error:
         cli.run(["apply-patch", str(source), str(patch_path), "--dry-run"])
     assert error.value.code == 2
+
+
+@pytest.mark.parametrize("extra_bytes", [-1, 0, 1])
+def test_patch_reader_bounds_actual_bytes_even_when_stat_size_is_stale(
+    monkeypatch, extra_bytes
+) -> None:
+    limit = 16
+    monkeypatch.setattr(cli, "MAX_PATCH_BYTES", limit)
+    raw = b"{}" + b" " * (limit + extra_bytes - 2)
+    path = Mock()
+    path.is_file.return_value = True
+    path.stat.return_value.st_size = 2
+    path.read_bytes.return_value = raw
+    stream = io.BytesIO(raw)
+    path.open.return_value = stream
+
+    if extra_bytes > 0:
+        with pytest.raises(ValueError) as error:
+            cli._read_patch(path)
+        assert str(error.value) == "patch document exceeds the 16-byte limit"
+    else:
+        assert cli._read_patch(path) == {}
+    path.open.assert_called_once_with("rb")
+    path.read_bytes.assert_not_called()
+    assert stream.closed
 
 
 def test_failure_after_an_earlier_operation_leaves_no_output(

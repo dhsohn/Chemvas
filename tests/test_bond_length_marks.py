@@ -195,7 +195,7 @@ def test_bond_length_history_failure_restores_exact_current_frame_and_is_retryab
     position, font = QPointF(item.pos()), item.font()
     stacks = history.capture_stack_snapshot()
     with mock.patch(
-        "chemvas.ui.history_commands._apply_scene_item_state",
+        "chemvas.ui.history_operations.apply_scene_item_state",
         side_effect=RuntimeError("injected replay"),
     ):
         with pytest.raises(RuntimeError, match="injected replay"):

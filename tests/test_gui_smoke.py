@@ -2073,7 +2073,7 @@ class GuiShortcutSmokeTest(unittest.TestCase):
             )
             overlay_center = (
                 active_canvas_for_window(self.window)
-                .services.selection.selection_controller.selection_path_for_bond(
+                .services.selection.selection_controller.outline_service.selection_path_for_bond(
                     bond_id
                 )
                 .boundingRect()
@@ -2110,12 +2110,16 @@ class GuiShortcutSmokeTest(unittest.TestCase):
 
         single_rect = (
             active_canvas_for_window(self.window)
-            .services.selection.selection_controller.selection_path_for_bond(0)
+            .services.selection.selection_controller.outline_service.selection_path_for_bond(
+                0
+            )
             .boundingRect()
         )
         double_rect = (
             active_canvas_for_window(self.window)
-            .services.selection.selection_controller.selection_path_for_bond(1)
+            .services.selection.selection_controller.outline_service.selection_path_for_bond(
+                1
+            )
             .boundingRect()
         )
 
@@ -2140,7 +2144,7 @@ class GuiShortcutSmokeTest(unittest.TestCase):
         bond_item = bond_items_for_id(active_canvas_for_window(self.window), 0)[0]
         path_rect = (
             active_canvas_for_window(self.window)
-            .services.selection.selection_controller.selection_path_for_bond_item(
+            .services.selection.selection_controller.outline_service.selection_path_for_bond_item(
                 bond_item
             )
             .boundingRect()

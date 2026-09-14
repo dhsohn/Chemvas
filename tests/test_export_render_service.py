@@ -144,6 +144,19 @@ class ExportRenderServiceTest(unittest.TestCase):
             scene, items=None, margin=4.0, unit_scale=1.0, target_width_pt=None
         )
 
+    def test_independent_exports_resolve_fresh_geometry_after_edit(self) -> None:
+        scene = self._content_scene()
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "fresh.svg")
+            first = export_scene(scene, path, fmt="svg", margin=4.0)
+            label = next(item for item in scene.items() if item.data(0) == "atom")
+            label.moveBy(100.0, 0.0)
+            second = export_scene(scene, path, fmt="svg", margin=4.0)
+            self.assertGreater(second.source_w, first.source_w)
+            scene.clear()
+            with self.assertRaisesRegex(ValueError, "nothing to export"):
+                export_scene(scene, path, fmt="svg", margin=4.0)
+
     def test_empty_scene_reports_nothing_to_export(self) -> None:
         scene = QGraphicsScene()
         self.assertIsNone(content_bounds([]))

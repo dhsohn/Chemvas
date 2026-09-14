@@ -7,8 +7,44 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.15.0] - 2026-09-14
+
+### Fixed
+
+- Avoid decoding unchanged embedded image sources on each geometry update,
+  reducing work during rotation previews while retaining input validation and
+  immutable source pixels.
+- Reject atom annotation IDs that refer to the same atom after normalization,
+  instead of silently retaining only the last charge or radical annotation.
+- Bound graph-patch request reads to the existing byte limit, even when the
+  file size reported before reading is stale.
+
 ### Changed
 
+- Bind editing-history commands to explicit operations instead of passing the
+  entire canvas through Undo/Redo. Preserve transaction ordering, savepoints,
+  scene restoration and independent history for each canvas.
+- Share calculation-step preparation and test setup helpers, and verify the
+  complete declared package contents in both wheel and source distributions.
+- Extend desktop/CLI edit regressions to explicit bond order/style changes,
+  checking directed graphics, unchanged document content, Undo/Redo and GUI
+  restoration from both saved results. Keep GUI input policies distinct from
+  explicit patches.
+- Add same-input desktop/CLI atom-move regressions for dependent marks, ring
+  geometry, stored depth, document preservation and Undo/Redo. Keep the existing
+  shared geometry and distinct GUI/CLI execution policies.
+- Move common component and charge/radical inspection to
+  `chemvas.domain.document.inspection`, shared by document authoring and
+  calculation preparation. Keep calculation-specific rules in their feature,
+  retain the published Python root exports, and preserve document formats,
+  validation results and CLI behavior.
+- Establish continued reading of currently supported valid v7 documents as the
+  compatibility baseline, with fixed native, editable-SVG, CLI and desktop
+  regression examples. Keep the writer at v7 and separate reader support from
+  its version; future incompatible format changes must retain v7 reading.
+- Batch selection-outline updates when pasting multiple notes, and reuse figure
+  export geometry within each request while preserving pre-paint limits and
+  atomic output replacement.
 - Replace the two template documents in `examples` with a gallery of three
   existing 600 DPI publication PNGs. Keep the editable first-scheme starter and
   link the recipes for recreating the gallery's native documents and SVGs.
@@ -1957,7 +1993,8 @@ housekeeping.
   `.chemvas` document type (double-clicking a file opens it in Chemvas), and a
   Linux `.desktop` entry with an `application/x-chemvas` MIME type.
 
-[Unreleased]: https://github.com/dhsohn/Chemvas/compare/v0.14.1...HEAD
+[Unreleased]: https://github.com/dhsohn/Chemvas/compare/v0.15.0...HEAD
+[0.15.0]: https://github.com/dhsohn/Chemvas/compare/v0.14.1...v0.15.0
 [0.14.1]: https://github.com/dhsohn/Chemvas/compare/v0.14.0...v0.14.1
 [0.14.0]: https://github.com/dhsohn/Chemvas/compare/v0.13.0...v0.14.0
 [0.13.0]: https://github.com/dhsohn/Chemvas/compare/v0.12.0...v0.13.0

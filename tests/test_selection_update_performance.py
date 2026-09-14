@@ -17,8 +17,10 @@ from chemvas.ui.canvas_document_metadata_state import (
 from chemvas.ui.canvas_scene_items_state import selected_notes_for
 from chemvas.ui.canvas_window_access import snapshot_canvas_state_for
 from chemvas.ui.history_recording_access import record_additions_for
+from chemvas.ui.scene_clipboard_state import scene_clipboard_state_for
 from chemvas.ui.scene_item_access import create_scene_item_from_state
 from chemvas.ui.select_all_access import select_all_scene_items_for
+from chemvas.ui.selection_collection_access import selected_ids_for
 from chemvas.ui.selection_info_state import selection_info_state_for
 from chemvas.ui.selection_style_state import selection_style_state_for
 from chemvas.ui.selection_update_batch import batch_selection_updates
@@ -235,6 +237,151 @@ def test_actual_selected_paste_undo_is_bounded_and_redo_exact(canvas):
     assert not document_is_dirty_for(canvas, snapshot_canvas_state_for(canvas))
     history.redo()
     assert snapshot_canvas_state_for(canvas) == pasted
+
+
+def _paste_fixture(canvas, note_count):
+    atom_ids = set(_chain(canvas))
+    notes = [
+        create_scene_item_from_state(
+            canvas, {"kind": "note", "text": f"Step {i}", "x": i * 40, "y": 60}
+        )
+        for i in range(note_count)
+    ]
+    assert select_all_scene_items_for(canvas)
+    controller = canvas.services.scene_operations.scene_clipboard_controller
+    payload = controller.selection_payload_for_clipboard()
+    assert payload is not None
+    # Use only the in-memory provider, including when this file runs natively.
+    return controller, lambda: (payload, json.dumps(payload)), atom_ids, notes
+
+
+@pytest.mark.parametrize("note_count", [0, 1, 12])
+def test_forward_paste_builds_one_outline_and_keeps_exact_history(canvas, note_count):
+    controller, provider, original_atoms, original_notes = _paste_fixture(
+        canvas, note_count
+    )
+    before = snapshot_canvas_state_for(canvas)
+    mark_document_clean_for(canvas, before)
+    history = canvas.services.history_service
+    stacks = history.capture_stack_snapshot()
+    outline = _outline(canvas)
+    with (
+        mock.patch.object(
+            controller, "_clipboard", side_effect=AssertionError("OS clipboard")
+        ),
+        mock.patch.object(
+            outline, "update_selection_outline", wraps=outline.update_selection_outline
+        ) as refresh,
+        mock.patch.object(
+            outline, "selection_path_for_bond", wraps=outline.selection_path_for_bond
+        ) as paths,
+    ):
+        assert controller.paste_selection_from_clipboard(payload_provider=provider)
+    assert refresh.call_count == 1
+    assert paths.call_count == 17
+    assert len(canvas.model.atoms) == 36
+    assert len(canvas.model.bonds) == 34
+    assert selected_ids_for(canvas)[0] == set(canvas.model.atoms) - original_atoms
+    assert len(selected_notes_for(canvas)) == note_count
+    assert not set(original_notes).intersection(selected_notes_for(canvas))
+    pasted = snapshot_canvas_state_for(canvas)
+    assert document_is_dirty_for(canvas, pasted)
+    after_stacks = history.capture_stack_snapshot()
+    assert len(after_stacks.history) == len(stacks.history) + 1
+    history.verify_stack_snapshot(
+        stacks, history=(*stacks.history, after_stacks.history[-1])
+    )
+    history.undo()
+    assert snapshot_canvas_state_for(canvas) == before
+    assert not document_is_dirty_for(canvas, before)
+    history.verify_stack_snapshot(stacks, redo_stack=(after_stacks.history[-1],))
+    history.redo()
+    assert snapshot_canvas_state_for(canvas) == pasted
+    history.verify_stack_snapshot(after_stacks)
+
+
+@pytest.mark.parametrize("blocked", [False, True])
+@pytest.mark.parametrize("suspended", [False, True])
+def test_forward_paste_preserves_outer_selection_batch(canvas, blocked, suspended):
+    controller, provider, _, _ = _paste_fixture(canvas, 3)
+    style = selection_style_state_for(canvas)
+    style.suspend_outline = suspended
+    canvas.scene().blockSignals(blocked)
+    outline = _outline(canvas)
+    try:
+        with mock.patch.object(
+            outline, "update_selection_outline", wraps=outline.update_selection_outline
+        ) as refresh:
+            assert controller.paste_selection_from_clipboard(payload_provider=provider)
+        assert style.suspend_outline is suspended
+        assert canvas.scene().signalsBlocked() is blocked
+        assert refresh.call_count == (0 if suspended else 1)
+        assert len(selected_notes_for(canvas)) == 3
+    finally:
+        style.suspend_outline = False
+        canvas.scene().blockSignals(False)
+
+
+@pytest.mark.parametrize(
+    "phase, nested", [("note", False), ("note", True), ("refresh", False)]
+)
+def test_failed_forward_paste_restores_exact_scene_stacks_and_retry(
+    canvas, phase, nested
+):
+    controller, provider, _, _ = _paste_fixture(canvas, 3)
+    before = snapshot_canvas_state_for(canvas)
+    mark_document_clean_for(canvas, before)
+    selected = set(canvas.scene().selectedItems())
+    notes = list(selected_notes_for(canvas))
+    scene_items = set(canvas.scene().items())
+    history = canvas.services.history_service
+    stacks = history.capture_stack_snapshot()
+    clipboard = scene_clipboard_state_for(canvas)
+    paste_state = (clipboard.paste_source_json, clipboard.paste_count)
+    style = selection_style_state_for(canvas)
+    style.suspend_outline = nested
+    canvas.scene().blockSignals(nested)
+    selection = canvas.services.selection.selection_controller
+    owner, method = (
+        (selection.note_service, "select_note")
+        if phase == "note"
+        else (_outline(canvas), "update_selection_outline")
+    )
+    original = getattr(owner, method)
+    error = RuntimeError("paste selection failed after mutation")
+    calls = 0
+
+    def fail_after_mutation(*args, **kwargs):
+        nonlocal calls
+        result = original(*args, **kwargs)
+        calls += 1
+        if calls == (2 if phase == "note" else 1):
+            assert len(canvas.model.atoms) == 36
+            raise error
+        return result
+
+    try:
+        with mock.patch.object(owner, method, side_effect=fail_after_mutation):
+            with pytest.raises(RuntimeError) as caught:
+                controller.paste_selection_from_clipboard(payload_provider=provider)
+        assert style.suspend_outline is nested
+        assert canvas.scene().signalsBlocked() is nested
+    finally:
+        style.suspend_outline = False
+        canvas.scene().blockSignals(False)
+    assert caught.value is error
+    assert snapshot_canvas_state_for(canvas) == before
+    assert not document_is_dirty_for(canvas, before)
+    assert set(canvas.scene().selectedItems()) == selected
+    assert list(selected_notes_for(canvas)) == notes
+    assert set(canvas.scene().items()) == scene_items
+    assert (clipboard.paste_source_json, clipboard.paste_count) == paste_state
+    history.verify_stack_snapshot(stacks)
+    assert not canvas.scene().signalsBlocked()
+    assert not selection_style_state_for(canvas).suspend_outline
+    assert controller.paste_selection_from_clipboard(payload_provider=provider)
+    history.undo()
+    assert snapshot_canvas_state_for(canvas) == before
 
 
 def test_batch_refresh_publishes_final_selection_info_once(canvas):

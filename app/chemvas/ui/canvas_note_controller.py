@@ -320,7 +320,7 @@ class CanvasNoteController:
                     _call_required_rollback_method,
                     command,
                     "undo",
-                    self.canvas,
+                    self.history.operations,
                 ),
             )
             if runtime_rollback is not None:
@@ -353,7 +353,7 @@ class CanvasNoteController:
                 _call_required_rollback_method(
                     command,
                     "undo",
-                    self.canvas,
+                    self.history.operations,
                 )
 
             run_rollback_step(
@@ -679,7 +679,9 @@ class CanvasNoteController:
             command = CompositeCommand(
                 [
                     UpdateSceneItemCommand(item, before_state, empty_state),
-                    DeleteSceneItemsCommand.capture(self.canvas, [empty_state], [item]),
+                    DeleteSceneItemsCommand.capture(
+                        self.history.operations, [empty_state], [item]
+                    ),
                 ]
             )
             # Deselect before removal so grouped companion notes drop with it,

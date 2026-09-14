@@ -19,13 +19,11 @@ from chemvas.domain.document import (
     is_hex_color,
     serialize_model_state,
 )
-from chemvas.domain.document.perspective import translate_projected_point_3d
-from chemvas.features.calculation_bundle import (
+from chemvas.domain.document.inspection import (
     inspect_component_inventory,
     inspect_components,
-    validate_calculation_plan,
-    validate_reviewed_precomplex_pairs,
 )
+from chemvas.domain.document.perspective import translate_projected_point_3d
 
 DOCUMENT_PATCH_FORMAT = "chemvas-graph-patch"
 DOCUMENT_PATCH_VERSION = 1
@@ -160,6 +158,11 @@ def apply_document_patch(
         # and dual mark/model annotation consistency, even without a plan.
         inspect_components(candidate)
         if candidate.get("calculation_plan") is not None:
+            from chemvas.features.calculation_bundle import (
+                validate_calculation_plan,
+                validate_reviewed_precomplex_pairs,
+            )
+
             plan = validate_calculation_plan(candidate, candidate["calculation_plan"])
             validate_reviewed_precomplex_pairs(candidate, plan)
     except ValueError as exc:

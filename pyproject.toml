@@ -181,18 +181,12 @@ ignore_missing_imports = true
 # ``chemvas.core`` / ``chemvas.ui`` modules join it one at a time, as the work
 # to satisfy it produces real types rather than filler.
 #
-# Two of them will not join in this form, and that is a decision rather than a
-# backlog item. ``chemvas.core.history`` needs 69 annotations, 53 of which are
-# the same duck-typed ``canvas``; ``core`` is Qt-free by contract, so the only
-# value available is ``Any`` — which is exactly what ``HistoryCanvasPort``
-# already declares, deliberately, a few lines away. The rest of
-# ``chemvas.ui.transactions`` needs another 71 in the same shape, and narrowing
-# those to ``object`` breaks 32 call sites that reach the scene through
-# ``getattr``. Apart from six ``QRectF`` parameters in ``scene_rect``, promoting
-# either one buys 140 ``Any`` annotations, leaves the checking exactly as strong
-# as it is now, and labels two rollback kernels "strict" when nothing about them
-# is. Raising ``HistoryCanvasPort`` from ``Any`` to a real Protocol is the
-# prerequisite, not the promotion.
+# ``chemvas.core.history`` now uses small bound-operation protocols for command
+# families, without a UI resolver or canvas argument. Its heterogeneous command
+# composition and optional transaction capabilities are not yet fully strict.
+# ``chemvas.ui.transactions`` still restores heterogeneous Qt/runtime state.
+# Promote these modules only when the remaining annotations express real
+# contracts; filling their rollback kernels with ``Any`` is not a strictness gain.
 [[tool.mypy.overrides]]
 module = [
     "chemvas.domain.*",

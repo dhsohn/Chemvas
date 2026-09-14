@@ -139,7 +139,11 @@ class _FakeCanvas:
 
         self.clear_scene = Mock()
         self.push_command = Mock()
-        self.history_service = SimpleNamespace(push=self.push_command)
+        from chemvas.ui.history_operations import CanvasHistoryOperations
+
+        self.history_service = SimpleNamespace(
+            push=self.push_command, operations=CanvasHistoryOperations(self)
+        )
         self.rebuild_bond_adjacency = Mock()
         self._record_additions = Mock()
         self._add_bond_graphics = Mock()

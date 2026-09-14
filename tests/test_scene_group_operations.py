@@ -45,6 +45,7 @@ from chemvas.ui.history_commands import (
     GroupSceneItemsCommand,
     UngroupSceneItemsCommand,
 )
+from chemvas.ui.history_operations import CanvasHistoryOperations
 from chemvas.ui.scene_group_operations import (
     expand_note_selection_to_groups_for,
     expand_selection_to_groups_for,
@@ -233,6 +234,7 @@ class SceneGroupOperationsTest(unittest.TestCase):
 
     def test_group_selection_absorbs_overlapping_groups_with_undo(self) -> None:
         canvas = _Canvas()
+        operations = CanvasHistoryOperations(canvas)
         atom_a, _ = _add_atom(canvas, selected=True)
         atom_b, _ = _add_atom(canvas, 10.0, 0.0, selected=True)
         atom_c, _ = _add_atom(canvas, 20.0, 0.0, selected=True)
@@ -246,10 +248,10 @@ class SceneGroupOperationsTest(unittest.TestCase):
         self.assertEqual(merged.atom_ids, {atom_a, atom_b, atom_c})
 
         command = canvas.history.commands[-1]
-        command.undo(canvas)
+        command.undo(operations)
         self.assertEqual(len(state.groups), 1)
         self.assertEqual(next(iter(state.groups.values())).atom_ids, {atom_a, atom_b})
-        command.redo(canvas)
+        command.redo(operations)
         self.assertEqual(len(state.groups), 1)
         self.assertEqual(
             next(iter(state.groups.values())).atom_ids, {atom_a, atom_b, atom_c}
@@ -287,6 +289,7 @@ class SceneGroupOperationsTest(unittest.TestCase):
 
     def test_ungroup_selection_removes_intersecting_groups_with_undo(self) -> None:
         canvas = _Canvas()
+        operations = CanvasHistoryOperations(canvas)
         atom_a, _ = _add_atom(canvas, selected=True)
         atom_b, _ = _add_atom(canvas, 10.0, 0.0)
         group_id = register_group_for(canvas, {atom_a, atom_b}, [])
@@ -297,9 +300,9 @@ class SceneGroupOperationsTest(unittest.TestCase):
         self.assertEqual(state.groups, {})
         command = canvas.history.commands[-1]
         self.assertIsInstance(command, UngroupSceneItemsCommand)
-        command.undo(canvas)
+        command.undo(operations)
         self.assertEqual(state.groups[group_id].atom_ids, {atom_a, atom_b})
-        command.redo(canvas)
+        command.redo(operations)
         self.assertEqual(state.groups, {})
 
     def test_ungroup_selection_without_group_membership_is_noop(self) -> None:
@@ -451,13 +454,14 @@ class SceneGroupOperationsTest(unittest.TestCase):
 
     def test_group_command_undo_redo_refreshes_outline(self) -> None:
         canvas = _Canvas()
+        operations = CanvasHistoryOperations(canvas)
         _add_atom(canvas, selected=True)
         _add_arrow(canvas, selected=True)
         self.assertTrue(group_selection_for(canvas))
         command = canvas.history.commands[-1]
 
-        command.undo(canvas)
-        command.redo(canvas)
+        command.undo(operations)
+        command.redo(operations)
 
         self.assertEqual(
             canvas.selection_controller.update_selection_outline.call_count, 3
@@ -465,13 +469,14 @@ class SceneGroupOperationsTest(unittest.TestCase):
 
     def test_ungroup_command_undo_redo_refreshes_outline(self) -> None:
         canvas = _Canvas()
+        operations = CanvasHistoryOperations(canvas)
         atom_a, _ = _add_atom(canvas, selected=True)
         register_group_for(canvas, {atom_a}, [])
         self.assertTrue(ungroup_selection_for(canvas))
         command = canvas.history.commands[-1]
 
-        command.undo(canvas)
-        command.redo(canvas)
+        command.undo(operations)
+        command.redo(operations)
 
         self.assertEqual(
             canvas.selection_controller.update_selection_outline.call_count, 3

@@ -26,7 +26,7 @@ from chemvas.ui.selection_outline_state import (
     set_selection_outlines_for,
 )
 from chemvas.ui.selection_style_state import SelectionStyleState
-from tests.test_selection_controller_additional import (
+from tests.selection_support import (
     _FakeCanvas,
     _FakeItem,
     _FakeScene,

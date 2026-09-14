@@ -5,16 +5,11 @@ import json
 import zlib
 from os import PathLike
 from pathlib import Path
-from typing import Any, cast
+from typing import Any
 from xml.etree import ElementTree as ET
 
 from chemvas.core.document_io import ChemvasDocument, create_document, parse_document
-from chemvas.domain.document import (
-    CANVAS_FILE_VERSION,
-    CHEMVAS_FILE_TYPE,
-    MAX_DOCUMENT_BYTES,
-    normalize_json_numbers,
-)
+from chemvas.domain.document import MAX_DOCUMENT_BYTES
 from chemvas.domain.json_io import strict_json_loads
 
 PathType = str | PathLike[str]
@@ -56,11 +51,12 @@ def create_editable_svg_payload(
         "scope": scope,
         "document": document.payload,
     }
-    return _validated_editable_svg_payload(payload)
+    normalized_payload, _document = _validated_editable_svg_payload(payload)
+    return normalized_payload
 
 
 def embed_chemvas_document_in_svg(path: PathType, payload: dict[str, Any]) -> None:
-    payload = _validated_editable_svg_payload(payload)
+    payload, _document = _validated_editable_svg_payload(payload)
     tree = _parse_svg_tree(path, error_message="Invalid SVG file.")
     root = tree.getroot()
     metadata = _metadata_element(root)
@@ -87,11 +83,16 @@ def embed_chemvas_document_in_svg(path: PathType, payload: dict[str, Any]) -> No
 
 
 def extract_chemvas_document_from_svg(path: PathType) -> ChemvasDocument:
-    payload = extract_chemvas_svg_payload(path)
-    return parse_document(payload["document"])
+    _payload, document = _read_editable_svg(path)
+    return document
 
 
 def extract_chemvas_svg_payload(path: PathType) -> dict[str, Any]:
+    payload, _document = _read_editable_svg(path)
+    return payload
+
+
+def _read_editable_svg(path: PathType) -> tuple[dict[str, Any], ChemvasDocument]:
     tree = _parse_svg_tree(
         path, error_message="Invalid editable Chemvas metadata in SVG."
     )
@@ -231,7 +232,9 @@ def _decompress_svg_payload(compressed: bytes) -> bytes:
     return raw
 
 
-def _validated_editable_svg_payload(payload: dict[str, Any]) -> dict[str, Any]:
+def _validated_editable_svg_payload(
+    payload: dict[str, Any],
+) -> tuple[dict[str, Any], ChemvasDocument]:
     if set(payload) != {"type", "version", "scope", "document"}:
         raise ValueError("Invalid editable Chemvas SVG payload.")
     if payload.get("type") != CHEMVAS_SVG_PAYLOAD_TYPE:
@@ -245,18 +248,18 @@ def _validated_editable_svg_payload(payload: dict[str, Any]) -> dict[str, Any]:
     document = payload.get("document")
     if not isinstance(document, dict):
         raise ValueError("Invalid editable Chemvas SVG payload.")
-    document_version = document.get("version")
-    if (
-        document.get("type") != CHEMVAS_FILE_TYPE
-        or type(document_version) is not int
-        or document_version != CANVAS_FILE_VERSION
-    ):
-        raise ValueError("Invalid editable Chemvas SVG payload.")
     try:
-        parse_document(document)
+        parsed_document = parse_document(document)
     except ValueError as exc:
         raise ValueError("Invalid editable Chemvas SVG payload.") from exc
-    return cast("dict[str, Any]", normalize_json_numbers(payload))
+    # The outer fields are validated strings/integers. Reuse the normalized
+    # document instead of walking its state again or revalidating it on read.
+    normalized_payload = (
+        payload
+        if parsed_document.payload is document
+        else {**payload, "document": parsed_document.payload}
+    )
+    return normalized_payload, parsed_document
 
 
 __all__ = [

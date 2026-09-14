@@ -30,6 +30,7 @@ from chemvas.ui.canvas_smiles_input_state import (
     set_last_smiles_input_for,
 )
 from chemvas.ui.history_commands import AddSceneItemsCommand
+from chemvas.ui.history_operations import CanvasHistoryOperations
 from chemvas.ui.insert_template_commit_service import apply_template_commit_resolution
 from chemvas.ui.structure_build_service import StructureBuildService
 from chemvas.ui.structure_growth_build_actions import (
@@ -603,6 +604,7 @@ class StructureBuildServiceTest(unittest.TestCase):
 
     def test_free_template_insert_history_undo_redo_includes_ring_items(self) -> None:
         canvas = _FakeCanvas()
+        operations = CanvasHistoryOperations(canvas)
         pushed_commands = []
         canvas.services.document.canvas_history_recording_service = (
             CanvasHistoryRecordingService(
@@ -646,7 +648,7 @@ class StructureBuildServiceTest(unittest.TestCase):
         self.assertEqual(len(canvas.ring_items), 1)
         self.assertEqual(len(canvas.scene_items), 1)
 
-        command.undo(canvas)
+        command.undo(operations)
 
         self.assertEqual(canvas.model.atoms, {})
         self.assertEqual(canvas.model.bonds, [])
@@ -654,7 +656,7 @@ class StructureBuildServiceTest(unittest.TestCase):
         self.assertEqual(canvas.scene_items, [])
         self.assertEqual(last_smiles_input_for(canvas), "before")
 
-        command.redo(canvas)
+        command.redo(operations)
 
         self.assertEqual(len(canvas.model.atoms), 5)
         self.assertEqual(
@@ -706,6 +708,7 @@ class StructureBuildServiceTest(unittest.TestCase):
         for generator, ring_style, point_pairs in cases:
             with self.subTest(generator=generator, ring_style=ring_style):
                 canvas = _FakeCanvas()
+                operations = CanvasHistoryOperations(canvas)
                 points = [QPointF(x, y) for x, y in point_pairs]
                 if generator == "atom_regular_ring":
                     atom_id = canvas.model.add_atom("C", points[0].x(), points[0].y())
@@ -774,14 +777,14 @@ class StructureBuildServiceTest(unittest.TestCase):
                 self.assertEqual(len(ring_atom_ids), len(points))
                 self.assertEqual(set(ring_atom_ids), set(canvas.model.atoms))
 
-                command.undo(canvas)
+                command.undo(operations)
 
                 self.assertEqual(len(canvas.model.atoms), base_atom_count)
                 self.assertEqual(len(canvas.model.bonds), base_bond_count)
                 self.assertEqual(canvas.ring_items, [])
                 self.assertEqual(canvas.scene_items, [])
 
-                command.redo(canvas)
+                command.redo(operations)
 
                 self.assertEqual(len(canvas.ring_items), 1)
                 self.assertIs(canvas.ring_items[0], ring_item)

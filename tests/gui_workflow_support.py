@@ -7,6 +7,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 import pytest
 from PyQt6.QtCore import QPoint, QPointF, Qt
+from PyQt6.QtGui import QKeySequence
 from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import QApplication, QToolButton
 
@@ -73,6 +74,11 @@ def _click(canvas, scene_pos):
 
 def _key(canvas, key, modifiers=Qt.KeyboardModifier.NoModifier):
     QTest.keyClick(canvas, key, modifiers)
+    QApplication.processEvents()
+
+
+def _redo(canvas):
+    QTest.keySequence(canvas, QKeySequence(QKeySequence.StandardKey.Redo))
     QApplication.processEvents()
 
 

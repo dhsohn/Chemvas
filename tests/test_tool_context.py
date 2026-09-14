@@ -73,7 +73,7 @@ def _style_port(**overrides):
 
 
 def _history_port(**overrides):
-    defaults = dict(push=mock.Mock())
+    defaults = dict(push=mock.Mock(), operations=object())
     defaults.update(overrides)
     return SimpleNamespace(**defaults)
 
@@ -490,7 +490,7 @@ def test_tool_context_rolls_back_command_when_history_push_is_blocked() -> None:
         context.push_history(command)
 
     assert caught.value is primary
-    command.undo.assert_called_once_with(canvas)
+    command.undo.assert_called_once_with(history.operations)
 
 
 def test_tool_context_delegates_delete_gesture_session_lifecycle() -> None:

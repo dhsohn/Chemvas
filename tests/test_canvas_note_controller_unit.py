@@ -32,6 +32,7 @@ from chemvas.ui.canvas_text_style_state import (
     set_text_style_for,
 )
 from chemvas.ui.history_commands import UpdateSceneItemCommand
+from chemvas.ui.history_operations import CanvasHistoryOperations
 from chemvas.ui.note_item import NoteItem
 from chemvas.ui.note_item_access import committed_note_text_for
 from chemvas.ui.scene_item_restore import create_note_item_from_state
@@ -40,9 +41,11 @@ from chemvas.ui.selection_service_bundle import build_selection_services
 from chemvas.ui.selection_style_state import SelectionStyleState
 
 
-def _history_service(push=None):
+def _history_service(canvas, push=None):
     owner = CanvasHistoryService(
-        SimpleNamespace(), CanvasHistoryState(), replay_context=nullcontext
+        CanvasHistoryOperations(canvas),
+        CanvasHistoryState(),
+        replay_context=nullcontext,
     )
     if push is not None:
         owner.push = push
@@ -50,7 +53,7 @@ def _history_service(push=None):
 
 
 def _attach_history_service(canvas):
-    service = _history_service(getattr(canvas, "push_command", None))
+    service = _history_service(canvas, getattr(canvas, "push_command", None))
     services = getattr(canvas, "services", None)
     if services is None:
         services = canvas_runtime_services()
@@ -270,10 +273,9 @@ class CanvasNoteControllerUnitTest(unittest.TestCase):
                 text_style_state=CanvasTextStyleState(),
                 scene_items_state=CanvasSceneItemsState(),
             ),
-            services=canvas_runtime_services(
-                history_service=_history_service(push_command)
-            ),
+            services=canvas_runtime_services(),
         )
+        canvas.services.history_service = _history_service(canvas, push_command)
         note = NoteItem(canvas)
         note.setData(0, "note")
         note.setPlainText("memo")

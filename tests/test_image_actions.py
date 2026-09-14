@@ -236,6 +236,7 @@ def test_overlapping_native_note_and_image_paint_identically_after_reload_and_un
     from PyQt6.QtGui import QPainter
 
     from chemvas.ui.history_commands import DeleteSceneItemsCommand
+    from chemvas.ui.history_operations import CanvasHistoryOperations
     from chemvas.ui.scene_item_access import (
         create_scene_item_from_state,
         remove_scene_item,
@@ -244,6 +245,7 @@ def test_overlapping_native_note_and_image_paint_identically_after_reload_and_un
     state = _empty()
     state["notes"] = [{"text": "SCALE BAR", "x": 5, "y": 5}]
     with offscreen_canvas(state, command="image-layer") as (canvas, service):
+        operations = CanvasHistoryOperations(canvas)
         opaque = BytesIO()
         Image.new("RGB", (80, 40), "white").save(opaque, format="PNG")
         item = create_scene_item_from_state(
@@ -259,7 +261,9 @@ def test_overlapping_native_note_and_image_paint_identically_after_reload_and_un
             return result
 
         before = render()
-        deletion = DeleteSceneItemsCommand.capture(canvas, [item.image_state()], [item])
+        deletion = DeleteSceneItemsCommand.capture(
+            operations, [item.image_state()], [item]
+        )
         remove_scene_item(canvas, item)
         history_service_for_access(canvas).push(deletion)
         history_service_for_access(canvas).undo()

@@ -9,6 +9,7 @@ import sys
 import xml.etree.ElementTree as ET
 import zlib
 from pathlib import Path
+from unittest import mock
 
 import pytest
 
@@ -28,7 +29,6 @@ from chemvas.domain.document import (
     serialize_model_state,
     serialize_settings,
 )
-from chemvas.ui.canvas_document_session_service import CanvasDocumentSessionService
 
 
 @pytest.fixture(scope="module", autouse=True)
@@ -77,6 +77,37 @@ def _write_source(
 ) -> bytes:
     write_document(path, state or _state(), version)
     return path.read_bytes()
+
+
+@pytest.mark.parametrize("output_format", ["svg", "png", "pdf"])
+def test_headless_export_resolves_content_and_geometry_once(output_format: str) -> None:
+    from chemvas.features.export import service as export_service
+
+    state = _state()
+    before = json.dumps(state, sort_keys=True)
+    with (
+        mock.patch.object(
+            export_service,
+            "collect_export_items",
+            wraps=export_service.collect_export_items,
+        ) as collect,
+        mock.patch.object(
+            export_service, "content_bounds", wraps=export_service.content_bounds
+        ) as bounds,
+    ):
+        result = cli._render_offscreen(
+            state,
+            output_format=output_format,
+            background="white",
+            dpi=150,
+            width_mm=84,
+            min_font_pt=1 if output_format != "pdf" else None,
+        )
+    assert result.content
+    assert result.width_points > 0
+    assert result.height_points > 0
+    assert collect.call_count == bounds.call_count == 1
+    assert json.dumps(state, sort_keys=True) == before
 
 
 @pytest.mark.parametrize("output_format", ["svg", "png"])
@@ -466,7 +497,8 @@ def test_physical_size_limits_fail_before_painting(
         pytest.fail("over-budget physical size reached painting")
 
     monkeypatch.setattr(
-        CanvasDocumentSessionService, "export_figure", unexpected_export
+        "chemvas.ui.canvas_document_session_service.export_canvas_scene_for",
+        unexpected_export,
     )
     with pytest.raises(SystemExit) as error:
         cli.run(["render-document", str(source), "--output", str(output), *options])
@@ -812,7 +844,8 @@ def test_pdf_height_limit_rejects_before_export(
         pytest.fail("over-height PDF reached painting")
 
     monkeypatch.setattr(
-        CanvasDocumentSessionService, "export_figure", unexpected_export
+        "chemvas.ui.canvas_document_session_service.export_canvas_scene_for",
+        unexpected_export,
     )
     with pytest.raises(SystemExit) as error:
         cli.run(
@@ -881,7 +914,8 @@ def test_pdf_height_limit_includes_native_page_rounding(
         pytest.fail("rounded PDF page over the height limit reached painting")
 
     monkeypatch.setattr(
-        CanvasDocumentSessionService, "export_figure", unexpected_export
+        "chemvas.ui.canvas_document_session_service.export_canvas_scene_for",
+        unexpected_export,
     )
     with pytest.raises(SystemExit) as error:
         cli.run(

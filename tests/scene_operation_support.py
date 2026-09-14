@@ -55,6 +55,7 @@ from chemvas.ui.scene_clipboard_controller import (
 from chemvas.ui.scene_clipboard_state import SceneClipboardState
 from chemvas.ui.scene_delete_controller import SceneDeleteController
 from chemvas.ui.scene_transform_controller import SceneTransformController
+from chemvas.ui.selection_style_state import SelectionStyleState
 
 
 def _set_selectable(item: QGraphicsItem) -> QGraphicsItem:
@@ -195,6 +196,7 @@ class _FakeCanvas:
             rotation_state=CanvasRotationState(),
             scene_clipboard_state=self.scene_clipboard_state,
             scene_items_state=CanvasSceneItemsState(),
+            selection_style_state=SelectionStyleState(),
             smiles_input_state=CanvasSmilesInputState(),
         )
         set_last_smiles_input_for(self, None)
@@ -209,7 +211,11 @@ class _FakeCanvas:
         self.remove_atom_calls: list[tuple[int, bool]] = []
         self.removed_scene_items: list[QGraphicsItem] = []
         self.pushed_commands: list[object] = []
-        self.history_service = SimpleNamespace(push=self.push_command)
+        from chemvas.ui.history_operations import CanvasHistoryOperations
+
+        self.history_service = SimpleNamespace(
+            push=self.push_command, operations=CanvasHistoryOperations(self)
+        )
         self.clear_handles_calls = 0
         set_atom_items_for(self, {})
         set_atom_dots_for(self, {})

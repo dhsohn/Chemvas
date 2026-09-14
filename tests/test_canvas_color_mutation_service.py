@@ -44,6 +44,7 @@ from chemvas.ui.canvas_lifecycle import schedule_canvas_deletion_for
 from chemvas.ui.canvas_smiles_input_state import CanvasSmilesInputState
 from chemvas.ui.graphics_items import AtomDotItem
 from chemvas.ui.history_commands import UpdateSceneItemCommand
+from chemvas.ui.history_operations import CanvasHistoryOperations
 from chemvas.ui.note_item import NoteItem
 from chemvas.ui.note_item_access import (
     committed_note_html_for,
@@ -80,6 +81,7 @@ def _color_service_for(canvas, *, graph_service=None) -> CanvasColorMutationServ
         )
     return CanvasColorMutationService(
         canvas,
+        history_operations=CanvasHistoryOperations(canvas),
         graph_service=graph_service,
         history_service=canvas.services.history_service,
     )
@@ -203,6 +205,7 @@ class CanvasColorMutationServiceTest(unittest.TestCase):
         history = history_service.state
         service = CanvasColorMutationService(
             canvas,
+            history_operations=CanvasHistoryOperations(canvas),
             graph_service=graph_service,
             history_service=history_service,
         )
@@ -466,19 +469,19 @@ class CanvasColorMutationServiceTest(unittest.TestCase):
                 self.before = before
                 self.after = after
 
-            def undo(self, target_canvas) -> None:
-                self.assert_canvas(target_canvas)
+            def undo(self, operations) -> None:
+                self.assert_operations(operations)
                 values[self.key] = self.before
 
-            def redo(self, target_canvas) -> None:
-                self.assert_canvas(target_canvas)
+            def redo(self, operations) -> None:
+                self.assert_operations(operations)
                 values[self.key] = self.after
 
             @staticmethod
-            def assert_canvas(target_canvas) -> None:
-                if target_canvas is not canvas:
+            def assert_operations(operations) -> None:
+                if operations is not service.operations:
                     raise AssertionError(
-                        "transaction rolled back against the wrong canvas"
+                        "transaction rolled back against the wrong operations"
                     )
 
         def mutate(item, color) -> None:

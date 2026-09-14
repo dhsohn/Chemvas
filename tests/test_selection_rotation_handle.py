@@ -31,7 +31,7 @@ from chemvas.ui.scene_decoration_access import add_arrow_for
 from chemvas.ui.selection_outline_state import selection_outlines_for
 from chemvas.ui.selection_service_access import refresh_selection_outline_for
 from chemvas.ui.structure_mutation_access import add_atom_for, add_bond_for
-from tests.gui_workflow_support import _key
+from tests.gui_workflow_support import _key, _redo
 from tests.gui_workflow_support import app as app
 from tests.gui_workflow_support import drawing as drawing
 
@@ -176,7 +176,7 @@ def test_dragging_the_knob_rotates_the_selection_as_one_history_step(drawing):
     _knob(canvas)
     _ctrl(canvas, Qt.Key.Key_Z)
     assert _positions(canvas, a, b) == before
-    _ctrl(canvas, Qt.Key.Key_Y)
+    _redo(canvas)
     _assert_rotated(canvas, (a, b), before, 90.0)
 
 
@@ -365,7 +365,11 @@ def test_a_ring_double_bond_band_stays_on_the_atom_axis(drawing):
         assert lengths[0] < lengths[1] - 1.0
         a, b = atom_for_id(canvas, bond.a), atom_for_id(canvas, bond.b)
         axis_mid = QPointF((a.x + b.x) / 2.0, (a.y + b.y) / 2.0)
-        band_mid = controller.selection_path_for_bond(bond_id).boundingRect().center()
+        band_mid = (
+            controller.outline_service.selection_path_for_bond(bond_id)
+            .boundingRect()
+            .center()
+        )
         # The band follows the line on the atom axis, not the midpoint between
         # the outer and the shortened inner line, so it meets the single
         # bonds' bands at the ring vertices without a step.

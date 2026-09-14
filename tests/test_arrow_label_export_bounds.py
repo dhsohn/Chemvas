@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 import math
-import os
 import subprocess
 import sys
 from types import SimpleNamespace
@@ -21,6 +20,7 @@ from chemvas.features.export import (
 )
 from chemvas.ui.graphics_items import ArrowLabelItem
 from chemvas.ui.note_item import NoteItem
+from tests.subprocess_support import source_subprocess_env
 
 
 @pytest.fixture(scope="module", autouse=True)
@@ -260,7 +260,7 @@ def test_color_font_keeps_native_paint_and_conservative_bounds(mode):
             text=True,
             check=True,
             timeout=20,
-            env={**os.environ, "QT_QPA_PLATFORM": "offscreen"},
+            env=source_subprocess_env({"QT_QPA_PLATFORM": "offscreen"}),
         )
         return json.loads(result.stdout)
 

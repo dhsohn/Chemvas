@@ -815,8 +815,9 @@ class CanvasDocumentSessionService:
         editable_svg: bool = False,
         max_height_mm: float | None = None,
         min_font_pt: float | None = None,
-    ) -> None:
-        items, pad, unit_scale, target_width_pt = self._figure_export_parameters(
+    ) -> ExportPlan:
+        """Resolve once, validate, and atomically paint this synchronous export."""
+        items, guard_plan = self._resolve_figure_export(
             scope=scope,
             sizing=sizing,
             target_width_mm=target_width_mm,
@@ -835,9 +836,6 @@ class CanvasDocumentSessionService:
                 or min_font_pt <= 0.0
             ):
                 raise ValueError("minimum font size must be a positive finite number")
-        guard_plan = self.plan_figure_export(
-            scope=scope, sizing=sizing, target_width_mm=target_width_mm
-        )
         width_pixels, height_pixels = validate_export_budget(
             guard_plan, output_format=fmt, dpi=dpi, max_height_mm=max_height_mm
         )
@@ -855,12 +853,10 @@ class CanvasDocumentSessionService:
                 str(tmp),
                 fmt=fmt,
                 items=items,
-                margin=pad,
+                plan=guard_plan,
                 dpi=dpi,
                 background=background,
                 title="Chemvas drawing",
-                unit_scale=unit_scale,
-                target_width_pt=target_width_pt,
             )
             if tmp.stat().st_size == 0:
                 raise ValueError(
@@ -880,6 +876,7 @@ class CanvasDocumentSessionService:
                 self._embed_editable_svg_payload(str(tmp), fmt=fmt, scope=scope)
 
         atomic_write_via_temp(target, render_to_temp)
+        return guard_plan
 
     def plan_figure_export(
         self,
@@ -889,6 +886,17 @@ class CanvasDocumentSessionService:
         target_width_mm: float | None = None,
     ) -> ExportPlan:
         """Return the exact geometry plan used by figure export without painting."""
+        return self._resolve_figure_export(
+            scope=scope, sizing=sizing, target_width_mm=target_width_mm
+        )[1]
+
+    def _resolve_figure_export(
+        self,
+        *,
+        scope: str,
+        sizing: str,
+        target_width_mm: float | None,
+    ) -> tuple[list[Any], ExportPlan]:
         from chemvas.features.export import resolve_export_plan
 
         items, pad, unit_scale, target_width_pt = self._figure_export_parameters(
@@ -896,14 +904,13 @@ class CanvasDocumentSessionService:
             sizing=sizing,
             target_width_mm=target_width_mm,
         )
-        _export_items, plan = resolve_export_plan(
+        return resolve_export_plan(
             canvas_scene_for(self.canvas),
             items=items,
             margin=pad,
             unit_scale=unit_scale,
             target_width_pt=target_width_pt,
         )
-        return plan
 
     def _figure_export_parameters(
         self,

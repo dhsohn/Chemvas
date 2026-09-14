@@ -96,6 +96,8 @@ class CanvasRuntimeState:
 
     @classmethod
     def create(cls, canvas: Any) -> CanvasRuntimeState:
+        from chemvas.ui.history_operations import CanvasHistoryOperations
+
         history_state = CanvasHistoryState()
         rdkit_idle_warmup_bridge = RdkitIdleWarmupBridge(canvas)
         rdkit_idle_timer = QTimer(rdkit_idle_warmup_bridge)
@@ -115,7 +117,7 @@ class CanvasRuntimeState:
             insert_state=CanvasInsertState(),
             history_state=history_state,
             history_service=CanvasHistoryService(
-                canvas,
+                CanvasHistoryOperations(canvas),
                 history_state,
                 replay_context=partial(batch_selection_updates, canvas),
             ),

@@ -6,10 +6,9 @@ import sys
 from pathlib import Path
 from typing import Any, cast
 
-from chemvas.bootstrap.document_cli_shared import json_text
+from chemvas.bootstrap.document_cli_shared import json_text, read_json_request
 from chemvas.core.document_io import atomic_create_bytes, read_exact_document
 from chemvas.domain.document import build_document_payload, normalize_json_numbers
-from chemvas.domain.json_io import strict_json_loads
 from chemvas.features.document_patch import (
     DocumentPatchResult,
     apply_document_patch,
@@ -161,12 +160,13 @@ def _patch_report(
 def _read_patch(path: Path) -> object:
     if not path.is_file():
         raise ValueError(f"patch document does not exist: {path}")
-    if path.stat().st_size > MAX_PATCH_BYTES:
-        raise ValueError(f"patch document exceeds the {MAX_PATCH_BYTES}-byte limit")
-    try:
-        return strict_json_loads(path.read_bytes())
-    except (ValueError, RecursionError, UnicodeError) as exc:
-        raise ValueError("Invalid Chemvas Graph Patch JSON file.") from exc
+    _, request = read_json_request(
+        path,
+        max_bytes=MAX_PATCH_BYTES,
+        limit_message=f"patch document exceeds the {MAX_PATCH_BYTES}-byte limit",
+        invalid_message="Invalid Chemvas Graph Patch JSON file.",
+    )
+    return request
 
 
 def _validate_source(source: Path) -> None:

@@ -41,6 +41,7 @@ from chemvas.ui.canvas_bond_graphics_state import (
 )
 from chemvas.ui.canvas_group_state import CanvasGroupState
 from chemvas.ui.canvas_history_state import CanvasHistoryState
+from chemvas.ui.canvas_model_access import set_next_atom_id_for
 from chemvas.ui.canvas_service_access import canvas_services_for
 from chemvas.ui.canvas_smiles_input_state import (
     CanvasSmilesInputState,
@@ -360,8 +361,8 @@ class AtomLabelServiceTest(unittest.TestCase):
             atom_coords_3d=merge_info["atom_coords_3d"],
         )
 
-        def restore_atom(_canvas, atom_id, state) -> None:
-            _canvas.model.atoms[atom_id] = Atom(
+        def restore_atom(atom_id, state) -> None:
+            canvas.model.atoms[atom_id] = Atom(
                 state["element"],
                 state["x"],
                 state["y"],
@@ -369,26 +370,26 @@ class AtomLabelServiceTest(unittest.TestCase):
                 explicit_label=state["explicit_label"],
             )
 
-        def restore_coords(_canvas, _positions, *, coords_3d=None, **_kwargs) -> None:
-            atom_coords_3d_for(_canvas).update(coords_3d or {})
+        def restore_coords(_positions, *, coords_3d=None, **_kwargs) -> None:
+            atom_coords_3d_for(canvas).update(coords_3d or {})
 
-        def remove_atom(_canvas, atom_id, *, remove_marks=True) -> None:
+        def remove_atom(atom_id, *, remove_marks=True) -> None:
             del remove_marks
-            _canvas.model.atoms.pop(atom_id, None)
-            atom_coords_3d_for(_canvas).pop(atom_id, None)
+            canvas.model.atoms.pop(atom_id, None)
+            atom_coords_3d_for(canvas).pop(atom_id, None)
 
         history_port = SimpleNamespace(
             restore_atom_from_state_for_history=restore_atom,
+            set_next_atom_id_for_history=lambda value: set_next_atom_id_for(
+                canvas, value
+            ),
             set_atom_positions_for_history=restore_coords,
             remove_atom_for_history=remove_atom,
-            set_last_smiles_input_for_history=lambda _canvas, _value: None,
+            set_last_smiles_input_for_history=lambda _value: None,
         )
-        with patch(
-            "chemvas.core.history._history_canvas_port", return_value=history_port
-        ):
-            command.undo(canvas)
-            self.assertEqual(atom_coords_3d_for(canvas)[2], (0.2, 0.2, 4.0))
-            command.redo(canvas)
+        command.undo(history_port)
+        self.assertEqual(atom_coords_3d_for(canvas)[2], (0.2, 0.2, 4.0))
+        command.redo(history_port)
 
         self.assertEqual(atom_coords_3d_for(canvas), after_merge_coords)
 

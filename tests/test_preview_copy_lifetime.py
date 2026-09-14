@@ -1,11 +1,12 @@
 from __future__ import annotations
 
-import os
 import subprocess
 import sys
 from typing import TYPE_CHECKING
 
 import pytest
+
+from tests.subprocess_support import source_subprocess_env
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -61,7 +62,7 @@ print('PASS: copy timer teardown and surviving window' if sys.argv[2] == 'close'
 @pytest.mark.parametrize("name", ["smiles", "inchi", "inchikey"])
 @pytest.mark.parametrize("mode", ["close", "repeat"])
 def test_copy_feedback_follows_button_lifetime(tmp_path: Path, name: str, mode: str):
-    environment = dict(os.environ)
+    environment = source_subprocess_env()
     environment["QT_QPA_PLATFORM"] = environment.get("QT_QPA_PLATFORM", "offscreen")
     for key in ("XDG_CONFIG_HOME", "XDG_DATA_HOME", "XDG_CACHE_HOME"):
         environment[key] = str(tmp_path / key.lower())

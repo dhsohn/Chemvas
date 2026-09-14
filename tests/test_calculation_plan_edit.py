@@ -20,7 +20,7 @@ from chemvas.features.calculation_bundle import (
     validate_calculation_plan,
 )
 from tests.calculation_plan_support import _document_state, _plan
-from tests.test_precomplex_cli import _generate_candidate_fixture
+from tests.precomplex_workflow_support import _generate_candidate_fixture
 
 if TYPE_CHECKING:
     from pathlib import Path

@@ -473,6 +473,27 @@ def test_drag_transaction_uses_shared_history_savepoint_port() -> None:
     assert "chemvas.ui.transactions.document import" not in source
 
 
+def test_core_history_has_no_ui_or_concrete_runtime_dependencies() -> None:
+    """The bound operation contracts apply to lazy and type-only imports too."""
+    forbidden = (
+        "chemvas.ui",
+        "chemvas.bootstrap",
+        "chemvas.adapters",
+        "PyQt6",
+        "rdkit",
+    )
+    violations = [
+        _formatted(edge)
+        for edge in _import_edges()
+        if edge.source == "chemvas.core.history"
+        and any(
+            edge.dependency == prefix or edge.dependency.startswith(prefix + ".")
+            for prefix in forbidden
+        )
+    ]
+    assert violations == []
+
+
 def test_concrete_adapters_are_known_only_by_adapters_and_bootstrap() -> None:
     violations = [
         _formatted(edge)

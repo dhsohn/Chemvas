@@ -189,11 +189,11 @@ def arrange_grouped_canvas(
         transform = scene_transform_controller_for_access(canvas)
         with (
             document_transaction(canvas, history_service=history),
-            history_transaction_scope(canvas),
+            history_transaction_scope(history.operations),
             blocked_scene_signals(canvas.scene()),
         ):
             for color_command in color_commands:
-                color_command.redo(canvas)
+                color_command.redo(history.operations)
             geometry = [
                 transform.translate_geometry(atom_ids, scene_items, dx, dy)
                 for atom_ids, scene_items, dx, dy in translations

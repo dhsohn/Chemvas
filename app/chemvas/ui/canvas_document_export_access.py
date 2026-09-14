@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from chemvas.features.export import export_scene
+from chemvas.features.export import ExportPlan, render_export_plan
 from chemvas.ui.scene_item_access import canvas_scene_for
 
 
@@ -10,24 +10,20 @@ def export_canvas_scene_for(
     *,
     fmt: str,
     items,
-    margin: float,
+    plan: ExportPlan,
     dpi: int,
     background: str,
     title: str,
-    unit_scale: float,
-    target_width_pt: float | None,
 ):
-    return export_scene(
+    return render_export_plan(
         canvas_scene_for(canvas),
         path,
         fmt=fmt,
         items=items,
-        margin=margin,
+        plan=plan,
         dpi=dpi,
         background=background,
         title=title,
-        unit_scale=unit_scale,
-        target_width_pt=target_width_pt,
     )
 
 

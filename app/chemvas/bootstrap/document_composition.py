@@ -7,7 +7,7 @@ import sys
 from pathlib import Path
 from typing import Any, cast
 
-from chemvas.bootstrap.document_cli_shared import json_text
+from chemvas.bootstrap.document_cli_shared import json_text, read_json_request
 from chemvas.core.document_io import atomic_create_bytes
 from chemvas.domain.document import (
     CANVAS_FILE_VERSION,
@@ -16,7 +16,6 @@ from chemvas.domain.document import (
     build_document_payload,
     normalize_json_numbers,
 )
-from chemvas.domain.json_io import strict_json_loads
 from chemvas.features.document_composition import compose_document_state
 
 MAX_COMPOSITION_BYTES = 1024 * 1024
@@ -81,14 +80,13 @@ def _argument_parser() -> argparse.ArgumentParser:
 
 
 def _read_composition(path: Path) -> object:
-    with path.open("rb") as stream:
-        raw = stream.read(MAX_COMPOSITION_BYTES + 1)
-    if len(raw) > MAX_COMPOSITION_BYTES:
-        raise ValueError(f"composition exceeds the {MAX_COMPOSITION_BYTES}-byte limit")
-    try:
-        return strict_json_loads(raw)
-    except (ValueError, RecursionError, UnicodeError) as exc:
-        raise ValueError("Invalid Chemvas composition JSON file.") from exc
+    _, request = read_json_request(
+        path,
+        max_bytes=MAX_COMPOSITION_BYTES,
+        limit_message=f"composition exceeds the {MAX_COMPOSITION_BYTES}-byte limit",
+        invalid_message="Invalid Chemvas composition JSON file.",
+    )
+    return request
 
 
 def _read_image_source(base_directory: Path, source: str) -> bytes:

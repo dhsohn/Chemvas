@@ -32,6 +32,7 @@ from chemvas.ui.canvas_smiles_input_state import (
     last_smiles_input_for,
 )
 from chemvas.ui.history_commands import DeleteSceneItemsCommand
+from chemvas.ui.history_operations import CanvasHistoryOperations
 from chemvas.ui.scene_delete_controller import SceneDeleteController
 from chemvas.ui.scene_transform_controller import SceneTransformController
 
@@ -126,7 +127,9 @@ class CanvasViewDeleteAndBondStyleTest(unittest.TestCase):
             ),
             push_command=mock.Mock(),
         )
-        view.services.history_service = SimpleNamespace(push=view.push_command)
+        view.services.history_service = SimpleNamespace(
+            push=view.push_command, operations=CanvasHistoryOperations(view)
+        )
         controller = _scene_delete_controller_for(view)
 
         self.assertIsNone(controller.delete_atom("bad"))
@@ -204,7 +207,9 @@ class CanvasViewDeleteAndBondStyleTest(unittest.TestCase):
             ),
             push_command=mock.Mock(),
         )
-        view.services.history_service = SimpleNamespace(push=view.push_command)
+        view.services.history_service = SimpleNamespace(
+            push=view.push_command, operations=CanvasHistoryOperations(view)
+        )
         controller = _scene_delete_controller_for(view)
 
         command = controller.delete_atom(1, record=False)
@@ -247,7 +252,9 @@ class CanvasViewDeleteAndBondStyleTest(unittest.TestCase):
             ),
             push_command=mock.Mock(),
         )
-        view.services.history_service = SimpleNamespace(push=view.push_command)
+        view.services.history_service = SimpleNamespace(
+            push=view.push_command, operations=CanvasHistoryOperations(view)
+        )
         controller = _scene_delete_controller_for(view)
 
         self.assertIsNone(controller.delete_bond(None))
@@ -278,7 +285,9 @@ class CanvasViewDeleteAndBondStyleTest(unittest.TestCase):
             ),
             push_command=mock.Mock(),
         )
-        view.services.history_service = SimpleNamespace(push=view.push_command)
+        view.services.history_service = SimpleNamespace(
+            push=view.push_command, operations=CanvasHistoryOperations(view)
+        )
         controller = _scene_delete_controller_for(view)
 
         command = controller.delete_ring(ring_item, record=False)

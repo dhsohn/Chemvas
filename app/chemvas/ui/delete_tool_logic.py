@@ -4,6 +4,7 @@ from typing import TYPE_CHECKING
 
 from chemvas.core.history import CompositeCommand, HistoryCommand, SetSmilesInputCommand
 from chemvas.domain.document import VALID_ARROW_KINDS
+from chemvas.ui.canvas_service_ports import history_operations_for
 from chemvas.ui.history_commands import DeleteSceneItemsCommand
 from chemvas.ui.scene_item_access import remove_scene_item
 from chemvas.ui.scene_item_state import scene_item_state_for
@@ -65,7 +66,9 @@ def erase_delete_tool_item(canvas, item, *, scene_ops=None, delete_session=None)
     if delete_session is not None:
         command = delete_session.delete_scene_item(item, state)
         return command is not None, command
-    command = DeleteSceneItemsCommand.capture(canvas, [state], [item])
+    command = DeleteSceneItemsCommand.capture(
+        history_operations_for(canvas), [state], [item]
+    )
     remove_scene_item(canvas, item)
     return True, command
 

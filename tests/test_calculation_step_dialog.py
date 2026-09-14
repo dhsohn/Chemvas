@@ -1,13 +1,11 @@
 from __future__ import annotations
 
-import json
 import os
 from types import SimpleNamespace
 from unittest.mock import patch
 
 import pytest
 
-from chemvas.bootstrap import calculation_bundle as calculation_bundle_cli
 from chemvas.domain.document import state as document_state_module
 from chemvas.features.insertion import RDKitResult
 
@@ -34,7 +32,7 @@ from chemvas.ui.calculation_step_dialog import (
     _MappingProductCombo,
 )
 from tests.calculation_plan_support import _document_state, _plan
-from tests.test_precomplex_cli import _generate_candidate_fixture
+from tests.precomplex_workflow_support import _review_candidate_fixture
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -960,41 +958,6 @@ def test_dialog_tables_reject_input_method_cell_editing() -> None:
     dialog.deleteLater()
 
 
-def _reviewed_precomplex_state(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-    capsys: pytest.CaptureFixture[str],
-) -> dict[str, object]:
-    _source, candidates, raw = _generate_candidate_fixture(
-        tmp_path, monkeypatch, capsys
-    )
-    step = raw["state"]["calculation_plan"]["steps"][0]
-    reviewed = tmp_path / "reviewed.chemvas"
-    assert (
-        calculation_bundle_cli.run(
-            [
-                "select-precomplex",
-                str(candidates),
-                "--step",
-                "S01",
-                "--reactant-candidate",
-                step["reactant"]["precomplex"]["candidates"][0]["id"],
-                "--product-candidate",
-                step["product"]["precomplex"]["candidates"][0]["id"],
-                "--reviewer",
-                "test-reviewer",
-                "--output",
-                str(reviewed),
-            ]
-        )
-        == 0
-    )
-    capsys.readouterr()
-    state = json.loads(reviewed.read_text(encoding="utf-8"))["state"]
-    assert isinstance(state, dict)
-    return state
-
-
 def test_dialog_noop_edit_preserves_reviewed_precomplex_pair(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -1002,7 +965,7 @@ def test_dialog_noop_edit_preserves_reviewed_precomplex_pair(
 ) -> None:
     app = QApplication.instance() or QApplication([])
     app.setQuitOnLastWindowClosed(False)
-    state = _reviewed_precomplex_state(tmp_path, monkeypatch, capsys)
+    state = _review_candidate_fixture(tmp_path, monkeypatch, capsys)[1]["state"]
     before = state["calculation_plan"]["steps"][0]
     dialog = CalculationStepDialog(state)
 
@@ -1023,7 +986,7 @@ def test_dialog_dependency_edit_invalidates_precomplex_pair(
 ) -> None:
     app = QApplication.instance() or QApplication([])
     app.setQuitOnLastWindowClosed(False)
-    state = _reviewed_precomplex_state(tmp_path, monkeypatch, capsys)
+    state = _review_candidate_fixture(tmp_path, monkeypatch, capsys)[1]["state"]
     dialog = CalculationStepDialog(state)
     dialog.step_selector.setCurrentIndex(1)
     dialog._set_combo_data(dialog._role_combos[("reactant", 2)], "spectator")
@@ -1101,7 +1064,7 @@ def test_plan_history_failure_preserves_exact_plan_and_stacks(
     monkeypatch: pytest.MonkeyPatch, direction: str
 ) -> None:
     import chemvas.ui.calculation_step_dialog as dialog_module
-    import chemvas.ui.history_commands as command_module
+    import chemvas.ui.history_operations as command_module
     from chemvas.ui.canvas_calculation_plan_state import calculation_plan_for
     from chemvas.ui.canvas_window_access import history_service_for_canvas
 

@@ -22,12 +22,12 @@ from chemvas.core.document_io import (
 from chemvas.core.rdkit_adapter import RDKitAdapter
 from chemvas.domain.document import (
     CANVAS_FILE_VERSION,
-    CalculationPlan,
     CalculationState,
     CalculationStep,
     CalculationStepEndpoint,
     calculation_plan_to_state,
 )
+from chemvas.domain.document.inspection import ComponentSummary, inspect_components
 from chemvas.domain.document.precomplex import precomplex_state_from_json
 from chemvas.domain.document.precomplex_profile import (
     CURRENT_PROFILE_ID,
@@ -38,15 +38,13 @@ from chemvas.domain.json_io import strict_json_loads
 from chemvas.features.calculation_bundle import (
     CalculationArtifacts,
     CalculationStateSelection,
-    ComponentSummary,
-    calculate_bond_changes,
+    CalculationStepPreparation,
     calculation_plan_for_document,
     calculation_plan_report,
     calculation_state_by_id,
     calculation_step_by_id,
-    inspect_components,
-    path_precheck,
     precomplex_basis_sha256,
+    prepare_calculation_step,
     require_step_ready,
     select_calculation_state,
     step_atom_correspondence,
@@ -871,26 +869,12 @@ def _pack_step(
     _validate_source(source)
     _validate_new_step_output(output)
     source_bytes, document = read_exact_document(source)
-    plan = calculation_plan_for_document(document.state)
-    step = calculation_step_by_id(plan, step_id)
-    require_step_ready(plan, step)
+    prepared = prepare_calculation_step(document.state, step_id)
+    plan, step, precheck = prepared.plan, prepared.step, prepared.precheck
     reactant_state = calculation_state_by_id(plan, step.reactant.state_id)
     product_state = calculation_state_by_id(plan, step.product.state_id)
-    precheck = path_precheck(plan, step, document_state=document.state)
-    if any(
-        reason
-        in {
-            "multicomponent_precomplex_review_pair_invalid",
-            "multicomponent_precomplex_review_pair_stale",
-        }
-        for reason in precheck.blocking_reasons
-    ):
-        # Report review-contract failures before invoking RDKit. Besides being
-        # cheaper, this keeps the CLI's blocking reason aligned with
-        # ``inspect-plan`` when electronic marks changed the reviewed basis.
-        validate_reviewed_precomplex_pair(document.state, plan, step)
-    reactant_selection = select_calculation_state(document.state, reactant_state)
-    product_selection = select_calculation_state(document.state, product_state)
+    reactant_selection = prepared.reactant_selection
+    product_selection = prepared.product_selection
 
     adapter = RDKitAdapter()
     reactant_artifacts = _state_artifacts(
@@ -918,21 +902,15 @@ def _pack_step(
     interaction_geometry_guarantee = "not_provided"
     placement_profile: dict[str, object] | None = None
     if reviewed_precomplex_pair:
-        placement_profile = validate_reviewed_precomplex_pair(
-            document.state, plan, step
-        )
+        placement_profile = prepared.validate_reviewed_precomplex_pair()
         reactant_artifacts = _reviewed_precomplex_artifacts(
-            document_state=document.state,
-            plan=plan,
-            step=step,
+            prepared=prepared,
             endpoint=step.reactant,
             side="reactant",
             current=reactant_artifacts,
         )
         product_artifacts = _reviewed_precomplex_artifacts(
-            document_state=document.state,
-            plan=plan,
-            step=step,
+            prepared=prepared,
             endpoint=step.product,
             side="product",
             current=product_artifacts,
@@ -945,7 +923,7 @@ def _pack_step(
     )
     bond_changes = {
         "step_id": step.id,
-        "entries": list(calculate_bond_changes(document.state, plan, step)),
+        "entries": list(prepared.bond_changes()),
     }
 
     endpoint_pair = (
@@ -1037,23 +1015,19 @@ def _pack_step(
 
 def _reviewed_precomplex_artifacts(
     *,
-    document_state: Mapping[str, object],
-    plan: CalculationPlan,
-    step: CalculationStep,
+    prepared: CalculationStepPreparation,
     endpoint: CalculationStepEndpoint,
     side: str,
     current: CalculationArtifacts,
 ) -> CalculationArtifacts:
+    plan, step = prepared.plan, prepared.step
     state = precomplex_state_from_json(endpoint.precomplex.payload_json)
     if state.get("kind") != "candidate_ensemble":
         raise ValueError(f"Step {step.id} has no reviewed {side} precomplex.")
     environment = state.get("environment")
     if not isinstance(environment, Mapping):
         raise ValueError(f"Step {step.id} has invalid {side} environment provenance.")
-    expected_basis = precomplex_basis_sha256(
-        document_state,
-        plan,
-        step_id=step.id,
+    expected_basis = prepared.precomplex_basis_sha256(
         side=side,
         environment=environment,
     )

@@ -1,12 +1,15 @@
+import hashlib
 import json
 import os
 import stat
 import tempfile
 import unittest
+from copy import deepcopy
 from decimal import Decimal
 from pathlib import Path
 from unittest import mock
 
+from chemvas.core import document_io
 from chemvas.core.document_io import (
     ChemvasDocument,
     atomic_create_bytes,
@@ -258,6 +261,100 @@ class DocumentIOTest(unittest.TestCase):
         self.assertIs(wrapped.payload, payload)
         self.assertIs(wrapped.state, state)
 
+    def test_parse_document_normalizes_once_and_reuses_the_normalized_state(
+        self,
+    ) -> None:
+        state = _canvas_state()
+        state["notes"] = [{"text": "한글", "x": Decimal("1.25"), "y": 2}]
+        state["arrows"] = [
+            {"kind": "arrow", "start": (Decimal("1.25"), 0), "end": (2, 3)}
+        ]
+        payload = {
+            "type": CHEMVAS_FILE_TYPE,
+            "version": CANVAS_FILE_VERSION,
+            "state": state,
+        }
+        before = deepcopy(payload)
+        with mock.patch.object(
+            document_io,
+            "normalize_json_numbers",
+            wraps=document_io.normalize_json_numbers,
+        ) as normalize:
+            document = parse_document(payload)
+        normalize.assert_called_once_with(payload)
+        self.assertIs(document.state, document.payload["state"])
+        self.assertIsNot(document.state, state)
+        self.assertEqual(document.state["notes"][0]["x"], 1.25)
+        self.assertIs(type(document.state["notes"][0]["x"]), float)
+        self.assertEqual(document.state["arrows"][0]["start"], (1.25, 0))
+        self.assertEqual(payload, before)
+        # Like create_document, both views describe the same normalized document.
+        document.state["notes"][0]["x"] = 7.0
+        self.assertEqual(document.payload["state"]["notes"][0]["x"], 7.0)
+        self.assertEqual(payload, before)
+
+    def test_read_exact_document_normalizes_once_without_changing_source_hash(
+        self,
+    ) -> None:
+        state = _canvas_state()
+        state["notes"] = [{"text": "한글", "x": 1.25, "y": 2.0}]
+        raw = (
+            json.dumps(
+                {
+                    "type": CHEMVAS_FILE_TYPE,
+                    "version": CANVAS_FILE_VERSION,
+                    "state": state,
+                },
+                ensure_ascii=False,
+                indent=3,
+            ).encode("utf-8")
+            + b"\n"
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "source.chemvas"
+            path.write_bytes(raw)
+            with mock.patch.object(
+                document_io,
+                "normalize_json_numbers",
+                wraps=document_io.normalize_json_numbers,
+            ) as normalize:
+                actual_bytes, document = read_exact_document(path)
+            self.assertEqual(normalize.call_count, 1)
+            self.assertEqual(actual_bytes, raw)
+            self.assertEqual(document.source_sha256, hashlib.sha256(raw).hexdigest())
+            self.assertEqual(document.state, state)
+            self.assertEqual(path.read_bytes(), raw)
+
+    def test_parse_document_rejects_invalid_input_before_normalizing(self) -> None:
+        for defect in ("wrapper", "model", "number", "settings"):
+            with self.subTest(defect=defect):
+                state = _canvas_state()
+                payload = {
+                    "type": CHEMVAS_FILE_TYPE,
+                    "version": CANVAS_FILE_VERSION,
+                    "state": state,
+                }
+                if defect == "wrapper":
+                    payload["extra"] = []
+                elif defect == "model":
+                    del state["model"]["next_atom_id"]
+                elif defect == "number":
+                    state["notes"] = [
+                        {"text": "x", "x": Decimal("0.100000000000000000001"), "y": 2}
+                    ]
+                else:
+                    state["settings"]["arrow_head_scale"] = 0.9
+                before = deepcopy(payload)
+                with mock.patch.object(
+                    document_io,
+                    "normalize_json_numbers",
+                    side_effect=AssertionError("must validate first"),
+                ) as normalize:
+                    with self.assertRaises(ValueError):
+                        parse_document(payload)
+                normalize.assert_not_called()
+                self.assertEqual(payload, before)
+
     def test_parse_document_rejects_extra_wrapper_key_before_normalizing(self) -> None:
         state = _canvas_state()
         extra = []
@@ -355,7 +452,7 @@ class DocumentIOTest(unittest.TestCase):
 
     def test_versions_before_v7_are_rejected(self) -> None:
         state = _canvas_state()
-        for version in range(1, CANVAS_FILE_VERSION):
+        for version in range(1, 7):
             with self.subTest(version=version):
                 payload = {
                     "type": CHEMVAS_FILE_TYPE,

@@ -49,6 +49,10 @@ def history_service_for_access(canvas) -> Any:
     return canvas_services_for(canvas).history_service
 
 
+def history_operations_for(canvas) -> Any:
+    return history_service_for_access(canvas).operations
+
+
 def tool_mode_controller_for_access(canvas) -> Any:
     return canvas_services_for(canvas).input.tool_mode_controller
 
@@ -132,6 +136,7 @@ __all__ = [
     "history_atom_mutation_service_for",
     "history_bond_mutation_service_for",
     "history_hit_testing_service_for",
+    "history_operations_for",
     "history_recording_service_for_access",
     "history_service_for_access",
     "insert_controller_for_access",

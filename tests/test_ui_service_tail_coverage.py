@@ -30,6 +30,7 @@ from chemvas.ui.canvas_scene_items_state import (
 )
 from chemvas.ui.canvas_text_style_state import CanvasTextStyleState
 from chemvas.ui.handle_mutation_service import HandleMutationService
+from chemvas.ui.history_operations import CanvasHistoryOperations
 from chemvas.ui.main_window_panel_toolbar import MainWindowPanelToolbarCallbacks
 from chemvas.ui.note_item_access import (
     set_committed_note_html_for,
@@ -63,7 +64,11 @@ def _color_service_for(canvas) -> CanvasColorMutationService:
     graph_service = SimpleNamespace(
         bond_sets_for_atoms=mock.Mock(return_value=(set(), set()))
     )
-    return CanvasColorMutationService(canvas, graph_service=graph_service)
+    return CanvasColorMutationService(
+        canvas,
+        history_operations=CanvasHistoryOperations(canvas),
+        graph_service=graph_service,
+    )
 
 
 class _CurvedEndpointItem:

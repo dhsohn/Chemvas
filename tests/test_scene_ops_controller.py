@@ -430,6 +430,7 @@ class SceneOpsControllerTest(unittest.TestCase):
         self,
     ) -> None:
         canvas = _FakeCanvas()
+        operations = canvas.services.history_service.operations
         canvas.model = MoleculeModel(
             atoms={
                 0: Atom("C", 0.0, 0.0),
@@ -479,7 +480,7 @@ class SceneOpsControllerTest(unittest.TestCase):
         self.assertIn(valid_ring, canvas.ring_items)
         self.assertIs(valid_ring.scene(), canvas.scene())
 
-        command.undo(canvas)
+        command.undo(operations)
 
         self.assertIsNotNone(canvas.model.bonds[0])
         self.assertIn(broken_ring, canvas.ring_items)
@@ -489,7 +490,7 @@ class SceneOpsControllerTest(unittest.TestCase):
         self.assertAlmostEqual(broken_ring.brush().color().alphaF(), original_alpha)
         self.assertIn(valid_ring, canvas.ring_items)
 
-        command.redo(canvas)
+        command.redo(operations)
 
         self.assertIsNone(canvas.model.bonds[0])
         self.assertNotIn(broken_ring, canvas.ring_items)
@@ -500,6 +501,7 @@ class SceneOpsControllerTest(unittest.TestCase):
         self,
     ) -> None:
         canvas = _FakeCanvas()
+        operations = canvas.services.history_service.operations
         canvas.model = MoleculeModel(
             atoms={
                 0: Atom("C", 0.0, 0.0),
@@ -524,7 +526,7 @@ class SceneOpsControllerTest(unittest.TestCase):
         self.assertNotIn(ring_item, canvas.ring_items)
         self.assertIsNone(ring_item.scene())
 
-        command.undo(canvas)
+        command.undo(operations)
 
         self.assertIn(0, canvas.model.atoms)
         self.assertTrue(
@@ -534,7 +536,7 @@ class SceneOpsControllerTest(unittest.TestCase):
         self.assertIs(ring_item.scene(), canvas.scene())
         self.assertEqual(ring_item.data(2), [0, 1, 2])
 
-        command.redo(canvas)
+        command.redo(operations)
 
         self.assertNotIn(0, canvas.model.atoms)
         self.assertNotIn(ring_item, canvas.ring_items)
@@ -589,6 +591,7 @@ class SceneOpsControllerTest(unittest.TestCase):
         self,
     ) -> None:
         canvas = _FakeCanvas()
+        operations = canvas.history_service.operations
         canvas.model = MoleculeModel(
             atoms={
                 0: Atom("C", 0.0, 0.0),
@@ -633,7 +636,7 @@ class SceneOpsControllerTest(unittest.TestCase):
         self.assertIs(valid_ring.scene(), canvas.scene())
         self.assertIsNone(note_item.scene())
 
-        command.undo(canvas)
+        command.undo(operations)
 
         self.assertIn(0, canvas.model.atoms)
         self.assertIn(broken_ring, canvas.ring_items)
@@ -641,7 +644,7 @@ class SceneOpsControllerTest(unittest.TestCase):
         self.assertIs(broken_ring.scene(), canvas.scene())
         self.assertIs(note_item.scene(), canvas.scene())
 
-        command.redo(canvas)
+        command.redo(operations)
 
         self.assertNotIn(0, canvas.model.atoms)
         self.assertNotIn(broken_ring, canvas.ring_items)

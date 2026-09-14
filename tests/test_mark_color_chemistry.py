@@ -14,10 +14,8 @@ from chemvas.domain.document import (
     model_bond_pairs,
     serialize_model_state,
 )
-from chemvas.features.calculation_bundle import (
-    inspect_component_inventory,
-    precomplex_basis_sha256,
-)
+from chemvas.domain.document.inspection import inspect_component_inventory
+from chemvas.features.calculation_bundle import precomplex_basis_sha256
 from tests.calculation_plan_support import _document_state, _plan
 
 

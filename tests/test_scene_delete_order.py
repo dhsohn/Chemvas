@@ -72,7 +72,7 @@ def test_delete_undo_restores_note_order_and_clean_document(canvas, selected, gr
 
 
 def test_interleaved_marks_and_bond_restore_after_failed_undo(canvas, monkeypatch):
-    from chemvas.ui import history_commands
+    from chemvas.ui import history_operations as history_commands
 
     atoms = canvas.services.structure.canvas_atom_mutation_service
     nitrogen = atoms.add_atom("N", 0, 0)
@@ -99,14 +99,14 @@ def test_interleaved_marks_and_bond_restore_after_failed_undo(canvas, monkeypatc
     deleted_marks = list(mark_items_for(canvas))
     history = canvas.services.history_service
     commands = list(history.state.history)
-    restore_item = history_commands._restore_scene_item
+    restore_item = history_commands.restore_scene_item
 
     def fail_after_mark_restore(view, item):
         restore_item(view, item)
         raise RuntimeError("mark restoration failed")
 
     with monkeypatch.context() as patch:
-        patch.setattr(history_commands, "_restore_scene_item", fail_after_mark_restore)
+        patch.setattr(history_commands, "restore_scene_item", fail_after_mark_restore)
         with pytest.raises(RuntimeError, match="mark restoration failed"):
             history.undo()
     assert session.snapshot_state() == deleted
@@ -125,6 +125,7 @@ def test_interleaved_marks_and_bond_restore_after_failed_undo(canvas, monkeypatc
 def test_order_restore_failure_rolls_back_attachment_and_allows_retry(
     canvas, monkeypatch
 ):
+    operations = canvas.services.history_service.operations
     notes = [
         canvas.services.interaction.note_controller.create_text_note(
             QPointF(20, 20), text
@@ -132,9 +133,9 @@ def test_order_restore_failure_rolls_back_attachment_and_allows_retry(
         for text in ("first", "second", "third")
     ]
     command = DeleteSceneItemsCommand.capture(
-        canvas, [scene_item_state_for(canvas, notes[1])], [notes[1]]
+        operations, [scene_item_state_for(canvas, notes[1])], [notes[1]]
     )
-    command.redo(canvas)
+    command.redo(operations)
     session = canvas.services.document.canvas_document_session_service
     deleted_state = session.snapshot_state()
     deleted_stacking = list(canvas.scene().items())
@@ -149,12 +150,12 @@ def test_order_restore_failure_rolls_back_attachment_and_allows_retry(
     with monkeypatch.context() as patch:
         patch.setattr(order, "restore", fail_after_reordering)
         with pytest.raises(RuntimeError, match="order restore failure"):
-            command.undo(canvas)
+            command.undo(operations)
     assert notes[1].scene() is None
     assert note_items_for(canvas) == [notes[0], notes[2]]
     assert list(canvas.scene().items()) == deleted_stacking
     assert session.snapshot_state() == deleted_state
-    command.undo(canvas)
+    command.undo(operations)
     assert note_items_for(canvas) == notes
 
 

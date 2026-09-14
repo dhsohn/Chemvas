@@ -27,7 +27,6 @@ from chemvas.ui.export_guard_service import (
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
-    from chemvas.features.export import ExportPlan
 
 MAX_OUTPUT_BYTES = 64 * 1024 * 1024
 PNG_DPI_CHOICES = (150, 300, 600, 1200)
@@ -205,38 +204,9 @@ def _render_offscreen(
     min_font_pt: float | None = None,
 ) -> _RenderedDocument:
     with offscreen_canvas(state, command="render-document") as (canvas, service):
-        plan = cast(
-            "ExportPlan",
-            service.plan_figure_export(
-                scope="sheet", sizing="bond", target_width_mm=width_mm
-            ),
-        )
-        width_pixels, height_pixels = validate_export_budget(
-            plan,
-            output_format=output_format,
-            dpi=dpi,
-            max_height_mm=None if output_format == "pdf" else max_height_mm,
-        )
-        output_plan = plan
-        if output_format == "pdf":
-            from chemvas.features.export import pdf_page_size
-
-            # Match the native PDF writer's whole-point page dimensions.
-            page_size = pdf_page_size(plan).sizePoints()
-            output_plan = replace(
-                plan,
-                out_w_pt=float(page_size.width()),
-                out_h_pt=float(page_size.height()),
-            )
-            validate_export_budget(
-                output_plan,
-                output_format=output_format,
-                dpi=dpi,
-                max_height_mm=max_height_mm,
-            )
         with tempfile.TemporaryDirectory(prefix="chemvas-render-document-") as raw_tmp:
             rendered_path = Path(raw_tmp) / f"rendered.{output_format}"
-            service.export_figure(
+            plan = service.export_figure(
                 str(rendered_path),
                 fmt=output_format,
                 scope="sheet",
@@ -245,6 +215,7 @@ def _render_offscreen(
                 sizing="bond",
                 target_width_mm=width_mm,
                 editable_svg=False,
+                max_height_mm=max_height_mm,
             )
             rendered_size = rendered_path.stat().st_size
             if rendered_size > MAX_OUTPUT_BYTES:
@@ -252,6 +223,21 @@ def _render_offscreen(
                     f"rendered output exceeds the {MAX_OUTPUT_BYTES}-byte limit"
                 )
             content = rendered_path.read_bytes()
+        # The session checked all limits before painting, including native PDF
+        # height rounding. Reuse its exact plan for dimensions and readability.
+        width_pixels, height_pixels = validate_export_budget(
+            plan, output_format=output_format, dpi=dpi
+        )
+        output_plan = plan
+        if output_format == "pdf":
+            from chemvas.features.export import pdf_page_size
+
+            page_size = pdf_page_size(plan).sizePoints()
+            output_plan = replace(
+                plan,
+                out_w_pt=float(page_size.width()),
+                out_h_pt=float(page_size.height()),
+            )
         font_readability = None
         if min_font_pt is not None:
             from chemvas.ui.export_readability_service import assess_export_readability

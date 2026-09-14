@@ -36,6 +36,7 @@ from chemvas.ui.history_commands import (
     UngroupSceneItemsCommand,
     UpdateSceneItemCommand,
 )
+from chemvas.ui.history_operations import CanvasHistoryOperations
 from chemvas.ui.transactions.document import (
     DocumentSavepoint,
 )
@@ -917,6 +918,7 @@ def test_actual_qt_runtime_consumers_restore_parent_topology_and_z_value(
     peer.setZValue(2.0)
     expected_order = list(scene.items())
     canvas = SimpleNamespace(scene=lambda: scene)
+    operations = CanvasHistoryOperations(canvas)
 
     def corrupt_topology_and_z() -> None:
         child.setParentItem(peer)
@@ -942,14 +944,14 @@ def test_actual_qt_runtime_consumers_restore_parent_topology_and_z_value(
 
         with (
             mock.patch(
-                "chemvas.ui.history_commands._apply_scene_item_state",
+                "chemvas.ui.history_operations.apply_scene_item_state",
                 side_effect=fail_move,
             ),
             pytest.raises(RuntimeError, match="move damaged scene topology"),
         ):
             SetSceneGeometryCommand(
                 [], [UpdateSceneItemCommand(child, {}, {"x": 4.0, "y": 5.0})]
-            ).redo(canvas)
+            ).redo(operations)
 
     assert child.parentItem() is parent
     assert parent.zValue() == 2.0
@@ -1099,6 +1101,7 @@ def test_existing_scene_item_commands_rollback_a_second_item_that_mutates_then_r
     operation_name: str,
 ) -> None:
     canvas = _Canvas()
+    operations = CanvasHistoryOperations(canvas)
     items = [_SceneItem("first"), _SceneItem("second")]
     command.items[:] = items
     if starts_attached:
@@ -1122,14 +1125,14 @@ def test_existing_scene_item_commands_rollback_a_second_item_that_mutates_then_r
             raise RuntimeError("remove failed after mutation")
 
     patches = {
-        "_restore_scene_item": restore_with_failure,
-        "_remove_scene_item": remove_with_failure,
+        "restore_scene_item": restore_with_failure,
+        "remove_scene_item": remove_with_failure,
     }
-    with mock.patch.multiple("chemvas.ui.history_commands", **patches):
+    with mock.patch.multiple("chemvas.ui.history_operations", **patches):
         with pytest.raises(
             RuntimeError, match=f"{operation_name} failed after mutation"
         ):
-            getattr(command, method_name)(canvas)
+            getattr(command, method_name)(operations)
 
     assert canvas.scene().items() == before
 
@@ -1145,6 +1148,7 @@ def test_initial_scene_item_creation_rollback_finds_the_unreturned_failed_item(
     command,
 ) -> None:
     canvas = _Canvas()
+    operations = CanvasHistoryOperations(canvas)
     existing = _SceneItem("existing")
     canvas.scene().attach(existing)
     before = canvas.scene().items()
@@ -1168,7 +1172,7 @@ def test_initial_scene_item_creation_rollback_finds_the_unreturned_failed_item(
         ),
         pytest.raises(RuntimeError, match="create failed after mutation"),
     ):
-        method(canvas)
+        method(operations)
 
     assert canvas.scene().items() == before
     assert command.items == []
@@ -1189,6 +1193,7 @@ def test_scene_item_batch_success_releases_one_final_bounds_scan_after_o1_childr
     scene = QGraphicsScene()
     scene.addRect(QRectF(0.0, 0.0, 10.0, 10.0))
     canvas = SimpleNamespace(scene=lambda: scene)
+    operations = CanvasHistoryOperations(canvas)
     primer = SceneRectSnapshot.capture(scene)
     assert primer is not None
     primer.release(scene.itemsBoundingRect())
@@ -1219,7 +1224,7 @@ def test_scene_item_batch_success_releases_one_final_bounds_scan_after_o1_childr
             wraps=scene.itemsBoundingRect,
         ) as bounds_scan,
     ):
-        command.redo(canvas)
+        command.redo(operations)
 
     assert len(command.items) == len(states)
     assert all(item.scene() is scene for item in command.items)
@@ -1240,6 +1245,7 @@ def test_explicit_scene_item_history_success_never_scans_global_item_bounds(
     scene = QGraphicsScene()
     item = scene.addRect(QRectF(0.0, 0.0, 10.0, 10.0))
     canvas = SimpleNamespace(scene=lambda: scene)
+    operations = CanvasHistoryOperations(canvas)
     explicit_rect = QRectF(-100.0, -100.0, 200.0, 200.0)
     set_explicit_scene_rect(scene, explicit_rect)
 
@@ -1253,17 +1259,17 @@ def test_explicit_scene_item_history_success_never_scans_global_item_bounds(
                     QRectF(25.0, 0.0, 10.0, 10.0)
                 ),
             ):
-                command.redo(canvas)
+                command.redo(operations)
 
     elif operation == "remove":
         command = DeleteSceneItemsCommand([], [item])
 
         def run() -> None:
             with mock.patch(
-                "chemvas.ui.history_commands._remove_scene_item",
+                "chemvas.ui.history_operations.remove_scene_item",
                 side_effect=lambda _canvas, target: scene.removeItem(target),
             ):
-                command.redo(canvas)
+                command.redo(operations)
 
     else:
         command = UpdateSceneItemCommand(item, {"x": 0.0}, {"x": 25.0})
@@ -1271,17 +1277,17 @@ def test_explicit_scene_item_history_success_never_scans_global_item_bounds(
         def run() -> None:
             with (
                 mock.patch(
-                    "chemvas.ui.history_commands._apply_scene_item_state",
+                    "chemvas.ui.history_operations.apply_scene_item_state",
                     side_effect=lambda _canvas, target, state: target.setPos(
                         state["x"],
                         0.0,
                     ),
                 ),
                 mock.patch(
-                    "chemvas.ui.history_commands.refresh_selection_outline_for_canvas"
+                    "chemvas.ui.history_operations.refresh_selection_outline_for_canvas"
                 ),
             ):
-                command.redo(canvas)
+                command.redo(operations)
 
     with mock.patch.object(
         scene,
@@ -1298,6 +1304,7 @@ def test_note_remove_failure_restores_collections_selection_and_container_identi
     None
 ):
     canvas = _Canvas()
+    operations = CanvasHistoryOperations(canvas)
     _install_scene_runtime_state(canvas)
     other = _SceneItem("other")
     note = _SceneItem("note")
@@ -1327,16 +1334,16 @@ def test_note_remove_failure_restores_collections_selection_and_container_identi
     command = DeleteSceneItemsCommand([], [note])
     with (
         mock.patch(
-            "chemvas.ui.history_commands._remove_scene_item",
+            "chemvas.ui.history_operations.remove_scene_item",
             side_effect=remove_after_registration_mutation,
         ),
         mock.patch(
-            "chemvas.ui.history_commands._restore_scene_item",
+            "chemvas.ui.history_operations.restore_scene_item",
             side_effect=_restore_scene_item,
         ),
         pytest.raises(RuntimeError, match="before detach"),
     ):
-        command.redo(canvas)
+        command.redo(operations)
 
     assert canvas.scene().items() == before_order
     assert note.isSelected()
@@ -1350,6 +1357,7 @@ def test_note_remove_failure_restores_collections_selection_and_container_identi
 
 def test_note_remove_failure_restores_selection_child_visual_state() -> None:
     canvas = _Canvas()
+    operations = CanvasHistoryOperations(canvas)
     _install_scene_runtime_state(canvas)
     note = _SceneItem("note")
     selection_box = _VisualRectSceneItem("note-select")
@@ -1373,16 +1381,16 @@ def test_note_remove_failure_restores_selection_child_visual_state() -> None:
     command = DeleteSceneItemsCommand([], [note])
     with (
         mock.patch(
-            "chemvas.ui.history_commands._remove_scene_item",
+            "chemvas.ui.history_operations.remove_scene_item",
             side_effect=remove_after_selection_box_mutation,
         ),
         mock.patch(
-            "chemvas.ui.history_commands._restore_scene_item",
+            "chemvas.ui.history_operations.restore_scene_item",
             side_effect=_restore_scene_item,
         ),
         pytest.raises(RuntimeError, match="after hiding selection box"),
     ):
-        command.redo(canvas)
+        command.redo(operations)
 
     assert canvas.runtime_state.scene_items_state.selected_notes is selected_notes
     assert selected_notes == [note]
@@ -1399,6 +1407,7 @@ def test_mark_remove_failure_restores_registry_nested_lists_and_mapping_identity
     None
 ):
     canvas = _Canvas()
+    operations = CanvasHistoryOperations(canvas)
     _install_scene_runtime_state(canvas)
     mark = _SceneItem("mark")
     canvas.scene().attach(mark)
@@ -1417,16 +1426,16 @@ def test_mark_remove_failure_restores_registry_nested_lists_and_mapping_identity
     command = AddSceneItemsCommand([], [mark])
     with (
         mock.patch(
-            "chemvas.ui.history_commands._remove_scene_item",
+            "chemvas.ui.history_operations.remove_scene_item",
             side_effect=remove_after_registry_mutation,
         ),
         mock.patch(
-            "chemvas.ui.history_commands._restore_scene_item",
+            "chemvas.ui.history_operations.restore_scene_item",
             side_effect=_restore_scene_item,
         ),
         pytest.raises(RuntimeError, match="before detach"),
     ):
-        command.undo(canvas)
+        command.undo(operations)
 
     assert canvas.runtime_state.scene_items_state.mark_items is mark_items
     assert mark_items == [mark]
@@ -1441,6 +1450,7 @@ def test_handle_target_remove_failure_restores_handles_scene_order_and_container
     collection_name: str,
 ) -> None:
     canvas = _Canvas()
+    operations = CanvasHistoryOperations(canvas)
     _install_scene_runtime_state(canvas)
     target = _SceneItem("target")
     first_handle = _SceneItem("first-handle")
@@ -1466,16 +1476,16 @@ def test_handle_target_remove_failure_restores_handles_scene_order_and_container
     command = DeleteSceneItemsCommand([], [target])
     with (
         mock.patch(
-            "chemvas.ui.history_commands._remove_scene_item",
+            "chemvas.ui.history_operations.remove_scene_item",
             side_effect=remove_after_handle_clear,
         ),
         mock.patch(
-            "chemvas.ui.history_commands._restore_scene_item",
+            "chemvas.ui.history_operations.restore_scene_item",
             side_effect=_restore_scene_item,
         ),
         pytest.raises(RuntimeError, match="before detach"),
     ):
-        command.redo(canvas)
+        command.redo(operations)
 
     assert canvas.scene().items() == before_order
     assert (
@@ -1496,6 +1506,7 @@ def test_geometry_command_restores_second_item_after_partial_mutation(
     failure_point: str,
 ) -> None:
     canvas = _Canvas()
+    operations = CanvasHistoryOperations(canvas)
     items = [_RawStateSceneItem("first"), _RawStateSceneItem("second")]
     for index, item in enumerate(items):
         item.x = float(index)
@@ -1530,13 +1541,15 @@ def test_geometry_command_restores_second_item_after_partial_mutation(
 
     with (
         mock.patch(
-            "chemvas.ui.history_commands._apply_scene_item_state",
+            "chemvas.ui.history_operations.apply_scene_item_state",
             side_effect=apply_with_failure,
         ),
-        mock.patch("chemvas.ui.history_commands.refresh_selection_outline_for_canvas"),
+        mock.patch(
+            "chemvas.ui.history_operations.refresh_selection_outline_for_canvas"
+        ),
         pytest.raises(RuntimeError) as caught,
     ):
-        getattr(command, method_name)(canvas)
+        getattr(command, method_name)(operations)
 
     assert caught.value is primary
     assert attempted == (items if method_name == "redo" else list(reversed(items)))
@@ -1548,12 +1561,14 @@ def test_geometry_command_restores_second_item_after_partial_mutation(
 
     with (
         mock.patch(
-            "chemvas.ui.history_commands._apply_scene_item_state",
+            "chemvas.ui.history_operations.apply_scene_item_state",
             side_effect=apply_successfully,
         ),
-        mock.patch("chemvas.ui.history_commands.refresh_selection_outline_for_canvas"),
+        mock.patch(
+            "chemvas.ui.history_operations.refresh_selection_outline_for_canvas"
+        ),
     ):
-        getattr(command, method_name)(canvas)
+        getattr(command, method_name)(operations)
     assert [(item.x, item.metadata_x) for item in items] == [
         (x + direction * 3.0, metadata + direction * 5.0) for x, metadata in before
     ]
@@ -1564,6 +1579,7 @@ def test_geometry_command_restores_model_and_3d_state_on_refresh_failure(
     moved_atom_ids: tuple[int, ...],
 ) -> None:
     canvas = _Canvas()
+    operations = CanvasHistoryOperations(canvas)
     atoms = {
         7: SimpleNamespace(x=1.0, y=2.0),
         8: SimpleNamespace(x=5.0, y=6.0),
@@ -1612,16 +1628,16 @@ def test_geometry_command_restores_model_and_3d_state_on_refresh_failure(
 
     with (
         mock.patch(
-            "chemvas.ui.history_canvas_access.set_atom_positions_for_history",
+            "chemvas.ui.history_operations.set_atom_positions_for_history",
             side_effect=set_positions,
         ),
         mock.patch(
-            "chemvas.ui.history_commands.refresh_selection_outline_for_canvas",
+            "chemvas.ui.history_operations.refresh_selection_outline_for_canvas",
             side_effect=RuntimeError("selection refresh failed"),
         ),
         pytest.raises(RuntimeError, match="selection refresh failed"),
     ):
-        command.redo(canvas)
+        command.redo(operations)
 
     assert {
         (atom_id): (atom.x, atom.y) for atom_id, atom in atoms.items()
@@ -1654,6 +1670,7 @@ def test_geometry_exact_restore_keeps_data_identity_and_history_retryable(
             self._data[role] = value
 
     canvas = _Canvas()
+    operations = CanvasHistoryOperations(canvas)
     item = ExactDataSceneItem()
     canvas.scene().attach(item)
     original_data = item.data(data_role)
@@ -1669,7 +1686,7 @@ def test_geometry_exact_restore_keeps_data_identity_and_history_retryable(
     history = [history_sentinel]
     redo_stack = [redo_sentinel, command]
     state = CanvasHistoryState(history=history, redo_stack=redo_stack)  # type: ignore[list-item]
-    service = CanvasHistoryService(canvas, state, replay_context=nullcontext)
+    service = CanvasHistoryService(operations, state, replay_context=nullcontext)
     primary = RuntimeError("geometry failed after replacing item data")
 
     def apply_then_fail(_canvas, current_item, target) -> None:
@@ -1678,10 +1695,12 @@ def test_geometry_exact_restore_keeps_data_identity_and_history_retryable(
 
     with (
         mock.patch(
-            "chemvas.ui.history_commands._apply_scene_item_state",
+            "chemvas.ui.history_operations.apply_scene_item_state",
             side_effect=apply_then_fail,
         ),
-        mock.patch("chemvas.ui.history_commands.refresh_selection_outline_for_canvas"),
+        mock.patch(
+            "chemvas.ui.history_operations.refresh_selection_outline_for_canvas"
+        ),
         pytest.raises(RuntimeError) as caught,
     ):
         service.redo()
@@ -1694,12 +1713,14 @@ def test_geometry_exact_restore_keeps_data_identity_and_history_retryable(
 
     with (
         mock.patch(
-            "chemvas.ui.history_commands._apply_scene_item_state",
+            "chemvas.ui.history_operations.apply_scene_item_state",
             side_effect=lambda _canvas, target, payload: target.setData(
                 data_role, dict(payload)
             ),
         ),
-        mock.patch("chemvas.ui.history_commands.refresh_selection_outline_for_canvas"),
+        mock.patch(
+            "chemvas.ui.history_operations.refresh_selection_outline_for_canvas"
+        ),
     ):
         service.redo()
     assert item.data(data_role) == {"point": (100.0, 200.0)}
@@ -1710,6 +1731,7 @@ def test_geometry_exact_restore_keeps_data_identity_and_history_retryable(
 def test_geometry_capture_failure_keeps_document_and_fails_closed() -> None:
     primary = RuntimeError("live scene inventory lookup failed")
     canvas = _Canvas()
+    operations = CanvasHistoryOperations(canvas)
     item = _SceneItem("moved")
     canvas.scene().attach(item)
     command = SetSceneGeometryCommand(
@@ -1719,11 +1741,11 @@ def test_geometry_capture_failure_keeps_document_and_fails_closed() -> None:
     history = [history_sentinel]
     redo_stack = [redo_sentinel, command]
     state = CanvasHistoryState(history=history, redo_stack=redo_stack)  # type: ignore[list-item]
-    service = CanvasHistoryService(canvas, state, replay_context=nullcontext)
+    service = CanvasHistoryService(operations, state, replay_context=nullcontext)
     with (
         mock.patch.object(canvas.scene(), "items", side_effect=primary),
         mock.patch(
-            "chemvas.ui.history_commands._apply_scene_item_state"
+            "chemvas.ui.history_operations.apply_scene_item_state"
         ) as apply_state,
         pytest.raises(RuntimeError) as caught,
     ):
@@ -1749,6 +1771,7 @@ def test_geometry_restores_exact_outline_runtime_after_persistent_refresh_failur
             self.x, self.y = position
 
     canvas = _Canvas()
+    operations = CanvasHistoryOperations(canvas)
     _install_scene_runtime_state(canvas)
     item = PositionedSceneItem("moved")
     canvas.scene().attach(item)
@@ -1764,16 +1787,16 @@ def test_geometry_restores_exact_outline_runtime_after_persistent_refresh_failur
 
     with (
         mock.patch(
-            "chemvas.ui.history_commands._apply_scene_item_state",
+            "chemvas.ui.history_operations.apply_scene_item_state",
             side_effect=apply_state,
         ),
         mock.patch(
-            "chemvas.ui.history_commands.refresh_selection_outline_for_canvas",
+            "chemvas.ui.history_operations.refresh_selection_outline_for_canvas",
             side_effect=refresh_then_fail,
         ),
         pytest.raises(RuntimeError, match="persistent outline rebuild failure"),
     ):
-        command.redo(canvas)
+        command.redo(operations)
     assert (item.x, item.y) == (0.0, 0.0)
     _assert_original_outline_restored(canvas, old_outline, outlines, partial_outlines)
 
@@ -1790,6 +1813,7 @@ def test_geometry_exact_restore_is_final_after_partial_absolute_item_apply(
             self.geometry_x = path
 
     canvas = _Canvas()
+    operations = CanvasHistoryOperations(canvas)
     item = AbsolutePathSceneItem(kind)
     item.x, item.metadata_x, item.geometry_x = 3.0, 13.0, 10.0
     canvas.scene().attach(item)
@@ -1805,13 +1829,15 @@ def test_geometry_exact_restore_is_final_after_partial_absolute_item_apply(
 
     with (
         mock.patch(
-            "chemvas.ui.history_commands._apply_scene_item_state",
+            "chemvas.ui.history_operations.apply_scene_item_state",
             side_effect=apply_then_fail,
         ),
-        mock.patch("chemvas.ui.history_commands.refresh_selection_outline_for_canvas"),
+        mock.patch(
+            "chemvas.ui.history_operations.refresh_selection_outline_for_canvas"
+        ),
         pytest.raises(RuntimeError, match="absolute item apply failed"),
     ):
-        command.redo(canvas)
+        command.redo(operations)
     assert item.x == 3.0
     assert item.geometry_x == 10.0
     assert item.metadata_x == 13.0
@@ -1828,6 +1854,7 @@ def test_update_scene_item_command_compensates_current_child_failure(
     target_state = after_state if method_name == "redo" else before_state
     rollback_state = before_state if method_name == "redo" else after_state
     canvas = SimpleNamespace(value=rollback_state["value"])
+    operations = CanvasHistoryOperations(canvas)
     command = UpdateSceneItemCommand("item", before_state, after_state)
     apply_failed = False
     refresh_failed = False
@@ -1847,16 +1874,16 @@ def test_update_scene_item_command_compensates_current_child_failure(
 
     with (
         mock.patch(
-            "chemvas.ui.history_commands._apply_scene_item_state",
+            "chemvas.ui.history_operations.apply_scene_item_state",
             side_effect=apply_state,
         ),
         mock.patch(
-            "chemvas.ui.history_commands.refresh_selection_outline_for_canvas",
+            "chemvas.ui.history_operations.refresh_selection_outline_for_canvas",
             side_effect=refresh,
         ),
         pytest.raises(RuntimeError, match="failed"),
     ):
-        getattr(command, method_name)(canvas)
+        getattr(command, method_name)(operations)
 
     assert canvas.value == rollback_state["value"]
 
@@ -1865,6 +1892,7 @@ def test_update_scene_item_restores_old_outline_objects_when_refresh_rebuild_fai
     None
 ):
     canvas = _Canvas()
+    operations = CanvasHistoryOperations(canvas)
     _install_scene_runtime_state(canvas)
     canvas.value = 1
     old_outline = _SceneItem("old-outline")
@@ -1888,16 +1916,16 @@ def test_update_scene_item_restores_old_outline_objects_when_refresh_rebuild_fai
     command = UpdateSceneItemCommand("item", {"value": 1}, {"value": 2})
     with (
         mock.patch(
-            "chemvas.ui.history_commands._apply_scene_item_state",
+            "chemvas.ui.history_operations.apply_scene_item_state",
             side_effect=apply_state,
         ),
         mock.patch(
-            "chemvas.ui.history_commands.refresh_selection_outline_for_canvas",
+            "chemvas.ui.history_operations.refresh_selection_outline_for_canvas",
             side_effect=refresh_then_fail,
         ),
         pytest.raises(RuntimeError, match="outline rebuild failed after clear"),
     ):
-        command.redo(canvas)
+        command.redo(operations)
 
     assert canvas.value == 1
     assert canvas.runtime_state.selection_outline_state.outlines is outlines
@@ -1916,6 +1944,13 @@ def test_change_atom_label_command_compensates_smiles_failure_after_label_mutati
     rollback = before if method_name == "redo" else after
     canvas = SimpleNamespace(
         element=rollback[0], explicit_label=rollback[1], smiles=rollback[2]
+    )
+    adapter = CanvasHistoryOperations(canvas)
+    # Only the value operations are supplied: this synthetic field state is
+    # outside the optional DocumentSavepoint contract, so use compensation.
+    operations = SimpleNamespace(
+        restore_atom_label=adapter.restore_atom_label,
+        set_last_smiles_input_for_history=adapter.set_last_smiles_input_for_history,
     )
     command = ChangeAtomLabelCommand(
         atom_id=7,
@@ -1954,24 +1989,17 @@ def test_change_atom_label_command_compensates_smiles_failure_after_label_mutati
             raise RuntimeError("smiles failed after label mutation")
 
     with (
-        # This headless double stores fields outside DocumentSavepoint's model
-        # contract. Explicitly omit the optional exact-transaction capability
-        # so this existing test continues to exercise inverse compensation.
         mock.patch(
-            "chemvas.core.history._history_canvas_port",
-            return_value=SimpleNamespace(),
-        ),
-        mock.patch(
-            "chemvas.ui.history_commands.add_or_update_atom_label",
+            "chemvas.ui.history_operations.add_or_update_atom_label",
             side_effect=apply_label,
         ),
         mock.patch(
-            "chemvas.ui.history_commands.set_last_smiles_input_for",
+            "chemvas.ui.history_operations.set_last_smiles_input_for",
             side_effect=apply_smiles,
         ),
         pytest.raises(RuntimeError, match="smiles failed"),
     ):
-        getattr(command, method_name)(canvas)
+        getattr(command, method_name)(operations)
 
     assert (canvas.element, canvas.explicit_label, canvas.smiles) == rollback
 
@@ -1994,6 +2022,7 @@ def test_group_redo_rolls_back_when_second_absorbed_group_removal_mutates_then_r
     None
 ):
     canvas = _group_canvas()
+    operations = CanvasHistoryOperations(canvas)
     state = group_state_for(canvas)
     absorbed = [
         (1, CanvasSceneGroup({1}, [])),
@@ -2012,13 +2041,15 @@ def test_group_redo_rolls_back_when_second_absorbed_group_removal_mutates_then_r
 
     with (
         mock.patch(
-            "chemvas.ui.history_commands.remove_group_for",
+            "chemvas.ui.history_operations.remove_group_for",
             side_effect=remove_with_failure,
         ),
-        mock.patch("chemvas.ui.history_commands.refresh_selection_outline_for_canvas"),
+        mock.patch(
+            "chemvas.ui.history_operations.refresh_selection_outline_for_canvas"
+        ),
         pytest.raises(RuntimeError, match="remove group failed after mutation"),
     ):
-        command.redo(canvas)
+        command.redo(operations)
 
     assert _group_snapshot(canvas) == before
     assert command.group_id is None
@@ -2028,6 +2059,7 @@ def test_group_undo_rolls_back_when_second_absorbed_group_restore_mutates_then_r
     None
 ):
     canvas = _group_canvas()
+    operations = CanvasHistoryOperations(canvas)
     state = group_state_for(canvas)
     absorbed = [
         (1, CanvasSceneGroup({1}, [])),
@@ -2046,13 +2078,15 @@ def test_group_undo_rolls_back_when_second_absorbed_group_restore_mutates_then_r
 
     with (
         mock.patch(
-            "chemvas.ui.history_commands.restore_group_for",
+            "chemvas.ui.history_operations.restore_group_for",
             side_effect=restore_with_failure,
         ),
-        mock.patch("chemvas.ui.history_commands.refresh_selection_outline_for_canvas"),
+        mock.patch(
+            "chemvas.ui.history_operations.refresh_selection_outline_for_canvas"
+        ),
         pytest.raises(RuntimeError, match="restore group failed after mutation"),
     ):
-        command.undo(canvas)
+        command.undo(operations)
 
     assert _group_snapshot(canvas) == before
     assert command.group_id == 3
@@ -2062,6 +2096,7 @@ def test_group_command_restores_exact_outline_runtime_after_persistent_refresh_f
     None
 ):
     canvas = _Canvas()
+    operations = CanvasHistoryOperations(canvas)
     _install_scene_runtime_state(canvas)
     state = group_state_for(canvas)
     absorbed_group = CanvasSceneGroup({1}, [])
@@ -2078,12 +2113,12 @@ def test_group_command_restores_exact_outline_runtime_after_persistent_refresh_f
 
     with (
         mock.patch(
-            "chemvas.ui.history_commands.refresh_selection_outline_for_canvas",
+            "chemvas.ui.history_operations.refresh_selection_outline_for_canvas",
             side_effect=refresh_then_fail,
         ),
         pytest.raises(RuntimeError, match="persistent outline rebuild failure"),
     ):
-        command.redo(canvas)
+        command.redo(operations)
 
     assert state.groups is groups_object
     assert state.groups == {1: absorbed_group}
@@ -2102,6 +2137,7 @@ def test_ungroup_command_rolls_back_when_second_group_mutates_then_raises(
     method_name: str,
 ) -> None:
     canvas = _group_canvas()
+    operations = CanvasHistoryOperations(canvas)
     state = group_state_for(canvas)
     removed = [
         (1, CanvasSceneGroup({1}, [])),
@@ -2133,12 +2169,14 @@ def test_ungroup_command_rolls_back_when_second_group_mutates_then_raises(
     )
     with (
         mock.patch(
-            f"chemvas.ui.history_commands.{operation_name}", side_effect=operation
+            f"chemvas.ui.history_operations.{operation_name}", side_effect=operation
         ),
-        mock.patch("chemvas.ui.history_commands.refresh_selection_outline_for_canvas"),
+        mock.patch(
+            "chemvas.ui.history_operations.refresh_selection_outline_for_canvas"
+        ),
         pytest.raises(RuntimeError, match=error_pattern),
     ):
-        getattr(command, method_name)(canvas)
+        getattr(command, method_name)(operations)
 
     assert _group_snapshot(canvas) == before
 
@@ -2164,6 +2202,7 @@ def test_group_rollback_note_names_the_operation_not_the_history_slot(
     """
 
     canvas = _group_canvas()
+    operations = CanvasHistoryOperations(canvas)
     state = group_state_for(canvas)
     group = CanvasSceneGroup({1}, [])
     state.groups[1] = group
@@ -2181,15 +2220,15 @@ def test_group_rollback_note_names_the_operation_not_the_history_slot(
         raise RuntimeError("primary failure")
 
     with (
-        mock.patch("chemvas.ui.history_commands.remove_group_for", side_effect=fail),
-        mock.patch("chemvas.ui.history_commands.restore_group_for", side_effect=fail),
+        mock.patch("chemvas.ui.history_operations.remove_group_for", side_effect=fail),
+        mock.patch("chemvas.ui.history_operations.restore_group_for", side_effect=fail),
         mock.patch(
-            "chemvas.ui.history_commands.refresh_selection_outline_for_canvas",
+            "chemvas.ui.history_operations.refresh_selection_outline_for_canvas",
             side_effect=RuntimeError("outline refresh failed"),
         ),
         pytest.raises(RuntimeError, match="primary failure") as raised,
     ):
-        getattr(command, method_name)(canvas)
+        getattr(command, method_name)(operations)
 
     outline_notes = [
         note for note in raised.value.__notes__ if "selection outline" in note
@@ -2206,6 +2245,7 @@ def test_ungroup_command_restores_exact_outline_runtime_after_persistent_refresh
     None
 ):
     canvas = _Canvas()
+    operations = CanvasHistoryOperations(canvas)
     _install_scene_runtime_state(canvas)
     state = group_state_for(canvas)
     removed_group = CanvasSceneGroup({1}, [])
@@ -2218,12 +2258,12 @@ def test_ungroup_command_restores_exact_outline_runtime_after_persistent_refresh
 
     with (
         mock.patch(
-            "chemvas.ui.history_commands.refresh_selection_outline_for_canvas",
+            "chemvas.ui.history_operations.refresh_selection_outline_for_canvas",
             side_effect=refresh_then_fail,
         ),
         pytest.raises(RuntimeError, match="persistent outline rebuild failure"),
     ):
-        command.redo(canvas)
+        command.redo(operations)
 
     assert state.groups is groups_object
     assert state.groups == {1: removed_group}
@@ -2254,6 +2294,7 @@ def test_explicit_group_and_label_history_success_never_scans_global_item_bounds
     scene = QGraphicsScene()
     label = scene.addRect(QRectF(0.0, 0.0, 10.0, 10.0))
     canvas = _group_canvas(scene=lambda: scene)
+    operations = CanvasHistoryOperations(canvas)
     explicit_rect = QRectF(-100.0, -100.0, 200.0, 200.0)
     set_explicit_scene_rect(scene, explicit_rect)
     state = group_state_for(canvas)
@@ -2294,19 +2335,21 @@ def test_explicit_group_and_label_history_success_never_scans_global_item_bounds
         label.setPos(25.0 if element == "far" else 0.0, 0.0)
 
     with (
-        mock.patch("chemvas.ui.history_commands.refresh_selection_outline_for_canvas"),
         mock.patch(
-            "chemvas.ui.history_commands.add_or_update_atom_label",
+            "chemvas.ui.history_operations.refresh_selection_outline_for_canvas"
+        ),
+        mock.patch(
+            "chemvas.ui.history_operations.add_or_update_atom_label",
             side_effect=apply_label,
         ),
-        mock.patch("chemvas.ui.history_commands.set_last_smiles_input_for"),
+        mock.patch("chemvas.ui.history_operations.set_last_smiles_input_for"),
         mock.patch.object(
             scene,
             "itemsBoundingRect",
             wraps=scene.itemsBoundingRect,
         ) as bounds_scan,
     ):
-        getattr(command, method_name)(canvas)
+        getattr(command, method_name)(operations)
 
     assert bounds_scan.call_count == 0
     assert scene.sceneRect() == explicit_rect

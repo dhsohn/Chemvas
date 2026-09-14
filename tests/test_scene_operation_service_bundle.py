@@ -40,7 +40,8 @@ def test_build_scene_operation_services_wires_explicit_collaborators(
     bond_mutation_service = object()
     note_controller = object()
     graph_service = object()
-    history_service = object()
+    history_operations = object()
+    history_service = SimpleNamespace(operations=history_operations)
 
     services = build_scene_operation_services(
         canvas,
@@ -77,4 +78,5 @@ def test_build_scene_operation_services_wires_explicit_collaborators(
     assert services.canvas_color_mutation_service.kwargs == {
         "graph_service": graph_service,
         "history_service": history_service,
+        "history_operations": history_operations,
     }

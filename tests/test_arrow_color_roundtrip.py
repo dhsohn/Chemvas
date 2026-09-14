@@ -19,6 +19,7 @@ from chemvas.ui.canvas_window_access import (
     restore_canvas_state_for,
     snapshot_canvas_state_for,
 )
+from chemvas.ui.history_operations import CanvasHistoryOperations
 from chemvas.ui.scene_item_state_serialization import arrow_state_dict
 
 
@@ -141,6 +142,7 @@ def test_arrow_labels_render_in_explicit_color_but_keep_default_text_style(
 
 @pytest.mark.parametrize("kind", sorted(VALID_ARROW_KINDS))
 def test_arrow_state_edit_and_history_restore_color_including_default(canvas, kind):
+    operations = canvas.services.history_service.operations
     from chemvas.ui.history_commands import UpdateSceneItemCommand
 
     restore_canvas_state_for(canvas, _document([_arrow(kind, labels={"above": "k_1"})]))
@@ -150,7 +152,7 @@ def test_arrow_state_edit_and_history_restore_color_including_default(canvas, ki
     before = arrow_state_dict(item)
     after = {**before, "end": (100.0, 20.0), "color": "#123abc"}
     command = UpdateSceneItemCommand(item, before, after)
-    command.redo(canvas)
+    command.redo(operations)
     assert arrow_state_dict(item) == after
     assert item.pen().color() == QColor("#123abc")
     assert item.childItems()[0].defaultTextColor() == QColor("#123abc")
@@ -212,6 +214,7 @@ def test_color_operation_recolors_arrows_with_one_undo_step(canvas, kind):
     history = canvas.runtime_state.history_service
     colors = CanvasColorMutationService(
         canvas,
+        history_operations=CanvasHistoryOperations(canvas),
         graph_service=canvas_services_for(canvas).graph_service,
         history_service=history,
     )
@@ -267,6 +270,7 @@ def test_color_tool_empty_space_click_recolors_selected_arrow(canvas):
     item.setSelected(True)
     colors = CanvasColorMutationService(
         canvas,
+        history_operations=CanvasHistoryOperations(canvas),
         graph_service=canvas_services_for(canvas).graph_service,
         history_service=canvas.runtime_state.history_service,
     )
@@ -341,6 +345,7 @@ def test_failed_arrow_color_batch_restores_document(canvas, monkeypatch, failure
     history = canvas.runtime_state.history_service
     colors = CanvasColorMutationService(
         canvas,
+        history_operations=CanvasHistoryOperations(canvas),
         graph_service=canvas_services_for(canvas).graph_service,
         history_service=history,
     )
