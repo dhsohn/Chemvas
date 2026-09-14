@@ -12,7 +12,7 @@ from chemvas.domain.document import Atom
 from chemvas.features.selection import StructureHit
 from chemvas.ui.selection_preference_service import SelectionPreferenceService
 from chemvas.ui.selection_structure_service import SelectionStructureService
-from tests.test_selection_controller_additional import _FakeItem, _make_canvas
+from tests.selection_support import _FakeItem, _make_canvas
 
 
 def _make_service(canvas, *, hit_testing_service=None, structure_service=None):

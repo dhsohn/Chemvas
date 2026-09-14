@@ -67,7 +67,7 @@ class CanvasHistoryRecordingService:
             if group_updates:
                 command = CompositeCommand([command, *group_updates])
                 for update in group_updates:
-                    update.redo(self.canvas)
+                    update.redo(self.history.operations)
             if self.history.push(command) is False and self.history.is_enabled():
                 raise ValueError("History did not accept the edit.")
         except Exception as original_error:
@@ -77,7 +77,7 @@ class CanvasHistoryRecordingService:
             run_rollback_step(
                 original_error,
                 "inverting a recorded mutation that failed to publish",
-                lambda: command.undo(self.canvas),
+                lambda: command.undo(self.history.operations),
             )
             raise
 

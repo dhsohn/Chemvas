@@ -35,6 +35,7 @@ from chemvas.domain.document import (
     calculation_plan_to_state,
     deserialize_model_state,
 )
+from chemvas.domain.document.inspection import inspect_components
 from chemvas.features.calculation_bundle import (
     apply_calculation_step_edit,
     calculation_state_by_id,
@@ -42,7 +43,6 @@ from chemvas.features.calculation_bundle import (
     fill_correspondence_gaps,
     identity_correspondence,
     included_atom_ids,
-    inspect_components,
     prepare_calculation_step_editor,
 )
 from chemvas.shell.palette import PALETTE

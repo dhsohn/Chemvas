@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from functools import partial
-from typing import TYPE_CHECKING, Any, override
+from typing import TYPE_CHECKING, Any, Protocol, override
 
 from PyQt6 import sip
 from PyQt6.QtCore import Qt
@@ -21,63 +21,82 @@ from chemvas.domain.transactions import run_rollback_step
 
 if TYPE_CHECKING:
     from collections.abc import Callable
-from chemvas.ui.atom_coords_access import pop_atom_coords_3d_for
-from chemvas.ui.atom_label_access import add_or_update_atom_label
-from chemvas.ui.canvas_calculation_plan_state import set_calculation_plan_for
-from chemvas.ui.canvas_group_state import (
-    CanvasSceneGroup,
-    group_state_for,
-    register_group_for,
-    remove_group_for,
-    restore_group_for,
-)
-from chemvas.ui.canvas_mark_registry import mark_registry_for
-from chemvas.ui.canvas_model_access import (
-    atom_annotations_for,
-)
-from chemvas.ui.canvas_scene_items_state import (
-    SCENE_ITEM_COLLECTION_ATTRS,
-    scene_item_collection_for,
-)
-from chemvas.ui.canvas_smiles_input_state import set_last_smiles_input_for
-from chemvas.ui.canvas_view_event_router import route_scene_selection_group_changed
-from chemvas.ui.handle_overlay_access import clear_handles_for
-from chemvas.ui.move_access import (
-    refresh_selection_outline_for_canvas,
-)
-from chemvas.ui.scene_item_access import (
-    apply_scene_item_state as _apply_scene_item_state,
-)
-from chemvas.ui.scene_item_access import (
-    remove_scene_item as _remove_scene_item,
-)
-from chemvas.ui.scene_item_access import (
-    restore_scene_item as _restore_scene_item,
-)
-from chemvas.ui.scene_signal_blocking import blocked_scene_signals
+    from contextlib import AbstractContextManager
+
+    from chemvas.ui.transactions.scene_runtime import SceneRuntimeSnapshot
+
+from chemvas.core.history import HistoryPositionOperations, HistorySmilesOperations
+from chemvas.ui.canvas_group_state import CanvasGroupState, CanvasSceneGroup
+from chemvas.ui.canvas_scene_items_state import SCENE_ITEM_COLLECTION_ATTRS
 from chemvas.ui.transactions.scene_rect import (
     capture_scene_rect_snapshot,
     release_scene_rect_snapshot,
 )
-from chemvas.ui.transactions.scene_runtime import (
-    capture_scene_runtime,
-    create_scene_items_atomically,
-    mutate_existing_scene_items_atomically,
-    restore_absolute_snapshots,
-)
+from chemvas.ui.transactions.scene_runtime import restore_absolute_snapshots
+
+
+class HistorySceneItemOperations(Protocol):
+    def apply_scene_item_state(self, item: object, state: dict) -> None: ...
+    def clear_handles_for_target(self, item: object) -> None: ...
+    def refresh_selection_outline(self) -> None: ...
+    def capture_scene_runtime(self) -> SceneRuntimeSnapshot: ...
+
+
+class HistorySelectionGeometryOperations(
+    HistorySceneItemOperations, HistoryPositionOperations, Protocol
+):
+    def blocked_scene_signals(self) -> AbstractContextManager[None]: ...
+    def pop_atom_coords_3d(self, atom_id: int) -> object: ...
+
+
+class HistorySceneCollectionOperations(Protocol):
+    def scene_item_collection(self, name: str) -> list[Any]: ...
+    def create_scene_items(self, states: list[dict], items: list) -> None: ...
+    def restore_scene_items(
+        self, items: list, *, after_mutation: Callable[[], None] | None = None
+    ) -> None: ...
+    def remove_scene_items(self, items: list) -> None: ...
+
+
+class HistoryGroupOperations(Protocol):
+    def group_state(self) -> CanvasGroupState: ...
+    def remove_group(self, group_id: int) -> CanvasSceneGroup | None: ...
+    def register_group(self, atom_ids: set[int], items: list) -> int: ...
+    def restore_group(self, group_id: int, group: CanvasSceneGroup) -> None: ...
+    def route_scene_selection_group_changed(self) -> None: ...
+    def refresh_selection_outline(self) -> None: ...
+    def capture_scene_runtime(self) -> SceneRuntimeSnapshot: ...
+
+
+class HistoryMarkOperations(HistorySceneItemOperations, Protocol):
+    def restore_mark_ownership(
+        self,
+        marks: dict[int, tuple[object, ...]],
+        annotations: dict[int, dict[str, int]],
+    ) -> None: ...
+
+
+class HistoryCalculationPlanOperations(Protocol):
+    def set_calculation_plan(self, state: dict[str, object] | None) -> None: ...
+
+
+class HistoryAtomLabelOperations(HistorySmilesOperations, Protocol):
+    def restore_atom_label(
+        self, atom_id: int, element: str, explicit_label: bool
+    ) -> None: ...
 
 
 @dataclass(slots=True)
 class _GroupStateSnapshot:
-    state: Any
+    state: CanvasGroupState
     groups_object: dict[int, CanvasSceneGroup]
     groups: dict[int, CanvasSceneGroup]
     next_group_id: int
     expanding: bool
 
 
-def _group_state_snapshot(canvas) -> _GroupStateSnapshot:
-    state = group_state_for(canvas)
+def _group_state_snapshot(operations: HistoryGroupOperations) -> _GroupStateSnapshot:
+    state = operations.group_state()
     return _GroupStateSnapshot(
         state=state,
         groups_object=state.groups,
@@ -95,19 +114,6 @@ def _restore_group_state(snapshot: _GroupStateSnapshot) -> None:
     snapshot.state.expanding = snapshot.expanding
 
 
-def _clear_handles_for_target(canvas, item) -> None:
-    """Drop handles that were placed from the geometry this command replaced.
-
-    A lightweight canvas without a runtime container is simply a canvas
-    with no handles rather than an error inside an undo.
-    """
-    runtime_state = getattr(canvas, "runtime_state", None)
-    handle_state = getattr(runtime_state, "handle_state", None)
-    if handle_state is None or getattr(handle_state, "target", None) is not item:
-        return
-    clear_handles_for(canvas)
-
-
 @dataclass
 class SetAnnotationStyleCommand[StyleState](HistoryCommand):
     history_transaction_snapshot_covers_state = True
@@ -115,32 +121,32 @@ class SetAnnotationStyleCommand[StyleState](HistoryCommand):
 
     before_state: StyleState
     after_state: StyleState
-    apply_style: Callable[[Any, StyleState], None]
+    apply_style: Callable[[StyleState], None]
 
-    def _apply(self, canvas, state, rollback_state) -> None:
-        transaction = capture_history_transaction_for_command(canvas)
+    def _apply(self, operations, state, rollback_state) -> None:
+        transaction = capture_history_transaction_for_command(operations)
         try:
-            self.apply_style(canvas, state)
-            release_history_transaction_for_command(canvas, transaction)
+            self.apply_style(state)
+            release_history_transaction_for_command(operations, transaction)
         except Exception as original_error:
             result = restore_history_transaction_for_command(
-                canvas, transaction, original_error
+                operations, transaction, original_error
             )
             if result.fallback_to_inverse:
                 run_rollback_step(
                     original_error,
                     "restoring annotation settings",
-                    lambda: self.apply_style(canvas, rollback_state),
+                    lambda: self.apply_style(rollback_state),
                 )
             raise
 
     @override
-    def undo(self, canvas) -> None:
-        self._apply(canvas, self.before_state, self.after_state)
+    def undo(self, operations) -> None:
+        self._apply(operations, self.before_state, self.after_state)
 
     @override
-    def redo(self, canvas) -> None:
-        self._apply(canvas, self.after_state, self.before_state)
+    def redo(self, operations) -> None:
+        self._apply(operations, self.after_state, self.before_state)
 
 
 @dataclass
@@ -150,24 +156,26 @@ class SetSheetSetupCommand(HistoryCommand):
 
     before: tuple[str, str]
     after: tuple[str, str]
-    apply_setup: Callable[[Any, str, str], None]
+    apply_setup: Callable[[str, str], None]
 
-    def _apply(self, canvas, state) -> None:
-        transaction = capture_history_transaction_for_command(canvas)
+    def _apply(self, operations, state) -> None:
+        transaction = capture_history_transaction_for_command(operations)
         try:
-            self.apply_setup(canvas, *state)
-            release_history_transaction_for_command(canvas, transaction)
+            self.apply_setup(*state)
+            release_history_transaction_for_command(operations, transaction)
         except Exception as original_error:
-            restore_history_transaction_for_command(canvas, transaction, original_error)
+            restore_history_transaction_for_command(
+                operations, transaction, original_error
+            )
             raise
 
     @override
-    def undo(self, canvas) -> None:
-        self._apply(canvas, self.before)
+    def undo(self, operations) -> None:
+        self._apply(operations, self.before)
 
     @override
-    def redo(self, canvas) -> None:
-        self._apply(canvas, self.after)
+    def redo(self, operations) -> None:
+        self._apply(operations, self.after)
 
 
 @dataclass
@@ -178,30 +186,32 @@ class SetCalculationPlanCommand(HistoryCommand):
     before_state: dict[str, object] | None
     after_state: dict[str, object] | None
 
-    def _apply(self, canvas, state, rollback_state) -> None:
-        transaction = capture_history_transaction_for_command(canvas)
+    def _apply(
+        self, operations: HistoryCalculationPlanOperations, state, rollback_state
+    ) -> None:
+        transaction = capture_history_transaction_for_command(operations)
         try:
-            set_calculation_plan_for(canvas, state)
-            release_history_transaction_for_command(canvas, transaction)
+            operations.set_calculation_plan(state)
+            release_history_transaction_for_command(operations, transaction)
         except Exception as original_error:
             result = restore_history_transaction_for_command(
-                canvas, transaction, original_error
+                operations, transaction, original_error
             )
             if result.fallback_to_inverse:
                 run_rollback_step(
                     original_error,
                     "restoring the previous calculation plan",
-                    lambda: set_calculation_plan_for(canvas, rollback_state),
+                    lambda: operations.set_calculation_plan(rollback_state),
                 )
             raise
 
     @override
-    def undo(self, canvas) -> None:
-        self._apply(canvas, self.before_state, self.after_state)
+    def undo(self, operations: HistoryCalculationPlanOperations) -> None:
+        self._apply(operations, self.before_state, self.after_state)
 
     @override
-    def redo(self, canvas) -> None:
-        self._apply(canvas, self.after_state, self.before_state)
+    def redo(self, operations: HistoryCalculationPlanOperations) -> None:
+        self._apply(operations, self.after_state, self.before_state)
 
 
 @dataclass
@@ -219,37 +229,29 @@ class RebindMarkCommand(HistoryCommand):
     before_annotations: dict[int, dict[str, int]]
     after_annotations: dict[int, dict[str, int]]
 
-    def _apply(self, canvas, *, undo: bool) -> None:
-        transaction = capture_history_transaction_for_command(canvas)
+    def _apply(self, operations: HistoryMarkOperations, *, undo: bool) -> None:
+        transaction = capture_history_transaction_for_command(operations)
         try:
             state = self.before_state if undo else self.after_state
             marks = self.before_marks if undo else self.after_marks
             annotations = self.before_annotations if undo else self.after_annotations
-            _apply_scene_item_state(canvas, self.item, state)
-            registry = mark_registry_for(canvas)
-            model_annotations = atom_annotations_for(canvas)
-            for atom_id, items in marks.items():
-                if items:
-                    registry.by_atom.setdefault(atom_id, [])[:] = items
-                else:
-                    registry.by_atom.pop(atom_id, None)
-                if atom_id in annotations:
-                    model_annotations[atom_id] = dict(annotations[atom_id])
-                else:
-                    model_annotations.pop(atom_id, None)
-            refresh_selection_outline_for_canvas(canvas)
-            release_history_transaction_for_command(canvas, transaction)
+            operations.apply_scene_item_state(self.item, state)
+            operations.restore_mark_ownership(marks, annotations)
+            operations.refresh_selection_outline()
+            release_history_transaction_for_command(operations, transaction)
         except Exception as original_error:
-            restore_history_transaction_for_command(canvas, transaction, original_error)
+            restore_history_transaction_for_command(
+                operations, transaction, original_error
+            )
             raise
 
     @override
-    def undo(self, canvas) -> None:
-        self._apply(canvas, undo=True)
+    def undo(self, operations: HistoryMarkOperations) -> None:
+        self._apply(operations, undo=True)
 
     @override
-    def redo(self, canvas) -> None:
-        self._apply(canvas, undo=False)
+    def redo(self, operations: HistoryMarkOperations) -> None:
+        self._apply(operations, undo=False)
 
 
 @dataclass
@@ -260,24 +262,26 @@ class UpdateSceneItemCommand(HistoryCommand):
     before_state: dict
     after_state: dict
 
-    def _apply(self, canvas, state: dict, rollback_state: dict) -> None:
-        runtime_snapshot = capture_scene_runtime(canvas)
+    def _apply(
+        self, operations: HistorySceneItemOperations, state: dict, rollback_state: dict
+    ) -> None:
+        runtime_snapshot = operations.capture_scene_runtime()
         scene_rect_snapshot = capture_scene_rect_snapshot(runtime_snapshot.scene)
         try:
-            _apply_scene_item_state(canvas, self.item, state)
-            _clear_handles_for_target(canvas, self.item)
-            refresh_selection_outline_for_canvas(canvas)
+            operations.apply_scene_item_state(self.item, state)
+            operations.clear_handles_for_target(self.item)
+            operations.refresh_selection_outline()
             release_scene_rect_snapshot(scene_rect_snapshot)
         except Exception as original_error:
             run_rollback_step(
                 original_error,
                 "restoring a scene item's prior state",
-                lambda: _apply_scene_item_state(canvas, self.item, rollback_state),
+                lambda: operations.apply_scene_item_state(self.item, rollback_state),
             )
             run_rollback_step(
                 original_error,
                 "refreshing the selection outline after a scene-item update",
-                lambda: refresh_selection_outline_for_canvas(canvas),
+                lambda: operations.refresh_selection_outline(),
             )
             # Outline refresh clears the old scene items before rebuilding. If
             # that rebuild raises, applying the item state back is insufficient:
@@ -289,12 +293,12 @@ class UpdateSceneItemCommand(HistoryCommand):
             raise
 
     @override
-    def undo(self, canvas) -> None:
-        self._apply(canvas, self.before_state, self.after_state)
+    def undo(self, operations: HistorySceneItemOperations) -> None:
+        self._apply(operations, self.before_state, self.after_state)
 
     @override
-    def redo(self, canvas) -> None:
-        self._apply(canvas, self.after_state, self.before_state)
+    def redo(self, operations: HistorySceneItemOperations) -> None:
+        self._apply(operations, self.after_state, self.before_state)
 
 
 @dataclass
@@ -311,8 +315,10 @@ class SetSceneGeometryCommand(HistoryCommand):
     atom_commands: list[SetAtomPositionsCommand]
     item_commands: list[UpdateSceneItemCommand]
 
-    def _apply_geometry(self, canvas, *, undo: bool) -> None:
-        with history_transaction_scope(canvas), blocked_scene_signals(canvas.scene()):
+    def _apply_geometry(
+        self, operations: HistorySelectionGeometryOperations, *, undo: bool
+    ) -> None:
+        with history_transaction_scope(operations), operations.blocked_scene_signals():
             atom_commands = reversed(self.atom_commands) if undo else self.atom_commands
             for command in atom_commands:
                 positions = (
@@ -323,42 +329,44 @@ class SetSceneGeometryCommand(HistoryCommand):
                 # unlike the general setter's optional partial coordinate update.
                 if coords is not None:
                     for atom_id in positions.keys() - coords.keys():
-                        pop_atom_coords_3d_for(canvas, atom_id)
+                        operations.pop_atom_coords_3d(atom_id)
                 if undo:
-                    command.undo(canvas)
+                    command.undo(operations)
                 else:
-                    command.redo(canvas)
+                    command.redo(operations)
             item_commands = reversed(self.item_commands) if undo else self.item_commands
             for item_command in item_commands:
                 state = item_command.before_state if undo else item_command.after_state
-                _apply_scene_item_state(canvas, item_command.item, state)
-                _clear_handles_for_target(canvas, item_command.item)
-        refresh_selection_outline_for_canvas(canvas)
+                operations.apply_scene_item_state(item_command.item, state)
+                operations.clear_handles_for_target(item_command.item)
+        operations.refresh_selection_outline()
 
-    def _apply(self, canvas, *, undo: bool) -> None:
-        transaction = capture_history_transaction_for_command(canvas)
+    def _apply(
+        self, operations: HistorySelectionGeometryOperations, *, undo: bool
+    ) -> None:
+        transaction = capture_history_transaction_for_command(operations)
         try:
-            self._apply_geometry(canvas, undo=undo)
-            release_history_transaction_for_command(canvas, transaction)
+            self._apply_geometry(operations, undo=undo)
+            release_history_transaction_for_command(operations, transaction)
         except Exception as original_error:
             result = restore_history_transaction_for_command(
-                canvas, transaction, original_error
+                operations, transaction, original_error
             )
             if result.fallback_to_inverse:
                 run_rollback_step(
                     original_error,
                     "restoring the previous selection geometry",
-                    lambda: self._apply_geometry(canvas, undo=not undo),
+                    lambda: self._apply_geometry(operations, undo=not undo),
                 )
             raise
 
     @override
-    def undo(self, canvas) -> None:
-        self._apply(canvas, undo=True)
+    def undo(self, operations: HistorySelectionGeometryOperations) -> None:
+        self._apply(operations, undo=True)
 
     @override
-    def redo(self, canvas) -> None:
-        self._apply(canvas, undo=False)
+    def redo(self, operations: HistorySelectionGeometryOperations) -> None:
+        self._apply(operations, undo=False)
 
 
 @dataclass
@@ -368,12 +376,12 @@ class SetBondLengthGeometryCommand(SetSceneGeometryCommand):
     length_command: UpdateBondLengthCommand
 
     @override
-    def _apply_geometry(self, canvas, *, undo: bool) -> None:
+    def _apply_geometry(self, operations, *, undo: bool) -> None:
         if undo:
-            self.length_command.undo(canvas)
+            self.length_command.undo(operations)
         else:
-            self.length_command.redo(canvas)
-        super()._apply_geometry(canvas, undo=undo)
+            self.length_command.redo(operations)
+        super()._apply_geometry(operations, undo=undo)
 
 
 @dataclass
@@ -384,25 +392,15 @@ class AddSceneItemsCommand(HistoryCommand):
     items: list = field(default_factory=list)
 
     @override
-    def redo(self, canvas) -> None:
+    def redo(self, operations: HistorySceneCollectionOperations) -> None:
         if not self.items:
-            create_scene_items_atomically(canvas, self.item_states, self.items)
+            operations.create_scene_items(self.item_states, self.items)
             return
-        mutate_existing_scene_items_atomically(
-            canvas,
-            self.items,
-            _restore_scene_item,
-            unknown_was_attached=False,
-        )
+        operations.restore_scene_items(self.items)
 
     @override
-    def undo(self, canvas) -> None:
-        mutate_existing_scene_items_atomically(
-            canvas,
-            self.items,
-            _remove_scene_item,
-            unknown_was_attached=True,
-        )
+    def undo(self, operations: HistorySceneCollectionOperations) -> None:
+        operations.remove_scene_items(self.items)
 
 
 @dataclass
@@ -413,12 +411,14 @@ class _DeletedSceneItemOrder:
     siblings: list[list[QGraphicsItem]]
 
     @classmethod
-    def capture(cls, canvas, items: list) -> _DeletedSceneItemOrder:
+    def capture(
+        cls, operations: HistorySceneCollectionOperations, items: list
+    ) -> _DeletedSceneItemOrder:
         item_ids = {id(item) for item in items}
         collections = {
             name: [
                 (index, item)
-                for index, item in enumerate(scene_item_collection_for(canvas, name))
+                for index, item in enumerate(operations.scene_item_collection(name))
                 if id(item) in item_ids
             ]
             for name in SCENE_ITEM_COLLECTION_ATTRS
@@ -443,9 +443,9 @@ class _DeletedSceneItemOrder:
             )
         return cls(collections, siblings)
 
-    def restore(self, canvas) -> None:
+    def restore(self, operations: HistorySceneCollectionOperations) -> None:
         for name, entries in self.collections.items():
-            collection = scene_item_collection_for(canvas, name)
+            collection = operations.scene_item_collection(name)
             for _, item in entries:
                 collection.remove(item)
             for index, item in entries:
@@ -470,38 +470,35 @@ class DeleteSceneItemsCommand(HistoryCommand):
 
     @classmethod
     def capture(
-        cls, canvas, item_states: list[dict], items: list
+        cls,
+        operations: HistorySceneCollectionOperations,
+        item_states: list[dict],
+        items: list,
     ) -> DeleteSceneItemsCommand:
         """Capture ordering before the first item is detached."""
-        return cls(item_states, items, _DeletedSceneItemOrder.capture(canvas, items))
-
-    @override
-    def redo(self, canvas) -> None:
-        mutate_existing_scene_items_atomically(
-            canvas,
-            self.items,
-            _remove_scene_item,
-            unknown_was_attached=True,
+        return cls(
+            item_states, items, _DeletedSceneItemOrder.capture(operations, items)
         )
 
     @override
-    def undo(self, canvas) -> None:
+    def redo(self, operations: HistorySceneCollectionOperations) -> None:
+        operations.remove_scene_items(self.items)
+
+    @override
+    def undo(self, operations: HistorySceneCollectionOperations) -> None:
         if not self.items:
-            create_scene_items_atomically(canvas, self.item_states, self.items)
+            operations.create_scene_items(self.item_states, self.items)
             return
-        mutate_existing_scene_items_atomically(
-            canvas,
+        operations.restore_scene_items(
             self.items,
-            _restore_scene_item,
-            unknown_was_attached=False,
-            after_mutation=partial(self._order.restore, canvas)
+            after_mutation=partial(self._order.restore, operations)
             if self._order
             else None,
         )
 
 
 def _run_group_state_transaction(
-    canvas,
+    operations: HistoryGroupOperations,
     apply_change,
     *,
     outline_rollback_note: str,
@@ -516,18 +513,18 @@ def _run_group_state_transaction(
     recorded as notes on the original error in that same order.
     """
 
-    snapshot = _group_state_snapshot(canvas)
-    runtime_snapshot = capture_scene_runtime(canvas)
+    snapshot = _group_state_snapshot(operations)
+    runtime_snapshot = operations.capture_scene_runtime()
     scene_rect_snapshot = capture_scene_rect_snapshot(runtime_snapshot.scene)
     try:
         apply_change()
         # Pasted scene items regain selection before their group is restored.
         # Membership changes emit no Qt selectionChanged signal; reconcile now
         # so the next drag cannot move a ring while leaving its sidechain behind.
-        route_scene_selection_group_changed(canvas)
+        operations.route_scene_selection_group_changed()
         # The dashed group box is part of the selection outline; without a
         # refresh, undo/redo would leave a stale box (and its hit-test area).
-        refresh_selection_outline_for_canvas(canvas)
+        operations.refresh_selection_outline()
         release_scene_rect_snapshot(scene_rect_snapshot)
     except Exception as original_error:
         run_rollback_step(
@@ -540,7 +537,7 @@ def _run_group_state_transaction(
         run_rollback_step(
             original_error,
             outline_rollback_note,
-            lambda: refresh_selection_outline_for_canvas(canvas),
+            lambda: operations.refresh_selection_outline(),
         )
         restore_absolute_snapshots(
             runtime_snapshot, scene_rect_snapshot, original_error
@@ -556,17 +553,16 @@ class GroupSceneItemsCommand(HistoryCommand):
     group_id: int | None = None
 
     @override
-    def redo(self, canvas) -> None:
+    def redo(self, operations: HistoryGroupOperations) -> None:
         previous_group_id = self.group_id
 
         def apply_change() -> None:
             for absorbed_id, _ in self.absorbed:
-                remove_group_for(canvas, absorbed_id)
+                operations.remove_group(absorbed_id)
             if self.group_id is None:
-                self.group_id = register_group_for(canvas, self.atom_ids, self.items)
+                self.group_id = operations.register_group(self.atom_ids, self.items)
             else:
-                restore_group_for(
-                    canvas,
+                operations.restore_group(
                     self.group_id,
                     CanvasSceneGroup(set(self.atom_ids), list(self.items)),
                 )
@@ -577,22 +573,22 @@ class GroupSceneItemsCommand(HistoryCommand):
             self.group_id = previous_group_id
 
         _run_group_state_transaction(
-            canvas,
+            operations,
             apply_change,
             outline_rollback_note="refreshing the selection outline after grouping",
             on_rollback=restore_group_id,
         )
 
     @override
-    def undo(self, canvas) -> None:
+    def undo(self, operations: HistoryGroupOperations) -> None:
         def apply_change() -> None:
             if self.group_id is not None:
-                remove_group_for(canvas, self.group_id)
+                operations.remove_group(self.group_id)
             for absorbed_id, group in self.absorbed:
-                restore_group_for(canvas, absorbed_id, group)
+                operations.restore_group(absorbed_id, group)
 
         _run_group_state_transaction(
-            canvas,
+            operations,
             apply_change,
             outline_rollback_note="refreshing the selection outline after ungrouping",
         )
@@ -603,25 +599,25 @@ class UngroupSceneItemsCommand(HistoryCommand):
     removed: list[tuple[int, CanvasSceneGroup]]
 
     @override
-    def redo(self, canvas) -> None:
+    def redo(self, operations: HistoryGroupOperations) -> None:
         def apply_change() -> None:
             for group_id, _ in self.removed:
-                remove_group_for(canvas, group_id)
+                operations.remove_group(group_id)
 
         _run_group_state_transaction(
-            canvas,
+            operations,
             apply_change,
             outline_rollback_note="refreshing the selection outline after ungrouping",
         )
 
     @override
-    def undo(self, canvas) -> None:
+    def undo(self, operations: HistoryGroupOperations) -> None:
         def apply_change() -> None:
             for group_id, group in self.removed:
-                restore_group_for(canvas, group_id, group)
+                operations.restore_group(group_id, group)
 
         _run_group_state_transaction(
-            canvas,
+            operations,
             apply_change,
             outline_rollback_note="refreshing the selection outline after grouping",
         )
@@ -642,7 +638,7 @@ class ChangeAtomLabelCommand(HistoryCommand):
 
     def _apply(
         self,
-        canvas,
+        operations: HistoryAtomLabelOperations,
         element: str,
         explicit_label: bool,
         smiles_input: str | None,
@@ -650,50 +646,36 @@ class ChangeAtomLabelCommand(HistoryCommand):
         rollback_explicit_label: bool,
         rollback_smiles_input: str | None,
     ) -> None:
-        transaction = capture_history_transaction_for_command(canvas)
+        transaction = capture_history_transaction_for_command(operations)
         try:
-            add_or_update_atom_label(
-                canvas,
-                self.atom_id,
-                element,
-                clear_smiles=False,
-                record=False,
-                allow_merge=False,
-                show_carbon=explicit_label,
-                literal_label=explicit_label,
-            )
-            set_last_smiles_input_for(canvas, smiles_input)
-            release_history_transaction_for_command(canvas, transaction)
+            operations.restore_atom_label(self.atom_id, element, explicit_label)
+            operations.set_last_smiles_input_for_history(smiles_input)
+            release_history_transaction_for_command(operations, transaction)
         except Exception as original_error:
             result = restore_history_transaction_for_command(
-                canvas, transaction, original_error
+                operations, transaction, original_error
             )
             if result.fallback_to_inverse:
                 run_rollback_step(
                     original_error,
                     "restoring the prior atom label",
-                    lambda: add_or_update_atom_label(
-                        canvas,
-                        self.atom_id,
-                        rollback_element,
-                        clear_smiles=False,
-                        record=False,
-                        allow_merge=False,
-                        show_carbon=rollback_explicit_label,
-                        literal_label=rollback_explicit_label,
+                    lambda: operations.restore_atom_label(
+                        self.atom_id, rollback_element, rollback_explicit_label
                     ),
                 )
                 run_rollback_step(
                     original_error,
                     "restoring the prior SMILES input",
-                    lambda: set_last_smiles_input_for(canvas, rollback_smiles_input),
+                    lambda: operations.set_last_smiles_input_for_history(
+                        rollback_smiles_input
+                    ),
                 )
             raise
 
     @override
-    def undo(self, canvas) -> None:
+    def undo(self, operations: HistoryAtomLabelOperations) -> None:
         self._apply(
-            canvas,
+            operations,
             self.before_element,
             self.before_explicit_label,
             self.before_smiles_input,
@@ -703,9 +685,9 @@ class ChangeAtomLabelCommand(HistoryCommand):
         )
 
     @override
-    def redo(self, canvas) -> None:
+    def redo(self, operations: HistoryAtomLabelOperations) -> None:
         self._apply(
-            canvas,
+            operations,
             self.after_element,
             self.after_explicit_label,
             self.after_smiles_input,
@@ -720,6 +702,13 @@ __all__ = [
     "ChangeAtomLabelCommand",
     "DeleteSceneItemsCommand",
     "GroupSceneItemsCommand",
+    "HistoryAtomLabelOperations",
+    "HistoryCalculationPlanOperations",
+    "HistoryGroupOperations",
+    "HistoryMarkOperations",
+    "HistorySceneCollectionOperations",
+    "HistorySceneItemOperations",
+    "HistorySelectionGeometryOperations",
     "SetAnnotationStyleCommand",
     "SetCalculationPlanCommand",
     "SetSceneGeometryCommand",

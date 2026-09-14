@@ -55,6 +55,7 @@ def _command(canvas, atom_id, *, element="C", explicit=True):
 
 
 def _edit(canvas, compound):
+    operations = canvas.services.history_service.operations
     atom_id = canvas.services.structure.canvas_atom_mutation_service.add_atom(
         "C", 0.1, -0.3
     )
@@ -70,7 +71,7 @@ def _edit(canvas, compound):
         CompositeCommand(
             [
                 DeleteSceneItemsCommand.capture(
-                    canvas, [mark_state_dict_for(canvas, mark)], [mark]
+                    operations, [mark_state_dict_for(canvas, mark)], [mark]
                 ),
                 label,
             ]
@@ -82,7 +83,7 @@ def _edit(canvas, compound):
     history.clear()
     before = snapshot_canvas_state_for(canvas)
     mark_document_clean_for(canvas, before)
-    command.redo(canvas)
+    command.redo(operations)
     assert history.push(command)
     return atom_id, mark, command, before, snapshot_canvas_state_for(canvas)
 
@@ -180,9 +181,10 @@ def test_failed_compound_mark_replay_restores_label_and_mark_identity(
 def test_standalone_label_failure_restores_original_graphics_without_inverse_rebuild(
     canvas, monkeypatch, direction
 ):
+    operations = canvas.services.history_service.operations
     atom_id, _mark, command, _before, _after = _edit(canvas, False)
     if direction == "redo":
-        command.undo(canvas)
+        command.undo(operations)
     expected = _exact_state(canvas)
     stacks = canvas.services.history_service.capture_stack_snapshot()
     service = atom_label_service(canvas)
@@ -195,7 +197,7 @@ def test_standalone_label_failure_restores_original_graphics_without_inverse_reb
     with monkeypatch.context() as patch:
         patch.setattr(service, "restore_atom_item_interaction", fail_after_layout)
         with pytest.raises(RuntimeError, match="label interaction unavailable"):
-            getattr(command, direction)(canvas)
+            getattr(command, direction)(operations)
     assert calls == [direction == "redo"]
     assert _exact_state(canvas) == expected
     canvas.services.history_service.verify_stack_snapshot(stacks)
@@ -205,11 +207,12 @@ def test_standalone_label_failure_restores_original_graphics_without_inverse_reb
 def test_real_canvas_restores_label_when_following_smiles_update_fails(
     canvas, monkeypatch, direction
 ):
-    from chemvas.ui import history_commands
+    operations = canvas.services.history_service.operations
+    from chemvas.ui import history_operations as history_commands
 
     atom_id, _mark, command, _before, _after = _edit(canvas, False)
     if direction == "redo":
-        command.undo(canvas)
+        command.undo(operations)
     expected = _exact_state(canvas)
     updates = []
 
@@ -221,7 +224,7 @@ def test_real_canvas_restores_label_when_following_smiles_update_fails(
     with monkeypatch.context() as patch:
         patch.setattr(history_commands, "set_last_smiles_input_for", fail_smiles_update)
         with pytest.raises(RuntimeError, match="SMILES metadata update failure"):
-            getattr(command, direction)(canvas)
+            getattr(command, direction)(operations)
     assert len(updates) == 1
     assert _exact_state(canvas) == expected
 
@@ -233,6 +236,7 @@ def test_real_canvas_restores_label_when_following_smiles_update_fails(
 def test_label_replay_preserves_literal_alias_selection_smiles_and_other_atoms(
     canvas, element, explicit
 ):
+    operations = canvas.services.history_service.operations
     atoms = canvas.services.structure.canvas_atom_mutation_service
     atom_id = atoms.add_atom("C", 0.1, -0.3)
     partner = atoms.add_atom("C", 20.1, -0.3)
@@ -245,7 +249,7 @@ def test_label_replay_preserves_literal_alias_selection_smiles_and_other_atoms(
     before = snapshot_canvas_state_for(canvas)
     mark_document_clean_for(canvas, before)
     command = _command(canvas, atom_id, element=element, explicit=explicit)
-    command.redo(canvas)
+    command.redo(operations)
     assert history.push(command)
     after = snapshot_canvas_state_for(canvas)
     assert canvas.model.atoms[atom_id].element == element
@@ -278,6 +282,7 @@ def test_compound_replay_captures_one_document_savepoint(canvas, direction):
 
 
 def test_nested_label_command_defers_to_existing_document_transaction(canvas):
+    operations = canvas.services.history_service.operations
     from chemvas.core.history import history_transaction_scope
     from chemvas.ui.transactions.document import document_transaction
 
@@ -286,7 +291,7 @@ def test_nested_label_command_defers_to_existing_document_transaction(canvas):
     with mock.patch.object(
         DocumentSavepoint, "capture", wraps=DocumentSavepoint.capture
     ) as capture:
-        with document_transaction(canvas), history_transaction_scope(canvas):
-            command.redo(canvas)
+        with document_transaction(canvas), history_transaction_scope(operations):
+            command.redo(operations)
     assert capture.call_count == 1
     assert canvas.model.atoms[atom_id].explicit_label

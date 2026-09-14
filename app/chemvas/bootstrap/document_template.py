@@ -15,6 +15,7 @@ from chemvas.bootstrap.document_cli_shared import (
     graphics_record_count,
     json_text,
     offscreen_canvas,
+    read_json_request,
 )
 from chemvas.core.document_io import atomic_create_bytes, read_exact_document
 from chemvas.domain.document import (
@@ -27,8 +28,7 @@ from chemvas.domain.document import (
     normalize_json_numbers,
     serialize_model_state,
 )
-from chemvas.domain.json_io import strict_json_loads
-from chemvas.features.calculation_bundle import inspect_components
+from chemvas.domain.document.inspection import inspect_components
 from chemvas.features.insertion import (
     TemplateInsertPlan,
     TemplateInsertRequest,
@@ -61,16 +61,12 @@ def run(argv: list[str]) -> int:
             source, max_bytes=MAX_DOCUMENT_BYTES
         )
         source_hash = cast("str", document.source_sha256)
-        with request_path.open("rb") as stream:
-            request_bytes = stream.read(MAX_REQUEST_BYTES + 1)
-        if len(request_bytes) > MAX_REQUEST_BYTES:
-            raise ValueError(
-                f"template request exceeds the {MAX_REQUEST_BYTES}-byte limit"
-            )
-        try:
-            raw = strict_json_loads(request_bytes)
-        except (ValueError, RecursionError, UnicodeError) as exc:
-            raise ValueError("Invalid Chemvas template insertion JSON file.") from exc
+        request_bytes, raw = read_json_request(
+            request_path,
+            max_bytes=MAX_REQUEST_BYTES,
+            limit_message=f"template request exceeds the {MAX_REQUEST_BYTES}-byte limit",
+            invalid_message="Invalid Chemvas template insertion JSON file.",
+        )
         state = document.state
         request = validate_template_request(state, raw, source_sha256=source_hash)
         candidate, added_atoms = insert_template(state, request)

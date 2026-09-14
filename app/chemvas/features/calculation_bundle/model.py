@@ -7,23 +7,6 @@ if TYPE_CHECKING:
     from chemvas.domain.document import MoleculeModel
 
 
-@dataclass(frozen=True, kw_only=True)
-class ComponentSummary:
-    index: int
-    atom_ids: tuple[int, ...]
-    bond_count: int
-    formula_labels: tuple[tuple[str, int], ...]
-    formal_charge: int
-    radical_electrons: int
-    bounds: tuple[float, float, float, float]
-
-
-@dataclass(frozen=True)
-class ComponentInventory:
-    model: MoleculeModel
-    components: tuple[ComponentSummary, ...]
-
-
 @dataclass(frozen=True)
 class CalculationStateSelection:
     model: MoleculeModel
@@ -65,6 +48,4 @@ __all__ = [
     "AtomMapEntry",
     "CalculationArtifacts",
     "CalculationStateSelection",
-    "ComponentInventory",
-    "ComponentSummary",
 ]

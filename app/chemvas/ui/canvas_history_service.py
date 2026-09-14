@@ -15,12 +15,12 @@ from chemvas.domain.transactions import (
     run_rollback_step,
     validate_restore_outcome,
 )
-from chemvas.ui import history_canvas_access
-from chemvas.ui.canvas_history_state import CanvasHistoryState, history_state_for
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable
     from contextlib import AbstractContextManager
+
+    from chemvas.ui.canvas_history_state import CanvasHistoryState
 
 
 @dataclass(frozen=True)
@@ -39,13 +39,13 @@ class CanvasHistoryService:
 
     def __init__(
         self,
-        canvas,
-        state: CanvasHistoryState | None = None,
+        operations,
+        state: CanvasHistoryState,
         *,
         replay_context: Callable[[], AbstractContextManager[None]],
     ) -> None:
-        self.canvas = canvas
-        self.state = state if state is not None else history_state_for(canvas)
+        self.operations = operations
+        self.state = state
         self._replay_context = replay_context
         self._history_mutation_active = False
         self._history_publication_active = False
@@ -201,8 +201,7 @@ class CanvasHistoryService:
         return snapshot.history, ()
 
     def _capture_document_savepoint(self):
-        return history_canvas_access.capture_history_transaction_for_history(
-            self.canvas,
+        return self.operations.capture_history_transaction_for_history(
             history_service=None,
             guard_scene_rect=True,
         )
@@ -214,10 +213,7 @@ class CanvasHistoryService:
     ) -> RestoreOutcome:
         try:
             result = validate_restore_outcome(
-                history_canvas_access.restore_history_transaction_for_history(
-                    self.canvas,
-                    snapshot,
-                )
+                self.operations.restore_history_transaction_for_history(snapshot)
             )
             for recovery_error in result.errors:
                 add_recovery_error_note(
@@ -264,12 +260,9 @@ class CanvasHistoryService:
             raise
 
         try:
-            with history_transaction_scope(self.canvas), self._replay_context():
-                getattr(command, direction)(self.canvas)
-            history_canvas_access.release_history_transaction_for_history(
-                self.canvas,
-                document_snapshot,
-            )
+            with history_transaction_scope(self.operations), self._replay_context():
+                getattr(command, direction)(self.operations)
+            self.operations.release_history_transaction_for_history(document_snapshot)
         except Exception as original_error:
             restore_result = self._restore_document_savepoint(
                 document_snapshot,
@@ -346,7 +339,7 @@ class CanvasHistoryService:
             self.state.history[:] = inflight_history
             try:
                 with self._replay_context():
-                    command.undo(self.canvas)
+                    command.undo(self.operations)
             except Exception as original_error:
                 self.state.redo_stack.clear()
                 self._notify_failed_operation(original_error)
@@ -381,7 +374,7 @@ class CanvasHistoryService:
             self.state.redo_stack[:] = inflight_redo
             try:
                 with self._replay_context():
-                    command.redo(self.canvas)
+                    command.redo(self.operations)
             except Exception as original_error:
                 self.state.redo_stack.clear()
                 self._notify_failed_operation(original_error)

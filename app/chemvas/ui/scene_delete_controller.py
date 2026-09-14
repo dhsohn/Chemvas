@@ -792,7 +792,7 @@ class SceneDeleteController:
             else:
                 removed_groups.extend(remove_groups_for_items(broken_items))
         command = DeleteSceneItemsCommand.capture(
-            self.canvas, broken_states, broken_items
+            self.history.operations, broken_states, broken_items
         )
         for item in broken_items:
             self._remove_scene_item(item)
@@ -1061,7 +1061,7 @@ class SceneDeleteController:
             remove_atom_only=self._remove_atom,
             remove_scene_item=self._remove_scene_item,
             scene_delete_command_factory=partial(
-                DeleteSceneItemsCommand.capture, self.canvas
+                DeleteSceneItemsCommand.capture, self.history.operations
             ),
             atom_coords_3d_getter=lambda atom_id: atom_coords_3d_for(self.canvas).get(
                 atom_id
@@ -1218,7 +1218,7 @@ class SceneDeleteController:
             ring_state_getter=self._ring_state,
             remove_scene_item=self._remove_scene_item,
             scene_delete_command_factory=partial(
-                DeleteSceneItemsCommand.capture, self.canvas
+                DeleteSceneItemsCommand.capture, self.history.operations
             ),
         )
         command = self._with_group_cleanup(command, removed_groups)
@@ -1236,7 +1236,7 @@ class SceneDeleteController:
         if removed_groups is None:
             removed_groups = self._remove_overlapping_groups(items=[item])
         command: HistoryCommand = DeleteSceneItemsCommand.capture(
-            self.canvas,
+            self.history.operations,
             item_states=[state],
             items=[item],
         )
@@ -1322,7 +1322,7 @@ class SceneDeleteController:
                 remove_scene_item=self._remove_scene_item,
                 clear_handles=lambda: clear_handles_for(self.canvas),
                 scene_delete_command_factory=partial(
-                    DeleteSceneItemsCommand.capture, self.canvas
+                    DeleteSceneItemsCommand.capture, self.history.operations
                 ),
                 atom_coords_3d_getter=lambda atom_id: atom_coords_3d_for(
                     self.canvas

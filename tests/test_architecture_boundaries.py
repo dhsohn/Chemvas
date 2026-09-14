@@ -13,6 +13,7 @@ dependency contract, it probably belongs in a unit test, not here.
 
 import ast
 import re
+from functools import lru_cache
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -22,6 +23,45 @@ if TYPE_CHECKING:
     from collections.abc import Iterator
 
 APP_ROOT = Path(__file__).resolve().parents[1] / "app"
+
+
+@lru_cache(maxsize=1024)
+def _parse_source(source: str) -> ast.Module:
+    # Shared trees are read-only. Mutation controls supply changed source text,
+    # which gets a different entry even when its path and metadata are unchanged.
+    return ast.parse(source)
+
+
+def test_source_parsing_observes_same_length_file_edits(tmp_path):
+    path = tmp_path / "source.py"
+    original = "value = 1\n"
+    path.write_text(original, encoding="utf-8")
+    first = _parse_source(path.read_text(encoding="utf-8"))
+
+    # Read content afresh: timestamps can coincide for fast same-length edits.
+    updated = "value = 2\n"
+    path.write_text(updated, encoding="utf-8")
+    second = _parse_source(path.read_text(encoding="utf-8"))
+    assert isinstance(first.body[0], ast.Assign)
+    assert isinstance(second.body[0], ast.Assign)
+    assert ast.literal_eval(first.body[0].value) == 1
+    assert ast.literal_eval(second.body[0].value) == 2
+    path.unlink()
+    with pytest.raises(FileNotFoundError):
+        _parse_source(path.read_text(encoding="utf-8"))
+
+
+def test_source_parsing_reuses_only_identical_text():
+    _parse_source.cache_clear()
+    source = "value = 1\n"
+    first = _parse_source(source)
+    assert _parse_source(source) is first
+    assert _parse_source("value = 2\n") is not first
+    assert _parse_source.cache_info().misses == 2
+    assert _parse_source.cache_info().hits == 1
+    with pytest.raises(SyntaxError):
+        _parse_source("def broken(")
+
 
 LEGACY_CANVAS_SERVICE_NAMES = frozenset(
     {
@@ -182,7 +222,7 @@ def _direct_canvas_collaborator_violations(source: str) -> list[tuple[int, str]]
         )
 
     violations: list[tuple[int, str]] = []
-    for node in ast.walk(ast.parse(source)):
+    for node in ast.walk(_parse_source(source)):
         if (
             isinstance(node, ast.Attribute)
             and node.attr in collaborator_names
@@ -320,7 +360,7 @@ def test_main_window_keeps_action_availability_surface_off_window() -> None:
     source = (APP_ROOT / "chemvas" / "shell" / "main_window.py").read_text(
         encoding="utf-8"
     )
-    tree = ast.parse(source)
+    tree = _parse_source(source)
     main_window_class = next(
         node
         for node in tree.body
@@ -344,7 +384,7 @@ def test_main_window_keeps_removed_service_surfaces_off_window() -> None:
     source = (APP_ROOT / "chemvas" / "shell" / "main_window.py").read_text(
         encoding="utf-8"
     )
-    tree = ast.parse(source)
+    tree = _parse_source(source)
     method_names = {
         node.name for node in ast.walk(tree) if isinstance(node, ast.FunctionDef)
     }
@@ -434,7 +474,7 @@ def test_main_window_delegates_runtime_state_to_state_object() -> None:
     source = (APP_ROOT / "chemvas" / "shell" / "main_window.py").read_text(
         encoding="utf-8"
     )
-    tree = ast.parse(source)
+    tree = _parse_source(source)
 
     private_state_attrs = {
         "_current_file_path",
@@ -472,7 +512,7 @@ def test_main_window_delegates_toolbar_ui_references_to_reference_object() -> No
     source = (APP_ROOT / "chemvas" / "shell" / "main_window.py").read_text(
         encoding="utf-8"
     )
-    tree = ast.parse(source)
+    tree = _parse_source(source)
 
     private_ui_attrs = {
         "_atom_input",
@@ -522,7 +562,7 @@ def test_main_window_delegates_canvas_tab_references_to_reference_object() -> No
     bootstrap_source = (
         APP_ROOT / "chemvas" / "bootstrap" / "main_window_runtime.py"
     ).read_text(encoding="utf-8")
-    tree = ast.parse(source)
+    tree = _parse_source(source)
 
     assert "window.canvas_tabs" not in bootstrap_source
     private_tab_attrs = {
@@ -558,7 +598,7 @@ def test_main_window_does_not_wrap_tool_action_construction() -> None:
     source = (APP_ROOT / "chemvas" / "shell" / "main_window.py").read_text(
         encoding="utf-8"
     )
-    tree = ast.parse(source)
+    tree = _parse_source(source)
     method_names = {
         node.name for node in ast.walk(tree) if isinstance(node, ast.FunctionDef)
     }
@@ -574,7 +614,7 @@ def test_main_window_context_page_state_service_uses_injected_services_and_publi
     service = APP_ROOT / "chemvas" / "ui" / "main_window_context_page_state_service.py"
     main_window = APP_ROOT / "chemvas" / "shell" / "main_window.py"
     main_window_source = main_window.read_text(encoding="utf-8")
-    tree = ast.parse(main_window_source)
+    tree = _parse_source(main_window_source)
     pattern = re.compile(
         r"\bwindow\._"
         r"|\bwindow\.services\b"
@@ -719,7 +759,7 @@ def test_main_window_canvas_tab_ui_service_uses_injected_close_port() -> None:
         r"|\bwindow\.sheet_tab_global_pos\("
         r"|\bwindow\.canvas_sheet_count\("
     )
-    tree = ast.parse(source)
+    tree = _parse_source(source)
     service_class = next(
         node
         for node in tree.body
@@ -870,7 +910,7 @@ def test_main_window_code_binds_preview_rdkit_through_preview_api() -> None:
 
 def test_preview_3d_does_not_reintroduce_renderer_delegate_wrappers() -> None:
     preview = APP_ROOT / "chemvas" / "ui" / "preview_3d.py"
-    tree = ast.parse(preview.read_text(encoding="utf-8"))
+    tree = _parse_source(preview.read_text(encoding="utf-8"))
     preview_class = next(
         node
         for node in tree.body
@@ -1182,7 +1222,7 @@ def test_history_collaborator_services_use_injected_history_port() -> None:
 def test_production_context_factories_use_default_public_context_keys() -> None:
     matches: list[str] = []
     for path in _app_python_files():
-        tree = ast.parse(path.read_text(encoding="utf-8"))
+        tree = _parse_source(path.read_text(encoding="utf-8"))
         for node in ast.walk(tree):
             if not isinstance(node, ast.Call):
                 continue
@@ -1277,7 +1317,7 @@ def test_production_canvas_service_container_lookup_is_canonical() -> None:
     violations: list[str] = []
 
     for path in _app_python_files():
-        tree = ast.parse(path.read_text(encoding="utf-8"))
+        tree = _parse_source(path.read_text(encoding="utf-8"))
         for node in ast.walk(tree):
             if isinstance(node, ast.Attribute) and node.attr == "services":
                 allowed_receiver = allowed_attribute_receivers.get(path)
@@ -1678,7 +1718,7 @@ def test_selection_controller_delegates_preference_details() -> None:
 
 def test_selection_controller_does_not_reintroduce_private_delegate_wrappers() -> None:
     controller = APP_ROOT / "chemvas" / "ui" / "selection_controller.py"
-    tree = ast.parse(controller.read_text(encoding="utf-8"))
+    tree = _parse_source(controller.read_text(encoding="utf-8"))
     private_methods: list[str] = []
     for node in ast.walk(tree):
         if not isinstance(node, ast.ClassDef) or node.name != "SelectionController":
@@ -1705,7 +1745,7 @@ def test_selection_controller_does_not_construct_collaborator_services() -> None
         "SelectionHitTestService",
     }
     matches: list[str] = []
-    tree = ast.parse(controller.read_text(encoding="utf-8"))
+    tree = _parse_source(controller.read_text(encoding="utf-8"))
     for node in ast.walk(tree):
         if not isinstance(node, ast.Call):
             continue
@@ -1782,7 +1822,7 @@ def test_canvas_services_delegates_handle_service_assembly_to_bundle() -> None:
 
 def test_canvas_runtime_services_exposes_single_runtimes_directly() -> None:
     runtime_services = APP_ROOT / "chemvas" / "ui" / "canvas_runtime_services.py"
-    tree = ast.parse(runtime_services.read_text(encoding="utf-8"))
+    tree = _parse_source(runtime_services.read_text(encoding="utf-8"))
     annotations: dict[str, str] = {}
     for node in tree.body:
         if not isinstance(node, ast.ClassDef) or node.name != "CanvasRuntimeServices":
@@ -1919,7 +1959,7 @@ def test_production_canvas_service_consumers_use_grouped_runtime_api() -> None:
     for path in sorted((APP_ROOT / "chemvas").rglob("*.py")):
         if path == runtime_services:
             continue
-        tree = ast.parse(path.read_text(encoding="utf-8"))
+        tree = _parse_source(path.read_text(encoding="utf-8"))
         for node in ast.walk(tree):
             if isinstance(node, ast.Attribute) and node.attr in legacy_names:
                 owner = node.value
@@ -2517,7 +2557,7 @@ def test_document_session_history_rollback_does_not_rebind_stacks() -> None:
 
 def test_document_session_does_not_snapshot_legacy_sheet_fields() -> None:
     module = APP_ROOT / "chemvas" / "ui" / "canvas_document_session_service.py"
-    tree = ast.parse(module.read_text(encoding="utf-8"))
+    tree = _parse_source(module.read_text(encoding="utf-8"))
     forbidden = {"sheet_size", "sheet_orientation"}
     constants = {
         node.value
@@ -2545,7 +2585,7 @@ def test_sheet_setup_values_exist_only_in_the_runtime_state() -> None:
     violations: list[str] = []
 
     for path in _app_python_files():
-        tree = ast.parse(path.read_text(encoding="utf-8"))
+        tree = _parse_source(path.read_text(encoding="utf-8"))
         for node in ast.walk(tree):
             if isinstance(node, ast.Attribute) and node.attr in forbidden_names:
                 violations.append(f"{path}:{node.lineno}: .{node.attr}")
@@ -2886,7 +2926,7 @@ def test_scene_clipboard_controller_delegates_copy_paste_workflows_to_services()
 
 def test_clipboard_copy_uses_canonical_export_scope_without_parallel_visibility_owner():
     ui = APP_ROOT / "chemvas" / "ui"
-    tree = ast.parse(
+    tree = _parse_source(
         (ui / "scene_clipboard_copy_service.py").read_text(encoding="utf-8")
     )
     scope_names = {
@@ -2938,7 +2978,7 @@ def test_clipboard_export_scope_guard_checks_structure(monkeypatch, variant, all
         changed = source.replace(
             scope, "with (exported_scene(canvas_scene_for(canvas), items)):"
         )
-        assert ast.dump(ast.parse(changed)) == ast.dump(ast.parse(source))
+        assert ast.dump(_parse_source(changed)) == ast.dump(_parse_source(source))
     elif variant == "import_alias":
         changed = source.replace(
             "from chemvas.features.export import exported_scene",
@@ -3199,7 +3239,7 @@ def test_production_code_uses_atom_graphics_accessors_instead_of_canvas_alias_fa
 
 def test_hover_state_accessor_stays_a_thin_runtime_state_leaf() -> None:
     hover_state = APP_ROOT / "chemvas" / "ui" / "canvas_hover_state.py"
-    tree = ast.parse(hover_state.read_text(encoding="utf-8"))
+    tree = _parse_source(hover_state.read_text(encoding="utf-8"))
     classes = [node.name for node in tree.body if isinstance(node, ast.ClassDef)]
     functions = [
         node.name
@@ -3218,50 +3258,173 @@ def test_hover_state_accessor_stays_a_thin_runtime_state_leaf() -> None:
     assert _matching_lines(pattern, [hover_state]) == []
 
 
+def _runtime_state_fields(node: ast.AST) -> set[str]:
+    return {
+        child.attr
+        for child in ast.walk(node)
+        if isinstance(child, ast.Attribute)
+        and isinstance(child.ctx, ast.Load)
+        and isinstance(child.value, ast.Attribute)
+        and child.value.attr == "runtime_state"
+        and isinstance(child.value.value, ast.Name)
+        and child.value.value.id == "canvas"
+    }
+
+
+def _has_state_fallback(node: ast.AST, *, legacy_field: str | None = None) -> bool:
+    for child in ast.walk(node):
+        if (
+            isinstance(child, ast.Attribute)
+            and child.attr == legacy_field
+            and isinstance(child.value, ast.Name)
+            and child.value.id == "canvas"
+        ):
+            return True
+        if not isinstance(child, ast.Call) or not isinstance(child.func, ast.Name):
+            continue
+        if child.func.id == "ensure_canvas_state":
+            return True
+        if (
+            child.func.id in {"getattr", "setattr"}
+            and child.args
+            and isinstance(child.args[0], ast.Name)
+            and child.args[0].id == "canvas"
+        ):
+            return True
+    return False
+
+
 def test_input_view_state_access_is_strict_runtime_owned() -> None:
     state_module = APP_ROOT / "chemvas" / "ui" / "input_view_state.py"
     access_module = APP_ROOT / "chemvas" / "ui" / "input_view_access.py"
     state_source = state_module.read_text(encoding="utf-8")
     access_source = access_module.read_text(encoding="utf-8")
-    access_tree = ast.parse(access_source)
+    access_tree = _parse_source(access_source)
     getter = next(
         node
         for node in access_tree.body
         if isinstance(node, ast.FunctionDef) and node.name == "input_view_state_for"
     )
-    getter_source = ast.get_source_segment(access_source, getter) or ""
-    fallback_pattern = re.compile(
-        r"\bensure_canvas_state\b"
-        r"|\b(?:getattr|setattr)\(\s*canvas\b"
-        r"|\bcanvas\.input_view_state\b"
+    state_tree = _parse_source(state_source)
+    assert any(
+        isinstance(node, ast.ClassDef) and node.name == "InputViewState"
+        for node in state_tree.body
     )
-
-    assert "class InputViewState" in state_source
-    assert "def input_view_state_for" not in state_source
-    assert "canvas.runtime_state.input_view_state" in getter_source
-    assert fallback_pattern.search(state_source) is None
-    assert fallback_pattern.search(getter_source) is None
+    assert not any(
+        isinstance(node, ast.FunctionDef) and node.name == "input_view_state_for"
+        for node in state_tree.body
+    )
+    assert _runtime_state_fields(getter) == {"input_view_state"}
+    assert not _has_state_fallback(state_tree, legacy_field="input_view_state")
+    assert not _has_state_fallback(getter, legacy_field="input_view_state")
 
 
 def test_callback_state_accessor_is_strict_runtime_owned() -> None:
     callback_state = APP_ROOT / "chemvas" / "ui" / "canvas_callback_state.py"
     source = callback_state.read_text(encoding="utf-8")
-    tree = ast.parse(source)
+    tree = _parse_source(source)
     getter = next(
         node
         for node in tree.body
         if isinstance(node, ast.FunctionDef) and node.name == "callback_state_for"
     )
-    getter_source = ast.get_source_segment(source, getter) or ""
-    fallback_pattern = re.compile(
-        r"\bensure_canvas_state\b"
-        r"|\b(?:getattr|setattr)\(\s*canvas\b"
-        r"|\bcanvas\.callback_state\b"
+    assert any(
+        isinstance(node, ast.ClassDef) and node.name == "CanvasCallbackState"
+        for node in tree.body
     )
+    assert _runtime_state_fields(getter) == {"callback_state"}
+    assert not _has_state_fallback(getter, legacy_field="callback_state")
 
-    assert "class CanvasCallbackState" in source
-    assert "canvas.runtime_state.callback_state" in getter_source
-    assert fallback_pattern.search(getter_source) is None
+
+@pytest.mark.parametrize(
+    ("filename", "getter_name", "field", "state_type", "guard"),
+    [
+        (
+            "canvas_callback_state.py",
+            "callback_state_for",
+            "callback_state",
+            "CanvasCallbackState",
+            test_callback_state_accessor_is_strict_runtime_owned,
+        ),
+        (
+            "input_view_access.py",
+            "input_view_state_for",
+            "input_view_state",
+            "InputViewState",
+            test_input_view_state_access_is_strict_runtime_owned,
+        ),
+    ],
+)
+@pytest.mark.parametrize(
+    ("variant", "allowed"),
+    [
+        ("parenthesized", True),
+        ("multiline", True),
+        ("comment_only", False),
+        ("docstring_only", False),
+        ("wrong_field", False),
+        ("legacy_field", False),
+        ("fallback", False),
+        ("write_only", False),
+    ],
+)
+def test_runtime_state_guards_check_structure(
+    monkeypatch, filename, getter_name, field, state_type, guard, variant, allowed
+):
+    path = APP_ROOT / "chemvas" / "ui" / filename
+    source = path.read_text(encoding="utf-8")
+    getter = next(
+        node
+        for node in _parse_source(source).body
+        if isinstance(node, ast.FunctionDef) and node.name == getter_name
+    )
+    original = ast.get_source_segment(source, getter)
+    assert original is not None
+    reference = f"canvas.runtime_state.{field}"
+    assert original.count(reference) == 1
+    if variant == "parenthesized":
+        replacement = f"(canvas.runtime_state).{field}"
+    elif variant == "multiline":
+        replacement = f"(canvas.runtime_state\n        .{field})"
+    elif variant == "wrong_field":
+        replacement = "canvas.runtime_state.missing_state"
+    elif variant == "legacy_field":
+        replacement = f"canvas.{field}"
+    elif variant == "fallback":
+        replacement = f"getattr(canvas, '{field}', {reference})"
+    else:
+        replacement = f"{state_type}()"
+    changed_getter = original.replace(reference, replacement)
+    if variant == "comment_only":
+        changed_getter = changed_getter.replace(
+            "    return", f"    # {reference}\n    return", 1
+        )
+    elif variant == "docstring_only":
+        changed_getter = changed_getter.replace(
+            "    return", f'    """{reference}"""\n    return', 1
+        )
+    elif variant == "write_only":
+        changed_getter = changed_getter.replace(
+            "    return", f"    {reference} = {state_type}()\n    return", 1
+        )
+    changed = source.replace(original, changed_getter)
+    assert changed != source
+    if allowed:
+        assert ast.dump(_parse_source(changed)) == ast.dump(_parse_source(source))
+    original_read = Path.read_text
+
+    def read_source(candidate, *args, **kwargs):
+        return (
+            changed if candidate == path else original_read(candidate, *args, **kwargs)
+        )
+
+    monkeypatch.setattr(Path, "read_text", read_source)
+    for check in (guard, test_state_accessors_read_the_runtime_container_directly):
+        if allowed:
+            check()
+        else:
+            with pytest.raises(AssertionError):
+                check()
 
 
 def test_state_accessors_do_not_read_legacy_canvas_mirror_vocabulary() -> None:
@@ -3414,7 +3577,7 @@ def test_perspective_tool_controller_does_not_reintroduce_context_delegate_wrapp
         "_selection_hit_test",
         "_select_structure_for_item",
     }
-    tree = ast.parse(controller.read_text(encoding="utf-8"))
+    tree = _parse_source(controller.read_text(encoding="utf-8"))
     private_methods: set[str] = set()
     for node in ast.walk(tree):
         if (
@@ -3626,7 +3789,7 @@ def _static_app_import_graph(*, eager_only: bool = False) -> dict[str, set[str]]
     graph = {module: set() for module in module_paths}
     assert graph, "No Python modules found in the source inventory"
     for module, path in module_paths.items():
-        tree = ast.parse(path.read_text(encoding="utf-8"))
+        tree = _parse_source(path.read_text(encoding="utf-8"))
         for node in _eager_imports(tree) if eager_only else ast.walk(tree):
             candidates: list[str] = []
             if isinstance(node, ast.Import):
@@ -3711,6 +3874,7 @@ def _strongly_connected_components(
 def test_history_transaction_dependency_cluster_stays_acyclic() -> None:
     graph = _static_app_import_graph()
     protected_modules = {
+        "chemvas.core.history",
         "chemvas.domain.transactions.outcome",
         "chemvas.domain.transactions.recovery",
         "chemvas.ui.canvas_history_service",
@@ -3722,6 +3886,10 @@ def test_history_transaction_dependency_cluster_stays_acyclic() -> None:
         "chemvas.ui.history_canvas_access",
         "chemvas.ui.history_commands",
     }
+    # The concrete history_operations adapter is assembled lazily by runtime
+    # creation and refers to typed canvas services. The global eager-DAG guard
+    # covers it; the policy/command/savepoint cluster here forbids even lazy
+    # and type-only cycles. Core history additionally cannot import the UI.
     assert protected_modules <= set(graph)
     cyclic_components = [
         sorted(component)
@@ -3758,7 +3926,7 @@ def test_document_savepoint_does_not_depend_on_history_policy_or_commands() -> N
 def test_history_stack_snapshot_has_one_production_owner() -> None:
     owners = []
     for path in _app_python_files():
-        tree = ast.parse(path.read_text(encoding="utf-8"))
+        tree = _parse_source(path.read_text(encoding="utf-8"))
         for node in ast.walk(tree):
             if not isinstance(node, ast.ClassDef):
                 continue
@@ -3779,7 +3947,7 @@ def test_document_lifecycle_does_not_reach_into_history_stacks() -> None:
     violations = []
     for name in ("canvas_document_session_service", "canvas_scene_reset_service"):
         path = APP_ROOT / "chemvas" / "ui" / f"{name}.py"
-        tree = ast.parse(path.read_text(encoding="utf-8"))
+        tree = _parse_source(path.read_text(encoding="utf-8"))
         for node in ast.walk(tree):
             if isinstance(node, ast.Attribute):
                 attribute, receiver = node.attr, node.value
@@ -3830,6 +3998,7 @@ def test_rollback_kernel_has_no_restore_retry_or_qt_base_port_bypass() -> None:
         APP_ROOT / "chemvas" / "ui" / "canvas_scene_reset_service.py",
         APP_ROOT / "chemvas" / "ui" / "history_canvas_access.py",
         APP_ROOT / "chemvas" / "ui" / "history_commands.py",
+        APP_ROOT / "chemvas" / "ui" / "history_operations.py",
         APP_ROOT / "chemvas" / "ui" / "insert_smiles_service.py",
         APP_ROOT / "chemvas" / "ui" / "sheet_setup_access.py",
         *sorted((APP_ROOT / "chemvas" / "ui" / "transactions").glob("*.py")),
@@ -3870,7 +4039,7 @@ def test_core_does_not_import_ui_statically() -> None:
     """core stays importable without Qt: any ui dependency must be lazy."""
     violations: list[str] = []
     for path in sorted((APP_ROOT / "chemvas" / "core").rglob("*.py")):
-        tree = ast.parse(path.read_text(encoding="utf-8"))
+        tree = _parse_source(path.read_text(encoding="utf-8"))
         for node in tree.body:
             if isinstance(node, ast.Import):
                 names = [alias.name for alias in node.names]
@@ -3885,10 +4054,143 @@ def test_core_does_not_import_ui_statically() -> None:
     assert violations == []
 
 
+def test_core_history_does_not_resolve_runtime_implementations() -> None:
+    """History receives operations; even a lazy implementation lookup is wrong."""
+    path = APP_ROOT / "chemvas" / "core" / "history.py"
+    tree = _parse_source(path.read_text(encoding="utf-8"))
+    aliases = _imported_name_aliases(tree)
+    called = {aliases.get(name, name) for name in _called_function_names(tree)}
+    assert not {"import_module", "__import__"} & called
+
+
+def _history_receiver_violations(source: str) -> list[tuple[int, str]]:
+    """Commands may call an operation, not inspect/store its backing canvas."""
+    violations = []
+    state_fields = {"canvas", "model", "runtime_state", "services"}
+    for function in ast.walk(_parse_source(source)):
+        if not isinstance(function, ast.FunctionDef):
+            continue
+        args = function.args.posonlyargs + function.args.args
+        if len(args) < 2 or args[0].arg != "self":
+            continue
+        if function.name not in {"undo", "redo", "_apply", "_compensate"}:
+            continue
+        receiver = args[1].arg
+        if receiver == "canvas":
+            violations.append((function.lineno, "canvas receiver"))
+        for node in ast.walk(function):
+            if (
+                isinstance(node, ast.Attribute)
+                and isinstance(node.value, ast.Name)
+                and node.value.id == receiver
+                and node.attr in state_fields
+            ):
+                violations.append((node.lineno, "receiver state access"))
+            if (
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Name)
+                and node.func.id in {"getattr", "setattr", "delattr", "hasattr"}
+                and len(node.args) >= 2
+                and isinstance(node.args[0], ast.Name)
+                and node.args[0].id == receiver
+                and isinstance(node.args[1], ast.Constant)
+                and node.args[1].value in state_fields
+            ):
+                violations.append((node.lineno, "receiver state lookup"))
+            if (
+                isinstance(node, (ast.Assign, ast.AnnAssign))
+                and isinstance(node.value, ast.Name)
+                and node.value.id == receiver
+            ):
+                targets = (
+                    node.targets if isinstance(node, ast.Assign) else [node.target]
+                )
+                if any(isinstance(target, ast.Attribute) for target in targets):
+                    violations.append((node.lineno, "stored receiver"))
+    return violations
+
+
+@pytest.mark.parametrize("module", ["core/history.py", "ui/history_commands.py"])
+def test_history_commands_do_not_receive_or_retain_canvas(module) -> None:
+    source = (APP_ROOT / "chemvas" / module).read_text(encoding="utf-8")
+    assert _history_receiver_violations(source) == []
+
+
+@pytest.mark.parametrize(
+    "method",
+    [
+        "def undo(self, canvas): pass",
+        "def redo(self, target): target.model.next_atom_id = 4",
+        "def _apply(self, target): getattr(target, 'runtime_state')",
+        "def redo(self, target): self.saved_receiver = target",
+    ],
+)
+def test_history_receiver_guard_rejects_canvas_coupling(method):
+    assert _history_receiver_violations("class Command:\n    " + method)
+    assert (
+        _history_receiver_violations(
+            "class Command:\n    def redo(self, target): target.remove_atom_for_history(4)"
+        )
+        == []
+    )
+
+
+def _history_proxy_violations(source: str) -> list[tuple[int, str]]:
+    """The UI adapter names operations instead of exposing a general canvas proxy."""
+    violations = []
+    for node in ast.walk(_parse_source(source)):
+        if isinstance(node, ast.FunctionDef) and node.name in {
+            "__getattr__",
+            "__getattribute__",
+        }:
+            violations.append((node.lineno, "generic attribute proxy"))
+        if isinstance(node, ast.Return) and isinstance(node.value, ast.Attribute):
+            if node.value.attr.lstrip("_") == "canvas":
+                violations.append((node.lineno, "exposed canvas"))
+        if (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Name)
+            and node.func.id in {"getattr", "setattr", "delattr"}
+            and len(node.args) >= 2
+            and isinstance(node.args[0], ast.Attribute)
+            and node.args[0].attr.lstrip("_") == "canvas"
+            and not isinstance(node.args[1], ast.Constant)
+        ):
+            violations.append((node.lineno, "dynamic canvas operation"))
+        if isinstance(node, ast.Attribute) and node.attr == "canvas":
+            violations.append((node.lineno, "public canvas field"))
+    return violations
+
+
+def test_history_operations_do_not_expose_a_generic_canvas_proxy() -> None:
+    path = APP_ROOT / "chemvas" / "ui" / "history_operations.py"
+    assert _history_proxy_violations(path.read_text(encoding="utf-8")) == []
+
+
+@pytest.mark.parametrize(
+    "method",
+    [
+        "def __getattr__(self, name): return getattr(self.__canvas, name)",
+        "def canvas_for_command(self): return self.__canvas",
+        "def invoke(self, name): return getattr(self.__canvas, name)()",
+        "def __init__(self, canvas): self.canvas = canvas",
+    ],
+)
+def test_history_proxy_guard_rejects_unbound_canvas_access(method):
+    assert _history_proxy_violations("class Operations:\n    " + method)
+    assert (
+        _history_proxy_violations(
+            "class Operations:\n    def remove_atom_for_history(self, atom_id): "
+            "remove_atom(self.__canvas, atom_id)"
+        )
+        == []
+    )
+
+
 def test_core_has_no_direct_qt_dependencies() -> None:
     qt_modules: set[str] = set()
     for path in sorted((APP_ROOT / "chemvas" / "core").rglob("*.py")):
-        tree = ast.parse(path.read_text(encoding="utf-8"))
+        tree = _parse_source(path.read_text(encoding="utf-8"))
         if any(
             (
                 isinstance(node, ast.Import)
@@ -3916,7 +4218,7 @@ def test_chemvas_is_the_only_production_top_level_package() -> None:
 
 
 def _canvas_runtime_state_field_names() -> set[str]:
-    tree = ast.parse(
+    tree = _parse_source(
         (APP_ROOT / "chemvas" / "ui" / "canvas_runtime_state.py").read_text(
             encoding="utf-8"
         )
@@ -3986,16 +4288,12 @@ def test_state_accessors_read_the_runtime_container_directly() -> None:
     lookup helper nor an accessor that synthesizes its own state can pass.
     """
     field_names = _canvas_runtime_state_field_names()
-    runtime_read = re.compile(r"canvas\.runtime_state\.(?P<name>\w+)\b")
-    fallback = re.compile(
-        r"\bensure_canvas_state\b|\b(?:getattr|setattr)\(\s*canvas\s*,\s*[\"']"
-    )
     accessor_name = re.compile(r"_(?:state|registry)_for$")
     checked: list[str] = []
     violations: list[str] = []
     for path in sorted((APP_ROOT / "chemvas" / "ui").glob("*.py")):
         source = path.read_text(encoding="utf-8")
-        tree = ast.parse(source)
+        tree = _parse_source(source)
         for node in tree.body:
             if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
                 continue
@@ -4004,8 +4302,7 @@ def test_state_accessors_read_the_runtime_container_directly() -> None:
             accessor_key = f"{path.name}:{node.name}"
             if accessor_key in NON_RUNTIME_STATE_ACCESSORS:
                 continue
-            body = ast.get_source_segment(source, node) or ""
-            names = {match.group("name") for match in runtime_read.finditer(body)}
+            names = _runtime_state_fields(node)
             checked.append(accessor_key)
             if not names:
                 violations.append(
@@ -4017,7 +4314,7 @@ def test_state_accessors_read_the_runtime_container_directly() -> None:
                     f"{path.name}:{node.name}: {name!r} is not a"
                     " CanvasRuntimeState field"
                 )
-            if fallback.search(body):
+            if _has_state_fallback(node):
                 violations.append(
                     f"{path.name}:{node.name} falls back off the runtime container"
                 )
@@ -4122,8 +4419,8 @@ def test_access_ports_without_a_production_caller_stay_removed() -> None:
     helpers and ``remove_scene_items`` under ``rebuild_graphics_for``, and
     ``build_template_entries`` under the retired menu population path.
     ``bold_bond_width_for`` is not ``renderer_bold_bond_width_for`` and
-    ``remove_scene_items`` is not ``remove_scene_item``; both survivors are
-    live and stay.
+    the retired free ``remove_scene_items`` is not the live bound history
+    operation with that name, nor the single-item ``remove_scene_item``.
     """
     removed_ports = (
         "rebuild_graphics_for",
@@ -4140,7 +4437,6 @@ def test_access_ports_without_a_production_caller_stay_removed() -> None:
         "clear_canvas_scene_item_list_map",
         "clear_scene_item_map",
         "clear_scene_item_list_map",
-        "remove_scene_items",
         "build_template_entries",
     )
     pattern = re.compile(
@@ -4148,6 +4444,27 @@ def test_access_ports_without_a_production_caller_stay_removed() -> None:
     )
 
     assert _matching_lines(pattern, _app_python_files()) == []
+
+    # Match the retired free helper, not an explicit bound operation. Keep
+    # imports and unqualified calls covered as well as its old definition.
+    violations = []
+    for path in _app_python_files():
+        tree = _parse_source(path.read_text(encoding="utf-8"))
+        for node in tree.body:
+            if isinstance(node, ast.FunctionDef) and node.name == "remove_scene_items":
+                violations.append(f"{path}:{node.lineno}: free helper")
+        for node in ast.walk(tree):
+            if isinstance(node, ast.ImportFrom) and any(
+                alias.name == "remove_scene_items" for alias in node.names
+            ):
+                violations.append(f"{path}:{node.lineno}: import")
+            if (
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Name)
+                and node.func.id == "remove_scene_items"
+            ):
+                violations.append(f"{path}:{node.lineno}: unbound call")
+    assert violations == []
 
 
 def test_service_methods_only_the_tests_called_stay_removed() -> None:
@@ -4281,7 +4598,7 @@ def _package_root_surface(path: Path) -> set[str]:
     bindings rather than grepping for the word.
     """
     surface: set[str] = set()
-    for node in ast.parse(path.read_text(encoding="utf-8")).body:
+    for node in _parse_source(path.read_text(encoding="utf-8")).body:
         if isinstance(node, ast.ImportFrom):
             surface.update(alias.asname or alias.name for alias in node.names)
             continue
@@ -4434,7 +4751,7 @@ def _unread_strict_parameters(source: str) -> list[tuple[int, str]]:
         return {argument.arg for argument in declared}
 
     dead: list[tuple[int, str]] = []
-    for node in ast.walk(ast.parse(source)):
+    for node in ast.walk(_parse_source(source)):
         if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             continue
         if "strict" not in parameters(node):
@@ -4597,7 +4914,7 @@ def _modules_listing(members: frozenset[str]) -> list[str]:
     """Modules with a string-collection literal containing every member."""
     owners: list[str] = []
     for path in _app_python_files():
-        tree = ast.parse(path.read_text(encoding="utf-8"))
+        tree = _parse_source(path.read_text(encoding="utf-8"))
         for line_no, literal in _string_set_literals(tree):
             if members <= literal:
                 owners.append(f"{path.relative_to(APP_ROOT.parents[0])}:{line_no}")
@@ -4707,7 +5024,7 @@ def _getattr_forwarding_wrappers(source: str) -> list[tuple[int, str]]:
       fixed object instead of forwarding the caller's.
     """
     wrappers: list[tuple[int, str]] = []
-    for node in ast.walk(ast.parse(source)):
+    for node in ast.walk(_parse_source(source)):
         if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             continue
         body = _body_after_docstring(node)
@@ -4926,7 +5243,7 @@ def _seeded_reachability_walks(source: str) -> list[int]:
       way the shortest-cycle search in this module records predecessors.
     * a recursive walk, which has no worklist to drain.
     """
-    tree = ast.parse(source)
+    tree = _parse_source(source)
     nested = _loop_nested_while_loops(tree)
     walks: list[int] = []
     for node in ast.walk(tree):
@@ -4987,7 +5304,7 @@ def _bond_cycle_cache_writes(source: str) -> list[int]:
     the pin is that one place decides what freshness means.
     """
     writes: list[int] = []
-    for node in ast.walk(ast.parse(source)):
+    for node in ast.walk(_parse_source(source)):
         targets: list[ast.expr] = []
         if isinstance(node, ast.Assign):
             targets = list(node.targets)
@@ -5038,7 +5355,7 @@ def _modules_using(name: str) -> list[str]:
     """Modules that import or call ``name``, however they spell the import."""
     users: list[str] = []
     for path in _app_python_files():
-        tree = ast.parse(path.read_text(encoding="utf-8"))
+        tree = _parse_source(path.read_text(encoding="utf-8"))
         used = False
         for node in ast.walk(tree):
             if isinstance(node, ast.ImportFrom) and any(
@@ -5102,7 +5419,7 @@ def _group_rollback_scaffolds(source: str) -> list[tuple[int, str]]:
     does not depend on the copy calling ``_group_state_snapshot``.
     """
     scaffolds: list[tuple[int, str]] = []
-    for node in ast.walk(ast.parse(source)):
+    for node in ast.walk(_parse_source(source)):
         if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             continue
         called = _called_function_names(node)
@@ -5114,7 +5431,7 @@ def _group_rollback_scaffolds(source: str) -> list[tuple[int, str]]:
 def _group_command_scaffold_routing(source: str) -> dict[str, bool]:
     """For each group command's ``redo``/``undo``, whether it calls the scaffold."""
     routing: dict[str, bool] = {}
-    for node in ast.walk(ast.parse(source)):
+    for node in ast.walk(_parse_source(source)):
         if not isinstance(node, ast.ClassDef) or node.name not in GROUP_COMMAND_CLASSES:
             continue
         for member in node.body:
@@ -5185,7 +5502,7 @@ def _canvas_scoped_detachers(source: str) -> list[tuple[int, str]]:
     out: they are handed a scene rather than resolving one from a canvas.
     """
     detachers: list[tuple[int, str]] = []
-    for node in ast.walk(ast.parse(source)):
+    for node in ast.walk(_parse_source(source)):
         if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             continue
         called = _called_function_names(node)
@@ -5247,7 +5564,7 @@ def test_attached_scene_detach_keeps_its_third_answer() -> None:
     and the merged body is exactly where that narrowing would look harmless.
     """
     scene_item_access = APP_ROOT / "chemvas" / "ui" / "scene_item_access.py"
-    tree = ast.parse(scene_item_access.read_text(encoding="utf-8"))
+    tree = _parse_source(scene_item_access.read_text(encoding="utf-8"))
     annotations = {
         node.name: _return_annotation_names(node)
         for node in ast.walk(tree)
@@ -5314,7 +5631,7 @@ def _modules_spelling_out(members: frozenset[str]) -> list[str]:
     """Modules that write every one of ``members`` out as keys or as strings."""
     owners: list[str] = []
     for path in _app_python_files():
-        tree = ast.parse(path.read_text(encoding="utf-8"))
+        tree = _parse_source(path.read_text(encoding="utf-8"))
         spellings = _dict_literal_key_sets(tree) + _string_set_literals(tree)
         for line_no, spelled in sorted(spellings, key=lambda entry: entry[0]):
             if members <= spelled:
@@ -5407,7 +5724,7 @@ def _ring_polygon_rebuilders(source: str) -> list[tuple[int, str]]:
     function that indexes atoms next to a ``setPolygon``, so the rule stays
     narrow and the escape stays written down.
     """
-    tree = ast.parse(source)
+    tree = _parse_source(source)
     role_reads = _ring_atom_role_reads(tree)
     rebuilders: list[tuple[int, str]] = []
     for node in ast.walk(tree):
@@ -5556,7 +5873,7 @@ def _scene_item_pool_resets(source: str) -> list[tuple[int, str]]:
       time, or that parks the scene on an object first and loops over that.
     """
     resets: list[tuple[int, str]] = []
-    for node in ast.walk(ast.parse(source)):
+    for node in ast.walk(_parse_source(source)):
         if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             continue
         handed = _parameter_names(node)
@@ -5642,7 +5959,7 @@ def _restore_atoms_steps(source: str) -> list[tuple[int, str]]:
     Requiring only one of the two calls would flag six live functions that
     move atoms for other reasons, so the pair is the mark.
     """
-    tree = ast.parse(source)
+    tree = _parse_source(source)
     aliases = _imported_name_aliases(tree)
     steps: list[tuple[int, str]] = []
     for node in ast.walk(tree):
@@ -5706,7 +6023,7 @@ def _exception_note_attachments(source: str) -> list[int]:
     argument would be counted here and would have to be named something else.
     """
     lines: list[int] = []
-    for node in ast.walk(ast.parse(source)):
+    for node in ast.walk(_parse_source(source)):
         if not isinstance(node, ast.Call):
             continue
         called = node.func
@@ -5799,7 +6116,7 @@ def _rollback_runners(source: str) -> list[tuple[int, str]]:
     which is the escape: a re-derived runner that also logs, or that returns
     a computed value, reads as one of those and is missed.
     """
-    tree = ast.parse(source)
+    tree = _parse_source(source)
     names = _canonical_note_names(tree)
     runners: list[tuple[int, str]] = []
     for node in ast.walk(tree):

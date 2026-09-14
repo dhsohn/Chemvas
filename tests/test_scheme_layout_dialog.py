@@ -215,7 +215,7 @@ def test_already_arranged_layout_preserves_existing_redo_and_raw_state():
 def test_failed_layout_history_restores_exact_geometry_and_existing_stacks(
     monkeypatch, phase
 ):
-    from chemvas.ui import history_commands
+    from chemvas.ui import history_operations as history_commands
 
     with offscreen_canvas(
         _fractional_source(), command="test-arrange-history-failure"
@@ -259,7 +259,7 @@ def test_failed_layout_history_restores_exact_geometry_and_existing_stacks(
             else:
                 # The command has already restored atoms when item application
                 # fails: only the existing exact savepoint may recover it.
-                injected.setattr(history_commands, "_apply_scene_item_state", fail)
+                injected.setattr(history_commands, "apply_scene_item_state", fail)
                 with pytest.raises(RuntimeError, match="injected layout"):
                     (history.undo if phase == "undo" else history.redo)()
         assert _snapshot(canvas) == before

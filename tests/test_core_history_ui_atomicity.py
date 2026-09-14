@@ -32,6 +32,7 @@ from chemvas.ui.canvas_rotation_state import rotation_state_for
 from chemvas.ui.canvas_view import CanvasView
 from chemvas.ui.graphics_items import AtomLabelItem
 from chemvas.ui.history_commands import SetSceneGeometryCommand, UpdateSceneItemCommand
+from chemvas.ui.history_operations import CanvasHistoryOperations
 from chemvas.ui.scene_item_state import scene_item_state_for
 from chemvas.ui.structure_mutation_access import add_atom_for, add_bond_for
 from tests.canvas_factory import build_canvas_view
@@ -82,6 +83,7 @@ class CoreHistoryUiAtomicityTest(unittest.TestCase):
         for command_kind in ("add", "delete"):
             with self.subTest(command=command_kind):
                 canvas = self._canvas()
+                operations = canvas.services.history_service.operations
                 atom_id = add_atom_for(canvas, "N", 3.0, 7.0)
                 original_item = atom_items_for(canvas)[atom_id]
                 original_item.setSelected(True)
@@ -118,9 +120,9 @@ class CoreHistoryUiAtomicityTest(unittest.TestCase):
                 ):
                     with self.assertRaisesRegex(RuntimeError, "scene removal failed"):
                         if command_kind == "add":
-                            command.undo(canvas)
+                            command.undo(operations)
                         else:
-                            command.redo(canvas)
+                            command.redo(operations)
 
                 matching_items = [
                     item
@@ -142,6 +144,7 @@ class CoreHistoryUiAtomicityTest(unittest.TestCase):
         for command_kind in ("add", "delete"):
             with self.subTest(command=command_kind):
                 canvas = self._canvas()
+                operations = canvas.services.history_service.operations
                 atom_a = add_atom_for(canvas, "C", 0.0, 0.0)
                 atom_b = add_atom_for(canvas, "C", 20.0, 0.0)
                 bond_id = add_bond_for(canvas, atom_a, atom_b)
@@ -201,9 +204,9 @@ class CoreHistoryUiAtomicityTest(unittest.TestCase):
                 ):
                     with self.assertRaisesRegex(RuntimeError, "registry pop failed"):
                         if command_kind == "add":
-                            command.undo(canvas)
+                            command.undo(operations)
                         else:
-                            command.redo(canvas)
+                            command.redo(operations)
 
                 self.assertIs(bond_items_for(canvas), registry)
                 self.assertIs(bond_items_for_id(canvas, bond_id), original_items)
@@ -219,6 +222,7 @@ class CoreHistoryUiAtomicityTest(unittest.TestCase):
         self,
     ) -> None:
         canvas = self._canvas()
+        operations = canvas.services.history_service.operations
         atom_a = add_atom_for(canvas, "C", 0.0, 0.0)
         atom_b = add_atom_for(canvas, "C", 20.0, 0.0)
         bond_id = add_bond_for(canvas, atom_a, atom_b)
@@ -258,7 +262,7 @@ class CoreHistoryUiAtomicityTest(unittest.TestCase):
             side_effect=add_then_fail,
         ):
             with self.assertRaisesRegex(RuntimeError, "bond graphics add failed"):
-                command.redo(canvas)
+                command.redo(operations)
 
         self.assertIs(canvas.model.bonds[bond_id], original_bond)
         self.assertIs(bond_items_for(canvas), registry)
@@ -274,6 +278,7 @@ class CoreHistoryUiAtomicityTest(unittest.TestCase):
         self,
     ) -> None:
         canvas = self._canvas()
+        operations = canvas.services.history_service.operations
         note = QGraphicsTextItem("transactional note")
         note.setData(0, "note")
         note.setData(2, {})
@@ -301,7 +306,7 @@ class CoreHistoryUiAtomicityTest(unittest.TestCase):
             ]
         )
 
-        from chemvas.ui import history_canvas_access as history_access
+        from chemvas.ui import history_operations as history_access
 
         original_restore_length = history_access.restore_bond_length_for_history
 
@@ -322,7 +327,7 @@ class CoreHistoryUiAtomicityTest(unittest.TestCase):
             ),
         ):
             with self.assertRaisesRegex(RuntimeError, "mixed lifecycle child failed"):
-                command.redo(canvas)
+                command.redo(operations)
 
         self.assertEqual(capture.call_count, 1)
         self.assertEqual(note.pos(), original_position)
@@ -331,8 +336,8 @@ class CoreHistoryUiAtomicityTest(unittest.TestCase):
     def test_move_exact_owner_preserves_retryable_service_stacks_with_one_capture(
         self,
     ) -> None:
-        from chemvas.ui import history_canvas_access as history_access
-        from chemvas.ui import history_commands as history_commands_module
+        from chemvas.ui import history_operations as history_access
+        from chemvas.ui import history_operations as history_commands_module
 
         for move_kind in ("atoms", "items"):
             for wrapped in (False, True):
@@ -396,7 +401,7 @@ class CoreHistoryUiAtomicityTest(unittest.TestCase):
                                 ],
                             )
                             original_mutation = (
-                                history_commands_module._apply_scene_item_state
+                                history_commands_module.apply_scene_item_state
                             )
 
                             def mutate_then_fail(
@@ -410,7 +415,7 @@ class CoreHistoryUiAtomicityTest(unittest.TestCase):
 
                             mutation_patch = mock.patch.object(
                                 history_commands_module,
-                                "_apply_scene_item_state",
+                                "apply_scene_item_state",
                                 side_effect=mutate_then_fail,
                             )
 
@@ -464,6 +469,7 @@ class CoreHistoryUiAtomicityTest(unittest.TestCase):
         self,
     ) -> None:
         canvas = self._canvas()
+        operations = canvas.services.history_service.operations
         rotation = rotation_state_for(canvas)
         rotation.projection_center_3d = (1.0, 2.0, 3.0)
         rotation.projection_anchor_2d = (4.0, 5.0)
@@ -488,7 +494,7 @@ class CoreHistoryUiAtomicityTest(unittest.TestCase):
             ]
         )
 
-        from chemvas.ui import history_canvas_access as history_access
+        from chemvas.ui import history_operations as history_access
 
         calls = 0
 
@@ -513,7 +519,7 @@ class CoreHistoryUiAtomicityTest(unittest.TestCase):
                 RuntimeError,
                 "persistent projection restore failure",
             ):
-                command.redo(canvas)
+                command.redo(operations)
 
         # The child transaction defers to the composite owner, so the failed
         # relative compensation is deliberately skipped and one outer exact
@@ -526,6 +532,7 @@ class CoreHistoryUiAtomicityTest(unittest.TestCase):
 
     def test_update_atom_color_compensates_mutate_then_raise_label_setter(self) -> None:
         canvas = self._canvas()
+        operations = canvas.services.history_service.operations
         atom_id = add_atom_for(canvas, "N", 0.0, 0.0)
         label = atom_items_for(canvas)[atom_id]
         before_model_color = canvas.model.atoms[atom_id].color
@@ -551,13 +558,87 @@ class CoreHistoryUiAtomicityTest(unittest.TestCase):
             new=fail_once_after_mutation,
         ):
             with self.assertRaisesRegex(RuntimeError, "failed after mutation"):
-                command.redo(canvas)
+                command.redo(operations)
 
         self.assertEqual(canvas.model.atoms[atom_id].color, before_model_color)
         self.assertEqual(label.defaultTextColor(), before_label_color)
 
+    def test_bound_operations_isolate_two_canvases_and_share_mixed_replay_owner(
+        self,
+    ) -> None:
+        from chemvas.core.history import SetSmilesInputCommand
+        from chemvas.ui.canvas_service_ports import history_operations_for
+        from chemvas.ui.canvas_window_access import snapshot_canvas_state_for
+
+        canvas, other = self._canvas(), self._canvas()
+        history = canvas.services.history_service
+        operations = history.operations
+        self.assertIs(history_operations_for(canvas), operations)
+        self.assertIsNot(other.services.history_service.operations, operations)
+        first = add_atom_for(canvas, "C", 0.0, 0.0)
+        second = add_atom_for(canvas, "O", 40.0, 0.0)
+        add_bond_for(canvas, first, second)
+        note = canvas.services.interaction.note_controller.create_text_note(
+            QPointF(0.0, 60.0), "note"
+        )
+        before_note = scene_item_state_for(canvas, note)
+        before = snapshot_canvas_state_for(canvas)
+        other_before = snapshot_canvas_state_for(other)
+        receivers = []
+
+        class ObserveReceiver:
+            def undo(self, target):
+                receivers.append(target)
+                super().undo(target)
+
+            def redo(self, target):
+                receivers.append(target)
+                super().redo(target)
+
+        class ObservedMove(ObserveReceiver, MoveAtomsCommand):
+            pass
+
+        class ObservedItem(ObserveReceiver, UpdateSceneItemCommand):
+            pass
+
+        class ObservedSmiles(ObserveReceiver, SetSmilesInputCommand):
+            pass
+
+        command = CompositeCommand(
+            [
+                ObservedMove({first, second}, 10.0, 5.0),
+                ObservedItem(note, before_note, {**before_note, "x": 15.0, "y": 70.0}),
+                ObservedSmiles(None, "CO"),
+            ]
+        )
+        capture = CanvasHistoryOperations.capture_history_transaction_for_history
+        captured = []
+
+        def record_capture(target, **kwargs):
+            captured.append(target)
+            return capture(target, **kwargs)
+
+        with mock.patch.object(
+            CanvasHistoryOperations,
+            "capture_history_transaction_for_history",
+            new=record_capture,
+        ):
+            command.redo(operations)
+            after = snapshot_canvas_state_for(canvas)
+            self.assertNotEqual(after, before)
+            self.assertTrue(history.push(command))
+            history.undo()
+            self.assertEqual(snapshot_canvas_state_for(canvas), before)
+            history.redo()
+            self.assertEqual(snapshot_canvas_state_for(canvas), after)
+
+        self.assertEqual(captured, [operations] * 3)
+        self.assertEqual(receivers, [operations] * 9)
+        self.assertEqual(snapshot_canvas_state_for(other), other_before)
+
     def test_push_many_preserves_linear_entries_limit_and_disabled_policy(self) -> None:
         canvas = object()
+        operations = CanvasHistoryOperations(canvas)
         callback = mock.Mock()
         existing = mock.Mock()
         redo = mock.Mock()
@@ -567,7 +648,7 @@ class CoreHistoryUiAtomicityTest(unittest.TestCase):
             limit=2,
             change_callback=callback,
         )
-        service = CanvasHistoryService(canvas, state, replay_context=nullcontext)
+        service = CanvasHistoryService(operations, state, replay_context=nullcontext)
         first = mock.Mock()
         second = mock.Mock()
 

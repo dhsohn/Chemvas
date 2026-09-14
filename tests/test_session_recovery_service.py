@@ -17,6 +17,7 @@ from chemvas.ui.session_recovery_service import (
     collect_open_documents,
 )
 from chemvas.ui.session_snapshot_store import RestoreResult
+from tests.subprocess_support import source_subprocess_env
 
 
 @pytest.fixture(scope="module")
@@ -567,7 +568,7 @@ def test_last_window_close_marks_quitting_before_deferred_snapshot() -> None:
         assert app_reference() is None
         """
     )
-    environment = os.environ.copy()
+    environment = source_subprocess_env()
     environment["QT_QPA_PLATFORM"] = "offscreen"
     completed = subprocess.run(
         [sys.executable, "-c", script],

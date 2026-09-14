@@ -42,6 +42,7 @@ from chemvas.ui.history_commands import (
     DeleteSceneItemsCommand,
     UpdateSceneItemCommand,
 )
+from chemvas.ui.history_operations import CanvasHistoryOperations
 from tests.runtime_services import canvas_runtime_services
 from tests.runtime_state import canvas_runtime_state
 
@@ -352,8 +353,12 @@ def _atomic_canvas_snapshot(canvas: _AtomicHistoryCanvas) -> dict:
 class _StatefulHistoryPort:
     """Small stateful port that can raise after mutating one requested step."""
 
-    def __init__(self) -> None:
+    def __init__(self, state) -> None:
+        self.state = state
         self._failure: tuple[str, object] | None = None
+
+    def set_next_atom_id_for_history(self, atom_id: int) -> None:
+        self.state.model.next_atom_id = atom_id
 
     def fail_once_after(self, operation: str, discriminator: object = None) -> None:
         self._failure = (operation, discriminator)
@@ -366,35 +371,30 @@ class _StatefulHistoryPort:
 
     def release_history_transaction_for_history(
         self,
-        _canvas,
         _snapshot,
     ) -> None:
         pass
 
     def restore_projection_state_for_history(
         self,
-        canvas: _AtomicHistoryCanvas,
         projection_center_3d,
         projection_anchor_2d,
     ) -> None:
-        canvas.projection_center_3d = projection_center_3d
-        canvas.projection_anchor_2d = projection_anchor_2d
+        self.state.projection_center_3d = projection_center_3d
+        self.state.projection_anchor_2d = projection_anchor_2d
         self._raise_if_armed("restore_projection")
 
     def set_ring_polygons_for_history(
         self,
-        canvas: _AtomicHistoryCanvas,
         ring_items,
         polygons,
     ) -> None:
-        del canvas
         for ring_item, polygon in zip(ring_items, polygons, strict=False):
             ring_item.polygon = list(polygon)
             self._raise_if_armed("set_ring_polygon", ring_item.name)
 
     def set_atom_positions_for_history(
         self,
-        canvas: _AtomicHistoryCanvas,
         positions,
         *,
         update_selection=True,
@@ -402,86 +402,79 @@ class _StatefulHistoryPort:
     ) -> None:
         del update_selection
         for atom_id, (x, y) in positions.items():
-            atom = canvas.model.atoms.get(atom_id)
+            atom = self.state.model.atoms.get(atom_id)
             if atom is not None:
                 atom["x"] = x
                 atom["y"] = y
         if coords_3d is not None:
-            canvas.coords_3d.update(coords_3d)
+            self.state.coords_3d.update(coords_3d)
         self._raise_if_armed("set_positions")
 
     def remove_atom_for_history(
         self,
-        canvas: _AtomicHistoryCanvas,
         atom_id: int,
         *,
         remove_marks: bool = True,
     ) -> None:
-        canvas.model.atoms.pop(atom_id, None)
-        canvas.coords_3d.pop(atom_id, None)
+        self.state.model.atoms.pop(atom_id, None)
+        self.state.coords_3d.pop(atom_id, None)
         if remove_marks:
-            canvas.marks[:] = [
-                mark for mark in canvas.marks if mark.get("atom_id") != atom_id
+            self.state.marks[:] = [
+                mark for mark in self.state.marks if mark.get("atom_id") != atom_id
             ]
         self._raise_if_armed("remove_atom", atom_id)
 
     def restore_atom_from_state_for_history(
         self,
-        canvas: _AtomicHistoryCanvas,
         atom_id: int,
         state: dict,
     ) -> None:
-        canvas.model.atoms[atom_id] = deepcopy(state)
+        self.state.model.atoms[atom_id] = deepcopy(state)
         self._raise_if_armed("restore_atom", atom_id)
 
     def restore_mark_from_state_for_history(
         self,
-        canvas: _AtomicHistoryCanvas,
         mark_state: dict,
     ) -> dict:
         restored = deepcopy(mark_state)
-        canvas.marks.append(restored)
+        self.state.marks.append(restored)
         self._raise_if_armed("restore_mark", mark_state.get("atom_id"))
         return restored
 
     def set_last_smiles_input_for_history(
         self,
-        canvas: _AtomicHistoryCanvas,
         value: str | None,
     ) -> None:
-        canvas.smiles_input = value
+        self.state.smiles_input = value
         self._raise_if_armed("set_smiles", value)
 
     def restore_bond_from_state_for_history(
         self,
-        canvas: _AtomicHistoryCanvas,
         bond_id: int,
         bond_state: dict,
     ) -> None:
-        canvas.bonds[bond_id] = deepcopy(bond_state)
+        self.state.bonds[bond_id] = deepcopy(bond_state)
         self._raise_if_armed("restore_bond", bond_id)
 
-    def remove_bond_for_history(
-        self, canvas: _AtomicHistoryCanvas, bond_id: int
-    ) -> None:
-        canvas.bonds.pop(bond_id, None)
+    def remove_bond_for_history(self, bond_id: int) -> None:
+        self.state.bonds.pop(bond_id, None)
         self._raise_if_armed("remove_bond", bond_id)
 
-    def trim_bonds_for_history(self, canvas: _AtomicHistoryCanvas, length: int) -> None:
-        canvas.bonds = {
+    def trim_bonds_for_history(self, length: int) -> None:
+        self.state.bonds = {
             bond_id: state
-            for bond_id, state in canvas.bonds.items()
+            for bond_id, state in self.state.bonds.items()
             if bond_id < length
         }
         self._raise_if_armed("trim_bonds", length)
 
 
 class _ToggleStateCommand(HistoryCommand):
-    def undo(self, canvas: _AtomicHistoryCanvas) -> None:
-        canvas.toggle = False
+    def undo(self, operations) -> None:
+        operations.state.toggle = False
 
-    def redo(self, canvas: _AtomicHistoryCanvas) -> None:
-        canvas.toggle = True
+    def redo(self, operations) -> None:
+        operations.state.toggle = True
 
 
 class HistoryCommandTest(unittest.TestCase):
@@ -566,13 +559,13 @@ class HistoryCommandTest(unittest.TestCase):
         self,
     ) -> None:
         class _CaptureOnlyPort(_StatefulHistoryPort):
-            def __init__(self) -> None:
-                super().__init__()
+            def __init__(self, state) -> None:
+                super().__init__(state)
                 self.capture_calls = 0
 
-            def capture_history_transaction_for_history(self, canvas, **_kwargs):
+            def capture_history_transaction_for_history(self, **_kwargs):
                 self.capture_calls += 1
-                return _atomic_canvas_snapshot(canvas)
+                return _atomic_canvas_snapshot(self.state)
 
         class _FailingChild(HistoryCommand):
             def undo(self, canvas) -> None:
@@ -584,7 +577,7 @@ class HistoryCommandTest(unittest.TestCase):
 
         canvas = _AtomicHistoryCanvas(smiles_input="before")
         before = _atomic_canvas_snapshot(canvas)
-        port = _CaptureOnlyPort()
+        port = _CaptureOnlyPort(canvas)
         command = CompositeCommand(
             [
                 AddBondCommand(
@@ -598,26 +591,25 @@ class HistoryCommandTest(unittest.TestCase):
             ]
         )
 
-        with mock.patch("chemvas.core.history._history_canvas_port", return_value=port):
-            with self.assertRaisesRegex(RuntimeError, "later child failed"):
-                command.redo(canvas)
+        with self.assertRaisesRegex(RuntimeError, "later child failed"):
+            command.redo(port)
 
         self.assertEqual(_atomic_canvas_snapshot(canvas), before)
         self.assertEqual(port.capture_calls, 0)
 
     def test_lifecycle_composite_falls_back_if_restore_hook_disappears(self) -> None:
         class _VanishingRestorePort(_StatefulHistoryPort):
-            def __init__(self) -> None:
-                super().__init__()
+            def __init__(self, state) -> None:
+                super().__init__(state)
                 self.capture_calls = 0
                 self.restore_calls = 0
 
-            def capture_history_transaction_for_history(self, canvas, **_kwargs):
+            def capture_history_transaction_for_history(self, **_kwargs):
                 self.capture_calls += 1
-                return _atomic_canvas_snapshot(canvas)
+                return _atomic_canvas_snapshot(self.state)
 
-            def restore_history_transaction_for_history(self, canvas, snapshot) -> None:
-                del canvas, snapshot
+            def restore_history_transaction_for_history(self, snapshot) -> None:
+                del snapshot
                 self.restore_calls += 1
 
         class _RemoveRestoreAndFail(HistoryCommand):
@@ -634,7 +626,7 @@ class HistoryCommandTest(unittest.TestCase):
 
         canvas = _AtomicHistoryCanvas(smiles_input="before")
         before = _atomic_canvas_snapshot(canvas)
-        port = _VanishingRestorePort()
+        port = _VanishingRestorePort(canvas)
         command = CompositeCommand(
             [
                 AddBondCommand(
@@ -648,9 +640,8 @@ class HistoryCommandTest(unittest.TestCase):
             ]
         )
 
-        with mock.patch("chemvas.core.history._history_canvas_port", return_value=port):
-            with self.assertRaisesRegex(RuntimeError, "restore hook disappeared"):
-                command.redo(canvas)
+        with self.assertRaisesRegex(RuntimeError, "restore hook disappeared"):
+            command.redo(port)
 
         self.assertEqual(_atomic_canvas_snapshot(canvas), before)
         self.assertEqual(port.capture_calls, 1)
@@ -660,22 +651,21 @@ class HistoryCommandTest(unittest.TestCase):
         self,
     ) -> None:
         class _PreAuthoritativeFailurePort(_StatefulHistoryPort):
-            def __init__(self) -> None:
-                super().__init__()
+            def __init__(self, state) -> None:
+                super().__init__(state)
                 self.capture_calls = 0
                 self.restore_calls = 0
                 self.remove_calls = 0
 
-            def capture_history_transaction_for_history(self, canvas, **_kwargs):
+            def capture_history_transaction_for_history(self, **_kwargs):
                 self.capture_calls += 1
-                return _atomic_canvas_snapshot(canvas)
+                return _atomic_canvas_snapshot(self.state)
 
             def restore_history_transaction_for_history(
                 self,
-                canvas,
                 snapshot,
             ) -> RestoreOutcome:
-                del canvas, snapshot
+                del snapshot
                 self.restore_calls += 1
                 return RestoreOutcome(
                     authoritative=False,
@@ -683,9 +673,9 @@ class HistoryCommandTest(unittest.TestCase):
                     errors=(RuntimeError("restore failed before absolute pass"),),
                 )
 
-            def remove_bond_for_history(self, canvas, bond_id: int) -> None:
+            def remove_bond_for_history(self, bond_id: int) -> None:
                 self.remove_calls += 1
-                super().remove_bond_for_history(canvas, bond_id)
+                super().remove_bond_for_history(bond_id)
 
         class _FailingChild(HistoryCommand):
             def undo(self, canvas) -> None:
@@ -697,7 +687,7 @@ class HistoryCommandTest(unittest.TestCase):
 
         canvas = _AtomicHistoryCanvas(smiles_input="before")
         before = _atomic_canvas_snapshot(canvas)
-        port = _PreAuthoritativeFailurePort()
+        port = _PreAuthoritativeFailurePort(canvas)
         command = CompositeCommand(
             [
                 AddBondCommand(
@@ -711,9 +701,8 @@ class HistoryCommandTest(unittest.TestCase):
             ]
         )
 
-        with mock.patch("chemvas.core.history._history_canvas_port", return_value=port):
-            with self.assertRaisesRegex(ValueError, "later child failed") as caught:
-                command.redo(canvas)
+        with self.assertRaisesRegex(ValueError, "later child failed") as caught:
+            command.redo(port)
 
         self.assertEqual(_atomic_canvas_snapshot(canvas), before)
         self.assertEqual(port.restore_calls, 1)
@@ -729,22 +718,22 @@ class HistoryCommandTest(unittest.TestCase):
         self,
     ) -> None:
         class _MutateThenRaiseRestorePort(_StatefulHistoryPort):
-            def __init__(self) -> None:
-                super().__init__()
+            def __init__(self, state) -> None:
+                super().__init__(state)
                 self.restore_calls = 0
                 self.remove_calls = 0
 
-            def capture_history_transaction_for_history(self, canvas, **_kwargs):
-                return _atomic_canvas_snapshot(canvas)
+            def capture_history_transaction_for_history(self, **_kwargs):
+                return _atomic_canvas_snapshot(self.state)
 
-            def restore_history_transaction_for_history(self, canvas, snapshot) -> None:
+            def restore_history_transaction_for_history(self, snapshot) -> None:
                 self.restore_calls += 1
-                canvas.smiles_input = snapshot["smiles_input"]
+                self.state.smiles_input = snapshot["smiles_input"]
                 raise RuntimeError("restore hook mutated then raised")
 
-            def remove_bond_for_history(self, canvas, bond_id: int) -> None:
+            def remove_bond_for_history(self, bond_id: int) -> None:
                 self.remove_calls += 1
-                super().remove_bond_for_history(canvas, bond_id)
+                super().remove_bond_for_history(bond_id)
 
         class _FailingChild(HistoryCommand):
             def undo(self, canvas) -> None:
@@ -755,7 +744,7 @@ class HistoryCommandTest(unittest.TestCase):
                 raise ValueError("later child failed")
 
         canvas = _AtomicHistoryCanvas(smiles_input="before")
-        port = _MutateThenRaiseRestorePort()
+        port = _MutateThenRaiseRestorePort(canvas)
         command = CompositeCommand(
             [
                 AddBondCommand(
@@ -769,9 +758,8 @@ class HistoryCommandTest(unittest.TestCase):
             ]
         )
 
-        with mock.patch("chemvas.core.history._history_canvas_port", return_value=port):
-            with self.assertRaisesRegex(ValueError, "later child failed") as caught:
-                command.redo(canvas)
+        with self.assertRaisesRegex(ValueError, "later child failed") as caught:
+            command.redo(port)
 
         self.assertEqual(canvas.smiles_input, "before")
         self.assertIn(0, canvas.bonds)
@@ -788,28 +776,27 @@ class HistoryCommandTest(unittest.TestCase):
         self,
     ) -> None:
         class _AuthoritativeRestorePort(_StatefulHistoryPort):
-            def __init__(self) -> None:
-                super().__init__()
+            def __init__(self, state) -> None:
+                super().__init__(state)
                 self.remove_calls = 0
 
-            def capture_history_transaction_for_history(self, canvas, **_kwargs):
-                return _atomic_canvas_snapshot(canvas)
+            def capture_history_transaction_for_history(self, **_kwargs):
+                return _atomic_canvas_snapshot(self.state)
 
             def restore_history_transaction_for_history(
                 self,
-                canvas,
                 snapshot,
             ) -> RestoreOutcome:
-                canvas.bonds = deepcopy(snapshot["bonds"])
-                canvas.smiles_input = snapshot["smiles_input"]
+                self.state.bonds = deepcopy(snapshot["bonds"])
+                self.state.smiles_input = snapshot["smiles_input"]
                 return RestoreOutcome(
                     authoritative=True,
                     errors=(RuntimeError("observer failed after absolute pass"),),
                 )
 
-            def remove_bond_for_history(self, canvas, bond_id: int) -> None:
+            def remove_bond_for_history(self, bond_id: int) -> None:
                 self.remove_calls += 1
-                super().remove_bond_for_history(canvas, bond_id)
+                super().remove_bond_for_history(bond_id)
 
         class _FailingChild(HistoryCommand):
             def undo(self, canvas) -> None:
@@ -821,7 +808,7 @@ class HistoryCommandTest(unittest.TestCase):
 
         canvas = _AtomicHistoryCanvas(smiles_input="before")
         before = _atomic_canvas_snapshot(canvas)
-        port = _AuthoritativeRestorePort()
+        port = _AuthoritativeRestorePort(canvas)
         command = CompositeCommand(
             [
                 AddBondCommand(
@@ -835,9 +822,8 @@ class HistoryCommandTest(unittest.TestCase):
             ]
         )
 
-        with mock.patch("chemvas.core.history._history_canvas_port", return_value=port):
-            with self.assertRaisesRegex(ValueError, "later child failed") as caught:
-                command.redo(canvas)
+        with self.assertRaisesRegex(ValueError, "later child failed") as caught:
+            command.redo(port)
 
         self.assertEqual(_atomic_canvas_snapshot(canvas), before)
         self.assertEqual(port.remove_calls, 0)
@@ -852,30 +838,29 @@ class HistoryCommandTest(unittest.TestCase):
         self,
     ) -> None:
         class _PartialRestorePort(_StatefulHistoryPort):
-            def __init__(self) -> None:
-                super().__init__()
+            def __init__(self, state) -> None:
+                super().__init__(state)
                 self.remove_calls = 0
 
-            def capture_history_transaction_for_history(self, canvas, **_kwargs):
-                return _atomic_canvas_snapshot(canvas)
+            def capture_history_transaction_for_history(self, **_kwargs):
+                return _atomic_canvas_snapshot(self.state)
 
             def restore_history_transaction_for_history(
                 self,
-                canvas,
                 snapshot,
             ) -> RestoreOutcome:
                 # Simulate a full best-effort pass that restored one absolute
                 # field but hit a persistent critical setter on another.
-                canvas.smiles_input = snapshot["smiles_input"]
+                self.state.smiles_input = snapshot["smiles_input"]
                 return RestoreOutcome(
                     authoritative=False,
                     fallback_to_inverse=False,
                     errors=(RuntimeError("persistent model setter failure"),),
                 )
 
-            def remove_bond_for_history(self, canvas, bond_id: int) -> None:
+            def remove_bond_for_history(self, bond_id: int) -> None:
                 self.remove_calls += 1
-                super().remove_bond_for_history(canvas, bond_id)
+                super().remove_bond_for_history(bond_id)
 
         class _FailingChild(HistoryCommand):
             def undo(self, canvas) -> None:
@@ -886,7 +871,7 @@ class HistoryCommandTest(unittest.TestCase):
                 raise ValueError("later child failed")
 
         canvas = _AtomicHistoryCanvas(smiles_input="before")
-        port = _PartialRestorePort()
+        port = _PartialRestorePort(canvas)
         command = CompositeCommand(
             [
                 AddBondCommand(
@@ -900,9 +885,8 @@ class HistoryCommandTest(unittest.TestCase):
             ]
         )
 
-        with mock.patch("chemvas.core.history._history_canvas_port", return_value=port):
-            with self.assertRaisesRegex(ValueError, "later child failed") as caught:
-                command.redo(canvas)
+        with self.assertRaisesRegex(ValueError, "later child failed") as caught:
+            command.redo(port)
 
         self.assertEqual(canvas.smiles_input, "before")
         self.assertIn(0, canvas.bonds)
@@ -956,7 +940,7 @@ class HistoryCommandTest(unittest.TestCase):
         self,
     ) -> None:
         canvas = _AtomicHistoryCanvas(next_atom_id=1, smiles_input="before")
-        port = _StatefulHistoryPort()
+        port = _StatefulHistoryPort(canvas)
         command = AddAtomsCommand(
             atom_states={
                 1: {"element": "C", "x": 1.0, "y": 2.0},
@@ -969,19 +953,18 @@ class HistoryCommandTest(unittest.TestCase):
             after_smiles_input="after",
         )
 
-        with mock.patch("chemvas.core.history._history_canvas_port", return_value=port):
-            before = _atomic_canvas_snapshot(canvas)
-            port.fail_once_after("restore_atom", 2)
-            with self.assertRaisesRegex(RuntimeError, "restore_atom failed"):
-                command.redo(canvas)
-            self.assertEqual(_atomic_canvas_snapshot(canvas), before)
+        before = _atomic_canvas_snapshot(canvas)
+        port.fail_once_after("restore_atom", 2)
+        with self.assertRaisesRegex(RuntimeError, "restore_atom failed"):
+            command.redo(port)
+        self.assertEqual(_atomic_canvas_snapshot(canvas), before)
 
-            command.redo(canvas)
-            after = _atomic_canvas_snapshot(canvas)
-            port.fail_once_after("remove_atom", 2)
-            with self.assertRaisesRegex(RuntimeError, "remove_atom failed"):
-                command.undo(canvas)
-            self.assertEqual(_atomic_canvas_snapshot(canvas), after)
+        command.redo(port)
+        after = _atomic_canvas_snapshot(canvas)
+        port.fail_once_after("remove_atom", 2)
+        with self.assertRaisesRegex(RuntimeError, "remove_atom failed"):
+            command.undo(port)
+        self.assertEqual(_atomic_canvas_snapshot(canvas), after)
 
     def test_delete_atoms_command_compensates_atoms_marks_coords_and_projection(
         self,
@@ -1003,7 +986,7 @@ class HistoryCommandTest(unittest.TestCase):
             projection_center_3d=(1.0, 2.0, 3.0),
             projection_anchor_2d=(4.0, 5.0),
         )
-        port = _StatefulHistoryPort()
+        port = _StatefulHistoryPort(canvas)
         command = DeleteAtomsCommand(
             atom_states=atom_states,
             mark_states=mark_states,
@@ -1019,19 +1002,18 @@ class HistoryCommandTest(unittest.TestCase):
             after_projection_anchor_2d=None,
         )
 
-        with mock.patch("chemvas.core.history._history_canvas_port", return_value=port):
-            before = _atomic_canvas_snapshot(canvas)
-            port.fail_once_after("remove_atom", 2)
-            with self.assertRaisesRegex(RuntimeError, "remove_atom failed"):
-                command.redo(canvas)
-            self.assertEqual(_atomic_canvas_snapshot(canvas), before)
+        before = _atomic_canvas_snapshot(canvas)
+        port.fail_once_after("remove_atom", 2)
+        with self.assertRaisesRegex(RuntimeError, "remove_atom failed"):
+            command.redo(port)
+        self.assertEqual(_atomic_canvas_snapshot(canvas), before)
 
-            command.redo(canvas)
-            after = _atomic_canvas_snapshot(canvas)
-            port.fail_once_after("restore_mark", 2)
-            with self.assertRaisesRegex(RuntimeError, "restore_mark failed"):
-                command.undo(canvas)
-            self.assertEqual(_atomic_canvas_snapshot(canvas), after)
+        command.redo(port)
+        after = _atomic_canvas_snapshot(canvas)
+        port.fail_once_after("restore_mark", 2)
+        with self.assertRaisesRegex(RuntimeError, "restore_mark failed"):
+            command.undo(port)
+        self.assertEqual(_atomic_canvas_snapshot(canvas), after)
 
     def test_set_atom_positions_command_compensates_projection_and_positions(
         self,
@@ -1042,7 +1024,7 @@ class HistoryCommandTest(unittest.TestCase):
             projection_center_3d=(1.0, 2.0, 3.0),
             projection_anchor_2d=(4.0, 5.0),
         )
-        port = _StatefulHistoryPort()
+        port = _StatefulHistoryPort(canvas)
         command = SetAtomPositionsCommand(
             before_positions={1: (1.0, 2.0)},
             after_positions={1: (10.0, 20.0)},
@@ -1055,12 +1037,11 @@ class HistoryCommandTest(unittest.TestCase):
             after_projection_anchor_2d=(40.0, 50.0),
         )
 
-        with mock.patch("chemvas.core.history._history_canvas_port", return_value=port):
-            before = _atomic_canvas_snapshot(canvas)
-            port.fail_once_after("set_positions")
-            with self.assertRaisesRegex(RuntimeError, "set_positions failed"):
-                command.redo(canvas)
-            self.assertEqual(_atomic_canvas_snapshot(canvas), before)
+        before = _atomic_canvas_snapshot(canvas)
+        port.fail_once_after("set_positions")
+        with self.assertRaisesRegex(RuntimeError, "set_positions failed"):
+            command.redo(port)
+        self.assertEqual(_atomic_canvas_snapshot(canvas), before)
 
     def test_set_ring_polygons_command_compensates_failed_current_ring(self) -> None:
         first = _AtomicRingItem("first", [(0.0, 0.0), (1.0, 0.0), (0.0, 1.0)])
@@ -1071,13 +1052,12 @@ class HistoryCommandTest(unittest.TestCase):
             [(12.0, 12.0), (13.0, 12.0), (12.0, 13.0)],
         ]
         canvas = _AtomicHistoryCanvas()
-        port = _StatefulHistoryPort()
+        port = _StatefulHistoryPort(canvas)
         command = SetRingPolygonsCommand([first, second], before, after)
 
-        with mock.patch("chemvas.core.history._history_canvas_port", return_value=port):
-            port.fail_once_after("set_ring_polygon", "second")
-            with self.assertRaisesRegex(RuntimeError, "set_ring_polygon failed"):
-                command.redo(canvas)
+        port.fail_once_after("set_ring_polygon", "second")
+        with self.assertRaisesRegex(RuntimeError, "set_ring_polygon failed"):
+            command.redo(port)
 
         self.assertEqual([first.polygon, second.polygon], before)
 
@@ -1085,17 +1065,18 @@ class HistoryCommandTest(unittest.TestCase):
         self,
     ) -> None:
         class _FailingLengthPort:
-            def __init__(self) -> None:
+            def __init__(self, state) -> None:
+                self.state = state
                 self.fail_next = False
 
-            def restore_bond_length_for_history(self, canvas, length: float) -> None:
-                canvas.bond_length = length
+            def restore_bond_length_for_history(self, length: float) -> None:
+                self.state.bond_length = length
                 if self.fail_next:
                     self.fail_next = False
                     raise RuntimeError("graphics rebuild failed")
 
         canvas = SimpleNamespace(bond_length=24.0, toggle=True)
-        port = _FailingLengthPort()
+        port = _FailingLengthPort(canvas)
         command = CompositeCommand(
             [
                 UpdateBondLengthCommand(before_length=18.0, after_length=24.0),
@@ -1103,52 +1084,50 @@ class HistoryCommandTest(unittest.TestCase):
             ]
         )
 
-        with mock.patch("chemvas.core.history._history_canvas_port", return_value=port):
-            port.fail_next = True
-            with self.assertRaisesRegex(RuntimeError, "graphics rebuild failed"):
-                command.undo(canvas)
-            self.assertEqual((canvas.bond_length, canvas.toggle), (24.0, True))
+        port.fail_next = True
+        with self.assertRaisesRegex(RuntimeError, "graphics rebuild failed"):
+            command.undo(port)
+        self.assertEqual((canvas.bond_length, canvas.toggle), (24.0, True))
 
-            command.undo(canvas)
-            self.assertEqual((canvas.bond_length, canvas.toggle), (18.0, False))
+        command.undo(port)
+        self.assertEqual((canvas.bond_length, canvas.toggle), (18.0, False))
 
-            port.fail_next = True
-            with self.assertRaisesRegex(RuntimeError, "graphics rebuild failed"):
-                command.redo(canvas)
-            self.assertEqual((canvas.bond_length, canvas.toggle), (18.0, False))
+        port.fail_next = True
+        with self.assertRaisesRegex(RuntimeError, "graphics rebuild failed"):
+            command.redo(port)
+        self.assertEqual((canvas.bond_length, canvas.toggle), (18.0, False))
 
     def test_bond_length_composite_owns_one_outer_transaction_per_direction(
         self,
     ) -> None:
         class _SnapshotLengthPort:
-            def __init__(self) -> None:
+            def __init__(self, state) -> None:
+                self.state = state
                 self.capture_calls = 0
                 self.release_calls = 0
 
-            def capture_history_transaction_for_history(self, canvas, **_kwargs):
+            def capture_history_transaction_for_history(self, **_kwargs):
                 self.capture_calls += 1
-                return canvas.bond_length
+                return self.state.bond_length
 
             def restore_history_transaction_for_history(
                 self,
-                canvas,
                 snapshot,
             ) -> RestoreOutcome:
-                canvas.bond_length = snapshot
+                self.state.bond_length = snapshot
                 return RestoreOutcome(authoritative=True)
 
             def release_history_transaction_for_history(
                 self,
-                _canvas,
                 _snapshot,
             ) -> None:
                 self.release_calls += 1
 
-            def restore_bond_length_for_history(self, canvas, length: float) -> None:
-                canvas.bond_length = length
+            def restore_bond_length_for_history(self, length: float) -> None:
+                self.state.bond_length = length
 
         canvas = SimpleNamespace(bond_length=18.0, toggle=False)
-        port = _SnapshotLengthPort()
+        port = _SnapshotLengthPort(canvas)
         command = CompositeCommand(
             [
                 UpdateBondLengthCommand(before_length=18.0, after_length=24.0),
@@ -1156,9 +1135,8 @@ class HistoryCommandTest(unittest.TestCase):
             ]
         )
 
-        with mock.patch("chemvas.core.history._history_canvas_port", return_value=port):
-            command.redo(canvas)
-            command.undo(canvas)
+        command.redo(port)
+        command.undo(port)
 
         self.assertEqual((canvas.bond_length, canvas.toggle), (18.0, False))
         self.assertEqual(port.capture_calls, 2)
@@ -1168,6 +1146,7 @@ class HistoryCommandTest(unittest.TestCase):
         self,
     ) -> None:
         canvas = _FakeCanvas()
+        operations = CanvasHistoryOperations(canvas)
         canvas.model.atoms[2] = Atom("N", 10.0, 20.0)
         canvas.atom_coords_3d = {
             1: (0.0, 0.0, 1.0),
@@ -1195,11 +1174,11 @@ class HistoryCommandTest(unittest.TestCase):
 
         command = MoveAtomsCommand({1, 2}, 5.0, 7.0)
         with mock.patch(
-            "chemvas.ui.history_canvas_access.move_atoms_for",
+            "chemvas.ui.history_operations.move_atoms_for",
             side_effect=partially_move_first_atom,
         ):
             with self.assertRaisesRegex(RuntimeError, "partial move failed"):
-                command.redo(canvas)
+                command.redo(operations)
 
         self.assertEqual(
             {atom_id: (atom.x, atom.y) for atom_id, atom in canvas.model.atoms.items()},
@@ -1231,40 +1210,37 @@ class HistoryCommandTest(unittest.TestCase):
         for name, command, bonds in cases:
             with self.subTest(command=name):
                 canvas = _AtomicHistoryCanvas(bonds=bonds, smiles_input="before")
-                port = _StatefulHistoryPort()
-                with mock.patch(
-                    "chemvas.core.history._history_canvas_port", return_value=port
-                ):
-                    before = _atomic_canvas_snapshot(canvas)
-                    port.fail_once_after("set_smiles", "after")
-                    with self.assertRaisesRegex(RuntimeError, "set_smiles failed"):
-                        command.redo(canvas)
-                    self.assertEqual(_atomic_canvas_snapshot(canvas), before)
+                port = _StatefulHistoryPort(canvas)
+                before = _atomic_canvas_snapshot(canvas)
+                port.fail_once_after("set_smiles", "after")
+                with self.assertRaisesRegex(RuntimeError, "set_smiles failed"):
+                    command.redo(port)
+                self.assertEqual(_atomic_canvas_snapshot(canvas), before)
 
-                    command.redo(canvas)
-                    after = _atomic_canvas_snapshot(canvas)
-                    port.fail_once_after("set_smiles", "before")
-                    with self.assertRaisesRegex(RuntimeError, "set_smiles failed"):
-                        command.undo(canvas)
-                    self.assertEqual(_atomic_canvas_snapshot(canvas), after)
+                command.redo(port)
+                after = _atomic_canvas_snapshot(canvas)
+                port.fail_once_after("set_smiles", "before")
+                with self.assertRaisesRegex(RuntimeError, "set_smiles failed"):
+                    command.undo(port)
+                self.assertEqual(_atomic_canvas_snapshot(canvas), after)
 
     def test_history_service_drops_mixed_composite_after_failed_child(
         self,
     ) -> None:
         class _AuthoritativePort(_StatefulHistoryPort):
-            def capture_history_transaction_for_history(self, canvas, **_kwargs):
-                return _atomic_canvas_snapshot(canvas)
+            def capture_history_transaction_for_history(self, **_kwargs):
+                return _atomic_canvas_snapshot(self.state)
 
-            def restore_history_transaction_for_history(self, canvas, snapshot) -> None:
-                canvas.model.atoms = deepcopy(snapshot["atoms"])
-                canvas.model.next_atom_id = snapshot["next_atom_id"]
-                canvas.coords_3d = dict(snapshot["coords_3d"])
-                canvas.marks = deepcopy(snapshot["marks"])
-                canvas.bonds = deepcopy(snapshot["bonds"])
-                canvas.smiles_input = snapshot["smiles_input"]
-                canvas.projection_center_3d = snapshot["projection_center_3d"]
-                canvas.projection_anchor_2d = snapshot["projection_anchor_2d"]
-                canvas.toggle = snapshot["toggle"]
+            def restore_history_transaction_for_history(self, snapshot) -> None:
+                self.state.model.atoms = deepcopy(snapshot["atoms"])
+                self.state.model.next_atom_id = snapshot["next_atom_id"]
+                self.state.coords_3d = dict(snapshot["coords_3d"])
+                self.state.marks = deepcopy(snapshot["marks"])
+                self.state.bonds = deepcopy(snapshot["bonds"])
+                self.state.smiles_input = snapshot["smiles_input"]
+                self.state.projection_center_3d = snapshot["projection_center_3d"]
+                self.state.projection_anchor_2d = snapshot["projection_anchor_2d"]
+                self.state.toggle = snapshot["toggle"]
 
         atom_states = {
             1: {"element": "C", "x": 1.0, "y": 2.0},
@@ -1275,7 +1251,7 @@ class HistoryCommandTest(unittest.TestCase):
             next_atom_id=3,
             smiles_input="after",
         )
-        port = _AuthoritativePort()
+        port = _AuthoritativePort(canvas)
         add_atoms = AddAtomsCommand(
             atom_states=atom_states,
             before_next_atom_id=1,
@@ -1288,13 +1264,12 @@ class HistoryCommandTest(unittest.TestCase):
         state = CanvasHistoryState(history=[composite], redo_stack=[stale_redo])
         history = state.history
         redo_stack = state.redo_stack
-        service = CanvasHistoryService(canvas, state, replay_context=nullcontext)
+        service = CanvasHistoryService(port, state, replay_context=nullcontext)
         before = _atomic_canvas_snapshot(canvas)
 
-        with mock.patch("chemvas.core.history._history_canvas_port", return_value=port):
-            port.fail_once_after("remove_atom", 2)
-            with self.assertRaisesRegex(RuntimeError, "remove_atom failed"):
-                service.undo()
+        port.fail_once_after("remove_atom", 2)
+        with self.assertRaisesRegex(RuntimeError, "remove_atom failed"):
+            service.undo()
 
         # The document savepoint cannot prove coverage of an unknown child,
         # so the conservative policy drops the command and clears redo.
@@ -1381,15 +1356,14 @@ class HistoryCommandTest(unittest.TestCase):
         self,
     ) -> None:
         class _PartialRestorePort(_StatefulHistoryPort):
-            def capture_history_transaction_for_history(self, canvas, **_kwargs):
-                return _atomic_canvas_snapshot(canvas)
+            def capture_history_transaction_for_history(self, **_kwargs):
+                return _atomic_canvas_snapshot(self.state)
 
             def restore_history_transaction_for_history(
                 self,
-                canvas,
                 snapshot,
             ) -> RestoreOutcome:
-                del canvas, snapshot
+                del snapshot
                 return RestoreOutcome(
                     authoritative=False,
                     fallback_to_inverse=False,
@@ -1405,7 +1379,7 @@ class HistoryCommandTest(unittest.TestCase):
             next_atom_id=3,
             smiles_input="after",
         )
-        port = _PartialRestorePort()
+        port = _PartialRestorePort(canvas)
         composite = CompositeCommand(
             [
                 AddAtomsCommand(
@@ -1420,23 +1394,11 @@ class HistoryCommandTest(unittest.TestCase):
         )
         stale_redo = _RecorderCommand("stale", [])
         state = CanvasHistoryState(history=[composite], redo_stack=[stale_redo])
-        service = CanvasHistoryService(canvas, state, replay_context=nullcontext)
+        service = CanvasHistoryService(port, state, replay_context=nullcontext)
 
-        with (
-            mock.patch("chemvas.core.history._history_canvas_port", return_value=port),
-            mock.patch(
-                "chemvas.ui.history_canvas_access."
-                "restore_history_transaction_for_history",
-                return_value=RestoreOutcome(
-                    authoritative=False,
-                    fallback_to_inverse=False,
-                    errors=(RuntimeError("persistent exact restore failure"),),
-                ),
-            ),
-        ):
-            port.fail_once_after("remove_atom", 2)
-            with self.assertRaisesRegex(RuntimeError, "remove_atom failed") as caught:
-                service.undo()
+        port.fail_once_after("remove_atom", 2)
+        with self.assertRaisesRegex(RuntimeError, "remove_atom failed") as caught:
+            service.undo()
 
         # The deferred child's provisional success cannot retain the command;
         # only the final owning restore result controls retry safety.
@@ -1451,29 +1413,29 @@ class HistoryCommandTest(unittest.TestCase):
 
     def test_lifecycle_composite_captures_one_outer_transaction(self) -> None:
         class _SnapshotPort(_StatefulHistoryPort):
-            def __init__(self) -> None:
-                super().__init__()
+            def __init__(self, state) -> None:
+                super().__init__(state)
                 self.capture_calls = 0
                 self.restore_calls = 0
 
-            def capture_history_transaction_for_history(self, canvas, **_kwargs):
+            def capture_history_transaction_for_history(self, **_kwargs):
                 self.capture_calls += 1
-                return _atomic_canvas_snapshot(canvas)
+                return _atomic_canvas_snapshot(self.state)
 
-            def restore_history_transaction_for_history(self, canvas, snapshot) -> None:
+            def restore_history_transaction_for_history(self, snapshot) -> None:
                 self.restore_calls += 1
-                canvas.model.atoms = deepcopy(snapshot["atoms"])
-                canvas.model.next_atom_id = snapshot["next_atom_id"]
-                canvas.coords_3d = dict(snapshot["coords_3d"])
-                canvas.marks = deepcopy(snapshot["marks"])
-                canvas.bonds = deepcopy(snapshot["bonds"])
-                canvas.smiles_input = snapshot["smiles_input"]
-                canvas.projection_center_3d = snapshot["projection_center_3d"]
-                canvas.projection_anchor_2d = snapshot["projection_anchor_2d"]
-                canvas.toggle = snapshot["toggle"]
+                self.state.model.atoms = deepcopy(snapshot["atoms"])
+                self.state.model.next_atom_id = snapshot["next_atom_id"]
+                self.state.coords_3d = dict(snapshot["coords_3d"])
+                self.state.marks = deepcopy(snapshot["marks"])
+                self.state.bonds = deepcopy(snapshot["bonds"])
+                self.state.smiles_input = snapshot["smiles_input"]
+                self.state.projection_center_3d = snapshot["projection_center_3d"]
+                self.state.projection_anchor_2d = snapshot["projection_anchor_2d"]
+                self.state.toggle = snapshot["toggle"]
 
         canvas = _AtomicHistoryCanvas(smiles_input="before")
-        port = _SnapshotPort()
+        port = _SnapshotPort(canvas)
         commands = [
             AddBondCommand(
                 bond_id=bond_id,
@@ -1486,10 +1448,9 @@ class HistoryCommandTest(unittest.TestCase):
         ]
         composite = CompositeCommand(commands)
 
-        with mock.patch("chemvas.core.history._history_canvas_port", return_value=port):
-            composite.redo(canvas)
-            self.assertEqual(port.capture_calls, 1)
-            composite.undo(canvas)
+        composite.redo(port)
+        self.assertEqual(port.capture_calls, 1)
+        composite.undo(port)
 
         self.assertEqual(port.capture_calls, 2)
         self.assertEqual(port.restore_calls, 0)
@@ -1498,27 +1459,27 @@ class HistoryCommandTest(unittest.TestCase):
         self,
     ) -> None:
         class _SnapshotPort(_StatefulHistoryPort):
-            def __init__(self) -> None:
-                super().__init__()
+            def __init__(self, state) -> None:
+                super().__init__(state)
                 self.capture_calls = 0
                 self.restore_calls = 0
                 self.remove_calls = 0
 
-            def capture_history_transaction_for_history(self, canvas, **_kwargs):
+            def capture_history_transaction_for_history(self, **_kwargs):
                 self.capture_calls += 1
-                return _atomic_canvas_snapshot(canvas)
+                return _atomic_canvas_snapshot(self.state)
 
-            def restore_history_transaction_for_history(self, canvas, snapshot) -> None:
+            def restore_history_transaction_for_history(self, snapshot) -> None:
                 self.restore_calls += 1
-                canvas.bonds = deepcopy(snapshot["bonds"])
-                canvas.smiles_input = snapshot["smiles_input"]
+                self.state.bonds = deepcopy(snapshot["bonds"])
+                self.state.smiles_input = snapshot["smiles_input"]
 
-            def remove_bond_for_history(self, canvas, bond_id: int) -> None:
+            def remove_bond_for_history(self, bond_id: int) -> None:
                 self.remove_calls += 1
-                super().remove_bond_for_history(canvas, bond_id)
+                super().remove_bond_for_history(bond_id)
 
         canvas = _AtomicHistoryCanvas(smiles_input="before")
-        port = _SnapshotPort()
+        port = _SnapshotPort(canvas)
         composite = CompositeCommand(
             [
                 AddBondCommand(
@@ -1533,10 +1494,9 @@ class HistoryCommandTest(unittest.TestCase):
         )
         before = _atomic_canvas_snapshot(canvas)
 
-        with mock.patch("chemvas.core.history._history_canvas_port", return_value=port):
-            port.fail_once_after("restore_bond", 10)
-            with self.assertRaisesRegex(RuntimeError, "restore_bond failed"):
-                composite.redo(canvas)
+        port.fail_once_after("restore_bond", 10)
+        with self.assertRaisesRegex(RuntimeError, "restore_bond failed"):
+            composite.redo(port)
 
         self.assertEqual(_atomic_canvas_snapshot(canvas), before)
         self.assertEqual(port.capture_calls, 1)
@@ -1547,29 +1507,29 @@ class HistoryCommandTest(unittest.TestCase):
         self,
     ) -> None:
         class _SnapshotPort(_StatefulHistoryPort):
-            def __init__(self) -> None:
-                super().__init__()
+            def __init__(self, state) -> None:
+                super().__init__(state)
                 self.capture_calls = 0
 
-            def capture_history_transaction_for_history(self, canvas, **_kwargs):
+            def capture_history_transaction_for_history(self, **_kwargs):
                 self.capture_calls += 1
-                return _atomic_canvas_snapshot(canvas)
+                return _atomic_canvas_snapshot(self.state)
 
-            def restore_history_transaction_for_history(self, canvas, snapshot) -> None:
-                canvas.bonds = deepcopy(snapshot["bonds"])
-                canvas.smiles_input = snapshot["smiles_input"]
-                canvas.toggle = snapshot["toggle"]
+            def restore_history_transaction_for_history(self, snapshot) -> None:
+                self.state.bonds = deepcopy(snapshot["bonds"])
+                self.state.smiles_input = snapshot["smiles_input"]
+                self.state.toggle = snapshot["toggle"]
 
         class _CustomCounterCommand(HistoryCommand):
-            def undo(self, canvas) -> None:
-                canvas.custom_counter -= 1
+            def undo(self, operations) -> None:
+                operations.state.custom_counter -= 1
 
-            def redo(self, canvas) -> None:
-                canvas.custom_counter += 1
+            def redo(self, operations) -> None:
+                operations.state.custom_counter += 1
 
         canvas = _AtomicHistoryCanvas(smiles_input="before")
         canvas.custom_counter = 0
-        port = _SnapshotPort()
+        port = _SnapshotPort(canvas)
         command = CompositeCommand(
             [
                 _CustomCounterCommand(),
@@ -1583,10 +1543,9 @@ class HistoryCommandTest(unittest.TestCase):
             ]
         )
 
-        with mock.patch("chemvas.core.history._history_canvas_port", return_value=port):
-            port.fail_once_after("restore_bond", 0)
-            with self.assertRaisesRegex(RuntimeError, "restore_bond failed"):
-                command.redo(canvas)
+        port.fail_once_after("restore_bond", 0)
+        with self.assertRaisesRegex(RuntimeError, "restore_bond failed"):
+            command.redo(port)
 
         self.assertEqual(canvas.custom_counter, 0)
         self.assertEqual(canvas.bonds, {})
@@ -1595,18 +1554,20 @@ class HistoryCommandTest(unittest.TestCase):
 
     def test_move_atoms_command_delegates_to_canvas(self) -> None:
         canvas = _FakeCanvas()
+        operations = CanvasHistoryOperations(canvas)
         move_atoms = MoveAtomsCommand(
             {1, 2}, 3.5, -4.0, bond_ids={7}, redraw_bond_ids={8}
         )
 
-        move_atoms.undo(canvas)
-        move_atoms.redo(canvas)
+        move_atoms.undo(operations)
+        move_atoms.redo(operations)
 
         self.assertIn(("move_atoms", {1, 2}, -3.5, 4.0, {7}, {8}, True), canvas.calls)
         self.assertIn(("move_atoms", {1, 2}, 3.5, -4.0, {7}, {8}, True), canvas.calls)
 
     def test_position_and_polygon_commands_apply_history_ports(self) -> None:
         canvas = _FakeCanvas()
+        operations = CanvasHistoryOperations(canvas)
         atom_command = SetAtomPositionsCommand(
             before_positions={1: (0.0, 0.0)},
             after_positions={1: (2.0, 3.0)},
@@ -1615,10 +1576,10 @@ class HistoryCommandTest(unittest.TestCase):
         ring = _FakeRingItem(canvas)
         ring_command = SetRingPolygonsCommand([ring], [[(0.0, 0.0)]], [[(1.0, 1.0)]])
 
-        atom_command.undo(canvas)
-        atom_command.redo(canvas)
-        ring_command.undo(canvas)
-        ring_command.redo(canvas)
+        atom_command.undo(operations)
+        atom_command.redo(operations)
+        ring_command.undo(operations)
+        ring_command.redo(operations)
 
         self.assertEqual((canvas.model.atoms[1].x, canvas.model.atoms[1].y), (2.0, 3.0))
         self.assertEqual(canvas.calls.count(("redraw_bonds_for_atoms", {1})), 2)
@@ -1627,6 +1588,7 @@ class HistoryCommandTest(unittest.TestCase):
 
     def test_set_atom_positions_command_restores_projection_state(self) -> None:
         canvas = _FakeCanvas()
+        operations = CanvasHistoryOperations(canvas)
         command = SetAtomPositionsCommand(
             before_positions={1: (0.0, 0.0)},
             after_positions={1: (2.0, 3.0)},
@@ -1639,7 +1601,7 @@ class HistoryCommandTest(unittest.TestCase):
             after_projection_anchor_2d=(8.0, 9.0),
         )
 
-        command.redo(canvas)
+        command.redo(operations)
         self.assertEqual(
             canvas.runtime_state.rotation_state.projection_center_3d, (5.0, 6.0, 7.0)
         )
@@ -1647,7 +1609,7 @@ class HistoryCommandTest(unittest.TestCase):
             canvas.runtime_state.rotation_state.projection_anchor_2d, (8.0, 9.0)
         )
 
-        command.undo(canvas)
+        command.undo(operations)
         self.assertIsNone(canvas.runtime_state.rotation_state.projection_center_3d)
         self.assertIsNone(canvas.runtime_state.rotation_state.projection_anchor_2d)
 
@@ -1655,6 +1617,7 @@ class HistoryCommandTest(unittest.TestCase):
         self,
     ) -> None:
         canvas = _MinimalCanvas()
+        operations = CanvasHistoryOperations(canvas)
         command = SetAtomPositionsCommand(
             before_positions={1: (0.0, 0.0)},
             after_positions={1: (2.0, 3.0)},
@@ -1663,8 +1626,8 @@ class HistoryCommandTest(unittest.TestCase):
             restore_projection_state=True,
         )
 
-        command.redo(canvas)
-        command.undo(canvas)
+        command.redo(operations)
+        command.undo(operations)
 
         self.assertEqual((canvas.model.atoms[1].x, canvas.model.atoms[1].y), (0.0, 0.0))
         self.assertEqual(canvas.atom_coords_3d[1], (0.0, 0.0, 0.0))
@@ -1675,21 +1638,22 @@ class HistoryCommandTest(unittest.TestCase):
 
     def test_update_commands_apply_length_color_scene_state_and_smiles(self) -> None:
         canvas = _FakeCanvas()
+        operations = CanvasHistoryOperations(canvas)
         length_command = UpdateBondLengthCommand(18.0, 24.0)
         smiles_command = SetSmilesInputCommand("before", "after")
         color_command = UpdateAtomColorCommand(4, "#000000", "#ff0000")
         scene_state_command = UpdateSceneItemCommand("item", {"x": 1}, {"x": 2})
 
-        length_command.undo(canvas)
-        length_command.redo(canvas)
-        smiles_command.undo(canvas)
+        length_command.undo(operations)
+        length_command.redo(operations)
+        smiles_command.undo(operations)
         self.assertEqual(canvas.last_smiles_input, "before")
-        smiles_command.redo(canvas)
+        smiles_command.redo(operations)
         self.assertEqual(canvas.last_smiles_input, "after")
-        color_command.undo(canvas)
-        color_command.redo(canvas)
-        scene_state_command.undo(canvas)
-        scene_state_command.redo(canvas)
+        color_command.undo(operations)
+        color_command.redo(operations)
+        scene_state_command.undo(operations)
+        scene_state_command.redo(operations)
 
         self.assertEqual(canvas.calls.count(("set_bond_length", 18.0)), 1)
         self.assertEqual(canvas.calls.count(("set_bond_length", 24.0)), 1)
@@ -1701,6 +1665,7 @@ class HistoryCommandTest(unittest.TestCase):
 
     def test_atom_commands_restore_and_remove_atoms_and_marks(self) -> None:
         canvas = _FakeCanvas()
+        operations = CanvasHistoryOperations(canvas)
         canvas.model.next_atom_id = 10
         add_command = AddAtomsCommand(
             atom_states={3: {"element": "C"}},
@@ -1718,10 +1683,10 @@ class HistoryCommandTest(unittest.TestCase):
             after_smiles_input="after",
         )
 
-        add_command.undo(canvas)
-        add_command.redo(canvas)
-        delete_command.undo(canvas)
-        delete_command.redo(canvas)
+        add_command.undo(operations)
+        add_command.redo(operations)
+        delete_command.undo(operations)
+        delete_command.redo(operations)
 
         self.assertIn(("remove_atom_for_history", 3, True), canvas.calls)
         self.assertIn(("restore_atom_from_state", 3, {"element": "C"}), canvas.calls)
@@ -1732,6 +1697,7 @@ class HistoryCommandTest(unittest.TestCase):
 
     def test_add_atoms_command_restores_atom_coords_3d_on_redo(self) -> None:
         canvas = _FakeCanvas()
+        operations = CanvasHistoryOperations(canvas)
         command = AddAtomsCommand(
             atom_states={3: {"element": "N", "x": 1.0, "y": 2.0}},
             before_next_atom_id=3,
@@ -1739,13 +1705,14 @@ class HistoryCommandTest(unittest.TestCase):
             atom_coords_3d={3: (1.0, 2.0, 3.0)},
         )
 
-        command.redo(canvas)
+        command.redo(operations)
 
         self.assertEqual(atom_coords_3d_for(canvas)[3], (1.0, 2.0, 3.0))
         self.assertIn(("redraw_bonds_for_atoms", {3}), canvas.calls)
 
     def test_delete_atoms_command_restores_atom_coords_3d_on_undo(self) -> None:
         canvas = _FakeCanvas()
+        operations = CanvasHistoryOperations(canvas)
         command = DeleteAtomsCommand(
             atom_states={3: {"element": "N", "x": 1.0, "y": 2.0}},
             before_next_atom_id=4,
@@ -1753,7 +1720,7 @@ class HistoryCommandTest(unittest.TestCase):
             atom_coords_3d={3: (1.0, 2.0, 3.0)},
         )
 
-        command.undo(canvas)
+        command.undo(operations)
 
         self.assertEqual(atom_coords_3d_for(canvas)[3], (1.0, 2.0, 3.0))
         self.assertIn(("redraw_bonds_for_atoms", {3}), canvas.calls)
@@ -1762,6 +1729,7 @@ class HistoryCommandTest(unittest.TestCase):
         self,
     ) -> None:
         canvas = _FakeCanvas()
+        operations = CanvasHistoryOperations(canvas)
         command = DeleteAtomsCommand(
             atom_states={3: {"element": "N", "x": 1.0, "y": 2.0}},
             before_next_atom_id=4,
@@ -1774,7 +1742,7 @@ class HistoryCommandTest(unittest.TestCase):
             after_projection_anchor_2d=None,
         )
 
-        command.undo(canvas)
+        command.undo(operations)
         self.assertEqual(
             canvas.runtime_state.rotation_state.projection_center_3d, (1.0, 2.0, 3.0)
         )
@@ -1783,7 +1751,7 @@ class HistoryCommandTest(unittest.TestCase):
         )
         self.assertEqual(atom_coords_3d_for(canvas)[3], (1.0, 2.0, 3.0))
 
-        command.redo(canvas)
+        command.redo(operations)
         self.assertIsNone(canvas.runtime_state.rotation_state.projection_center_3d)
         self.assertIsNone(canvas.runtime_state.rotation_state.projection_anchor_2d)
 
@@ -1791,6 +1759,7 @@ class HistoryCommandTest(unittest.TestCase):
         self,
     ) -> None:
         canvas = _FakeCanvas()
+        operations = CanvasHistoryOperations(canvas)
         command = DeleteAtomsCommand(
             atom_states={8: {"element": "N"}},
             mark_states=[{"kind": "minus"}],
@@ -1801,8 +1770,8 @@ class HistoryCommandTest(unittest.TestCase):
             remove_marks=False,
         )
 
-        command.undo(canvas)
-        command.redo(canvas)
+        command.undo(operations)
+        command.redo(operations)
 
         self.assertIn(("restore_atom_from_state", 8, {"element": "N"}), canvas.calls)
         self.assertIn(("remove_atom_for_history", 8, False), canvas.calls)
@@ -1812,18 +1781,19 @@ class HistoryCommandTest(unittest.TestCase):
 
     def test_scene_item_commands_create_remove_and_restore_items(self) -> None:
         canvas = _FakeCanvas()
+        operations = CanvasHistoryOperations(canvas)
         add_command = AddSceneItemsCommand(item_states=[{"kind": "note"}])
         delete_command = DeleteSceneItemsCommand(item_states=[{"kind": "arrow"}])
 
-        add_command.redo(canvas)
+        add_command.redo(operations)
         add_item = add_command.items[0]
-        add_command.undo(canvas)
-        add_command.redo(canvas)
+        add_command.undo(operations)
+        add_command.redo(operations)
 
-        delete_command.undo(canvas)
+        delete_command.undo(operations)
         delete_item = delete_command.items[0]
-        delete_command.redo(canvas)
-        delete_command.undo(canvas)
+        delete_command.redo(operations)
+        delete_command.undo(operations)
 
         self.assertIn(("create_scene_item_from_state", {"kind": "note"}), canvas.calls)
         self.assertIn(("remove_scene_item", add_item), canvas.calls)
@@ -1836,13 +1806,14 @@ class HistoryCommandTest(unittest.TestCase):
         self,
     ) -> None:
         canvas = _FakeCanvas()
+        operations = CanvasHistoryOperations(canvas)
         add_command = AddSceneItemsCommand(item_states=[], items=[None, "note-item"])
         delete_command = DeleteSceneItemsCommand(
             item_states=[], items=[None, "arrow-item"]
         )
 
-        add_command.redo(canvas)
-        delete_command.undo(canvas)
+        add_command.redo(operations)
+        delete_command.undo(operations)
 
         self.assertEqual(
             canvas.calls,
@@ -1856,6 +1827,7 @@ class HistoryCommandTest(unittest.TestCase):
         self,
     ) -> None:
         canvas = _FakeCanvas()
+        operations = CanvasHistoryOperations(canvas)
         canvas.services.scene_view.scene_item_controller = _FakeSceneItemController(
             canvas
         )
@@ -1871,19 +1843,19 @@ class HistoryCommandTest(unittest.TestCase):
             after_smiles_input="after",
         )
 
-        add_command.redo(canvas)
+        add_command.redo(operations)
         add_item = add_command.items[0]
-        add_command.undo(canvas)
-        add_command.redo(canvas)
+        add_command.undo(operations)
+        add_command.redo(operations)
 
-        delete_command.undo(canvas)
+        delete_command.undo(operations)
         delete_item = delete_command.items[0]
-        delete_command.redo(canvas)
-        delete_command.undo(canvas)
+        delete_command.redo(operations)
+        delete_command.undo(operations)
 
-        update_command.undo(canvas)
-        update_command.redo(canvas)
-        delete_atoms_command.undo(canvas)
+        update_command.undo(operations)
+        update_command.redo(operations)
+        delete_atoms_command.undo(operations)
 
         self.assertIn(
             ("controller_create_scene_item_from_state", {"kind": "note"}), canvas.calls
@@ -1915,6 +1887,7 @@ class HistoryCommandTest(unittest.TestCase):
         self,
     ) -> None:
         canvas = _FakeCanvas()
+        operations = CanvasHistoryOperations(canvas)
         command = ChangeAtomLabelCommand(
             atom_id=5,
             before_element="C",
@@ -1925,9 +1898,9 @@ class HistoryCommandTest(unittest.TestCase):
             after_smiles_input="after",
         )
 
-        command.undo(canvas)
+        command.undo(operations)
         self.assertEqual(canvas.last_smiles_input, "before")
-        command.redo(canvas)
+        command.redo(operations)
         self.assertEqual(canvas.last_smiles_input, "after")
 
         self.assertEqual(
@@ -1941,6 +1914,7 @@ class HistoryCommandTest(unittest.TestCase):
 
     def test_change_atom_label_command_restores_noncarbon_literal_intent(self) -> None:
         canvas = _FakeCanvas()
+        operations = CanvasHistoryOperations(canvas)
         command = ChangeAtomLabelCommand(
             atom_id=5,
             before_element="OH",
@@ -1951,7 +1925,7 @@ class HistoryCommandTest(unittest.TestCase):
             after_smiles_input=None,
         )
 
-        command.undo(canvas)
+        command.undo(operations)
 
         self.assertEqual(
             canvas.calls[0],
@@ -1962,6 +1936,7 @@ class HistoryCommandTest(unittest.TestCase):
         self,
     ) -> None:
         canvas = _FakeCanvas()
+        operations = CanvasHistoryOperations(canvas)
         service_calls = []
         canvas.services.atom_label_service = SimpleNamespace(
             add_or_update_atom_label=lambda atom_id, text, **kwargs: (
@@ -1978,7 +1953,7 @@ class HistoryCommandTest(unittest.TestCase):
             after_smiles_input="after",
         )
 
-        command.redo(canvas)
+        command.redo(operations)
 
         self.assertEqual(
             service_calls,
@@ -2001,6 +1976,7 @@ class HistoryCommandTest(unittest.TestCase):
 
     def test_bond_commands_remove_trim_and_restore(self) -> None:
         canvas = _FakeCanvas()
+        operations = CanvasHistoryOperations(canvas)
         add_command = AddBondCommand(
             bond_id=2,
             bond_state={"order": 1},
@@ -2022,19 +1998,19 @@ class HistoryCommandTest(unittest.TestCase):
             after_smiles_input="after-update",
         )
 
-        add_command.undo(canvas)
+        add_command.undo(operations)
         self.assertEqual(canvas.last_smiles_input, "before-add")
-        add_command.redo(canvas)
+        add_command.redo(operations)
         self.assertEqual(canvas.last_smiles_input, "after-add")
 
-        delete_command.undo(canvas)
+        delete_command.undo(operations)
         self.assertEqual(canvas.last_smiles_input, "before-delete")
-        delete_command.redo(canvas)
+        delete_command.redo(operations)
         self.assertEqual(canvas.last_smiles_input, "after-delete")
 
-        update_command.undo(canvas)
+        update_command.undo(operations)
         self.assertEqual(canvas.last_smiles_input, "before-update")
-        update_command.redo(canvas)
+        update_command.redo(operations)
         self.assertEqual(canvas.last_smiles_input, "after-update")
 
         self.assertIn(("remove_bond_for_history", 2), canvas.calls)

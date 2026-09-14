@@ -279,7 +279,7 @@ def test_disabled_history_keeps_existing_operation_policy(canvas, route):
 @pytest.mark.parametrize("route", ["selected", "cancel", "rebind", "eraser"])
 @pytest.mark.parametrize("phase", ["label_after_real", "push_false", "undo", "redo"])
 def test_failed_promotion_edit_preserves_state_and_history(canvas, route, phase):
-    from chemvas.ui import history_commands
+    from chemvas.ui import history_operations as history_commands
 
     mark = _mark(canvas)
     history = canvas.services.history_service

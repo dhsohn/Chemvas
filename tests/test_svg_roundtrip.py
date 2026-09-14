@@ -5,11 +5,13 @@ import os
 import tempfile
 import unittest
 import zlib
+from copy import deepcopy
 from decimal import Decimal
 from pathlib import Path
 from unittest import mock
 from xml.etree import ElementTree as ET
 
+from chemvas.core import svg_roundtrip
 from chemvas.core.svg_roundtrip import (
     CHEMVAS_SVG_ENCODING,
     CHEMVAS_SVG_NAMESPACE,
@@ -102,6 +104,88 @@ class SvgRoundtripTest(unittest.TestCase):
                 extract_chemvas_svg_payload(path)["scope"], CHEMVAS_SVG_SCOPE_SHEET
             )
             self.assertEqual(extract_chemvas_document_from_svg(path).state, state)
+
+    def test_each_svg_reader_validates_the_document_once_per_read(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self._svg_path(tmp)
+            for text in ("first 한글", "changed"):
+                state = _sheet_state(text)
+                payload = create_editable_svg_payload(
+                    state,
+                    document_version=CANVAS_FILE_VERSION,
+                    scope=CHEMVAS_SVG_SCOPE_SHEET,
+                )
+                embed_chemvas_document_in_svg(path, payload)
+                original = path.read_bytes()
+                for reader in (
+                    extract_chemvas_svg_payload,
+                    extract_chemvas_document_from_svg,
+                ):
+                    with self.subTest(text=text, reader=reader):
+                        with mock.patch.object(
+                            svg_roundtrip,
+                            "parse_document",
+                            wraps=svg_roundtrip.parse_document,
+                        ) as parse:
+                            result = reader(path)
+                        self.assertEqual(parse.call_count, 1)
+                        if isinstance(result, dict):
+                            self.assertEqual(result, payload)
+                        else:
+                            self.assertEqual(result.payload, payload["document"])
+                            self.assertEqual(result.state, state)
+                            self.assertIs(result.state, result.payload["state"])
+                        self.assertEqual(path.read_bytes(), original)
+
+    def test_embed_revalidates_mutated_payload_without_changing_svg(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self._svg_path(tmp)
+            payload = create_editable_svg_payload(
+                _sheet_state(),
+                document_version=CANVAS_FILE_VERSION,
+                scope=CHEMVAS_SVG_SCOPE_SHEET,
+            )
+            payload["document"]["state"]["notes"][0]["x"] = "not-a-coordinate"
+            before = deepcopy(payload)
+            original = path.read_bytes()
+            with mock.patch.object(
+                svg_roundtrip, "parse_document", wraps=svg_roundtrip.parse_document
+            ) as parse:
+                with self.assertRaisesRegex(
+                    ValueError, "^Invalid editable Chemvas SVG payload\\.$"
+                ) as raised:
+                    embed_chemvas_document_in_svg(path, payload)
+            self.assertEqual(parse.call_count, 1)
+            self.assertIsInstance(raised.exception.__cause__, ValueError)
+            self.assertEqual(payload, before)
+            self.assertEqual(path.read_bytes(), original)
+
+    def test_reader_keeps_validation_failure_cause_and_file_unchanged(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self._svg_path(tmp)
+            payload = create_editable_svg_payload(
+                _sheet_state(),
+                document_version=CANVAS_FILE_VERSION,
+                scope=CHEMVAS_SVG_SCOPE_SHEET,
+            )
+            embed_chemvas_document_in_svg(path, payload)
+            original = path.read_bytes()
+            for reader in (
+                extract_chemvas_svg_payload,
+                extract_chemvas_document_from_svg,
+            ):
+                with self.subTest(reader=reader):
+                    failure = ValueError("document validation failed")
+                    with mock.patch.object(
+                        svg_roundtrip, "parse_document", side_effect=failure
+                    ) as parse:
+                        with self.assertRaisesRegex(
+                            ValueError, "^Invalid editable Chemvas SVG payload\\.$"
+                        ) as raised:
+                            reader(path)
+                    self.assertEqual(parse.call_count, 1)
+                    self.assertIs(raised.exception.__cause__, failure)
+                    self.assertEqual(path.read_bytes(), original)
 
     def test_svg_readers_preserve_filesystem_errors(self) -> None:
         payload = create_editable_svg_payload(

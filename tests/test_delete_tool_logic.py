@@ -17,6 +17,7 @@ from chemvas.ui.delete_tool_logic import (
     erase_delete_tool_item,
 )
 from chemvas.ui.history_commands import DeleteSceneItemsCommand
+from chemvas.ui.history_operations import CanvasHistoryOperations
 
 
 class _Command(HistoryCommand):
@@ -66,6 +67,7 @@ class _Canvas:
         self.deleted_rings = []
         self.removed_items = []
         self.services = canvas_runtime_services(
+            history_service=SimpleNamespace(operations=CanvasHistoryOperations(self)),
             scene_delete_controller=SimpleNamespace(
                 delete_atom=self.delete_atom,
                 delete_bond=self.delete_bond,

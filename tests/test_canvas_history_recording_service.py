@@ -30,6 +30,7 @@ from chemvas.ui.canvas_history_service import CanvasHistoryService
 from chemvas.ui.canvas_history_state import CanvasHistoryState, history_state_for
 from chemvas.ui.canvas_smiles_input_state import CanvasSmilesInputState
 from chemvas.ui.history_commands import AddSceneItemsCommand
+from chemvas.ui.history_operations import CanvasHistoryOperations
 
 
 class _SceneItem:
@@ -460,7 +461,7 @@ class CanvasHistoryRecordingServiceTest(unittest.TestCase):
             history_enabled=False,
         )
         disabled_canvas.services.history_service = CanvasHistoryService(
-            disabled_canvas,
+            CanvasHistoryOperations(disabled_canvas),
             history_state_for(disabled_canvas),
             replay_context=nullcontext,
         )

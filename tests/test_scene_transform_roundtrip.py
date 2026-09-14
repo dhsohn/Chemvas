@@ -307,7 +307,7 @@ def test_transform_failure_restores_geometry_and_retryable_history(canvas, kind,
     elif phase in {"undo", "redo"}:
         # Rebuilding a dependent item can fail after the atoms have changed.
         failure = mock.patch(
-            "chemvas.ui.history_commands._apply_scene_item_state",
+            "chemvas.ui.history_operations.apply_scene_item_state",
             side_effect=RuntimeError("item render failed"),
         )
     elif kind in {"nudge", "align"}:
@@ -396,6 +396,7 @@ def test_2d_transform_does_not_launder_stale_projection_coordinates(canvas, kind
 
 
 def test_exact_geometry_command_restores_absent_depth_only_in_its_footprint(canvas):
+    operations = canvas.services.history_service.operations
     from chemvas.core.history import SetAtomPositionsCommand
     from chemvas.ui.history_commands import SetSceneGeometryCommand
 
@@ -414,9 +415,9 @@ def test_exact_geometry_command_restores_absent_depth_only_in_its_footprint(canv
         ],
         [],
     )
-    command.undo(canvas)
+    command.undo(operations)
     assert atom_coords_3d_for(canvas) == {
         aid: point for aid, point in before.items() if aid != ids[0]
     }
-    command.redo(canvas)
+    command.redo(operations)
     assert atom_coords_3d_for(canvas) == before

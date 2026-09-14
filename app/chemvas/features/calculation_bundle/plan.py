@@ -20,6 +20,11 @@ from chemvas.domain.document import (
     model_bond_pairs,
 )
 from chemvas.domain.document.calculation_plan import NO_PRECOMPLEX
+from chemvas.domain.document.inspection import (
+    component_inventory,
+    document_model,
+    inspect_component_inventory,
+)
 from chemvas.domain.document.precomplex import precomplex_state_from_json
 from chemvas.domain.document.precomplex_profile import (
     precomplex_placement_profile,
@@ -27,19 +32,17 @@ from chemvas.domain.document.precomplex_profile import (
 )
 
 from .service import (
-    _component_inventory,
-    _document_model,
-    inspect_component_inventory,
+    _select_components,
     select_components,
 )
 
 if TYPE_CHECKING:
+    from chemvas.domain.document.inspection import ComponentInventory, ComponentSummary
+
     from .model import (
         AtomMapEntry,
         CalculationArtifacts,
         CalculationStateSelection,
-        ComponentInventory,
-        ComponentSummary,
     )
 
 
@@ -68,6 +71,82 @@ class PathPrecheck:
     blocking_reasons: tuple[str, ...]
 
 
+@dataclass(frozen=True)
+class CalculationStepPreparation:
+    """One pack request's validated graph; never reuse across document edits.
+
+    Later checks stay explicit so bootstrap preserves their ordering around
+    backend artifact generation. This is not a replacement public validator.
+    """
+
+    plan: CalculationPlan
+    step: CalculationStep
+    precheck: PathPrecheck
+    reactant_selection: CalculationStateSelection
+    product_selection: CalculationStateSelection
+    _inventory: ComponentInventory
+
+    def validate_reviewed_precomplex_pair(self) -> dict[str, object]:
+        return _validate_reviewed_precomplex_pair(
+            None, self.plan, self.step, inventory=self._inventory
+        )
+
+    def precomplex_basis_sha256(
+        self, *, side: str, environment: Mapping[str, object]
+    ) -> str:
+        return _precomplex_basis_sha256(
+            self._inventory,
+            self.plan,
+            step_id=self.step.id,
+            side=side,
+            environment=environment,
+        )
+
+    def bond_changes(self) -> tuple[dict[str, object], ...]:
+        require_step_ready(self.plan, self.step)
+        return _calculate_bond_changes(self._inventory.model, self.plan, self.step)
+
+
+def prepare_calculation_step(
+    document_state: Mapping[str, object], step_id: str
+) -> CalculationStepPreparation:
+    """Prepare one pack request without retaining or changing its source state."""
+    plan, inventory = _validated_plan_and_inventory(
+        document_state, _document_plan_state(document_state)
+    )
+    step = calculation_step_by_id(plan, step_id)
+    require_step_ready(plan, step)
+    precheck = _path_precheck(
+        plan, step, document_state=document_state, inventory=inventory
+    )
+    if any(
+        reason
+        in {
+            "multicomponent_precomplex_review_pair_invalid",
+            "multicomponent_precomplex_review_pair_stale",
+        }
+        for reason in precheck.blocking_reasons
+    ):
+        # Preserve the pack command's review error before invoking RDKit.
+        _validate_reviewed_precomplex_pair(
+            document_state, plan, step, inventory=inventory
+        )
+    selections = tuple(
+        _select_components(
+            inventory,
+            [
+                member.component_atom_ids
+                for member in calculation_state_by_id(plan, endpoint.state_id).members
+                if member.inclusion == "included"
+            ],
+        )
+        for endpoint in (step.reactant, step.product)
+    )
+    return CalculationStepPreparation(
+        plan, step, precheck, selections[0], selections[1], inventory
+    )
+
+
 def validate_calculation_plan(
     document_state: Mapping[str, object],
     plan_state: object,
@@ -79,7 +158,7 @@ def validate_calculation_plan(
 def _validated_plan_and_inventory(
     document_state: Mapping[str, object], plan_state: object
 ) -> tuple[CalculationPlan, ComponentInventory]:
-    model = _document_model(document_state)
+    model = document_model(document_state)
     plan = calculation_plan_from_state(
         plan_state,
         atom_ids=set(model.atoms),
@@ -87,7 +166,7 @@ def _validated_plan_and_inventory(
     )
     # Structural errors precede mark/alias and semantic errors, as they do at
     # the public validation boundary. Reuse this parsed model after that gate.
-    inventory = _component_inventory(document_state, model)
+    inventory = component_inventory(document_state, model)
     components = {summary.atom_ids: summary for summary in inventory.components}
     for state in plan.states:
         modeled_charge = sum(
@@ -125,7 +204,7 @@ def structural_calculation_plan_for_document(
     document_state: Mapping[str, object],
 ) -> CalculationPlan:
     raw_plan = _document_plan_state(document_state)
-    model = _document_model(document_state)
+    model = document_model(document_state)
     return calculation_plan_from_state(
         raw_plan,
         atom_ids=set(model.atoms),
@@ -429,7 +508,7 @@ def _validate_reviewed_precomplex_pair(
                 state.get("environment"),
             )
         )
-        if document_state is not None:
+        if document_state is not None or inventory is not None:
             environment = state.get("environment")
             if not isinstance(environment, Mapping):
                 raise _ReviewedPrecomplexPairError(
@@ -437,6 +516,7 @@ def _validate_reviewed_precomplex_pair(
                     "Precomplex review pair has invalid generation provenance.",
                 )
             if inventory is None:
+                assert document_state is not None
                 inventory = inspect_component_inventory(document_state)
             expected_basis = _precomplex_basis_sha256(
                 inventory,
@@ -689,7 +769,13 @@ def calculate_bond_changes(
     step: CalculationStep,
 ) -> tuple[dict[str, object], ...]:
     require_step_ready(plan, step)
-    model = _document_model(document_state)
+    model = document_model(document_state)
+    return _calculate_bond_changes(model, plan, step)
+
+
+def _calculate_bond_changes(
+    model: MoleculeModel, plan: CalculationPlan, step: CalculationStep
+) -> tuple[dict[str, object], ...]:
     reactant_state = calculation_state_by_id(plan, step.reactant.state_id)
     product_state = calculation_state_by_id(plan, step.product.state_id)
     reactant_ids = included_atom_ids(reactant_state)
@@ -746,7 +832,7 @@ def plan_with_replaced_step(
     if current_plan_state is None:
         existing_plan = CalculationPlan(states=(), steps=())
     else:
-        model = _document_model(document_state)
+        model = document_model(document_state)
         existing_plan = calculation_plan_from_state(
             current_plan_state,
             atom_ids=set(model.atoms),

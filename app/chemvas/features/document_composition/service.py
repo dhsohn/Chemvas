@@ -25,6 +25,7 @@ from chemvas.domain.document import (
     serialize_model_state,
     serialize_settings,
 )
+from chemvas.domain.document.inspection import inspect_components
 from chemvas.domain.document.state import (
     VALID_SHAPE_KINDS,
     VALID_SHAPE_STROKES,
@@ -32,7 +33,6 @@ from chemvas.domain.document.state import (
     validate_settings_state,
 )
 from chemvas.features.annotations import sanitize_note_html
-from chemvas.features.calculation_bundle import inspect_components
 from chemvas.features.insertion import (
     annotation_mark_direction,
     annotation_mark_kinds,

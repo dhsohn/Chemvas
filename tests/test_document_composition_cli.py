@@ -12,7 +12,7 @@ import pytest
 from chemvas.bootstrap import document_composition
 from chemvas.core.document_io import read_document
 from chemvas.domain.document import CANVAS_FILE_VERSION
-from chemvas.features.calculation_bundle import inspect_components
+from chemvas.domain.document.inspection import inspect_components
 
 
 def _composition() -> dict[str, object]:

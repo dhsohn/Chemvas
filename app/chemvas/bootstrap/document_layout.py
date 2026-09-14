@@ -12,10 +12,10 @@ from chemvas.bootstrap.document_cli_shared import (
     graphics_record_count,
     json_text,
     offscreen_canvas,
+    read_json_request,
 )
 from chemvas.core.document_io import atomic_create_bytes, read_exact_document
 from chemvas.domain.document import build_document_payload, normalize_json_numbers
-from chemvas.domain.json_io import strict_json_loads
 from chemvas.features.scheme_layout import validate_layout_request
 
 MAX_LAYOUT_BYTES = 1024 * 1024
@@ -35,16 +35,12 @@ def run(argv: list[str]) -> int:
             source, max_bytes=MAX_DOCUMENT_BYTES
         )
         source_sha256 = cast("str", document.source_sha256)
-        with layout.open("rb") as stream:
-            layout_bytes = stream.read(MAX_LAYOUT_BYTES + 1)
-        if len(layout_bytes) > MAX_LAYOUT_BYTES:
-            raise ValueError(
-                f"layout request exceeds the {MAX_LAYOUT_BYTES}-byte limit"
-            )
-        try:
-            raw_request = strict_json_loads(layout_bytes)
-        except (ValueError, RecursionError, UnicodeError) as exc:
-            raise ValueError("Invalid Chemvas scheme layout JSON file.") from exc
+        layout_bytes, raw_request = read_json_request(
+            layout,
+            max_bytes=MAX_LAYOUT_BYTES,
+            limit_message=f"layout request exceeds the {MAX_LAYOUT_BYTES}-byte limit",
+            invalid_message="Invalid Chemvas scheme layout JSON file.",
+        )
         state = cast("dict[str, Any]", document.state)
         if graphics_record_count(state) > MAX_GRAPHICS_RECORDS:
             raise ValueError(

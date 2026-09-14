@@ -4,7 +4,6 @@ from types import SimpleNamespace
 from unittest import mock
 
 from tests.runtime_services import canvas_runtime_services
-from tests.runtime_state import canvas_runtime_state
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -21,263 +20,27 @@ from PyQt6.QtWidgets import (
 
 from chemvas.domain.document import Atom, Bond
 from chemvas.features.selection import StructureHit
-from chemvas.ui.canvas_atom_graphics_state import (
-    CanvasAtomGraphicsState,
-    atom_dots_for,
-    atom_items_for,
-    set_atom_dots_for,
-    set_atom_items_for,
-)
 from chemvas.ui.canvas_bond_graphics_state import (
-    CanvasBondGraphicsState,
-    bond_items_for,
     set_bond_items_for,
 )
-from chemvas.ui.canvas_group_state import CanvasGroupState
-from chemvas.ui.canvas_rotation_state import CanvasRotationState
 from chemvas.ui.canvas_scene_items_state import (
-    CanvasSceneItemsState,
     selected_notes_for,
-    set_scene_item_collection_for,
     set_selected_notes_for,
 )
-from chemvas.ui.canvas_text_style_state import CanvasTextStyleState
-from chemvas.ui.selection_info_state import SelectionInfoState
 from chemvas.ui.selection_outline_state import (
-    SelectionOutlineState,
     selection_outlines_for,
     set_selection_outlines_for,
 )
 from chemvas.ui.selection_service_bundle import build_selection_services
 from chemvas.ui.selection_style_state import SelectionStyleState
-
-
-class _FakeItem:
-    def __init__(
-        self,
-        kind=None,
-        *,
-        data1=None,
-        data2=None,
-        selected=False,
-        rect: QRectF | None = None,
-        contains=False,
-    ) -> None:
-        self._data = {0: kind, 1: data1, 2: data2}
-        self._selected = bool(selected)
-        self._rect = QRectF(rect or QRectF(0.0, 0.0, 10.0, 6.0))
-        self._contains = contains
-        self.moves = []
-
-    def data(self, key):
-        return self._data.get(key)
-
-    def setSelected(self, selected: bool) -> None:
-        self._selected = bool(selected)
-
-    def isSelected(self) -> bool:
-        return self._selected
-
-    def sceneBoundingRect(self) -> QRectF:
-        return QRectF(self._rect)
-
-    def childrenBoundingRect(self) -> QRectF:
-        return QRectF()
-
-    def mapRectToScene(self, rect: QRectF) -> QRectF:
-        return QRectF(rect)
-
-    def contains(self, _pos) -> bool:
-        return self._contains
-
-    def mapFromScene(self, pos):
-        return pos
-
-    def moveBy(self, dx: float, dy: float) -> None:
-        self.moves.append((dx, dy))
-
-
-class _FakeScene:
-    def __init__(self, selected_items=None) -> None:
-        self._selected_items = list(selected_items or [])
-        self.block_signal_calls = []
-        self.removed_items = []
-        self.added_items = []
-        self.clear_selection_calls = 0
-
-    def selectedItems(self):
-        return list(self._selected_items)
-
-    def blockSignals(self, enabled: bool) -> None:
-        self.block_signal_calls.append(enabled)
-
-    def removeItem(self, item) -> None:
-        self.removed_items.append(item)
-
-    def addItem(self, item) -> None:
-        self.added_items.append(item)
-
-    def clearSelection(self) -> None:
-        self.clear_selection_calls += 1
-        for item in self._selected_items:
-            item.setSelected(False)
-
-
-class _FakeShapeItem:
-    def __init__(
-        self,
-        kind=None,
-        *,
-        rect: QRectF | None = None,
-        shape: QPainterPath | None = None,
-    ) -> None:
-        self._kind = kind
-        self._rect = QRectF(rect or QRectF(0.0, 0.0, 10.0, 6.0))
-        self._shape = QPainterPath() if shape is None else QPainterPath(shape)
-
-    def data(self, key):
-        if key == 0:
-            return self._kind
-        return None
-
-    def mapToScene(self, value):
-        return value
-
-    def shape(self) -> QPainterPath:
-        return QPainterPath(self._shape)
-
-    def sceneBoundingRect(self) -> QRectF:
-        return QRectF(self._rect)
-
-
-def _canvas_runtime_state():
-    """Canonical state container the accessors read through."""
-
-    return canvas_runtime_state(
-        atom_graphics_state=CanvasAtomGraphicsState(),
-        bond_graphics_state=CanvasBondGraphicsState(),
-        group_state=CanvasGroupState(),
-        rotation_state=CanvasRotationState(),
-        scene_items_state=CanvasSceneItemsState(),
-        selection_info_state=SelectionInfoState.create(),
-        selection_outline_state=SelectionOutlineState(),
-        selection_style_state=SelectionStyleState(),
-        text_style_state=CanvasTextStyleState(),
-    )
-
-
-class _FakeCanvas(SimpleNamespace):
-    def __init__(self, **attributes) -> None:
-        # The runtime state must exist before the property setters below run:
-        # they write through the state accessors, which read it off the canvas.
-        super().__init__(runtime_state=_canvas_runtime_state())
-        for name, value in attributes.items():
-            setattr(self, name, value)
-
-    @property
-    def atom_items(self):
-        return atom_items_for(self)
-
-    @atom_items.setter
-    def atom_items(self, value) -> None:
-        set_atom_items_for(self, value)
-
-    @property
-    def atom_dots(self):
-        return atom_dots_for(self)
-
-    @atom_dots.setter
-    def atom_dots(self, value) -> None:
-        set_atom_dots_for(self, value)
-
-    @property
-    def bond_items(self):
-        return bond_items_for(self)
-
-    @bond_items.setter
-    def bond_items(self, value) -> None:
-        set_bond_items_for(self, value)
-
-
-def _make_canvas(**overrides):
-    scene = overrides.pop("scene", _FakeScene())
-    defaults = dict(
-        atom_items={},
-        atom_dots={},
-        bond_items={},
-        model=SimpleNamespace(atoms={}, bonds=[]),
-        rdkit=SimpleNamespace(
-            is_unavailable=mock.Mock(return_value=True),
-            is_loaded=mock.Mock(return_value=False),
-        ),
-        renderer=SimpleNamespace(
-            style=SimpleNamespace(bond_line_width=1.0, bond_length_px=20.0)
-        ),
-        ring_items=[],
-        selected_notes=[],
-        selection_outlines=[],
-        selection_style_state=SelectionStyleState(color=QColor("#1f5eff")),
-        selection_info_callback=mock.Mock(),
-        scene=lambda: scene,
-        item_at_scene_pos=mock.Mock(return_value=None),
-        _find_bond_near=mock.Mock(return_value=None),
-        find_atom_near=mock.Mock(return_value=None),
-        _distance_point_to_segment=mock.Mock(return_value=1.5),
-        graph_expand_connected_atoms=mock.Mock(
-            side_effect=lambda atom_ids: set(atom_ids)
-        ),
-        graph_connected_components=mock.Mock(return_value=[]),
-        _bounding_box_center_for_atoms=mock.Mock(return_value=QPointF(5.0, 6.0)),
-    )
-    defaults.update(overrides)
-    atom_items = defaults.pop("atom_items")
-    atom_dots = defaults.pop("atom_dots")
-    bond_items = defaults.pop("bond_items")
-    ring_items = defaults.pop("ring_items")
-    selected_notes = defaults.pop("selected_notes")
-    selection_outlines = defaults.pop("selection_outlines")
-    selection_info_callback = defaults.pop("selection_info_callback")
-    selection_style_state = defaults.pop("selection_style_state")
-    hit_testing_service = defaults.pop("hit_testing_service", None)
-    graph_service = defaults.pop("graph_service", None)
-    graph_expand_connected_atoms = defaults.pop("graph_expand_connected_atoms")
-    graph_connected_components = defaults.pop("graph_connected_components")
-    tool_controller = defaults.pop("tool_controller", SimpleNamespace(active=None))
-    services = defaults.pop("services", canvas_runtime_services())
-    canvas = _FakeCanvas(**defaults)
-    canvas.runtime_state.selection_style_state = selection_style_state
-    canvas.runtime_state.selection_info_state = SelectionInfoState(
-        callback=selection_info_callback
-    )
-    set_atom_items_for(canvas, atom_items)
-    set_atom_dots_for(canvas, atom_dots)
-    set_bond_items_for(canvas, bond_items)
-    set_scene_item_collection_for(canvas, "ring_items", ring_items)
-    set_selected_notes_for(canvas, selected_notes)
-    set_selection_outlines_for(canvas, selection_outlines)
-    if graph_service is None:
-        graph_service = SimpleNamespace(
-            expand_connected_atoms=graph_expand_connected_atoms,
-            connected_components=graph_connected_components,
-        )
-    if hit_testing_service is None:
-        hit_testing_service = SimpleNamespace(
-            item_at_scene_pos=canvas.item_at_scene_pos,
-            nearest_atom_hit=mock.Mock(return_value=None),
-            nearest_bond_hit=mock.Mock(return_value=None),
-        )
-    services.graph_service = graph_service
-    services.hit_testing_service = hit_testing_service
-    services.tool_controller = tool_controller
-    if not hasattr(services.selection, "selection_controller"):
-        # The structure service clears note selection through this port; the
-        # controller under test is created after the canvas, so stand in for it.
-        services.selection_controller = SimpleNamespace(
-            clear_note_selection=mock.Mock()
-        )
-    canvas.services = services
-    canvas.selection_info_callback = selection_info_callback
-    return canvas
+from tests.selection_support import (
+    _canvas_runtime_state,
+    _FakeCanvas,
+    _FakeItem,
+    _FakeScene,
+    _FakeShapeItem,
+    _make_canvas,
+)
 
 
 def _make_selection_controller(canvas, *, hit_testing_service=None):
@@ -786,15 +549,13 @@ class SelectionControllerAdditionalTest(unittest.TestCase):
         )
         self.assertTrue(atom_item.isSelected())
 
-    def test_public_selection_helper_methods_cover_overlay_and_geometry_paths(
+    def test_public_selection_helpers_delegate_structure_and_hit_geometry(
         self,
     ) -> None:
         atom_target = _FakeItem("atom", data1=1)
         controller = _make_selection_controller(
             _make_canvas(atom_items={1: atom_target})
         )
-        center = QPointF(6.0, 7.0)
-        color = QColor("#123456")
         empty_snapshot = SimpleNamespace(
             selected_atom_ids=set(), selected_bond_ids=set(), selection_items=[]
         )
@@ -811,27 +572,6 @@ class SelectionControllerAdditionalTest(unittest.TestCase):
         controller.hit_test_service.selection_rects_for_snapshot = mock.Mock(
             return_value=()
         )
-        controller.outline_service.selection_line_stroke_path = mock.Mock(
-            return_value="line-path"
-        )
-        controller.outline_service.selection_path_for_bond_item = mock.Mock(
-            return_value="bond-item-path"
-        )
-        controller.outline_service.selection_path_for_bond = mock.Mock(
-            return_value="bond-path"
-        )
-        controller.outline_service.selection_path_for_object_item = mock.Mock(
-            return_value="object-path"
-        )
-        controller.outline_service.add_selection_object_overlay = mock.Mock()
-        controller.outline_service.add_selection_component_overlay = mock.Mock()
-        controller.outline_service.selection_center_for_atoms = mock.Mock(
-            return_value=center
-        )
-        controller.outline_service.selection_center_marker_enabled = mock.Mock(
-            return_value=True
-        )
-        controller.outline_service.add_selection_center_marker = mock.Mock()
         target_item = _FakeItem("atom", data1=1)
 
         self.assertEqual(
@@ -842,23 +582,6 @@ class SelectionControllerAdditionalTest(unittest.TestCase):
             controller.selection_targets_for_item(target_item), [atom_target]
         )
         self.assertEqual(controller.selection_rects_for_snapshot(empty_snapshot), ())
-        self.assertEqual(
-            controller.selection_line_stroke_path(QPointF(), QPointF(1.0, 1.0), 2.0),
-            "line-path",
-        )
-        self.assertEqual(
-            controller.selection_path_for_bond_item("bond-item", width=3.0),
-            "bond-item-path",
-        )
-        self.assertEqual(controller.selection_path_for_bond(4), "bond-path")
-        self.assertEqual(
-            controller.selection_path_for_object_item("object"), "object-path"
-        )
-        controller.add_selection_object_overlay("object", color)
-        controller.add_selection_component_overlay({1}, {2}, color)
-        self.assertEqual(controller.selection_center_for_atoms({1, 2}), center)
-        self.assertTrue(controller.selection_center_marker_enabled())
-        controller.add_selection_center_marker(center)
 
         controller.structure_service.structure_hit_from_item.assert_called_once_with(
             "item"
@@ -871,29 +594,6 @@ class SelectionControllerAdditionalTest(unittest.TestCase):
         )
         controller.hit_test_service.selection_rects_for_snapshot.assert_called_once_with(
             empty_snapshot
-        )
-        controller.outline_service.selection_line_stroke_path.assert_called_once_with(
-            QPointF(), QPointF(1.0, 1.0), 2.0
-        )
-        controller.outline_service.selection_path_for_bond_item.assert_called_once_with(
-            "bond-item", width=3.0
-        )
-        controller.outline_service.selection_path_for_bond.assert_called_once_with(4)
-        controller.outline_service.selection_path_for_object_item.assert_called_once_with(
-            "object"
-        )
-        controller.outline_service.add_selection_object_overlay.assert_called_once_with(
-            "object", color
-        )
-        controller.outline_service.add_selection_component_overlay.assert_called_once_with(
-            {1}, {2}, color
-        )
-        controller.outline_service.selection_center_for_atoms.assert_called_once_with(
-            {1, 2}
-        )
-        controller.outline_service.selection_center_marker_enabled.assert_called_once_with()
-        controller.outline_service.add_selection_center_marker.assert_called_once_with(
-            center
         )
 
     def test_note_selection_helpers_manage_selected_notes_and_selection_boxes(
@@ -1135,16 +835,17 @@ class SelectionControllerAdditionalTest(unittest.TestCase):
         controller.shift_selection_outlines(3.0, -2.0)
         self.assertEqual(outline.moves, [(3.0, -2.0)])
 
-        self.assertIsNone(controller.selection_center_for_atoms({1}))
+        self.assertIsNone(controller.outline_service.selection_center_for_atoms({1}))
         self.assertEqual(
-            controller.selection_center_for_atoms({1, 2}), QPointF(5.0, 6.0)
+            controller.outline_service.selection_center_for_atoms({1, 2}),
+            QPointF(5.0, 6.0),
         )
-        self.assertTrue(controller.selection_center_marker_enabled())
+        self.assertTrue(controller.outline_service.selection_center_marker_enabled())
 
         canvas.services.tool_controller = SimpleNamespace(
             active=SimpleNamespace(name="select")
         )
-        self.assertFalse(controller.selection_center_marker_enabled())
+        self.assertFalse(controller.outline_service.selection_center_marker_enabled())
 
         empty_controller = _make_selection_controller(
             _make_canvas(selection_outlines=[])
@@ -1198,34 +899,48 @@ class SelectionControllerAdditionalTest(unittest.TestCase):
         empty_shape_item = _FakeShapeItem("orbital", rect=QRectF(1.0, 2.0, 4.0, 5.0))
 
         self.assertFalse(
-            controller.selection_line_stroke_path(
+            controller.outline_service.selection_line_stroke_path(
                 QPointF(0.0, 0.0), QPointF(10.0, 0.0), 4.0
             ).isEmpty()
         )
         self.assertFalse(
-            controller.selection_path_for_bond_item(line_item, width=4.0).isEmpty()
+            controller.outline_service.selection_path_for_bond_item(
+                line_item, width=4.0
+            ).isEmpty()
         )
         self.assertFalse(
-            controller.selection_path_for_bond_item(polygon_item).isEmpty()
+            controller.outline_service.selection_path_for_bond_item(
+                polygon_item
+            ).isEmpty()
         )
-        self.assertFalse(controller.selection_path_for_bond_item(path_item).isEmpty())
         self.assertFalse(
-            controller.selection_path_for_bond_item(stroked_path).isEmpty()
+            controller.outline_service.selection_path_for_bond_item(path_item).isEmpty()
         )
-        self.assertTrue(controller.selection_path_for_bond_item(object()).isEmpty())
-        self.assertTrue(controller.selection_path_for_bond(-1).isEmpty())
-        self.assertTrue(controller.selection_path_for_bond(1).isEmpty())
+        self.assertFalse(
+            controller.outline_service.selection_path_for_bond_item(
+                stroked_path
+            ).isEmpty()
+        )
+        self.assertTrue(
+            controller.outline_service.selection_path_for_bond_item(object()).isEmpty()
+        )
+        self.assertTrue(
+            controller.outline_service.selection_path_for_bond(-1).isEmpty()
+        )
+        self.assertTrue(controller.outline_service.selection_path_for_bond(1).isEmpty())
 
         line_item_a = QGraphicsLineItem(0.0, -2.0, 10.0, -2.0)
         line_item_b = QGraphicsLineItem(0.0, 2.0, 10.0, 2.0)
         canvas.bond_items[0] = [line_item_a, line_item_b]
-        self.assertFalse(controller.selection_path_for_bond(0).isEmpty())
+        self.assertFalse(
+            controller.outline_service.selection_path_for_bond(0).isEmpty()
+        )
 
         canvas.services.scene_view.geometry_controller.ring_center_for_bond = (
             lambda bond: QPointF(5.0, 0.0)
         )
         canvas.bond_items[0] = [object()]
-        self.assertTrue(controller.selection_path_for_bond(0).isEmpty())
+        self.assertTrue(controller.outline_service.selection_path_for_bond(0).isEmpty())
 
         canvas.model = SimpleNamespace(
             atoms={1: Atom("C", 0.0, 0.0)}, bonds=[Bond(1, 2, 2)]
@@ -1237,7 +952,9 @@ class SelectionControllerAdditionalTest(unittest.TestCase):
         canvas.services.scene_view.geometry_controller.ring_center_for_bond = (
             lambda bond: None
         )
-        self.assertFalse(controller.selection_path_for_bond(0).isEmpty())
+        self.assertFalse(
+            controller.outline_service.selection_path_for_bond(0).isEmpty()
+        )
 
         canvas.model = SimpleNamespace(
             atoms={1: Atom("C", 0.0, 0.0), 2: Atom("O", 0.0, 0.0)},
@@ -1247,34 +964,50 @@ class SelectionControllerAdditionalTest(unittest.TestCase):
             QGraphicsLineItem(0.0, 0.0, 10.0, 0.0),
             QGraphicsLineItem(0.0, 2.0, 10.0, 2.0),
         ]
-        self.assertFalse(controller.selection_path_for_bond(0).isEmpty())
+        self.assertFalse(
+            controller.outline_service.selection_path_for_bond(0).isEmpty()
+        )
 
         self.assertFalse(
-            controller.selection_path_for_object_item(_FakeItem("mark")).isEmpty()
+            controller.outline_service.selection_path_for_object_item(
+                _FakeItem("mark")
+            ).isEmpty()
         )
         arrow_path_item = QGraphicsPathItem(filled_path)
         arrow_path_item.setData(0, "arrow")
         arrow_path_item.setPen(QPen(QColor("#112233"), 1.2))
         self.assertFalse(
-            controller.selection_path_for_object_item(arrow_path_item).isEmpty()
+            controller.outline_service.selection_path_for_object_item(
+                arrow_path_item
+            ).isEmpty()
         )
-        self.assertFalse(controller.selection_path_for_object_item(text_item).isEmpty())
         self.assertFalse(
-            controller.selection_path_for_object_item(empty_shape_item).isEmpty()
+            controller.outline_service.selection_path_for_object_item(
+                text_item
+            ).isEmpty()
+        )
+        self.assertFalse(
+            controller.outline_service.selection_path_for_object_item(
+                empty_shape_item
+            ).isEmpty()
         )
 
         controller.outline_service.selection_path_for_object_item = mock.Mock(
             return_value=QPainterPath()
         )
-        controller.add_selection_object_overlay(_FakeItem("arrow"), QColor("#abcdef"))
+        controller.outline_service.add_selection_object_overlay(
+            _FakeItem("arrow"), QColor("#abcdef")
+        )
         self.assertEqual(selection_outlines_for(canvas), [])
 
         controller.outline_service.selection_path_for_object_item = mock.Mock(
-            return_value=controller.selection_line_stroke_path(
+            return_value=controller.outline_service.selection_line_stroke_path(
                 QPointF(0.0, 0.0), QPointF(5.0, 0.0), 3.0
             )
         )
-        controller.add_selection_object_overlay(_FakeItem("arrow"), QColor("#abcdef"))
+        controller.outline_service.add_selection_object_overlay(
+            _FakeItem("arrow"), QColor("#abcdef")
+        )
         self.assertEqual(len(selection_outlines_for(canvas)), 1)
 
         controller.outline_service.selection_path_for_bond = mock.Mock(
@@ -1282,21 +1015,26 @@ class SelectionControllerAdditionalTest(unittest.TestCase):
         )
         # A bonded, unlabelled atom draws no mark of its own: with no bond
         # band there is nothing to outline.
-        controller.add_selection_component_overlay({1}, {0}, QColor("#334455"))
+        controller.outline_service.add_selection_component_overlay(
+            {1}, {0}, QColor("#334455")
+        )
         self.assertEqual(len(selection_outlines_for(canvas)), 1)
 
-        non_empty_bond_path = controller.selection_line_stroke_path(
+        non_empty_bond_path = controller.outline_service.selection_line_stroke_path(
             QPointF(0.0, 0.0), QPointF(10.0, 0.0), 4.0
         )
         controller.outline_service.selection_path_for_bond = mock.Mock(
             return_value=non_empty_bond_path
         )
-        controller.add_selection_component_overlay({1}, {0}, QColor("#334455"))
+        controller.outline_service.add_selection_component_overlay(
+            {1}, {0}, QColor("#334455")
+        )
         self.assertEqual(len(selection_outlines_for(canvas)), 2)
 
         self.assertEqual(
-            controller.selection_center_for_atoms({1, 2}), QPointF(0.0, 0.0)
+            controller.outline_service.selection_center_for_atoms({1, 2}),
+            QPointF(0.0, 0.0),
         )
-        self.assertTrue(controller.selection_center_marker_enabled())
-        controller.add_selection_center_marker(QPointF(5.0, 5.0))
+        self.assertTrue(controller.outline_service.selection_center_marker_enabled())
+        controller.outline_service.add_selection_center_marker(QPointF(5.0, 5.0))
         self.assertEqual(len(selection_outlines_for(canvas)), 4)

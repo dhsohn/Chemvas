@@ -29,6 +29,13 @@ on the canvas.
   reopenable `.chemvas` documents. Export SVG, PDF, PNG, or TIFF at explicit
   physical sizes while keeping the editable drawing alongside the figure.
 
+## Your saved drawings stay usable
+
+Future Chemvas updates will continue to open currently supported, valid v7
+`.chemvas` documents. Newer file formats must preserve that reading support;
+older applications are not guaranteed to open newly saved formats.
+See the [document compatibility policy](https://github.com/dhsohn/Chemvas/blob/main/docs/DOCUMENT_COMPATIBILITY.md).
+
 ## Install
 
 Requires **Python 3.12+**. Install the optional RDKit backend for SMILES insertion,

@@ -14,10 +14,10 @@ from chemvas.features.precomplex_generation import (
     ValidationMetrics,
     generate_precomplex_candidates,
 )
-from tests.test_calculation_step_cli import _validate_common_machine
-from tests.test_precomplex_cli import (
+from tests.precomplex_workflow_support import (
     _generate_candidate_fixture,
     _review_candidate_fixture,
+    _validate_common_machine,
 )
 from tests.test_precomplex_generation import _iron_cobalt_fixture
 

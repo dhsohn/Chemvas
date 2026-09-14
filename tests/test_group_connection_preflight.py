@@ -249,7 +249,7 @@ def test_explicit_group_mark_survives_merge_as_valid_document_item(drawing):
 
 
 def test_partial_group_publication_failure_rolls_back_label_merge(drawing, monkeypatch):
-    from chemvas.ui import history_commands
+    from chemvas.ui import history_operations as history_commands
 
     _window, canvas = drawing
     _populate(canvas, overlap=True, grouping="same")

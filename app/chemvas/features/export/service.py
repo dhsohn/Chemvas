@@ -94,7 +94,6 @@ def export_scene(
     for empty content, an unsupported format, or an output device that cannot be
     opened.
     """
-    fmt = (fmt or "").lower()
     export_items, plan = resolve_export_plan(
         scene,
         items=items,
@@ -102,6 +101,36 @@ def export_scene(
         unit_scale=unit_scale,
         target_width_pt=target_width_pt,
     )
+    return render_export_plan(
+        scene,
+        path,
+        items=export_items,
+        plan=plan,
+        fmt=fmt,
+        dpi=dpi,
+        background=background,
+        title=title,
+    )
+
+
+def render_export_plan(
+    scene: QGraphicsScene,
+    path: str,
+    *,
+    items: Sequence[QGraphicsItem],
+    plan: ExportPlan,
+    fmt: str,
+    dpi: int = 300,
+    background: str = "transparent",
+    title: str | None = None,
+) -> ExportPlan:
+    """Paint a resolved plan within the same synchronous export operation.
+
+    Callers own preflight and must not retain the items/plan across scene edits.
+    Independent exports should use ``export_scene`` to resolve fresh geometry.
+    """
+    fmt = (fmt or "").lower()
+    export_items = list(items)
     if fmt == "svg":
         export_svg_file(scene, path, export_items, plan, background, title)
     elif fmt == "pdf":
@@ -148,6 +177,7 @@ __all__ = [
     "content_bounds",
     "export_scene",
     "item_export_bounds",
+    "render_export_plan",
     "render_scene_to_pdf_bytes",
     "render_scene_to_svg_bytes",
     "resolve_export_plan",

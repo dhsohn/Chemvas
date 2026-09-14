@@ -1,5 +1,6 @@
 import json
 import os
+from unittest import mock
 
 import pytest
 
@@ -12,10 +13,11 @@ from PyQt6.QtCore import (
     QEvent,
     QIODevice,
     QPoint,
+    QPointF,
     QRectF,
     Qt,
 )
-from PyQt6.QtGui import QColor, QImage, QPainter
+from PyQt6.QtGui import QColor, QImage, QMouseEvent, QPainter
 from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import QApplication
 
@@ -26,6 +28,8 @@ from chemvas.domain.document import (
     image_bytes_from_state,
     image_state_from_bytes,
 )
+from chemvas.domain.document import images as image_policy
+from chemvas.features.selection import ROTATION_HANDLE_TYPE
 from chemvas.ui.canvas_document_state import snapshot_canvas_document_state
 from chemvas.ui.canvas_group_state import group_state_for
 from chemvas.ui.canvas_lifecycle import schedule_canvas_deletion_for
@@ -41,6 +45,7 @@ from chemvas.ui.scene_item_access import create_scene_item_from_state, remove_sc
 from chemvas.ui.scene_item_state import scene_item_state_for
 from chemvas.ui.select_all_access import select_all_scene_items_for
 from chemvas.ui.selection_outline_state import selection_outlines_for
+from chemvas.ui.structure_mutation_access import add_bond_between_points_for
 from chemvas.ui.transactions import document_transaction
 from tests.canvas_factory import build_canvas_view
 
@@ -110,6 +115,7 @@ def test_paint_preserves_full_image_and_alpha(app):
 
 
 def test_selection_move_properties_delete_and_history(canvas):
+    operations = canvas.services.history_service.operations
     item = create_scene_item_from_state(canvas, image_state_from_bytes(image_bytes()))
     history = history_service_for_access(canvas)
     assert select_all_scene_items_for(canvas)
@@ -133,13 +139,13 @@ def test_selection_move_properties_delete_and_history(canvas):
         "lock_aspect": False,
     }
     command = UpdateSceneItemCommand(item, before, after)
-    command.redo(canvas)
+    command.redo(operations)
     history.push(command)
     assert item.image_state() == after
     history.undo()
     assert item.image_state() == before
     history.redo()
-    deletion = DeleteSceneItemsCommand.capture(canvas, [after], [item])
+    deletion = DeleteSceneItemsCommand.capture(operations, [after], [item])
     remove_scene_item(canvas, item)
     history.push(deletion)
     assert not image_items_for(canvas)
@@ -210,6 +216,104 @@ def test_source_replacement_fails_without_altering_pixels(app):
     with pytest.raises(ValueError, match="source cannot be replaced"):
         item.apply_image_state(image_state_from_bytes(image_bytes("JPEG")))
     assert item.image_state() == before
+
+
+@pytest.mark.parametrize(
+    "change",
+    [
+        {"width": 0},
+        {"height": float("nan")},
+        {"x": float("inf")},
+        {"y": True},
+        {"opacity": 1.01},
+        {"lock_aspect": 1},
+        {"pixel_width": True},
+        {"pixel_width": 13},
+        {"pixel_height": 9},
+        {"mime_type": "image/jpeg"},
+        {"data_base64": "AAAA"},
+        {"data_base64": "!!!!"},
+        {"kind": "note"},
+        {"unexpected": 1},
+    ],
+)
+def test_invalid_image_update_preserves_geometry_source_and_pixels(app, change):
+    item = ImageItem(image_state_from_bytes(image_bytes(), x=20, y=30, width=120))
+    before = item.image_state()
+    pixels = item.image()
+    with pytest.raises(ValueError):
+        item.apply_image_state({**before, **change})
+    assert item.image_state() == before
+    assert item.image() == pixels
+
+
+@pytest.mark.parametrize("finish", ["release", "escape"])
+def test_rotation_pointer_preview_preserves_images_and_single_history(
+    canvas, app, finish, request
+):
+    canvas.resize(800, 600)
+    canvas.services.tool_controller.set_active("select")
+    request.addfinalizer(app.processEvents)
+    request.addfinalizer(canvas.services.tool_controller.prepare_for_document_edit)
+    # Images keep upright pixels; a molecular selection supplies the real knob
+    # while the images' positions rotate with the mixed selection.
+    add_bond_between_points_for(canvas, QPointF(-20, 0), QPointF(20, 0))
+    items = [
+        create_scene_item_from_state(
+            canvas,
+            image_state_from_bytes(image_bytes(fmt), x=x, y=20, width=72),
+        )
+        for fmt, x in (("PNG", -90), ("JPEG", 90))
+    ]
+    canvas.show()
+    canvas.centerOn(0, 0)
+    app.processEvents()
+    assert select_all_scene_items_for(canvas)
+    before = snapshot_canvas_document_state(canvas)
+    pixels = [item.image() for item in items]
+    history = history_service_for_access(canvas)
+    stacks = history.capture_stack_snapshot()
+    knob = next(
+        item for item in canvas.scene().items() if item.data(1) == ROTATION_HANDLE_TYPE
+    )
+    start = canvas.mapFromScene(knob.sceneBoundingRect().center())
+    QTest.mousePress(canvas.viewport(), Qt.MouseButton.LeftButton, pos=start)
+    assert canvas.services.tool_controller.active._rotation_session is not None
+    with mock.patch.object(
+        image_policy, "_inspect_image_bytes", wraps=image_policy._inspect_image_bytes
+    ) as inspect:
+        for delta in (QPoint(15, 10), QPoint(30, 20), QPoint(45, 25)):
+            position = start + delta
+            # Deliver a real viewport event without relying on compositor cursor warps.
+            event = QMouseEvent(
+                QEvent.Type.MouseMove,
+                QPointF(position),
+                QPointF(canvas.viewport().mapToGlobal(position)),
+                Qt.MouseButton.NoButton,
+                Qt.MouseButton.LeftButton,
+                Qt.KeyboardModifier.NoModifier,
+            )
+            QApplication.sendEvent(canvas.viewport(), event)
+    preview = snapshot_canvas_document_state(canvas)
+    assert preview != before
+    history.verify_stack_snapshot(stacks)
+    if finish == "escape":
+        QTest.keyClick(canvas, Qt.Key.Key_Escape)
+    QTest.mouseRelease(canvas.viewport(), Qt.MouseButton.LeftButton, pos=position)
+    app.processEvents()
+    assert [item.image() for item in items] == pixels
+    if finish == "escape":
+        assert snapshot_canvas_document_state(canvas) == before
+        history.verify_stack_snapshot(stacks)
+    else:
+        assert snapshot_canvas_document_state(canvas) == preview
+        command = history.capture_stack_snapshot().history[-1]
+        history.verify_stack_snapshot(stacks, history=(*stacks.history, command))
+        history.undo()
+        assert snapshot_canvas_document_state(canvas) == before
+        history.redo()
+        assert snapshot_canvas_document_state(canvas) == preview
+    assert inspect.call_count == 0
 
 
 @pytest.mark.parametrize("tool", ["select", "move"])

@@ -4,6 +4,7 @@ from types import SimpleNamespace
 from unittest import mock
 
 from tests.runtime_services import canvas_runtime_services
+from tests.runtime_state import canvas_runtime_state
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -17,11 +18,15 @@ from PyQt6.QtWidgets import (
 )
 
 from chemvas.ui.scene_clipboard_selection import select_pasted_content_for_canvas
+from chemvas.ui.selection_style_state import SelectionStyleState
 
 
 class _FakeCanvas:
     def __init__(self, atom_item) -> None:
         self._scene = QGraphicsScene()
+        self.runtime_state = canvas_runtime_state(
+            selection_style_state=SelectionStyleState()
+        )
         self.selection_controller = SimpleNamespace(
             update_selection_outline=mock.Mock()
         )

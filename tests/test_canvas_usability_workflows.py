@@ -28,7 +28,7 @@ from chemvas.ui.scene_clipboard_logic import build_selection_clipboard_payload
 from chemvas.ui.scene_item_state import scene_item_state_for
 from chemvas.ui.scene_item_state_serialization import arrow_state_dict
 from chemvas.ui.selection_collection_access import selection_status_count_for
-from tests.gui_workflow_support import _click, _key, _tool
+from tests.gui_workflow_support import _click, _key, _redo, _tool
 from tests.gui_workflow_support import app as app
 from tests.gui_workflow_support import drawing as drawing
 
@@ -84,7 +84,7 @@ def test_note_spaces_survive_document_undo_redo(drawing, tmp_path):
     _ctrl(canvas, Qt.Key.Key_Z)
     assert note.toPlainText() == text
     assert not window.isWindowModified()
-    _ctrl(canvas, Qt.Key.Key_Y)
+    _redo(canvas)
     assert note.toPlainText() == text + " extra"
 
 
@@ -138,7 +138,7 @@ def test_unselected_annotation_moves_on_first_drag(drawing, tmp_path, kind):
     _ctrl(canvas, Qt.Key.Key_Z)
     assert snapshot_canvas_state_for(canvas) == baseline
     assert not window.isWindowModified()
-    _ctrl(canvas, Qt.Key.Key_Y)
+    _redo(canvas)
     assert item.sceneBoundingRect().center() == center + QPointF(30, 15)
 
 
@@ -208,7 +208,7 @@ def test_first_drag_moves_notes_only_group_as_unit(
     _ctrl(canvas, Qt.Key.Key_Z)
     assert snapshot_canvas_state_for(canvas) == baseline
     assert not window.isWindowModified()
-    _ctrl(canvas, Qt.Key.Key_Y)
+    _redo(canvas)
     assert snapshot_canvas_state_for(canvas) == moved
 
 
@@ -251,7 +251,7 @@ def test_group_copy_paste_preserves_independent_group_and_undo(drawing, clipboar
     _ctrl(canvas, Qt.Key.Key_Z)
     assert len(group_state_for(canvas).groups) == 1
     assert len(note_items_for(canvas)) == 1
-    _ctrl(canvas, Qt.Key.Key_Y)
+    _redo(canvas)
     assert snapshot_canvas_state_for(canvas) == pasted
     _click(canvas, QPointF(160, 130))
     copied_note = note_items_for(canvas)[-1]
@@ -349,8 +349,8 @@ def test_repeated_paste_remaps_mixed_groups_without_touching_originals(
     _ctrl(canvas, Qt.Key.Key_Z)
     _ctrl(canvas, Qt.Key.Key_Z)
     assert snapshot_canvas_state_for(canvas) == baseline
-    _ctrl(canvas, Qt.Key.Key_Y)
-    _ctrl(canvas, Qt.Key.Key_Y)
+    _redo(canvas)
+    _redo(canvas)
     assert snapshot_canvas_state_for(canvas) == after
     _ctrl(canvas, Qt.Key.Key_A)
     _ctrl(canvas, Qt.Key.Key_C)

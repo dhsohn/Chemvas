@@ -49,9 +49,9 @@ def create_document(state: dict[str, Any], version: int) -> ChemvasDocument:
 
 
 def parse_document(payload: object) -> ChemvasDocument:
-    state = extract_document_state(payload)
+    extract_document_state(payload)
     normalized_payload = cast("dict[str, Any]", normalize_json_numbers(payload))
-    normalized_state = cast("dict[str, Any]", normalize_json_numbers(state))
+    normalized_state = cast("dict[str, Any]", normalized_payload["state"])
     return ChemvasDocument(payload=normalized_payload, state=normalized_state)
 
 

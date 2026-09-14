@@ -39,6 +39,7 @@ from .scope import (
 )
 from .service import (
     export_scene,
+    render_export_plan,
     render_scene_to_pdf_bytes,
     render_scene_to_svg_bytes,
     resolve_export_plan,
@@ -72,6 +73,7 @@ __all__ = [
     "normalize_export_path",
     "pdf_page_size",
     "points_for_mm",
+    "render_export_plan",
     "render_scene_to_pdf_bytes",
     "render_scene_to_svg_bytes",
     "resolve_export_plan",

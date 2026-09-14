@@ -52,20 +52,34 @@ follow the ADR instead of copying the flat `core` / `ui` layout below.
 - Domain document (`app/chemvas/domain/document`): owns the Qt-free molecule model plus versioned document/clipboard serialization and validation policies. The former `chemvas.core.model` and `document_state` paths have been removed.
 - Calculation plans and artifacts (`app/chemvas/domain/document/calculation_plan.py`, `app/chemvas/domain/document/precomplex_profile.py`, `app/chemvas/features/calculation_bundle`, `app/chemvas/bootstrap/calculation_bundle.py`): the document domain owns the strict Plan v2 schema, including endpoint precomplex state. The domain profile registry is the single immutable owner of the current placement profile's sample bounds, radius table, table hash, and scientific provenance. The Qt-free feature APIs own connected-component selection, semantic charge validation, endpoint-specific roles, correspondence readiness, bond changes, deterministic path prechecks, bounded rigid-placement candidate generation, the electronic-state and atom-map validation of generated calculation artifacts, and the generated-atom correspondence between step endpoints. The Calculation dialog projects included atoms into one ID-based mapping table, preserves partial drafts and explicit unmapped choices, and delegates the final candidate to that same feature/domain validation path. `calculation_mapping_highlight.py` owns dialog-scoped, non-selectable atom-ID labels colored by mapping state; they never enter document serialization, selection state, or history and are cleared on every dialog exit. Bootstrap owns `.chemvas` I/O, optional RDKit composition, deterministic single-file step serialization, current-profile candidate generation/inspection/selection/regeneration, reactant-identity-ordered path endpoint generation, and atomic non-overwriting publication. `application.main` dispatches `inspect`, `attach-plan`, `inspect-plan`, `generate-precomplex`, `inspect-precomplex`, `select-precomplex`, and `pack-step` before importing Qt, while an argument-free invocation keeps the desktop startup path.
 - Agent document patches (`app/chemvas/features/document_patch`, `app/chemvas/bootstrap/document_patch.py`): the Qt/provider-free feature API owns deterministic full-graph inspection, strict Graph Patch v1 validation, copy-based ordered mutation, dependent coordinate movement, and final document/Calculation Plan gates. Bootstrap reads and hashes the exact source bytes, rejects duplicate/non-standard JSON, encodes the candidate deterministically, and publishes through the shared atomic non-overwriting file creator. `inspect-document` and `apply-patch` are dispatched before Qt; no natural-language model or chemistry inference runs inside Chemvas.
-- Headless document rendering (`app/chemvas/bootstrap/document_render.py`): bootstrap validates the bounded file/output contract before lazily composing an invisible `QApplication` and `CanvasView`. The loaded state uses `CanvasDocumentSessionService.plan_figure_export` for a no-paint resource preflight, then the same whole-sheet figure-export path used by the GUI renders SVG/PNG to private temporary storage. Only bounded output is atomically published without replacement; the source and output hashes, point/pixel dimensions, and document version form render report v1. Desktop windows, session recovery, RDKit loading, editable SVG payloads, PDF, and TIFF are outside this command.
+- Headless document rendering (`app/chemvas/bootstrap/document_render.py`): bootstrap validates the bounded file/output contract before lazily composing an invisible `QApplication` and `CanvasView`. The same whole-sheet `CanvasDocumentSessionService.export_figure` path used by the GUI resolves content once, checks resource limits before painting, and renders SVG/PNG/PDF to private temporary storage. Bootstrap reuses the returned plan for render report v1, including native PDF whole-point dimensions. Only bounded output is atomically published without replacement; the source and output hashes, point/pixel dimensions, and document version form the report. Desktop windows, session recovery, RDKit loading, editable SVG payloads, and TIFF are outside this command.
 - Migrated feature policies (`app/chemvas/features/{export,session,annotations,rendering,insertion,selection,hover}`): each package exposes one public API for its cohesive planning/geometry/state contracts. The former flat compatibility modules have been removed and `test_package_dependencies.py` prevents their return.
 - Main-window composition: `chemvas.shell.main_window` owns the thin Qt shell; `chemvas.bootstrap` owns runtime/service assembly, window registration, document opening, and application startup. Qt file-open events enter through `chemvas.adapters.qt`.
 - Application chrome (`app/chemvas/shell/{palette,stylesheet,theme,toolbar_styles,toolbar_buttons,icon_design,icon_factory,icon_pixmap_factory}.py`): the shared palette, main-window stylesheet, theme aggregation, toolbar button styles/widgets, and the SVG design-icon factories are shell-owned per ADR 0001. They form a closed leaf set (they import only each other), and the legacy flat `chemvas.ui` widgets consume them during the migration — those `ui -> shell` edges are legitimate (chrome belongs to shell) and sit outside the target-layer dependency gate, which only checks edges whose source is a target layer.
 
-Calculation-plan validation and reporting reuse a request-local
+`chemvas.domain.document.inspection` owns shared connected-component inventory,
+effective charge/radical marks and model/mark consistency checks. Composition,
+graph inspection, patching and calculation preparation use this one owner;
+calculation state selection and plan/artifact rules remain in
+`features.calculation_bundle`. Patches without a calculation plan do not load
+that feature. The inspection module itself imports neither Qt nor RDKit.
+These semantic checks are not native document-opening gates: users must still
+be able to open drawings that need repair. The previously published generic
+exports at the calculation package root refer to the same canonical objects;
+internal callers import the domain owner directly.
+
+Calculation-plan validation and reporting reuse its request-local
 `ComponentInventory`. Editor preparation uses structural validation so users can
 repair semantic errors such as an inconsistent charge. The calculation feature's
 pure step-edit operation owns duplicate-step rejection and reviewed-precomplex
 retention/invalidation; the dialog collects widget values and presents errors.
 No inventory is cached across document edits.
 
-Figure-export preflight and rendering share the feature's `resolve_export_plan`
-entrypoint for content bounds and physical sizing. Selection rotation, clipboard
+Figure-export preflight and rendering share the items and geometry returned by
+the feature's `resolve_export_plan` within one synchronous request. After the
+session validates the plan, `render_export_plan` paints it without measuring
+again. Independent `export_scene` and `plan_figure_export` calls always resolve
+fresh geometry; plans are not cached across edits. Selection rotation, clipboard
 placement, and atom movement share the pure perspective geometry in
 `chemvas.features.selection`. A screen-space move applies the inverse projection
 delta to stored coordinates, preserving depth, the camera frame, and any existing
@@ -83,7 +97,7 @@ new feature packages create role modules only when the boundary is useful.
 - **Access modules** (`*_access.py`): free functions (`foo_for(canvas)`) wrapping one operation. They must not reach into `canvas.services` directly; service lookup is delegated to the matching ports module.
 - **Ports modules** (`*_ports.py`): the only modules that resolve the service container (`canvas_services_for` / `window` private storage). Everything else receives collaborators via injection or calls a port. Production ports read only the canonical `CanvasRuntimeServices` API. Cohesive groups remain grouped, while single runtimes such as `graph_service`, `tool_controller`, `hover`, and `atom_label_service` are stored directly. Flat service aliases and duck-typed production adapters are removed; focused tests build partial canonical runtimes with `tests/runtime_services.py`.
 - **Services and controllers**: constructed once per canvas in `chemvas.ui.canvas_services.py` with explicit keyword injection — no service locator inside services, no `=None` collaborator defaults that hide a missing wire. Assembly stores cohesive groups as bundles in `CanvasRuntimeServices`; a single runtime is stored directly instead of receiving a one-member bundle. The obsolete graph/tool wrapper bundles and the builder-injection composer layer have been removed.
-- **core is UI- and Qt-free**: `app/chemvas/core` must not import `ui` at module level (a lazily resolved protocol implementation is the one sanctioned exception, see `chemvas.core.history.py`) or import Qt. Concrete Qt rendering lives in `chemvas.adapters.qt.renderer`; new core-to-Qt dependencies are forbidden.
+- **core is UI- and Qt-free**: `app/chemvas/core` must not import `ui` or Qt, including dynamic imports. History commands receive bound operations instead of selecting a UI implementation. Concrete Qt rendering lives in `chemvas.adapters.qt.renderer`; new core-to-Qt dependencies are forbidden.
 - **RDKit is optional**: it must never become a hard import at app startup. Any feature that needs it degrades gracefully, or fails with a clear message, when it is absent — see `chemvas.core.rdkit_adapter`. The 3D constraints below say what that means for the export action specifically; the rule itself is general.
 
 These rules are enforced by `tests/test_architecture_boundaries.py`. New rules
@@ -116,6 +130,20 @@ end state is decided.
   tracker. Focused text editors retain their own editing route. Ordinary
   Perspective tool switching still commits, while this boundary cancels.
 - `CanvasHistoryService` is the sole owner of undo/redo stack policy and of the immutable `HistoryStackSnapshot` value. Exact top-level undo/redo operations capture one document savepoint; nested commands defer to that operation.
+- Core and UI history commands receive bound operations, never the whole canvas.
+  Small structural protocols describe the operations each command family needs.
+  `CanvasRuntimeState.create` assembles one `CanvasHistoryOperations` per canvas;
+  this UI adapter privately binds the canvas and reuses canonical mutation and
+  transaction owners. It has no public canvas accessor or generic proxy.
+  `CanvasHistoryService` receives the operations and stack state explicitly.
+  Initial execution, inverse compensation, composite children, and nested
+  transaction scopes all use the same operations instance. Commands retain their
+  existing data payloads; annotation/sheet callbacks are bound to value-only calls.
+  `test_history_operations.py` and `test_history_atom_lifecycle_port.py` exercise
+  replay with small state-owning doubles, without importing UI or Qt or patching
+  a global resolver. Real-Qt tests continue to cover scene identity, recovery,
+  stack policy, and GUI/CLI equivalence. This is an execution boundary, not a new
+  history engine or a replacement for the document savepoint.
 - Note formatting reads the existing scene/note selection union; an active text
   editor keeps its native cursor and Undo across temporary menu-popup focus.
   `CanvasStyleController` owns document-wide note appearance and new-note defaults.
@@ -168,6 +196,53 @@ Calculation flow: headless `inspect` -> validated `.chemvas` state -> stable ind
 Agent-edit flow: `inspect-document` -> exact source SHA-256 plus stable atom/bond inventory -> untrusted Graph Patch v1 -> strict schema/hash gate -> ordered mutations on a deep copy -> structural and semantic Calculation Plan validation -> deterministic candidate hash -> dry-run report or one atomic non-overwriting `.chemvas` publication. The input file version and out-of-scope scene state are preserved; any failed operation or stale plan produces no output.
 
 Headless render flow: `render-document` -> exact source read/hash and record-count gate -> validated state applied to an invisible canvas -> canonical whole-sheet export plan -> point/pixel resource gate -> private SVG/PNG render -> output byte gate -> one atomic non-overwriting publication -> hash-and-dimension JSON report. Qt is lazy but required for painting; RDKit and the desktop session-recovery service are not started.
+
+### Shared atom-move semantics
+
+GUI moves and Graph Patch `move_atom` share the inverse-projection rule in
+`domain.document.perspective`. GUI item updates and history remain separate from
+the CLI's copied-state validation and publication. The cross-path regression in
+`tests/test_document_move_equivalence.py` starts both from the same desktop
+snapshot and compares actual Select/Move input with a separate `apply-patch`
+process. It checks the moved atoms, bound marks, ring geometry and stored depth,
+alongside unchanged document content, exact GUI Undo/Redo and GUI reopening of
+both saved results.
+Live mark centres and ring polygons are checked separately: a correct serialized
+snapshot alone does not prove that the visible companions moved.
+
+This is an atom-move contract, not a universal edit engine or byte-equivalence
+promise for every accepted input. Desktop snapshots already rebuild ring points
+from their atoms; a raw patch preserves tiny unmoved-point residuals accepted by
+the document validator. Snapshots also omit stale perspective-cache entries;
+their GUI movement and history are checked separately in live state, not claimed
+as serialized CLI coverage. GUI cancellation/no-op history and CLI no-op rejection
+remain distinct, as do CLI-only terminal-angle restrictions. Extend shared rules
+and cross-path tests one operation at a time when there is a real common rule.
+
+### Shared bond-edit semantics
+
+GUI bond shortcuts and Graph Patch `update_bond` change the same document bond
+fields. A patch matching a named GUI order/style action specifies both fields;
+the CLI does not infer the GUI preset from an order-only request. Its unordered
+endpoint locator retains the bond's stored direction and is not a direction-flip
+operation. GUI graphics/history and CLI copy/validate/publish remain separate.
+
+`tests/test_document_bond_edit_equivalence.py` compares actual hover/key input
+and a separate public CLI process against a literal expected document, changing
+only the requested bond order/style. Representative single/double/triple,
+directed wedge/hash and explicit unknown-stereo removal cases also check live
+Qt primitives and their paint, unchanged document/selection state, exact
+Undo/Redo and GUI restoration from both saved results. These tests and the
+atom-move regressions reuse the existing GUI fixtures and a shared public CLI
+launcher; operation-specific fixtures and graphical expectations remain separate.
+
+Input policies are not interchangeable. A repeated GUI preset can be a no-op,
+while an unchanged patch is rejected. Drawing a new single bond over an existing
+double is an overlay gesture, not the named Single action. Cosmetic GUI shortcuts
+protect unknown double-bond stereo; choosing Double explicitly can remove its
+unknown-stereo marker.
+An explicit CLI style change is not that cosmetic gesture. These distinctions
+do not require another shared edit engine.
 
 ## Composite Grouping
 
@@ -241,7 +316,7 @@ When an operation touches multiple entity types at once (ex: atom creation plus 
 - The preview window should reuse the same conversion path as `.xyz` export to avoid divergence between what the user sees and what gets exported.
 - The 3D preview opens as a separate modeless window from **View ▸ Molecule Info**. It uses the selected-structure conversion path, owns the `Export 3D XYZ` action for the selected molecule, and shows an empty preview when no chemical structure is selected.
 - Each open canvas tab is an independent document with its own file path and clean/dirty digest. `.chemvas` loading accepts only the canonical single-canvas payload.
-- `.chemvas` documents accept and write version 7 only. The canonical payload uses compact bond arrays without deleted-slot tombstones and, when present, Calculation Plan v2. Bond identity is runtime-scoped — the calculation plan references stable atom ids and complete connected-component atom-id sets, not bond positions.
+- `.chemvas` currently reads and writes version 7. Supported v7 reads must survive future writer-version changes, as required by the [document compatibility policy](DOCUMENT_COMPATIBILITY.md). Native I/O and embedded editable-SVG documents share the domain reader validation. The canonical payload uses compact bond arrays without deleted-slot tombstones and, when present, Calculation Plan v2. Bond identity is runtime-scoped — the calculation plan references stable atom ids and complete connected-component atom-id sets, not bond positions.
 
 ## Refactoring Sequence
 

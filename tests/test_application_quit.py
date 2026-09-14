@@ -1,10 +1,11 @@
 from __future__ import annotations
 
-import os
 import subprocess
 import sys
 
 import pytest
+
+from tests.subprocess_support import source_subprocess_env
 
 SCRIPT = r"""
 import json
@@ -169,7 +170,7 @@ print("quit preserved all documents", flush=True)
     ],
 )
 def test_application_quit_keeps_the_whole_session(tmp_path, mode, answer_delay_ms):
-    environment = os.environ.copy()
+    environment = source_subprocess_env()
     for key in ("XDG_CONFIG_HOME", "XDG_DATA_HOME", "XDG_CACHE_HOME", "XDG_STATE_HOME"):
         environment[key] = str(tmp_path / key.lower())
     environment["QT_QPA_PLATFORM"] = "offscreen"
@@ -326,7 +327,7 @@ print(json.dumps({"mode": mode, "reopened_paths": sorted(expected), "answers": a
 def test_quit_respects_close_decisions_for_a_stale_plan(
     tmp_path, mode, answer_delay_ms
 ):
-    environment = os.environ.copy()
+    environment = source_subprocess_env()
     for key in ("XDG_CONFIG_HOME", "XDG_DATA_HOME", "XDG_CACHE_HOME", "XDG_STATE_HOME"):
         environment[key] = str(tmp_path / key.lower())
     environment["QT_QPA_PLATFORM"] = "offscreen"

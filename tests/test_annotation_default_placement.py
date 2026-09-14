@@ -18,6 +18,7 @@ from chemvas.domain.document import MoleculeModel
 from chemvas.features.document_composition import compose_document_state
 from chemvas.features.insertion import annotation_mark_direction, plan_smiles_commit
 from chemvas.ui.layout_qa_service import check_canvas_layout
+from tests.subprocess_support import source_subprocess_env
 
 
 @pytest.fixture(scope="module", autouse=True)
@@ -120,6 +121,7 @@ def test_compose_then_check_layout_public_cli_accepts_default_charges(tmp_path, 
     ]
     composed = subprocess.run(
         [*prefix, "compose-document", str(source), "--output", str(output)],
+        env=source_subprocess_env(),
         capture_output=True,
         text=True,
         timeout=20,
@@ -128,6 +130,7 @@ def test_compose_then_check_layout_public_cli_accepts_default_charges(tmp_path, 
     document = output.read_bytes()
     checked = subprocess.run(
         [*prefix, "check-layout", str(output)],
+        env=source_subprocess_env(),
         capture_output=True,
         text=True,
         timeout=20,

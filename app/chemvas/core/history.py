@@ -4,8 +4,7 @@ from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass, field
 from functools import partial
-from importlib import import_module
-from typing import TYPE_CHECKING, Any, Protocol, cast, override
+from typing import TYPE_CHECKING, Any, Protocol, override
 
 from chemvas.domain.transactions import (
     RestoreOutcome,
@@ -31,25 +30,36 @@ class HistoryCommand:
     # an exact sibling cannot make an arbitrary partial failure retryable.
     history_transaction_snapshot_covers_state = False
 
-    def undo(self, canvas) -> None:
+    def undo(self, operations) -> None:
         raise NotImplementedError
 
-    def redo(self, canvas) -> None:
+    def redo(self, operations) -> None:
         raise NotImplementedError
 
 
-class HistoryCanvasPort(Protocol):
-    """Canvas operations invoked by history commands.
+class HistorySmilesOperations(Protocol):
+    def set_last_smiles_input_for_history(self, value: str | None) -> None: ...
 
-    The core history layer depends on this interface it owns rather than on the
-    concrete (PyQt-importing) ``chemvas.ui.history_canvas_access`` module. The
-    implementation is resolved lazily so importing this module never requires
-    PyQt6, keeping the core package usable in headless contexts.
-    """
 
+class HistoryPositionOperations(Protocol):
+    def restore_projection_state_for_history(
+        self,
+        projection_center_3d: tuple[float, float, float] | None,
+        projection_anchor_2d: tuple[float, float] | None,
+    ) -> None: ...
+
+    def set_atom_positions_for_history(
+        self,
+        positions: dict[int, tuple[float, float]],
+        *,
+        update_selection: bool = ...,
+        coords_3d: dict[int, tuple[float, float, float]] | None = ...,
+    ) -> None: ...
+
+
+class HistoryGeometryOperations(HistoryPositionOperations, Protocol):
     def move_atoms_for_history(
         self,
-        canvas: Any,
         atom_ids: set[int],
         dx: float,
         dy: float,
@@ -59,110 +69,72 @@ class HistoryCanvasPort(Protocol):
         update_selection: bool = ...,
     ) -> None: ...
 
-    def restore_projection_state_for_history(
-        self,
-        canvas: Any,
-        projection_center_3d: tuple[float, float, float] | None,
-        projection_anchor_2d: tuple[float, float] | None,
-    ) -> None: ...
-
-    def set_atom_positions_for_history(
-        self,
-        canvas: Any,
-        positions: dict[int, tuple[float, float]],
-        *,
-        update_selection: bool = ...,
-        coords_3d: dict[int, tuple[float, float, float]] | None = ...,
-    ) -> None: ...
-
     def set_ring_polygons_for_history(
         self,
-        canvas: Any,
         ring_items: list,
         polygons: list[list[tuple[float, float]]],
     ) -> None: ...
 
-    def set_last_smiles_input_for_history(
-        self, canvas: Any, value: str | None
-    ) -> None: ...
+    def restore_bond_length_for_history(self, length_px: float) -> None: ...
 
-    def restore_bond_length_for_history(
-        self, canvas: Any, length_px: float
-    ) -> None: ...
+
+class HistoryAtomOperations(
+    HistoryPositionOperations, HistorySmilesOperations, Protocol
+):
+    def set_next_atom_id_for_history(self, atom_id: int) -> None: ...
 
     def remove_atom_for_history(
-        self, canvas: Any, atom_id: int, *, remove_marks: bool = ...
+        self, atom_id: int, *, remove_marks: bool = ...
     ) -> None: ...
 
     def restore_atom_from_state_for_history(
-        self, canvas: Any, atom_id: int, state: dict
+        self, atom_id: int, state: dict
     ) -> None: ...
 
-    def apply_atom_color_for_history(
-        self, canvas: Any, atom_id: int, color: Any
-    ) -> None: ...
+    def restore_mark_from_state_for_history(self, mark_state: dict) -> Any: ...
 
-    def restore_mark_from_state_for_history(
-        self, canvas: Any, mark_state: dict
-    ) -> Any: ...
 
+class HistoryBondOperations(HistorySmilesOperations, Protocol):
     def restore_bond_from_state_for_history(
-        self, canvas: Any, bond_id: int, bond_state: dict
+        self, bond_id: int, bond_state: dict
     ) -> None: ...
 
-    def remove_bond_for_history(self, canvas: Any, bond_id: int) -> None: ...
+    def remove_bond_for_history(self, bond_id: int) -> None: ...
 
-    def trim_bonds_for_history(self, canvas: Any, length: int) -> None: ...
-
-    def capture_history_transaction_for_history(
-        self,
-        canvas: Any,
-        *,
-        history_service: Any | None = ...,
-    ) -> Any: ...
-
-    def restore_history_transaction_for_history(
-        self,
-        canvas: Any,
-        snapshot: Any,
-    ) -> RestoreOutcome | None: ...
-
-    def release_history_transaction_for_history(
-        self,
-        canvas: Any,
-        snapshot: Any,
-    ) -> None: ...
+    def trim_bonds_for_history(self, length: int) -> None: ...
 
 
-def _history_canvas_port() -> HistoryCanvasPort:
-    return cast("HistoryCanvasPort", import_module("chemvas.ui.history_canvas_access"))
+class HistoryColorOperations(Protocol):
+    def apply_atom_color_for_history(self, atom_id: int, color: Any) -> None: ...
 
 
-def _set_last_smiles_input(canvas, value: str | None) -> None:
-    _history_canvas_port().set_last_smiles_input_for_history(canvas, value)
+def _set_last_smiles_input(
+    operations: HistorySmilesOperations, value: str | None
+) -> None:
+    operations.set_last_smiles_input_for_history(value)
 
 
 _NO_HISTORY_TRANSACTION = object()
 _DEFER_TO_OUTER_HISTORY_TRANSACTION = object()
-_ACTIVE_HISTORY_TRANSACTION_CANVASES: ContextVar[frozenset[int]] = ContextVar(
-    "active_history_transaction_canvases",
+_ACTIVE_HISTORY_TRANSACTION_OPERATIONS: ContextVar[frozenset[int]] = ContextVar(
+    "active_history_transaction_operations",
     default=frozenset(),
 )
 
 
 @contextmanager
-def history_transaction_scope(canvas) -> Iterator[None]:
+def history_transaction_scope(operations) -> Iterator[None]:
     """Make nested commands defer to one already-captured document savepoint."""
 
-    active = _ACTIVE_HISTORY_TRANSACTION_CANVASES.get()
-    reset_token = _ACTIVE_HISTORY_TRANSACTION_CANVASES.set(active | {id(canvas)})
+    active = _ACTIVE_HISTORY_TRANSACTION_OPERATIONS.get()
+    reset_token = _ACTIVE_HISTORY_TRANSACTION_OPERATIONS.set(active | {id(operations)})
     try:
         yield
     finally:
-        _ACTIVE_HISTORY_TRANSACTION_CANVASES.reset(reset_token)
+        _ACTIVE_HISTORY_TRANSACTION_OPERATIONS.reset(reset_token)
 
 
-def _capture_history_transaction(canvas) -> object:
+def _capture_history_transaction(operations) -> object:
     """Capture an exact UI transaction when the active port supports one.
 
     The core package remains usable without Qt: headless/fake ports can omit
@@ -170,9 +142,9 @@ def _capture_history_transaction(canvas) -> object:
     compensation below.
     """
 
-    if id(canvas) in _ACTIVE_HISTORY_TRANSACTION_CANVASES.get():
+    if id(operations) in _ACTIVE_HISTORY_TRANSACTION_OPERATIONS.get():
         return _DEFER_TO_OUTER_HISTORY_TRANSACTION
-    port = _history_canvas_port()
+    port = operations
     capture = getattr(
         port,
         "capture_history_transaction_for_history",
@@ -188,10 +160,10 @@ def _capture_history_transaction(canvas) -> object:
     # command keeps its inverse-operation fallback.
     if not callable(capture) or not callable(restore):
         return _NO_HISTORY_TRANSACTION
-    return capture(canvas)
+    return capture()
 
 
-def capture_history_transaction_for_command(canvas) -> object:
+def capture_history_transaction_for_command(operations) -> object:
     """Capture or defer a command-local exact transaction.
 
     UI commands with a standalone exact rollback use this port so a lifecycle
@@ -199,11 +171,11 @@ def capture_history_transaction_for_command(canvas) -> object:
     second time.
     """
 
-    return _capture_history_transaction(canvas)
+    return _capture_history_transaction(operations)
 
 
 def _restore_history_transaction(
-    canvas,
+    operations,
     snapshot: object,
     original_error: BaseException,
 ) -> RestoreOutcome:
@@ -216,7 +188,7 @@ def _restore_history_transaction(
         # The owning CompositeCommand restores its single absolute snapshot.
         return RestoreOutcome(authoritative=True)
     restore = getattr(
-        _history_canvas_port(),
+        operations,
         "restore_history_transaction_for_history",
         None,
     )
@@ -226,7 +198,7 @@ def _restore_history_transaction(
             fallback_to_inverse=True,
         )
     try:
-        result = validate_restore_outcome(restore(canvas, snapshot))
+        result = validate_restore_outcome(restore(snapshot))
     except Exception as caught_restore_error:
         # An unstructured exception does not prove that the absolute restore
         # failed before touching state.  It may have restored only part of the
@@ -249,28 +221,28 @@ def _restore_history_transaction(
 
 
 def restore_history_transaction_for_command(
-    canvas,
+    operations,
     snapshot: object,
     original_error: BaseException,
 ) -> RestoreOutcome:
     """Restore a command-local transaction or defer to its outer owner."""
 
-    return _restore_history_transaction(canvas, snapshot, original_error)
+    return _restore_history_transaction(operations, snapshot, original_error)
 
 
-def _release_history_transaction(canvas, snapshot: object) -> None:
+def _release_history_transaction(operations, snapshot: object) -> None:
     if (
         snapshot is _NO_HISTORY_TRANSACTION
         or snapshot is _DEFER_TO_OUTER_HISTORY_TRANSACTION
     ):
         return
-    _history_canvas_port().release_history_transaction_for_history(canvas, snapshot)
+    operations.release_history_transaction_for_history(snapshot)
 
 
-def release_history_transaction_for_command(canvas, snapshot: object) -> None:
+def release_history_transaction_for_command(operations, snapshot: object) -> None:
     """Commit a command-local savepoint after its mutation succeeds."""
 
-    _release_history_transaction(canvas, snapshot)
+    _release_history_transaction(operations, snapshot)
 
 
 def _owns_history_transaction(snapshot: object) -> bool:
@@ -281,17 +253,14 @@ def _owns_history_transaction(snapshot: object) -> bool:
 
 
 def _restore_atom_states(
-    canvas,
+    operations: HistoryAtomOperations,
     atom_states: dict[int, dict],
     atom_coords_3d: dict[int, tuple[float, float, float]] | None,
 ) -> None:
     for atom_id, state in atom_states.items():
-        _history_canvas_port().restore_atom_from_state_for_history(
-            canvas, atom_id, state
-        )
+        operations.restore_atom_from_state_for_history(atom_id, state)
     if atom_coords_3d:
-        _history_canvas_port().set_atom_positions_for_history(
-            canvas,
+        operations.set_atom_positions_for_history(
             {},
             update_selection=False,
             coords_3d=atom_coords_3d,
@@ -303,12 +272,12 @@ def _restore_atom_states(
 # command and the mark restore that follows stay at their own call sites, so
 # each compensation order still reads top to bottom where it is written.
 def _restore_atom_states_best_effort(
-    canvas,
+    operations: HistoryAtomOperations,
     original_error: BaseException,
     atom_states: dict[int, dict],
     atom_coords_3d: dict[int, tuple[float, float, float]] | None,
 ) -> None:
-    port = _history_canvas_port()
+    port = operations
 
     # The port attribute is looked up inside this body, not in the ``partial``
     # below, so a missing port method is caught by the rollback step and noted
@@ -318,7 +287,7 @@ def _restore_atom_states_best_effort(
     # through ``partial`` instead of default arguments, which the rollback
     # runner's zero-argument callable type cannot describe.
     def restore_one_atom_state(atom_id: int, state: dict) -> None:
-        port.restore_atom_from_state_for_history(canvas, atom_id, state)
+        port.restore_atom_from_state_for_history(atom_id, state)
 
     for atom_id, state in atom_states.items():
         run_rollback_step(
@@ -331,7 +300,6 @@ def _restore_atom_states_best_effort(
             original_error,
             "restoring the 3-D atom coordinates",
             lambda: port.set_atom_positions_for_history(
-                canvas,
                 {},
                 update_selection=False,
                 coords_3d=atom_coords_3d,
@@ -342,7 +310,7 @@ def _restore_atom_states_best_effort(
 def _compensate_completed_nonexact_commands(
     original_error: BaseException,
     completed: list[HistoryCommand],
-    canvas,
+    operations,
     *,
     operation_name: str,
 ) -> set[int]:
@@ -360,7 +328,7 @@ def _compensate_completed_nonexact_commands(
     # rollback step's own try. A missing operation must become a note, not
     # escape and mask the primary error.
     def invert_one_completed_command(child: HistoryCommand) -> None:
-        getattr(child, operation_name)(canvas)
+        getattr(child, operation_name)(operations)
 
     for command in reversed(completed):
         if command_is_fully_covered_by_history_transaction(command):
@@ -379,43 +347,43 @@ class CompositeCommand(HistoryCommand):
     commands: list[HistoryCommand] = field(default_factory=list)
 
     @override
-    def undo(self, canvas) -> None:
+    def undo(self, operations) -> None:
         # A composite must apply atomically: if one child fails part-way, roll
         # the already-undone children forward again so the canvas is not left
         # in a state no command on either stack describes.
         transaction = (
-            _capture_history_transaction(canvas)
+            _capture_history_transaction(operations)
             if command_requires_exact_history_transaction(self)
             else _NO_HISTORY_TRANSACTION
         )
         active_token = None
         if _owns_history_transaction(transaction):
-            active = _ACTIVE_HISTORY_TRANSACTION_CANVASES.get()
-            active_token = _ACTIVE_HISTORY_TRANSACTION_CANVASES.set(
-                active | {id(canvas)}
+            active = _ACTIVE_HISTORY_TRANSACTION_OPERATIONS.get()
+            active_token = _ACTIVE_HISTORY_TRANSACTION_OPERATIONS.set(
+                active | {id(operations)}
             )
         completed: list[HistoryCommand] = []
         failed_command: HistoryCommand | None = None
         try:
             for command in reversed(self.commands):
                 failed_command = command
-                command.undo(canvas)
+                command.undo(operations)
                 completed.append(command)
                 failed_command = None
-            _release_history_transaction(canvas, transaction)
+            _release_history_transaction(operations, transaction)
         except Exception as exc:
             precompensated: set[int] = set()
             if transaction is not _NO_HISTORY_TRANSACTION:
                 precompensated = _compensate_completed_nonexact_commands(
                     exc,
                     completed,
-                    canvas,
+                    operations,
                     operation_name="redo",
                 )
-            restore_result = _restore_history_transaction(canvas, transaction, exc)
+            restore_result = _restore_history_transaction(operations, transaction, exc)
             if restore_result.fallback_to_inverse:
                 if active_token is not None:
-                    _ACTIVE_HISTORY_TRANSACTION_CANVASES.reset(active_token)
+                    _ACTIVE_HISTORY_TRANSACTION_OPERATIONS.reset(active_token)
                     active_token = None
                 # Lifecycle commands suppress their own inverse while an outer
                 # exact transaction is active. If that outer restore later
@@ -431,11 +399,11 @@ class CompositeCommand(HistoryCommand):
                     run_rollback_step(
                         exc,
                         "redoing the child command whose undo failed",
-                        lambda: failed_command.redo(canvas),
+                        lambda: failed_command.redo(operations),
                     )
 
                 def redo_one_completed_command(child: HistoryCommand) -> None:
-                    child.redo(canvas)
+                    child.redo(operations)
 
                 for command in reversed(completed):
                     if id(command) in precompensated:
@@ -448,43 +416,43 @@ class CompositeCommand(HistoryCommand):
             raise
         finally:
             if active_token is not None:
-                _ACTIVE_HISTORY_TRANSACTION_CANVASES.reset(active_token)
+                _ACTIVE_HISTORY_TRANSACTION_OPERATIONS.reset(active_token)
 
     @override
-    def redo(self, canvas) -> None:
+    def redo(self, operations) -> None:
         transaction = (
-            _capture_history_transaction(canvas)
+            _capture_history_transaction(operations)
             if command_requires_exact_history_transaction(self)
             else _NO_HISTORY_TRANSACTION
         )
         active_token = None
         if _owns_history_transaction(transaction):
-            active = _ACTIVE_HISTORY_TRANSACTION_CANVASES.get()
-            active_token = _ACTIVE_HISTORY_TRANSACTION_CANVASES.set(
-                active | {id(canvas)}
+            active = _ACTIVE_HISTORY_TRANSACTION_OPERATIONS.get()
+            active_token = _ACTIVE_HISTORY_TRANSACTION_OPERATIONS.set(
+                active | {id(operations)}
             )
         completed: list[HistoryCommand] = []
         failed_command: HistoryCommand | None = None
         try:
             for command in self.commands:
                 failed_command = command
-                command.redo(canvas)
+                command.redo(operations)
                 completed.append(command)
                 failed_command = None
-            _release_history_transaction(canvas, transaction)
+            _release_history_transaction(operations, transaction)
         except Exception as exc:
             precompensated: set[int] = set()
             if transaction is not _NO_HISTORY_TRANSACTION:
                 precompensated = _compensate_completed_nonexact_commands(
                     exc,
                     completed,
-                    canvas,
+                    operations,
                     operation_name="undo",
                 )
-            restore_result = _restore_history_transaction(canvas, transaction, exc)
+            restore_result = _restore_history_transaction(operations, transaction, exc)
             if restore_result.fallback_to_inverse:
                 if active_token is not None:
-                    _ACTIVE_HISTORY_TRANSACTION_CANVASES.reset(active_token)
+                    _ACTIVE_HISTORY_TRANSACTION_OPERATIONS.reset(active_token)
                     active_token = None
                 if (
                     _owns_history_transaction(transaction)
@@ -494,11 +462,11 @@ class CompositeCommand(HistoryCommand):
                     run_rollback_step(
                         exc,
                         "undoing the child command whose redo failed",
-                        lambda: failed_command.undo(canvas),
+                        lambda: failed_command.undo(operations),
                     )
 
                 def undo_one_completed_command(child: HistoryCommand) -> None:
-                    child.undo(canvas)
+                    child.undo(operations)
 
                 for command in reversed(completed):
                     if id(command) in precompensated:
@@ -511,7 +479,7 @@ class CompositeCommand(HistoryCommand):
             raise
         finally:
             if active_token is not None:
-                _ACTIVE_HISTORY_TRANSACTION_CANVASES.reset(active_token)
+                _ACTIVE_HISTORY_TRANSACTION_OPERATIONS.reset(active_token)
 
 
 @dataclass
@@ -525,9 +493,8 @@ class MoveAtomsCommand(HistoryCommand):
     redraw_bond_ids: set[int] | None = None
 
     @override
-    def undo(self, canvas) -> None:
-        _history_canvas_port().move_atoms_for_history(
-            canvas,
+    def undo(self, operations: HistoryGeometryOperations) -> None:
+        operations.move_atoms_for_history(
             self.atom_ids,
             -self.dx,
             -self.dy,
@@ -537,9 +504,8 @@ class MoveAtomsCommand(HistoryCommand):
         )
 
     @override
-    def redo(self, canvas) -> None:
-        _history_canvas_port().move_atoms_for_history(
-            canvas,
+    def redo(self, operations: HistoryGeometryOperations) -> None:
+        operations.move_atoms_for_history(
             self.atom_ids,
             self.dx,
             self.dy,
@@ -564,27 +530,24 @@ class SetAtomPositionsCommand(HistoryCommand):
 
     def _apply(
         self,
-        canvas,
+        operations: HistoryPositionOperations,
         positions: dict[int, tuple[float, float]],
         coords_3d: dict[int, tuple[float, float, float]] | None,
         projection_center_3d: tuple[float, float, float] | None,
         projection_anchor_2d: tuple[float, float] | None,
     ) -> None:
         if self.restore_projection_state:
-            _history_canvas_port().restore_projection_state_for_history(
-                canvas,
+            operations.restore_projection_state_for_history(
                 projection_center_3d,
                 projection_anchor_2d,
             )
         if coords_3d is None:
-            _history_canvas_port().set_atom_positions_for_history(
-                canvas,
+            operations.set_atom_positions_for_history(
                 positions,
                 update_selection=self.update_selection,
             )
             return
-        _history_canvas_port().set_atom_positions_for_history(
-            canvas,
+        operations.set_atom_positions_for_history(
             positions,
             update_selection=self.update_selection,
             coords_3d=coords_3d,
@@ -592,20 +555,19 @@ class SetAtomPositionsCommand(HistoryCommand):
 
     def _compensate(
         self,
-        canvas,
+        operations: HistoryPositionOperations,
         positions: dict[int, tuple[float, float]],
         coords_3d: dict[int, tuple[float, float, float]] | None,
         projection_center_3d: tuple[float, float, float] | None,
         projection_anchor_2d: tuple[float, float] | None,
         original_error: BaseException,
     ) -> None:
-        port = _history_canvas_port()
+        port = operations
         if self.restore_projection_state:
             run_rollback_step(
                 original_error,
                 "restoring the projection state",
                 lambda: port.restore_projection_state_for_history(
-                    canvas,
                     projection_center_3d,
                     projection_anchor_2d,
                 ),
@@ -614,13 +576,11 @@ class SetAtomPositionsCommand(HistoryCommand):
         def restore_positions() -> None:
             if coords_3d is None:
                 port.set_atom_positions_for_history(
-                    canvas,
                     positions,
                     update_selection=self.update_selection,
                 )
             else:
                 port.set_atom_positions_for_history(
-                    canvas,
                     positions,
                     update_selection=self.update_selection,
                     coords_3d=coords_3d,
@@ -633,23 +593,23 @@ class SetAtomPositionsCommand(HistoryCommand):
         )
 
     @override
-    def undo(self, canvas) -> None:
-        transaction = _capture_history_transaction(canvas)
+    def undo(self, operations: HistoryPositionOperations) -> None:
+        transaction = _capture_history_transaction(operations)
         try:
             self._apply(
-                canvas,
+                operations,
                 self.before_positions,
                 self.before_coords_3d,
                 self.before_projection_center_3d,
                 self.before_projection_anchor_2d,
             )
-            _release_history_transaction(canvas, transaction)
+            _release_history_transaction(operations, transaction)
         except Exception as exc:
             if _restore_history_transaction(
-                canvas, transaction, exc
+                operations, transaction, exc
             ).fallback_to_inverse:
                 self._compensate(
-                    canvas,
+                    operations,
                     self.after_positions,
                     self.after_coords_3d,
                     self.after_projection_center_3d,
@@ -659,23 +619,23 @@ class SetAtomPositionsCommand(HistoryCommand):
             raise
 
     @override
-    def redo(self, canvas) -> None:
-        transaction = _capture_history_transaction(canvas)
+    def redo(self, operations: HistoryPositionOperations) -> None:
+        transaction = _capture_history_transaction(operations)
         try:
             self._apply(
-                canvas,
+                operations,
                 self.after_positions,
                 self.after_coords_3d,
                 self.after_projection_center_3d,
                 self.after_projection_anchor_2d,
             )
-            _release_history_transaction(canvas, transaction)
+            _release_history_transaction(operations, transaction)
         except Exception as exc:
             if _restore_history_transaction(
-                canvas, transaction, exc
+                operations, transaction, exc
             ).fallback_to_inverse:
                 self._compensate(
-                    canvas,
+                    operations,
                     self.before_positions,
                     self.before_coords_3d,
                     self.before_projection_center_3d,
@@ -693,16 +653,16 @@ class SetRingPolygonsCommand(HistoryCommand):
 
     def _compensate(
         self,
-        canvas,
+        operations: HistoryGeometryOperations,
         polygons: list[list[tuple[float, float]]],
         original_error: BaseException,
     ) -> None:
-        port = _history_canvas_port()
+        port = operations
 
         def restore_one_ring_polygon(
             ring_item, polygon: list[tuple[float, float]]
         ) -> None:
-            port.set_ring_polygons_for_history(canvas, [ring_item], [polygon])
+            port.set_ring_polygons_for_history([ring_item], [polygon])
 
         # Compensate one ring at a time so a persistently broken item cannot
         # prevent later rings from being restored.
@@ -714,37 +674,35 @@ class SetRingPolygonsCommand(HistoryCommand):
             )
 
     @override
-    def undo(self, canvas) -> None:
-        transaction = _capture_history_transaction(canvas)
+    def undo(self, operations: HistoryGeometryOperations) -> None:
+        transaction = _capture_history_transaction(operations)
         try:
-            _history_canvas_port().set_ring_polygons_for_history(
-                canvas,
+            operations.set_ring_polygons_for_history(
                 self.ring_items,
                 self.before_polygons,
             )
-            _release_history_transaction(canvas, transaction)
+            _release_history_transaction(operations, transaction)
         except Exception as exc:
             if _restore_history_transaction(
-                canvas, transaction, exc
+                operations, transaction, exc
             ).fallback_to_inverse:
-                self._compensate(canvas, self.after_polygons, exc)
+                self._compensate(operations, self.after_polygons, exc)
             raise
 
     @override
-    def redo(self, canvas) -> None:
-        transaction = _capture_history_transaction(canvas)
+    def redo(self, operations: HistoryGeometryOperations) -> None:
+        transaction = _capture_history_transaction(operations)
         try:
-            _history_canvas_port().set_ring_polygons_for_history(
-                canvas,
+            operations.set_ring_polygons_for_history(
                 self.ring_items,
                 self.after_polygons,
             )
-            _release_history_transaction(canvas, transaction)
+            _release_history_transaction(operations, transaction)
         except Exception as exc:
             if _restore_history_transaction(
-                canvas, transaction, exc
+                operations, transaction, exc
             ).fallback_to_inverse:
-                self._compensate(canvas, self.before_polygons, exc)
+                self._compensate(operations, self.before_polygons, exc)
             raise
 
 
@@ -755,47 +713,42 @@ class UpdateBondLengthCommand(HistoryCommand):
 
     @staticmethod
     def _compensate(
-        canvas,
+        operations: HistoryGeometryOperations,
         length: float,
         original_error: BaseException,
     ) -> None:
         run_rollback_step(
             original_error,
             "restoring the bond length",
-            lambda: _history_canvas_port().restore_bond_length_for_history(
-                canvas,
+            lambda: operations.restore_bond_length_for_history(
                 length,
             ),
         )
 
     @override
-    def undo(self, canvas) -> None:
-        transaction = _capture_history_transaction(canvas)
+    def undo(self, operations: HistoryGeometryOperations) -> None:
+        transaction = _capture_history_transaction(operations)
         try:
-            _history_canvas_port().restore_bond_length_for_history(
-                canvas, self.before_length
-            )
-            _release_history_transaction(canvas, transaction)
+            operations.restore_bond_length_for_history(self.before_length)
+            _release_history_transaction(operations, transaction)
         except Exception as exc:
             if _restore_history_transaction(
-                canvas, transaction, exc
+                operations, transaction, exc
             ).fallback_to_inverse:
-                self._compensate(canvas, self.after_length, exc)
+                self._compensate(operations, self.after_length, exc)
             raise
 
     @override
-    def redo(self, canvas) -> None:
-        transaction = _capture_history_transaction(canvas)
+    def redo(self, operations: HistoryGeometryOperations) -> None:
+        transaction = _capture_history_transaction(operations)
         try:
-            _history_canvas_port().restore_bond_length_for_history(
-                canvas, self.after_length
-            )
-            _release_history_transaction(canvas, transaction)
+            operations.restore_bond_length_for_history(self.after_length)
+            _release_history_transaction(operations, transaction)
         except Exception as exc:
             if _restore_history_transaction(
-                canvas, transaction, exc
+                operations, transaction, exc
             ).fallback_to_inverse:
-                self._compensate(canvas, self.before_length, exc)
+                self._compensate(operations, self.before_length, exc)
             raise
 
 
@@ -805,12 +758,12 @@ class SetSmilesInputCommand(HistoryCommand):
     after_value: str | None
 
     @override
-    def undo(self, canvas) -> None:
-        _set_last_smiles_input(canvas, self.before_value)
+    def undo(self, operations: HistorySmilesOperations) -> None:
+        _set_last_smiles_input(operations, self.before_value)
 
     @override
-    def redo(self, canvas) -> None:
-        _set_last_smiles_input(canvas, self.after_value)
+    def redo(self, operations: HistorySmilesOperations) -> None:
+        _set_last_smiles_input(operations, self.after_value)
 
 
 @dataclass(kw_only=True)
@@ -824,13 +777,13 @@ class AddAtomsCommand(HistoryCommand):
 
     def _remove_atoms_best_effort(
         self,
-        canvas,
+        operations: HistoryAtomOperations,
         original_error: BaseException,
     ) -> None:
-        port = _history_canvas_port()
+        port = operations
 
         def remove_one_atom(atom_id: int) -> None:
-            port.remove_atom_for_history(canvas, atom_id)
+            port.remove_atom_for_history(atom_id)
 
         for atom_id in reversed(self.atom_states):
             run_rollback_step(
@@ -841,73 +794,73 @@ class AddAtomsCommand(HistoryCommand):
 
     def _restore_atoms_best_effort(
         self,
-        canvas,
+        operations: HistoryAtomOperations,
         original_error: BaseException,
     ) -> None:
         # Normalize every atom owned by this command first. A failing port
         # call may have mutated the current atom before raising, so tracking
         # only calls that returned successfully is insufficient.
-        self._remove_atoms_best_effort(canvas, original_error)
+        self._remove_atoms_best_effort(operations, original_error)
         _restore_atom_states_best_effort(
-            canvas, original_error, self.atom_states, self.atom_coords_3d
+            operations, original_error, self.atom_states, self.atom_coords_3d
         )
         run_rollback_step(
             original_error,
             "restoring the next atom id",
-            lambda: setattr(canvas.model, "next_atom_id", self.after_next_atom_id),
+            lambda: operations.set_next_atom_id_for_history(self.after_next_atom_id),
         )
         run_rollback_step(
             original_error,
             "restoring the prior SMILES input",
-            lambda: _set_last_smiles_input(canvas, self.after_smiles_input),
+            lambda: _set_last_smiles_input(operations, self.after_smiles_input),
         )
 
     def _restore_absent_state_best_effort(
         self,
-        canvas,
+        operations: HistoryAtomOperations,
         original_error: BaseException,
     ) -> None:
-        self._remove_atoms_best_effort(canvas, original_error)
+        self._remove_atoms_best_effort(operations, original_error)
         run_rollback_step(
             original_error,
             "restoring the next atom id",
-            lambda: setattr(canvas.model, "next_atom_id", self.before_next_atom_id),
+            lambda: operations.set_next_atom_id_for_history(self.before_next_atom_id),
         )
         run_rollback_step(
             original_error,
             "restoring the prior SMILES input",
-            lambda: _set_last_smiles_input(canvas, self.before_smiles_input),
+            lambda: _set_last_smiles_input(operations, self.before_smiles_input),
         )
 
     @override
-    def undo(self, canvas) -> None:
-        transaction = _capture_history_transaction(canvas)
+    def undo(self, operations: HistoryAtomOperations) -> None:
+        transaction = _capture_history_transaction(operations)
         try:
             for atom_id in self.atom_states:
-                _history_canvas_port().remove_atom_for_history(canvas, atom_id)
-            canvas.model.next_atom_id = self.before_next_atom_id
-            _set_last_smiles_input(canvas, self.before_smiles_input)
-            _release_history_transaction(canvas, transaction)
+                operations.remove_atom_for_history(atom_id)
+            operations.set_next_atom_id_for_history(self.before_next_atom_id)
+            _set_last_smiles_input(operations, self.before_smiles_input)
+            _release_history_transaction(operations, transaction)
         except Exception as exc:
             if _restore_history_transaction(
-                canvas, transaction, exc
+                operations, transaction, exc
             ).fallback_to_inverse:
-                self._restore_atoms_best_effort(canvas, exc)
+                self._restore_atoms_best_effort(operations, exc)
             raise
 
     @override
-    def redo(self, canvas) -> None:
-        transaction = _capture_history_transaction(canvas)
+    def redo(self, operations: HistoryAtomOperations) -> None:
+        transaction = _capture_history_transaction(operations)
         try:
-            _restore_atom_states(canvas, self.atom_states, self.atom_coords_3d)
-            canvas.model.next_atom_id = self.after_next_atom_id
-            _set_last_smiles_input(canvas, self.after_smiles_input)
-            _release_history_transaction(canvas, transaction)
+            _restore_atom_states(operations, self.atom_states, self.atom_coords_3d)
+            operations.set_next_atom_id_for_history(self.after_next_atom_id)
+            _set_last_smiles_input(operations, self.after_smiles_input)
+            _release_history_transaction(operations, transaction)
         except Exception as exc:
             if _restore_history_transaction(
-                canvas, transaction, exc
+                operations, transaction, exc
             ).fallback_to_inverse:
-                self._restore_absent_state_best_effort(canvas, exc)
+                self._restore_absent_state_best_effort(operations, exc)
             raise
 
 
@@ -929,14 +882,13 @@ class DeleteAtomsCommand(HistoryCommand):
 
     def _remove_atoms_best_effort(
         self,
-        canvas,
+        operations: HistoryAtomOperations,
         original_error: BaseException,
     ) -> None:
-        port = _history_canvas_port()
+        port = operations
 
         def remove_one_atom(atom_id: int) -> None:
             port.remove_atom_for_history(
-                canvas,
                 atom_id,
                 remove_marks=self.remove_marks,
             )
@@ -950,28 +902,27 @@ class DeleteAtomsCommand(HistoryCommand):
 
     def _restore_deleted_state_best_effort(
         self,
-        canvas,
+        operations: HistoryAtomOperations,
         original_error: BaseException,
     ) -> None:
-        self._remove_atoms_best_effort(canvas, original_error)
-        port = _history_canvas_port()
+        self._remove_atoms_best_effort(operations, original_error)
+        port = operations
         if self.restore_projection_state:
             run_rollback_step(
                 original_error,
                 "restoring the projection state",
                 lambda: port.restore_projection_state_for_history(
-                    canvas,
                     self.before_projection_center_3d,
                     self.before_projection_anchor_2d,
                 ),
             )
         _restore_atom_states_best_effort(
-            canvas, original_error, self.atom_states, self.atom_coords_3d
+            operations, original_error, self.atom_states, self.atom_coords_3d
         )
         if self.remove_marks:
 
             def restore_one_mark_state(mark_state: dict) -> None:
-                port.restore_mark_from_state_for_history(canvas, mark_state)
+                port.restore_mark_from_state_for_history(mark_state)
 
             for mark_state in self.mark_states:
                 run_rollback_step(
@@ -982,26 +933,25 @@ class DeleteAtomsCommand(HistoryCommand):
         run_rollback_step(
             original_error,
             "restoring the next atom id",
-            lambda: setattr(canvas.model, "next_atom_id", self.before_next_atom_id),
+            lambda: operations.set_next_atom_id_for_history(self.before_next_atom_id),
         )
         run_rollback_step(
             original_error,
             "restoring the prior SMILES input",
-            lambda: _set_last_smiles_input(canvas, self.before_smiles_input),
+            lambda: _set_last_smiles_input(operations, self.before_smiles_input),
         )
 
     def _restore_absent_state_best_effort(
         self,
-        canvas,
+        operations: HistoryAtomOperations,
         original_error: BaseException,
     ) -> None:
-        self._remove_atoms_best_effort(canvas, original_error)
+        self._remove_atoms_best_effort(operations, original_error)
         if self.restore_projection_state:
             run_rollback_step(
                 original_error,
                 "restoring the projection state",
-                lambda: _history_canvas_port().restore_projection_state_for_history(
-                    canvas,
+                lambda: operations.restore_projection_state_for_history(
                     self.after_projection_center_3d,
                     self.after_projection_anchor_2d,
                 ),
@@ -1009,64 +959,59 @@ class DeleteAtomsCommand(HistoryCommand):
         run_rollback_step(
             original_error,
             "restoring the next atom id",
-            lambda: setattr(canvas.model, "next_atom_id", self.after_next_atom_id),
+            lambda: operations.set_next_atom_id_for_history(self.after_next_atom_id),
         )
         run_rollback_step(
             original_error,
             "restoring the prior SMILES input",
-            lambda: _set_last_smiles_input(canvas, self.after_smiles_input),
+            lambda: _set_last_smiles_input(operations, self.after_smiles_input),
         )
 
     @override
-    def undo(self, canvas) -> None:
-        transaction = _capture_history_transaction(canvas)
+    def undo(self, operations: HistoryAtomOperations) -> None:
+        transaction = _capture_history_transaction(operations)
         try:
             if self.restore_projection_state:
-                _history_canvas_port().restore_projection_state_for_history(
-                    canvas,
+                operations.restore_projection_state_for_history(
                     self.before_projection_center_3d,
                     self.before_projection_anchor_2d,
                 )
-            _restore_atom_states(canvas, self.atom_states, self.atom_coords_3d)
+            _restore_atom_states(operations, self.atom_states, self.atom_coords_3d)
             if self.remove_marks:
                 for mark_state in self.mark_states:
-                    _history_canvas_port().restore_mark_from_state_for_history(
-                        canvas, mark_state
-                    )
-            canvas.model.next_atom_id = self.before_next_atom_id
-            _set_last_smiles_input(canvas, self.before_smiles_input)
-            _release_history_transaction(canvas, transaction)
+                    operations.restore_mark_from_state_for_history(mark_state)
+            operations.set_next_atom_id_for_history(self.before_next_atom_id)
+            _set_last_smiles_input(operations, self.before_smiles_input)
+            _release_history_transaction(operations, transaction)
         except Exception as exc:
             if _restore_history_transaction(
-                canvas, transaction, exc
+                operations, transaction, exc
             ).fallback_to_inverse:
-                self._restore_absent_state_best_effort(canvas, exc)
+                self._restore_absent_state_best_effort(operations, exc)
             raise
 
     @override
-    def redo(self, canvas) -> None:
-        transaction = _capture_history_transaction(canvas)
+    def redo(self, operations: HistoryAtomOperations) -> None:
+        transaction = _capture_history_transaction(operations)
         try:
             for atom_id in self.atom_states:
-                _history_canvas_port().remove_atom_for_history(
-                    canvas,
+                operations.remove_atom_for_history(
                     atom_id,
                     remove_marks=self.remove_marks,
                 )
             if self.restore_projection_state:
-                _history_canvas_port().restore_projection_state_for_history(
-                    canvas,
+                operations.restore_projection_state_for_history(
                     self.after_projection_center_3d,
                     self.after_projection_anchor_2d,
                 )
-            canvas.model.next_atom_id = self.after_next_atom_id
-            _set_last_smiles_input(canvas, self.after_smiles_input)
-            _release_history_transaction(canvas, transaction)
+            operations.set_next_atom_id_for_history(self.after_next_atom_id)
+            _set_last_smiles_input(operations, self.after_smiles_input)
+            _release_history_transaction(operations, transaction)
         except Exception as exc:
             if _restore_history_transaction(
-                canvas, transaction, exc
+                operations, transaction, exc
             ).fallback_to_inverse:
-                self._restore_deleted_state_best_effort(canvas, exc)
+                self._restore_deleted_state_best_effort(operations, exc)
             raise
 
 
@@ -1078,7 +1023,7 @@ class UpdateAtomColorCommand(HistoryCommand):
 
     @staticmethod
     def _compensate(
-        canvas,
+        operations: HistoryColorOperations,
         atom_id: int,
         color: str,
         original_error: BaseException,
@@ -1086,35 +1031,32 @@ class UpdateAtomColorCommand(HistoryCommand):
         run_rollback_step(
             original_error,
             "restoring the prior atom color",
-            lambda: _history_canvas_port().apply_atom_color_for_history(
-                canvas,
+            lambda: operations.apply_atom_color_for_history(
                 atom_id,
                 color,
             ),
         )
 
     @override
-    def undo(self, canvas) -> None:
+    def undo(self, operations: HistoryColorOperations) -> None:
         try:
-            _history_canvas_port().apply_atom_color_for_history(
-                canvas,
+            operations.apply_atom_color_for_history(
                 self.atom_id,
                 self.before_color,
             )
         except Exception as exc:
-            self._compensate(canvas, self.atom_id, self.after_color, exc)
+            self._compensate(operations, self.atom_id, self.after_color, exc)
             raise
 
     @override
-    def redo(self, canvas) -> None:
+    def redo(self, operations: HistoryColorOperations) -> None:
         try:
-            _history_canvas_port().apply_atom_color_for_history(
-                canvas,
+            operations.apply_atom_color_for_history(
                 self.atom_id,
                 self.after_color,
             )
         except Exception as exc:
-            self._compensate(canvas, self.atom_id, self.before_color, exc)
+            self._compensate(operations, self.atom_id, self.before_color, exc)
             raise
 
 
@@ -1128,14 +1070,13 @@ class AddBondCommand(HistoryCommand):
 
     def _restore_added_state_best_effort(
         self,
-        canvas,
+        operations: HistoryBondOperations,
         original_error: BaseException,
     ) -> None:
         run_rollback_step(
             original_error,
             "restoring the bond state",
-            lambda: _history_canvas_port().restore_bond_from_state_for_history(
-                canvas,
+            lambda: operations.restore_bond_from_state_for_history(
                 self.bond_id,
                 self.bond_state,
             ),
@@ -1143,69 +1084,64 @@ class AddBondCommand(HistoryCommand):
         run_rollback_step(
             original_error,
             "restoring the prior SMILES input",
-            lambda: _set_last_smiles_input(canvas, self.after_smiles_input),
+            lambda: _set_last_smiles_input(operations, self.after_smiles_input),
         )
 
     def _restore_absent_state_best_effort(
         self,
-        canvas,
+        operations: HistoryBondOperations,
         original_error: BaseException,
     ) -> None:
         run_rollback_step(
             original_error,
             "removing the bond",
-            lambda: _history_canvas_port().remove_bond_for_history(
-                canvas,
+            lambda: operations.remove_bond_for_history(
                 self.bond_id,
             ),
         )
         run_rollback_step(
             original_error,
             "trimming the bond list",
-            lambda: _history_canvas_port().trim_bonds_for_history(
-                canvas,
+            lambda: operations.trim_bonds_for_history(
                 self.previous_bond_count,
             ),
         )
         run_rollback_step(
             original_error,
             "restoring the prior SMILES input",
-            lambda: _set_last_smiles_input(canvas, self.before_smiles_input),
+            lambda: _set_last_smiles_input(operations, self.before_smiles_input),
         )
 
     @override
-    def undo(self, canvas) -> None:
-        transaction = _capture_history_transaction(canvas)
+    def undo(self, operations: HistoryBondOperations) -> None:
+        transaction = _capture_history_transaction(operations)
         try:
-            _history_canvas_port().remove_bond_for_history(canvas, self.bond_id)
-            _history_canvas_port().trim_bonds_for_history(
-                canvas, self.previous_bond_count
-            )
-            _set_last_smiles_input(canvas, self.before_smiles_input)
-            _release_history_transaction(canvas, transaction)
+            operations.remove_bond_for_history(self.bond_id)
+            operations.trim_bonds_for_history(self.previous_bond_count)
+            _set_last_smiles_input(operations, self.before_smiles_input)
+            _release_history_transaction(operations, transaction)
         except Exception as exc:
             if _restore_history_transaction(
-                canvas, transaction, exc
+                operations, transaction, exc
             ).fallback_to_inverse:
-                self._restore_added_state_best_effort(canvas, exc)
+                self._restore_added_state_best_effort(operations, exc)
             raise
 
     @override
-    def redo(self, canvas) -> None:
-        transaction = _capture_history_transaction(canvas)
+    def redo(self, operations: HistoryBondOperations) -> None:
+        transaction = _capture_history_transaction(operations)
         try:
-            _history_canvas_port().restore_bond_from_state_for_history(
-                canvas,
+            operations.restore_bond_from_state_for_history(
                 self.bond_id,
                 self.bond_state,
             )
-            _set_last_smiles_input(canvas, self.after_smiles_input)
-            _release_history_transaction(canvas, transaction)
+            _set_last_smiles_input(operations, self.after_smiles_input)
+            _release_history_transaction(operations, transaction)
         except Exception as exc:
             if _restore_history_transaction(
-                canvas, transaction, exc
+                operations, transaction, exc
             ).fallback_to_inverse:
-                self._restore_absent_state_best_effort(canvas, exc)
+                self._restore_absent_state_best_effort(operations, exc)
             raise
 
 
@@ -1218,14 +1154,13 @@ class DeleteBondCommand(HistoryCommand):
 
     def _restore_present_state_best_effort(
         self,
-        canvas,
+        operations: HistoryBondOperations,
         original_error: BaseException,
     ) -> None:
         run_rollback_step(
             original_error,
             "restoring the bond state",
-            lambda: _history_canvas_port().restore_bond_from_state_for_history(
-                canvas,
+            lambda: operations.restore_bond_from_state_for_history(
                 self.bond_id,
                 self.bond_state,
             ),
@@ -1233,58 +1168,56 @@ class DeleteBondCommand(HistoryCommand):
         run_rollback_step(
             original_error,
             "restoring the prior SMILES input",
-            lambda: _set_last_smiles_input(canvas, self.before_smiles_input),
+            lambda: _set_last_smiles_input(operations, self.before_smiles_input),
         )
 
     def _restore_absent_state_best_effort(
         self,
-        canvas,
+        operations: HistoryBondOperations,
         original_error: BaseException,
     ) -> None:
         run_rollback_step(
             original_error,
             "removing the bond",
-            lambda: _history_canvas_port().remove_bond_for_history(
-                canvas,
+            lambda: operations.remove_bond_for_history(
                 self.bond_id,
             ),
         )
         run_rollback_step(
             original_error,
             "restoring the prior SMILES input",
-            lambda: _set_last_smiles_input(canvas, self.after_smiles_input),
+            lambda: _set_last_smiles_input(operations, self.after_smiles_input),
         )
 
     @override
-    def undo(self, canvas) -> None:
-        transaction = _capture_history_transaction(canvas)
+    def undo(self, operations: HistoryBondOperations) -> None:
+        transaction = _capture_history_transaction(operations)
         try:
-            _history_canvas_port().restore_bond_from_state_for_history(
-                canvas,
+            operations.restore_bond_from_state_for_history(
                 self.bond_id,
                 self.bond_state,
             )
-            _set_last_smiles_input(canvas, self.before_smiles_input)
-            _release_history_transaction(canvas, transaction)
+            _set_last_smiles_input(operations, self.before_smiles_input)
+            _release_history_transaction(operations, transaction)
         except Exception as exc:
             if _restore_history_transaction(
-                canvas, transaction, exc
+                operations, transaction, exc
             ).fallback_to_inverse:
-                self._restore_absent_state_best_effort(canvas, exc)
+                self._restore_absent_state_best_effort(operations, exc)
             raise
 
     @override
-    def redo(self, canvas) -> None:
-        transaction = _capture_history_transaction(canvas)
+    def redo(self, operations: HistoryBondOperations) -> None:
+        transaction = _capture_history_transaction(operations)
         try:
-            _history_canvas_port().remove_bond_for_history(canvas, self.bond_id)
-            _set_last_smiles_input(canvas, self.after_smiles_input)
-            _release_history_transaction(canvas, transaction)
+            operations.remove_bond_for_history(self.bond_id)
+            _set_last_smiles_input(operations, self.after_smiles_input)
+            _release_history_transaction(operations, transaction)
         except Exception as exc:
             if _restore_history_transaction(
-                canvas, transaction, exc
+                operations, transaction, exc
             ).fallback_to_inverse:
-                self._restore_present_state_best_effort(canvas, exc)
+                self._restore_present_state_best_effort(operations, exc)
             raise
 
 
@@ -1298,7 +1231,7 @@ class UpdateBondCommand(HistoryCommand):
 
     def _restore_state_best_effort(
         self,
-        canvas,
+        operations: HistoryBondOperations,
         bond_state: dict,
         smiles_input: str | None,
         original_error: BaseException,
@@ -1306,8 +1239,7 @@ class UpdateBondCommand(HistoryCommand):
         run_rollback_step(
             original_error,
             "restoring the bond state",
-            lambda: _history_canvas_port().restore_bond_from_state_for_history(
-                canvas,
+            lambda: operations.restore_bond_from_state_for_history(
                 self.bond_id,
                 bond_state,
             ),
@@ -1315,26 +1247,25 @@ class UpdateBondCommand(HistoryCommand):
         run_rollback_step(
             original_error,
             "restoring the prior SMILES input",
-            lambda: _set_last_smiles_input(canvas, smiles_input),
+            lambda: _set_last_smiles_input(operations, smiles_input),
         )
 
     @override
-    def undo(self, canvas) -> None:
-        transaction = _capture_history_transaction(canvas)
+    def undo(self, operations: HistoryBondOperations) -> None:
+        transaction = _capture_history_transaction(operations)
         try:
-            _history_canvas_port().restore_bond_from_state_for_history(
-                canvas,
+            operations.restore_bond_from_state_for_history(
                 self.bond_id,
                 self.before_state,
             )
-            _set_last_smiles_input(canvas, self.before_smiles_input)
-            _release_history_transaction(canvas, transaction)
+            _set_last_smiles_input(operations, self.before_smiles_input)
+            _release_history_transaction(operations, transaction)
         except Exception as exc:
             if _restore_history_transaction(
-                canvas, transaction, exc
+                operations, transaction, exc
             ).fallback_to_inverse:
                 self._restore_state_best_effort(
-                    canvas,
+                    operations,
                     self.after_state,
                     self.after_smiles_input,
                     exc,
@@ -1342,22 +1273,21 @@ class UpdateBondCommand(HistoryCommand):
             raise
 
     @override
-    def redo(self, canvas) -> None:
-        transaction = _capture_history_transaction(canvas)
+    def redo(self, operations: HistoryBondOperations) -> None:
+        transaction = _capture_history_transaction(operations)
         try:
-            _history_canvas_port().restore_bond_from_state_for_history(
-                canvas,
+            operations.restore_bond_from_state_for_history(
                 self.bond_id,
                 self.after_state,
             )
-            _set_last_smiles_input(canvas, self.after_smiles_input)
-            _release_history_transaction(canvas, transaction)
+            _set_last_smiles_input(operations, self.after_smiles_input)
+            _release_history_transaction(operations, transaction)
         except Exception as exc:
             if _restore_history_transaction(
-                canvas, transaction, exc
+                operations, transaction, exc
             ).fallback_to_inverse:
                 self._restore_state_best_effort(
-                    canvas,
+                    operations,
                     self.before_state,
                     self.before_smiles_input,
                     exc,

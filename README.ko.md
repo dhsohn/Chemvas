@@ -15,6 +15,13 @@ Chemvas는 **화학 구조와 반응식을 그리는 오픈소스 데스크톱 �
 데스크톱에서 그리고, 논문 단 너비 그대로 SVG·PDF·PNG·TIFF로 출력하고,
 같은 문서를 스크립트로도 다룰 수 있습니다.
 
+## 저장한 그림은 계속 사용할 수 있습니다
+
+앞으로 Chemvas를 업데이트해도 현재 지원되는 정상적인 v7 `.chemvas` 문서는
+계속 열 수 있습니다. 새 저장 형식이 생겨도 v7 읽기는 유지합니다.
+다만 이전 앱이 새로운 형식으로 저장한 파일까지 읽는다는 보장은 아닙니다.
+자세한 범위는 [문서 호환성 정책](https://github.com/dhsohn/Chemvas/blob/main/docs/DOCUMENT_COMPATIBILITY.ko.md)을 참고하세요.
+
 ## 설치
 
 **Python 3.12+**가 필요합니다. SMILES 삽입, Molecule Info(분자식·식별자),

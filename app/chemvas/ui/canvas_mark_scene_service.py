@@ -80,9 +80,11 @@ class CanvasMarkSceneService:
             command: HistoryCommand
             if cancel is not None:
                 command = DeleteSceneItemsCommand.capture(
-                    self.canvas, [mark_state_dict_for(self.canvas, cancel)], [cancel]
+                    self.history.operations,
+                    [mark_state_dict_for(self.canvas, cancel)],
+                    [cancel],
                 )
-                command.redo(self.canvas)
+                command.redo(self.history.operations)
                 labels = self.reveal_unmarked_isolated_carbons({atom_id})
                 if labels:
                     command = CompositeCommand([command, *labels])
@@ -130,7 +132,7 @@ class CanvasMarkSceneService:
                 candidates.discard(bond.b)
         commands = []
         smiles_input = last_smiles_input_for(self.canvas)
-        with history_transaction_scope(self.canvas):
+        with history_transaction_scope(self.history.operations):
             for atom_id in sorted(candidates):
                 atom = required_atom_for(self.canvas, atom_id)
                 command = ChangeAtomLabelCommand(
@@ -142,7 +144,7 @@ class CanvasMarkSceneService:
                     before_smiles_input=smiles_input,
                     after_smiles_input=smiles_input,
                 )
-                command.redo(self.canvas)
+                command.redo(self.history.operations)
                 commands.append(command)
         return commands
 
@@ -374,9 +376,9 @@ class CanvasMarkSceneService:
         )
         with (
             document_transaction(self.canvas, history_service=self.history),
-            history_transaction_scope(self.canvas),
+            history_transaction_scope(self.history.operations),
         ):
-            command.redo(self.canvas)
+            command.redo(self.history.operations)
             labels = self.reveal_unmarked_isolated_carbons(
                 {old_id} if old_id is not None else set()
             )

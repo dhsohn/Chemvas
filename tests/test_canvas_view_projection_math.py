@@ -237,7 +237,7 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
         )
 
         with mock.patch(
-            "chemvas.ui.history_commands._apply_scene_item_state",
+            "chemvas.ui.history_operations.apply_scene_item_state",
             side_effect=lambda _canvas, item, state: item.setOpacity(state["opacity"]),
         ):
             canvas.services.history_service.undo()
@@ -290,6 +290,7 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
         self,
     ) -> None:
         canvas, label_atom_id, dot_atom_id, bond_id = self._real_bond_length_canvas()
+        operations = canvas.services.history_service.operations
         canvas.services.scene_view.geometry_controller.set_bond_length(30.0)
         canvas.services.history_service.clear()
         label_item = atom_items_for(canvas)[label_atom_id]
@@ -320,7 +321,7 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
             side_effect=fail_once_after_update,
         ):
             with self.assertRaisesRegex(RuntimeError, "in-place refresh failure"):
-                command.undo(canvas)
+                command.undo(operations)
 
         self.assertEqual(bond_length_px_for(canvas), 30.0)
         self.assertEqual(
@@ -463,6 +464,7 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
         self,
     ) -> None:
         canvas, label_atom_id, _dot_atom_id, _bond_id = self._real_bond_length_canvas()
+        operations = canvas.services.history_service.operations
         canvas.services.scene_view.geometry_controller.set_bond_length(30.0)
         label_item = atom_items_for(canvas)[label_atom_id]
         label_item.setSelected(True)
@@ -486,7 +488,7 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
             new=mutate_then_fail_persistently,
         ):
             with self.assertRaisesRegex(RuntimeError, "persistent history atom font"):
-                UpdateBondLengthCommand(20.0, 30.0).undo(canvas)
+                UpdateBondLengthCommand(20.0, 30.0).undo(operations)
 
         self.assertGreaterEqual(calls, 1)
         self.assertIs(canvas.renderer.style, original_style)

@@ -101,7 +101,7 @@ def insert_image_bytes(canvas, data: bytes) -> ImageItem:
     history = history_service_for_access(canvas)
     with document_transaction(canvas, history_service=history):
         command = AddSceneItemsCommand([state])
-        command.redo(canvas)
+        command.redo(history.operations)
         item = command.items[0]
         clear_note_selection_for(canvas)
         clear_scene_selection_for(canvas)
@@ -136,7 +136,7 @@ def update_image_properties(canvas, item: ImageItem, state: dict) -> bool:
     history = history_service_for_access(canvas)
     with document_transaction(canvas, history_service=history):
         command = UpdateSceneItemCommand(item, before, state)
-        command.redo(canvas)
+        command.redo(history.operations)
         if not history.push(command):
             raise ValueError("History is disabled; the image was not changed.")
     return True

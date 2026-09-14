@@ -5,6 +5,7 @@ from copy import deepcopy
 
 import pytest
 
+import chemvas.domain.document.inspection as document_inspection
 from chemvas.domain.document import (
     CANVAS_FILE_VERSION,
     Atom,
@@ -14,7 +15,6 @@ from chemvas.domain.document import (
     serialize_model_state,
     serialize_settings,
 )
-from chemvas.features.calculation_bundle import service as calculation_bundle_service
 from chemvas.features.document_patch import (
     MAX_PATCH_OPERATIONS,
     apply_document_patch,
@@ -265,7 +265,7 @@ def test_inspection_deserializes_once_for_many_components(
             atoms={atom_id: Atom("C", float(atom_id), 0.0) for atom_id in range(64)}
         )
     )
-    original = calculation_bundle_service.deserialize_model_state
+    original = document_inspection.deserialize_model_state
     calls = 0
 
     def counted_deserialize(model_state: dict[str, object]) -> MoleculeModel:
@@ -274,7 +274,7 @@ def test_inspection_deserializes_once_for_many_components(
         return original(model_state)
 
     monkeypatch.setattr(
-        calculation_bundle_service,
+        document_inspection,
         "deserialize_model_state",
         counted_deserialize,
     )

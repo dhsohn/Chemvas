@@ -1,84 +1,60 @@
 from __future__ import annotations
 
-from collections import Counter
-from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
-from typing import cast
+from typing import TYPE_CHECKING
 
-from chemvas.domain.atom_aliases import (
-    AliasAttachment,
-    alias_attachment_inventory,
-    modeled_atom_formal_charge,
-)
-from chemvas.domain.document import (
-    Atom,
-    Bond,
-    MoleculeModel,
-    connected_atom_components,
-    deserialize_model_state,
-)
-
-from .model import (
-    CalculationArtifacts,
-    CalculationStateSelection,
+from chemvas.domain.atom_aliases import modeled_atom_formal_charge
+from chemvas.domain.document import Atom, Bond, MoleculeModel
+from chemvas.domain.document.inspection import (
     ComponentInventory,
-    ComponentSummary,
+    document_annotations,
+    document_model,
+    graph_index,
 )
 
-_CHARGE_MARKS = {
-    "plus": 1,
-    "circled_plus": 1,
-    "minus": -1,
-    "circled_minus": -1,
-}
+from .model import CalculationArtifacts, CalculationStateSelection
 
-
-@dataclass(frozen=True)
-class _GraphIndex:
-    components: tuple[tuple[int, ...], ...]
-    bond_counts: tuple[int, ...]
-    indexed_bonds: tuple[tuple[int, Bond], ...]
-    attachments_by_atom: Mapping[int, tuple[AliasAttachment, ...]]
-
-
-def inspect_components(state: Mapping[str, object]) -> tuple[ComponentSummary, ...]:
-    return inspect_component_inventory(state).components
-
-
-def inspect_component_inventory(state: Mapping[str, object]) -> ComponentInventory:
-    """Deserialize and annotate a document once for complete graph inspection."""
-    return _component_inventory(state, _document_model(state))
-
-
-def _component_inventory(
-    state: Mapping[str, object], model: MoleculeModel
-) -> ComponentInventory:
-    model.atom_annotations = _document_annotations(state, model)
-    graph = _graph_index(model)
-    return ComponentInventory(
-        model=model,
-        components=tuple(
-            _component_summary(
-                model,
-                index,
-                atom_ids,
-                bond_count=graph.bond_counts[index],
-                attachments_by_atom=graph.attachments_by_atom,
-            )
-            for index, atom_ids in enumerate(graph.components)
-        ),
-    )
+if TYPE_CHECKING:
+    from collections.abc import Mapping, Sequence
 
 
 def select_components(
     state: Mapping[str, object],
     component_atom_ids: Sequence[Sequence[int]],
 ) -> CalculationStateSelection:
-    model = _document_model(state)
-    annotations = _document_annotations(state, model)
-    graph = _graph_index(model)
+    return _select_components(state, component_atom_ids)
+
+
+def _select_components(
+    source: Mapping[str, object] | ComponentInventory,
+    component_atom_ids: Sequence[Sequence[int]],
+) -> CalculationStateSelection:
+    if isinstance(source, ComponentInventory):
+        model = source.model
+        annotations = model.atom_annotations
+        components = tuple(summary.atom_ids for summary in source.components)
+        component_by_atom = {
+            atom_id: index
+            for index, atom_ids in enumerate(components)
+            for atom_id in atom_ids
+        }
+        indexed_bonds = tuple(
+            (component_by_atom[bond.a], bond)
+            for bond in model.bonds
+            if bond is not None
+            and bond.a in component_by_atom
+            and component_by_atom.get(bond.b) == component_by_atom[bond.a]
+        )
+    else:
+        # Standalone selection validates only the selected aliases. A prepared
+        # plan has already validated its complete inventory; do not broaden the
+        # standalone public API's validation scope to obtain that inventory.
+        model = document_model(source)
+        annotations = document_annotations(source, model)
+        graph = graph_index(model)
+        components = graph.components
+        indexed_bonds = graph.indexed_bonds
     component_index_by_atoms = {
-        tuple(atom_ids): index for index, atom_ids in enumerate(graph.components)
+        tuple(atom_ids): index for index, atom_ids in enumerate(components)
     }
     requested = [tuple(atom_ids) for atom_ids in component_atom_ids]
     if not requested:
@@ -99,7 +75,7 @@ def select_components(
     }
     bonds: list[Bond | None] = [
         _copy_bond(bond)
-        for index, bond in graph.indexed_bonds
+        for index, bond in indexed_bonds
         if index in selected_component_indices
     ]
     selected_annotations = {
@@ -116,14 +92,18 @@ def select_components(
         ),
         component_indices=component_indices,
         atom_ids=tuple(sorted(selected_ids)),
-        formal_charge=sum(
-            _modeled_atom_formal_charge(
-                model,
-                atom_id,
-                selected_annotations.get(atom_id),
-                graph.attachments_by_atom.get(atom_id, ()),
+        formal_charge=(
+            sum(source.components[index].formal_charge for index in component_indices)
+            if isinstance(source, ComponentInventory)
+            else sum(
+                modeled_atom_formal_charge(
+                    model.atoms[atom_id].element,
+                    selected_annotations.get(atom_id),
+                    atom_id=atom_id,
+                    attachments=graph.attachments_by_atom.get(atom_id, ()),
+                )
+                for atom_id in selected_ids
             )
-            for atom_id in selected_ids
         ),
         radical_electrons=sum(
             int(selected_annotations.get(atom_id, {}).get("radical_electrons", 0))
@@ -176,173 +156,6 @@ def validate_calculation_artifacts(
         raise ValueError("RDKit atom map does not match the MOL atom count")
 
 
-def _document_model(state: Mapping[str, object]) -> MoleculeModel:
-    model_state = state.get("model")
-    if not isinstance(model_state, Mapping):
-        raise ValueError("Invalid Chemvas document state: model is missing.")
-    return deserialize_model_state(cast("Mapping[str, object]", model_state))
-
-
-def _document_annotations(
-    state: Mapping[str, object], model: MoleculeModel
-) -> dict[int, dict[str, int]]:
-    marks = state.get("marks", ())
-    if not isinstance(marks, Sequence) or isinstance(marks, (str, bytes)):
-        raise ValueError("Invalid Chemvas document state: marks are invalid.")
-    return _resolve_annotations(
-        model,
-        cast("Sequence[object]", marks),
-    )
-
-
-def _resolve_annotations(
-    model: MoleculeModel, marks: Sequence[object]
-) -> dict[int, dict[str, int]]:
-    mark_totals: dict[int, dict[str, int]] = {}
-    electronic_marked_atom_ids: set[int] = set()
-    for raw_mark in marks:
-        if not isinstance(raw_mark, Mapping):
-            raise ValueError("Invalid Chemvas document state: mark entry is invalid.")
-        atom_id = raw_mark.get("atom_id")
-        kind = raw_mark.get("kind")
-        if atom_id is None:
-            continue
-        if type(atom_id) is not int or atom_id not in model.atoms:
-            raise ValueError("Invalid Chemvas document state: mark atom is invalid.")
-        if not isinstance(kind, str):
-            raise ValueError("Invalid Chemvas document state: mark kind is invalid.")
-        if kind not in _CHARGE_MARKS and kind != "radical":
-            continue
-        electronic_marked_atom_ids.add(atom_id)
-        values = mark_totals.setdefault(
-            atom_id, {"formal_charge": 0, "radical_electrons": 0}
-        )
-        values["formal_charge"] += _CHARGE_MARKS.get(kind, 0)
-        if kind == "radical":
-            values["radical_electrons"] += 1
-
-    normalized_marks = {
-        atom_id: _normalize_annotation(values)
-        for atom_id, values in mark_totals.items()
-    }
-    normalized_model = {
-        int(atom_id): _normalize_annotation(values)
-        for atom_id, values in model.atom_annotations.items()
-    }
-    model_electronic_atom_ids = {
-        int(atom_id)
-        for atom_id, values in model.atom_annotations.items()
-        if any(key in values for key in ("formal_charge", "radical_electrons"))
-    }
-    for atom_id in model_electronic_atom_ids:
-        if atom_id not in electronic_marked_atom_ids or normalized_marks.get(
-            atom_id, {}
-        ) != normalized_model.get(atom_id, {}):
-            raise ValueError(
-                "Conflicting charge/radical annotations for Chemvas atom "
-                f"{atom_id}; repair the document before calculation export."
-            )
-
-    resolved: dict[int, dict[str, int]] = {}
-    for atom_id in electronic_marked_atom_ids:
-        annotation = normalized_marks.get(atom_id, {})
-        resolved[atom_id] = annotation or {"formal_charge": 0}
-    return resolved
-
-
-def _normalize_annotation(values: Mapping[str, int]) -> dict[str, int]:
-    normalized: dict[str, int] = {}
-    formal_charge = int(values.get("formal_charge", 0))
-    radical_electrons = int(values.get("radical_electrons", 0))
-    if formal_charge:
-        normalized["formal_charge"] = formal_charge
-    if radical_electrons:
-        normalized["radical_electrons"] = radical_electrons
-    return normalized
-
-
-def _component_atom_ids(model: MoleculeModel) -> tuple[tuple[int, ...], ...]:
-    return connected_atom_components(
-        model.atoms,
-        ((bond.a, bond.b) for bond in model.bonds if bond is not None),
-    )
-
-
-def _graph_index(model: MoleculeModel) -> _GraphIndex:
-    components = _component_atom_ids(model)
-    component_by_atom = {
-        atom_id: index
-        for index, atom_ids in enumerate(components)
-        for atom_id in atom_ids
-    }
-    bond_counts = [0] * len(components)
-    indexed_bonds: list[tuple[int, Bond]] = []
-    attachment_inventory = alias_attachment_inventory(model)
-    for bond in attachment_inventory.bonds:
-        first_component = component_by_atom.get(bond.a)
-        second_component = component_by_atom.get(bond.b)
-        if first_component is not None and first_component == second_component:
-            bond_counts[first_component] += 1
-            indexed_bonds.append((first_component, bond))
-    return _GraphIndex(
-        components=components,
-        bond_counts=tuple(bond_counts),
-        indexed_bonds=tuple(indexed_bonds),
-        attachments_by_atom=attachment_inventory.attachments_by_atom,
-    )
-
-
-def _component_summary(
-    model: MoleculeModel,
-    index: int,
-    atom_ids: tuple[int, ...],
-    annotations: Mapping[int, Mapping[str, int]] | None = None,
-    *,
-    bond_count: int,
-    attachments_by_atom: Mapping[int, tuple[AliasAttachment, ...]],
-) -> ComponentSummary:
-    active_annotations = (
-        annotations if annotations is not None else model.atom_annotations
-    )
-    labels = Counter(model.atoms[atom_id].element for atom_id in atom_ids)
-    xs = [model.atoms[atom_id].x for atom_id in atom_ids]
-    ys = [model.atoms[atom_id].y for atom_id in atom_ids]
-    return ComponentSummary(
-        index=index,
-        atom_ids=atom_ids,
-        bond_count=bond_count,
-        formula_labels=tuple(sorted(labels.items())),
-        formal_charge=sum(
-            _modeled_atom_formal_charge(
-                model,
-                atom_id,
-                active_annotations.get(atom_id),
-                attachments_by_atom.get(atom_id, ()),
-            )
-            for atom_id in atom_ids
-        ),
-        radical_electrons=sum(
-            int(active_annotations.get(atom_id, {}).get("radical_electrons", 0))
-            for atom_id in atom_ids
-        ),
-        bounds=(min(xs), min(ys), max(xs), max(ys)),
-    )
-
-
-def _modeled_atom_formal_charge(
-    model: MoleculeModel,
-    atom_id: int,
-    annotation: Mapping[str, int] | None,
-    attachments: Sequence[AliasAttachment],
-) -> int:
-    return modeled_atom_formal_charge(
-        model.atoms[atom_id].element,
-        annotation,
-        atom_id=atom_id,
-        attachments=attachments,
-    )
-
-
 def _copy_atom(atom: Atom) -> Atom:
     return Atom(
         element=atom.element,
@@ -363,8 +176,4 @@ def _copy_bond(bond: Bond) -> Bond:
     )
 
 
-__all__ = [
-    "inspect_component_inventory",
-    "inspect_components",
-    "select_components",
-]
+__all__ = ["select_components", "validate_calculation_artifacts"]

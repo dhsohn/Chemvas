@@ -44,7 +44,7 @@ from chemvas.ui.main_window_ports import (
 )
 from chemvas.ui.structure_mutation_access import add_bond_for
 from tests.calculation_plan_support import _document_state, _plan
-from tests.test_calculation_step_dialog import _reviewed_precomplex_state
+from tests.precomplex_workflow_support import _review_candidate_fixture
 from tests.test_document_images import _raster
 
 
@@ -102,7 +102,7 @@ def _export(window, destination, message_box, options=None):
 
 def _problem(window, kind, tmp_path, monkeypatch, capsys):
     if kind == "review":
-        state = _reviewed_precomplex_state(tmp_path, monkeypatch, capsys)
+        state = _review_candidate_fixture(tmp_path, monkeypatch, capsys)[1]["state"]
         canvas = _install(window, state)
         canvas.setFocus()
         QTest.keySequence(canvas, QKeySequence(QKeySequence.StandardKey.SelectAll))

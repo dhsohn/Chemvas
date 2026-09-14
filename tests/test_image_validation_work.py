@@ -1,17 +1,21 @@
-"""Existing embedded pixels are not repeatedly decoded on new insert/paste."""
+"""Immutable live pixels are not repeatedly decoded by scene editing."""
 
 import json
+import math
 from io import BytesIO
 from unittest import mock
 
 import pytest
 from PIL import Image
+from PyQt6.QtCore import QPointF
 from PyQt6.QtWidgets import QApplication
 
 from chemvas.domain.document import image_state_from_bytes, validate_image_states
 from chemvas.domain.document import images as image_policy
 from chemvas.ui.canvas_window_access import snapshot_canvas_state_for
 from chemvas.ui.image_actions import insert_image_bytes
+from chemvas.ui.image_item import ImageItem
+from chemvas.ui.scene_item_access import create_scene_item_from_state
 from chemvas.ui.select_all_access import select_all_scene_items_for
 from tests.canvas_factory import build_canvas_view
 
@@ -130,3 +134,64 @@ def test_whole_document_validation_remains_strict_for_every_image():
     ) as inspect:
         validate_image_states(states)
     assert inspect.call_count == 3
+
+
+def test_rotation_preview_and_history_do_not_decode_unchanged_sources(canvas):
+    items = [
+        create_scene_item_from_state(
+            canvas,
+            image_state_from_bytes(_png(color), x=index * 90, width=48, height=24),
+        )
+        for index, color in enumerate(("red", "blue"))
+    ]
+    assert select_all_scene_items_for(canvas)
+    before = snapshot_canvas_state_for(canvas)
+    pixels = [item.image() for item in items]
+    history = canvas.services.history_service
+    stacks = history.capture_stack_snapshot()
+    controller = canvas.services.scene_operations.scene_transform_controller
+    session = controller.begin_rotation_drag(QPointF(300, 0))
+    assert session is not None
+    with mock.patch.object(
+        image_policy, "_inspect_image_bytes", wraps=image_policy._inspect_image_bytes
+    ) as inspect:
+        for index in range(1, 11):
+            angle = 0.06 * index
+            controller.update_rotation_drag(
+                session,
+                session.center + QPointF(200 * math.cos(angle), 200 * math.sin(angle)),
+            )
+    assert inspect.call_count == 0
+    after = snapshot_canvas_state_for(canvas)
+    assert after != before
+    history.verify_stack_snapshot(stacks)
+    command = controller.rotation_drag_command(session)
+    assert command is not None
+    assert history.push(command)
+    with mock.patch.object(
+        image_policy, "_inspect_image_bytes", wraps=image_policy._inspect_image_bytes
+    ) as inspect:
+        history.undo()
+        assert [item.image_state() for item in items] == before["images"]
+        history.redo()
+        assert [item.image_state() for item in items] == after["images"]
+    assert inspect.call_count == 0
+    history.verify_stack_snapshot(stacks, history=(*stacks.history, command))
+    assert snapshot_canvas_state_for(canvas) == after
+    assert [item.image() for item in items] == pixels
+    for old, new in zip(before["images"], after["images"], strict=True):
+        assert {key: value for key, value in old.items() if key not in {"x", "y"}} == {
+            key: value for key, value in new.items() if key not in {"x", "y"}
+        }
+
+
+def test_image_constructor_still_decodes_and_rejects_false_source_metadata(app):
+    state = image_state_from_bytes(_png("red"))
+    with mock.patch.object(
+        image_policy, "_inspect_image_bytes", wraps=image_policy._inspect_image_bytes
+    ) as inspect:
+        item = ImageItem(state)
+    assert inspect.call_count == 1
+    assert item.image_state() == state
+    with pytest.raises(ValueError, match="dimensions do not match"):
+        ImageItem({**state, "pixel_width": 25})

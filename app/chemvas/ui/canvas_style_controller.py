@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from functools import partial
 from typing import TYPE_CHECKING, Any, cast
 
 from PyQt6.QtCore import Qt
@@ -172,7 +173,9 @@ class CanvasStyleController:
             after = _TextStyleChange(dict(changed), self._capture_notes(items))
             if (
                 self.history.push(
-                    SetAnnotationStyleCommand(before, after, self._restore_text_style)
+                    SetAnnotationStyleCommand(
+                        before, after, partial(self._restore_text_style, self.canvas)
+                    )
                 )
                 is False
             ):

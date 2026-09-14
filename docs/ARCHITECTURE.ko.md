@@ -53,18 +53,30 @@ flowchart TB
 - Domain document (`app/chemvas/domain/document`): Qt-free 분자 모델과 버전이 있는 문서/클립보드 직렬화·검증 정책을 소유한다. 기존 `chemvas.core.model`과 `document_state` 경로는 삭제되었다.
 - 계산 plan과 artifact(`app/chemvas/domain/document/calculation_plan.py`, `app/chemvas/domain/document/precomplex_profile.py`, `app/chemvas/features/calculation_bundle`, `app/chemvas/bootstrap/calculation_bundle.py`): document domain은 endpoint precomplex 상태를 포함한 엄격한 Plan v2 스키마를 소유한다. Domain profile registry는 현재 placement profile의 sample bound, radius table, table hash, 과학 provenance의 단일 immutable owner다. Qt 비의존 feature API는 연결 성분 선택·전하 의미 검증·endpoint별 역할·correspondence readiness·결합 변화·결정론적 path precheck·제한된 rigid-placement 후보 생성·생성된 계산 artifact의 전자 상태와 원자 맵 검증·step endpoint 사이의 생성 원자 대응을 소유한다. Calculation dialog는 included 원자를 ID 기반 대응표 하나로 투영하고 부분 draft와 명시적인 unmapped 선택을 보존한 뒤, 최종 후보를 같은 feature/domain 검증 경로에 맡긴다. `calculation_mapping_highlight.py`는 dialog 수명에 한정된 비선택 atom-ID label을 mapping 상태에 따라 색칠하며 document serialization, selection state, history에 넣지 않고 모든 dialog 종료에서 제거한다. bootstrap은 `.chemvas` I/O, 선택적 RDKit 조립, 결정적 단일파일 step 직렬화, 현재 profile의 후보 생성·검사·선택·결정론적 재생성, reactant identity 순서의 path endpoint 생성, 비덮어쓰기 원자적 공개를 맡는다. `application.main`은 Qt import 전에 `inspect`, `attach-plan`, `inspect-plan`, `generate-precomplex`, `inspect-precomplex`, `select-precomplex`, `pack-step`을 dispatch한다.
 - Agent 문서 patch(`app/chemvas/features/document_patch`, `app/chemvas/bootstrap/document_patch.py`): Qt/provider 비의존 feature API가 결정적 전체 graph 검사, 엄격한 Graph Patch v1 검증, 복사본 기반 순차 mutation, 의존 좌표 이동, 최종 문서/Calculation Plan gate를 소유한다. bootstrap은 원본 bytes를 한 번 읽어 hash하고, 중복 key·비표준 JSON을 거부하며, 후보를 결정적으로 encode한 뒤 공용 원자적 비덮어쓰기 파일 생성기로 공개한다. `inspect-document`와 `apply-patch`는 Qt 전에 dispatch되며 Chemvas 내부에서 자연어 모델이나 화학 추론을 실행하지 않는다.
-- 창 없는 문서 렌더링(`app/chemvas/bootstrap/document_render.py`): bootstrap은 파일과 출력 자원 계약을 먼저 검증한 뒤 보이지 않는 `QApplication`과 `CanvasView`를 지연 조립한다. 적용된 문서는 `CanvasDocumentSessionService.plan_figure_export`로 painting 전 자원 preflight를 거치고 GUI와 같은 전체 sheet figure-export 경로로 private 임시 저장소에 SVG/PNG를 렌더한다. 제한을 통과한 출력만 기존 경로를 덮어쓰지 않고 원자적으로 공개하며 원본/출력 hash, point/pixel 크기, 문서 버전이 render report v1을 이룬다. 데스크톱 창, session recovery, RDKit loading, editable SVG payload, PDF, TIFF는 이 명령의 범위 밖이다.
+- 창 없는 문서 렌더링(`app/chemvas/bootstrap/document_render.py`): bootstrap은 파일과 출력 자원 계약을 먼저 검증한 뒤 보이지 않는 `QApplication`과 `CanvasView`를 지연 조립한다. GUI와 같은 전체 sheet `CanvasDocumentSessionService.export_figure` 경로에서 내용을 한 번 계산하고 painting 전 자원 제한을 검사한 뒤 private 임시 저장소에 SVG/PNG/PDF를 렌더한다. bootstrap은 반환된 plan을 render report v1에 재사용하며 PDF의 실제 정수 point 크기도 반영한다. 제한을 통과한 출력만 기존 경로를 덮어쓰지 않고 원자적으로 공개하며 원본/출력 hash, point/pixel 크기, 문서 버전을 보고한다. 데스크톱 창, session recovery, RDKit loading, editable SVG payload, TIFF는 이 명령의 범위 밖이다.
 - 이전된 feature 정책 (`app/chemvas/features/{export,session,annotations,rendering,insertion,selection,hover}`): 각 패키지는 응집된 planning/geometry/state 계약을 하나의 공개 API로 제공한다. 기존 평면 호환 모듈은 삭제되었고 `test_package_dependencies.py`가 재도입을 막는다.
 - 메인 창 조립: `chemvas.shell.main_window`가 얇은 Qt 셸을 소유하고, `chemvas.bootstrap`이 runtime/service 조립·창 등록·문서 열기·앱 시작을 소유한다. Qt 파일 열기 이벤트는 `chemvas.adapters.qt`를 통해 들어온다.
 
-계산 plan 검증과 보고는 요청 안에서 `ComponentInventory`를 재사용한다. 편집 준비는
+`chemvas.domain.document.inspection`이 공통 연결 성분 inventory, 유효 전하·라디칼
+표시, 모델과 표시의 일관성 검사를 소유한다. 문서 조합, graph 검사, patch와 계산 준비가
+이 단일 소유자를 사용하고, 계산 state 선택 및 plan/artifact 규칙은
+`features.calculation_bundle`에 남는다. 계산 plan이 없는 patch는 해당 feature를
+로드하지 않으며, inspection 모듈 자체는 Qt와 RDKit을 import하지 않는다.
+이 의미 검사는 native 문서를 여는 gate가 아니다. 수정이 필요한 그림도 계속 열 수
+있어야 한다. 기존에 공개한 calculation 패키지 루트의 공통 export는 동일한 정본 객체를
+가리키고, 내부 호출자는 domain 소유자를 직접 import한다.
+
+계산 plan 검증과 보고는 요청 안에서 이 `ComponentInventory`를 재사용한다. 편집 준비는
 structural validation을 사용하므로 사용자가 맞지 않는 전하 같은 의미 오류를 수정할 수
 있다. 중복 step 거부와 reviewed-precomplex 유지·무효화는 calculation feature의 순수
 step-edit 연산이 소유하며, dialog는 widget 입력 수집과 오류 표시를 맡는다. 문서 편집
 사이에 inventory를 캐시하지 않는다.
 
-Figure export의 사전 검사와 렌더링은 feature의 `resolve_export_plan` 진입점에서
-content bounds와 물리 크기를 함께 계산한다. 선택 회전, 클립보드 배치, 원자 이동은
+Figure export의 사전 검사와 렌더링은 동기 요청 하나 안에서 feature의
+`resolve_export_plan`이 반환한 항목과 기하 정보를 공유한다. session이 plan을 검증하면
+`render_export_plan`이 다시 측정하지 않고 그린다. 별도의 `export_scene` 및
+`plan_figure_export` 호출은 항상 새로 계산하며 편집 사이에 plan을 캐시하지 않는다.
+선택 회전, 클립보드 배치, 원자 이동은
 `chemvas.features.selection`의 순수 원근 기하 계산을 공유한다. 화면 좌표 이동은
 저장 좌표에 역투영한 변화량을 적용해 깊이, 카메라 frame, 기존 stale 좌표의 오차를
 보존한다. 선택 상태 집계는 Qt 선택과 선택된 노트 registry에 같은 item identity를
@@ -81,7 +93,7 @@ content bounds와 물리 크기를 함께 계산한다. 선택 회전, 클립보
 - **Access 모듈** (`*_access.py`): 연산 하나를 감싸는 자유 함수(`foo_for(canvas)`). `canvas.services`에 직접 접근할 수 없고, 서비스 조회는 대응하는 ports 모듈에 위임한다.
 - **Ports 모듈** (`*_ports.py`): 서비스 컨테이너(`canvas_services_for` / window 비공개 저장소)를 해석할 수 있는 유일한 모듈. 그 외 모든 코드는 협력자를 주입받거나 port를 호출한다. 생산 코드의 port는 canonical `CanvasRuntimeServices` API만 사용한다. 응집된 그룹은 묶어서 유지하고 `graph_service`, `tool_controller`, `hover`, `atom_label_service` 같은 단일 runtime은 직접 보관한다. 평면 서비스 별칭과 duck-typed 생산 adapter는 삭제되었고, 집중 테스트는 `tests/runtime_services.py`로 부분 canonical runtime을 만든다.
 - **서비스와 컨트롤러**: `chemvas.ui.canvas_services.py`에서 캔버스당 한 번, 명시적 키워드 주입으로 조립된다 — 서비스 내부의 서비스 로케이터 금지, 누락된 배선을 숨기는 `=None` 협력자 기본값 금지. 조립은 응집된 그룹은 `CanvasRuntimeServices`의 bundle로 보관하고, runtime이 하나면 단일 멤버 bundle을 만들지 않고 직접 보관한다. 기존 graph/tool wrapper bundle과 builder 주입 composer 계층은 삭제되었다.
-- **core는 UI 및 Qt와 분리된다**: `app/chemvas/core`는 모듈 수준에서 `ui`를 import하지 않는다(`chemvas.core.history.py`의 지연 해석 프로토콜 구현만 예외). 또한 Qt를 import하지 않으며, 구체 Qt 렌더링은 `chemvas.adapters.qt.renderer`에 둔다. 새로운 core-to-Qt 의존성은 금지한다.
+- **core는 UI 및 Qt와 분리된다**: `app/chemvas/core`는 동적 import를 포함해 `ui`나 Qt를 import하지 않는다. History command는 UI 구현을 선택하지 않고 결합된 연산을 전달받는다. 구체 Qt 렌더링은 `chemvas.adapters.qt.renderer`에 둔다. 새로운 core-to-Qt 의존성은 금지한다.
 - **RDKit은 선택적이다**: 앱 시작 경로에서 절대 하드 import가 되어서는 안 된다. RDKit이 필요한 기능은 그것이 없을 때 우아하게 축소되거나 명확한 메시지와 함께 실패한다 — `chemvas.core.rdkit_adapter` 참조. 아래 3D 제약은 이 규칙이 export 동작에 대해 무엇을 뜻하는지를 적은 것이고, 규칙 자체는 일반적이다.
 
 이 규칙들은 `tests/test_architecture_boundaries.py`가 강제한다. 신규 규칙은
@@ -112,6 +124,18 @@ content bounds와 물리 크기를 함께 계산한다. 선택 회전, 클립보
   기존 편집 경로를 유지한다. 일반 Perspective 도구 전환은 여전히 commit하며,
   이 변경 경계에서는 취소한다.
 - `CanvasHistoryService`는 undo/redo stack 정책과 불변 `HistoryStackSnapshot` 값의 유일한 소유자다. 최상위 exact undo/redo 연산은 문서 savepoint를 하나만 캡처하고, 중첩 command는 그 연산에 위임한다.
+- core와 UI history command는 전체 canvas가 아니라 결합된 연산을 전달받는다.
+  작은 구조적 프로토콜이 각 command 계열에 필요한 연산을 명시한다.
+  `CanvasRuntimeState.create`가 캔버스당 `CanvasHistoryOperations` 하나를 조립하며,
+  이 UI adapter만 canvas를 비공개로 보관하고 정본 mutation·transaction 소유자를
+  재사용한다. 공개 canvas 접근자나 범용 proxy는 없다. `CanvasHistoryService`는
+  연산과 stack state를 명시적으로 주입받는다. 초기 실행, 역연산 보상, 복합 command의
+  자식, 중첩 transaction scope는 모두 같은 연산 인스턴스를 사용한다. 기존 command의
+  데이터 payload는 유지하며 annotation·sheet callback은 값만 받도록 결합한다.
+  `test_history_operations.py`와 `test_history_atom_lifecycle_port.py`는 UI·Qt import나
+  전역 resolver 패치 없이, 필요한 상태·연산만 가진 작은 대역으로 재실행을 검증한다.
+  실제 Qt 테스트는 장면 객체의 동일성, 복구, stack 정책, GUI/CLI 동등성을 계속 검증한다.
+  이는 실행 경계를 좁힌 것이며 별도 history 엔진이나 문서 savepoint의 대체물이 아니다.
 - 선택 nudge/정렬 및 Select/Move 드래그 command는 기존 깊이 좌표와 종속 mark/ring fill을 포함한
   선택 영역 geometry의 정확한 before/after를 기록한다. 재생할 때 원자를 먼저,
   종속 scene item을 나중에 복원하고 선택 외곽선을 한 번 갱신한다. 이 command
@@ -156,6 +180,47 @@ flowchart LR
 Agent 편집 흐름: `inspect-document` -> 정확한 source SHA-256과 안정적인 atom/bond 목록 -> 신뢰하지 않는 Graph Patch v1 -> 엄격한 schema/hash gate -> deep copy에서 순차 mutation -> 구조 및 Calculation Plan 의미 검증 -> 결정적 후보 hash -> dry-run 보고 또는 단 한 번의 원자적 비덮어쓰기 `.chemvas` 공개. 입력 파일 버전과 범위 밖 scene state를 보존하며, 어느 operation이나 stale plan이라도 실패하면 output은 없다.
 
 창 없는 렌더 흐름: `render-document` -> 원본 1회 읽기/hash 및 record-count gate -> 검증된 state를 invisible canvas에 적용 -> canonical whole-sheet export plan -> point/pixel 자원 gate -> private SVG/PNG 렌더 -> output byte gate -> 단 한 번의 원자적 비덮어쓰기 공개 -> hash·크기 JSON report. painting에는 지연 import한 Qt가 필요하지만 RDKit과 desktop session-recovery service는 시작하지 않는다.
+
+### 원자 이동의 공통 의미
+
+GUI 이동과 Graph Patch의 `move_atom`은 `domain.document.perspective`의 역투영
+규칙을 공유한다. GUI item 갱신·history와 CLI의 복사본 검증·파일 공개는 별도 책임으로
+유지한다. `tests/test_document_move_equivalence.py`의 경로 간 회귀는 동일한 desktop
+snapshot에서 실제 Select/Move 입력과 별도 `apply-patch` 프로세스를 실행해 비교한다.
+이동 원자, 부착 표시, ring 기하, 저장된 깊이뿐 아니라 나머지 문서 내용 보존, GUI의
+정확한 Undo/Redo와 양쪽 저장 결과를 GUI에서 다시 열었을 때의 상태를 확인한다.
+실제 표시 중심과 ring polygon도 따로
+검사한다. 올바른 snapshot만으로 화면의 종속 항목이 함께 움직였음을 증명할 수는 없다.
+
+이는 원자 이동의 계약이지, 범용 편집 엔진이나 허용된 모든 입력의 바이트 동일성 약속이
+아니다. Desktop snapshot은 이미 원자에서 ring 꼭짓점을 다시 만들고, raw patch는
+문서 검증기가 허용한 정지 꼭짓점의 미세 잔차를 보존한다. Snapshot은 오래된 원근 캐시
+항목도 제외한다. 해당 항목의 GUI 이동·history는 live state에서 따로 검사하며,
+직렬화된 CLI 경로의 검증 범위라고 주장하지 않는다. GUI 취소·무이동의 history
+정책과 CLI의 무이동 거절, CLI 전용 terminal-angle 제한도 구별한다. 실제 공통 규칙이
+있는 연산부터 하나씩 공유 규칙과 경로 간 테스트를 확장한다.
+
+### 결합 변경의 공통 의미
+
+GUI 결합 단축키와 Graph Patch의 `update_bond`는 같은 문서 결합 필드를 변경한다.
+GUI의 명명된 차수·스타일 동작에 대응하는 patch는 두 필드를 모두 명시한다.
+CLI는 차수만 보고 GUI 프리셋을 추론하지 않는다. 순서 없는 끝점 쌍으로 결합을
+찾더라도 저장된 방향은 유지하며, 이는 방향을 뒤집는 연산이 아니다.
+GUI의 화면·history 갱신과 CLI의 복사본 검증·파일 공개는 별도 책임으로 유지한다.
+
+`tests/test_document_bond_edit_equivalence.py`는 실제 hover·키 입력과 별도 공개
+CLI 프로세스를, 요청한 결합 차수·스타일만 바꾼 명시적 기대 문서에 각각 대조한다.
+단일·이중·삼중 결합, 방향이 있는 wedge/hash, 명시적인 미지정 입체표시 제거의 대표
+사례에서 실제 Qt 도형과 그 페인트, 나머지 문서·선택 상태 보존, 정확한 Undo/Redo,
+양쪽 저장 결과의 GUI 복원을 확인한다. 원자 이동 회귀와 기존 GUI fixture 및 공개
+CLI 테스트 실행 부분을 공유하고, 연산별 fixture와 화면 기대값은 별도로 둔다.
+
+입력 정책은 서로 대체하지 않는다. 같은 GUI 프리셋을 다시 적용하면 무변경일 수
+있지만, 바뀌는 값이 없는 patch는 거절한다. 기존 이중 결합 위에 단일 결합을 새로
+그리는 것은 덧그리기 동작이지 명명된 Single 동작이 아니다. GUI의 외형 단축키는
+이중 결합의 미지정 입체정보를 보호하고, Double을 명시적으로 고르면 미지정 표시를
+제거할 수 있다. CLI의 명시적 스타일 변경은 그 외형 단축키와 같은 의도가 아니다.
+이 차이를 위해 별도의 공통 편집 엔진을 추가하지 않는다.
 
 ## 복합 그룹화 (Composite Grouping)
 
@@ -220,7 +285,7 @@ GUI 내보내기는 공통 크기 한도와 가독성 검사를 사용하며,
 - 미리보기 창은 사용자가 보는 것과 실제로 내보내지는 것 사이의 불일치를 피하기 위해 `.xyz` 내보내기와 동일한 변환 경로를 재사용해야 한다.
 - 3D 미리보기는 **View ▸ Molecule Info**에서 별도의 모덜리스(modeless) 창으로 열린다. 선택된 구조 변환 경로를 사용하고, 선택된 분자에 대한 `Export 3D XYZ` 동작을 소유하며, 선택된 화학 구조가 없을 때는 빈 미리보기를 표시한다.
 - 열려 있는 각 캔버스 탭은 자체 파일 경로와 clean/dirty 다이제스트(digest)를 가진 독립적인 문서다. `.chemvas` 로딩은 표준 단일 캔버스 페이로드만 허용한다.
-- `.chemvas` 문서는 version 7만 읽고 쓴다. Canonical payload는 deleted-slot tombstone이 없는 compact bond array를 사용하며 plan이 있으면 Calculation Plan v2다. Calculation plan은 bond 위치가 아니라 안정적 atom id와 완전한 연결 성분 atom-id 집합을 참조한다.
+- `.chemvas`는 현재 version 7을 읽고 쓴다. [문서 호환성 정책](DOCUMENT_COMPATIBILITY.ko.md)에 따라 앞으로 쓰기 버전이 바뀌어도 지원 중인 v7 읽기는 유지한다. Native I/O와 editable SVG에 내장된 문서는 domain의 같은 reader 검증을 사용한다. Canonical payload는 deleted-slot tombstone이 없는 compact bond array를 사용하며 plan이 있으면 Calculation Plan v2다. Calculation plan은 bond 위치가 아니라 안정적 atom id와 완전한 연결 성분 atom-id 집합을 참조한다.
 
 ## 리팩토링 순서
 

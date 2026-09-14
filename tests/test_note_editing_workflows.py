@@ -4,7 +4,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 import pytest
 from PyQt6.QtCore import QPointF, QRectF, Qt
-from PyQt6.QtGui import QColor, QImage, QKeySequence, QPainter, QTextCursor
+from PyQt6.QtGui import QColor, QImage, QPainter, QTextCursor
 from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import QApplication, QToolButton
 
@@ -23,14 +23,9 @@ from chemvas.ui.note_item import NoteItem
 from chemvas.ui.scene_item_restore import create_note_item_from_state
 from chemvas.ui.scene_item_state_serialization import note_state_dict
 from chemvas.ui.structure_mutation_access import add_atom_for
-from tests.gui_workflow_support import _click, _key, _saved_note, _tool
+from tests.gui_workflow_support import _click, _key, _redo, _saved_note, _tool
 from tests.gui_workflow_support import app as app
 from tests.gui_workflow_support import drawing as drawing
-
-
-def _redo(canvas):
-    QTest.keySequence(canvas, QKeySequence(QKeySequence.StandardKey.Redo))
-    QApplication.processEvents()
 
 
 @pytest.mark.parametrize("key", [Qt.Key.Key_Return, Qt.Key.Key_Enter])
@@ -393,7 +388,7 @@ def test_dirty_observer_failure_does_not_lose_editor_text_or_history(drawing, tm
         assert note.toPlainText() == "alpha beta gamma changed"
         _key(canvas, Qt.Key.Key_Z, Qt.KeyboardModifier.ControlModifier)
         assert note.toPlainText() == "alpha beta gamma"
-        _key(canvas, Qt.Key.Key_Y, Qt.KeyboardModifier.ControlModifier)
+        _redo(canvas)
         _tool(window, "bond")
         history_service_for_window(window).undo()
         assert note.toPlainText() == "alpha beta gamma"

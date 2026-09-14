@@ -8,7 +8,10 @@ from PyQt6.QtCore import QRectF, Qt
 from PyQt6.QtGui import QImage, QPainter, QPen
 from PyQt6.QtWidgets import QGraphicsRectItem, QStyleOptionGraphicsItem, QWidget
 
-from chemvas.domain.document import image_bytes_from_state, validate_image_state
+from chemvas.domain.document import (
+    image_bytes_from_state,
+    validate_image_collection_budget,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -91,7 +94,9 @@ class ImageItem(QGraphicsRectItem):
         return state
 
     def apply_image_state(self, state: Mapping[str, object]) -> None:
-        validate_image_state(state)
+        # The constructor authenticated these immutable bytes. Validate all
+        # fields again, but do not decode the same raster on every pointer frame.
+        validate_image_collection_budget([state])
         source = self.data(1)
         if any(state[key] != source[key] for key in _SOURCE_KEYS):
             raise ValueError(

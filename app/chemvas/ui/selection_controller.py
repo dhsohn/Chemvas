@@ -9,7 +9,6 @@ from chemvas.ui.selection_style_state import selection_style_state_for
 
 if TYPE_CHECKING:
     from PyQt6.QtCore import QPointF
-    from PyQt6.QtGui import QColor, QPainterPath
     from PyQt6.QtWidgets import (
         QGraphicsItem,
         QGraphicsTextItem,
@@ -124,45 +123,6 @@ class SelectionController:
 
     def shift_selection_outlines(self, dx: float, dy: float) -> None:
         self.outline_service.shift_selection_outlines(dx, dy)
-
-    def selection_line_stroke_path(
-        self,
-        start: QPointF,
-        end: QPointF,
-        width: float,
-    ) -> QPainterPath:
-        return self.outline_service.selection_line_stroke_path(start, end, width)
-
-    def selection_path_for_bond_item(
-        self, item, width: float | None = None
-    ) -> QPainterPath:
-        return self.outline_service.selection_path_for_bond_item(item, width=width)
-
-    def selection_path_for_bond(self, bond_id: int) -> QPainterPath:
-        return self.outline_service.selection_path_for_bond(bond_id)
-
-    def selection_path_for_object_item(self, item) -> QPainterPath:
-        return self.outline_service.selection_path_for_object_item(item)
-
-    def add_selection_object_overlay(self, item, color: QColor) -> None:
-        self.outline_service.add_selection_object_overlay(item, color)
-
-    def add_selection_component_overlay(
-        self,
-        atom_ids: set[int],
-        bond_ids: set[int],
-        color: QColor,
-    ) -> None:
-        self.outline_service.add_selection_component_overlay(atom_ids, bond_ids, color)
-
-    def selection_center_for_atoms(self, atom_ids: set[int]) -> QPointF | None:
-        return self.outline_service.selection_center_for_atoms(atom_ids)
-
-    def selection_center_marker_enabled(self) -> bool:
-        return self.outline_service.selection_center_marker_enabled()
-
-    def add_selection_center_marker(self, center: QPointF) -> None:
-        self.outline_service.add_selection_center_marker(center)
 
 
 __all__ = ["SelectionController"]

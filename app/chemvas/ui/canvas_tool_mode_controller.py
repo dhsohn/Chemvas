@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from functools import wraps
+from functools import partial, wraps
 from typing import TYPE_CHECKING, Any, ClassVar
 
 from chemvas.domain.document import VALID_LINE_KINDS
@@ -149,7 +149,9 @@ class CanvasToolModeController:
             if history is not None:
                 committed = history.push(
                     SetAnnotationStyleCommand(
-                        before, changed, apply_annotation_style_for
+                        before,
+                        changed,
+                        partial(apply_annotation_style_for, self.canvas),
                     )
                 )
                 if committed is False:

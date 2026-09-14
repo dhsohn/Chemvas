@@ -1,10 +1,18 @@
 from __future__ import annotations
 
+import json
 from copy import deepcopy
+from pathlib import Path
+from unittest import mock
 
 import pytest
-from PyQt6.QtWidgets import QApplication
+from PyQt6.QtCore import QPointF, Qt
+from PyQt6.QtGui import QColor, QTextCursor, QTextDocument
+from PyQt6.QtTest import QTest
+from PyQt6.QtWidgets import QApplication, QFileDialog, QMessageBox
 
+from chemvas.bootstrap.file_open import open_document
+from chemvas.bootstrap.window_registry import open_windows
 from chemvas.core.document_io import read_document
 from chemvas.domain.document import (
     CANVAS_FILE_VERSION,
@@ -17,7 +25,10 @@ from chemvas.features.document_composition import compose_document_state
 from chemvas.features.document_patch import apply_document_patch
 from chemvas.features.insertion import plan_smiles_commit
 from chemvas.ui.insert_commit_service import InsertCommitService
+from chemvas.ui.main_window_ports import active_canvas_for_window, services_for_window
 from tests.canvas_factory import build_canvas_view
+from tests.gui_workflow_support import _click, _tool
+from tests.gui_workflow_support import qt_errors as qt_errors
 
 
 @pytest.fixture(scope="module")
@@ -151,3 +162,162 @@ def test_insert_overlapping_heteroatom_preserves_original_and_undo(canvas, opera
     assert documents.snapshot_state() == before
     canvas.services.history_service.redo()
     assert documents.snapshot_state() == after
+
+
+@pytest.fixture
+def document_windows(app, qt_errors):
+    yield
+    for window in list(open_windows()):
+        services = services_for_window(window)
+        for canvas in window.tab_references.all_canvases():
+            canvas.services.tool_controller.prepare_for_document_edit()
+            canvas.scene().clearFocus()
+            services.canvas_document_service.mark_clean(canvas)
+        window.close()
+    app.processEvents()
+    assert not qt_errors
+
+
+def _html_text_and_formats(html):
+    document = QTextDocument()
+    document.setHtml(html)
+    cursor = QTextCursor(document)
+    formats = []
+    for position in range(document.characterCount() - 1):
+        cursor.setPosition(position)
+        cursor.movePosition(
+            QTextCursor.MoveOperation.NextCharacter, QTextCursor.MoveMode.KeepAnchor
+        )
+        char = cursor.charFormat()
+        formats.append(
+            (
+                cursor.selectedText(),
+                char.fontWeight(),
+                char.fontItalic(),
+                char.fontUnderline(),
+                char.fontStrikeOut(),
+                char.verticalAlignment(),
+                char.foreground().color().name(),
+                char.anchorHref(),
+            )
+        )
+    return document.toPlainText(), formats
+
+
+def _assert_frozen_v7_content(literal_state, live_state):
+    expected = deepcopy(literal_state)
+    # Native JSON represents atom IDs as strings and coordinates as arrays.
+    actual = json.loads(json.dumps(live_state))
+    for arrow in expected["arrows"]:
+        arrow.setdefault("control", None)
+        arrow.setdefault("double", False)
+    for shape in expected["shapes"]:
+        # QBrush stores alpha at QColor's existing 16-bit precision.
+        if "fill_alpha" in shape:
+            color = QColor(shape["fill"])
+            color.setAlphaF(shape["fill_alpha"])
+            shape["fill_alpha"] = color.alphaF()
+    for before, after in zip(expected["notes"], actual["notes"], strict=True):
+        # Qt and the existing HTML sanitizer canonicalize markup, not its text
+        # or per-character formatting. No other frozen field is discarded.
+        assert _html_text_and_formats(before["html"]) == _html_text_and_formats(
+            after["html"]
+        )
+        before["html"] = after["html"]
+    assert actual == expected
+
+
+@pytest.mark.parametrize("name", ["minimal", "extended"])
+def test_frozen_v7_gui_open_edit_undo_save_as_and_reopen(
+    app, document_windows, tmp_path, name
+):
+    source = Path(__file__).parent / "fixtures" / "document-v7" / f"{name}.chemvas"
+    original_bytes = source.read_bytes()
+    literal = json.loads(original_bytes)
+    assert literal["version"] == 7
+    with (
+        mock.patch.object(
+            QMessageBox,
+            "warning",
+            side_effect=AssertionError("unexpected document warning"),
+        ),
+        mock.patch.object(
+            QMessageBox,
+            "question",
+            side_effect=AssertionError("unexpected document confirmation"),
+        ),
+    ):
+        # The application File Open entry reads the fixed file, not a document
+        # generated with the current writer in test setup.
+        open_document(str(source))
+        assert len(open_windows()) == 1
+        window = open_windows()[0]
+        window.resize(1120, 700)
+        window.activateWindow()
+        assert QTest.qWaitForWindowExposed(window, 5000)
+        assert QTest.qWaitForWindowActive(window, 5000)
+        canvas = active_canvas_for_window(window)
+        canvas.centerOn(0, 0)
+        app.processEvents()
+        services = services_for_window(window)
+        documents = canvas.services.document.canvas_document_session_service
+        before = documents.snapshot_state()
+        _assert_frozen_v7_content(literal["state"], before)
+        assert services.canvas_document_service.file_path(canvas) == str(source)
+        assert not services.canvas_document_service.is_dirty(canvas)
+        history = canvas.services.history_service
+        stacks = history.capture_stack_snapshot()
+
+        _tool(window, "note")
+        _click(canvas, QPointF(-100, -100))
+        QTest.keyClicks(canvas, "v7 compatibility edit")
+        _tool(window, "select")
+        canvas.scene().clearFocus()
+        app.processEvents()
+        after = documents.snapshot_state()
+        assert len(after["notes"]) == len(before["notes"]) + 1
+        assert after["notes"][-1]["text"] == "v7 compatibility edit"
+        without_edit = deepcopy(after)
+        without_edit["notes"].pop()
+        assert without_edit == before
+        command = history.capture_stack_snapshot().history[-1]
+        history.verify_stack_snapshot(stacks, history=(*stacks.history, command))
+        assert services.canvas_document_service.is_dirty(canvas)
+        QTest.keyClick(canvas, Qt.Key.Key_Z, Qt.KeyboardModifier.ControlModifier)
+        assert documents.snapshot_state() == before
+        assert not services.canvas_document_service.is_dirty(canvas)
+        history.redo()
+        assert documents.snapshot_state() == after
+
+        destination = tmp_path / f"{name}-edited.chemvas"
+        file_menu = next(
+            action.menu()
+            for action in window.menuBar().actions()
+            if action.text() == "File"
+        )
+        with mock.patch.object(
+            QFileDialog, "getSaveFileName", return_value=(str(destination), "")
+        ) as chooser:
+            next(
+                action
+                for action in file_menu.actions()
+                if action.text() == "Save As..."
+            ).trigger()
+        chooser.assert_called_once()
+        saved = read_document(destination)
+        assert json.loads(destination.read_bytes())["version"] == CANVAS_FILE_VERSION
+        assert json.loads(json.dumps(saved.state)) == json.loads(json.dumps(after))
+        assert not services.canvas_document_service.is_dirty(canvas)
+        assert services.canvas_document_service.file_path(canvas) == str(destination)
+        window.close()
+        app.processEvents()
+        assert not open_windows()
+        open_document(str(destination))
+        assert len(open_windows()) == 1
+        reopened = active_canvas_for_window(open_windows()[0])
+        assert reopened is not canvas
+        assert (
+            reopened.services.document.canvas_document_session_service.snapshot_state()
+            == after
+        )
+    assert source.read_bytes() == original_bytes

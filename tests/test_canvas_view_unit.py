@@ -49,6 +49,7 @@ from chemvas.ui.history_commands import (
     DeleteSceneItemsCommand,
     UpdateSceneItemCommand,
 )
+from chemvas.ui.history_operations import CanvasHistoryOperations
 from chemvas.ui.input_view_access import (
     shortcut_modifiers_for,
 )
@@ -105,7 +106,9 @@ class _FakeNoteCanvas:
         set_selected_notes_for(self, [])
         self.updated_boxes = []
         self.history_service = CanvasHistoryService(
-            self, CanvasHistoryState(), replay_context=nullcontext
+            CanvasHistoryOperations(self),
+            CanvasHistoryState(),
+            replay_context=nullcontext,
         )
         self.history_service.push = self.push_command
         self.services = canvas_runtime_services(

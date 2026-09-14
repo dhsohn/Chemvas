@@ -288,7 +288,7 @@ def test_upright_group_transform_failure_is_atomic_and_retryable(canvas, kind, p
         failure = mock.patch.object(history, "push", return_value=False)
     elif phase in {"undo", "redo"}:
         failure = mock.patch(
-            "chemvas.ui.history_commands._apply_scene_item_state",
+            "chemvas.ui.history_operations.apply_scene_item_state",
             side_effect=RuntimeError("item render failed"),
         )
     else:

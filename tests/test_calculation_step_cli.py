@@ -2,105 +2,24 @@ from __future__ import annotations
 
 import hashlib
 import json
-import os
-import subprocess
-import sys
 from typing import TYPE_CHECKING
 
 import pytest
 
 from chemvas.bootstrap import calculation_bundle as cli
 from chemvas.core.document_io import read_document, write_document
-from chemvas.domain.document import (
-    CANVAS_FILE_VERSION,
-    Atom,
-    Bond,
-    MoleculeModel,
-    serialize_model_state,
-)
+from chemvas.domain.document import CANVAS_FILE_VERSION
 from chemvas.features.calculation_bundle import AtomMapEntry, CalculationArtifacts
 from tests.calculation_artifact_support import _StateFakeAdapter
 from tests.calculation_plan_support import _document_state, _plan
+from tests.precomplex_workflow_support import (
+    _path_ready_state,
+    _validate_common_machine,
+    _write_document_with_plan,
+)
 
 if TYPE_CHECKING:
     from pathlib import Path
-
-
-def _validate_common_machine(path: Path) -> None:
-    validator = os.environ.get("FACTORY_MACHINE_CONTRACT_VALIDATOR")
-    if not validator:
-        pytest.fail(
-            "FACTORY_MACHINE_CONTRACT_VALIDATOR is required for machine.json "
-            "conformance assertions"
-        )
-    subprocess.run([sys.executable, validator, "--machine", str(path)], check=True)
-
-
-def _write_document_with_plan(path: Path, *, complete_mapping: bool = True) -> None:
-    state = _document_state()
-    state["calculation_plan"] = _plan(complete_mapping=complete_mapping)
-    write_document(path, state, CANVAS_FILE_VERSION)
-
-
-def _path_ready_state(
-    *,
-    product_charge: int = 0,
-    product_multiplicity: int = 1,
-) -> dict[str, object]:
-    state = _document_state()
-    state["model"] = serialize_model_state(
-        MoleculeModel(
-            atoms={
-                0: Atom("C", 0.0, 0.0),
-                1: Atom("C", 1.0, 0.0),
-                2: Atom("Me", 4.0, 0.0),
-                3: Atom("C", 5.0, 0.0),
-                4: Atom("Pt", 2.5, 3.0),
-                5: Atom("Cl", 2.5, -3.0),
-                6: Atom("Me", 2.0, 0.0),
-                7: Atom("C", 6.0, 0.0),
-            },
-            # Change an explicit C=C bond; both Me abbreviations retain their
-            # required single attachment while product atom order is reversed.
-            bonds=[
-                Bond(0, 1, order=2),
-                Bond(1, 6, order=1),
-                Bond(2, 3, order=1),
-                Bond(3, 7, order=1),
-            ],
-            atom_annotations=(
-                {3: {"formal_charge": product_charge}} if product_charge else {}
-            ),
-        )
-    )
-    state["marks"] = [
-        {
-            "kind": "plus" if product_charge > 0 else "minus",
-            "text": "+" if product_charge > 0 else "-",
-            "atom_id": 3,
-            "dx": None,
-            "dy": None,
-            "x": 5.0,
-            "y": 0.0,
-        }
-        for _ in range(abs(product_charge))
-    ]
-    plan = _plan()
-    plan["states"][0]["members"][0]["component_atom_ids"] = [0, 1, 6]  # type: ignore[index]
-    plan["states"][1]["members"][0]["component_atom_ids"] = [2, 3, 7]  # type: ignore[index]
-    plan["states"][0]["members"][1]["inclusion"] = "context_only"  # type: ignore[index]
-    plan["states"][1]["members"][1]["inclusion"] = "context_only"  # type: ignore[index]
-    plan["states"][1]["charge"] = product_charge  # type: ignore[index]
-    plan["states"][1]["multiplicity"] = product_multiplicity  # type: ignore[index]
-    plan["steps"][0]["reactant"]["roles"][0]["component_atom_ids"] = [0, 1, 6]  # type: ignore[index]
-    plan["steps"][0]["product"]["roles"][0]["component_atom_ids"] = [2, 3, 7]  # type: ignore[index]
-    plan["steps"][0]["atom_correspondence"] = [  # type: ignore[index]
-        {"reactant_atom_id": 0, "product_atom_id": 7},
-        {"reactant_atom_id": 1, "product_atom_id": 3},
-        {"reactant_atom_id": 6, "product_atom_id": 2},
-    ]
-    state["calculation_plan"] = plan
-    return state
 
 
 def test_attach_and_inspect_plan_create_current_document_without_overwrite(

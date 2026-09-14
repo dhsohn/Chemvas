@@ -5,11 +5,33 @@ import os
 import sys
 from collections.abc import Iterator, Mapping
 from contextlib import contextmanager
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from chemvas.domain.document import MAX_DOCUMENT_BYTES
+from chemvas.domain.json_io import strict_json_loads
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 MAX_GRAPHICS_RECORDS = 20_000
+
+
+def read_json_request(
+    path: Path,
+    *,
+    max_bytes: int,
+    limit_message: str,
+    invalid_message: str,
+) -> tuple[bytes, object]:
+    """Read bounded, exact request bytes and strictly decode the same bytes."""
+    with path.open("rb") as stream:
+        raw = stream.read(max_bytes + 1)
+    if len(raw) > max_bytes:
+        raise ValueError(limit_message)
+    try:
+        return raw, strict_json_loads(raw)
+    except (ValueError, RecursionError, UnicodeError) as exc:
+        raise ValueError(invalid_message) from exc
 
 
 def json_text(payload: object) -> str:
@@ -122,4 +144,5 @@ __all__ = [
     "json_text",
     "offscreen_canvas",
     "qt_platform",
+    "read_json_request",
 ]
