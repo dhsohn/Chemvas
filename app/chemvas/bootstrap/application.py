@@ -30,12 +30,9 @@ DOCUMENT_RENDER_COMMANDS = frozenset(("render-document",))
 CALCULATION_BUNDLE_COMMANDS = frozenset(
     (
         "attach-plan",
-        "generate-precomplex",
         "inspect",
         "inspect-plan",
-        "inspect-precomplex",
         "pack-step",
-        "select-precomplex",
     )
 )
 HEADLESS_SUBCOMMAND_HELP = (
@@ -43,16 +40,13 @@ HEADLESS_SUBCOMMAND_HELP = (
     ("attach-plan", "embed a calculation plan in a new document"),
     ("compose-document", "create a Chemvas document from a strict composition"),
     ("check-layout", "report deterministic layout collisions without editing"),
-    ("generate-precomplex", "generate bounded endpoint precomplex candidates"),
     ("inspect", "inspect connected structures as JSON"),
     ("inspect-document", "inspect the complete chemical graph as JSON"),
     ("inspect-plan", "inspect embedded calculation states and steps"),
-    ("inspect-precomplex", "inspect persisted candidate XYZ and provenance"),
     ("insert-template", "insert a native ring template in a new document"),
     ("layout-document", "align structure blocks and captions in a new document"),
     ("pack-step", "create one elementary-step JSON artifact"),
     ("render-document", "render a document to SVG, PNG or PDF"),
-    ("select-precomplex", "review and select a precomplex endpoint pair"),
 )
 
 

@@ -12,6 +12,12 @@ current writer constant and serializer defaults.
   note text and HTML, a group, ring fill, shape, orbital, TS bracket, perspective
   coordinates with stored depth, and a Calculation Plan v2. The embedded raster
   is a generated 1 x 1 RGB PNG; its original encoded bytes are part of the fixture.
+- `legacy-reviewed-precomplex.chemvas`: a Calculation Plan v2 whose step S01
+  stores reviewed `candidate_ensemble` precomplex data on both endpoints. Chemvas
+  0.15.0 wrote it with `generate-precomplex` and `select-precomplex` (using the
+  fake RDKit adapter of the test suite) on 2026-09-17, before those commands were
+  removed. Later releases must keep reading and preserving this data even though
+  nothing creates or uses it.
 
 The JSON was captured once from synthetic document builders, checked with native
 validation, graph inspection and a color-only Graph Patch, then stored as
@@ -25,6 +31,7 @@ Frozen UTF-8 file SHA-256 values (including the final newline):
 | --- | --- |
 | `minimal.chemvas` | `872e42a2d1d6635279e28c3efbc8540f68918c87026ae62a052d32aa98d7403e` |
 | `extended.chemvas` | `24d8b3cc358f00f5ca9188e56f7a6b39dbc4c57cebb224cd67f98eb81f91bd7e` |
+| `legacy-reviewed-precomplex.chemvas` | `3d14aeb67cdda436c23220ec960f5283fcb683dbb94319add177b076ca81bdf4` |
 
 The headless checks compare the complete normalized state after reading and
 writing, and after a declared color-only patch. Editable SVG tests wrap this

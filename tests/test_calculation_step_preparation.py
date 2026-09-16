@@ -7,7 +7,7 @@ import pytest
 
 import chemvas.domain.document.inspection as document_inspection
 from chemvas.bootstrap import calculation_bundle as cli
-from chemvas.core.document_io import read_document, write_document
+from chemvas.core.document_io import write_document
 from chemvas.domain.document import (
     CANVAS_FILE_VERSION,
     Atom,
@@ -21,18 +21,16 @@ from chemvas.features.calculation_bundle import (
     calculation_state_by_id,
     calculation_step_by_id,
     path_precheck,
-    precomplex_basis_sha256,
     prepare_calculation_step,
     require_step_ready,
     select_calculation_state,
     select_components,
-    validate_reviewed_precomplex_pair,
 )
 from tests.calculation_artifact_support import _StateFakeAdapter
 from tests.calculation_plan_support import _document_state, _plan
-from tests.precomplex_workflow_support import (
+from tests.calculation_workflow_support import (
+    _legacy_reviewed_precomplex_payload,
     _path_ready_state,
-    _review_candidate_fixture,
 )
 
 
@@ -47,16 +45,7 @@ def _separate_preparation(state, step_id="S01"):
     plan = calculation_plan_for_document(state)
     step = calculation_step_by_id(plan, step_id)
     require_step_ready(plan, step)
-    precheck = path_precheck(plan, step, document_state=state)
-    if any(
-        reason
-        in {
-            "multicomponent_precomplex_review_pair_invalid",
-            "multicomponent_precomplex_review_pair_stale",
-        }
-        for reason in precheck.blocking_reasons
-    ):
-        validate_reviewed_precomplex_pair(state, plan, step)
+    precheck = path_precheck(plan, step)
     selections = tuple(
         select_calculation_state(
             state, calculation_state_by_id(plan, endpoint.state_id)
@@ -64,6 +53,17 @@ def _separate_preparation(state, step_id="S01"):
         for endpoint in (step.reactant, step.product)
     )
     return plan, step, precheck, selections
+
+
+def _separate_component_selections(state, plan, step):
+    return tuple(
+        tuple(
+            select_components(state, [member.component_atom_ids])
+            for member in calculation_state_by_id(plan, endpoint.state_id).members
+            if member.inclusion == "included"
+        )
+        for endpoint in (step.reactant, step.product)
+    )
 
 
 @pytest.mark.parametrize("single_component", [False, True])
@@ -80,16 +80,9 @@ def test_preparation_matches_independent_apis_without_mutation(
         _separate_preparation(state)
     )
     expected_changes = calculate_bond_changes(state, expected_plan, expected_step)
-    expected_basis = {
-        side: precomplex_basis_sha256(
-            state,
-            expected_plan,
-            step_id="S01",
-            side=side,
-            environment={"kind": "gas_phase"},
-        )
-        for side in ("reactant", "product")
-    }
+    expected_components = _separate_component_selections(
+        state, expected_plan, expected_step
+    )
     with patch.object(
         document_inspection,
         "deserialize_model_state",
@@ -103,23 +96,22 @@ def test_preparation_matches_independent_apis_without_mutation(
             prepared.reactant_selection,
             prepared.product_selection,
         ) == expected_selections
+        assert (
+            prepared.reactant_component_selections,
+            prepared.product_component_selections,
+        ) == expected_components
         assert prepared.bond_changes() == expected_changes
-        for side, expected in expected_basis.items():
-            assert (
-                prepared.precomplex_basis_sha256(
-                    side=side, environment={"kind": "gas_phase"}
-                )
-                == expected
-            )
     assert deserialize.call_count == 1
     assert state == before
+    expected_count = 1 if single_component else 2
+    for side_selections in expected_components:
+        assert len(side_selections) == expected_count
+        assert all(len(item.component_indices) == 1 for item in side_selections)
     prepared.reactant_selection.model.atoms[0].x += 1
-    assert (
-        prepared.precomplex_basis_sha256(
-            side="reactant", environment={"kind": "gas_phase"}
-        )
-        == expected_basis["reactant"]
-    )
+    prepared.reactant_component_selections[0].model.atoms[
+        prepared.reactant_component_selections[0].atom_ids[0]
+    ].x += 1
+    assert prepared.bond_changes() == expected_changes
     assert state == before
 
 
@@ -224,34 +216,27 @@ def test_preparation_preserves_intrinsic_alias_charge_and_electronic_marks(
     assert state == before
 
 
-def test_reviewed_pack_reuses_inventory_through_current_profile_regeneration(
-    tmp_path, monkeypatch, capsys
-):
-    source, _payload = _review_candidate_fixture(tmp_path, monkeypatch, capsys)
-    original = source.read_bytes()
-    state = read_document(source).state
-    plan = calculation_plan_for_document(state)
-    step = calculation_step_by_id(plan, "S01")
-    expected_profile = validate_reviewed_precomplex_pair(state, plan, step)
-    with (
-        patch.object(
-            document_inspection,
-            "deserialize_model_state",
-            wraps=document_inspection.deserialize_model_state,
-        ) as deserialize,
-        patch.object(
-            cli,
-            "_require_reproducible_precomplex",
-            wraps=cli._require_reproducible_precomplex,
-        ) as regenerate,
-    ):
-        result = cli._pack_step(source, step_id="S01", output=tmp_path / "machine.json")
-    assert result["handoff"]["status"] == "ready"
-    assert deserialize.call_count == 1
-    assert regenerate.call_count == 2
-    assert source.read_bytes() == original
-    prepared = prepare_calculation_step(state, "S01")
-    assert prepared.validate_reviewed_precomplex_pair() == expected_profile
+def test_legacy_reviewed_precomplex_does_not_change_step_preparation():
+    legacy = _legacy_reviewed_precomplex_payload()["state"]
+    cleared = deepcopy(legacy)
+    for side in ("reactant", "product"):
+        cleared["calculation_plan"]["steps"][0][side]["precomplex"] = {"kind": "none"}
+    before = deepcopy(legacy)
+
+    prepared = prepare_calculation_step(legacy, "S01")
+    baseline = prepare_calculation_step(cleared, "S01")
+
+    assert prepared.step.reactant.precomplex.kind == "candidate_ensemble"
+    assert prepared.precheck == baseline.precheck
+    assert prepared.precheck.ready_for_path_endpoints is True
+    assert prepared.reactant_component_selections == (
+        baseline.reactant_component_selections
+    )
+    assert prepared.product_component_selections == (
+        baseline.product_component_selections
+    )
+    assert prepared.bond_changes() == baseline.bond_changes()
+    assert legacy == before
 
 
 def test_pack_step_prepares_the_source_model_once(tmp_path, monkeypatch):
@@ -266,7 +251,7 @@ def test_pack_step_prepares_the_source_model_once(tmp_path, monkeypatch):
         wraps=document_inspection.deserialize_model_state,
     ) as deserialize:
         result = cli._pack_step(source, step_id="S01", output=tmp_path / "machine.json")
-    assert result["handoff"]["status"] == "blocked"
+    assert result["handoff"]["status"] == "ready"
     assert source.read_bytes() == original
     assert deserialize.call_count == 1
 

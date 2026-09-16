@@ -23,17 +23,15 @@ flowchart LR
     revised --> check["check-layout<br/>경고, exit 0/1/2"]
     revised --> render["render-document<br/>SVG · PDF · PNG"]
     doc --> plan["attach-plan → inspect-plan"]
-    plan --> precomplex["generate-precomplex → select-precomplex"]
-    precomplex --> pack["pack-step<br/>machine.json"]
+    plan --> pack["pack-step<br/>machine.json"]
 ```
 
 모든 명령은 정확한 원본 바이트를 읽고, 가능한 곳에서는 Qt가 필요해지기 전에
 검증합니다. 출력 경로를 받는 명령(`compose-document`, `insert-template`,
 `apply-patch`, `layout-document`, `render-document`, `attach-plan`,
-`generate-precomplex`, `select-precomplex`, `pack-step`)은 새 파일 하나를
-원자적으로 게시하고 입력을 절대 편집하지 않습니다. `inspect`, `inspect-document`,
-`inspect-plan`, `inspect-precomplex`, `check-layout`과 모든 `--dry-run`은 JSON
-보고서만 출력하고 아무것도 쓰지 않습니다. 아래 그림들은 문서화된 예제를
+`pack-step`)은 새 파일 하나를 원자적으로 게시하고 입력을 절대 편집하지 않습니다.
+`inspect`, `inspect-document`, `inspect-plan`, `check-layout`과 모든
+`--dry-run`은 JSON 보고서만 출력하고 아무것도 쓰지 않습니다. 아래 그림들은 문서화된 예제를
 `render-document`로 렌더링한 것입니다.
 POSIX에서 원자적으로 게시한 새 파일은 소유자 전용 권한(0600)입니다. 공유할 때
 읽기 권한을 명시적으로 부여하세요. 디렉터리에서 공개 공유 의도를 추정하지 않습니다.
@@ -169,8 +167,8 @@ ring_fills, ts_brackets 각각 4,096개입니다. 이미지는 앞서 연결한 
 형태의 `color`를 넣을 수 있습니다. `plus`, `minus`, `circled_plus`,
 `circled_minus`, `radical` 각각에 독립적으로 적용되며 원자 부착·자유 표시 모두
 지원합니다. 생략하면 부착 원자의 색이 아닌 문서의 기본 표시색을 사용합니다.
-명시적 색은 원본 문서·선택 클립보드·편집 가능한 SVG에 보존되며 형식 전하,
-라디칼 전자 수, precomplex 검토 기준을 바꾸지 않습니다. 미지의 필드와 잘못된
+명시적 색은 원본 문서·선택 클립보드·편집 가능한 SVG에 보존되며 형식 전하와
+라디칼 전자 수를 바꾸지 않습니다. 미지의 필드와 잘못된
 색은 거부합니다. 형식 버전은 그대로지만 이 필드가 없는 옛 릴리스는 해당 필드를
 담은 표시를 거부합니다. 표시색이 없는 기존 문서는 계속 지원합니다.
 Graph Patch에 표시색 편집 연산이 추가되는 것은 아닙니다.
@@ -471,10 +469,7 @@ chemvas apply-patch ring-added.chemvas patch.json --output revised.chemvas
 받으며 각 `add_atom.atom_id`는 그 시점의 `next_atom_id`와 같아야 합니다(추가 후 증가).
 연산은 사설
 사본에서 순서대로 실행되고 전체 문서와 Calculation Plan 검증 뒤에만 게시됩니다.
-문서가 검토된 반응 전 복합체 선택을 담고 있으면, 그 검증은 프로필, 공유
-원본/환경 출처, 전자 그래프/계획 기반이 후보 그래프와 여전히 일치하는 완전한
-원자적 반응물/생성물 검토 쌍도 요구합니다. 이를 오래된 것으로 만들 패치는 출력을
-만들지 않습니다. `move_atom`은 종속 고리 채움, 결합 표시, 원근 좌표도 함께
+`move_atom`은 종속 고리 채움, 결합 표시, 원근 좌표도 함께
 옮깁니다. 화면상의 이동은 저장된 깊이와 카메라 투영을 보존합니다. `remove_bond`는
 해당 간선을 순환 경로에 포함하는 고리 채움만 제거합니다. 다른 채움은 유지하며,
 계산 계획의 참조가 무효가 되면 여전히 패치를 거부합니다.
@@ -485,8 +480,8 @@ chemvas apply-patch ring-added.chemvas patch.json --output revised.chemvas
 들어 `OH`, `NH2`, `SH`에 결합이 두 개이거나 이중 결합이 붙은 경우입니다.
 `inspect`와 `inspect-document`는 이런 의미 오류를 계속 거부합니다. `apply-patch`는
 이를 수리할 수 있습니다. 편집 전에 원본 구조, 정확한 해시, 패치 요청을 검증하고,
-편집 뒤 **최종 후보 전체**의 별칭 연결, 전하/라디칼 주석 일관성, Calculation Plan,
-검토된 반응 전 복합체 쌍을 검증합니다. 변경하지 않았거나 일부만 수리하여 여전히
+편집 뒤 **최종 후보 전체**의 별칭 연결, 전하/라디칼 주석 일관성, Calculation Plan을
+검증합니다. 변경하지 않았거나 일부만 수리하여 여전히
 무효인 그림은 출력을 만들지 않습니다. 기존 검증 규칙을 적용하는 것이지, 일반적인
 화학적 정확성을 보증하는 것은 아닙니다. 수리 내용을 자동으로 추론하지 않습니다.
 
@@ -574,8 +569,8 @@ chemvas inspect scheme.chemvas
 pip install "chemvas[rdkit]"
 ```
 
-계획을 붙이고 검사하는 것은 RDKit을 호출하지 않지만, **Suggest by structure**,
-`generate-precomplex`, `select-precomplex`, `pack-step`은 RDKit이 필요합니다.
+계획을 붙이고 검사하는 것은 RDKit을 호출하지 않지만, **Suggest by structure**와
+`pack-step`은 RDKit이 필요합니다.
 
 반응물, 생성물, 촉매, 방관자를 한 캔버스에 그린 뒤 **Calculation ▸ Edit States and
 Steps...**를 엽니다. 각 종점에서 모든 연결 성분에 다음 포함 모드 중 하나를
@@ -611,18 +606,17 @@ _(RDKit)_는 최대 공통 부분 구조의 매핑되지 않은 원자를 채웁
 검토는 여전히 별도 요구 사항입니다. 라벨은 임시 오버레이입니다. 대화상자를 닫으면
 그림과 현재 캔버스 선택을 바꾸지 않고 사라집니다. 오버레이 제거는 히스토리를
 추가하지 않지만, 확정한 계획 변경은 Undo/Redo로 되돌릴 수 있습니다. 변경 없이
-확정하면 계획의 순서와 검토된 기하를 보존합니다. 공유 상태의 전하만 고치면 소속과
-다중도는 유지하고 이전 계획에 연결된 검토 선택은 모두 해제합니다. 기존 단계를
-편집해도 단계의 위치와 남는 상태들의 순서는 유지하며, 새 단계와 새 상태 ID만
-끝에 추가합니다. 검토된 기하는 여전히 직렬화된 계획 전체에 연결되므로 다른
-단계를 바꿔도 손대지 않은 검토가 오래된 것으로 판정될 수 있습니다. 그래프 편집으로
-성분 참조가 무효가 되면 편집기는 기존 계획을 보존하고 해당 편집을 취소하거나
-수리한 계획을 붙이도록 안내하며 조용히 새로 시작하지 않습니다. 저장도 불일치하는
-초안을 유지하거나 참조가 무효인 계획을 제외하기 전에 확인합니다.
-검토된 precomplex 쌍이 오래되거나 유효하지 않을 때도 저장 전에 묻습니다.
-**No**는 현재 그림과 저장 대상 파일을 그대로 두며, **Yes**는 편집 가능한 초안과
-검토 데이터를 보존하지만 계산 준비 완료를 뜻하지 않습니다. 검토를 무효로 만든
-편집을 Undo하거나 해당 쌍을 다시 생성·검토한 뒤 `pack-step`을 실행하세요.
+확정하면 계획을 순서까지 그대로 보존합니다. 기존 단계를 편집해도 단계의 위치와
+남는 상태들의 순서는 유지하며, 새 단계와 새 상태 ID만 끝에 추가합니다. 그래프
+편집으로 성분 참조가 무효가 되면 편집기는 기존 계획을 보존하고 해당 편집을
+취소하거나 수리한 계획을 붙이도록 안내하며 조용히 새로 시작하지 않습니다.
+저장도 불일치하는 초안을 유지하거나 참조가 무효인 계획을 제외하기 전에 확인합니다.
+
+Chemvas 0.15.0 이하로 저장한 문서에는 제거된 `generate-precomplex`와
+`select-precomplex` 명령으로 만든 반응 전 복합체 후보와 검토가 들어 있을 수
+있습니다. 이런 문서도 그대로 열리고 저장 시 해당 데이터를 바꾸지 않지만,
+`pack-step`은 이를 사용하지 않습니다. 그 단계를 편집하면 해당 단계의 저장
+데이터가 지워지고, 공유 상태의 전하를 고치면 모든 단계에서 지워집니다.
 
 에이전트는 Qt 없이 같은 계약을 붙이고 검사할 수 있습니다.
 
@@ -631,105 +625,6 @@ chemvas attach-plan scheme.chemvas plan.json --output mechanism.chemvas
 chemvas inspect-plan mechanism.chemvas
 chemvas pack-step mechanism.chemvas --step S01 --output calculations/machine.json
 ```
-
-각 종점에 포함된 성분이 정확히 둘인 단계에는 패킹 전에 유계 강체 배치 후보를
-생성하고 검토합니다.
-
-```bash
-chemvas generate-precomplex mechanism.chemvas precomplex-request.json \
-  --step S01 --output mechanism-candidates.chemvas
-chemvas inspect-precomplex mechanism-candidates.chemvas --step S01
-chemvas select-precomplex mechanism-candidates.chemvas --step S01 \
-  --reactant-candidate <candidate-id> --product-candidate <candidate-id> \
-  --reviewer <reviewer> --output mechanism-reviewed.chemvas
-chemvas pack-step mechanism-reviewed.chemvas --step S01 \
-  --output calculations/machine.json
-```
-
-엄격한 요청은 `source_document_sha256`과 `step_id`로 생성을 정확한 입력에 묶고,
-종점마다 성분 간 접촉 하나를 지정하고, 명시적 기체상 또는 용매 환경을 기록하고,
-보존 후보 상한을 정합니다. 생성은 Calculation Plan v2와 `selection: null`이 있는 새
-버전 7 문서를 쓰고, `inspect-precomplex`는 ID, 출처, 검증 지표, 해시, 정확한 XYZ를
-노출합니다. `select-precomplex`는 같은 검토자와 타임스탬프로 반응물/생성물 쌍
-하나를 기록하고 각 선택을 그 XYZ 해시에 묶습니다. 전달 전에 `pack-step`은 현재
-그래프, 계획, RDKit 출처, 접촉, 프로필에서 두 유계 앙상블을 결정적으로 다시
-생성하고 불일치를 거부합니다. 배치 점수는 기하학적 충돌과 접촉 지표이지
-에너지나 안정성 순위가 아닙니다. 검토되지 않았거나 부분적으로 검토된 다성분
-종점은 막힌 채 남습니다.
-후보 앙상블이 없으면 `multicomponent_precomplex_geometry_not_provided`를
-보고하므로 `generate-precomplex`를 실행합니다. 두 앙상블이 있지만 어느 한쪽의
-선택이 없으면 `multicomponent_precomplex_review_required`를 보고합니다.
-`inspect-precomplex`로 후보를 확인한 뒤 `select-precomplex`로 한 쌍을 검토하세요.
-반대쪽이 미검토 상태라도 한쪽 앙상블이 없으면 생성 안내가 우선합니다.
-
-반응 전 복합체 생성은 요청 형식 v2만 받으며
-`"profile": "chemvas-rigid-precomplex-placement/2"`가 필요합니다. 이 프로필은
-[Cordero 외, Table 2](https://doi.org/10.1039/B801115J)의 공유 반지름(C sp3과 저스핀
-Fe/Co 항목)과 [Alvarez, Table 1](https://doi.org/10.1039/C3DT50599E)의 반데르발스
-반지름을 지원되는 모든 원소에 씁니다. 앙상블, 생성/검사 보고서, 최종
-`machine.json` 배치 메타데이터는 프로필, 데이터셋 ID, DOI, 정확한 반지름 표
-해시를 담습니다. 다른 요청 버전과 배치 프로필은 거부됩니다.
-
-프로필은 문서 버전 7과 Calculation Plan v2에 저장됩니다. 이 인용된 반지름과
-Chemvas의 문턱은 여전히 결정적 기하 휴리스틱을 정의합니다. 지정된 접촉은 공유
-반지름 합의 `0.85 ×`를, 다른 쌍은 공유 반지름 합의 `1.05 ×`와 반데르발스 반지름
-합의 `0.60 ×` 중 큰 값을, 부드러운 겹침 점수는 반데르발스 반지름 합의 `0.85 ×`를
-씁니다. 이것은 강체 구 물리 모델도, 에너지도, 안정성 주장도 아닙니다. Fe/Co 스핀과
-배위는 현재 입력 모델에 표현되지 않으므로 문서화된 저스핀 선택자는 추론되지
-않고 고정됩니다. 연구자 검토와 이후 양자 최적화는 여전히 필요합니다.
-
-### 완전한 precomplex 요청 v2
-
-아래를 `precomplex-request.json`으로 저장합니다. 이것은 **별도의 2→2 예제**로,
-반응물 성분은 [0,1]과 [2], 생성물 성분은 [3,4]와 [5]입니다.
-아래 1→1 계획 예제에는 적용하지 않습니다. 계획을 붙인 실제 원본을 검사해
-정확한 해시를 넣고, 실제 성분 간 접촉 원자 ID와 거리를 선택하세요.
-
-```json
-{
-  "format": "chemvas-precomplex-request",
-  "version": 2,
-  "profile": "chemvas-rigid-precomplex-placement/2",
-  "source_document_sha256": "<64 lowercase hexadecimal characters>",
-  "step_id": "S01",
-  "candidate_cap": 16,
-  "environment": {"kind": "gas_phase"},
-  "endpoints": {
-    "reactant": {"contacts": [{
-      "id": "nucleophile", "first_atom_id": 2, "second_atom_id": 0,
-      "target_distance_angstrom": 3.0, "tolerance_angstrom": 0.2
-    }]},
-    "product": {"contacts": [{
-      "id": "leaving", "first_atom_id": 4, "second_atom_id": 5,
-      "target_distance_angstrom": 3.2, "tolerance_angstrom": 0.2
-    }]}
-  }
-}
-```
-
-표시된 모든 필드는 필수이고, 각 수준에서 알 수 없는 키를 거부합니다.
-`candidate_cap`은 정수 1–16입니다. 종점마다 접촉은 정확히 하나이며, 64자 이하의
-비어 있지 않은 ID, 서로 다른 포함 성분에 속한 두 정수 Chemvas 원자 ID,
-유한한 양의 목표 거리(Å), 유한한 허용 오차 0–1 Å를 지정합니다.
-허용 오차는 거리 검증 기준이지 **방사 방향 샘플링 범위가 아닙니다**. 배치는 목표
-거리를 지향하므로 허용 오차를 바꿔도 좌표가 같을 수 있습니다.
-환경은 정확히 `{"kind":"gas_phase"}` 또는
-`{"kind":"solvent","model":"CPCM","name":"THF"}`이며, 용매 model/name은
-128자 이하의 비어 있지 않은 문자열입니다. 이것은 출처 기록이지 용매화 계산이나
-특정 모델을 권장하는 뜻이 아닙니다.
-
-현재 배치는 포함 성분이 정확히 2→2인 경우만 지원합니다. 직접 1→1 패킹에는 이
-요청이 필요하지 않습니다. 2→1, 1→2와 더 큰 종점은 현재 프로필에서 명시적으로
-미지원입니다. 후보 ID 수가 서로 다른 기하 수는 아닙니다.
-`inspect-precomplex.candidate_geometry_summary`에서 후보 수, 고유 XYZ 해시 수,
-중복 그룹을 확인하세요. 완전히 같은 기하도 후보 상한을 차지할 수 있으며 프로필 2는
-중복 제거, 대칭 동등성, 원자 번호 변경에 독립적인 탐색을 보장하지 않습니다.
-후보가 없다는 것은 유계 탐색의 실패이지 반응 불가능의 증거가 아닙니다.
-생성 오류는 `chemvas/precomplex_no_candidates_survived` 코드를 유지하며,
-처음 탈락한 배치의 충돌·접촉 실패 수, 접촉 오차와, 존재하는 경우 제한 원자 쌍의
-거리·문턱값을 보고합니다. 경로 인덱스는 0부터 시작하며, 함께 표시하는 Chemvas ID는
-원본 원자 또는 생성된 수소의 원본 부모 원자를 가리킵니다. 결정적인 표본 하나이지
-가장 좋은 실패 기하, 가장 자주 막힌 쌍의 집계, 유일한 실패 원인은 아닙니다.
 
 ### 화학적 해석의 한계
 
@@ -801,30 +696,44 @@ Chemvas의 문턱은 여전히 결정적 기하 휴리스틱을 정의합니다.
 ```
 
 모든 `component_atom_ids` 목록은 완전한 연결 성분 하나와 같아야 하고 정렬되어
-있어야 합니다. `pack-step`은 `machine.json`이라는 덮어쓰지 않는 파일 정확히 하나를
+있어야 합니다. 각 종점에는 여전히 Calculation Plan v2의 `precomplex` 키가
+필요하며 `{"kind": "none"}`을 씁니다. `pack-step`은 `machine.json`이라는 덮어쓰지 않는 파일 정확히 하나를
 원자적으로 씁니다. 공유 `factory/machine-observation` v1 봉투와, 원본 문서 해시,
 종점 상태와 RDKit 원자 출처, 완전한 원본/생성 원자 대응, 결합 변화를 담은
-`chemistry/elementary-step` v1 페이로드를 씁니다. 암시적 수소 수가 종점 간에
+`chemistry/elementary-step` v2 페이로드를 씁니다. 이를 검증하려면 소비자가
+`machine-contracts` v1.1.0 이상을 써야 합니다. 암시적 수소 수가 종점 간에
 다르면 이동한 수소를 명시적으로 그리세요. 생성된 원자도 완전한 전단사를 이뤄야
 합니다.
 
 `inspect-plan`은 각 단계에 결정적 `path_precheck`를 보고합니다. 원본 매핑이
-완전하고, 두 종점의 전하와 다중도가 같고, 각 종점이 단일 성분이거나 두 다성분
-종점 모두에 현재의 원자적 검토된 반응 전 복합체 쌍이 있으면, 단일 산출물의
-`endpoint_pair`에 정확한 반응물/생성물 XYZ 텍스트와 해시가 들어 있습니다. 잘못된
-검토 메타데이터/프로필은 `multicomponent_precomplex_review_pair_invalid`로,
-그래프/계획 기반 불일치는 `multicomponent_precomplex_review_pair_stale`로 막힙니다.
-짝지은 생성 출처에는 원본 문서 해시와 환경이 들어 있고, 기반 신선도는
-원소/좌표/결합 의미, 환경, 실효 전하/라디칼 표시를 묶되 표시 그리기 좌표, 표시
-색, 명시적 라벨 가시성은 무시합니다. 생성물 XYZ는 반응물 원자 정체성 순서로 다시
-쓰이며, 같은 객체가 그 순서와 결합 변화 반응 중심 원자를 정규 0 기반 인덱스로
-기록합니다. 따라서 이후 도구는 원소 순서나 좌표에서 매핑을 재구성할 필요가
-없습니다.
+완전하고 두 종점의 전하와 다중도가 같으면, 각 종점에 포함된 성분 수와 관계없이
+단계는 준비 완료이며 산출물의 `endpoint_geometry`에는 다음이 들어 있습니다.
+
+- `ordering.atom_order`: 반응물 쪽을 기준으로 한 정규 0 기반 원자 순서(`path_index`)
+  하나와 원자마다의 Chemvas ID. 여기의 `reactant_xyz_index`와
+  `product_xyz_index`는 상태 수준 `atom_map`, `geometry_generation`과 마찬가지로
+  좌표를 게시하지 않는 Chemvas 내부 전체 상태 변환을 가리키므로, 원자는
+  `path_index`와 성분의 `atom_indices`로 참조하세요;
+- `reaction_center`: 결합 변화에 참여하는 원자의 0 기반 인덱스와, 각 결합 변화에
+  두 원자의 `atom_indices`를 덧붙여 다시 담은 `bond_changes`;
+- `sides.reactant`와 `sides.product`: `single_component` 또는
+  `separated_components`인 `assembly`와, 포함된 성분마다 `component_index`, 종점
+  `role`, Chemvas 원자 ID, `atom_indices`, `formal_charge`, `radical_electrons`,
+  `electron_count`, SHA-256과 바이트 수가 붙은 정확한 XYZ 텍스트. XYZ 행 순서는
+  `atom_indices`를 따릅니다. 다중도는 상태 전체에만 선언되므로 성분의
+  `multiplicity`는 `null`이고 `multiplicity_inference: "not_performed"`입니다;
+- `electronic_state`: 공유 전하와 다중도.
+
+RDKit은 성분마다 따로 임베딩하므로 성분의 좌표는 그 성분 자체만 나타냅니다.
+그림은 서로 다른 분자가 어떻게 마주하는지 정하지 않으므로 상대 배치는 제공하지
+않으며(`geometry.intermolecular_arrangement: "not_provided"`), 성분 XYZ를 이어
+붙여 복합체로 써서는 안 됩니다. 반응성 배치, 전이 상태, 반응 전·후 복합체를 찾는
+일은 이후 계산에 맡깁니다. 이후 도구는 원소 순서나 좌표에서 매핑을 재구성할
+필요가 없습니다.
 
 불완전한 원본 매핑은 여전히 출력을 만들지 않고 `pack-step`을 막습니다. 그
-게이트와 생성 원자 전단사를 통과하면, 검토되지 않은 다성분 종점이나 전자 상태
-불일치는 `handoff.status: "blocked"`, 이름 공간이 있는 `handoff.codes`,
-`payload.data.endpoint_pair: null`을 가진 관측 하나를 씁니다. Chemvas는 접촉을
-지어내거나 후보를 자동으로 고르거나 생성된 좌표를 최적화된 최소점으로 보지
-않습니다. 검토된 생성 좌표는 이후 양자 최적화와 과학적 검증이 필요한 초기
-추측으로 남습니다.
+게이트와 생성 원자 전단사를 통과하면, 전자 상태 불일치는
+`handoff.status: "blocked"`, 이름 공간이 있는 `handoff.codes`,
+`payload.data.endpoint_geometry: null`을 가진 관측 하나를 씁니다. Chemvas는 생성된
+좌표를 최적화된 최소점으로 보지 않습니다. 생성 좌표는 이후 양자 최적화와 과학적
+검증이 필요한 초기 추측으로 남습니다.

@@ -257,9 +257,9 @@ molecule model, annotations, arrows, bracket annotations, and settings:
 ```
 
 Version 7 is the only supported document contract. It can carry an optional
-Calculation Plan v2 with bounded precomplex candidates, exact XYZ provenance,
-and explicit endpoint review selections. Earlier document versions and
-Calculation Plan v1 payloads are rejected.
+Calculation Plan v2; precomplex candidates and review selections stored by
+Chemvas 0.15.0 and earlier stay readable and are preserved. Earlier document
+versions and Calculation Plan v1 payloads are rejected.
 
 Opening or inserting a drawing preserves overlapping atoms: move or edit them
 on the canvas to correct the layout. Save asks before replacing a file changed

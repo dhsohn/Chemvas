@@ -5593,7 +5593,6 @@ SOURCE_GEOMETRY_KEY_MEMBERS = frozenset(
         "atom_map",
     }
 )
-CALCULATION_BUNDLE_MODULE = "app/chemvas/bootstrap/calculation_bundle.py"
 PRECOMPLEX_SCHEMA_MODULE = "app/chemvas/domain/document/precomplex.py"
 
 
@@ -5639,29 +5638,23 @@ def _modules_spelling_out(members: frozenset[str]) -> list[str]:
     return owners
 
 
-def test_precomplex_source_geometry_keys_are_spelled_twice_on_purpose() -> None:
-    """The eleven geometry keys appear once as a fingerprint, once as a schema.
+def test_precomplex_source_geometry_keys_are_spelled_once_by_the_schema() -> None:
+    """The eleven stored geometry keys are spelled out by one schema only.
 
-    ``calculation_bundle`` wrote the fingerprint out three times -- store it,
-    then rebuild it at each of two reproducibility checks -- so a twelfth
-    field added to ``CalculationArtifacts`` and pasted into two of the three
-    would leave a bundle claiming a reproducibility it does not have.
-    ``_source_geometry_fingerprint`` produces it now.
-
-    ``domain.document.precomplex._validate_source_geometry`` is the second
-    entry and is not a copy: it checks a *stored* mapping against the schema
-    rather than reproducing one from artifacts, and it lives in the layer that
-    owns the document format. Two entries is the rule; a third anywhere, or a
-    second inside either module, is a duplicate.
+    Chemvas no longer generates precomplex candidates, so no module builds a
+    source-geometry fingerprint from artifacts any more.
+    ``domain.document.precomplex._validate_source_geometry`` still checks the
+    stored mapping of documents written by older releases, and it lives in the
+    layer that owns the document format. One entry is the rule; a second
+    anywhere, or a second inside that module, is a duplicate.
 
     Both the mapping and the bare list of names count, because rebuilding the
-    fingerprint through ``{name: getattr(artifacts, name) for name in NAMES}``
-    is the same duplicate with the keys moved one line up.
+    mapping through ``{name: getattr(artifacts, name) for name in NAMES}`` is
+    the same duplicate with the keys moved one line up.
     """
     owners = _modules_spelling_out(SOURCE_GEOMETRY_KEY_MEMBERS)
 
     assert [owner.rsplit(":", 1)[0] for owner in owners] == [
-        CALCULATION_BUNDLE_MODULE,
         PRECOMPLEX_SCHEMA_MODULE,
     ]
 

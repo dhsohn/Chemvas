@@ -40,7 +40,7 @@ See the [document compatibility policy](https://github.com/dhsohn/Chemvas/blob/m
 
 Requires **Python 3.12+**. Install the optional RDKit backend for SMILES insertion,
 Molecule Info (formula and identifiers), 3D XYZ export, abbreviation MOL export,
-**Suggest by structure**, and `generate-precomplex` / `select-precomplex` / `pack-step`:
+**Suggest by structure**, and `pack-step`:
 
 ```bash
 pip install "chemvas[rdkit]"
@@ -90,7 +90,7 @@ Patch, scheme layout and their limits:
   [Chemistry I/O](https://github.com/dhsohn/Chemvas/blob/main/docs/REFERENCE.md#chemistry-io) ·
   [Image objects](https://github.com/dhsohn/Chemvas/blob/main/docs/IMAGE_OBJECTS.md) ·
   [Limits and roadmap](https://github.com/dhsohn/Chemvas/blob/main/docs/REFERENCE.md#roadmap--not-yet-supported)
-- [Calculation handoff (RDKit)](https://github.com/dhsohn/Chemvas/blob/main/docs/AGENT_CLI.md#calculation-states-and-elementary-steps): elementary steps and reviewed precomplexes, one `machine.json` per step.
+- [Calculation handoff (RDKit)](https://github.com/dhsohn/Chemvas/blob/main/docs/AGENT_CLI.md#calculation-states-and-elementary-steps): elementary steps with separately embedded components, one `machine.json` per step.
 - Documents are editable `.chemvas` JSON files (version 7).
   [More examples](https://github.com/dhsohn/Chemvas/tree/main/examples)
 - [Contributing](https://github.com/dhsohn/Chemvas/blob/main/CONTRIBUTING.md) ·

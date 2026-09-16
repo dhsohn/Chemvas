@@ -158,13 +158,9 @@ def apply_document_patch(
         # and dual mark/model annotation consistency, even without a plan.
         inspect_components(candidate)
         if candidate.get("calculation_plan") is not None:
-            from chemvas.features.calculation_bundle import (
-                validate_calculation_plan,
-                validate_reviewed_precomplex_pairs,
-            )
+            from chemvas.features.calculation_bundle import validate_calculation_plan
 
-            plan = validate_calculation_plan(candidate, candidate["calculation_plan"])
-            validate_reviewed_precomplex_pairs(candidate, plan)
+            validate_calculation_plan(candidate, candidate["calculation_plan"])
     except ValueError as exc:
         raise ValueError(
             "patched document would violate a document or Calculation Plan invariant: "

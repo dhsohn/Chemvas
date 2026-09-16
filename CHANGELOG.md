@@ -7,6 +7,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Hand off multicomponent elementary steps without a precomplex. A drawing does
+  not determine how separate molecules sit against each other, so `pack-step`
+  no longer requires generated or reviewed placements. A step is ready once its
+  source mapping is complete and both endpoints share charge and multiplicity,
+  whatever the number of included components.
+- `pack-step` now writes payload `chemistry/elementary-step` v2, which requires
+  `machine-contracts` v1.1.0 or later to validate. `endpoint_pair` is replaced by
+  `endpoint_geometry`: each included component is embedded separately by RDKit
+  and published with its role, Chemvas atom IDs, canonical `atom_indices`,
+  formal charge, radical and electron counts, and exact XYZ. The bond changes
+  repeated under `reaction_center` carry the atom indices of their two atoms.
+  No relative placement of components
+  is provided, and per-component multiplicity is not inferred. Operation IDs use
+  a new digest, so artifacts from this version never share an ID with v1
+  artifacts for the same step.
+- Graph Patch and whole-document Save or Export no longer check reviewed
+  precomplex pairs. The "Calculation Plan Needs Attention" prompt now appears
+  only for an invalid or stale plan.
+
+### Removed
+
+- The `generate-precomplex`, `inspect-precomplex` and `select-precomplex`
+  commands, rigid-placement candidate generation, and reviewed-pair validation,
+  including the `multicomponent_precomplex_*` and
+  `precomplex_endpoint_topology_not_supported` blocking reasons. The Python
+  exports `precomplex_basis_sha256`, `validate_reviewed_precomplex_pair` and
+  `validate_reviewed_precomplex_pairs` are gone, and `path_precheck` no longer
+  accepts `document_state`. Documents that already store
+  precomplex candidates or reviews still open, and saving keeps that data
+  unchanged, but calculation handoff ignores it.
+
 ## [0.15.0] - 2026-09-14
 
 ### Fixed

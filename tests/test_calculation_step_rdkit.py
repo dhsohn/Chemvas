@@ -16,6 +16,10 @@ from chemvas.domain.document import (
     serialize_model_state,
 )
 from tests.calculation_plan_support import _document_state
+from tests.calculation_workflow_support import (
+    _assert_separated_endpoint_geometry,
+    _validate_common_machine,
+)
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -106,11 +110,48 @@ def _single_component_state() -> dict[str, object]:
     return state
 
 
-def test_real_rdkit_packs_balanced_multicomponent_step(tmp_path: Path) -> None:
-    source = tmp_path / "balanced.chemvas"
-    output = tmp_path / "machine.json"
-    write_document(source, _balanced_state(), CANVAS_FILE_VERSION)
+def _bond_change_state() -> dict[str, object]:
+    """Ethene opens to a CH2(+)-CH2(-) zwitterion next to a water molecule.
 
+    Charges on the product carbons keep two implicit hydrogens on each mapped
+    carbon, so the generated atoms stay a bijection across the order change.
+    """
+    state = _balanced_state()
+    charges = {2: 1, 3: -1}
+    atoms = {
+        0: Atom("C", 0.0, 0.0),
+        1: Atom("C", 1.0, 0.0),
+        2: Atom("C", 4.0, 0.0),
+        3: Atom("C", 5.0, 0.0),
+        4: Atom("O", 2.5, 3.0),
+        5: Atom("He", 2.5, -3.0),
+    }
+    state["model"] = serialize_model_state(
+        MoleculeModel(
+            atoms=atoms,
+            bonds=[Bond(0, 1, order=2), Bond(2, 3)],
+            atom_annotations={
+                atom_id: {"formal_charge": charge}
+                for atom_id, charge in charges.items()
+            },
+        )
+    )
+    state["marks"] = [
+        {
+            "kind": "plus" if charge > 0 else "minus",
+            "text": "+" if charge > 0 else "-",
+            "atom_id": atom_id,
+            "dx": None,
+            "dy": None,
+            "x": atoms[atom_id].x,
+            "y": atoms[atom_id].y,
+        }
+        for atom_id, charge in charges.items()
+    ]
+    return state
+
+
+def _pack(source: Path, output: Path) -> dict[str, object]:
     assert (
         run(
             [
@@ -124,8 +165,19 @@ def test_real_rdkit_packs_balanced_multicomponent_step(tmp_path: Path) -> None:
         )
         == 0
     )
-
     observation = json.loads(output.read_text(encoding="utf-8"))
+    assert isinstance(observation, dict)
+    return observation
+
+
+def test_real_rdkit_packs_balanced_multicomponent_step(tmp_path: Path) -> None:
+    source = tmp_path / "balanced.chemvas"
+    output = tmp_path / "machine.json"
+    write_document(source, _balanced_state(), CANVAS_FILE_VERSION)
+
+    observation = _pack(source, output)
+
+    _validate_common_machine(output)
     artifact = observation["payload"]["data"]
     correspondence = artifact["atom_correspondence"]
     assert correspondence["geometry_mapping"] == "complete_bijection"
@@ -133,8 +185,55 @@ def test_real_rdkit_packs_balanced_multicomponent_step(tmp_path: Path) -> None:
     assert artifact["reactant"]["structure"]["component_count"] == 2
     assert artifact["reactant"]["structure"]["atom_counts"]["xyz"] == 11
     assert artifact["product"]["structure"]["atom_counts"]["xyz"] == 11
-    assert observation["handoff"]["status"] == "blocked"
-    assert artifact["endpoint_pair"] is None
+    assert observation["handoff"] == {"status": "ready", "codes": []}
+    assert observation["payload"]["contract"]["version"] == 2
+    assert artifact["endpoint_geometry"]["geometry"]["atom_count"] == 11
+    assert artifact["endpoint_geometry"]["reaction_center"]["bond_changes"] == []
+    _assert_separated_endpoint_geometry(
+        artifact,
+        elements={0: "C", 1: "C", 2: "C", 3: "C", 4: "O"},
+        reactant_charge=0,
+        product_charge=0,
+    )
+
+
+def test_real_rdkit_embeds_each_component_of_a_bond_change_step(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "zwitterion.chemvas"
+    output = tmp_path / "machine.json"
+    write_document(source, _bond_change_state(), CANVAS_FILE_VERSION)
+
+    observation = _pack(source, output)
+
+    _validate_common_machine(output)
+    artifact = observation["payload"]["data"]
+    geometry = artifact["endpoint_geometry"]
+    assert observation["handoff"] == {"status": "ready", "codes": []}
+    # C2H4 + H2O on both sides.
+    assert geometry["geometry"]["atom_count"] == 9
+    assert [
+        (change["reactant_atom_ids"], change["product_atom_ids"], change["kind"])
+        for change in geometry["reaction_center"]["bond_changes"]
+    ] == [([0, 1], [2, 3], "order_changed")]
+    _assert_separated_endpoint_geometry(
+        artifact,
+        elements={0: "C", 1: "C", 2: "C", 3: "C", 4: "O"},
+        reactant_charge=0,
+        product_charge=0,
+    )
+    for side, ethylene_atoms in (("reactant", [0, 1]), ("product", [2, 3])):
+        components = geometry["sides"][side]["components"]
+        assert [item["chemvas_atom_ids"] for item in components] == [
+            ethylene_atoms,
+            [4],
+        ]
+        assert [len(item["atom_indices"]) for item in components] == [6, 3]
+        state_generation = artifact[side]["structure"]["geometry_generation"]
+        for component in components:
+            generation = component["geometry_generation"]
+            assert generation["embedding"] == state_generation["embedding"]
+            assert generation["random_seed"] == state_generation["random_seed"]
 
 
 def test_real_rdkit_writes_single_component_path_endpoints(tmp_path: Path) -> None:
@@ -159,15 +258,18 @@ def test_real_rdkit_writes_single_component_path_endpoints(tmp_path: Path) -> No
     observation = json.loads(output.read_text(encoding="utf-8"))
     artifact = observation["payload"]["data"]
     assert observation["handoff"] == {"status": "ready", "codes": []}
-    endpoint_pair = artifact["endpoint_pair"]
-    reactant_symbols = [
-        row.split()[0]
-        for row in endpoint_pair["endpoints"]["reactant"]["content"].splitlines()[2:]
-    ]
-    product_symbols = [
-        row.split()[0]
-        for row in endpoint_pair["endpoints"]["product"]["content"].splitlines()[2:]
-    ]
-    assert reactant_symbols == product_symbols
-    assert endpoint_pair["geometry"]["atom_count"] == 8
-    assert len(endpoint_pair["ordering"]["atom_order"]) == 8
+    endpoint_geometry = artifact["endpoint_geometry"]
+    atom_order = endpoint_geometry["ordering"]["atom_order"]
+    for side in ("reactant", "product"):
+        side_geometry = endpoint_geometry["sides"][side]
+        assert side_geometry["assembly"] == "single_component"
+        (component,) = side_geometry["components"]
+        symbols = [
+            row.split()[0] for row in component["xyz"]["content"].splitlines()[2:]
+        ]
+        assert sorted(component["atom_indices"]) == list(range(8))
+        assert symbols == [
+            atom_order[index]["symbol"] for index in component["atom_indices"]
+        ]
+    assert endpoint_geometry["geometry"]["atom_count"] == 8
+    assert len(atom_order) == 8

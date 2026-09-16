@@ -35,7 +35,7 @@ def rdkit_status() -> str:
         return (
             "Not installed — SMILES insertion, Molecule Info (formula/identifiers), "
             "3D XYZ, abbreviation MOL export, Suggest by structure, "
-            "generate-precomplex, select-precomplex and pack-step require RDKit. "
+            "and pack-step require RDKit. "
             "Drawing, document editing and figure export remain available. "
             f"Install it with: {RDKIT_INSTALL_COMMAND}."
         )

@@ -25,7 +25,19 @@ FIXTURE_ROOT = Path(__file__).parent / "fixtures" / "document-v7"
 FROZEN_SHA256 = {
     "minimal": "872e42a2d1d6635279e28c3efbc8540f68918c87026ae62a052d32aa98d7403e",
     "extended": "24d8b3cc358f00f5ca9188e56f7a6b39dbc4c57cebb224cd67f98eb81f91bd7e",
+    # Written by Chemvas 0.15.0 with a reviewed candidate_ensemble pair on S01.
+    "legacy-reviewed-precomplex": (
+        "3d14aeb67cdda436c23220ec960f5283fcb683dbb94319add177b076ca81bdf4"
+    ),
 }
+
+
+def _stored_precomplex(state: dict) -> list[dict]:
+    return [
+        step[side]["precomplex"]
+        for step in state["calculation_plan"]["steps"]
+        for side in ("reactant", "product")
+    ]
 
 
 def _frozen_document(name: str) -> tuple[bytes, dict]:
@@ -146,6 +158,63 @@ def test_frozen_v7_inspect_dry_run_and_patch_preserve_other_state(
     assert applied["source_sha256"] == source_sha256
     assert source.read_bytes() == original_bytes
     assert request_path.read_bytes() == request_bytes
+
+
+def test_legacy_reviewed_precomplex_objects_survive_native_read_and_resave(tmp_path):
+    original_bytes, original = _frozen_document("legacy-reviewed-precomplex")
+    stored = _stored_precomplex(original["state"])
+    assert [item["kind"] for item in stored] == ["candidate_ensemble"] * 2
+    assert all("selection" in item and item["candidates"] for item in stored)
+
+    _raw, document = read_exact_document(
+        FIXTURE_ROOT / "legacy-reviewed-precomplex.chemvas"
+    )
+    assert _stored_precomplex(document.state) == stored
+    output = tmp_path / "resaved.chemvas"
+    write_document(output, document.state, CANVAS_FILE_VERSION)
+    saved_bytes, reopened = read_exact_document(output)
+
+    # The re-saved file spells the same objects, not merely an equal state.
+    assert _stored_precomplex(json.loads(saved_bytes)["state"]) == stored
+    assert _stored_precomplex(reopened.state) == stored
+    second = tmp_path / "resaved-again.chemvas"
+    write_document(second, reopened.state, CANVAS_FILE_VERSION)
+    assert second.read_bytes() == saved_bytes
+    assert (FIXTURE_ROOT / "legacy-reviewed-precomplex.chemvas").read_bytes() == (
+        original_bytes
+    )
+
+
+def test_graph_patch_moving_an_atom_keeps_legacy_reviewed_precomplex(tmp_path, capsys):
+    original_bytes, original = _frozen_document("legacy-reviewed-precomplex")
+    source = tmp_path / "source.chemvas"
+    source.write_bytes(original_bytes)
+    request_path = tmp_path / "patch.json"
+    request_path.write_text(
+        json.dumps(
+            {
+                "format": "chemvas-graph-patch",
+                "version": 1,
+                "source_sha256": hashlib.sha256(original_bytes).hexdigest(),
+                "operations": [{"op": "move_atom", "atom_id": 0, "x": -3.0, "y": 1.0}],
+            }
+        ),
+        encoding="utf-8",
+    )
+    output = tmp_path / "patched.chemvas"
+
+    assert (
+        patch_cli.run(
+            ["apply-patch", str(source), str(request_path), "--output", str(output)]
+        )
+        == 0
+    )
+
+    assert json.loads(capsys.readouterr().out)["written"]
+    _bytes, patched = read_exact_document(output)
+    assert patched.state["model"]["atoms"]["0"]["x"] == -3.0
+    assert patched.state["calculation_plan"] == original["state"]["calculation_plan"]
+    assert source.read_bytes() == original_bytes
 
 
 @pytest.mark.parametrize("version", [6, 999, 7.0, "7", True])

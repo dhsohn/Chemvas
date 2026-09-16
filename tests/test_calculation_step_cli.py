@@ -2,17 +2,27 @@ from __future__ import annotations
 
 import hashlib
 import json
+from copy import deepcopy
 from typing import TYPE_CHECKING
 
 import pytest
 
 from chemvas.bootstrap import calculation_bundle as cli
 from chemvas.core.document_io import read_document, write_document
-from chemvas.domain.document import CANVAS_FILE_VERSION
+from chemvas.domain.document import (
+    CANVAS_FILE_VERSION,
+    Atom,
+    Bond,
+    MoleculeModel,
+    serialize_model_state,
+)
 from chemvas.features.calculation_bundle import AtomMapEntry, CalculationArtifacts
 from tests.calculation_artifact_support import _StateFakeAdapter
 from tests.calculation_plan_support import _document_state, _plan
-from tests.precomplex_workflow_support import (
+from tests.calculation_workflow_support import (
+    LEGACY_REVIEWED_PRECOMPLEX_FIXTURE,
+    _assert_separated_endpoint_geometry,
+    _legacy_reviewed_precomplex_payload,
     _path_ready_state,
     _validate_common_machine,
     _write_document_with_plan,
@@ -105,16 +115,11 @@ def test_attach_plan_rejects_duplicate_json_keys_without_output(
     assert not output.exists()
 
 
-def test_pack_step_writes_one_blocked_artifact_with_mapping_and_bond_changes(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-    capsys: pytest.CaptureFixture[str],
-) -> None:
-    source = tmp_path / "mechanism.chemvas"
-    _write_document_with_plan(source)
-    output = tmp_path / "machine.json"
-    monkeypatch.setattr(cli, "RDKitAdapter", _StateFakeAdapter)
+# Generated element symbols of the synthetic drawing in calculation_plan_support.
+_ELEMENTS = {0: "C", 1: "O", 2: "C", 3: "O", 4: "Pt", 5: "Cl"}
 
+
+def _run_pack_step(source: Path, output: Path) -> None:
     assert (
         cli.run(
             [
@@ -128,6 +133,170 @@ def test_pack_step_writes_one_blocked_artifact_with_mapping_and_bond_changes(
         )
         == 0
     )
+
+
+def _charge_separated_state() -> dict[str, object]:
+    """Two charged components on each side whose charges cancel per state."""
+    state = _document_state()
+    state["calculation_plan"] = _plan()
+    charges = {1: -1, 3: -1, 4: 1}
+    atoms = {
+        0: Atom("C", 0.0, 0.0),
+        1: Atom("O", 1.0, 0.0),
+        2: Atom("C", 4.0, 0.0),
+        3: Atom("O", 5.0, 0.0),
+        4: Atom("Pt", 2.5, 3.0),
+        5: Atom("Cl", 2.5, -3.0),
+    }
+    state["model"] = serialize_model_state(
+        MoleculeModel(
+            atoms=atoms,
+            bonds=[Bond(0, 1, order=2), Bond(2, 3, order=1)],
+            atom_annotations={
+                atom_id: {"formal_charge": charge}
+                for atom_id, charge in charges.items()
+            },
+        )
+    )
+    state["marks"] = [
+        {
+            "kind": "plus" if charge > 0 else "minus",
+            "text": "+" if charge > 0 else "-",
+            "atom_id": atom_id,
+            "dx": None,
+            "dy": None,
+            "x": atoms[atom_id].x,
+            "y": atoms[atom_id].y,
+        }
+        for atom_id, charge in charges.items()
+    ]
+    return state
+
+
+def test_pack_step_hands_off_a_two_component_step_as_separated_components(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    source = tmp_path / "ion-pair.chemvas"
+    write_document(source, _charge_separated_state(), CANVAS_FILE_VERSION)
+    output = tmp_path / "machine.json"
+    monkeypatch.setattr(cli, "RDKitAdapter", _StateFakeAdapter)
+
+    _run_pack_step(source, output)
+    observation = json.loads(capsys.readouterr().out)
+    artifact = observation["payload"]["data"]
+
+    assert observation == json.loads(output.read_text(encoding="utf-8"))
+    _validate_common_machine(output)
+    assert observation["handoff"] == {"status": "ready", "codes": []}
+    assert observation["payload"]["contract"] == {
+        "name": "chemistry/elementary-step",
+        "version": 2,
+    }
+    assert "endpoint_pair" not in artifact
+    assert artifact["geometry_scope"]["reactant_component_count"] == 2
+    assert artifact["geometry_scope"]["product_component_count"] == 2
+    _assert_separated_endpoint_geometry(
+        artifact, elements=_ELEMENTS, reactant_charge=0, product_charge=0
+    )
+    sides = artifact["endpoint_geometry"]["sides"]
+    assert [
+        (item["chemvas_atom_ids"], item["role"], item["formal_charge"])
+        for item in sides["reactant"]["components"]
+    ] == [([0, 1], "reactant", -1), ([4], "catalyst", 1)]
+    assert [
+        (item["chemvas_atom_ids"], item["role"], item["formal_charge"])
+        for item in sides["product"]["components"]
+    ] == [([2, 3], "product", -1), ([4], "catalyst", 1)]
+    assert artifact["endpoint_geometry"]["reaction_center"]["bond_changes"] == [
+        {
+            "kind": "order_changed",
+            "reactant_atom_ids": [0, 1],
+            "product_atom_ids": [2, 3],
+            "reactant_order": 2,
+            "product_order": 1,
+            "atom_indices": [0, 1],
+        }
+    ]
+    digest = hashlib.sha256(
+        b"chemvas-elementary-step-v2\0" + source.read_bytes() + b"\0S01"
+    ).hexdigest()
+    assert observation["operation"]["id"] == f"step-{digest}"
+
+
+def test_pack_step_output_ignores_legacy_reviewed_precomplex_data(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    legacy_payload = _legacy_reviewed_precomplex_payload()
+    legacy = tmp_path / "legacy" / "mechanism.chemvas"
+    legacy.parent.mkdir()
+    legacy.write_bytes(LEGACY_REVIEWED_PRECOMPLEX_FIXTURE.read_bytes())
+    cleared_state = deepcopy(legacy_payload["state"])
+    assert isinstance(cleared_state, dict)
+    for side in ("reactant", "product"):
+        endpoint = cleared_state["calculation_plan"]["steps"][0][side]
+        assert endpoint["precomplex"]["kind"] == "candidate_ensemble"
+        endpoint["precomplex"] = {"kind": "none"}
+    cleared = tmp_path / "cleared" / "mechanism.chemvas"
+    cleared.parent.mkdir()
+    write_document(cleared, cleared_state, CANVAS_FILE_VERSION)
+    monkeypatch.setattr(cli, "RDKitAdapter", _StateFakeAdapter)
+
+    observations = []
+    for source in (legacy, cleared):
+        output = source.parent / "machine.json"
+        _run_pack_step(source, output)
+        observations.append(json.loads(capsys.readouterr().out))
+        _validate_common_machine(output)
+    legacy_observation, cleared_observation = observations
+
+    assert legacy_observation["handoff"] == {"status": "ready", "codes": []}
+    assert cleared_observation["handoff"] == legacy_observation["handoff"]
+    legacy_data = dict(legacy_observation["payload"]["data"])
+    cleared_data = dict(cleared_observation["payload"]["data"])
+    assert legacy_data.pop("source") != cleared_data.pop("source")
+    assert legacy_data == cleared_data
+    assert legacy_data["endpoint_geometry"]["reaction_center"]["bond_changes"]
+    _assert_separated_endpoint_geometry(
+        legacy_data, elements=_ELEMENTS, reactant_charge=0, product_charge=0
+    )
+
+
+@pytest.mark.parametrize(
+    "command", ["generate-precomplex", "inspect-precomplex", "select-precomplex"]
+)
+def test_removed_precomplex_commands_are_rejected_by_the_parser(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    command: str,
+) -> None:
+    source = tmp_path / "mechanism.chemvas"
+    _write_document_with_plan(source)
+    original = source.read_bytes()
+
+    with pytest.raises(SystemExit) as error:
+        cli.run([command, str(source)])
+
+    assert error.value.code == 2
+    assert f"invalid choice: '{command}'" in capsys.readouterr().err
+    assert source.read_bytes() == original
+    assert sorted(path.name for path in tmp_path.iterdir()) == ["mechanism.chemvas"]
+
+
+def test_pack_step_writes_mapping_and_bond_changes_for_a_multicomponent_step(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    source = tmp_path / "mechanism.chemvas"
+    _write_document_with_plan(source)
+    output = tmp_path / "machine.json"
+    monkeypatch.setattr(cli, "RDKitAdapter", _StateFakeAdapter)
+
+    _run_pack_step(source, output)
     observation = json.loads(capsys.readouterr().out)
     artifact = observation["payload"]["data"]
 
@@ -145,15 +314,12 @@ def test_pack_step_writes_one_blocked_artifact_with_mapping_and_bond_changes(
         "outcome": "succeeded",
         "codes": [],
     }
-    assert observation["handoff"] == {
-        "status": "blocked",
-        "codes": ["chemvas/multicomponent_precomplex_geometry_not_provided"],
-    }
+    assert observation["handoff"] == {"status": "ready", "codes": []}
     assert observation["delivery"] == {"status": "complete", "codes": []}
     assert observation["artifacts"] == {}
     assert observation["payload"]["contract"] == {
         "name": "chemistry/elementary-step",
-        "version": 1,
+        "version": 2,
     }
     assert (
         artifact["source"]["document_sha256"]
@@ -163,7 +329,9 @@ def test_pack_step_writes_one_blocked_artifact_with_mapping_and_bond_changes(
     assert artifact["geometry_scope"]["interaction_geometry_guarantee"] == (
         "not_provided"
     )
-    assert artifact["endpoint_pair"] is None
+    _assert_separated_endpoint_geometry(
+        artifact, elements=_ELEMENTS, reactant_charge=0, product_charge=0
+    )
     correspondence = artifact["atom_correspondence"]
     assert correspondence["source_mapping"] == "complete_bijection"
     assert correspondence["geometry_mapping"] == "complete_bijection"
@@ -209,28 +377,44 @@ def test_pack_step_writes_identity_ordered_path_endpoints(
     )
     observation = json.loads(capsys.readouterr().out)
     artifact = observation["payload"]["data"]
-    endpoint_pair = artifact["endpoint_pair"]
-    reactant = endpoint_pair["endpoints"]["reactant"]
-    product = endpoint_pair["endpoints"]["product"]
-    reactant_rows = reactant["content"].splitlines()[2:]
-    product_rows = product["content"].splitlines()[2:]
+    endpoint_geometry = artifact["endpoint_geometry"]
+    (reactant,) = endpoint_geometry["sides"]["reactant"]["components"]
+    (product,) = endpoint_geometry["sides"]["product"]["components"]
+    reactant_rows = reactant["xyz"]["content"].splitlines()[2:]
+    product_rows = product["xyz"]["content"].splitlines()[2:]
 
     assert observation == json.loads(output.read_text(encoding="utf-8"))
     _validate_common_machine(output)
     assert observation["handoff"] == {"status": "ready", "codes": []}
+    assert observation["payload"]["contract"]["version"] == 2
+    for side in ("reactant", "product"):
+        assert endpoint_geometry["sides"][side]["assembly"] == "single_component"
     assert [row.split()[0] for row in reactant_rows] == ["C", "C", "C"]
     assert [row.split()[0] for row in product_rows] == ["C", "C", "C"]
-    assert [float(row.split()[1]) for row in product_rows] == [3.0, 2.0, 1.0]
+    # Component rows keep their own generated order; atom_indices place them
+    # on the canonical reactant-ordered path atoms.
+    assert reactant["chemvas_atom_ids"] == [0, 1, 6]
+    assert reactant["atom_indices"] == [0, 1, 2]
+    assert product["chemvas_atom_ids"] == [2, 3, 7]
+    assert product["atom_indices"] == [2, 1, 0]
     assert [
-        entry["product_xyz_index"] for entry in endpoint_pair["ordering"]["atom_order"]
+        entry["product_xyz_index"]
+        for entry in endpoint_geometry["ordering"]["atom_order"]
     ] == [3, 2, 1]
-    assert [entry["origin"] for entry in endpoint_pair["ordering"]["atom_order"]] == [
+    assert [
+        entry["origin"] for entry in endpoint_geometry["ordering"]["atom_order"]
+    ] == [
         "chemvas_atom",
         "chemvas_atom",
         "alias_attachment",
     ]
-    assert endpoint_pair["reaction_center"]["atom_indices"] == [0, 1]
-    for embedded in (reactant, product):
+    assert endpoint_geometry["reaction_center"]["atom_indices"] == [0, 1]
+    assert [
+        change["atom_indices"]
+        for change in endpoint_geometry["reaction_center"]["bond_changes"]
+    ] == [[0, 1]]
+    assert endpoint_geometry["geometry"]["atom_count"] == 3
+    for embedded in (reactant["xyz"], product["xyz"]):
         content = embedded["content"].encode("utf-8")
         assert embedded["sha256"] == hashlib.sha256(content).hexdigest()
         assert embedded["bytes"] == len(content)
@@ -305,6 +489,7 @@ def test_pack_step_writes_blocked_artifact_when_endpoint_electronic_state_differ
     observation = json.loads(capsys.readouterr().out)
     artifact = observation["payload"]["data"]
 
+    _validate_common_machine(output)
     assert observation["handoff"] == {
         "status": "blocked",
         "codes": [
@@ -312,7 +497,15 @@ def test_pack_step_writes_blocked_artifact_when_endpoint_electronic_state_differ
             "chemvas/endpoint_multiplicity_mismatch",
         ],
     }
-    assert artifact["endpoint_pair"] is None
+    assert observation["payload"]["contract"] == {
+        "name": "chemistry/elementary-step",
+        "version": 2,
+    }
+    assert "endpoint_pair" not in artifact
+    assert artifact["endpoint_geometry"] is None
+    assert artifact["geometry_scope"]["interaction_geometry_guarantee"] == (
+        "not_provided"
+    )
     assert output.is_file()
 
 

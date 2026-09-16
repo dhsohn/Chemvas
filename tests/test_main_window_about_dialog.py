@@ -41,14 +41,13 @@ class AboutDialogTest(unittest.TestCase):
             "3D XYZ",
             "abbreviation MOL export",
             "Suggest by structure",
-            "generate-precomplex",
-            "select-precomplex",
             "pack-step",
             "figure export remain available",
             'pip install "chemvas[rdkit]"',
         ):
             with self.subTest(feature=feature):
                 self.assertIn(feature, status)
+        self.assertNotIn("precomplex", status)
 
     def test_show_about_dialog_presents_identity_and_links(self) -> None:
         captured: dict[str, object] = {}

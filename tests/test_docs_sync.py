@@ -154,7 +154,7 @@ def test_readmes_mark_calculation_handoff_as_an_rdkit_feature() -> None:
         )
     calculation_docs = _collapse(_read(AGENT_CLI))
     assert 'pip install "chemvas[rdkit]"' in calculation_docs
-    for command in ("generate-precomplex", "pack-step"):
+    for command in ("pack-step",):
         assert re.search(
             rf"{re.escape(command)}[^.]*require(?:s| it)",
             calculation_docs,

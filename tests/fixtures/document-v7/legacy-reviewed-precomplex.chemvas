@@ -1,0 +1,506 @@
+{
+  "state": {
+    "arrows": [],
+    "calculation_plan": {
+      "format": "chemvas-calculation-plan",
+      "states": [
+        {
+          "charge": 0,
+          "id": "R01",
+          "members": [
+            {
+              "component_atom_ids": [
+                0,
+                1
+              ],
+              "inclusion": "included"
+            },
+            {
+              "component_atom_ids": [
+                4
+              ],
+              "inclusion": "included"
+            },
+            {
+              "component_atom_ids": [
+                5
+              ],
+              "inclusion": "context_only"
+            }
+          ],
+          "multiplicity": 1
+        },
+        {
+          "charge": 0,
+          "id": "P01",
+          "members": [
+            {
+              "component_atom_ids": [
+                2,
+                3
+              ],
+              "inclusion": "included"
+            },
+            {
+              "component_atom_ids": [
+                4
+              ],
+              "inclusion": "included"
+            },
+            {
+              "component_atom_ids": [
+                5
+              ],
+              "inclusion": "context_only"
+            }
+          ],
+          "multiplicity": 1
+        }
+      ],
+      "steps": [
+        {
+          "atom_correspondence": [
+            {
+              "product_atom_id": 2,
+              "reactant_atom_id": 0
+            },
+            {
+              "product_atom_id": 3,
+              "reactant_atom_id": 1
+            },
+            {
+              "product_atom_id": 4,
+              "reactant_atom_id": 4
+            }
+          ],
+          "id": "S01",
+          "product": {
+            "precomplex": {
+              "basis_sha256": "7a3f9c97cbd5062d4a64b94bc71eeb82086739553a1344f1fd158a5ef7429f85",
+              "candidates": [
+                {
+                  "component_conformer_ids": [
+                    "conf-b1b5a183277b41d75025b1ebc40e991021354568aea289abd73ec16f19ac2066",
+                    "conf-87b36248850f8f9a263e9952e32dead60d778cbef4c669a59f0986b95d54503a"
+                  ],
+                  "geometry_class": "generated_candidate_ensemble",
+                  "id": "pc-7e4f7b3ade7d0d07f79e6526ed79ed0e99b4109c9d19a28a8e2f7a6b6ab043ae",
+                  "transform": {
+                    "approach_index": 0,
+                    "approach_vector": [
+                      0.39965262694272674,
+                      0.9166666666666666,
+                      0.0
+                    ],
+                    "rotation_index": 0
+                  },
+                  "validation": {
+                    "contact_error_angstrom": 0.0,
+                    "hard_clash_count": 0,
+                    "limiting_distance_angstrom": null,
+                    "limiting_pair": null,
+                    "limiting_threshold_angstrom": null,
+                    "soft_overlap_score": 0.04906225
+                  },
+                  "xyz": "3\nChemvas chemvas-rigid-precomplex-placement/2 S01 product\nC  1.00000000 0.00000000 0.00000000\nO  2.00000000 0.00000000 0.00000000\nPt 3.19895788 2.75000000 0.00000000\n",
+                  "xyz_sha256": "b57418148625554336d6953a603739f262db1b45a3b22610383b6eff8115b192"
+                },
+                {
+                  "component_conformer_ids": [
+                    "conf-b1b5a183277b41d75025b1ebc40e991021354568aea289abd73ec16f19ac2066",
+                    "conf-87b36248850f8f9a263e9952e32dead60d778cbef4c669a59f0986b95d54503a"
+                  ],
+                  "geometry_class": "generated_candidate_ensemble",
+                  "id": "pc-3a17261a314a2dbfa58c40128bd01b4ae1e7cfe7266a3843d01d864fd22e6c4f",
+                  "transform": {
+                    "approach_index": 0,
+                    "approach_vector": [
+                      0.39965262694272674,
+                      0.9166666666666666,
+                      0.0
+                    ],
+                    "rotation_index": 1
+                  },
+                  "validation": {
+                    "contact_error_angstrom": 0.0,
+                    "hard_clash_count": 0,
+                    "limiting_distance_angstrom": null,
+                    "limiting_pair": null,
+                    "limiting_threshold_angstrom": null,
+                    "soft_overlap_score": 0.04906225
+                  },
+                  "xyz": "3\nChemvas chemvas-rigid-precomplex-placement/2 S01 product\nC  1.00000000 0.00000000 0.00000000\nO  2.00000000 0.00000000 0.00000000\nPt 3.19895788 2.75000000 0.00000000\n",
+                  "xyz_sha256": "b57418148625554336d6953a603739f262db1b45a3b22610383b6eff8115b192"
+                }
+              ],
+              "contacts": [
+                {
+                  "first_atom_id": 3,
+                  "id": "p-contact",
+                  "second_atom_id": 4,
+                  "target_distance_angstrom": 3.0,
+                  "tolerance_angstrom": 0.1
+                }
+              ],
+              "environment": {
+                "kind": "gas_phase"
+              },
+              "kind": "candidate_ensemble",
+              "profile": "chemvas-rigid-precomplex-placement/2",
+              "radius_provenance": {
+                "covalent": {
+                  "dataset_id": "cordero-2008-table-2",
+                  "doi": "10.1039/B801115J",
+                  "selectors": {
+                    "C": "sp3",
+                    "Co": "low_spin",
+                    "Fe": "low_spin"
+                  }
+                },
+                "radius_table_sha256": "49382c8b506725b256fa9aaa35350b467f223b036b53275dc20bd6e095eae339",
+                "status": "cited",
+                "units": "angstrom",
+                "van_der_waals": {
+                  "dataset_id": "alvarez-2013-table-1",
+                  "doi": "10.1039/C3DT50599E"
+                }
+              },
+              "selection": {
+                "acceptance_statement": "accepted_for_path_endpoint_review",
+                "candidate_id": "pc-7e4f7b3ade7d0d07f79e6526ed79ed0e99b4109c9d19a28a8e2f7a6b6ab043ae",
+                "candidate_xyz_sha256": "b57418148625554336d6953a603739f262db1b45a3b22610383b6eff8115b192",
+                "reviewed_at": "2026-09-16T15:38:27Z",
+                "reviewer": "test-reviewer"
+              },
+              "side": "product",
+              "source_document_sha256": "2cac0934e9dc13c86aa74a39d9c54a8765a115c7f21e8b9bcb4a6cc85c5ea094",
+              "source_geometry": {
+                "atom_map": [
+                  {
+                    "chemvas_atom_id": 2,
+                    "mol_index": 1,
+                    "origin": "chemvas_atom",
+                    "parent_chemvas_atom_id": null,
+                    "parent_xyz_index": null,
+                    "symbol": "C",
+                    "xyz_index": 1
+                  },
+                  {
+                    "chemvas_atom_id": 3,
+                    "mol_index": 2,
+                    "origin": "chemvas_atom",
+                    "parent_chemvas_atom_id": null,
+                    "parent_xyz_index": null,
+                    "symbol": "O",
+                    "xyz_index": 2
+                  },
+                  {
+                    "chemvas_atom_id": 4,
+                    "mol_index": 3,
+                    "origin": "chemvas_atom",
+                    "parent_chemvas_atom_id": null,
+                    "parent_xyz_index": null,
+                    "symbol": "Pt",
+                    "xyz_index": 3
+                  }
+                ],
+                "electron_count": 100,
+                "geometry_embedding": "ETKDGv3",
+                "geometry_optimization_policy": "test",
+                "geometry_optimization_result": "test_converged",
+                "geometry_random_seed": 12648430,
+                "mol_atom_count": 3,
+                "rdkit_formal_charge": 0,
+                "rdkit_radical_electrons": 0,
+                "rdkit_version": "test-rdkit",
+                "xyz_atom_count": 3
+              }
+            },
+            "roles": [
+              {
+                "component_atom_ids": [
+                  2,
+                  3
+                ],
+                "role": "product"
+              },
+              {
+                "component_atom_ids": [
+                  4
+                ],
+                "role": "catalyst"
+              },
+              {
+                "component_atom_ids": [
+                  5
+                ],
+                "role": "spectator"
+              }
+            ],
+            "state_id": "P01"
+          },
+          "reactant": {
+            "precomplex": {
+              "basis_sha256": "f2ecde74550bf8e4a5779cd9850ec658c76b4da25a60648f2553f6c5811b6a09",
+              "candidates": [
+                {
+                  "component_conformer_ids": [
+                    "conf-d6b33b6e4f7260f577088ebbcdeac46070cbee0542a5aa4ed1c373059fe27737",
+                    "conf-87b36248850f8f9a263e9952e32dead60d778cbef4c669a59f0986b95d54503a"
+                  ],
+                  "geometry_class": "generated_candidate_ensemble",
+                  "id": "pc-36d35a861e77029791d5cdc26855891f5eba156eae34c9cce2c66e22b3876d1d",
+                  "transform": {
+                    "approach_index": 1,
+                    "approach_vector": [
+                      -0.4877236689784852,
+                      0.75,
+                      0.44679483291345823
+                    ],
+                    "rotation_index": 0
+                  },
+                  "validation": {
+                    "contact_error_angstrom": 0.0,
+                    "hard_clash_count": 0,
+                    "limiting_distance_angstrom": null,
+                    "limiting_pair": null,
+                    "limiting_threshold_angstrom": null,
+                    "soft_overlap_score": 0.203401
+                  },
+                  "xyz": "3\nChemvas chemvas-rigid-precomplex-placement/2 S01 reactant\nC  1.00000000 0.00000000 0.00000000\nO  2.00000000 0.00000000 0.00000000\nPt -0.46317101 2.25000000 1.34038450\n",
+                  "xyz_sha256": "520f5dbd732557b758e9d2f6c795a0b6f56908e1a87b8b6ccdd2e865340911bb"
+                },
+                {
+                  "component_conformer_ids": [
+                    "conf-d6b33b6e4f7260f577088ebbcdeac46070cbee0542a5aa4ed1c373059fe27737",
+                    "conf-87b36248850f8f9a263e9952e32dead60d778cbef4c669a59f0986b95d54503a"
+                  ],
+                  "geometry_class": "generated_candidate_ensemble",
+                  "id": "pc-41e5d06a0228a02739fe7172b07c62f227b72a8c0becaa2ab5cd2fbb3addb4ea",
+                  "transform": {
+                    "approach_index": 1,
+                    "approach_vector": [
+                      -0.4877236689784852,
+                      0.75,
+                      0.44679483291345823
+                    ],
+                    "rotation_index": 1
+                  },
+                  "validation": {
+                    "contact_error_angstrom": 0.0,
+                    "hard_clash_count": 0,
+                    "limiting_distance_angstrom": null,
+                    "limiting_pair": null,
+                    "limiting_threshold_angstrom": null,
+                    "soft_overlap_score": 0.203401
+                  },
+                  "xyz": "3\nChemvas chemvas-rigid-precomplex-placement/2 S01 reactant\nC  1.00000000 0.00000000 0.00000000\nO  2.00000000 0.00000000 0.00000000\nPt -0.46317101 2.25000000 1.34038450\n",
+                  "xyz_sha256": "520f5dbd732557b758e9d2f6c795a0b6f56908e1a87b8b6ccdd2e865340911bb"
+                }
+              ],
+              "contacts": [
+                {
+                  "first_atom_id": 0,
+                  "id": "r-contact",
+                  "second_atom_id": 4,
+                  "target_distance_angstrom": 3.0,
+                  "tolerance_angstrom": 0.1
+                }
+              ],
+              "environment": {
+                "kind": "gas_phase"
+              },
+              "kind": "candidate_ensemble",
+              "profile": "chemvas-rigid-precomplex-placement/2",
+              "radius_provenance": {
+                "covalent": {
+                  "dataset_id": "cordero-2008-table-2",
+                  "doi": "10.1039/B801115J",
+                  "selectors": {
+                    "C": "sp3",
+                    "Co": "low_spin",
+                    "Fe": "low_spin"
+                  }
+                },
+                "radius_table_sha256": "49382c8b506725b256fa9aaa35350b467f223b036b53275dc20bd6e095eae339",
+                "status": "cited",
+                "units": "angstrom",
+                "van_der_waals": {
+                  "dataset_id": "alvarez-2013-table-1",
+                  "doi": "10.1039/C3DT50599E"
+                }
+              },
+              "selection": {
+                "acceptance_statement": "accepted_for_path_endpoint_review",
+                "candidate_id": "pc-36d35a861e77029791d5cdc26855891f5eba156eae34c9cce2c66e22b3876d1d",
+                "candidate_xyz_sha256": "520f5dbd732557b758e9d2f6c795a0b6f56908e1a87b8b6ccdd2e865340911bb",
+                "reviewed_at": "2026-09-16T15:38:27Z",
+                "reviewer": "test-reviewer"
+              },
+              "side": "reactant",
+              "source_document_sha256": "2cac0934e9dc13c86aa74a39d9c54a8765a115c7f21e8b9bcb4a6cc85c5ea094",
+              "source_geometry": {
+                "atom_map": [
+                  {
+                    "chemvas_atom_id": 0,
+                    "mol_index": 1,
+                    "origin": "chemvas_atom",
+                    "parent_chemvas_atom_id": null,
+                    "parent_xyz_index": null,
+                    "symbol": "C",
+                    "xyz_index": 1
+                  },
+                  {
+                    "chemvas_atom_id": 1,
+                    "mol_index": 2,
+                    "origin": "chemvas_atom",
+                    "parent_chemvas_atom_id": null,
+                    "parent_xyz_index": null,
+                    "symbol": "O",
+                    "xyz_index": 2
+                  },
+                  {
+                    "chemvas_atom_id": 4,
+                    "mol_index": 3,
+                    "origin": "chemvas_atom",
+                    "parent_chemvas_atom_id": null,
+                    "parent_xyz_index": null,
+                    "symbol": "Pt",
+                    "xyz_index": 3
+                  }
+                ],
+                "electron_count": 100,
+                "geometry_embedding": "ETKDGv3",
+                "geometry_optimization_policy": "test",
+                "geometry_optimization_result": "test_converged",
+                "geometry_random_seed": 12648430,
+                "mol_atom_count": 3,
+                "rdkit_formal_charge": 0,
+                "rdkit_radical_electrons": 0,
+                "rdkit_version": "test-rdkit",
+                "xyz_atom_count": 3
+              }
+            },
+            "roles": [
+              {
+                "component_atom_ids": [
+                  0,
+                  1
+                ],
+                "role": "reactant"
+              },
+              {
+                "component_atom_ids": [
+                  4
+                ],
+                "role": "catalyst"
+              },
+              {
+                "component_atom_ids": [
+                  5
+                ],
+                "role": "spectator"
+              }
+            ],
+            "state_id": "R01"
+          }
+        }
+      ],
+      "version": 2
+    },
+    "last_smiles_input": null,
+    "marks": [],
+    "model": {
+      "atoms": {
+        "0": {
+          "color": "#000000",
+          "element": "C",
+          "explicit_label": false,
+          "x": 0.0,
+          "y": 0.0
+        },
+        "1": {
+          "color": "#000000",
+          "element": "O",
+          "explicit_label": false,
+          "x": 1.0,
+          "y": 0.0
+        },
+        "2": {
+          "color": "#000000",
+          "element": "C",
+          "explicit_label": false,
+          "x": 4.0,
+          "y": 0.0
+        },
+        "3": {
+          "color": "#000000",
+          "element": "O",
+          "explicit_label": false,
+          "x": 5.0,
+          "y": 0.0
+        },
+        "4": {
+          "color": "#000000",
+          "element": "Pt",
+          "explicit_label": false,
+          "x": 2.5,
+          "y": 3.0
+        },
+        "5": {
+          "color": "#000000",
+          "element": "Cl",
+          "explicit_label": false,
+          "x": 2.5,
+          "y": -3.0
+        }
+      },
+      "bonds": [
+        {
+          "a": 0,
+          "b": 1,
+          "color": "#000000",
+          "order": 2,
+          "style": "single"
+        },
+        {
+          "a": 2,
+          "b": 3,
+          "color": "#000000",
+          "order": 1,
+          "style": "single"
+        }
+      ],
+      "next_atom_id": 6
+    },
+    "notes": [],
+    "orbitals": [],
+    "ring_fills": [],
+    "settings": {
+      "arrow_head_scale": 0.4,
+      "arrow_line_width": 1.5,
+      "bond_length_px": 18.0,
+      "note_border_color": "#333333",
+      "note_border_enabled": false,
+      "note_border_width": 1.0,
+      "note_box_alpha": 1.0,
+      "note_box_color": "#ffffff",
+      "note_box_enabled": false,
+      "note_padding": 6.0,
+      "orbital_phase_enabled": true,
+      "sheet_orientation": "portrait",
+      "sheet_size": "A4",
+      "text_alignment": "left",
+      "text_color": "#222222",
+      "text_font_family": "Arial",
+      "text_font_size": 13,
+      "text_font_weight": 600,
+      "text_italic": false,
+      "text_line_spacing": 1.0
+    },
+    "shapes": [],
+    "ts_brackets": []
+  },
+  "type": "chemvas",
+  "version": 7
+}
