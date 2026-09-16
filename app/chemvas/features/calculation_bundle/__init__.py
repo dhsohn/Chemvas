@@ -27,7 +27,6 @@ from .plan import (
     member,
     path_precheck,
     plan_with_replaced_step,
-    precomplex_basis_sha256,
     prepare_calculation_step,
     prepare_calculation_step_editor,
     require_step_ready,
@@ -36,8 +35,6 @@ from .plan import (
     step_readiness,
     structural_calculation_plan_for_document,
     validate_calculation_plan,
-    validate_reviewed_precomplex_pair,
-    validate_reviewed_precomplex_pairs,
 )
 from .service import (
     select_components,
@@ -66,7 +63,6 @@ __all__ = [
     "member",
     "path_precheck",
     "plan_with_replaced_step",
-    "precomplex_basis_sha256",
     "prepare_calculation_step",
     "prepare_calculation_step_editor",
     "require_step_ready",
@@ -77,6 +73,4 @@ __all__ = [
     "structural_calculation_plan_for_document",
     "validate_calculation_artifacts",
     "validate_calculation_plan",
-    "validate_reviewed_precomplex_pair",
-    "validate_reviewed_precomplex_pairs",
 ]

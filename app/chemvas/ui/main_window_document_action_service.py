@@ -12,10 +12,7 @@ from chemvas.core.svg_roundtrip import (
     extract_chemvas_document_from_svg as default_read_editable_svg,
 )
 from chemvas.domain.document import MoleculeModel, serialize_model_state
-from chemvas.features.calculation_bundle import (
-    validate_calculation_plan,
-    validate_reviewed_precomplex_pairs,
-)
+from chemvas.features.calculation_bundle import validate_calculation_plan
 from chemvas.features.export import (
     default_export_path,
     export_error_message,
@@ -163,7 +160,7 @@ class MainWindowDocumentActionService:
         consequence = ""
         action = "Exporting" if exporting else "Saving"
         try:
-            validated_plan = validate_calculation_plan(state, plan)
+            validate_calculation_plan(state, plan)
         except ValueError as exc:
             plan_problem = str(exc)
             consequence = (
@@ -174,19 +171,6 @@ class MainWindowDocumentActionService:
                 "Choose No and undo the graph edit to recover its references, "
                 "or use Save As to keep the previously saved plan separately."
             )
-        else:
-            try:
-                validate_reviewed_precomplex_pairs(state, validated_plan)
-            except ValueError as exc:
-                plan_problem = str(exc)
-                consequence = (
-                    f"{action} will keep this drawing and its reviewed precomplex "
-                    "data as a draft, but the review is no longer valid for "
-                    "calculation export. Choose No to cancel; Undo the "
-                    "invalidating edit if it is still in history. Otherwise "
-                    "regenerate and review the affected pair before pack-step. "
-                    "Save As can keep the previously saved drawing separately."
-                )
         if plan_problem is None:
             return True
         verb = "Export" if exporting else "Save"

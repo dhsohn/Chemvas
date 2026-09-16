@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from copy import deepcopy
 from dataclasses import replace
-from typing import TYPE_CHECKING
 from unittest.mock import patch
 
 import pytest
@@ -20,32 +19,18 @@ from chemvas.features.calculation_bundle import (
     validate_calculation_plan,
 )
 from tests.calculation_plan_support import _document_state, _plan
-from tests.precomplex_workflow_support import _generate_candidate_fixture
-
-if TYPE_CHECKING:
-    from pathlib import Path
+from tests.calculation_workflow_support import _legacy_reviewed_precomplex_payload
 
 
 @pytest.fixture
-def reviewed_state(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-    capsys: pytest.CaptureFixture[str],
-) -> dict:
-    _source, _candidates, payload = _generate_candidate_fixture(
-        tmp_path, monkeypatch, capsys
-    )
-    state = payload["state"]
+def reviewed_state() -> dict:
+    """A plan whose step S01 stores a reviewed precomplex pair from 0.15.0."""
+    state = _legacy_reviewed_precomplex_payload()["state"]
+    assert isinstance(state, dict)
     for side in ("reactant", "product"):
         precomplex = state["calculation_plan"]["steps"][0][side]["precomplex"]
-        candidate = precomplex["candidates"][0]
-        precomplex["selection"] = {
-            "candidate_id": candidate["id"],
-            "candidate_xyz_sha256": candidate["xyz_sha256"],
-            "reviewer": "test-reviewer",
-            "reviewed_at": "2026-09-07T00:00:00Z",
-            "acceptance_statement": "accepted_for_path_endpoint_review",
-        }
+        assert precomplex["kind"] == "candidate_ensemble"
+        assert "selection" in precomplex
     return state
 
 
@@ -284,7 +269,7 @@ def test_editor_acceptance_still_runs_mapping_validation() -> None:
         )
 
 
-def test_reviewed_report_reuses_inventory_for_both_endpoint_basis_checks(
+def test_report_on_legacy_precomplex_plan_is_ready_and_builds_the_model_once(
     reviewed_state: dict,
 ) -> None:
     with patch.object(
@@ -295,6 +280,7 @@ def test_reviewed_report_reuses_inventory_for_both_endpoint_basis_checks(
         report = calculation_plan_report(reviewed_state)
 
     assert report["steps"][0]["path_precheck"]["ready_for_path_endpoints"] is True
+    assert report["steps"][0]["path_precheck"]["blocking_reasons"] == ()
     assert model_construction.call_count == 1
 
 

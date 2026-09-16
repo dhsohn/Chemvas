@@ -10,8 +10,6 @@ from pathlib import Path
 
 import pytest
 
-from chemvas.bootstrap.calculation_bundle import _parse_precomplex_request
-
 ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -112,56 +110,6 @@ def test_documented_composition_template_patch_chain(
     )
     assert source.read_bytes() == original
     assert ring.read_bytes() == ring_bytes
-
-
-@pytest.mark.parametrize("language", ["", ".ko"])
-def test_documented_precomplex_request_is_complete_v2(language: str) -> None:
-    request = _example(language, "chemvas-precomplex-request")
-    request["source_document_sha256"] = "a" * 64
-    cap, profile, environment, contacts = _parse_precomplex_request(
-        request,
-        step_id="S01",
-        source_document_sha256="a" * 64,
-    )
-    assert cap == 16
-    assert profile == "chemvas-rigid-precomplex-placement/2"
-    assert environment == {"kind": "gas_phase"}
-    assert set(contacts) == {"reactant", "product"}
-    assert contacts["reactant"][0].first_atom_id == 2
-    request["environment"] = {"kind": "solvent", "model": "CPCM", "name": "THF"}
-    _parse_precomplex_request(request, step_id="S01", source_document_sha256="a" * 64)
-
-
-@pytest.mark.parametrize(
-    "section,field",
-    [
-        ("root", "profile"),
-        ("endpoints", "product"),
-        ("reactant", "contacts"),
-        ("contact", "tolerance_angstrom"),
-        ("environment", "name"),
-    ],
-)
-def test_precomplex_field_errors_identify_the_missing_and_misspelled_key(
-    section, field
-):
-    request = _example("", "chemvas-precomplex-request")
-    request["source_document_sha256"] = "a" * 64
-    request["environment"] = {"kind": "solvent", "model": "CPCM", "name": "THF"}
-    target = {
-        "root": request,
-        "endpoints": request["endpoints"],
-        "reactant": request["endpoints"]["reactant"],
-        "contact": request["endpoints"]["reactant"]["contacts"][0],
-        "environment": request["environment"],
-    }[section]
-    target[field + "_typo"] = target.pop(field)
-    with pytest.raises(ValueError) as error:
-        _parse_precomplex_request(
-            request, step_id="S01", source_document_sha256="a" * 64
-        )
-    assert f"missing=['{field}']" in str(error.value)
-    assert f"unexpected=['{field}_typo']" in str(error.value)
 
 
 def test_composition_diagnostics_name_keys_and_supported_arrow_kinds():

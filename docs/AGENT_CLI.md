@@ -24,16 +24,14 @@ flowchart LR
     revised --> check["check-layout<br/>warnings, exit 0/1/2"]
     revised --> render["render-document<br/>SVG · PDF · PNG"]
     doc --> plan["attach-plan → inspect-plan"]
-    plan --> precomplex["generate-precomplex → select-precomplex"]
-    precomplex --> pack["pack-step<br/>machine.json"]
+    plan --> pack["pack-step<br/>machine.json"]
 ```
 
 Every command reads the exact source bytes and validates before it needs Qt
 where it can. Commands that take an output path (`compose-document`,
 `insert-template`, `apply-patch`, `layout-document`, `render-document`,
-`attach-plan`, `generate-precomplex`, `select-precomplex`, `pack-step`)
-publish one new file atomically and never edit their input; `inspect`,
-`inspect-document`, `inspect-plan`, `inspect-precomplex`, `check-layout` and
+`attach-plan`, `pack-step`) publish one new file atomically and never edit
+their input; `inspect`, `inspect-document`, `inspect-plan`, `check-layout` and
 every `--dry-run` only print a JSON report and write nothing.
 The figures below are the documented examples rendered with `render-document`.
 On POSIX, new atomically published files are private to their owner (mode 0600).
@@ -179,8 +177,8 @@ or `#RRGGBB` form. This applies independently to each `plus`, `minus`,
 `circled_plus`, `circled_minus` and `radical`, whether bound to an atom or free.
 Omitting it uses the document's default mark color, not the bound atom's color.
 Explicit colors persist in native documents, clipboard selections and editable
-SVG; they do not change formal charge, radical electrons or the precomplex
-review basis. Unknown fields and invalid colors are rejected. The format
+SVG; they do not change formal charge or radical electrons. Unknown fields and
+invalid colors are rejected. The format
 versions remain unchanged, but older releases without this field reject marks
 that contain it; documents without mark colors remain supported. Graph Patch
 does not gain a mark-color editing operation.
@@ -502,10 +500,6 @@ Supported operations are `add_atom`, `update_atom` (element/color/explicit label
 There are at most 256 operations. Each `add_atom.atom_id` must equal the current
 `next_atom_id` (which advances after an addition). Operations run in order on
 a private copy and publish only after full document and Calculation Plan validation.
-If the document carries a reviewed precomplex selection, that validation also
-requires a complete atomic reactant/product review pair whose profile, shared
-source/environment provenance, and electronic graph/plan basis still match the
-candidate graph. A patch that would make it stale produces no output.
 `move_atom` also moves dependent ring-fill, bound-mark, and perspective coordinates.
 Its screen-space movement preserves stored depth and the camera projection.
 `remove_bond` removes any ring fill whose cycle contains that edge; it preserves
@@ -518,8 +512,8 @@ rule—for example, `OH`, `NH2`, or `SH` with two bonds or a double bond.
 `inspect` and `inspect-document` still reject these semantic errors. `apply-patch`
 can repair them: it validates the source structure, exact hash, and patch request
 before editing, then validates **the entire final candidate**, including alias
-attachments, charge/radical annotation consistency, Calculation Plans, and reviewed
-precomplex pairs. An unchanged or only partly repaired invalid drawing produces
+attachments, charge/radical annotation consistency, and Calculation Plans. An
+unchanged or only partly repaired invalid drawing produces
 no output. These are the existing validation rules, not a general chemical
 correctness guarantee; no repair is inferred automatically.
 
@@ -613,7 +607,7 @@ pip install "chemvas[rdkit]"
 ```
 
 Attaching and inspecting a plan do not invoke RDKit, but **Suggest by
-structure**, `generate-precomplex`, `select-precomplex`, and `pack-step` require it.
+structure** and `pack-step` require it.
 
 Draw the reactant, product, catalyst, and spectators on one canvas, then open
 **Calculation ▸ Edit States and Steps...**. For each endpoint, assign every
@@ -656,19 +650,18 @@ generation and downstream chemical review are still separate requirements.
 The labels are temporary overlays: closing the dialog removes them without
 changing the drawing or the current canvas selection. Overlay removal adds no
 history entry; an accepted plan change does, and supports Undo/Redo. Accepting
-an unchanged plan preserves its ordering and reviewed geometry. A charge-only
-correction to a shared state retains its membership and multiplicity but clears
-all reviews tied to the old plan basis. Editing an existing step also keeps its
-position and the order of surviving states; new steps and new state IDs append.
-Reviewed geometry still binds the whole serialized plan, so changing another
-step can make an otherwise untouched review stale. If a graph edit invalidates stored
+an unchanged plan preserves it exactly, including its ordering. Editing an
+existing step also keeps its position and the order of surviving states; new
+steps and new state IDs append. If a graph edit invalidates stored
 component references, the editor keeps the plan and asks you to undo that edit
 or attach a repaired plan; it does not silently start over. Save also asks before
-keeping an inconsistent draft or omitting a topologically stale plan. A stale or
-invalid reviewed precomplex pair also prompts before saving: **No** keeps the
-current drawing and destination unchanged; **Yes** retains an editable draft and
-the review data, not calculation readiness. Undo the invalidating edit or
-regenerate and review the affected pair before `pack-step`.
+keeping an inconsistent draft or omitting a topologically stale plan.
+
+Documents saved by Chemvas 0.15.0 or earlier can contain precomplex candidates
+and reviews made with the removed `generate-precomplex` and `select-precomplex`
+commands. They still open, and saving keeps that data unchanged, but
+`pack-step` ignores it. Editing that step clears its stored data, and
+correcting the charge of a shared state clears it from every step.
 
 Agents can attach and inspect the same contract without Qt:
 
@@ -677,116 +670,6 @@ chemvas attach-plan scheme.chemvas plan.json --output mechanism.chemvas
 chemvas inspect-plan mechanism.chemvas
 chemvas pack-step mechanism.chemvas --step S01 --output calculations/machine.json
 ```
-
-For a step with exactly two included components on each endpoint, generate and
-review bounded rigid-placement candidates before packing:
-
-```bash
-chemvas generate-precomplex mechanism.chemvas precomplex-request.json \
-  --step S01 --output mechanism-candidates.chemvas
-chemvas inspect-precomplex mechanism-candidates.chemvas --step S01
-chemvas select-precomplex mechanism-candidates.chemvas --step S01 \
-  --reactant-candidate <candidate-id> --product-candidate <candidate-id> \
-  --reviewer <reviewer> --output mechanism-reviewed.chemvas
-chemvas pack-step mechanism-reviewed.chemvas --step S01 \
-  --output calculations/machine.json
-```
-
-The strict request binds generation to the exact input through
-`source_document_sha256` and `step_id`, names one intercomponent contact per
-endpoint, records an explicit gas-phase or solvent environment, and sets a
-retained candidate cap. Generation writes a new version-7 document with
-Calculation Plan v2 and `selection: null`; `inspect-precomplex` exposes IDs,
-provenance, validation metrics, hashes, and exact XYZ. `select-precomplex`
-records one reactant/product pair with the same reviewer and timestamp and binds
-each selection to its XYZ hash. Before handoff, `pack-step` deterministically
-regenerates both bounded ensembles from the current graph, plan, RDKit
-provenance, contacts, and profile and rejects any mismatch. Placement scores are
-geometric clash and contact metrics, not energies or stability rankings.
-Unreviewed or partially reviewed multicomponent endpoints remain blocked.
-Missing candidate ensembles report
-`multicomponent_precomplex_geometry_not_provided`: run `generate-precomplex`.
-When both ensembles exist but either selection is absent, the reason is
-`multicomponent_precomplex_review_required`: inspect the candidates with
-`inspect-precomplex`, then review a pair with `select-precomplex`. A missing
-ensemble takes priority over an unreviewed one on the opposite endpoint.
-
-Precomplex generation accepts request format v2 only and requires
-`"profile": "chemvas-rigid-precomplex-placement/2"`. This profile uses the
-covalent radii from [Cordero et al., Table 2](https://doi.org/10.1039/B801115J)
-(C sp3 and low-spin Fe/Co entries) and the van der Waals radii from
-[Alvarez, Table 1](https://doi.org/10.1039/C3DT50599E) for every supported
-element. The ensemble, generation/inspection reports, and final
-`machine.json` placement metadata carry the profile, dataset IDs, DOIs, and an
-exact radius-table hash. Other request versions and placement profiles are
-rejected.
-
-The profile is stored in document version 7 and Calculation Plan v2. These
-cited radii and Chemvas's thresholds still define a deterministic geometric
-heuristic: designated contacts use `0.85 ×` the covalent-radius sum; other pairs
-use the
-larger of `1.05 ×` the covalent-radius sum and `0.60 ×` the van der Waals-radius
-sum; soft-overlap scoring uses `0.85 ×` the van der Waals-radius sum. This is
-not a hard-sphere physical model, energy, or stability claim. Fe/Co spin and
-coordination are not represented in the current input model, so the documented
-low-spin selector is fixed rather than inferred. Researcher review and
-downstream quantum optimization remain required.
-
-### Complete precomplex request v2
-
-Save this as `precomplex-request.json`. This is a **separate 2→2 example**:
-reactant components [0,1] and [2], product components [3,4] and [5].
-It is not applicable to the 1→1 plan example below. Inspect your planned source,
-substitute its exact hash, and choose actual intercomponent contact IDs/distances.
-
-```json
-{
-  "format": "chemvas-precomplex-request",
-  "version": 2,
-  "profile": "chemvas-rigid-precomplex-placement/2",
-  "source_document_sha256": "<64 lowercase hexadecimal characters>",
-  "step_id": "S01",
-  "candidate_cap": 16,
-  "environment": {"kind": "gas_phase"},
-  "endpoints": {
-    "reactant": {"contacts": [{
-      "id": "nucleophile", "first_atom_id": 2, "second_atom_id": 0,
-      "target_distance_angstrom": 3.0, "tolerance_angstrom": 0.2
-    }]},
-    "product": {"contacts": [{
-      "id": "leaving", "first_atom_id": 4, "second_atom_id": 5,
-      "target_distance_angstrom": 3.2, "tolerance_angstrom": 0.2
-    }]}
-  }
-}
-```
-
-Every field shown is required; unknown keys are rejected at every level.
-`candidate_cap` is an integer 1–16. Each endpoint has exactly one contact:
-a nonblank ID of at most 64 characters, two integer Chemvas atom IDs from
-different included components, a finite positive target distance in Å, and
-finite tolerance 0–1 Å. Tolerance validates distance; it is **not** a radial
-sampling range. Placement aims at the target, so different tolerances can
-produce identical coordinates.
-Environment is exactly `{"kind":"gas_phase"}` or
-`{"kind":"solvent","model":"CPCM","name":"THF"}`; solvent model/name are
-nonblank strings of at most 128 characters. These record provenance, not a
-solvation calculation or an endorsement of the named model.
-
-Current placement supports exactly 2→2 included components; direct 1→1
-packing does not use this request. 2→1, 1→2 and larger endpoints are explicitly
-unsupported by the current profile. Candidate IDs are not counts of unique
-geometries: `inspect-precomplex.candidate_geometry_summary` reports candidate
-and unique-XYZ-hash counts plus duplicate groups. Exact duplicates can consume
-the cap; deduplication, symmetry equivalence and renumbering-independent sampling
-are not promised by profile 2. No surviving candidate is a bounded-search
-failure, not evidence that the reaction is impossible.
-The generation error retains `chemvas/precomplex_no_candidates_survived` and
-reports the first rejected placement's clash/contact failure count, contact
-error, and, when present, limiting pair with distance and threshold. Path indices
-are 0-based; accompanying Chemvas IDs identify source atoms or the source parents
-of generated hydrogens. This is one deterministic sample, not a best failed
-geometry, a count of the most common blocking pair, or a unique cause of failure.
 
 ### Chemical interpretation limits
 
@@ -862,36 +745,51 @@ charge/multiplicity; step endpoints own roles:
 ```
 
 Every `component_atom_ids` list must equal one complete connected component and
-must be sorted. `pack-step` atomically writes exactly one non-overwriting file
+must be sorted. Each endpoint still requires the Calculation Plan v2
+`precomplex` key; write `{"kind": "none"}`. `pack-step` atomically writes exactly one non-overwriting file
 named `machine.json`. It uses the shared `factory/machine-observation` v1
-envelope and a `chemistry/elementary-step` v1 payload containing the source
+envelope and a `chemistry/elementary-step` v2 payload containing the source
 document hash, endpoint state and RDKit atom provenance, complete
-source/generated atom correspondence, and bond changes. Draw transferred
+source/generated atom correspondence, and bond changes. Consumers need
+`machine-contracts` v1.1.0 or later to validate it. Draw transferred
 hydrogens explicitly when implicit-hydrogen counts differ between endpoints;
 the generated atoms must also form a complete bijection.
 
 `inspect-plan` reports a deterministic `path_precheck` for each step. When the
-source mapping is complete, both endpoints have the same charge and
-multiplicity, and either each endpoint is single-component or both
-multicomponent endpoints have a current atomic reviewed precomplex pair, the
-single artifact's `endpoint_pair` contains the exact reactant/product XYZ text
-and hashes. Invalid review metadata/profile is blocked with
-`multicomponent_precomplex_review_pair_invalid`; a graph/plan basis mismatch is
-blocked with `multicomponent_precomplex_review_pair_stale`. Paired generation
-provenance includes the source-document hash and environment; basis freshness
-binds element/coordinate/bond semantics, the environment, and effective
-charge/radical marks, but ignores mark drawing coordinates, display colors, and
-explicit-label visibility. The product XYZ is rewritten into the reactant
-atom-identity order; the same object records that
-order and the bond-change reaction-center atoms as canonical 0-based indices.
-Downstream tools therefore do not need to reconstruct the mapping from element
-order or coordinates.
+source mapping is complete and both endpoints have the same charge and
+multiplicity, the step is ready however many components each endpoint includes,
+and the artifact's `endpoint_geometry` contains:
+
+- `ordering.atom_order`: one canonical 0-based atom order (`path_index`) taken
+  from the reactant side, with each atom's Chemvas IDs. Its
+  `reactant_xyz_index` and `product_xyz_index`, like the state-level `atom_map`
+  and `geometry_generation`, describe Chemvas's internal whole-state
+  conversion, whose coordinates are not published; refer to atoms by
+  `path_index` and component `atom_indices`;
+- `reaction_center`: the 0-based indices of atoms incident to a bond change,
+  and `bond_changes`, which repeats each change with the `atom_indices` of its
+  two atoms;
+- `sides.reactant` and `sides.product`: an `assembly` of `single_component` or
+  `separated_components`, and one entry per included component with its
+  `component_index`, endpoint `role`, Chemvas atom IDs, `atom_indices`,
+  `formal_charge`, `radical_electrons`, `electron_count`, and exact XYZ text
+  with its SHA-256 and byte count. XYZ rows follow `atom_indices`. Only the whole
+  state's multiplicity is declared, so a component's `multiplicity` is `null`
+  with `multiplicity_inference: "not_performed"`;
+- `electronic_state`: the shared charge and multiplicity.
+
+RDKit embeds each component on its own, so a component's coordinates describe
+that component only. A drawing does not determine how separate molecules sit
+against each other: no relative placement is provided
+(`geometry.intermolecular_arrangement: "not_provided"`), and component XYZ must
+not be concatenated into a complex. Finding reactive arrangements, transition
+states and pre- or post-reaction complexes is left to the downstream
+calculation. Downstream tools do not need to reconstruct the mapping from
+element order or coordinates.
 
 An incomplete source mapping still blocks `pack-step` without creating the
-output. Once that gate and the generated-atom bijection pass, an unreviewed
-multicomponent endpoint or electronic-state mismatch writes one observation with
-`handoff.status: "blocked"`, namespaced `handoff.codes`, and
-`payload.data.endpoint_pair: null`. Chemvas does not invent contacts, select a
-candidate automatically, or treat generated coordinates as optimized minima.
-Reviewed generated coordinates remain initial guesses requiring downstream
-quantum optimization and scientific validation.
+output. Once that gate and the generated-atom bijection pass, an electronic-state
+mismatch writes one observation with `handoff.status: "blocked"`, namespaced
+`handoff.codes`, and `payload.data.endpoint_geometry: null`. Chemvas does not
+treat generated coordinates as optimized minima; they remain initial guesses
+requiring downstream quantum optimization and scientific validation.

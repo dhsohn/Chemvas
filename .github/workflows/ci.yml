@@ -47,7 +47,7 @@ jobs:
         uses: actions/checkout@v7
         with:
           repository: dhsohn/machine-contracts
-          ref: bc252035d01edddf1314e6641689c6d5cb88af92
+          ref: 38581a7737cd0521bb3d50b59115eefe3c9254ca
           path: .machine-contracts
           persist-credentials: false
 

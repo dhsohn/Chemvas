@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+from copy import deepcopy
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -32,11 +33,10 @@ from chemvas.ui.calculation_step_dialog import (
     _MappingProductCombo,
 )
 from tests.calculation_plan_support import _document_state, _plan
-from tests.precomplex_workflow_support import _review_candidate_fixture
+from tests.calculation_workflow_support import _legacy_reviewed_precomplex_payload
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
-    from pathlib import Path
 
 
 def _select_component(
@@ -958,15 +958,13 @@ def test_dialog_tables_reject_input_method_cell_editing() -> None:
     dialog.deleteLater()
 
 
-def test_dialog_noop_edit_preserves_reviewed_precomplex_pair(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-    capsys: pytest.CaptureFixture[str],
-) -> None:
+def test_dialog_noop_edit_preserves_reviewed_precomplex_pair() -> None:
     app = QApplication.instance() or QApplication([])
     app.setQuitOnLastWindowClosed(False)
-    state = _review_candidate_fixture(tmp_path, monkeypatch, capsys)[1]["state"]
-    before = state["calculation_plan"]["steps"][0]
+    state = _legacy_reviewed_precomplex_payload()["state"]
+    before = deepcopy(state["calculation_plan"]["steps"][0])
+    assert before["reactant"]["precomplex"]["kind"] == "candidate_ensemble"
+    assert before["product"]["precomplex"]["kind"] == "candidate_ensemble"
     dialog = CalculationStepDialog(state)
 
     dialog.step_selector.setCurrentIndex(1)
@@ -979,14 +977,10 @@ def test_dialog_noop_edit_preserves_reviewed_precomplex_pair(
     dialog.deleteLater()
 
 
-def test_dialog_dependency_edit_invalidates_precomplex_pair(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-    capsys: pytest.CaptureFixture[str],
-) -> None:
+def test_dialog_dependency_edit_invalidates_precomplex_pair() -> None:
     app = QApplication.instance() or QApplication([])
     app.setQuitOnLastWindowClosed(False)
-    state = _review_candidate_fixture(tmp_path, monkeypatch, capsys)[1]["state"]
+    state = _legacy_reviewed_precomplex_payload()["state"]
     dialog = CalculationStepDialog(state)
     dialog.step_selector.setCurrentIndex(1)
     dialog._set_combo_data(dialog._role_combos[("reactant", 2)], "spectator")

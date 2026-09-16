@@ -19,7 +19,6 @@ from chemvas.bootstrap import (
 )
 from chemvas.core.document_io import read_exact_document, write_document
 from chemvas.domain.document import CANVAS_FILE_VERSION
-from chemvas.domain.document.precomplex_profile import CURRENT_PROFILE_ID
 from chemvas.features.document_composition import compose_document_state
 from tests.calculation_artifact_support import _StateFakeAdapter
 from tests.calculation_plan_support import _document_state, _plan
@@ -31,7 +30,6 @@ OPERATIONS = (
     "render-document",
     "layout-document",
     "insert-template",
-    "generate-precomplex",
     "pack-step",
 )
 
@@ -61,7 +59,7 @@ def _write_source(source: Path) -> bytes:
 
 def _case(directory: Path, operation: str):
     source, output = directory / "source.chemvas", directory / "output.chemvas"
-    if operation in {"generate-precomplex", "pack-step"}:
+    if operation == "pack-step":
         state = _document_state()
         state["calculation_plan"] = _plan()
         write_document(source, state, CANVAS_FILE_VERSION)
@@ -118,50 +116,6 @@ def _case(directory: Path, operation: str):
                 str(source),
                 "--request",
                 str(request),
-                "--output",
-                str(output),
-            ],
-        )
-    if operation == "generate-precomplex":
-        request = directory / "request.json"
-        request.write_text(
-            json.dumps(
-                {
-                    "format": "chemvas-precomplex-request",
-                    "version": 2,
-                    "profile": CURRENT_PROFILE_ID,
-                    "source_document_sha256": digest,
-                    "step_id": "S01",
-                    "candidate_cap": 2,
-                    "environment": {"kind": "gas_phase"},
-                    "endpoints": {
-                        side: {
-                            "contacts": [
-                                {
-                                    "id": f"{side}-contact",
-                                    "first_atom_id": first,
-                                    "second_atom_id": 4,
-                                    "target_distance_angstrom": 3.0,
-                                    "tolerance_angstrom": 0.1,
-                                }
-                            ]
-                        }
-                        for side, first in (("reactant", 0), ("product", 3))
-                    },
-                }
-            ),
-            encoding="utf-8",
-        )
-        return (
-            calculation_bundle,
-            source,
-            output,
-            [
-                operation,
-                str(source),
-                str(request),
-                "--step",
-                "S01",
                 "--output",
                 str(output),
             ],
@@ -249,14 +203,7 @@ def capture_operation(directory: Path, operation: str) -> dict:
     assert code in ({0, 1} if operation == "check-layout" else {0})
     report = json.loads(stdout.getvalue())
     expected = constructor(original).hexdigest()
-    if operation == "generate-precomplex":
-        state = json.loads(output.read_bytes())["state"]["calculation_plan"]
-        for side in ("reactant", "product"):
-            assert (
-                state["steps"][0][side]["precomplex"]["source_document_sha256"]
-                == expected
-            )
-    elif operation == "pack-step":
+    if operation == "pack-step":
         assert report["payload"]["data"]["source"]["document_sha256"] == expected
         assert report["payload"]["data"]["source"]["document_bytes"] == len(original)
     else:

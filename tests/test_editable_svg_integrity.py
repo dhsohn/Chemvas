@@ -44,7 +44,7 @@ from chemvas.ui.main_window_ports import (
 )
 from chemvas.ui.structure_mutation_access import add_bond_for
 from tests.calculation_plan_support import _document_state, _plan
-from tests.precomplex_workflow_support import _review_candidate_fixture
+from tests.calculation_workflow_support import _legacy_reviewed_precomplex_payload
 from tests.test_document_images import _raster
 
 
@@ -100,30 +100,23 @@ def _export(window, destination, message_box, options=None):
         )
 
 
-def _problem(window, kind, tmp_path, monkeypatch, capsys):
-    if kind == "review":
-        state = _review_candidate_fixture(tmp_path, monkeypatch, capsys)[1]["state"]
-        canvas = _install(window, state)
-        canvas.setFocus()
-        QTest.keySequence(canvas, QKeySequence(QKeySequence.StandardKey.SelectAll))
-        QTest.keyClick(canvas, Qt.Key.Key_Right, Qt.KeyboardModifier.ShiftModifier)
-    else:
-        canvas = _install(window, _document_state())
-        plan = _plan()
-        if kind == "charge":
-            plan["states"][0]["charge"] = 1
-        set_calculation_plan_for(canvas, plan)
-        if kind == "stale":
-            add_bond_for(canvas, 0, 2)
-        services_for_window(window).canvas_document_service.mark_dirty(canvas)
+def _problem(window, kind):
+    canvas = _install(window, _document_state())
+    plan = _plan()
+    if kind == "charge":
+        plan["states"][0]["charge"] = 1
+    set_calculation_plan_for(canvas, plan)
+    if kind == "stale":
+        add_bond_for(canvas, 0, 2)
+    services_for_window(window).canvas_document_service.mark_dirty(canvas)
     return canvas
 
 
-@pytest.mark.parametrize("kind", ["stale", "charge", "review"])
+@pytest.mark.parametrize("kind", ["stale", "charge"])
 def test_editable_whole_svg_requires_same_default_no_draft_consent_as_save(
-    window, tmp_path, monkeypatch, capsys, kind
+    window, tmp_path, kind
 ):
-    canvas = _problem(window, kind, tmp_path, monkeypatch, capsys)
+    canvas = _problem(window, kind)
     before = snapshot_canvas_state_for(canvas)
     raw_plan = deepcopy(calculation_plan_for(canvas))
     history = history_service_for_window(window)
@@ -144,8 +137,6 @@ def test_editable_whole_svg_requires_same_default_no_draft_consent_as_save(
     assert args[-1] == QMessageBox.StandardButton.No
     assert "Export anyway?" in args[2]
     assert ("omit" if kind == "stale" else "draft") in args[2]
-    if kind == "review":
-        assert "reviewed precomplex" in args[2]
     render.assert_not_called()
     message_box.warning.assert_not_called()
     assert output.read_bytes() == b"existing destination"
@@ -171,11 +162,9 @@ def test_editable_whole_svg_requires_same_default_no_draft_consent_as_save(
     history.verify_stack_snapshot(stacks)
 
 
-@pytest.mark.parametrize("kind", ["stale", "charge", "review"])
-def test_real_export_draft_notice_escape_preserves_destination(
-    window, tmp_path, monkeypatch, capsys, kind
-):
-    canvas = _problem(window, kind, tmp_path, monkeypatch, capsys)
+@pytest.mark.parametrize("kind", ["stale", "charge"])
+def test_real_export_draft_notice_escape_preserves_destination(window, tmp_path, kind):
+    canvas = _problem(window, kind)
     before = snapshot_canvas_state_for(canvas)
     raw_plan = deepcopy(calculation_plan_for(canvas))
     output = tmp_path / "cancelled.svg"
@@ -206,9 +195,9 @@ def test_real_export_draft_notice_escape_preserves_destination(
 
 
 def test_accepted_draft_export_failure_keeps_destination_and_live_drawing(
-    window, tmp_path, monkeypatch, capsys
+    window, tmp_path
 ):
-    canvas = _problem(window, "charge", tmp_path, monkeypatch, capsys)
+    canvas = _problem(window, "charge")
     before = snapshot_canvas_state_for(canvas)
     history = history_service_for_window(window)
     stacks = history.capture_stack_snapshot()
@@ -228,6 +217,35 @@ def test_accepted_draft_export_failure_keeps_destination_and_live_drawing(
     assert sorted(path.name for path in tmp_path.iterdir()) == ["drawing.svg"]
     assert snapshot_canvas_state_for(canvas) == before
     history.verify_stack_snapshot(stacks)
+
+
+def test_moved_legacy_precomplex_plan_exports_editable_svg_without_plan_prompt(
+    window, tmp_path
+):
+    # Moving every atom used to make the stored review stale. Chemvas no longer
+    # validates that data, so the still-valid plan exports without the
+    # attention prompt and the stored precomplex objects travel unchanged.
+    state = _legacy_reviewed_precomplex_payload()["state"]
+    stored_steps = deepcopy(state["calculation_plan"]["steps"])
+    for side in ("reactant", "product"):
+        assert stored_steps[0][side]["precomplex"]["kind"] == "candidate_ensemble"
+    canvas = _install(window, state)
+    canvas.setFocus()
+    QTest.keySequence(canvas, QKeySequence(QKeySequence.StandardKey.SelectAll))
+    QTest.keyClick(canvas, Qt.Key.Key_Right, Qt.KeyboardModifier.ShiftModifier)
+    before = snapshot_canvas_state_for(canvas)
+    assert before["model"]["atoms"] != state["model"]["atoms"]
+    services_for_window(window).canvas_document_service.mark_dirty(canvas)
+    message_box = Mock()
+    output = tmp_path / "drawing.svg"
+
+    _export(window, output, message_box)
+
+    message_box.question.assert_not_called()
+    message_box.warning.assert_not_called()
+    restored = extract_chemvas_document_from_svg(output).state
+    assert restored == json.loads(json.dumps(before))
+    assert restored["calculation_plan"]["steps"] == stored_steps
 
 
 @pytest.mark.parametrize("stage", ["options", "destination"])
