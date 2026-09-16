@@ -3,13 +3,15 @@ from __future__ import annotations
 from unittest.mock import patch
 
 import pytest
-from PyQt6.QtCore import QPointF
+from PyQt6.QtCore import QPointF, Qt
 from PyQt6.QtWidgets import QApplication
 
 from chemvas.bootstrap.document_cli_shared import offscreen_canvas
 from chemvas.features.document_composition import compose_document_state
+from chemvas.ui.atom_label_access import add_or_update_atom_label, clear_atom_label_for
 from chemvas.ui.canvas_atom_graphics_state import atom_dots_for, atom_items_for
 from chemvas.ui.canvas_document_state import snapshot_canvas_document_state
+from chemvas.ui.canvas_hover_state import hover_state_for
 from chemvas.ui.canvas_service_ports import mark_scene_service_for_access
 from chemvas.ui.scene_decoration_access import add_mark_for_atom_for
 from chemvas.ui.scene_item_access import remove_scene_item
@@ -239,6 +241,72 @@ def test_selecting_bond_and_mark_preserves_existing_orphan_cleanup(canvas):
     )
     assert set(canvas.model.atoms) == {2}
     _roundtrip(canvas, before, snapshot_canvas_document_state(canvas))
+
+
+class _DeleteKey:
+    def key(self):
+        return Qt.Key.Key_Delete
+
+    def modifiers(self):
+        return Qt.KeyboardModifier.NoModifier
+
+
+@pytest.mark.parametrize("route", ["selected", "hover"])
+def test_hidden_explicit_carbon_label_no_longer_protects_an_orphan(canvas, route):
+    # Label a bonded carbon "C", hide that label with Delete, then delete the
+    # bond. The carbon is implicit again, so the bond deletion removes it
+    # instead of stranding an invisible atom the sheet cannot show.
+    from chemvas.ui.canvas_bond_graphics_state import bond_items_for_id
+
+    bond_id = add_bond_for(canvas, 0, 1)
+    canvas.services.structure.structure_build_service.render_model()
+    add_or_update_atom_label(canvas, 1, "C", show_carbon=True)
+    assert canvas.model.atoms[1].explicit_label
+    assert 1 in atom_items_for(canvas)
+    hover_state_for(canvas).atom_id = 1
+    canvas.services.input.input_controller._delete_hover_target(_DeleteKey())
+    assert not canvas.model.atoms[1].explicit_label
+    assert 1 not in atom_items_for(canvas)
+    canvas.services.history_service.clear()
+    before = snapshot_canvas_document_state(canvas)
+    controller = canvas.services.scene_operations.scene_delete_controller
+    if route == "selected":
+        bond_items_for_id(canvas, bond_id)[0].setSelected(True)
+        assert controller.delete_selected_items()
+    else:
+        hover_state_for(canvas).atom_id = None
+        hover_state_for(canvas).bond_id = bond_id
+        canvas.services.input.input_controller._delete_hover_target(_DeleteKey())
+    assert set(canvas.model.atoms) == {2}
+    _roundtrip(canvas, before, snapshot_canvas_document_state(canvas))
+
+
+def test_clearing_an_explicit_carbon_label_makes_it_implicit(canvas):
+    add_or_update_atom_label(canvas, 1, "C", show_carbon=True)
+    clear_atom_label_for(canvas, 1)
+    assert not canvas.model.atoms[1].explicit_label
+    assert 1 not in atom_items_for(canvas)
+
+
+def test_delete_on_a_lone_labelled_atom_removes_it(canvas):
+    # Atom 2 is an "N" with no bonds. Delete on a bonded atom only strips its
+    # label; on a lone atom that would leave an invisible carbon behind.
+    before = snapshot_canvas_document_state(canvas)
+    hover_state_for(canvas).atom_id = 2
+    canvas.services.input.input_controller._delete_hover_target(_DeleteKey())
+    assert 2 not in canvas.model.atoms
+    assert 2 not in atom_items_for(canvas)
+    _roundtrip(canvas, before, snapshot_canvas_document_state(canvas))
+
+
+def test_delete_on_a_bonded_labelled_atom_still_strips_the_label(canvas):
+    add_bond_for(canvas, 1, 2)
+    canvas.services.structure.structure_build_service.render_model()
+    hover_state_for(canvas).atom_id = 2
+    canvas.services.input.input_controller._delete_hover_target(_DeleteKey())
+    assert 2 in canvas.model.atoms
+    assert canvas.model.atoms[2].element == "C"
+    assert not canvas.model.atoms[2].explicit_label
 
 
 def test_eraser_cancel_restores_original_implicit_owner_and_mark(canvas):

@@ -655,6 +655,22 @@ class AtomLabelServiceTest(unittest.TestCase):
         self.assertIsNone(item.anchor_scene_rect())
         self.assertTrue(canvas.model.atoms[2].explicit_label)
 
+    def test_hiding_an_explicit_carbon_label_clears_the_explicit_flag(self) -> None:
+        canvas = _FakeCanvas()
+        canvas.model = MoleculeModel(
+            atoms={1: Atom("C", 0.0, 0.0), 2: Atom("C", 20.0, 0.0)},
+            bonds=[Bond(1, 2, 1, style="single")],
+        )
+        service = _atom_label_service(canvas)
+        service.add_or_update_atom_label(2, "C", show_carbon=True, record=False)
+        self.assertTrue(canvas.model.atoms[2].explicit_label)
+        self.assertIn(2, canvas.atom_items)
+
+        service.add_or_update_atom_label(2, "C", show_carbon=False, record=False)
+
+        self.assertFalse(canvas.model.atoms[2].explicit_label)
+        self.assertNotIn(2, canvas.atom_items)
+
     def test_nh2_with_a_vertical_bond_stacks_hydrogens_below(self) -> None:
         # A single bond arriving from straight above leaves the open side below;
         # the H2 stacks under the N instead of picking a horizontal side.

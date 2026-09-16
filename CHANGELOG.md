@@ -9,6 +9,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Stack hydride labels tightly. When the hydrogens of an `OH`, `NH2` or
+  `CH3` label sit on their own line above or below the element, that line
+  now starts a quarter of a capital height from the element's ink instead
+  of a full font box away, so the two lines read as one label. A
+  subscript in the upper line keeps its own clearance.
+
+### Fixed
+
+- Remove a carbon whose last bond is deleted after its explicit `C` label
+  was hidden. Hiding the label left the atom flagged as labelled, so orphan
+  cleanup kept an invisible atom that Delete could not remove and that
+  reappeared as `C` on reopening. A hidden carbon is now implicit.
+- Delete on a labelled atom without bonds removes the atom. Stripping the
+  label there produced an invisible carbon instead; bonded atoms keep the
+  label-first behaviour.
 - Hand off multicomponent elementary steps without a precomplex. A drawing does
   not determine how separate molecules sit against each other, so `pack-step`
   no longer requires generated or reviewed placements. A step is ready once its

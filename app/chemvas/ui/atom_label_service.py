@@ -469,7 +469,11 @@ class AtomLabelService:
             if show_carbon and show_label:
                 explicit_label = True
             else:
+                # A hidden carbon is an implicit carbon. Keeping the explicit
+                # flag here left a label-less atom that orphan cleanup treated
+                # as visible, so deleting its last bond stranded it invisibly.
                 show_label = False
+                explicit_label = False
         atom.explicit_label = explicit_label
         if not show_label:
             text = ""

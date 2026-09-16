@@ -9,6 +9,7 @@ from PyQt6.QtWidgets import QGraphicsTextItem, QGraphicsView, QWidget
 from chemvas.ui.atom_label_access import atom_has_visible_label_for, atom_label_service
 from chemvas.ui.canvas_hover_state import hover_state_for
 from chemvas.ui.canvas_insert_state import insert_state_for
+from chemvas.ui.canvas_model_access import bonds_for
 from chemvas.ui.canvas_window_access import notify_error_for
 from chemvas.ui.input_view_access import (
     fit_canvas_to_view_for,
@@ -195,7 +196,12 @@ class CanvasInputController:
             return
         hover_atom_id = hover_state_for(self.canvas).atom_id
         if hover_atom_id is not None:
-            if atom_has_visible_label_for(self.canvas, hover_atom_id):
+            # Delete strips a bonded atom's label first. A lone labelled atom
+            # has nothing to fall back to: hiding its label would leave an
+            # invisible carbon on the sheet, so it is deleted outright.
+            if atom_has_visible_label_for(
+                self.canvas, hover_atom_id
+            ) and _atom_has_bond(self.canvas, hover_atom_id):
                 self.atom_labels.add_or_update_atom_label(
                     hover_atom_id, "C", show_carbon=False
                 )
@@ -323,3 +329,11 @@ class CanvasInputController:
                 event.accept()
                 return True
         return QGraphicsView.event(self.canvas, event)
+
+
+def _atom_has_bond(canvas, atom_id: int) -> bool:
+    return any(
+        bond is not None
+        and atom_id in (getattr(bond, "a", None), getattr(bond, "b", None))
+        for bond in bonds_for(canvas)
+    )

@@ -18,7 +18,7 @@ from PyQt6.QtWidgets import (
     QGraphicsView,
 )
 
-from chemvas.domain.document import Atom
+from chemvas.domain.document import Atom, Bond
 from chemvas.features.hover import HoverState
 from chemvas.ui.canvas_atom_graphics_state import CanvasAtomGraphicsState
 from chemvas.ui.canvas_hover_state import hover_state_for
@@ -165,7 +165,7 @@ class _Canvas(QGraphicsView):
                 7: Atom("C", 0.0, 0.0),
                 8: Atom("O", 1.0, 0.0),
             },
-            bonds=[object(), object()],
+            bonds=[Bond(7, 8, 1), Bond(7, 8, 1)],
         )
 
     def add_selected_item(self):
@@ -423,6 +423,20 @@ class CanvasInputControllerTest(unittest.TestCase):
         canvas.clear_atom_label.assert_not_called()
         canvas.services.scene_operations.scene_delete_controller.delete_atom.assert_not_called()
         label_clear_event.accept.assert_called_once_with()
+
+        # A labelled atom with no bonds is deleted, not turned into an
+        # invisible carbon: hiding the label would leave nothing to see.
+        canvas = _Canvas()
+        controller = _input_controller(canvas)
+        canvas.model.bonds = []
+        hover_state_for(canvas).atom_id = 8
+        lone_delete_event = _FakeEvent(key=Qt.Key.Key_Delete)
+        controller.key_press_event(lone_delete_event)
+        canvas.services.atom_label_service.add_or_update_atom_label.assert_not_called()
+        canvas.services.scene_operations.scene_delete_controller.delete_atom.assert_called_once_with(
+            8, record=True
+        )
+        lone_delete_event.accept.assert_called_once_with()
 
         canvas = _Canvas()
         controller = _input_controller(canvas)

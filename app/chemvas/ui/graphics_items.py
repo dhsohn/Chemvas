@@ -576,6 +576,7 @@ class AtomLabelItem(NoSelectTextItem):
                 ascent=ascent,
                 descent=descent,
                 base_point_size=size_pt,
+                cap_height=QFontMetricsF(self.font()).capHeight(),
             )
             self._layout = layout
             self._typographic = True
