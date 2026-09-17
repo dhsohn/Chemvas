@@ -3,6 +3,7 @@ from __future__ import annotations
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QTransform
 
+from chemvas.ui.canvas_viewport_access import viewport_transform_for
 from chemvas.ui.scene_item_access import canvas_scene_for
 
 
@@ -13,7 +14,7 @@ def scene_items_at_pos_for_canvas(canvas, pos):
         pos,
         Qt.ItemSelectionMode.IntersectsItemShape,
         Qt.SortOrder.DescendingOrder,
-        canvas.viewportTransform(),
+        viewport_transform_for(canvas),
     )
 
 

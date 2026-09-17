@@ -47,8 +47,16 @@ from chemvas.ui.canvas_format_access import (
 )
 from chemvas.ui.canvas_mark_registry import mark_registry_for
 from chemvas.ui.canvas_model_access import bonds_for, set_model_for
+from chemvas.ui.canvas_model_state import model_for
 from chemvas.ui.canvas_scene_items_state import ring_items_for
 from chemvas.ui.canvas_scene_reset_access import clear_scene_for
+from chemvas.ui.canvas_scene_state import scene_if_present_for
+from chemvas.ui.canvas_viewport_access import (
+    ViewportSnapshot,
+    capture_viewport_for,
+    restore_viewport_geometry_for,
+    restore_viewport_scroll_for,
+)
 from chemvas.ui.export_guard_service import validate_export_budget
 from chemvas.ui.export_readability_service import assess_export_readability
 from chemvas.ui.main_window_path_logic import is_canonical_saved_document_path
@@ -86,6 +94,7 @@ from chemvas.ui.structure_payload_access import (
     build_3d_conversion_payload_for,
     build_selected_3d_conversion_payload_for,
 )
+from chemvas.ui.transactions.document import runtime_state_object_for
 from chemvas.ui.transactions.object_graph_snapshot import (
     ContainerGraphSnapshot as _ContainerGraphSnapshot,
 )
@@ -99,7 +108,6 @@ from chemvas.ui.transactions.scene_rect import (
     SceneRectSnapshot,
     SceneRectStateSnapshot,
     scene_rect_is_automatic,
-    view_scene_rect_is_explicit,
 )
 
 if TYPE_CHECKING:
@@ -154,19 +162,14 @@ class _DetachedSceneSnapshot:
     scene_rect_state_snapshot: SceneRectStateSnapshot | None
     raw_scene_rect: Any
     view: Any | None
-    view_scene_rect: Any | None
-    view_scene_rect_explicit: bool
-    view_transform: Any | None
-    horizontal_scroll_value: int | None
-    vertical_scroll_value: int | None
+    viewport: ViewportSnapshot | None
     selected_items: tuple[Any, ...]
     focus_item: Any | None
     scene_signals_blocked: bool | None
 
     @classmethod
     def capture(cls, canvas) -> _DetachedSceneSnapshot | None:
-        scene_method = getattr(canvas, "scene", None)
-        scene = scene_method() if callable(scene_method) else None
+        scene = scene_if_present_for(canvas)
         if scene is None:
             return None
         is_qt_scene = isinstance(scene, QGraphicsScene)
@@ -200,22 +203,10 @@ class _DetachedSceneSnapshot:
             )
 
         view: Any | None = None
-        view_scene_rect = None
-        view_scene_rect_explicit = False
-        view_transform = None
-        horizontal_scroll_value = None
-        vertical_scroll_value = None
+        viewport: ViewportSnapshot | None = None
         if isinstance(canvas, QGraphicsView):
             view = canvas
-            view_scene_rect = QRectF(canvas.sceneRect())
-            view_scene_rect_explicit = view_scene_rect_is_explicit(canvas)
-            view_transform = canvas.transform()
-            horizontal_bar = canvas.horizontalScrollBar()
-            if horizontal_bar is not None:
-                horizontal_scroll_value = int(horizontal_bar.value())
-            vertical_bar = canvas.verticalScrollBar()
-            if vertical_bar is not None:
-                vertical_scroll_value = int(vertical_bar.value())
+            viewport = capture_viewport_for(canvas)
 
         selected_items_method = getattr(scene, "selectedItems", None)
         selected_items = (
@@ -238,11 +229,7 @@ class _DetachedSceneSnapshot:
             scene_rect_state_snapshot=scene_rect_state_snapshot,
             raw_scene_rect=raw_scene_rect,
             view=view,
-            view_scene_rect=view_scene_rect,
-            view_scene_rect_explicit=view_scene_rect_explicit,
-            view_transform=view_transform,
-            horizontal_scroll_value=horizontal_scroll_value,
-            vertical_scroll_value=vertical_scroll_value,
+            viewport=viewport,
             selected_items=selected_items,
             focus_item=focus_item,
             scene_signals_blocked=scene_signals_blocked,
@@ -298,15 +285,8 @@ class _DetachedSceneSnapshot:
                     self.scene_rect_state_snapshot.restore()
             else:
                 self.scene.setSceneRect(self.raw_scene_rect)
-            if self.view is not None:
-                if self.view_scene_rect_explicit and self.view_scene_rect is not None:
-                    self.view.setSceneRect(QRectF(self.view_scene_rect))
-                    self.view._chemvas_view_scene_rect_explicit = True
-                else:
-                    self.view.setSceneRect(QRectF())
-                    self.view._chemvas_view_scene_rect_explicit = False
-                if self.view_transform is not None:
-                    self.view.setTransform(self.view_transform)
+            if self.view is not None and self.viewport is not None:
+                restore_viewport_geometry_for(self.view, self.viewport)
             selected_ids = {id(item) for item in self.selected_items}
             for item in self.all_scene_items:
                 item.setSelected(id(item) in selected_ids)
@@ -315,17 +295,8 @@ class _DetachedSceneSnapshot:
                 set_focus_item(self.focus_item)
             # Selection and focus restoration can ask the view to reveal an
             # item; restore the exact pan last.
-            if self.view is not None:
-                horizontal_bar = self.view.horizontalScrollBar()
-                if self.horizontal_scroll_value is not None and (
-                    horizontal_bar is not None
-                ):
-                    horizontal_bar.setValue(self.horizontal_scroll_value)
-                vertical_bar = self.view.verticalScrollBar()
-                if self.vertical_scroll_value is not None and (
-                    vertical_bar is not None
-                ):
-                    vertical_bar.setValue(self.vertical_scroll_value)
+            if self.view is not None and self.viewport is not None:
+                restore_viewport_scroll_for(self.view, self.viewport)
         # A failure inside a signal-blocked production section leaves the
         # scene blocked; rollback restores the captured baseline state.
         if self.scene_signals_blocked is not None:
@@ -412,7 +383,7 @@ class _CanvasRollbackSnapshot:
     def restore_live_state(self, canvas) -> list[BaseException]:
         errors: list[BaseException] = []
         try:
-            canvas.model = self.model
+            set_model_for(canvas, self.model)
         except Exception as exc:
             errors.append(exc)
         collect_restore_errors(self.containers.restore, errors)
@@ -611,7 +582,7 @@ class CanvasDocumentSessionService:
     ) -> None:
         if restore_errors:
             raise RuntimeError("Failed to restore the previous canvas document state.")
-        if self.canvas.model is not rollback_snapshot.model:
+        if model_for(self.canvas) is not rollback_snapshot.model:
             raise RuntimeError("document rollback changed model identity")
         if rollback_snapshot.scene is not None:
             rollback_snapshot.scene.verify_restored()
@@ -656,10 +627,8 @@ class CanvasDocumentSessionService:
             object_states.append(snapshot)
             return snapshot
 
-        runtime_state = getattr(self.canvas, "runtime_state", None)
-        if runtime_state is not None:
-            for name in _DOCUMENT_MUTATED_RUNTIME_FIELDS:
-                append_snapshot(getattr(runtime_state, name, None))
+        for name in _DOCUMENT_MUTATED_RUNTIME_FIELDS:
+            append_snapshot(runtime_state_object_for(self.canvas, name))
 
         append_snapshot(
             renderer_for(self.canvas),
@@ -670,7 +639,7 @@ class CanvasDocumentSessionService:
             names=("settings", "scene_items"),
         )
 
-        model = getattr(self.canvas, "model", None)
+        model = model_for(self.canvas)
         append_snapshot(
             model,
             names=("atoms", "bonds", "next_atom_id", "atom_annotations"),

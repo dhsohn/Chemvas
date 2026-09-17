@@ -20,6 +20,7 @@ from chemvas.ui.canvas_model_access import (
     bonds_for,
     has_atoms_for,
 )
+from chemvas.ui.canvas_viewport_access import viewport_transform_for
 from chemvas.ui.graphics_items import AtomDotItem
 from chemvas.ui.mark_item_access import mark_center_for
 from chemvas.ui.pick_radius_access import atom_pick_radius_for, bond_pick_radius_for
@@ -148,7 +149,7 @@ class CanvasHitTestingService:
         return other_item
 
     def _arrow_near(self, pos: QPointF, *, stop_at=None):
-        view_transform = self.canvas.viewportTransform()
+        view_transform = viewport_transform_for(self.canvas)
         inverse, invertible = view_transform.inverted()
         if not invertible:
             return None

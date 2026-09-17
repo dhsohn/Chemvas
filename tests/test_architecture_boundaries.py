@@ -4116,6 +4116,50 @@ def test_history_commands_do_not_receive_or_retain_canvas(module) -> None:
     assert _history_receiver_violations(source) == []
 
 
+_CANVAS_BOUND_NAMES = frozenset({"canvas", "_canvas", "view", "_view"})
+
+
+def _is_canvas_bound(node: ast.expr) -> bool:
+    if isinstance(node, ast.Name):
+        return node.id in _CANVAS_BOUND_NAMES
+    return (
+        isinstance(node, ast.Attribute)
+        and isinstance(node.value, ast.Name)
+        and node.value.id == "self"
+        and node.attr in _CANVAS_BOUND_NAMES
+    )
+
+
+def _canvas_attribute_reads(source: str) -> list[tuple[int, str]]:
+    """Services hand the canvas to access functions; they never read it."""
+    reads = []
+    for node in ast.walk(_parse_source(source)):
+        if isinstance(node, ast.Attribute) and _is_canvas_bound(node.value):
+            reads.append((node.lineno, f"{ast.unparse(node.value)}.{node.attr}"))
+        elif (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Name)
+            and node.func.id in {"getattr", "setattr", "delattr", "hasattr"}
+            and node.args
+            and _is_canvas_bound(node.args[0])
+        ):
+            reads.append(
+                (node.lineno, f"{node.func.id}({ast.unparse(node.args[0])}, ...)")
+            )
+    return reads
+
+
+def _canvas_service_modules() -> list[Path]:
+    ui = APP_ROOT / "chemvas" / "ui"
+    return sorted([*ui.glob("*_service.py"), *ui.glob("*_controller.py")])
+
+
+@pytest.mark.parametrize("path", _canvas_service_modules(), ids=lambda path: path.name)
+def test_services_reach_the_canvas_only_through_access_functions(path) -> None:
+    """The state a service can touch is exactly the accessors it imports."""
+    assert _canvas_attribute_reads(path.read_text(encoding="utf-8")) == []
+
+
 @pytest.mark.parametrize(
     "method",
     [

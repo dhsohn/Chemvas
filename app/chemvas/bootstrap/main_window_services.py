@@ -84,6 +84,13 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
 
+def _frameless_canvas_view() -> CanvasView:
+    # The tab widget draws the border around a canvas; the view itself is bare.
+    canvas = CanvasView(renderer=Renderer())
+    canvas.setFrameStyle(0)
+    return canvas
+
+
 def build_main_window_services() -> MainWindowServices:
     # The port module fronts existing Qt objects. Keep that dynamic seam at
     # the composition root instead of allowing ``Any`` to leak into the typed
@@ -241,7 +248,7 @@ def build_main_window_services() -> MainWindowServices:
     )
     canvas_document_service = MainWindowCanvasDocumentService(
         active_canvas_ui=active_canvas_ui_service,
-        canvas_factory=lambda: CanvasView(renderer=Renderer()),
+        canvas_factory=_frameless_canvas_view,
         tab_refs_for_window=tab_references_for_window,
         active_canvas_or_none_for_window=active_canvas_or_none_for_window,
         next_canvas_name_for_window=next_canvas_name_for_window,

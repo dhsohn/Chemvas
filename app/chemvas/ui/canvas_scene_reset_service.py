@@ -18,6 +18,7 @@ from chemvas.ui.canvas_mark_registry import mark_registry_for
 from chemvas.ui.canvas_model_access import set_model_for
 from chemvas.ui.canvas_rotation_state import rotation_state_for
 from chemvas.ui.canvas_scene_items_state import clear_scene_item_collections_for
+from chemvas.ui.canvas_scene_state import canvas_scene_for
 from chemvas.ui.canvas_service_ports import history_service_for_access
 from chemvas.ui.handle_state import set_active_handles_for, set_handle_target_for
 from chemvas.ui.insert_mode_logic import clear_insert_session
@@ -44,11 +45,7 @@ class CanvasSceneResetService:
         self._empty_status_publication_active = False
 
     def _scene_and_qt_items(self) -> tuple[object, tuple[object, ...] | None]:
-        scene: object | None
-        scene_method = getattr(self.canvas, "scene", None)
-        if not callable(scene_method):
-            raise AttributeError("canvas has no callable scene accessor")
-        scene = scene_method()
+        scene: object | None = canvas_scene_for(self.canvas)
         if scene is None:
             raise RuntimeError("canvas scene accessor returned no scene")
         qt_items_before_clear = (
