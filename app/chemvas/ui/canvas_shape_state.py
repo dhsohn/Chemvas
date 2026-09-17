@@ -13,7 +13,8 @@ class CanvasShapeState:
 
     A shape's graphics item carries the id; the record says what the shape is.
     Records of detached items are kept: undo re-attaches the same item, and its
-    record must still be there. The store is therefore a lookup, never a list of
+    record must still be there; records go only when a new document discards
+    history, and ids are never reused. The store is therefore a lookup, never a list of
     the document's shapes: which shapes the document has, and in what order, is
     the attached shape items.
     """

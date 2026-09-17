@@ -29,7 +29,7 @@ from chemvas.ui.canvas_shape_state import shape_state_for
 from chemvas.ui.scene_decoration_build_access import shape_pen_for
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
+    from collections.abc import Callable, Mapping
 
 # Roles 0-2 carry an item's kind and payloads; the shape id has its own.
 SHAPE_ID_ROLE = 3
@@ -139,9 +139,20 @@ def shape_state_from_record_for(canvas: Any, item: Any) -> dict[str, object]:
 
 
 def clear_shape_records_for(canvas: Any) -> None:
+    """Forget every record. Ids are never reused, so a stray item cannot alias."""
+    shape_state_for(canvas).records = {}
+
+
+def shape_store_checkpoint_for(canvas: Any) -> Callable[[], None]:
+    """Return a callable that puts the store back as it is now."""
     state = shape_state_for(canvas)
-    state.records = {}
-    state.next_shape_id = 1
+    records, next_shape_id = dict(state.records), state.next_shape_id
+
+    def restore() -> None:
+        state.records = dict(records)
+        state.next_shape_id = next_shape_id
+
+    return restore
 
 
 __all__ = [
@@ -156,5 +167,6 @@ __all__ = [
     "shape_record_for",
     "shape_rect_of",
     "shape_state_from_record_for",
+    "shape_store_checkpoint_for",
     "shape_with_rect",
 ]

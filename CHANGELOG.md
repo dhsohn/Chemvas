@@ -12,8 +12,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `chemvas.domain.document.Shape`, a Qt-free record of a free decorative
   shape, with `shape_from_state` and `shape_to_state` over the existing
   document schema. It is the first step of moving the source of truth for
-  non-molecular objects off the graphics items; nothing reads it yet, and
-  the file format is unchanged.
+  non-molecular objects off the graphics items; the file format is
+  unchanged.
 - A per-canvas shape store kept in step with the shape items. Every shape item
   carries a runtime id, every edit path updates the shape's `Shape` record
   (`normalized_shape` defines the canonical form: the rules the desktop has

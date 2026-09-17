@@ -270,9 +270,9 @@ do not require another shared edit engine.
 
 ### Document data ownership (shapes done; other kinds not started)
 
-`MoleculeModel` owns atoms and bonds as Qt-free data. Every other drawn object
-a document saves — ring fills, notes, marks, arrows and lines, TS brackets,
-shapes, orbitals, images — is still read back from its live graphics item when the document is
+`MoleculeModel` owns atoms and bonds as Qt-free data, and shapes are records
+(below). Every other drawn object a document saves — ring fills, notes, marks,
+arrows and lines, TS brackets, orbitals, images — is still read back from its live graphics item when the document is
 written, and history commands hold those items. The pilot moves one kind at a
 time to the same footing as the molecule, starting with shapes:
 `chemvas.domain.document.Shape` is the Qt-free record, `shape_from_state` and
@@ -293,7 +293,9 @@ document save, undo capture, clipboard, delete capture, flip and rotate, scheme
 layout — comes from the record through `shape_state_dict_for`; an attached shape without
 a record is an error, not something to reconstruct from its brush. The store is
 a lookup, never the list of shapes: the attached shape items say which shapes
-the document has, and records of detached items stay for undo. Saved values are
+the document has, and records of detached items stay for undo: they are
+dropped only when a new document discards history (a structure load, which
+keeps history, leaves them), and ids are never reused. Saved values are
 therefore the ones the document states: an opacity of 0.25 is saved as 0.25
 where Qt's read-back used to write 0.2500038, and a file Chemvas already saved
 re-saves unchanged. `tests/test_shape_record_first.py` holds both criteria and
