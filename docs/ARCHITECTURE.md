@@ -285,10 +285,12 @@ it. For shapes that is now the case. Each canvas has a shape store
 every shape item carries a runtime id. An edit — state apply for
 undo/redo/flip/rotate/restyle, move, resize, fill, a colour rollback — computes
 a new `Shape` and hands it to `set_shape_record_for`, which stores its
-`normalized_shape` and draws the item from it (`render_shape_item`, the only
-writer of a shape item's paint). Every read of a shape's state — document save,
-undo capture, clipboard, delete capture, flip and rotate, layout checks —
-comes from the record through `shape_state_dict_for`; an attached shape without
+`normalized_shape` and draws the item from it (`render_shape_item`; besides it
+only the build service paints a shape item, once, and an exact rollback snapshot
+restores paint together with the record). A state that arrives — open, paste,
+undo re-creation — becomes the record as given. Every read of a shape's state —
+document save, undo capture, clipboard, delete capture, flip and rotate, scheme
+layout — comes from the record through `shape_state_dict_for`; an attached shape without
 a record is an error, not something to reconstruct from its brush. The store is
 a lookup, never the list of shapes: the attached shape items say which shapes
 the document has, and records of detached items stay for undo. Saved values are

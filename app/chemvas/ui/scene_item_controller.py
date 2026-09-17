@@ -199,6 +199,10 @@ class SceneItemController:
             set_arrow_labels=self._set_arrow_labels,
         )
         if item is not None:
+            if state.get("kind") == "shape":
+                # Paste and undo re-creation arrive here: the record is the state
+                # that was given, not what Qt reads back off the new item.
+                record_shape_state(self.canvas, item, state)
             self.attach_scene_item(item)
             return item
         return None

@@ -11,7 +11,9 @@ from PyQt6.QtCore import QPointF, QRectF
 from PyQt6.QtGui import QBrush, QColor
 from PyQt6.QtWidgets import QApplication
 
+from chemvas.domain.document import MoleculeModel
 from chemvas.ui.canvas_scene_items_state import shape_items_for
+from chemvas.ui.canvas_service_ports import insert_controller_for_access
 from chemvas.ui.canvas_shape_state import shape_state_for
 from chemvas.ui.shape_record_access import shape_id_for_item, shape_record_for
 from tests.canvas_factory import build_canvas_view
@@ -172,3 +174,46 @@ def test_a_shape_drawn_with_the_tool_gets_its_record_from_how_it_was_drawn(
         }
     ]
     assert shape_record_for(canvas, item) is not None
+
+
+def test_a_pasted_shape_keeps_the_stated_values(canvas) -> None:
+    services = canvas.services
+    session = _session(canvas)
+    session.apply_state(_document_with(canvas, [CANONICAL_SHAPE]))
+    original = shape_items_for(canvas)[0]
+    original.setSelected(True)
+    clipboard = services.scene_operations.scene_clipboard_controller
+
+    assert clipboard.copy_selection_to_clipboard()
+    assert clipboard.paste_selection_from_clipboard()
+
+    pasted = next(item for item in shape_items_for(canvas) if item is not original)
+    record = shape_record_for(canvas, pasted)
+    # The copy is offset, and its opacity is the stated one, not Qt's read-back.
+    assert repr(record.fill_alpha) == "0.25"
+    assert record.right - record.left == pytest.approx(
+        CANONICAL_SHAPE["right"] - CANONICAL_SHAPE["left"], abs=1e-9
+    )
+    assert (record.shape_kind, record.stroke_style, record.fill) == (
+        "ellipse",
+        "dashed",
+        "#aabbcc",
+    )
+
+
+def test_undoing_a_structure_load_recreates_shapes_with_the_stated_values(
+    canvas,
+) -> None:
+    services = canvas.services
+    session = _session(canvas)
+    session.apply_state(_document_with(canvas, [CANONICAL_SHAPE]))
+    before = session.snapshot_state()["shapes"]
+    model = MoleculeModel()
+    model.add_atom("C", 0.0, 0.0)
+
+    model.add_atom("C", 40.0, 0.0)
+    insert_controller_for_access(canvas).smiles_service.load_model(model, "CC")
+    assert session.snapshot_state()["shapes"] == []
+    services.history_service.undo()
+
+    assert session.snapshot_state()["shapes"] == before

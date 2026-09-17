@@ -86,7 +86,12 @@ def shape_with_rect(shape: Shape, rect: QRectF) -> Shape:
 
 
 def render_shape_item(canvas: Any, item: Any, shape: Shape) -> None:
-    """Make the item look like ``shape``. The only writer of a shape item's paint."""
+    """Make the item look like ``shape``.
+
+    Every edit paints through here. The build service paints a new item once
+    when it creates it, and an exact rollback snapshot puts paint back together
+    with the record it captured.
+    """
     rect = shape_rect_of(shape)
     item.setPath(shape_path(rect, shape.shape_kind))
     item.setPen(shape_pen_for(canvas, shape.stroke_style))
@@ -136,9 +141,10 @@ def record_shape_state(canvas: Any, item: Any, state: Mapping[str, object]) -> S
 def adopt_shape_item_for(canvas: Any, item: Any) -> None:
     """Give a freshly built item its record, once, from what it was built as.
 
-    Items that arrive from a state already have their record. A shape drawn
-    with the tool is built from a rectangle and the tool settings, and this is
-    where those become its record. Nothing is derived from an item afterwards.
+    Items that arrive from a state (open, paste, undo re-creation) already have
+    their record. A shape drawn with the tool is built from a rectangle and the
+    tool settings, and this is where those become its record. Nothing is
+    derived from an item afterwards.
     """
     if not _is_shape_item(item) or shape_record_for(canvas, item) is not None:
         return
