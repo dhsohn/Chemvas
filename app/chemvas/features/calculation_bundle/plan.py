@@ -14,10 +14,11 @@ from chemvas.domain.document import (
     calculation_plan_to_state,
     included_atom_ids,
     model_bond_pairs,
+    validate_calculation_plan,
+    validated_plan_and_inventory,
 )
 from chemvas.domain.document.calculation_plan import NO_PRECOMPLEX
 from chemvas.domain.document.inspection import (
-    component_inventory,
     document_model,
     inspect_component_inventory,
 )
@@ -93,7 +94,7 @@ def prepare_calculation_step(
     document_state: Mapping[str, object], step_id: str
 ) -> CalculationStepPreparation:
     """Prepare one pack request without retaining or changing its source state."""
-    plan, inventory = _validated_plan_and_inventory(
+    plan, inventory = validated_plan_and_inventory(
         document_state, _document_plan_state(document_state)
     )
     step = calculation_step_by_id(plan, step_id)
@@ -117,51 +118,6 @@ def prepare_calculation_step(
         tuple(_select_components(inventory, [ids]) for ids in included[1]),
         inventory,
     )
-
-
-def validate_calculation_plan(
-    document_state: Mapping[str, object],
-    plan_state: object,
-) -> CalculationPlan:
-    plan, _inventory = _validated_plan_and_inventory(document_state, plan_state)
-    return plan
-
-
-def _validated_plan_and_inventory(
-    document_state: Mapping[str, object], plan_state: object
-) -> tuple[CalculationPlan, ComponentInventory]:
-    model = document_model(document_state)
-    plan = calculation_plan_from_state(
-        plan_state,
-        atom_ids=set(model.atoms),
-        bond_pairs=model_bond_pairs(model),
-    )
-    # Structural errors precede mark/alias and semantic errors, as they do at
-    # the public validation boundary. Reuse this parsed model after that gate.
-    inventory = component_inventory(document_state, model)
-    components = {summary.atom_ids: summary for summary in inventory.components}
-    for state in plan.states:
-        modeled_charge = sum(
-            components[member.component_atom_ids].formal_charge
-            for member in state.members
-            if member.inclusion == "included"
-        )
-        if state.charge != modeled_charge:
-            raise ValueError(
-                f"State {state.id} declares charge {state.charge}, but its included "
-                f"components have modeled formal charge {modeled_charge}."
-            )
-    for step in plan.steps:
-        for entry in step.atom_correspondence:
-            reactant_label = model.atoms[entry.reactant_atom_id].element
-            product_label = model.atoms[entry.product_atom_id].element
-            if reactant_label != product_label:
-                raise ValueError(
-                    f"Step {step.id} maps {reactant_label} atom "
-                    f"{entry.reactant_atom_id} to {product_label} atom "
-                    f"{entry.product_atom_id}; mapped atom labels must match."
-                )
-    return plan, inventory
 
 
 def calculation_plan_for_document(
@@ -212,7 +168,7 @@ def _document_plan_state(document_state: Mapping[str, object]) -> object:
 def calculation_plan_report(
     document_state: Mapping[str, object],
 ) -> dict[str, object]:
-    plan, inventory = _validated_plan_and_inventory(
+    plan, inventory = validated_plan_and_inventory(
         document_state, _document_plan_state(document_state)
     )
     components = {summary.atom_ids: summary for summary in inventory.components}

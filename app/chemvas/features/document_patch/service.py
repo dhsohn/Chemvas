@@ -22,6 +22,7 @@ from chemvas.domain.document import (
     model_bond_pairs,
     orphaned_atom_ids,
     serialize_model_state,
+    validate_calculation_plan,
 )
 from chemvas.domain.document.inspection import (
     inspect_component_inventory,
@@ -163,8 +164,6 @@ def apply_document_patch(
         # and dual mark/model annotation consistency, even without a plan.
         inspect_components(candidate)
         if candidate.get("calculation_plan") is not None:
-            from chemvas.features.calculation_bundle import validate_calculation_plan
-
             validate_calculation_plan(candidate, candidate["calculation_plan"])
     except ValueError as exc:
         raise ValueError(

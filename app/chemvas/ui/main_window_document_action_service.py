@@ -11,8 +11,11 @@ from chemvas.core.molfile import fit_molfile_model, read_molfile
 from chemvas.core.svg_roundtrip import (
     extract_chemvas_document_from_svg as default_read_editable_svg,
 )
-from chemvas.domain.document import MoleculeModel, serialize_model_state
-from chemvas.features.calculation_bundle import validate_calculation_plan
+from chemvas.domain.document import (
+    MoleculeModel,
+    serialize_model_state,
+    validate_calculation_plan,
+)
 from chemvas.features.export import (
     default_export_path,
     export_error_message,

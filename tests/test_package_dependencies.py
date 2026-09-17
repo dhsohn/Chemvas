@@ -300,6 +300,25 @@ def test_bootstrap_legacy_dependencies_are_confined_to_composition_modules() -> 
     assert violations == []
 
 
+def test_general_editing_does_not_depend_on_the_calculation_feature() -> None:
+    """The plan's consistency rules and the RDKit conversion records live in
+    the domain, so saving, patching and converting a drawing never reach into
+    the calculation feature. Only the feature's own consumers may."""
+    general_sources = (
+        "chemvas.core.",
+        "chemvas.features.document_patch",
+        "chemvas.ui.main_window_document_action_service",
+    )
+    violations = [
+        _formatted(edge)
+        for edge in _import_edges()
+        if edge.source.startswith(general_sources)
+        and edge.dependency.startswith("chemvas.features.calculation_bundle")
+    ]
+
+    assert violations == []
+
+
 def test_domain_has_no_framework_or_adapter_dependencies() -> None:
     violations = [
         _formatted(edge)
