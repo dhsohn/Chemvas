@@ -15,6 +15,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `chemvas.domain.document`. Saving, Graph Patch and the RDKit adapter no
   longer import the calculation feature; a dependency test keeps it that
   way. `chemvas.features.calculation_bundle` still exports the same names.
+- State in `docs/DOCUMENT_COMPATIBILITY.md` that calculation data carried by a
+  document is preserved with or without the RDKit backend, and which facts
+  (component membership, mapped atoms, declared charges, mapped-atom labels)
+  validation, the save prompt and `inspect-plan` check when a plan no longer
+  fits its drawing; none of them discards data on its own, and other edits
+  pass unnoticed.
 - Document the shared bond-removal rules in `docs/ARCHITECTURE.md` next to
   the shared atom-move semantics, in English and Korean.
 - State in `docs/DOCUMENT_COMPATIBILITY.md` how the next document format
