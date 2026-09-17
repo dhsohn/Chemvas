@@ -161,6 +161,10 @@ SUB_SCALE = 0.72
 # Vertical offsets, expressed as a fraction of the base em (ascent + descent).
 SUB_DROP_RATIO = 0.20
 SUPER_RISE_RATIO = 0.34
+# Air between the two lines of a stacked hydride ("N" over "H"), as a
+# fraction of the capital height. Lines are pitched from glyph ink, not from
+# the font's ascent/descent box, so the hydrogen sits close under the element.
+STACK_GAP_RATIO = 0.25
 
 
 @dataclass(frozen=True)
@@ -326,12 +330,18 @@ def place_hydride_stack(
     ascent: float,
     descent: float,
     base_point_size: float,
+    cap_height: float | None = None,
+    gap_ratio: float = STACK_GAP_RATIO,
 ) -> tuple[LabelLayout, tuple[float, float, float, float]]:
     """Stack the hydrogens on their own line under (or over) the element.
 
     Used when the open side around an atom is vertical, matching ChemDraw's
     "N over H" rendering at a two-bond vertex. Each line is centred on the
-    other. Returns the combined layout plus the element glyph box
+    other. The lower line's capitals start ``gap_ratio`` capital heights below
+    the upper line's lowest ink (its baseline, or a subscript's baseline), so
+    the stack is as tight as the glyphs allow rather than one font box per
+    line; ``cap_height`` defaults to ``ascent`` when the caller cannot measure
+    it. Returns the combined layout plus the element glyph box
     ``(x, y, width, height)`` inside it, so callers can keep anchoring the atom
     and trimming bonds to the element exactly like the horizontal layouts do.
     """
@@ -353,8 +363,19 @@ def place_hydride_stack(
     width = max(element_line.width, hydrogen_line.width)
     element_x = (width - element_line.width) / 2.0
     hydrogen_x = (width - hydrogen_line.width) / 2.0
-    element_y = 0.0 if hydrogens_below else hydrogen_line.height
-    hydrogen_y = element_line.height if hydrogens_below else 0.0
+    # Qt reports a zero capital height for a few fonts; fall back to the
+    # ascent rather than collapsing both lines onto one baseline.
+    cap = ascent if cap_height is None or cap_height <= 0.0 else cap_height
+    upper, lower = (
+        (element_line, hydrogen_line)
+        if hydrogens_below
+        else (hydrogen_line, element_line)
+    )
+    pitch = cap + cap * gap_ratio + _ink_below_baseline(upper)
+    upper_baseline = _line_baseline(upper)
+    lower_y = upper_baseline + pitch - _line_baseline(lower)
+    element_y = 0.0 if hydrogens_below else lower_y
+    hydrogen_y = lower_y if hydrogens_below else 0.0
 
     runs: list[PlacedRun] = []
     for line, line_x, line_y in (
@@ -374,7 +395,7 @@ def place_hydride_stack(
     layout = LabelLayout(
         runs=tuple(runs),
         width=width,
-        height=element_line.height + hydrogen_line.height,
+        height=max(element_y + element_line.height, hydrogen_y + hydrogen_line.height),
         # Even a subscript-free stack ("N" over "H") needs custom run painting.
         has_typography=True,
     )
@@ -382,7 +403,26 @@ def place_hydride_stack(
     return layout, element_box
 
 
+def _line_baseline(line: LabelLayout) -> float:
+    """The baseline shared by a line's normal runs, measured from its top."""
+    return next(run.baseline for run in line.runs if run.role == "normal")
+
+
+def _ink_below_baseline(line: LabelLayout) -> float:
+    """How far a line's ink reaches below its baseline.
+
+    Capitals and hydrogens sit on the baseline; a subscript digit sits on its
+    own dropped baseline, so only that drop counts.
+    """
+    baseline = _line_baseline(line)
+    return max(
+        (run.baseline - baseline for run in line.runs if run.role == "sub"),
+        default=0.0,
+    )
+
+
 __all__ = [
+    "STACK_GAP_RATIO",
     "SUB_DROP_RATIO",
     "SUB_SCALE",
     "SUPER_RISE_RATIO",

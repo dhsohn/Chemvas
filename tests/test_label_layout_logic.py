@@ -268,6 +268,64 @@ class PlaceHydrideStackTest(unittest.TestCase):
         self.assertLess(hydrogen_run.baseline, element_run.baseline)
         self.assertAlmostEqual(element_box[1], 10.0)  # below the 1-em H line
 
+    def test_lines_pitch_from_capital_height_not_the_font_box(self):
+        # Arial-like metrics: the font box (ascent 8 + descent 2) is much taller
+        # than a capital (6). The hydrogen line starts one gap (25% of a capital)
+        # under the element's baseline, not one full font box down.
+        layout, element_box = place_hydride_stack(
+            "O",
+            1,
+            hydrogens_below=True,
+            measure=self.measure,
+            ascent=8.0,
+            descent=2.0,
+            base_point_size=10.0,
+            cap_height=6.0,
+        )
+        element_run, hydrogen_run = layout.runs
+        self.assertAlmostEqual(hydrogen_run.baseline - element_run.baseline, 7.5)
+        self.assertAlmostEqual(layout.height, 17.5)  # 7.5 pitch + 1-em H line
+        self.assertEqual(element_box, (0.0, 0.0, 10.0, 10.0))
+
+    def test_subscript_above_the_element_keeps_its_own_clearance(self):
+        # "H2" over "N": the subscript digit sits 2.0 below the H baseline (drop
+        # 20% of em 10), so the N's capital starts one gap under the digit, not
+        # under the H baseline.
+        layout, element_box = place_hydride_stack(
+            "N",
+            2,
+            hydrogens_below=False,
+            measure=self.measure,
+            ascent=8.0,
+            descent=2.0,
+            base_point_size=10.0,
+            cap_height=6.0,
+        )
+        element_run = next(run for run in layout.runs if run.text == "N")
+        hydrogen_run = next(run for run in layout.runs if run.text == "H")
+        subscript = next(run for run in layout.runs if run.role == "sub")
+        self.assertAlmostEqual(subscript.baseline - hydrogen_run.baseline, 2.0)
+        self.assertAlmostEqual(
+            element_run.baseline - hydrogen_run.baseline, 6.0 + 1.5 + 2.0
+        )
+        self.assertAlmostEqual(element_box[1], element_run.baseline - 8.0)
+
+    def test_zero_capital_height_falls_back_to_the_ascent(self):
+        # Qt reports capHeight() == 0 for a few fonts; the lines must still be
+        # pitched apart instead of both landing on one baseline.
+        layout, _ = place_hydride_stack(
+            "O",
+            1,
+            hydrogens_below=True,
+            measure=self.measure,
+            ascent=8.0,
+            descent=2.0,
+            base_point_size=10.0,
+            cap_height=0.0,
+        )
+        element_run, hydrogen_run = layout.runs
+        self.assertAlmostEqual(hydrogen_run.baseline - element_run.baseline, 10.0)
+
     def test_lines_are_centred_on_each_other(self):
         # "H2" (H at 10 + subscript 2 at 7.2) is wider than "N", so the element
         # shifts right by half the difference and the hydrogen line starts at 0.
