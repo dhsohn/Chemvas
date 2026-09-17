@@ -619,6 +619,7 @@ class SceneItemControllerTest(unittest.TestCase):
         )
         ts_bracket = self.controller.restore_ts_bracket_from_state(
             {
+                "kind": "ts_bracket",
                 "left": -5.0,
                 "top": -2.0,
                 "right": 8.0,

@@ -133,9 +133,9 @@ class _BracketGlyphPath(QPainterPath):
 
 
 class _BracketGlyphItem(NoSelectPathItem):
-    """Keep the font used to construct a dagger's outlined glyph."""
+    """A TS bracket item; keeps the font of a dagger's outlined glyph."""
 
-    def __init__(self, path: _BracketGlyphPath) -> None:
+    def __init__(self, path: QPainterPath) -> None:
         super().__init__()
         self.setPath(path)
 
@@ -380,14 +380,11 @@ class CanvasSceneDecorationBuildService:
 
     def _bracket_symbol_font(self, rect: QRectF) -> QFont:
         font = QFont(font_family_for(self.canvas))
-        font.setPixelSize(
-            max(
-                10,
-                round(
-                    min(rect.height() * 0.62, bond_length_px_for(self.canvas) * 1.35)
-                ),
-            )
-        )
+        size = min(rect.height() * 0.62, bond_length_px_for(self.canvas) * 1.35)
+        # A box 25 tall asks for exactly 15.5 px. Moving a bracket is arithmetic
+        # on its edges, which can leave the height one float step short of 25;
+        # rounding that noise away first keeps the glyph the size it was.
+        font.setPixelSize(max(10, round(round(size, 6))))
         return font
 
     def _add_bracket_symbol(
@@ -430,11 +427,9 @@ class CanvasSceneDecorationBuildService:
         normalized = QRectF(rect).normalized()
         bracket_kind = normalized_bracket_kind(bracket_kind)
         path = self.ts_bracket_path(normalized, bracket_kind)
-        item = (
-            _BracketGlyphItem(path)
-            if isinstance(path, _BracketGlyphPath)
-            else NoSelectPathItem(path)
-        )
+        # Every bracket item can keep a glyph run: it is redrawn from its
+        # record, whose kind may be a dagger after an undo or a paste.
+        item = _BracketGlyphItem(path)
         item.setPen(QPen(Qt.PenStyle.NoPen))
         item.setBrush(QBrush(QColor(bond_color_for(self.canvas))))
         item.setData(0, "ts_bracket")

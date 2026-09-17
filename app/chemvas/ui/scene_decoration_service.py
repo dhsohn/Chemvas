@@ -6,9 +6,13 @@ from typing import TYPE_CHECKING
 
 from PyQt6.QtWidgets import QGraphicsTextItem
 
-from chemvas.domain.document import ARROW_LABEL_SIDES, Shape
+from chemvas.domain.document import ARROW_LABEL_SIDES, Shape, TSBracket
 from chemvas.domain.transactions import run_rollback_step
-from chemvas.features.annotations import normalized_shape_kind, normalized_stroke_style
+from chemvas.features.annotations import (
+    normalized_bracket_kind,
+    normalized_shape_kind,
+    normalized_stroke_style,
+)
 from chemvas.ui.arrow_label_dialog import prompt_arrow_labels
 from chemvas.ui.canvas_tool_settings_state import tool_settings_state_for
 from chemvas.ui.history_commands import AddSceneItemsCommand, UpdateSceneItemCommand
@@ -40,7 +44,10 @@ from chemvas.ui.shape_record_access import (
 )
 from chemvas.ui.transactions.document import document_transaction
 from chemvas.ui.transactions.scene_item_attach import SceneItemAttachSnapshot
-from chemvas.ui.ts_bracket_record_access import ts_bracket_store_checkpoint_for
+from chemvas.ui.ts_bracket_record_access import (
+    set_ts_bracket_record_for,
+    ts_bracket_store_checkpoint_for,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterator, Mapping
@@ -147,13 +154,25 @@ class SceneDecorationService:
                     or tool_settings_state_for(self.canvas).active_bracket_type
                 )
                 item = build_ts_bracket_item_for(self.canvas, rect, bracket_kind)
+                set_ts_bracket_record_for(
+                    self.canvas,
+                    item,
+                    TSBracket(
+                        left=rect.left(),
+                        top=rect.top(),
+                        right=rect.right(),
+                        bottom=rect.bottom(),
+                        bracket_kind=normalized_bracket_kind(bracket_kind),
+                    ),
+                )
                 track(item)
                 attach_scene_item(self.canvas, item)
                 self._push_add_scene_item(
                     item, ts_bracket_state_dict_for(self.canvas, item)
                 )
         except Exception:
-            # Attaching made the record; a failed add takes it back out.
+            # The record is set before the item is attached; a failed add takes
+            # it back out.
             restore_ts_bracket_store()
             raise
         return item

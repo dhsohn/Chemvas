@@ -309,21 +309,33 @@ outlines to the two modules that paint them and keeps the old item-side reader
 from coming back. The same steps — record, store kept in step, reads flipped,
 item emptied — are the template for the remaining kinds.
 
-TS brackets are at the second step. `chemvas.domain.document.TSBracket` is
-the record, and each canvas has a bracket store (`CanvasTSBracketState`, in the
-same two rollback field lists as the shape store) with a runtime id on every
-bracket item. The item is still the source of truth: the three places that
-change what a bracket is — attaching it (tool, open, paste, undo re-creation and
-re-attachment), `CanvasMoveController.move_item`, and
-`SceneItemController.apply_scene_item_state` (undo, redo, flip, rotate) — call
-`sync_ts_bracket_record_for` afterwards, and saving, undo and drawing read the
-item as before. Record lifetime follows the shape rule: records go when a new
-document discards history, and ids come from `new_scene_record_id`. Two more
-things remove a record in this step: a failed add takes back the one attaching
-made, and a bracket whose rectangle is no longer finite has none, because no
-document could hold it; the third step has to refuse such an edit instead.
-`tests/test_ts_bracket_store_sync.py` checks after every operation that each
-attached bracket has a record saying what its item says.
+TS brackets are at the third step. `chemvas.domain.document.TSBracket` is the
+record, and each canvas has a bracket store (`CanvasTSBracketState`, in the same
+two rollback field lists as the shape store) with a runtime id on every bracket
+item. An edit — `CanvasMoveController.move_item`, state apply for undo, redo,
+flip and rotate — computes a new `TSBracket` and hands it to
+`set_ts_bracket_record_for`, which stores its `normalized_ts_bracket` and draws
+the item from it (`render_ts_bracket_item`: the path is rebuilt in scene
+coordinates with the document's bond settings and the item stays at the
+origin). A state that arrives — open, paste, undo re-creation — becomes the
+record as given, and a bracket drawn with the tool gets its record from the
+rectangle and kind it was drawn with. Every read of a bracket's state —
+document save, undo capture, clipboard, delete capture, flip and rotate, scheme
+layout — comes from the record through `ts_bracket_state_dict_for`; an attached
+bracket without a record is an error. A `TSBracket` no document could hold
+cannot be built, so an edit that would produce one (a move past the largest
+number a document may hold) raises before it touches the record or the item.
+Saved values are therefore the ones the document states: a rectangle given
+with its corners swapped saves 10.2 where Qt's read-back wrote
+10.199999999999989, and a file Chemvas already saved re-saves unchanged.
+Record lifetime follows the shape rule: records go when a new document discards
+history, a failed add takes its record back out, and ids come from
+`new_scene_record_id`. Still to do in the last step: the item mirrors its
+rectangle and kind under data role 1 (the export readability check reads the
+kind there), and an item that arrives without a record is adopted from what it
+says instead of being refused. `tests/test_ts_bracket_record_first.py` holds the
+acceptance criteria and `tests/test_ts_bracket_store_sync.py` checks after
+every operation that each attached bracket item shows exactly its record.
 
 ## Composite Grouping
 

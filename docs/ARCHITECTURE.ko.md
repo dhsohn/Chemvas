@@ -279,19 +279,28 @@ layout — 은 `shape_state_dict_for`를 통해 레코드에서 읽는다. 레�
 외곽선을 그리는 곳을 두 모듈로 묶고 예전의 아이템 쪽 reader가 돌아오지 못하게 한다.
 같은 단계 — 레코드, store 동기화, 읽기 전환, 아이템 비우기 — 가 나머지 종류의 틀이다.
 
-TS 괄호는 두 번째 단계에 있다. `chemvas.domain.document.TSBracket`이 레코드이고,
+TS 괄호는 세 번째 단계에 있다. `chemvas.domain.document.TSBracket`이 레코드이고,
 캔버스마다 괄호 store(`CanvasTSBracketState`, 도형 store와 같은 두 롤백 필드 목록에
-들어 있다)가 있으며 괄호 아이템마다 런타임 id가 있다. 원본은 아직 아이템이다. 괄호가
-무엇인지를 바꾸는 세 곳 — 부착(도구, 열기, 붙여넣기, undo 재생성과 재부착),
-`CanvasMoveController.move_item`, `SceneItemController.apply_scene_item_state`
-(undo, redo, 뒤집기, 회전) — 이 끝난 뒤 `sync_ts_bracket_record_for`를 부르고, 저장·undo·
-그리기는 전과 같이 아이템을 읽는다. 레코드 수명은 도형 규칙을 따른다: 새 문서가
-history를 버릴 때 지우고, id는 `new_scene_record_id`에서 나온다. 이 단계에서 레코드가
-사라지는 경우가 둘 더 있다: 실패한 추가는 부착이 만든 레코드를 도로 빼고, rect가 더는
-유한하지 않은 괄호는 어떤 문서에도 담길 수 없으므로 레코드가 없다. 세 번째 단계는 그런
-편집 자체를 거부해야 한다.
-`tests/test_ts_bracket_store_sync.py`가 매 동작 뒤에 부착된 괄호마다 아이템과 같은
-내용의 레코드가 있는지 확인한다.
+들어 있다)가 있으며 괄호 아이템마다 런타임 id가 있다. 편집 —
+`CanvasMoveController.move_item`, undo·redo·뒤집기·회전의 상태 적용 — 은 새
+`TSBracket`을 계산해 `set_ts_bracket_record_for`에 넘기고, 이 함수가
+`normalized_ts_bracket`을 저장한 뒤 그 레코드로 아이템을 그린다
+(`render_ts_bracket_item`: 문서의 결합 설정으로 경로를 씬 좌표에 다시 만들고 아이템은
+원점에 머문다). 도착하는 상태 — 열기, 붙여넣기, undo 재생성 — 는 주어진 그대로 레코드가
+되고, 도구로 그린 괄호는 그릴 때의 rect와 종류에서 레코드를 얻는다. 괄호 상태의 모든
+읽기 — 문서 저장, undo 캡처, 클립보드, 삭제 캡처, 뒤집기와 회전, scheme layout — 는
+`ts_bracket_state_dict_for`를 거쳐 레코드에서 나오며, 레코드 없이 부착된 괄호는 오류다.
+어떤 문서에도 담길 수 없는 `TSBracket`은 만들 수 없으므로, 그런 레코드를 만들 편집(문서가
+담을 수 있는 가장 큰 수를 넘는 이동)은 레코드나 아이템을 건드리기 전에 예외를 낸다.
+따라서 저장되는 값은 문서가 말한 값이다. 모서리를 뒤바꿔 준 rect는 Qt read-back이
+10.199999999999989로 쓰던 자리에 10.2를 저장하고, Chemvas가 이미 저장한 파일은 다시
+저장해도 바뀌지 않는다. 레코드 수명은 도형 규칙을 따른다: 새 문서가 history를 버릴 때
+지우고, 실패한 추가는 자기 레코드를 도로 빼며, id는 `new_scene_record_id`에서 나온다.
+마지막 단계에 남은 일: 아이템은 아직 data role 1에 rect와 종류를 비춰 두고(export
+readability 검사가 거기서 종류를 읽는다), 레코드 없이 도착한 아이템은 거부되는 대신
+아이템이 말하는 내용으로 입양된다. `tests/test_ts_bracket_record_first.py`가 수락 기준을
+담고, `tests/test_ts_bracket_store_sync.py`가 매 동작 뒤에 부착된 괄호 아이템이 정확히
+자기 레코드를 보여 주는지 확인한다.
 
 ## 복합 그룹화 (Composite Grouping)
 

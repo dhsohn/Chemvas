@@ -192,7 +192,6 @@ def ts_bracket_state_dict(item: QGraphicsPathItem) -> dict:
 
 
 def ts_bracket_state_dict_for(canvas, item) -> dict:
-    del canvas
     embedded = embedded_scene_item_state(item)
     if embedded:
         return {
@@ -203,7 +202,18 @@ def ts_bracket_state_dict_for(canvas, item) -> dict:
             "bottom": embedded["bottom"],
             "bracket_kind": normalized_bracket_kind(embedded["bracket_kind"]),
         }
-    return _typed_state_dict_for(item, QGraphicsPathItem, ts_bracket_state_dict)
+    # The record says what the bracket is; the item is not asked.
+    from chemvas.ui.ts_bracket_record_access import (
+        ts_bracket_state_from_record_for,
+    )
+
+    return _typed_state_dict_for(
+        item,
+        QGraphicsPathItem,
+        lambda ts_bracket_item: ts_bracket_state_from_record_for(
+            canvas, ts_bracket_item
+        ),
+    )
 
 
 def shape_state_dict_for(canvas, item) -> dict:
@@ -273,6 +283,8 @@ def scene_item_state_for(canvas, item) -> dict:
 
         if _item_kind(item) == "shape" and isinstance(item, QGraphicsPathItem):
             return shape_state_dict_for(canvas, item)
+        if _item_kind(item) == "ts_bracket" and isinstance(item, QGraphicsPathItem):
+            return ts_bracket_state_dict_for(canvas, item)
         state = scene_item_state(
             item,
             mark_center_getter=lambda mark_item: mark_center_for(canvas, mark_item),

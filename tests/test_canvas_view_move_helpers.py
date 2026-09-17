@@ -3,9 +3,11 @@ import unittest
 from types import SimpleNamespace
 from unittest import mock
 
+from chemvas.ui.ts_bracket_record_access import ts_bracket_record_for
 from tests.runtime_services import canvas_runtime_services
 from tests.runtime_state import canvas_runtime_state
 from tests.shape_support import adopt_shape, plain_shape_pen
+from tests.ts_bracket_support import adopt_ts_bracket, plain_ts_bracket_paint
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -149,9 +151,8 @@ class CanvasViewMoveHelpersTest(unittest.TestCase):
         bond_item = _FakeItem("bond", data1=0)
         mark_item = _FakeItem("mark", data1={"atom_id": 1})
         orbital_item = _FakeItem("orbital", data1={"center": QPointF(2.0, 3.0)})
-        bracket_item = _FakeItem(
-            "ts_bracket", data1={"rect": QRectF(1.0, 2.0, 3.0, 4.0)}
-        )
+        bracket_item = QGraphicsPathItem()
+        bracket_item.setData(0, "ts_bracket")
         arrow_item = _FakeItem(
             "arrow",
             data2={
@@ -184,7 +185,9 @@ class CanvasViewMoveHelpersTest(unittest.TestCase):
         move_item_for(view, bond_item, 4.0, -2.0)
         move_item_for(view, mark_item, 1.0, 2.0)
         move_item_for(view, orbital_item, -3.0, 5.0)
-        move_item_for(view, bracket_item, 2.0, 2.0)
+        with plain_ts_bracket_paint():
+            adopt_ts_bracket(view, bracket_item, rect=(1.0, 2.0, 3.0, 4.0))
+            move_item_for(view, bracket_item, 2.0, 2.0)
         move_item_for(view, arrow_item, 1.5, -0.5)
 
         controller.move_atom.assert_has_calls(
@@ -197,7 +200,14 @@ class CanvasViewMoveHelpersTest(unittest.TestCase):
         self.assertEqual(mark_item.data(1)["dx"], 5.0)
         self.assertEqual(mark_item.data(1)["dy"], 8.0)
         self.assertEqual(orbital_item.data(1)["center"], QPointF(-1.0, 8.0))
-        self.assertEqual(bracket_item.data(1)["rect"], QRectF(3.0, 4.0, 3.0, 4.0))
+        # A bracket moves as arithmetic on its record and is redrawn in scene
+        # coordinates, so the item stays at the origin.
+        record = ts_bracket_record_for(view, bracket_item)
+        self.assertEqual(
+            (record.left, record.top, record.right, record.bottom),
+            (3.0, 4.0, 6.0, 8.0),
+        )
+        self.assertEqual(bracket_item.pos(), QPointF(0.0, 0.0))
         self.assertEqual(arrow_item.data(2)["start"], QPointF(1.5, -0.5))
         self.assertEqual(arrow_item.data(2)["end"], QPointF(2.5, 0.5))
         self.assertEqual(arrow_item.data(2)["control"], QPointF(3.5, 1.5))
@@ -250,7 +260,6 @@ class CanvasViewMoveHelpersTest(unittest.TestCase):
         non_int_mark = _FakeItem("mark", data1={"atom_id": "bad"})
         missing_mark_atom = _FakeItem("mark", data1={"atom_id": 9})
         orbital_item = _FakeItem("orbital", data1={"center": (2.0, 3.0)})
-        bracket_item = _FakeItem("ts_bracket", data1={"rect": (1.0, 2.0, 3.0, 4.0)})
         arrow_item = _FakeItem(
             "arrow",
             data2={
@@ -285,7 +294,6 @@ class CanvasViewMoveHelpersTest(unittest.TestCase):
         move_item_for(view, non_int_mark, 1.0, 2.0)
         move_item_for(view, missing_mark_atom, 1.0, 2.0)
         move_item_for(view, orbital_item, -3.0, 5.0)
-        move_item_for(view, bracket_item, 2.0, 2.0)
         move_item_for(view, arrow_item, 1.5, -0.5)
         move_item_for(view, other_item, 0.5, 0.5)
 
@@ -296,11 +304,10 @@ class CanvasViewMoveHelpersTest(unittest.TestCase):
         self.assertNotIn("dx", non_int_mark.data(1))
         self.assertNotIn("dx", missing_mark_atom.data(1))
         self.assertEqual(orbital_item.data(1)["center"], (2.0, 3.0))
-        self.assertEqual(bracket_item.data(1)["rect"], (1.0, 2.0, 3.0, 4.0))
         self.assertEqual(arrow_item.data(2)["start"], "bad")
         self.assertEqual(arrow_item.data(2)["end"], QPointF(1.0, 1.0))
         self.assertEqual(arrow_item.data(2)["control"], QPointF(3.5, 1.5))
-        self.assertEqual(view.refresh_selection_outline.call_count, 6)
+        self.assertEqual(view.refresh_selection_outline.call_count, 5)
 
     def test_move_atoms_uses_bond_sets_or_falls_back_to_redraw(self) -> None:
         bond_graphic = _FakeItem("bond")

@@ -10,7 +10,12 @@ from tests.runtime_state import canvas_runtime_state
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PyQt6.QtCore import QPointF, QRectF
-from PyQt6.QtWidgets import QApplication, QGraphicsScene, QGraphicsTextItem
+from PyQt6.QtWidgets import (
+    QApplication,
+    QGraphicsPathItem,
+    QGraphicsScene,
+    QGraphicsTextItem,
+)
 
 from chemvas.ui.canvas_mark_registry import CanvasMarkRegistry
 from chemvas.ui.canvas_scene_items_state import CanvasSceneItemsState
@@ -18,6 +23,8 @@ from chemvas.ui.canvas_tool_settings_state import CanvasToolSettingsState
 from chemvas.ui.history_commands import AddSceneItemsCommand
 from chemvas.ui.scene_decoration_service import SceneDecorationService
 from chemvas.ui.scene_item_lifecycle_service import SceneItemLifecycleService
+from chemvas.ui.ts_bracket_record_access import ts_bracket_record_for
+from tests.ts_bracket_support import plain_ts_bracket_paint
 
 
 class _FakeScene:
@@ -338,7 +345,7 @@ class SceneDecorationServiceTest(unittest.TestCase):
         pushed = []
         arrow_item = _FakeItem()
         arrow_item.setData(2, {"control": QPointF(2.0, 3.0)})
-        ts_item = _FakeItem()
+        ts_item = QGraphicsPathItem()
         ts_item.setData(0, "ts_bracket")
         build_service = SimpleNamespace(
             build_arrow_item=mock.Mock(return_value=arrow_item),
@@ -372,9 +379,10 @@ class SceneDecorationServiceTest(unittest.TestCase):
 
         canvas.services.scene_decoration.arrow_build_service = build_service
         arrow = service.add_arrow(QPointF(1.0, 2.0), QPointF(6.0, 7.0), "curved_double")
-        ts_bracket = service.add_ts_bracket(
-            QRectF(QPointF(0.0, 0.0), QPointF(4.0, 8.0))
-        )
+        with plain_ts_bracket_paint():
+            ts_bracket = service.add_ts_bracket(
+                QRectF(QPointF(0.0, 0.0), QPointF(4.0, 8.0))
+            )
 
         self.assertIs(arrow, arrow_item)
         self.assertEqual(arrow.data(0), "curved_double")
@@ -382,6 +390,11 @@ class SceneDecorationServiceTest(unittest.TestCase):
         self.assertEqual(arrow.data(2)["end"], QPointF(6.0, 7.0))
         self.assertTrue(arrow.data(2)["double"])
         self.assertIs(ts_bracket, ts_item)
+        record = ts_bracket_record_for(canvas, ts_item)
+        self.assertEqual(
+            (record.left, record.top, record.right, record.bottom),
+            (0.0, 0.0, 4.0, 8.0),
+        )
         self.assertEqual(scene_items_state.arrow_items, [arrow_item])
         self.assertEqual(scene_items_state.ts_bracket_items, [ts_item])
         self.assertEqual(scene.items, [arrow_item, ts_item])
