@@ -53,7 +53,7 @@ from chemvas.ui.scene_item_state import (
     apply_scene_item_state as apply_scene_item_state_helper,
 )
 from chemvas.ui.shape_record_access import record_shape_state
-from chemvas.ui.ts_bracket_record_access import sync_ts_bracket_record_for
+from chemvas.ui.ts_bracket_record_access import record_ts_bracket_state
 
 if TYPE_CHECKING:
     from chemvas.ui.canvas_view import CanvasView
@@ -158,6 +158,9 @@ class SceneItemController:
             ts_bracket_state,
             build_ts_bracket_item=self._build_ts_bracket_item,
         )
+        if item is not None:
+            # The record is the state that was given, not what Qt read back.
+            record_ts_bracket_state(self.canvas, item, ts_bracket_state)
         self.attach_scene_item(item)
         return item
 
@@ -200,10 +203,12 @@ class SceneItemController:
             set_arrow_labels=self._set_arrow_labels,
         )
         if item is not None:
+            # Paste and undo re-creation arrive here: the record is the state
+            # that was given, not what Qt reads back off the new item.
             if state.get("kind") == "shape":
-                # Paste and undo re-creation arrive here: the record is the state
-                # that was given, not what Qt reads back off the new item.
                 record_shape_state(self.canvas, item, state)
+            elif state.get("kind") == "ts_bracket":
+                record_ts_bracket_state(self.canvas, item, state)
             self.attach_scene_item(item)
             return item
         return None
@@ -227,6 +232,9 @@ class SceneItemController:
         if state.get("kind") == "shape" and item.data(0) == "shape":
             record_shape_state(self.canvas, item, state)
             return
+        if state.get("kind") == "ts_bracket" and item.data(0) == "ts_bracket":
+            record_ts_bracket_state(self.canvas, item, state)
+            return
         apply_scene_item_state_helper(
             item,
             state,
@@ -242,7 +250,6 @@ class SceneItemController:
             orbital_base_handle_dist=self._orbital_base_handle_dist(),
             set_arrow_labels=self._set_arrow_labels,
         )
-        sync_ts_bracket_record_for(self.canvas, item)
 
 
 __all__ = ["SceneItemController"]

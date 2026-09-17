@@ -1,8 +1,8 @@
-"""The TS bracket store never lags the graphics items that still own brackets.
+"""Every attached TS bracket item draws its record, after every operation.
 
-Reads have not moved to the store yet, so this is the whole contract of the
-step: after every operation that can change a bracket, each attached bracket
-item has a record, and the record says what the item says.
+The record is what the bracket is; the item is redrawn from it in scene
+coordinates and stays at the origin. After each operation that can change a
+bracket, each attached item has a record and shows exactly that record.
 """
 
 from __future__ import annotations
@@ -16,22 +16,17 @@ import pytest
 from PyQt6.QtCore import QPointF, QRectF
 from PyQt6.QtWidgets import QApplication
 
-from chemvas.domain.document import (
-    MoleculeModel,
-    normalized_ts_bracket,
-    ts_bracket_from_state,
-)
+from chemvas.domain.document import MoleculeModel
 from chemvas.ui.canvas_scene_items_state import ts_bracket_items_for
 from chemvas.ui.canvas_service_ports import insert_controller_for_access
 from chemvas.ui.canvas_ts_bracket_state import ts_bracket_state_for
-from chemvas.ui.scene_item_state_serialization import (
-    scene_item_state_for,
-    ts_bracket_state_dict,
-)
+from chemvas.ui.scene_decoration_build_access import ts_bracket_path_for
+from chemvas.ui.scene_item_state_serialization import scene_item_state_for
 from chemvas.ui.transactions import document_transaction
 from chemvas.ui.ts_bracket_record_access import (
     ts_bracket_id_for_item,
     ts_bracket_record_for,
+    ts_bracket_rect_of,
 )
 from tests.canvas_factory import build_canvas_view
 
@@ -51,10 +46,12 @@ def assert_store_matches_items(canvas) -> None:
     assert None not in ids
     assert len(set(ids)) == len(ids)
     for item in items:
-        expected = normalized_ts_bracket(
-            ts_bracket_from_state(ts_bracket_state_dict(item))
-        )
-        assert ts_bracket_record_for(canvas, item) == expected
+        record = ts_bracket_record_for(canvas, item)
+        assert record is not None
+        rect = ts_bracket_rect_of(record)
+        assert item.pos() == QPointF(0.0, 0.0)
+        assert item.path() == ts_bracket_path_for(canvas, rect, record.bracket_kind)
+        assert item.data(1) == {"rect": rect, "bracket_kind": record.bracket_kind}
 
 
 def _add_ts_bracket(canvas, rect=None, *, bracket_kind="square_pair"):
@@ -350,15 +347,3 @@ def test_restating_another_kind_of_item_leaves_the_bracket_store_alone(canvas) -
 
     assert ts_bracket_state_for(canvas).records == {}
     assert ts_bracket_id_for_item(arrow) is None
-
-
-def test_a_ts_bracket_no_document_could_hold_has_no_record(canvas) -> None:
-    item = _add_ts_bracket(canvas)
-    move = canvas.services.interaction.move_controller.move_item
-
-    for _ in range(3):
-        move(item, 1e308, 0.0)
-
-    # The rectangle is no longer finite. Nothing reads the store yet, so the
-    # edit stands and the record, which could not be valid, is gone.
-    assert ts_bracket_record_for(canvas, item) is None

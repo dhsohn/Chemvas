@@ -13,14 +13,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   bracket, with `ts_bracket_from_state`, `ts_bracket_to_state` and
   `normalized_ts_bracket` (an ordered rectangle with the edges it was given)
   over the existing document schema. Each canvas keeps one record per bracket
-  item, kept current by every path that attaches, moves or re-states a
-  bracket and put back by the document savepoint, a failed open and a failed
-  add. Saving, undo and drawing still read the item, so behaviour and saved
-  files are unchanged.
+  item; every edit and every rollback path keeps it current, and saving, undo
+  and drawing read the record (see Changed). The file format is unchanged.
+
+### Changed
+
+- TS brackets are saved, undone and moved as document data instead of being
+  read back from their graphics items. A saved bracket now carries the values
+  the document states: a rectangle given with its corners swapped keeps 10.2
+  where Qt's read-back wrote 10.199999999999989, and moving a bracket is
+  arithmetic on its coordinates. As before, a file from another tool gets an
+  ordered rectangle on open and is stable after that; a file Chemvas already
+  saved re-saves unchanged. A move that would take a bracket past the largest
+  number a document may hold is refused instead of producing a bracket that
+  cannot be saved.
 
 ### Fixed
 
-- A shape could be saved as a different shape after an undo failed part-way.
+- A dagger or double dagger keeps the size of its glyph. A box 25 units tall
+  asks for a glyph exactly between two pixel sizes, and after a move the saved
+  height could be one floating-point step short of 25, so the glyph came back
+  a pixel smaller when the document was reopened. The size is now computed
+  with that noise rounded away.
+- Record ids are never handed out twice. Nothing in the desktop app or the
+  CLI reaches this today: it needs `load_model` on a canvas that holds shapes,
+  and only the SMILES preview calls that, on a throw-away canvas. There, a
+  shape could be saved as a different shape after an undo failed part-way.
   Undoing a structure load re-creates the shapes it removed; when a later part
   of that undo failed, the rollback also rewound the counter that numbers shape
   records while history kept the re-created item, so the next shape drawn took

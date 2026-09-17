@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import replace
 from typing import Any
 
-from PyQt6.QtCore import QPointF, QRectF
+from PyQt6.QtCore import QPointF
 
 from chemvas.domain.document import VALID_ARROW_KINDS
 from chemvas.features.selection import translate_projected_point_3d
@@ -31,13 +31,16 @@ from chemvas.ui.shape_record_access import (
     require_shape_record_for,
     set_shape_record_for,
 )
-from chemvas.ui.ts_bracket_record_access import sync_ts_bracket_record_for
+from chemvas.ui.ts_bracket_record_access import (
+    moved_ts_bracket,
+    require_ts_bracket_record_for,
+    set_ts_bracket_record_for,
+)
 
 # Every arrow kind the document schema knows, plus the annotation items that
 # move by a plain moveBy with their stored geometry patched afterwards.
 _MOVE_BY_ITEM_KINDS = VALID_ARROW_KINDS | frozenset(
     {
-        "ts_bracket",
         "orbital",
         "note",
         "image",
@@ -113,6 +116,16 @@ class CanvasMoveController:
                     bottom=shape.bottom + dy,
                 ),
             )
+        elif kind == "ts_bracket":
+            # Like a shape: the path is rebuilt in scene coordinates and
+            # item.pos() stays at the origin.
+            set_ts_bracket_record_for(
+                self.canvas,
+                item,
+                moved_ts_bracket(
+                    require_ts_bracket_record_for(self.canvas, item), dx, dy
+                ),
+            )
         elif kind in _MOVE_BY_ITEM_KINDS:
             item.moveBy(dx, dy)
             if kind == "orbital":
@@ -121,13 +134,6 @@ class CanvasMoveController:
                 if isinstance(center, QPointF):
                     data["center"] = QPointF(center.x() + dx, center.y() + dy)
                     item.setData(1, data)
-            elif kind == "ts_bracket":
-                data = item.data(1) or {}
-                rect = data.get("rect")
-                if isinstance(rect, QRectF):
-                    data["rect"] = rect.translated(dx, dy)
-                    item.setData(1, data)
-                    sync_ts_bracket_record_for(self.canvas, item)
             else:
                 data = item.data(2) or {}
                 start = data.get("start")
