@@ -13,7 +13,11 @@ def optional_canvas_scene_for(canvas):
 
 
 def scene_if_present_for(canvas):
-    """Scene of a canvas double that may not have a scene accessor at all."""
+    """Scene of a canvas that may lack a scene accessor, or None.
+
+    Only the detached-scene snapshot needs this: it is captured over canvas
+    doubles built without a scene. Production lookups use canvas_scene_for.
+    """
     scene_method = getattr(canvas, "scene", None)
     return scene_method() if callable(scene_method) else None
 

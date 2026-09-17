@@ -4156,7 +4156,7 @@ def _canvas_service_modules() -> list[Path]:
 
 @pytest.mark.parametrize("path", _canvas_service_modules(), ids=lambda path: path.name)
 def test_services_reach_the_canvas_only_through_access_functions(path) -> None:
-    """The state a service can touch is exactly the accessors it imports."""
+    """A service reaches the canvas through the access functions it imports."""
     assert _canvas_attribute_reads(path.read_text(encoding="utf-8")) == []
 
 
@@ -5531,9 +5531,12 @@ CANVAS_SCENE_RESOLVERS = frozenset(
         "canvas_scene_for",
         "canvas_scene_for_item_operation",
         "optional_canvas_scene_for",
+        "scene_if_present_for",
     }
 )
 CANVAS_DETACH_BODY = "_detach_item_from_canvas_scene"
+INSERT_SMILES_MODULE = "app/chemvas/ui/insert_smiles_service.py"
+PRE_CLEAR_DETACH_BODY = "_detach_top_level_scene_items_before_clear"
 TRI_STATE_DETACH_WRAPPER = "remove_attached_item_from_canvas_scene"
 
 
@@ -5562,6 +5565,14 @@ def test_canvas_scoped_scene_detach_has_one_body() -> None:
     they answer when the canvas has no scene or the item's C++ object is gone.
     Both now pass that answer to ``_detach_item_from_canvas_scene`` as
     ``unresolved``.
+
+    ``insert_smiles_service._detach_top_level_scene_items_before_clear`` is
+    the one other function that resolves the canvas's scene and calls
+    ``removeItem``, and it asks a different question: it detaches every root
+    under blocked signals before a destructive clear so an exact rollback can
+    reattach the same wrappers. It used to call ``canvas.scene()`` directly and
+    so sat outside this rule by accident; services no longer touch the canvas
+    themselves, so it resolves through ``canvas_scene_for`` and is named here.
     """
     detachers = [
         f"{path.relative_to(APP_ROOT.parents[0])}:{line_no}: {name}"
@@ -5570,10 +5581,12 @@ def test_canvas_scoped_scene_detach_has_one_body() -> None:
     ]
 
     assert [detacher.rsplit(":", 2)[0] for detacher in detachers] == [
-        SCENE_ITEM_ACCESS_MODULE
+        INSERT_SMILES_MODULE,
+        SCENE_ITEM_ACCESS_MODULE,
     ]
     assert [detacher.rsplit(": ", 1)[1] for detacher in detachers] == [
-        CANVAS_DETACH_BODY
+        PRE_CLEAR_DETACH_BODY,
+        CANVAS_DETACH_BODY,
     ]
 
 

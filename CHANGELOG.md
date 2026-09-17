@@ -9,8 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- Services and controllers no longer read the canvas directly. The 21
-  remaining attribute reads — viewport rect, transform and pan capture and
+- Services and controllers no longer touch the canvas directly. The 21
+  remaining direct attribute accesses (reads, writes and method calls) —
+  viewport rect, transform and pan capture and
   restore in the document session service, hit-testing's viewport
   transform, scene and model lookups, and the frame style set when a tab
   creates a canvas — now go through access functions
