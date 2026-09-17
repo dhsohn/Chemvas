@@ -71,11 +71,16 @@ release number is illustrative; the writer fills the real one):
   promise: a reader that supports a generation reads every revision of it that
   it knows, and a writer version never drops a supported generation.
 - `schema` is the revision within a generation. It starts at 1 and increases by
-  one whenever a writer starts emitting something an older reader of the same
-  generation would reject: a new optional field, a new enumeration value, a new
-  optional collection. Changes that an older reader would misread rather than
-  reject — a required field, a changed meaning, a removed field, a wrapper
-  change — need a new generation, which resets the revision to 1.
+  one for an **additive** change: one where every document valid under the
+  previous revision is still valid, with the same meaning, under the new one.
+  A new optional field, a new enumeration value or a new optional collection
+  is additive; the strict reader of an older revision still rejects such a
+  document, which is exactly what the revision number explains. A **breaking**
+  change — a required field, a changed meaning, a removed or renamed field, a
+  wrapper change — is one where some previously valid document is no longer
+  valid or means something else; it needs a new generation, which resets the
+  revision to 1. The test is validity and meaning of existing documents, not
+  whether an old reader rejects the new one.
 - `min_reader` is the lowest Chemvas release that reads this revision in full.
   The writer fills it from a table in the code keyed by `(version, schema)`;
   it is never typed by hand, and the implementation must carry a test that
@@ -85,12 +90,16 @@ A reader judges a document in this order and reports the first failure:
 
 1. An unknown `version` is refused with the message used today, naming the
    generations this release reads.
-2. A known `version` whose `schema` is above the highest revision this release
+2. The wrapper is validated independently of the revision: exactly the keys
+   above, the right `type`, an integer `schema` of at least 1, a release string
+   in `min_reader` and an object in `state`. A document that fails here is an
+   invalid document, never a newer one.
+3. A known `version` whose `schema` is above the highest revision this release
    knows is refused as a **newer document, not an invalid one**: the message
    names the document's format and revision, the highest revision this release
    reads, and the release from `min_reader` that can open it. The reader
    decides by `schema`; `min_reader` is only quoted, never trusted.
-3. A known revision is validated as strictly as today. An unknown field, an
+4. A known revision is validated as strictly as today. An unknown field, an
    unknown enumeration value or an invalid reference remains an error. The
    revision number explains a refusal; it does not relax validation.
 
