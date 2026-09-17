@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING
 
 from PyQt6.QtWidgets import QGraphicsItem, QGraphicsPolygonItem, QGraphicsTextItem
 
+from chemvas.domain.document import bond_endpoint_ids, orphaned_atom_ids
 from chemvas.ui.scene_item_state import ARROW_KINDS
 
 if TYPE_CHECKING:
@@ -108,15 +109,23 @@ def build_delete_selection_plan(
         if bond.a in selection.atom_ids or bond.b in selection.atom_ids:
             bonds_to_remove.add(bond_id)
 
+    # Marks selected for this same deletion cannot keep an endpoint visible:
+    # they die with it, so counting them would leave an invisible orphan.
+    selected_mark_item_ids = {id(item) for item in selection.mark_items}
     atom_ids_to_remove = set(selection.atom_ids)
     atom_ids_to_remove.update(
-        _removable_orphaned_atom_ids(
-            bonds=bonds,
-            bonds_to_remove=bonds_to_remove,
-            atom_ids_to_remove=atom_ids_to_remove,
-            marks_by_atom=marks_by_atom,
-            selected_mark_item_ids={id(item) for item in selection.mark_items},
-            atom_has_visible_label=atom_has_visible_label,
+        orphaned_atom_ids(
+            bonds,
+            candidate_atom_ids=bond_endpoint_ids(bonds, bonds_to_remove),
+            removed_bond_ids=bonds_to_remove,
+            removed_atom_ids=atom_ids_to_remove,
+            keeps_visible=lambda atom_id: (
+                atom_has_visible_label(atom_id)
+                or any(
+                    id(mark) not in selected_mark_item_ids
+                    for mark in marks_by_atom.get(atom_id, ())
+                )
+            ),
         )
     )
 
@@ -153,48 +162,6 @@ def build_delete_selection_plan(
         ),
         clear_smiles_input=bool(bonds_to_remove or selection.atom_ids),
     )
-
-
-def _removable_orphaned_atom_ids(
-    *,
-    bonds: Sequence[Bond | None],
-    bonds_to_remove: set[int],
-    atom_ids_to_remove: set[int],
-    marks_by_atom: Mapping[int, Sequence[QGraphicsItem]],
-    selected_mark_item_ids: set[int],
-    atom_has_visible_label: Callable[[int], bool],
-) -> set[int]:
-    """Atoms this deletion orphans that nothing keeps visible on the sheet.
-
-    Every removed bond nominates its endpoints; an endpoint survives when it
-    keeps a surviving bond, is already being deleted, or stays visible through
-    a label or a mark. Marks selected for this same deletion cannot protect —
-    they die with it, so counting them would leave an invisible orphan behind.
-    """
-    candidates: set[int] = set()
-    for bond_id in bonds_to_remove:
-        if not (0 <= bond_id < len(bonds)):
-            continue
-        bond = bonds[bond_id]
-        if bond is not None:
-            candidates.update((bond.a, bond.b))
-    candidates -= atom_ids_to_remove
-    if not candidates:
-        return set()
-    surviving_bond_atoms: set[int] = set()
-    for bond_id, bond in enumerate(bonds):
-        if bond is None or bond_id in bonds_to_remove:
-            continue
-        surviving_bond_atoms.update((bond.a, bond.b))
-    return {
-        atom_id
-        for atom_id in candidates - surviving_bond_atoms
-        if not atom_has_visible_label(atom_id)
-        and not any(
-            id(mark) not in selected_mark_item_ids
-            for mark in marks_by_atom.get(atom_id, ())
-        )
-    }
 
 
 __all__ = [
