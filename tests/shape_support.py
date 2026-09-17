@@ -6,7 +6,8 @@ from unittest import mock
 
 from PyQt6.QtGui import QPen
 
-from chemvas.ui.shape_record_access import adopt_shape_item_for
+from chemvas.domain.document import Shape
+from chemvas.ui.shape_record_access import set_shape_record_for
 
 # A partial canvas has no decoration build service to ask for the stroke pen.
 plain_shape_pen = mock.patch(
@@ -15,9 +16,28 @@ plain_shape_pen = mock.patch(
 )
 
 
-def adopt_shape(canvas, item) -> None:
-    """Give a hand-built shape item the record an attached shape always has."""
-    adopt_shape_item_for(canvas, item)
+def adopt_shape(
+    canvas,
+    item,
+    *,
+    rect=(0.0, 0.0, 10.0, 10.0),
+    shape_kind="rect",
+    stroke_style="solid",
+) -> Shape:
+    """Give a hand-built shape item the record every shape in a document has."""
+    left, top, width, height = rect
+    return set_shape_record_for(
+        canvas,
+        item,
+        Shape(
+            left=left,
+            top=top,
+            right=left + width,
+            bottom=top + height,
+            shape_kind=shape_kind,
+            stroke_style=stroke_style,
+        ),
+    )
 
 
 __all__ = ["adopt_shape", "plain_shape_pen"]

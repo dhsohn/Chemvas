@@ -9,7 +9,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 import pytest
 from PyQt6.QtCore import QPointF, QRectF
 from PyQt6.QtGui import QBrush, QColor
-from PyQt6.QtWidgets import QApplication
+from PyQt6.QtWidgets import QApplication, QGraphicsPathItem
 
 from chemvas.domain.document import MoleculeModel
 from chemvas.ui.canvas_scene_items_state import shape_items_for
@@ -217,3 +217,14 @@ def test_undoing_a_structure_load_recreates_shapes_with_the_stated_values(
     services.history_service.undo()
 
     assert session.snapshot_state()["shapes"] == before
+
+
+def test_a_shape_item_without_a_record_cannot_join_the_document(canvas) -> None:
+    item = QGraphicsPathItem()
+    item.setData(0, "shape")
+
+    with pytest.raises(RuntimeError, match="without a record"):
+        canvas.services.scene_view.scene_item_controller.attach_scene_item(item)
+
+    assert shape_items_for(canvas) == []
+    assert item.scene() is None

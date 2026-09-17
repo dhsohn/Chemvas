@@ -32,6 +32,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   lowercase six-digit fill with an explicit opacity) and is stable after that;
   a file Chemvas already saved re-saves unchanged. The file format is the
   same.
+- A shape's graphics item now carries only its kind and a runtime id. The
+  rectangle, kind and stroke it used to mirror are gone, the item-side state
+  reader is removed, a shape drawn with the tool gets its record from how it was
+  drawn, and an item without a record cannot be attached. Architecture tests
+  keep shape outlines to the two modules that paint them.
 - The main-window ports no longer resolve the canvas service container. Each
   window getter composes the active canvas with a canvas service port and
   returns the concrete type; five ports the window side needed are added to

@@ -500,15 +500,8 @@ class CanvasSceneDecorationBuildService:
         item.setBrush(
             QBrush(QColor(0, 0, 0, 0)) if fill is None else QBrush(QColor(fill))
         )
+        # What the shape is lives in its record; the item only says it is a shape.
         item.setData(0, "shape")
-        item.setData(
-            1,
-            {
-                "rect": normalized,
-                "shape_kind": shape_kind,
-                "stroke_style": stroke_style,
-            },
-        )
         item.setZValue(self.SHAPE_Z_VALUE)
         return item
 

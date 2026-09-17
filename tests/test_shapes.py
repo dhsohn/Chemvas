@@ -27,7 +27,6 @@ from chemvas.features.selection import (
     shape_resize_handle_positions,
 )
 from chemvas.ui.scene_item_restore import create_shape_item_from_state
-from chemvas.ui.scene_item_state import shape_state_dict
 
 
 class ShapeGeometryTest(unittest.TestCase):
@@ -60,64 +59,36 @@ class ShapeGeometryTest(unittest.TestCase):
         self.assertEqual(pen_style_for_stroke("none"), Qt.PenStyle.NoPen)
 
 
-class ShapeSerializationTest(unittest.TestCase):
+class ShapeItemFromStateTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         cls.app = QApplication.instance() or QApplication([])
 
-    def _shape_item(self, fill=None):
-        item = QGraphicsPathItem(
-            shape_path(QRectF(10.0, 20.0, 60.0, 40.0), "rounded_rect")
-        )
-        item.setData(0, "shape")
-        item.setData(
-            1,
-            {
-                "rect": QRectF(10.0, 20.0, 60.0, 40.0),
-                "shape_kind": "rounded_rect",
-                "stroke_style": "dashed",
-            },
-        )
-        if fill is not None:
-            item.setBrush(fill)
-        else:
-            item.setBrush(QColor(0, 0, 0, 0))
-        return item
+    def test_create_from_state_draws_the_state(self) -> None:
+        state = {
+            "kind": "shape",
+            "left": 10.0,
+            "top": 20.0,
+            "right": 70.0,
+            "bottom": 60.0,
+            "shape_kind": "rounded_rect",
+            "stroke_style": "dashed",
+            "fill": "#2196f3",
+            "fill_alpha": 0.25,
+        }
 
-    def test_state_dict_round_trips_geometry_and_style(self) -> None:
-        state = shape_state_dict(self._shape_item())
-        self.assertEqual(state["kind"], "shape")
-        self.assertEqual(state["shape_kind"], "rounded_rect")
-        self.assertEqual(state["stroke_style"], "dashed")
-        self.assertEqual(
-            (state["left"], state["top"], state["right"], state["bottom"]),
-            (10.0, 20.0, 70.0, 60.0),
-        )
-        self.assertNotIn("fill", state)
+        built = create_shape_item_from_state(state, build_shape_item=self._build)
 
-    def test_fill_is_serialized_only_when_visible(self) -> None:
-        state = shape_state_dict(self._shape_item(QColor(33, 150, 243, 64)))
-        self.assertEqual(state["fill"], "#2196f3")
-        self.assertGreater(state["fill_alpha"], 0.0)
-
-    def test_create_from_state_restores_item(self) -> None:
-        state = shape_state_dict(self._shape_item(QColor(33, 150, 243, 64)))
-        built = create_shape_item_from_state(
-            state,
-            build_shape_item=lambda rect, kind, stroke, fill: self._rebuild(
-                rect, kind, stroke, fill
-            ),
-        )
         self.assertIsNotNone(built)
-        self.assertEqual(built.data(1)["shape_kind"], "rounded_rect")
+        self.assertEqual(
+            built.path(), shape_path(QRectF(10.0, 20.0, 60.0, 40.0), "rounded_rect")
+        )
+        self.assertEqual(built.brush().color().name(), "#2196f3")
         self.assertGreater(built.brush().color().alphaF(), 0.0)
 
-    def _rebuild(self, rect, kind, stroke, fill):
+    def _build(self, rect, kind, stroke, fill):
         item = QGraphicsPathItem(shape_path(rect, kind))
         item.setData(0, "shape")
-        item.setData(
-            1, {"rect": QRectF(rect), "shape_kind": kind, "stroke_style": stroke}
-        )
         item.setBrush(fill if fill is not None else QColor(0, 0, 0, 0))
         return item
 

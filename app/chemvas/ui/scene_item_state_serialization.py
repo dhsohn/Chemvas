@@ -15,8 +15,6 @@ from chemvas.domain.document import VALID_ARROW_KINDS
 from chemvas.features.annotations import (
     DEFAULT_BRACKET_KIND,
     normalized_bracket_kind,
-    normalized_shape_kind,
-    normalized_stroke_style,
     sanitize_note_html,
 )
 from chemvas.ui.canvas_atom_graphics_state import atom_items_for
@@ -208,27 +206,6 @@ def ts_bracket_state_dict_for(canvas, item) -> dict:
     return _typed_state_dict_for(item, QGraphicsPathItem, ts_bracket_state_dict)
 
 
-def shape_state_dict(item: QGraphicsPathItem) -> dict:
-    data = item.data(1) or {}
-    rect = data.get("rect")
-    if not isinstance(rect, QRectF):
-        rect = item.sceneBoundingRect()
-    state: dict[str, object] = {
-        "kind": "shape",
-        "left": rect.left(),
-        "top": rect.top(),
-        "right": rect.right(),
-        "bottom": rect.bottom(),
-        "shape_kind": normalized_shape_kind(data.get("shape_kind")),
-        "stroke_style": normalized_stroke_style(data.get("stroke_style")),
-    }
-    fill = item.brush().color()
-    if fill.alphaF() > 0.0:
-        state["fill"] = fill.name()
-        state["fill_alpha"] = fill.alphaF()
-    return state
-
-
 def shape_state_dict_for(canvas, item) -> dict:
     # The record says what the shape is; the item is not asked.
     from chemvas.ui.shape_record_access import shape_state_from_record_for
@@ -275,8 +252,6 @@ def scene_item_state(item, *, mark_center_getter: MarkCenterGetter) -> dict:
         return mark_state_dict(item, mark_center_getter=mark_center_getter)
     if kind == "ts_bracket" and isinstance(item, QGraphicsPathItem):
         return ts_bracket_state_dict(item)
-    if kind == "shape" and isinstance(item, QGraphicsPathItem):
-        return shape_state_dict(item)
     if kind == "orbital" and isinstance(item, QGraphicsItemGroup):
         return orbital_state_dict(item)
     if kind in ARROW_KINDS and isinstance(item, QGraphicsPathItem):
@@ -325,7 +300,6 @@ __all__ = [
     "ring_state_dict_for",
     "scene_item_state",
     "scene_item_state_for",
-    "shape_state_dict",
     "shape_state_dict_for",
     "ts_bracket_state_dict",
     "ts_bracket_state_dict_for",

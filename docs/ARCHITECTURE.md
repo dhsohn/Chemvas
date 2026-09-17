@@ -268,7 +268,7 @@ unknown-stereo marker.
 An explicit CLI style change is not that cosmetic gesture. These distinctions
 do not require another shared edit engine.
 
-### Document data ownership (in progress)
+### Document data ownership (shapes done; other kinds not started)
 
 `MoleculeModel` owns atoms and bonds as Qt-free data. Every other drawn object
 a document saves — ring fills, notes, marks, arrows and lines, TS brackets,
@@ -298,7 +298,12 @@ therefore the ones the document states: an opacity of 0.25 is saved as 0.25
 where Qt's read-back used to write 0.2500038, and a file Chemvas already saved
 re-saves unchanged. `tests/test_shape_record_first.py` holds both criteria and
 `tests/test_shape_store_sync.py` checks after every operation that the item
-draws its record.
+draws its record and carries nothing else: a shape item holds its kind and its
+id, no rectangle, kind or stroke, and cannot join the document's shapes without
+a record. `test_shape_values_live_in_records_not_on_graphics_items` keeps shape
+outlines to the two modules that paint them and keeps the old item-side reader
+from coming back. The same steps — record, store kept in step, reads flipped,
+item emptied — are the template for the remaining kinds.
 
 ## Composite Grouping
 
