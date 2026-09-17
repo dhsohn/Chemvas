@@ -29,8 +29,8 @@ from chemvas.ui.canvas_model_access import (
 )
 from chemvas.ui.canvas_scene_items_state import scene_item_collection_for
 from chemvas.ui.canvas_service_ports import (
-    history_atom_mutation_service_for,
-    history_bond_mutation_service_for,
+    structure_mutation_atom_service,
+    structure_mutation_bond_service,
 )
 from chemvas.ui.canvas_smiles_input_state import set_last_smiles_input_for
 from chemvas.ui.handle_overlay_access import clear_handles_for
@@ -222,7 +222,7 @@ class CanvasHistoryOperations:
         remove_atom_for_history(self.__canvas, atom_id, remove_marks=remove_marks)
 
     def restore_atom_from_state_for_history(self, atom_id: int, state: dict) -> None:
-        history_atom_mutation_service_for(self.__canvas).restore_atom_from_state(
+        structure_mutation_atom_service(self.__canvas).restore_atom_from_state(
             atom_id, state
         )
 
@@ -235,12 +235,12 @@ class CanvasHistoryOperations:
     def restore_bond_from_state_for_history(
         self, bond_id: int, bond_state: dict
     ) -> None:
-        history_bond_mutation_service_for(self.__canvas).restore_bond_from_state(
+        structure_mutation_bond_service(self.__canvas).restore_bond_from_state(
             bond_id, bond_state
         )
 
     def remove_bond_for_history(self, bond_id: int) -> None:
-        history_bond_mutation_service_for(self.__canvas).remove_bond_by_id(bond_id)
+        structure_mutation_bond_service(self.__canvas).remove_bond_by_id(bond_id)
 
     def trim_bonds_for_history(self, length: int) -> None:
         trim_bonds_for_history(self.__canvas, length)

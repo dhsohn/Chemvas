@@ -1363,6 +1363,47 @@ CANVAS_SERVICE_CONTAINER_RESOLVERS = (
 )
 
 
+def test_canvas_service_ports_name_each_container_path_once_with_its_type() -> None:
+    """A port is a name for a place in the container, not a second name for one.
+
+    The ports used to return ``Any``, which hid the container's types from
+    every caller, and five of them resolved a path another port already
+    named. A role-flavoured alias adds a name to learn and nothing to check.
+    """
+    path = APP_ROOT / "chemvas" / "ui" / "canvas_service_ports.py"
+    tree = _parse_source(path.read_text(encoding="utf-8"))
+    names_by_container_path: dict[str, list[str]] = {}
+    untyped: list[str] = []
+    for node in tree.body:
+        if not isinstance(node, ast.FunctionDef):
+            continue
+        if node.returns is None or any(
+            (isinstance(part, ast.Name) and part.id == "Any")
+            or (isinstance(part, ast.Attribute) and part.attr == "Any")
+            or (
+                isinstance(part, ast.Constant)
+                and isinstance(part.value, str)
+                and re.search(r"\bAny\b", part.value) is not None
+            )
+            for part in ast.walk(node.returns)
+        ):
+            untyped.append(node.name)
+        returned = node.body[-1]
+        if not isinstance(returned, ast.Return) or returned.value is None:
+            continue
+        expression = ast.unparse(returned.value)
+        if expression.startswith("canvas_services_for(canvas)."):
+            names_by_container_path.setdefault(expression, []).append(node.name)
+
+    assert names_by_container_path, path
+    assert untyped == []
+    assert {
+        container_path: names
+        for container_path, names in names_by_container_path.items()
+        if len(names) > 1
+    } == {}
+
+
 def test_only_container_resolvers_reach_the_canvas_service_bundle() -> None:
     """Nothing but the resolver modules may resolve the canvas service bundle.
 

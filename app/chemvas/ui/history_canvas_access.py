@@ -8,9 +8,9 @@ from PyQt6.QtGui import QPolygonF
 from chemvas.ui.bond_length_graphics_refresh import refresh_bond_length_graphics_for
 from chemvas.ui.canvas_rotation_state import rotation_state_for
 from chemvas.ui.canvas_service_ports import (
-    history_atom_mutation_service_for,
-    history_bond_mutation_service_for,
     history_hit_testing_service_for,
+    structure_mutation_atom_service,
+    structure_mutation_bond_service,
 )
 from chemvas.ui.history_atom_position_restore import set_atom_positions_for_history
 from chemvas.ui.renderer_style_access import set_bond_length_for
@@ -80,18 +80,18 @@ def restore_bond_length_for_history(canvas, length_px: float) -> None:
 
 
 def remove_atom_for_history(canvas, atom_id: int, *, remove_marks: bool = True) -> None:
-    history_atom_mutation_service_for(canvas).remove_atom_only(
+    structure_mutation_atom_service(canvas).remove_atom_only(
         atom_id,
         remove_marks=remove_marks,
     )
 
 
 def apply_atom_color_for_history(canvas, atom_id: int, color) -> None:
-    history_atom_mutation_service_for(canvas).apply_atom_color(atom_id, color)
+    structure_mutation_atom_service(canvas).apply_atom_color(atom_id, color)
 
 
 def trim_bonds_for_history(canvas, length: int) -> None:
-    history_bond_mutation_service_for(canvas).trim_bonds_to_length(length)
+    structure_mutation_bond_service(canvas).trim_bonds_to_length(length)
 
 
 __all__ = [
