@@ -55,7 +55,6 @@ class MainWindowCanvasDocumentService:
         self, window, *, template: CanvasView | None = None
     ) -> CanvasView:
         canvas = self._canvas_factory()
-        canvas.setFrameStyle(0)
         copy_canvas_template_settings(canvas, template)
         return canvas
 

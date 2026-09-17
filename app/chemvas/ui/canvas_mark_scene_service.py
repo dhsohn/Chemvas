@@ -32,7 +32,10 @@ from chemvas.ui.history_commands import (
 from chemvas.ui.input_view_access import zoom_factor_for
 from chemvas.ui.mark_item_access import mark_center_for, set_mark_center_for
 from chemvas.ui.renderer_style_access import bond_length_px_for
-from chemvas.ui.scene_item_access import remove_item_from_canvas_scene
+from chemvas.ui.scene_item_access import (
+    canvas_scene_for,
+    remove_item_from_canvas_scene,
+)
 from chemvas.ui.scene_item_state import mark_state_dict_for, scene_item_history_state
 from chemvas.ui.selection_info_access import emit_selection_info_for
 from chemvas.ui.transactions.document import document_transaction
@@ -305,7 +308,7 @@ class CanvasMarkSceneService:
         """Transfer only on an explicit user choice; ordinary moves never call this."""
         if (
             sip.isdeleted(item)
-            or item.scene() is not self.canvas.scene()
+            or item.scene() is not canvas_scene_for(self.canvas)
             or item.data(0) != "mark"
         ):
             raise ValueError("The mark is no longer in this document.")

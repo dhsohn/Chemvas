@@ -106,6 +106,13 @@ def set_explicit_view_scene_rect(
     setattr(view, _VIEW_EXPLICIT_ATTRIBUTE, True)
 
 
+def clear_explicit_view_scene_rect(view) -> None:
+    """Return a view to inheriting its scene's rect."""
+
+    view.setSceneRect(QRectF())
+    setattr(view, _VIEW_EXPLICIT_ATTRIBUTE, False)
+
+
 @dataclass(slots=True, kw_only=True)
 class _SceneRectTracker:
     """Per-scene growth bookkeeping, stored on the scene itself."""
@@ -743,6 +750,7 @@ __all__ = [
     "SceneRectStateSnapshot",
     "ViewSceneRectStateSnapshot",
     "capture_scene_rect_snapshot",
+    "clear_explicit_view_scene_rect",
     "release_scene_rect_snapshot",
     "restore_scene_rect_snapshot",
     "scene_rect_is_automatic",

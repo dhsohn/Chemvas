@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Services and controllers no longer touch the canvas directly. The 21
+  remaining direct attribute accesses (reads, writes and method calls) —
+  viewport rect, transform and pan capture and
+  restore in the document session service, hit-testing's viewport
+  transform, scene and model lookups, and the frame style set when a tab
+  creates a canvas — now go through access functions
+  (`chemvas.ui.canvas_viewport_access` is new), and an architecture test
+  bans any attribute read on a canvas-bound name in `ui/*_service.py` and
+  `ui/*_controller.py`. The state a service can touch is exactly the
+  accessors it imports; `docs/ARCHITECTURE.md` says so.
 - Move the Calculation Plan consistency rules (declared charge versus
   component charges, matching element labels across a mapping) and the
   RDKit conversion records (`AtomMapEntry`, `CalculationArtifacts`) into

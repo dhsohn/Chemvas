@@ -59,7 +59,12 @@ class MoveGestureScope:
     scene_items: tuple[Any, ...]
 
 
-def _capture_runtime_state_object(canvas: object, name: str) -> object | None:
+def runtime_state_object_for(canvas: object, name: str) -> object | None:
+    """One runtime field of a canvas, or None when the canvas has no container.
+
+    Savepoints and rollback snapshots capture canvas doubles that were built
+    without a runtime container; they omit runtime state instead of failing.
+    """
     runtime_state = getattr(canvas, "runtime_state", None)
     if runtime_state is None:
         return None
@@ -215,7 +220,7 @@ class DocumentSavepoint:
             if name == "history_state" and history_service is None:
                 runtime_states[name] = None
                 continue
-            state = _capture_runtime_state_object(canvas, name)
+            state = runtime_state_object_for(canvas, name)
             runtime_states[name] = state
             append(state)
         groups = getattr(runtime_states["group_state"], "groups", None)
@@ -551,4 +556,5 @@ __all__ = [
     "DocumentSavepoint",
     "MoveGestureScope",
     "document_transaction",
+    "runtime_state_object_for",
 ]

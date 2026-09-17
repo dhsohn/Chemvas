@@ -4116,6 +4116,50 @@ def test_history_commands_do_not_receive_or_retain_canvas(module) -> None:
     assert _history_receiver_violations(source) == []
 
 
+_CANVAS_BOUND_NAMES = frozenset({"canvas", "_canvas", "view", "_view"})
+
+
+def _is_canvas_bound(node: ast.expr) -> bool:
+    if isinstance(node, ast.Name):
+        return node.id in _CANVAS_BOUND_NAMES
+    return (
+        isinstance(node, ast.Attribute)
+        and isinstance(node.value, ast.Name)
+        and node.value.id == "self"
+        and node.attr in _CANVAS_BOUND_NAMES
+    )
+
+
+def _canvas_attribute_reads(source: str) -> list[tuple[int, str]]:
+    """Services hand the canvas to access functions; they never read it."""
+    reads = []
+    for node in ast.walk(_parse_source(source)):
+        if isinstance(node, ast.Attribute) and _is_canvas_bound(node.value):
+            reads.append((node.lineno, f"{ast.unparse(node.value)}.{node.attr}"))
+        elif (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Name)
+            and node.func.id in {"getattr", "setattr", "delattr", "hasattr"}
+            and node.args
+            and _is_canvas_bound(node.args[0])
+        ):
+            reads.append(
+                (node.lineno, f"{node.func.id}({ast.unparse(node.args[0])}, ...)")
+            )
+    return reads
+
+
+def _canvas_service_modules() -> list[Path]:
+    ui = APP_ROOT / "chemvas" / "ui"
+    return sorted([*ui.glob("*_service.py"), *ui.glob("*_controller.py")])
+
+
+@pytest.mark.parametrize("path", _canvas_service_modules(), ids=lambda path: path.name)
+def test_services_reach_the_canvas_only_through_access_functions(path) -> None:
+    """A service reaches the canvas through the access functions it imports."""
+    assert _canvas_attribute_reads(path.read_text(encoding="utf-8")) == []
+
+
 @pytest.mark.parametrize(
     "method",
     [
@@ -5487,9 +5531,12 @@ CANVAS_SCENE_RESOLVERS = frozenset(
         "canvas_scene_for",
         "canvas_scene_for_item_operation",
         "optional_canvas_scene_for",
+        "scene_if_present_for",
     }
 )
 CANVAS_DETACH_BODY = "_detach_item_from_canvas_scene"
+INSERT_SMILES_MODULE = "app/chemvas/ui/insert_smiles_service.py"
+PRE_CLEAR_DETACH_BODY = "_detach_top_level_scene_items_before_clear"
 TRI_STATE_DETACH_WRAPPER = "remove_attached_item_from_canvas_scene"
 
 
@@ -5518,6 +5565,14 @@ def test_canvas_scoped_scene_detach_has_one_body() -> None:
     they answer when the canvas has no scene or the item's C++ object is gone.
     Both now pass that answer to ``_detach_item_from_canvas_scene`` as
     ``unresolved``.
+
+    ``insert_smiles_service._detach_top_level_scene_items_before_clear`` is
+    the one other function that resolves the canvas's scene and calls
+    ``removeItem``, and it asks a different question: it detaches every root
+    under blocked signals before a destructive clear so an exact rollback can
+    reattach the same wrappers. It used to call ``canvas.scene()`` directly and
+    so sat outside this rule by accident; services no longer touch the canvas
+    themselves, so it resolves through ``canvas_scene_for`` and is named here.
     """
     detachers = [
         f"{path.relative_to(APP_ROOT.parents[0])}:{line_no}: {name}"
@@ -5526,10 +5581,12 @@ def test_canvas_scoped_scene_detach_has_one_body() -> None:
     ]
 
     assert [detacher.rsplit(":", 2)[0] for detacher in detachers] == [
-        SCENE_ITEM_ACCESS_MODULE
+        INSERT_SMILES_MODULE,
+        SCENE_ITEM_ACCESS_MODULE,
     ]
     assert [detacher.rsplit(": ", 1)[1] for detacher in detachers] == [
-        CANVAS_DETACH_BODY
+        PRE_CLEAR_DETACH_BODY,
+        CANVAS_DETACH_BODY,
     ]
 
 

@@ -16,6 +16,7 @@ from chemvas.features.insertion import (
 )
 from chemvas.ui.canvas_model_access import next_atom_id_for, set_model_for
 from chemvas.ui.canvas_scene_reset_access import clear_scene_for
+from chemvas.ui.canvas_scene_state import canvas_scene_for
 from chemvas.ui.canvas_smiles_input_state import set_last_smiles_input_for
 from chemvas.ui.canvas_window_access import notify_error_for
 from chemvas.ui.history_canvas_access import (
@@ -62,7 +63,7 @@ def _detach_top_level_scene_items_before_clear(canvas) -> None:
     before the first removal so a getter failure cannot leave a partial tree.
     """
 
-    scene = canvas.scene()
+    scene = canvas_scene_for(canvas)
     if scene is None:
         return
     items = getattr(scene, "items", None)
