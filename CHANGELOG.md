@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.17.0] - 2026-09-18
+
 ### Added
 
 - `chemvas.domain.document.TSBracket`, a Qt-free record of a transition-state
@@ -14,27 +16,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `normalized_ts_bracket` (an ordered rectangle with the edges it was given)
   over the existing document schema. Each canvas keeps one record per bracket
   item; every edit and every rollback path keeps it current, and saving, undo
-  and drawing read the record (see Changed). The file format is unchanged.
+  and drawing read the record (see Changed). The file format is unchanged, and
+  0.16.0 opens a document saved by this release.
 
 ### Changed
 
 - TS brackets are saved, undone and moved as document data instead of being
   read back from their graphics items. A saved bracket now carries the values
-  the document states: a rectangle given with its corners swapped keeps 10.2
-  where Qt's read-back wrote 10.199999999999989, and moving a bracket is
-  arithmetic on its coordinates. As before, a file from another tool gets an
-  ordered rectangle on open and is stable after that; a file Chemvas already
-  saved re-saves unchanged. A move that would take a bracket past the largest
-  number a document may hold is refused instead of producing a bracket that
-  cannot be saved.
+  the document states, however its corners were given: an ordered rectangle
+  running from 78.95 to 208.83 keeps 208.83 where Qt's read-back wrote
+  208.82999999999998, and one whose corners arrive swapped keeps 10.2 where it
+  wrote 10.199999999999989. Moving a bracket is arithmetic on its coordinates.
+  As before, a file from another tool gets an ordered rectangle on open and is
+  stable after that, and a file Chemvas already saved re-saves unchanged;
+  unlike before, no edge moves on the way. A bracket drawn with the bracket
+  tool still takes the rectangle Qt computes from the drag.
+- Moving a TS bracket redraws it from the document's current bond settings
+  instead of shifting the drawing it already had, which is what a flip or an
+  undo already did. A dagger drawn before the bond length was changed is
+  therefore redrawn at its new size the first time it is moved, rather than the
+  first time it is flipped.
+- A move that would take a TS bracket past the largest number a document may
+  hold is refused instead of moving it there and leaving a document that cannot
+  be saved, which is what 0.16.0 did. A mouse drag reports that the interaction
+  could not be completed; the same refusal during a keyboard nudge ends the
+  session, as it already did for a shape.
 
 ### Fixed
 
-- A dagger or double dagger keeps the size of its glyph. A box 25 units tall
-  asks for a glyph exactly between two pixel sizes, and after a move the saved
-  height could be one floating-point step short of 25, so the glyph came back
-  a pixel smaller when the document was reopened. The size is now computed
-  with that noise rounded away.
+- A dagger or double dagger keeps the size of its glyph while the bond length
+  is unchanged. A box 25 units tall asks for a glyph exactly between two pixel
+  sizes, and after a move the stored height could be one floating-point step
+  short of 25, so the glyph came back a pixel smaller the next time the bracket
+  was drawn from that height: at once on a flip or an undo, and again when the
+  document was reopened. The size is now computed with that noise rounded away.
+  A dagger is still sized against the bond length, so lowering the bond length
+  and then moving one still redraws it smaller (see Changed).
 - Record ids are never handed out twice. Nothing in the desktop app or the
   CLI reaches this today: it needs `load_model` on a canvas that holds shapes,
   and only the SMILES preview calls that, on a throw-away canvas. There, a
@@ -54,6 +71,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   bracket kinds a document may hold. `VALID_TS_BRACKET_KINDS` in
   `chemvas.domain.document.state` is the one definition; the bracket menu is
   checked against it.
+- The `next_shape_id` field of `chemvas.ui.canvas_shape_state.CanvasShapeState`.
+  Scene record ids now come from
+  `chemvas.ui.scene_record_ids.new_scene_record_id`, a process-wide counter that
+  no rollback touches, so the store no longer carries one (see Fixed).
 
 ## [0.16.0] - 2026-09-17
 
@@ -2211,7 +2232,8 @@ housekeeping.
   `.chemvas` document type (double-clicking a file opens it in Chemvas), and a
   Linux `.desktop` entry with an `application/x-chemvas` MIME type.
 
-[Unreleased]: https://github.com/dhsohn/Chemvas/compare/v0.16.0...HEAD
+[Unreleased]: https://github.com/dhsohn/Chemvas/compare/v0.17.0...HEAD
+[0.17.0]: https://github.com/dhsohn/Chemvas/compare/v0.16.0...v0.17.0
 [0.16.0]: https://github.com/dhsohn/Chemvas/compare/v0.15.0...v0.16.0
 [0.15.0]: https://github.com/dhsohn/Chemvas/compare/v0.14.1...v0.15.0
 [0.14.1]: https://github.com/dhsohn/Chemvas/compare/v0.14.0...v0.14.1
