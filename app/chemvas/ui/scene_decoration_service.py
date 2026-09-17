@@ -40,6 +40,7 @@ from chemvas.ui.shape_record_access import (
 )
 from chemvas.ui.transactions.document import document_transaction
 from chemvas.ui.transactions.scene_item_attach import SceneItemAttachSnapshot
+from chemvas.ui.ts_bracket_record_access import ts_bracket_store_checkpoint_for
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterator, Mapping
@@ -138,16 +139,23 @@ class SceneDecorationService:
         return True
 
     def add_ts_bracket(self, rect: QRectF, *, bracket_kind: str | None = None):
-        with self._scene_add_transaction() as track:
-            bracket_kind = (
-                bracket_kind or tool_settings_state_for(self.canvas).active_bracket_type
-            )
-            item = build_ts_bracket_item_for(self.canvas, rect, bracket_kind)
-            track(item)
-            attach_scene_item(self.canvas, item)
-            self._push_add_scene_item(
-                item, ts_bracket_state_dict_for(self.canvas, item)
-            )
+        restore_ts_bracket_store = ts_bracket_store_checkpoint_for(self.canvas)
+        try:
+            with self._scene_add_transaction() as track:
+                bracket_kind = (
+                    bracket_kind
+                    or tool_settings_state_for(self.canvas).active_bracket_type
+                )
+                item = build_ts_bracket_item_for(self.canvas, rect, bracket_kind)
+                track(item)
+                attach_scene_item(self.canvas, item)
+                self._push_add_scene_item(
+                    item, ts_bracket_state_dict_for(self.canvas, item)
+                )
+        except Exception:
+            # Attaching made the record; a failed add takes it back out.
+            restore_ts_bracket_store()
+            raise
         return item
 
     def add_shape(

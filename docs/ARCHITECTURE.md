@@ -268,7 +268,7 @@ unknown-stereo marker.
 An explicit CLI style change is not that cosmetic gesture. These distinctions
 do not require another shared edit engine.
 
-### Document data ownership (shapes done; other kinds not started)
+### Document data ownership (shapes done; TS brackets under way)
 
 `MoleculeModel` owns atoms and bonds as Qt-free data, and shapes are records
 (below). Every other drawn object a document saves — ring fills, notes, marks,
@@ -308,6 +308,22 @@ a record. `test_shape_values_live_in_records_not_on_graphics_items` keeps shape
 outlines to the two modules that paint them and keeps the old item-side reader
 from coming back. The same steps — record, store kept in step, reads flipped,
 item emptied — are the template for the remaining kinds.
+
+TS brackets are at the second step. `chemvas.domain.document.TSBracket` is
+the record, and each canvas has a bracket store (`CanvasTSBracketState`, in the
+same two rollback field lists as the shape store) with a runtime id on every
+bracket item. The item is still the source of truth: the three places that
+change what a bracket is — attaching it (tool, open, paste, undo re-creation and
+re-attachment), `CanvasMoveController.move_item`, and
+`SceneItemController.apply_scene_item_state` (undo, redo, flip, rotate) — call
+`sync_ts_bracket_record_for` afterwards, and saving, undo and drawing read the
+item as before. Record lifetime follows the shape rule: records go when a new
+document discards history, and ids come from `new_scene_record_id`. Two more
+things remove a record in this step: a failed add takes back the one attaching
+made, and a bracket whose rectangle is no longer finite has none, because no
+document could hold it; the third step has to refuse such an edit instead.
+`tests/test_ts_bracket_store_sync.py` checks after every operation that each
+attached bracket has a record saying what its item says.
 
 ## Composite Grouping
 

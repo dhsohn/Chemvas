@@ -12,8 +12,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `chemvas.domain.document.TSBracket`, a Qt-free record of a transition-state
   bracket, with `ts_bracket_from_state`, `ts_bracket_to_state` and
   `normalized_ts_bracket` (an ordered rectangle with the edges it was given)
-  over the existing document schema. The desktop editor does not use it yet;
-  the file format is unchanged.
+  over the existing document schema. Each canvas keeps one record per bracket
+  item, kept current by every path that attaches, moves or re-states a
+  bracket and put back by the document savepoint, a failed open and a failed
+  add. Saving, undo and drawing still read the item, so behaviour and saved
+  files are unchanged.
 
 ### Fixed
 

@@ -110,6 +110,7 @@ from chemvas.ui.transactions.scene_rect import (
     SceneRectStateSnapshot,
     scene_rect_is_automatic,
 )
+from chemvas.ui.ts_bracket_record_access import clear_ts_bracket_records_for
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -141,6 +142,7 @@ _DOCUMENT_MUTATED_RUNTIME_FIELDS = (
     "hover_preview_state",
     "scene_items_state",
     "shape_state",
+    "ts_bracket_state",
     "smiles_input_state",
 )
 
@@ -598,6 +600,7 @@ class CanvasDocumentSessionService:
         # come back; only then are the old records unreachable. Clearing the
         # scene alone (a structure load keeps history) must leave them.
         clear_shape_records_for(self.canvas)
+        clear_ts_bracket_records_for(self.canvas)
         set_calculation_plan_for(self.canvas, state.get("calculation_plan"))
         apply_document_settings(self.canvas, state)
         set_model_for(self.canvas, deserialize_model_state(state["model"]))

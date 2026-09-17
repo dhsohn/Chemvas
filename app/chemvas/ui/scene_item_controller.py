@@ -53,6 +53,7 @@ from chemvas.ui.scene_item_state import (
     apply_scene_item_state as apply_scene_item_state_helper,
 )
 from chemvas.ui.shape_record_access import record_shape_state
+from chemvas.ui.ts_bracket_record_access import sync_ts_bracket_record_for
 
 if TYPE_CHECKING:
     from chemvas.ui.canvas_view import CanvasView
@@ -241,6 +242,7 @@ class SceneItemController:
             orbital_base_handle_dist=self._orbital_base_handle_dist(),
             set_arrow_labels=self._set_arrow_labels,
         )
+        sync_ts_bracket_record_for(self.canvas, item)
 
 
 __all__ = ["SceneItemController"]

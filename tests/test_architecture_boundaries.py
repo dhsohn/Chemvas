@@ -4485,6 +4485,7 @@ EXPECTED_RUNTIME_STATE_ACCESSORS = {
     "canvas_rotation_state.py:rotation_state_for",
     "canvas_scene_items_state.py:scene_items_state_for",
     "canvas_shape_state.py:shape_state_for",
+    "canvas_ts_bracket_state.py:ts_bracket_state_for",
     "canvas_smiles_input_state.py:smiles_input_state_for",
     "canvas_text_style_state.py:text_style_state_for",
     "canvas_tool_settings_state.py:tool_settings_state_for",
