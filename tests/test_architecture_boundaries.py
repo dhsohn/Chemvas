@@ -1356,10 +1356,11 @@ def test_production_canvas_service_container_lookup_is_canonical() -> None:
 CANVAS_SERVICE_CONTAINER_RESOLVERS = (
     # Defines canvas_services_for and re-exports it.
     "app/chemvas/ui/canvas_service_access.py",
-    # Ports modules: the documented owners of container resolution.
+    # Ports modules: the documented owners of container resolution. The
+    # window ports compose the active canvas with these; they do not resolve
+    # the container themselves.
     "app/chemvas/ui/canvas_service_ports.py",
     "app/chemvas/ui/canvas_view_ports.py",
-    "app/chemvas/ui/main_window_ports.py",
 )
 
 
@@ -2081,7 +2082,6 @@ def test_production_canvas_service_consumers_use_grouped_runtime_api() -> None:
                     and owner.func.id
                     in {
                         "active_canvas_services_for",
-                        "_active_canvas_services_for_window",
                         "build_canvas_services",
                         "canvas_services_for",
                     }

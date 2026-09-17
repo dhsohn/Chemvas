@@ -45,6 +45,11 @@ def _canvas_with_service(service_name: str, service):
         (ports.scene_item_controller_for_access, "scene_item_controller"),
         (ports.scene_reset_service_for_access, "canvas_scene_reset_service"),
         (ports.selection_service_for_access, "selection_controller"),
+        (ports.style_controller_for_access, "style_controller"),
+        (ports.color_mutation_service_for_access, "canvas_color_mutation_service"),
+        (ports.scene_clipboard_controller_for_access, "scene_clipboard_controller"),
+        (ports.scene_delete_controller_for_access, "scene_delete_controller"),
+        (ports.tool_controller_for_access, "tool_controller"),
         (ports.structure_build_service_for_access, "structure_build_service"),
     ],
 )

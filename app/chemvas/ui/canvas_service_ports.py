@@ -16,6 +16,7 @@ if TYPE_CHECKING:
     from chemvas.ui.canvas_arrow_build_service import CanvasArrowBuildService
     from chemvas.ui.canvas_atom_mutation_service import CanvasAtomMutationService
     from chemvas.ui.canvas_bond_mutation_service import CanvasBondMutationService
+    from chemvas.ui.canvas_color_mutation_service import CanvasColorMutationService
     from chemvas.ui.canvas_document_session_service import CanvasDocumentSessionService
     from chemvas.ui.canvas_geometry_controller import CanvasGeometryController
     from chemvas.ui.canvas_history_recording_service import (
@@ -31,17 +32,21 @@ if TYPE_CHECKING:
         CanvasSceneDecorationBuildService,
     )
     from chemvas.ui.canvas_scene_reset_service import CanvasSceneResetService
+    from chemvas.ui.canvas_style_controller import CanvasStyleController
     from chemvas.ui.canvas_tool_mode_controller import CanvasToolModeController
     from chemvas.ui.curved_arrow_path_service import CurvedArrowPathService
     from chemvas.ui.handle_mutation_service import HandleMutationService
     from chemvas.ui.handle_overlay_service import HandleOverlayService
     from chemvas.ui.history_operations import CanvasHistoryOperations
     from chemvas.ui.insert_controller import InsertController
+    from chemvas.ui.scene_clipboard_controller import SceneClipboardController
     from chemvas.ui.scene_decoration_service import SceneDecorationService
+    from chemvas.ui.scene_delete_controller import SceneDeleteController
     from chemvas.ui.scene_item_controller import SceneItemController
     from chemvas.ui.scene_transform_controller import SceneTransformController
     from chemvas.ui.selection_controller import SelectionController
     from chemvas.ui.structure_build_service import StructureBuildService
+    from chemvas.ui.tool_controller import ToolController
 
 
 def arrow_build_service_for_access(canvas) -> CanvasArrowBuildService:
@@ -150,10 +155,31 @@ def structure_mutation_bond_service(canvas) -> CanvasBondMutationService:
     return canvas_services_for(canvas).structure.canvas_bond_mutation_service
 
 
+def style_controller_for_access(canvas) -> CanvasStyleController:
+    return canvas_services_for(canvas).scene_operations.style_controller
+
+
+def color_mutation_service_for_access(canvas) -> CanvasColorMutationService:
+    return canvas_services_for(canvas).scene_operations.canvas_color_mutation_service
+
+
+def scene_clipboard_controller_for_access(canvas) -> SceneClipboardController:
+    return canvas_services_for(canvas).scene_operations.scene_clipboard_controller
+
+
+def scene_delete_controller_for_access(canvas) -> SceneDeleteController:
+    return canvas_services_for(canvas).scene_operations.scene_delete_controller
+
+
+def tool_controller_for_access(canvas) -> ToolController:
+    return canvas_services_for(canvas).tool_controller
+
+
 __all__ = [
     "arrow_build_service_for_access",
     "atom_label_service_for_access",
     "canvas_window_document_session_service",
+    "color_mutation_service_for_access",
     "curved_arrow_path_service_for_access",
     "geometry_controller_for_access",
     "handle_mutation_service_for_access",
@@ -167,8 +193,10 @@ __all__ = [
     "move_controller_for_access",
     "note_controller_for_access",
     "ring_fill_scene_service_for_access",
+    "scene_clipboard_controller_for_access",
     "scene_decoration_build_service_for_access",
     "scene_decoration_service_for_access",
+    "scene_delete_controller_for_access",
     "scene_item_controller_for_access",
     "scene_reset_service_for_access",
     "scene_transform_controller_for_access",
@@ -176,4 +204,6 @@ __all__ = [
     "structure_build_service_for_access",
     "structure_mutation_atom_service",
     "structure_mutation_bond_service",
+    "style_controller_for_access",
+    "tool_controller_for_access",
 ]

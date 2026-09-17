@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- The main-window ports no longer resolve the canvas service container. Each
+  window getter composes the active canvas with a canvas service port and
+  returns the concrete type; five ports the window side needed are added to
+  `canvas_service_ports`, and `main_window_ports` leaves the resolver
+  exemption list, so the container layout is named in one module.
 - The canvas service ports return the concrete service types instead of
   `Any`, so the container types named earlier reach the access modules that
   use them, and four alias ports that resolved a path another port already
