@@ -36,6 +36,7 @@ from .images import (
 )
 from .model import Atom, Bond, MoleculeModel
 from .plan_validation import validate_calculation_plan, validated_plan_and_inventory
+from .shapes import Shape, shape_from_state, shape_to_state
 from .state import (
     ARC_KIND_SWEEPS,
     ARROW_LABEL_SIDES,
@@ -106,6 +107,7 @@ __all__ = [
     "CalculationStep",
     "CalculationStepEndpoint",
     "MoleculeModel",
+    "Shape",
     "atom_shows_itself",
     "atom_to_state",
     "bond_endpoint_ids",
@@ -132,6 +134,8 @@ __all__ = [
     "serialize_model_state",
     "serialize_model_state_with_warnings",
     "serialize_settings",
+    "shape_from_state",
+    "shape_to_state",
     "validate_calculation_plan",
     "validate_clipboard_selection_payload",
     "validate_image_collection_budget",
