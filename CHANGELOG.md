@@ -7,86 +7,84 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.16.0] - 2026-09-17
+
+**Compatibility.** `pack-step` now writes `chemistry/elementary-step` v2:
+`endpoint_pair` is gone for every step, single-component ones included, and
+validating the artifact needs `machine-contracts` v1.1.0 or later. The three
+precomplex commands are removed; precomplex data already stored in a document
+is kept but no longer used. Graph Patch `remove_bond` now deletes the atoms it
+leaves bare, so a v1 patch that referred to such an atom afterwards is
+rejected. Details are under Changed and Removed.
+
 ### Added
 
 - `chemvas.domain.document.Shape`, a Qt-free record of a free decorative
-  shape, with `shape_from_state` and `shape_to_state` over the existing
-  document schema. It is the first step of moving the source of truth for
-  non-molecular objects off the graphics items; the file format is
-  unchanged.
-- A per-canvas shape store kept in step with the shape items. Every shape item
-  carries a runtime id, every edit path updates the shape's `Shape` record
-  (`normalized_shape` defines the canonical form: the rules the desktop has
-  applied through Qt, without Qt's opacity quantisation or edge drift), and
-  every rollback path restores the store. Saving, undo and
-  rendering still read the item, so behaviour and saved files are unchanged.
+  shape, with `shape_from_state`, `shape_to_state` and `normalized_shape` over
+  the existing document schema. Each canvas keeps one record per shape item;
+  every edit path and every rollback path keeps it current, and saving, undo
+  and drawing read the record (see Changed). The file format is unchanged.
 
 ### Changed
 
+- `pack-step` now writes payload `chemistry/elementary-step` v2, which requires
+  `machine-contracts` v1.1.0 or later to validate. `endpoint_pair` is replaced by
+  `endpoint_geometry`: each included component is embedded separately by RDKit
+  and published with its role, Chemvas atom IDs, canonical `atom_indices`,
+  formal charge, radical and electron counts, and exact XYZ. The bond changes
+  repeated under `reaction_center` carry the atom indices of their two atoms.
+  No relative placement of components
+  is provided, and per-component multiplicity is not inferred. Operation IDs use
+  a new digest, so artifacts from this version never share an ID with v1
+  artifacts for the same step.
+- Hand off multicomponent elementary steps without a precomplex. A drawing does
+  not determine how separate molecules sit against each other, so `pack-step`
+  no longer requires generated or reviewed placements. A step is ready once its
+  source mapping is complete and both endpoints share charge and multiplicity,
+  whatever the number of included components.
+- Graph Patch and whole-document Save or Export no longer check reviewed
+  precomplex pairs. The "Calculation Plan Needs Attention" prompt now appears
+  only for an invalid or stale plan.
+- Graph Patch `remove_bond` now removes an endpoint the removal leaves with
+  no bond, no label and no mark, with its perspective coordinate and group
+  membership, and drops any ring fill that no longer forms a bonded cycle,
+  using the same rules as deleting the bond in the desktop editor. Before,
+  the patch kept such an atom as an invisible implicit carbon. The operation
+  report gains `removed_atom_ids` and `removed_ring_fill_count`, and
+  `inspect-document` advertises `remove_bond_removes_bare_atoms`. This changes
+  the result of existing v1 patches: a later operation in the same patch that
+  refers to the removed atom now fails with "atom N does not exist", so add
+  the new bond before removing the old one, and a patch is rejected if a
+  Calculation Plan still references a removed atom.
 - Shapes are saved, undone and edited as document data instead of being read
   back from their graphics items. A saved shape now carries the values the
   document states: an opacity of 0.25 is written as 0.25 (Qt's read-back used
   to write 0.2500038146972656), an edge no longer drifts by a floating-point
-  unit on save, and moving a shape is arithmetic on its coordinates. A file
-  from another tool is made canonical once on open (ordered rectangle,
-  lowercase six-digit fill with an explicit opacity) and is stable after that;
-  a file Chemvas already saved re-saves unchanged. The file format is the
-  same.
-- A shape's graphics item now carries only its kind and a runtime id. The
-  rectangle, kind and stroke it used to mirror are gone, the item-side state
-  reader is removed, a shape drawn with the tool gets its record from how it was
-  drawn, and an item without a record cannot be attached. Architecture tests
-  keep shape outlines to the two modules that paint them.
-- The main-window ports no longer resolve the canvas service container. Each
-  window getter composes the active canvas with a canvas service port and
-  returns the concrete type; five ports the window side needed are added to
-  `canvas_service_ports`, and `main_window_ports` leaves the resolver
-  exemption list, so the container layout is named in one module.
-- The canvas service ports return the concrete service types instead of
-  `Any`, so the container types named earlier reach the access modules that
-  use them, and four alias ports that resolved a path another port already
-  named are removed (`structure_insert_build_service_for_access`,
-  `structure_mutation_build_service`, `history_atom_mutation_service_for`,
-  `history_bond_mutation_service_for`). An architecture test keeps one name
-  per container path in that module, rejects aliases written as delegating
-  functions or module-level assignments, and requires every return type to be
-  a concrete class. The four access wrappers that pass a port's result on and
-  `CanvasHistoryService.operations` carry the type too.
-- Canvas input events travel one hop less. `CanvasView`'s event overrides ask
-  the view port for the input or pointer controller and call it, keeping the
-  fallback to Qt while services are not attached yet and the exception
-  containment around mouse handlers; `canvas_view_event_router`, which only
-  forwarded, is removed, and its two scene-selection callbacks live beside
-  the callback state. Hit testing receives the view's `viewportTransform` by
-  injection, so the one-line `viewport_transform_for` accessor is gone too.
-- `CanvasRuntimeServices` names the concrete type of all fourteen fields
-  instead of declaring thirteen of them `Any`. The architecture rule that
-  forced the `Any` — no cycle through the history/transaction cluster, even
-  an annotation-only one — now counts eager and lazy imports and leaves
-  `TYPE_CHECKING` edges out; runtime cycles stay forbidden, and core history
-  still may not import the UI in any form. `build_canvas_services` and the
-  window ports carry the container's type through instead of `Any`, and
-  `Tool.canvas` is annotated explicitly because mypy resolves the new
-  annotation-only cycle as one unit.
-- `DocumentSavepoint` no longer snapshots `pushed_commands`, an attribute only
-  lightweight test canvases have. Recovery covers the state the product owns,
-  as ADR 0002 decided; no test relied on the capture.
-- Services and controllers no longer touch the canvas directly. The 21
-  remaining direct attribute accesses (reads, writes and method calls) —
-  viewport rect, transform and pan capture and
-  restore in the document session service, hit-testing's viewport
-  transform, scene and model lookups, and the frame style set when a tab
-  creates a canvas — now go through access functions
-  (`chemvas.ui.canvas_viewport_access` is new), and an architecture test
-  bans any attribute read on a canvas-bound name in `ui/*_service.py` and
-  `ui/*_controller.py`. The state a service can touch is exactly the
-  accessors it imports; `docs/ARCHITECTURE.md` says so.
+  unit on save, and moving a shape is arithmetic on its coordinates. As
+  before, a file from another tool is made canonical on open (ordered
+  rectangle, lowercase six-digit fill with an explicit opacity) and is stable
+  after that; a file Chemvas already saved re-saves unchanged. The file
+  format is the same, and 0.15.0 opens files saved by this version.
+- Stack hydride labels tightly. When the hydrogens of an `OH`, `NH2` or
+  `CH3` label sit on their own line above or below the element, that line
+  now starts a quarter of a capital height from the element's ink instead
+  of a full font box away, so the two lines read as one label. A
+  subscript in the upper line keeps its own clearance.
+- Decide what a bond removal takes with it in one place. The atoms it leaves
+  bare and the ring fills it breaks are now computed by Qt-free rules in
+  `chemvas.domain.document` (`orphaned_atom_ids`, `broken_ring_fill_indices`,
+  `ring_fill_is_intact`, with `bond_endpoint_ids` and `atom_shows_itself`),
+  and the single-bond, selection and eraser delete paths all call them instead
+  of each keeping its own copy. Desktop delete behaviour is unchanged; Graph
+  Patch `remove_bond` uses the same rules (above).
 - Move the Calculation Plan consistency rules (declared charge versus
   component charges, matching element labels across a mapping) and the
   RDKit conversion records (`AtomMapEntry`, `CalculationArtifacts`) into
-  `chemvas.domain.document`. Saving, Graph Patch and the RDKit adapter no
-  longer import the calculation feature; a dependency test keeps it that
-  way. `chemvas.features.calculation_bundle` still exports the same names.
+  `chemvas.domain.document`, which also exports `validate_calculation_plan`
+  and `validated_plan_and_inventory`. Saving, Graph Patch and the RDKit
+  adapter no longer import the calculation feature; a dependency test keeps
+  it that way. `chemvas.features.calculation_bundle` still exports the same
+  names.
 - State in `docs/DOCUMENT_COMPATIBILITY.md` that calculation data carried by a
   document is preserved with or without the RDKit backend, and which facts
   (component membership, mapped atoms, declared charges, mapped-atom labels)
@@ -100,24 +98,55 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   a `min_reader` release to the wrapper, readers judge support by revision
   and name the release that can open a newer file, and v7 stays frozen
   without a revision number. Policy only; no format change ships here.
-- Graph Patch `remove_bond` now removes an endpoint the removal leaves with
-  no bond, no label and no mark, with its perspective coordinate and group
-  membership, and drops any ring fill that no longer forms a bonded cycle,
-  using the same rules as deleting the bond in the desktop editor. Before,
-  the patch kept such an atom as an invisible implicit carbon. The operation
-  report gains `removed_atom_ids` and `removed_ring_fill_count`, and
-  `inspect-document` advertises `remove_bond_removes_bare_atoms`.
-- Decide what a bond removal takes with it in one place. The atoms it leaves
-  bare and the ring fills it breaks are now computed by Qt-free rules in
-  `chemvas.domain.document` (`orphaned_atom_ids`, `broken_ring_fill_indices`,
-  `ring_fill_is_intact`), and the single-bond, selection and eraser delete
-  paths all call them instead of each keeping its own copy. Behaviour is
-  unchanged; Graph Patch follows in a later change.
-- Stack hydride labels tightly. When the hydrogens of an `OH`, `NH2` or
-  `CH3` label sit on their own line above or below the element, that line
-  now starts a quarter of a capital height from the element's ink instead
-  of a full font box away, so the two lines read as one label. A
-  subscript in the upper line keeps its own clearance.
+
+The remaining entries are internal and change nothing a user or a document
+can observe.
+
+- A shape's graphics item carries only its kind and a runtime id. The
+  rectangle, kind and stroke it used to mirror are gone, the item-side state
+  reader is removed, a shape drawn with the tool gets its record from how it was
+  drawn, and an item without a record cannot be attached. Architecture tests
+  keep shape outlines to the two modules that paint them.
+- The main-window ports no longer resolve the canvas service container. Each
+  window getter composes the active canvas with a canvas service port and
+  returns the concrete type; five ports the window side needed are added to
+  `canvas_service_ports`, and `main_window_ports` leaves the resolver
+  exemption list, so the container layout is named in one module.
+- The canvas service ports return the concrete service types instead of
+  `Any`, and four alias ports that resolved a path another port already
+  named are removed (`structure_insert_build_service_for_access`,
+  `structure_mutation_build_service`, `history_atom_mutation_service_for`,
+  `history_bond_mutation_service_for`). An architecture test keeps one name
+  per container path in that module, rejects aliases written as delegating
+  functions or module-level assignments, and requires every return type to be
+  a concrete class. The four access wrappers that pass a port's result on and
+  `CanvasHistoryService.operations` carry the type too.
+- Canvas input events travel one hop less. `CanvasView`'s event overrides ask
+  the view port for the input or pointer controller and call it, keeping the
+  fallback to Qt while services are not attached yet and the exception
+  containment around mouse handlers; `canvas_view_event_router`, which only
+  forwarded, is removed, and its two scene-selection callbacks live beside
+  the callback state. Hit testing receives the view's `viewportTransform` by
+  injection.
+- `CanvasRuntimeServices` names the concrete type of all fourteen fields
+  instead of declaring thirteen of them `Any`. The architecture rule that
+  forced the `Any` — no cycle through the history/transaction cluster, even
+  an annotation-only one — now counts eager and lazy imports and leaves
+  `TYPE_CHECKING` edges out; runtime cycles stay forbidden, and core history
+  still may not import the UI in any form. `build_canvas_services` carries
+  the container's type through instead of `Any`, and `Tool.canvas` is
+  annotated explicitly because mypy resolves the new annotation-only cycle as
+  one unit.
+- `DocumentSavepoint` no longer snapshots `pushed_commands`, an attribute only
+  lightweight test canvases have. Recovery covers the state the product owns,
+  as ADR 0002 decided; no test relied on the capture.
+- Services and controllers reach the canvas through access functions
+  (`chemvas.ui.canvas_viewport_access` is new) for viewport rect, transform
+  and pan capture and restore in the document session service, scene and
+  model lookups, and the frame style set when a tab creates a canvas. An
+  architecture test bans attribute reads on the names `canvas` and
+  `self.canvas` in `ui/*_service.py` and `ui/*_controller.py`;
+  `docs/ARCHITECTURE.md` describes the rule.
 
 ### Fixed
 
@@ -125,39 +154,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   was hidden. Hiding the label left the atom flagged as labelled, so orphan
   cleanup kept an invisible atom that Delete could not remove and that
   reappeared as `C` on reopening. A hidden carbon is now implicit.
-- Delete on a labelled atom without bonds removes the atom. Stripping the
-  label there produced an invisible carbon instead; bonded atoms keep the
-  label-first behaviour.
-- Hand off multicomponent elementary steps without a precomplex. A drawing does
-  not determine how separate molecules sit against each other, so `pack-step`
-  no longer requires generated or reviewed placements. A step is ready once its
-  source mapping is complete and both endpoints share charge and multiplicity,
-  whatever the number of included components.
-- `pack-step` now writes payload `chemistry/elementary-step` v2, which requires
-  `machine-contracts` v1.1.0 or later to validate. `endpoint_pair` is replaced by
-  `endpoint_geometry`: each included component is embedded separately by RDKit
-  and published with its role, Chemvas atom IDs, canonical `atom_indices`,
-  formal charge, radical and electron counts, and exact XYZ. The bond changes
-  repeated under `reaction_center` carry the atom indices of their two atoms.
-  No relative placement of components
-  is provided, and per-component multiplicity is not inferred. Operation IDs use
-  a new digest, so artifacts from this version never share an ID with v1
-  artifacts for the same step.
-- Graph Patch and whole-document Save or Export no longer check reviewed
-  precomplex pairs. The "Calculation Plan Needs Attention" prompt now appears
-  only for an invalid or stale plan.
+- Delete over a hovered labelled atom without bonds removes the atom.
+  Stripping the label there produced an invisible carbon instead; bonded
+  atoms keep the label-first behaviour.
 
 ### Removed
 
 - The `generate-precomplex`, `inspect-precomplex` and `select-precomplex`
-  commands, rigid-placement candidate generation, and reviewed-pair validation,
-  including the `multicomponent_precomplex_*` and
-  `precomplex_endpoint_topology_not_supported` blocking reasons. The Python
+  commands and the `chemvas.features.precomplex_generation` package
+  (rigid-placement candidate generation), reviewed-pair validation, the
+  `multicomponent_precomplex_*` and
+  `precomplex_endpoint_topology_not_supported` blocking reasons, and the
+  handoff codes `chemvas/precomplex_contact_graph_incomplete`,
+  `chemvas/precomplex_no_candidates_survived` and
+  `chemvas/precomplex_unsupported_radius`. The Python
   exports `precomplex_basis_sha256`, `validate_reviewed_precomplex_pair` and
-  `validate_reviewed_precomplex_pairs` are gone, and `path_precheck` no longer
-  accepts `document_state`. Documents that already store
-  precomplex candidates or reviews still open, and saving keeps that data
-  unchanged, but calculation handoff ignores it.
+  `validate_reviewed_precomplex_pairs` are gone, as are the
+  `CalculationStepPreparation` methods of the first two names, and
+  `path_precheck` no longer accepts `document_state`. Documents that already
+  store precomplex candidates or reviews still open, and saving keeps that
+  data unchanged, but calculation handoff ignores it. As before, editing a
+  step in the Calculation dialog clears that step's stored precomplex data,
+  which can no longer be recreated.
 
 ## [0.15.0] - 2026-09-14
 
@@ -2145,7 +2163,8 @@ housekeeping.
   `.chemvas` document type (double-clicking a file opens it in Chemvas), and a
   Linux `.desktop` entry with an `application/x-chemvas` MIME type.
 
-[Unreleased]: https://github.com/dhsohn/Chemvas/compare/v0.15.0...HEAD
+[Unreleased]: https://github.com/dhsohn/Chemvas/compare/v0.16.0...HEAD
+[0.16.0]: https://github.com/dhsohn/Chemvas/compare/v0.15.0...v0.16.0
 [0.15.0]: https://github.com/dhsohn/Chemvas/compare/v0.14.1...v0.15.0
 [0.14.1]: https://github.com/dhsohn/Chemvas/compare/v0.14.0...v0.14.1
 [0.14.0]: https://github.com/dhsohn/Chemvas/compare/v0.13.0...v0.14.0
