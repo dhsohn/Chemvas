@@ -4,7 +4,8 @@ from functools import partial, wraps
 from typing import TYPE_CHECKING, Any, ClassVar
 
 from chemvas.domain.document import VALID_LINE_KINDS
-from chemvas.features.annotations import BRACKET_KIND_VALUES, SHAPE_KINDS, STROKE_STYLES
+from chemvas.domain.document.state import VALID_TS_BRACKET_KINDS
+from chemvas.features.annotations import SHAPE_KINDS, STROKE_STYLES
 from chemvas.ui.annotation_style_service import apply_annotation_style_for
 from chemvas.ui.canvas_callback_state import callback_state_for
 from chemvas.ui.canvas_insert_state import insert_state_for
@@ -118,7 +119,7 @@ class CanvasToolModeController:
         self._refresh_tool_mode()
 
     def set_bracket_type(self, bracket_type: str) -> None:
-        if bracket_type not in BRACKET_KIND_VALUES:
+        if bracket_type not in VALID_TS_BRACKET_KINDS:
             return
         self._cancel_active_insert_modes()
         set_tool_setting_for(self.canvas, "active_bracket_type", bracket_type)

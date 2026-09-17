@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `chemvas.domain.document.TSBracket`, a Qt-free record of a transition-state
+  bracket, with `ts_bracket_from_state`, `ts_bracket_to_state` and
+  `normalized_ts_bracket` (an ordered rectangle with the edges it was given)
+  over the existing document schema. The desktop editor does not use it yet;
+  the file format is unchanged.
+
+### Removed
+
+- `chemvas.features.annotations.BRACKET_KIND_VALUES`, a second copy of the
+  bracket kinds a document may hold. `VALID_TS_BRACKET_KINDS` in
+  `chemvas.domain.document.state` is the one definition; the bracket menu is
+  checked against it.
+
 ## [0.16.0] - 2026-09-17
 
 **Compatibility.** `pack-step` now writes `chemistry/elementary-step` v2:
