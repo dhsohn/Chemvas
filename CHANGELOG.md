@@ -11,7 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Canvas input events travel one hop less. `CanvasView`'s event overrides ask
   the view port for the input or pointer controller and call it, keeping the
-  fall back to Qt while services are not attached yet and the exception
+  fallback to Qt while services are not attached yet and the exception
   containment around mouse handlers; `canvas_view_event_router`, which only
   forwarded, is removed, and its two scene-selection callbacks live beside
   the callback state. Hit testing receives the view's `viewportTransform` by

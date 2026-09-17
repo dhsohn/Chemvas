@@ -97,19 +97,36 @@ def test_pointer_override_falls_back_to_qt_before_services_are_attached(
     base.assert_called_once_with(event)
 
 
-def test_a_failing_mouse_handler_is_contained_at_the_qt_boundary(view) -> None:
+@pytest.mark.parametrize(("override", "handler", "base_keyword"), POINTER_OVERRIDES[:4])
+def test_a_failing_mouse_handler_is_contained_at_the_qt_boundary(
+    view, override, handler, base_keyword
+) -> None:
     controller = SimpleNamespace(
-        mouse_press_event=mock.Mock(side_effect=RuntimeError("tool failed"))
+        **{handler: mock.Mock(side_effect=RuntimeError("tool failed"))}
     )
     event = SimpleNamespace(accept=mock.Mock())
 
     with (
         _attached(pointer=controller),
-        mock.patch.object(QGraphicsView, "mousePressEvent", new=mock.Mock()),
+        mock.patch.object(QGraphicsView, override, new=mock.Mock()),
     ):
-        view.mousePressEvent(event)
+        getattr(view, override)(event)
 
     event.accept.assert_called_once_with()
+
+
+def test_only_the_mouse_overrides_contain_exceptions(view) -> None:
+    """A wheel failure is not swallowed: the containment is four overrides wide."""
+    controller = SimpleNamespace(
+        wheel_event=mock.Mock(side_effect=RuntimeError("zoom failed"))
+    )
+
+    with (
+        _attached(pointer=controller),
+        mock.patch.object(QGraphicsView, "wheelEvent", new=mock.Mock()),
+        pytest.raises(RuntimeError, match="zoom failed"),
+    ):
+        view.wheelEvent(SimpleNamespace(accept=mock.Mock()))
 
 
 def test_viewport_event_passes_the_timer_and_returns_the_controller_answer(

@@ -43,7 +43,7 @@ ARROW_PICK_SCREEN_PX = 6.0
 
 class CanvasHitTestingService:
     def __init__(
-        self, canvas: CanvasView, *, scene_pos_mapper=None, viewport_transform=None
+        self, canvas: CanvasView, *, viewport_transform, scene_pos_mapper=None
     ) -> None:
         self.canvas = canvas
         self._scene_pos_mapper = scene_pos_mapper
@@ -151,10 +151,6 @@ class CanvasHitTestingService:
         return other_item
 
     def _arrow_near(self, pos: QPointF, *, stop_at=None):
-        if not callable(self._viewport_transform):
-            raise AttributeError(
-                "CanvasHitTestingService requires an injected viewport_transform"
-            )
         view_transform = self._viewport_transform()
         inverse, invertible = view_transform.inverted()
         if not invertible:

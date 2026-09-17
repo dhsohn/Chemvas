@@ -39,8 +39,9 @@ class CanvasView(QGraphicsView):
 
     Qt can deliver events while the view is still being set up, before the
     services are attached; every override then falls back to the base
-    handler. The base handler is looked up first in each override, so it
-    is the same bound method whether or not a controller takes the event.
+    handler. Only the four mouse overrides contain exceptions: an exception
+    escaping a Python override of a Qt virtual is fatal, and a failed
+    pointer gesture is the one the user can simply retry.
     """
 
     FILE_FORMAT_VERSION = CANVAS_FILE_VERSION
