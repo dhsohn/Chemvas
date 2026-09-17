@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from PyQt6 import sip
 from PyQt6.QtCore import QObject
 from PyQt6.QtWidgets import QGraphicsItem
@@ -7,8 +9,11 @@ from PyQt6.QtWidgets import QGraphicsItem
 from chemvas.ui.canvas_scene_state import canvas_scene_for, optional_canvas_scene_for
 from chemvas.ui.canvas_service_ports import scene_item_controller_for_access
 
+if TYPE_CHECKING:
+    from chemvas.ui.scene_item_controller import SceneItemController
 
-def scene_item_controller(canvas):
+
+def scene_item_controller(canvas) -> SceneItemController:
     return scene_item_controller_for_access(canvas)
 
 

@@ -1,12 +1,17 @@
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from chemvas.domain.document import atom_shows_itself
 from chemvas.ui.canvas_atom_graphics_state import atom_items_for
 from chemvas.ui.canvas_model_access import atom_for_id
 from chemvas.ui.canvas_service_ports import atom_label_service_for_access
 
+if TYPE_CHECKING:
+    from chemvas.ui.atom_label_service import AtomLabelService
 
-def atom_label_service(canvas):
+
+def atom_label_service(canvas) -> AtomLabelService:
     return atom_label_service_for_access(canvas)
 
 

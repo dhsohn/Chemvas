@@ -1,8 +1,8 @@
-"""The one map from a role to its place in the canvas service container.
+"""A map from a role to its place in the canvas service container.
 
-Access modules ask for a service by role; only this module knows which bundle
+Access modules ask for a service by role and this module knows which bundle
 holds it. Each container path has exactly one name here and every port returns
-the concrete service type, so a caller is checked against the service it gets.
+the concrete service type.
 """
 
 from __future__ import annotations
