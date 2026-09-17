@@ -25,7 +25,6 @@ from chemvas.ui.canvas_scene_items_state import shape_items_for
 from chemvas.ui.canvas_shape_state import shape_state_for
 from chemvas.ui.handle_state import active_handles_for
 from chemvas.ui.shape_record_access import (
-    set_shape_record_for,
     shape_id_for_item,
     shape_record_for,
     shape_rect_of,
@@ -251,7 +250,6 @@ def test_a_failed_open_puts_the_store_back(canvas) -> None:
     session = canvas.services.document.canvas_document_session_service
     item = _add_shape(canvas)
     before_records = dict(shape_state_for(canvas).records)
-    before_next_id = shape_state_for(canvas).next_shape_id
     other = session.snapshot_state()
     other["shapes"] = [
         {**other["shapes"][0], "left": 300.0, "right": 340.0},
@@ -271,7 +269,6 @@ def test_a_failed_open_puts_the_store_back(canvas) -> None:
 
     assert shape_items_for(canvas) == [item]
     assert shape_state_for(canvas).records == before_records
-    assert shape_state_for(canvas).next_shape_id == before_next_id
     assert_store_matches_items(canvas)
 
 
@@ -279,7 +276,6 @@ def test_a_rolled_back_transaction_puts_the_store_back(canvas) -> None:
     services = canvas.services
     item = _add_shape(canvas)
     before_records = dict(shape_state_for(canvas).records)
-    before_next_id = shape_state_for(canvas).next_shape_id
 
     with (
         pytest.raises(RuntimeError, match="gesture failed"),
@@ -292,7 +288,6 @@ def test_a_rolled_back_transaction_puts_the_store_back(canvas) -> None:
 
     assert shape_items_for(canvas) == [item]
     assert shape_state_for(canvas).records == before_records
-    assert shape_state_for(canvas).next_shape_id == before_next_id
     assert_store_matches_items(canvas)
 
 
@@ -339,12 +334,18 @@ def test_a_failed_fill_of_one_shape_leaves_no_fill_in_its_record(canvas) -> None
     assert_store_matches_items(canvas)
 
 
-def test_an_item_that_arrives_with_an_id_never_meets_a_fresh_one(canvas) -> None:
-    item = _add_shape(canvas)
-    shape_state_for(canvas).next_shape_id = 1
+def test_a_rolled_back_shape_does_not_give_its_id_to_the_next_one(canvas) -> None:
+    services = canvas.services
+    rolled_back = []
 
-    set_shape_record_for(canvas, item, shape_record_for(canvas, item))
+    with (
+        pytest.raises(RuntimeError, match="gesture failed"),
+        document_transaction(canvas, history_service=services.history_service),
+    ):
+        rolled_back.append(_add_shape(canvas, QRectF(300.0, 300.0, 20.0, 20.0)))
+        raise RuntimeError("gesture failed")
     other = _add_shape(canvas, QRectF(200.0, 20.0, 60.0, 40.0))
 
-    assert shape_id_for_item(other) != shape_id_for_item(item)
+    # The rolled-back item still carries the id it was given.
+    assert shape_id_for_item(other) != shape_id_for_item(rolled_back[0])
     assert_store_matches_items(canvas)
