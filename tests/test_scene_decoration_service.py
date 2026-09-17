@@ -3,6 +3,7 @@ import unittest
 from types import SimpleNamespace
 from unittest import mock
 
+from chemvas.ui.canvas_ts_bracket_state import CanvasTSBracketState
 from tests.runtime_services import canvas_runtime_services
 from tests.runtime_state import canvas_runtime_state
 
@@ -358,6 +359,7 @@ class SceneDecorationServiceTest(unittest.TestCase):
             runtime_state=canvas_runtime_state(
                 scene_items_state=scene_items_state,
                 tool_settings_state=CanvasToolSettingsState(),
+                ts_bracket_state=CanvasTSBracketState(),
             ),
             attach_scene_item=mock.Mock(side_effect=_attach),
         )

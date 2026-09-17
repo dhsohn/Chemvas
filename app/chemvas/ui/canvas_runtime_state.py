@@ -26,6 +26,7 @@ from chemvas.ui.canvas_shape_state import CanvasShapeState
 from chemvas.ui.canvas_smiles_input_state import CanvasSmilesInputState
 from chemvas.ui.canvas_text_style_state import CanvasTextStyleState
 from chemvas.ui.canvas_tool_settings_state import CanvasToolSettingsState
+from chemvas.ui.canvas_ts_bracket_state import CanvasTSBracketState
 from chemvas.ui.handle_state import CanvasHandleState
 from chemvas.ui.input_view_state import InputViewState
 from chemvas.ui.scene_clipboard_state import SceneClipboardState
@@ -95,6 +96,7 @@ class CanvasRuntimeState:
     scene_items_state: CanvasSceneItemsState
     shape_state: CanvasShapeState
     smiles_input_state: CanvasSmilesInputState
+    ts_bracket_state: CanvasTSBracketState
 
     @classmethod
     def create(cls, canvas: Any) -> CanvasRuntimeState:
@@ -141,6 +143,7 @@ class CanvasRuntimeState:
             scene_items_state=CanvasSceneItemsState(),
             shape_state=CanvasShapeState(),
             smiles_input_state=CanvasSmilesInputState(),
+            ts_bracket_state=CanvasTSBracketState(),
         )
 
 

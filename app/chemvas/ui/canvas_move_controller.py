@@ -31,6 +31,7 @@ from chemvas.ui.shape_record_access import (
     require_shape_record_for,
     set_shape_record_for,
 )
+from chemvas.ui.ts_bracket_record_access import sync_ts_bracket_record_for
 
 # Every arrow kind the document schema knows, plus the annotation items that
 # move by a plain moveBy with their stored geometry patched afterwards.
@@ -126,6 +127,7 @@ class CanvasMoveController:
                 if isinstance(rect, QRectF):
                     data["rect"] = rect.translated(dx, dy)
                     item.setData(1, data)
+                    sync_ts_bracket_record_for(self.canvas, item)
             else:
                 data = item.data(2) or {}
                 start = data.get("start")

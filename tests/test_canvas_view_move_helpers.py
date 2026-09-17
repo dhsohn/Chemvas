@@ -36,6 +36,7 @@ from chemvas.ui.canvas_scene_items_state import (
     set_scene_item_collection_for,
 )
 from chemvas.ui.canvas_shape_state import CanvasShapeState
+from chemvas.ui.canvas_ts_bracket_state import CanvasTSBracketState
 from chemvas.ui.handle_state import CanvasHandleState
 from chemvas.ui.move_access import move_atoms_for, move_item_for
 from chemvas.ui.shape_record_access import shape_record_for
@@ -174,6 +175,7 @@ class CanvasViewMoveHelpersTest(unittest.TestCase):
             runtime_state=canvas_runtime_state(
                 handle_state=CanvasHandleState(),
                 mark_registry=CanvasMarkRegistry(),
+                ts_bracket_state=CanvasTSBracketState(),
             ),
         )
         controller = self._bind_move_controller(view)
@@ -216,6 +218,7 @@ class CanvasViewMoveHelpersTest(unittest.TestCase):
             refresh_selection_outline=mock.Mock(),
             runtime_state=canvas_runtime_state(
                 shape_state=CanvasShapeState(),
+                ts_bracket_state=CanvasTSBracketState(),
                 handle_state=CanvasHandleState(),
                 mark_registry=CanvasMarkRegistry(),
             ),

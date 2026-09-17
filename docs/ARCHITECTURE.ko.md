@@ -242,7 +242,7 @@ CLI 테스트 실행 부분을 공유하고, 연산별 fixture와 화면 기대�
 제거할 수 있다. CLI의 명시적 스타일 변경은 그 외형 단축키와 같은 의도가 아니다.
 이 차이를 위해 별도의 공통 편집 엔진을 추가하지 않는다.
 
-### 문서 데이터 소유권 (도형 완료, 나머지 종류는 미착수)
+### 문서 데이터 소유권 (도형 완료, TS 괄호 진행 중)
 
 `MoleculeModel`은 원자와 결합을 Qt 없는 데이터로 소유하고, 도형은 레코드다(아래).
 문서가 저장하는 나머지 그려지는 객체 — 고리 채움, 노트, 마크, 화살표와 선, TS 괄호,
@@ -278,6 +278,20 @@ layout — 은 `shape_state_dict_for`를 통해 레코드에서 읽는다. 레�
 도형에 들어올 수 없다. `test_shape_values_live_in_records_not_on_graphics_items`가 도형
 외곽선을 그리는 곳을 두 모듈로 묶고 예전의 아이템 쪽 reader가 돌아오지 못하게 한다.
 같은 단계 — 레코드, store 동기화, 읽기 전환, 아이템 비우기 — 가 나머지 종류의 틀이다.
+
+TS 괄호는 두 번째 단계에 있다. `chemvas.domain.document.TSBracket`이 레코드이고,
+캔버스마다 괄호 store(`CanvasTSBracketState`, 도형 store와 같은 두 롤백 필드 목록에
+들어 있다)가 있으며 괄호 아이템마다 런타임 id가 있다. 원본은 아직 아이템이다. 괄호가
+무엇인지를 바꾸는 세 곳 — 부착(도구, 열기, 붙여넣기, undo 재생성과 재부착),
+`CanvasMoveController.move_item`, `SceneItemController.apply_scene_item_state`
+(undo, redo, 뒤집기, 회전) — 이 끝난 뒤 `sync_ts_bracket_record_for`를 부르고, 저장·undo·
+그리기는 전과 같이 아이템을 읽는다. 레코드 수명은 도형 규칙을 따른다: 새 문서가
+history를 버릴 때 지우고, id는 `new_scene_record_id`에서 나온다. 이 단계에서 레코드가
+사라지는 경우가 둘 더 있다: 실패한 추가는 부착이 만든 레코드를 도로 빼고, rect가 더는
+유한하지 않은 괄호는 어떤 문서에도 담길 수 없으므로 레코드가 없다. 세 번째 단계는 그런
+편집 자체를 거부해야 한다.
+`tests/test_ts_bracket_store_sync.py`가 매 동작 뒤에 부착된 괄호마다 아이템과 같은
+내용의 레코드가 있는지 확인한다.
 
 ## 복합 그룹화 (Composite Grouping)
 

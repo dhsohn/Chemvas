@@ -34,6 +34,7 @@ from chemvas.ui.transactions.scene_runtime import (
     capture_scene_runtime,
     restore_scene_runtime,
 )
+from chemvas.ui.ts_bracket_record_access import sync_ts_bracket_record_for
 
 # Every kind that can own handles; deleting one must take its handles with it.
 HANDLE_BEARING_KINDS = ARROW_KINDS | frozenset({"shape", "orbital"})
@@ -164,6 +165,7 @@ class SceneItemLifecycleService:
             append_scene_item_for(self.canvas, "arrow_items", item)
         elif kind == "ts_bracket":
             append_scene_item_for(self.canvas, "ts_bracket_items", item)
+            sync_ts_bracket_record_for(self.canvas, item)
         elif kind == "shape":
             require_attached_shape_record_for(self.canvas, item)
             append_scene_item_for(self.canvas, "shape_items", item)

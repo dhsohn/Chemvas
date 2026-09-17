@@ -46,6 +46,7 @@ from chemvas.ui.canvas_runtime_state import attach_canvas_runtime_state
 from chemvas.ui.canvas_scene_items_state import CanvasSceneItemsState
 from chemvas.ui.canvas_scene_reset_service import CanvasSceneResetService
 from chemvas.ui.canvas_shape_state import CanvasShapeState
+from chemvas.ui.canvas_ts_bracket_state import CanvasTSBracketState
 from chemvas.ui.history_commands import AddSceneItemsCommand, UpdateSceneItemCommand
 from chemvas.ui.history_operations import CanvasHistoryOperations
 from chemvas.ui.selection_info_state import (
@@ -135,6 +136,7 @@ def _document_runtime_state(**states):
     states.setdefault("rotation_state", CanvasRotationState())
     states.setdefault("sheet_setup_state", SheetSetupState())
     states.setdefault("shape_state", CanvasShapeState())
+    states.setdefault("ts_bracket_state", CanvasTSBracketState())
     return canvas_runtime_state(**states)
 
 
