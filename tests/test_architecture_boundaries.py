@@ -1824,18 +1824,27 @@ def test_canvas_runtime_services_exposes_single_runtimes_directly() -> None:
     runtime_services = APP_ROOT / "chemvas" / "ui" / "canvas_runtime_services.py"
     tree = _parse_source(runtime_services.read_text(encoding="utf-8"))
     annotations: dict[str, str] = {}
+    mentions_any: list[str] = []
     for node in tree.body:
         if not isinstance(node, ast.ClassDef) or node.name != "CanvasRuntimeServices":
             continue
         for child in node.body:
             if isinstance(child, ast.AnnAssign) and isinstance(child.target, ast.Name):
                 annotations[child.target.id] = ast.unparse(child.annotation)
+                if any(
+                    (isinstance(part, ast.Name) and part.id == "Any")
+                    or (isinstance(part, ast.Attribute) and part.attr == "Any")
+                    for part in ast.walk(child.annotation)
+                ):
+                    mentions_any.append(child.target.id)
 
     assert annotations["hover"] == "HoverController"
     assert annotations["graph_service"] == "CanvasGraphService"
     assert annotations["tool_controller"] == "ToolController"
-    # The container says what it holds; an Any here hides a dependency from mypy.
-    assert [name for name, kind in annotations.items() if kind == "Any"] == []
+    # The container says what it holds; an Any anywhere in an annotation hides
+    # a dependency from mypy.
+    assert len(annotations) == 14
+    assert mentions_any == []
     assert "graph" not in annotations
     assert "tooling" not in annotations
 
@@ -3933,7 +3942,12 @@ def test_history_transaction_dependency_cluster_stays_acyclic() -> None:
     # covers it; the policy/command/savepoint cluster here also forbids lazy
     # cycles. Annotation-only edges are not counted: they never execute, and
     # counting them is what forced CanvasRuntimeServices to declare its bundles
-    # as Any. Core history additionally cannot import the UI, type-only or not
+    # as Any. The price is written down here: the TYPE_CHECKING block in
+    # canvas_runtime_services is the one separator between the protected
+    # modules and the service bundles that import them eagerly. Moving any of
+    # those imports out of the block, to module level or into a function,
+    # closes a real cycle, and this test and the eager-DAG test both fail on
+    # it. Core history additionally cannot import the UI, type-only or not
     # (tests/test_package_dependencies.py).
     assert protected_modules <= set(graph)
     cyclic_components = [

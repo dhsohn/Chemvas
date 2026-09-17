@@ -14,7 +14,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   forced the `Any` — no cycle through the history/transaction cluster, even
   an annotation-only one — now counts eager and lazy imports and leaves
   `TYPE_CHECKING` edges out; runtime cycles stay forbidden, and core history
-  still may not import the UI in any form.
+  still may not import the UI in any form. `build_canvas_services` and the
+  window ports carry the container's type through instead of `Any`, and
+  `Tool.canvas` is annotated explicitly because mypy resolves the new
+  annotation-only cycle as one unit.
 - Services and controllers no longer touch the canvas directly. The 21
   remaining direct attribute accesses (reads, writes and method calls) —
   viewport rect, transform and pan capture and
