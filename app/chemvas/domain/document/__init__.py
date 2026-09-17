@@ -12,6 +12,7 @@ from .calculation_plan import (
     calculation_plan_to_state,
     included_atom_ids,
 )
+from .conversion import AtomMapEntry, CalculationArtifacts
 from .edits import (
     atom_shows_itself,
     bond_endpoint_ids,
@@ -34,6 +35,7 @@ from .images import (
     validate_image_states,
 )
 from .model import Atom, Bond, MoleculeModel
+from .plan_validation import validate_calculation_plan, validated_plan_and_inventory
 from .state import (
     ARC_KIND_SWEEPS,
     ARROW_LABEL_SIDES,
@@ -93,7 +95,9 @@ __all__ = [
     "VALID_LINE_KINDS",
     "VALID_MARK_KINDS",
     "Atom",
+    "AtomMapEntry",
     "Bond",
+    "CalculationArtifacts",
     "CalculationAtomCorrespondence",
     "CalculationEndpointRole",
     "CalculationPlan",
@@ -128,8 +132,10 @@ __all__ = [
     "serialize_model_state",
     "serialize_model_state_with_warnings",
     "serialize_settings",
+    "validate_calculation_plan",
     "validate_clipboard_selection_payload",
     "validate_image_collection_budget",
     "validate_image_state",
     "validate_image_states",
+    "validated_plan_and_inventory",
 ]

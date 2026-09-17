@@ -18,8 +18,7 @@ from chemvas.features.insertion import (
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
 
-    from chemvas.domain.document import MoleculeModel
-    from chemvas.features.calculation_bundle import CalculationArtifacts
+    from chemvas.domain.document import CalculationArtifacts, MoleculeModel
 
 
 class RDKitAdapter:
