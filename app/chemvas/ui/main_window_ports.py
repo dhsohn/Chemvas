@@ -2,15 +2,37 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from chemvas.ui.canvas_service_ports import (
+    canvas_window_document_session_service,
+    color_mutation_service_for_access,
+    geometry_controller_for_access,
+    insert_controller_for_access,
+    note_controller_for_access,
+    scene_clipboard_controller_for_access,
+    scene_delete_controller_for_access,
+    scene_transform_controller_for_access,
+    style_controller_for_access,
+    tool_controller_for_access,
+    tool_mode_controller_for_access,
+)
+
 if TYPE_CHECKING:
     from PyQt6.QtWidgets import QGraphicsTextItem, QLineEdit
 
-    from chemvas.ui.canvas_runtime_services import CanvasRuntimeServices
+    from chemvas.ui.canvas_color_mutation_service import CanvasColorMutationService
+    from chemvas.ui.canvas_document_session_service import CanvasDocumentSessionService
+    from chemvas.ui.canvas_geometry_controller import CanvasGeometryController
+    from chemvas.ui.canvas_style_controller import CanvasStyleController
+    from chemvas.ui.canvas_tool_mode_controller import CanvasToolModeController
     from chemvas.ui.canvas_view import CanvasView
+    from chemvas.ui.insert_controller import InsertController
     from chemvas.ui.main_window_service_types import MainWindowServices
     from chemvas.ui.main_window_tab_references import MainWindowTabReferences
     from chemvas.ui.main_window_ui_references import MainWindowUiReferences
     from chemvas.ui.preview_3d import Preview3D
+    from chemvas.ui.scene_clipboard_controller import SceneClipboardController
+    from chemvas.ui.scene_delete_controller import SceneDeleteController
+    from chemvas.ui.scene_transform_controller import SceneTransformController
 
 
 def last_export_format_for_window(window) -> str:
@@ -111,44 +133,32 @@ def set_last_canvas_tab_index_for_window(window, index: int) -> None:
     window.runtime_state.last_canvas_tab_index = index
 
 
-def _active_canvas_services_for_window(window) -> CanvasRuntimeServices:
-    from chemvas.ui.canvas_service_access import canvas_services_for
-
-    return canvas_services_for(active_canvas_for_window(window))
+def style_controller_for_window(window) -> CanvasStyleController:
+    return style_controller_for_access(active_canvas_for_window(window))
 
 
-def style_controller_for_window(window):
-    return _active_canvas_services_for_window(window).scene_operations.style_controller
+def tool_mode_controller_for_window(window) -> CanvasToolModeController:
+    return tool_mode_controller_for_access(active_canvas_for_window(window))
 
 
-def tool_mode_controller_for_window(window):
-    return _active_canvas_services_for_window(window).input.tool_mode_controller
+def insert_controller_for_window(window) -> InsertController:
+    return insert_controller_for_access(active_canvas_for_window(window))
 
 
-def insert_controller_for_window(window):
-    return _active_canvas_services_for_window(window).structure.insert_controller
+def color_mutation_service_for_window(window) -> CanvasColorMutationService:
+    return color_mutation_service_for_access(active_canvas_for_window(window))
 
 
-def color_mutation_service_for_window(window):
-    return _active_canvas_services_for_window(
-        window
-    ).scene_operations.canvas_color_mutation_service
+def scene_transform_controller_for_window(window) -> SceneTransformController:
+    return scene_transform_controller_for_access(active_canvas_for_window(window))
 
 
-def scene_transform_controller_for_window(window):
-    return _active_canvas_services_for_window(
-        window
-    ).scene_operations.scene_transform_controller
+def document_session_service_for_window(window) -> CanvasDocumentSessionService:
+    return canvas_window_document_session_service(active_canvas_for_window(window))
 
 
-def document_session_service_for_window(window):
-    return _active_canvas_services_for_window(
-        window
-    ).document.canvas_document_session_service
-
-
-def geometry_controller_for_window(window):
-    return _active_canvas_services_for_window(window).scene_view.geometry_controller
+def geometry_controller_for_window(window) -> CanvasGeometryController:
+    return geometry_controller_for_access(active_canvas_for_window(window))
 
 
 def history_service_for_window(window):
@@ -157,16 +167,12 @@ def history_service_for_window(window):
     return history_service_for_canvas(active_canvas_for_window(window))
 
 
-def scene_clipboard_controller_for_window(window):
-    return _active_canvas_services_for_window(
-        window
-    ).scene_operations.scene_clipboard_controller
+def scene_clipboard_controller_for_window(window) -> SceneClipboardController:
+    return scene_clipboard_controller_for_access(active_canvas_for_window(window))
 
 
-def scene_delete_controller_for_window(window):
-    return _active_canvas_services_for_window(
-        window
-    ).scene_operations.scene_delete_controller
+def scene_delete_controller_for_window(window) -> SceneDeleteController:
+    return scene_delete_controller_for_access(active_canvas_for_window(window))
 
 
 def _text_editor_for_window(window) -> QLineEdit | QGraphicsTextItem | None:
@@ -238,16 +244,14 @@ def _edit_text_for_window(window, operation: str) -> bool:
 
 def _prepare_document_edit_for_window(window) -> None:
     if active_canvas_or_none_for_window(window) is not None:
-        _active_canvas_services_for_window(
-            window
-        ).tool_controller.prepare_for_document_edit()
+        tool_controller_for_access(
+            active_canvas_for_window(window)
+        ).prepare_for_document_edit()
 
 
 def note_appearance_for_window(window) -> None:
     _prepare_document_edit_for_window(window)
-    _active_canvas_services_for_window(
-        window
-    ).interaction.note_controller.finish_note_edit()
+    note_controller_for_access(active_canvas_for_window(window)).finish_note_edit()
     services_for_window(window).text_style_service.edit_note_appearance(window)
 
 
@@ -344,12 +348,10 @@ def distribute_selection_for_window(window, axis: str) -> None:
 
 
 def active_tool_name_for_window(window):
-    from chemvas.ui.canvas_service_access import canvas_services_for
-
     canvas = active_canvas_or_none_for_window(window)
     if canvas is None:
         return None
-    active_tool = getattr(canvas_services_for(canvas).tool_controller, "active", None)
+    active_tool = getattr(tool_controller_for_access(canvas), "active", None)
     name = getattr(active_tool, "name", None)
     return str(name) if name else None
 
@@ -466,7 +468,7 @@ def next_canvas_name_for_window(window, prefix: str = "Canvas") -> str:
 
 def color_tool_for_window(window):
     return getattr(
-        _active_canvas_services_for_window(window).tool_controller, "tools", {}
+        tool_controller_for_access(active_canvas_for_window(window)), "tools", {}
     ).get("color")
 
 
