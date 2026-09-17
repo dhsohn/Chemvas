@@ -198,6 +198,26 @@ Agent-edit flow: `inspect-document` -> exact source SHA-256 plus stable atom/bon
 
 Headless render flow: `render-document` -> exact source read/hash and record-count gate -> validated state applied to an invisible canvas -> canonical whole-sheet export plan -> point/pixel resource gate -> private SVG/PNG render -> output byte gate -> one atomic non-overwriting publication -> hash-and-dimension JSON report. Qt is lazy but required for painting; RDKit and the desktop session-recovery service are not started.
 
+### Shared bond-removal semantics
+
+What a bond removal takes with it is decided once, in
+`domain.document.edits`: `orphaned_atom_ids` names the endpoints left with no
+bond that nothing keeps on the sheet, `atom_shows_itself` says which atoms show
+without a bond (a heteroatom or an explicit label; a mark is the caller's
+knowledge), and `broken_ring_fill_indices` / `ring_fill_is_intact` name the
+fills that no longer describe a bonded cycle. The single-bond delete, the
+selection delete plan, the eraser session and Graph Patch `remove_bond` all
+call these functions and apply the result in their own way: the GUI through
+history commands and scene updates, the patch on its copied state, dropping the
+removed atom's perspective coordinate and group membership and omitting an
+emptied collection as the desktop does when it saves. Ring fills are judged on
+the document as it will be after the edit, not on the removed edge alone.
+`tests/test_document_edits.py` pins the rules, and the bond-deletion cases in
+`tests/test_document_edit_roundtrip.py` delete the same bond on the desktop and
+through `apply_document_patch` and compare the resulting documents. Breaking a
+rule in the domain fails every path's tests, which is the point: a fix to what
+counts as a bare atom is made in one place.
+
 ### Shared atom-move semantics
 
 GUI moves and Graph Patch `move_atom` share the inverse-projection rule in

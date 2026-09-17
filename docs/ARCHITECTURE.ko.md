@@ -181,6 +181,23 @@ Agent 편집 흐름: `inspect-document` -> 정확한 source SHA-256과 안정적
 
 창 없는 렌더 흐름: `render-document` -> 원본 1회 읽기/hash 및 record-count gate -> 검증된 state를 invisible canvas에 적용 -> canonical whole-sheet export plan -> point/pixel 자원 gate -> private SVG/PNG 렌더 -> output byte gate -> 단 한 번의 원자적 비덮어쓰기 공개 -> hash·크기 JSON report. painting에는 지연 import한 Qt가 필요하지만 RDKit과 desktop session-recovery service는 시작하지 않는다.
 
+### 결합 제거의 공통 의미
+
+결합 하나를 지울 때 함께 없어져야 할 것은 `domain.document.edits`에서 한 번만
+정한다. `orphaned_atom_ids`는 결합이 없어진 끝점 중 sheet에 남길 이유가 없는 원자를,
+`atom_shows_itself`는 결합 없이도 보이는 원자(heteroatom 또는 명시적 라벨; 표시는
+호출자가 아는 정보)를, `broken_ring_fill_indices`/`ring_fill_is_intact`는 더 이상
+결합된 순환을 이루지 않는 ring fill을 가려낸다. 단일 결합 삭제, 선택 삭제 계획, 지우개
+세션, Graph Patch `remove_bond`가 모두 이 함수를 호출하고 결과를 각자의 방식으로
+적용한다. GUI는 history command와 scene 갱신으로, patch는 복사본 state에서 제거된
+원자의 원근 좌표와 group 소속을 함께 지우고 비어 버린 collection은 desktop이 저장할
+때처럼 생략한다. ring fill은 지운 간선만 보지 않고 편집 뒤의 문서를 기준으로 판정한다.
+`tests/test_document_edits.py`가 규칙을 고정하고,
+`tests/test_document_edit_roundtrip.py`의 결합 삭제 사례는 같은 결합을 desktop과
+`apply_document_patch`로 각각 지운 뒤 결과 문서를 비교한다. domain의 규칙 하나를
+깨뜨리면 모든 경로의 테스트가 실패하며, 그것이 목적이다. 어떤 원자를 빈 원자로 볼지는
+한 곳에서 고친다.
+
 ### 원자 이동의 공통 의미
 
 GUI 이동과 Graph Patch의 `move_atom`은 `domain.document.perspective`의 역투영
