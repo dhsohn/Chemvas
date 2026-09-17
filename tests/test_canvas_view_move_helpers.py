@@ -9,6 +9,7 @@ from tests.runtime_state import canvas_runtime_state
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PyQt6.QtCore import QPointF, QRectF
+from PyQt6.QtGui import QBrush, QColor
 from PyQt6.QtWidgets import QApplication
 
 from chemvas.domain.document import Atom, Bond
@@ -33,6 +34,7 @@ from chemvas.ui.canvas_scene_items_state import (
     CanvasSceneItemsState,
     set_scene_item_collection_for,
 )
+from chemvas.ui.canvas_shape_state import CanvasShapeState
 from chemvas.ui.handle_state import CanvasHandleState
 from chemvas.ui.move_access import move_atoms_for, move_item_for
 
@@ -46,6 +48,10 @@ class _FakeItem:
 
     def data(self, key):
         return self._data.get(key)
+
+    def brush(self):
+        # A shape item always has a brush; the fill is read from it.
+        return QBrush(QColor(0, 0, 0, 0))
 
     def setData(self, key, value) -> None:
         self._data[key] = value
@@ -205,6 +211,7 @@ class CanvasViewMoveHelpersTest(unittest.TestCase):
         view = SimpleNamespace(
             refresh_selection_outline=mock.Mock(),
             runtime_state=canvas_runtime_state(
+                shape_state=CanvasShapeState(),
                 handle_state=CanvasHandleState(),
                 mark_registry=CanvasMarkRegistry(),
             ),

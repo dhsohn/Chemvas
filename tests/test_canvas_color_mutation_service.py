@@ -41,6 +41,7 @@ from chemvas.ui.canvas_color_mutation_service import (
     UpdateNoteColorCommand,
 )
 from chemvas.ui.canvas_lifecycle import schedule_canvas_deletion_for
+from chemvas.ui.canvas_shape_state import CanvasShapeState
 from chemvas.ui.canvas_smiles_input_state import CanvasSmilesInputState
 from chemvas.ui.graphics_items import AtomDotItem
 from chemvas.ui.history_commands import UpdateSceneItemCommand
@@ -63,6 +64,7 @@ def _history_service(push=None):
 
 def _runtime_state(**states):
     return canvas_runtime_state(
+        shape_state=CanvasShapeState(),
         atom_graphics_state=CanvasAtomGraphicsState(),
         bond_graphics_state=CanvasBondGraphicsState(),
         **states,

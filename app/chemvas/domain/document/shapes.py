@@ -13,7 +13,7 @@ same value. A ``Shape`` that is not a valid shape state cannot be constructed.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Any, cast
 
 from .state import validate_shape_fields
@@ -75,4 +75,36 @@ def shape_to_state(shape: Shape) -> dict[str, object]:
     return state
 
 
-__all__ = ["Shape", "shape_from_state", "shape_to_state"]
+def normalized_shape(shape: Shape) -> Shape:
+    """The canonical form of a shape, as the desktop editor has always saved it.
+
+    The editor used to get these rules for free by pushing every value
+    through ``QRectF`` and ``QColor`` and reading it back. They are spelled out
+    here so a record holds the form a Chemvas-saved file already has: an
+    ordered rectangle, a lowercase six-digit fill, a fill that always states
+    its opacity, and no fill at all once it is fully transparent.
+    """
+    left, right = sorted((shape.left, shape.right))
+    top, bottom = sorted((shape.top, shape.bottom))
+    fill = shape.fill
+    fill_alpha = shape.fill_alpha
+    if fill is None or fill_alpha == 0.0:
+        fill, fill_alpha = None, None
+    else:
+        digits = fill[1:].lower()
+        if len(digits) == 3:
+            digits = "".join(digit * 2 for digit in digits)
+        fill = f"#{digits}"
+        fill_alpha = 1.0 if fill_alpha is None else fill_alpha
+    return replace(
+        shape,
+        left=left,
+        top=top,
+        right=right,
+        bottom=bottom,
+        fill=fill,
+        fill_alpha=fill_alpha,
+    )
+
+
+__all__ = ["Shape", "normalized_shape", "shape_from_state", "shape_to_state"]

@@ -58,6 +58,7 @@ from chemvas.ui.scene_item_state import (
     ring_state_dict_for,
     shape_state_dict_for,
 )
+from chemvas.ui.shape_record_access import sync_shape_record_for
 from chemvas.ui.transactions.document import DocumentSavepoint
 
 if TYPE_CHECKING:
@@ -523,13 +524,21 @@ class CanvasColorMutationService:
         )
 
     def _apply_shape_fill(self, item, color: QColor) -> None:
+        graphics_rollback = self._graphics_runtime_rollback(item)
+
+        def mutate() -> None:
+            item.setBrush(self._pastel_fill(color, self.SHAPE_FILL_TINT))
+            sync_shape_record_for(self.canvas, item)
+
+        def rollback() -> None:
+            graphics_rollback()
+            sync_shape_record_for(self.canvas, item)
+
         self._record_scene_item_mutation(
             item,
             state_for=shape_state_dict_for,
-            mutation=lambda: item.setBrush(
-                self._pastel_fill(color, self.SHAPE_FILL_TINT)
-            ),
-            runtime_rollback=self._graphics_runtime_rollback(item),
+            mutation=mutate,
+            runtime_rollback=rollback,
         )
 
     def apply_ring_fill_color(self, item, color: QColor, alpha: float = 0.25) -> None:

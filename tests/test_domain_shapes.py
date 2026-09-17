@@ -10,7 +10,12 @@ from pathlib import Path
 
 import pytest
 
-from chemvas.domain.document import Shape, shape_from_state, shape_to_state
+from chemvas.domain.document import (
+    Shape,
+    normalized_shape,
+    shape_from_state,
+    shape_to_state,
+)
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
@@ -162,3 +167,37 @@ def test_what_is_not_a_shape_state_is_refused_with_the_callers_message(
 ) -> None:
     with pytest.raises(ValueError, match=re.escape(error)):
         shape_from_state(state, error=error)
+
+
+@pytest.mark.parametrize(
+    ("given", "expected"),
+    [
+        # An ordered rectangle, whichever corners were given.
+        ({"left": 110.0, "right": 10.0}, {"left": 10.0, "right": 110.0}),
+        ({"top": 80.25, "bottom": 20.5}, {"top": 20.5, "bottom": 80.25}),
+        # A fill always states its opacity, in lowercase six-digit form.
+        ({"fill": "#ABC"}, {"fill": "#aabbcc", "fill_alpha": 1.0}),
+        (
+            {"fill": "#FEDCBA", "fill_alpha": 0.25},
+            {"fill": "#fedcba", "fill_alpha": 0.25},
+        ),
+        # No fill at all once it is fully transparent, and no opacity without a fill.
+        ({"fill": "#fedcba", "fill_alpha": 0}, {}),
+        ({"fill_alpha": 0.5}, {}),
+    ],
+)
+def test_the_canonical_form_is_what_the_desktop_has_always_saved(
+    given, expected
+) -> None:
+    shape = normalized_shape(shape_from_state({**BASE, **given}))
+
+    assert shape_to_state(shape) == {**BASE, **expected}
+
+
+def test_a_canonical_shape_is_left_alone_and_values_are_not_quantised() -> None:
+    state = {**BASE, "fill": "#2196f3", "fill_alpha": 0.25, "right": 347.43}
+    shape = shape_from_state(state)
+
+    assert normalized_shape(shape) == shape
+    assert normalized_shape(normalized_shape(shape)) == shape
+    assert shape_to_state(normalized_shape(shape)) == state
