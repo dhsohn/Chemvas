@@ -502,8 +502,14 @@ There are at most 256 operations. Each `add_atom.atom_id` must equal the current
 a private copy and publish only after full document and Calculation Plan validation.
 `move_atom` also moves dependent ring-fill, bound-mark, and perspective coordinates.
 Its screen-space movement preserves stored depth and the camera projection.
-`remove_bond` removes any ring fill whose cycle contains that edge; it preserves
-unrelated fills and still rejects invalid Calculation Plan references.
+`remove_bond` applies the same rules as deleting the bond in the desktop
+editor: an endpoint left with no bond, no label and no mark is removed too
+(an implicit carbon would otherwise stay on the sheet invisibly), together
+with its stored perspective coordinate and its group membership, and any
+ring fill that no longer describes a bonded cycle is dropped. Unrelated
+fills and labelled or marked endpoints stay. The operation's report lists
+`removed_atom_ids` and `removed_ring_fill_count`, and a Calculation Plan
+that still references a removed atom rejects the whole patch.
 
 ### Repairing an invalid alias drawing
 
@@ -572,12 +578,12 @@ Dry-run performs the identical validation and reports the candidate file hash bu
 writes nothing. Apply preserves the input document version, never changes the source,
 and refuses to replace an existing file or symlink.
 
-Graph Patch v1 deliberately does not delete atoms or edit charge/radical annotations,
-arrows, groups, or Calculation Plans. It makes no chemical or mechanistic inference;
-use the GUI or a separately reviewed plan update for those semantics. `remove_bond`
-keeps both endpoint atoms in place even when the removal leaves them bond-less —
-unlike the GUI, which also removes newly bare atoms that no label or mark keeps
-visible.
+Graph Patch v1 deliberately has no operation that deletes an atom directly and
+does not edit charge/radical annotations, arrows, groups, or Calculation Plans.
+It makes no chemical or mechanistic inference; use the GUI or a separately
+reviewed plan update for those semantics. The only atoms a patch removes are
+the bare endpoints of `remove_bond` described above, which the desktop editor
+removes in exactly the same cases, so both paths leave the same document.
 
 ## Headless structure inspection
 

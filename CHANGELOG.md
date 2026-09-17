@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Graph Patch `remove_bond` now removes an endpoint the removal leaves with
+  no bond, no label and no mark, with its perspective coordinate and group
+  membership, and drops any ring fill that no longer forms a bonded cycle,
+  using the same rules as deleting the bond in the desktop editor. Before,
+  the patch kept such an atom as an invisible implicit carbon. The operation
+  report gains `removed_atom_ids` and `removed_ring_fill_count`, and
+  `inspect-document` advertises `remove_bond_removes_bare_atoms`.
 - Decide what a bond removal takes with it in one place. The atoms it leaves
   bare and the ring fills it breaks are now computed by Qt-free rules in
   `chemvas.domain.document` (`orphaned_atom_ids`, `broken_ring_fill_indices`,

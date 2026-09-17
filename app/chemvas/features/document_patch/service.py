@@ -12,11 +12,15 @@ from chemvas.domain.document import (
     Atom,
     Bond,
     MoleculeModel,
+    atom_shows_itself,
+    broken_ring_fill_indices,
     build_document_payload,
     connected_atom_components,
     deserialize_model_state,
     is_document_number,
     is_hex_color,
+    model_bond_pairs,
+    orphaned_atom_ids,
     serialize_model_state,
 )
 from chemvas.domain.document.inspection import (
@@ -124,6 +128,7 @@ def inspect_document_graph(state: Mapping[str, object]) -> dict[str, object]:
             "supported_operations": list(_SUPPORTED_OPERATIONS),
             "atom_ids_are_stable": True,
             "bond_locator": "unordered_atom_endpoint_pair",
+            "remove_bond_removes_bare_atoms": True,
             "automatic_chemical_inference": False,
         },
     }
@@ -455,14 +460,71 @@ def _remove_bond(
     b = _atom_id(operation.get("b"), "b")
     bond = _existing_bond(model, a, b)
     model.bonds.remove(bond)
-    remaining_fills = []
-    for ring in state.get("ring_fills", []):
-        atom_ids = ring["atom_ids"]
-        edges = zip(atom_ids, atom_ids[1:] + atom_ids[:1], strict=True)
-        if not any(_pair(first, second) == _pair(a, b) for first, second in edges):
-            remaining_fills.append(ring)
-    state["ring_fills"] = remaining_fills
-    return {"op": "remove_bond", "a": bond.a, "b": bond.b}
+    # The same rules the desktop editor applies: an endpoint left with no
+    # bond, no label and no mark is removed with the bond, and a ring fill
+    # that no longer describes a bonded cycle goes with it.
+    marks = cast("list[dict[str, Any]]", state.get("marks", []))
+    marked_atom_ids = {_state_atom_id(mark.get("atom_id")) for mark in marks}
+    removed_atom_ids = orphaned_atom_ids(
+        model.bonds,
+        candidate_atom_ids=(bond.a, bond.b),
+        keeps_visible=lambda atom_id: (
+            atom_shows_itself(model.atoms[atom_id]) or atom_id in marked_atom_ids
+        ),
+    )
+    for atom_id in removed_atom_ids:
+        _remove_atom_dependents(state, atom_id)
+        del model.atoms[atom_id]
+        model.atom_annotations.pop(atom_id, None)
+    ring_fills = cast("list[dict[str, Any]]", state.get("ring_fills", []))
+    broken = set(
+        broken_ring_fill_indices(
+            [ring.get("atom_ids") for ring in ring_fills],
+            atom_ids=set(model.atoms),
+            bond_pairs=model_bond_pairs(model),
+        )
+    )
+    state["ring_fills"] = [
+        ring for index, ring in enumerate(ring_fills) if index not in broken
+    ]
+    return {
+        "op": "remove_bond",
+        "a": bond.a,
+        "b": bond.b,
+        "removed_atom_ids": list(removed_atom_ids),
+        "removed_ring_fill_count": len(broken),
+    }
+
+
+def _remove_atom_dependents(state: dict[str, Any], atom_id: int) -> None:
+    """Drop what the desktop editor drops with a bare atom: its stored
+    perspective coordinate and its group membership (an emptied group goes).
+    Marks cannot be attached, since an attached mark keeps the atom."""
+    # Collections emptied here are dropped, as the desktop omits them when it
+    # writes a file, so both paths publish the same document.
+    perspective = state.get("perspective")
+    if isinstance(perspective, dict):
+        coordinates = perspective.get("atom_coords_3d")
+        if isinstance(coordinates, dict):
+            coordinates.pop(atom_id, None)
+            coordinates.pop(str(atom_id), None)
+            if not coordinates:
+                del state["perspective"]
+    groups = state.get("groups")
+    if isinstance(groups, list):
+        remaining_groups = []
+        for group in cast("list[dict[str, Any]]", groups):
+            atoms = [
+                member
+                for member in cast("list[object]", group.get("atoms", []))
+                if _state_atom_id(member) != atom_id
+            ]
+            if atoms or group.get("items"):
+                remaining_groups.append({**group, "atoms": atoms})
+        if remaining_groups:
+            state["groups"] = remaining_groups
+        else:
+            del state["groups"]
 
 
 def _move_ring_points(state: dict[str, Any], atom_id: int, x: float, y: float) -> None:

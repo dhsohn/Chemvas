@@ -102,6 +102,112 @@ def test_open_and_save_preserve_overlapping_atoms(
     assert documents.snapshot_state()["model"] == state["model"]
 
 
+@pytest.mark.parametrize(
+    ("bond", "removed_atoms"),
+    [((0, 1), [0]), ((1, 2), []), ((3, 4), [4]), ((5, 6), [5]), ((7, 8), [7, 8])],
+    ids=[
+        "bare_carbon",
+        "ring_member",
+        "labelled_endpoint",
+        "marked_endpoint",
+        "both_endpoints",
+    ],
+)
+def test_desktop_and_patch_bond_deletion_leave_the_same_document(
+    canvas, bond, removed_atoms
+):
+    # A chain 0-1 into a ring 1-2-3, N-C at 3-4, and a marked carbon at 5-6.
+    # Only 3 (a heteroatom) and 6 (marked) can stay when their bond goes.
+    state = _state(
+        [
+            ("C", 60, 100),
+            ("C", 80, 100),
+            ("C", 100, 100),
+            ("N", 90, 120),
+            ("C", 110, 140),
+            ("C", 200, 100),
+            ("C", 220, 100),
+            ("C", 300, 100),
+            ("C", 320, 100),
+        ],
+        [(0, 1), (1, 2), (2, 3), (3, 1), (3, 4), (5, 6), (7, 8)],
+    )
+    state["ring_fills"] = [
+        {
+            "points": [[80, 100], [100, 100], [90, 120]],
+            "atom_ids": [1, 2, 3],
+            "color": "#ff0000",
+            "alpha": 0.3,
+        }
+    ]
+    state["marks"] = [
+        {
+            "kind": "radical",
+            "text": None,
+            "atom_id": 6,
+            "dx": None,
+            "dy": None,
+            "x": 224,
+            "y": 94,
+        }
+    ]
+    state["groups"] = [{"atoms": [0, 2], "items": []}, {"atoms": [7], "items": []}]
+    state["perspective"] = {
+        "atom_coords_3d": {
+            str(i): [x, y, 0]
+            for i, (x, y) in enumerate(
+                [
+                    (60, 100),
+                    (80, 100),
+                    (100, 100),
+                    (90, 120),
+                    (110, 140),
+                    (200, 100),
+                    (220, 100),
+                    (300, 100),
+                    (320, 100),
+                ]
+            )
+        },
+        "projection_center_3d": [100, 100, 0],
+        "projection_anchor_2d": [100, 100],
+    }
+    original = deepcopy(state)
+
+    patched = _patch(state, {"op": "remove_bond", "a": bond[0], "b": bond[1]})
+    assert state == original
+
+    documents = canvas.services.document.canvas_document_session_service
+    documents.apply_state(deepcopy(state))
+    model = canvas.model
+    bond_id = next(
+        index
+        for index, item in enumerate(model.bonds)
+        if item is not None and {item.a, item.b} == set(bond)
+    )
+    controller = canvas.services.scene_operations.scene_delete_controller
+    assert controller.delete_bond(bond_id, record=True) is not None
+    desktop = documents.snapshot_state()
+
+    for atom_id in removed_atoms:
+        assert atom_id not in patched["model"]["atoms"]
+    # The desktop snapshot spells points as float tuples; JSON is the shared
+    # form both paths publish, so compare through it.
+    desktop, patched = _json_form(desktop), _json_form(patched)
+    for key in ("model", "ring_fills", "marks"):
+        assert desktop[key] == patched[key], key
+    # Emptied collections are omitted by both, so compare presence too.
+    assert desktop.get("groups") == patched.get("groups")
+    assert ("perspective" in desktop) == ("perspective" in patched)
+    assert desktop.get("perspective", {}).get("atom_coords_3d") == patched.get(
+        "perspective", {}
+    ).get("atom_coords_3d")
+
+
+def _json_form(state):
+    return json.loads(json.dumps(state))
+
+
 def test_patch_move_preserves_projected_depth_through_desktop_save(canvas, tmp_path):
     state = _state([("C", 100, 100), ("C", 120, 100)], [(0, 1)])
     state["perspective"] = {

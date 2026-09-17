@@ -159,11 +159,16 @@ def test_source_alias_error_can_be_repaired_but_inspection_stays_strict(alias, r
         "bonds": len(state["model"]["bonds"]),
         "components": 1,
     }
+    # Removing the second bond leaves atom 2 a bare implicit carbon, which
+    # goes with the bond as it would in the desktop editor.
     assert result.after == {
         "atoms": inspection["atom_count"],
         "bonds": inspection["bond_count"],
-        "components": 2 if repair == "remove_bond" else 1,
+        "components": 1,
     }
+    if repair == "remove_bond":
+        assert result.operations[0]["removed_atom_ids"] == [2]
+        assert 2 not in result.state["model"]["atoms"]
     assert result.state["model"]["next_atom_id"] == state["model"]["next_atom_id"]
     assert {k: v for k, v in result.state.items() if k != "model"} == {
         k: v for k, v in state.items() if k != "model"
