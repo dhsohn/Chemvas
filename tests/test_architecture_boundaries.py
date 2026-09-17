@@ -1363,6 +1363,89 @@ CANVAS_SERVICE_CONTAINER_RESOLVERS = (
 )
 
 
+def test_canvas_service_ports_name_each_container_path_once_with_its_type() -> None:
+    """A port is a name for a place in the container, not a second name for one.
+
+    The ports used to return ``Any``, which hid the container's types from
+    every caller, and four of them resolved a path another port already
+    named. A role-flavoured alias adds a name to learn and nothing to check.
+
+    The module may hold only imports, ``__all__`` and port functions, so an
+    alias cannot hide in a module-level assignment. A port's body is one
+    ``return`` of an attribute chain off ``canvas_services_for`` applied to its
+    own parameter; ``history_operations_for`` is the one port that reads a
+    service's attribute instead, and it is named here. Every return type must
+    be a class the module imports for type checking.
+    """
+    path = APP_ROOT / "chemvas" / "ui" / "canvas_service_ports.py"
+    tree = _parse_source(path.read_text(encoding="utf-8"))
+    type_checking_classes: set[str] = set()
+    stray_statements: list[str] = []
+    for node in tree.body:
+        if isinstance(node, (ast.ImportFrom, ast.FunctionDef)) or (
+            isinstance(node, ast.Expr) and isinstance(node.value, ast.Constant)
+        ):
+            continue
+        if isinstance(node, ast.If) and ast.unparse(node.test) == "TYPE_CHECKING":
+            for child in node.body:
+                if isinstance(child, ast.ImportFrom):
+                    type_checking_classes.update(alias.name for alias in child.names)
+            continue
+        if (
+            isinstance(node, ast.Assign)
+            and len(node.targets) == 1
+            and isinstance(node.targets[0], ast.Name)
+            and node.targets[0].id == "__all__"
+        ):
+            continue
+        stray_statements.append(f"{node.lineno}: {ast.unparse(node)[:60]}")
+
+    names_by_container_path: dict[str, list[str]] = {}
+    untyped: list[str] = []
+    not_a_chain: list[str] = []
+    for node in tree.body:
+        if not isinstance(node, ast.FunctionDef):
+            continue
+        if not (
+            isinstance(node.returns, ast.Name)
+            and node.returns.id in type_checking_classes
+        ):
+            untyped.append(node.name)
+        parameters = [argument.arg for argument in node.args.args]
+        chain = node.body[-1].value if isinstance(node.body[-1], ast.Return) else None
+        attributes: list[str] = []
+        while isinstance(chain, ast.Attribute):
+            attributes.insert(0, chain.attr)
+            chain = chain.value
+        is_container_chain = (
+            len(node.body) == 1
+            and len(parameters) == 1
+            and bool(attributes)
+            and isinstance(chain, ast.Call)
+            and isinstance(chain.func, ast.Name)
+            and chain.func.id == "canvas_services_for"
+            and len(chain.args) == 1
+            and isinstance(chain.args[0], ast.Name)
+            and chain.args[0].id == parameters[0]
+        )
+        if is_container_chain:
+            key = ".".join(attributes)
+            names_by_container_path.setdefault(key, []).append(node.name)
+        elif node.name != "history_operations_for":
+            not_a_chain.append(node.name)
+
+    assert stray_statements == []
+    assert not_a_chain == []
+
+    assert names_by_container_path, path
+    assert untyped == []
+    assert {
+        container_path: names
+        for container_path, names in names_by_container_path.items()
+        if len(names) > 1
+    } == {}
+
+
 def test_only_container_resolvers_reach_the_canvas_service_bundle() -> None:
     """Nothing but the resolver modules may resolve the canvas service bundle.
 

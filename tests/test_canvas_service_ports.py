@@ -25,8 +25,8 @@ def _canvas_with_service(service_name: str, service):
         (ports.geometry_controller_for_access, "geometry_controller"),
         (ports.handle_mutation_service_for_access, "handle_mutation_service"),
         (ports.handle_overlay_service_for_access, "handle_overlay_service"),
-        (ports.history_atom_mutation_service_for, "canvas_atom_mutation_service"),
-        (ports.history_bond_mutation_service_for, "canvas_bond_mutation_service"),
+        (ports.structure_mutation_atom_service, "canvas_atom_mutation_service"),
+        (ports.structure_mutation_bond_service, "canvas_bond_mutation_service"),
         (ports.history_hit_testing_service_for, "hit_testing_service"),
         (
             ports.history_recording_service_for_access,
@@ -46,10 +46,6 @@ def _canvas_with_service(service_name: str, service):
         (ports.scene_reset_service_for_access, "canvas_scene_reset_service"),
         (ports.selection_service_for_access, "selection_controller"),
         (ports.structure_build_service_for_access, "structure_build_service"),
-        (ports.structure_insert_build_service_for_access, "structure_build_service"),
-        (ports.structure_mutation_atom_service, "canvas_atom_mutation_service"),
-        (ports.structure_mutation_bond_service, "canvas_bond_mutation_service"),
-        (ports.structure_mutation_build_service, "structure_build_service"),
     ],
 )
 def test_canvas_service_port_returns_attached_service(

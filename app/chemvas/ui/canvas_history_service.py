@@ -21,6 +21,7 @@ if TYPE_CHECKING:
     from contextlib import AbstractContextManager
 
     from chemvas.ui.canvas_history_state import CanvasHistoryState
+    from chemvas.ui.history_operations import CanvasHistoryOperations
 
 
 @dataclass(frozen=True)
@@ -39,7 +40,7 @@ class CanvasHistoryService:
 
     def __init__(
         self,
-        operations,
+        operations: CanvasHistoryOperations,
         state: CanvasHistoryState,
         *,
         replay_context: Callable[[], AbstractContextManager[None]],

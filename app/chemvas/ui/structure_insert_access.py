@@ -30,7 +30,7 @@ from chemvas.ui.canvas_model_access import (
 )
 from chemvas.ui.canvas_scene_items_state import remove_scene_item_from_collection_for
 from chemvas.ui.canvas_service_ports import (
-    structure_insert_build_service_for_access,
+    structure_build_service_for_access,
     structure_mutation_atom_service,
     structure_mutation_bond_service,
 )
@@ -111,7 +111,7 @@ def record_insert_additions_for(
 
 
 def add_atom_with_merge_for(canvas, point, element: str, merge: list) -> int:
-    return structure_insert_build_service_for_access(canvas).add_atom_with_merge(
+    return structure_build_service_for_access(canvas).add_atom_with_merge(
         point, element, merge
     )
 
@@ -133,7 +133,7 @@ def build_insert_benzene_ring_for(
     attach_atom_id: int | None = None,
     attach_bond_id: int | None = None,
 ) -> object | None:
-    return structure_insert_build_service_for_access(canvas).build_benzene_ring(
+    return structure_build_service_for_access(canvas).build_benzene_ring(
         center,
         attach_atom_id=attach_atom_id,
         attach_bond_id=attach_bond_id,
@@ -146,7 +146,7 @@ def add_insert_ring_from_points_for(
     elements: list[str] | None = None,
     merge: list | None = None,
 ) -> list[int]:
-    return structure_insert_build_service_for_access(canvas).add_ring_from_points(
+    return structure_build_service_for_access(canvas).add_ring_from_points(
         points,
         elements=elements,
         merge=merge,

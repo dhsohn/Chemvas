@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from chemvas.features.selection import structure_hit_is_selected
 from chemvas.ui.canvas_service_ports import selection_service_for_access
 from chemvas.ui.selection_scene_access import (
@@ -7,8 +9,11 @@ from chemvas.ui.selection_scene_access import (
     set_scene_items_selected_for,
 )
 
+if TYPE_CHECKING:
+    from chemvas.ui.selection_controller import SelectionController
 
-def selection_service_from_canvas(canvas):
+
+def selection_service_from_canvas(canvas) -> SelectionController:
     return selection_service_for_access(canvas)
 
 

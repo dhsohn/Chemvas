@@ -1,13 +1,18 @@
 from __future__ import annotations
 
+from typing import TYPE_CHECKING, Any
+
 from chemvas.ui.canvas_service_ports import move_controller_for_access
 from chemvas.ui.selection_service_access import (
     refresh_selection_outline_for,
     selection_service_from_canvas,
 )
 
+if TYPE_CHECKING:
+    from chemvas.ui.canvas_move_controller import CanvasMoveController
 
-def move_service_from_canvas(canvas):
+
+def move_service_from_canvas(canvas) -> CanvasMoveController:
     return move_controller_for_access(canvas)
 
 
@@ -32,7 +37,9 @@ def move_atoms_for(
     rebuild_stale_bond_topology: bool = False,
 ) -> None:
     move_service = move_service_from_canvas(canvas)
-    kwargs: dict[str, object] = {
+    # Optional arguments are passed only when set, which callers and tests
+    # rely on; the values are typed by the controller signature.
+    kwargs: dict[str, Any] = {
         "bond_ids": bond_ids,
         "redraw_bond_ids": redraw_bond_ids,
         "update_selection": update_selection,

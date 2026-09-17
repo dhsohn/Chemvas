@@ -367,15 +367,13 @@ def _planned_template(
     from chemvas.features.insertion import alternating_ring_bond_specs
     from chemvas.ui.canvas_service_ports import (
         ring_fill_scene_service_for_access,
-        structure_insert_build_service_for_access,
+        structure_build_service_for_access,
     )
     from chemvas.ui.scene_item_state import ring_state_dict_for
     from chemvas.ui.structure_build_committer import StructureBuildCommitter
 
     if plan.generator == "benzene":
-        geometry = structure_insert_build_service_for_access(
-            canvas
-        ).benzene_ring_points(
+        geometry = structure_build_service_for_access(canvas).benzene_ring_points(
             QPointF(*request.cursor_pos),
             attach_atom_id=request.atom_id,
             attach_bond_id=request.bond_id,

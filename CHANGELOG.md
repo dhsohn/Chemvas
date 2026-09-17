@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- The canvas service ports return the concrete service types instead of
+  `Any`, so the container types named earlier reach the access modules that
+  use them, and four alias ports that resolved a path another port already
+  named are removed (`structure_insert_build_service_for_access`,
+  `structure_mutation_build_service`, `history_atom_mutation_service_for`,
+  `history_bond_mutation_service_for`). An architecture test keeps one name
+  per container path in that module, rejects aliases written as delegating
+  functions or module-level assignments, and requires every return type to be
+  a concrete class. The four access wrappers that pass a port's result on and
+  `CanvasHistoryService.operations` carry the type too.
 - Canvas input events travel one hop less. `CanvasView`'s event overrides ask
   the view port for the input or pointer controller and call it, keeping the
   fallback to Qt while services are not attached yet and the exception
