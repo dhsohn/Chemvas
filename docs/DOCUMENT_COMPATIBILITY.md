@@ -90,10 +90,11 @@ A reader judges a document in this order and reports the first failure:
 
 1. An unknown `version` is refused with the message used today, naming the
    generations this release reads.
-2. The wrapper is validated independently of the revision: exactly the keys
-   above, the right `type`, an integer `schema` of at least 1, a release string
-   in `min_reader` and an object in `state`. A document that fails here is an
-   invalid document, never a newer one.
+2. The wrapper is validated for that generation, independently of the
+   revision: for v7 exactly `type`, `version` and `state` as today; for v8
+   exactly the keys above, with the right `type`, an integer `schema` of at
+   least 1, a release string in `min_reader` and an object in `state`. A
+   document that fails here is an invalid document, never a newer one.
 3. A known `version` whose `schema` is above the highest revision this release
    knows is refused as a **newer document, not an invalid one**: the message
    names the document's format and revision, the highest revision this release
