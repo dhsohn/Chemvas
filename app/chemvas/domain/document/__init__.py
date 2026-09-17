@@ -12,6 +12,12 @@ from .calculation_plan import (
     calculation_plan_to_state,
     included_atom_ids,
 )
+from .edits import (
+    bond_endpoint_ids,
+    broken_ring_fill_indices,
+    orphaned_atom_ids,
+    ring_fill_is_intact,
+)
 from .graph import connected_atom_components
 from .images import (
     MAX_DOCUMENT_BYTES,
@@ -96,7 +102,9 @@ __all__ = [
     "CalculationStepEndpoint",
     "MoleculeModel",
     "atom_to_state",
+    "bond_endpoint_ids",
     "bond_to_state",
+    "broken_ring_fill_indices",
     "build_document_payload",
     "calculation_plan_from_state",
     "calculation_plan_to_state",
@@ -111,7 +119,9 @@ __all__ = [
     "mirrored_arc_kind",
     "model_bond_pairs",
     "normalize_json_numbers",
+    "orphaned_atom_ids",
     "ring_atom_ids_form_cycle",
+    "ring_fill_is_intact",
     "selection_payload_to_canvas_state",
     "serialize_model_state",
     "serialize_model_state_with_warnings",

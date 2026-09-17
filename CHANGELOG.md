@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Decide what a bond removal takes with it in one place. The atoms it leaves
+  bare and the ring fills it breaks are now computed by Qt-free rules in
+  `chemvas.domain.document` (`orphaned_atom_ids`, `broken_ring_fill_indices`,
+  `ring_fill_is_intact`), and the single-bond, selection and eraser delete
+  paths all call them instead of each keeping its own copy. Behaviour is
+  unchanged; Graph Patch follows in a later change.
 - Stack hydride labels tightly. When the hydrogens of an `OH`, `NH2` or
   `CH3` label sit on their own line above or below the element, that line
   now starts a quarter of a capital height from the element's ink instead

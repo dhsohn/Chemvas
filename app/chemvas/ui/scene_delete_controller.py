@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from functools import partial
-from typing import TYPE_CHECKING, Protocol
+from typing import TYPE_CHECKING, Protocol, cast
 
 from PyQt6 import sip
 from PyQt6.QtWidgets import QGraphicsItem, QGraphicsPolygonItem
@@ -13,7 +13,12 @@ from chemvas.core.history import (
     DeleteBondCommand,
     HistoryCommand,
 )
-from chemvas.domain.document import model_bond_pairs, ring_atom_ids_form_cycle
+from chemvas.domain.document import (
+    broken_ring_fill_indices,
+    model_bond_pairs,
+    orphaned_atom_ids,
+    ring_fill_is_intact,
+)
 from chemvas.domain.transactions import add_recovery_error_note
 from chemvas.ui.atom_coords_access import atom_coords_3d_for
 from chemvas.ui.atom_label_access import atom_has_visible_label_for
@@ -768,20 +773,20 @@ class SceneDeleteController:
             model = model_for(self.canvas)
             atom_ids = set(model.atoms)
             bond_pairs = model_bond_pairs(model)
-        broken_items = []
-        broken_states = []
-        for item in candidates:
-            ring_atom_ids = _ring_atom_ids(item)
-            if ring_atom_ids is _DELETED_RING_ITEM:
-                continue
-            if (
-                isinstance(ring_atom_ids, list)
-                and all(type(atom_id) is int for atom_id in ring_atom_ids)
-                and ring_atom_ids_form_cycle(ring_atom_ids, atom_ids, bond_pairs)
-            ):
-                continue
-            broken_items.append(item)
-            broken_states.append(self._ring_state(item))
+        live_items = [
+            item
+            for item in candidates
+            if _ring_atom_ids(item) is not _DELETED_RING_ITEM
+        ]
+        broken_items = [
+            live_items[index]
+            for index in broken_ring_fill_indices(
+                [_ring_atom_ids(item) for item in live_items],
+                atom_ids=atom_ids,
+                bond_pairs=bond_pairs,
+            )
+        ]
+        broken_states = [self._ring_state(item) for item in broken_items]
         if not broken_items:
             return None
         if removed_groups is not None:
@@ -870,18 +875,14 @@ class SceneDeleteController:
             ring_id = id(item)
             ring_items_by_id[ring_id] = item
             ring_order_by_id[ring_id] = order
-            if not (
-                isinstance(raw_atom_ids, list)
-                and all(type(atom_id) is int for atom_id in raw_atom_ids)
-                and ring_atom_ids_form_cycle(
-                    raw_atom_ids,
-                    live_atom_ids,
-                    live_bond_pairs,
-                )
+            if not ring_fill_is_intact(
+                raw_atom_ids, atom_ids=live_atom_ids, bond_pairs=live_bond_pairs
             ):
                 ring_dependencies_by_id[ring_id] = (set(), set())
                 pending_broken_ring_ids.add(ring_id)
                 continue
+            # The shared rule established the list-of-ints shape above.
+            raw_atom_ids = cast("list[int]", raw_atom_ids)
             atom_ids = set(raw_atom_ids)
             bond_pairs = {
                 SceneDeleteTransactionSession._bond_pair(atom_a, atom_b)
@@ -1072,22 +1073,20 @@ class SceneDeleteController:
     def _removable_orphaned_atom_ids(
         self, candidate_atom_ids: tuple[int, ...]
     ) -> list[int]:
-        removable: list[int] = []
-        for atom_id in candidate_atom_ids:
-            if any(
-                bond is not None and atom_id in (bond.a, bond.b) for bond in self._bonds
-            ):
-                continue
-            if not self._has_atom(atom_id):
-                continue
-            # A label or an attached mark keeps the atom visible on the sheet,
-            # so orphaning must not delete it as a side effect.
-            if atom_has_visible_label_for(self.canvas, atom_id):
-                continue
-            if self.marks.by_atom.get(atom_id):
-                continue
-            removable.append(atom_id)
-        return removable
+        # The removed bond is already gone from the model here, so the shared
+        # rule sees only surviving bonds. A label or an attached mark keeps the
+        # atom visible on the sheet, so orphaning must not delete it.
+        return list(
+            orphaned_atom_ids(
+                self._bonds,
+                candidate_atom_ids=candidate_atom_ids,
+                atom_exists=self._has_atom,
+                keeps_visible=lambda atom_id: (
+                    atom_has_visible_label_for(self.canvas, atom_id)
+                    or bool(self.marks.by_atom.get(atom_id))
+                ),
+            )
+        )
 
     def _neighbor_atom_ids(self, atom_id: int, *, bond_ids=None) -> tuple[int, ...]:
         bonds = self._bonds
