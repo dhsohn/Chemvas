@@ -11,6 +11,7 @@ from chemvas.domain.transactions import add_recovery_error_note
 from chemvas.ui.atom_coords_access import atom_coords_3d_for_id, pop_atom_coords_3d_for
 from chemvas.ui.atom_label_access import add_or_update_atom_label
 from chemvas.ui.canvas_calculation_plan_state import set_calculation_plan_for
+from chemvas.ui.canvas_callback_state import run_scene_selection_group_callback_for
 from chemvas.ui.canvas_color_mutation_service import apply_bond_color_in_place
 from chemvas.ui.canvas_group_state import (
     CanvasGroupState,
@@ -32,7 +33,6 @@ from chemvas.ui.canvas_service_ports import (
     history_bond_mutation_service_for,
 )
 from chemvas.ui.canvas_smiles_input_state import set_last_smiles_input_for
-from chemvas.ui.canvas_view_event_router import route_scene_selection_group_changed
 from chemvas.ui.handle_overlay_access import clear_handles_for
 from chemvas.ui.history_canvas_access import (
     apply_atom_color_for_history,
@@ -287,7 +287,7 @@ class CanvasHistoryOperations:
         restore_group_for(self.__canvas, group_id, group)
 
     def route_scene_selection_group_changed(self) -> None:
-        route_scene_selection_group_changed(self.__canvas)
+        run_scene_selection_group_callback_for(self.__canvas)
 
     def restore_mark_ownership(
         self,

@@ -275,17 +275,29 @@ def test_canvas_view_keeps_hit_testing_and_selection_wrappers_removed() -> None:
     assert _matching_lines(pattern, [canvas_view]) == []
 
 
-def test_canvas_view_event_overrides_route_to_attached_service_ports() -> None:
+def test_canvas_view_event_overrides_resolve_controllers_through_view_ports() -> None:
+    """The view asks its port for a controller and calls it; nothing in between.
+
+    A router module used to sit between the overrides and the port. It added
+    no policy beyond the fall back to Qt when services are not attached yet,
+    which the overrides now spell out themselves. The view still does not
+    reach into the service container: resolution stays in the port.
+    """
     canvas_view = APP_ROOT / "chemvas" / "ui" / "canvas_view.py"
     pattern = re.compile(
-        r"\bfrom ui\.canvas_service_access\b"
-        r"|\bself\.services\."
+        r"\bcanvas_service_access\b"
+        r"|\bself\.services\b"
         r"|getattr\(\s*self\s*,\s*\"services\""
-        r"|\binput_controller_for_view\b"
-        r"|\bpointer_controller_for_view\b"
     )
 
     assert _matching_lines(pattern, [canvas_view]) == []
+    assert not (APP_ROOT / "chemvas" / "ui" / "canvas_view_event_router.py").exists()
+    assert (
+        _matching_lines(
+            re.compile(r"\bcanvas_view_event_router\b"), _app_python_files()
+        )
+        == []
+    )
 
 
 def test_canvas_view_state_properties_mixin_removed_from_app_code() -> None:

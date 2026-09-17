@@ -20,7 +20,6 @@ from chemvas.ui.canvas_model_access import (
     bonds_for,
     has_atoms_for,
 )
-from chemvas.ui.canvas_viewport_access import viewport_transform_for
 from chemvas.ui.graphics_items import AtomDotItem
 from chemvas.ui.mark_item_access import mark_center_for
 from chemvas.ui.pick_radius_access import atom_pick_radius_for, bond_pick_radius_for
@@ -43,9 +42,12 @@ ARROW_PICK_SCREEN_PX = 6.0
 
 
 class CanvasHitTestingService:
-    def __init__(self, canvas: CanvasView, *, scene_pos_mapper=None) -> None:
+    def __init__(
+        self, canvas: CanvasView, *, scene_pos_mapper=None, viewport_transform=None
+    ) -> None:
         self.canvas = canvas
         self._scene_pos_mapper = scene_pos_mapper
+        self._viewport_transform = viewport_transform
 
     def scene_pos_from_event(self, event) -> QPointF:
         if callable(self._scene_pos_mapper):
@@ -149,7 +151,11 @@ class CanvasHitTestingService:
         return other_item
 
     def _arrow_near(self, pos: QPointF, *, stop_at=None):
-        view_transform = viewport_transform_for(self.canvas)
+        if not callable(self._viewport_transform):
+            raise AttributeError(
+                "CanvasHitTestingService requires an injected viewport_transform"
+            )
+        view_transform = self._viewport_transform()
         inverse, invertible = view_transform.inverted()
         if not invertible:
             return None

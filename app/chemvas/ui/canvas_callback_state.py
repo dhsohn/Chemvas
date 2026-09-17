@@ -21,4 +21,21 @@ def callback_state_for(canvas) -> CanvasCallbackState:
     return cast("CanvasCallbackState", canvas.runtime_state.callback_state)
 
 
-__all__ = ["CanvasCallbackState", "callback_state_for"]
+def run_scene_selection_group_callback_for(canvas) -> None:
+    callback = callback_state_for(canvas).scene_selection_group
+    if callback is not None:
+        callback()
+
+
+def run_scene_selection_outline_callback_for(canvas) -> None:
+    callback = callback_state_for(canvas).scene_selection_outline
+    if callback is not None:
+        callback()
+
+
+__all__ = [
+    "CanvasCallbackState",
+    "callback_state_for",
+    "run_scene_selection_group_callback_for",
+    "run_scene_selection_outline_callback_for",
+]

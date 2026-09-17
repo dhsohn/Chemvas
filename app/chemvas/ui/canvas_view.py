@@ -4,7 +4,8 @@ import contextlib
 import logging
 from typing import TYPE_CHECKING, override
 
-from PyQt6.QtCore import QRectF, pyqtSlot
+from PyQt6.QtCore import QRectF, QTimer, pyqtSlot
+from PyQt6.QtGui import QNativeGestureEvent
 from PyQt6.QtWidgets import (
     QGraphicsView,
 )
@@ -14,18 +15,13 @@ from chemvas.domain.document import (
     CLIPBOARD_SELECTION_VERSION as CURRENT_CLIPBOARD_SELECTION_VERSION,
 )
 from chemvas.ui.canvas_background_painter import draw_canvas_background_for
-from chemvas.ui.canvas_view_event_router import (
-    route_event,
-    route_key_press_event,
-    route_mouse_double_click_event,
-    route_mouse_move_event,
-    route_mouse_press_event,
-    route_mouse_release_event,
-    route_scene_selection_group_changed,
-    route_scene_selection_outline_changed,
-    route_scroll_contents_by,
-    route_viewport_event,
-    route_wheel_event,
+from chemvas.ui.canvas_callback_state import (
+    run_scene_selection_group_callback_for,
+    run_scene_selection_outline_callback_for,
+)
+from chemvas.ui.canvas_view_ports import (
+    input_controller_for_view,
+    pointer_controller_for_view,
 )
 from chemvas.ui.canvas_view_setup import initialize_canvas_view
 from chemvas.ui.canvas_window_access import notify_error_for
@@ -39,6 +35,14 @@ logger = logging.getLogger(__name__)
 
 
 class CanvasView(QGraphicsView):
+    """The Qt view. Its event overrides hand each event to the input services.
+
+    Qt can deliver events while the view is still being set up, before the
+    services are attached; every override then falls back to the base
+    handler. The base handler is looked up first in each override, so it
+    is the same bound method whether or not a controller takes the event.
+    """
+
     FILE_FORMAT_VERSION = CANVAS_FILE_VERSION
     CLIPBOARD_SELECTION_MIME = "application/x-chemvas-selection+json"
     CLIPBOARD_SELECTION_VERSION = CURRENT_CLIPBOARD_SELECTION_VERSION
@@ -56,11 +60,11 @@ class CanvasView(QGraphicsView):
         disconnect it before child graphics items emit selection changes from
         their destructors.
         """
-        route_scene_selection_group_changed(self)
+        run_scene_selection_group_callback_for(self)
 
     @pyqtSlot()
     def handle_scene_selection_outline_changed(self) -> None:
-        route_scene_selection_outline_changed(self)
+        run_scene_selection_outline_callback_for(self)
 
     @override
     def drawBackground(self, painter: QPainter | None, rect: QRectF) -> None:
@@ -70,7 +74,12 @@ class CanvasView(QGraphicsView):
 
     @override
     def keyPressEvent(self, event) -> None:
-        route_key_press_event(self, event, base_key_press_event=super().keyPressEvent)
+        base_key_press_event = super().keyPressEvent
+        input_controller = input_controller_for_view(self)
+        if input_controller is None:
+            base_key_press_event(event)
+            return
+        input_controller.key_press_event(event)
 
     def _report_mouse_event_failure(self, event, phase: str) -> None:
         # PyQt6 treats an exception escaping a Python virtual-method override
@@ -95,8 +104,13 @@ class CanvasView(QGraphicsView):
     @override
     def mousePressEvent(self, event) -> None:
         try:
-            route_mouse_press_event(
-                self, event, base_mouse_press_event=super().mousePressEvent
+            base_mouse_press_event = super().mousePressEvent
+            pointer_controller = pointer_controller_for_view(self)
+            if pointer_controller is None:
+                base_mouse_press_event(event)
+                return
+            pointer_controller.mouse_press_event(
+                event, base_mouse_press_event=base_mouse_press_event
             )
         except Exception:
             self._report_mouse_event_failure(event, "press")
@@ -104,10 +118,14 @@ class CanvasView(QGraphicsView):
     @override
     def mouseDoubleClickEvent(self, event) -> None:
         try:
-            route_mouse_double_click_event(
-                self,
+            base_mouse_double_click_event = super().mouseDoubleClickEvent
+            pointer_controller = pointer_controller_for_view(self)
+            if pointer_controller is None:
+                base_mouse_double_click_event(event)
+                return
+            pointer_controller.mouse_double_click_event(
                 event,
-                base_mouse_double_click_event=super().mouseDoubleClickEvent,
+                base_mouse_double_click_event=base_mouse_double_click_event,
             )
         except Exception:
             self._report_mouse_event_failure(event, "double-click")
@@ -115,8 +133,13 @@ class CanvasView(QGraphicsView):
     @override
     def mouseMoveEvent(self, event) -> None:
         try:
-            route_mouse_move_event(
-                self, event, base_mouse_move_event=super().mouseMoveEvent
+            base_mouse_move_event = super().mouseMoveEvent
+            pointer_controller = pointer_controller_for_view(self)
+            if pointer_controller is None:
+                base_mouse_move_event(event)
+                return
+            pointer_controller.mouse_move_event(
+                event, base_mouse_move_event=base_mouse_move_event
             )
         except Exception:
             self._report_mouse_event_failure(event, "move")
@@ -124,28 +147,55 @@ class CanvasView(QGraphicsView):
     @override
     def mouseReleaseEvent(self, event) -> None:
         try:
-            route_mouse_release_event(
-                self, event, base_mouse_release_event=super().mouseReleaseEvent
+            base_mouse_release_event = super().mouseReleaseEvent
+            pointer_controller = pointer_controller_for_view(self)
+            if pointer_controller is None:
+                base_mouse_release_event(event)
+                return
+            pointer_controller.mouse_release_event(
+                event, base_mouse_release_event=base_mouse_release_event
             )
         except Exception:
             self._report_mouse_event_failure(event, "release")
 
     @override
     def viewportEvent(self, event) -> bool:
-        return route_viewport_event(
-            self, event, base_viewport_event=super().viewportEvent
+        base_viewport_event = super().viewportEvent
+        pointer_controller = pointer_controller_for_view(self)
+        if pointer_controller is None:
+            return base_viewport_event(event)
+        return pointer_controller.viewport_event(
+            event,
+            single_shot=QTimer.singleShot,
+            base_viewport_event=base_viewport_event,
         )
 
     @override
     def wheelEvent(self, event) -> None:
-        route_wheel_event(self, event, base_wheel_event=super().wheelEvent)
+        base_wheel_event = super().wheelEvent
+        pointer_controller = pointer_controller_for_view(self)
+        if pointer_controller is None:
+            base_wheel_event(event)
+            return
+        pointer_controller.wheel_event(event, base_wheel_event=base_wheel_event)
 
     @override
     def event(self, event) -> bool:
-        return route_event(self, event, base_event=super().event)
+        base_event = super().event
+        input_controller = input_controller_for_view(self)
+        if input_controller is None:
+            return base_event(event)
+        return input_controller.event(
+            event, native_gesture_event_type=QNativeGestureEvent
+        )
 
     @override
     def scrollContentsBy(self, dx: int, dy: int) -> None:
-        route_scroll_contents_by(
-            self, dx, dy, base_scroll_contents_by=super().scrollContentsBy
+        base_scroll_contents_by = super().scrollContentsBy
+        pointer_controller = pointer_controller_for_view(self)
+        if pointer_controller is None:
+            base_scroll_contents_by(dx, dy)
+            return
+        pointer_controller.scroll_contents_by(
+            dx, dy, base_scroll_contents_by=base_scroll_contents_by
         )

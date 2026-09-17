@@ -5,6 +5,7 @@ from unittest import mock
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
+import pytest
 from PyQt6.QtCore import QPointF
 from PyQt6.QtGui import QTransform
 from PyQt6.QtWidgets import QApplication
@@ -349,3 +350,11 @@ class CanvasHitTestingServiceTest(unittest.TestCase):
         service.find_bond_near.return_value = 2
         self.assertEqual(service.bond_id_from_event(object()), 2)
         service.find_bond_near.assert_called_with(QPointF(3.0, 4.0), 10.56)
+
+
+def test_arrow_picking_names_the_missing_viewport_transform() -> None:
+    """The view's transform is injected at assembly; the service never reads the view."""
+    service = CanvasHitTestingService(SimpleNamespace())
+
+    with pytest.raises(AttributeError, match="injected viewport_transform"):
+        service._arrow_near(QPointF(0.0, 0.0))

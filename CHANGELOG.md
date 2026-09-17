@@ -9,6 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Canvas input events travel one hop less. `CanvasView`'s event overrides ask
+  the view port for the input or pointer controller and call it, keeping the
+  fall back to Qt while services are not attached yet and the exception
+  containment around mouse handlers; `canvas_view_event_router`, which only
+  forwarded, is removed, and its two scene-selection callbacks live beside
+  the callback state. Hit testing receives the view's `viewportTransform` by
+  injection, so the one-line `viewport_transform_for` accessor is gone too.
 - `CanvasRuntimeServices` names the concrete type of all fourteen fields
   instead of declaring thirteen of them `Any`. The architecture rule that
   forced the `Any` — no cycle through the history/transaction cluster, even
