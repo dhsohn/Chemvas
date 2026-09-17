@@ -295,7 +295,9 @@ a record is an error, not something to reconstruct from its brush. The store is
 a lookup, never the list of shapes: the attached shape items say which shapes
 the document has, and records of detached items stay for undo: they are
 dropped only when a new document discards history (a structure load, which
-keeps history, leaves them), and ids are never reused. Saved values are
+keeps history, leaves them), and ids are never reused: they come from
+`new_scene_record_id`, a counter kept outside the runtime state so that no
+rollback rewinds it while history still holds an item with a later id. Saved values are
 therefore the ones the document states: an opacity of 0.25 is saved as 0.25
 where Qt's read-back used to write 0.2500038, and a file Chemvas already saved
 re-saves unchanged. `tests/test_shape_record_first.py` holds both criteria and

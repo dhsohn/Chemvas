@@ -15,6 +15,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   over the existing document schema. The desktop editor does not use it yet;
   the file format is unchanged.
 
+### Fixed
+
+- A shape could be saved as a different shape after an undo failed part-way.
+  Undoing a structure load re-creates the shapes it removed; when a later part
+  of that undo failed, the rollback also rewound the counter that numbers shape
+  records while history kept the re-created item, so the next shape drawn took
+  the same number and the older item came back carrying the newer shape's
+  values. Record ids now come from a counter no rollback touches. After such
+  a failed undo, undoing that load (and so the steps before it) stays refused
+  with an error for the rest of the session instead of restoring a shape with
+  the wrong values; the document, redo and further editing are unaffected.
+
 ### Removed
 
 - `chemvas.features.annotations.BRACKET_KIND_VALUES`, a second copy of the

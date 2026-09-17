@@ -12,15 +12,18 @@ from PyQt6.QtCore import QPointF, QRectF
 from PyQt6.QtGui import QBrush, QColor
 from PyQt6.QtWidgets import QApplication, QGraphicsPathItem
 
+from chemvas.core.history import DeleteAtomsCommand
 from chemvas.domain.document import MoleculeModel
 from chemvas.ui.canvas_scene_items_state import shape_items_for
 from chemvas.ui.canvas_service_ports import insert_controller_for_access
 from chemvas.ui.canvas_shape_state import shape_state_for
+from chemvas.ui.scene_item_state_serialization import shape_state_dict_for
 from chemvas.ui.shape_record_access import (
     clear_shape_records_for,
     shape_id_for_item,
     shape_record_for,
 )
+from chemvas.ui.structure_mutation_access import add_bond_between_points_for
 from tests.canvas_factory import build_canvas_view
 
 
@@ -287,11 +290,10 @@ def test_a_shape_drawn_after_a_structure_load_never_takes_an_old_shape_id(
     assert _session(canvas).snapshot_state()["shapes"][0]["shape_kind"] == "rect"
 
 
-def test_a_failed_add_leaves_no_record_and_no_used_id(canvas) -> None:
+def test_a_failed_add_leaves_no_record(canvas) -> None:
     service = canvas.services.scene_decoration.scene_decoration_service
     service.add_shape(QRectF(10.0, 20.0, 60.0, 40.0))
     before_records = dict(shape_state_for(canvas).records)
-    before_next_id = shape_state_for(canvas).next_shape_id
 
     with (
         mock.patch(
@@ -303,7 +305,6 @@ def test_a_failed_add_leaves_no_record_and_no_used_id(canvas) -> None:
         service.add_shape(QRectF(200.0, 200.0, 30.0, 30.0))
 
     assert shape_state_for(canvas).records == before_records
-    assert shape_state_for(canvas).next_shape_id == before_next_id
     assert len(shape_items_for(canvas)) == 1
 
 
@@ -315,3 +316,58 @@ def test_clearing_the_records_never_hands_out_an_old_id_again(canvas) -> None:
     second = service.add_shape(QRectF(200.0, 20.0, 60.0, 40.0))
 
     assert shape_id_for_item(second) > shape_id_for_item(first)
+
+
+def test_a_rollback_never_lets_a_new_shape_take_the_id_of_one_history_holds(
+    canvas,
+) -> None:
+    services = canvas.services
+    history = services.history_service
+    service = services.scene_decoration.scene_decoration_service
+    original = service.add_shape(QRectF(10.0, 20.0, 120.0, 90.0), shape_kind="ellipse")
+    add_bond_between_points_for(canvas, QPointF(-45.0, -20.0), QPointF(25.0, 15.0))
+    insert_controller_for_access(canvas).smiles_service.load_model(_two_carbons(), "CC")
+
+    # Undoing the load re-creates the ellipse as a new item that the delete
+    # command keeps; then a later part of the same undo fails and the store
+    # is rolled back. The item keeps its id, so the id must stay taken.
+    with (
+        mock.patch.object(
+            DeleteAtomsCommand, "undo", side_effect=RuntimeError("late undo failure")
+        ),
+        pytest.raises(RuntimeError, match="late undo failure"),
+    ):
+        history.undo()
+    revived_ids = {
+        shape_id_for_item(item)
+        for command in history.state.history
+        for item in _held_shape_items(command)
+    }
+    # Besides the original, which the add command holds, history now holds
+    # the item the failed undo re-created.
+    assert revived_ids - {shape_id_for_item(original)}
+
+    new = service.add_shape(QRectF(300.0, 300.0, 50.0, 60.0), shape_kind="rect")
+
+    assert shape_id_for_item(new) not in revived_ids
+    assert _session(canvas).snapshot_state()["shapes"] == [
+        shape_state_dict_for(canvas, new)
+    ]
+
+    # The re-created item lost its record to the rollback. Undoing the load
+    # again is refused rather than bringing it back as some other shape.
+    history.undo()
+    with pytest.raises(RuntimeError, match="without a record"):
+        history.undo()
+    assert _session(canvas).snapshot_state()["shapes"] == []
+
+
+def _held_shape_items(command) -> list:
+    held = [
+        item
+        for item in getattr(command, "items", [])
+        if item is not None and item.data(0) == "shape"
+    ]
+    for child in getattr(command, "commands", []):
+        held.extend(_held_shape_items(child))
+    return held

@@ -27,6 +27,7 @@ from chemvas.domain.document import (
 from chemvas.features.annotations import shape_path
 from chemvas.ui.canvas_shape_state import shape_state_for
 from chemvas.ui.scene_decoration_build_access import shape_pen_for
+from chemvas.ui.scene_record_ids import new_scene_record_id
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
@@ -110,12 +111,8 @@ def set_shape_record_for(canvas: Any, item: Any, shape: Shape) -> Shape:
     state = shape_state_for(canvas)
     shape_id = shape_id_for_item(item)
     if shape_id is None:
-        shape_id = state.next_shape_id
-        state.next_shape_id += 1
+        shape_id = new_scene_record_id()
         item.setData(SHAPE_ID_ROLE, shape_id)
-    else:
-        # An item that already carries an id must never meet a fresh one.
-        state.next_shape_id = max(state.next_shape_id, shape_id + 1)
     record = normalized_shape(shape)
     state.records[shape_id] = record
     render_shape_item(canvas, item, record)
@@ -146,11 +143,10 @@ def clear_shape_records_for(canvas: Any) -> None:
 def shape_store_checkpoint_for(canvas: Any) -> Callable[[], None]:
     """Return a callable that puts the store back as it is now."""
     state = shape_state_for(canvas)
-    records, next_shape_id = dict(state.records), state.next_shape_id
+    records = dict(state.records)
 
     def restore() -> None:
         state.records = dict(records)
-        state.next_shape_id = next_shape_id
 
     return restore
 

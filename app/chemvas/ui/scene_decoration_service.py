@@ -183,7 +183,7 @@ class SceneDecorationService:
                 self._push_add_scene_item(item, shape_state_dict_for(self.canvas, item))
         except Exception:
             # The record is set before the item is attached; a failed add takes
-            # it, and its id, back out.
+            # it back out.
             restore_shape_store()
             raise
         return item
