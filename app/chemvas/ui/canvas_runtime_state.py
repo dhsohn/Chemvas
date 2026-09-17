@@ -22,6 +22,7 @@ from chemvas.ui.canvas_insert_state import CanvasInsertState
 from chemvas.ui.canvas_mark_registry import CanvasMarkRegistry
 from chemvas.ui.canvas_rotation_state import CanvasRotationState
 from chemvas.ui.canvas_scene_items_state import CanvasSceneItemsState
+from chemvas.ui.canvas_shape_state import CanvasShapeState
 from chemvas.ui.canvas_smiles_input_state import CanvasSmilesInputState
 from chemvas.ui.canvas_text_style_state import CanvasTextStyleState
 from chemvas.ui.canvas_tool_settings_state import CanvasToolSettingsState
@@ -92,6 +93,7 @@ class CanvasRuntimeState:
     callback_state: CanvasCallbackState
     scene_clipboard_state: SceneClipboardState
     scene_items_state: CanvasSceneItemsState
+    shape_state: CanvasShapeState
     smiles_input_state: CanvasSmilesInputState
 
     @classmethod
@@ -137,6 +139,7 @@ class CanvasRuntimeState:
             callback_state=CanvasCallbackState(),
             scene_clipboard_state=SceneClipboardState(),
             scene_items_state=CanvasSceneItemsState(),
+            shape_state=CanvasShapeState(),
             smiles_input_state=CanvasSmilesInputState(),
         )
 

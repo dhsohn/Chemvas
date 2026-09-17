@@ -29,6 +29,7 @@ from chemvas.ui.scene_decoration_build_access import (
     build_arrow_item_for,
 )
 from chemvas.ui.selection_service_access import refresh_selection_outline_for
+from chemvas.ui.shape_record_access import sync_shape_record_for
 
 if TYPE_CHECKING:
     from chemvas.ui.canvas_view import CanvasView
@@ -64,6 +65,7 @@ class HandleMutationService:
         updated = dict(data)
         updated["rect"] = new_rect
         item.setData(1, updated)
+        sync_shape_record_for(self.canvas, item)
         refresh_selection_outline_for(self.canvas)
 
     def update_orbital_rotate(self, item, pos: QPointF) -> None:

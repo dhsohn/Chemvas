@@ -280,7 +280,14 @@ time to the same footing as the molecule, starting with shapes:
 `validate_shape_fields` stays the one definition of a valid shape state. The
 graphics item stays (recovery keeps verifying item identity); what changes, step
 by step, is that saving, undo and edits read the record and the item only draws
-it. Until the later steps land, nothing reads `Shape` yet.
+it. So far the record is kept, not read: each canvas has a shape store
+(`CanvasShapeState`, a runtime-state field captured by both rollback paths),
+every shape item carries a runtime id, and every site that changes what a shape
+is — attach, state apply for undo/redo/flip/rotate/restyle, move, resize, fill,
+scene reset — calls `sync_shape_record_for`, which stores the
+`normalized_shape` of what the item says. `tests/test_shape_store_sync.py`
+asserts that agreement after every operation on a real canvas; it is what makes
+moving the reads safe.
 
 ## Composite Grouping
 

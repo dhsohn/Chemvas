@@ -31,6 +31,7 @@ from chemvas.ui.canvas_scene_items_state import (
     scene_item_collection_for,
     set_scene_item_collection_for,
 )
+from chemvas.ui.canvas_shape_state import CanvasShapeState
 from chemvas.ui.handle_state import CanvasHandleState
 from chemvas.ui.scene_item_controller import SceneItemController
 from chemvas.ui.transactions.scene_rect import scene_rect_is_automatic
@@ -54,6 +55,7 @@ class _FakeCanvas:
         self.handle_state = CanvasHandleState()
         self.mark_registry = CanvasMarkRegistry()
         self.runtime_state = canvas_runtime_state(
+            shape_state=CanvasShapeState(),
             handle_state=self.handle_state,
             mark_registry=self.mark_registry,
             scene_items_state=CanvasSceneItemsState(),

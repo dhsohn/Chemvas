@@ -14,6 +14,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   document schema. It is the first step of moving the source of truth for
   non-molecular objects off the graphics items; nothing reads it yet, and
   the file format is unchanged.
+- A per-canvas shape store kept in step with the shape items. Every shape item
+  carries a runtime id, every edit path updates the shape's `Shape` record
+  (`normalized_shape` defines the canonical form: the rules the desktop has
+  applied through Qt, without Qt's opacity quantisation or edge drift), and
+  every rollback path restores the store. Saving, undo and
+  rendering still read the item, so behaviour and saved files are unchanged.
 
 ### Changed
 

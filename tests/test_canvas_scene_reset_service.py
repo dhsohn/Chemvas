@@ -51,6 +51,7 @@ from chemvas.ui.canvas_scene_items_state import (
     ts_bracket_items_for,
 )
 from chemvas.ui.canvas_scene_reset_service import CanvasSceneResetService
+from chemvas.ui.canvas_shape_state import CanvasShapeState
 from chemvas.ui.handle_state import (
     CanvasHandleState,
     active_handles_for,
@@ -92,6 +93,7 @@ def _attach_minimal_runtime_state(canvas) -> None:
 
     canvas.renderer = Renderer()
     canvas.runtime_state = canvas_runtime_state(
+        shape_state=CanvasShapeState(),
         graph_state=canvas.graph_state,
         rotation_state=canvas.rotation_state,
         insert_state=canvas.insert_state,

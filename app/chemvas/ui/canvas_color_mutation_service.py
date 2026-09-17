@@ -58,6 +58,7 @@ from chemvas.ui.scene_item_state import (
     ring_state_dict_for,
     shape_state_dict_for,
 )
+from chemvas.ui.shape_record_access import sync_shape_record_for
 from chemvas.ui.transactions.document import DocumentSavepoint
 
 if TYPE_CHECKING:
@@ -523,12 +524,14 @@ class CanvasColorMutationService:
         )
 
     def _apply_shape_fill(self, item, color: QColor) -> None:
+        def mutate() -> None:
+            item.setBrush(self._pastel_fill(color, self.SHAPE_FILL_TINT))
+            sync_shape_record_for(self.canvas, item)
+
         self._record_scene_item_mutation(
             item,
             state_for=shape_state_dict_for,
-            mutation=lambda: item.setBrush(
-                self._pastel_fill(color, self.SHAPE_FILL_TINT)
-            ),
+            mutation=mutate,
             runtime_rollback=self._graphics_runtime_rollback(item),
         )
 
@@ -1074,6 +1077,9 @@ class CanvasColorMutationService:
                 )
             if mark_data is not None:
                 operations.append(lambda: item.setData(1, dict(mark_data)))
+            # A shape's fill is part of what the shape is; the record follows the
+            # brush back. A no-op for every other kind.
+            operations.append(lambda: sync_shape_record_for(self.canvas, item))
             _run_restore_operations("Graphics color rollback failed", operations)
 
         def verify() -> None:

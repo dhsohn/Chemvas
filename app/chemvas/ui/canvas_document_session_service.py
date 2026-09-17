@@ -139,6 +139,7 @@ _DOCUMENT_MUTATED_RUNTIME_FIELDS = (
     "tool_settings_state",
     "hover_preview_state",
     "scene_items_state",
+    "shape_state",
     "smiles_input_state",
 )
 

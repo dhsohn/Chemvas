@@ -13,7 +13,7 @@ same value. A ``Shape`` that is not a valid shape state cannot be constructed.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Any, cast
 
 from .state import validate_shape_fields
@@ -75,4 +75,39 @@ def shape_to_state(shape: Shape) -> dict[str, object]:
     return state
 
 
-__all__ = ["Shape", "shape_from_state", "shape_to_state"]
+def normalized_shape(shape: Shape) -> Shape:
+    """The canonical form of a shape record.
+
+    An ordered rectangle, a lowercase six-digit fill that always states its
+    opacity, no fill once it is fully transparent, and no opacity without a
+    fill. The desktop editor has applied the same rules implicitly by pushing
+    values through ``QRectF`` and ``QColor``; what that round trip also does and
+    this function deliberately does not is quantise opacity to sixteen bits
+    (0.25 reads back as 0.2500038...), drop a fill fainter than one such step,
+    and nudge an edge by a floating-point unit. A value a Chemvas-saved file
+    already holds is a fixed point of both.
+    """
+    left, right = sorted((shape.left, shape.right))
+    top, bottom = sorted((shape.top, shape.bottom))
+    fill = shape.fill
+    fill_alpha = shape.fill_alpha
+    if fill is None or fill_alpha == 0.0:
+        fill, fill_alpha = None, None
+    else:
+        digits = fill[1:].lower()
+        if len(digits) == 3:
+            digits = "".join(digit * 2 for digit in digits)
+        fill = f"#{digits}"
+        fill_alpha = 1.0 if fill_alpha is None else fill_alpha
+    return replace(
+        shape,
+        left=left,
+        top=top,
+        right=right,
+        bottom=bottom,
+        fill=fill,
+        fill_alpha=fill_alpha,
+    )
+
+
+__all__ = ["Shape", "normalized_shape", "shape_from_state", "shape_to_state"]

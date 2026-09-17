@@ -52,6 +52,7 @@ from chemvas.ui.scene_item_restore import (
 from chemvas.ui.scene_item_state import (
     apply_scene_item_state as apply_scene_item_state_helper,
 )
+from chemvas.ui.shape_record_access import sync_shape_record_for
 
 if TYPE_CHECKING:
     from chemvas.ui.canvas_view import CanvasView
@@ -231,6 +232,7 @@ class SceneItemController:
             build_shape_item=self._build_shape_item,
             set_arrow_labels=self._set_arrow_labels,
         )
+        sync_shape_record_for(self.canvas, item)
 
 
 __all__ = ["SceneItemController"]

@@ -31,6 +31,7 @@ from chemvas.ui.scene_signal_blocking import blocked_scene_signals
 from chemvas.ui.selection_info_state import selection_info_state_for
 from chemvas.ui.selection_outline_state import clear_selection_outlines_for
 from chemvas.ui.selection_style_state import selection_style_state_for
+from chemvas.ui.shape_record_access import clear_shape_records_for
 from chemvas.ui.transactions.object_graph_snapshot import _MISSING_ATTRIBUTE
 
 
@@ -142,6 +143,7 @@ class CanvasSceneResetService:
             self.graph.reset,
             lambda: clear_bond_graphics_for(canvas),
             lambda: clear_scene_item_collections_for(canvas),
+            lambda: clear_shape_records_for(canvas),
             lambda: clear_groups_for(canvas),
             self.marks.clear,
             lambda: clear_template_preview_for(canvas),

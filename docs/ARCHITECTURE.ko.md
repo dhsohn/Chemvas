@@ -253,8 +253,13 @@ CLI 테스트 실행 부분을 공유하고, 연산별 fixture와 화면 기대�
 `shape_to_state`가 기존 스키마와 상호 변환하며, `validate_shape_fields`가 유효한
 도형 state의 유일한 정의로 남는다. 그래픽 아이템은 그대로 둔다(복구는 계속 아이템
 동일성을 검증한다). 단계적으로 바뀌는 것은 저장·undo·편집이 레코드를 읽고 아이템은
-그것을 그리기만 한다는 점이다. 이후 단계가 들어오기 전까지 `Shape`를 읽는 곳은
-아직 없다.
+그것을 그리기만 한다는 점이다. 지금까지는 레코드를 유지만 하고 읽지는 않는다.
+캔버스마다 도형 store(`CanvasShapeState`, 두 롤백 경로가 모두 캡처하는 runtime-state
+필드)가 있고, 모든 도형 아이템은 런타임 id를 가지며, 도형이 무엇인지를 바꾸는 모든
+지점 — 부착, undo/redo/뒤집기/회전/스타일 변경을 위한 state 적용, 이동, 크기 조절,
+채움, 씬 초기화 — 이 `sync_shape_record_for`를 호출해 아이템이 말하는 값의
+`normalized_shape`를 저장한다. `tests/test_shape_store_sync.py`가 실제 캔버스에서
+매 연산 뒤 그 일치를 단언하며, 이것이 읽기를 옮겨도 안전하게 만드는 근거다.
 
 ## 복합 그룹화 (Composite Grouping)
 

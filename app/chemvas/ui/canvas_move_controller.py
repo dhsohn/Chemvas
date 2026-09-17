@@ -27,6 +27,7 @@ from chemvas.ui.handle_state import active_handles_for, handle_target_for
 from chemvas.ui.mark_item_access import mark_center_for
 from chemvas.ui.renderer_style_access import bond_length_px_for
 from chemvas.ui.selection_service_access import refresh_selection_outline_for
+from chemvas.ui.shape_record_access import sync_shape_record_for
 
 # Every arrow kind the document schema knows, plus the annotation items that
 # move by a plain moveBy with their stored geometry patched afterwards.
@@ -105,6 +106,7 @@ class CanvasMoveController:
                 item.setPath(
                     shape_path(new_rect, normalized_shape_kind(data.get("shape_kind")))
                 )
+                sync_shape_record_for(self.canvas, item)
         elif kind in _MOVE_BY_ITEM_KINDS:
             item.moveBy(dx, dy)
             if kind == "orbital":

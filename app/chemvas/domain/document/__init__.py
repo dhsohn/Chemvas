@@ -36,7 +36,7 @@ from .images import (
 )
 from .model import Atom, Bond, MoleculeModel
 from .plan_validation import validate_calculation_plan, validated_plan_and_inventory
-from .shapes import Shape, shape_from_state, shape_to_state
+from .shapes import Shape, normalized_shape, shape_from_state, shape_to_state
 from .state import (
     ARC_KIND_SWEEPS,
     ARROW_LABEL_SIDES,
@@ -127,6 +127,7 @@ __all__ = [
     "mirrored_arc_kind",
     "model_bond_pairs",
     "normalize_json_numbers",
+    "normalized_shape",
     "orphaned_atom_ids",
     "ring_atom_ids_form_cycle",
     "ring_fill_is_intact",
