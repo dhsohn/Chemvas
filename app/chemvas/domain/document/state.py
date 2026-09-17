@@ -1003,7 +1003,8 @@ def _validate_ts_bracket_fields(
             raise ValueError(error)
 
 
-def _validate_shape_fields(shape_state: Mapping[str, object], *, error: str) -> None:
+def validate_shape_fields(shape_state: Mapping[str, object], *, error: str) -> None:
+    """The one definition of a valid shape state, for files and the clipboard."""
     keys = set(shape_state)
     if not _SHAPE_STATE_BASE_KEYS <= keys or not keys <= _SHAPE_STATE_BASE_KEYS | {
         "fill",
@@ -1218,7 +1219,7 @@ _SHAPE_STATE_BASE_KEYS = frozenset(
 
 def _validate_shape_states(states: object) -> None:
     for shape_state in _validated_scene_state_list(states):
-        _validate_shape_fields(shape_state, error="Invalid Chemvas file.")
+        validate_shape_fields(shape_state, error="Invalid Chemvas file.")
 
 
 def _validate_orbital_states(states: object) -> None:
@@ -1706,7 +1707,7 @@ def _validate_clipboard_scene_item(item_state: Mapping[str, object]) -> None:
         _validate_ts_bracket_fields(item_state, error="Invalid clipboard payload.")
         return
     if kind == "shape":
-        _validate_shape_fields(item_state, error="Invalid clipboard payload.")
+        validate_shape_fields(item_state, error="Invalid clipboard payload.")
         return
     if kind == "image":
         # The complete image set was validated together before scene traversal.

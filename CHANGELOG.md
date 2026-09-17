@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `chemvas.domain.document.Shape`, a Qt-free record of a free decorative
+  shape, with `shape_from_state` and `shape_to_state` over the existing
+  document schema. It is the first step of moving the source of truth for
+  non-molecular objects off the graphics items; nothing reads it yet, and
+  the file format is unchanged.
+
 ### Changed
 
 - The main-window ports no longer resolve the canvas service container. Each

@@ -268,6 +268,20 @@ unknown-stereo marker.
 An explicit CLI style change is not that cosmetic gesture. These distinctions
 do not require another shared edit engine.
 
+### Document data ownership (in progress)
+
+`MoleculeModel` owns atoms and bonds as Qt-free data. Every other drawn object
+a document saves — ring fills, notes, marks, arrows and lines, TS brackets,
+shapes, orbitals, images — is still read back from its live graphics item when the document is
+written, and history commands hold those items. The pilot moves one kind at a
+time to the same footing as the molecule, starting with shapes:
+`chemvas.domain.document.Shape` is the Qt-free record, `shape_from_state` and
+`shape_to_state` convert to and from the existing schema, and
+`validate_shape_fields` stays the one definition of a valid shape state. The
+graphics item stays (recovery keeps verifying item identity); what changes, step
+by step, is that saving, undo and edits read the record and the item only draws
+it. Until the later steps land, nothing reads `Shape` yet.
+
 ## Composite Grouping
 
 Native template CLI composition (`bootstrap.document_template`) joins the
