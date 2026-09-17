@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Document the shared bond-removal rules in `docs/ARCHITECTURE.md` next to
+  the shared atom-move semantics, in English and Korean.
 - Graph Patch `remove_bond` now removes an endpoint the removal leaves with
   no bond, no label and no mark, with its perspective coordinate and group
   membership, and drops any ring fill that no longer forms a bonded cycle,
