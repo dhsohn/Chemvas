@@ -130,15 +130,20 @@ still reject malformed inputs that an earlier implementation accidentally accept
 
 Calculation data a document carries is preserved on the same terms as its
 drawing, whether or not the optional RDKit backend is installed: Chemvas never
-drops a plan because it cannot compute with it. Nor is a plan treated as still
-valid once the drawing under it changes. Three existing surfaces say so, and
-none of them discards data on its own: document validation refuses a plan
-that references an atom or bond that no longer exists; the desktop asks before
-saving a plan the drawing no longer supports, keeping it as an invalid draft
-when its references still resolve and, only with the user's consent, leaving
-it out of the file when they do not; and `inspect-plan` reports whether each
-step is ready. Preserve the data, and say that it needs review; that is the
-rule for every extension a document carries.
+drops a plan because it cannot compute with it. Chemvas does not record
+whether the drawing has changed since a plan was written; what it checks is
+whether the plan still fits the drawing it is saved with, and three existing
+surfaces report the result without discarding data on their own: document
+validation refuses a plan that references an atom or bond that no longer
+exists; the desktop asks before saving a plan whose components, declared
+charges or mapped atoms no longer agree with the drawing, keeping it as an
+invalid draft when its references still resolve and, only with the user's
+consent, leaving it out of the file when they do not; and `inspect-plan`
+reports whether each step is ready. An edit that leaves those facts intact,
+such as a changed bond order, passes every check, and whether the plan still
+describes the intended chemistry remains the user's judgement. Preserve the
+data, and say what is known to need review; that is the rule for every
+extension a document carries.
 
 ## Regression baseline
 
