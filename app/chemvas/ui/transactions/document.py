@@ -229,10 +229,6 @@ class DocumentSavepoint:
                 append(group)
         append(getattr(history_service, "state", None))
 
-        # Lightweight test canvases use this list as their history stack.
-        # Capturing it also makes a mutate-then-raise fake push transactional.
-        append(canvas, names=("pushed_commands",))
-
         object_snapshots = tuple(objects)
 
         scene_item_snapshots: list[_SceneItemExactSnapshot] = []

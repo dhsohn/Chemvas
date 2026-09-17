@@ -18,6 +18,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   window ports carry the container's type through instead of `Any`, and
   `Tool.canvas` is annotated explicitly because mypy resolves the new
   annotation-only cycle as one unit.
+- `DocumentSavepoint` no longer snapshots `pushed_commands`, an attribute only
+  lightweight test canvases have. Recovery covers the state the product owns,
+  as ADR 0002 decided; no test relied on the capture.
 - Services and controllers no longer touch the canvas directly. The 21
   remaining direct attribute accesses (reads, writes and method calls) —
   viewport rect, transform and pan capture and
