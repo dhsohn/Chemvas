@@ -52,7 +52,7 @@ from chemvas.ui.scene_item_restore import (
 from chemvas.ui.scene_item_state import (
     apply_scene_item_state as apply_scene_item_state_helper,
 )
-from chemvas.ui.shape_record_access import sync_shape_record_for
+from chemvas.ui.shape_record_access import record_shape_state
 
 if TYPE_CHECKING:
     from chemvas.ui.canvas_view import CanvasView
@@ -165,6 +165,9 @@ class SceneItemController:
             shape_state,
             build_shape_item=self._build_shape_item,
         )
+        if item is not None:
+            # The record is the state that was given, not what Qt read back.
+            record_shape_state(self.canvas, item, shape_state)
         self.attach_scene_item(item)
         return item
 
@@ -196,6 +199,10 @@ class SceneItemController:
             set_arrow_labels=self._set_arrow_labels,
         )
         if item is not None:
+            if state.get("kind") == "shape":
+                # Paste and undo re-creation arrive here: the record is the state
+                # that was given, not what Qt reads back off the new item.
+                record_shape_state(self.canvas, item, state)
             self.attach_scene_item(item)
             return item
         return None
@@ -216,6 +223,9 @@ class SceneItemController:
         self.lifecycle_service.remove_scene_item(item)
 
     def apply_scene_item_state(self, item, state: dict) -> None:
+        if state.get("kind") == "shape" and item.data(0) == "shape":
+            record_shape_state(self.canvas, item, state)
+            return
         apply_scene_item_state_helper(
             item,
             state,
@@ -232,7 +242,6 @@ class SceneItemController:
             build_shape_item=self._build_shape_item,
             set_arrow_labels=self._set_arrow_labels,
         )
-        sync_shape_record_for(self.canvas, item)
 
 
 __all__ = ["SceneItemController"]

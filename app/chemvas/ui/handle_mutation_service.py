@@ -3,9 +3,8 @@ from __future__ import annotations
 import math
 from typing import TYPE_CHECKING
 
-from PyQt6.QtCore import QPointF, QRectF
+from PyQt6.QtCore import QPointF
 
-from chemvas.features.annotations import normalized_shape_kind, shape_path
 from chemvas.features.selection import (
     orbital_rotation_angle as orbital_rotation_angle_helper,
 )
@@ -29,7 +28,12 @@ from chemvas.ui.scene_decoration_build_access import (
     build_arrow_item_for,
 )
 from chemvas.ui.selection_service_access import refresh_selection_outline_for
-from chemvas.ui.shape_record_access import sync_shape_record_for
+from chemvas.ui.shape_record_access import (
+    require_shape_record_for,
+    set_shape_record_for,
+    shape_rect_of,
+    shape_with_rect,
+)
 
 if TYPE_CHECKING:
     from chemvas.ui.canvas_view import CanvasView
@@ -54,18 +58,9 @@ class HandleMutationService:
         item.setScale(scale)
 
     def update_shape_resize(self, item, anchor: str, pos: QPointF) -> None:
-        data = item.data(1) or {}
-        rect = data.get("rect")
-        if not isinstance(rect, QRectF):
-            rect = item.sceneBoundingRect()
-        new_rect = resized_shape_rect_helper(rect, anchor, pos)
-        item.setPath(
-            shape_path(new_rect, normalized_shape_kind(data.get("shape_kind")))
-        )
-        updated = dict(data)
-        updated["rect"] = new_rect
-        item.setData(1, updated)
-        sync_shape_record_for(self.canvas, item)
+        shape = require_shape_record_for(self.canvas, item)
+        new_rect = resized_shape_rect_helper(shape_rect_of(shape), anchor, pos)
+        set_shape_record_for(self.canvas, item, shape_with_rect(shape, new_rect))
         refresh_selection_outline_for(self.canvas)
 
     def update_orbital_rotate(self, item, pos: QPointF) -> None:

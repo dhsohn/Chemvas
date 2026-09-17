@@ -1,8 +1,9 @@
-"""The shape store never lags the graphics items that still own shapes.
+"""Every attached shape has a record, and its item draws that record.
 
-Reads have not moved to the store yet, so this is the whole contract of the
-step: after every operation that can change a shape, each attached shape item
-has a record, and the record says what the item says.
+The record is what the shape is; the item is how it looks. After every
+operation that can change a shape, the two must agree - compared within what
+Qt does to a value it is asked to paint (sixteen-bit opacity, floating-point
+edges), since the item is no longer where the value lives.
 """
 
 from __future__ import annotations
@@ -18,13 +19,15 @@ from PyQt6.QtGui import QColor
 from PyQt6.QtWidgets import QApplication
 
 from chemvas.domain.document import normalized_shape, shape_from_state
+from chemvas.features.annotations import shape_path
 from chemvas.ui.canvas_scene_items_state import shape_items_for
 from chemvas.ui.canvas_shape_state import shape_state_for
 from chemvas.ui.scene_item_state_serialization import shape_state_dict
 from chemvas.ui.shape_record_access import (
+    set_shape_record_for,
     shape_id_for_item,
     shape_record_for,
-    sync_shape_record_for,
+    shape_rect_of,
 )
 from chemvas.ui.transactions import document_transaction
 from tests.canvas_factory import build_canvas_view
@@ -45,8 +48,22 @@ def assert_store_matches_items(canvas) -> None:
     assert None not in ids
     assert len(set(ids)) == len(ids)
     for item in items:
-        expected = normalized_shape(shape_from_state(shape_state_dict(item)))
-        assert shape_record_for(canvas, item) == expected
+        record = shape_record_for(canvas, item)
+        assert record is not None
+        assert normalized_shape(record) == record
+        drawn = normalized_shape(shape_from_state(shape_state_dict(item)))
+        assert (drawn.shape_kind, drawn.stroke_style, drawn.fill) == (
+            record.shape_kind,
+            record.stroke_style,
+            record.fill,
+        )
+        assert (drawn.left, drawn.top, drawn.right, drawn.bottom) == pytest.approx(
+            (record.left, record.top, record.right, record.bottom), abs=1e-6
+        )
+        if record.fill is not None:
+            assert drawn.fill_alpha == pytest.approx(record.fill_alpha, abs=1e-4)
+        # The outline on screen is the record's outline, not a cached rectangle.
+        assert item.path() == shape_path(shape_rect_of(record), record.shape_kind)
 
 
 def _add_shape(canvas, rect=None, **kwargs):
@@ -306,7 +323,7 @@ def test_an_item_that_arrives_with_an_id_never_meets_a_fresh_one(canvas) -> None
     item = _add_shape(canvas)
     shape_state_for(canvas).next_shape_id = 1
 
-    sync_shape_record_for(canvas, item)
+    set_shape_record_for(canvas, item, shape_record_for(canvas, item))
     other = _add_shape(canvas, QRectF(200.0, 20.0, 60.0, 40.0))
 
     assert shape_id_for_item(other) != shape_id_for_item(item)

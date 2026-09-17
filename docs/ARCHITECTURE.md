@@ -280,14 +280,25 @@ time to the same footing as the molecule, starting with shapes:
 `validate_shape_fields` stays the one definition of a valid shape state. The
 graphics item stays (recovery keeps verifying item identity); what changes, step
 by step, is that saving, undo and edits read the record and the item only draws
-it. So far the record is kept, not read: each canvas has a shape store
-(`CanvasShapeState`, a runtime-state field captured by both rollback paths),
-every shape item carries a runtime id, and every site that changes what a shape
-is — attach, state apply for undo/redo/flip/rotate/restyle, move, resize, fill,
-scene reset — calls `sync_shape_record_for`, which stores the
-`normalized_shape` of what the item says. `tests/test_shape_store_sync.py`
-asserts that agreement after every operation on a real canvas; it is what makes
-moving the reads safe.
+it. For shapes that is now the case. Each canvas has a shape store
+(`CanvasShapeState`, a runtime-state field captured by every rollback path) and
+every shape item carries a runtime id. An edit — state apply for
+undo/redo/flip/rotate/restyle, move, resize, fill, a colour rollback — computes
+a new `Shape` and hands it to `set_shape_record_for`, which stores its
+`normalized_shape` and draws the item from it (`render_shape_item`; besides it
+only the build service paints a shape item, once, and an exact rollback snapshot
+restores paint together with the record). A state that arrives — open, paste,
+undo re-creation — becomes the record as given. Every read of a shape's state —
+document save, undo capture, clipboard, delete capture, flip and rotate, scheme
+layout — comes from the record through `shape_state_dict_for`; an attached shape without
+a record is an error, not something to reconstruct from its brush. The store is
+a lookup, never the list of shapes: the attached shape items say which shapes
+the document has, and records of detached items stay for undo. Saved values are
+therefore the ones the document states: an opacity of 0.25 is saved as 0.25
+where Qt's read-back used to write 0.2500038, and a file Chemvas already saved
+re-saves unchanged. `tests/test_shape_record_first.py` holds both criteria and
+`tests/test_shape_store_sync.py` checks after every operation that the item
+draws its record.
 
 ## Composite Grouping
 

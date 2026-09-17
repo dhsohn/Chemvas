@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import contextlib
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Protocol, override
 
 from PyQt6 import sip
@@ -58,7 +58,11 @@ from chemvas.ui.scene_item_state import (
     ring_state_dict_for,
     shape_state_dict_for,
 )
-from chemvas.ui.shape_record_access import sync_shape_record_for
+from chemvas.ui.shape_record_access import (
+    require_shape_record_for,
+    set_shape_record_for,
+    shape_record_for,
+)
 from chemvas.ui.transactions.document import DocumentSavepoint
 
 if TYPE_CHECKING:
@@ -525,8 +529,16 @@ class CanvasColorMutationService:
 
     def _apply_shape_fill(self, item, color: QColor) -> None:
         def mutate() -> None:
-            item.setBrush(self._pastel_fill(color, self.SHAPE_FILL_TINT))
-            sync_shape_record_for(self.canvas, item)
+            fill = self._pastel_fill(color, self.SHAPE_FILL_TINT)
+            set_shape_record_for(
+                self.canvas,
+                item,
+                replace(
+                    require_shape_record_for(self.canvas, item),
+                    fill=fill.name(),
+                    fill_alpha=fill.alphaF(),
+                ),
+            )
 
         self._record_scene_item_mutation(
             item,
@@ -1060,6 +1072,12 @@ class CanvasColorMutationService:
             else None
         )
 
+        shape_record = (
+            shape_record_for(self.canvas, item)
+            if _graphics_item_data_for_capture(item, 0) == "shape"
+            else None
+        )
+
         if text_color is None and brush is None and pen is None:
             raise RuntimeError("color runtime has no exact Qt text/brush/pen authority")
 
@@ -1077,9 +1095,13 @@ class CanvasColorMutationService:
                 )
             if mark_data is not None:
                 operations.append(lambda: item.setData(1, dict(mark_data)))
-            # A shape's fill is part of what the shape is; the record follows the
-            # brush back. A no-op for every other kind.
-            operations.append(lambda: sync_shape_record_for(self.canvas, item))
+            if shape_record is not None:
+                # A shape's fill is part of what the shape is: the record goes
+                # back, and the item is drawn from it.
+                def restore_shape_record() -> None:
+                    set_shape_record_for(self.canvas, item, shape_record)
+
+                operations.append(restore_shape_record)
             _run_restore_operations("Graphics color rollback failed", operations)
 
         def verify() -> None:

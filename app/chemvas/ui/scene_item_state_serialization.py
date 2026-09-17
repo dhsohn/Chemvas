@@ -230,8 +230,14 @@ def shape_state_dict(item: QGraphicsPathItem) -> dict:
 
 
 def shape_state_dict_for(canvas, item) -> dict:
-    del canvas
-    return _typed_state_dict_for(item, QGraphicsPathItem, shape_state_dict)
+    # The record says what the shape is; the item is not asked.
+    from chemvas.ui.shape_record_access import shape_state_from_record_for
+
+    return _typed_state_dict_for(
+        item,
+        QGraphicsPathItem,
+        lambda shape_item: shape_state_from_record_for(canvas, shape_item),
+    )
 
 
 def orbital_state_dict(item: QGraphicsItemGroup) -> dict:
@@ -281,10 +287,17 @@ def scene_item_state(item, *, mark_center_getter: MarkCenterGetter) -> dict:
     return {}
 
 
+def _item_kind(item) -> object:
+    data_method = getattr(item, "data", None)
+    return data_method(0) if callable(data_method) else None
+
+
 def scene_item_state_for(canvas, item) -> dict:
     if item is not None:
         from chemvas.ui.mark_item_access import mark_center_for
 
+        if _item_kind(item) == "shape" and isinstance(item, QGraphicsPathItem):
+            return shape_state_dict_for(canvas, item)
         state = scene_item_state(
             item,
             mark_center_getter=lambda mark_item: mark_center_for(canvas, mark_item),

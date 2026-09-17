@@ -56,6 +56,7 @@ from chemvas.ui.note_item_access import (
 from chemvas.ui.scene_item_state import note_state_dict_for
 from chemvas.ui.structure_mutation_access import add_benzene_ring_for
 from tests.canvas_factory import build_canvas_view
+from tests.shape_support import adopt_shape, plain_shape_pen
 
 
 def _history_service(push=None):
@@ -393,6 +394,7 @@ class CanvasColorMutationServiceTest(unittest.TestCase):
         # History service is restored after the bundled mutation.
         self.assertIs(service.history, canvas.services.history_service)
 
+    @plain_shape_pen
     def test_apply_color_to_items_pushes_one_command_for_multiple_selected_items(
         self,
     ) -> None:
@@ -412,9 +414,11 @@ class CanvasColorMutationServiceTest(unittest.TestCase):
         first = QGraphicsPathItem()
         first.setData(0, "shape")
         scene.addItem(first)
+        adopt_shape(canvas, first)
         second = QGraphicsPathItem()
         second.setData(0, "shape")
         scene.addItem(second)
+        adopt_shape(canvas, second)
 
         service.apply_color_to_items([first, second], QColor("#2f6ed3"))
 
@@ -424,6 +428,7 @@ class CanvasColorMutationServiceTest(unittest.TestCase):
         self.assertNotEqual(first.brush().style(), Qt.BrushStyle.NoBrush)
         self.assertNotEqual(second.brush().style(), Qt.BrushStyle.NoBrush)
 
+    @plain_shape_pen
     def test_color_batch_skips_sip_deleted_item_and_mutates_live_item(self) -> None:
         scene = QGraphicsScene()
         pushes = []
@@ -446,6 +451,7 @@ class CanvasColorMutationServiceTest(unittest.TestCase):
         live = QGraphicsPathItem()
         live.setData(0, "shape")
         scene.addItem(live)
+        adopt_shape(canvas, live)
 
         service.apply_color_to_items([deleted, live], QColor("#2f6ed3"))
 
@@ -616,6 +622,7 @@ class CanvasColorMutationServiceTest(unittest.TestCase):
         self.assertEqual(canvas.model.bonds[bond_id].color, "#d84a3a")
         self.assertEqual(bond_item.pen().color().name(), "#d84a3a")
 
+    @plain_shape_pen
     def test_apply_color_to_item_washes_shape_fill_and_records_history(self) -> None:
         scene = QGraphicsScene()
         pushes: list = []
@@ -634,6 +641,7 @@ class CanvasColorMutationServiceTest(unittest.TestCase):
         shape = QGraphicsPathItem()
         shape.setData(0, "shape")
         scene.addItem(shape)
+        adopt_shape(canvas, shape)
 
         picked = QColor("#d84a3a")
         service.apply_color_to_item(shape, picked)

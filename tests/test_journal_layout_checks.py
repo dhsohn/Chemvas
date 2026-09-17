@@ -343,7 +343,9 @@ def test_highlight_panel_is_not_a_molecular_collision_target() -> None:
     )
     state["shapes"] = [
         {
+            "kind": "shape",
             "shape_kind": "rect",
+            "stroke_style": "solid",
             "left": -50.0,
             "top": -30.0,
             "right": 50.0,
@@ -599,7 +601,9 @@ def test_attached_label_shape_border_and_glyph_gap() -> None:
     state = _state({}, arrows=[_labelled_arrow(labels={"above": "O"})])
     state["shapes"] = [
         {
+            "kind": "shape",
             "shape_kind": "rect",
+            "stroke_style": "solid",
             "left": -10.0,
             "top": -10.0,
             "right": 10.0,
