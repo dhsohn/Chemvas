@@ -32,6 +32,7 @@ from chemvas.ui.handle_state import (
     set_handle_target_for,
 )
 from chemvas.ui.renderer_style_access import bond_length_px_for
+from chemvas.ui.shape_record_access import require_shape_record_for, shape_rect_of
 
 if TYPE_CHECKING:
     from chemvas.ui.canvas_view import CanvasView
@@ -69,10 +70,7 @@ class HandleOverlayService:
 
     def show_shape_handles(self, item) -> None:
         self.clear_handles()
-        data = item.data(1) or {}
-        rect = data.get("rect")
-        if rect is None:
-            rect = item.sceneBoundingRect()
+        rect = shape_rect_of(require_shape_record_for(self.canvas, item))
         handles = [
             self.create_handle(pos, handle_type, item)
             for handle_type, pos in shape_resize_handle_positions_helper(rect)

@@ -5,12 +5,13 @@ from unittest import mock
 
 from tests.runtime_services import canvas_runtime_services
 from tests.runtime_state import canvas_runtime_state
+from tests.shape_support import adopt_shape, plain_shape_pen
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PyQt6.QtCore import QPointF, QRectF
 from PyQt6.QtGui import QBrush, QColor
-from PyQt6.QtWidgets import QApplication
+from PyQt6.QtWidgets import QApplication, QGraphicsPathItem
 
 from chemvas.domain.document import Atom, Bond
 from chemvas.ui.atom_coords_access import (
@@ -37,6 +38,7 @@ from chemvas.ui.canvas_scene_items_state import (
 from chemvas.ui.canvas_shape_state import CanvasShapeState
 from chemvas.ui.handle_state import CanvasHandleState
 from chemvas.ui.move_access import move_atoms_for, move_item_for
+from chemvas.ui.shape_record_access import shape_record_for
 
 
 class _FakeItem:
@@ -199,13 +201,23 @@ class CanvasViewMoveHelpersTest(unittest.TestCase):
         self.assertEqual(arrow_item.data(2)["control"], QPointF(3.5, 1.5))
         self.assertEqual(view.refresh_selection_outline.call_count, 5)
 
+    @plain_shape_pen
     def test_move_item_shifts_active_handles_glued_to_target(self) -> None:
         from chemvas.ui.handle_state import (
             set_active_handles_for,
             set_handle_target_for,
         )
 
-        shape = _FakeItem("shape", data1={"rect": QRectF(0.0, 0.0, 10.0, 10.0)})
+        shape = QGraphicsPathItem()
+        shape.setData(0, "shape")
+        shape.setData(
+            1,
+            {
+                "rect": QRectF(0.0, 0.0, 10.0, 10.0),
+                "shape_kind": "rect",
+                "stroke_style": "solid",
+            },
+        )
         handle_a = _FakeItem("handle")
         handle_b = _FakeItem("handle")
         view = SimpleNamespace(
@@ -216,6 +228,7 @@ class CanvasViewMoveHelpersTest(unittest.TestCase):
                 mark_registry=CanvasMarkRegistry(),
             ),
         )
+        adopt_shape(view, shape)
         self._bind_move_controller(view)
         set_handle_target_for(view, shape)
         set_active_handles_for(view, [handle_a, handle_b])
@@ -225,11 +238,16 @@ class CanvasViewMoveHelpersTest(unittest.TestCase):
         # The shape's resize handles follow it instead of floating in place.
         self.assertEqual(handle_a.moves, [(5.0, 7.0)])
         self.assertEqual(handle_b.moves, [(5.0, 7.0)])
-        self.assertEqual(shape.data(1)["rect"], QRectF(5.0, 7.0, 10.0, 10.0))
-        # A shape moves by rebuilding its path (pos stays at the origin) rather than
-        # moveBy, so a later resize does not double-apply the offset.
-        self.assertEqual(shape.moves, [])
-        self.assertEqual(len(shape.paths), 1)
+        record = shape_record_for(view, shape)
+        self.assertEqual(
+            (record.left, record.top, record.right, record.bottom),
+            (5.0, 7.0, 15.0, 17.0),
+        )
+        # A shape moves by redrawing its record in scene coordinates (pos stays
+        # at the origin) rather than moveBy, so a later resize does not
+        # double-apply the offset.
+        self.assertEqual(shape.pos(), QPointF(0.0, 0.0))
+        self.assertEqual(shape.path().boundingRect(), QRectF(5.0, 7.0, 10.0, 10.0))
 
     def test_move_item_covers_bond_mark_and_scene_item_guard_paths(self) -> None:
         invalid_bond_item = _FakeItem("bond", data1="bad")

@@ -48,6 +48,10 @@ def build_shape_item_for(
     )
 
 
+def shape_pen_for(canvas, stroke_style: str):
+    return scene_decoration_build_service_for_access(canvas).shape_pen(stroke_style)
+
+
 def build_orbital_items_for(canvas, center, kind: str):
     return scene_decoration_build_service_for_access(canvas).build_orbital_items(
         center, kind

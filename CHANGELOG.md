@@ -23,6 +23,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Shapes are saved, undone and edited as document data instead of being read
+  back from their graphics items. A saved shape now carries the values the
+  document states: an opacity of 0.25 is written as 0.25 (Qt's read-back used
+  to write 0.2500038146972656), an edge no longer drifts by a floating-point
+  unit on save, and moving a shape is arithmetic on its coordinates. A file
+  from another tool is made canonical once on open (ordered rectangle,
+  lowercase six-digit fill with an explicit opacity) and is stable after that;
+  a file Chemvas already saved re-saves unchanged. The file format is the
+  same.
 - The main-window ports no longer resolve the canvas service container. Each
   window getter composes the active canvas with a canvas service port and
   returns the concrete type; five ports the window side needed are added to

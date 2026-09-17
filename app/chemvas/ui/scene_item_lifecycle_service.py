@@ -24,7 +24,7 @@ from chemvas.ui.scene_item_access import (
 )
 from chemvas.ui.scene_item_state import ARROW_KINDS
 from chemvas.ui.selection_service_access import refresh_selection_outline_for
-from chemvas.ui.shape_record_access import sync_shape_record_for
+from chemvas.ui.shape_record_access import adopt_shape_item_for
 from chemvas.ui.transactions.scene_item_attach import (
     SceneItemAttachPorts,
     SceneItemAttachSnapshot,
@@ -166,7 +166,7 @@ class SceneItemLifecycleService:
             append_scene_item_for(self.canvas, "ts_bracket_items", item)
         elif kind == "shape":
             append_scene_item_for(self.canvas, "shape_items", item)
-            sync_shape_record_for(self.canvas, item)
+            adopt_shape_item_for(self.canvas, item)
         elif kind == "orbital":
             append_scene_item_for(self.canvas, "orbital_items", item)
 

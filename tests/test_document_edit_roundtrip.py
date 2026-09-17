@@ -7,7 +7,7 @@ from unittest import mock
 
 import pytest
 from PyQt6.QtCore import QPointF, Qt
-from PyQt6.QtGui import QColor, QTextCursor, QTextDocument
+from PyQt6.QtGui import QTextCursor, QTextDocument
 from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import QApplication, QFileDialog, QMessageBox
 
@@ -317,12 +317,8 @@ def _assert_frozen_v7_content(literal_state, live_state):
     for arrow in expected["arrows"]:
         arrow.setdefault("control", None)
         arrow.setdefault("double", False)
-    for shape in expected["shapes"]:
-        # QBrush stores alpha at QColor's existing 16-bit precision.
-        if "fill_alpha" in shape:
-            color = QColor(shape["fill"])
-            color.setAlphaF(shape["fill_alpha"])
-            shape["fill_alpha"] = color.alphaF()
+    # Shapes are saved from their records, so the opacity comes back as the
+    # document stated it, not as QColor's 16-bit read-back of it.
     for before, after in zip(expected["notes"], actual["notes"], strict=True):
         # Qt and the existing HTML sanitizer canonicalize markup, not its text
         # or per-character formatting. No other frozen field is discarded.

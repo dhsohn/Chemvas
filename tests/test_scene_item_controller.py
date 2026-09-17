@@ -10,7 +10,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PyQt6 import sip
 from PyQt6.QtCore import QPointF, QRectF, Qt
-from PyQt6.QtGui import QBrush, QColor, QPainterPath, QPolygonF
+from PyQt6.QtGui import QBrush, QColor, QPainterPath, QPen, QPolygonF
 from PyQt6.QtWidgets import (
     QApplication,
     QGraphicsItemGroup,
@@ -93,6 +93,7 @@ class _FakeCanvas:
                 build_ts_bracket_item=self.record_build_ts_bracket_item,
                 build_orbital_items=self.record_build_orbital_items,
                 ts_bracket_path=self.record_ts_bracket_path,
+                shape_pen=lambda stroke_style: QPen(),
             ),
             arrow_build_service=SimpleNamespace(
                 build_arrow_item=self.record_build_arrow_item,
