@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from chemvas.features.selection import ActiveToolReference
 from chemvas.ui.atom_label_service import AtomLabelService
@@ -20,13 +20,16 @@ from chemvas.ui.selection_service_bundle import build_selection_services
 from chemvas.ui.structure_service_bundle import build_structure_services
 from chemvas.ui.tool_controller_factory import build_tool_controller
 
+if TYPE_CHECKING:
+    from chemvas.ui.canvas_history_service import CanvasHistoryService
+
 
 def build_canvas_services(
     canvas: Any,
     *,
     graph_state,
     insert_state,
-    history_service,
+    history_service: CanvasHistoryService,
 ) -> CanvasRuntimeServices:
     graph_service = CanvasGraphService(canvas, graph_state=graph_state)
     active_tool_reference = ActiveToolReference()

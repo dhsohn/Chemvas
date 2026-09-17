@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from PyQt6.QtWidgets import QGraphicsTextItem, QLineEdit
 
+    from chemvas.ui.canvas_runtime_services import CanvasRuntimeServices
     from chemvas.ui.canvas_view import CanvasView
     from chemvas.ui.main_window_service_types import MainWindowServices
     from chemvas.ui.main_window_tab_references import MainWindowTabReferences
@@ -110,7 +111,7 @@ def set_last_canvas_tab_index_for_window(window, index: int) -> None:
     window.runtime_state.last_canvas_tab_index = index
 
 
-def _active_canvas_services_for_window(window):
+def _active_canvas_services_for_window(window) -> CanvasRuntimeServices:
     from chemvas.ui.canvas_service_access import canvas_services_for
 
     return canvas_services_for(active_canvas_for_window(window))
