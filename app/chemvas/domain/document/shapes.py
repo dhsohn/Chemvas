@@ -76,13 +76,16 @@ def shape_to_state(shape: Shape) -> dict[str, object]:
 
 
 def normalized_shape(shape: Shape) -> Shape:
-    """The canonical form of a shape, as the desktop editor has always saved it.
+    """The canonical form of a shape record.
 
-    The editor used to get these rules for free by pushing every value
-    through ``QRectF`` and ``QColor`` and reading it back. They are spelled out
-    here so a record holds the form a Chemvas-saved file already has: an
-    ordered rectangle, a lowercase six-digit fill, a fill that always states
-    its opacity, and no fill at all once it is fully transparent.
+    An ordered rectangle, a lowercase six-digit fill that always states its
+    opacity, no fill once it is fully transparent, and no opacity without a
+    fill. The desktop editor has applied the same rules implicitly by pushing
+    values through ``QRectF`` and ``QColor``; what that round trip also does and
+    this function deliberately does not is quantise opacity to sixteen bits
+    (0.25 reads back as 0.2500038...), drop a fill fainter than one such step,
+    and nudge an edge by a floating-point unit. A value a Chemvas-saved file
+    already holds is a fixed point of both.
     """
     left, right = sorted((shape.left, shape.right))
     top, bottom = sorted((shape.top, shape.bottom))

@@ -186,15 +186,15 @@ def test_what_is_not_a_shape_state_is_refused_with_the_callers_message(
         ({"fill_alpha": 0.5}, {}),
     ],
 )
-def test_the_canonical_form_is_what_the_desktop_has_always_saved(
-    given, expected
-) -> None:
+def test_the_canonical_form_of_a_record(given, expected) -> None:
     shape = normalized_shape(shape_from_state({**BASE, **given}))
 
     assert shape_to_state(shape) == {**BASE, **expected}
 
 
-def test_a_canonical_shape_is_left_alone_and_values_are_not_quantised() -> None:
+def test_a_canonical_shape_is_left_alone_and_qt_quantisation_is_not_copied() -> None:
+    # Qt reads 0.25 back as 0.2500038... and may nudge 347.43 by one unit in
+    # the last place; the record keeps what it was given.
     state = {**BASE, "fill": "#2196f3", "fill_alpha": 0.25, "right": 347.43}
     shape = shape_from_state(state)
 

@@ -7,6 +7,7 @@ derived from it. Every site that changes what a shape is calls
 
 from __future__ import annotations
 
+import logging
 from typing import TYPE_CHECKING, Any
 
 from PyQt6 import sip
@@ -17,6 +18,8 @@ from chemvas.ui.scene_item_state_serialization import shape_state_dict
 
 if TYPE_CHECKING:
     from chemvas.domain.document import Shape
+
+logger = logging.getLogger(__name__)
 
 # Roles 0-2 carry an item's kind and payloads; the shape id has its own.
 SHAPE_ID_ROLE = 3
@@ -51,11 +54,15 @@ def sync_shape_record_for(canvas: Any, item: Any) -> None:
         shape_id = state.next_shape_id
         state.next_shape_id += 1
         item.setData(SHAPE_ID_ROLE, shape_id)
+    else:
+        # An item that already carries an id must never meet a fresh one.
+        state.next_shape_id = max(state.next_shape_id, shape_id + 1)
     try:
         record = normalized_shape(shape_from_state(shape_state_dict(item)))
     except ValueError:
         # An item whose geometry no document would accept has no record; the
         # edit itself must not fail because the mirror could not follow it.
+        logger.warning("Shape %s has no valid record; dropping it", shape_id)
         state.records.pop(shape_id, None)
         return
     state.records[shape_id] = record

@@ -21,7 +21,11 @@ from chemvas.domain.document import normalized_shape, shape_from_state
 from chemvas.ui.canvas_scene_items_state import shape_items_for
 from chemvas.ui.canvas_shape_state import shape_state_for
 from chemvas.ui.scene_item_state_serialization import shape_state_dict
-from chemvas.ui.shape_record_access import shape_id_for_item, shape_record_for
+from chemvas.ui.shape_record_access import (
+    shape_id_for_item,
+    shape_record_for,
+    sync_shape_record_for,
+)
 from chemvas.ui.transactions import document_transaction
 from tests.canvas_factory import build_canvas_view
 
@@ -121,6 +125,13 @@ def test_every_edit_and_its_undo_and_redo_keep_the_record_current(canvas) -> Non
         3.0, 4.0
     )
     check("translate selection")
+    services.scene_operations.scene_transform_controller.align_selected_items("left")
+    check("align")
+    services.scene_operations.canvas_color_mutation_service.apply_color_to_items(
+        [item, other], QColor("#4caf50")
+    )
+    check("fill several")
+    assert shape_record_for(canvas, other).fill is not None
 
     steps = 0
     while history.state.history:
@@ -245,4 +256,58 @@ def test_a_rolled_back_transaction_puts_the_store_back(canvas) -> None:
     assert shape_items_for(canvas) == [item]
     assert shape_state_for(canvas).records == before_records
     assert shape_state_for(canvas).next_shape_id == before_next_id
+    assert_store_matches_items(canvas)
+
+
+def test_a_failed_fill_of_several_shapes_leaves_no_fill_in_the_records(canvas) -> None:
+    services = canvas.services
+    first = _add_shape(canvas)
+    second = _add_shape(canvas, QRectF(200.0, 20.0, 60.0, 40.0))
+
+    with (
+        mock.patch.object(
+            type(services.history_service),
+            "push",
+            side_effect=RuntimeError("push failed"),
+        ),
+        pytest.raises(RuntimeError, match="push failed"),
+    ):
+        services.scene_operations.canvas_color_mutation_service.apply_color_to_items(
+            [first, second], QColor("#2196f3")
+        )
+
+    assert shape_state_dict(first).get("fill") is None
+    assert shape_record_for(canvas, first).fill is None
+    assert shape_record_for(canvas, second).fill is None
+    assert_store_matches_items(canvas)
+
+
+def test_a_failed_fill_of_one_shape_leaves_no_fill_in_its_record(canvas) -> None:
+    services = canvas.services
+    item = _add_shape(canvas)
+
+    with (
+        mock.patch.object(
+            type(services.history_service),
+            "push",
+            side_effect=RuntimeError("push failed"),
+        ),
+        pytest.raises(RuntimeError, match="push failed"),
+    ):
+        services.scene_operations.canvas_color_mutation_service.apply_color_to_item(
+            item, QColor("#2196f3")
+        )
+
+    assert shape_record_for(canvas, item).fill is None
+    assert_store_matches_items(canvas)
+
+
+def test_an_item_that_arrives_with_an_id_never_meets_a_fresh_one(canvas) -> None:
+    item = _add_shape(canvas)
+    shape_state_for(canvas).next_shape_id = 1
+
+    sync_shape_record_for(canvas, item)
+    other = _add_shape(canvas, QRectF(200.0, 20.0, 60.0, 40.0))
+
+    assert shape_id_for_item(other) != shape_id_for_item(item)
     assert_store_matches_items(canvas)
