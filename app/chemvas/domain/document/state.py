@@ -980,9 +980,10 @@ def _validate_arrow_fields(arrow_state: Mapping[str, object], *, error: str) -> 
         raise ValueError(error)
 
 
-def _validate_ts_bracket_fields(
+def validate_ts_bracket_fields(
     ts_bracket_state: Mapping[str, object], *, error: str
 ) -> None:
+    """The one definition of a valid TS bracket state, for files and the clipboard."""
     keys = set(ts_bracket_state)
     if ts_bracket_state.get("kind") != "ts_bracket":
         raise ValueError(error)
@@ -1209,7 +1210,7 @@ def _validate_arrow_states(states: object) -> None:
 
 def _validate_ts_bracket_states(states: object) -> None:
     for ts_bracket_state in _validated_scene_state_list(states):
-        _validate_ts_bracket_fields(ts_bracket_state, error="Invalid Chemvas file.")
+        validate_ts_bracket_fields(ts_bracket_state, error="Invalid Chemvas file.")
 
 
 _SHAPE_STATE_BASE_KEYS = frozenset(
@@ -1704,7 +1705,7 @@ def _validate_clipboard_scene_item(item_state: Mapping[str, object]) -> None:
         _validate_arrow_fields(item_state, error="Invalid clipboard payload.")
         return
     if kind == "ts_bracket":
-        _validate_ts_bracket_fields(item_state, error="Invalid clipboard payload.")
+        validate_ts_bracket_fields(item_state, error="Invalid clipboard payload.")
         return
     if kind == "shape":
         validate_shape_fields(item_state, error="Invalid clipboard payload.")

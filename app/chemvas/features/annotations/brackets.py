@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from chemvas.domain.document.state import VALID_TS_BRACKET_KINDS
+
 DEFAULT_BRACKET_KIND = "square_pair"
 
 BRACKET_MENU_SPECS: list[tuple[str, str]] = [
@@ -13,30 +15,16 @@ BRACKET_MENU_SPECS: list[tuple[str, str]] = [
     ("Dagger", "dagger"),
 ]
 
-BRACKET_KIND_VALUES = frozenset(
-    {
-        DEFAULT_BRACKET_KIND,
-        "parentheses_pair",
-        "braces_pair",
-        "double_dagger",
-        "square_left",
-        "parenthesis_left",
-        "brace_left",
-        "dagger",
-    }
-)
-
 
 def normalized_bracket_kind(
     value: object, *, default: str = DEFAULT_BRACKET_KIND
 ) -> str:
-    if isinstance(value, str) and value in BRACKET_KIND_VALUES:
+    if isinstance(value, str) and value in VALID_TS_BRACKET_KINDS:
         return value
     return default
 
 
 __all__ = [
-    "BRACKET_KIND_VALUES",
     "BRACKET_MENU_SPECS",
     "DEFAULT_BRACKET_KIND",
     "normalized_bracket_kind",

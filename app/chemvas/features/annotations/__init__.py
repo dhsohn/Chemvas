@@ -2,7 +2,6 @@
 
 from .arrow_label import arrow_label_html, arrow_label_normal, parse_arrow_label
 from .brackets import (
-    BRACKET_KIND_VALUES,
     BRACKET_MENU_SPECS,
     DEFAULT_BRACKET_KIND,
     normalized_bracket_kind,
@@ -34,7 +33,6 @@ from .shape_geometry import (
 )
 
 __all__ = [
-    "BRACKET_KIND_VALUES",
     "BRACKET_MENU_SPECS",
     "DEFAULT_BRACKET_KIND",
     "DEFAULT_SHAPE_KIND",

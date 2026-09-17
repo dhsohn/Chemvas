@@ -7,7 +7,7 @@ from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import QApplication, QToolButton
 
 from chemvas.bootstrap.main_window import build_main_window
-from chemvas.features.annotations import BRACKET_KIND_VALUES
+from chemvas.domain.document.state import VALID_TS_BRACKET_KINDS
 from chemvas.ui.canvas_callback_state import callback_state_for
 from chemvas.ui.canvas_window_access import snapshot_canvas_state_for
 from chemvas.ui.main_window_ports import (
@@ -26,7 +26,7 @@ def app():
     return application
 
 
-@pytest.mark.parametrize("kind", sorted(BRACKET_KIND_VALUES))
+@pytest.mark.parametrize("kind", sorted(VALID_TS_BRACKET_KINDS))
 def test_ts_color_reports_document_color_policy_without_mutation(app, kind):
     canvas = build_canvas_view()
     try:
