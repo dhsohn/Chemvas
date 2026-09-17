@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- `CanvasRuntimeServices` names the concrete type of all fourteen fields
+  instead of declaring thirteen of them `Any`. The architecture rule that
+  forced the `Any` — no cycle through the history/transaction cluster, even
+  an annotation-only one — now counts eager and lazy imports and leaves
+  `TYPE_CHECKING` edges out; runtime cycles stay forbidden, and core history
+  still may not import the UI in any form.
 - Services and controllers no longer touch the canvas directly. The 21
   remaining direct attribute accesses (reads, writes and method calls) —
   viewport rect, transform and pan capture and

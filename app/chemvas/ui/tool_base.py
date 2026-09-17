@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from chemvas.ui.tool_context import ToolContext
@@ -11,7 +11,7 @@ class Tool:
         self, name: str, canvas=None, *, context: ToolContext | None = None
     ) -> None:
         self.name = name
-        self.canvas = (
+        self.canvas: Any = (
             canvas
             if canvas is not None
             else (context.canvas if context is not None else None)

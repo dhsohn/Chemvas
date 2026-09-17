@@ -20,7 +20,7 @@ from typing import TYPE_CHECKING
 import pytest
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator
+    from collections.abc import Iterable, Iterator
 
 APP_ROOT = Path(__file__).resolve().parents[1] / "app"
 
@@ -1832,8 +1832,10 @@ def test_canvas_runtime_services_exposes_single_runtimes_directly() -> None:
                 annotations[child.target.id] = ast.unparse(child.annotation)
 
     assert annotations["hover"] == "HoverController"
-    assert annotations["graph_service"] == "Any"
-    assert annotations["tool_controller"] == "Any"
+    assert annotations["graph_service"] == "CanvasGraphService"
+    assert annotations["tool_controller"] == "ToolController"
+    # The container says what it holds; an Any here hides a dependency from mypy.
+    assert [name for name, kind in annotations.items() if kind == "Any"] == []
     assert "graph" not in annotations
     assert "tooling" not in annotations
 
@@ -3716,23 +3718,36 @@ def test_import_graph_rejects_empty_inventory(monkeypatch, tmp_path, eager_only)
 
 
 @pytest.mark.parametrize(
-    "source,eager",
+    "source,eager,runtime",
     [
-        ("from example import right", True),
-        ("from . import right as peer", True),
-        ("from example.right import READY", True),
-        ("def lazy():\n    from example import right", False),
-        ("async def lazy():\n    from example import right", False),
-        ("if TYPE_CHECKING:\n    from example import right", False),
-        ("if typing.TYPE_CHECKING:\n    from example import right", False),
-        ("if TYPE_CHECKING:\n    pass\nelse:\n    from example import right", True),
-        ("class Widget:\n    from example import right", True),
-        ("try:\n    pass\nexcept RuntimeError:\n    from example import right", True),
-        ("match value:\n    case 1:\n        from example import right", True),
+        ("from example import right", True, True),
+        ("from . import right as peer", True, True),
+        ("from example.right import READY", True, True),
+        ("def lazy():\n    from example import right", False, True),
+        ("async def lazy():\n    from example import right", False, True),
+        ("if TYPE_CHECKING:\n    from example import right", False, False),
+        ("if typing.TYPE_CHECKING:\n    from example import right", False, False),
+        (
+            "def lazy():\n    if TYPE_CHECKING:\n        from example import right",
+            False,
+            False,
+        ),
+        (
+            "if TYPE_CHECKING:\n    pass\nelse:\n    from example import right",
+            True,
+            True,
+        ),
+        ("class Widget:\n    from example import right", True, True),
+        (
+            "try:\n    pass\nexcept RuntimeError:\n    from example import right",
+            True,
+            True,
+        ),
+        ("match value:\n    case 1:\n        from example import right", True, True),
     ],
 )
 def test_import_graph_preserves_lazy_and_type_only_boundaries(
-    monkeypatch, tmp_path, source, eager
+    monkeypatch, tmp_path, source, eager, runtime
 ):
     package = tmp_path / "example"
     package.mkdir()
@@ -3744,6 +3759,9 @@ def test_import_graph_preserves_lazy_and_type_only_boundaries(
     assert (
         "example.right" in _static_app_import_graph(eager_only=True)["example.left"]
     ) is eager
+    assert (
+        "example.right" in _static_app_import_graph(runtime_only=True)["example.left"]
+    ) is runtime
     assert all(
         dependency in {"example", "example.right"}
         for dependency in _static_app_import_graph()["example.left"]
@@ -3753,12 +3771,21 @@ def test_import_graph_preserves_lazy_and_type_only_boundaries(
 # --- Dependency contracts ------------------------------------------------
 
 
-def _eager_imports(node: ast.AST) -> Iterator[ast.Import | ast.ImportFrom]:
-    """Visit import-time statements, including class/exception/match bodies."""
+def _eager_imports(
+    node: ast.AST, *, enter_functions: bool = False
+) -> Iterator[ast.Import | ast.ImportFrom]:
+    """Visit import-time statements, including class/exception/match bodies.
+
+    ``enter_functions`` also visits function bodies, which turns the walk into
+    every import that can execute: eager and lazy, never ``TYPE_CHECKING``.
+    """
     if isinstance(node, (ast.Import, ast.ImportFrom)):
         yield node
         return
-    if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+    if (
+        isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+        and not enter_functions
+    ):
         return
     if isinstance(node, ast.If) and (
         (isinstance(node.test, ast.Name) and node.test.id == "TYPE_CHECKING")
@@ -3770,14 +3797,23 @@ def _eager_imports(node: ast.AST) -> Iterator[ast.Import | ast.ImportFrom]:
         )
     ):
         for statement in node.orelse:
-            yield from _eager_imports(statement)
+            yield from _eager_imports(statement, enter_functions=enter_functions)
         return
     for child in ast.iter_child_nodes(node):
-        yield from _eager_imports(child)
+        yield from _eager_imports(child, enter_functions=enter_functions)
 
 
-def _static_app_import_graph(*, eager_only: bool = False) -> dict[str, set[str]]:
-    """Share module discovery and resolution across full and eager contracts."""
+def _static_app_import_graph(
+    *, eager_only: bool = False, runtime_only: bool = False
+) -> dict[str, set[str]]:
+    """Share module discovery and resolution across the import contracts.
+
+    The default graph has every import statement. ``eager_only`` keeps what runs
+    at import time; ``runtime_only`` adds lazy function-level imports to that
+    and still leaves ``TYPE_CHECKING`` blocks out, because an annotation-only
+    edge cannot make two modules wait on each other.
+    """
+    assert not (eager_only and runtime_only)
     module_paths: dict[str, Path] = {}
     for path in _app_python_files():
         relative = path.relative_to(APP_ROOT).with_suffix("")
@@ -3790,7 +3826,13 @@ def _static_app_import_graph(*, eager_only: bool = False) -> dict[str, set[str]]
     assert graph, "No Python modules found in the source inventory"
     for module, path in module_paths.items():
         tree = _parse_source(path.read_text(encoding="utf-8"))
-        for node in _eager_imports(tree) if eager_only else ast.walk(tree):
+        if eager_only:
+            nodes: Iterable[ast.AST] = _eager_imports(tree)
+        elif runtime_only:
+            nodes = _eager_imports(tree, enter_functions=True)
+        else:
+            nodes = ast.walk(tree)
+        for node in nodes:
             candidates: list[str] = []
             if isinstance(node, ast.Import):
                 candidates.extend(alias.name for alias in node.names)
@@ -3872,7 +3914,7 @@ def _strongly_connected_components(
 
 
 def test_history_transaction_dependency_cluster_stays_acyclic() -> None:
-    graph = _static_app_import_graph()
+    graph = _static_app_import_graph(runtime_only=True)
     protected_modules = {
         "chemvas.core.history",
         "chemvas.domain.transactions.outcome",
@@ -3888,8 +3930,11 @@ def test_history_transaction_dependency_cluster_stays_acyclic() -> None:
     }
     # The concrete history_operations adapter is assembled lazily by runtime
     # creation and refers to typed canvas services. The global eager-DAG guard
-    # covers it; the policy/command/savepoint cluster here forbids even lazy
-    # and type-only cycles. Core history additionally cannot import the UI.
+    # covers it; the policy/command/savepoint cluster here also forbids lazy
+    # cycles. Annotation-only edges are not counted: they never execute, and
+    # counting them is what forced CanvasRuntimeServices to declare its bundles
+    # as Any. Core history additionally cannot import the UI, type-only or not
+    # (tests/test_package_dependencies.py).
     assert protected_modules <= set(graph)
     cyclic_components = [
         sorted(component)
