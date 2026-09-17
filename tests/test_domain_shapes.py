@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import re
-from dataclasses import FrozenInstanceError
+from dataclasses import FrozenInstanceError, replace
 from decimal import Decimal
 from pathlib import Path
 
@@ -38,6 +38,8 @@ def _document_shape_states() -> list[dict]:
 
 
 def test_the_repository_documents_contain_shapes_to_check() -> None:
+    # Only one tracked document carries a shape today; the hand-written cases
+    # below are what cover the optional keys and number types.
     assert _document_shape_states()
 
 
@@ -64,15 +66,56 @@ def test_optional_keys_stay_exactly_as_present_as_they_were(extra) -> None:
 
 
 def test_integer_and_decimal_numbers_become_floats_of_the_same_value() -> None:
-    state = {**BASE, "left": 350, "top": Decimal("130.5"), "fill_alpha": 1}
+    state = {
+        **BASE,
+        "left": 350,
+        "top": Decimal("130.5"),
+        "right": 390,
+        "bottom": 155,
+        "fill_alpha": 1,
+    }
 
     shape = shape_from_state(state)
 
-    assert (shape.left, shape.top, shape.fill_alpha) == (350.0, 130.5, 1.0)
+    assert (shape.left, shape.top, shape.right, shape.bottom, shape.fill_alpha) == (
+        350.0,
+        130.5,
+        390.0,
+        155.0,
+        1.0,
+    )
     assert all(
-        type(value) is float for value in (shape.left, shape.top, shape.fill_alpha)
+        type(value) is float
+        for value in (
+            shape.left,
+            shape.top,
+            shape.right,
+            shape.bottom,
+            shape.fill_alpha,
+        )
     )
     assert shape_to_state(shape) == state
+
+
+def test_a_decimal_comes_back_as_the_float_the_reader_would_have_made() -> None:
+    # Decimal("0.1") != 0.1 in Python, so the promise is about the value the
+    # document reader normalises to, not about the Decimal object.
+    state = {**BASE, "left": Decimal("0.1")}
+
+    assert shape_to_state(shape_from_state(state)) == {**BASE, "left": 0.1}
+
+
+def test_a_shape_that_could_not_be_saved_cannot_be_built() -> None:
+    shape = shape_from_state(BASE)
+
+    for change in (
+        {"shape_kind": "hexagon"},
+        {"left": float("nan")},
+        {"fill": "red"},
+        {"fill_alpha": 7.0},
+    ):
+        with pytest.raises(ValueError, match="Invalid shape"):
+            replace(shape, **change)
 
 
 def test_a_shape_is_a_value() -> None:
@@ -105,6 +148,9 @@ def test_a_shape_is_a_value() -> None:
         {**BASE, "fill": "fedcba"},
         {**BASE, "fill": "#12"},
         {**BASE, "fill_alpha": 1.5},
+        {**BASE, "fill_alpha": -0.1},
+        {**BASE, "right": None},
+        {**BASE, "bottom": "x"},
         {**BASE, "fill_alpha": "0.5"},
     ],
 )

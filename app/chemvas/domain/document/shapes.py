@@ -5,7 +5,10 @@ The desktop editor has kept a shape's geometry, kind, stroke and fill on the
 the same information as a Qt-free value, so the saved form has one definition:
 ``validate_shape_fields`` says which states are shapes, ``shape_from_state`` turns
 a valid state into a record, and ``shape_to_state`` writes the record back as the
-state it came from.
+state it came from. Numbers are held as floats, as the document reader hands
+them over, so the state that comes back equals the one that went in whenever
+its numbers were ints or floats; a ``Decimal`` comes back as the float of the
+same value. A ``Shape`` that is not a valid shape state cannot be constructed.
 """
 
 from __future__ import annotations
@@ -19,7 +22,7 @@ if TYPE_CHECKING:
     from collections.abc import Mapping
 
 
-@dataclass(frozen=True, slots=True, kw_only=True)
+@dataclass(frozen=True, kw_only=True)
 class Shape:
     left: float
     top: float
@@ -31,6 +34,11 @@ class Shape:
     # either without the other, and an absent key stays absent.
     fill: str | None = None
     fill_alpha: float | None = None
+
+    def __post_init__(self) -> None:
+        # Edits build new records with dataclasses.replace; a record that
+        # could not be saved must fail here, not when the document is written.
+        validate_shape_fields(shape_to_state(self), error="Invalid shape.")
 
 
 def shape_from_state(

@@ -270,9 +270,9 @@ do not require another shared edit engine.
 
 ### Document data ownership (in progress)
 
-`MoleculeModel` owns atoms and bonds as Qt-free data. Every other object a
-document saves — notes, marks, arrows and lines, TS brackets, shapes, orbitals,
-images — is still read back from its live graphics item when the document is
+`MoleculeModel` owns atoms and bonds as Qt-free data. Every other drawn object
+a document saves — ring fills, notes, marks, arrows and lines, TS brackets,
+shapes, orbitals, images — is still read back from its live graphics item when the document is
 written, and history commands hold those items. The pilot moves one kind at a
 time to the same footing as the molecule, starting with shapes:
 `chemvas.domain.document.Shape` is the Qt-free record, `shape_from_state` and
