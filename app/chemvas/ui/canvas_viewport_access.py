@@ -33,10 +33,6 @@ class ViewportSnapshot:
     vertical_scroll: int | None
 
 
-def viewport_transform_for(canvas: Any) -> QTransform:
-    return canvas.viewportTransform()
-
-
 def capture_viewport_for(view: Any) -> ViewportSnapshot:
     horizontal_bar = view.horizontalScrollBar()
     vertical_bar = view.verticalScrollBar()
@@ -73,5 +69,4 @@ __all__ = [
     "capture_viewport_for",
     "restore_viewport_geometry_for",
     "restore_viewport_scroll_for",
-    "viewport_transform_for",
 ]

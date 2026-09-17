@@ -78,7 +78,7 @@ class CanvasViewEventShortcutTest(unittest.TestCase):
                 pass
 
             with mock.patch(
-                "chemvas.ui.canvas_view_event_router.QNativeGestureEvent",
+                "chemvas.ui.canvas_view.QNativeGestureEvent",
                 _FakeNativeGestureEvent,
             ):
                 for gesture_type in gestures:
@@ -105,7 +105,7 @@ class CanvasViewEventShortcutTest(unittest.TestCase):
                 pass
 
             with mock.patch(
-                "chemvas.ui.canvas_view_event_router.QNativeGestureEvent",
+                "chemvas.ui.canvas_view.QNativeGestureEvent",
                 _FakeNativeGestureEvent,
             ):
                 view = self._new_view()

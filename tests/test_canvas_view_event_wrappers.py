@@ -548,9 +548,7 @@ class CanvasViewEventWrapperTest(unittest.TestCase):
         self,
     ) -> None:
         with (
-            mock.patch(
-                "chemvas.ui.canvas_view_event_router.QTimer.singleShot"
-            ) as single_shot,
+            mock.patch("chemvas.ui.canvas_view.QTimer.singleShot") as single_shot,
             mock.patch.object(
                 QGraphicsView,
                 "viewportEvent",
@@ -660,7 +658,7 @@ class CanvasViewEventWrapperTest(unittest.TestCase):
                 gesture_type=Qt.NativeGestureType.PanNativeGesture,
             )
             with mock.patch(
-                "chemvas.ui.canvas_view_event_router.QNativeGestureEvent",
+                "chemvas.ui.canvas_view.QNativeGestureEvent",
                 _FakeNativeGestureEvent,
             ):
                 self.assertTrue(CanvasView.event(native_view, native_event))

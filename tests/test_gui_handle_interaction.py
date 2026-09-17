@@ -100,7 +100,9 @@ class GuiHandleInteractionTest(unittest.TestCase):
         canvas = active_canvas_for_window(self.window)
         canvas_services_for(canvas).input.tool_mode_controller.set_tool("select")
         bracket = add_ts_bracket_for(canvas, QRectF(-100, -60, 100, 120))
-        hit = CanvasHitTestingService(canvas)
+        hit = CanvasHitTestingService(
+            canvas, viewport_transform=canvas.viewportTransform
+        )
         for zoom in (0.5, 1.0, 2.0):
             set_zoom_for(canvas, zoom)
             self.assertAlmostEqual(canvas.viewportTransform().m11(), zoom)

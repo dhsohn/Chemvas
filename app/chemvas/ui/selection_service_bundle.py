@@ -37,6 +37,7 @@ def build_selection_services(
         resolved_hit_testing_service = CanvasHitTestingService(
             canvas,
             scene_pos_mapper=lambda event: scene_pos_from_event_for_view(canvas, event),
+            viewport_transform=lambda: canvas.viewportTransform(),
         )
     resolved_graph_service = graph_service
     selection_structure_service = SelectionStructureService(
