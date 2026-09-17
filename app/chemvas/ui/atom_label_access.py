@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from chemvas.domain.document import atom_shows_itself
 from chemvas.ui.canvas_atom_graphics_state import atom_items_for
 from chemvas.ui.canvas_model_access import atom_for_id
 from chemvas.ui.canvas_service_ports import atom_label_service_for_access
@@ -21,11 +22,7 @@ def atom_has_visible_label_for(canvas, atom_id: int) -> bool:
     atom = atom_for_id(canvas, atom_id)
     if atom is None:
         return False
-    return (
-        atom.element.upper() != "C"
-        or atom.explicit_label
-        or atom_id in atom_items_for(canvas)
-    )
+    return atom_shows_itself(atom) or atom_id in atom_items_for(canvas)
 
 
 def uses_compact_label_hit_shape_for(canvas, text: str) -> bool:

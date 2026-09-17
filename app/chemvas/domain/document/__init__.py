@@ -13,6 +13,7 @@ from .calculation_plan import (
     included_atom_ids,
 )
 from .edits import (
+    atom_shows_itself,
     bond_endpoint_ids,
     broken_ring_fill_indices,
     orphaned_atom_ids,
@@ -101,6 +102,7 @@ __all__ = [
     "CalculationStep",
     "CalculationStepEndpoint",
     "MoleculeModel",
+    "atom_shows_itself",
     "atom_to_state",
     "bond_endpoint_ids",
     "bond_to_state",

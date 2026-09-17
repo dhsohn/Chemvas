@@ -17,7 +17,14 @@ from .state import ring_atom_ids_form_cycle
 if TYPE_CHECKING:
     from collections.abc import Callable, Collection, Iterable, Sequence
 
-    from .model import Bond
+    from .model import Atom, Bond
+
+
+def atom_shows_itself(atom: Atom) -> bool:
+    """Whether an atom is drawn without any bond: a heteroatom or an explicit
+    label. An implicit carbon shows nothing, so a bond removal that leaves it
+    bare leaves an invisible atom unless a mark still points at it."""
+    return atom.element.upper() != "C" or bool(atom.explicit_label)
 
 
 def bond_endpoint_ids(
@@ -109,6 +116,7 @@ def ring_fill_is_intact(
 
 
 __all__ = [
+    "atom_shows_itself",
     "bond_endpoint_ids",
     "broken_ring_fill_indices",
     "orphaned_atom_ids",

@@ -469,6 +469,144 @@ def test_patch_normalizes_padded_element_labels(element, operation) -> None:
     assert result.state["model"]["atoms"][change["atom_id"]]["element"] == "N"
 
 
+def _two_atom_state(second: Atom) -> dict[str, object]:
+    model = MoleculeModel(
+        atoms={0: Atom("C", 0, 0), 1: second, 2: Atom("C", 40, 0)},
+        bonds=[Bond(0, 1), Bond(1, 2)],
+    )
+    return _state(model)
+
+
+def _remove(state, a, b):
+    return apply_document_patch(
+        state,
+        _patch({"op": "remove_bond", "a": a, "b": b}),
+        source_sha256=SOURCE_HASH,
+        document_version=CANVAS_FILE_VERSION,
+    )
+
+
+def test_remove_bond_removes_a_bare_implicit_carbon_with_its_dependents() -> None:
+    state = _two_atom_state(Atom("C", 20, 0))
+    state["perspective"] = {
+        "atom_coords_3d": {"0": [0, 0, 0], "1": [20, 0, 0], "2": [40, 0, 5]},
+        "projection_center_3d": [20, 0, 0],
+        "projection_anchor_2d": [20, 0],
+    }
+    state["notes"] = [{"text": "kept", "x": 0, "y": 40}]
+    state["groups"] = [
+        {"atoms": [2], "items": []},
+        {"atoms": [0], "items": [["notes", 0]]},
+    ]
+    original = deepcopy(state)
+
+    result = _remove(state, 1, 2)
+
+    assert state == original
+    assert result.operations == (
+        {
+            "index": 0,
+            "op": "remove_bond",
+            "a": 1,
+            "b": 2,
+            "removed_atom_ids": [2],
+            "removed_ring_fill_count": 0,
+        },
+    )
+    assert sorted(result.state["model"]["atoms"]) == [0, 1]
+    assert result.state["model"]["next_atom_id"] == 3
+    assert result.state["perspective"]["atom_coords_3d"] == {
+        "0": [0, 0, 0],
+        "1": [20, 0, 0],
+    }
+    assert result.state["groups"] == [{"atoms": [0], "items": [["notes", 0]]}]
+    assert result.after == {"atoms": 2, "bonds": 1, "components": 1}
+
+
+@pytest.mark.parametrize(
+    "second",
+    [Atom("O", 20, 0), Atom("C", 20, 0, explicit_label=True)],
+    ids=["heteroatom", "explicit_carbon"],
+)
+def test_remove_bond_keeps_a_labelled_endpoint(second: Atom) -> None:
+    state = _two_atom_state(second)
+    result = _remove(state, 0, 1)
+    assert result.operations[0]["removed_atom_ids"] == [0]
+    assert sorted(result.state["model"]["atoms"]) == [1, 2]
+
+
+def test_remove_bond_keeps_a_marked_endpoint() -> None:
+    state = _two_atom_state(Atom("C", 20, 0))
+    state["marks"] = [
+        {
+            "kind": "radical",
+            "text": "",
+            "atom_id": 2,
+            "dx": None,
+            "dy": None,
+            "x": 40,
+            "y": -6,
+        }
+    ]
+    result = _remove(state, 1, 2)
+    assert result.operations[0]["removed_atom_ids"] == []
+    assert sorted(result.state["model"]["atoms"]) == [0, 1, 2]
+    assert result.state["marks"] == state["marks"]
+
+
+def test_remove_bond_rejects_a_plan_that_still_references_the_removed_atom() -> None:
+    from chemvas.features.calculation_bundle import validate_calculation_plan
+
+    state = _two_atom_state(Atom("C", 20, 0))
+    state["model"]["atoms"][3] = {
+        "element": "C",
+        "x": 80.0,
+        "y": 0.0,
+        "color": "#000000",
+        "explicit_label": True,
+    }
+    state["model"]["next_atom_id"] = 4
+    state["calculation_plan"] = {
+        "format": "chemvas-calculation-plan",
+        "version": 2,
+        "states": [
+            {
+                "id": "R",
+                "charge": 0,
+                "multiplicity": 1,
+                "members": [{"component_atom_ids": [0, 1, 2], "inclusion": "included"}],
+            },
+            {
+                "id": "P",
+                "charge": 0,
+                "multiplicity": 1,
+                "members": [{"component_atom_ids": [3], "inclusion": "included"}],
+            },
+        ],
+        "steps": [
+            {
+                "id": "S",
+                "reactant": {
+                    "state_id": "R",
+                    "roles": [{"component_atom_ids": [0, 1, 2], "role": "reactant"}],
+                    "precomplex": {"kind": "none"},
+                },
+                "product": {
+                    "state_id": "P",
+                    "roles": [{"component_atom_ids": [3], "role": "product"}],
+                    "precomplex": {"kind": "none"},
+                },
+                "atom_correspondence": [{"reactant_atom_id": 0, "product_atom_id": 3}],
+            }
+        ],
+    }
+    # Valid as drawn; removing 1-2 deletes atom 2, so R no longer names a
+    # complete component and the whole patch is refused.
+    validate_calculation_plan(state, state["calculation_plan"])
+    with pytest.raises(ValueError, match="complete connected component"):
+        _remove(state, 1, 2)
+
+
 def test_remove_bond_keeps_fill_when_the_bond_is_not_a_cycle_edge() -> None:
     model = MoleculeModel(
         atoms={
