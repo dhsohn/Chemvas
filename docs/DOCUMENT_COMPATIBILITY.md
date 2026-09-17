@@ -134,16 +134,18 @@ drops a plan because it cannot compute with it. Chemvas does not record
 whether the drawing has changed since a plan was written; what it checks is
 whether the plan still fits the drawing it is saved with, and three existing
 surfaces report the result without discarding data on their own: document
-validation refuses a plan that references an atom or bond that no longer
-exists; the desktop asks before saving a plan whose components, declared
-charges or mapped atoms no longer agree with the drawing, keeping it as an
-invalid draft when its references still resolve and, only with the user's
-consent, leaving it out of the file when they do not; and `inspect-plan`
-reports whether each step is ready. An edit that leaves those facts intact,
-such as a changed bond order, passes every check, and whether the plan still
-describes the intended chemistry remains the user's judgement. Preserve the
-data, and say what is known to need review; that is the rule for every
-extension a document carries.
+validation refuses a plan whose members no longer name a complete connected
+component of the drawing or whose mapped atoms no longer exist; the desktop
+asks before saving a plan that no longer agrees with the drawing, keeping it
+as an invalid draft when only its declared charges or mapped-atom labels
+disagree and, only with the user's consent, leaving it out of the file when
+its component references no longer resolve; and `inspect-plan` refuses a
+plan that no longer fits and, for one that does, reports whether each step
+is ready to pack. An edit that leaves those facts intact, such as a changed
+bond order, passes every check, and whether the plan still describes the
+intended chemistry remains the user's judgement. Preserve the data, and say
+what is known to need review; that is the rule for every extension a
+document carries.
 
 ## Regression baseline
 
