@@ -239,7 +239,6 @@ class SceneItemController:
             build_arrow_item=self._build_arrow_item,
             set_curved_arrow_path=self._set_curved_arrow_path,
             orbital_base_handle_dist=self._orbital_base_handle_dist(),
-            build_shape_item=self._build_shape_item,
             set_arrow_labels=self._set_arrow_labels,
         )
 

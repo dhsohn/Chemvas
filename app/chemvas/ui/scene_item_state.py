@@ -42,7 +42,6 @@ from chemvas.ui.scene_item_state_serialization import (
     ring_state_dict_for,
     scene_item_state,
     scene_item_state_for,
-    shape_state_dict,
     shape_state_dict_for,
     ts_bracket_state_dict,
     ts_bracket_state_dict_for,
@@ -53,7 +52,6 @@ MarkColorSetter = Callable[[Any, str | None], None]
 NoteStyleApplier = Callable[[QGraphicsTextItem], None]
 RingFillBrushGetter = Callable[[], QBrush]
 TsBracketPathBuilder = Callable[..., Any]
-ShapeItemBuilder = Callable[..., QGraphicsPathItem]
 ArrowItemBuilder = Callable[[QPointF, QPointF, str, bool], QGraphicsPathItem]
 CurvedArrowPathSetter = Callable[
     [QGraphicsPathItem, QPointF, QPointF, QPointF, bool], None
@@ -207,7 +205,6 @@ def apply_scene_item_state(
     build_arrow_item: ArrowItemBuilder,
     set_curved_arrow_path: CurvedArrowPathSetter,
     orbital_base_handle_dist: float,
-    build_shape_item: ShapeItemBuilder | None = None,
     set_arrow_labels: ArrowLabelSetter | None = None,
 ) -> None:
     if item is None or not state:
@@ -267,30 +264,6 @@ def apply_scene_item_state(
         item.setPen(QPen(Qt.PenStyle.NoPen))
         item.setBrush(QBrush(QColor(bond_color)))
         item.setData(1, {"rect": QRectF(rect), "bracket_kind": bracket_kind})
-        return
-    if kind == "shape" and isinstance(item, QGraphicsPathItem):
-        if build_shape_item is None:
-            return
-        rect = shape_rect_from_state(state)
-        if rect is None:
-            return
-        shape_kind = shape_kind_from_state(state)
-        stroke_style = shape_stroke_from_state(state)
-        rebuilt = build_shape_item(
-            rect, shape_kind, stroke_style, shape_fill_from_state(state)
-        )
-        item.setPath(rebuilt.path())
-        item.setPen(rebuilt.pen())
-        item.setBrush(rebuilt.brush())
-        item.setData(0, "shape")
-        item.setData(
-            1,
-            {
-                "rect": QRectF(rect),
-                "shape_kind": shape_kind,
-                "stroke_style": stroke_style,
-            },
-        )
         return
     if kind == "orbital" and isinstance(item, QGraphicsItemGroup):
         center_point = _point_from_state(state.get("center"))
@@ -427,7 +400,6 @@ __all__ = [
     "shape_fill_from_state",
     "shape_kind_from_state",
     "shape_rect_from_state",
-    "shape_state_dict",
     "shape_state_dict_for",
     "shape_stroke_from_state",
     "ts_bracket_kind_from_state",

@@ -3,9 +3,9 @@
 Every edit computes a new ``Shape`` and hands it to ``set_shape_record_for``,
 which stores the canonical record and renders the item from it. Every read of
 a shape's state comes from the record. The item keeps its identity, because
-history and recovery hold on to it, but it is no longer asked what the shape
-is: an attached shape without a valid record is an error, not something to
-reconstruct from paint.
+history and recovery hold on to it, and carries nothing but its kind and its
+id: it cannot be asked what the shape is, and an item without a record cannot
+join the document's shapes.
 """
 
 from __future__ import annotations
@@ -27,10 +27,9 @@ from chemvas.domain.document import (
 from chemvas.features.annotations import shape_path
 from chemvas.ui.canvas_shape_state import shape_state_for
 from chemvas.ui.scene_decoration_build_access import shape_pen_for
-from chemvas.ui.scene_item_state_serialization import shape_state_dict
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
+    from collections.abc import Callable, Mapping
 
 # Roles 0-2 carry an item's kind and payloads; the shape id has its own.
 SHAPE_ID_ROLE = 3
@@ -104,15 +103,6 @@ def render_shape_item(canvas: Any, item: Any, shape: Shape) -> None:
         fill.setAlphaF(1.0 if shape.fill_alpha is None else shape.fill_alpha)
     item.setBrush(QBrush(fill))
     item.setData(0, "shape")
-    # Still mirrored for the few places that read geometry off the item.
-    item.setData(
-        1,
-        {
-            "rect": rect,
-            "shape_kind": shape.shape_kind,
-            "stroke_style": shape.stroke_style,
-        },
-    )
 
 
 def set_shape_record_for(canvas: Any, item: Any, shape: Shape) -> Shape:
@@ -132,23 +122,16 @@ def set_shape_record_for(canvas: Any, item: Any, shape: Shape) -> Shape:
     return record
 
 
+def require_attached_shape_record_for(canvas: Any, item: Any) -> None:
+    """An item may join the document's shapes only with its record in place."""
+    if _is_shape_item(item) and shape_record_for(canvas, item) is None:
+        raise RuntimeError("shape item attached without a record")
+
+
 def record_shape_state(canvas: Any, item: Any, state: Mapping[str, object]) -> Shape:
     return set_shape_record_for(
         canvas, item, shape_from_state(state, error="Invalid shape.")
     )
-
-
-def adopt_shape_item_for(canvas: Any, item: Any) -> None:
-    """Give a freshly built item its record, once, from what it was built as.
-
-    Items that arrive from a state (open, paste, undo re-creation) already have
-    their record. A shape drawn with the tool is built from a rectangle and the
-    tool settings, and this is where those become its record. Nothing is
-    derived from an item afterwards.
-    """
-    if not _is_shape_item(item) or shape_record_for(canvas, item) is not None:
-        return
-    record_shape_state(canvas, item, shape_state_dict(item))
 
 
 def shape_state_from_record_for(canvas: Any, item: Any) -> dict[str, object]:
@@ -156,22 +139,34 @@ def shape_state_from_record_for(canvas: Any, item: Any) -> dict[str, object]:
 
 
 def clear_shape_records_for(canvas: Any) -> None:
+    """Forget every record. Ids are never reused, so a stray item cannot alias."""
+    shape_state_for(canvas).records = {}
+
+
+def shape_store_checkpoint_for(canvas: Any) -> Callable[[], None]:
+    """Return a callable that puts the store back as it is now."""
     state = shape_state_for(canvas)
-    state.records = {}
-    state.next_shape_id = 1
+    records, next_shape_id = dict(state.records), state.next_shape_id
+
+    def restore() -> None:
+        state.records = dict(records)
+        state.next_shape_id = next_shape_id
+
+    return restore
 
 
 __all__ = [
     "SHAPE_ID_ROLE",
-    "adopt_shape_item_for",
     "clear_shape_records_for",
     "record_shape_state",
     "render_shape_item",
+    "require_attached_shape_record_for",
     "require_shape_record_for",
     "set_shape_record_for",
     "shape_id_for_item",
     "shape_record_for",
     "shape_rect_of",
     "shape_state_from_record_for",
+    "shape_store_checkpoint_for",
     "shape_with_rect",
 ]

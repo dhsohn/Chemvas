@@ -210,14 +210,6 @@ class CanvasViewMoveHelpersTest(unittest.TestCase):
 
         shape = QGraphicsPathItem()
         shape.setData(0, "shape")
-        shape.setData(
-            1,
-            {
-                "rect": QRectF(0.0, 0.0, 10.0, 10.0),
-                "shape_kind": "rect",
-                "stroke_style": "solid",
-            },
-        )
         handle_a = _FakeItem("handle")
         handle_b = _FakeItem("handle")
         view = SimpleNamespace(

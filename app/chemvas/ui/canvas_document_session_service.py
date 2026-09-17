@@ -89,6 +89,7 @@ from chemvas.ui.selection_collection_access import (
     selection_items_for_copy_for,
 )
 from chemvas.ui.selection_info_state import selection_info_state_for
+from chemvas.ui.shape_record_access import clear_shape_records_for
 from chemvas.ui.sheet_setup_access import apply_sheet_scene_rect_for
 from chemvas.ui.structure_payload_access import (
     build_3d_conversion_payload_for,
@@ -593,6 +594,10 @@ class CanvasDocumentSessionService:
 
     def _apply_state_contents(self, state: dict) -> None:
         clear_scene_for(self.canvas)
+        # A new document discards history, and with it every item that could
+        # come back; only then are the old records unreachable. Clearing the
+        # scene alone (a structure load keeps history) must leave them.
+        clear_shape_records_for(self.canvas)
         set_calculation_plan_for(self.canvas, state.get("calculation_plan"))
         apply_document_settings(self.canvas, state)
         set_model_for(self.canvas, deserialize_model_state(state["model"]))

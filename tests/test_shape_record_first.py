@@ -3,19 +3,24 @@
 from __future__ import annotations
 
 import os
+from unittest import mock
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 import pytest
 from PyQt6.QtCore import QPointF, QRectF
 from PyQt6.QtGui import QBrush, QColor
-from PyQt6.QtWidgets import QApplication
+from PyQt6.QtWidgets import QApplication, QGraphicsPathItem
 
 from chemvas.domain.document import MoleculeModel
 from chemvas.ui.canvas_scene_items_state import shape_items_for
 from chemvas.ui.canvas_service_ports import insert_controller_for_access
 from chemvas.ui.canvas_shape_state import shape_state_for
-from chemvas.ui.shape_record_access import shape_id_for_item, shape_record_for
+from chemvas.ui.shape_record_access import (
+    clear_shape_records_for,
+    shape_id_for_item,
+    shape_record_for,
+)
 from tests.canvas_factory import build_canvas_view
 
 
@@ -217,3 +222,96 @@ def test_undoing_a_structure_load_recreates_shapes_with_the_stated_values(
     services.history_service.undo()
 
     assert session.snapshot_state()["shapes"] == before
+
+
+def test_a_shape_item_without_a_record_cannot_join_the_document(canvas) -> None:
+    item = QGraphicsPathItem()
+    item.setData(0, "shape")
+
+    with pytest.raises(RuntimeError, match="without a record"):
+        canvas.services.scene_view.scene_item_controller.attach_scene_item(item)
+
+    assert shape_items_for(canvas) == []
+    assert item.scene() is None
+
+
+def _two_carbons() -> MoleculeModel:
+    model = MoleculeModel()
+    model.add_atom("C", 0.0, 0.0)
+    model.add_atom("C", 40.0, 0.0)
+    return model
+
+
+def test_a_shape_deleted_before_a_structure_load_still_comes_back_on_undo(
+    canvas,
+) -> None:
+    services = canvas.services
+    session = _session(canvas)
+    session.apply_state(_document_with(canvas, [CANONICAL_SHAPE]))
+    item = shape_items_for(canvas)[0]
+    item.setSelected(True)
+    services.scene_operations.scene_delete_controller.delete_selected_items()
+
+    # A structure load clears the scene but keeps history, and history still
+    # holds the deleted item; its record has to outlive the load.
+    insert_controller_for_access(canvas).smiles_service.load_model(_two_carbons(), "CC")
+    services.history_service.undo()
+    services.history_service.undo()
+
+    assert shape_items_for(canvas) == [item]
+    assert session.snapshot_state()["shapes"] == [CANONICAL_SHAPE]
+
+
+def test_a_shape_drawn_after_a_structure_load_never_takes_an_old_shape_id(
+    canvas,
+) -> None:
+    services = canvas.services
+    service = services.scene_decoration.scene_decoration_service
+    old = service.add_shape(QRectF(10.0, 20.0, 60.0, 40.0), shape_kind="rect")
+    old_record = shape_record_for(canvas, old)
+    old.setSelected(True)
+    services.scene_operations.scene_delete_controller.delete_selected_items()
+    insert_controller_for_access(canvas).smiles_service.load_model(_two_carbons(), "CC")
+
+    new = service.add_shape(
+        QRectF(-300.0, -300.0, 20.0, 20.0), shape_kind="ellipse", stroke_style="dashed"
+    )
+    assert shape_id_for_item(new) != shape_id_for_item(old)
+
+    for _ in range(3):
+        services.history_service.undo()
+
+    # The old rectangle is back, saved as itself and not as the newer ellipse.
+    assert shape_items_for(canvas) == [old]
+    assert shape_record_for(canvas, old) == old_record
+    assert _session(canvas).snapshot_state()["shapes"][0]["shape_kind"] == "rect"
+
+
+def test_a_failed_add_leaves_no_record_and_no_used_id(canvas) -> None:
+    service = canvas.services.scene_decoration.scene_decoration_service
+    service.add_shape(QRectF(10.0, 20.0, 60.0, 40.0))
+    before_records = dict(shape_state_for(canvas).records)
+    before_next_id = shape_state_for(canvas).next_shape_id
+
+    with (
+        mock.patch(
+            "chemvas.ui.scene_item_lifecycle_service.append_scene_item_for",
+            side_effect=RuntimeError("attach failed"),
+        ),
+        pytest.raises(RuntimeError, match="attach failed"),
+    ):
+        service.add_shape(QRectF(200.0, 200.0, 30.0, 30.0))
+
+    assert shape_state_for(canvas).records == before_records
+    assert shape_state_for(canvas).next_shape_id == before_next_id
+    assert len(shape_items_for(canvas)) == 1
+
+
+def test_clearing_the_records_never_hands_out_an_old_id_again(canvas) -> None:
+    service = canvas.services.scene_decoration.scene_decoration_service
+    first = service.add_shape(QRectF(10.0, 20.0, 60.0, 40.0))
+
+    clear_shape_records_for(canvas)
+    second = service.add_shape(QRectF(200.0, 20.0, 60.0, 40.0))
+
+    assert shape_id_for_item(second) > shape_id_for_item(first)

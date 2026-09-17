@@ -18,11 +18,12 @@ from PyQt6.QtCore import QPointF, QRectF
 from PyQt6.QtGui import QColor
 from PyQt6.QtWidgets import QApplication
 
-from chemvas.domain.document import normalized_shape, shape_from_state
-from chemvas.features.annotations import shape_path
+from chemvas.domain.document import normalized_shape
+from chemvas.features.annotations import pen_style_for_stroke, shape_path
+from chemvas.features.selection import shape_resize_handle_positions
 from chemvas.ui.canvas_scene_items_state import shape_items_for
 from chemvas.ui.canvas_shape_state import shape_state_for
-from chemvas.ui.scene_item_state_serialization import shape_state_dict
+from chemvas.ui.handle_state import active_handles_for
 from chemvas.ui.shape_record_access import (
     set_shape_record_for,
     shape_id_for_item,
@@ -51,19 +52,19 @@ def assert_store_matches_items(canvas) -> None:
         record = shape_record_for(canvas, item)
         assert record is not None
         assert normalized_shape(record) == record
-        drawn = normalized_shape(shape_from_state(shape_state_dict(item)))
-        assert (drawn.shape_kind, drawn.stroke_style, drawn.fill) == (
-            record.shape_kind,
-            record.stroke_style,
-            record.fill,
-        )
-        assert (drawn.left, drawn.top, drawn.right, drawn.bottom) == pytest.approx(
-            (record.left, record.top, record.right, record.bottom), abs=1e-6
-        )
-        if record.fill is not None:
-            assert drawn.fill_alpha == pytest.approx(record.fill_alpha, abs=1e-4)
-        # The outline on screen is the record's outline, not a cached rectangle.
+        # The item says it is a shape and which one; nothing about what it is.
+        assert item.data(0) == "shape"
+        assert item.data(1) is None
+        assert item.data(2) is None
+        # And it is painted as its record.
         assert item.path() == shape_path(shape_rect_of(record), record.shape_kind)
+        assert item.pen().style() == pen_style_for_stroke(record.stroke_style)
+        painted = item.brush().color()
+        if record.fill is None:
+            assert painted.alpha() == 0
+        else:
+            assert painted.name() == record.fill
+            assert painted.alphaF() == pytest.approx(record.fill_alpha, abs=1e-4)
 
 
 def _add_shape(canvas, rect=None, **kwargs):
@@ -121,6 +122,25 @@ def test_every_edit_and_its_undo_and_redo_keep_the_record_current(canvas) -> Non
         item, "shape_se", QPointF(140.0, 120.0)
     )
     check("resize")
+
+    # The resize handles sit on the record's rectangle, not on the item's
+    # bounding box, which is wider by the stroke.
+    services.handles.handle_overlay_service.show_shape_handles(item)
+    expected = [
+        position
+        for _, position in shape_resize_handle_positions(
+            shape_rect_of(shape_record_for(canvas, item))
+        )
+    ]
+    centres = [
+        handle.sceneBoundingRect().center() for handle in active_handles_for(canvas)
+    ]
+    assert len(centres) == len(expected) == 8
+    for centre, position in zip(centres, expected, strict=True):
+        assert (centre.x(), centre.y()) == pytest.approx(
+            (position.x(), position.y()), abs=1e-6
+        )
+    services.handles.handle_overlay_service.clear_handles()
 
     services.scene_operations.canvas_color_mutation_service.apply_color_to_item(
         item, QColor("#2196f3")
@@ -293,7 +313,7 @@ def test_a_failed_fill_of_several_shapes_leaves_no_fill_in_the_records(canvas) -
             [first, second], QColor("#2196f3")
         )
 
-    assert shape_state_dict(first).get("fill") is None
+    assert first.brush().color().alpha() == 0
     assert shape_record_for(canvas, first).fill is None
     assert shape_record_for(canvas, second).fill is None
     assert_store_matches_items(canvas)

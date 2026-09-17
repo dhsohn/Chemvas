@@ -5,6 +5,7 @@ from unittest.mock import patch
 
 from tests.runtime_services import canvas_runtime_services
 from tests.runtime_state import canvas_runtime_state
+from tests.shape_support import adopt_shape
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -439,6 +440,8 @@ class SceneItemControllerTest(unittest.TestCase):
         baseline = QRectF(scene.sceneRect())
         shape = QGraphicsPathItem()
         shape.setData(0, "shape")
+        # Only a shape with a record may join the document's shapes.
+        adopt_shape(self.canvas, shape)
         original_flags = shape.flags()
         shape_items = scene_item_collection_for(self.canvas, "shape_items")
         armed = False

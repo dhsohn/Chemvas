@@ -6,8 +6,9 @@ from typing import TYPE_CHECKING
 
 from PyQt6.QtWidgets import QGraphicsTextItem
 
-from chemvas.domain.document import ARROW_LABEL_SIDES
+from chemvas.domain.document import ARROW_LABEL_SIDES, Shape
 from chemvas.domain.transactions import run_rollback_step
+from chemvas.features.annotations import normalized_shape_kind, normalized_stroke_style
 from chemvas.ui.arrow_label_dialog import prompt_arrow_labels
 from chemvas.ui.canvas_tool_settings_state import tool_settings_state_for
 from chemvas.ui.history_commands import AddSceneItemsCommand, UpdateSceneItemCommand
@@ -33,6 +34,10 @@ from chemvas.ui.scene_item_state import (
     ts_bracket_state_dict_for,
 )
 from chemvas.ui.selection_service_access import refresh_selection_outline_for
+from chemvas.ui.shape_record_access import (
+    set_shape_record_for,
+    shape_store_checkpoint_for,
+)
 from chemvas.ui.transactions.document import document_transaction
 from chemvas.ui.transactions.scene_item_attach import SceneItemAttachSnapshot
 
@@ -152,16 +157,35 @@ class SceneDecorationService:
         shape_kind: str | None = None,
         stroke_style: str | None = None,
     ):
-        with self._scene_add_transaction() as track:
-            settings = tool_settings_state_for(self.canvas)
-            shape_kind = shape_kind or settings.active_shape_type
-            stroke_style = stroke_style or settings.active_shape_stroke
-            item = build_shape_item_for(self.canvas, rect, shape_kind, stroke_style)
-            if item is None:
-                return None
-            track(item)
-            attach_scene_item(self.canvas, item)
-            self._push_add_scene_item(item, shape_state_dict_for(self.canvas, item))
+        restore_shape_store = shape_store_checkpoint_for(self.canvas)
+        try:
+            with self._scene_add_transaction() as track:
+                settings = tool_settings_state_for(self.canvas)
+                shape_kind = shape_kind or settings.active_shape_type
+                stroke_style = stroke_style or settings.active_shape_stroke
+                item = build_shape_item_for(self.canvas, rect, shape_kind, stroke_style)
+                if item is None:
+                    return None
+                set_shape_record_for(
+                    self.canvas,
+                    item,
+                    Shape(
+                        left=rect.left(),
+                        top=rect.top(),
+                        right=rect.right(),
+                        bottom=rect.bottom(),
+                        shape_kind=normalized_shape_kind(shape_kind),
+                        stroke_style=normalized_stroke_style(stroke_style),
+                    ),
+                )
+                track(item)
+                attach_scene_item(self.canvas, item)
+                self._push_add_scene_item(item, shape_state_dict_for(self.canvas, item))
+        except Exception:
+            # The record is set before the item is attached; a failed add takes
+            # it, and its id, back out.
+            restore_shape_store()
+            raise
         return item
 
     def add_orbital(self, center: QPointF):

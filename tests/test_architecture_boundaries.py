@@ -1364,6 +1364,30 @@ CANVAS_SERVICE_CONTAINER_RESOLVERS = (
 )
 
 
+def test_shape_values_live_in_records_not_on_graphics_items() -> None:
+    """A shape item is drawn from its record and is never asked what it is.
+
+    Two modules paint a shape: the decoration build service creates the item
+    and ``shape_record_access`` redraws it from its record. Nothing else may
+    build a shape outline, and the item-side reader and the adoption that
+    derived a record from paint are gone for good.
+    """
+    painters = sorted(
+        str(path.relative_to(APP_ROOT.parents[0]))
+        for path in _app_python_files()
+        if re.search(r"\bshape_path\(", path.read_text(encoding="utf-8"))
+        and path.name != "shape_geometry.py"
+    )
+    assert painters == [
+        "app/chemvas/ui/canvas_scene_decoration_build_service.py",
+        "app/chemvas/ui/shape_record_access.py",
+    ]
+    removed = re.compile(
+        r"\bshape_state_dict\b(?!_for)|\badopt_shape_item_for\b|\bsync_shape_record_for\b"
+    )
+    assert _matching_lines(removed, _app_python_files()) == []
+
+
 def test_canvas_service_ports_name_each_container_path_once_with_its_type() -> None:
     """A port is a name for a place in the container, not a second name for one.
 
