@@ -24,11 +24,14 @@ when sharing with an older installation.
 ## Format changes
 
 - The application release number and document format number are independent.
-  The current writer still emits **v7**; this policy introduces no new schema.
+  The current writer still emits **v7**; this policy introduces no new format.
 - A serialized change that an existing reader cannot correctly interpret needs
   a new document format version. This includes new fields rejected by the
   existing strict schema, new enum values, and changes to a field's meaning.
-  Do not add another incompatible feature under the v7 label.
+  Do not add another incompatible feature under the v7 label. From v8 on, the
+  revision rule in "Next format version" below decides whether such a change
+  takes a new revision or a new version; under v7 every one of them takes a
+  new version.
 - A future writer version must not remove v7 from the readable versions. Version
   interpretation belongs at the document boundary, not in every GUI or CLI
   consumer. Implement any necessary conversion there when an actual new format
@@ -40,6 +43,65 @@ when sharing with an older installation.
 - Unknown versions, unknown fields, malformed documents and invalid references
   remain errors. Do not guess their meaning, silently omit unsupported content,
   or bypass validation to make a file appear to open successfully.
+
+## Next format version
+
+Version 7 is frozen as the contract supported on 2026-09-13; it carries no
+revision number, and nothing more is added under its label. Several additions
+were made under the v7 label before that date, so a reader older than one of
+them rejects a newer v7 file as an invalid document even though both say
+`"version": 7`. The file cannot say which reader it needs. The wrapper's key set
+is closed, so that information cannot be added to v7 either: it arrives with the
+next format version.
+
+The next format version, v8, extends the wrapper to exactly these keys (the
+release number is illustrative; the writer fills the real one):
+
+```json
+{
+  "type": "chemvas",
+  "version": 8,
+  "schema": 1,
+  "min_reader": "0.17.0",
+  "state": {}
+}
+```
+
+- `version` is the format generation, as today. It is the unit of the reading
+  promise: a reader that supports a generation reads every revision of it that
+  it knows, and a writer version never drops a supported generation.
+- `schema` is the revision within a generation. It starts at 1 and increases by
+  one whenever a writer starts emitting something an older reader of the same
+  generation would reject: a new optional field, a new enumeration value, a new
+  optional collection. Changes that an older reader would misread rather than
+  reject — a required field, a changed meaning, a removed field, a wrapper
+  change — need a new generation, which resets the revision to 1.
+- `min_reader` is the lowest Chemvas release that reads this revision in full.
+  The writer fills it from a table in the code keyed by `(version, schema)`;
+  it is never typed by hand, and the implementation must carry a test that
+  keeps the table and the writer in step.
+
+A reader judges a document in this order and reports the first failure:
+
+1. An unknown `version` is refused with the message used today, naming the
+   generations this release reads.
+2. A known `version` whose `schema` is above the highest revision this release
+   knows is refused as a **newer document, not an invalid one**: the message
+   names the document's format and revision, the highest revision this release
+   reads, and the release from `min_reader` that can open it. The reader
+   decides by `schema`; `min_reader` is only quoted, never trusted.
+3. A known revision is validated as strictly as today. An unknown field, an
+   unknown enumeration value or an invalid reference remains an error. The
+   revision number explains a refusal; it does not relax validation.
+
+`inspect-document` will report the same three values under `document_format`,
+so an agent can compare a file with the release its user has installed before
+handing it over.
+
+Introducing v8 follows the rules above: keep reading v7, convert at the
+document boundary, verify the frozen v7 fixtures, and freeze a v8 fixture set
+separately. Until a real change to the document requires v8, none of this is
+implemented; this section is the requirement it will be built to.
 
 ## Scope and limits
 

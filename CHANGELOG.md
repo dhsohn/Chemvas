@@ -11,6 +11,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Document the shared bond-removal rules in `docs/ARCHITECTURE.md` next to
   the shared atom-move semantics, in English and Korean.
+- State in `docs/DOCUMENT_COMPATIBILITY.md` how the next document format
+  will let a file say which reader it needs: v8 adds a `schema` revision and
+  a `min_reader` release to the wrapper, readers judge support by revision
+  and name the release that can open a newer file, and v7 stays frozen
+  without a revision number. Policy only; no format change ships here.
 - Graph Patch `remove_bond` now removes an endpoint the removal leaves with
   no bond, no label and no mark, with its perspective coordinate and group
   membership, and drops any ring fill that no longer forms a bonded cycle,
