@@ -9,11 +9,21 @@ import pytest
 from PyQt6.QtCore import QRectF, Qt
 from PyQt6.QtGui import QImage, QPainter
 
-from chemvas.bootstrap.document_cli_shared import offscreen_canvas
+from chemvas.bootstrap.document_cli_shared import (
+    offscreen_application,
+    offscreen_canvas,
+)
 from chemvas.domain.document import CANVAS_FILE_VERSION, build_document_payload
 from chemvas.features.document_composition import compose_document_state
 from chemvas.features.export import exported_scene, resolve_export_plan
 from chemvas.features.export.vector import render_svg_bytes
+
+
+@pytest.fixture(scope="module", autouse=True)
+def _application():
+    # Keep Qt's application alive across the parameterized graphics cases.
+    with offscreen_application(command="native-label-tests") as application:
+        yield application
 
 
 def _state(label: str, explicit: bool) -> dict:
