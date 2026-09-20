@@ -8,11 +8,19 @@ from PyQt6.QtGui import QPen
 
 from chemvas.domain.document import Shape
 from chemvas.ui.shape_record_access import set_shape_record_for
+from tests.scene_render_context import attach_scene_render_context
+
+
+def _plain_context_for(canvas):
+    context = attach_scene_render_context(canvas)
+    context.decorations.shape_pen = lambda stroke_style: QPen()
+    return context
+
 
 # A partial canvas has no decoration build service to ask for the stroke pen.
 plain_shape_pen = mock.patch(
-    "chemvas.ui.shape_record_access.shape_pen_for",
-    new=lambda canvas, stroke_style: QPen(),
+    "chemvas.ui.shape_record_access.scene_render_context_for",
+    new=_plain_context_for,
 )
 
 
@@ -26,6 +34,8 @@ def adopt_shape(
 ) -> Shape:
     """Give a hand-built shape item the record every shape in a document has."""
     left, top, width, height = rect
+    if not hasattr(canvas, "render_context"):
+        attach_scene_render_context(canvas)
     return set_shape_record_for(
         canvas,
         item,

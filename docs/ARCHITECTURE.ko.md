@@ -42,7 +42,8 @@ flowchart TB
   `chemvas.features.rendering.acs1996_style` 정책을 사용하는 Qt 펜/브러시와
   폰트 설정.
 - HistoryCommand (`app/chemvas/core/history.py`): 델타 기반 실행 취소/다시 실행(undo/redo). 다중 엔티티(multi-entity) 연산은 `CompositeCommand`로 그룹화되며, 이는 다시 실행 시 자식 델타 커맨드를 순서대로 적용하고 실행 취소 시 역순으로 적용한다.
-- BondRenderer (`app/chemvas/ui/bond_renderer.py`): 결합 QGraphicsItem 생성/업데이트 및 기하 헬퍼(geometry helpers)로, CanvasView 컨텍스트에 의해 구동된다.
+- 장면 렌더링(`scene_render_context.py`, `scene_rendering.py`): 명시적인 `SceneRenderContext`가 scene, 현재 model, style, 공통 drawing state를 분자·annotation 렌더러에 제공한다. `CanvasRuntimeState`는 이 상태를 상속해 편집기 필드만 추가하므로 GUI가 drawing state 사본을 따로 유지하지 않는다. [ADR 0004](adr/0004-view-independent-scene-rendering.md) 참조.
+- BondRenderer (`app/chemvas/ui/bond_renderer.py`): drawing context를 사용해 결합 QGraphicsItem을 생성·갱신한다. `SceneGeometry`와 `AtomLabelRenderer`가 뷰와 무관한 기하·label drawing을 소유하고, 편집 서비스는 변경과 history를 맡는다.
 - 화살표(`app/chemvas/ui/canvas_arrow_build_service.py`): scene-decoration bundle이 기존 canvas ports/access를 통해 arrow builder를 직접 노출한다. 곡선 생성과 갱신은 path/head 생성을 공유하지만, handle 편집과 document-state 적용의 서로 다른 metadata·label 정책은 유지한다. 메뉴 이벤트에는 표시 문자열 대신 kind ID를 전달한다.
 - Graphics items (`app/chemvas/ui/graphics_items.py`): 선택 불가능한 QGraphicsItem 래퍼(wrapper).
 - Label layout (`app/chemvas/features/annotations`): 원자 레이블을 조판 런과 배치로 파싱하는 순수(Qt-free) 공개 API이며 화면과 아웃라인 내보내기 타이포그래피의 단일 소유자다.
@@ -53,7 +54,7 @@ flowchart TB
 - Domain document (`app/chemvas/domain/document`): Qt-free 분자 모델과 버전이 있는 문서/클립보드 직렬화·검증 정책을 소유한다. 기존 `chemvas.core.model`과 `document_state` 경로는 삭제되었다.
 - 계산 plan과 artifact(`app/chemvas/domain/document/calculation_plan.py`, `app/chemvas/domain/document/plan_validation.py`, `app/chemvas/domain/document/conversion.py`, `app/chemvas/domain/document/precomplex.py`, `app/chemvas/domain/document/precomplex_profile.py`, `app/chemvas/features/calculation_bundle`, `app/chemvas/bootstrap/calculation_bundle.py`): document domain은 엄격한 Plan v2 스키마, plan의 일관성 규칙(state가 선언한 전하와 성분의 전하 대조, 대응된 원자의 원소 라벨 일치), 변환이 돌려주는 기록(`AtomMapEntry`, `CalculationArtifacts`)을 소유한다. Chemvas 0.15.0 이하가 쓴 endpoint precomplex 상태는 계속 읽고 검증하고 보존하며, profile registry는 그 검증에만 쓴다. Chemvas는 이제 그 상태를 생성하거나 사용하지 않으며, 그 상태를 담아 제공된 plan은 그대로 저장한다. Qt 비의존 feature API는 연결 성분 선택·endpoint별 역할·correspondence readiness·결합 변화·결정론적 path precheck·생성된 계산 artifact의 전자 상태와 원자 맵 검증·step endpoint 사이의 생성 원자 대응을 소유한다. Calculation dialog는 included 원자를 ID 기반 대응표 하나로 투영하고 부분 draft와 명시적인 unmapped 선택을 보존한 뒤, 최종 후보를 같은 feature/domain 검증 경로에 맡긴다. `calculation_mapping_highlight.py`는 dialog 수명에 한정된 비선택 atom-ID label을 mapping 상태에 따라 색칠하며 document serialization, selection state, history에 넣지 않고 모든 dialog 종료에서 제거한다. bootstrap은 `.chemvas` I/O, 선택적 RDKit 조립, 결정적 단일파일 step 직렬화, reactant identity 순서로 index한 성분별 기하 생성, 비덮어쓰기 원자적 공개를 맡는다. `application.main`은 Qt import 전에 `inspect`, `attach-plan`, `inspect-plan`, `pack-step`을 dispatch한다.
 - Agent 문서 patch(`app/chemvas/features/document_patch`, `app/chemvas/bootstrap/document_patch.py`): Qt/provider 비의존 feature API가 결정적 전체 graph 검사, 엄격한 Graph Patch v1 검증, 복사본 기반 순차 mutation, 의존 좌표 이동, 최종 문서/Calculation Plan gate를 소유한다. bootstrap은 원본 bytes를 한 번 읽어 hash하고, 중복 key·비표준 JSON을 거부하며, 후보를 결정적으로 encode한 뒤 공용 원자적 비덮어쓰기 파일 생성기로 공개한다. `inspect-document`와 `apply-patch`는 Qt 전에 dispatch되며 Chemvas 내부에서 자연어 모델이나 화학 추론을 실행하지 않는다.
-- 창 없는 문서 렌더링(`app/chemvas/bootstrap/document_render.py`): bootstrap은 파일과 출력 자원 계약을 먼저 검증한 뒤 보이지 않는 `QApplication`과 `CanvasView`를 지연 조립한다. GUI와 같은 전체 sheet `CanvasDocumentSessionService.export_figure` 경로에서 내용을 한 번 계산하고 painting 전 자원 제한을 검사한 뒤 private 임시 저장소에 SVG/PNG/PDF를 렌더한다. bootstrap은 반환된 plan을 render report v1에 재사용하며 PDF의 실제 정수 point 크기도 반영한다. 제한을 통과한 출력만 기존 경로를 덮어쓰지 않고 원자적으로 공개하며 원본/출력 hash, point/pixel 크기, 문서 버전을 보고한다. 데스크톱 창, session recovery, RDKit loading, editable SVG payload, TIFF는 이 명령의 범위 밖이다.
+- 창 없는 문서 렌더링(`app/chemvas/bootstrap/document_render.py`): bootstrap은 파일과 출력 자원 계약을 먼저 검증한 뒤 `QApplication`, `QGraphicsScene`, drawing context를 지연 조립하며 `CanvasView`는 만들지 않는다. 공통 `populate_document_scene`가 graphics를 생성하고 GUI와 같은 전체 sheet `FigureExportService` 경로에서 내용을 한 번 계산하고 painting 전 자원 제한을 검사한 뒤 private 임시 저장소에 SVG/PNG/PDF를 렌더한다. bootstrap은 반환된 plan을 render report v1에 재사용하며 PDF의 실제 정수 point 크기도 반영한다. 제한을 통과한 출력만 기존 경로를 덮어쓰지 않고 원자적으로 공개하며 원본/출력 hash, point/pixel 크기, 문서 버전을 보고한다. 데스크톱 창, session recovery, RDKit loading, editable SVG payload, TIFF는 이 명령의 범위 밖이다.
 - 이전된 feature 정책 (`app/chemvas/features/{export,session,annotations,rendering,insertion,selection,hover}`): 각 패키지는 응집된 planning/geometry/state 계약을 하나의 공개 API로 제공한다. 기존 평면 호환 모듈은 삭제되었고 `test_package_dependencies.py`가 재도입을 막는다.
 - 메인 창 조립: `chemvas.shell.main_window`가 얇은 Qt 셸을 소유하고, `chemvas.bootstrap`이 runtime/service 조립·창 등록·문서 열기·앱 시작을 소유한다. Qt 파일 열기 이벤트는 `chemvas.adapters.qt`를 통해 들어온다.
 
@@ -76,7 +77,7 @@ step-edit 연산이 소유하며, dialog는 widget 입력 수집과 오류 표�
 사이에 inventory를 캐시하지 않는다.
 
 Figure export의 사전 검사와 렌더링은 동기 요청 하나 안에서 feature의
-`resolve_export_plan`이 반환한 항목과 기하 정보를 공유한다. session이 plan을 검증하면
+`resolve_export_plan`이 반환한 항목과 기하 정보를 공유한다. export service가 plan을 검증하면
 `render_export_plan`이 다시 측정하지 않고 그린다. 별도의 `export_scene` 및
 `plan_figure_export` 호출은 항상 새로 계산하며 편집 사이에 plan을 캐시하지 않는다.
 선택 회전, 클립보드 배치, 원자 이동은
@@ -98,6 +99,10 @@ Figure export의 사전 검사와 렌더링은 동기 요청 하나 안에서 fe
 - **서비스와 컨트롤러**: `chemvas.ui.canvas_services.py`에서 캔버스당 한 번, 명시적 키워드 주입으로 조립된다 — 서비스 내부의 서비스 로케이터 금지, 누락된 배선을 숨기는 `=None` 협력자 기본값 금지. 조립은 응집된 그룹은 `CanvasRuntimeServices`의 bundle로 보관하고, runtime이 하나면 단일 멤버 bundle을 만들지 않고 직접 보관한다. 기존 graph/tool wrapper bundle과 builder 주입 composer 계층은 삭제되었다. 서비스는 캔버스를 접근 함수에 넘길 뿐 그 속성을 직접 건드리지 않는다 — `canvas.model`도, `canvas.scene()`도, 문자열 이름의 `getattr`도 안 된다 — 따라서 서비스가 닿을 수 있는 것은 그 모듈이 import한 접근 함수들과 그것이 돌려주는 것이며, 어떤 편집 규칙이 무엇을 바꿀 수 있는지 물을 때 볼 곳도 그 import 목록이다. `test_services_reach_the_canvas_only_through_access_functions`가 모든 `ui/*_service.py`·`ui/*_controller.py`에서 `canvas`·`_canvas`·`view`·`_view`라는 이름(그대로든 `self`를 거치든)에 대한 속성 접근을 예외 목록 없이 금지한다. 다른 이름으로 받은 캔버스는 리뷰어가 잡을 몫이다. 캔버스에서 새로 필요한 것이 생긴 서비스는 조립 단계가 줄 수 있으면 주입된 협력자로 받고(hit testing은 뷰의 `viewportTransform`을 이렇게 받는다), 그렇지 않을 때 접근 함수를 추가한다. 조회의 이름만 바꾸는 함수는 경계가 아니다.
 - **core는 UI 및 Qt와 분리된다**: `app/chemvas/core`는 동적 import를 포함해 `ui`나 Qt를 import하지 않는다. History command는 UI 구현을 선택하지 않고 결합된 연산을 전달받는다. 구체 Qt 렌더링은 `chemvas.adapters.qt.renderer`에 둔다. 새로운 core-to-Qt 의존성은 금지한다.
 - **RDKit은 선택적이다**: 앱 시작 경로에서 절대 하드 import가 되어서는 안 된다. RDKit이 필요한 기능은 그것이 없을 때 우아하게 축소되거나 명확한 메시지와 함께 실패한다 — `chemvas.core.rdkit_adapter` 참조. 아래 3D 제약은 이 규칙이 export 동작에 대해 무엇을 뜻하는지를 적은 것이고, 규칙 자체는 일반적이다.
+
+두 view-controller 포트는 `CanvasInputController | None`과
+`CanvasPointerController | None`을 명시적으로 반환한다. 구체 타입은
+`TYPE_CHECKING` 아래에서만 import하며, Qt 초기화 중의 기존 `None` 반환은 유지한다.
 
 이 규칙들은 `tests/test_architecture_boundaries.py`가 강제한다. 신규 규칙은
 의존성 계약이나 일반 패턴 금지로 작성한다. 일부 전환기 검사는 아직 제거된
@@ -182,7 +187,7 @@ flowchart LR
 
 Agent 편집 흐름: `inspect-document` -> 정확한 source SHA-256과 안정적인 atom/bond 목록 -> 신뢰하지 않는 Graph Patch v1 -> 엄격한 schema/hash gate -> deep copy에서 순차 mutation -> 구조 및 Calculation Plan 의미 검증 -> 결정적 후보 hash -> dry-run 보고 또는 단 한 번의 원자적 비덮어쓰기 `.chemvas` 공개. 입력 파일 버전과 범위 밖 scene state를 보존하며, 어느 operation이나 stale plan이라도 실패하면 output은 없다.
 
-창 없는 렌더 흐름: `render-document` -> 원본 1회 읽기/hash 및 record-count gate -> 검증된 state를 invisible canvas에 적용 -> canonical whole-sheet export plan -> point/pixel 자원 gate -> private SVG/PNG 렌더 -> output byte gate -> 단 한 번의 원자적 비덮어쓰기 공개 -> hash·크기 JSON report. painting에는 지연 import한 Qt가 필요하지만 RDKit과 desktop session-recovery service는 시작하지 않는다.
+창 없는 렌더 흐름: `render-document` -> 원본 1회 읽기/hash 및 record-count gate -> 검증된 state를 뷰 독립 scene에 구성 -> canonical whole-sheet export plan -> point/pixel 자원 gate -> private SVG/PNG 렌더 -> output byte gate -> 단 한 번의 원자적 비덮어쓰기 공개 -> hash·크기 JSON report. painting에는 지연 import한 Qt가 필요하지만 RDKit과 desktop session-recovery service는 시작하지 않는다.
 
 ### 결합 제거의 공통 의미
 
@@ -242,10 +247,10 @@ CLI 테스트 실행 부분을 공유하고, 연산별 fixture와 화면 기대�
 제거할 수 있다. CLI의 명시적 스타일 변경은 그 외형 단축키와 같은 의도가 아니다.
 이 차이를 위해 별도의 공통 편집 엔진을 추가하지 않는다.
 
-### 문서 데이터 소유권 (도형 완료, TS 괄호 진행 중)
+### 문서 데이터 소유권 (도형과 TS 괄호)
 
-`MoleculeModel`은 원자와 결합을 Qt 없는 데이터로 소유하고, 도형은 레코드다(아래).
-문서가 저장하는 나머지 그려지는 객체 — 고리 채움, 노트, 마크, 화살표와 선, TS 괄호,
+`MoleculeModel`은 원자와 결합을 Qt 없는 데이터로 소유하고, 도형과 TS 괄호는 레코드다(아래).
+문서가 저장하는 나머지 그려지는 객체 — 고리 채움, 노트, 마크, 화살표와 선,
 오비탈, 이미지 —
 는 아직 문서를 쓸 때
 살아 있는 그래픽 아이템에서 다시 읽으며, history 명령은 그 아이템을 들고 있다.
@@ -265,9 +270,13 @@ state 적용, 이동, 크기 조절, 채움, 색 롤백 — 은 새 `Shape`를 �
 state를 읽는 모든 곳 — 문서 저장, undo 캡처, 클립보드, 삭제 캡처, 뒤집기와 회전, scheme
 layout — 은 `shape_state_dict_for`를 통해 레코드에서 읽는다. 레코드 없는 부착 도형은 붓에서
 복원할 대상이 아니라 오류다. store는 조회용이지 도형 목록이 아니다. 문서에 어떤 도형이
-있는지는 부착된 도형 아이템이 말하고, 분리된 아이템의 레코드는 undo를 위해 남는다.
-레코드는 새 문서가 history를 버릴 때에만 지워지며(history를 유지하는 구조 로드는
-레코드를 남긴다) id는 재사용되지 않는다. id는 `new_scene_record_id`에서 나오며, 이 카운터는
+있는지는 부착된 도형 아이템이 말한다. 분리된 레코드는 history나 롤백 스냅샷이 아이템을
+보유하는 동안 남는다. 그래픽 아이템의 Python wrapper를 가리키는 마지막 참조가 해제되면
+weak finalizer가 레코드를 지우므로, 버려진 redo 분기와 한도 밖으로 밀려난 history 항목이
+더는 참조되지 않는 레코드를 남기지 않는다. finalizer는 아이템이 아니라 state와 id만
+보유하고 실행 시 state의 현재 mapping을 읽는다. 롤백이나 문서 교체가 mapping을 바꿀 수
+있기 때문이다. 새 문서는 여전히 store를 명시적으로 비우고, 구조 로드는 history와 그것이
+참조하는 레코드를 유지한다. id는 재사용되지 않는다. id는 `new_scene_record_id`에서 나오며, 이 카운터는
 런타임 상태 밖에 있어서 history가 더 뒤의 id를 가진 아이템을 쥐고 있는 동안 어떤 롤백도
 카운터를 되감지 못한다.
 따라서 저장되는 값은 문서가 말한 값이다. 불투명도 0.25는 0.25로 저장되며(예전에는 Qt의
@@ -279,7 +288,7 @@ layout — 은 `shape_state_dict_for`를 통해 레코드에서 읽는다. 레�
 외곽선을 그리는 곳을 두 모듈로 묶고 예전의 아이템 쪽 reader가 돌아오지 못하게 한다.
 같은 단계 — 레코드, store 동기화, 읽기 전환, 아이템 비우기 — 가 나머지 종류의 틀이다.
 
-TS 괄호는 세 번째 단계에 있다. `chemvas.domain.document.TSBracket`이 레코드이고,
+TS 괄호도 같은 record-first 소유권을 따른다. `chemvas.domain.document.TSBracket`이 레코드이고,
 캔버스마다 괄호 store(`CanvasTSBracketState`, 도형 store와 같은 두 롤백 필드 목록에
 들어 있다)가 있으며 괄호 아이템마다 런타임 id가 있다. 편집 —
 `CanvasMoveController.move_item`, undo·redo·뒤집기·회전의 상태 적용 — 은 새
@@ -294,11 +303,16 @@ TS 괄호는 세 번째 단계에 있다. `chemvas.domain.document.TSBracket`이
 담을 수 있는 가장 큰 수를 넘는 이동)은 레코드나 아이템을 건드리기 전에 예외를 낸다.
 따라서 저장되는 값은 문서가 말한 값이다. 모서리를 뒤바꿔 준 rect는 Qt read-back이
 10.199999999999989로 쓰던 자리에 10.2를 저장하고, Chemvas가 이미 저장한 파일은 다시
-저장해도 바뀌지 않는다. 레코드 수명은 도형 규칙을 따른다: 새 문서가 history를 버릴 때
-지우고, 실패한 추가는 자기 레코드를 도로 빼며, id는 `new_scene_record_id`에서 나온다.
-마지막 단계에 남은 일: 아이템은 아직 data role 1에 rect와 종류를 비춰 두고(export
-readability 검사가 거기서 종류를 읽는다), 레코드 없이 도착한 아이템은 거부되는 대신
-아이템이 말하는 내용으로 입양된다. `tests/test_ts_bracket_record_first.py`가 수락 기준을
+저장해도 바뀌지 않는다. 레코드 수명은 도형 규칙을 따르고, id는 `new_scene_record_id`에서
+나온다. 실패한 추가는 store 전체를 복사하지 않고 새 레코드 하나만 지운다.
+`tests/test_scene_record_lifetime.py`는 두 종류의 history와 롤백에서 레코드의 해제와
+보존을 확인한다. 괄호 아이템은 scene 종류와 id를 지닐 뿐 rect와 괄호 종류를 중복해서
+저장하지 않는다. 레코드 없는 아이템은 문서의 괄호에 들어올 수 없으며, 아이템만 읽는
+reader·상태 적용 분기·입양 경로는 제거되었다. export readability는 괄호 종류를
+레코드에서 읽되 실제 칠한 글꼴을 측정하기 위해 아이템의 construction glyph run은 유지한다.
+전체·scoped graphics snapshot은 path와 함께 이 run을 보존하므로 실패한 redraw 뒤에도
+원래 글꼴을 복원한다. 글꼴 근거가 사라진 임의의 path는 계속 fail closed로 거부한다.
+`tests/test_ts_bracket_record_first.py`가 수락 기준을
 담고, `tests/test_ts_bracket_store_sync.py`가 매 동작 뒤에 부착된 괄호 아이템이 정확히
 자기 레코드를 보여 주는지 확인한다.
 

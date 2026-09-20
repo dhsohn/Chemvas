@@ -11,7 +11,7 @@ from chemvas.bootstrap.document_cli_shared import (
     MAX_GRAPHICS_RECORDS,
     graphics_record_count,
     json_text,
-    offscreen_canvas,
+    offscreen_document_scene,
 )
 from chemvas.core.document_io import read_exact_document
 
@@ -137,13 +137,12 @@ def _layout_work_units(state: Mapping[str, object]) -> int:
 def _check_offscreen(
     state: dict[str, Any], *, sheet_only: bool = False
 ) -> dict[str, object]:
-    with offscreen_canvas(state, command="check-layout", pin_locale=True) as (
-        canvas,
-        _,
-    ):
-        from chemvas.ui.layout_qa_service import check_canvas_layout
+    with offscreen_document_scene(
+        state, command="check-layout", pin_locale=True
+    ) as context:
+        from chemvas.ui.layout_qa_service import check_scene_layout
 
-        return check_canvas_layout(canvas, sheet_only=sheet_only)
+        return check_scene_layout(context, sheet_only=sheet_only)
 
 
 __all__ = ["run"]

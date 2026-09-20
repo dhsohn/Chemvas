@@ -12,8 +12,8 @@ from PyQt6.QtGui import QColor, QFont, QImage, QPainter
 from PyQt6.QtWidgets import QApplication, QGraphicsRectItem, QGraphicsScene
 
 from chemvas.features.export import content_bounds, item_export_bounds
-from chemvas.ui.canvas_geometry_controller import CanvasGeometryController
 from chemvas.ui.graphics_items import AtomDotItem, AtomLabelItem
+from chemvas.ui.scene_geometry import SceneGeometry
 
 
 @pytest.fixture(scope="module", autouse=True)
@@ -60,10 +60,7 @@ def test_atom_export_bounds_follow_all_painted_runs_without_changing_layout(
     assert content_bounds([label]) == expected
     # Existing mark clearance deliberately uses layout geometry, not tighter
     # output bounds. A no-hit-halo item is the independent old layout control.
-    assert (
-        CanvasGeometryController.visible_text_rect(label)
-        == layout_control.sceneBoundingRect()
-    )
+    assert SceneGeometry.visible_text_rect(label) == layout_control.sceneBoundingRect()
     assert (
         label.boundingRect(),
         label.shape(),

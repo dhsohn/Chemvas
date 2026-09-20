@@ -135,7 +135,7 @@ def test_qt_export_rejects_surrogate_parent_before_render(
     if via_link:
         path.symlink_to(target)
     monkeypatch.setattr(
-        "chemvas.ui.canvas_document_session_service.export_canvas_scene_for",
+        "chemvas.ui.figure_export_service.render_export_plan",
         lambda *a, **kw: pytest.fail("unsafe filename reached Qt renderer"),
     )
     with pytest.raises(ValueError, match="UTF-8"):
@@ -219,7 +219,7 @@ def test_silent_empty_renderer_does_not_replace_existing_output(
     path = tmp_path / ("figure." + kind)
     path.write_bytes(b"original")
     monkeypatch.setattr(
-        "chemvas.ui.canvas_document_session_service.export_canvas_scene_for",
+        "chemvas.ui.figure_export_service.render_export_plan",
         lambda *a, **kw: None,
     )
     with pytest.raises(ValueError, match="empty|produce"):

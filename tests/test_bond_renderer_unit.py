@@ -6,6 +6,7 @@ from unittest import mock
 
 from tests.runtime_services import canvas_runtime_services
 from tests.runtime_state import canvas_runtime_state
+from tests.scene_render_context import attach_scene_render_context
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -19,8 +20,6 @@ from PyQt6.QtWidgets import (
     QGraphicsScene,
 )
 
-import chemvas.ui.bond_graphics_build_service as bond_graphics_build_module
-import chemvas.ui.bond_renderer as bond_renderer_module
 from chemvas.adapters.qt.renderer import Renderer
 from chemvas.domain.document import (
     VALID_BOND_ORDERS,
@@ -133,6 +132,12 @@ class _FakeCanvas:
                 ring_center_3d_for_bond=lambda bond: self._ring_center_3d,
             )
         )
+
+        context = attach_scene_render_context(self)
+        context.geometry.trim_line_for_labels = self.trim_line_for_labels
+        context.geometry.label_rect_for_atom = self.label_rect_for_atom
+        context.geometry.ring_center_for_bond = lambda bond: self._ring_center
+        context.geometry.ring_center_3d_for_bond = lambda bond: self._ring_center_3d
 
     def scene(self) -> QGraphicsScene:
         return self._scene
@@ -288,7 +293,7 @@ def _renderer_for_bond(
     canvas.model.atoms[1].x, canvas.model.atoms[1].y = end
     canvas.model.bonds = [Bond(0, 1, order, style=style, color="#AA5500")]
     canvas._ring_center = QPointF(3.0, 6.0) if ring else None
-    renderer = BondRenderer(canvas)
+    renderer = BondRenderer(canvas.render_context)
     renderer.add_bond_graphics(0)
     return canvas, renderer
 
@@ -301,7 +306,7 @@ class BondRendererUnitTest(unittest.TestCase):
 
     def setUp(self) -> None:
         self.canvas = _FakeCanvas()
-        self.renderer = BondRenderer(self.canvas)
+        self.renderer = BondRenderer(self.canvas.render_context)
 
     def _set_bond(self, bond: Bond | None) -> None:
         self.canvas.model.bonds = [bond]
@@ -486,11 +491,12 @@ class BondRendererUnitTest(unittest.TestCase):
 
     def test_label_trimmed_hash_count_uses_visible_stem_in_both_draw_paths(self):
         self.canvas.renderer = Renderer(ACS1996Style(bond_length_px=47 * 20 / 12))
+        self.canvas.render_context.renderer = self.canvas.renderer
         self.canvas.model.atoms[0] = Atom("P", 0.0, 0.0)
         self.canvas.model.atoms[1] = Atom("Ar", 112.0, 0.0)
         self.canvas._trim = (0.4, 0.6)
         self._set_bond(Bond(0, 1, 1, style="hash"))
-        self.renderer = BondRenderer(self.canvas)
+        self.renderer = BondRenderer(self.canvas.render_context)
         self.renderer.add_bond_graphics(0)
         drawn = self.renderer.draw_hash_bond(0.0, 0.0, 112.0, 0.0, 0, 1)
 
@@ -514,12 +520,13 @@ class BondRendererUnitTest(unittest.TestCase):
         self.canvas.model.atoms[1] = Atom("Ar", 40.0, 0.0)
         self._set_bond(Bond(0, 1, 1, style="hash"))
 
-        def trim(canvas, a_id, b_id, x1, y1, x2, y2, offsets=()):
+        def trim(a_id, b_id, x1, y1, x2, y2, offsets=()):
             # Side samples encounter glyph ink before the centerline does.
             return (0.3, 0.75) if offsets else (0.1, 0.9)
 
-        with mock.patch(
-            "chemvas.ui.bond_line_geometry_service.trim_line_for_labels_for",
+        with mock.patch.object(
+            self.canvas.render_context.geometry,
+            "trim_line_for_labels",
             side_effect=trim,
         ):
             self.renderer.add_bond_graphics(0)
@@ -877,6 +884,7 @@ class BondRendererUnitTest(unittest.TestCase):
 
     def test_ring_double_segments_scale_spacing_with_short_bond_length(self) -> None:
         self.canvas.renderer = Renderer(ACS1996Style(bond_length_px=10.0))
+        self.canvas.render_context.renderer = self.canvas.renderer
 
         outer, inner, _ = self.renderer.ring_double_segments(
             self.canvas.model.atoms[0],
@@ -1256,8 +1264,9 @@ class BondRendererUnitTest(unittest.TestCase):
         self.renderer.add_bond_graphics(0)
         self.assertEqual(self.canvas.bond_items, {})
 
-    def test_redraw_and_add_bond_graphics_use_scene_item_access_helpers(self) -> None:
+    def test_redraw_and_add_bond_graphics_use_the_context_scene(self) -> None:
         old_item = QGraphicsLineItem(0.0, 0.0, 1.0, 0.0)
+        self.canvas.render_context.scene.addItem(old_item)
         self._set_bond(Bond(0, 1, 1, style="single"))
         self.canvas.bond_items[0] = [old_item]
         removed_items = []
@@ -1265,22 +1274,21 @@ class BondRendererUnitTest(unittest.TestCase):
 
         with (
             mock.patch.object(
-                bond_renderer_module,
-                "remove_item_from_canvas_scene",
-                side_effect=lambda canvas, item: removed_items.append((canvas, item)),
+                self.canvas.render_context.scene,
+                "removeItem",
+                side_effect=removed_items.append,
             ),
             mock.patch.object(
-                bond_graphics_build_module,
-                "add_item_to_canvas_scene",
-                side_effect=lambda canvas, item: added_items.append((canvas, item)),
+                self.canvas.render_context.scene,
+                "addItem",
+                side_effect=added_items.append,
             ),
         ):
             self.assertTrue(self.renderer.redraw_bond(0))
 
-        self.assertEqual(removed_items, [(self.canvas, old_item)])
+        self.assertEqual(removed_items, [old_item])
         self.assertTrue(added_items)
-        self.assertTrue(all(canvas is self.canvas for canvas, _ in added_items))
-        self.assertEqual(self.canvas.bond_items[0], [item for _, item in added_items])
+        self.assertEqual(self.canvas.bond_items[0], added_items)
 
     def test_add_bond_graphics_covers_wedge_hash_single_and_dotted_paths(self) -> None:
         for style in ("wedge", "hash", "single", "dotted"):

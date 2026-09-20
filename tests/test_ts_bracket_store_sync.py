@@ -51,7 +51,8 @@ def assert_store_matches_items(canvas) -> None:
         rect = ts_bracket_rect_of(record)
         assert item.pos() == QPointF(0.0, 0.0)
         assert item.path() == ts_bracket_path_for(canvas, rect, record.bracket_kind)
-        assert item.data(1) == {"rect": rect, "bracket_kind": record.bracket_kind}
+        assert item.data(1) is None
+        assert item.data(2) is None
 
 
 def _add_ts_bracket(canvas, rect=None, *, bracket_kind="square_pair"):

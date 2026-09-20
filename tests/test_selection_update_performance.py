@@ -9,7 +9,7 @@ from PyQt6.QtCore import QPoint, QPointF, Qt
 from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import QApplication
 
-from chemvas.ui import canvas_geometry_controller as glyph_geometry
+from chemvas.ui import scene_geometry as glyph_geometry
 from chemvas.ui.canvas_document_metadata_state import (
     document_is_dirty_for,
     mark_document_clean_for,

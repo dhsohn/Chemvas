@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Any
 
-from PyQt6.QtCore import QPointF, QRectF, Qt
+from PyQt6.QtCore import QPointF, Qt
 from PyQt6.QtWidgets import (
     QGraphicsItemGroup,
     QGraphicsPathItem,
@@ -13,7 +13,6 @@ from PyQt6.QtWidgets import (
 
 from chemvas.domain.document import VALID_ARROW_KINDS
 from chemvas.features.annotations import (
-    DEFAULT_BRACKET_KIND,
     normalized_bracket_kind,
     sanitize_note_html,
 )
@@ -174,23 +173,6 @@ def arrow_state_dict_for(canvas, item) -> dict:
     return _typed_state_dict_for(item, QGraphicsPathItem, arrow_state_dict)
 
 
-def ts_bracket_state_dict(item: QGraphicsPathItem) -> dict:
-    data = item.data(1) or {}
-    rect = data.get("rect")
-    if not isinstance(rect, QRectF):
-        rect = item.sceneBoundingRect()
-    return {
-        "kind": "ts_bracket",
-        "left": rect.left(),
-        "top": rect.top(),
-        "right": rect.right(),
-        "bottom": rect.bottom(),
-        "bracket_kind": normalized_bracket_kind(
-            data.get("bracket_kind"), default=DEFAULT_BRACKET_KIND
-        ),
-    }
-
-
 def ts_bracket_state_dict_for(canvas, item) -> dict:
     embedded = embedded_scene_item_state(item)
     if embedded:
@@ -260,8 +242,6 @@ def scene_item_state(item, *, mark_center_getter: MarkCenterGetter) -> dict:
         return note_state_dict(item)
     if kind == "mark":
         return mark_state_dict(item, mark_center_getter=mark_center_getter)
-    if kind == "ts_bracket" and isinstance(item, QGraphicsPathItem):
-        return ts_bracket_state_dict(item)
     if kind == "orbital" and isinstance(item, QGraphicsItemGroup):
         return orbital_state_dict(item)
     if kind in ARROW_KINDS and isinstance(item, QGraphicsPathItem):
@@ -313,6 +293,5 @@ __all__ = [
     "scene_item_state",
     "scene_item_state_for",
     "shape_state_dict_for",
-    "ts_bracket_state_dict",
     "ts_bracket_state_dict_for",
 ]

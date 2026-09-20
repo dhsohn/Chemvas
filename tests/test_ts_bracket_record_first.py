@@ -17,6 +17,7 @@ from chemvas.ui.canvas_service_ports import insert_controller_for_access
 from chemvas.ui.canvas_ts_bracket_state import ts_bracket_state_for
 from chemvas.ui.export_readability_service import _item_sizes
 from chemvas.ui.scene_decoration_build_access import ts_bracket_path_for
+from chemvas.ui.scene_render_access import scene_render_context_for
 from chemvas.ui.ts_bracket_record_access import (
     ts_bracket_id_for_item,
     ts_bracket_record_for,
@@ -266,28 +267,51 @@ def test_moving_a_dagger_keeps_the_size_of_its_glyph(canvas) -> None:
     assert sizes == {size_before}
 
 
-def test_a_ts_bracket_item_that_arrives_without_a_record_is_adopted(canvas) -> None:
+def test_a_ts_bracket_item_without_a_record_cannot_join_the_document(canvas) -> None:
     from chemvas.ui.scene_decoration_build_access import build_ts_bracket_item_for
 
     item = build_ts_bracket_item_for(
         canvas, QRectF(10.0, 20.0, 120.0, 90.0), "braces_pair"
     )
     assert ts_bracket_record_for(canvas, item) is None
+    records_before = dict(ts_bracket_state_for(canvas).records)
+    flags_before = item.flags()
 
-    canvas.services.scene_view.scene_item_controller.attach_scene_item(item)
+    with pytest.raises(RuntimeError, match="TS bracket item attached without a record"):
+        canvas.services.scene_view.scene_item_controller.attach_scene_item(item)
 
-    # Until the last step makes this an error, what the item says becomes
-    # its record.
-    assert _session(canvas).snapshot_state()["ts_brackets"] == [
-        {
-            "kind": "ts_bracket",
-            "left": 10.0,
-            "top": 20.0,
-            "right": 130.0,
-            "bottom": 110.0,
-            "bracket_kind": "braces_pair",
-        }
-    ]
+    assert item.scene() is None
+    assert item.flags() == flags_before
+    assert ts_bracket_items_for(canvas) == []
+    assert ts_bracket_state_for(canvas).records == records_before
+    assert _session(canvas).snapshot_state()["ts_brackets"] == []
+
+
+@pytest.mark.parametrize(
+    "bracket_kind",
+    [
+        "square_pair",
+        "square_left",
+        "parentheses_pair",
+        "parenthesis_left",
+        "braces_pair",
+        "brace_left",
+        "dagger",
+        "double_dagger",
+    ],
+)
+def test_a_ts_bracket_item_carries_no_document_values(canvas, bracket_kind) -> None:
+    item = canvas.services.scene_decoration.scene_decoration_service.add_ts_bracket(
+        QRectF(10.0, 20.0, 120.0, 90.0), bracket_kind=bracket_kind
+    )
+    assert ts_bracket_record_for(canvas, item).bracket_kind == bracket_kind
+    assert item.data(1) is None
+    assert item.data(2) is None
+
+    canvas.services.interaction.move_controller.move_item(item, 3.0, -5.0)
+
+    assert item.data(1) is None
+    assert item.data(2) is None
 
 
 def test_a_dagger_can_come_back_onto_an_item_that_was_drawn_as_a_bracket(
@@ -305,4 +329,10 @@ def test_a_dagger_can_come_back_onto_an_item_that_was_drawn_as_a_bracket(
     assert ts_bracket_record_for(canvas, item).bracket_kind == "double_dagger"
     # The export check measures the glyph through its construction font, which
     # an item first drawn as a stroked bracket has to be able to carry.
-    assert list(_item_sizes(item))
+    assert list(_item_sizes(scene_render_context_for(canvas), item))
+
+    bracket = {**dagger, "bracket_kind": "square_pair"}
+    services.scene_view.scene_item_controller.apply_scene_item_state(item, bracket)
+
+    assert item.export_glyph_run() is None
+    assert list(_item_sizes(scene_render_context_for(canvas), item)) == []

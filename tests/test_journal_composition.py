@@ -5,6 +5,8 @@ import subprocess
 import sys
 from typing import TYPE_CHECKING
 
+from tests.scene_render_context import attach_scene_render_context
+
 if TYPE_CHECKING:
     from pathlib import Path
 
@@ -418,9 +420,9 @@ def test_omitted_curve_control_retains_native_geometry_after_roundtrip(
     canvas = build_canvas_view()
     try:
         restore_canvas_state_for(canvas, state)
-        expected = CanvasArrowBuildService(canvas).build_arrow_item(
-            QPointF(0, 0), QPointF(60, 0), kind
-        )
+        expected = CanvasArrowBuildService(
+            attach_scene_render_context(canvas)
+        ).build_arrow_item(QPointF(0, 0), QPointF(60, 0), kind)
         control = expected.data(2)["control"]
         for _ in range(2):
             saved = snapshot_canvas_state_for(canvas)

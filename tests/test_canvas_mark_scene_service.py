@@ -5,6 +5,7 @@ from types import SimpleNamespace
 from unittest import mock
 
 from tests.runtime_services import canvas_runtime_services
+from tests.scene_render_context import attach_scene_render_context
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -49,6 +50,7 @@ class CanvasMarkSceneServiceTest(unittest.TestCase):
                 tool_settings_state=CanvasToolSettingsState(mark_kind="plus"),
             ),
         )
+        attach_scene_render_context(canvas)
         service = CanvasMarkSceneService(canvas)
 
         self.assertIsNone(service.add_mark_for_atom(7, QPointF(1.0, 2.0)))
@@ -146,6 +148,8 @@ class CanvasMarkSceneServiceTest(unittest.TestCase):
             ),
         )
         mark_target_distance = mock.Mock(return_value=20.0)
+        context = attach_scene_render_context(canvas)
+        context.geometry.mark_target_distance_for_atom = mark_target_distance
         canvas.services = canvas_runtime_services(
             geometry_controller=SimpleNamespace(
                 mark_target_distance_for_atom=mark_target_distance

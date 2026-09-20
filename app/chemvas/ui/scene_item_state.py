@@ -4,7 +4,7 @@ from collections.abc import Callable, Mapping
 from typing import Any, cast
 
 from PyQt6.QtCore import QPointF, QRectF, Qt
-from PyQt6.QtGui import QBrush, QColor, QPen, QPolygonF
+from PyQt6.QtGui import QBrush, QColor, QPolygonF
 from PyQt6.QtWidgets import (
     QGraphicsItemGroup,
     QGraphicsPathItem,
@@ -43,7 +43,6 @@ from chemvas.ui.scene_item_state_serialization import (
     scene_item_state,
     scene_item_state_for,
     shape_state_dict_for,
-    ts_bracket_state_dict,
     ts_bracket_state_dict_for,
 )
 
@@ -51,7 +50,6 @@ MarkCenterSetter = Callable[[Any, QPointF], None]
 MarkColorSetter = Callable[[Any, str | None], None]
 NoteStyleApplier = Callable[[QGraphicsTextItem], None]
 RingFillBrushGetter = Callable[[], QBrush]
-TsBracketPathBuilder = Callable[..., Any]
 ArrowItemBuilder = Callable[[QPointF, QPointF, str, bool], QGraphicsPathItem]
 CurvedArrowPathSetter = Callable[
     [QGraphicsPathItem, QPointF, QPointF, QPointF, bool], None
@@ -163,12 +161,6 @@ def shape_fill_from_state(state: Mapping[str, object]) -> QColor | None:
     return color
 
 
-def _build_ts_bracket_path(
-    builder: TsBracketPathBuilder, rect: QRectF, bracket_kind: str
-):
-    return builder(rect, bracket_kind)
-
-
 def _apply_note_state(
     item: QGraphicsTextItem,
     state: Mapping[str, object],
@@ -200,7 +192,6 @@ def apply_scene_item_state(
     mark_center_setter: MarkCenterSetter,
     mark_color_setter: MarkColorSetter,
     ring_fill_brush_getter: RingFillBrushGetter,
-    ts_bracket_path_builder: TsBracketPathBuilder,
     bond_color: str,
     build_arrow_item: ArrowItemBuilder,
     set_curved_arrow_path: CurvedArrowPathSetter,
@@ -248,22 +239,6 @@ def apply_scene_item_state(
             set_ring_fill_brush(item, fill, source_alpha=source_alpha)
         else:
             set_ring_fill_brush(item, ring_fill_brush_getter())
-        return
-    if kind == "ts_bracket" and isinstance(item, QGraphicsPathItem):
-        rect = ts_bracket_rect_from_state(state)
-        if rect is None:
-            return
-        bracket_kind = ts_bracket_kind_from_state(state)
-        # The rect is in scene coordinates, so the rebuilt path is absolute.
-        # Clear any translation left by a prior drag/nudge (move_item shifts
-        # item.pos() via moveBy) or the item would render double-offset.
-        item.setPos(0.0, 0.0)
-        item.setPath(
-            _build_ts_bracket_path(ts_bracket_path_builder, rect, bracket_kind)
-        )
-        item.setPen(QPen(Qt.PenStyle.NoPen))
-        item.setBrush(QBrush(QColor(bond_color)))
-        item.setData(1, {"rect": QRectF(rect), "bracket_kind": bracket_kind})
         return
     if kind == "orbital" and isinstance(item, QGraphicsItemGroup):
         center_point = _point_from_state(state.get("center"))
@@ -404,6 +379,5 @@ __all__ = [
     "shape_stroke_from_state",
     "ts_bracket_kind_from_state",
     "ts_bracket_rect_from_state",
-    "ts_bracket_state_dict",
     "ts_bracket_state_dict_for",
 ]

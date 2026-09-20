@@ -8,6 +8,7 @@ from PyQt6.QtWidgets import QGraphicsItem
 
 from chemvas.ui.canvas_scene_state import canvas_scene_for, optional_canvas_scene_for
 from chemvas.ui.canvas_service_ports import scene_item_controller_for_access
+from chemvas.ui.scene_graphics_operations import detach_graphics_item
 
 if TYPE_CHECKING:
     from chemvas.ui.scene_item_controller import SceneItemController
@@ -131,18 +132,9 @@ def _detach_item_from_canvas_scene(
 
     if item is None:
         return False
-    scene = optional_canvas_scene_for(canvas)
-    if scene is None:
-        return unresolved
-    scene_method = getattr(item, "scene", None)
-    if callable(scene_method):
-        try:
-            if scene_method() is not scene:
-                return False
-        except RuntimeError:
-            return unresolved
-    scene.removeItem(item)
-    return True
+    return detach_graphics_item(
+        optional_canvas_scene_for(canvas), item, unresolved=unresolved
+    )
 
 
 def remove_item_from_canvas_scene(canvas, item) -> bool:

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+from typing import TYPE_CHECKING
 
 from PyQt6.QtCore import QPointF
 
@@ -15,34 +16,24 @@ from chemvas.features.rendering import (
     trimmed_line_segment,
     wedge_triangle_from_segment,
 )
-from chemvas.ui.bond_graphics_access import bond_offset_unit_3d_for, line_normal_for
-from chemvas.ui.bond_label_geometry_access import (
-    label_rect_for_atom_for,
-    trim_line_for_labels_for,
-)
-from chemvas.ui.canvas_graph_state import graph_state_for
-from chemvas.ui.canvas_model_access import atom_for_id, bond_for_id
-from chemvas.ui.renderer_style_access import (
-    bold_bond_pen_for,
-    renderer_bond_line_width_for,
-    renderer_bond_spacing_for,
-    renderer_hash_spacing_for,
-)
+
+if TYPE_CHECKING:
+    from chemvas.ui.scene_render_context import SceneRenderContext
 
 
 class BondLineGeometryService:
-    def __init__(self, canvas) -> None:
-        self.canvas = canvas
-        self.graph = graph_state_for(canvas)
+    def __init__(self, context: SceneRenderContext) -> None:
+        self.context = context
+        self.graph = context.state.graph_state
 
     def _bond_line_width(self) -> float:
-        return renderer_bond_line_width_for(self.canvas)
+        return self.context.renderer.bond_line_width()
 
     def _bond_spacing(self) -> float:
-        return renderer_bond_spacing_for(self.canvas)
+        return self.context.renderer.bond_spacing()
 
     def _hash_spacing(self) -> float:
-        return renderer_hash_spacing_for(self.canvas)
+        return self.context.renderer.hash_spacing()
 
     def _dotted_dot_radius(self) -> float:
         return max(0.4, self._bond_line_width() * 0.58)
@@ -59,7 +50,7 @@ class BondLineGeometryService:
         bond_ids = set(self.graph.atom_bond_ids.get(atom_id, ()))
         if other_id is not None:
             for bond_id in list(bond_ids):
-                bond = bond_for_id(self.canvas, bond_id)
+                bond = self.context.bond_for_id(bond_id)
                 if bond is None:
                     continue
                 if {bond.a, bond.b} == {atom_id, other_id}:
@@ -108,7 +99,7 @@ class BondLineGeometryService:
         length = math.hypot(dx, dy) or 1.0
         offset_unit = None
         if a_id is not None and b_id is not None:
-            offset_unit = bond_offset_unit_3d_for(self.canvas, a_id, b_id)
+            offset_unit = self.context.geometry.bond_offset_unit_3d(a_id, b_id)
         if offset_unit is not None:
             nx, ny = offset_unit[0], offset_unit[1]
         else:
@@ -121,8 +112,7 @@ class BondLineGeometryService:
             offsets = [-spacing, 0.0, spacing]
         else:
             offsets = [0.0]
-        t0, t1 = trim_line_for_labels_for(
-            self.canvas,
+        t0, t1 = self.context.geometry.trim_line_for_labels(
             a_id,
             b_id,
             x1,
@@ -168,17 +158,17 @@ class BondLineGeometryService:
             self.graph.atom_bond_ids.get(b_id, ())
         )
         for bond_id in candidate_bond_ids:
-            bond = bond_for_id(self.canvas, bond_id)
+            bond = self.context.bond_for_id(bond_id)
             if bond is None:
                 continue
             if bond.a == a_id and bond.b != b_id:
-                other = atom_for_id(self.canvas, bond.b)
+                other = self.context.model.atoms.get(bond.b)
             elif bond.b == a_id and bond.a != b_id:
-                other = atom_for_id(self.canvas, bond.a)
+                other = self.context.model.atoms.get(bond.a)
             elif bond.a == b_id and bond.b != a_id:
-                other = atom_for_id(self.canvas, bond.b)
+                other = self.context.model.atoms.get(bond.b)
             elif bond.b == b_id and bond.a != a_id:
-                other = atom_for_id(self.canvas, bond.a)
+                other = self.context.model.atoms.get(bond.a)
             else:
                 other = None
             if other is None:
@@ -202,12 +192,12 @@ class BondLineGeometryService:
     ) -> tuple[float, float]:
         target = self._double_neighbor_target(a_id, b_id)
         if target is not None:
-            return line_normal_for(self.canvas, x1, y1, x2, y2, target)
+            return self.context.geometry.line_normal(x1, y1, x2, y2, target)
         if a_id is not None and b_id is not None:
-            offset_unit = bond_offset_unit_3d_for(self.canvas, a_id, b_id)
+            offset_unit = self.context.geometry.bond_offset_unit_3d(a_id, b_id)
             if offset_unit is not None:
                 return offset_unit[0], offset_unit[1]
-        return line_normal_for(self.canvas, x1, y1, x2, y2, None)
+        return self.context.geometry.line_normal(x1, y1, x2, y2, None)
 
     def plain_double_segments(
         self,
@@ -236,8 +226,8 @@ class BondLineGeometryService:
         else:
             distances = (-center_offset, center_offset)
         offsets = tuple((inner_nx * d, inner_ny * d) for d in distances)
-        t0, t1 = trim_line_for_labels_for(
-            self.canvas, a_id, b_id, x1, y1, x2, y2, offsets
+        t0, t1 = self.context.geometry.trim_line_for_labels(
+            a_id, b_id, x1, y1, x2, y2, offsets
         )
         base_segment = (
             x1 + dx * t0,
@@ -260,9 +250,15 @@ class BondLineGeometryService:
             or 1.0
         )
         has_label = False
-        if a_id is not None and label_rect_for_atom_for(self.canvas, a_id) is not None:
+        if (
+            a_id is not None
+            and self.context.geometry.label_rect_for_atom(a_id) is not None
+        ):
             has_label = True
-        if b_id is not None and label_rect_for_atom_for(self.canvas, b_id) is not None:
+        if (
+            b_id is not None
+            and self.context.geometry.label_rect_for_atom(b_id) is not None
+        ):
             has_label = True
         trim = self._double_short_trim(base_length, has_label=has_label)
         if variant == DOUBLE_STYLE_DEFAULT:
@@ -281,11 +277,11 @@ class BondLineGeometryService:
 
     def _stereo_label_trim(self, a_id, b_id, x1, y1, x2, y2):
         length = math.hypot(x2 - x1, y2 - y1) or 1.0
-        half_width = bold_bond_pen_for(self.canvas).widthF() / 2.0
+        half_width = self.context.renderer.bold_bond_pen().widthF() / 2.0
         ox = -(y2 - y1) / length * half_width
         oy = (x2 - x1) / length * half_width
-        return trim_line_for_labels_for(
-            self.canvas, a_id, b_id, x1, y1, x2, y2, ((-ox, -oy), (ox, oy))
+        return self.context.geometry.trim_line_for_labels(
+            a_id, b_id, x1, y1, x2, y2, ((-ox, -oy), (ox, oy))
         )
 
     def wedge_triangle(
@@ -304,7 +300,7 @@ class BondLineGeometryService:
         t0, t1 = self._stereo_label_trim(a_id, b_id, x1, y1, x2, y2)
         return wedge_triangle_from_segment(
             trimmed_line_segment(x1, y1, x2, y2, t0=t0, t1=t1),
-            max_width=bold_bond_pen_for(self.canvas).widthF(),
+            max_width=self.context.renderer.bold_bond_pen().widthF(),
         )
 
     def hash_topology_count(
@@ -343,7 +339,7 @@ class BondLineGeometryService:
         return hash_segments_from_segment(
             trimmed_line_segment(x1, y1, x2, y2, t0=t0, t1=t1),
             count=count,
-            max_size=bold_bond_pen_for(self.canvas).widthF(),
+            max_size=self.context.renderer.bold_bond_pen().widthF(),
         )
 
 

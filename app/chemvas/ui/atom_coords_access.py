@@ -6,7 +6,10 @@ from typing import Any, cast
 
 from chemvas.ui.bond_graphics_access import project_point_3d_for
 from chemvas.ui.canvas_model_access import atom_for_id
+from chemvas.ui.canvas_model_state import model_for
+from chemvas.ui.canvas_rotation_state import rotation_state_for
 from chemvas.ui.renderer_style_access import bond_length_px_for
+from chemvas.ui.scene_geometry import current_atom_coords_in_scene
 
 AtomCoords3D = tuple[float, float, float]
 
@@ -62,15 +65,15 @@ def stored_atom_coords_3d_matches_projection_for(
 def current_atom_coords_3d_for(
     canvas, atom_id: int
 ) -> tuple[float, float, float] | None:
-    atom = atom_for_id(canvas, atom_id)
-    if atom is None:
-        return None
-    coords = atom_coords_3d_for_id(canvas, atom_id)
-    if coords is None:
-        return (atom.x, atom.y, 0.0)
-    if not stored_atom_coords_3d_matches_projection_for(canvas, atom_id, coords):
-        return (atom.x, atom.y, 0.0)
-    return coords
+    rotation = rotation_state_for(canvas)
+    return current_atom_coords_in_scene(
+        atom_id,
+        model=model_for(canvas),
+        stored_coords=atom_coords_3d_for(canvas),
+        bond_length_px=bond_length_px_for(canvas),
+        center_3d=rotation.projection_center_3d,
+        anchor_2d=rotation.projection_anchor_2d,
+    )
 
 
 __all__ = [

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from chemvas.ui.scene_decoration_build_access import build_curved_arrow_path_for
+from chemvas.ui.canvas_service_ports import arrow_build_service_for_access
 
 if TYPE_CHECKING:
     from PyQt6.QtCore import QPointF
@@ -26,9 +26,8 @@ class CurvedArrowPathService:
         # Curved-arrow geometry is tracked in scene coordinates.
         # Reset per-item translation before rebuilding the local path so
         # the rendered arrow stays aligned with endpoint/control handles.
-        item.setPos(0.0, 0.0)
-        item.setPath(
-            build_curved_arrow_path_for(self.canvas, start, end, control, double)
+        arrow_build_service_for_access(self.canvas).set_curved_arrow_path(
+            item, start, end, control, double
         )
 
 

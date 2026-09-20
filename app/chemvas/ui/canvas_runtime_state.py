@@ -30,6 +30,7 @@ from chemvas.ui.canvas_ts_bracket_state import CanvasTSBracketState
 from chemvas.ui.handle_state import CanvasHandleState
 from chemvas.ui.input_view_state import InputViewState
 from chemvas.ui.scene_clipboard_state import SceneClipboardState
+from chemvas.ui.scene_render_context import SceneRenderState
 from chemvas.ui.selection_info_access import maybe_warm_rdkit_for
 from chemvas.ui.selection_info_state import SelectionInfoState, selection_info_state_for
 from chemvas.ui.selection_outline_state import SelectionOutlineState
@@ -63,40 +64,28 @@ class RdkitIdleWarmupBridge(QObject):
 
 
 @dataclass(slots=True, kw_only=True)
-class CanvasRuntimeState:
+class CanvasRuntimeState(SceneRenderState):
     # The canonical, complete state container. State accessors read their field
     # off it directly, and ``slots=True`` makes a renamed or misspelled field
     # raise instead of quietly becoming a second copy of the state.
     document_metadata_state: CanvasDocumentMetadataState
     calculation_plan_state: CanvasCalculationPlanState
-    sheet_setup_state: SheetSetupState
     selection_info_state: SelectionInfoState
     rdkit_idle_timer: QTimer
     rdkit_idle_warmup_bridge: RdkitIdleWarmupBridge
-    graph_state: CanvasGraphState
     group_state: CanvasGroupState
     insert_state: CanvasInsertState
     history_state: CanvasHistoryState
     history_service: CanvasHistoryService
-    atom_coords_3d_state: CanvasAtomCoords3DState
-    atom_graphics_state: CanvasAtomGraphicsState
-    bond_graphics_state: CanvasBondGraphicsState
-    mark_registry: CanvasMarkRegistry
     spatial_index_state: CanvasSpatialIndexState
     input_view_state: InputViewState
-    rotation_state: CanvasRotationState
     handle_state: CanvasHandleState
     selection_style_state: SelectionStyleState
     selection_outline_state: SelectionOutlineState
-    text_style_state: CanvasTextStyleState
-    tool_settings_state: CanvasToolSettingsState
     hover_preview_state: HoverState
     callback_state: CanvasCallbackState
     scene_clipboard_state: SceneClipboardState
-    scene_items_state: CanvasSceneItemsState
-    shape_state: CanvasShapeState
     smiles_input_state: CanvasSmilesInputState
-    ts_bracket_state: CanvasTSBracketState
 
     @classmethod
     def create(cls, canvas: Any) -> CanvasRuntimeState:

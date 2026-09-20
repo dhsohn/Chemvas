@@ -80,6 +80,7 @@ from chemvas.ui.selection_rotation_access import (
 )
 from chemvas.ui.structure_mutation_access import add_atom_for, add_bond_for
 from tests.canvas_factory import build_canvas_view
+from tests.scene_render_context import attach_scene_render_context
 
 
 class _FakeRingItem:
@@ -1217,14 +1218,17 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
             (0.0, -1.0),
         )
 
+        attach_scene_render_context(cached_view)
+        coincident_view = SimpleNamespace(
+            model=SimpleNamespace(
+                atoms={1: Atom("C", 1.0, 1.0), 2: Atom("C", 1.0, 1.0)},
+            ),
+        )
+        attach_scene_render_context(coincident_view)
         self.assertEqual(bond_offset_unit_3d_for(cached_view, 99, 2), None)
         self.assertEqual(
             bond_offset_unit_3d_for(
-                SimpleNamespace(
-                    model=SimpleNamespace(
-                        atoms={1: Atom("C", 1.0, 1.0), 2: Atom("C", 1.0, 1.0)},
-                    ),
-                ),
+                coincident_view,
                 1,
                 2,
             ),

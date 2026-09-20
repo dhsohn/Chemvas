@@ -1,11 +1,37 @@
 from __future__ import annotations
 
+from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QBrush, QColor, QPen
+
 from chemvas.features.annotations import DEFAULT_BRACKET_KIND
+from chemvas.features.selection import HANDLE_ACCENT_COLOR
 from chemvas.ui.canvas_service_ports import (
     arrow_build_service_for_access,
     scene_decoration_build_service_for_access,
 )
+from chemvas.ui.endpoint_snap_access import (
+    SNAP_MARK_SCREEN_PX,
+    scene_length_for_screen_px,
+    snapped_points_among_for,
+)
+from chemvas.ui.graphics_items import NoSelectEllipseItem
 from chemvas.ui.scene_item_access import add_item_to_canvas_scene
+
+SNAP_MARK_ROLE = "snap_mark"
+
+
+def build_snap_mark_for(canvas, point):
+    radius = scene_length_for_screen_px(canvas, SNAP_MARK_SCREEN_PX) / 2.0
+    mark = NoSelectEllipseItem(
+        point.x() - radius, point.y() - radius, radius * 2, radius * 2
+    )
+    pen = QPen(QColor(HANDLE_ACCENT_COLOR))
+    pen.setWidthF(1.6)
+    pen.setCosmetic(True)
+    mark.setPen(pen)
+    mark.setBrush(QBrush(Qt.BrushStyle.NoBrush))
+    mark.setData(0, SNAP_MARK_ROLE)
+    return mark
 
 
 def build_arrow_item_for(canvas, start, end, kind: str, mirrored: bool = False):
@@ -16,12 +42,13 @@ def build_arrow_item_for(canvas, start, end, kind: str, mirrored: bool = False):
 
 def show_connect_mark_for(canvas, point):
     """Put a standalone snap ring on the scene and return it."""
-    mark = arrow_build_service_for_access(canvas).build_snap_mark(point)
+    mark = build_snap_mark_for(canvas, point)
     return add_item_to_canvas_scene(canvas, mark)
 
 
 def mark_snapped_points_for(canvas, item, points) -> None:
-    arrow_build_service_for_access(canvas).mark_snapped_points(item, points)
+    for point in snapped_points_among_for(canvas, points):
+        build_snap_mark_for(canvas, point).setParentItem(item)
 
 
 def apply_arrow_labels_for(canvas, item, labels) -> None:

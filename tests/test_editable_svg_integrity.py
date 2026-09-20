@@ -127,7 +127,7 @@ def test_editable_whole_svg_requires_same_default_no_draft_consent_as_save(
     message_box.question.return_value = QMessageBox.StandardButton.No
 
     with patch(
-        "chemvas.ui.canvas_document_session_service.export_canvas_scene_for",
+        "chemvas.ui.figure_export_service.render_export_plan",
         side_effect=AssertionError("rendering must not start after No"),
     ) as render:
         _export(window, output, message_box)

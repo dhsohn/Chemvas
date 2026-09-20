@@ -1,14 +1,18 @@
+import copy
 import unittest
 from types import SimpleNamespace
 from unittest import mock
 
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import QPointF, Qt
 from PyQt6.QtGui import QColor
+from PyQt6.QtWidgets import QApplication, QGraphicsScene
 
-from chemvas.domain.document import Atom, Bond, MoleculeModel
+from chemvas.adapters.qt.renderer import Renderer
+from chemvas.domain.document import Atom, Bond, MoleculeModel, deserialize_model_state
+from chemvas.features.document_composition import compose_document_state
+from chemvas.features.graph import build_bond_adjacency_index
 from chemvas.ui.atom_coords_access import (
     CanvasAtomCoords3DState,
-    atom_coords_3d_for,
     set_atom_coords_3d_for,
 )
 from chemvas.ui.canvas_atom_graphics_state import (
@@ -17,10 +21,6 @@ from chemvas.ui.canvas_atom_graphics_state import (
 )
 from chemvas.ui.canvas_calculation_plan_state import CanvasCalculationPlanState
 from chemvas.ui.canvas_document_state import (
-    apply_document_settings,
-    restore_document_post_model_items,
-    restore_document_pre_model_items,
-    restore_document_projection_state,
     snapshot_canvas_document_state,
 )
 from chemvas.ui.canvas_group_state import CanvasGroupState
@@ -28,66 +28,21 @@ from chemvas.ui.canvas_rotation_state import CanvasRotationState, rotation_state
 from chemvas.ui.canvas_scene_items_state import CanvasSceneItemsState
 from chemvas.ui.canvas_smiles_input_state import (
     CanvasSmilesInputState,
-    last_smiles_input_for,
 )
 from chemvas.ui.canvas_text_style_state import (
     CanvasTextStyleState,
-    text_style_state_for,
 )
 from chemvas.ui.canvas_tool_settings_state import (
     CanvasToolSettingsState,
-    tool_settings_state_for,
 )
-from chemvas.ui.sheet_setup_access import sheet_setup_for
+from chemvas.ui.document_scene import populate_document_scene
+from chemvas.ui.note_item import NoteItem
+from chemvas.ui.scene_render_context import SceneRenderState
+from chemvas.ui.scene_rendering import build_scene_render_context
+from chemvas.ui.shape_record_access import require_shape_record
 from chemvas.ui.sheet_setup_state import SheetSetupState
-from tests.runtime_services import canvas_runtime_services
+from chemvas.ui.ts_bracket_record_access import require_ts_bracket_record
 from tests.runtime_state import canvas_runtime_state
-
-
-class _Canvas:
-    def __init__(self) -> None:
-        self.calls = []
-
-    def restore_ring_from_state(self, ring_state):
-        self.calls.append(("canvas_ring", dict(ring_state)))
-
-    def restore_note_from_state(self, note_state):
-        self.calls.append(("canvas_note", dict(note_state)))
-
-    def restore_mark_from_state(self, mark_state):
-        self.calls.append(("canvas_mark", dict(mark_state)))
-
-    def restore_arrow_from_state(self, arrow_state):
-        self.calls.append(("canvas_arrow", dict(arrow_state)))
-
-    def restore_ts_bracket_from_state(self, ts_bracket_state):
-        self.calls.append(("canvas_ts", dict(ts_bracket_state)))
-
-    def restore_orbital_from_state(self, orbital_state):
-        self.calls.append(("canvas_orbital", dict(orbital_state)))
-
-
-class _Controller:
-    def __init__(self, canvas: _Canvas) -> None:
-        self.canvas = canvas
-
-    def restore_ring_from_state(self, ring_state):
-        self.canvas.calls.append(("controller_ring", dict(ring_state)))
-
-    def restore_note_from_state(self, note_state):
-        self.canvas.calls.append(("controller_note", dict(note_state)))
-
-    def restore_mark_from_state(self, mark_state):
-        self.canvas.calls.append(("controller_mark", dict(mark_state)))
-
-    def restore_arrow_from_state(self, arrow_state):
-        self.canvas.calls.append(("controller_arrow", dict(arrow_state)))
-
-    def restore_ts_bracket_from_state(self, ts_bracket_state):
-        self.canvas.calls.append(("controller_ts", dict(ts_bracket_state)))
-
-    def restore_orbital_from_state(self, orbital_state):
-        self.canvas.calls.append(("controller_orbital", dict(orbital_state)))
 
 
 class _SceneItem:
@@ -294,295 +249,221 @@ class CanvasDocumentStateTest(unittest.TestCase):
         self.assertEqual(state["settings"]["sheet_orientation"], "portrait")
         self.assertEqual(state["last_smiles_input"], "CCO")
 
-    def test_apply_document_settings_uses_state_values(self) -> None:
-        canvas = SimpleNamespace(
-            renderer=SimpleNamespace(
-                style=SimpleNamespace(bond_length_px=18.0),
-                set_bond_length=mock.Mock(),
-            ),
-            viewport=lambda: SimpleNamespace(update=mock.Mock()),
-            runtime_state=canvas_runtime_state(
-                smiles_input_state=CanvasSmilesInputState(last_smiles_input="before"),
-                sheet_setup_state=SheetSetupState(),
-                text_style_state=CanvasTextStyleState(),
-                tool_settings_state=CanvasToolSettingsState(),
-            ),
-        )
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.app = QApplication.instance() or QApplication([])
 
-        apply_document_settings(
-            canvas,
+    def _state(self, **records):
+        return compose_document_state(
             {
-                "settings": {
-                    "bond_length_px": 22.0,
-                    "arrow_line_width": 1.7,
-                    "arrow_head_scale": 0.5,
-                    "orbital_phase_enabled": True,
-                    "text_font_family": "Helvetica",
-                    "text_font_size": 14,
-                    "text_font_weight": 500,
-                    "text_italic": True,
-                    "text_color": "#445566",
-                    "text_alignment": "center",
-                    "text_line_spacing": 1.3,
-                    "note_box_enabled": True,
-                    "note_box_color": "#ffffff",
-                    "note_box_alpha": 0.5,
-                    "note_border_enabled": True,
-                    "note_border_color": "#111111",
-                    "note_border_width": 1.4,
-                    "note_padding": 8.0,
-                    "sheet_size": "A4",
-                    "sheet_orientation": "portrait",
-                },
-                "last_smiles_input": "after",
-            },
+                "format": "chemvas-document-composition",
+                "version": 1,
+                "atoms": [],
+                "bonds": [],
+                **records,
+            }
         )
 
-        canvas.renderer.set_bond_length.assert_called_once_with(22.0)
-        self.assertEqual(sheet_setup_for(canvas), ("A4", "portrait"))
-        tool_settings = tool_settings_state_for(canvas)
-        self.assertEqual(tool_settings.arrow_line_width, 1.7)
-        self.assertEqual(tool_settings.arrow_head_scale, 0.5)
-        self.assertTrue(tool_settings.orbital_phase_enabled)
-        text_style = text_style_state_for(canvas)
-        self.assertEqual(text_style.text_font_family, "Helvetica")
-        self.assertEqual(text_style.text_font_size, 14)
-        self.assertEqual(text_style.text_font_weight, 500)
-        self.assertTrue(text_style.text_italic)
-        self.assertEqual(text_style.text_color.name(), "#445566")
-        self.assertEqual(text_style.text_alignment, Qt.AlignmentFlag.AlignHCenter)
-        self.assertEqual(text_style.text_line_spacing, 1.3)
-        self.assertTrue(text_style.note_box_enabled)
-        self.assertEqual(text_style.note_box_color.name(), "#ffffff")
-        self.assertEqual(text_style.note_box_alpha, 0.5)
-        self.assertTrue(text_style.note_border_enabled)
-        self.assertEqual(text_style.note_border_color.name(), "#111111")
-        self.assertEqual(text_style.note_border_width, 1.4)
-        self.assertEqual(text_style.note_padding, 8.0)
-        self.assertEqual(last_smiles_input_for(canvas), "after")
-
-    def test_apply_document_settings_requires_current_text_note_settings(
-        self,
-    ) -> None:
-        canvas = SimpleNamespace(
-            renderer=SimpleNamespace(
-                style=SimpleNamespace(bond_length_px=18.0),
-                set_bond_length=mock.Mock(),
-            ),
-            viewport=lambda: SimpleNamespace(update=mock.Mock()),
-            runtime_state=canvas_runtime_state(
-                smiles_input_state=CanvasSmilesInputState(last_smiles_input="before"),
-                sheet_setup_state=SheetSetupState(),
-                text_style_state=CanvasTextStyleState(
-                    text_font_family="Courier New",
-                    text_color=QColor("#ff00aa"),
-                    text_alignment=Qt.AlignmentFlag.AlignRight,
-                    note_box_enabled=True,
-                ),
-                tool_settings_state=CanvasToolSettingsState(),
-            ),
+    def _context(self, state):
+        model = deserialize_model_state(state["model"])
+        drawing = SceneRenderState()
+        graph = drawing.graph_state
+        graph.atom_neighbors, graph.atom_bond_ids = build_bond_adjacency_index(
+            model.atoms, model.bonds
         )
+        scene = QGraphicsScene()
+        context = build_scene_render_context(
+            scene_provider=lambda: scene,
+            model_provider=lambda: model,
+            renderer=Renderer(),
+            state=drawing,
+        )
+        self.addCleanup(context.scene.clear)
+        return context
 
+    def test_materializer_applies_native_settings_and_note_typography(self):
+        state = self._state(notes=[{"text": "first\nsecond", "x": 2, "y": 3}])
+        state["settings"].update(
+            bond_length_px=22.0,
+            arrow_line_width=1.7,
+            arrow_head_scale=0.5,
+            orbital_phase_enabled=True,
+            text_font_family="Helvetica",
+            text_font_size=14,
+            text_font_weight=500,
+            text_italic=True,
+            text_color="#445566",
+            text_alignment="center",
+            text_line_spacing=1.3,
+            note_box_enabled=True,
+            note_box_color="#ffffff",
+            note_box_alpha=0.5,
+            note_border_enabled=True,
+            note_border_color="#111111",
+            note_border_width=1.4,
+            note_padding=8.0,
+            sheet_size="A4",
+            sheet_orientation="portrait",
+        )
+        context = self._context(state)
+        populate_document_scene(context, state, note_item_factory=NoteItem)
+        self.assertEqual(context.renderer.style.bond_length_px, 22.0)
+        tools = context.state.tool_settings_state
+        self.assertEqual((tools.arrow_line_width, tools.arrow_head_scale), (1.7, 0.5))
+        self.assertTrue(tools.orbital_phase_enabled)
+        note = context.state.scene_items_state.note_items[0]
+        self.assertEqual(note.font().family(), "Helvetica")
+        self.assertEqual(note.font().pointSize(), 14)
+        self.assertEqual(note.font().weight(), 500)
+        self.assertTrue(note.font().italic())
+        self.assertEqual(note.defaultTextColor().name(), "#445566")
+        self.assertEqual(
+            note.document().defaultTextOption().alignment(),
+            Qt.AlignmentFlag.AlignHCenter,
+        )
+        self.assertEqual(note.document().begin().blockFormat().lineHeight(), 130)
+        self.assertEqual((note.pos().x(), note.pos().y()), (2, 3))
+        box = note.data(20)
+        self.assertAlmostEqual(box.brush().color().alphaF(), 0.5, places=3)
+        self.assertEqual(box.pen().color().name(), "#111111")
+        self.assertEqual(box.pen().widthF(), 1.4)
+        self.assertEqual(box.rect(), note.boundingRect().adjusted(-8, -8, 8, 8))
+        self.assertEqual(context.state.sheet_setup_state.size_name, "A4")
+        self.assertEqual(context.state.sheet_setup_state.orientation, "portrait")
+
+    def test_materializer_requires_all_current_text_note_settings(self):
+        state = self._state()
+        del state["settings"]["text_font_family"]
         with self.assertRaises(KeyError):
-            apply_document_settings(
-                canvas,
-                {
-                    "settings": {
-                        "bond_length_px": 22.0,
-                        "arrow_line_width": 1.7,
-                        "arrow_head_scale": 0.5,
-                        "orbital_phase_enabled": True,
-                        "text_font_size": 14,
-                        "text_font_weight": 500,
-                        "text_italic": True,
-                        "sheet_size": "A4",
-                        "sheet_orientation": "portrait",
-                    },
-                    "last_smiles_input": "after",
-                },
+            populate_document_scene(
+                self._context(state), state, note_item_factory=NoteItem
             )
 
-    def test_restore_document_projection_state_restores_coords_and_projection(
-        self,
-    ) -> None:
-        canvas = SimpleNamespace(
-            runtime_state=canvas_runtime_state(
-                atom_coords_3d_state=CanvasAtomCoords3DState(),
-                rotation_state=CanvasRotationState(),
-            )
-        )
-        set_atom_coords_3d_for(canvas, {9: (9.0, 9.0, 9.0)})
-        rotation = rotation_state_for(canvas)
-        rotation.projection_center_3d = (1.0, 1.0, 1.0)
-        rotation.projection_anchor_2d = (2.0, 2.0)
+    def test_materializer_normalizes_sheet_settings_like_native_open(self):
+        state = self._state()
+        state["settings"].update(sheet_size="A3", sheet_orientation=" PORTRAIT ")
+        context = self._context(state)
+        populate_document_scene(context, state, note_item_factory=NoteItem)
+        self.assertEqual(context.state.sheet_setup_state.size_name, "A4")
+        self.assertEqual(context.state.sheet_setup_state.orientation, "portrait")
 
-        restore_document_projection_state(
-            canvas,
-            {
-                "perspective": {
-                    "atom_coords_3d": {"3": [1, 2.5, 4]},
-                    "projection_center_3d": [5, 6.5, 7],
-                    "projection_anchor_2d": [8, 9.5],
-                },
-            },
+    def test_materializer_restores_projection_before_drawing(self):
+        state = self._state()
+        state["perspective"] = {
+            "atom_coords_3d": {"3": [1, 2.5, 4]},
+            "projection_center_3d": [5, 6.5, 7],
+            "projection_anchor_2d": [8, 9.5],
+        }
+        context = self._context(state)
+        populate_document_scene(context, state, note_item_factory=NoteItem)
+        self.assertEqual(
+            context.state.atom_coords_3d_state.atom_coords_3d, {3: (1.0, 2.5, 4.0)}
         )
-
-        self.assertEqual(atom_coords_3d_for(canvas), {3: (1.0, 2.5, 4.0)})
+        rotation = context.state.rotation_state
         self.assertEqual(rotation.projection_center_3d, (5.0, 6.5, 7.0))
         self.assertEqual(rotation.projection_anchor_2d, (8.0, 9.5))
 
-    def test_restore_document_projection_state_clears_missing_optional_projection(
-        self,
-    ) -> None:
-        canvas = SimpleNamespace(
-            runtime_state=canvas_runtime_state(
-                atom_coords_3d_state=CanvasAtomCoords3DState(),
-                rotation_state=CanvasRotationState(),
-            )
-        )
-        set_atom_coords_3d_for(canvas, {1: (1.0, 2.0, 3.0)})
-        rotation = rotation_state_for(canvas)
+    def test_materializer_clears_missing_optional_projection(self):
+        state = self._state()
+        context = self._context(state)
+        context.state.atom_coords_3d_state.atom_coords_3d = {3: (1.0, 2.0, 3.0)}
+        rotation = context.state.rotation_state
         rotation.projection_center_3d = (4.0, 5.0, 6.0)
         rotation.projection_anchor_2d = (7.0, 8.0)
-
-        restore_document_projection_state(canvas, {})
-
-        self.assertEqual(atom_coords_3d_for(canvas), {})
+        populate_document_scene(context, state, note_item_factory=NoteItem)
+        self.assertEqual(context.state.atom_coords_3d_state.atom_coords_3d, {})
         self.assertIsNone(rotation.projection_center_3d)
         self.assertIsNone(rotation.projection_anchor_2d)
 
-    def test_restore_document_items_prefer_scene_item_controller(self) -> None:
-        canvas = _Canvas()
-        canvas.services = canvas_runtime_services(
-            scene_item_controller=_Controller(canvas)
+    def test_materializer_builds_all_annotation_kinds_without_an_editor(self):
+        state = self._state(
+            atoms=[{"id": 0, "element": "N", "x": 0, "y": 0}],
+            notes=[{"text": "note", "x": 1.0, "y": 2.0}],
+            arrows=[
+                {
+                    "kind": "curved_double",
+                    "start": [0, 0],
+                    "end": [30, 0],
+                    "control": [15, 10],
+                    "labels": {"above": "THF"},
+                }
+            ],
+            ts_brackets=[
+                {
+                    "left": 0,
+                    "top": 0,
+                    "right": 12,
+                    "bottom": 20,
+                    "bracket_kind": "double_dagger",
+                }
+            ],
+            shapes=[
+                {
+                    "left": 30,
+                    "top": 0,
+                    "right": 42,
+                    "bottom": 20,
+                    "shape_kind": "rect",
+                    "stroke_style": "dashed",
+                    "fill": "#123456",
+                    "fill_alpha": 0.4,
+                }
+            ],
         )
-        state = {
-            "ring_fills": [{"points": [(0.0, 0.0)]}],
-            "notes": [{"text": "note", "x": 1.0, "y": 2.0}],
-            "marks": [
-                {
-                    "kind": "minus",
-                    "text": "-",
-                    "atom_id": 3,
-                    "dx": 1.0,
-                    "dy": 2.0,
-                    "x": 4.0,
-                    "y": 5.0,
-                }
-            ],
-            "arrows": [{"kind": "arrow", "start": (0.0, 0.0), "end": (1.0, 1.0)}],
-            "ts_brackets": [
-                {
-                    "kind": "ts_bracket",
-                    "left": 0.0,
-                    "top": 0.0,
-                    "right": 1.0,
-                    "bottom": 1.0,
-                    "bracket_kind": "square_pair",
-                }
-            ],
-            "shapes": [],
-            "orbitals": [
-                {"kind": "p", "center": (3.0, 4.0), "scale": 2.0, "rotation": 45.0}
-            ],
-        }
-
-        restore_document_pre_model_items(canvas, state)
-        restore_document_post_model_items(canvas, state)
-
+        state["orbitals"] = [
+            {"kind": "p", "center": [3, 4], "scale": 2.0, "rotation": 45.0}
+        ]
+        state["ring_fills"] = [{"points": [(0.0, 0.0), (30.0, 0.0), (15.0, 20.0)]}]
+        state["marks"] = [
+            {
+                "kind": "minus",
+                "text": "-",
+                "atom_id": 0,
+                "dx": 1.0,
+                "dy": 2.0,
+                "x": 1.0,
+                "y": 2.0,
+            }
+        ]
+        original = copy.deepcopy(state)
+        context = self._context(state)
+        original_model = copy.deepcopy(context.model)
+        populate_document_scene(context, state, note_item_factory=NoteItem)
+        items = context.state.scene_items_state
+        for collection in (
+            items.ring_items,
+            items.note_items,
+            items.mark_items,
+            items.arrow_items,
+            items.ts_bracket_items,
+            items.shape_items,
+            items.orbital_items,
+        ):
+            self.assertEqual(len(collection), 1)
+            self.assertIs(collection[0].scene(), context.scene)
+        self.assertEqual(context.state.mark_registry.get_for_atom(0), items.mark_items)
         self.assertEqual(
-            canvas.calls,
-            [
-                ("controller_ring", {"points": [(0.0, 0.0)]}),
-                ("controller_note", {"text": "note", "x": 1.0, "y": 2.0}),
-                (
-                    "controller_mark",
-                    {
-                        "kind": "mark",
-                        "mark_kind": "minus",
-                        "text": "-",
-                        "atom_id": 3,
-                        "dx": 1.0,
-                        "dy": 2.0,
-                        "x": 4.0,
-                        "y": 5.0,
-                    },
-                ),
-                (
-                    "controller_arrow",
-                    {"kind": "arrow", "start": (0.0, 0.0), "end": (1.0, 1.0)},
-                ),
-                (
-                    "controller_ts",
-                    {
-                        "kind": "ts_bracket",
-                        "left": 0.0,
-                        "top": 0.0,
-                        "right": 1.0,
-                        "bottom": 1.0,
-                        "bracket_kind": "square_pair",
-                    },
-                ),
-                (
-                    "controller_orbital",
-                    {
-                        "kind": "orbital",
-                        "orbital_kind": "p",
-                        "center": (3.0, 4.0),
-                        "scale": 2.0,
-                        "rotation": 45.0,
-                    },
-                ),
-            ],
+            require_ts_bracket_record(context, items.ts_bracket_items[0]).bracket_kind,
+            "double_dagger",
         )
-
-    def test_restore_document_post_model_items_requires_current_shapes_key(
-        self,
-    ) -> None:
-        canvas = _Canvas()
-        canvas.services = canvas_runtime_services(
-            scene_item_controller=_Controller(canvas)
+        self.assertIsNotNone(items.ts_bracket_items[0].export_glyph_run())
+        self.assertEqual(
+            require_shape_record(context, items.shape_items[0]).fill, "#123456"
         )
+        self.assertAlmostEqual(
+            items.shape_items[0].brush().color().alphaF(), 0.4, places=3
+        )
+        self.assertEqual(items.arrow_items[0].data(2)["control"], QPointF(15, 10))
+        self.assertEqual(state, original)
+        self.assertEqual(context.model, original_model)
+        self.assertFalse(hasattr(context, "services"))
+        self.assertFalse(hasattr(context.state, "smiles_input_state"))
+        self.assertFalse(hasattr(context.state, "group_state"))
 
+    def test_materializer_requires_current_shapes_key(self):
+        state = self._state()
+        del state["shapes"]
         with self.assertRaises(KeyError):
-            restore_document_post_model_items(
-                canvas,
-                {
-                    "arrows": [],
-                    "ts_brackets": [],
-                    "orbitals": [],
-                },
+            populate_document_scene(
+                self._context(state), state, note_item_factory=NoteItem
             )
-
-    def test_restore_document_items_require_scene_item_controller(self) -> None:
-        canvas = _Canvas()
-        state = {
-            "ring_fills": [{"points": [(0.0, 0.0)]}],
-            "notes": [{"text": "note", "x": 1.0, "y": 2.0}],
-            "marks": [
-                {
-                    "kind": "plus",
-                    "text": "+",
-                    "atom_id": None,
-                    "dx": None,
-                    "dy": None,
-                    "x": 4.0,
-                    "y": 5.0,
-                }
-            ],
-            "arrows": [{"kind": "equilibrium"}],
-            "ts_brackets": [
-                {
-                    "kind": "ts_bracket",
-                    "left": 0.0,
-                    "top": 0.0,
-                    "right": 2.0,
-                    "bottom": 2.0,
-                    "bracket_kind": "square_pair",
-                }
-            ],
-            "orbitals": [{"center": (3.0, 4.0)}],
-        }
-
-        with self.assertRaises(AttributeError):
-            restore_document_pre_model_items(canvas, state)

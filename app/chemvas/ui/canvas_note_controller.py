@@ -2,12 +2,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from functools import partial
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING
 
 from PyQt6.QtCore import QPointF, QRectF, Qt
 from PyQt6.QtGui import (
     QBrush,
-    QColor,
     QFont,
     QFontInfo,
     QPen,
@@ -25,7 +24,6 @@ from chemvas.ui.canvas_scene_items_state import (
 )
 from chemvas.ui.canvas_text_style_state import text_style_state_for
 from chemvas.ui.canvas_window_access import notify_document_change_for
-from chemvas.ui.graphics_items import NoSelectRectItem
 from chemvas.ui.history_commands import (
     AddSceneItemsCommand,
     DeleteSceneItemsCommand,
@@ -43,6 +41,11 @@ from chemvas.ui.note_item_access import (
     new_note_item_for,
     set_committed_note_html_for,
     set_committed_note_text_for,
+)
+from chemvas.ui.note_rendering import (
+    apply_note_appearance,
+    apply_note_style,
+    update_note_box,
 )
 from chemvas.ui.note_selection_box import update_note_selection_box_for
 from chemvas.ui.scene_item_access import attach_scene_item, remove_scene_item
@@ -1027,77 +1030,20 @@ class CanvasNoteController:
             self.apply_note_style(item)
 
     def apply_note_style(self, item: QGraphicsTextItem) -> None:
-        style = text_style_state_for(self.canvas)
-        font = QFont(style.text_font_family, style.text_font_size)
-        font.setWeight(style.text_font_weight)
-        font.setItalic(style.text_italic)
-        item.setFont(font)
-        item.setDefaultTextColor(style.text_color)
-        doc = item.document()
-        if doc is None:
-            return
-        option = doc.defaultTextOption()
-        option.setAlignment(style.text_alignment)
-        doc.setDefaultTextOption(option)
-        self.apply_note_appearance(item, line_spacing=True)
+        apply_note_style(item, text_style_state_for(self.canvas))
+        update_note_selection_box_for(self.canvas, item)
 
     def apply_note_appearance(
         self, item: QGraphicsTextItem, *, line_spacing: bool
     ) -> None:
         """Restyle document-wide boxes/spacing without changing text runs."""
-        style = text_style_state_for(self.canvas)
-        doc = item.document()
-        if doc is None:
-            return
-        if line_spacing:
-            self._apply_note_line_spacing(doc, style.text_line_spacing)
-        self.update_note_box(item)
+        apply_note_appearance(
+            item, text_style_state_for(self.canvas), line_spacing=line_spacing
+        )
         update_note_selection_box_for(self.canvas, item)
 
-    @staticmethod
-    def _apply_note_line_spacing(doc, spacing: float) -> None:
-        cursor = QTextCursor(doc)
-        cursor.select(QTextCursor.SelectionType.Document)
-        block_format = QTextBlockFormat()
-        height_type = cast(
-            "int", QTextBlockFormat.LineHeightTypes.ProportionalHeight.value
-        )
-        block_format.setLineHeight(int(spacing * 100), height_type)
-        cursor.mergeBlockFormat(block_format)
-
     def update_note_box(self, item: QGraphicsTextItem) -> None:
-        style = text_style_state_for(self.canvas)
-        box = item.data(20)
-        rect = item.boundingRect().adjusted(
-            -style.note_padding,
-            -style.note_padding,
-            style.note_padding,
-            style.note_padding,
-        )
-        if not (style.note_box_enabled or style.note_border_enabled):
-            if isinstance(box, QGraphicsRectItem):
-                box.setVisible(False)
-            return
-        if not isinstance(box, QGraphicsRectItem):
-            box = NoSelectRectItem(item)
-            box.setData(0, "note_box")
-            box.setZValue(-1)
-            box.setFlag(QGraphicsItem.GraphicsItemFlag.ItemStacksBehindParent, True)
-            item.setData(20, box)
-        box.setVisible(True)
-        box.setRect(rect)
-        if style.note_box_enabled:
-            fill = QColor(style.note_box_color)
-            fill.setAlphaF(style.note_box_alpha)
-            box.setBrush(fill)
-        else:
-            box.setBrush(QBrush(Qt.BrushStyle.NoBrush))
-        if style.note_border_enabled:
-            pen = QPen(style.note_border_color)
-            pen.setWidthF(style.note_border_width)
-            box.setPen(pen)
-        else:
-            box.setPen(QPen(Qt.PenStyle.NoPen))
+        update_note_box(item, text_style_state_for(self.canvas))
 
 
 __all__ = ["CanvasNoteController"]

@@ -4,6 +4,7 @@ from types import SimpleNamespace
 from unittest import mock
 
 from tests.runtime_services import canvas_runtime_services
+from tests.scene_render_context import attach_scene_render_context
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -868,17 +869,17 @@ class SelectionControllerAdditionalTest(unittest.TestCase):
                 bonds=[Bond(1, 2, 2), None],
             ),
             services=canvas_runtime_services(
-                scene_decoration_build_service=SimpleNamespace(
-                    mark_center=lambda item: QPointF(4.0, 5.0)
-                ),
-                geometry_controller=SimpleNamespace(
-                    ring_center_for_bond=lambda bond: None,
-                    trim_line_for_labels=lambda *_args: (0.0, 1.0),
-                ),
                 tool_controller=SimpleNamespace(
                     active=SimpleNamespace(name="perspective")
                 ),
             ),
+        )
+        context = attach_scene_render_context(canvas)
+        context.geometry.ring_center_for_bond = lambda bond: None
+        context.geometry.trim_line_for_labels = lambda *_args: (0.0, 1.0)
+        context.decorations.mark_center = lambda item: QPointF(4.0, 5.0)
+        canvas.services.scene_decoration.scene_decoration_build_service = (
+            context.decorations
         )
         set_bond_items_for(canvas, {})
         set_selection_outlines_for(canvas, [])
@@ -936,9 +937,7 @@ class SelectionControllerAdditionalTest(unittest.TestCase):
             controller.outline_service.selection_path_for_bond(0).isEmpty()
         )
 
-        canvas.services.scene_view.geometry_controller.ring_center_for_bond = (
-            lambda bond: QPointF(5.0, 0.0)
-        )
+        context.geometry.ring_center_for_bond = lambda bond: QPointF(5.0, 0.0)
         canvas.bond_items[0] = [object()]
         self.assertTrue(controller.outline_service.selection_path_for_bond(0).isEmpty())
 
@@ -949,9 +948,7 @@ class SelectionControllerAdditionalTest(unittest.TestCase):
             QGraphicsLineItem(0.0, 0.0, 10.0, 0.0),
             QGraphicsLineItem(0.0, 2.0, 10.0, 2.0),
         ]
-        canvas.services.scene_view.geometry_controller.ring_center_for_bond = (
-            lambda bond: None
-        )
+        context.geometry.ring_center_for_bond = lambda bond: None
         self.assertFalse(
             controller.outline_service.selection_path_for_bond(0).isEmpty()
         )

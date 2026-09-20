@@ -11,19 +11,18 @@ from PyQt6.QtWidgets import QApplication, QGraphicsTextItem
 from chemvas.domain.document import Atom, Bond
 from chemvas.ui.atom_coords_access import (
     CanvasAtomCoords3DState,
-    atom_coords_3d_for,
 )
 from chemvas.ui.canvas_atom_graphics_state import (
     CanvasAtomGraphicsState,
-    set_atom_items_for,
 )
-from chemvas.ui.canvas_geometry_controller import CanvasGeometryController
 from chemvas.ui.canvas_rotation_state import CanvasRotationState
 from chemvas.ui.canvas_scene_items_state import (
     CanvasSceneItemsState,
     set_scene_item_collection_for,
 )
+from chemvas.ui.scene_geometry import SceneGeometry
 from tests.runtime_state import canvas_runtime_state
+from tests.scene_render_context import scene_geometry_for_test_canvas
 
 
 class _FakeRingItem:
@@ -73,15 +72,19 @@ class CanvasGeometryControllerTest(unittest.TestCase):
             "ring_items",
             [_FakeRingItem("bad"), ring_item, _FakeRingItem([7, 8])],
         )
-        controller = CanvasGeometryController(canvas)
+        controller = scene_geometry_for_test_canvas(canvas)
 
         center = controller.ring_center_for_bond(Bond(1, 3, 1))
         self.assertEqual(center, QPointF(3.0, 6.0))
         self.assertIsNone(controller.ring_center_for_bond(Bond(7, 8, 1)))
         self.assertIsNone(controller.ring_center_3d_for_bond(Bond(1, 3, 1)))
 
-        controller.canvas.model.atoms[2] = Atom("C", 3.0, 6.0)
-        atom_coords_3d_for(controller.canvas)[2] = (3.0, 6.0, 3.0)
+        controller.context.model.atoms[2] = Atom("C", 3.0, 6.0)
+        controller.context.state.atom_coords_3d_state.atom_coords_3d[2] = (
+            3.0,
+            6.0,
+            3.0,
+        )
         self.assertEqual(
             controller.ring_center_3d_for_bond(Bond(1, 3, 1)), (3.0, 6.0, 4.0)
         )
@@ -89,7 +92,7 @@ class CanvasGeometryControllerTest(unittest.TestCase):
     def test_label_rect_helpers_return_none_for_missing_items_and_pad_present_items(
         self,
     ) -> None:
-        controller = CanvasGeometryController(
+        controller = scene_geometry_for_test_canvas(
             SimpleNamespace(
                 renderer=SimpleNamespace(style=SimpleNamespace(bond_line_width=2.0)),
                 model=SimpleNamespace(atoms={1: Atom("C", 0.0, 0.0)}),
@@ -105,11 +108,11 @@ class CanvasGeometryControllerTest(unittest.TestCase):
 
         label_item = QGraphicsTextItem("OH")
         label_item.setPos(1.0, 2.0)
-        set_atom_items_for(controller.canvas, {1: label_item})
+        controller.context.state.atom_graphics_state.atom_items = {1: label_item}
         label_rect = controller.label_rect_for_atom(1)
         visible_rect = controller.visible_label_rect_for_atom(1)
         base_label_rect = label_item.sceneBoundingRect()
-        base_visible_rect = CanvasGeometryController.visible_text_rect(label_item)
+        base_visible_rect = SceneGeometry.visible_text_rect(label_item)
         self.assertLess(label_rect.left(), base_label_rect.left())
         self.assertLess(label_rect.top(), base_label_rect.top())
         self.assertGreater(label_rect.right(), base_label_rect.right())
@@ -119,7 +122,7 @@ class CanvasGeometryControllerTest(unittest.TestCase):
         self.assertGreater(visible_rect.right(), base_visible_rect.right())
         self.assertGreater(visible_rect.bottom(), base_visible_rect.bottom())
 
-        controller.canvas.model.atoms = {}
+        controller.context.model.atoms = {}
         self.assertIsNone(controller.label_cut_radius_for_atom(1))
 
     def test_visible_text_rect_covers_both_lines_of_a_stacked_hydride(self) -> None:
@@ -130,7 +133,7 @@ class CanvasGeometryControllerTest(unittest.TestCase):
         stacked.setPlainText("NH")
         stacked.set_stack_anchor("N", hydrogens_below=True)
 
-        visible_rect = CanvasGeometryController.visible_text_rect(stacked)
+        visible_rect = SceneGeometry.visible_text_rect(stacked)
         one_line_rect = stacked.mapRectToScene(QGraphicsTextItem.boundingRect(stacked))
         # The two-line content box must be taller than the one-line Qt document
         # rect so a mark placed above/below clears the stacked hydrogen glyph.
@@ -140,7 +143,7 @@ class CanvasGeometryControllerTest(unittest.TestCase):
         self,
     ) -> None:
         style = SimpleNamespace(bond_length_px=20.0, bond_line_width=2.0)
-        controller = CanvasGeometryController(
+        controller = scene_geometry_for_test_canvas(
             SimpleNamespace(
                 renderer=SimpleNamespace(style=style, atom_font=lambda: QFont())
             )
@@ -153,7 +156,7 @@ class CanvasGeometryControllerTest(unittest.TestCase):
         self.assertGreater(controller.mark_clearance_for_kind("minus"), default_gap)
 
     def test_math_wrapper_helpers_delegate_to_pure_geometry_logic(self) -> None:
-        controller = CanvasGeometryController(SimpleNamespace())
+        controller = scene_geometry_for_test_canvas(SimpleNamespace())
         rect = QRectF(0.0, 0.0, 10.0, 10.0)
 
         self.assertEqual(
@@ -191,7 +194,7 @@ class CanvasGeometryControllerTest(unittest.TestCase):
                 atom_graphics_state=CanvasAtomGraphicsState()
             ),
         )
-        controller = CanvasGeometryController(canvas)
+        controller = scene_geometry_for_test_canvas(canvas)
         controller.label_cut_radius_for_atom = lambda atom_id: {1: None, 2: 49.6}.get(
             atom_id
         )
@@ -216,7 +219,7 @@ class CanvasGeometryControllerTest(unittest.TestCase):
                 atom_graphics_state=CanvasAtomGraphicsState()
             ),
         )
-        controller = CanvasGeometryController(canvas)
+        controller = scene_geometry_for_test_canvas(canvas)
         controller.visible_label_rect_for_atom = lambda atom_id: {
             1: QRectF(-2.0, -5.0, 32.0, 10.0)
         }.get(atom_id)
@@ -233,7 +236,7 @@ class CanvasGeometryControllerTest(unittest.TestCase):
                 atom_graphics_state=CanvasAtomGraphicsState()
             ),
         )
-        controller = CanvasGeometryController(canvas)
+        controller = scene_geometry_for_test_canvas(canvas)
         controller.label_cut_radius_for_atom = lambda atom_id: {1: 99.9, 2: 99.9}.get(
             atom_id
         )

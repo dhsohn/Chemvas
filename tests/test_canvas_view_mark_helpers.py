@@ -6,6 +6,7 @@ from unittest import mock
 
 from tests.runtime_services import canvas_runtime_services
 from tests.runtime_state import canvas_runtime_state
+from tests.scene_render_context import attach_scene_render_context
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -71,7 +72,9 @@ class CanvasViewMarkHelperTest(unittest.TestCase):
             renderer=self._renderer(),
         )
         view.services = canvas_runtime_services(
-            scene_decoration_build_service=CanvasSceneDecorationBuildService(view)
+            scene_decoration_build_service=CanvasSceneDecorationBuildService(
+                attach_scene_render_context(view)
+            )
         )
         selection_radius = mark_selection_radius_for(view)
 
@@ -118,7 +121,9 @@ class CanvasViewMarkHelperTest(unittest.TestCase):
                 tool_settings_state=CanvasToolSettingsState(mark_kind="plus"),
             ),
         )
+        context = attach_scene_render_context(view)
         mark_target_distance = mock.Mock(return_value=20.0)
+        context.geometry.mark_target_distance_for_atom = mark_target_distance
         view.services = canvas_runtime_services(
             geometry_controller=SimpleNamespace(
                 mark_target_distance_for_atom=mark_target_distance
@@ -153,7 +158,9 @@ class CanvasViewMarkHelperTest(unittest.TestCase):
                 tool_settings_state=CanvasToolSettingsState(mark_kind="radical"),
             ),
         )
+        context = attach_scene_render_context(view)
         mark_target_distance = mock.Mock(return_value=0.0)
+        context.geometry.mark_target_distance_for_atom = mark_target_distance
         view.services = canvas_runtime_services(
             geometry_controller=SimpleNamespace(
                 mark_target_distance_for_atom=mark_target_distance

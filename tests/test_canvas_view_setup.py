@@ -43,6 +43,7 @@ def test_initialize_canvas_view_configures_view_runtime_and_services(
         tool_controller=SimpleNamespace(set_active=mock.Mock()),
     )
     calls = []
+    render_context = SimpleNamespace(bonds="bond-renderer")
 
     monkeypatch.setattr(
         setup,
@@ -67,10 +68,10 @@ def test_initialize_canvas_view_configures_view_runtime_and_services(
     )
     monkeypatch.setattr(
         setup,
-        "BondRenderer",
+        "build_scene_render_context",
         mock.Mock(
-            side_effect=lambda canvas, **_kwargs: (
-                calls.append("bond-renderer") or "bond-renderer"
+            side_effect=lambda **_kwargs: (
+                calls.append("scene-rendering") or render_context
             )
         ),
     )
@@ -97,17 +98,24 @@ def test_initialize_canvas_view_configures_view_runtime_and_services(
         "runtime",
         "sheet",
         "scene-rect",
-        "bond-renderer",
+        "scene-rendering",
     ]
     assert canvas.renderer is renderer
     assert canvas.rdkit == "rdkit"
     assert canvas.bond_renderer == "bond-renderer"
     setup.RDKitAdapter.assert_called_once_with()
-    setup.BondRenderer.assert_called_once_with(
-        canvas,
-        atom_label_relayout=setup.BondRenderer.call_args.kwargs["atom_label_relayout"],
+    setup.build_scene_render_context.assert_called_once_with(
+        scene_provider=canvas.scene,
+        model_provider=setup.build_scene_render_context.call_args.kwargs[
+            "model_provider"
+        ],
+        renderer=renderer,
+        state=runtime_state,
     )
-    assert callable(setup.BondRenderer.call_args.kwargs["atom_label_relayout"])
+    model_provider = setup.build_scene_render_context.call_args.kwargs["model_provider"]
+    canvas.model = object()
+    assert model_provider() is canvas.model
+    assert canvas.render_context is render_context
     assert runtime_state.tool_settings_state.arrow_line_width == 2.5
     setup.build_canvas_services.assert_called_once_with(
         canvas,

@@ -2,14 +2,12 @@ from __future__ import annotations
 
 import math
 
-from PyQt6.QtCore import Qt
-
-from chemvas.features.selection import project_point_3d
+from chemvas.ui.bond_graphics_build_service import apply_color_to_bond_item
 from chemvas.ui.bond_renderer_access import bond_renderer_for
-from chemvas.ui.canvas_model_access import atom_for_id
 from chemvas.ui.canvas_rotation_state import rotation_state_for
-from chemvas.ui.canvas_service_ports import geometry_controller_for_access
 from chemvas.ui.renderer_style_access import bond_length_px_for
+from chemvas.ui.scene_geometry import SceneGeometry, project_point_in_scene
+from chemvas.ui.scene_render_access import scene_render_context_for
 
 
 def add_bond_graphics_for(canvas, bond_id: int) -> None:
@@ -53,12 +51,7 @@ def orient_normal_toward_target(
 def line_normal_for(
     canvas, x1: float, y1: float, x2: float, y2: float, target=None
 ) -> tuple[float, float]:
-    nx, ny, _ = line_normal_components(x1, y1, x2, y2)
-    if target is None:
-        return nx, ny
-    mid_x = (x1 + x2) / 2.0
-    mid_y = (y1 + y2) / 2.0
-    return orient_normal_toward_target(nx, ny, mid_x, mid_y, target.x(), target.y())
+    return SceneGeometry.line_normal(x1, y1, x2, y2, target)
 
 
 def project_point_3d_for(
@@ -74,7 +67,7 @@ def project_point_3d_for(
         return point[0], point[1]
     if anchor_2d is None:
         anchor_2d = rotation.projection_anchor_2d or (center_3d[0], center_3d[1])
-    return project_point_3d(
+    return project_point_in_scene(
         point,
         bond_length_px=bond_length_px_for(canvas),
         center_3d=center_3d,
@@ -88,49 +81,21 @@ def bond_offset_unit_3d_for(
     b_id: int,
     target: tuple[float, float, float] | None = None,
 ) -> tuple[float, float] | None:
-    atom_a = atom_for_id(canvas, a_id)
-    atom_b = atom_for_id(canvas, b_id)
-    if atom_a is None or atom_b is None:
-        return None
-    ax, ay = atom_a.x, atom_a.y
-    bx, by = atom_b.x, atom_b.y
-    nx, ny, length = line_normal_components(ax, ay, bx, by)
-    if length < 1e-9:
-        return None
-    if target is not None:
-        mid_x = (ax + bx) * 0.5
-        mid_y = (ay + by) * 0.5
-        target_x, target_y = project_point_3d_for(canvas, target)
-        nx, ny = orient_normal_toward_target(nx, ny, mid_x, mid_y, target_x, target_y)
-    return nx, ny
+    return scene_render_context_for(canvas).geometry.bond_offset_unit_3d(
+        a_id, b_id, target
+    )
 
 
 def ring_center_for_bond_for(canvas, bond):
-    # Only the service lookup answers "no controller yet" with AttributeError.
-    # The controller itself returns None for a bond that is not in a ring, so a
-    # wider catch would report a bug inside it as an ordinary non-ring bond.
-    try:
-        controller = geometry_controller_for_access(canvas)
-    except AttributeError:
-        return None
-    return controller.ring_center_for_bond(bond)
+    return scene_render_context_for(canvas).geometry.ring_center_for_bond(bond)
 
 
 def ring_center_3d_for_bond_for(canvas, bond):
-    try:
-        controller = geometry_controller_for_access(canvas)
-    except AttributeError:
-        return None
-    return controller.ring_center_3d_for_bond(bond)
+    return scene_render_context_for(canvas).geometry.ring_center_3d_for_bond(bond)
 
 
 def apply_color_to_bond_item_for(canvas, item, color) -> None:
-    if hasattr(item, "setPen"):
-        pen = item.pen()
-        pen.setColor(color)
-        item.setPen(pen)
-    if hasattr(item, "setBrush") and item.brush().style() != Qt.BrushStyle.NoBrush:
-        item.setBrush(color)
+    apply_color_to_bond_item(item, color)
 
 
 __all__ = [

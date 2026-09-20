@@ -22,7 +22,6 @@ from chemvas.ui.scene_decoration_build_access import (
     build_orbital_items_for,
     build_shape_item_for,
     build_ts_bracket_item_for,
-    ts_bracket_path_for,
 )
 from chemvas.ui.scene_item_lifecycle_service import SceneItemLifecycleService
 from chemvas.ui.scene_item_restore import (
@@ -111,9 +110,6 @@ class SceneItemController:
 
     def _build_orbital_items(self, center, kind: str):
         return build_orbital_items_for(self.canvas, center, kind)
-
-    def _ts_bracket_path(self, rect, bracket_kind: str = DEFAULT_BRACKET_KIND):
-        return ts_bracket_path_for(self.canvas, rect, bracket_kind)
 
     def restore_ring_from_state(self, ring_state: dict):
         item = create_ring_item_from_state_helper(
@@ -243,7 +239,6 @@ class SceneItemController:
             mark_center_setter=self._set_mark_center,
             mark_color_setter=self._set_mark_color,
             ring_fill_brush_getter=self._ring_fill_brush,
-            ts_bracket_path_builder=self._ts_bracket_path,
             bond_color=bond_color_for(self.canvas),
             build_arrow_item=self._build_arrow_item,
             set_curved_arrow_path=self._set_curved_arrow_path,

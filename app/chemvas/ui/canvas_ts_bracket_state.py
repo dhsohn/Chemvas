@@ -12,13 +12,12 @@ class CanvasTSBracketState:
     """Every TS bracket of the open document as Qt-free data, keyed by a runtime id.
 
     A bracket's graphics item carries the id; the record says what the bracket
-    is. Records of detached items are kept: undo re-attaches the same item, and
-    its record must still be there; records go only when a new document
-    discards history. Ids come from ``new_scene_record_id`` and are never
-    reused; the counter is not kept here, because this state is rolled back
-    and an id must not be. The store is therefore a lookup, never a list of
-    the document's brackets: which brackets the document has, and in what
-    order, is the attached bracket items.
+    is. A record stays while the scene, history or an active savepoint retains
+    its item; finalization removes it when the item is released. Opening another
+    document clears the store. Ids come from ``new_scene_record_id`` and are
+    never reused; the counter lives outside this rolled-back state. The store
+    is therefore a lookup, never a list of the document's brackets: which
+    brackets the document has, and in what order, is the attached bracket items.
     """
 
     records: dict[int, TSBracket] = field(default_factory=dict)

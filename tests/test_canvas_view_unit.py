@@ -4,6 +4,7 @@ from contextlib import nullcontext
 from types import SimpleNamespace
 from unittest import mock
 
+from chemvas.ui.note_item_access import new_note_item_for
 from tests.runtime_services import canvas_runtime_services
 from tests.runtime_state import canvas_runtime_state
 
@@ -53,7 +54,6 @@ from chemvas.ui.history_operations import CanvasHistoryOperations
 from chemvas.ui.input_view_access import (
     shortcut_modifiers_for,
 )
-from chemvas.ui.note_item import NoteItem
 from chemvas.ui.note_item_access import committed_note_text_for
 from chemvas.ui.scene_clipboard_transaction_logic import (
     clipboard_paste_offset,
@@ -357,7 +357,7 @@ class CanvasViewUnitTest(unittest.TestCase):
 
     def test_note_item_focus_out_adds_updates_and_deletes_commands(self) -> None:
         canvas = _FakeNoteCanvas()
-        item = NoteItem(canvas)
+        item = new_note_item_for(canvas)
         item.setPlainText("Mechanism")
         item.focusOutEvent(QFocusEvent(QEvent.Type.FocusOut))
         self.assertIsInstance(canvas.commands[-1], AddSceneItemsCommand)
@@ -379,7 +379,7 @@ class CanvasViewUnitTest(unittest.TestCase):
         self,
     ) -> None:
         canvas = _FakeNoteCanvas()
-        item = NoteItem(canvas)
+        item = new_note_item_for(canvas)
         canvas.selected_notes.append(item)
 
         item.focusOutEvent(QFocusEvent(QEvent.Type.FocusOut))

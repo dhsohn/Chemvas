@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Shape and TS bracket records are released when their detached graphics items
+  are no longer held by history or recovery, instead of accumulating until a
+  new document is opened. Items still needed by undo and redo retain their
+  records. Adding either kind no longer copies the entire record store for
+  failure cleanup.
+- Failed edits restore dagger and double-dagger construction glyphs along with
+  their paths, so the minimum-font check remains usable after rollback.
+
+### Changed
+
+- GUI and command-line figure export share an explicit scene rendering context.
+  `render-document` and `check-layout` build a scene without constructing the
+  canvas editor or its history and input services. Document formats and output
+  sizing contracts are unchanged.
+
 ## [0.17.0] - 2026-09-18
 
 ### Added

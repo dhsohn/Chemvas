@@ -7,6 +7,7 @@ from unittest import mock
 
 from tests.runtime_services import canvas_runtime_services
 from tests.runtime_state import canvas_runtime_state
+from tests.scene_render_context import attach_scene_render_context
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -105,6 +106,12 @@ class _FakeCanvas:
             )
         )
 
+        context = attach_scene_render_context(self)
+        context.geometry.trim_line_for_labels = self.trim_line_for_labels
+        context.geometry.label_rect_for_atom = self.label_rect_for_atom
+        context.geometry.ring_center_for_bond = lambda bond: self._ring_center
+        context.geometry.ring_center_3d_for_bond = lambda bond: self._ring_center_3d
+
     def scene(self) -> QGraphicsScene:
         return self._scene
 
@@ -142,7 +149,7 @@ class RendererCanvasTailCoverageTest(unittest.TestCase):
 
     def setUp(self) -> None:
         self.canvas = _FakeCanvas()
-        self.renderer = BondRenderer(self.canvas)
+        self.renderer = BondRenderer(self.canvas.render_context)
 
     def _set_bond(self, bond: Bond) -> None:
         self.canvas.model.bonds = [bond]

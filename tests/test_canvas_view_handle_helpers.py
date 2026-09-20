@@ -5,6 +5,7 @@ from unittest import mock
 
 from tests.runtime_services import canvas_runtime_services
 from tests.runtime_state import canvas_runtime_state
+from tests.scene_render_context import attach_scene_render_context
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -125,7 +126,7 @@ def _make_proxy(
             selection_controller=SimpleNamespace(update_selection_outline=mock.Mock()),
         ),
     )
-    arrow_builder = CanvasArrowBuildService(view)
+    arrow_builder = CanvasArrowBuildService(attach_scene_render_context(view))
     arrow_builder.add_arrow_head = mock.Mock(wraps=arrow_builder.add_arrow_head)
     view.services.scene_decoration.arrow_build_service = arrow_builder
     view.services.selection.selection_controller.update_selection_outline = (

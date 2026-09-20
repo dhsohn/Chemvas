@@ -11,7 +11,6 @@ from PyQt6.QtWidgets import QApplication
 
 from chemvas.bootstrap.main_window import build_main_window
 from chemvas.features.selection.handles import HANDLE_ACCENT_COLOR
-from chemvas.ui.canvas_arrow_build_service import SNAP_MARK_ROLE
 from chemvas.ui.canvas_scene_items_state import arrow_items_for
 from chemvas.ui.canvas_service_access import canvas_services_for
 from chemvas.ui.canvas_window_access import history_service_for_canvas
@@ -28,6 +27,7 @@ from chemvas.ui.main_window_ports import (
     services_for_window,
 )
 from chemvas.ui.scene_decoration_access import add_arrow_for
+from chemvas.ui.scene_decoration_build_access import SNAP_MARK_ROLE
 from chemvas.ui.scene_item_state_serialization import arrow_state_dict
 
 

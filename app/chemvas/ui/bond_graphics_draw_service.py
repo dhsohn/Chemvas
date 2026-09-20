@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+from typing import TYPE_CHECKING
 
 from PyQt6.QtCore import QPointF
 from PyQt6.QtGui import QPolygonF
@@ -13,22 +14,19 @@ from chemvas.features.rendering import (
     line_intersection,
     strip_corners,
 )
-from chemvas.ui.canvas_graph_state import graph_state_for
-from chemvas.ui.canvas_model_access import atom_for_id, bond_for_id
-from chemvas.ui.renderer_style_access import (
-    bond_pen_for,
-    renderer_bold_bond_width_for,
-    renderer_bond_line_width_for,
-)
 
 # Cap the mitre extension so a very acute junction falls back to a flat end
 # instead of shooting a long spike (Qt's "mitre limit" idea, in width units).
 _MITER_LIMIT = 6.0
 
 
+if TYPE_CHECKING:
+    from chemvas.ui.scene_render_context import SceneRenderContext
+
+
 class BondGraphicsDrawService:
-    def __init__(self, canvas, *, renderer) -> None:
-        self.canvas = canvas
+    def __init__(self, context: SceneRenderContext, *, renderer) -> None:
+        self.context = context
         self.renderer = renderer
 
     def _line_item(
@@ -37,10 +35,10 @@ class BondGraphicsDrawService:
         return self.renderer.graphics.line(x1, y1, x2, y2, dotted=dotted)
 
     def _bond_line_width(self) -> float:
-        return renderer_bond_line_width_for(self.canvas)
+        return self.context.renderer.bond_line_width()
 
     def _bold_bond_width(self) -> float:
-        return renderer_bold_bond_width_for(self.canvas)
+        return self.context.renderer.bold_bond_width()
 
     def one_sided_bond_strip(
         self,
@@ -140,19 +138,19 @@ class BondGraphicsDrawService:
         length = math.hypot(away_dx, away_dy) or 1.0
         ax = away_dx / length
         ay = away_dy / length
-        vertex = atom_for_id(self.canvas, vertex_id)
+        vertex = self.context.model.atoms.get(vertex_id)
         if vertex is None:
             return None
         best = None
         best_score = -2.0
-        for bond_id in graph_state_for(self.canvas).atom_bond_ids.get(vertex_id, ()):
-            neighbor = bond_for_id(self.canvas, bond_id)
+        for bond_id in self.context.state.graph_state.atom_bond_ids.get(vertex_id, ()):
+            neighbor = self.context.bond_for_id(bond_id)
             if neighbor is None or neighbor.style not in BOLD_BOND_STYLES:
                 continue
             if {neighbor.a, neighbor.b} == {vertex_id, other_id}:
                 continue
             far_id = neighbor.b if neighbor.a == vertex_id else neighbor.a
-            far = atom_for_id(self.canvas, far_id)
+            far = self.context.model.atoms.get(far_id)
             if far is None:
                 continue
             fdx = far.x - vertex.x
@@ -170,13 +168,13 @@ class BondGraphicsDrawService:
         base = QPointF(vx + nx * off, vy + ny * off)
         if neighbor is None or vertex_id is None:
             return base
-        nb_a = atom_for_id(self.canvas, neighbor.a)
-        nb_b = atom_for_id(self.canvas, neighbor.b)
+        nb_a = self.context.model.atoms.get(neighbor.a)
+        nb_b = self.context.model.atoms.get(neighbor.b)
         if nb_a is None or nb_b is None:
             return base
         nbnx, nbny = self._bold_strip_normal(neighbor, nb_a, nb_b)
         far_id = neighbor.b if neighbor.a == vertex_id else neighbor.a
-        far = atom_for_id(self.canvas, far_id)
+        far = self.context.model.atoms.get(far_id)
         if far is None:
             return base
         point = line_intersection(
@@ -241,7 +239,7 @@ class BondGraphicsDrawService:
         polygon = self.renderer.wedge_polygon(x1, y1, x2, y2, a_id, b_id)
         return [
             self.renderer.graphics.filled_polygon(
-                polygon, pen=bond_pen_for(self.canvas)
+                polygon, pen=self.context.renderer.bond_pen()
             )
         ]
 

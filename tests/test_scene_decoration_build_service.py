@@ -3,6 +3,7 @@ import unittest
 from types import SimpleNamespace
 
 from tests.runtime_state import canvas_runtime_state
+from tests.scene_render_context import attach_scene_render_context
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -58,7 +59,7 @@ class CanvasSceneDecorationBuildServiceTest(unittest.TestCase):
             scene=lambda: scene,
         )
         return (
-            CanvasSceneDecorationBuildService(canvas),
+            CanvasSceneDecorationBuildService(attach_scene_render_context(canvas)),
             scene,
             style,
         )
@@ -84,7 +85,7 @@ class CanvasSceneDecorationBuildServiceTest(unittest.TestCase):
         self.assertAlmostEqual(normalized_rect.width(), 36.0)
         self.assertAlmostEqual(normalized_rect.height(), 48.0)
 
-    def test_build_ts_bracket_item_sets_metadata_brush_and_no_pen(self) -> None:
+    def test_build_ts_bracket_item_sets_kind_paint_and_no_document_values(self) -> None:
         service, _, _ = self._make_service()
         rect = QRectF(QPointF(24.0, 18.0), QPointF(6.0, -2.0))
 
@@ -92,8 +93,9 @@ class CanvasSceneDecorationBuildServiceTest(unittest.TestCase):
 
         self.assertFalse(item.path().isEmpty())
         self.assertEqual(item.data(0), "ts_bracket")
-        self.assertEqual(item.data(1)["rect"], QRectF(rect).normalized())
-        self.assertEqual(item.data(1)["bracket_kind"], "braces_pair")
+        self.assertIsNone(item.data(1))
+        self.assertIsNone(item.data(2))
+        self.assertEqual(item.path(), service.ts_bracket_path(rect, "braces_pair"))
         self.assertEqual(item.pen().style(), Qt.PenStyle.NoPen)
         self.assertEqual(item.brush().color().name(), "#123456")
 
@@ -148,6 +150,8 @@ class CanvasSceneDecorationBuildServiceTest(unittest.TestCase):
         self.assertIs(scene.items[-1], item)
         self.assertEqual(item.data(0), "ts_bracket")
         self.assertEqual(item.brush().color().alpha(), 140)
-        rect = item.data(1)["rect"]
-        self.assertAlmostEqual(rect.width(), 36.0)
-        self.assertAlmostEqual(rect.height(), 48.0)
+        self.assertIsNone(item.data(1))
+        self.assertEqual(
+            item.path(),
+            service.ts_bracket_path(QRectF(-15.0, -20.0, 36.0, 48.0)),
+        )
