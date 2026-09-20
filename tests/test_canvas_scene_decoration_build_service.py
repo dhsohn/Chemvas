@@ -1,6 +1,8 @@
 import os
 import unittest
 
+from tests.scene_render_context import attach_scene_render_context
+
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PyQt6.QtCore import QPointF, QRectF, Qt
@@ -23,7 +25,9 @@ class CanvasSceneDecorationBuildServiceTest(unittest.TestCase):
 
     def setUp(self) -> None:
         self.canvas = build_canvas_view()
-        self.service = CanvasSceneDecorationBuildService(self.canvas)
+        self.service = CanvasSceneDecorationBuildService(
+            attach_scene_render_context(self.canvas)
+        )
 
     def tearDown(self) -> None:
         self.canvas.deleteLater()
@@ -40,7 +44,9 @@ class CanvasSceneDecorationBuildServiceTest(unittest.TestCase):
         self.assertIn(arrow, self.canvas.scene().items())
         self.assertIn(bracket, self.canvas.scene().items())
 
-    def test_ts_bracket_helpers_normalize_rect_and_attach_metadata(self) -> None:
+    def test_ts_bracket_helpers_normalize_rect_and_draw_without_value_mirrors(
+        self,
+    ) -> None:
         rect = self.service.ts_bracket_rect_from_points(
             QPointF(4.0, 5.0), QPointF(5.0, 6.0)
         )
@@ -55,7 +61,11 @@ class CanvasSceneDecorationBuildServiceTest(unittest.TestCase):
         self.assertGreaterEqual(rect.height(), min_height)
         self.assertEqual(large_rect, QRectF(-30.0, -20.0, 60.0, 48.0))
         self.assertEqual(item.data(0), "ts_bracket")
-        self.assertEqual(item.data(1)["rect"], QRectF(4.0, 3.0, 4.0, 6.0))
+        self.assertIsNone(item.data(1))
+        self.assertIsNone(item.data(2))
+        self.assertEqual(
+            item.path(), self.service.ts_bracket_path(QRectF(4.0, 3.0, 4.0, 6.0))
+        )
         self.assertEqual(item.pen().style(), Qt.PenStyle.NoPen)
         self.assertEqual(
             item.brush().color().name(),

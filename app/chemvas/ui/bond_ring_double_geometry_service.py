@@ -10,19 +10,20 @@ from chemvas.features.rendering import (
     normalized_plain_double_style,
     trim_segment,
 )
-from chemvas.ui.renderer_style_access import renderer_bond_spacing_for
 
 if TYPE_CHECKING:
     from PyQt6.QtCore import QPointF
 
+    from chemvas.ui.scene_render_context import SceneRenderContext
+
 
 class BondRingDoubleGeometryService:
-    def __init__(self, canvas, *, renderer) -> None:
-        self.canvas = canvas
+    def __init__(self, context: SceneRenderContext, *, renderer) -> None:
+        self.context = context
         self.renderer = renderer
 
     def _bond_spacing(self) -> float:
-        return renderer_bond_spacing_for(self.canvas)
+        return self.context.renderer.bond_spacing()
 
     @staticmethod
     def _double_short_trim(length: float, *, has_label: bool) -> float:

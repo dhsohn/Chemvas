@@ -4,80 +4,44 @@ import math
 from typing import TYPE_CHECKING
 
 from PyQt6.QtCore import QPointF, Qt
-from PyQt6.QtGui import QBrush, QColor, QFont, QPainterPath, QPen
+from PyQt6.QtGui import QBrush, QColor, QFont, QPainterPath
 
 from chemvas.domain.document import ARC_KIND_SWEEPS, VALID_ARC_KINDS, VALID_LINE_KINDS
 from chemvas.features.annotations import arrow_label_html, arrow_label_normal
 from chemvas.features.rendering import arc_midpoint, arc_points, wavy_line_points
-from chemvas.features.selection import HANDLE_ACCENT_COLOR, default_curved_control
-from chemvas.ui.canvas_text_style_state import text_style_state_for
-from chemvas.ui.canvas_tool_settings_state import tool_settings_state_for
-from chemvas.ui.endpoint_snap_access import (
-    SNAP_MARK_SCREEN_PX,
-    scene_length_for_screen_px,
-    snapped_points_among_for,
-)
+from chemvas.features.selection import default_curved_control
 from chemvas.ui.graphics_items import (
     ArrowLabelItem,
     ArrowPathItem,
-    NoSelectEllipseItem,
 )
-from chemvas.ui.renderer_style_access import (
-    bold_bond_pen_for,
-    bond_length_px_for,
-    bond_pen_for,
-    bond_spacing_px_for,
-    renderer_bond_spacing_for,
-)
-from chemvas.ui.scene_item_access import add_item_to_canvas_scene
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
+
+    from chemvas.ui.scene_render_context import SceneRenderContext
 
 # Role of the child text items that carry an arrow's labels. Hit testing maps
 # the role back to the parent arrow, and export collects it so the label
 # widens the figure bounds.
 ARROW_LABEL_ROLE = "arrow_label"
-# Role of the ring drawn on a preview end that has taken an existing
-# endpoint. It lives on the preview, so it disappears with it.
-SNAP_MARK_ROLE = "snap_mark"
 
 
 class CanvasArrowBuildService:
-    def __init__(self, canvas) -> None:
-        self.canvas = canvas
+    def __init__(self, context: SceneRenderContext) -> None:
+        self.context = context
 
     @property
     def settings(self):
-        return tool_settings_state_for(self.canvas)
+        return self.context.state.tool_settings_state
 
     def preview_arrow(self, start: QPointF, end: QPointF, kind: str):
         item = self.build_arrow_item(start, end, kind)
-        return add_item_to_canvas_scene(self.canvas, item)
+        self.context.scene.addItem(item)
+        return item
 
-    def build_snap_mark(self, point: QPointF):
-        """A ring at ``point``, in the handle accent rather than drawing ink."""
-        radius = scene_length_for_screen_px(self.canvas, SNAP_MARK_SCREEN_PX) / 2.0
-        mark = NoSelectEllipseItem(
-            point.x() - radius, point.y() - radius, radius * 2, radius * 2
-        )
-        pen = QPen(QColor(HANDLE_ACCENT_COLOR))
-        pen.setWidthF(1.6)
-        pen.setCosmetic(True)
-        mark.setPen(pen)
-        mark.setBrush(QBrush(Qt.BrushStyle.NoBrush))
-        mark.setData(0, SNAP_MARK_ROLE)
-        return mark
-
-    def mark_snapped_points(self, item, points) -> None:
-        """Ring each of ``points`` that has taken an existing endpoint.
-
-        ``item`` is the preview, which is added to the scene without being
-        registered as an arrow, so it is never one of the candidates and
-        there is nothing to exclude.
-        """
-        for point in snapped_points_among_for(self.canvas, points):
-            self.build_snap_mark(point).setParentItem(item)
+    def set_curved_arrow_path(self, item, start, end, control, double: bool) -> None:
+        item.setPos(0.0, 0.0)
+        item.setPath(self.build_curved_arrow_path(start, end, control, double))
 
     def build_arrow_item(
         self, start: QPointF, end: QPointF, kind: str, mirrored: bool = False
@@ -167,7 +131,7 @@ class CanvasArrowBuildService:
         if kind == "line_wavy":
             # One half-wave per bond spacing keeps the wave in step with the
             # ACS bond metrics, so it scales with the document like a bond.
-            spacing = renderer_bond_spacing_for(self.canvas)
+            spacing = self.context.renderer.bond_spacing()
             points = wavy_line_points(
                 (start.x(), start.y()),
                 (end.x(), end.y()),
@@ -182,7 +146,7 @@ class CanvasArrowBuildService:
             path.lineTo(end)
         item = ArrowPathItem(path)
         if kind == "line_bold":
-            item.setPen(bold_bond_pen_for(self.canvas))
+            item.setPen(self.context.renderer.bold_bond_pen())
         else:
             item.setPen(self.arrow_pen(dotted=kind == "line_dashed"))
         item.setBrush(QBrush(Qt.BrushStyle.NoBrush))
@@ -219,7 +183,7 @@ class CanvasArrowBuildService:
         length = math.hypot(dx, dy) or 1.0
         nx = -dy / length
         ny = dx / length
-        bar = bond_length_px_for(self.canvas) * 0.2
+        bar = self.context.renderer.style.bond_length_px * 0.2
 
         path = QPainterPath()
         path.moveTo(start)
@@ -249,7 +213,8 @@ class CanvasArrowBuildService:
         ny = dx / length
         # Keep the shafts one bond spacing apart, with room for thick strokes.
         offset = max(
-            bond_spacing_px_for(self.canvas) * 0.5, self.settings.arrow_line_width
+            self.context.renderer.style.bond_spacing_px * 0.5,
+            self.settings.arrow_line_width,
         )
         if mirrored:
             offset = -offset
@@ -332,7 +297,7 @@ class CanvasArrowBuildService:
         dx = end.x() - start.x()
         dy = end.y() - start.y()
         nx, ny = arrow_label_normal(dx, dy)
-        style = text_style_state_for(self.canvas)
+        style = self.context.state.text_style_state
         font = QFont(style.text_font_family, style.text_font_size)
         font.setWeight(style.text_font_weight)
         font.setItalic(style.text_italic)
@@ -347,7 +312,7 @@ class CanvasArrowBuildService:
                 element = path.elementAt(index)
                 offset = (element.x - mid.x()) * nx + (element.y - mid.y()) * ny
                 arrow_extent = max(arrow_extent, abs(offset))
-        gap = arrow_extent + bond_spacing_px_for(self.canvas)
+        gap = arrow_extent + self.context.renderer.style.bond_spacing_px
         for side, sign in (("above", 1.0), ("below", -1.0)):
             text = labels.get(side)
             if not text:
@@ -395,7 +360,9 @@ class CanvasArrowBuildService:
         mirrored: bool = False,
     ) -> None:
         angle = math.atan2(end.y() - start.y(), end.x() - start.x())
-        head_len = bond_length_px_for(self.canvas) * self.settings.arrow_head_scale
+        head_len = (
+            self.context.renderer.style.bond_length_px * self.settings.arrow_head_scale
+        )
         head_angle = math.radians(-25 if mirrored else 25)
         offsets = [0.0]
         if double:
@@ -425,11 +392,11 @@ class CanvasArrowBuildService:
             path.lineTo(right)
 
     def arrow_pen(self, dotted: bool = False):
-        pen = bond_pen_for(self.canvas)
+        pen = self.context.renderer.bond_pen()
         pen.setWidthF(self.settings.arrow_line_width)
         if dotted:
             pen.setStyle(Qt.PenStyle.DashLine)
         return pen
 
 
-__all__ = ["ARROW_LABEL_ROLE", "SNAP_MARK_ROLE", "CanvasArrowBuildService"]
+__all__ = ["ARROW_LABEL_ROLE", "CanvasArrowBuildService"]

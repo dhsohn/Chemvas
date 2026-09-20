@@ -29,19 +29,15 @@ from chemvas.features.export import (
     export_item_closure,
     svg_viewport_size_points,
 )
-from chemvas.ui.canvas_scene_items_state import (
-    arrow_items_for,
-    mark_items_for,
-    note_items_for,
-    ts_bracket_items_for,
-)
 from chemvas.ui.graphics_items import AtomLabelItem, ExportTextItem
-from chemvas.ui.scene_item_access import canvas_scene_for
+from chemvas.ui.ts_bracket_record_access import require_ts_bracket_record
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
 
     from PyQt6.QtGui import QGlyphRun, QPainterPath
+
+    from chemvas.ui.scene_render_context import SceneRenderContext
 
 
 @dataclass(frozen=True)
@@ -160,7 +156,9 @@ def _atom_sizes(item: AtomLabelItem) -> Iterator[_GlyphSize]:
         yield from _shaped_sizes(text, font, script=font != item.font())
 
 
-def _item_sizes(item: QGraphicsItem) -> Iterator[_GlyphSize]:
+def _item_sizes(
+    context: SceneRenderContext, item: QGraphicsItem
+) -> Iterator[_GlyphSize]:
     if isinstance(item, AtomLabelItem):
         yield from _atom_sizes(item)
     elif isinstance(item, ExportTextItem):
@@ -172,8 +170,7 @@ def _item_sizes(item: QGraphicsItem) -> Iterator[_GlyphSize]:
         if any(_rich_text_sizes(item)):
             raise ValueError("text does not expose the canonical export typography")
     elif item.data(0) == "ts_bracket":
-        data = item.data(1)
-        if not isinstance(data, dict) or data.get("bracket_kind") not in {
+        if require_ts_bracket_record(context, item).bracket_kind not in {
             "dagger",
             "double_dagger",
         }:
@@ -243,13 +240,14 @@ def _output_scale(
     return scale
 
 
-def _references(canvas: Any) -> dict[QGraphicsItem, dict[str, object]]:
+def _references(context: SceneRenderContext) -> dict[QGraphicsItem, dict[str, object]]:
     references: dict[QGraphicsItem, dict[str, object]] = {}
+    collections = context.state.scene_items_state
     for kind, items in (
-        ("note", note_items_for(canvas)),
-        ("mark", mark_items_for(canvas)),
-        ("arrow", arrow_items_for(canvas)),
-        ("ts_bracket", ts_bracket_items_for(canvas)),
+        ("note", collections.note_items),
+        ("mark", collections.mark_items),
+        ("arrow", collections.arrow_items),
+        ("ts_bracket", collections.ts_bracket_items),
     ):
         for index, item in enumerate(items):
             references[item] = {"kind": kind, "index": index}
@@ -257,7 +255,7 @@ def _references(canvas: Any) -> dict[QGraphicsItem, dict[str, object]]:
 
 
 def assess_export_readability(
-    canvas: Any,
+    context: SceneRenderContext,
     plan: ExportPlan,
     *,
     minimum_font_pt: float,
@@ -276,11 +274,11 @@ def assess_export_readability(
         width_pixels=width_pixels,
         height_pixels=height_pixels,
     )
-    references = _references(canvas)
+    references = _references(context)
     coverage: dict[str, dict[str, int | float]] = {}
     minimum: float | None = None
     witness: dict[str, object] | None = None
-    items = export_item_closure(collect_export_items(canvas_scene_for(canvas)))
+    items = export_item_closure(collect_export_items(context.scene))
     for item in items:
         if not item.isVisible() or item.effectiveOpacity() <= 0:
             continue
@@ -295,7 +293,7 @@ def assess_export_readability(
             }
         reference = reference or {"kind": str(item.data(0))}
         try:
-            sizes = list(_item_sizes(item))
+            sizes = list(_item_sizes(context, item))
             if not sizes:
                 continue
             item_scale = _uniform_scene_scale(item) * scale

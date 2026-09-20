@@ -23,14 +23,12 @@ def build_canvas_document_services(
     *,
     hit_testing_service: Any,
     graph_service: Any,
-    structure_build_service: Any,
     history_service: Any,
 ) -> CanvasDocumentServiceBundle:
     canvas_document_session_service = CanvasDocumentSessionService(
         canvas,
         hit_testing_service=hit_testing_service,
         graph_service=graph_service,
-        structure_build_service=structure_build_service,
         history_service=history_service,
     )
     canvas_history_recording_service = CanvasHistoryRecordingService(

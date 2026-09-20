@@ -16,12 +16,14 @@ from chemvas.features.insertion import (
     graph_ring_polygons_for_bond,
     ring_polygon_points_for_bond,
 )
+from chemvas.ui.atom_label_renderer import connected_atom_unit_vectors
 from chemvas.ui.canvas_model_access import (
     atom_for_id,
     atoms_for,
     bonds_for,
     required_atom_for,
 )
+from chemvas.ui.canvas_model_state import model_for
 from chemvas.ui.canvas_scene_items_state import ring_items_for
 from chemvas.ui.renderer_style_access import bond_length_px_for
 from chemvas.ui.structure_geometry_logic import (
@@ -65,25 +67,7 @@ def atom_point_for(canvas, atom_id: int) -> QPointF:
 
 
 def connected_atom_unit_vectors_for(canvas, atom_id: int) -> list[tuple[float, float]]:
-    atom = atom_for_id(canvas, atom_id)
-    if atom is None:
-        return []
-    vectors: list[tuple[float, float]] = []
-    atoms = atoms_for(canvas)
-    for bond in bonds_for(canvas):
-        if bond is None or (bond.a != atom_id and bond.b != atom_id):
-            continue
-        other_id = bond.b if bond.a == atom_id else bond.a
-        other = atoms.get(other_id)
-        if other is None:
-            continue
-        dx = other.x - atom.x
-        dy = other.y - atom.y
-        length = math.hypot(dx, dy)
-        if length <= 1e-9:
-            continue
-        vectors.append((dx / length, dy / length))
-    return vectors
+    return connected_atom_unit_vectors(model_for(canvas), atom_id)
 
 
 def default_bond_angle_for_vectors(vectors: list[tuple[float, float]]) -> float:

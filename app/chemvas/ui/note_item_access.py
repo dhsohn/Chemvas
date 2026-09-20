@@ -9,7 +9,11 @@ COMMITTED_NOTE_HTML_ROLE = 0xC002
 def new_note_item_for(canvas):
     from chemvas.ui.note_item import NoteItem
 
-    return NoteItem(canvas)
+    return NoteItem(
+        on_focus_out=lambda item: note_controller_for_access(
+            canvas
+        ).handle_note_focus_out(item)
+    )
 
 
 def _committed_note_value(item, accessor_name: str, role: int) -> str:

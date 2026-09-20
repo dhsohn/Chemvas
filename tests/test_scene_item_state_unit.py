@@ -6,7 +6,7 @@ from unittest import mock
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PyQt6.QtCore import QPointF, QRectF, Qt
+from PyQt6.QtCore import QPointF, Qt
 from PyQt6.QtGui import QBrush, QColor, QPainterPath, QPen, QPolygonF
 from PyQt6.QtWidgets import (
     QApplication,
@@ -147,7 +147,6 @@ class SceneItemStateUnitTest(unittest.TestCase):
             mark_center_setter=lambda item, center: None,
             mark_color_setter=lambda item, color: None,
             ring_fill_brush_getter=lambda: QBrush(QColor("#AA4400")),
-            ts_bracket_path_builder=lambda rect: QPainterPath(),
             bond_color="#000000",
             build_arrow_item=lambda start, end, kind, mirrored: QGraphicsPathItem(),
             set_curved_arrow_path=lambda *args: None,
@@ -173,7 +172,6 @@ class SceneItemStateUnitTest(unittest.TestCase):
             mark_center_setter=lambda item, center: None,
             mark_color_setter=lambda item, color: None,
             ring_fill_brush_getter=lambda: QBrush(QColor("#AA4400")),
-            ts_bracket_path_builder=lambda rect: QPainterPath(),
             bond_color="#000000",
             build_arrow_item=lambda start, end, kind, mirrored: QGraphicsPathItem(),
             set_curved_arrow_path=lambda *args: None,
@@ -196,7 +194,6 @@ class SceneItemStateUnitTest(unittest.TestCase):
             mark_center_setter=lambda item, center: None,
             mark_color_setter=lambda item, color: None,
             ring_fill_brush_getter=lambda: QBrush(QColor("#AA4400")),
-            ts_bracket_path_builder=lambda rect: QPainterPath(),
             bond_color="#000000",
             build_arrow_item=lambda start, end, kind, mirrored: QGraphicsPathItem(),
             set_curved_arrow_path=lambda *args: None,
@@ -233,7 +230,6 @@ class SceneItemStateUnitTest(unittest.TestCase):
             mark_center_setter=lambda item, center: None,
             mark_color_setter=lambda item, color: None,
             ring_fill_brush_getter=lambda: QBrush(QColor("#AA4400")),
-            ts_bracket_path_builder=lambda rect: QPainterPath(),
             bond_color="#000000",
             build_arrow_item=lambda start, end, kind, mirrored: QGraphicsPathItem(),
             set_curved_arrow_path=lambda *args: None,
@@ -286,7 +282,6 @@ class SceneItemStateUnitTest(unittest.TestCase):
             mark_center_setter=center_setter,
             mark_color_setter=lambda item, color: None,
             ring_fill_brush_getter=lambda: QBrush(QColor("#AA4400")),
-            ts_bracket_path_builder=lambda rect: QPainterPath(),
             bond_color="#000000",
             build_arrow_item=lambda start, end, kind, mirrored: QGraphicsPathItem(),
             set_curved_arrow_path=lambda *args: None,
@@ -311,23 +306,7 @@ class SceneItemStateUnitTest(unittest.TestCase):
         self.assertEqual((center.x(), center.y()), (7.5, -2.5))
         self.assertIsNone(mark_center_from_state({"atom_id": 1}, {}))
 
-    def test_ts_bracket_helpers_use_fallback_bounds_and_validate_state(self) -> None:
-        item = QGraphicsPathItem()
-        item.setData(0, "ts_bracket")
-        item.setData(
-            1, {"rect": QRectF(-6.0, -4.0, 12.0, 10.0), "bracket_kind": "brace_left"}
-        )
-        path = QPainterPath()
-        path.addRect(QRectF(-6.0, -4.0, 12.0, 10.0))
-        item.setPath(path)
-        item.setPen(QPen(Qt.PenStyle.NoPen))
-
-        state = scene_item_state(item, mark_center_getter=lambda _: QPointF())
-
-        self.assertEqual(state["kind"], "ts_bracket")
-        self.assertEqual(state["bracket_kind"], "brace_left")
-        self.assertLess(state["left"], state["right"])
-        self.assertLess(state["top"], state["bottom"])
+    def test_ts_bracket_rect_from_state_rejects_invalid_coordinates(self) -> None:
         self.assertIsNone(
             ts_bracket_rect_from_state(
                 {"left": "bad", "top": 0, "right": 1, "bottom": 2}
@@ -340,52 +319,6 @@ class SceneItemStateUnitTest(unittest.TestCase):
         )
 
         self.assertIsNone(rect)
-
-    def test_apply_ts_bracket_state_sets_path_pen_brush_and_metadata(self) -> None:
-        item = QGraphicsPathItem()
-        built_paths: list[QPainterPath] = []
-
-        built_kinds: list[str] = []
-
-        def build_path(rect: QRectF, bracket_kind: str) -> QPainterPath:
-            path = QPainterPath()
-            path.addRect(rect)
-            built_paths.append(path)
-            built_kinds.append(bracket_kind)
-            return path
-
-        apply_scene_item_state(
-            item,
-            {
-                "kind": "ts_bracket",
-                "left": -8.0,
-                "top": -3.0,
-                "right": 9.0,
-                "bottom": 6.0,
-                "bracket_kind": "parentheses_pair",
-            },
-            model_atoms={},
-            note_style_applier=lambda item: None,
-            mark_center_setter=lambda item, center: None,
-            mark_color_setter=lambda item, color: None,
-            ring_fill_brush_getter=lambda: QBrush(QColor("#AA4400")),
-            ts_bracket_path_builder=build_path,
-            bond_color="#123456",
-            build_arrow_item=lambda start, end, kind, mirrored: QGraphicsPathItem(),
-            set_curved_arrow_path=lambda *args: None,
-            orbital_base_handle_dist=18.0,
-        )
-
-        rect = item.data(1)["rect"]
-        self.assertEqual(
-            (rect.left(), rect.top(), rect.right(), rect.bottom()),
-            (-8.0, -3.0, 9.0, 6.0),
-        )
-        self.assertEqual(item.data(1)["bracket_kind"], "parentheses_pair")
-        self.assertEqual(item.pen().style(), Qt.PenStyle.NoPen)
-        self.assertEqual(item.brush().color().name(), "#123456")
-        self.assertTrue(built_paths)
-        self.assertEqual(built_kinds, ["parentheses_pair"])
 
     def test_orbital_state_dict_and_apply_restore_transform_metadata(self) -> None:
         item = QGraphicsItemGroup()
@@ -408,7 +341,6 @@ class SceneItemStateUnitTest(unittest.TestCase):
             mark_center_setter=lambda item, center: None,
             mark_color_setter=lambda item, color: None,
             ring_fill_brush_getter=lambda: QBrush(QColor("#AA4400")),
-            ts_bracket_path_builder=lambda rect: QPainterPath(),
             bond_color="#000000",
             build_arrow_item=lambda start, end, kind, mirrored: QGraphicsPathItem(),
             set_curved_arrow_path=lambda *args: None,
@@ -445,7 +377,6 @@ class SceneItemStateUnitTest(unittest.TestCase):
             mark_center_setter=lambda item, center: None,
             mark_color_setter=lambda item, color: None,
             ring_fill_brush_getter=lambda: QBrush(QColor("#AA4400")),
-            ts_bracket_path_builder=lambda rect: QPainterPath(),
             bond_color="#000000",
             build_arrow_item=lambda start, end, kind, mirrored: QGraphicsPathItem(),
             set_curved_arrow_path=lambda *args: None,
@@ -499,7 +430,6 @@ class SceneItemStateUnitTest(unittest.TestCase):
             mark_center_setter=lambda item, center: None,
             mark_color_setter=lambda item, color: None,
             ring_fill_brush_getter=lambda: QBrush(QColor("#AA4400")),
-            ts_bracket_path_builder=lambda rect: QPainterPath(),
             bond_color="#000000",
             build_arrow_item=build_arrow_item,
             set_curved_arrow_path=lambda *args: None,
@@ -533,38 +463,8 @@ class SceneItemStateUnitTest(unittest.TestCase):
             mark_center_setter=lambda item, center: None,
             mark_color_setter=lambda item, color: None,
             ring_fill_brush_getter=lambda: QBrush(QColor("#AA4400")),
-            ts_bracket_path_builder=lambda rect: QPainterPath(),
             bond_color="#000000",
             build_arrow_item=lambda start, end, kind, mirrored: rebuilt,
-            set_curved_arrow_path=lambda *args: None,
-            orbital_base_handle_dist=18.0,
-        )
-
-        self.assertEqual((item.pos().x(), item.pos().y()), (0.0, 0.0))
-
-    def test_apply_ts_bracket_state_clears_stale_translation(self) -> None:
-        item = QGraphicsPathItem()
-        item.setData(0, "ts_bracket")
-        item.setPos(12.0, 4.0)
-
-        apply_scene_item_state(
-            item,
-            {
-                "kind": "ts_bracket",
-                "left": -8.0,
-                "top": -3.0,
-                "right": 9.0,
-                "bottom": 6.0,
-                "bracket_kind": "square_pair",
-            },
-            model_atoms={},
-            note_style_applier=lambda item: None,
-            mark_center_setter=lambda item, center: None,
-            mark_color_setter=lambda item, color: None,
-            ring_fill_brush_getter=lambda: QBrush(QColor("#AA4400")),
-            ts_bracket_path_builder=lambda rect, bracket_kind: QPainterPath(),
-            bond_color="#000000",
-            build_arrow_item=lambda start, end, kind, mirrored: QGraphicsPathItem(),
             set_curved_arrow_path=lambda *args: None,
             orbital_base_handle_dist=18.0,
         )
@@ -591,7 +491,6 @@ class SceneItemStateUnitTest(unittest.TestCase):
             mark_center_setter=lambda item, center: None,
             mark_color_setter=lambda item, color: None,
             ring_fill_brush_getter=lambda: QBrush(QColor("#AA4400")),
-            ts_bracket_path_builder=lambda rect: QPainterPath(),
             bond_color="#000000",
             build_arrow_item=build_arrow_item,
             set_curved_arrow_path=set_curved_arrow_path,
@@ -630,7 +529,6 @@ class SceneItemStateUnitTest(unittest.TestCase):
             mark_center_setter=lambda item, center: None,
             mark_color_setter=lambda item, color: None,
             ring_fill_brush_getter=lambda: QBrush(QColor("#AA4400")),
-            ts_bracket_path_builder=lambda rect: QPainterPath(),
             bond_color="#000000",
             build_arrow_item=lambda start, end, kind, mirrored: QGraphicsPathItem(),
             set_curved_arrow_path=lambda *args: None,
@@ -644,7 +542,6 @@ class SceneItemStateUnitTest(unittest.TestCase):
             mark_center_setter=lambda item, center: None,
             mark_color_setter=lambda item, color: None,
             ring_fill_brush_getter=lambda: QBrush(QColor("#AA4400")),
-            ts_bracket_path_builder=lambda rect: QPainterPath(),
             bond_color="#000000",
             build_arrow_item=lambda start, end, kind, mirrored: QGraphicsPathItem(),
             set_curved_arrow_path=lambda *args: None,
@@ -678,7 +575,6 @@ class SceneItemStateUnitTest(unittest.TestCase):
             mark_center_setter=center_setter,
             mark_color_setter=lambda item, color: None,
             ring_fill_brush_getter=lambda: QBrush(QColor("#AA4400")),
-            ts_bracket_path_builder=lambda rect: QPainterPath(),
             bond_color="#000000",
             build_arrow_item=lambda start, end, kind, mirrored: QGraphicsPathItem(),
             set_curved_arrow_path=lambda *args: None,
@@ -699,7 +595,6 @@ class SceneItemStateUnitTest(unittest.TestCase):
             mark_center_setter=lambda item, center: None,
             mark_color_setter=lambda item, color: None,
             ring_fill_brush_getter=lambda: QBrush(QColor("#AA4400")),
-            ts_bracket_path_builder=lambda rect: QPainterPath(),
             bond_color="#000000",
             build_arrow_item=lambda start, end, kind, mirrored: QGraphicsPathItem(),
             set_curved_arrow_path=lambda *args: None,
@@ -724,7 +619,6 @@ class SceneItemStateUnitTest(unittest.TestCase):
             mark_center_setter=lambda item, center: None,
             mark_color_setter=lambda item, color: None,
             ring_fill_brush_getter=lambda: QBrush(QColor("#55AA11")),
-            ts_bracket_path_builder=lambda rect: QPainterPath(),
             bond_color="#000000",
             build_arrow_item=lambda start, end, kind, mirrored: QGraphicsPathItem(),
             set_curved_arrow_path=lambda *args: None,
@@ -732,30 +626,6 @@ class SceneItemStateUnitTest(unittest.TestCase):
         )
         self.assertEqual(len(ring.polygon()), len(original_polygon))
         self.assertEqual(ring.brush().color().name(), "#55aa11")
-
-        bracket = QGraphicsPathItem()
-        path_builder = mock.Mock()
-        apply_scene_item_state(
-            bracket,
-            {
-                "kind": "ts_bracket",
-                "left": "bad",
-                "top": 0.0,
-                "right": 1.0,
-                "bottom": 2.0,
-            },
-            model_atoms={},
-            note_style_applier=lambda item: None,
-            mark_center_setter=lambda item, center: None,
-            mark_color_setter=lambda item, color: None,
-            ring_fill_brush_getter=lambda: QBrush(QColor("#AA4400")),
-            ts_bracket_path_builder=path_builder,
-            bond_color="#000000",
-            build_arrow_item=lambda start, end, kind, mirrored: QGraphicsPathItem(),
-            set_curved_arrow_path=lambda *args: None,
-            orbital_base_handle_dist=18.0,
-        )
-        path_builder.assert_not_called()
 
         orbital = QGraphicsItemGroup()
         orbital.setData(1, {"center": QPointF(1.0, 2.0), "base_handle_dist": 11.0})
@@ -767,7 +637,6 @@ class SceneItemStateUnitTest(unittest.TestCase):
             mark_center_setter=lambda item, center: None,
             mark_color_setter=lambda item, color: None,
             ring_fill_brush_getter=lambda: QBrush(QColor("#AA4400")),
-            ts_bracket_path_builder=lambda rect: QPainterPath(),
             bond_color="#000000",
             build_arrow_item=lambda start, end, kind, mirrored: QGraphicsPathItem(),
             set_curved_arrow_path=lambda *args: None,
@@ -790,7 +659,6 @@ class SceneItemStateUnitTest(unittest.TestCase):
             mark_center_setter=lambda item, center: None,
             mark_color_setter=lambda item, color: None,
             ring_fill_brush_getter=lambda: QBrush(QColor("#AA4400")),
-            ts_bracket_path_builder=lambda rect: QPainterPath(),
             bond_color="#000000",
             build_arrow_item=build_arrow_item,
             set_curved_arrow_path=lambda *args: None,
@@ -810,7 +678,6 @@ class SceneItemStateUnitTest(unittest.TestCase):
             mark_center_setter=lambda item, center: None,
             mark_color_setter=lambda item, color: None,
             ring_fill_brush_getter=lambda: QBrush(QColor("#AA4400")),
-            ts_bracket_path_builder=lambda rect: QPainterPath(),
             bond_color="#000000",
             build_arrow_item=build_arrow_item,
             set_curved_arrow_path=lambda *args: None,

@@ -9,7 +9,6 @@ from PyQt6.QtCore import QPointF, QRectF
 from chemvas.core.history import CompositeCommand, history_transaction_scope
 from chemvas.features.insertion import build_atom_annotations
 from chemvas.ui.atom_label_access import atom_has_visible_label_for
-from chemvas.ui.canvas_geometry_access import mark_target_distance_for_atom_for
 from chemvas.ui.canvas_hit_testing_scene_access import scene_items_in_rect_for_canvas
 from chemvas.ui.canvas_mark_registry import mark_registry_for
 from chemvas.ui.canvas_model_access import (
@@ -37,6 +36,7 @@ from chemvas.ui.scene_item_access import (
     remove_item_from_canvas_scene,
 )
 from chemvas.ui.scene_item_state import mark_state_dict_for, scene_item_history_state
+from chemvas.ui.scene_render_access import scene_render_context_for
 from chemvas.ui.selection_info_access import emit_selection_info_for
 from chemvas.ui.transactions.document import document_transaction
 
@@ -396,26 +396,10 @@ class CanvasMarkSceneService:
     def mark_offset_from_click(
         self, atom_id: int, click_pos: QPointF, *, kind: str | None = None
     ) -> QPointF:
-        atom = atom_for_id(self.canvas, atom_id)
-        if atom is None:
-            return QPointF(0.0, 0.0)
-        dx = click_pos.x() - atom.x
-        dy = click_pos.y() - atom.y
-        length = math.hypot(dx, dy)
-        if length <= 1e-6:
-            dx = 1.0
-            dy = -1.0
-            length = math.hypot(dx, dy)
-        direction_x = dx / length
-        direction_y = dy / length
-        target = bond_length_px_for(self.canvas) * 0.2
         mark_kind = kind or tool_settings_state_for(self.canvas).mark_kind
-        label_target = mark_target_distance_for_atom_for(
-            self.canvas, atom_id, direction_x, direction_y, mark_kind
+        return scene_render_context_for(self.canvas).geometry.mark_offset_from_click(
+            atom_id, click_pos, kind=mark_kind
         )
-        if label_target > target:
-            target += (label_target - target) * 0.25
-        return QPointF(direction_x * target, direction_y * target)
 
     def remove_mark_item(self, item) -> None:
         remove_scene_item_from_collection_for(self.canvas, "mark_items", item)

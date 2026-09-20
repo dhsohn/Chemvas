@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from chemvas.ui.canvas_service_ports import geometry_controller_for_access
+from chemvas.ui.scene_render_access import scene_render_context_for
 
 
 def mark_target_distance_for_atom_for(
@@ -10,7 +10,7 @@ def mark_target_distance_for_atom_for(
     direction_y: float,
     kind: str,
 ) -> float:
-    return geometry_controller_for_access(canvas).mark_target_distance_for_atom(
+    return scene_render_context_for(canvas).geometry.mark_target_distance_for_atom(
         atom_id, direction_x, direction_y, kind
     )
 

@@ -19,10 +19,10 @@ from chemvas.ui.input_view_access import (
 )
 from chemvas.ui.sheet_setup_logic import (
     SHEET_MARGIN_PX,
-    sheet_dimensions_px,
 )
 from chemvas.ui.sheet_setup_state import (
     set_sheet_setup_state_for,
+    sheet_rects,
     sheet_setup_state_for,
     sheet_setup_values_for,
 )
@@ -118,23 +118,8 @@ def sheet_orientation_for(canvas) -> str:
     return sheet_setup_for(canvas)[1]
 
 
-def _expected_rects(
-    size_name: str,
-    orientation: str,
-) -> tuple[QRectF, QRectF]:
-    width, height = sheet_dimensions_px(size_name, orientation)
-    sheet_rect = QRectF(-width / 2.0, -height / 2.0, width, height)
-    scene_rect = sheet_rect.adjusted(
-        -SHEET_MARGIN_PX,
-        -SHEET_MARGIN_PX,
-        SHEET_MARGIN_PX,
-        SHEET_MARGIN_PX,
-    )
-    return sheet_rect, scene_rect
-
-
 def _apply_sheet_scene_rect_unchecked(canvas) -> None:
-    sheet_rect, scene_rect = _expected_rects(*sheet_setup_for(canvas))
+    sheet_rect, scene_rect = sheet_rects(*sheet_setup_for(canvas))
     scene_getter = getattr(canvas, "scene", None)
     scene = scene_getter() if callable(scene_getter) else None
     if scene is not None:

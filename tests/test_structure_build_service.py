@@ -863,7 +863,7 @@ class StructureBuildServiceTest(unittest.TestCase):
             [bond.order for bond in canvas.model.bonds if bond is not None], [2, 1, 2]
         )
 
-    def test_render_model_uses_atom_label_service(self) -> None:
+    def test_render_model_uses_shared_drawing_collaborators(self) -> None:
         canvas = _FakeCanvas()
         service = _service_for(canvas)
 
@@ -878,17 +878,28 @@ class StructureBuildServiceTest(unittest.TestCase):
         canvas.added_graphics.clear()
         canvas.carbon_dots.clear()
         canvas.wrapper_label_calls.clear()
+        labels = SimpleNamespace(
+            ensure_carbon_dot=canvas.ensure_carbon_dot,
+            draw_atom=Mock(),
+        )
+        canvas.render_context = SimpleNamespace(
+            model=canvas.model,
+            bonds=SimpleNamespace(
+                add_bond_graphics=canvas._add_bond_graphics,
+                redraw_connected_bonds=Mock(),
+            ),
+            atom_labels=labels,
+        )
 
         service.render_model()
 
         self.assertEqual(canvas.added_graphics, [0, 2])
         self.assertEqual(canvas.carbon_dots, [0])
+        self.assertEqual(labels.draw_atom.call_args_list, [mock.call(1), mock.call(2)])
+        self.assertEqual(canvas.wrapper_label_calls, [])
         self.assertEqual(
-            canvas.wrapper_label_calls,
-            [
-                (1, "C", False, False, False, True),
-                (2, "Cl", False, False, False, False),
-            ],
+            canvas.render_context.bonds.redraw_connected_bonds.call_args_list,
+            [mock.call(1), mock.call(2)],
         )
 
     def test_render_model_preserves_lowercase_carbon_visibility(self) -> None:
@@ -900,14 +911,24 @@ class StructureBuildServiceTest(unittest.TestCase):
                 1: Atom("c", 10.0, 0.0, explicit_label=True),
             }
         )
+        labels = SimpleNamespace(
+            ensure_carbon_dot=canvas.ensure_carbon_dot,
+            draw_atom=Mock(),
+        )
+        canvas.render_context = SimpleNamespace(
+            model=canvas.model,
+            bonds=SimpleNamespace(
+                add_bond_graphics=canvas._add_bond_graphics,
+                redraw_connected_bonds=Mock(),
+            ),
+            atom_labels=labels,
+        )
 
         service.render_model()
 
         self.assertEqual(canvas.carbon_dots, [0])
-        self.assertEqual(
-            canvas.wrapper_label_calls,
-            [(1, "c", False, False, False, True)],
-        )
+        labels.draw_atom.assert_called_once_with(1)
+        self.assertEqual(canvas.wrapper_label_calls, [])
 
     def test_add_bond_between_points_creates_or_updates_bonds_with_history(
         self,

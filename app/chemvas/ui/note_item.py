@@ -1,18 +1,20 @@
 from __future__ import annotations
 
-from typing import override
+from typing import TYPE_CHECKING, override
 
 from PyQt6.QtCore import QEvent, Qt
 from PyQt6.QtWidgets import QGraphicsItem
 
-from chemvas.ui.canvas_service_ports import note_controller_for_access
 from chemvas.ui.graphics_items import ExportTextItem
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 
 class NoteItem(ExportTextItem):
-    def __init__(self, canvas) -> None:
+    def __init__(self, on_focus_out: Callable[[NoteItem], None] | None = None) -> None:
         super().__init__()
-        self._canvas = canvas
+        self._on_focus_out = on_focus_out
         self.setTextInteractionFlags(Qt.TextInteractionFlag.TextEditorInteraction)
         self.setFlag(QGraphicsItem.GraphicsItemFlag.ItemIsFocusable, True)
         self._last_text = ""
@@ -87,7 +89,8 @@ class NoteItem(ExportTextItem):
             # A font/menu popup temporarily borrows focus from the editor.
             # Keep its cursor and native text Undo until a real editor exit.
             return
-        note_controller_for_access(self._canvas).handle_note_focus_out(self)
+        if self._on_focus_out is not None:
+            self._on_focus_out(self)
 
 
 __all__ = ["NoteItem"]

@@ -26,6 +26,12 @@ from chemvas.ui.export_readability_service import assess_export_readability
 from chemvas.ui.scene_decoration_build_access import build_ts_bracket_item_for
 from chemvas.ui.scene_item_access import apply_scene_item_state, canvas_scene_for
 from chemvas.ui.scene_item_state_serialization import scene_item_state_for
+from chemvas.ui.scene_render_access import scene_render_context_for
+from chemvas.ui.transactions.document import (
+    DocumentSavepoint,
+    MoveGestureScope,
+    document_transaction,
+)
 
 
 @pytest.fixture(scope="module", autouse=True)
@@ -59,6 +65,34 @@ def _plan() -> ExportPlan:
     )
 
 
+@pytest.mark.parametrize("bracket_kind", ["dagger", "double_dagger", "square_pair"])
+def test_bracket_readability_uses_its_record_not_item_payload(bracket_kind) -> None:
+    state = _state(
+        ts_brackets=[
+            {
+                "left": 10.0,
+                "top": 10.0,
+                "right": 40.0,
+                "bottom": 50.0,
+                "bracket_kind": bracket_kind,
+            }
+        ]
+    )
+    with offscreen_canvas(state, command="readability-test") as (canvas, _session):
+        item = ts_bracket_items_for(canvas)[0]
+        expected = _assess(canvas)
+        item.setData(
+            1,
+            {
+                "bracket_kind": "dagger"
+                if bracket_kind == "square_pair"
+                else "square_pair"
+            },
+        )
+
+        assert _assess(canvas) == expected
+
+
 def _assess(
     canvas,
     *,
@@ -68,7 +102,7 @@ def _assess(
 ):
     plan = plan or _plan()
     return assess_export_readability(
-        canvas,
+        scene_render_context_for(canvas),
         plan,
         minimum_font_pt=minimum,
         output_format=output_format,
@@ -202,6 +236,105 @@ def test_native_ts_rebuild_refreshes_glyph_font_and_restores_it(
                 == QRawFont.fromFont(font).pixelSize()
             )
         assert scene_item_state_for(canvas, item) == original
+
+
+@pytest.mark.parametrize(
+    ("bracket_kind", "edited_kind"),
+    [
+        ("dagger", "dagger"),
+        ("double_dagger", "double_dagger"),
+        ("dagger", "square_pair"),
+        ("square_pair", "double_dagger"),
+    ],
+)
+@pytest.mark.parametrize("scoped", [False, True])
+@pytest.mark.parametrize("output_format", ["svg", "png"])
+def test_rollback_restores_bracket_construction_font_with_its_path(
+    bracket_kind: str, edited_kind: str, scoped: bool, output_format: str
+) -> None:
+    state = _state(
+        ts_brackets=[
+            {
+                "left": 10,
+                "top": 10,
+                "right": 30,
+                "bottom": 50,
+                "bracket_kind": bracket_kind,
+            }
+        ]
+    )
+    with offscreen_canvas(state, command="test-ts-font-rollback") as (canvas, session):
+        item = ts_bracket_items_for(canvas)[0]
+        original_document = session.snapshot_state()
+        original_path = item.path()
+        original_glyph = item.export_glyph_run()
+        original_report = _assess(canvas, output_format=output_format)
+        scope = MoveGestureScope(frozenset(), frozenset(), (item,)) if scoped else None
+        savepoint = DocumentSavepoint.capture(canvas, move_scope=scope)
+        apply_scene_item_state(
+            canvas,
+            item,
+            {
+                **scene_item_state_for(canvas, item),
+                "bottom": 25,
+                "bracket_kind": edited_kind,
+            },
+        )
+        assert item.export_glyph_run() != original_glyph
+
+        outcome = savepoint.restore()
+
+        assert outcome.authoritative and not outcome.errors
+        assert ts_bracket_items_for(canvas) == [item]
+        assert item.path() == original_path
+        assert item.export_glyph_run() == original_glyph
+        assert session.snapshot_state() == original_document
+        assert _assess(canvas, output_format=output_format) == original_report
+
+
+@pytest.mark.parametrize("bracket_kind", ["dagger", "double_dagger"])
+def test_failed_transaction_keeps_untouched_bracket_font(bracket_kind: str) -> None:
+    state = _state(
+        ts_brackets=[
+            {
+                "left": 10,
+                "top": 10,
+                "right": 30,
+                "bottom": 50,
+                "bracket_kind": bracket_kind,
+            }
+        ]
+    )
+    with offscreen_canvas(state, command="test-ts-font-transaction") as (canvas, _):
+        item = ts_bracket_items_for(canvas)[0]
+        original_glyph = item.export_glyph_run()
+        original_report = _assess(canvas)
+
+        with pytest.raises(RuntimeError, match="document edit failed"):
+            with document_transaction(canvas):
+                raise RuntimeError("document edit failed")
+
+        assert item.export_glyph_run() == original_glyph
+        assert _assess(canvas) == original_report
+
+
+def test_savepoint_detects_a_lost_bracket_font_with_unchanged_path() -> None:
+    state = _state(
+        ts_brackets=[
+            {"left": 10, "top": 10, "right": 30, "bottom": 50, "bracket_kind": "dagger"}
+        ]
+    )
+    with offscreen_canvas(state, command="test-ts-font-verification") as (canvas, _):
+        item = ts_bracket_items_for(canvas)[0]
+        original_report = _assess(canvas)
+        savepoint = DocumentSavepoint.capture(canvas)
+        item.setPath(item.path())
+
+        assert savepoint.verify()
+        outcome = savepoint.restore()
+
+        assert outcome.authoritative and not outcome.errors
+        assert _assess(canvas) == original_report
 
 
 def test_hidden_transparent_and_whitespace_text_are_not_missing_measurements() -> None:

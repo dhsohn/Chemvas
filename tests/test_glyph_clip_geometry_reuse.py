@@ -8,7 +8,7 @@ from PyQt6.QtCore import QPointF
 from PyQt6.QtGui import QFont
 from PyQt6.QtWidgets import QApplication
 
-from chemvas.ui import canvas_geometry_controller as geometry
+from chemvas.ui import scene_geometry as geometry
 from tests.test_atom_glyph_bond_clearance import _label_controller
 
 

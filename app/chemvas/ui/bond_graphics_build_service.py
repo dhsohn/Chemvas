@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
+from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QColor
 
 from chemvas.ui.bond_geometry_plan_service import (
@@ -7,17 +10,25 @@ from chemvas.ui.bond_geometry_plan_service import (
     BondPathPrimitive,
     BondPolygonPrimitive,
 )
-from chemvas.ui.bond_graphics_access import apply_color_to_bond_item_for
-from chemvas.ui.canvas_bond_graphics_state import set_bond_items_for_id
-from chemvas.ui.canvas_model_access import atom_for_id, bond_for_id
-from chemvas.ui.renderer_style_access import bond_color_for, bond_pen_for
-from chemvas.ui.scene_item_access import add_item_to_canvas_scene
 from chemvas.ui.scene_selectability import make_item_selectable
 
 
+def apply_color_to_bond_item(item, color) -> None:
+    if hasattr(item, "setPen"):
+        pen = item.pen()
+        pen.setColor(color)
+        item.setPen(pen)
+    if hasattr(item, "setBrush") and item.brush().style() != Qt.BrushStyle.NoBrush:
+        item.setBrush(color)
+
+
+if TYPE_CHECKING:
+    from chemvas.ui.scene_render_context import SceneRenderContext
+
+
 class BondGraphicsBuildService:
-    def __init__(self, canvas, *, renderer, planner) -> None:
-        self.canvas = canvas
+    def __init__(self, context: SceneRenderContext, *, renderer, planner) -> None:
+        self.context = context
         self.renderer = renderer
         self.planner = planner
 
@@ -27,7 +38,7 @@ class BondGraphicsBuildService:
         if isinstance(primitive, BondPathPrimitive):
             return self.renderer.graphics.path_fill(primitive.path)
         if isinstance(primitive, BondPolygonPrimitive):
-            pen = bond_pen_for(self.canvas) if primitive.outlined else None
+            pen = self.context.renderer.bond_pen() if primitive.outlined else None
             return self.renderer.graphics.filled_polygon(
                 primitive.polygon,
                 pen=pen,
@@ -35,24 +46,24 @@ class BondGraphicsBuildService:
         raise TypeError(f"unsupported bond primitive: {type(primitive).__name__}")
 
     def add_bond_graphics(self, bond_id: int) -> None:
-        bond = bond_for_id(self.canvas, bond_id)
+        bond = self.context.bond_for_id(bond_id)
         if bond is None:
             return
-        a = atom_for_id(self.canvas, bond.a)
-        b = atom_for_id(self.canvas, bond.b)
+        a = self.context.model.atoms.get(bond.a)
+        b = self.context.model.atoms.get(bond.b)
         if a is None or b is None:
             return
 
-        color = QColor(bond.color or bond_color_for(self.canvas))
+        color = QColor(bond.color or self.context.renderer.style.bond_color)
         primitives = self.planner.primitives_for_bond(bond, a, b)
         items = [self._item_for_primitive(primitive) for primitive in primitives]
         for item in items:
             item.setData(0, "bond")
             item.setData(1, bond_id)
             make_item_selectable(item)
-            apply_color_to_bond_item_for(self.canvas, item, color)
-            add_item_to_canvas_scene(self.canvas, item)
-        set_bond_items_for_id(self.canvas, bond_id, items)
+            apply_color_to_bond_item(item, color)
+            self.context.scene.addItem(item)
+        self.context.state.bond_graphics_state.bond_items[bond_id] = items
 
 
 __all__ = ["BondGraphicsBuildService"]

@@ -23,6 +23,7 @@ from chemvas.ui.canvas_scene_items_state import CanvasSceneItemsState
 from chemvas.ui.layout_qa_service import check_canvas_layout
 from chemvas.ui.sheet_setup_state import SheetSetupState
 from tests.runtime_state import canvas_runtime_state
+from tests.scene_render_context import attach_scene_render_context
 
 
 @pytest.fixture(scope="module", autouse=True)
@@ -256,7 +257,7 @@ def test_note_whitespace_does_not_collide_with_shape_border() -> None:
 def _canvas(
     *, notes: list[QGraphicsTextItem], shapes: list[QGraphicsPathItem], sheet: QRectF
 ) -> SimpleNamespace:
-    return SimpleNamespace(
+    canvas = SimpleNamespace(
         runtime_state=canvas_runtime_state(
             atom_graphics_state=CanvasAtomGraphicsState(),
             bond_graphics_state=CanvasBondGraphicsState(),
@@ -267,6 +268,8 @@ def _canvas(
             sheet_setup_state=SheetSetupState(rect=sheet),
         )
     )
+    attach_scene_render_context(canvas)
+    return canvas
 
 
 @pytest.mark.parametrize(

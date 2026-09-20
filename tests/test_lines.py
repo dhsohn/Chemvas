@@ -6,6 +6,7 @@ from types import SimpleNamespace
 
 from tests.runtime_services import canvas_runtime_services
 from tests.runtime_state import canvas_runtime_state
+from tests.scene_render_context import attach_scene_render_context
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -156,7 +157,7 @@ class LineBuildServiceTest(unittest.TestCase):
                 )
             ),
         )
-        return CanvasArrowBuildService(canvas)
+        return CanvasArrowBuildService(attach_scene_render_context(canvas))
 
     def test_line_kinds_are_members_of_the_arrow_family(self) -> None:
         self.assertEqual(VALID_LINE_KINDS, frozenset(LINE_KINDS))

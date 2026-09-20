@@ -3,14 +3,15 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
-from chemvas.ui.canvas_arrow_build_service import CanvasArrowBuildService
 from chemvas.ui.canvas_mark_scene_service import CanvasMarkSceneService
-from chemvas.ui.canvas_scene_decoration_build_service import (
-    CanvasSceneDecorationBuildService,
-)
 from chemvas.ui.scene_decoration_service import SceneDecorationService
+from chemvas.ui.scene_render_access import scene_render_context_for
 
 if TYPE_CHECKING:
+    from chemvas.ui.canvas_arrow_build_service import CanvasArrowBuildService
+    from chemvas.ui.canvas_scene_decoration_build_service import (
+        CanvasSceneDecorationBuildService,
+    )
     from chemvas.ui.canvas_view import CanvasView
 
 
@@ -27,8 +28,9 @@ def build_scene_decoration_services(
     *,
     history_service: Any,
 ) -> SceneDecorationServiceBundle:
-    arrow_build_service = CanvasArrowBuildService(canvas)
-    scene_decoration_build_service = CanvasSceneDecorationBuildService(canvas)
+    context = scene_render_context_for(canvas)
+    arrow_build_service = context.arrows
+    scene_decoration_build_service = context.decorations
     scene_decoration_service = SceneDecorationService(
         canvas, history_service=history_service
     )

@@ -12,7 +12,7 @@ from tests.runtime_state import canvas_runtime_state
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PyQt6.QtCore import QPointF, QRectF, Qt
-from PyQt6.QtGui import QColor, QFont, QPainterPath, QPolygonF
+from PyQt6.QtGui import QColor, QFont, QPolygonF
 from PyQt6.QtWidgets import (
     QApplication,
     QGraphicsPathItem,
@@ -963,11 +963,7 @@ class CanvasViewAdditionalTest(unittest.TestCase):
 
     def test_set_curved_arrow_path_uses_the_arrow_geometry_builder(self) -> None:
         path_item = QGraphicsPathItem()
-        path = QPainterPath(QPointF(0.0, 0.0))
-        path.lineTo(10.0, 4.0)
-        build_service = SimpleNamespace(
-            build_curved_arrow_path=mock.Mock(return_value=path)
-        )
+        build_service = SimpleNamespace(set_curved_arrow_path=mock.Mock())
         view = SimpleNamespace(
             services=canvas_runtime_services(arrow_build_service=build_service)
         )
@@ -982,8 +978,8 @@ class CanvasViewAdditionalTest(unittest.TestCase):
             double=True,
         )
 
-        self.assertEqual(path_item.path(), path)
-        build_service.build_curved_arrow_path.assert_called_once_with(
+        build_service.set_curved_arrow_path.assert_called_once_with(
+            path_item,
             QPointF(0.0, 0.0),
             QPointF(10.0, 0.0),
             QPointF(5.0, 4.0),

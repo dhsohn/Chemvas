@@ -8,10 +8,12 @@ import subprocess
 import sys
 import xml.etree.ElementTree as ET
 import zlib
+from io import BytesIO
 from pathlib import Path
 from unittest import mock
 
 import pytest
+from PIL import Image
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -20,15 +22,18 @@ from PyQt6.QtGui import QImage
 from PyQt6.QtWidgets import QApplication
 
 from chemvas.bootstrap import document_render as cli
+from chemvas.bootstrap.document_cli_shared import offscreen_canvas
 from chemvas.core.document_io import write_document
 from chemvas.domain.document import (
     CANVAS_FILE_VERSION,
     Atom,
     Bond,
     MoleculeModel,
+    image_state_from_bytes,
     serialize_model_state,
     serialize_settings,
 )
+from chemvas.features.document_composition import compose_document_state
 
 
 @pytest.fixture(scope="module", autouse=True)
@@ -108,6 +113,165 @@ def test_headless_export_resolves_content_and_geometry_once(output_format: str) 
     assert result.height_points > 0
     assert collect.call_count == bounds.call_count == 1
     assert json.dumps(state, sort_keys=True) == before
+
+
+@pytest.mark.parametrize("output_format", ["svg", "png"])
+def test_view_free_scene_matches_editor_for_all_document_item_families(
+    tmp_path: Path, output_format: str
+) -> None:
+    from PyQt6 import sip
+    from PyQt6.QtWidgets import QGraphicsScene
+
+    from chemvas.ui.figure_export_service import FigureExportService
+    from chemvas.ui.layout_qa_service import check_canvas_layout, check_scene_layout
+    from chemvas.ui.scene_render_access import scene_render_context_for
+    from chemvas.ui.scene_render_context import SceneRenderState
+    from chemvas.ui.shape_record_access import require_shape_record
+    from chemvas.ui.ts_bracket_record_access import require_ts_bracket_record
+
+    state = compose_document_state(
+        {
+            "format": "chemvas-document-composition",
+            "version": 1,
+            "atoms": [
+                {"id": 0, "element": "C", "x": -40.0, "y": 0.0},
+                {"id": 1, "element": "C", "x": 0.0, "y": 0.0},
+                {"id": 2, "element": "N", "x": -20.0, "y": 35.0},
+                {"id": 3, "element": "O", "x": 70.0, "y": 0.0, "formal_charge": -1},
+                {"id": 4, "element": "C", "x": 100.0, "y": 100.0},
+            ],
+            "bonds": [
+                {"a": 0, "b": 1, "order": 2},
+                {"a": 1, "b": 2, "order": 1, "style": "wedge"},
+                {"a": 2, "b": 0, "order": 1, "style": "hash"},
+            ],
+            "ring_fills": [{"atom_ids": [0, 1, 2], "color": "#ffeeaa", "alpha": 0.5}],
+            "notes": [{"text": "Rich H2O", "x": -120.0, "y": 60.0}],
+            "arrows": [
+                {
+                    "kind": "arrow",
+                    "start": [-100.0, -50.0],
+                    "end": [100.0, -50.0],
+                    "labels": {"above": "k_1^‡", "below": "THF"},
+                },
+                {
+                    "kind": "curved_single",
+                    "start": [20.0, 20.0],
+                    "end": [50.0, 20.0],
+                    "control": [35.0, 55.0],
+                },
+            ],
+            "shapes": [
+                {
+                    "shape_kind": "rounded_rect",
+                    "left": -100.0,
+                    "top": 100.0,
+                    "right": -40.0,
+                    "bottom": 120.0,
+                    "stroke_style": "dashed",
+                    "fill": "#3388bb",
+                    "fill_alpha": 0.25,
+                }
+            ],
+            "ts_brackets": [
+                {
+                    "bracket_kind": "double_dagger",
+                    "left": -150.0,
+                    "top": -100.0,
+                    "right": -100.0,
+                    "bottom": -60.0,
+                }
+            ],
+            "settings": {
+                "sheet_orientation": "portrait",
+                "orbital_phase_enabled": True,
+            },
+        }
+    )
+    state["notes"][0]["html"] = "<p><b>Rich H<sub>2</sub>O</b></p><p>second line</p>"
+    state["orbitals"] = [
+        {"kind": "p", "center": [150.0, 0.0], "scale": 1.2, "rotation": 35.0}
+    ]
+    state["perspective"] = {
+        "atom_coords_3d": {"0": [-40.0, 0.0, 2.0], "1": [0.0, 0.0, -2.0]},
+        "projection_center_3d": [0.0, 0.0, 0.0],
+        "projection_anchor_2d": [0.0, 0.0],
+    }
+    image_bytes = BytesIO()
+    Image.new("RGBA", (8, 4), (20, 80, 180, 128)).save(image_bytes, "PNG")
+    state["images"] = [
+        image_state_from_bytes(image_bytes.getvalue(), x=110.0, y=80.0, width=24.0)
+    ]
+    before = json.dumps(state, sort_keys=True)
+    source = tmp_path / "all-items.chemvas"
+    source_bytes = _write_source(source, state=state)
+    editor_output = tmp_path / f"editor.{output_format}"
+    scene_output = tmp_path / f"scene.{output_format}"
+
+    with offscreen_canvas(state, command="test-editor-scene") as (canvas, session):
+        editor_state = session.snapshot_state()
+        editor_context = scene_render_context_for(canvas)
+        with cli.offscreen_document_scene(
+            state, command="test-standalone-scene"
+        ) as context:
+            scene = context.scene
+            assert type(scene) is QGraphicsScene
+            assert scene.views() == []
+            assert type(context.state) is SceneRenderState
+            assert not hasattr(context.state, "history_state")
+            assert serialize_model_state(context.model) == serialize_model_state(
+                canvas.model
+            )
+            assert (
+                context.state.graph_state.atom_neighbors
+                == editor_context.state.graph_state.atom_neighbors
+            )
+            assert (
+                context.state.atom_coords_3d_state
+                == editor_context.state.atom_coords_3d_state
+            )
+            assert (
+                context.state.sheet_setup_state
+                == editor_context.state.sheet_setup_state
+            )
+            for field in (
+                "note_items",
+                "mark_items",
+                "arrow_items",
+                "ring_items",
+                "shape_items",
+                "ts_bracket_items",
+                "orbital_items",
+                "image_items",
+            ):
+                items = getattr(context.state.scene_items_state, field)
+                editor_items = getattr(editor_context.state.scene_items_state, field)
+                assert len(items) == len(editor_items) > 0
+            assert require_shape_record(
+                context, context.state.scene_items_state.shape_items[0]
+            ) == require_shape_record(
+                editor_context, editor_context.state.scene_items_state.shape_items[0]
+            )
+            assert require_ts_bracket_record(
+                context, context.state.scene_items_state.ts_bracket_items[0]
+            ) == require_ts_bracket_record(
+                editor_context,
+                editor_context.state.scene_items_state.ts_bracket_items[0],
+            )
+            assert check_scene_layout(context) == check_canvas_layout(canvas)
+            session.export_figure(
+                str(editor_output), fmt=output_format, background="white"
+            )
+            FigureExportService(context).export_figure(
+                str(scene_output), fmt=output_format, background="white"
+            )
+            assert editor_output.read_bytes() == scene_output.read_bytes()
+            if output_format == "png":
+                assert QImage(str(editor_output)) == QImage(str(scene_output))
+            assert session.snapshot_state() == editor_state
+        assert sip.isdeleted(scene)
+    assert json.dumps(state, sort_keys=True) == before
+    assert source.read_bytes() == source_bytes
 
 
 @pytest.mark.parametrize("output_format", ["svg", "png"])
@@ -333,7 +497,7 @@ def test_width_uses_shared_export_size_and_preserves_aspect_ratio(
         assert image.width() == report["width_pixels"] == 300
         assert image.height() == report["height_pixels"]
 
-    with cli.offscreen_canvas(_state(), command="test-render") as (_, service):
+    with offscreen_canvas(_state(), command="test-render") as (_, service):
         gui_default = tmp_path / f"gui-default.{output_format}"
         gui_sized = tmp_path / f"gui-sized.{output_format}"
         service.export_figure(str(gui_default), fmt=output_format, background="white")
@@ -346,7 +510,7 @@ def test_width_uses_shared_export_size_and_preserves_aspect_ratio(
 
 @pytest.mark.parametrize("option", ["--width-mm", "--max-height-mm", "--min-font-pt"])
 @pytest.mark.parametrize("value", ["0", "-1", "nan", "inf", "-inf", "1e309", "bad"])
-def test_invalid_physical_options_fail_before_canvas_creation(
+def test_invalid_physical_options_fail_before_scene_creation(
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
     monkeypatch: pytest.MonkeyPatch,
@@ -357,10 +521,10 @@ def test_invalid_physical_options_fail_before_canvas_creation(
     _write_source(source)
     output = tmp_path / "invalid.svg"
 
-    def unexpected_canvas(*args: object, **kwargs: object) -> None:
-        pytest.fail("invalid physical option reached canvas creation")
+    def unexpected_scene(*args: object, **kwargs: object) -> None:
+        pytest.fail("invalid physical option reached scene creation")
 
-    monkeypatch.setattr(cli, "offscreen_canvas", unexpected_canvas)
+    monkeypatch.setattr(cli, "offscreen_document_scene", unexpected_scene)
     with pytest.raises(SystemExit) as error:
         cli.run(
             [
@@ -381,7 +545,7 @@ def test_direct_service_rejects_invalid_width_for_plan_and_export(
     tmp_path: Path, width: float
 ) -> None:
     output = tmp_path / "invalid.svg"
-    with cli.offscreen_canvas(_state(), command="test-render") as (_, service):
+    with offscreen_canvas(_state(), command="test-render") as (_, service):
         with pytest.raises(ValueError, match="target width must be a positive finite"):
             service.plan_figure_export(target_width_mm=width)
         with pytest.raises(ValueError, match="target width must be a positive finite"):
@@ -497,7 +661,7 @@ def test_physical_size_limits_fail_before_painting(
         pytest.fail("over-budget physical size reached painting")
 
     monkeypatch.setattr(
-        "chemvas.ui.canvas_document_session_service.export_canvas_scene_for",
+        "chemvas.ui.figure_export_service.render_export_plan",
         unexpected_export,
     )
     with pytest.raises(SystemExit) as error:
@@ -687,6 +851,53 @@ def test_module_import_is_qt_and_rdkit_free_until_rendering() -> None:
     assert result.returncode == 0, result.stderr
 
 
+@pytest.mark.parametrize("command", ["render-document", "check-layout"])
+def test_read_only_cli_never_imports_editor_or_history(
+    tmp_path: Path, command: str
+) -> None:
+    source = tmp_path / "source.chemvas"
+    source_bytes = _write_source(source)
+    output = tmp_path / "scene.png"
+    env = os.environ.copy()
+    env["PYTHONPATH"] = str(Path(__file__).resolve().parents[1] / "app")
+    script = """
+import sys
+
+class NoEditorImports:
+    def find_spec(self, fullname, path=None, target=None):
+        if fullname in {
+            "chemvas.ui.canvas_view",
+            "chemvas.ui.canvas_services",
+            "chemvas.ui.canvas_history_service",
+            "chemvas.ui.canvas_document_session_service",
+        }:
+            raise AssertionError(f"read-only command imported editor: {fullname}")
+
+sys.meta_path.insert(0, NoEditorImports())
+from chemvas.bootstrap.application import main
+main()
+"""
+    options = ["--output", str(output)] if command == "render-document" else []
+    result = subprocess.run(
+        [sys.executable, "-c", script, command, str(source), *options],
+        check=False,
+        capture_output=True,
+        env=env,
+        text=True,
+        timeout=30,
+    )
+    assert result.returncode == 0, result.stderr
+    report = json.loads(result.stdout)
+    assert report["source_sha256"] == hashlib.sha256(source_bytes).hexdigest()
+    assert source.read_bytes() == source_bytes
+    if command == "render-document":
+        assert (
+            report["output_sha256"] == hashlib.sha256(output.read_bytes()).hexdigest()
+        )
+    else:
+        assert report["ok"] is True
+
+
 @pytest.mark.parametrize("output_format", ["png", "pdf"])
 def test_python_module_entrypoint_renders_without_desktop_startup(
     tmp_path: Path, output_format: str
@@ -844,7 +1055,7 @@ def test_pdf_height_limit_rejects_before_export(
         pytest.fail("over-height PDF reached painting")
 
     monkeypatch.setattr(
-        "chemvas.ui.canvas_document_session_service.export_canvas_scene_for",
+        "chemvas.ui.figure_export_service.render_export_plan",
         unexpected_export,
     )
     with pytest.raises(SystemExit) as error:
@@ -866,7 +1077,7 @@ def test_pdf_height_limit_rejects_before_export(
     assert source.read_bytes() == source_bytes
 
 
-def test_pdf_minimum_font_option_fails_before_canvas_creation(
+def test_pdf_minimum_font_option_fails_before_scene_creation(
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
     monkeypatch: pytest.MonkeyPatch,
@@ -875,10 +1086,10 @@ def test_pdf_minimum_font_option_fails_before_canvas_creation(
     source_bytes = _write_source(source)
     output = tmp_path / "unsupported-font-check.pdf"
 
-    def unexpected_canvas(*args: object, **kwargs: object) -> None:
-        pytest.fail("unsupported PDF font option reached canvas creation")
+    def unexpected_scene(*args: object, **kwargs: object) -> None:
+        pytest.fail("unsupported PDF font option reached scene creation")
 
-    monkeypatch.setattr(cli, "offscreen_canvas", unexpected_canvas)
+    monkeypatch.setattr(cli, "offscreen_document_scene", unexpected_scene)
     with pytest.raises(SystemExit) as error:
         cli.run(
             [
@@ -904,7 +1115,7 @@ def test_pdf_height_limit_includes_native_page_rounding(
     source = tmp_path / "source.chemvas"
     source_bytes = _write_source(source)
     output = tmp_path / "rounded-page.pdf"
-    with cli.offscreen_canvas(_state(), command="test-pdf-rounding") as (_, service):
+    with offscreen_canvas(_state(), command="test-pdf-rounding") as (_, service):
         plan = service.plan_figure_export(scope="sheet", sizing="bond")
     # Choose a width that makes the planned height 64.8 pt; Qt writes 65 pt.
     width_mm = plan.out_w_pt / plan.out_h_pt * 64.8 / 72 * 25.4
@@ -914,7 +1125,7 @@ def test_pdf_height_limit_includes_native_page_rounding(
         pytest.fail("rounded PDF page over the height limit reached painting")
 
     monkeypatch.setattr(
-        "chemvas.ui.canvas_document_session_service.export_canvas_scene_for",
+        "chemvas.ui.figure_export_service.render_export_plan",
         unexpected_export,
     )
     with pytest.raises(SystemExit) as error:

@@ -4,6 +4,7 @@ from contextlib import nullcontext
 from types import SimpleNamespace
 from unittest import mock
 
+from chemvas.ui.note_item_access import new_note_item_for
 from tests.runtime_services import canvas_runtime_services
 from tests.runtime_state import canvas_runtime_state
 
@@ -214,7 +215,7 @@ class CanvasNoteControllerUnitTest(unittest.TestCase):
                 scene_items_state=CanvasSceneItemsState(),
             ),
         )
-        note = NoteItem(canvas)
+        note = new_note_item_for(canvas)
         note.setData(0, "note")
         note.setPlainText(text)
         scene.addItem(note)
@@ -276,7 +277,7 @@ class CanvasNoteControllerUnitTest(unittest.TestCase):
             services=canvas_runtime_services(),
         )
         canvas.services.history_service = _history_service(canvas, push_command)
-        note = NoteItem(canvas)
+        note = new_note_item_for(canvas)
         note.setData(0, "note")
         note.setPlainText("memo")
         scene.addItem(note)
@@ -293,7 +294,7 @@ class CanvasNoteControllerUnitTest(unittest.TestCase):
 
     def test_editing_note_snapshot_keeps_absent_scene_focus_fallback(self) -> None:
         canvas = SimpleNamespace()
-        note = NoteItem(canvas)
+        note = new_note_item_for(canvas)
         note.setData(0, "note")
 
         snapshot = _EditingNoteSnapshot.capture(note)
@@ -427,7 +428,7 @@ class CanvasNoteControllerUnitTest(unittest.TestCase):
             ),
         )
         _attach_history_service(canvas)
-        note = NoteItem(canvas)
+        note = new_note_item_for(canvas)
         note.setData(0, "note")
         note.setPlainText("D")
         scene.addItem(note)
@@ -462,7 +463,7 @@ class CanvasNoteControllerUnitTest(unittest.TestCase):
             update_note_selection_box=mock.Mock()
         )
         set_selected_notes_for(canvas, [])
-        note = NoteItem(canvas)
+        note = new_note_item_for(canvas)
         note.setData(0, "note")
         note.setPlainText("Hi there")
         scene.addItem(note)
@@ -538,7 +539,7 @@ class CanvasNoteControllerUnitTest(unittest.TestCase):
         )
         _attach_history_service(canvas)
         controller = _note_controller(canvas)
-        item = NoteItem(canvas)
+        item = new_note_item_for(canvas)
 
         item.setPlainText("Mechanism")
         controller.handle_note_focus_out(item)
@@ -589,7 +590,7 @@ class CanvasNoteControllerUnitTest(unittest.TestCase):
         )
         _attach_history_service(canvas)
         controller = _note_controller(canvas)
-        item = NoteItem(canvas)
+        item = new_note_item_for(canvas)
         item.setPlainText("Mechanism")
 
         with self.assertRaisesRegex(RuntimeError, "history"):
@@ -637,7 +638,7 @@ class CanvasNoteControllerUnitTest(unittest.TestCase):
         )
         history = _attach_history_service(canvas)
         controller = _note_controller(canvas)
-        item = NoteItem(canvas)
+        item = new_note_item_for(canvas)
         item.setPlainText("Mechanism")
         controller.handle_note_focus_out(item)
         history.push = mock.Mock(side_effect=RuntimeError("history"))
@@ -676,7 +677,7 @@ class CanvasNoteControllerUnitTest(unittest.TestCase):
         )
         _attach_history_service(canvas)
         controller = _note_controller(canvas)
-        item = NoteItem(canvas)
+        item = new_note_item_for(canvas)
         item.setPlainText("kept")
         item.set_committed_text("kept")
         item.set_committed_html(item.toHtml())
@@ -717,7 +718,7 @@ class CanvasNoteControllerUnitTest(unittest.TestCase):
         )
         _attach_history_service(canvas)
         controller = _note_controller(canvas)
-        item = NoteItem(canvas)
+        item = new_note_item_for(canvas)
         item.setPlainText("")
         item.set_committed_text("previous")
         item.set_committed_html("<p>previous</p>")
@@ -758,7 +759,7 @@ class CanvasNoteControllerUnitTest(unittest.TestCase):
         )
         _attach_history_service(canvas)
         controller = _note_controller(canvas)
-        item = NoteItem(canvas)
+        item = new_note_item_for(canvas)
         selected_notes_for(canvas).append(item)
 
         controller.handle_note_focus_out(item)
@@ -793,7 +794,7 @@ class CanvasNoteControllerUnitTest(unittest.TestCase):
         )
         _attach_history_service(canvas)
         controller = _note_controller(canvas)
-        item = NoteItem(canvas)
+        item = new_note_item_for(canvas)
 
         controller.handle_note_focus_out(item)
 
@@ -901,14 +902,11 @@ class CanvasNoteControllerUnitTest(unittest.TestCase):
         )
         _attach_history_service(canvas)
         controller = _note_controller(canvas)
-        controller.update_note_box = mock.Mock()
-
         with (
+            mock.patch("chemvas.ui.note_rendering.update_note_box") as update_box,
+            mock.patch("chemvas.ui.note_rendering.QTextBlockFormat", FakeBlockFormat),
             mock.patch(
-                "chemvas.ui.canvas_note_controller.QTextBlockFormat", FakeBlockFormat
-            ),
-            mock.patch(
-                "chemvas.ui.canvas_note_controller.QTextCursor",
+                "chemvas.ui.note_rendering.QTextCursor",
                 FakeCursor,
             ),
         ):
@@ -923,5 +921,5 @@ class CanvasNoteControllerUnitTest(unittest.TestCase):
             FakeCursor.last_instance.block_format.height,
             (125, FakeBlockFormat.LineHeightTypes.ProportionalHeight.value),
         )
-        controller.update_note_box.assert_called_once_with(item)
+        update_box.assert_called_once_with(item, canvas.runtime_state.text_style_state)
         selection_controller.update_note_selection_box.assert_called_once_with(item)

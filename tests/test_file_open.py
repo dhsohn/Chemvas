@@ -210,7 +210,7 @@ class OpenDocumentRoutingTest(unittest.TestCase):
             ),
             mock.patch.object(QMessageBox, "warning"),
             mock.patch(
-                "chemvas.ui.canvas_document_session_service.restore_document_pre_model_items",
+                "chemvas.ui.canvas_document_session_service.populate_document_scene",
                 side_effect=RuntimeError("injected load failure"),
             ),
         ):

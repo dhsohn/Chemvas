@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 from PyQt6.QtCore import QPointF
 from PyQt6.QtGui import QPainterPath, QPolygonF
@@ -12,91 +12,69 @@ from chemvas.features.rendering import (
 from chemvas.features.rendering import (
     strip_corners as strip_corners_shape,
 )
-from chemvas.ui.atom_coords_access import current_atom_coords_3d_for
 from chemvas.ui.bond_geometry_plan_service import BondGeometryPlanService
 from chemvas.ui.bond_geometry_update_service import BondGeometryUpdateService
-from chemvas.ui.bond_graphics_access import (
-    bond_offset_unit_3d_for,
-    line_normal_for,
-    project_point_3d_for,
-    ring_center_3d_for_bond_for,
-    ring_center_for_bond_for,
-)
 from chemvas.ui.bond_graphics_build_service import BondGraphicsBuildService
 from chemvas.ui.bond_graphics_draw_service import BondGraphicsDrawService
 from chemvas.ui.bond_graphics_factory import BondGraphicsFactory
-from chemvas.ui.bond_label_geometry_access import (
-    label_rect_for_atom_for,
-    trim_line_for_labels_for,
-)
 from chemvas.ui.bond_line_geometry_service import BondLineGeometryService
 from chemvas.ui.bond_ring_double_geometry_service import BondRingDoubleGeometryService
-from chemvas.ui.canvas_bond_graphics_state import (
-    bond_items_for,
-)
-from chemvas.ui.canvas_graph_state import graph_state_for
-from chemvas.ui.canvas_model_access import bonds_for
-from chemvas.ui.renderer_style_access import (
-    renderer_for,
-)
-from chemvas.ui.scene_item_access import remove_item_from_canvas_scene
+from chemvas.ui.scene_graphics_operations import detach_graphics_item
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from PyQt6.QtWidgets import QGraphicsItem
+
+    from chemvas.ui.scene_render_context import SceneRenderContext
 
 
 class BondRenderer:
-    def __init__(
-        self,
-        canvas,
-        *,
-        atom_label_relayout: Callable[[set[int], set[int]], None] | None = None,
-    ) -> None:
-        self.canvas = canvas
-        self._atom_label_relayout = atom_label_relayout
-        self.graph = graph_state_for(canvas)
-        self.graphics = BondGraphicsFactory(renderer_for(canvas))
-        self.line_geometry = BondLineGeometryService(canvas)
-        self.graphics_drawer = BondGraphicsDrawService(canvas, renderer=self)
-        self.ring_double_geometry = BondRingDoubleGeometryService(canvas, renderer=self)
-        self.geometry_planner = BondGeometryPlanService(canvas, renderer=self)
+    def __init__(self, context: SceneRenderContext) -> None:
+        self.context = context
+        self.graph = context.state.graph_state
+        self.graphics = BondGraphicsFactory(context.renderer)
+        self.line_geometry = BondLineGeometryService(context)
+        self.graphics_drawer = BondGraphicsDrawService(context, renderer=self)
+        self.ring_double_geometry = BondRingDoubleGeometryService(
+            context, renderer=self
+        )
+        self.geometry_planner = BondGeometryPlanService(context, renderer=self)
         self.graphics_builder = BondGraphicsBuildService(
-            canvas,
+            context,
             renderer=self,
             planner=self.geometry_planner,
         )
         self.geometry_updater = BondGeometryUpdateService(
-            canvas,
+            context,
             planner=self.geometry_planner,
         )
 
     def trim_line_for_labels(
         self, a_id, b_id, x1: float, y1: float, x2: float, y2: float, offsets=()
     ):
-        return trim_line_for_labels_for(
-            self.canvas, a_id, b_id, x1, y1, x2, y2, offsets
+        return self.context.geometry.trim_line_for_labels(
+            a_id, b_id, x1, y1, x2, y2, offsets
         )
 
     def bond_offset_unit_3d(self, a_id: int, b_id: int, target=None):
-        return bond_offset_unit_3d_for(self.canvas, a_id, b_id, target=target)
+        return self.context.geometry.bond_offset_unit_3d(a_id, b_id, target=target)
 
     def line_normal(self, x1: float, y1: float, x2: float, y2: float, ring_center):
-        return line_normal_for(self.canvas, x1, y1, x2, y2, ring_center)
+        return self.context.geometry.line_normal(x1, y1, x2, y2, ring_center)
 
     def label_rect_for_atom(self, atom_id: int):
-        return label_rect_for_atom_for(self.canvas, atom_id)
+        return self.context.geometry.label_rect_for_atom(atom_id)
 
     def current_atom_coords_3d(self, atom_id: int):
-        return current_atom_coords_3d_for(self.canvas, atom_id)
+        return self.context.geometry.current_atom_coords_3d(atom_id)
 
     def project_point_3d(self, point):
-        return project_point_3d_for(self.canvas, point)
+        return self.context.geometry.project_point_3d(point)
 
     def ring_center_for_bond(self, bond):
-        return ring_center_for_bond_for(self.canvas, bond)
+        return self.context.geometry.ring_center_for_bond(bond)
 
     def ring_center_3d_for_bond(self, bond):
-        return ring_center_3d_for_bond_for(self.canvas, bond)
+        return self.context.geometry.ring_center_3d_for_bond(bond)
 
     def dotted_bond_path(
         self,
@@ -301,10 +279,10 @@ class BondRenderer:
     def redraw_bond(self, bond_id: int) -> bool:
         return refresh_bond_graphics(
             bond_id,
-            bonds=bonds_for(self.canvas),
-            bond_items=bond_items_for(self.canvas),
-            remove_scene_item=lambda item: remove_item_from_canvas_scene(
-                self.canvas, item
+            bonds=self.context.model.bonds,
+            bond_items=self.context.state.bond_graphics_state.bond_items,
+            remove_scene_item=lambda item: detach_graphics_item(
+                self.context.scene, cast("QGraphicsItem", item)
             ),
             add_bond_graphics=self.add_bond_graphics,
         )
@@ -314,15 +292,15 @@ class BondRenderer:
         self.graphics_builder.add_bond_graphics(bond_id)
 
     def _relayout_bond_atom_labels(self, bond_id: int) -> None:
-        if self._atom_label_relayout is None:
-            return
-        bonds = bonds_for(self.canvas)
+        bonds = self.context.model.bonds
         if not 0 <= bond_id < len(bonds):
             return
         bond = bonds[bond_id]
         if bond is None:
             return
-        self._atom_label_relayout({bond.a, bond.b}, {bond_id})
+        self.context.atom_labels.relayout_atom_labels(
+            {bond.a, bond.b}, skip_bond_ids={bond_id}
+        )
 
 
 __all__ = ["BondRenderer"]

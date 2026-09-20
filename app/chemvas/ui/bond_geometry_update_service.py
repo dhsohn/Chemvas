@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from PyQt6.QtWidgets import QGraphicsLineItem, QGraphicsPathItem, QGraphicsPolygonItem
 
 from chemvas.ui.bond_geometry_plan_service import (
@@ -7,13 +9,14 @@ from chemvas.ui.bond_geometry_plan_service import (
     BondPathPrimitive,
     BondPolygonPrimitive,
 )
-from chemvas.ui.canvas_bond_graphics_state import bond_items_for_id
-from chemvas.ui.canvas_model_access import atom_for_id, bond_for_id
+
+if TYPE_CHECKING:
+    from chemvas.ui.scene_render_context import SceneRenderContext
 
 
 class BondGeometryUpdateService:
-    def __init__(self, canvas, *, planner) -> None:
-        self.canvas = canvas
+    def __init__(self, context: SceneRenderContext, *, planner) -> None:
+        self.context = context
         self.planner = planner
 
     @staticmethod
@@ -57,28 +60,28 @@ class BondGeometryUpdateService:
         the existing items, so a length change during a gesture freezes the
         count until something rebuilds the bond.
         """
-        bond = bond_for_id(self.canvas, bond_id)
+        bond = self.context.bond_for_id(bond_id)
         if bond is None:
             return False
-        items = bond_items_for_id(self.canvas, bond_id)
+        items = self.context.state.bond_graphics_state.bond_items.get(bond_id)
         if not items:
             return False
-        a = atom_for_id(self.canvas, bond.a)
-        b = atom_for_id(self.canvas, bond.b)
+        a = self.context.model.atoms.get(bond.a)
+        b = self.context.model.atoms.get(bond.b)
         if a is None or b is None:
             return False
         fresh = self.planner.primitives_for_bond(bond, a, b, topology_count=None)
         return len(fresh) != len(items)
 
     def update_bond_geometry(self, bond_id: int) -> None:
-        bond = bond_for_id(self.canvas, bond_id)
+        bond = self.context.bond_for_id(bond_id)
         if bond is None:
             return
-        items = bond_items_for_id(self.canvas, bond_id)
+        items = self.context.state.bond_graphics_state.bond_items.get(bond_id)
         if not items:
             return
-        a = atom_for_id(self.canvas, bond.a)
-        b = atom_for_id(self.canvas, bond.b)
+        a = self.context.model.atoms.get(bond.a)
+        b = self.context.model.atoms.get(bond.b)
         if a is None or b is None:
             return
 

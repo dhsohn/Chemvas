@@ -5,6 +5,7 @@ from types import SimpleNamespace
 from unittest import mock
 
 from tests.runtime_state import canvas_runtime_state
+from tests.scene_render_context import attach_scene_render_context
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -50,7 +51,7 @@ class CanvasArrowBuildServiceTest(unittest.TestCase):
             ),
             scene=lambda: scene,
         )
-        return CanvasArrowBuildService(canvas), scene
+        return CanvasArrowBuildService(attach_scene_render_context(canvas)), scene
 
     def test_build_arrow_item_dispatches_supported_kinds(self) -> None:
         service, _ = self._make_service()
@@ -226,7 +227,7 @@ class CanvasArrowBuildServiceTest(unittest.TestCase):
             ):
                 for spacing in (6.0, 10.0, 15.0):
                     with self.subTest(kind=kind, direction=(dx, dy), spacing=spacing):
-                        service.canvas.renderer.style.bond_spacing_px = spacing
+                        service.context.renderer.style.bond_spacing_px = spacing
                         end = start + QPointF(dx, dy)
                         item = service.build_arrow_item(start, end, kind)
                         path = item.path()

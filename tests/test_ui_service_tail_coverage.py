@@ -329,21 +329,18 @@ class UIServiceTailCoverageTest(unittest.TestCase):
             ),
         )
         controller = CanvasNoteController(canvas)
-        controller.update_note_box = mock.Mock()
-
         with (
+            mock.patch("chemvas.ui.note_rendering.update_note_box") as update_box,
+            mock.patch("chemvas.ui.note_rendering.QTextBlockFormat", _FakeBlockFormat),
             mock.patch(
-                "chemvas.ui.canvas_note_controller.QTextBlockFormat", _FakeBlockFormat
-            ),
-            mock.patch(
-                "chemvas.ui.canvas_note_controller.QTextCursor",
+                "chemvas.ui.note_rendering.QTextCursor",
                 _FakeCursor,
             ),
         ):
             controller.apply_note_style(item)
 
         self.assertEqual(_FakeCursor.last_instance.block_format.height, (140, 42))
-        controller.update_note_box.assert_called_once_with(item)
+        update_box.assert_called_once_with(item, canvas.runtime_state.text_style_state)
         canvas.services.selection.selection_controller.update_note_selection_box.assert_called_once_with(
             item
         )
@@ -403,15 +400,11 @@ class UIServiceTailCoverageTest(unittest.TestCase):
             ),
         )
         controller = CanvasNoteController(canvas)
-        controller.update_note_box = mock.Mock()
-
         with (
             self.assertRaises(AttributeError),
+            mock.patch("chemvas.ui.note_rendering.QTextBlockFormat", _FakeBlockFormat),
             mock.patch(
-                "chemvas.ui.canvas_note_controller.QTextBlockFormat", _FakeBlockFormat
-            ),
-            mock.patch(
-                "chemvas.ui.canvas_note_controller.QTextCursor",
+                "chemvas.ui.note_rendering.QTextCursor",
                 _FakeCursor,
             ),
         ):

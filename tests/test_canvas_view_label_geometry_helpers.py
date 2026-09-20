@@ -4,7 +4,6 @@ import unittest
 from types import SimpleNamespace
 from unittest import mock
 
-from tests.runtime_services import canvas_runtime_services
 from tests.runtime_state import canvas_runtime_state
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
@@ -27,13 +26,16 @@ from chemvas.ui.canvas_atom_graphics_state import (
     set_atom_items_for,
 )
 from chemvas.ui.canvas_geometry_access import mark_target_distance_for_atom_for
-from chemvas.ui.canvas_geometry_controller import CanvasGeometryController
 from chemvas.ui.canvas_rotation_state import CanvasRotationState
 from chemvas.ui.canvas_scene_items_state import (
     CanvasSceneItemsState,
     set_scene_item_collection_for,
 )
-from chemvas.ui.canvas_service_ports import geometry_controller_for_access
+from chemvas.ui.scene_render_access import scene_render_context_for
+from tests.scene_render_context import (
+    attach_scene_render_context,
+    scene_geometry_for_test_canvas,
+)
 
 
 class _FakeLabelItem:
@@ -61,15 +63,10 @@ class CanvasViewLabelGeometryHelperTest(unittest.TestCase):
         cls.app.setQuitOnLastWindowClosed(False)
 
     def _bind_geometry_controller(self, view, controller=None):
-        controller = (
-            CanvasGeometryController(view) if controller is None else controller
-        )
-        services = getattr(view, "services", None)
-        if services is None:
-            services = canvas_runtime_services()
-            view.services = services
-        services.geometry_controller = controller
-        return controller
+        context = attach_scene_render_context(view)
+        if controller is not None:
+            context.geometry = controller
+        return context.geometry
 
     def test_label_cut_radius_for_atom_uses_label_bounds_and_handles_missing_inputs(
         self,
@@ -89,11 +86,11 @@ class CanvasViewLabelGeometryHelperTest(unittest.TestCase):
         set_atom_items_for(view, {1: _FakeLabelItem(QRectF(-1.0, -1.0, 2.0, 2.0))})
         self._bind_geometry_controller(view)
 
-        radius = geometry_controller_for_access(view).label_cut_radius_for_atom(1)
+        radius = scene_render_context_for(view).geometry.label_cut_radius_for_atom(1)
         self.assertAlmostEqual(radius, (math.sqrt(2.0) + 0.03) * 0.6)
 
         self.assertIsNone(
-            geometry_controller_for_access(view).label_cut_radius_for_atom(2)
+            scene_render_context_for(view).geometry.label_cut_radius_for_atom(2)
         )
         empty_view = SimpleNamespace(
             model=view.model,
@@ -105,7 +102,7 @@ class CanvasViewLabelGeometryHelperTest(unittest.TestCase):
         set_atom_items_for(empty_view, {})
         self._bind_geometry_controller(empty_view)
         self.assertIsNone(
-            geometry_controller_for_access(empty_view).label_cut_radius_for_atom(1)
+            scene_render_context_for(empty_view).geometry.label_cut_radius_for_atom(1)
         )
 
     def test_mark_target_distance_for_atom_uses_expanded_visible_label_rect(
@@ -114,7 +111,7 @@ class CanvasViewLabelGeometryHelperTest(unittest.TestCase):
         view = SimpleNamespace(
             model=SimpleNamespace(atoms={7: Atom("C", 0.0, 0.0)}),
         )
-        controller = CanvasGeometryController(view)
+        controller = scene_geometry_for_test_canvas(view)
         controller.visible_label_rect_for_atom = mock.Mock(
             return_value=QRectF(-2.0, -1.0, 4.0, 2.0)
         )
@@ -141,7 +138,7 @@ class CanvasViewLabelGeometryHelperTest(unittest.TestCase):
         missing_label_view = SimpleNamespace(
             model=SimpleNamespace(atoms={7: Atom("C", 0.0, 0.0)}),
         )
-        missing_label_controller = CanvasGeometryController(missing_label_view)
+        missing_label_controller = scene_geometry_for_test_canvas(missing_label_view)
         missing_label_controller.visible_label_rect_for_atom = mock.Mock(
             return_value=None
         )
@@ -154,7 +151,7 @@ class CanvasViewLabelGeometryHelperTest(unittest.TestCase):
     def test_line_rect_intersections_returns_all_hits_and_skips_disjoint_lines(
         self,
     ) -> None:
-        controller = CanvasGeometryController(SimpleNamespace())
+        controller = scene_geometry_for_test_canvas(SimpleNamespace())
 
         hits = controller.line_rect_intersections(
             QPointF(-1.0, 1.0),
@@ -177,7 +174,7 @@ class CanvasViewLabelGeometryHelperTest(unittest.TestCase):
             renderer=SimpleNamespace(style=SimpleNamespace(bond_line_width=5.0)),
         )
         zero_label_cut_radius = mock.Mock()
-        zero_controller = CanvasGeometryController(zero_view)
+        zero_controller = scene_geometry_for_test_canvas(zero_view)
         zero_controller.label_cut_radius_for_atom = zero_label_cut_radius
         self._bind_geometry_controller(zero_view, zero_controller)
         self.assertEqual(
@@ -191,7 +188,7 @@ class CanvasViewLabelGeometryHelperTest(unittest.TestCase):
                 atom_graphics_state=CanvasAtomGraphicsState()
             ),
         )
-        start_controller = CanvasGeometryController(start_view)
+        start_controller = scene_geometry_for_test_canvas(start_view)
         start_controller.label_cut_radius_for_atom = lambda atom_id: {1: 5.0}[atom_id]
         self._bind_geometry_controller(start_view, start_controller)
         start_only = trim_line_for_labels_for(start_view, 1, None, 0.0, 0.0, 100.0, 0.0)
@@ -204,7 +201,7 @@ class CanvasViewLabelGeometryHelperTest(unittest.TestCase):
                 atom_graphics_state=CanvasAtomGraphicsState()
             ),
         )
-        end_controller = CanvasGeometryController(end_view)
+        end_controller = scene_geometry_for_test_canvas(end_view)
         end_controller.label_cut_radius_for_atom = lambda atom_id: {2: 5.0}[atom_id]
         self._bind_geometry_controller(end_view, end_controller)
         end_only = trim_line_for_labels_for(end_view, None, 2, 0.0, 0.0, 100.0, 0.0)
@@ -217,7 +214,7 @@ class CanvasViewLabelGeometryHelperTest(unittest.TestCase):
                 atom_graphics_state=CanvasAtomGraphicsState()
             ),
         )
-        tight_controller = CanvasGeometryController(tight_view)
+        tight_controller = scene_geometry_for_test_canvas(tight_view)
         tight_controller.label_cut_radius_for_atom = lambda atom_id: {1: 49.6, 2: 49.6}[
             atom_id
         ]
@@ -314,11 +311,9 @@ class CanvasViewLabelGeometryHelperTest(unittest.TestCase):
 
         self.assertIsNone(ring_center_3d_for_bond_for(view, Bond(1, 4, 1)))
 
-    def test_geometry_access_helpers_delegate_to_controller(self) -> None:
+    def test_geometry_access_helpers_delegate_to_render_context(self) -> None:
         controller = mock.Mock()
-        view = SimpleNamespace(
-            services=canvas_runtime_services(geometry_controller=controller)
-        )
+        view = SimpleNamespace(render_context=SimpleNamespace(geometry=controller))
         bond = Bond(1, 2, 1)
 
         ring_center_for_bond_for(view, bond)

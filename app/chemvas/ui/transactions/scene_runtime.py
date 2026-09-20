@@ -253,7 +253,7 @@ _BOND_PRIMITIVE_GRAPHICS_PROPERTIES = (
     ("textInteractionFlags", "setTextInteractionFlags"),
 )
 
-_ATOM_GRAPHICS_DIRECT_ATTRIBUTES = (
+_GRAPHICS_ITEM_DIRECT_ATTRIBUTES = (
     "_hit_padding",
     "_hit_radius",
     "_raw_text",
@@ -263,6 +263,7 @@ _ATOM_GRAPHICS_DIRECT_ATTRIBUTES = (
     "_anchor_at_end",
     "_stack",
     "_stack_element_rect",
+    "_glyph_run",
 )
 
 
@@ -358,7 +359,7 @@ class BondPrimitiveGraphicsSnapshot:
                 )
             )
         direct_attribute_values: list[tuple[str, object]] = []
-        for name in _ATOM_GRAPHICS_DIRECT_ATTRIBUTES:
+        for name in _GRAPHICS_ITEM_DIRECT_ATTRIBUTES:
             value = _snapshot_attribute(item, name)
             if value is _MISSING_SNAPSHOT_ATTRIBUTE:
                 continue

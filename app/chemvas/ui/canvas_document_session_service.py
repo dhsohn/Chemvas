@@ -1,9 +1,7 @@
 from __future__ import annotations
 
 import contextlib
-import math
 from dataclasses import dataclass
-from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from PyQt6.QtCore import QRectF
@@ -11,7 +9,6 @@ from PyQt6.QtWidgets import QGraphicsScene, QGraphicsView
 
 from chemvas.core.document_io import (
     atomic_write_text,
-    atomic_write_via_temp,
     write_document,
 )
 from chemvas.core.molfile import MolfileError, MolfileLimitError, write_molfile
@@ -28,16 +25,10 @@ from chemvas.domain.document import (
     selection_payload_to_canvas_state,
 )
 from chemvas.domain.transactions import add_recovery_error_note
-from chemvas.features.export import supports_minimum_font_check
 from chemvas.ui.canvas_calculation_plan_state import set_calculation_plan_for
-from chemvas.ui.canvas_document_export_access import export_canvas_scene_for
 from chemvas.ui.canvas_document_metadata_state import set_document_source_sha256_for
 from chemvas.ui.canvas_document_state import (
-    apply_document_settings,
     restore_document_groups,
-    restore_document_post_model_items,
-    restore_document_pre_model_items,
-    restore_document_projection_state,
     snapshot_canvas_document_state,
     snapshot_canvas_document_state_with_warnings,
 )
@@ -51,15 +42,17 @@ from chemvas.ui.canvas_model_state import model_for
 from chemvas.ui.canvas_scene_items_state import ring_items_for
 from chemvas.ui.canvas_scene_reset_access import clear_scene_for
 from chemvas.ui.canvas_scene_state import scene_if_present_for
+from chemvas.ui.canvas_smiles_input_state import set_last_smiles_input_for
 from chemvas.ui.canvas_viewport_access import (
     ViewportSnapshot,
     capture_viewport_for,
     restore_viewport_geometry_for,
     restore_viewport_scroll_for,
 )
-from chemvas.ui.export_guard_service import validate_export_budget
-from chemvas.ui.export_readability_service import assess_export_readability
+from chemvas.ui.document_scene import populate_document_scene
+from chemvas.ui.figure_export_service import FigureExportService
 from chemvas.ui.main_window_path_logic import is_canonical_saved_document_path
+from chemvas.ui.note_item_access import new_note_item_for
 from chemvas.ui.rdkit_adapter_access import (
     model_to_mol_block_for,
     model_to_xyz_block_for,
@@ -69,20 +62,17 @@ from chemvas.ui.rdkit_adapter_access import (
     rdkit_last_error_for,
 )
 from chemvas.ui.renderer_style_access import (
-    bond_length_pt_for,
-    bond_length_px_for,
-    bond_line_width_for,
     renderer_for,
 )
 from chemvas.ui.scene_clipboard_access import (
     build_selection_clipboard_payload_for_canvas,
 )
-from chemvas.ui.scene_item_access import canvas_scene_for
 from chemvas.ui.scene_item_state import (
     atom_state_dict_for,
     bond_state_dict,
     scene_item_state_for,
 )
+from chemvas.ui.scene_render_access import scene_render_context_for
 from chemvas.ui.scene_signal_blocking import blocked_scene_signals
 from chemvas.ui.selection_collection_access import (
     selected_ids_for,
@@ -419,14 +409,12 @@ class CanvasDocumentSessionService:
         *,
         hit_testing_service,
         graph_service,
-        structure_build_service=None,
         history_service: CanvasHistoryService | None = None,
     ) -> None:
         self.canvas = canvas
         self.history = history_service
         self.hit_testing_service = hit_testing_service
         self.graph_service = graph_service
-        self.structure_build_service = structure_build_service
 
     def snapshot_state(self) -> dict:
         return snapshot_canvas_document_state(self.canvas)
@@ -443,10 +431,6 @@ class CanvasDocumentSessionService:
         success the previous history is discarded and the savepoint committed.
         """
 
-        if self.structure_build_service is None:
-            raise RuntimeError(
-                "structure_build_service is required to apply document state"
-            )
         history_snapshot = (
             self.history.capture_stack_snapshot() if self.history is not None else None
         )
@@ -602,13 +586,14 @@ class CanvasDocumentSessionService:
         clear_shape_records_for(self.canvas)
         clear_ts_bracket_records_for(self.canvas)
         set_calculation_plan_for(self.canvas, state.get("calculation_plan"))
-        apply_document_settings(self.canvas, state)
         set_model_for(self.canvas, deserialize_model_state(state["model"]))
         self.graph_service.rebuild_bond_adjacency()
-        restore_document_pre_model_items(self.canvas, state)
-        restore_document_projection_state(self.canvas, state)
-        self.structure_build_service.render_model()
-        restore_document_post_model_items(self.canvas, state)
+        populate_document_scene(
+            scene_render_context_for(self.canvas),
+            state,
+            note_item_factory=lambda: new_note_item_for(self.canvas),
+        )
+        set_last_smiles_input_for(self.canvas, state["last_smiles_input"])
         restore_document_groups(self.canvas, state)
         apply_sheet_scene_rect_for(self.canvas)
         self.hit_testing_service.mark_spatial_index_dirty()
@@ -794,67 +779,30 @@ class CanvasDocumentSessionService:
         max_height_mm: float | None = None,
         min_font_pt: float | None = None,
     ) -> ExportPlan:
-        """Resolve once, validate, and atomically paint this synchronous export."""
-        items, guard_plan = self._resolve_figure_export(
+        exporter = FigureExportService(scene_render_context_for(self.canvas))
+        return exporter.export_figure(
+            path,
+            fmt=fmt,
             scope=scope,
+            selection=(
+                selection_items_for_copy_for(self.canvas)
+                if scope == "selection"
+                else None
+            ),
+            dpi=dpi,
+            background=background,
             sizing=sizing,
             target_width_mm=target_width_mm,
-        )
-
-        fmt = fmt.lower()
-        target = Path(path)
-        if min_font_pt is not None:
-            if not supports_minimum_font_check(fmt, scope):
-                raise ValueError(
-                    "Minimum font checking requires whole-canvas SVG or PNG export."
+            max_height_mm=max_height_mm,
+            min_font_pt=min_font_pt,
+            after_render=(
+                lambda tmp: self._embed_editable_svg_payload(
+                    str(tmp), fmt=fmt, scope=scope
                 )
-            if (
-                isinstance(min_font_pt, bool)
-                or not math.isfinite(min_font_pt)
-                or min_font_pt <= 0.0
-            ):
-                raise ValueError("minimum font size must be a positive finite number")
-        width_pixels, height_pixels = validate_export_budget(
-            guard_plan, output_format=fmt, dpi=dpi, max_height_mm=max_height_mm
-        )
-
-        def render_to_temp(tmp: Path) -> None:
-            try:
-                str(tmp).encode("utf-8")
-            except UnicodeEncodeError:
-                raise ValueError(
-                    "The destination folder cannot be represented as UTF-8. "
-                    "Choose another folder. No file was written."
-                ) from None
-            export_canvas_scene_for(
-                self.canvas,
-                str(tmp),
-                fmt=fmt,
-                items=items,
-                plan=guard_plan,
-                dpi=dpi,
-                background=background,
-                title="Chemvas drawing",
             )
-            if tmp.stat().st_size == 0:
-                raise ValueError(
-                    "The renderer produced an empty file. No file was written."
-                )
-            if min_font_pt is not None:
-                assess_export_readability(
-                    self.canvas,
-                    guard_plan,
-                    minimum_font_pt=min_font_pt,
-                    output_format=fmt,
-                    dpi=dpi,
-                    width_pixels=width_pixels,
-                    height_pixels=height_pixels,
-                )
-            if fmt == "svg" and editable_svg:
-                self._embed_editable_svg_payload(str(tmp), fmt=fmt, scope=scope)
-
-        atomic_write_via_temp(target, render_to_temp)
-        return guard_plan
+            if fmt.lower() == "svg" and editable_svg
+            else None,
+        )
 
     def plan_figure_export(
         self,
@@ -863,70 +811,18 @@ class CanvasDocumentSessionService:
         sizing: str = "bond",
         target_width_mm: float | None = None,
     ) -> ExportPlan:
-        """Return the exact geometry plan used by figure export without painting."""
-        return self._resolve_figure_export(
-            scope=scope, sizing=sizing, target_width_mm=target_width_mm
-        )[1]
-
-    def _resolve_figure_export(
-        self,
-        *,
-        scope: str,
-        sizing: str,
-        target_width_mm: float | None,
-    ) -> tuple[list[Any], ExportPlan]:
-        from chemvas.features.export import resolve_export_plan
-
-        items, pad, unit_scale, target_width_pt = self._figure_export_parameters(
+        return FigureExportService(
+            scene_render_context_for(self.canvas)
+        ).plan_figure_export(
             scope=scope,
+            selection=(
+                selection_items_for_copy_for(self.canvas)
+                if scope == "selection"
+                else None
+            ),
             sizing=sizing,
             target_width_mm=target_width_mm,
         )
-        return resolve_export_plan(
-            canvas_scene_for(self.canvas),
-            items=items,
-            margin=pad,
-            unit_scale=unit_scale,
-            target_width_pt=target_width_pt,
-        )
-
-    def _figure_export_parameters(
-        self,
-        *,
-        scope: str,
-        sizing: str,
-        target_width_mm: float | None,
-    ) -> tuple[list[Any] | None, float, float, float | None]:
-        from chemvas.features.export import points_for_mm
-
-        pad = max(2.0, bond_line_width_for(self.canvas) * 2.0)
-        items = None
-        if scope == "selection":
-            items = selection_items_for_copy_for(self.canvas)
-            if not items:
-                raise ValueError("Select something to export, or choose Whole canvas.")
-
-        unit_scale = 1.0
-        target_width_pt = None
-        if sizing == "custom" and target_width_mm is None:
-            raise ValueError("Custom width sizing requires a target width in mm.")
-        if target_width_mm is not None:
-            if (
-                isinstance(target_width_mm, bool)
-                or not math.isfinite(target_width_mm)
-                or target_width_mm <= 0.0
-            ):
-                raise ValueError("target width must be a positive finite number")
-            target_width_pt = points_for_mm(target_width_mm)
-        elif sizing == "bond":
-            bond_length_px = bond_length_px_for(self.canvas)
-            if bond_length_px > 0:
-                unit_scale = bond_length_pt_for(self.canvas) / bond_length_px
-        elif sizing == "col1":
-            target_width_pt = points_for_mm(84.0)
-        elif sizing == "col2":
-            target_width_pt = points_for_mm(174.0)
-        return items, pad, unit_scale, target_width_pt
 
     def _embed_editable_svg_payload(self, path: str, *, fmt: str, scope: str) -> None:
         if fmt.lower() != "svg":

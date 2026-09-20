@@ -1,5 +1,7 @@
 import os
 
+from chemvas.ui.note_item_access import new_note_item_for
+
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 import pytest
@@ -19,7 +21,6 @@ from chemvas.ui.main_window_ports import (
     services_for_window,
     set_zoom_percent_for_window,
 )
-from chemvas.ui.note_item import NoteItem
 from chemvas.ui.scene_item_restore import create_note_item_from_state
 from chemvas.ui.scene_item_state_serialization import note_state_dict
 from chemvas.ui.structure_mutation_access import add_atom_for
@@ -87,7 +88,7 @@ def test_note_natural_width_tracks_edits_and_restores_alignment(drawing):
     state = note_state_dict(note)
     restored = create_note_item_from_state(
         state,
-        note_item_factory=lambda: NoteItem(canvas),
+        note_item_factory=lambda: new_note_item_for(canvas),
         note_style_applier=controller.apply_note_style,
     )
     assert restored.toPlainText() == note.toPlainText()

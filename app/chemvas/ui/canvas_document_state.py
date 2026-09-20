@@ -2,8 +2,7 @@ from __future__ import annotations
 
 import math
 
-from PyQt6.QtCore import QPointF, Qt
-from PyQt6.QtGui import QColor
+from PyQt6.QtCore import Qt
 
 from chemvas.domain.document import (
     VALID_MARK_KINDS,
@@ -16,7 +15,6 @@ from chemvas.domain.document import (
 )
 from chemvas.ui.atom_coords_access import (
     atom_coords_3d_for,
-    set_atom_coords_3d_for,
     stored_atom_coords_3d_matches_projection_for,
 )
 from chemvas.ui.canvas_atom_graphics_state import atom_items_for
@@ -40,28 +38,16 @@ from chemvas.ui.canvas_scene_items_state import (
 )
 from chemvas.ui.canvas_smiles_input_state import (
     last_smiles_input_for,
-    set_last_smiles_input_for,
 )
 from chemvas.ui.canvas_text_style_state import (
-    set_text_style_for,
     text_style_state_for,
 )
 from chemvas.ui.canvas_tool_settings_state import (
-    set_tool_setting_for,
     tool_settings_state_for,
 )
-from chemvas.ui.renderer_style_access import bond_length_px_for, set_bond_length_for
-from chemvas.ui.scene_decoration_access import materialize_mark_for_atom_for
+from chemvas.ui.renderer_style_access import bond_length_px_for
 from chemvas.ui.scene_item_access import (
     attached_canvas_scene_items,
-    create_scene_item_from_state,
-    restore_arrow_from_state,
-    restore_mark_from_state,
-    restore_note_from_state,
-    restore_orbital_from_state,
-    restore_ring_from_state,
-    restore_shape_from_state,
-    restore_ts_bracket_from_state,
 )
 from chemvas.ui.scene_item_state import (
     arrow_state_dict_for,
@@ -74,7 +60,6 @@ from chemvas.ui.scene_item_state import (
     ts_bracket_state_dict_for,
 )
 from chemvas.ui.sheet_setup_access import (
-    set_sheet_setup_for,
     sheet_orientation_for,
     sheet_size_for,
 )
@@ -183,97 +168,6 @@ def _finite_point_or_none(point):
     return None
 
 
-def restore_document_projection_state(canvas, state: dict) -> None:
-    perspective_state = state.get("perspective") or {}
-    coords_state = perspective_state.get("atom_coords_3d", {})
-    coords_3d = {
-        int(atom_id): (float(coords[0]), float(coords[1]), float(coords[2]))
-        for atom_id, coords in coords_state.items()
-    }
-    set_atom_coords_3d_for(canvas, coords_3d)
-    rotation = rotation_state_for(canvas)
-    center = perspective_state.get("projection_center_3d")
-    anchor = perspective_state.get("projection_anchor_2d")
-    rotation.projection_center_3d = (
-        (float(center[0]), float(center[1]), float(center[2]))
-        if center is not None
-        else None
-    )
-    rotation.projection_anchor_2d = (
-        (float(anchor[0]), float(anchor[1])) if anchor is not None else None
-    )
-
-
-def apply_document_settings(canvas, state: dict) -> None:
-    settings = state["settings"]
-    set_bond_length_for(canvas, settings["bond_length_px"])
-    set_tool_setting_for(canvas, "arrow_line_width", settings["arrow_line_width"])
-    set_tool_setting_for(canvas, "arrow_head_scale", settings["arrow_head_scale"])
-    set_tool_setting_for(
-        canvas, "orbital_phase_enabled", settings["orbital_phase_enabled"]
-    )
-    set_text_style_for(
-        canvas,
-        "text_font_family",
-        settings["text_font_family"],
-    )
-    set_text_style_for(canvas, "text_font_size", settings["text_font_size"])
-    set_text_style_for(canvas, "text_font_weight", settings["text_font_weight"])
-    set_text_style_for(canvas, "text_italic", settings["text_italic"])
-    set_text_style_for(
-        canvas,
-        "text_color",
-        _color_from_setting(settings["text_color"]),
-    )
-    set_text_style_for(
-        canvas,
-        "text_alignment",
-        _alignment_from_name(settings["text_alignment"]),
-    )
-    set_text_style_for(
-        canvas,
-        "text_line_spacing",
-        settings["text_line_spacing"],
-    )
-    set_text_style_for(
-        canvas,
-        "note_box_enabled",
-        settings["note_box_enabled"],
-    )
-    set_text_style_for(
-        canvas,
-        "note_box_color",
-        _color_from_setting(settings["note_box_color"]),
-    )
-    set_text_style_for(
-        canvas,
-        "note_box_alpha",
-        settings["note_box_alpha"],
-    )
-    set_text_style_for(
-        canvas,
-        "note_border_enabled",
-        settings["note_border_enabled"],
-    )
-    set_text_style_for(
-        canvas,
-        "note_border_color",
-        _color_from_setting(settings["note_border_color"]),
-    )
-    set_text_style_for(
-        canvas,
-        "note_border_width",
-        settings["note_border_width"],
-    )
-    set_text_style_for(
-        canvas,
-        "note_padding",
-        settings["note_padding"],
-    )
-    set_sheet_setup_for(canvas, settings["sheet_size"], settings["sheet_orientation"])
-    set_last_smiles_input_for(canvas, state["last_smiles_input"])
-
-
 def _alignment_name(alignment) -> str:
     if alignment == Qt.AlignmentFlag.AlignHCenter:
         return "center"
@@ -282,82 +176,6 @@ def _alignment_name(alignment) -> str:
     if alignment == Qt.AlignmentFlag.AlignJustify:
         return "justify"
     return "left"
-
-
-def _alignment_from_name(value: str):
-    return {
-        "left": Qt.AlignmentFlag.AlignLeft,
-        "center": Qt.AlignmentFlag.AlignHCenter,
-        "right": Qt.AlignmentFlag.AlignRight,
-        "justify": Qt.AlignmentFlag.AlignJustify,
-    }[value]
-
-
-def _color_from_setting(value: str) -> QColor:
-    return QColor(value)
-
-
-def restore_document_pre_model_items(canvas, state: dict) -> None:
-    for ring_state in state["ring_fills"]:
-        restore_ring_from_state(canvas, ring_state)
-    # Restore backgrounds before the structure so its first viewport paint is
-    # visible over raster images, including in a newly opened native window.
-    for image_state in state.get("images", []):
-        create_scene_item_from_state(canvas, image_state)
-
-
-def restore_document_post_model_items(canvas, state: dict) -> None:
-    for note_state in state["notes"]:
-        restore_note_from_state(canvas, note_state)
-
-    for mark_state in state["marks"]:
-        if mark_state.get("_auto_position") is True:
-            item = materialize_mark_for_atom_for(
-                canvas,
-                mark_state["atom_id"],
-                QPointF(float(mark_state["x"]), float(mark_state["y"])),
-                kind=mark_state["kind"],
-            )
-            if item is None:
-                raise RuntimeError(
-                    "Failed to materialize an atom annotation as a scene mark."
-                )
-            continue
-        restore_mark_from_state(
-            canvas,
-            {
-                "kind": "mark",
-                "mark_kind": mark_state["kind"],
-                "text": mark_state["text"],
-                "atom_id": mark_state["atom_id"],
-                "dx": mark_state["dx"],
-                "dy": mark_state["dy"],
-                "x": mark_state["x"],
-                "y": mark_state["y"],
-                **({"color": mark_state["color"]} if "color" in mark_state else {}),
-            },
-        )
-
-    for arrow_state in state["arrows"]:
-        restore_arrow_from_state(canvas, arrow_state)
-
-    for ts_bracket_state in state["ts_brackets"]:
-        restore_ts_bracket_from_state(canvas, ts_bracket_state)
-
-    for shape_state in state["shapes"]:
-        restore_shape_from_state(canvas, shape_state)
-
-    for orbital_state in state["orbitals"]:
-        restore_orbital_from_state(
-            canvas,
-            {
-                "kind": "orbital",
-                "orbital_kind": orbital_state["kind"],
-                "center": orbital_state["center"],
-                "scale": orbital_state["scale"],
-                "rotation": orbital_state["rotation"],
-            },
-        )
 
 
 def document_item_lists_for(canvas) -> dict[str, list]:

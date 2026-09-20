@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import math
-from typing import Any, override
+from typing import TYPE_CHECKING, Any, override
 
 from PyQt6.QtCore import QRectF, Qt
 from PyQt6.QtGui import (
@@ -22,21 +22,11 @@ from PyQt6.QtWidgets import (
 
 from chemvas.features.export import EXPORT_EXCLUDED_KINDS, item_export_bounds
 from chemvas.ui.canvas_arrow_build_service import ARROW_LABEL_ROLE
-from chemvas.ui.canvas_atom_graphics_state import atom_dots_for, atom_items_for
-from chemvas.ui.canvas_bond_graphics_state import bond_items_for
-from chemvas.ui.canvas_model_access import bond_for_id
-from chemvas.ui.canvas_scene_items_state import (
-    arrow_items_for,
-    image_items_for,
-    mark_items_for,
-    note_items_for,
-    orbital_items_for,
-    ring_items_for,
-    shape_items_for,
-    ts_bracket_items_for,
-)
 from chemvas.ui.graphics_items import note_paint_scene_path
-from chemvas.ui.sheet_setup_access import sheet_rect_for
+from chemvas.ui.scene_render_access import scene_render_context_for
+
+if TYPE_CHECKING:
+    from chemvas.ui.scene_render_context import SceneRenderContext
 
 WARNING_CODES = (
     "arrow-structure-overlap",
@@ -53,12 +43,18 @@ _SHEET_EPSILON = 0.01
 
 
 def check_canvas_layout(canvas: Any, *, sheet_only: bool = False) -> dict[str, object]:
-    warnings = _sheet_boundary_warnings(canvas)
+    return check_scene_layout(scene_render_context_for(canvas), sheet_only=sheet_only)
+
+
+def check_scene_layout(
+    context: SceneRenderContext, *, sheet_only: bool = False
+) -> dict[str, object]:
+    warnings = _sheet_boundary_warnings(context)
     if sheet_only:
         return _layout_report(warnings, sheet_only=True)
     notes = []
     note_paths = []
-    for index, item in enumerate(note_items_for(canvas)):
+    for index, item in enumerate(context.state.scene_items_state.note_items):
         if not item.isVisible() or item.effectiveOpacity() <= 0.0:
             continue
         path = note_paint_scene_path(item)
@@ -68,11 +64,11 @@ def check_canvas_layout(canvas: Any, *, sheet_only: bool = False) -> dict[str, o
         note_paths.append((index, path))
     shapes = [
         (index, item)
-        for index, item in enumerate(shape_items_for(canvas))
+        for index, item in enumerate(context.state.scene_items_state.shape_items)
         if item.isVisible() and _has_visible_shape_paint(item)
     ]
     atom_paths = []
-    for atom_id, item in sorted(atom_items_for(canvas).items()):
+    for atom_id, item in sorted(context.state.atom_graphics_state.atom_items.items()):
         if not item.isVisible() or item.effectiveOpacity() <= 0.0:
             continue
         path = _atom_label_scene_path(item)
@@ -148,15 +144,17 @@ def check_canvas_layout(canvas: Any, *, sheet_only: bool = False) -> dict[str, o
             )
 
     bond_paths = (
-        _molecular_bond_paths(canvas)
-        if atom_paths or arrow_items_for(canvas) or mark_items_for(canvas)
+        _molecular_bond_paths(context)
+        if atom_paths
+        or context.state.scene_items_state.arrow_items
+        or context.state.scene_items_state.mark_items
         else []
     )
-    warnings.extend(_molecular_text_bond_warnings(canvas, atom_paths, bond_paths))
-    warnings.extend(_arrow_structure_warnings(canvas, atom_paths, bond_paths))
+    warnings.extend(_molecular_text_bond_warnings(context, atom_paths, bond_paths))
+    warnings.extend(_arrow_structure_warnings(context, atom_paths, bond_paths))
 
     warnings.extend(
-        _arrow_label_warnings(canvas, atom_paths, note_paths, bond_paths, shapes)
+        _arrow_label_warnings(context, atom_paths, note_paths, bond_paths, shapes)
     )
     return _layout_report(warnings, sheet_only=False)
 
@@ -210,9 +208,9 @@ def _layout_report(
     }
 
 
-def _sheet_boundary_warnings(canvas: Any) -> list[dict[str, object]]:
+def _sheet_boundary_warnings(context: SceneRenderContext) -> list[dict[str, object]]:
     """Containment has no pairwise work and is shared by both check modes."""
-    sheet = sheet_rect_for(canvas).adjusted(
+    sheet = context.state.sheet_setup_state.rect.adjusted(
         -_SHEET_EPSILON, -_SHEET_EPSILON, _SHEET_EPSILON, _SHEET_EPSILON
     )
     warnings: list[dict[str, object]] = []
@@ -232,23 +230,23 @@ def _sheet_boundary_warnings(canvas: Any) -> list[dict[str, object]]:
                 )
             )
 
-    for atom_id, item in sorted(atom_items_for(canvas).items()):
+    for atom_id, item in sorted(context.state.atom_graphics_state.atom_items.items()):
         check(
             {"kind": "atom", "id": atom_id}, _sheet_item_bounds(item, atom_label=True)
         )
-    for atom_id, item in sorted(atom_dots_for(canvas).items()):
+    for atom_id, item in sorted(context.state.atom_graphics_state.atom_dots.items()):
         check({"kind": "atom", "id": atom_id}, _sheet_item_bounds(item))
-    for atom_ids, path in _molecular_bond_paths(canvas):
+    for atom_ids, path in _molecular_bond_paths(context):
         check({"kind": "bond", "atom_ids": atom_ids}, path.boundingRect())
     for kind, items in (
-        ("note", note_items_for(canvas)),
-        ("mark", mark_items_for(canvas)),
-        ("arrow", arrow_items_for(canvas)),
-        ("shape", shape_items_for(canvas)),
-        ("ts_bracket", ts_bracket_items_for(canvas)),
-        ("orbital", orbital_items_for(canvas)),
-        ("ring", ring_items_for(canvas)),
-        ("image", image_items_for(canvas)),
+        ("note", context.state.scene_items_state.note_items),
+        ("mark", context.state.scene_items_state.mark_items),
+        ("arrow", context.state.scene_items_state.arrow_items),
+        ("shape", context.state.scene_items_state.shape_items),
+        ("ts_bracket", context.state.scene_items_state.ts_bracket_items),
+        ("orbital", context.state.scene_items_state.orbital_items),
+        ("ring", context.state.scene_items_state.ring_items),
+        ("image", context.state.scene_items_state.image_items),
     ):
         for index, item in enumerate(items):
             ref: dict[str, object] = {"kind": kind, "index": index}
@@ -320,7 +318,7 @@ def _has_visible_list_marker(item: QGraphicsTextItem) -> bool:
 
 
 def _arrow_label_warnings(
-    canvas: Any,
+    context: SceneRenderContext,
     atom_paths: list[tuple[int, QPainterPath]],
     note_paths: list[tuple[int, QPainterPath]],
     bond_paths: list[tuple[list[int], QPainterPath]],
@@ -340,14 +338,14 @@ def _arrow_label_warnings(
             {"kind": "arrow", "index": index},
             _graphics_paint_scene_path(arrow),
         )
-        for index, arrow in enumerate(arrow_items_for(canvas))
+        for index, arrow in enumerate(context.state.scene_items_state.arrow_items)
     )
     targets.extend(
         ("text-shape-border-overlap", {"kind": "shape", "index": index}, path)
         for index, shape in shapes
         if (path := _shape_border_scene_path(shape)) is not None
     )
-    for index, arrow in enumerate(arrow_items_for(canvas)):
+    for index, arrow in enumerate(context.state.scene_items_state.arrow_items):
         for item in arrow.childItems():
             if (
                 item.data(0) != ARROW_LABEL_ROLE
@@ -391,22 +389,24 @@ def _arrow_label_warnings(
     return warnings
 
 
-def _molecular_bond_paths(canvas: Any) -> list[tuple[list[int], QPainterPath]]:
+def _molecular_bond_paths(
+    context: SceneRenderContext,
+) -> list[tuple[list[int], QPainterPath]]:
     # A bond may have several painted pieces (parallel strokes, hashes, dots).
     # Report it once using stable document atom IDs, not its runtime slot.
     bond_paths = []
-    for bond_id, items in sorted(bond_items_for(canvas).items()):
+    for bond_id, items in sorted(context.state.bond_graphics_state.bond_items.items()):
         path = QPainterPath()
         for item in items:
             path = path.united(_graphics_paint_scene_path(item))
-        bond = bond_for_id(canvas, bond_id)
+        bond = context.bond_for_id(bond_id)
         if bond is not None and not path.isEmpty():
             bond_paths.append((sorted((bond.a, bond.b)), path))
     return bond_paths
 
 
 def _molecular_text_bond_warnings(
-    canvas: Any,
+    context: SceneRenderContext,
     atom_paths: list[tuple[int, QPainterPath]],
     bond_paths: list[tuple[list[int], QPainterPath]],
 ) -> list[dict[str, object]]:
@@ -428,7 +428,7 @@ def _molecular_text_bond_warnings(
                         "Atom label crosses a nonincident molecular bond.",
                     )
                 )
-    for index, item in enumerate(mark_items_for(canvas)):
+    for index, item in enumerate(context.state.scene_items_state.mark_items):
         metadata = item.data(1)
         if (
             not isinstance(item, QGraphicsTextItem)
@@ -462,12 +462,12 @@ def _molecular_text_bond_warnings(
 
 
 def _arrow_structure_warnings(
-    canvas: Any,
+    context: SceneRenderContext,
     atom_paths: list[tuple[int, QPainterPath]],
     bond_paths: list[tuple[list[int], QPainterPath]],
 ) -> list[dict[str, object]]:
     warnings: list[dict[str, object]] = []
-    for arrow_index, arrow in enumerate(arrow_items_for(canvas)):
+    for arrow_index, arrow in enumerate(context.state.scene_items_state.arrow_items):
         arrow_path = _graphics_paint_scene_path(arrow)
         for atom_id, atom_path in atom_paths:
             overlap = arrow_path.intersected(atom_path)
@@ -626,4 +626,4 @@ def _warning_sort_key(warning: dict[str, object]) -> tuple[str, str]:
     return str(warning["code"]), repr(warning["items"])
 
 
-__all__ = ["WARNING_CODES", "check_canvas_layout"]
+__all__ = ["WARNING_CODES", "check_canvas_layout", "check_scene_layout"]

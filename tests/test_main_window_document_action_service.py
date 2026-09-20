@@ -1347,12 +1347,15 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
         message_box = mock.Mock()
         mark_calls = 0
 
+        from chemvas.ui.scene_item_restore import create_scene_item_from_state
+
         def fail_second_mark(*args, **kwargs):
             nonlocal mark_calls
-            mark_calls += 1
-            if mark_calls == 2:
-                return None
-            return materialize_mark_for_atom_for(*args, **kwargs)
+            if args[0]["kind"] == "mark":
+                mark_calls += 1
+                if mark_calls == 2:
+                    return None
+            return create_scene_item_from_state(*args, **kwargs)
 
         with tempfile.TemporaryDirectory() as temp_dir:
             path = Path(temp_dir) / "charged.mol"
@@ -1361,7 +1364,7 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
                 encoding="utf-8",
             )
             with mock.patch(
-                "chemvas.ui.canvas_document_state.materialize_mark_for_atom_for",
+                "chemvas.ui.document_scene.create_scene_item_from_state",
                 side_effect=fail_second_mark,
             ):
                 result = self.service.load_canvas_from_path(

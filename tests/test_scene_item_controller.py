@@ -5,7 +5,9 @@ from unittest.mock import patch
 
 from tests.runtime_services import canvas_runtime_services
 from tests.runtime_state import canvas_runtime_state
+from tests.scene_render_context import attach_scene_render_context
 from tests.shape_support import adopt_shape
+from tests.ts_bracket_support import adopt_ts_bracket
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -90,7 +92,7 @@ class _FakeCanvas:
             scene_decoration_build_service=SimpleNamespace(
                 build_mark_item=self.record_build_mark_item,
                 apply_mark_color=CanvasSceneDecorationBuildService(
-                    self
+                    attach_scene_render_context(self)
                 ).apply_mark_color,
                 set_mark_center=self.record_set_mark_center,
                 build_ts_bracket_item=self.record_build_ts_bracket_item,
@@ -112,6 +114,9 @@ class _FakeCanvas:
             curved_arrow_path_service=SimpleNamespace(
                 set_curved_arrow_path=self.record_set_curved_arrow_path
             ),
+        )
+        self.render_context.decorations = (
+            self.services.scene_decoration.scene_decoration_build_service
         )
 
     def scene(self):
@@ -192,7 +197,6 @@ class _FakeCanvas:
     def record_build_ts_bracket_item(self, rect, bracket_kind) -> QGraphicsPathItem:
         item = QGraphicsPathItem(QPainterPath())
         item.setData(0, "ts_bracket")
-        item.setData(1, {"bracket_kind": bracket_kind})
         self.built_ts_bracket_rects.append(rect)
         return item
 
@@ -498,6 +502,7 @@ class SceneItemControllerTest(unittest.TestCase):
         orbital = QGraphicsItemGroup()
         orbital.setData(0, "orbital")
 
+        adopt_ts_bracket(self.canvas, ts_bracket)
         self.controller.restore_scene_item(curved)
         self.controller.restore_scene_item(ts_bracket)
         self.controller.restore_scene_item(orbital)
@@ -577,6 +582,7 @@ class SceneItemControllerTest(unittest.TestCase):
         self.canvas.ts_bracket_items.append(ts_bracket)
         self.canvas.orbital_items.append(orbital)
 
+        adopt_ts_bracket(self.canvas, ts_bracket)
         for item in (ring, note, free_mark, curved, ts_bracket, orbital):
             self.controller.restore_scene_item(item)
 

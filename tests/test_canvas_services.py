@@ -249,7 +249,6 @@ def test_build_canvas_services_composes_grouped_runtimes(monkeypatch) -> None:
         canvas,
         hit_testing_service=hit_testing_service,
         graph_service=graph_service,
-        structure_build_service=structure.structure_build_service,
         history_service=history_service,
     )
     builders["AtomLabelService"].assert_called_once_with(

@@ -39,14 +39,16 @@ from chemvas.ui.scene_item_state import (
 )
 from chemvas.ui.selection_service_access import refresh_selection_outline_for
 from chemvas.ui.shape_record_access import (
+    discard_shape_record_for,
     set_shape_record_for,
-    shape_store_checkpoint_for,
+    shape_id_for_item,
 )
 from chemvas.ui.transactions.document import document_transaction
 from chemvas.ui.transactions.scene_item_attach import SceneItemAttachSnapshot
 from chemvas.ui.ts_bracket_record_access import (
+    discard_ts_bracket_record_for,
     set_ts_bracket_record_for,
-    ts_bracket_store_checkpoint_for,
+    ts_bracket_id_for_item,
 )
 
 if TYPE_CHECKING:
@@ -146,7 +148,7 @@ class SceneDecorationService:
         return True
 
     def add_ts_bracket(self, rect: QRectF, *, bracket_kind: str | None = None):
-        restore_ts_bracket_store = ts_bracket_store_checkpoint_for(self.canvas)
+        record_id = None
         try:
             with self._scene_add_transaction() as track:
                 bracket_kind = (
@@ -165,6 +167,7 @@ class SceneDecorationService:
                         bracket_kind=normalized_bracket_kind(bracket_kind),
                     ),
                 )
+                record_id = ts_bracket_id_for_item(item)
                 track(item)
                 attach_scene_item(self.canvas, item)
                 self._push_add_scene_item(
@@ -173,7 +176,8 @@ class SceneDecorationService:
         except Exception:
             # The record is set before the item is attached; a failed add takes
             # it back out.
-            restore_ts_bracket_store()
+            if record_id is not None:
+                discard_ts_bracket_record_for(self.canvas, record_id)
             raise
         return item
 
@@ -184,7 +188,7 @@ class SceneDecorationService:
         shape_kind: str | None = None,
         stroke_style: str | None = None,
     ):
-        restore_shape_store = shape_store_checkpoint_for(self.canvas)
+        record_id = None
         try:
             with self._scene_add_transaction() as track:
                 settings = tool_settings_state_for(self.canvas)
@@ -205,13 +209,15 @@ class SceneDecorationService:
                         stroke_style=normalized_stroke_style(stroke_style),
                     ),
                 )
+                record_id = shape_id_for_item(item)
                 track(item)
                 attach_scene_item(self.canvas, item)
                 self._push_add_scene_item(item, shape_state_dict_for(self.canvas, item))
         except Exception:
             # The record is set before the item is attached; a failed add takes
             # it back out.
-            restore_shape_store()
+            if record_id is not None:
+                discard_shape_record_for(self.canvas, record_id)
             raise
         return item
 

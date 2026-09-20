@@ -5,6 +5,7 @@ from unittest import mock
 
 from tests.runtime_services import canvas_runtime_services
 from tests.runtime_state import canvas_runtime_state
+from tests.scene_render_context import attach_scene_render_context
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -76,7 +77,7 @@ class HandleMutationServiceTest(unittest.TestCase):
             ),
             refresh_selection_outline=mock.Mock(),
         )
-        build_service = CanvasArrowBuildService(canvas)
+        build_service = CanvasArrowBuildService(attach_scene_render_context(canvas))
         build_service.add_arrow_head = mock.Mock(wraps=build_service.add_arrow_head)
         canvas.services = canvas_runtime_services(
             arrow_build_service=build_service,

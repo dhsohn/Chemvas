@@ -6,6 +6,7 @@ from types import SimpleNamespace
 from unittest import mock
 
 from tests.runtime_state import canvas_runtime_state
+from tests.scene_render_context import attach_scene_render_context
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -247,7 +248,7 @@ def _build_service(metric_scale: float = 1.0):
             text_style_state=CanvasTextStyleState(),
         ),
     )
-    return CanvasArrowBuildService(canvas)
+    return CanvasArrowBuildService(attach_scene_render_context(canvas))
 
 
 def _label_children(item):
@@ -583,7 +584,6 @@ class ArrowLabelCodecTest(unittest.TestCase):
             mark_center_setter=lambda item, center: None,
             mark_color_setter=lambda item, color: None,
             ring_fill_brush_getter=lambda: QBrush(QColor("#000000")),
-            ts_bracket_path_builder=lambda rect: QPainterPath(),
             bond_color="#000000",
             build_arrow_item=builder,
             set_curved_arrow_path=lambda *args: None,

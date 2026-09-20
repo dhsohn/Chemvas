@@ -14,13 +14,11 @@ from chemvas.features.rendering import (
     is_plain_double_bond_style,
     normalized_plain_double_style,
 )
-from chemvas.ui.renderer_style_access import (
-    renderer_bold_bond_width_for,
-    renderer_bond_line_width_for,
-)
 
 if TYPE_CHECKING:
     from PyQt6.QtGui import QPainterPath, QPolygonF
+
+    from chemvas.ui.scene_render_context import SceneRenderContext
 
 
 @dataclass(frozen=True)
@@ -50,15 +48,15 @@ class BondGeometryPlanService:
     drift between the two paths.
     """
 
-    def __init__(self, canvas, *, renderer) -> None:
-        self.canvas = canvas
+    def __init__(self, context: SceneRenderContext, *, renderer) -> None:
+        self.context = context
         self.renderer = renderer
 
     def _bond_line_width(self) -> float:
-        return renderer_bond_line_width_for(self.canvas)
+        return self.context.renderer.bond_line_width()
 
     def _bold_bond_width(self) -> float:
-        return renderer_bold_bond_width_for(self.canvas)
+        return self.context.renderer.bold_bond_width()
 
     def _line(self, segment: LineSegment) -> BondLinePrimitive:
         return BondLinePrimitive(segment)

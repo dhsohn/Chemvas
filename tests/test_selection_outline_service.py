@@ -4,6 +4,7 @@ from types import SimpleNamespace
 from unittest import mock
 
 from tests.runtime_services import canvas_runtime_services
+from tests.scene_render_context import attach_scene_render_context
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -248,17 +249,17 @@ class SelectionOutlineServiceTest(unittest.TestCase):
                 bonds=[Bond(1, 2, 2), None],
             ),
             services=canvas_runtime_services(
-                scene_decoration_build_service=SimpleNamespace(
-                    mark_center=lambda item: QPointF(4.0, 5.0)
-                ),
-                geometry_controller=SimpleNamespace(
-                    ring_center_for_bond=lambda bond: None,
-                    trim_line_for_labels=lambda *_args: (0.0, 1.0),
-                ),
                 tool_controller=SimpleNamespace(
                     active=SimpleNamespace(name="perspective")
                 ),
             ),
+        )
+        context = attach_scene_render_context(canvas)
+        context.geometry.ring_center_for_bond = lambda bond: None
+        context.geometry.trim_line_for_labels = lambda *_args: (0.0, 1.0)
+        context.decorations.mark_center = lambda item: QPointF(4.0, 5.0)
+        canvas.services.scene_decoration.scene_decoration_build_service = (
+            context.decorations
         )
         set_bond_items_for(canvas, {})
         set_selection_outlines_for(canvas, [])

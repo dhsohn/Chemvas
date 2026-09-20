@@ -13,6 +13,10 @@ from chemvas.domain.json_io import strict_json_loads
 if TYPE_CHECKING:
     from pathlib import Path
 
+    from PyQt6.QtWidgets import QApplication
+
+    from chemvas.ui.scene_render_context import SceneRenderContext
+
 MAX_GRAPHICS_RECORDS = 20_000
 
 
@@ -72,12 +76,11 @@ def graphics_record_count(state: Mapping[str, object]) -> int:
 
 
 @contextmanager
-def offscreen_canvas(
-    state: dict[str, Any],
+def offscreen_application(
     *,
     command: str,
     pin_locale: bool = False,
-) -> Iterator[tuple[Any, Any]]:
+) -> Iterator[QApplication]:
     previous_qt_platform = os.environ.get("QT_QPA_PLATFORM")
     previous_locale = (
         {name: os.environ.get(name) for name in ("LC_ALL", "LANG")}
@@ -89,14 +92,8 @@ def offscreen_canvas(
         os.environ["LC_ALL"] = "C.UTF-8"
         os.environ["LANG"] = "C.UTF-8"
     try:
-        from PyQt6.QtCore import QEvent, Qt
+        from PyQt6.QtCore import Qt
         from PyQt6.QtWidgets import QApplication
-
-        from chemvas.adapters.qt.renderer import Renderer
-        from chemvas.ui.canvas_service_ports import (
-            canvas_window_document_session_service,
-        )
-        from chemvas.ui.canvas_view import CanvasView
 
         existing = QApplication.instance()
         if existing is not None and not isinstance(existing, QApplication):
@@ -124,17 +121,80 @@ def offscreen_canvas(
 
     restore_quit = application.quitOnLastWindowClosed()
     application.setQuitOnLastWindowClosed(False)
-    canvas = None
     try:
-        canvas = CanvasView(renderer=Renderer())
-        service = canvas_window_document_session_service(canvas)
-        service.apply_state(state)
-        yield canvas, service
+        yield application
     finally:
-        if canvas is not None:
+        application.setQuitOnLastWindowClosed(restore_quit)
+
+
+@contextmanager
+def offscreen_canvas(
+    state: dict[str, Any],
+    *,
+    command: str,
+    pin_locale: bool = False,
+) -> Iterator[tuple[Any, Any]]:
+    with offscreen_application(command=command, pin_locale=pin_locale) as application:
+        from PyQt6.QtCore import QEvent
+
+        from chemvas.adapters.qt.renderer import Renderer
+        from chemvas.ui.canvas_service_ports import (
+            canvas_window_document_session_service,
+        )
+        from chemvas.ui.canvas_view import CanvasView
+
+        canvas = CanvasView(renderer=Renderer())
+        try:
+            service = canvas_window_document_session_service(canvas)
+            service.apply_state(state)
+            yield canvas, service
+        finally:
             canvas.deleteLater()
             application.sendPostedEvents(canvas, QEvent.Type.DeferredDelete)
-        application.setQuitOnLastWindowClosed(restore_quit)
+
+
+@contextmanager
+def offscreen_document_scene(
+    state: dict[str, Any],
+    *,
+    command: str,
+    pin_locale: bool = False,
+) -> Iterator[SceneRenderContext]:
+    with offscreen_application(command=command, pin_locale=pin_locale) as application:
+        from PyQt6.QtCore import QEvent
+        from PyQt6.QtWidgets import QGraphicsScene
+
+        from chemvas.adapters.qt.renderer import Renderer
+        from chemvas.domain.document import deserialize_model_state
+        from chemvas.features.graph import build_bond_adjacency_index
+        from chemvas.ui.document_scene import populate_document_scene
+        from chemvas.ui.note_item import NoteItem
+        from chemvas.ui.scene_render_context import SceneRenderState
+        from chemvas.ui.scene_rendering import build_scene_render_context
+        from chemvas.ui.sheet_setup_state import sheet_rects
+
+        scene = QGraphicsScene()
+        try:
+            model = deserialize_model_state(state["model"])
+            drawing_state = SceneRenderState()
+            graph = drawing_state.graph_state
+            graph.atom_neighbors, graph.atom_bond_ids = build_bond_adjacency_index(
+                model.atoms, model.bonds
+            )
+            context = build_scene_render_context(
+                scene_provider=lambda: scene,
+                model_provider=lambda: model,
+                renderer=Renderer(),
+                state=drawing_state,
+            )
+            populate_document_scene(context, state, note_item_factory=NoteItem)
+            sheet = drawing_state.sheet_setup_state
+            sheet.rect, scene_rect = sheet_rects(sheet.size_name, sheet.orientation)
+            scene.setSceneRect(scene_rect)
+            yield context
+        finally:
+            scene.deleteLater()
+            application.sendPostedEvents(scene, QEvent.Type.DeferredDelete)
 
 
 __all__ = [
@@ -142,7 +202,9 @@ __all__ = [
     "MAX_GRAPHICS_RECORDS",
     "graphics_record_count",
     "json_text",
+    "offscreen_application",
     "offscreen_canvas",
+    "offscreen_document_scene",
     "qt_platform",
     "read_json_request",
 ]

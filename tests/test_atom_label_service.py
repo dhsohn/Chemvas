@@ -5,6 +5,7 @@ from unittest.mock import Mock, call, patch
 
 from tests.runtime_services import canvas_runtime_services
 from tests.runtime_state import canvas_runtime_state
+from tests.scene_render_context import attach_scene_render_context
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -194,6 +195,7 @@ class _FakeCanvas:
 
 
 def _atom_label_service(canvas: _FakeCanvas) -> AtomLabelService:
+    attach_scene_render_context(canvas)
     return AtomLabelService(
         canvas,
         move_controller=canvas.services.interaction.move_controller,

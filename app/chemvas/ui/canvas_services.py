@@ -111,7 +111,6 @@ def build_canvas_services(
         canvas,
         hit_testing_service=selection_services.hit_testing_service,
         graph_service=graph_service,
-        structure_build_service=structure_services.structure_build_service,
         history_service=history_service,
     )
     scene_view_services = build_canvas_scene_view_services(

@@ -6,6 +6,7 @@ from unittest import mock
 
 from tests.runtime_services import canvas_runtime_services
 from tests.runtime_state import canvas_runtime_state
+from tests.scene_render_context import attach_scene_render_context
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -199,7 +200,7 @@ def _build_service():
             text_style_state=CanvasTextStyleState(),
         ),
     )
-    return CanvasArrowBuildService(canvas)
+    return CanvasArrowBuildService(attach_scene_render_context(canvas))
 
 
 class ArcBuildTest(unittest.TestCase):
@@ -345,6 +346,17 @@ class SnapToolTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         cls.app = QApplication.instance() or QApplication([])
+
+    def setUp(self) -> None:
+        for module in ("preview_tools", "line_tool"):
+            patcher = mock.patch(
+                f"chemvas.ui.{module}.mark_snapped_points_for",
+                side_effect=lambda canvas, item, points: canvas.snap_mark_calls.append(
+                    (item, list(points))
+                ),
+            )
+            patcher.start()
+            self.addCleanup(patcher.stop)
 
     def test_snap_radius_is_a_distance_on_screen(self) -> None:
         canvas = _FakeToolCanvas()

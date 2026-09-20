@@ -1364,6 +1364,37 @@ CANVAS_SERVICE_CONTAINER_RESOLVERS = (
 )
 
 
+def test_view_controller_ports_preserve_concrete_optional_return_types() -> None:
+    path = APP_ROOT / "chemvas" / "ui" / "canvas_view_ports.py"
+    tree = _parse_source(path.read_text(encoding="utf-8"))
+    expected = {
+        "input_controller_for_view": frozenset({"CanvasInputController", "None"}),
+        "pointer_controller_for_view": frozenset({"CanvasPointerController", "None"}),
+    }
+    assert {
+        node.name: _return_annotation_names(node)
+        for node in tree.body
+        if isinstance(node, ast.FunctionDef) and node.name in expected
+    } == expected
+
+
+def test_ts_bracket_values_are_read_and_drawn_through_records() -> None:
+    painters = sorted(
+        str(path.relative_to(APP_ROOT.parents[0]))
+        for path in _app_python_files()
+        if re.search(
+            r"\bcontext\.decorations\.ts_bracket_path\(",
+            path.read_text(encoding="utf-8"),
+        )
+        and path.name != "scene_decoration_build_access.py"
+    )
+    assert painters == ["app/chemvas/ui/ts_bracket_record_access.py"]
+    removed = re.compile(
+        r"\bts_bracket_state_dict\b|\badopt_ts_bracket_item_for\b|\bTsBracketPathBuilder\b"
+    )
+    assert _matching_lines(removed, _app_python_files()) == []
+
+
 def test_shape_values_live_in_records_not_on_graphics_items() -> None:
     """A shape item is drawn from its record and is never asked what it is.
 
@@ -2201,7 +2232,6 @@ CONTEXT_FACADE_RULES: tuple[
         (
             r"\bCanvasSceneDecorationBuildContext\b",
             r"\bcanvas_scene_decoration_build_context_for\b",
-            r"self\.context\b",
         ),
     ),
     (
@@ -2417,7 +2447,6 @@ CONTEXT_FACADE_RULES: tuple[
         (
             r"\bBondRenderContext\b",
             r"\bbond_render_context_for\b",
-            r"self\.context\b",
         ),
     ),
     (
@@ -4439,20 +4468,120 @@ def test_chemvas_is_the_only_production_top_level_package() -> None:
     assert packages == {"chemvas"}
 
 
-def _canvas_runtime_state_field_names() -> set[str]:
-    tree = _parse_source(
-        (APP_ROOT / "chemvas" / "ui" / "canvas_runtime_state.py").read_text(
-            encoding="utf-8"
+SCENE_DRAWING_MODULES = (
+    "atom_label_renderer.py",
+    "bond_renderer.py",
+    "bond_geometry_plan_service.py",
+    "bond_geometry_update_service.py",
+    "bond_graphics_build_service.py",
+    "bond_graphics_draw_service.py",
+    "bond_line_geometry_service.py",
+    "bond_ring_double_geometry_service.py",
+    "canvas_arrow_build_service.py",
+    "canvas_scene_decoration_build_service.py",
+    "scene_geometry.py",
+    "molecule_scene_renderer.py",
+    "document_scene.py",
+    "figure_export_service.py",
+    "export_readability_service.py",
+)
+
+
+def _drawing_editor_dependencies(source: str) -> list[str]:
+    violations = []
+    forbidden = {
+        "canvas_view",
+        "canvas_service_ports",
+        "canvas_runtime_services",
+        "canvas_services",
+        "canvas_history_service",
+        "canvas_view_ports",
+        "canvas_geometry_access",
+        "scene_render_access",
+    }
+    for node in ast.walk(_parse_source(source)):
+        if isinstance(node, ast.ImportFrom):
+            if (node.module or "").rsplit(".", 1)[-1] in forbidden:
+                violations.append(node.module)
+        elif isinstance(node, ast.Import):
+            violations.extend(
+                alias.name
+                for alias in node.names
+                if alias.name.rsplit(".", 1)[-1] in forbidden
+            )
+        elif isinstance(node, ast.Attribute) and node.attr in {
+            "canvas",
+            "services",
+            "history",
+            "viewport",
+            "runtime_state",
+        }:
+            violations.append(node.attr)
+    return violations
+
+
+def test_scene_drawing_uses_a_typed_context_without_editor_resolution() -> None:
+    for filename in SCENE_DRAWING_MODULES:
+        source = (APP_ROOT / "chemvas/ui" / filename).read_text(encoding="utf-8")
+        assert _drawing_editor_dependencies(source) == [], filename
+        arguments = [
+            node
+            for node in ast.walk(_parse_source(source))
+            if isinstance(node, ast.arg) and node.arg == "context"
+        ]
+        assert arguments, filename
+        assert all(
+            node.annotation is not None
+            and ast.unparse(node.annotation) == "SceneRenderContext"
+            for node in arguments
+        ), filename
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        "from chemvas.ui.canvas_service_ports import graph_service_for_access",
+        "import chemvas.ui.canvas_view as editor",
+        "def draw(context): return context.services",
+        "def draw(context): return context.canvas",
+    ],
+)
+def test_scene_drawing_guard_rejects_editor_dependencies(source: str) -> None:
+    assert _drawing_editor_dependencies(source)
+    assert (
+        _drawing_editor_dependencies(
+            "def draw(context: SceneRenderContext): return context.scene"
         )
+        == []
     )
-    for node in ast.walk(tree):
-        if isinstance(node, ast.ClassDef) and node.name == "CanvasRuntimeState":
-            return {
-                stmt.target.id
-                for stmt in node.body
-                if isinstance(stmt, ast.AnnAssign) and isinstance(stmt.target, ast.Name)
-            }
-    raise AssertionError("CanvasRuntimeState class not found")
+
+
+def _canvas_runtime_state_field_names() -> set[str]:
+    fields: set[str] = set()
+    for filename, class_name in (
+        ("scene_render_context.py", "SceneRenderState"),
+        ("canvas_runtime_state.py", "CanvasRuntimeState"),
+    ):
+        tree = _parse_source(
+            (APP_ROOT / "chemvas" / "ui" / filename).read_text(encoding="utf-8")
+        )
+        node = next(
+            node
+            for node in tree.body
+            if isinstance(node, ast.ClassDef) and node.name == class_name
+        )
+        if class_name == "CanvasRuntimeState":
+            assert [ast.unparse(base) for base in node.bases] == ["SceneRenderState"]
+        own_fields = {
+            stmt.target.id
+            for stmt in node.body
+            if isinstance(stmt, ast.AnnAssign) and isinstance(stmt.target, ast.Name)
+        }
+        assert not fields & own_fields, (
+            "Drawing state must not be mirrored by the editor"
+        )
+        fields.update(own_fields)
+    return fields
 
 
 # Functions whose name looks like a state accessor but which are not one, with
@@ -5739,12 +5868,12 @@ def _canvas_scoped_detachers(source: str) -> list[tuple[int, str]]:
 
 
 def test_canvas_scoped_scene_detach_has_one_body() -> None:
-    """One function detaches an item from the canvas's own scene.
+    """The editor adapter resolves its scene and delegates the shared detach body.
 
     Two wrappers used to spell the same fifteen lines, differing only in what
     they answer when the canvas has no scene or the item's C++ object is gone.
-    Both now pass that answer to ``_detach_item_from_canvas_scene`` as
-    ``unresolved``.
+    Both pass that answer through ``_detach_item_from_canvas_scene`` to the
+    view-independent ``detach_graphics_item`` as ``unresolved``.
 
     ``insert_smiles_service._detach_top_level_scene_items_before_clear`` is
     the one other function that resolves the canvas's scene and calls
@@ -5762,12 +5891,27 @@ def test_canvas_scoped_scene_detach_has_one_body() -> None:
 
     assert [detacher.rsplit(":", 2)[0] for detacher in detachers] == [
         INSERT_SMILES_MODULE,
-        SCENE_ITEM_ACCESS_MODULE,
     ]
     assert [detacher.rsplit(": ", 1)[1] for detacher in detachers] == [
         PRE_CLEAR_DETACH_BODY,
-        CANVAS_DETACH_BODY,
     ]
+    source = (APP_ROOT / "chemvas/ui/scene_item_access.py").read_text(encoding="utf-8")
+    adapter = next(
+        node
+        for node in _parse_source(source).body
+        if isinstance(node, ast.FunctionDef) and node.name == CANVAS_DETACH_BODY
+    )
+    assert "detach_graphics_item" in _called_function_names(adapter)
+    source = (APP_ROOT / "chemvas/ui/scene_graphics_operations.py").read_text(
+        encoding="utf-8"
+    )
+    body = next(
+        node
+        for node in _parse_source(source).body
+        if isinstance(node, ast.FunctionDef) and node.name == "detach_graphics_item"
+    )
+    assert "removeItem" in _called_function_names(body)
+    assert _return_annotation_names(body) == frozenset({"bool", "None"})
 
 
 def _return_annotation_names(

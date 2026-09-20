@@ -9,7 +9,6 @@ from chemvas.ui.atom_label_access import add_or_update_atom_label, atom_label_se
 from chemvas.ui.bond_graphics_access import add_bond_graphics_for
 from chemvas.ui.canvas_model_access import (
     atom_for_id,
-    atoms_for,
     bond_count_for,
     bond_for_id,
     bond_ids_from,
@@ -38,6 +37,10 @@ from chemvas.ui.insert_commit_rollback import (
     SmilesInputRestoreAuthority,
     capture_smiles_input_restore_authority,
 )
+from chemvas.ui.molecule_scene_renderer import (
+    prepare_molecule_for_scene,
+    render_molecule,
+)
 from chemvas.ui.renderer_style_access import bond_length_px_for
 from chemvas.ui.scene_item_access import (
     attach_scene_item,
@@ -45,8 +48,8 @@ from chemvas.ui.scene_item_access import (
     remove_item_from_canvas_scene,
     remove_scene_item,
 )
+from chemvas.ui.scene_render_access import scene_render_context_for
 from chemvas.ui.structure_insert_access import (
-    ensure_insert_carbon_dot_for,
     record_insert_additions_for,
     rollback_insert_mutation_for,
 )
@@ -551,34 +554,9 @@ class StructureBuildCommitter:
         return double_count
 
     def render_model(self) -> None:
-        for bond_id, bond in enumerate(bonds_for(self.canvas)):
-            if bond is None:
-                continue
-            self.add_bond_graphics(bond_id)
-
-        for atom_id, atom in atoms_for(self.canvas).items():
-            if atom.element.upper() == "C":
-                if atom.explicit_label:
-                    add_or_update_atom_label(
-                        self.canvas,
-                        atom_id,
-                        atom.element,
-                        clear_smiles=False,
-                        record=False,
-                        allow_merge=False,
-                        show_carbon=True,
-                    )
-                else:
-                    ensure_insert_carbon_dot_for(self.canvas, atom_id)
-            else:
-                add_or_update_atom_label(
-                    self.canvas,
-                    atom_id,
-                    atom.element,
-                    clear_smiles=False,
-                    record=False,
-                    allow_merge=False,
-                )
+        context = scene_render_context_for(self.canvas)
+        prepare_molecule_for_scene(context.model)
+        render_molecule(context)
 
 
 __all__ = ["StructureBuildCommitter", "StructureBuildHistorySnapshot"]

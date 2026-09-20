@@ -14,13 +14,13 @@ from chemvas.ui.canvas_atom_graphics_state import (
     atom_items_for,
 )
 from chemvas.ui.canvas_bond_graphics_state import bond_items_for_id
-from chemvas.ui.canvas_geometry_controller import CanvasGeometryController
 from chemvas.ui.canvas_service_access import canvas_services_for
-from chemvas.ui.canvas_service_ports import geometry_controller_for_access
 from chemvas.ui.canvas_view import CanvasView
 from chemvas.ui.graphics_items import AtomLabelItem
 from chemvas.ui.layout_qa_service import _atom_label_scene_path
+from chemvas.ui.scene_render_access import scene_render_context_for
 from tests.runtime_state import canvas_runtime_state
+from tests.scene_render_context import scene_geometry_for_test_canvas
 
 
 @pytest.fixture(scope="module")
@@ -39,7 +39,7 @@ def test_native_oxygen_bond_clears_ink_without_document_box_gap(app):
         bond = services.structure.canvas_bond_mutation_service.add_bond(a, b)
         canvas.bond_renderer.add_bond_graphics(bond)
         item = atom_items_for(canvas)[a]
-        controller = geometry_controller_for_access(canvas)
+        controller = scene_render_context_for(canvas).geometry
         bounds, hit, pos = item.boundingRect(), item.shape(), item.pos()
         model_positions = {k: (v.x, v.y) for k, v in canvas.model.atoms.items()}
         line_item = bond_items_for_id(canvas, bond)[0]
@@ -101,7 +101,7 @@ def _label_controller(
             atom_graphics_state=CanvasAtomGraphicsState(atom_items={1: item})
         ),
     )
-    return item, CanvasGeometryController(canvas)
+    return item, scene_geometry_for_test_canvas(canvas)
 
 
 @pytest.mark.parametrize(

@@ -14,7 +14,7 @@ from chemvas.bootstrap.document_cli_shared import (
     MAX_GRAPHICS_RECORDS,
     graphics_record_count,
     json_text,
-    offscreen_canvas,
+    offscreen_document_scene,
 )
 from chemvas.core.document_io import atomic_create_bytes, read_exact_document
 from chemvas.ui.export_guard_service import (
@@ -203,7 +203,10 @@ def _render_offscreen(
     max_height_mm: float | None = None,
     min_font_pt: float | None = None,
 ) -> _RenderedDocument:
-    with offscreen_canvas(state, command="render-document") as (canvas, service):
+    with offscreen_document_scene(state, command="render-document") as context:
+        from chemvas.ui.figure_export_service import FigureExportService
+
+        service = FigureExportService(context)
         with tempfile.TemporaryDirectory(prefix="chemvas-render-document-") as raw_tmp:
             rendered_path = Path(raw_tmp) / f"rendered.{output_format}"
             plan = service.export_figure(
@@ -214,7 +217,6 @@ def _render_offscreen(
                 background=background,
                 sizing="bond",
                 target_width_mm=width_mm,
-                editable_svg=False,
                 max_height_mm=max_height_mm,
             )
             rendered_size = rendered_path.stat().st_size
@@ -223,7 +225,7 @@ def _render_offscreen(
                     f"rendered output exceeds the {MAX_OUTPUT_BYTES}-byte limit"
                 )
             content = rendered_path.read_bytes()
-        # The session checked all limits before painting, including native PDF
+        # The exporter checked all limits before painting, including native PDF
         # height rounding. Reuse its exact plan for dimensions and readability.
         width_pixels, height_pixels = validate_export_budget(
             plan, output_format=output_format, dpi=dpi
@@ -243,7 +245,7 @@ def _render_offscreen(
             from chemvas.ui.export_readability_service import assess_export_readability
 
             font_readability = assess_export_readability(
-                canvas,
+                context,
                 plan,
                 minimum_font_pt=min_font_pt,
                 output_format=output_format,

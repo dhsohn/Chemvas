@@ -3,6 +3,7 @@ import unittest
 from types import SimpleNamespace
 from unittest import mock
 
+from chemvas.ui.note_item_access import new_note_item_for
 from tests.runtime_services import canvas_runtime_services
 from tests.runtime_state import canvas_runtime_state
 
@@ -46,7 +47,6 @@ from chemvas.ui.canvas_smiles_input_state import CanvasSmilesInputState
 from chemvas.ui.graphics_items import AtomDotItem
 from chemvas.ui.history_commands import UpdateSceneItemCommand
 from chemvas.ui.history_operations import CanvasHistoryOperations
-from chemvas.ui.note_item import NoteItem
 from chemvas.ui.note_item_access import (
     committed_note_html_for,
     committed_note_text_for,
@@ -512,7 +512,7 @@ class CanvasColorMutationServiceTest(unittest.TestCase):
         canvas = build_canvas_view()
         self.addCleanup(self._dispose_canvas, canvas)
         service = canvas.services.scene_operations.canvas_color_mutation_service
-        note = NoteItem(canvas)
+        note = new_note_item_for(canvas)
         note.setPlainText("Hello World")
         note.setData(0, "note")
         set_committed_note_text_for(note, note.toPlainText())
@@ -828,7 +828,7 @@ class CanvasColorMutationServiceTest(unittest.TestCase):
     def test_note_color_undo_redo_preserves_exact_editing_runtime(self) -> None:
         canvas = build_canvas_view()
         self.addCleanup(self._dispose_canvas, canvas)
-        note = NoteItem(canvas)
+        note = new_note_item_for(canvas)
         note.setPlainText("Hello World")
         note.setData(0, "note")
         set_committed_note_text_for(note, note.toPlainText())
@@ -900,7 +900,7 @@ class CanvasColorMutationServiceTest(unittest.TestCase):
     def test_committed_note_color_is_not_recorded_again_on_focus_out(self) -> None:
         canvas = build_canvas_view()
         self.addCleanup(self._dispose_canvas, canvas)
-        note = NoteItem(canvas)
+        note = new_note_item_for(canvas)
         note.setData(0, "note")
         note.setPlainText("memo")
         canvas.services.scene_view.scene_item_controller.attach_scene_item(note)
@@ -937,7 +937,7 @@ class CanvasColorMutationServiceTest(unittest.TestCase):
     ) -> None:
         canvas = build_canvas_view()
         self.addCleanup(self._dispose_canvas, canvas)
-        note = NoteItem(canvas)
+        note = new_note_item_for(canvas)
         note.setData(0, "note")
         note.setPlainText("old")
         canvas.services.scene_view.scene_item_controller.attach_scene_item(note)

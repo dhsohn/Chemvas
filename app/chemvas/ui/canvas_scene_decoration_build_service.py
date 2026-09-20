@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import math
-from typing import override
+from typing import TYPE_CHECKING, override
 
 from PyQt6.QtCore import QPointF, QRectF, Qt
 from PyQt6.QtGui import (
@@ -31,27 +31,16 @@ from chemvas.features.annotations import (
     pen_style_for_stroke,
     shape_path,
 )
-from chemvas.ui.canvas_tool_settings_state import tool_settings_state_for
 from chemvas.ui.graphics_items import (
     AtomDotItem,
     AtomLabelItem,
     NoSelectLineItem,
     NoSelectPathItem,
 )
-from chemvas.ui.mark_item_access import mark_selection_radius_for
-from chemvas.ui.renderer_style_access import (
-    atom_color_for,
-    atom_font_for,
-    bond_color_for,
-    bond_length_px_for,
-    bond_line_width_for,
-    bond_pen_for,
-    font_family_for,
-    orbital_alpha_for,
-    orbital_negative_color_for,
-    orbital_positive_color_for,
-)
-from chemvas.ui.scene_item_access import add_item_to_canvas_scene
+from chemvas.ui.pick_radius_access import atom_pick_radius
+
+if TYPE_CHECKING:
+    from chemvas.ui.scene_render_context import SceneRenderContext
 
 
 def _radial_orbital_lobes(
@@ -157,14 +146,16 @@ class _BracketGlyphItem(NoSelectPathItem):
 
 
 class CanvasSceneDecorationBuildService:
-    def __init__(self, canvas) -> None:
-        self.canvas = canvas
+    def __init__(self, context: SceneRenderContext) -> None:
+        self.context = context
 
     def apply_mark_color(self, item, color: str | None) -> None:
         """Apply an explicit mark override, or restore the document default."""
         if color is not None and not is_hex_color(color):
             raise ValueError("Mark color must be a hex color.")
-        painted = QColor(color if color is not None else atom_color_for(self.canvas))
+        painted = QColor(
+            color if color is not None else self.context.renderer.style.atom_color
+        )
         if isinstance(item, QGraphicsTextItem):
             item.setDefaultTextColor(painted)
         elif isinstance(item, QGraphicsEllipseItem):
@@ -186,20 +177,22 @@ class CanvasSceneDecorationBuildService:
         if kind == "radical":
             item = AtomDotItem(0.0, 0.0, 0.0, 0.0)
             self.refresh_mark_item_geometry(item, kind)
-            item.setBrush(QColor(atom_color_for(self.canvas)))
+            item.setBrush(QColor(self.context.renderer.style.atom_color))
             item.setPen(QPen(Qt.PenStyle.NoPen))
             return item
         if kind in {"plus", "minus"}:
             text_item = AtomLabelItem()
             self.refresh_mark_item_geometry(text_item, kind)
-            text_item.setDefaultTextColor(QColor(atom_color_for(self.canvas)))
+            text_item.setDefaultTextColor(
+                QColor(self.context.renderer.style.atom_color)
+            )
             text_item.setPlainText("+" if kind == "plus" else "-")
             return text_item
         if kind in {"circled_plus", "circled_minus"}:
             circle_item = _ChargeCircleMarkItem(QPainterPath())
             self.refresh_mark_item_geometry(circle_item, kind)
             pen = circle_item.pen()
-            pen.setColor(QColor(atom_color_for(self.canvas)))
+            pen.setColor(QColor(self.context.renderer.style.atom_color))
             pen.setCapStyle(Qt.PenCapStyle.RoundCap)
             pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
             circle_item.setPen(pen)
@@ -209,9 +202,9 @@ class CanvasSceneDecorationBuildService:
 
     def refresh_mark_item_geometry(self, item, kind: str) -> None:
         """Use native mark dimensions without replacing identity, color or text."""
-        selection_radius = mark_selection_radius_for(self.canvas)
+        selection_radius = atom_pick_radius(self.context.renderer)
         if kind == "radical" and isinstance(item, AtomDotItem):
-            radius = max(1.2, bond_line_width_for(self.canvas) * 0.7)
+            radius = max(1.2, self.context.renderer.style.bond_line_width * 0.7)
             rect = QRectF(-radius, -radius, radius * 2.0, radius * 2.0)
             item.setRect(rect)
             item.set_hit_padding(max(0.0, selection_radius - radius))
@@ -221,7 +214,7 @@ class CanvasSceneDecorationBuildService:
                 )
             return
         if kind in {"plus", "minus"} and isinstance(item, AtomLabelItem):
-            font = atom_font_for(self.canvas)
+            font = self.context.renderer.atom_font()
             item.setFont(font)
             item.set_hit_radius(selection_radius)
             if item.font() != font:
@@ -233,8 +226,10 @@ class CanvasSceneDecorationBuildService:
             item, _ChargeCircleMarkItem
         ):
             raise ValueError(f"Cannot refresh mark geometry for {kind!r}")
-        radius = max(4.0, QFontMetricsF(atom_font_for(self.canvas)).height() * 0.26)
-        stroke_width = max(0.9, bond_line_width_for(self.canvas) * 0.65)
+        radius = max(
+            4.0, QFontMetricsF(self.context.renderer.atom_font()).height() * 0.26
+        )
+        stroke_width = max(0.9, self.context.renderer.style.bond_line_width * 0.65)
         symbol_extent = radius * 0.48
         path = QPainterPath()
         path.addEllipse(QRectF(-radius, -radius, radius * 2.0, radius * 2.0))
@@ -270,8 +265,8 @@ class CanvasSceneDecorationBuildService:
 
     def ts_bracket_rect_from_points(self, start: QPointF, end: QPointF) -> QRectF:
         rect = QRectF(start, end).normalized()
-        min_width = bond_length_px_for(self.canvas) * 1.8
-        min_height = bond_length_px_for(self.canvas) * 2.4
+        min_width = self.context.renderer.style.bond_length_px * 1.8
+        min_height = self.context.renderer.style.bond_length_px * 2.4
         if rect.width() < 4.0 and rect.height() < 4.0:
             return QRectF(
                 start.x() - min_width / 2.0,
@@ -287,7 +282,7 @@ class CanvasSceneDecorationBuildService:
         )
 
     def ts_bracket_stroke_width(self) -> float:
-        return max(0.8, bond_line_width_for(self.canvas) * 0.58)
+        return max(0.8, self.context.renderer.style.bond_line_width * 0.58)
 
     def _add_square_bracket_lines(
         self, path: QPainterPath, rect: QRectF, hook: float, *, left: bool
@@ -356,8 +351,10 @@ class CanvasSceneDecorationBuildService:
 
     def _stroked_bracket_lines(self, rect: QRectF, bracket_kind: str) -> QPainterPath:
         rect = QRectF(rect).normalized()
-        hook = min(rect.width() * 0.18, bond_length_px_for(self.canvas) * 0.55)
-        hook = max(hook, bond_length_px_for(self.canvas) * 0.28)
+        hook = min(
+            rect.width() * 0.18, self.context.renderer.style.bond_length_px * 0.55
+        )
+        hook = max(hook, self.context.renderer.style.bond_length_px * 0.28)
         bracket_lines = QPainterPath()
         if bracket_kind in {"square_pair", "square_left"}:
             self._add_square_bracket_lines(bracket_lines, rect, hook, left=True)
@@ -379,8 +376,10 @@ class CanvasSceneDecorationBuildService:
         return stroker.createStroke(bracket_lines)
 
     def _bracket_symbol_font(self, rect: QRectF) -> QFont:
-        font = QFont(font_family_for(self.canvas))
-        size = min(rect.height() * 0.62, bond_length_px_for(self.canvas) * 1.35)
+        font = QFont(self.context.renderer.style.font_family)
+        size = min(
+            rect.height() * 0.62, self.context.renderer.style.bond_length_px * 1.35
+        )
         # A box 25 tall asks for exactly 15.5 px. Moving a bracket is arithmetic
         # on its edges, which can leave the height one float step short of 25;
         # rounding that noise away first keeps the glyph the size it was.
@@ -431,9 +430,8 @@ class CanvasSceneDecorationBuildService:
         # record, whose kind may be a dagger after an undo or a paste.
         item = _BracketGlyphItem(path)
         item.setPen(QPen(Qt.PenStyle.NoPen))
-        item.setBrush(QBrush(QColor(bond_color_for(self.canvas))))
+        item.setBrush(QBrush(QColor(self.context.renderer.style.bond_color)))
         item.setData(0, "ts_bracket")
-        item.setData(1, {"rect": normalized, "bracket_kind": bracket_kind})
         return item
 
     def preview_ts_bracket(
@@ -447,7 +445,8 @@ class CanvasSceneDecorationBuildService:
         )
         preview_color = QColor(120, 120, 120, 140)
         item.setBrush(QBrush(preview_color))
-        return add_item_to_canvas_scene(self.canvas, item)
+        self.context.scene.addItem(item)
+        return item
 
     # --- Free decorative shapes (circle / ellipse / rounded rect / rect) ---
     # Shapes sit behind structures/arrows/text (default z 0) so a shape drawn
@@ -456,7 +455,7 @@ class CanvasSceneDecorationBuildService:
 
     def shape_rect_from_points(self, start: QPointF, end: QPointF) -> QRectF:
         rect = QRectF(start, end).normalized()
-        min_size = bond_length_px_for(self.canvas) * 1.2
+        min_size = self.context.renderer.style.bond_length_px * 1.2
         if rect.width() < 4.0 and rect.height() < 4.0:
             return QRectF(
                 start.x() - min_size / 2.0,
@@ -467,10 +466,10 @@ class CanvasSceneDecorationBuildService:
         return rect
 
     def shape_stroke_width(self) -> float:
-        return max(1.4, bond_line_width_for(self.canvas))
+        return max(1.4, self.context.renderer.style.bond_line_width)
 
     def shape_pen(self, stroke_style: str = DEFAULT_STROKE_STYLE) -> QPen:
-        pen = QPen(QColor(bond_color_for(self.canvas)))
+        pen = QPen(QColor(self.context.renderer.style.bond_color))
         pen.setWidthF(self.shape_stroke_width())
         pen.setStyle(pen_style_for_stroke(stroke_style))
         pen.setCapStyle(Qt.PenCapStyle.RoundCap)
@@ -517,16 +516,17 @@ class CanvasSceneDecorationBuildService:
             # exists only in the preview and disappears on commit.
             pen.setStyle(Qt.PenStyle.DashLine)
         item.setPen(pen)
-        return add_item_to_canvas_scene(self.canvas, item)
+        self.context.scene.addItem(item)
+        return item
 
     def build_orbital_items(self, center: QPointF, kind: str):
-        radius = bond_length_px_for(self.canvas) * 0.35
-        pen = bond_pen_for(self.canvas)
-        pos_color = QColor(orbital_positive_color_for(self.canvas))
-        neg_color = QColor(orbital_negative_color_for(self.canvas))
-        pos_color.setAlphaF(orbital_alpha_for(self.canvas))
-        neg_color.setAlphaF(orbital_alpha_for(self.canvas))
-        phase_enabled = tool_settings_state_for(self.canvas).orbital_phase_enabled
+        radius = self.context.renderer.style.bond_length_px * 0.35
+        pen = self.context.renderer.bond_pen()
+        pos_color = QColor(self.context.renderer.style.orbital_positive_color)
+        neg_color = QColor(self.context.renderer.style.orbital_negative_color)
+        pos_color.setAlphaF(self.context.renderer.style.orbital_alpha)
+        neg_color.setAlphaF(self.context.renderer.style.orbital_alpha)
+        phase_enabled = self.context.state.tool_settings_state.orbital_phase_enabled
 
         items: list[QGraphicsItem] = []
         for dx, dy, rx_factor, ry_factor, positive in _ORBITAL_LOBE_SPECS.get(kind, ()):
