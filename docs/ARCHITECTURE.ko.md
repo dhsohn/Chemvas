@@ -275,8 +275,8 @@ layout — 은 `shape_state_dict_for`를 통해 레코드에서 읽는다. 레�
 weak finalizer가 레코드를 지우므로, 버려진 redo 분기와 한도 밖으로 밀려난 history 항목이
 더는 참조되지 않는 레코드를 남기지 않는다. finalizer는 아이템이 아니라 state와 id만
 보유하고 실행 시 state의 현재 mapping을 읽는다. 롤백이나 문서 교체가 mapping을 바꿀 수
-있기 때문이다. 새 문서는 여전히 store를 명시적으로 비우고, 구조 로드는 history와 그것이
-참조하는 레코드를 유지한다. id는 재사용되지 않는다. id는 `new_scene_record_id`에서 나오며, 이 카운터는
+있기 때문이다. 새 문서는 여전히 store를 명시적으로 비우고, 이후의 삽입은 이전 history
+명령이 참조하는 레코드를 유지한다. id는 재사용되지 않는다. id는 `new_scene_record_id`에서 나오며, 이 카운터는
 런타임 상태 밖에 있어서 history가 더 뒤의 id를 가진 아이템을 쥐고 있는 동안 어떤 롤백도
 카운터를 되감지 못한다.
 따라서 저장되는 값은 문서가 말한 값이다. 불투명도 0.25는 0.25로 저장되며(예전에는 Qt의

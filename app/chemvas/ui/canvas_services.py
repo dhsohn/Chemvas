@@ -53,7 +53,6 @@ def build_canvas_services(
         graph_service=graph_service,
         move_controller=interaction_services.move_controller,
         insert_state=insert_state,
-        history_service=history_service,
     )
     scene_operation_services = build_scene_operation_services(
         canvas,

@@ -393,8 +393,8 @@ class CanvasViewEventWrapperTest(unittest.TestCase):
 
         tool.on_mouse_release.assert_called_once_with(release_event)
         log_exception.assert_called_once_with(
-            "Canvas mouse-%s handling failed",
-            "release",
+            "Canvas %s handling failed",
+            "mouse-release",
         )
         error_callback.assert_called_once_with(
             "The current interaction could not be completed. Try again."

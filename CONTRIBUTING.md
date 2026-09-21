@@ -83,6 +83,16 @@ that file's current `unittest` or plain-pytest style. New standalone test module
 use plain pytest functions. Do not convert unrelated tests solely to change
 style.
 
+Pytest graphics tests opt into the session-scoped `qt_application` fixture from
+`tests/conftest.py`. With file-isolated execution, this keeps one strongly owned
+`QApplication` alive for that file, including parameterized cases and nested
+offscreen contexts. A widget fixture depends on it and disposes of its own
+widgets before returning: schedule deletion and deliver the target's
+`DeferredDelete` event. Closing a window alone does not destroy it. Do not make
+the application fixture globally autouse; Qt-free and startup subprocess tests
+must retain their own application boundary. Existing unittest modules may keep
+their class-owned application and explicit widget cleanup.
+
 CI additionally runs the optional-RDKit smoke and wheel packaging smoke. Those
 two environment-specific jobs are not part of `make check`.
 

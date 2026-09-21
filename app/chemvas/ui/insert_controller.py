@@ -25,21 +25,17 @@ class InsertController:
         hit_testing_service,
         insert_commit_service: InsertCommitService | None = None,
         graph_service,
-        structure_build_service=None,
-        history_service=None,
     ) -> None:
         self.canvas = canvas
         self.insert_state = (
             insert_state if insert_state is not None else insert_state_for(canvas)
         )
         self.hit_testing_service = hit_testing_service
-        self.history = history_service
         self.graph_service = graph_service
         self.insert_commit_service = insert_commit_service or InsertCommitService(
             canvas,
             bond_exists=self.graph_service.bond_exists,
         )
-        self.structure_build_service = structure_build_service
         self.template_service = InsertTemplateService(
             canvas,
             insert_state=self.insert_state,
@@ -54,9 +50,6 @@ class InsertController:
             canvas,
             insert_state=self.insert_state,
             insert_commit_service=self.insert_commit_service,
-            graph_service=self.graph_service,
-            structure_build_service=self.structure_build_service,
-            history_service=self.history,
             session_state=self.insert_session_state,
             apply_session_state=self.apply_insert_session_state,
             cancel_template_insert=lambda: self.cancel_template_insert(),

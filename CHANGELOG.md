@@ -7,8 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.17.1] - 2026-09-21
+
 ### Fixed
 
+- Rejected keyboard nudges of shapes and TS brackets report an interaction error
+  instead of terminating Qt. The failed edit preserves the document and its
+  undo/redo stacks, and subsequent valid edits remain usable.
+- SMILES insertion retains explicit carbon labels present in its converted
+  model, matching the label shown by the preview.
 - Shape and TS bracket records are released when their detached graphics items
   are no longer held by history or recovery, instead of accumulating until a
   new document is opened. Items still needed by undo and redo retain their
@@ -19,6 +26,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- SMILES insertion previews draw directly into a temporary scene using the
+  shared molecular and annotation renderers. The throwaway editor, document
+  replacement loader and preview-only undo builder are removed; actual
+  insertion remains undoable.
 - GUI and command-line figure export share an explicit scene rendering context.
   `render-document` and `check-layout` build a scene without constructing the
   canvas editor or its history and input services. Document formats and output
@@ -2249,7 +2260,8 @@ housekeeping.
   `.chemvas` document type (double-clicking a file opens it in Chemvas), and a
   Linux `.desktop` entry with an `application/x-chemvas` MIME type.
 
-[Unreleased]: https://github.com/dhsohn/Chemvas/compare/v0.17.0...HEAD
+[Unreleased]: https://github.com/dhsohn/Chemvas/compare/v0.17.1...HEAD
+[0.17.1]: https://github.com/dhsohn/Chemvas/compare/v0.17.0...v0.17.1
 [0.17.0]: https://github.com/dhsohn/Chemvas/compare/v0.16.0...v0.17.0
 [0.16.0]: https://github.com/dhsohn/Chemvas/compare/v0.15.0...v0.16.0
 [0.15.0]: https://github.com/dhsohn/Chemvas/compare/v0.14.1...v0.15.0

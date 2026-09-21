@@ -79,6 +79,15 @@ QT_QPA_PLATFORM=offscreen python -m pytest tests/test_<area>.py
 현재 `unittest` 또는 순수 pytest 스타일을 따릅니다. 새로 만드는 독립 테스트
 모듈은 순수 pytest 함수를 씁니다. 스타일만 바꾸려고 무관한 테스트를 변환하지 마세요.
 
+pytest 그래픽 테스트는 `tests/conftest.py`의 session 범위 `qt_application`
+fixture를 명시적으로 사용합니다. 파일별 독립 실행에서 매개변수별 사례와 중첩된
+offscreen context가 같은 `QApplication`을 빌리도록 강한 참조를 유지합니다.
+위젯 fixture는 이 fixture에 의존하고, 종료 전에 자신이 만든 위젯의 삭제를 예약한 뒤
+그 대상의 `DeferredDelete` 이벤트를 처리합니다. 창을 닫는 것만으로는 객체가
+삭제되지 않습니다. Qt 없는 테스트와 시작 subprocess 테스트의 경계를 유지하도록
+application fixture를 전역 autouse로 만들지 않습니다. 기존 unittest 모듈은
+클래스가 application을 보유하고 위젯을 명시적으로 정리하는 방식을 유지할 수 있습니다.
+
 CI는 추가로 선택적 RDKit 스모크와 wheel 패키징 스모크를 돌립니다. 이 두
 환경 의존 잡은 `make check`에 포함되지 않습니다.
 

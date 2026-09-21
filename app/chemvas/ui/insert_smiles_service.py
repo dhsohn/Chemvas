@@ -2,28 +2,14 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from PyQt6.QtCore import QPointF
 from PyQt6.QtWidgets import QMessageBox
 
-from chemvas.domain.transactions import add_recovery_error_note, restore_snapshot
 from chemvas.features.insertion import (
-    annotation_mark_direction,
-    annotation_mark_kinds,
-    normalized_atom_annotation,
     plan_smiles_commit,
     smiles_preview_center,
     smiles_preview_offset,
 )
-from chemvas.ui.canvas_model_access import next_atom_id_for, set_model_for
-from chemvas.ui.canvas_scene_reset_access import clear_scene_for
-from chemvas.ui.canvas_scene_state import canvas_scene_for
-from chemvas.ui.canvas_smiles_input_state import set_last_smiles_input_for
 from chemvas.ui.canvas_window_access import notify_error_for
-from chemvas.ui.history_canvas_access import (
-    capture_history_transaction_for_history,
-    release_history_transaction_for_history,
-    restore_history_transaction_for_history,
-)
 from chemvas.ui.input_view_access import viewport_center_scene_pos_for
 from chemvas.ui.insert_mode_logic import InsertSessionState
 from chemvas.ui.insert_mode_logic import (
@@ -32,51 +18,23 @@ from chemvas.ui.insert_mode_logic import (
 from chemvas.ui.insert_mode_logic import (
     cancel_smiles_insert as cancel_smiles_insert_state,
 )
-from chemvas.ui.insert_smiles_transaction import SmilesLoadTransactionBuilder
 from chemvas.ui.preview_scene_access import add_smiles_preview_item_for
 from chemvas.ui.preview_scene_access import (
     clear_smiles_preview_for as clear_smiles_preview_helper,
 )
 from chemvas.ui.rdkit_adapter_access import rdkit_last_error_for, smiles_to_2d_for
-from chemvas.ui.renderer_style_access import bond_length_px_for
-from chemvas.ui.scene_decoration_access import materialize_mark_for_atom_for
-from chemvas.ui.scene_signal_blocking import blocked_scene_signals
+from chemvas.ui.renderer_style_access import bond_length_px_for, renderer_for
 from chemvas.ui.smiles_preview_picture import render_smiles_preview_picture
 
 if TYPE_CHECKING:
     from collections.abc import Callable
 
+    from PyQt6.QtCore import QPointF
+
     from chemvas.ui.canvas_insert_state import CanvasInsertState
     from chemvas.ui.insert_commit_service import InsertCommitService
-    from chemvas.ui.transactions.document import DocumentSavepoint
 
 MAX_SMILES_INPUT_LENGTH = 1024
-
-
-def _detach_top_level_scene_items_before_clear(canvas) -> None:
-    """Keep live Qt item identities outside a destructive scene clear.
-
-    The exact history transaction already owns strong references to every
-    scene item.  Detaching only the roots removes the whole parent/child tree
-    from the scene without destroying its C++ objects, so an exact rollback
-    can reattach those same wrappers.  The roots are collected completely
-    before the first removal so a getter failure cannot leave a partial tree.
-    """
-
-    scene = canvas_scene_for(canvas)
-    if scene is None:
-        return
-    items = getattr(scene, "items", None)
-    if not callable(items):
-        return
-    roots = tuple(item for item in items() if item.parentItem() is None)
-    if not roots:
-        return
-    with blocked_scene_signals(scene):
-        for root in roots:
-            scene.removeItem(root)
-            if root.scene() is scene:
-                raise RuntimeError("scene item remained attached after detach")
 
 
 class InsertSmilesService:
@@ -86,9 +44,6 @@ class InsertSmilesService:
         *,
         insert_state: CanvasInsertState,
         insert_commit_service: InsertCommitService,
-        graph_service,
-        structure_build_service,
-        history_service,
         session_state: Callable[[], InsertSessionState],
         apply_session_state: Callable[[InsertSessionState], None],
         cancel_template_insert: Callable[[], None],
@@ -99,16 +54,12 @@ class InsertSmilesService:
         self.canvas = canvas
         self.insert_state = insert_state
         self.insert_commit_service = insert_commit_service
-        self.graph_service = graph_service
-        self.structure_build_service = structure_build_service
-        self.history = history_service
         self._session_state = session_state
         self._apply_session_state = apply_session_state
         self._cancel_template_insert = cancel_template_insert
         self._cancel_smiles_insert_callback = cancel_smiles_insert
         self._clear_smiles_preview_callback = clear_smiles_preview
         self._render_smiles_preview_callback = render_smiles_preview
-        self.transaction_builder = SmilesLoadTransactionBuilder(canvas)
 
     def _warn_smiles_error(self, message: str) -> None:
         if not notify_error_for(self.canvas, f"SMILES: {message}"):
@@ -121,75 +72,6 @@ class InsertSmilesService:
             f"SMILES input is too long (maximum {MAX_SMILES_INPUT_LENGTH} characters)."
         )
         return True
-
-    def load_smiles(self, smiles: str) -> None:
-        smiles = smiles.strip()
-        if not smiles:
-            return
-        if self._reject_oversized_smiles(smiles):
-            return
-        model = smiles_to_2d_for(
-            self.canvas, smiles, scale=bond_length_px_for(self.canvas)
-        )
-        if model is None:
-            self._warn_smiles_error(
-                rdkit_last_error_for(self.canvas) or "Failed to render SMILES."
-            )
-            return
-        self.load_model(model, smiles)
-
-    def load_model(self, model, smiles: str) -> None:
-        """Replace the canvas contents with an already converted ``model``."""
-        if self.structure_build_service is None:
-            raise RuntimeError("structure_build_service is required to load SMILES")
-        snapshot = self.transaction_builder.capture()
-        after_clear_next_atom_id = next_atom_id_for(self.canvas)
-        added_scene_items: list[object] = []
-        command = None
-
-        def build_load_command():
-            if added_scene_items:
-                return self.transaction_builder.build_command(
-                    snapshot,
-                    after_clear_next_atom_id=after_clear_next_atom_id,
-                    after_smiles_input=smiles,
-                    added_scene_items=added_scene_items,
-                )
-            return self.transaction_builder.build_command(
-                snapshot,
-                after_clear_next_atom_id=after_clear_next_atom_id,
-                after_smiles_input=smiles,
-            )
-
-        exact_transaction = capture_history_transaction_for_history(
-            self.canvas,
-            history_service=self.history,
-        )
-        try:
-            _detach_top_level_scene_items_before_clear(self.canvas)
-            clear_scene_for(self.canvas)
-            after_clear_next_atom_id = next_atom_id_for(self.canvas)
-            set_model_for(self.canvas, model)
-            self.graph_service.rebuild_bond_adjacency()
-            set_last_smiles_input_for(self.canvas, smiles)
-            self.structure_build_service.render_model()
-            self._add_annotation_marks(model, added_scene_items)
-            command = build_load_command()
-            if command is not None:
-                self._push_load_history_verified(command)
-            release_history_transaction_for_history(
-                self.canvas,
-                exact_transaction,
-            )
-        except Exception as error:
-            self._restore_exact_transaction_after_failed_load(
-                exact_transaction,
-                original_error=error,
-            )
-            raise
-
-    def _push_load_history_verified(self, command: object) -> None:
-        self.history.push(command)
 
     def begin_smiles_insert(self, smiles: str) -> None:
         if self.insert_state.template_active:
@@ -215,7 +97,7 @@ class InsertSmilesService:
             return
         # Rendered once per insertion; hovering only moves the replayed picture.
         self.insert_state.smiles_preview_picture = render_smiles_preview_picture(
-            self.canvas, model, smiles
+            renderer_for(self.canvas), model
         )
         self.insert_state.smiles_preview_model = model
         self._apply_session_state(next_state)
@@ -293,59 +175,6 @@ class InsertSmilesService:
             self._clear_smiles_preview_callback()
             return
         self.clear_smiles_preview()
-
-    def _add_annotation_marks(
-        self, model, added: list[object] | None = None
-    ) -> list[object]:
-        if added is None:
-            added = []
-        atom_annotations = getattr(model, "atom_annotations", {})
-        for atom_id, annotation in atom_annotations.items():
-            atom = model.atoms.get(atom_id)
-            if atom is None:
-                continue
-            annotation_values = normalized_atom_annotation(annotation)
-            for index, kind in enumerate(annotation_mark_kinds(annotation_values)):
-                direction_x, direction_y = annotation_mark_direction(
-                    index, model=model, atom_id=atom_id
-                )
-                item = materialize_mark_for_atom_for(
-                    self.canvas,
-                    atom_id,
-                    QPointF(atom.x + direction_x, atom.y + direction_y),
-                    kind=kind,
-                )
-                if item is not None:
-                    added.append(item)
-        return added
-
-    def _restore_exact_transaction_after_failed_load(
-        self,
-        exact_transaction: DocumentSavepoint,
-        *,
-        original_error: BaseException,
-    ) -> None:
-        restore_result = restore_snapshot(
-            lambda: restore_history_transaction_for_history(
-                self.canvas,
-                exact_transaction,
-            ),
-            description="SMILES document transaction",
-        )
-        rollback_errors: tuple[BaseException, ...] = restore_result.errors
-        if not restore_result.authoritative:
-            rollback_errors = (
-                *rollback_errors,
-                RuntimeError(
-                    "SMILES document exact rollback remained non-authoritative"
-                ),
-            )
-        for secondary_error in rollback_errors:
-            add_recovery_error_note(
-                original_error,
-                secondary_error,
-                phase="restoring the SMILES document transaction",
-            )
 
 
 __all__ = ["MAX_SMILES_INPUT_LENGTH", "InsertSmilesService"]

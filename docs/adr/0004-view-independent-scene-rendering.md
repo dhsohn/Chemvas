@@ -41,6 +41,14 @@ selected items and, when requested, embeds the editable document payload.
 `QApplication`; neither needs a `CanvasView` or history. Commands that edit a
 document (`layout-document` and `insert-template`) retain the editor assembly.
 
+SMILES insertion previews also compose a standalone scene with a copied model
+and style renderer. Molecular painting and label-aware charge/radical placement
+use the shared drawing collaborators, then record one `QPicture` for hover.
+The temporary scene is destroyed on success and failure; the caller owns the
+application. The preview-only whole-document loader and its replacement-history
+builder are removed. Actual insertion still publishes through its existing
+committer and retains its undo/redo and rollback ownership.
+
 ## Consequences
 
 - The scene renderer remains Qt-dependent. This is an editor boundary, not a

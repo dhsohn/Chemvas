@@ -2500,7 +2500,6 @@ CONTEXT_FACADE_RULES: tuple[
         (
             "canvas_history_recording_service.py",
             "canvas_document_state.py",
-            "insert_smiles_transaction.py",
         ),
         (
             r"\bCanvasHistoryRecordingContext\b",
@@ -4537,6 +4536,12 @@ def test_scene_drawing_uses_a_typed_context_without_editor_resolution() -> None:
         ), filename
 
 
+def test_scene_composition_does_not_construct_or_resolve_an_editor() -> None:
+    for filename in ("scene_rendering.py", "smiles_preview_picture.py"):
+        source = (APP_ROOT / "chemvas/ui" / filename).read_text(encoding="utf-8")
+        assert _drawing_editor_dependencies(source) == [], filename
+
+
 @pytest.mark.parametrize(
     "source",
     [
@@ -5844,8 +5849,6 @@ CANVAS_SCENE_RESOLVERS = frozenset(
     }
 )
 CANVAS_DETACH_BODY = "_detach_item_from_canvas_scene"
-INSERT_SMILES_MODULE = "app/chemvas/ui/insert_smiles_service.py"
-PRE_CLEAR_DETACH_BODY = "_detach_top_level_scene_items_before_clear"
 TRI_STATE_DETACH_WRAPPER = "remove_attached_item_from_canvas_scene"
 
 
@@ -5875,13 +5878,6 @@ def test_canvas_scoped_scene_detach_has_one_body() -> None:
     Both pass that answer through ``_detach_item_from_canvas_scene`` to the
     view-independent ``detach_graphics_item`` as ``unresolved``.
 
-    ``insert_smiles_service._detach_top_level_scene_items_before_clear`` is
-    the one other function that resolves the canvas's scene and calls
-    ``removeItem``, and it asks a different question: it detaches every root
-    under blocked signals before a destructive clear so an exact rollback can
-    reattach the same wrappers. It used to call ``canvas.scene()`` directly and
-    so sat outside this rule by accident; services no longer touch the canvas
-    themselves, so it resolves through ``canvas_scene_for`` and is named here.
     """
     detachers = [
         f"{path.relative_to(APP_ROOT.parents[0])}:{line_no}: {name}"
@@ -5889,12 +5885,7 @@ def test_canvas_scoped_scene_detach_has_one_body() -> None:
         for line_no, name in _canvas_scoped_detachers(path.read_text(encoding="utf-8"))
     ]
 
-    assert [detacher.rsplit(":", 2)[0] for detacher in detachers] == [
-        INSERT_SMILES_MODULE,
-    ]
-    assert [detacher.rsplit(": ", 1)[1] for detacher in detachers] == [
-        PRE_CLEAR_DETACH_BODY,
-    ]
+    assert detachers == []
     source = (APP_ROOT / "chemvas/ui/scene_item_access.py").read_text(encoding="utf-8")
     adapter = next(
         node

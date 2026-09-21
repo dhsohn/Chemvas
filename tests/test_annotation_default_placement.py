@@ -144,8 +144,7 @@ def test_compose_then_check_layout_public_cli_accepts_default_charges(tmp_path, 
 @pytest.mark.parametrize(
     "smiles", ["O=[N+]([O-])c1ccccc1", "C[N+](=O)[O-]", "C[N+](C)(C)C"]
 )
-@pytest.mark.parametrize("route", ["load", "insert"])
-def test_smiles_charge_avoids_bonds_and_exact_undo_redo(smiles, route):
+def test_smiles_charge_avoids_bonds_and_exact_undo_redo(smiles):
     pytest.importorskip("rdkit")
     with offscreen_canvas(empty_state(), command="test-smiles-mark-placement") as (
         canvas,
@@ -153,11 +152,8 @@ def test_smiles_charge_avoids_bonds_and_exact_undo_redo(smiles, route):
     ):
         before = session.snapshot_state()
         controller = canvas.services.structure.insert_controller
-        if route == "load":
-            controller.smiles_service.load_smiles(smiles)
-        else:
-            controller.begin_smiles_insert(smiles)
-            controller.commit_smiles_insert(QPointF(50.0, 60.0))
+        controller.begin_smiles_insert(smiles)
+        controller.commit_smiles_insert(QPointF(50.0, 60.0))
         after = session.snapshot_state()
         assert after["model"]["atoms"]
         assert after["marks"]

@@ -1,28 +1,30 @@
-"""Render an inserted SMILES model exactly as the canvas will draw it.
-
-The insertion preview used to sketch bonds as bare line pairs and every atom
-as a dot, so ring double bonds and heteroatom labels looked nothing like the
-structure that landed on click. Instead of keeping a second geometry path in
-step with the renderer, the model is loaded into a throwaway offscreen canvas
-through the same load path the canvas uses, and that scene is recorded into a
-picture the preview item replays under the cursor.
-"""
+"""Record the shared molecular drawing in a picture, without an editor or history."""
 
 from __future__ import annotations
 
 import copy
 from typing import TYPE_CHECKING
 
-from PyQt6.QtCore import QCoreApplication, QEvent, QRectF
+from PyQt6.QtCore import QCoreApplication, QEvent, QPointF, QRectF
 from PyQt6.QtGui import QPainter, QPicture
+from PyQt6.QtWidgets import QGraphicsScene
 
-from chemvas.ui.canvas_lifecycle import schedule_canvas_deletion_for
-from chemvas.ui.canvas_service_ports import insert_controller_for_access
-from chemvas.ui.renderer_style_access import renderer_for, renderer_style_for
-from chemvas.ui.scene_item_access import canvas_scene_for
+from chemvas.features.graph import build_bond_adjacency_index
+from chemvas.features.insertion import (
+    annotation_mark_direction,
+    annotation_mark_kinds,
+    normalized_atom_annotation,
+)
+from chemvas.ui.molecule_scene_renderer import (
+    prepare_molecule_for_scene,
+    render_molecule,
+)
+from chemvas.ui.scene_render_context import SceneRenderState
+from chemvas.ui.scene_rendering import build_scene_render_context
 
 if TYPE_CHECKING:
     from chemvas.domain.document import MoleculeModel
+    from chemvas.ui.scene_render_context import SceneStyleRenderer
 
 # Slack around the structure, in bond lengths, so that label glyphs, charge
 # marks and hydrogen counts that paint past their atoms are recorded rather
@@ -31,31 +33,45 @@ PREVIEW_MARGIN_BOND_LENGTHS = 3.0
 
 
 def render_smiles_preview_picture(
-    canvas, model: MoleculeModel, smiles: str
+    renderer: SceneStyleRenderer, model: MoleculeModel
 ) -> QPicture:
-    """Record ``model`` as the live canvas's renderer would paint it.
-
-    The picture is in model coordinates: the ghost canvas places atoms at
-    their model positions, so translating the picture by the preview offset
-    lands it exactly where the commit will place the structure. Its bounding
-    rectangle is the rectangle that was rendered, so everything painted is
-    inside it.
-    """
-    # The ghost canvas type lives above this module; resolve it at call time,
-    # as the offscreen CLI does, so the canvas package does not import itself.
-    from chemvas.ui.canvas_view import CanvasView
-
-    # A shallow copy shares the immutable style and nothing else, so the ghost
-    # draws with the live canvas's bond length, widths and fonts.
-    ghost = CanvasView(renderer=copy.copy(renderer_for(canvas)))
+    """Keep model coordinates and caller-owned model/style/application unchanged."""
+    preview_model = copy.deepcopy(model)
+    prepare_molecule_for_scene(preview_model)
+    state = SceneRenderState()
+    state.graph_state.atom_neighbors, state.graph_state.atom_bond_ids = (
+        build_bond_adjacency_index(preview_model.atoms, preview_model.bonds)
+    )
+    scene = QGraphicsScene()
     try:
-        # The ghost takes its own copy: loading mutates the model it is given
-        # and the preview model must stay untouched for the commit plan.
-        insert_controller_for_access(ghost).smiles_service.load_model(
-            copy.deepcopy(model), smiles
+        context = build_scene_render_context(
+            scene_provider=lambda: scene,
+            model_provider=lambda: preview_model,
+            renderer=copy.copy(renderer),
+            state=state,
         )
-        scene = canvas_scene_for(ghost)
-        margin = renderer_style_for(canvas).bond_length_px * PREVIEW_MARGIN_BOND_LENGTHS
+        render_molecule(context)
+        # Use the insertion policy for direction and the shared label geometry
+        # for distance; previews have no editor mark registry or history to update.
+        for atom_id, annotation in preview_model.atom_annotations.items():
+            atom = preview_model.atoms.get(atom_id)
+            if atom is None:
+                continue
+            kinds = annotation_mark_kinds(normalized_atom_annotation(annotation))
+            for index, kind in enumerate(kinds):
+                dx, dy = annotation_mark_direction(
+                    index, model=preview_model, atom_id=atom_id
+                )
+                offset = context.geometry.mark_offset_from_click(
+                    atom_id, QPointF(atom.x + dx, atom.y + dy), kind=kind
+                )
+                item = context.decorations.build_mark_item(kind)
+                if item is not None:
+                    scene.addItem(item)
+                    context.decorations.set_mark_center(
+                        item, QPointF(atom.x + offset.x(), atom.y + offset.y())
+                    )
+        margin = renderer.style.bond_length_px * PREVIEW_MARGIN_BOND_LENGTHS
         left, top, right, bottom = model.bounds()
         bounds = (
             QRectF(left, top, right - left, bottom - top)
@@ -75,8 +91,8 @@ def render_smiles_preview_picture(
         picture.setBoundingRect(bounds.toAlignedRect())
         return picture
     finally:
-        schedule_canvas_deletion_for(ghost)
-        QCoreApplication.sendPostedEvents(ghost, QEvent.Type.DeferredDelete)
+        scene.deleteLater()
+        QCoreApplication.sendPostedEvents(scene, QEvent.Type.DeferredDelete)
 
 
 __all__ = ["render_smiles_preview_picture"]

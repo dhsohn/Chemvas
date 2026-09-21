@@ -35,7 +35,6 @@ def test_build_structure_services_wires_explicit_collaborators(monkeypatch) -> N
     graph_service = object()
     move_controller = object()
     insert_state = object()
-    history_service = object()
 
     services = build_structure_services(
         canvas,
@@ -43,7 +42,6 @@ def test_build_structure_services_wires_explicit_collaborators(monkeypatch) -> N
         graph_service=graph_service,
         move_controller=move_controller,
         insert_state=insert_state,
-        history_service=history_service,
     )
 
     assert isinstance(services, StructureServiceBundle)
@@ -67,6 +65,4 @@ def test_build_structure_services_wires_explicit_collaborators(monkeypatch) -> N
         "insert_state": insert_state,
         "hit_testing_service": hit_testing_service,
         "graph_service": graph_service,
-        "structure_build_service": services.structure_build_service,
-        "history_service": history_service,
     }
