@@ -3,6 +3,19 @@ from __future__ import annotations
 import pytest
 
 
+@pytest.fixture(scope="session")
+def qt_application():
+    """Opt in to one strongly owned application for this test-file process.
+
+    Import lazily so Qt-free and subprocess startup tests keep their own
+    application boundary. Tests still dispose of their own scenes and widgets.
+    """
+    from chemvas.bootstrap.document_cli_shared import offscreen_application
+
+    with offscreen_application(command="tests") as application:
+        yield application
+
+
 @pytest.fixture(autouse=True)
 def _isolate_chemvas_app_data(tmp_path_factory, monkeypatch):
     """Redirect Chemvas's writable app-data dir (recent files, autosave

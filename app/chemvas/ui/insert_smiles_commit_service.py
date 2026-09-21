@@ -107,6 +107,7 @@ def apply_smiles_commit_plan(
                     clear_smiles=False,
                     record=False,
                     allow_merge=False,
+                    show_carbon=atom.explicit_label,
                 )
 
         for source_atom_id, annotation in plan.annotations.items():

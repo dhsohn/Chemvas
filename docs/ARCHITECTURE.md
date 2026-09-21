@@ -304,8 +304,8 @@ its graphics-item wrapper is released, so discarded redo branches and evicted
 history entries do not keep otherwise unreachable records. The finalizer holds
 only the state and id, not the item, and reads the state's current mapping;
 rollback and document replacement may replace that mapping. A new document
-still clears the store explicitly; a structure load keeps history and its
-referenced records. Ids are never reused: they come from
+still clears the store explicitly; subsequent insertions retain records held
+by earlier history commands. Ids are never reused: they come from
 `new_scene_record_id`, a counter kept outside the runtime state so that no
 rollback rewinds it while history still holds an item with a later id. Saved values are
 therefore the ones the document states: an opacity of 0.25 is saved as 0.25

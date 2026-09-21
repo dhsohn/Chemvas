@@ -4,13 +4,6 @@ from unittest.mock import Mock, patch
 
 from PyQt6.QtCore import QPointF, QRectF
 
-from chemvas.core.history import (
-    AddAtomsCommand,
-    AddBondCommand,
-    CompositeCommand,
-    DeleteAtomsCommand,
-    DeleteBondCommand,
-)
 from chemvas.domain.document import Atom, Bond, MoleculeModel
 from chemvas.features.insertion import (
     TemplateInsertRequest,
@@ -19,8 +12,6 @@ from chemvas.features.insertion import (
 )
 from chemvas.ui.atom_coords_access import (
     CanvasAtomCoords3DState,
-    atom_coords_3d_for,
-    set_atom_coords_3d_for,
 )
 from chemvas.ui.canvas_atom_graphics_state import CanvasAtomGraphicsState
 from chemvas.ui.canvas_bond_graphics_state import CanvasBondGraphicsState
@@ -28,7 +19,7 @@ from chemvas.ui.canvas_callback_state import CanvasCallbackState
 from chemvas.ui.canvas_group_state import CanvasGroupState
 from chemvas.ui.canvas_insert_state import CanvasInsertState, insert_state_for
 from chemvas.ui.canvas_mark_registry import CanvasMarkRegistry
-from chemvas.ui.canvas_rotation_state import CanvasRotationState, rotation_state_for
+from chemvas.ui.canvas_rotation_state import CanvasRotationState
 from chemvas.ui.canvas_scene_items_state import (
     SCENE_ITEM_COLLECTION_ATTRS,
     CanvasSceneItemsState,
@@ -40,7 +31,6 @@ from chemvas.ui.canvas_smiles_input_state import (
     last_smiles_input_for,
     set_last_smiles_input_for,
 )
-from chemvas.ui.history_commands import AddSceneItemsCommand, DeleteSceneItemsCommand
 from chemvas.ui.insert_controller import InsertController
 from chemvas.ui.insert_smiles_service import MAX_SMILES_INPUT_LENGTH
 from chemvas.ui.insert_template_commit_service import bond_merge_seed
@@ -373,15 +363,10 @@ def _controller_for(canvas: _FakeCanvas, **kwargs) -> InsertController:
         "hit_testing_service", canvas.services.selection.hit_testing_service
     )
     graph_service = kwargs.pop("graph_service", canvas.services.graph_service)
-    structure_build_service = kwargs.pop(
-        "structure_build_service", canvas.services.structure.structure_build_service
-    )
     return InsertController(
         canvas,
         hit_testing_service=hit_testing_service,
         graph_service=graph_service,
-        structure_build_service=structure_build_service,
-        history_service=canvas.services.history_service,
         **kwargs,
     )
 
@@ -450,294 +435,6 @@ class InsertControllerTest(unittest.TestCase):
         controller.template_service.render_template_request_preview.assert_not_called()
         controller.smiles_service.commit_smiles_insert.assert_not_called()
         controller.smiles_service.render_smiles_preview.assert_not_called()
-
-    def test_load_smiles_blank_is_no_op(self) -> None:
-        canvas = _FakeCanvas()
-        controller = _controller_for(canvas)
-
-        controller.smiles_service.load_smiles("   ")
-
-        canvas.rdkit.smiles_to_2d.assert_not_called()
-        canvas.clear_scene.assert_not_called()
-        canvas.push_command.assert_not_called()
-
-    def test_load_smiles_warns_when_rdkit_conversion_fails(self) -> None:
-        canvas = _FakeCanvas()
-        set_last_smiles_input_for(canvas, "C")
-        canvas.rdkit.last_error = "bad smiles"
-        controller = _controller_for(canvas)
-
-        with patch("chemvas.ui.insert_smiles_service.QMessageBox.warning") as warning:
-            controller.smiles_service.load_smiles("broken")
-
-        warning.assert_called_once_with(canvas, "SMILES Error", "bad smiles")
-        canvas.clear_scene.assert_not_called()
-        canvas.push_command.assert_not_called()
-        self.assertEqual(last_smiles_input_for(canvas), "C")
-
-    def test_load_smiles_rejects_oversized_input_before_rdkit_conversion(self) -> None:
-        canvas = _FakeCanvas()
-        controller = _controller_for(canvas)
-
-        with patch("chemvas.ui.insert_smiles_service.QMessageBox.warning") as warning:
-            controller.smiles_service.load_smiles("C" * (MAX_SMILES_INPUT_LENGTH + 1))
-
-        warning.assert_called_once_with(
-            canvas,
-            "SMILES Error",
-            f"SMILES input is too long (maximum {MAX_SMILES_INPUT_LENGTH} characters).",
-        )
-        canvas.rdkit.smiles_to_2d.assert_not_called()
-        canvas.clear_scene.assert_not_called()
-        canvas.push_command.assert_not_called()
-
-    def test_load_smiles_replaces_scene_and_pushes_history_command(self) -> None:
-        canvas = _FakeCanvas()
-        set_last_smiles_input_for(canvas, "before")
-        canvas.model.add_atom("N", -5.0, -5.0)
-        canvas.model.bonds.append(Bond(0, 0, 1))
-        bound_mark = _FakeSceneItem("bound-mark", atom_id=0, state={"kind": "mark"})
-        free_mark = _FakeSceneItem("free-mark")
-        note = _FakeSceneItem("note")
-        canvas.mark_registry.by_atom = {0: [bound_mark]}
-        set_atom_coords_3d_for(canvas, {0: (-1.0, -2.0, 3.0)})
-        rotation = rotation_state_for(canvas)
-        rotation.projection_center_3d = (-1.0, -2.0, 3.0)
-        rotation.projection_anchor_2d = (-1.0, -2.0)
-        set_scene_item_collection_for(canvas, "mark_items", [bound_mark, free_mark])
-        set_scene_item_collection_for(canvas, "note_items", [note])
-        canvas.rdkit.smiles_to_2d.return_value = MoleculeModel(
-            atoms={0: Atom("C", 1.0, 2.0), 1: Atom("C", 3.0, 2.0)},
-            bonds=[Bond(0, 1, 1)],
-        )
-
-        def _clear_scene() -> None:
-            canvas.model = MoleculeModel()
-            set_atom_coords_3d_for(canvas, {})
-            rotation_state_for(canvas).reset_all()
-
-        canvas.clear_scene = Mock(side_effect=_clear_scene)
-        controller = _controller_for(canvas)
-
-        controller.smiles_service.load_smiles(" C ")
-
-        canvas.clear_scene.assert_called_once_with()
-        canvas.rebuild_bond_adjacency.assert_called_once_with()
-        canvas.services.structure.structure_build_service.render_model.assert_called_once_with()
-        self.assertEqual(last_smiles_input_for(canvas), "C")
-        command = canvas.push_command.call_args.args[0]
-        self.assertIsInstance(command, CompositeCommand)
-        self.assertEqual(
-            [type(child) for child in command.commands],
-            [
-                DeleteBondCommand,
-                DeleteAtomsCommand,
-                DeleteSceneItemsCommand,
-                AddAtomsCommand,
-                AddBondCommand,
-            ],
-        )
-        delete_bond = command.commands[0]
-        delete_atoms = command.commands[1]
-        delete_scene_items = command.commands[2]
-        add_atoms = command.commands[3]
-        add_bond = command.commands[4]
-        self.assertEqual(delete_bond.before_smiles_input, "before")
-        self.assertEqual(delete_bond.after_smiles_input, "C")
-        self.assertEqual(delete_atoms.before_next_atom_id, 1)
-        self.assertEqual(delete_atoms.after_next_atom_id, 0)
-        self.assertEqual(delete_atoms.mark_states, [{"kind": "mark"}])
-        self.assertEqual(delete_atoms.atom_coords_3d, {0: (-1.0, -2.0, 3.0)})
-        self.assertTrue(delete_atoms.restore_projection_state)
-        self.assertEqual(delete_atoms.before_projection_center_3d, (-1.0, -2.0, 3.0))
-        self.assertIsNone(delete_atoms.after_projection_center_3d)
-        self.assertEqual(delete_atoms.before_projection_anchor_2d, (-1.0, -2.0))
-        self.assertIsNone(delete_atoms.after_projection_anchor_2d)
-        self.assertEqual(
-            delete_scene_items.item_states, [{"kind": "free-mark"}, {"kind": "note"}]
-        )
-        self.assertEqual(add_atoms.before_next_atom_id, 0)
-        self.assertEqual(add_atoms.after_next_atom_id, 2)
-        self.assertEqual(add_bond.previous_bond_count, 0)
-
-    def test_load_smiles_adds_annotation_marks_to_transaction_history(self) -> None:
-        canvas = _FakeCanvas()
-        model = MoleculeModel(atoms={0: Atom("N", 1.0, 2.0)})
-        model.atom_annotations = {0: {"formal_charge": 1}}
-        canvas.rdkit.smiles_to_2d.return_value = model
-
-        def _clear_scene() -> None:
-            canvas.model = MoleculeModel()
-
-        canvas.clear_scene = Mock(side_effect=_clear_scene)
-        controller = _controller_for(canvas)
-
-        controller.smiles_service.load_smiles("[NH4+]")
-
-        self.assertEqual(canvas.mark_calls, [(0, 2.0, 1.0, "plus")])
-        command = canvas.push_command.call_args.args[0]
-        self.assertIsInstance(command, CompositeCommand)
-        self.assertIsInstance(command.commands[0], AddAtomsCommand)
-        self.assertEqual(
-            command.commands[0].atom_states[0]["annotation"], {"formal_charge": 1}
-        )
-        self.assertIsInstance(command.commands[-1], AddSceneItemsCommand)
-        self.assertEqual(command.commands[-1].items, canvas.created_marks)
-
-    def test_load_smiles_rolls_back_if_render_model_raises(self) -> None:
-        canvas = _FakeCanvas()
-        set_last_smiles_input_for(canvas, "before")
-        canvas.model.add_atom("O", -5.0, -5.0)
-        set_atom_coords_3d_for(canvas, {0: (-5.0, -5.0, 0.0)})
-        rotation = rotation_state_for(canvas)
-        rotation.projection_center_3d = (-5.0, -5.0, 0.0)
-        rotation.projection_anchor_2d = (-5.0, -5.0)
-        canvas.rdkit.smiles_to_2d.return_value = MoleculeModel(
-            atoms={0: Atom("C", 1.0, 2.0)}
-        )
-
-        def _clear_scene() -> None:
-            canvas.model = MoleculeModel()
-            set_atom_coords_3d_for(canvas, {})
-            rotation_state_for(canvas).reset_all()
-
-        canvas.clear_scene = Mock(side_effect=_clear_scene)
-        canvas.services.structure.structure_build_service.render_model = Mock(
-            side_effect=RuntimeError("render failed")
-        )
-        controller = _controller_for(canvas)
-
-        with self.assertRaisesRegex(RuntimeError, "render failed"):
-            controller.smiles_service.load_smiles(" C ")
-
-        self.assertEqual(canvas.model.atoms, {0: Atom("O", -5.0, -5.0)})
-        self.assertEqual(canvas.model.bonds, [])
-        self.assertEqual(canvas.model.next_atom_id, 1)
-        self.assertEqual(last_smiles_input_for(canvas), "before")
-        self.assertEqual(atom_coords_3d_for(canvas), {0: (-5.0, -5.0, 0.0)})
-        self.assertEqual(
-            rotation_state_for(canvas).projection_center_3d, (-5.0, -5.0, 0.0)
-        )
-        self.assertEqual(rotation_state_for(canvas).projection_anchor_2d, (-5.0, -5.0))
-        canvas.push_command.assert_not_called()
-
-    def test_load_smiles_rolls_back_if_clear_scene_raises_after_mutation(self) -> None:
-        canvas = _FakeCanvas()
-        set_last_smiles_input_for(canvas, "before")
-        canvas.model.add_atom("O", -5.0, -5.0)
-        set_atom_coords_3d_for(canvas, {0: (-5.0, -5.0, 0.0)})
-        canvas.rdkit.smiles_to_2d.return_value = MoleculeModel(
-            atoms={0: Atom("C", 1.0, 2.0)}
-        )
-
-        def _clear_scene() -> None:
-            canvas.model = MoleculeModel()
-            set_atom_coords_3d_for(canvas, {})
-            raise RuntimeError("clear failed")
-
-        canvas.clear_scene = Mock(side_effect=_clear_scene)
-        controller = _controller_for(canvas)
-
-        with self.assertRaisesRegex(RuntimeError, "clear failed"):
-            controller.smiles_service.load_smiles(" C ")
-
-        self.assertEqual(canvas.model.atoms, {0: Atom("O", -5.0, -5.0)})
-        self.assertEqual(canvas.model.bonds, [])
-        self.assertEqual(canvas.model.next_atom_id, 1)
-        self.assertEqual(last_smiles_input_for(canvas), "before")
-        self.assertEqual(atom_coords_3d_for(canvas), {0: (-5.0, -5.0, 0.0)})
-        canvas.push_command.assert_not_called()
-
-    def test_load_smiles_rolls_back_if_annotation_mark_creation_raises(self) -> None:
-        canvas = _FakeCanvas()
-        set_last_smiles_input_for(canvas, "before")
-        canvas.model.add_atom("O", -5.0, -5.0)
-        model = MoleculeModel(atoms={0: Atom("N", 1.0, 2.0)})
-        model.atom_annotations = {0: {"formal_charge": 2}}
-        canvas.rdkit.smiles_to_2d.return_value = model
-
-        def _clear_scene() -> None:
-            canvas.model = MoleculeModel()
-
-        def _add_first_mark_then_fail(
-            atom_id: int,
-            click_pos: QPointF,
-            *,
-            kind: str | None = None,
-        ):
-            if not canvas.created_marks:
-                return canvas.materialize_mark_for_atom(atom_id, click_pos, kind=kind)
-            raise RuntimeError("mark failed")
-
-        canvas.clear_scene = Mock(side_effect=_clear_scene)
-        canvas.services.scene_decoration.canvas_mark_scene_service.materialize_mark_for_atom = _add_first_mark_then_fail
-        controller = _controller_for(canvas)
-
-        with self.assertRaisesRegex(RuntimeError, "mark failed"):
-            controller.smiles_service.load_smiles("[NH2+]")
-
-        self.assertEqual(canvas.model.atoms, {0: Atom("O", -5.0, -5.0)})
-        self.assertEqual(last_smiles_input_for(canvas), "before")
-        self.assertEqual(canvas.mark_registry.by_atom, {})
-        canvas.push_command.assert_not_called()
-
-    def test_load_smiles_rolls_back_existing_scene_items_if_render_model_raises(
-        self,
-    ) -> None:
-        canvas = _FakeCanvas()
-        canvas.model.add_atom("O", -5.0, -5.0)
-        old_note_state = {"kind": "note", "text": "old note", "x": 12.0, "y": 14.0}
-        old_note = _FakeSceneItem("note", state=old_note_state, scene_obj=canvas._scene)
-        set_scene_item_collection_for(canvas, "note_items", [old_note])
-        canvas.rdkit.smiles_to_2d.return_value = MoleculeModel(
-            atoms={0: Atom("C", 1.0, 2.0)}
-        )
-
-        def _clear_scene() -> None:
-            canvas.model = MoleculeModel()
-            set_scene_item_collection_for(canvas, "note_items", [])
-
-        canvas.clear_scene = Mock(side_effect=_clear_scene)
-        canvas.services.structure.structure_build_service.render_model = Mock(
-            side_effect=RuntimeError("render failed")
-        )
-        controller = _controller_for(canvas)
-
-        with self.assertRaisesRegex(RuntimeError, "render failed"):
-            controller.smiles_service.load_smiles("C")
-
-        self.assertEqual(canvas.model.atoms, {0: Atom("O", -5.0, -5.0)})
-        restored_notes = scene_item_collection_for(canvas, "note_items")
-        self.assertEqual(restored_notes, [old_note])
-        self.assertEqual(restored_notes[0].data(9)["text"], "old note")
-
-    def test_load_smiles_skips_push_when_history_builder_returns_none(self) -> None:
-        canvas = _FakeCanvas()
-        canvas.rdkit.smiles_to_2d.return_value = MoleculeModel(
-            atoms={0: Atom("C", 1.0, 2.0)}
-        )
-
-        def _clear_scene() -> None:
-            canvas.model = MoleculeModel()
-
-        canvas.clear_scene = Mock(side_effect=_clear_scene)
-        controller = _controller_for(canvas)
-        controller.smiles_service.transaction_builder.capture = Mock(
-            return_value="snapshot"
-        )
-        controller.smiles_service.transaction_builder.build_command = Mock(
-            return_value=None
-        )
-
-        controller.smiles_service.load_smiles("C")
-
-        controller.smiles_service.transaction_builder.capture.assert_called_once_with()
-        controller.smiles_service.transaction_builder.build_command.assert_called_once_with(
-            "snapshot",
-            after_clear_next_atom_id=0,
-            after_smiles_input="C",
-        )
-        canvas.push_command.assert_not_called()
 
     def test_begin_ring_template_insert_noops_for_invalid_request(self) -> None:
         canvas = _FakeCanvas()
@@ -858,7 +555,7 @@ class InsertControllerTest(unittest.TestCase):
             controller.begin_smiles_insert(" CO ")
 
         render_picture.assert_called_once_with(
-            canvas, canvas.rdkit.smiles_to_2d.return_value, "CO"
+            canvas.renderer, canvas.rdkit.smiles_to_2d.return_value
         )
         self.assertEqual(canvas.insert_state.smiles_preview_picture, "picture")
         controller.cancel_template_insert.assert_called_once_with()
@@ -938,12 +635,12 @@ class InsertControllerTest(unittest.TestCase):
         self.assertEqual(canvas.model.atoms[1].color, "#111111")
         self.assertFalse(canvas.model.atoms[1].explicit_label)
         self.assertEqual(canvas.model.atoms[2].color, "#222222")
-        self.assertFalse(canvas.model.atoms[2].explicit_label)
+        self.assertTrue(canvas.model.atoms[2].explicit_label)
         self.assertEqual(canvas.add_bond_calls, [(1, 2, 2)])
         self.assertEqual(canvas.model.bonds[1].style, "double")
         self.assertEqual(canvas.model.bonds[1].color, "#333333")
         self.assertEqual(canvas.ensure_carbon_dot_calls, [1])
-        self.assertEqual(canvas.atom_label_calls, [(2, "O", False, False, False)])
+        self.assertEqual(canvas.atom_label_calls, [(2, "O", False, False, True)])
         self.assertEqual(
             [call.args[0] for call in canvas._add_bond_graphics.call_args_list], [1]
         )

@@ -3,7 +3,7 @@
 from dataclasses import asdict
 
 import pytest
-from PyQt6.QtCore import QPointF
+from PyQt6.QtCore import QEvent, QPointF
 from PyQt6.QtWidgets import QApplication, QGraphicsScene
 
 from chemvas.adapters.qt.renderer import Renderer
@@ -15,25 +15,28 @@ from chemvas.ui.scene_render_context import SceneRenderState
 from chemvas.ui.scene_rendering import build_scene_render_context
 
 
-@pytest.fixture(scope="module", autouse=True)
-def application():
-    app = QApplication.instance() or QApplication([])
-    app.setQuitOnLastWindowClosed(False)
-    return app
+@pytest.fixture
+def make_context(qt_application):
+    scenes = []
 
+    def build(model):
+        state = SceneRenderState()
+        state.graph_state.atom_neighbors, state.graph_state.atom_bond_ids = (
+            build_bond_adjacency_index(model.atoms, model.bonds)
+        )
+        scene = QGraphicsScene()
+        scenes.append(scene)
+        return build_scene_render_context(
+            scene_provider=lambda: scene,
+            model_provider=lambda: model,
+            renderer=Renderer(),
+            state=state,
+        )
 
-def _context(model):
-    state = SceneRenderState()
-    state.graph_state.atom_neighbors, state.graph_state.atom_bond_ids = (
-        build_bond_adjacency_index(model.atoms, model.bonds)
-    )
-    scene = QGraphicsScene()
-    return build_scene_render_context(
-        scene_provider=lambda: scene,
-        model_provider=lambda: model,
-        renderer=Renderer(),
-        state=state,
-    )
+    yield build
+    for scene in scenes:
+        scene.deleteLater()
+        qt_application.sendPostedEvents(scene, QEvent.Type.DeferredDelete)
 
 
 @pytest.mark.parametrize(
@@ -54,14 +57,14 @@ def _context(model):
     ],
 )
 def test_model_draws_without_any_widget_or_editor_state(
-    application, label, explicit, style, order
+    make_context, label, explicit, style, order
 ):
     model = MoleculeModel(
         atoms={0: Atom(label, 0, 0, explicit_label=explicit), 1: Atom("C", 60, 0)},
         bonds=[Bond(0, 1, order, style=style)],
     )
     before = asdict(model)
-    context = _context(model)
+    context = make_context(model)
 
     render_molecule(context)
 
@@ -80,11 +83,13 @@ def test_model_draws_without_any_widget_or_editor_state(
         assert item.toPlainText()
 
 
-def test_live_context_reads_replaced_model_and_replaced_graphics_containers():
+def test_live_context_reads_replaced_model_and_replaced_graphics_containers(
+    make_context,
+):
     first = MoleculeModel(atoms={0: Atom("N", 0, 0)})
     second = MoleculeModel(atoms={0: Atom("O", 18, 25)})
     owner = [first]
-    context = _context(first)
+    context = make_context(first)
     context.model_provider = lambda: owner[0]
     render_molecule(context)
     old_item = context.state.atom_graphics_state.atom_items[0]
@@ -102,8 +107,8 @@ def test_live_context_reads_replaced_model_and_replaced_graphics_containers():
     assert first.atoms[0].element == "N"
 
 
-def test_mark_auto_position_uses_the_shared_label_geometry():
-    context = _context(MoleculeModel(atoms={0: Atom("NH2", 0, 0)}))
+def test_mark_auto_position_uses_the_shared_label_geometry(make_context):
+    context = make_context(MoleculeModel(atoms={0: Atom("NH2", 0, 0)}))
     render_molecule(context)
     offset = context.geometry.mark_offset_from_click(0, QPointF(), kind="plus")
     assert offset.x() > 0
@@ -111,8 +116,8 @@ def test_mark_auto_position_uses_the_shared_label_geometry():
     assert context.geometry.mark_offset_from_click(99, QPointF(), kind="plus").isNull()
 
 
-def test_graphics_cleanup_tolerates_wrappers_deleted_by_qt_scene_clear():
-    context = _context(
+def test_graphics_cleanup_tolerates_wrappers_deleted_by_qt_scene_clear(make_context):
+    context = make_context(
         MoleculeModel(
             atoms={0: Atom("C", 0, 0), 1: Atom("C", 40, 0)},
             bonds=[Bond(0, 1)],

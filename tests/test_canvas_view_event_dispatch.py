@@ -10,7 +10,8 @@ from unittest import mock
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 import pytest
-from PyQt6.QtWidgets import QApplication, QGraphicsView
+from PyQt6.QtCore import QEvent
+from PyQt6.QtWidgets import QGraphicsView
 
 import chemvas.ui.canvas_view as canvas_view_module
 from chemvas.ui.canvas_callback_state import (
@@ -18,6 +19,7 @@ from chemvas.ui.canvas_callback_state import (
     run_scene_selection_group_callback_for,
     run_scene_selection_outline_callback_for,
 )
+from chemvas.ui.canvas_lifecycle import schedule_canvas_deletion_for
 from tests.canvas_factory import build_canvas_view
 
 POINTER_OVERRIDES = [
@@ -34,12 +36,11 @@ POINTER_OVERRIDES = [
 
 
 @pytest.fixture
-def view():
-    app = QApplication.instance() or QApplication([])
+def view(qt_application):
     canvas = build_canvas_view()
     yield canvas
-    canvas.close()
-    app.processEvents()
+    schedule_canvas_deletion_for(canvas)
+    qt_application.sendPostedEvents(canvas, QEvent.Type.DeferredDelete)
 
 
 @contextlib.contextmanager
@@ -115,8 +116,7 @@ def test_a_failing_mouse_handler_is_contained_at_the_qt_boundary(
     event.accept.assert_called_once_with()
 
 
-def test_only_the_mouse_overrides_contain_exceptions(view) -> None:
-    """A wheel failure is not swallowed: the containment is four overrides wide."""
+def test_wheel_errors_are_outside_the_editing_exception_boundary(view) -> None:
     controller = SimpleNamespace(
         wheel_event=mock.Mock(side_effect=RuntimeError("zoom failed"))
     )
@@ -181,6 +181,30 @@ def test_key_press_goes_to_the_input_controller_or_to_qt(view) -> None:
         with _attached():
             view.keyPressEvent(event)
         base.assert_called_once_with(event)
+
+
+@pytest.mark.parametrize("notification_fails", [False, True])
+def test_failed_key_handler_is_reported_and_consumed(view, notification_fails) -> None:
+    controller = SimpleNamespace(
+        key_press_event=mock.Mock(side_effect=ValueError("invalid edit"))
+    )
+    event = SimpleNamespace(accept=mock.Mock())
+    with (
+        _attached(keyboard=controller),
+        mock.patch.object(
+            canvas_view_module,
+            "notify_error_for",
+            side_effect=RuntimeError("notification failed")
+            if notification_fails
+            else None,
+        ) as notify,
+    ):
+        view.keyPressEvent(event)
+
+    notify.assert_called_once_with(
+        view, "The current interaction could not be completed. Try again."
+    )
+    event.accept.assert_called_once_with()
 
 
 def test_event_passes_the_native_gesture_type_and_returns_the_answer(view) -> None:

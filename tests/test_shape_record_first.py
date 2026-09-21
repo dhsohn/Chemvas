@@ -8,32 +8,29 @@ from unittest import mock
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 import pytest
-from PyQt6.QtCore import QPointF, QRectF
+from PyQt6.QtCore import QEvent, QPointF, QRectF
 from PyQt6.QtGui import QBrush, QColor
-from PyQt6.QtWidgets import QApplication, QGraphicsPathItem
+from PyQt6.QtWidgets import QGraphicsPathItem
 
-from chemvas.core.history import DeleteAtomsCommand
 from chemvas.domain.document import MoleculeModel
+from chemvas.ui.canvas_lifecycle import schedule_canvas_deletion_for
 from chemvas.ui.canvas_scene_items_state import shape_items_for
 from chemvas.ui.canvas_service_ports import insert_controller_for_access
 from chemvas.ui.canvas_shape_state import shape_state_for
-from chemvas.ui.scene_item_state_serialization import shape_state_dict_for
 from chemvas.ui.shape_record_access import (
     clear_shape_records_for,
     shape_id_for_item,
     shape_record_for,
 )
-from chemvas.ui.structure_mutation_access import add_bond_between_points_for
 from tests.canvas_factory import build_canvas_view
 
 
 @pytest.fixture
-def canvas():
-    app = QApplication.instance() or QApplication([])
+def canvas(qt_application):
     view = build_canvas_view()
     yield view
-    view.close()
-    app.processEvents()
+    schedule_canvas_deletion_for(view)
+    qt_application.sendPostedEvents(view, QEvent.Type.DeferredDelete)
 
 
 def _session(canvas):
@@ -209,18 +206,15 @@ def test_a_pasted_shape_keeps_the_stated_values(canvas) -> None:
     )
 
 
-def test_undoing_a_structure_load_recreates_shapes_with_the_stated_values(
+def test_undoing_deletion_restores_shapes_with_the_stated_values(
     canvas,
 ) -> None:
     services = canvas.services
     session = _session(canvas)
     session.apply_state(_document_with(canvas, [CANONICAL_SHAPE]))
     before = session.snapshot_state()["shapes"]
-    model = MoleculeModel()
-    model.add_atom("C", 0.0, 0.0)
-
-    model.add_atom("C", 40.0, 0.0)
-    insert_controller_for_access(canvas).smiles_service.load_model(model, "CC")
+    shape_items_for(canvas)[0].setSelected(True)
+    services.scene_operations.scene_delete_controller.delete_selected_items()
     assert session.snapshot_state()["shapes"] == []
     services.history_service.undo()
 
@@ -238,14 +232,17 @@ def test_a_shape_item_without_a_record_cannot_join_the_document(canvas) -> None:
     assert item.scene() is None
 
 
-def _two_carbons() -> MoleculeModel:
+def _insert_two_carbons(canvas) -> None:
     model = MoleculeModel()
     model.add_atom("C", 0.0, 0.0)
     model.add_atom("C", 40.0, 0.0)
-    return model
+    controller = insert_controller_for_access(canvas)
+    with mock.patch.object(canvas.rdkit, "smiles_to_2d", return_value=model):
+        controller.begin_smiles_insert("CC")
+    controller.commit_smiles_insert(QPointF(50.0, 60.0))
 
 
-def test_a_shape_deleted_before_a_structure_load_still_comes_back_on_undo(
+def test_a_shape_deleted_before_a_structure_insertion_still_comes_back_on_undo(
     canvas,
 ) -> None:
     services = canvas.services
@@ -255,9 +252,8 @@ def test_a_shape_deleted_before_a_structure_load_still_comes_back_on_undo(
     item.setSelected(True)
     services.scene_operations.scene_delete_controller.delete_selected_items()
 
-    # A structure load clears the scene but keeps history, and history still
-    # holds the deleted item; its record has to outlive the load.
-    insert_controller_for_access(canvas).smiles_service.load_model(_two_carbons(), "CC")
+    # A subsequent edit must retain the deleted item and its record for Undo.
+    _insert_two_carbons(canvas)
     services.history_service.undo()
     services.history_service.undo()
 
@@ -265,7 +261,7 @@ def test_a_shape_deleted_before_a_structure_load_still_comes_back_on_undo(
     assert session.snapshot_state()["shapes"] == [CANONICAL_SHAPE]
 
 
-def test_a_shape_drawn_after_a_structure_load_never_takes_an_old_shape_id(
+def test_a_shape_drawn_after_a_structure_insertion_never_takes_an_old_shape_id(
     canvas,
 ) -> None:
     services = canvas.services
@@ -274,7 +270,7 @@ def test_a_shape_drawn_after_a_structure_load_never_takes_an_old_shape_id(
     old_record = shape_record_for(canvas, old)
     old.setSelected(True)
     services.scene_operations.scene_delete_controller.delete_selected_items()
-    insert_controller_for_access(canvas).smiles_service.load_model(_two_carbons(), "CC")
+    _insert_two_carbons(canvas)
 
     new = service.add_shape(
         QRectF(-300.0, -300.0, 20.0, 20.0), shape_kind="ellipse", stroke_style="dashed"
@@ -316,58 +312,3 @@ def test_clearing_the_records_never_hands_out_an_old_id_again(canvas) -> None:
     second = service.add_shape(QRectF(200.0, 20.0, 60.0, 40.0))
 
     assert shape_id_for_item(second) > shape_id_for_item(first)
-
-
-def test_a_rollback_never_lets_a_new_shape_take_the_id_of_one_history_holds(
-    canvas,
-) -> None:
-    services = canvas.services
-    history = services.history_service
-    service = services.scene_decoration.scene_decoration_service
-    original = service.add_shape(QRectF(10.0, 20.0, 120.0, 90.0), shape_kind="ellipse")
-    add_bond_between_points_for(canvas, QPointF(-45.0, -20.0), QPointF(25.0, 15.0))
-    insert_controller_for_access(canvas).smiles_service.load_model(_two_carbons(), "CC")
-
-    # Undoing the load re-creates the ellipse as a new item that the delete
-    # command keeps; then a later part of the same undo fails and the store
-    # is rolled back. The item keeps its id, so the id must stay taken.
-    with (
-        mock.patch.object(
-            DeleteAtomsCommand, "undo", side_effect=RuntimeError("late undo failure")
-        ),
-        pytest.raises(RuntimeError, match="late undo failure"),
-    ):
-        history.undo()
-    revived_ids = {
-        shape_id_for_item(item)
-        for command in history.state.history
-        for item in _held_shape_items(command)
-    }
-    # Besides the original, which the add command holds, history now holds
-    # the item the failed undo re-created.
-    assert revived_ids - {shape_id_for_item(original)}
-
-    new = service.add_shape(QRectF(300.0, 300.0, 50.0, 60.0), shape_kind="rect")
-
-    assert shape_id_for_item(new) not in revived_ids
-    assert _session(canvas).snapshot_state()["shapes"] == [
-        shape_state_dict_for(canvas, new)
-    ]
-
-    # The re-created item lost its record to the rollback. Undoing the load
-    # again is refused rather than bringing it back as some other shape.
-    history.undo()
-    with pytest.raises(RuntimeError, match="without a record"):
-        history.undo()
-    assert _session(canvas).snapshot_state()["shapes"] == []
-
-
-def _held_shape_items(command) -> list:
-    held = [
-        item
-        for item in getattr(command, "items", [])
-        if item is not None and item.data(0) == "shape"
-    ]
-    for child in getattr(command, "commands", []):
-        held.extend(_held_shape_items(child))
-    return held

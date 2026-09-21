@@ -19,7 +19,6 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PyQt6.QtCore import QEvent
 from PyQt6.QtGui import QImage
-from PyQt6.QtWidgets import QApplication
 
 from chemvas.bootstrap import document_render as cli
 from chemvas.bootstrap.document_cli_shared import offscreen_canvas
@@ -35,13 +34,7 @@ from chemvas.domain.document import (
 )
 from chemvas.features.document_composition import compose_document_state
 
-
-@pytest.fixture(scope="module", autouse=True)
-def application() -> QApplication:
-    app = QApplication.instance() or QApplication([])
-    assert isinstance(app, QApplication)
-    app.setQuitOnLastWindowClosed(False)
-    return app
+pytestmark = pytest.mark.usefixtures("qt_application")
 
 
 def _state(*, far_x: float = 18.0) -> dict[str, object]:
@@ -948,7 +941,7 @@ def test_python_module_entrypoint_renders_without_desktop_startup(
 def test_rendering_does_not_load_rdkit_or_leave_visible_windows(
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
-    application: QApplication,
+    qt_application,
     output_format: str,
 ) -> None:
     source = tmp_path / "source.chemvas"
@@ -961,10 +954,10 @@ def test_rendering_does_not_load_rdkit_or_leave_visible_windows(
 
     assert cli.run(["render-document", str(source), "--output", str(output)]) == 0
     capsys.readouterr()
-    application.sendPostedEvents(None, QEvent.Type.DeferredDelete)
-    application.processEvents()
+    qt_application.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+    qt_application.processEvents()
 
-    assert not any(widget.isVisible() for widget in application.topLevelWidgets())
+    assert not any(widget.isVisible() for widget in qt_application.topLevelWidgets())
     rdkit_modules_after = {
         name for name in sys.modules if name == "rdkit" or name.startswith("rdkit.")
     }

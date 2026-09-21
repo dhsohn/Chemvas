@@ -39,9 +39,9 @@ class CanvasView(QGraphicsView):
 
     Qt can deliver events while the view is still being set up, before the
     services are attached; every override then falls back to the base
-    handler. Only the four mouse overrides contain exceptions: an exception
-    escaping a Python override of a Qt virtual is fatal, and a failed
-    pointer gesture is the one the user can simply retry.
+    handler. Mouse and key-press overrides contain editing exceptions: an
+    exception escaping a Python override of a Qt virtual is fatal. Mutation
+    services retain ownership of rollback and history policy.
     """
 
     FILE_FORMAT_VERSION = CANVAS_FILE_VERSION
@@ -75,20 +75,22 @@ class CanvasView(QGraphicsView):
 
     @override
     def keyPressEvent(self, event) -> None:
-        base_key_press_event = super().keyPressEvent
-        input_controller = input_controller_for_view(self)
-        if input_controller is None:
-            base_key_press_event(event)
-            return
-        input_controller.key_press_event(event)
+        try:
+            base_key_press_event = super().keyPressEvent
+            input_controller = input_controller_for_view(self)
+            if input_controller is None:
+                base_key_press_event(event)
+                return
+            input_controller.key_press_event(event)
+        except Exception:
+            self._report_input_event_failure(event, "key-press")
 
-    def _report_mouse_event_failure(self, event, phase: str) -> None:
+    def _report_input_event_failure(self, event, phase: str) -> None:
         # PyQt6 treats an exception escaping a Python virtual-method override
-        # as fatal (qFatal/SIGABRT). Perspective preserves its transaction and
-        # local cursor on failure so a later pointer event can retry it; contain
-        # the exception only at this outer Qt boundary.
+        # as fatal (qFatal/SIGABRT). Editing services own their transactions;
+        # contain and report the exception only at this outer Qt boundary.
         with contextlib.suppress(Exception):
-            logger.exception("Canvas mouse-%s handling failed", phase)
+            logger.exception("Canvas %s handling failed", phase)
         try:
             notify_error_for(
                 self,
@@ -96,7 +98,7 @@ class CanvasView(QGraphicsView):
             )
         except Exception:
             with contextlib.suppress(Exception):
-                logger.exception("Canvas mouse-event error notification failed")
+                logger.exception("Canvas input-event error notification failed")
         with contextlib.suppress(Exception):
             accept = getattr(event, "accept", None)
             if callable(accept):
@@ -114,7 +116,7 @@ class CanvasView(QGraphicsView):
                 event, base_mouse_press_event=base_mouse_press_event
             )
         except Exception:
-            self._report_mouse_event_failure(event, "press")
+            self._report_input_event_failure(event, "mouse-press")
 
     @override
     def mouseDoubleClickEvent(self, event) -> None:
@@ -129,7 +131,7 @@ class CanvasView(QGraphicsView):
                 base_mouse_double_click_event=base_mouse_double_click_event,
             )
         except Exception:
-            self._report_mouse_event_failure(event, "double-click")
+            self._report_input_event_failure(event, "mouse-double-click")
 
     @override
     def mouseMoveEvent(self, event) -> None:
@@ -143,7 +145,7 @@ class CanvasView(QGraphicsView):
                 event, base_mouse_move_event=base_mouse_move_event
             )
         except Exception:
-            self._report_mouse_event_failure(event, "move")
+            self._report_input_event_failure(event, "mouse-move")
 
     @override
     def mouseReleaseEvent(self, event) -> None:
@@ -157,7 +159,7 @@ class CanvasView(QGraphicsView):
                 event, base_mouse_release_event=base_mouse_release_event
             )
         except Exception:
-            self._report_mouse_event_failure(event, "release")
+            self._report_input_event_failure(event, "mouse-release")
 
     @override
     def viewportEvent(self, event) -> bool:

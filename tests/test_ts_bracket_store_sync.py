@@ -13,10 +13,10 @@ from unittest import mock
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 import pytest
-from PyQt6.QtCore import QPointF, QRectF
-from PyQt6.QtWidgets import QApplication
+from PyQt6.QtCore import QEvent, QPointF, QRectF
 
 from chemvas.domain.document import MoleculeModel
+from chemvas.ui.canvas_lifecycle import schedule_canvas_deletion_for
 from chemvas.ui.canvas_scene_items_state import ts_bracket_items_for
 from chemvas.ui.canvas_service_ports import insert_controller_for_access
 from chemvas.ui.canvas_ts_bracket_state import ts_bracket_state_for
@@ -32,12 +32,11 @@ from tests.canvas_factory import build_canvas_view
 
 
 @pytest.fixture
-def canvas():
-    app = QApplication.instance() or QApplication([])
+def canvas(qt_application):
     view = build_canvas_view()
     yield view
-    view.close()
-    app.processEvents()
+    schedule_canvas_deletion_for(view)
+    qt_application.sendPostedEvents(view, QEvent.Type.DeferredDelete)
 
 
 def assert_store_matches_items(canvas) -> None:
@@ -70,11 +69,14 @@ def _select_only(canvas, *items) -> None:
         item.setSelected(True)
 
 
-def _two_carbons() -> MoleculeModel:
+def _insert_two_carbons(canvas) -> None:
     model = MoleculeModel()
     model.add_atom("C", 0.0, 0.0)
     model.add_atom("C", 40.0, 0.0)
-    return model
+    controller = insert_controller_for_access(canvas)
+    with mock.patch.object(canvas.rdkit, "smiles_to_2d", return_value=model):
+        controller.begin_smiles_insert("CC")
+    controller.commit_smiles_insert(QPointF(50.0, 60.0))
 
 
 def test_a_new_ts_bracket_gets_an_id_and_a_record(canvas) -> None:
@@ -242,16 +244,17 @@ def test_a_rolled_back_transaction_puts_the_store_back(canvas) -> None:
     assert_store_matches_items(canvas)
 
 
-def test_a_ts_bracket_deleted_before_a_structure_load_keeps_its_record(canvas) -> None:
+def test_a_ts_bracket_deleted_before_a_structure_insertion_keeps_its_record(
+    canvas,
+) -> None:
     services = canvas.services
     item = _add_ts_bracket(canvas, bracket_kind="parentheses_pair")
     before = ts_bracket_record_for(canvas, item)
     _select_only(canvas, item)
     services.scene_operations.scene_delete_controller.delete_selected_items()
 
-    # A structure load clears the scene but keeps history, and history still
-    # holds the deleted item; its record has to outlive the load.
-    insert_controller_for_access(canvas).smiles_service.load_model(_two_carbons(), "CC")
+    # A subsequent edit must retain the deleted item and its record for Undo.
+    _insert_two_carbons(canvas)
     assert ts_bracket_record_for(canvas, item) == before
     services.history_service.undo()
     services.history_service.undo()
@@ -261,14 +264,14 @@ def test_a_ts_bracket_deleted_before_a_structure_load_keeps_its_record(canvas) -
     assert_store_matches_items(canvas)
 
 
-def test_a_ts_bracket_drawn_after_a_structure_load_never_takes_an_old_id(
+def test_a_ts_bracket_drawn_after_a_structure_insertion_never_takes_an_old_id(
     canvas,
 ) -> None:
     services = canvas.services
     old = _add_ts_bracket(canvas, bracket_kind="square_pair")
     _select_only(canvas, old)
     services.scene_operations.scene_delete_controller.delete_selected_items()
-    insert_controller_for_access(canvas).smiles_service.load_model(_two_carbons(), "CC")
+    _insert_two_carbons(canvas)
 
     new = _add_ts_bracket(
         canvas, QRectF(-300.0, -300.0, 60.0, 80.0), bracket_kind="dagger"

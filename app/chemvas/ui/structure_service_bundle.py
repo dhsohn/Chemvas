@@ -28,7 +28,6 @@ def build_structure_services(
     graph_service: Any,
     move_controller: Any,
     insert_state: Any,
-    history_service: Any,
 ) -> StructureServiceBundle:
     canvas_atom_mutation_service = CanvasAtomMutationService(
         canvas,
@@ -54,8 +53,6 @@ def build_structure_services(
         insert_state=insert_state,
         hit_testing_service=hit_testing_service,
         graph_service=graph_service,
-        structure_build_service=structure_build_service,
-        history_service=history_service,
     )
     return StructureServiceBundle(
         canvas_atom_mutation_service=canvas_atom_mutation_service,

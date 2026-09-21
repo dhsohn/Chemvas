@@ -7,13 +7,11 @@ import os
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 import pytest
-from PyQt6.QtCore import QPointF, QRectF
+from PyQt6.QtCore import QEvent, QPointF, QRectF
 from PyQt6.QtGui import QPainterPath
-from PyQt6.QtWidgets import QApplication
 
-from chemvas.domain.document import MoleculeModel
+from chemvas.ui.canvas_lifecycle import schedule_canvas_deletion_for
 from chemvas.ui.canvas_scene_items_state import ts_bracket_items_for
-from chemvas.ui.canvas_service_ports import insert_controller_for_access
 from chemvas.ui.canvas_ts_bracket_state import ts_bracket_state_for
 from chemvas.ui.export_readability_service import _item_sizes
 from chemvas.ui.scene_decoration_build_access import ts_bracket_path_for
@@ -27,12 +25,11 @@ from tests.canvas_factory import build_canvas_view
 
 
 @pytest.fixture
-def canvas():
-    app = QApplication.instance() or QApplication([])
+def canvas(qt_application):
     view = build_canvas_view()
     yield view
-    view.close()
-    app.processEvents()
+    schedule_canvas_deletion_for(view)
+    qt_application.sendPostedEvents(view, QEvent.Type.DeferredDelete)
 
 
 def _session(canvas):
@@ -208,22 +205,18 @@ def test_a_pasted_ts_bracket_keeps_the_stated_values(canvas) -> None:
     assert ts_bracket_id_for_item(pasted) != ts_bracket_id_for_item(original)
 
 
-def test_undoing_a_structure_load_recreates_ts_brackets_with_the_stated_values(
+def test_undoing_deletion_restores_ts_brackets_with_the_stated_values(
     canvas,
 ) -> None:
     services = canvas.services
     session = _session(canvas)
     session.apply_state(_document_with(canvas, [DRIFTING_TS_BRACKET]))
-    model = MoleculeModel()
-    model.add_atom("C", 0.0, 0.0)
-    model.add_atom("C", 40.0, 0.0)
-
-    insert_controller_for_access(canvas).smiles_service.load_model(model, "CC")
+    ts_bracket_items_for(canvas)[0].setSelected(True)
+    services.scene_operations.scene_delete_controller.delete_selected_items()
     assert session.snapshot_state()["ts_brackets"] == []
     services.history_service.undo()
 
-    # Undo re-creates the bracket from its state; the record is that state,
-    # not what the new item reads back.
+    # Undo retains the exact record, not the graphics item\'s read-back values.
     assert session.snapshot_state()["ts_brackets"] == [DRIFTING_TS_BRACKET]
 
 

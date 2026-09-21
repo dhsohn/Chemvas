@@ -192,7 +192,6 @@ def test_build_canvas_services_composes_grouped_runtimes(monkeypatch) -> None:
         graph_service=graph_service,
         move_controller=move_controller,
         insert_state=insert_state,
-        history_service=history_service,
     )
     builders["build_scene_operation_services"].assert_called_once_with(
         canvas,
