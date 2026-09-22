@@ -29,6 +29,8 @@ from chemvas.ui.session_snapshot_store import new_session_store
 from chemvas.ui.structure_mutation_access import add_bond_between_points_for
 
 root, mode = Path(sys.argv[1]), sys.argv[2]
+from chemvas.ui import app_data_paths
+app_data_paths._candidate_dirs = lambda: [root / "profile"]
 answer_delay_ms = int(sys.argv[3])
 app = QApplication([])
 app.setApplicationName("Chemvas")
@@ -74,7 +76,8 @@ class Answer(QObject):
         if event.type() == QEvent.Type.Show and isinstance(obj, QMessageBox):
             if not obj.property("answered"):
                 obj.setProperty("answered", True)
-                assert obj.windowTitle() == "Save Changes", obj.text()
+                assert obj.standardButtons() == (QMessageBox.StandardButton.Save | QMessageBox.StandardButton.Discard | QMessageBox.StandardButton.Cancel), obj.text()
+                assert obj.windowTitle() == ("" if sys.platform == "darwin" else "Save Changes"), obj.text()
                 prompts.append(obj.text())
                 choice = QMessageBox.StandardButton.Discard if mode == "discard" else QMessageBox.StandardButton.Save
                 if mode in {"cancel", "file-open-cancel"} and len(prompts) == 2:
@@ -207,6 +210,8 @@ from chemvas.ui.structure_mutation_access import add_bond_between_points_for, ad
 from tests.calculation_plan_support import _document_state, _plan
 
 root, mode = Path(sys.argv[1]), sys.argv[2]
+from chemvas.ui import app_data_paths
+app_data_paths._candidate_dirs = lambda: [root / "profile"]
 answer_delay_ms = int(sys.argv[3])
 app = QApplication([])
 app.setApplicationName("Chemvas")
@@ -245,20 +250,24 @@ class Answer(QObject):
         if event.type() != QEvent.Type.Show or not isinstance(obj, QMessageBox) or obj.property("answered"):
             return False
         obj.setProperty("answered", True)
-        title = obj.windowTitle()
-        if title == "Save Changes":
+        buttons = obj.standardButtons()
+        if buttons == (QMessageBox.StandardButton.Save | QMessageBox.StandardButton.Discard | QMessageBox.StandardButton.Cancel):
+            title = "Save Changes"
             first_prompt = not answers
             choice = QMessageBox.StandardButton.Save
             if first_prompt and mode not in {"save", "save-decline"}:
                 choice = QMessageBox.StandardButton.Discard
             if not first_prompt and mode == "discard-cancel":
                 choice = QMessageBox.StandardButton.Cancel
-        elif title == "Calculation Plan Needs Attention":
+        elif buttons == (QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No):
+            title = "Calculation Plan Needs Attention"
             choice = QMessageBox.StandardButton.No if mode == "save-decline" else QMessageBox.StandardButton.Yes
-        elif title == "Save Adjusted Document":
+        elif buttons == QMessageBox.StandardButton.Ok:
+            title = "Save Adjusted Document"
             choice = QMessageBox.StandardButton.Ok
         else:
-            raise AssertionError((title, obj.text()))
+            raise AssertionError((buttons, obj.text()))
+        assert obj.windowTitle() == ("" if sys.platform == "darwin" else title), obj.text()
         answers.append((title, choice.name))
         QTimer.singleShot(answer_delay_ms, lambda: obj.button(choice).click())
         return False

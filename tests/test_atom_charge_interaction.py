@@ -4,7 +4,7 @@ from itertools import combinations
 from unittest import mock
 
 import pytest
-from PyQt6.QtCore import QEvent, QPointF, Qt
+from PyQt6.QtCore import QEvent, QPoint, QPointF, Qt
 from PyQt6.QtGui import QKeyEvent
 from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import QApplication
@@ -328,7 +328,10 @@ def test_mark_preview_and_click_bind_at_long_alias_glyph_edge(canvas):
     load(canvas, "CO2Me")
     label = atom_items_for(canvas)[2]
     rect = label.glyph_path().boundingRect()
-    pos = label.mapToScene(QPointF(rect.right() - 0.1, rect.center().y()))
+    edge = label.mapToScene(QPointF(rect.right(), rect.center().y()))
+    pixel = canvas.mapFromScene(edge) - QPoint(1, 0)
+    pos = canvas.mapToScene(pixel)
+    assert label.contains(label.mapFromScene(pos))
     assert pos.x() > 30
     canvas.services.input.tool_mode_controller.set_mark_kind("minus")
     canvas.services.hover.update_hover_highlight(pos)

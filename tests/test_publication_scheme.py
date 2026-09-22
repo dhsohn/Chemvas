@@ -130,7 +130,9 @@ def test_publication_recipe_refuses_existing_directory_without_changes(publicati
         timeout=10,
     )
     assert result.returncode == 2
-    assert "File exists" in result.stderr
+    with pytest.raises(FileExistsError) as error:
+        directory.mkdir()
+    assert str(error.value) in result.stderr
     assert before == {
         p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in directory.iterdir()
     }

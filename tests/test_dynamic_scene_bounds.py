@@ -41,7 +41,7 @@ def app():
 @pytest.fixture
 def drawing(app):
     window = build_main_window()
-    window.resize(1400, 900)
+    window.resize(1000, 700)
     window.show()
     assert QTest.qWaitForWindowExposed(window, 5000)
     canvas = active_canvas_for_window(window)
@@ -50,7 +50,10 @@ def drawing(app):
     select_all_scene_items_for(canvas)
     canvas.services.history_service.clear()
     services_for_window(window).canvas_document_service.mark_clean(canvas)
+    # At the minimum zoom, align the sheet left so the off-sheet endpoint
+    # remains visible even on smaller native desktops.
     set_zoom_for(canvas, 0.2)
+    canvas.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
     canvas.centerOn(0, 0)
     app.processEvents()
     yield window, canvas
@@ -84,7 +87,7 @@ def _reachable(canvas):
 
 def _drag(canvas, app, *, release=True):
     start = canvas.mapFromScene(QPointF(210, 0))
-    end = start + QPoint(480, 0)
+    end = canvas.mapFromScene(QPointF(2610, 0))
     assert canvas.viewport().rect().contains(start)
     assert canvas.viewport().rect().contains(end)
 

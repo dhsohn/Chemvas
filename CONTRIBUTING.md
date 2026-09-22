@@ -39,6 +39,10 @@ check` uses an activated virtual environment first, then the repository's
 `.venv`, and finally `python3`; set `PYTHON_BIN` to choose an interpreter
 explicitly.
 
+On native Windows, use Git Bash for the shell gate. It also discovers
+`.venv/Scripts/python.exe`; `bash scripts/check.sh` runs the same gate when
+Make is unavailable.
+
 Run the app from the development tree:
 
 ```bash
@@ -62,19 +66,38 @@ python -m ruff format --check .  # deterministic formatting
 python -m mypy             # all production code; migrated owner packages are strict
 ```
 
-Tests use PyQt6 and run headlessly via the `offscreen` platform plugin. During
-development, run the file(s) you touched:
+The gate prints the actual Python platform and each skipped test's reason.
+The common suite runs on Linux/WSL, native Windows, and macOS. Platform scope is:
+
+| Host | Common suite and platform checks |
+| --- | --- |
+| Linux / WSL | Qt offscreen; includes Linux non-UTF-8 byte filename cases. WSL follows its Linux Python runtime. |
+| Native Windows | Common suite uses the product's Windows Qt backend for native font support and runs serially to avoid competing window focus. A separate CI job requires Inno Setup and runs native installer/bundle checks. |
+| macOS | Qt offscreen common suite; note formatting and appearance workflow files run serially with Cocoa for real popup focus. Includes the CoreFoundation application identity test. |
+
+OS-specific tests state their conditions and skip reasons alongside the test.
+Common assertions account for path aliases, macOS message boxes without
+window titles, and Qt raster rounding. Native Windows tests and Cocoa workflows
+require a graphical session with uninterrupted window focus. Avoid switching
+applications while they run; backend startup and window activation failures remain
+test failures.
+The menu fixtures use QWidget menus for synthetic clicks; the macOS system menu
+bar and other desktop interactions still need feature-specific manual checks.
+
+During development, run the file(s) you touched through the gate so the native
+workflow selection is preserved:
 
 ```bash
-QT_QPA_PLATFORM=offscreen python -m pytest tests/test_<area>.py
+bash scripts/check.sh tests/test_<area>.py
 ```
 
 > **Give each test file its own pytest process.** Qt keeps global application
 > state that does not fully reset between test modules, so a single shared
 > process passes tests that CI would fail. `scripts/run_test_files.sh` is the one
-> place that rule lives: `make check` and both CI jobs call it, and it runs
-> several of those processes at once — concurrency between processes, never two
-> files in one. To narrow the run to the files you touched, pass them to the
+> place that rule lives: `make check` and the CI test jobs call it, and it runs
+> several of those processes at once for offscreen tests. Native Windows and
+> Cocoa files run serially, and no process contains two files. To narrow the run
+> to the files you touched, pass them to the
 > gate directly:
 >
 > ```bash

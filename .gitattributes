@@ -1,0 +1,3 @@
+# Historical documents are byte fixtures; checkout must preserve their hashes.
+tests/fixtures/document-v7/*.chemvas -text
+tests/fixtures/document-v8/*.chemvas -text

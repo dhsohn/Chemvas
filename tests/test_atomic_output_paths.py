@@ -5,6 +5,7 @@ import hashlib
 import json
 import os
 import stat
+import sys
 from types import SimpleNamespace
 
 import pytest
@@ -102,7 +103,9 @@ def test_full_length_multibyte_basename_is_usable(tmp_path, kind, basename):
     assert list(tmp_path.iterdir()) == [path]
 
 
-@pytest.mark.skipif(os.name != "posix", reason="POSIX byte filename semantics")
+@pytest.mark.skipif(
+    sys.platform != "linux", reason="Linux/WSL filesystem permits non-UTF-8 byte names"
+)
 @pytest.mark.parametrize("kind", ["svg", "png", "pdf"])
 @pytest.mark.parametrize("existing", [False, True])
 def test_qt_export_to_surrogate_basename_writes_exact_requested_file(
@@ -118,7 +121,9 @@ def test_qt_export_to_surrogate_basename_writes_exact_requested_file(
     assert list(tmp_path.iterdir()) == [path]
 
 
-@pytest.mark.skipif(os.name != "posix", reason="POSIX byte filename semantics")
+@pytest.mark.skipif(
+    sys.platform != "linux", reason="Linux/WSL filesystem permits non-UTF-8 byte names"
+)
 @pytest.mark.parametrize("kind", ["svg", "png", "pdf"])
 @pytest.mark.parametrize("via_link", [False, True])
 def test_qt_export_rejects_surrogate_parent_before_render(

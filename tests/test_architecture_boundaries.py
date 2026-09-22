@@ -179,7 +179,7 @@ def _matching_lines(pattern: re.Pattern[str], paths: list[Path]) -> list[str]:
         ):
             if pattern.search(line):
                 matches.append(
-                    f"{path.relative_to(APP_ROOT.parents[0])}:{line_no}: {line.strip()}"
+                    f"{path.relative_to(APP_ROOT.parents[0]).as_posix()}:{line_no}: {line.strip()}"
                 )
     return matches
 
@@ -1212,7 +1212,7 @@ def test_production_context_factories_use_default_public_context_keys() -> None:
                 continue
             if any(keyword.arg == "legacy_attr" for keyword in node.keywords):
                 matches.append(
-                    f"{path.relative_to(APP_ROOT.parents[0])}:{node.lineno}: "
+                    f"{path.relative_to(APP_ROOT.parents[0]).as_posix()}:{node.lineno}: "
                     "canvas_context_for(..., legacy_attr=...)"
                 )
 
@@ -1322,7 +1322,7 @@ def test_view_controller_ports_preserve_concrete_optional_return_types() -> None
 
 def test_ts_bracket_values_are_read_and_drawn_through_records() -> None:
     painters = sorted(
-        str(path.relative_to(APP_ROOT.parents[0]))
+        path.relative_to(APP_ROOT.parents[0]).as_posix()
         for path in _app_python_files()
         if re.search(
             r"\bcontext\.decorations\.ts_bracket_path\(",
@@ -1346,7 +1346,7 @@ def test_shape_values_live_in_records_not_on_graphics_items() -> None:
     derived a record from paint are gone for good.
     """
     painters = sorted(
-        str(path.relative_to(APP_ROOT.parents[0]))
+        path.relative_to(APP_ROOT.parents[0]).as_posix()
         for path in _app_python_files()
         if re.search(r"\bshape_path\(", path.read_text(encoding="utf-8"))
         and path.name != "shape_geometry.py"
@@ -2380,7 +2380,7 @@ def test_direct_canvas_collaborators_stay_behind_setup_and_access_modules() -> N
             continue
         source = path.read_text(encoding="utf-8")
         violations.extend(
-            f"{path.relative_to(APP_ROOT.parents[0])}:{line_no}: {name}"
+            f"{path.relative_to(APP_ROOT.parents[0]).as_posix()}:{line_no}: {name}"
             for line_no, name in _direct_canvas_collaborator_violations(source)
         )
     lazy_creation = re.compile(
@@ -3419,7 +3419,7 @@ def test_state_accessors_do_not_refresh_existing_state_from_canvas_attrs() -> No
         r"(?:\n\s*)+refresh_state_from_canvas_(?:attrs|attr_map)\("
     )
     matches = [
-        str(path.relative_to(APP_ROOT.parents[0]))
+        path.relative_to(APP_ROOT.parents[0]).as_posix()
         for path in _app_python_files()
         if pattern.search(path.read_text(encoding="utf-8"))
     ]
@@ -4944,7 +4944,7 @@ def test_no_production_function_declares_an_unread_strict_parameter() -> None:
     switch on the flag all pass.
     """
     violations = [
-        f"{path.relative_to(APP_ROOT.parents[0])}:{line_no}: {name}"
+        f"{path.relative_to(APP_ROOT.parents[0]).as_posix()}:{line_no}: {name}"
         for path in _app_python_files()
         for line_no, name in _unread_strict_parameters(path.read_text(encoding="utf-8"))
     ]
@@ -5072,7 +5072,9 @@ def _modules_listing(members: frozenset[str]) -> list[str]:
         tree = _parse_source(path.read_text(encoding="utf-8"))
         for line_no, literal in _string_set_literals(tree):
             if members <= literal:
-                owners.append(f"{path.relative_to(APP_ROOT.parents[0])}:{line_no}")
+                owners.append(
+                    f"{path.relative_to(APP_ROOT.parents[0]).as_posix()}:{line_no}"
+                )
     return owners
 
 
@@ -5227,7 +5229,7 @@ def _getattr_forwarding_wrappers(source: str) -> list[tuple[int, str]]:
 def test_no_production_function_only_forwards_to_getattr() -> None:
     """A wrapper whose whole body forwards to getattr is getattr."""
     violations = [
-        f"{path.relative_to(APP_ROOT.parents[0])}:{line_no}: {name}"
+        f"{path.relative_to(APP_ROOT.parents[0]).as_posix()}:{line_no}: {name}"
         for path in _app_python_files()
         for line_no, name in _getattr_forwarding_wrappers(
             path.read_text(encoding="utf-8")
@@ -5430,7 +5432,7 @@ def test_seeded_graph_reachability_is_walked_in_one_place() -> None:
     one, and a second copy anywhere is what this catches.
     """
     walks = [
-        f"{path.relative_to(APP_ROOT.parents[0])}:{line_no}"
+        f"{path.relative_to(APP_ROOT.parents[0]).as_posix()}:{line_no}"
         for path in _app_python_files()
         for line_no in _seeded_reachability_walks(path.read_text(encoding="utf-8"))
     ]
@@ -5497,7 +5499,7 @@ def test_bond_cycle_cache_has_one_writer() -> None:
     """
     writers = sorted(
         {
-            f"{path.relative_to(APP_ROOT.parents[0])}"
+            f"{path.relative_to(APP_ROOT.parents[0]).as_posix()}"
             for path in _app_python_files()
             if _bond_cycle_cache_writes(path.read_text(encoding="utf-8"))
         }
@@ -5530,7 +5532,7 @@ def _modules_using(name: str) -> list[str]:
             ):
                 used = True
         if used:
-            users.append(str(path.relative_to(APP_ROOT.parents[0])))
+            users.append(path.relative_to(APP_ROOT.parents[0]).as_posix())
     return sorted(users)
 
 
@@ -5677,7 +5679,7 @@ def test_canvas_scoped_scene_detach_has_one_body() -> None:
 
     """
     detachers = [
-        f"{path.relative_to(APP_ROOT.parents[0])}:{line_no}: {name}"
+        f"{path.relative_to(APP_ROOT.parents[0]).as_posix()}:{line_no}: {name}"
         for path in _app_python_files()
         for line_no, name in _canvas_scoped_detachers(path.read_text(encoding="utf-8"))
     ]
@@ -5803,7 +5805,9 @@ def _modules_spelling_out(members: frozenset[str]) -> list[str]:
         spellings = _dict_literal_key_sets(tree) + _string_set_literals(tree)
         for line_no, spelled in sorted(spellings, key=lambda entry: entry[0]):
             if members <= spelled:
-                owners.append(f"{path.relative_to(APP_ROOT.parents[0])}:{line_no}")
+                owners.append(
+                    f"{path.relative_to(APP_ROOT.parents[0]).as_posix()}:{line_no}"
+                )
     return owners
 
 
@@ -5912,7 +5916,7 @@ def test_ring_fill_polygons_are_rebuilt_in_one_place() -> None:
     service-free.
     """
     rebuilders = [
-        f"{path.relative_to(APP_ROOT.parents[0])}:{line_no}: {name}"
+        f"{path.relative_to(APP_ROOT.parents[0]).as_posix()}:{line_no}: {name}"
         for path in _app_python_files()
         for line_no, name in _ring_polygon_rebuilders(path.read_text(encoding="utf-8"))
     ]
@@ -6060,7 +6064,7 @@ def test_scene_item_pool_reset_has_one_owner_per_layer() -> None:
     third anywhere, or a second inside either layer, is a duplicate.
     """
     resets = [
-        f"{path.relative_to(APP_ROOT.parents[0])}:{line_no}: {name}"
+        f"{path.relative_to(APP_ROOT.parents[0]).as_posix()}:{line_no}: {name}"
         for path in _app_python_files()
         for line_no, name in _scene_item_pool_resets(path.read_text(encoding="utf-8"))
     ]
@@ -6150,7 +6154,7 @@ def test_restore_atoms_steps_have_one_owner_per_failure_mode() -> None:
     method to put the compensation order in one place again.
     """
     steps = [
-        f"{path.relative_to(APP_ROOT.parents[0])}:{line_no}: {name}"
+        f"{path.relative_to(APP_ROOT.parents[0]).as_posix()}:{line_no}: {name}"
         for path in _app_python_files()
         for line_no, name in _restore_atoms_steps(path.read_text(encoding="utf-8"))
     ]
@@ -6214,7 +6218,7 @@ def test_exception_notes_have_one_owner() -> None:
     """
     owners = sorted(
         {
-            str(path.relative_to(APP_ROOT.parents[0]))
+            path.relative_to(APP_ROOT.parents[0]).as_posix()
             for path in _app_python_files()
             if _exception_note_attachments(path.read_text(encoding="utf-8"))
         }
@@ -6317,7 +6321,7 @@ def test_rollback_runner_has_one_owner() -> None:
     that way would otherwise read as calling something else.
     """
     runners = [
-        f"{path.relative_to(APP_ROOT.parents[0])}:{line_no}: {name}"
+        f"{path.relative_to(APP_ROOT.parents[0]).as_posix()}:{line_no}: {name}"
         for path in _app_python_files()
         for line_no, name in _rollback_runners(path.read_text(encoding="utf-8"))
     ]

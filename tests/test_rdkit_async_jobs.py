@@ -256,7 +256,7 @@ class ExportXYZInThreadTest(unittest.TestCase):
             self.assertEqual(worker.atom_annotations, {"a": 1})
             self.assertNotEqual(worker.path, str(path))
             self.assertEqual(worker.output_path, str(path))
-            self.assertEqual(Path(worker.path).parent, path.parent)
+            self.assertEqual(Path(worker.path).parent.resolve(), path.parent.resolve())
             self.assertIs(worker.moved_to, thread)
             self.assertEqual(rdkit_export_jobs_for(owner), [(thread, worker)])
             self.assertTrue(thread.start_called)

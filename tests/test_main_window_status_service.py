@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import time
 from types import SimpleNamespace
 from unittest import mock
 
@@ -15,6 +16,13 @@ from chemvas.ui.main_window_status_service import MainWindowStatusService
 @pytest.fixture(scope="module")
 def qapp():
     return QApplication.instance() or QApplication([])
+
+
+def _wait_until(predicate) -> None:
+    deadline = time.monotonic() + 2.0
+    while not predicate() and time.monotonic() < deadline:
+        QTest.qWait(10)
+    assert predicate()
 
 
 def _service(
@@ -240,11 +248,18 @@ def test_empty_status_tip_and_expired_feedback_restore_current_tool_hint(qapp):
     assert bar.currentMessage() == "Select: double-click arrows/lines for labels"
     bar.showMessage("Saved", 10)
     assert bar.currentMessage() == "Saved"
-    QTest.qWait(30)
+    _wait_until(
+        lambda: bar.currentMessage() == "Select: double-click arrows/lines for labels"
+    )
     assert bar.currentMessage() == "Select: double-click arrows/lines for labels"
     service.show_error_message(window, "Invalid molecule", timeout=10)
     assert bar.currentMessage() == "Invalid molecule"
-    QTest.qWait(30)
+    _wait_until(
+        lambda: (
+            bar.currentMessage() == "Select: double-click arrows/lines for labels"
+            and bar.property("statusState") == ""
+        )
+    )
     assert bar.currentMessage() == "Select: double-click arrows/lines for labels"
     assert bar.property("statusState") == ""
     window.close()

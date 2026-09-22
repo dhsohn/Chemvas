@@ -1161,6 +1161,7 @@ def test_linux_start_ticks_handles_spaces_and_close_parens_in_comm():
     assert session_snapshot_store._linux_start_ticks("123 malformed") is None
 
 
+@pytest.mark.skipif(os.name != "posix", reason="Requires the native POSIX ps command")
 def test_posix_process_identity_is_independent_of_caller_timezone(monkeypatch):
     monkeypatch.setenv("TZ", "Asia/Seoul")
     first = session_snapshot_store._process_identity_posix(os.getpid())

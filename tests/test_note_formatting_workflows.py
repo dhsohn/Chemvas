@@ -107,6 +107,9 @@ def _font_menu(window, family):
 
 def _main_menu(window, title, command):
     bar = window.menuBar()
+    # QTest clicks QWidget coordinates, not the macOS system menu bar.
+    bar.setNativeMenuBar(False)
+    QApplication.processEvents()
     menu_action = next(action for action in bar.actions() if action.text() == title)
     menu = menu_action.menu()
     action = next(action for action in menu.actions() if action.text() == command)

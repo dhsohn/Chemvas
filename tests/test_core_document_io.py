@@ -824,7 +824,7 @@ class DocumentIOTest(unittest.TestCase):
             self.assertEqual(len(temp_paths), 2)
             self.assertNotEqual(temp_paths[0], temp_paths[1])
             for tmp in temp_paths:
-                self.assertEqual(tmp.parent, path.parent)
+                self.assertEqual(tmp.parent.resolve(), path.parent.resolve())
                 self.assertTrue(tmp.name.startswith(".chemvas-"))
                 self.assertTrue(tmp.name.isascii())
                 self.assertLess(len(tmp.name), 64)

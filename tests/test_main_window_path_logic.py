@@ -1,4 +1,5 @@
 import unittest
+from pathlib import Path
 
 from chemvas.ui.main_window_path_logic import (
     resolve_load_path,
@@ -23,13 +24,13 @@ class MainWindowPathLogicTest(unittest.TestCase):
     ) -> None:
         self.assertEqual(
             resolve_save_path(dialog_path="/tmp/example"),
-            "/tmp/example.chemvas",
+            str(Path("/tmp/example.chemvas")),
         )
 
     def test_resolve_save_path_replaces_noncanonical_dialog_extension(self) -> None:
         self.assertEqual(
             resolve_save_path(dialog_path="/tmp/example.custom"),
-            "/tmp/example.chemvas",
+            str(Path("/tmp/example.chemvas")),
         )
 
     def test_resolve_save_path_returns_none_when_save_dialog_is_cancelled(self) -> None:
@@ -41,13 +42,13 @@ class MainWindowPathLogicTest(unittest.TestCase):
     ) -> None:
         self.assertEqual(
             resolve_save_as_path("/tmp/example"),
-            "/tmp/example.chemvas",
+            str(Path("/tmp/example.chemvas")),
         )
 
     def test_resolve_save_as_path_replaces_noncanonical_extension(self) -> None:
         self.assertEqual(
             resolve_save_as_path("/tmp/example.custom"),
-            "/tmp/example.chemvas",
+            str(Path("/tmp/example.chemvas")),
         )
 
     def test_resolve_save_as_path_returns_none_when_save_dialog_is_cancelled(

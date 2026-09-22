@@ -10,8 +10,8 @@ from xml.etree import ElementTree as ET
 
 import pytest
 from PIL import Image
-from PyQt6.QtCore import QRectF
-from PyQt6.QtGui import QImage
+from PyQt6.QtCore import QRectF, Qt
+from PyQt6.QtGui import QImage, QPainter
 from PyQt6.QtWidgets import QApplication, QGraphicsRectItem, QGraphicsScene
 
 from chemvas.bootstrap import document_render
@@ -136,8 +136,17 @@ def test_svg_and_png_apply_object_opacity_without_changing_source(tmp_path):
     path = tmp_path / "faded.png"
     export_scene(scene, str(path), fmt="png", margin=0, dpi=72)
     output = QImage(str(path))
-    assert output.pixelColor(63, 47).alpha() in {127, 128}
-    assert output.pixelColor(1, 0).alpha() in {63, 64}
+    # Compare the exported item with a direct half-opacity paint. Qt's raster
+    # backend can quantize alpha differently across platforms and versions.
+    original = QImage.fromData(data)
+    reference = QImage(original.size(), QImage.Format.Format_ARGB32_Premultiplied)
+    reference.fill(Qt.GlobalColor.transparent)
+    painter = QPainter(reference)
+    painter.setOpacity(0.5)
+    painter.drawImage(0, 0, original)
+    painter.end()
+    for x, y in ((63, 47), (1, 0)):
+        assert output.pixelColor(x, y).alpha() == reference.pixelColor(x, y).alpha()
     assert base64.b64decode(item.image_state()["data_base64"]) == data
 
 

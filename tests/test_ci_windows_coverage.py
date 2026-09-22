@@ -22,6 +22,33 @@ FILES = (
 )
 
 
+def test_macos_and_windows_run_the_full_host_gate() -> None:
+    workflow = WORKFLOW.read_text(encoding="utf-8")
+    match = re.search(r"(?ms)^  platform-tests:.*?(?=^  \w[\w-]*:|\Z)", workflow)
+    assert match, "macOS and Windows must run the common suite"
+    job = match.group(0)
+    hosts = re.search(r"(?m)^        os: \[(.+)\]$", job)
+    assert hosts
+    assert {host.strip() for host in hosts.group(1).split(",")} == {
+        "macos-15",
+        "windows-2025",
+    }
+    assert "    runs-on: ${{ matrix.os }}\n" in job
+    assert "continue-on-error:" not in job
+    assert not re.search(r"(?m)^\s*if:", job)
+    step = re.search(
+        r"(?m)^      - name: Run the host platform gate\n"
+        r"        shell: bash\n        run: \|\n((?:          .*\n)+)",
+        job,
+    )
+    assert step
+    assert shlex.split(dedent(step.group(1))) == [
+        "FACTORY_MACHINE_CONTRACT_REPO=$PWD/.machine-contracts",
+        "bash",
+        "scripts/check.sh",
+    ]
+
+
 def _windows_job() -> str:
     match = re.search(
         r"(?ms)^  windows-native:.*?(?=^  \w[\w-]*:|\Z)",

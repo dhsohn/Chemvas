@@ -1,4 +1,4 @@
-"""The same drawing uses the same scene typography on 72/96-DPI screens."""
+"""The same drawing uses the same scene typography on 72/96/144-DPI screens."""
 
 import json
 import os
@@ -12,6 +12,7 @@ import pytest
 def test_scene_fonts_and_glyph_paths_do_not_depend_on_screen_logical_dpi():
     code = """
 import json
+import os
 from chemvas.features.document_composition import compose_document_state
 from chemvas.bootstrap.document_cli_shared import offscreen_canvas
 from chemvas.ui.canvas_document_state import document_item_lists_for
@@ -26,6 +27,7 @@ s = compose_document_state({
 })
 def rect(r):
     return [r.x(), r.y(), r.width(), r.height()]
+original_dpi = os.environ.get("QT_FONT_DPI")
 with offscreen_canvas(s, command="dpi-regression") as (canvas, service):
     items = document_item_lists_for(canvas)
     atom = atom_items_for(canvas)[0]
@@ -35,9 +37,10 @@ with offscreen_canvas(s, command="dpi-regression") as (canvas, service):
         "atom": rect(atom.boundingRect()), "atom_ink": rect(atom.glyph_path().boundingRect()),
         "snapshot": service.snapshot_state(),
     }))
+assert os.environ.get("QT_FONT_DPI") == original_dpi
 """
     results = []
-    for dpi in (72, 96):
+    for dpi in (72, 96, 144):
         env = dict(
             os.environ,
             QT_QPA_PLATFORM="offscreen",
@@ -53,7 +56,7 @@ with offscreen_canvas(s, command="dpi-regression") as (canvas, service):
         )
         assert result.returncode == 0, result.stderr
         results.append(json.loads(result.stdout))
-    assert results[0] == results[1]
+        assert results[-1] == results[0], f"scene typography differs at {dpi} DPI"
 
 
 @pytest.mark.parametrize("output_format", ["png", "svg"])
@@ -117,4 +120,4 @@ def test_public_render_bytes_and_readability_are_dpi_independent(
         report = json.loads(result.stdout)
         report.pop("output")
         results.append((output.read_bytes(), report))
-    assert results[0] == results[1] == results[2]
+        assert results[-1] == results[0], f"{output_format} export differs at {dpi} DPI"

@@ -1,5 +1,7 @@
 import os
+import tempfile
 import unittest
+from pathlib import Path
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -25,6 +27,9 @@ class MainWindowCanvasDocumentServiceTest(unittest.TestCase):
         cls.app.setQuitOnLastWindowClosed(False)
 
     def setUp(self) -> None:
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        self.directory = Path(directory.name)
         self.window = build_main_window()
         self.window.show()
         self.app.processEvents()
@@ -65,13 +70,18 @@ class MainWindowCanvasDocumentServiceTest(unittest.TestCase):
         first = active_canvas_for_window(self.window)
         add_bond_between_points_for(first, QPointF(-20.0, 0.0), QPointF(20.0, 0.0))
         state = snapshot_canvas_state_for(first)
-        services_for_window(self.window).document_action_service.save_canvas_to_path(
-            self.window,
-            "/tmp/first.chemvas",
+        self.assertTrue(
+            services_for_window(
+                self.window
+            ).document_action_service.save_canvas_to_path(
+                self.window,
+                str(self.directory / "first.chemvas"),
+            )
         )
 
+        opened_path = str(self.directory / "opened.chemvas")
         opened = self.service.open_state(
-            self.window, state=state, file_path="/tmp/opened.chemvas"
+            self.window, state=state, file_path=opened_path
         )
 
         self.assertIsNot(opened, first)
@@ -79,7 +89,7 @@ class MainWindowCanvasDocumentServiceTest(unittest.TestCase):
         self.assertEqual(
             self.window.tab_references.canvas_tabs.tabText(1), "opened.chemvas"
         )
-        self.assertEqual(document_file_path_for(opened), "/tmp/opened.chemvas")
+        self.assertEqual(document_file_path_for(opened), opened_path)
 
     def test_document_service_rejects_noncanonical_backing_paths(self) -> None:
         canvas = active_canvas_for_window(self.window)

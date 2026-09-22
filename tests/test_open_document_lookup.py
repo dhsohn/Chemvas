@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 import os
+import sys
 from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
+
+import pytest
 
 from chemvas.ui import open_document_lookup
 from chemvas.ui.open_document_lookup import find_open_document, normalized_path_key
@@ -130,6 +133,7 @@ def test_normalized_key_is_absolute_and_platform_normalized(tmp_path, monkeypatc
 
 def test_missing_path_case_folds_on_a_case_insensitive_macos_volume(monkeypatch):
     monkeypatch.setattr("sys.platform", "darwin")
+    monkeypatch.setattr(os.path, "normcase", lambda path: path)
     monkeypatch.setattr(
         "chemvas.ui.open_document_lookup._path_is_on_case_insensitive_volume",
         lambda _path: True,
@@ -142,6 +146,7 @@ def test_missing_path_case_folds_on_a_case_insensitive_macos_volume(monkeypatch)
 
 def test_missing_path_preserves_case_on_a_case_sensitive_macos_volume(monkeypatch):
     monkeypatch.setattr("sys.platform", "darwin")
+    monkeypatch.setattr(os.path, "normcase", lambda path: path)
     monkeypatch.setattr(
         "chemvas.ui.open_document_lookup._path_is_on_case_insensitive_volume",
         lambda _path: False,
@@ -153,13 +158,13 @@ def test_missing_path_preserves_case_on_a_case_sensitive_macos_volume(monkeypatc
 
 
 def test_case_probe_never_uses_the_parent_side_of_a_mount(monkeypatch):
-    mount = "/Volumes/CaseSensitive"
+    mount = Path("/Volumes/CaseSensitive")
 
     def exists(path):
-        return str(path) == mount
+        return path == mount
 
     def stat(path):
-        device = 2 if str(path) == mount else 1
+        device = 2 if path == mount else 1
         return SimpleNamespace(st_dev=device)
 
     monkeypatch.setattr("pathlib.Path.exists", exists)
@@ -168,42 +173,50 @@ def test_case_probe_never_uses_the_parent_side_of_a_mount(monkeypatch):
     monkeypatch.setattr(os.path, "samefile", samefile)
 
     assert (
-        open_document_lookup._path_is_on_case_insensitive_volume(f"{mount}/new.chemvas")
+        open_document_lookup._path_is_on_case_insensitive_volume(
+            str(mount / "new.chemvas")
+        )
         is False
     )
     samefile.assert_not_called()
 
 
 def test_case_probe_fails_closed_after_an_unconfirmed_same_device_probe(monkeypatch):
-    project = "/Volumes/CaseSensitive/project"
+    project = Path("/Volumes/CaseSensitive/project")
     devices = {
         project: 2,
-        "/Volumes/CaseSensitive": 2,
-        "/Volumes": 1,
+        project.parent: 2,
+        project.parent.parent: 1,
     }
 
-    monkeypatch.setattr("pathlib.Path.exists", lambda path: str(path) == project)
+    monkeypatch.setattr("pathlib.Path.exists", lambda path: path == project)
     monkeypatch.setattr(
         "pathlib.Path.stat",
-        lambda path: SimpleNamespace(st_dev=devices[str(path)]),
+        lambda path: SimpleNamespace(st_dev=devices[path]),
     )
     samefile = mock.Mock(side_effect=FileNotFoundError)
     monkeypatch.setattr(os.path, "samefile", samefile)
 
     assert (
         open_document_lookup._path_is_on_case_insensitive_volume(
-            f"{project}/new.chemvas"
+            str(project / "new.chemvas")
         )
         is False
     )
-    samefile.assert_called_once_with(
-        Path(project), Path("/Volumes/CaseSensitive/Project")
-    )
+    samefile.assert_called_once_with(project, project.with_name("Project"))
 
 
+@pytest.mark.skipif(sys.platform != "linux", reason="Linux path keys preserve case")
 def test_key_is_case_sensitive_on_linux():
     assert normalized_path_key("/Lab/Foo.chemvas") != normalized_path_key(
         "/Lab/foo.chemvas"
+    )
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="Windows path keys ignore case")
+def test_key_is_case_insensitive_on_windows():
+    assert normalized_path_key("C:/Lab/Foo.chemvas") == normalized_path_key(
+        "C:/Lab/foo.chemvas"
     )
 
 

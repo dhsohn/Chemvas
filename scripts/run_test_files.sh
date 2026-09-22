@@ -37,7 +37,7 @@ logs="$(mktemp -d)"
 trap 'rm -rf "$logs"' EXIT
 
 export PYTHON logs
-export QT_QPA_PLATFORM=offscreen
+export QT_QPA_PLATFORM="${QT_QPA_PLATFORM:-offscreen}"
 
 echo "[tests] $# files, $jobs at a time"
 
@@ -51,11 +51,15 @@ done |
     index="$1"
     file="$2"
     log="$logs/$index.log"
-    if "$PYTHON" -m pytest -q "$file" >"$log" 2>&1; then
+    if "$PYTHON" -m pytest -q -ra --capture=tee-sys "$file" >"$log" 2>&1; then
       printf "[tests] %s: %s\n" "$file" "$(tail -1 "$log")"
+      awk '\''/^SKIPPED / { print "[tests] " $0 }'\'' "$log"
       rm -f "$log"
     else
+      code=$?
       printf "[tests] FAILED %s\n" "$file" >&2
+      printf "[tests] pytest exit code: %s\n" "$code" >&2
+      cat "$log" >&2
       exit 1
     fi
   ' _ || status=$?
@@ -63,11 +67,6 @@ done |
 if [[ "$status" -ne 0 ]]; then
   # Every process runs, so a broken tree reports all of its failures at once
   # rather than only the first one the old sequential loop reached.
-  for log in "$logs"/*.log; do
-    [[ -e "$log" ]] || continue
-    echo "[tests] ---------- $(basename "$log" .log)" >&2
-    tail -30 "$log" >&2
-  done
   exit 1
 fi
 
