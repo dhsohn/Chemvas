@@ -57,6 +57,7 @@ done |
       rm -f "$log"
     else
       printf "[tests] FAILED %s\n" "$file" >&2
+      cat "$log" >&2
       exit 1
     fi
   ' _ || status=$?
@@ -64,11 +65,6 @@ done |
 if [[ "$status" -ne 0 ]]; then
   # Every process runs, so a broken tree reports all of its failures at once
   # rather than only the first one the old sequential loop reached.
-  for log in "$logs"/*.log; do
-    [[ -e "$log" ]] || continue
-    echo "[tests] ---------- $(basename "$log" .log)" >&2
-    tail -30 "$log" >&2
-  done
   exit 1
 fi
 

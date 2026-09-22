@@ -78,7 +78,8 @@ The common suite runs on Linux/WSL, native Windows, and macOS. Platform scope is
 OS-specific tests state their conditions and skip reasons alongside the test.
 Common assertions account for path aliases, macOS message boxes without
 window titles, and Qt raster rounding. Cocoa workflows require a graphical macOS
-session; they must fail visibly if the native backend cannot run.
+session with uninterrupted window focus. Avoid switching applications while they
+run; backend startup and window activation failures remain test failures.
 The menu fixtures use QWidget menus for synthetic clicks; the macOS system menu
 bar and other desktop interactions still need feature-specific manual checks.
 
