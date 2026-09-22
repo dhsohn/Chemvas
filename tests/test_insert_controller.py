@@ -31,8 +31,7 @@ from chemvas.ui.canvas_smiles_input_state import (
     last_smiles_input_for,
     set_last_smiles_input_for,
 )
-from chemvas.ui.insert_controller import InsertController
-from chemvas.ui.insert_smiles_service import MAX_SMILES_INPUT_LENGTH
+from chemvas.ui.insert_controller import MAX_SMILES_INPUT_LENGTH, InsertController
 from chemvas.ui.insert_template_commit_service import bond_merge_seed
 from chemvas.ui.sheet_setup_state import SheetSetupState, sheet_setup_state_for
 from tests.runtime_services import canvas_runtime_services
@@ -418,23 +417,27 @@ class InsertControllerTest(unittest.TestCase):
         controller = _controller_for(canvas)
         controller.clear_template_preview = Mock()
         controller.clear_smiles_preview = Mock()
-        controller.template_service.commit_template_request = Mock()
-        controller.template_service.render_template_request_preview = Mock()
-        controller.smiles_service.commit_smiles_insert = Mock()
-        controller.smiles_service.render_smiles_preview = Mock()
+        controller.template_insert_request = Mock()
+        controller.insert_commit_service = Mock()
+        canvas.insert_state.smiles_preview_model = MoleculeModel(
+            atoms={0: Atom("C", 0.0, 0.0)}
+        )
+        canvas.insert_state.smiles_preview_center = QPointF(0.0, 0.0)
+        canvas.insert_state.smiles_preview_picture = "picture"
         outside = QPointF(999.0, 999.0)
 
         controller.commit_template_insert(outside)
         controller.render_template_preview(outside)
         controller.commit_smiles_insert(outside)
-        controller.render_smiles_preview(outside)
+        with patch("chemvas.ui.insert_controller.add_smiles_preview_item_for") as add:
+            controller.render_smiles_preview(outside)
 
         self.assertEqual(controller.clear_template_preview.call_count, 2)
         self.assertEqual(controller.clear_smiles_preview.call_count, 2)
-        controller.template_service.commit_template_request.assert_not_called()
-        controller.template_service.render_template_request_preview.assert_not_called()
-        controller.smiles_service.commit_smiles_insert.assert_not_called()
-        controller.smiles_service.render_smiles_preview.assert_not_called()
+        controller.template_insert_request.assert_not_called()
+        controller.insert_commit_service.apply_template_commit.assert_not_called()
+        controller.insert_commit_service.apply_smiles_commit.assert_not_called()
+        add.assert_not_called()
 
     def test_begin_ring_template_insert_noops_for_invalid_request(self) -> None:
         canvas = _FakeCanvas()
@@ -480,7 +483,7 @@ class InsertControllerTest(unittest.TestCase):
         canvas.rdkit.last_error = "bad smiles"
         controller = _controller_for(canvas)
 
-        with patch("chemvas.ui.insert_smiles_service.QMessageBox.warning") as warning:
+        with patch("chemvas.ui.insert_controller.QMessageBox.warning") as warning:
             controller.begin_smiles_insert("broken")
 
         warning.assert_called_once_with(canvas, "SMILES Error", "bad smiles")
@@ -492,7 +495,7 @@ class InsertControllerTest(unittest.TestCase):
         canvas = _FakeCanvas()
         controller = _controller_for(canvas)
 
-        with patch("chemvas.ui.insert_smiles_service.QMessageBox.warning") as warning:
+        with patch("chemvas.ui.insert_controller.QMessageBox.warning") as warning:
             controller.begin_smiles_insert("C" * (MAX_SMILES_INPUT_LENGTH + 1))
 
         warning.assert_called_once_with(
@@ -527,7 +530,7 @@ class InsertControllerTest(unittest.TestCase):
         controller.render_smiles_preview = Mock()
 
         with patch(
-            "chemvas.ui.insert_smiles_service.begin_smiles_insert_state",
+            "chemvas.ui.insert_controller.begin_smiles_insert_state",
             return_value=None,
         ):
             controller.begin_smiles_insert("CC")
@@ -549,7 +552,7 @@ class InsertControllerTest(unittest.TestCase):
         controller.render_smiles_preview = Mock()
 
         with patch(
-            "chemvas.ui.insert_smiles_service.render_smiles_preview_picture",
+            "chemvas.ui.insert_controller.render_smiles_preview_picture",
             return_value="picture",
         ) as render_picture:
             controller.begin_smiles_insert(" CO ")
@@ -658,7 +661,7 @@ class InsertControllerTest(unittest.TestCase):
         controller = _controller_for(canvas)
 
         with patch(
-            "chemvas.ui.insert_smiles_service.clear_smiles_preview_helper",
+            "chemvas.ui.insert_controller.clear_smiles_preview_helper",
             return_value=[],
         ) as helper:
             controller.clear_smiles_preview()
@@ -691,7 +694,7 @@ class InsertControllerTest(unittest.TestCase):
         item.picture.return_value = "picture"
 
         with patch(
-            "chemvas.ui.insert_smiles_service.add_smiles_preview_item_for",
+            "chemvas.ui.insert_controller.add_smiles_preview_item_for",
             return_value=item,
         ) as add_item:
             controller.render_smiles_preview(QPointF(12.0, 18.0))
@@ -1121,7 +1124,7 @@ class InsertControllerTest(unittest.TestCase):
         controller = _controller_for(canvas)
 
         with patch(
-            "chemvas.ui.insert_template_service.clear_template_preview_helper",
+            "chemvas.ui.insert_controller.clear_template_preview_helper",
             return_value=(["new-items"], ["lines"], ["dots"]),
         ) as helper:
             controller.clear_template_preview()
@@ -1147,7 +1150,7 @@ class InsertControllerTest(unittest.TestCase):
         with (
             patch.object(controller, "template_insert_request", return_value=request),
             patch(
-                "chemvas.ui.insert_template_service.plan_template_preview",
+                "chemvas.ui.insert_controller.plan_template_preview",
                 return_value=None,
             ),
         ):
@@ -1166,7 +1169,7 @@ class InsertControllerTest(unittest.TestCase):
         with (
             patch.object(controller, "template_insert_request", return_value=request),
             patch(
-                "chemvas.ui.insert_template_service.plan_template_preview",
+                "chemvas.ui.insert_controller.plan_template_preview",
                 return_value=plan,
             ),
             patch(
@@ -1181,7 +1184,7 @@ class InsertControllerTest(unittest.TestCase):
         with (
             patch.object(controller, "template_insert_request", return_value=request),
             patch(
-                "chemvas.ui.insert_template_service.plan_template_preview",
+                "chemvas.ui.insert_controller.plan_template_preview",
                 return_value=plan,
             ),
             patch(
@@ -1196,7 +1199,7 @@ class InsertControllerTest(unittest.TestCase):
         with (
             patch.object(controller, "template_insert_request", return_value=request),
             patch(
-                "chemvas.ui.insert_template_service.plan_template_preview",
+                "chemvas.ui.insert_controller.plan_template_preview",
                 return_value=plan,
             ),
             patch(
@@ -1204,7 +1207,7 @@ class InsertControllerTest(unittest.TestCase):
                 return_value=TemplateInsertResolution(plan=plan, points=[(1.0, 2.0)]),
             ),
             patch(
-                "chemvas.ui.insert_template_service.plan_template_preview_update",
+                "chemvas.ui.insert_controller.plan_template_preview_update",
                 return_value=SimpleNamespace(action="clear", geometry=None),
             ),
         ):
@@ -1223,7 +1226,7 @@ class InsertControllerTest(unittest.TestCase):
         with (
             patch.object(controller, "template_insert_request", return_value=request),
             patch(
-                "chemvas.ui.insert_template_service.plan_template_preview",
+                "chemvas.ui.insert_controller.plan_template_preview",
                 return_value=plan,
             ),
             patch(
@@ -1231,11 +1234,11 @@ class InsertControllerTest(unittest.TestCase):
                 return_value=resolution,
             ),
             patch(
-                "chemvas.ui.insert_template_service.plan_template_preview_update",
+                "chemvas.ui.insert_controller.plan_template_preview_update",
                 return_value=SimpleNamespace(action="update", geometry={"segments": 2}),
             ) as preview_update,
             patch(
-                "chemvas.ui.insert_template_service.apply_template_preview_geometry_helper",
+                "chemvas.ui.insert_controller.apply_template_preview_geometry_helper",
                 return_value=(["items"], ["lines"], ["dots"]),
             ) as apply_helper,
         ):
