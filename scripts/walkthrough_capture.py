@@ -27,6 +27,7 @@ from chemvas.ui.main_window_ports import (
     set_zoom_percent_for_window,
     tool_action_for_window,
 )
+from chemvas.ui.selection_state import selection_outlines_for
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -249,8 +250,6 @@ class Walkthrough:
     def rotate_selection(self, degrees: float, *, title: str, detail: str) -> None:
         """Drag the selection frame's rotation knob through ``degrees`` in
         captured steps, exactly as a pointer would."""
-        from chemvas.ui.selection_outline_state import selection_outlines_for
-
         from chemvas.features.selection import (
             HANDLE_SCREEN_PX,
             ROTATION_HANDLE_STEM_PX,

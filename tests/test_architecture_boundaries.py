@@ -6345,7 +6345,22 @@ def test_rollback_runner_has_one_owner() -> None:
 )
 def test_selection_removed_layers_stay_removed(module: str) -> None:
     assert not (APP_ROOT / "chemvas" / "ui" / f"{module}.py").exists()
-    assert _matching_lines(re.compile(rf"\b{module}\b"), _app_python_files()) == []
+    sources = [
+        *_app_python_files(),
+        *sorted((APP_ROOT.parent / "scripts").rglob("*.py")),
+    ]
+    assert _matching_lines(re.compile(rf"\b{module}\b"), sources) == []
+
+
+def test_selection_callers_do_not_use_removed_bundle() -> None:
+    sources = [
+        *_app_python_files(),
+        *sorted((APP_ROOT.parent / "scripts").rglob("*.py")),
+    ]
+    assert (
+        _matching_lines(re.compile(r"\bselection\.selection_controller\b"), sources)
+        == []
+    )
 
 
 def test_selection_owner_does_not_resolve_itself_through_canvas() -> None:
