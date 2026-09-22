@@ -339,6 +339,12 @@ class SceneGeometry:
             for index in range(len(atom_ids))
         )
 
+    def invalidate_ring_cache(self) -> None:
+        self._ring_model = None
+        self._ring_graph_neighbors = None
+        self._ring_graph_version = -1
+        self._rings_by_edge = {}
+
     def _ring_atom_ids_for_bond(self, bond) -> list[int] | None:
         for _, atom_ids in self._ring_items_for_bond(bond):
             return atom_ids

@@ -185,3 +185,36 @@ def test_ring_queries_scan_topology_once_per_graph_revision(canvas, monkeypatch)
     geometry.ring_center_for_bond(bonds[edges[0]])
     assert bonds.scans == 2
     assert finder.call_count == 2
+
+
+def test_failed_ring_edit_then_different_cycle_does_not_reuse_topology(canvas):
+    from chemvas.ui.transactions.document import document_transaction
+
+    ids, edges = _ring(canvas, closed=False)
+    mutation = canvas_services_for(canvas).structure.canvas_bond_mutation_service
+    for edge in edges:
+        bond = canvas.model.bonds[edge]
+        mutation.restore_bond_from_state(edge, {"a": bond.a, "b": bond.b, "order": 1})
+    context = scene_render_context_for(canvas)
+    version = context.state.graph_state.graph_version
+    with pytest.raises(RuntimeError, match="injected") as failure:
+        with document_transaction(canvas):
+            closing = mutation.add_bond(ids[-1], ids[0], 2)
+            canvas.bond_renderer.add_bond_graphics(closing)
+            assert (
+                context.geometry.ring_center_for_bond(canvas.model.bonds[closing])
+                is not None
+            )
+            raise RuntimeError("injected")
+    assert not getattr(failure.value, "__notes__", [])
+    assert context.state.graph_state.graph_version == version
+    chord = mutation.add_bond(ids[1], ids[4], 2)
+    canvas.bond_renderer.add_bond_graphics(chord)
+    center = context.geometry.ring_center_for_bond(canvas.model.bonds[chord])
+    assert center is not None
+    assert center.x() == pytest.approx(
+        sum(canvas.model.atoms[i].x for i in ids[1:5]) / 4
+    )
+    assert center.y() == pytest.approx(
+        sum(canvas.model.atoms[i].y for i in ids[1:5]) / 4
+    )

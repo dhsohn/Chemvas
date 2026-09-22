@@ -372,6 +372,12 @@ class DocumentSavepoint:
                 # A savepoint also supports model-only/headless canvases, where
                 # there is no bond graphics collaborator to refresh.
                 return
+            # Absolute rollback rewinds graph_version in place. A later edit
+            # may reuse the failed edit's version, so discard derived topology
+            # before redraw even if every restored bond is single.
+            context = getattr(renderer, "context", None)
+            if context is not None:
+                context.geometry.invalidate_ring_cache()
             bonds = getattr(self.canvas_model, "bonds", ()) or ()
             for bond_id, bond in enumerate(cast("Any", bonds)):
                 if bond is None:
