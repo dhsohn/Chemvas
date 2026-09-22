@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import shutil
 import subprocess
 import sys
 import time
@@ -10,18 +11,24 @@ ROOT = Path(__file__).resolve().parents[1]
 RUNNER = ROOT / "scripts" / "run_test_files.sh"
 
 
+def _runner_command(*files: Path) -> list[str]:
+    bash = shutil.which("bash")
+    assert bash is not None, "The shell gate requires Bash (Git Bash on Windows)"
+    return [
+        bash,
+        RUNNER.as_posix(),
+        "--python",
+        Path(sys.executable).as_posix(),
+        *(path.as_posix() for path in files),
+    ]
+
+
 def _run_runner(*files: Path, jobs: str) -> subprocess.CompletedProcess[str]:
     environment = os.environ.copy()
     environment["CHECK_JOBS"] = jobs
 
     return subprocess.run(
-        [
-            "bash",
-            str(RUNNER),
-            "--python",
-            sys.executable,
-            *(str(path) for path in files),
-        ],
+        _runner_command(*files),
         cwd=ROOT,
         env=environment,
         check=False,
@@ -104,14 +111,7 @@ def test_runner_reports_failure_while_another_file_is_still_running(tmp_path) ->
     log = tmp_path / "stderr.log"
     with log.open("w", encoding="utf-8") as output:
         process = subprocess.Popen(
-            [
-                "bash",
-                RUNNER.as_posix(),
-                "--python",
-                Path(sys.executable).as_posix(),
-                failing.as_posix(),
-                waiting.as_posix(),
-            ],
+            _runner_command(failing, waiting),
             cwd=ROOT,
             env={**os.environ, "CHECK_JOBS": "2"},
             stdout=subprocess.DEVNULL,

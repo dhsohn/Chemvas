@@ -240,7 +240,10 @@ def test_comparison_refuses_existing_directory_without_changes(comparison):
         check=False,
         timeout=10,
     )
-    assert result.returncode == 2 and "File exists" in result.stderr
+    assert result.returncode == 2
+    with pytest.raises(FileExistsError) as error:
+        directory.mkdir()
+    assert str(error.value) in result.stderr
     assert before == {
         p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in directory.iterdir()
     }

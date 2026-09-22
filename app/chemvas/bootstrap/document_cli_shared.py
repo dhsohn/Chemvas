@@ -82,12 +82,18 @@ def offscreen_application(
     pin_locale: bool = False,
 ) -> Iterator[QApplication]:
     previous_qt_platform = os.environ.get("QT_QPA_PLATFORM")
+    previous_font_dpi = os.environ.get("QT_FONT_DPI")
+    windows = sys.platform == "win32"
     previous_locale = (
         {name: os.environ.get(name) for name in ("LC_ALL", "LANG")}
         if pin_locale
         else {}
     )
     os.environ["QT_QPA_PLATFORM"] = qt_platform()
+    if windows:
+        # Windows changes font engines with the screen scale factor, even with
+        # AA_Use96Dpi. Keep CLI glyph geometry stable across display DPI settings.
+        os.environ["QT_FONT_DPI"] = "96"
     if pin_locale:
         os.environ["LC_ALL"] = "C.UTF-8"
         os.environ["LANG"] = "C.UTF-8"
@@ -113,6 +119,11 @@ def offscreen_application(
             os.environ.pop("QT_QPA_PLATFORM", None)
         else:
             os.environ["QT_QPA_PLATFORM"] = previous_qt_platform
+        if windows:
+            if previous_font_dpi is None:
+                os.environ.pop("QT_FONT_DPI", None)
+            else:
+                os.environ["QT_FONT_DPI"] = previous_font_dpi
         for name, value in previous_locale.items():
             if value is None:
                 os.environ.pop(name, None)

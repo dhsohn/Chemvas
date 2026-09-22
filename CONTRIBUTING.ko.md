@@ -65,13 +65,13 @@ Linux/WSL·네이티브 Windows·macOS에서 실행하며, 플랫폼별 범위�
 | 호스트 | 공통 스위트와 플랫폼 검사 |
 | --- | --- |
 | Linux / WSL | Qt offscreen과 Linux의 비 UTF-8 바이트 파일명 검사. WSL은 Linux Python 기준입니다. |
-| 네이티브 Windows | Qt offscreen 공통 스위트. 별도 CI 잡은 Inno Setup을 필수로 확인하고 설치기·번들을 검사합니다. |
+| 네이티브 Windows | 공통 스위트는 제품과 같은 Windows Qt 백엔드로 네이티브 글꼴을 지원하고, 창 포커스 충돌을 막도록 직렬 실행합니다. 별도 CI 잡은 Inno Setup을 필수로 확인하고 설치기·번들을 검사합니다. |
 | macOS | Qt offscreen 공통 스위트. 노트 서식·모양 workflow 두 파일은 실제 팝업 포커스를 위해 Cocoa로 직렬 실행합니다. CoreFoundation 앱 이름 검사도 포함합니다. |
 
 OS 전용 테스트는 실행 조건과 skip 사유를 테스트 옆에 명시합니다. 경로 별칭, Mac 대화상자의
-없는 제목, Qt 래스터 반올림은 공통 테스트에서 처리합니다. Cocoa workflow에는
-창 포커스를 유지할 수 있는 그래픽 Mac 세션이 필요하므로 실행 중 다른 앱으로 전환하지
-마세요. 네이티브 백엔드 시작이나 창 활성화 실패는 테스트 실패로 보고합니다.
+없는 제목, Qt 래스터 반올림은 공통 테스트에서 처리합니다. 네이티브 Windows 검사와
+Cocoa workflow에는 창 포커스를 유지할 수 있는 그래픽 세션이 필요하므로 실행 중 다른
+앱으로 전환하지 마세요. 네이티브 백엔드 시작이나 창 활성화 실패는 테스트 실패로 보고합니다.
 메뉴 fixture는 합성 클릭을 위해 QWidget 메뉴를 사용하므로 Mac 시스템 메뉴 막대와
 그 밖의 데스크톱 상호작용은 기능별 실검증이 필요합니다.
 Windows에서는 Git Bash를 사용하세요. `.venv/Scripts/python.exe`도 자동 선택하며
@@ -87,8 +87,9 @@ bash scripts/check.sh tests/test_<area>.py
 > 완전히 초기화되지 않는 전역 애플리케이션 상태를 유지하므로, 한 프로세스에서
 > 몰아 돌리면 CI에서는 실패할 테스트가 통과합니다. 이 규칙은
 > `scripts/run_test_files.sh` 한 곳에 있습니다. `make check`와 CI 테스트 잡이 모두 이
-> 스크립트를 호출하며, 여러 프로세스를 동시에 돌리되 두 파일을 한 프로세스에 넣는
-> 일은 없습니다. 손댄 파일로 범위를 좁히려면 게이트에 파일을 직접 넘기세요.
+> 스크립트를 호출하며, offscreen 검사는 여러 프로세스를 동시에 돌립니다. 네이티브
+> Windows와 Cocoa 파일은 직렬 실행하며, 두 파일을 한 프로세스에 넣는 일은 없습니다.
+> 손댄 파일로 범위를 좁히려면 게이트에 파일을 직접 넘기세요.
 >
 > ```bash
 > bash scripts/check.sh tests/test_<area>.py

@@ -21,8 +21,10 @@ make check
 ```
 
 Ruff·format·mypy를 돌린 뒤 **테스트를 `test_*.py` 파일마다 별도 pytest 프로세스로**
-실행한다. 공통 검사는 offscreen이며, macOS의 메뉴·포커스 workflow 두 파일은 Cocoa로
-직렬 실행한다. 실제 Python의 OS에 따라 범위를 선택하고 범위·skip 사유를 출력한다.
+실행한다. Linux/WSL·macOS의 공통 검사는 offscreen이며, macOS의 메뉴·포커스 workflow
+두 파일은 Cocoa로 직렬 실행한다. Windows는 제품과 같은 Windows Qt 백엔드를 쓰고
+창 포커스 충돌을 막도록 전체를 직렬 실행한다. 실제 Python의 OS에 따라 범위를 선택하고
+범위·skip 사유를 출력한다.
 Linux/WSL의 비 UTF-8 바이트 파일명 검사는 다른 OS에서 제외하고, 경로 별칭·대화상자
 표시 차이는 공통 테스트에서 처리한다. Windows는 Git Bash에서 같은 게이트를 실행하며
 `.venv/Scripts/python.exe`도 자동 선택한다. Qt가 모듈 간에 완전히 리셋되지 않는 전역 상태를 유지하므로, 전체를

@@ -96,5 +96,8 @@ def test_gate_routes_every_file_and_propagates_failures(tmp_path, platform, fail
     ]
     for entry in observed:
         native = platform == "darwin" and "test_note_" in entry["args"][4]
-        assert entry["qt"] == ("cocoa" if native else "offscreen")
-        assert entry["jobs"] == ("1" if native else "2")
+        backend = (
+            "windows" if platform == "win32" else "cocoa" if native else "offscreen"
+        )
+        assert entry["qt"] == backend
+        assert entry["jobs"] == ("1" if native or platform == "win32" else "2")

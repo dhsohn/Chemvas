@@ -51,7 +51,7 @@ platform="${platform%$'\r'}"
 case "$platform" in
   linux) echo "[check] Scope: Linux/WSL common suite and Linux filesystem cases (Qt offscreen)." ;;
   darwin) echo "[check] Scope: macOS common suite (Qt offscreen) and serial Cocoa menu/focus workflows." ;;
-  win32) echo "[check] Scope: Windows common suite and available native cases (Qt offscreen)." ;;
+  win32) echo "[check] Scope: Windows common suite and native cases (Windows Qt, serial window input)." ;;
   *) echo "[check] Scope: $platform common suite (Qt offscreen); platform support is not established." ;;
 esac
 echo "[check] Platform/dependency skips are reported by pytest; native packaging and RDKit have dedicated CI jobs."
@@ -91,7 +91,14 @@ fi
 
 # macOS offscreen cannot restore popup focus like Cocoa. These shown-window
 # workflow files run against Cocoa, one at a time so windows do not steal focus.
-offscreen_files=()
+common_backend=offscreen
+if [[ "$platform" == "win32" ]]; then
+  # Match the product's Windows font engine; offscreen cannot resolve its raw
+  # glyph fonts. Native windows share desktop focus, so run one file at a time.
+  common_backend=windows
+  export CHECK_JOBS=1
+fi
+common_files=()
 cocoa_files=()
 for file in "${files[@]}"; do
   if [[ "$platform" == "darwin" ]]; then
@@ -102,11 +109,11 @@ for file in "${files[@]}"; do
         ;;
     esac
   fi
-  offscreen_files+=("$file")
+  common_files+=("$file")
 done
 status=0
-if [[ ${#offscreen_files[@]} -gt 0 ]]; then
-  QT_QPA_PLATFORM=offscreen bash "$ROOT/scripts/run_test_files.sh" --python "$PYTHON" "${offscreen_files[@]}" || status=1
+if [[ ${#common_files[@]} -gt 0 ]]; then
+  QT_QPA_PLATFORM="$common_backend" bash "$ROOT/scripts/run_test_files.sh" --python "$PYTHON" "${common_files[@]}" || status=1
 fi
 if [[ ${#cocoa_files[@]} -gt 0 ]]; then
   echo "[check] Cocoa workflows: ${#cocoa_files[@]} files, serial native window input."

@@ -155,7 +155,7 @@ class MainWindowPanelActionsTest(unittest.TestCase):
         dialog.assert_called_once()
         self.assertEqual(dialog.call_args.args[2], "/tmp/current.chemvas")
         save_path.assert_called_once_with(
-            self.window, "/tmp/new-drawing.chemvas", canvas=None
+            self.window, str(Path("/tmp/new-drawing.chemvas")), canvas=None
         )
 
     def test_load_menu_action_uses_dialog_path_and_handles_failure(self) -> None:

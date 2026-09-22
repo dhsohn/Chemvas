@@ -382,6 +382,7 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
         other_canvas = object()
         other_window = object()
         message_box = mock.Mock()
+        owned_path = os.path.abspath("/tmp/owned.chemvas")
 
         with (
             mock.patch(
@@ -394,15 +395,13 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
         ):
             result = self.service.save_canvas_to_path(
                 self.window,
-                "/tmp/owned.chemvas",
+                owned_path,
                 canvas=canvas,
                 message_box=message_box,
             )
 
         self.assertFalse(result)
-        find_open_document.assert_called_once_with(
-            "/tmp/owned.chemvas", exclude_canvas=canvas
-        )
+        find_open_document.assert_called_once_with(owned_path, exclude_canvas=canvas)
         save_canvas_to_file_for.assert_not_called()
         message_box.warning.assert_called_once_with(
             self.window,
@@ -672,7 +671,7 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
             "Chemvas (*.chemvas);;All Files (*)",
         )
         save_canvas_to_path.assert_called_once_with(
-            self.window, "/tmp/new-drawing.chemvas", canvas=None
+            self.window, str(Path("/tmp/new-drawing.chemvas")), canvas=None
         )
 
     def test_save_canvas_as_confirms_overwrite_when_normalization_retargets(
