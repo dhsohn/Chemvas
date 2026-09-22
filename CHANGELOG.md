@@ -19,6 +19,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- New clipboard selections use v3 for rotation and stacking; valid legacy v2
+  selections remain pasteable, with strict validation of their original fields.
+
 - New saves use document format v8, schema 1, for text rotation and image/shape
   stacking. Supported v7 files remain readable; v8 requires Chemvas 0.18.0 or
   later. Keep the original v7 file when sharing with older installations.

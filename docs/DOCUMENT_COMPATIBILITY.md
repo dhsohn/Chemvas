@@ -168,3 +168,6 @@ checks the desktop editing and save/reopen path. Both run under `make check`.
 Tests for unsupported history pin versions 1–6 rather than treating every version
 below the current writer as unsupported. Updating the writer constant alone must
 not invalidate the v7 reading baseline.
+
+New clipboard selections use version 3 for note rotation and image/shape depth.
+Valid version 2 selections remain readable, but cannot carry these new fields.

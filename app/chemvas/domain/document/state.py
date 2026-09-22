@@ -170,7 +170,8 @@ VALID_ORBITAL_KINDS = frozenset(
 VALID_SHAPE_KINDS = frozenset(("circle", "ellipse", "rounded_rect", "rect"))
 VALID_SHAPE_STROKES = frozenset(("solid", "dashed", "dotted", "none"))
 VALID_ATOM_ANNOTATION_KEYS = frozenset(("formal_charge", "radical_electrons"))
-CLIPBOARD_SELECTION_VERSION = 2
+CLIPBOARD_SELECTION_VERSION = 3
+SUPPORTED_CLIPBOARD_VERSIONS = frozenset((2, 3))
 CLIPBOARD_SELECTION_REQUIRED_KEYS = frozenset(
     (
         "format",
@@ -1512,7 +1513,7 @@ def validate_clipboard_selection_payload(payload: Mapping[str, object]) -> bool:
             not isinstance(payload, Mapping)
             or payload.get("format") != "chemvas-selection"
             or type(payload.get("version")) is not int
-            or payload.get("version") != CLIPBOARD_SELECTION_VERSION
+            or payload.get("version") not in SUPPORTED_CLIPBOARD_VERSIONS
             or not CLIPBOARD_SELECTION_REQUIRED_KEYS <= set(payload)
             or not set(payload) <= CLIPBOARD_SELECTION_PAYLOAD_KEYS
         ):
@@ -1529,6 +1530,12 @@ def validate_clipboard_selection_payload(payload: Mapping[str, object]) -> bool:
         )
         for item_state in scene_items:
             _validate_clipboard_scene_item(item_state)
+            if payload["version"] == 2:
+                kind = item_state.get("kind")
+                if (kind == "note" and "rotation" in item_state) or (
+                    kind in {"image", "shape"} and "z" in item_state
+                ):
+                    raise ValueError("Clipboard transforms require version 3.")
         _validate_clipboard_perspective(payload, atom_ids)
         _validate_group_states(
             payload, atom_ids, item_keys=frozenset(("marks", "scene_items"))
@@ -1573,7 +1580,7 @@ def _validate_clipboard_perspective(
     if perspective_state is None:
         return
     version = payload.get("version")
-    if type(version) is not int or version != CLIPBOARD_SELECTION_VERSION:
+    if type(version) is not int or version not in SUPPORTED_CLIPBOARD_VERSIONS:
         raise ValueError("Invalid clipboard payload.")
     if not isinstance(perspective_state, Mapping):
         raise ValueError("Invalid clipboard payload.")

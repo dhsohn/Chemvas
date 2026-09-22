@@ -121,7 +121,7 @@ def scene_clipboard_controller_for(canvas) -> SceneClipboardController:
 def _valid_note_clipboard_payload() -> dict:
     return {
         "format": "chemvas-selection",
-        "version": 2,
+        "version": 3,
         "atoms": [],
         "bonds": [],
         "rings": [],
@@ -198,7 +198,7 @@ class SceneOpsControllerClipboardPayloadTest(unittest.TestCase):
         self.assertIsNotNone(payload)
         assert payload is not None
         self.assertEqual(payload["format"], "chemvas-selection")
-        self.assertEqual(payload["version"], 2)
+        self.assertEqual(payload["version"], 3)
         self.assertEqual(
             payload["atoms"],
             [
@@ -426,7 +426,7 @@ class SceneOpsControllerClipboardPayloadTest(unittest.TestCase):
 
 class _FakeCanvas:
     CLIPBOARD_SELECTION_MIME = "application/x-chemvas-selection+json"
-    CLIPBOARD_SELECTION_VERSION = 2
+    CLIPBOARD_SELECTION_VERSION = 3
 
     def __init__(self) -> None:
         self._scene = QGraphicsScene()
