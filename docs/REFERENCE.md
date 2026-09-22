@@ -281,7 +281,9 @@ Chemvas snapshots every open document to a per-user app-data folder every few
 seconds — nothing is written next to your own files. Startup opens a blank
 workspace or the explicitly requested document, without restoring earlier clean
 or crashed sessions. Existing snapshots remain on disk for manual recovery;
-a status-bar notice identifies retained unsaved recovery files. During explicit
+a status-bar notice identifies retained unsaved recovery files. Stopped clean
+sessions with only saved-file references and no recovery payloads are cleaned up.
+During explicit
 recovery, an unsupported original path is discarded and the recovered canvas
 opens unbound as an unsaved document.
 

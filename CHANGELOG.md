@@ -27,7 +27,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Desktop launches start blank or open only the explicitly requested document.
   Previous documents are no longer reopened automatically; existing crash
-  snapshots remain available on disk for manual recovery.
+  snapshots remain available on disk for manual recovery. Completed clean-session
+  metadata without recovery payloads is cleaned up after its process exits.
 - Selecting a shape once exposes its corner and edge resize handles.
 
 - Opening the editor no longer loads Calculation operations before they are

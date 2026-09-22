@@ -358,6 +358,8 @@ def create_session_recovery_service() -> SessionRecoveryService:
     modules (it imports only this factory).
     """
     root = sessions_dir()
+    store = new_session_store(root)
+    store.prune_completed_sessions()
     warnings = []
     for candidate in dict.fromkeys((root.resolve(), *existing_session_roots())):
         for directory in new_session_store(candidate).unrestored_snapshot_directories():
@@ -366,9 +368,7 @@ def create_session_recovery_service() -> SessionRecoveryService:
                 "They were not opened automatically. To recover, copy a doc-*.json "
                 "snapshot to a new .chemvas file and open that copy; keep the original."
             )
-    return SessionRecoveryService(
-        new_session_store(root), recovery_warnings=tuple(warnings)
-    )
+    return SessionRecoveryService(store, recovery_warnings=tuple(warnings))
 
 
 __all__ = [

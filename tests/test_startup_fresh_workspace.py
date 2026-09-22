@@ -39,7 +39,7 @@ def test_desktop_launch_never_reopens_previous_documents(tmp_path, mode):
             store.begin()
             store.save_documents([DocDescriptor(state=state(name),file_path=str(previous_path) if clean else None,display_name=name,dirty=not clean)])
             if clean:store.mark_clean_exit()
-            old_roots.append(store.session_dir)
+            if not clean:old_roots.append(store.session_dir)
         def old_bytes():
             return {str(p):p.read_bytes() for d in old_roots for p in d.rglob('*') if p.is_file()}
         before=old_bytes()
@@ -60,6 +60,8 @@ def test_desktop_launch_never_reopens_previous_documents(tmp_path, mode):
             request_snapshot()
             app.aboutToQuit.emit()
             assert old_bytes()==before
+            assert not (app_data_paths.sessions_dir()/'clean').exists()
+            assert previous_path.exists()
             for window in windows:
                 window.close_after_confirmation()
             app.processEvents()

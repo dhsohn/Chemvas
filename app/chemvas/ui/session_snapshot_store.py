@@ -579,6 +579,33 @@ class SessionSnapshotStore:
         for session_id in session_ids:
             shutil.rmtree(self._root / session_id, ignore_errors=True)
 
+    def prune_completed_sessions(self) -> None:
+        """Remove stopped clean-session metadata, never recovery payloads."""
+        for child in self._sibling_dirs():
+            if child.is_symlink():
+                continue
+            manifest = self._read_manifest(child)
+            if (
+                manifest is None
+                or not manifest.clean_exit
+                or _pid_alive(manifest.pid)
+                or any(entry.dirty or entry.snapshot for entry in manifest.docs)
+            ):
+                continue
+            # Preserve orphan snapshots, unknown files and uncertain contents.
+            # Clean manifests contain saved-file references, not unique work.
+            try:
+                if any(
+                    path.name not in {MANIFEST_NAME, OWNER_NAME}
+                    or path.is_symlink()
+                    or not path.is_file()
+                    for path in child.iterdir()
+                ):
+                    continue
+            except OSError:
+                continue
+            shutil.rmtree(child, ignore_errors=True)
+
     def unrestored_snapshot_directories(self) -> list[Path]:
         """Discover alternate-root crash data without consuming or deleting it.
 
