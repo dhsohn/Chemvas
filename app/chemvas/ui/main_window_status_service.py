@@ -8,8 +8,10 @@ from PyQt6.QtWidgets import QApplication, QFrame, QHBoxLayout, QLabel, QToolButt
 from chemvas.ui.main_window_document_dialogs import prompt_zoom_percent
 from chemvas.ui.main_window_toolbar_logic import tool_display_name
 from chemvas.ui.mark_ownership import mark_is_distant_for, mark_owner_text_for
-from chemvas.ui.selection_collection_access import selection_status_count_for
-from chemvas.ui.selection_scene_access import scene_selected_items_for
+from chemvas.ui.selection_queries import (
+    scene_selected_items_for,
+    selection_status_count_for,
+)
 
 
 class _ZoomPercentButton(QToolButton):

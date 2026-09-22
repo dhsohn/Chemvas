@@ -3,23 +3,15 @@ from __future__ import annotations
 from types import SimpleNamespace
 from unittest import mock
 
-from chemvas.ui.canvas_scene_items_state import (
-    CanvasSceneItemsState,
-    set_selected_notes_for,
-)
-from chemvas.ui.selection_collection_access import (
-    selection_status_count_for,
-    selection_status_item_identity,
-)
-from chemvas.ui.selection_scene_access import (
+from chemvas.ui.canvas_scene_items_state import CanvasSceneItemsState
+from chemvas.ui.selection_queries import (
     clear_scene_selection_for,
     scene_selected_items_for,
+    selection_status_count_for,
+    selection_status_item_identity,
     set_scene_items_selected_for,
 )
-from chemvas.ui.selection_service_access import (
-    select_single_structure_item_for,
-    selection_targets_for_item_for,
-)
+from chemvas.ui.selection_state import set_selected_notes_for
 from tests.runtime_services import canvas_runtime_services
 from tests.runtime_state import canvas_runtime_state
 
@@ -162,25 +154,23 @@ def test_set_scene_items_selected_for_handles_missing_scene() -> None:
     assert item.selected_calls == [False]
 
 
-def test_select_single_structure_item_for_uses_selection_controller_targets() -> None:
+def test_select_single_structure_item_uses_owner_targets() -> None:
+    from tests.selection_support import build_selection_controller
+
     item = object()
     target = _Item("atom", 1)
     scene = _Scene([])
-    selection_controller = SimpleNamespace(
-        selection_targets_for_item=mock.Mock(return_value=[target, None]),
-        clear_note_selection=mock.Mock(),
-    )
-    canvas = SimpleNamespace(
-        services=canvas_runtime_services(selection_controller=selection_controller),
-        scene=mock.Mock(return_value=scene),
-    )
+    canvas = SimpleNamespace(services=canvas_runtime_services(), scene=lambda: scene)
+    owner = build_selection_controller(canvas, render=False)
+    owner.selection_targets_for_item = mock.Mock(return_value=[target])
+    owner.clear_note_selection = mock.Mock()
 
-    assert selection_targets_for_item_for(canvas, item) == [target]
-    assert select_single_structure_item_for(canvas, item)
-    selection_controller.clear_note_selection.assert_called_once_with()
-
-    selection_controller.selection_targets_for_item.assert_has_calls(
-        [mock.call(item), mock.call(item)]
-    )
+    assert owner.select_single_structure_item(item)
+    owner.clear_note_selection.assert_called_once_with()
+    owner.selection_targets_for_item.assert_called_once_with(item)
     assert scene.clear_selection_calls == 1
     assert target.selected_calls == [True]
+
+    owner.selection_targets_for_item.return_value = []
+    assert not owner.select_single_structure_item(item)
+    assert scene.clear_selection_calls == 1

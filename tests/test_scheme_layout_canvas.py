@@ -8,6 +8,8 @@ from typing import TYPE_CHECKING, Any
 
 import pytest
 
+from chemvas.ui.selection_state import selection_for
+
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PyQt6.QtCore import QPointF
@@ -30,7 +32,6 @@ from chemvas.ui.canvas_scene_items_state import ring_items_for
 from chemvas.ui.canvas_service_access import canvas_services_for
 from chemvas.ui.canvas_service_ports import history_service_for_access
 from chemvas.ui.graphics_items import note_paint_scene_path
-from chemvas.ui.scene_group_operations import expand_selection_to_groups_for
 from chemvas.ui.scheme_layout_service import arrange_canvas
 
 if TYPE_CHECKING:
@@ -450,7 +451,7 @@ def test_saved_group_reopens_moves_as_unit_and_undo_redo(
         assert len(group_state_for(canvas).groups) == 4
         original = session.snapshot_state()
         visible_atom_item_for(canvas, 6).setSelected(True)
-        expand_selection_to_groups_for(canvas)
+        selection_for(canvas).expand_selection_to_groups()
         application.processEvents()
         controller = canvas_services_for(
             canvas

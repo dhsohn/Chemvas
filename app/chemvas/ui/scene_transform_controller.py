@@ -68,12 +68,12 @@ from chemvas.ui.scene_transform_apply_logic import (
     apply_component_flip_transform,
     apply_standalone_flip_transform,
 )
-from chemvas.ui.selection_collection_access import (
+from chemvas.ui.selection_queries import (
     independent_selection_items,
     selected_atom_ids_for_transform_for,
     selected_items_for_transform_for,
 )
-from chemvas.ui.selection_service_access import refresh_selection_outline_for
+from chemvas.ui.selection_state import selection_for
 from chemvas.ui.transactions.document import document_transaction
 
 if TYPE_CHECKING:
@@ -455,7 +455,7 @@ class SceneTransformController:
 
         if not atom_commands and not item_commands:
             return
-        refresh_selection_outline_for(self.canvas)
+        selection_for(self.canvas).update_selection_outline()
         geometry_command = SetSceneGeometryCommand(atom_commands, item_commands)
         if self.history.push(geometry_command) is False:
             raise RuntimeError("Selection flip history push did not commit")
@@ -471,7 +471,7 @@ class SceneTransformController:
         if not atom_ids and not items:
             return False
         command = self.translate_geometry(atom_ids, items, dx, dy)
-        refresh_selection_outline_for(self.canvas)
+        selection_for(self.canvas).update_selection_outline()
         if self.history.push(command) is False:
             raise RuntimeError("Selection translation history push did not commit")
         return True
@@ -556,7 +556,7 @@ class SceneTransformController:
             )
         if not commands:
             return False
-        refresh_selection_outline_for(self.canvas)
+        selection_for(self.canvas).update_selection_outline()
         command = SetSceneGeometryCommand(
             atom_commands=[
                 atom_command
@@ -679,7 +679,7 @@ class SceneTransformController:
             )
         if atom_command is None and not item_commands:
             return
-        refresh_selection_outline_for(self.canvas)
+        selection_for(self.canvas).update_selection_outline()
         if (
             self.history.push(
                 SetSceneGeometryCommand(
@@ -747,7 +747,7 @@ class SceneTransformController:
             ]
         for item, _before_state, after_state in item_updates:
             self._apply_scene_item_state(item, after_state)
-        refresh_selection_outline_for(self.canvas)
+        selection_for(self.canvas).update_selection_outline()
 
     def rotation_drag_command(
         self, session: RotationDragSession

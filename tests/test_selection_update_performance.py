@@ -14,15 +14,14 @@ from chemvas.ui.canvas_document_metadata_state import (
     document_is_dirty_for,
     mark_document_clean_for,
 )
-from chemvas.ui.canvas_scene_items_state import selected_notes_for
 from chemvas.ui.canvas_window_access import snapshot_canvas_state_for
 from chemvas.ui.history_recording_access import record_additions_for
 from chemvas.ui.scene_clipboard_state import scene_clipboard_state_for
 from chemvas.ui.scene_item_access import create_scene_item_from_state
 from chemvas.ui.select_all_access import select_all_scene_items_for
-from chemvas.ui.selection_collection_access import selected_ids_for
 from chemvas.ui.selection_info_state import selection_info_state_for
-from chemvas.ui.selection_style_state import selection_style_state_for
+from chemvas.ui.selection_queries import selected_ids_for
+from chemvas.ui.selection_state import selected_notes_for, selection_state_for
 from chemvas.ui.selection_update_batch import batch_selection_updates
 from chemvas.ui.structure_mutation_access import add_atom_for, add_bond_for
 from tests.canvas_factory import build_canvas_view
@@ -60,7 +59,7 @@ def _chain(canvas, count=18, *, labels=False):
 
 
 def _outline(canvas):
-    return canvas.services.selection.selection_controller.outline_service
+    return canvas.services.selection.outline_service
 
 
 @pytest.mark.parametrize("count", [1, 12])
@@ -103,7 +102,7 @@ def test_selected_addition_undo_does_not_build_decreasing_outlines(canvas, count
     assert not document_is_dirty_for(canvas, snapshot_canvas_state_for(canvas))
     assert not canvas.scene().selectedItems()
     assert not canvas.scene().signalsBlocked()
-    assert not selection_style_state_for(canvas).suspend_outline
+    assert not selection_state_for(canvas).suspend_outline
     history.redo()
     assert snapshot_canvas_state_for(canvas) == drawn
 
@@ -146,7 +145,7 @@ def test_rotation_reuses_unchanged_glyph_clearance_geometry(canvas):
 @pytest.mark.parametrize("fail", [False, True])
 def test_nested_batch_restores_prior_flags_without_early_repaint(canvas, fail):
     _chain(canvas, 4)
-    style = selection_style_state_for(canvas)
+    style = selection_state_for(canvas)
     style.suspend_outline = True
     canvas.scene().blockSignals(True)
     outline = _outline(canvas)
@@ -203,7 +202,7 @@ def test_failed_undo_batch_preserves_exact_scene_stacks_and_retry(canvas, phase)
     assert set(canvas.scene().items()) == scene_items
     history.verify_stack_snapshot(stacks)
     assert not canvas.scene().signalsBlocked()
-    assert not selection_style_state_for(canvas).suspend_outline
+    assert not selection_state_for(canvas).suspend_outline
     history.undo()
     assert not canvas.model.atoms
     history.redo()
@@ -304,7 +303,7 @@ def test_forward_paste_builds_one_outline_and_keeps_exact_history(canvas, note_c
 @pytest.mark.parametrize("suspended", [False, True])
 def test_forward_paste_preserves_outer_selection_batch(canvas, blocked, suspended):
     controller, provider, _, _ = _paste_fixture(canvas, 3)
-    style = selection_style_state_for(canvas)
+    style = selection_state_for(canvas)
     style.suspend_outline = suspended
     canvas.scene().blockSignals(blocked)
     outline = _outline(canvas)
@@ -338,12 +337,12 @@ def test_failed_forward_paste_restores_exact_scene_stacks_and_retry(
     stacks = history.capture_stack_snapshot()
     clipboard = scene_clipboard_state_for(canvas)
     paste_state = (clipboard.paste_source_json, clipboard.paste_count)
-    style = selection_style_state_for(canvas)
+    style = selection_state_for(canvas)
     style.suspend_outline = nested
     canvas.scene().blockSignals(nested)
-    selection = canvas.services.selection.selection_controller
+    selection = canvas.services.selection
     owner, method = (
-        (selection.note_service, "select_note")
+        (selection, "select_note")
         if phase == "note"
         else (_outline(canvas), "update_selection_outline")
     )
@@ -378,7 +377,7 @@ def test_failed_forward_paste_restores_exact_scene_stacks_and_retry(
     assert (clipboard.paste_source_json, clipboard.paste_count) == paste_state
     history.verify_stack_snapshot(stacks)
     assert not canvas.scene().signalsBlocked()
-    assert not selection_style_state_for(canvas).suspend_outline
+    assert not selection_state_for(canvas).suspend_outline
     assert controller.paste_selection_from_clipboard(payload_provider=provider)
     history.undo()
     assert snapshot_canvas_state_for(canvas) == before

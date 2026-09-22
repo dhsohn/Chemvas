@@ -820,9 +820,7 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
         canvas.services.scene_operations.style_controller.suspend_selection_outline = (
             fail_resume
         )
-        canvas.services.selection.selection_controller.update_selection_outline = (
-            fail_refresh
-        )
+        canvas.services.selection.update_selection_outline = fail_refresh
 
         with self.assertRaisesRegex(ValueError, "original delete failure") as caught:
             canvas.services.scene_operations.scene_delete_controller.delete_selected_items()
@@ -838,7 +836,7 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
         self.assertEqual(bond_items_for_id(canvas, bond_id), graphics_before)
         self.assertTrue(bond_item.isSelected())
         self.assertEqual(list(canvas.scene().items()), scene_before)
-        self.assertFalse(canvas.runtime_state.selection_style_state.suspend_outline)
+        self.assertFalse(canvas.runtime_state.selection_state.suspend_outline)
         self.assertEqual(canvas.services.history_service.state.history, [])
 
     def test_selection_delete_success_cleanup_failure_rolls_back_and_raises_first_cleanup_error(
@@ -881,9 +879,7 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
         canvas.services.scene_operations.style_controller.suspend_selection_outline = (
             fail_resume
         )
-        canvas.services.selection.selection_controller.update_selection_outline = (
-            fail_refresh
-        )
+        canvas.services.selection.update_selection_outline = fail_refresh
 
         with self.assertRaisesRegex(RuntimeError, "first cleanup failure") as caught:
             canvas.services.scene_operations.scene_delete_controller.delete_selected_items()
@@ -902,7 +898,7 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
         self.assertEqual(graphics_mapping[bond_id], graphics_before)
         self.assertTrue(bond_item.isSelected())
         self.assertEqual(list(canvas.scene().items()), scene_before)
-        self.assertFalse(canvas.runtime_state.selection_style_state.suspend_outline)
+        self.assertFalse(canvas.runtime_state.selection_state.suspend_outline)
         self.assertEqual(history.state.history, [])
         self.assertEqual(history.state.redo_stack, [])
         self.assertEqual(history_observations, [True, False])
@@ -1125,7 +1121,7 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
                         raise RuntimeError("persistent group refresh failure")
 
                     patcher = mock.patch.object(
-                        canvas.services.selection.selection_controller,
+                        canvas.services.selection,
                         "update_selection_outline",
                         side_effect=mutate_every_group_layer_then_fail,
                     )
@@ -1350,7 +1346,7 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
                     canvas, context=canvas.services.tool_controller.context
                 )
                 with mock.patch.object(
-                    canvas.services.selection.hit_testing_service,
+                    canvas.services.hit_testing_service,
                     "item_at_event",
                     return_value=atom_item,
                 ):
@@ -1407,7 +1403,7 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
 
         tool = DeleteTool(canvas, context=canvas.services.tool_controller.context)
         with mock.patch.object(
-            canvas.services.selection.hit_testing_service,
+            canvas.services.hit_testing_service,
             "item_at_event",
             side_effect=[atom_item, shape_item],
         ):
@@ -1679,7 +1675,7 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
         self.addCleanup(setattr, context, "history_service", actual_history)
         tool = DeleteTool(canvas, context=context)
         with mock.patch.object(
-            canvas.services.selection.hit_testing_service,
+            canvas.services.hit_testing_service,
             "item_at_event",
             side_effect=[atom_item, shape_item],
         ):
@@ -1772,7 +1768,7 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
         tool = DeleteTool(canvas, context=canvas.services.tool_controller.context)
         with (
             mock.patch.object(
-                canvas.services.selection.hit_testing_service,
+                canvas.services.hit_testing_service,
                 "item_at_event",
                 return_value=shape_item,
             ),

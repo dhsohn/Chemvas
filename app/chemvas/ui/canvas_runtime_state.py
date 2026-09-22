@@ -33,8 +33,7 @@ from chemvas.ui.scene_clipboard_state import SceneClipboardState
 from chemvas.ui.scene_render_context import SceneRenderState
 from chemvas.ui.selection_info_access import maybe_warm_rdkit_for
 from chemvas.ui.selection_info_state import SelectionInfoState, selection_info_state_for
-from chemvas.ui.selection_outline_state import SelectionOutlineState
-from chemvas.ui.selection_style_state import SelectionStyleState
+from chemvas.ui.selection_state import SelectionState
 from chemvas.ui.selection_update_batch import batch_selection_updates
 from chemvas.ui.sheet_setup_state import SheetSetupState
 from chemvas.ui.spatial_index_state import CanvasSpatialIndexState
@@ -80,8 +79,7 @@ class CanvasRuntimeState(SceneRenderState):
     spatial_index_state: CanvasSpatialIndexState
     input_view_state: InputViewState
     handle_state: CanvasHandleState
-    selection_style_state: SelectionStyleState
-    selection_outline_state: SelectionOutlineState
+    selection_state: SelectionState
     hover_preview_state: HoverState
     callback_state: CanvasCallbackState
     scene_clipboard_state: SceneClipboardState
@@ -122,8 +120,7 @@ class CanvasRuntimeState(SceneRenderState):
             input_view_state=InputViewState(),
             rotation_state=CanvasRotationState(),
             handle_state=CanvasHandleState(),
-            selection_style_state=SelectionStyleState(),
-            selection_outline_state=SelectionOutlineState(),
+            selection_state=SelectionState(),
             text_style_state=CanvasTextStyleState(),
             tool_settings_state=CanvasToolSettingsState(),
             hover_preview_state=HoverState(),

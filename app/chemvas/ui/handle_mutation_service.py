@@ -27,7 +27,7 @@ from chemvas.ui.scene_decoration_build_access import (
     apply_arrow_labels_for,
     build_arrow_item_for,
 )
-from chemvas.ui.selection_service_access import refresh_selection_outline_for
+from chemvas.ui.selection_state import selection_for
 from chemvas.ui.shape_record_access import (
     require_shape_record_for,
     set_shape_record_for,
@@ -61,7 +61,7 @@ class HandleMutationService:
         shape = require_shape_record_for(self.canvas, item)
         new_rect = resized_shape_rect_helper(shape_rect_of(shape), anchor, pos)
         set_shape_record_for(self.canvas, item, shape_with_rect(shape, new_rect))
-        refresh_selection_outline_for(self.canvas)
+        selection_for(self.canvas).update_selection_outline()
 
     def update_orbital_rotate(self, item, pos: QPointF) -> None:
         data = item.data(1) or {}
@@ -118,7 +118,7 @@ class HandleMutationService:
         item.setData(2, data)
         if data.get("labels"):
             apply_arrow_labels_for(self.canvas, item, data["labels"])
-        refresh_selection_outline_for(self.canvas)
+        selection_for(self.canvas).update_selection_outline()
 
     def update_curved_control(self, item, pos: QPointF) -> None:
         data = item.data(2) or {}
@@ -137,7 +137,7 @@ class HandleMutationService:
         item.setData(2, data)
         if data.get("labels"):
             apply_arrow_labels_for(self.canvas, item, data["labels"])
-        refresh_selection_outline_for(self.canvas)
+        selection_for(self.canvas).update_selection_outline()
 
     def update_curved_endpoint(self, item, pos: QPointF, endpoint: str) -> None:
         """Move one end of a curved arrow to ``pos``.
@@ -178,7 +178,7 @@ class HandleMutationService:
         item.setData(2, data)
         if data.get("labels"):
             apply_arrow_labels_for(self.canvas, item, data["labels"])
-        refresh_selection_outline_for(self.canvas)
+        selection_for(self.canvas).update_selection_outline()
 
 
 __all__ = ["HandleMutationService"]

@@ -70,7 +70,10 @@ if [[ $# -gt 0 ]]; then
 else
   # Keep recursive discovery aligned with CI so a test remains part of the
   # gate if its feature package places it below tests/.
-  mapfile -t files < <(find tests -name 'test_*.py' | sort)
+  files=()
+  while IFS= read -r file; do
+    files+=("$file")
+  done < <(find tests -name 'test_*.py' | sort)
 fi
 
 bash "$ROOT/scripts/run_test_files.sh" --python "$PYTHON" "${files[@]}"

@@ -859,8 +859,8 @@ class SelectionRotationControllerTest(unittest.TestCase):
             mock.patch(
                 "chemvas.ui.selection_rotation_controller.update_ring_fills_for_atoms_for"
             ) as update_rings,
-            mock.patch(
-                "chemvas.ui.selection_rotation_controller.refresh_selection_outline_for"
+            mock.patch.object(
+                canvas.services.selection, "update_selection_outline", create=True
             ) as refresh_outline,
         ):
             SelectionRotationController.refresh_atom_geometry(controller, {0, 2})
@@ -868,7 +868,7 @@ class SelectionRotationControllerTest(unittest.TestCase):
         update_geometries.assert_called_once_with({0, 2})
         redraw_bonds.assert_not_called()
         update_rings.assert_called_once_with(canvas, {0, 2})
-        refresh_outline.assert_called_once_with(canvas)
+        refresh_outline.assert_called_once_with()
 
     def test_update_selection_3d_rotation_rotates_bond_mode_atoms(self) -> None:
         canvas = _FakeCanvas()

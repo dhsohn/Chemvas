@@ -13,7 +13,6 @@ from chemvas.ui.canvas_group_state import group_state_for
 from chemvas.ui.canvas_scene_items_state import (
     arrow_items_for,
     note_items_for,
-    selected_notes_for,
     shape_items_for,
 )
 from chemvas.ui.canvas_window_access import snapshot_canvas_state_for
@@ -27,7 +26,8 @@ from chemvas.ui.scene_clipboard_controller import SceneClipboardController
 from chemvas.ui.scene_clipboard_logic import build_selection_clipboard_payload
 from chemvas.ui.scene_item_state import scene_item_state_for
 from chemvas.ui.scene_item_state_serialization import arrow_state_dict
-from chemvas.ui.selection_collection_access import selection_status_count_for
+from chemvas.ui.selection_queries import selection_status_count_for
+from chemvas.ui.selection_state import selected_notes_for
 from tests.gui_workflow_support import _click, _key, _redo, _tool
 from tests.gui_workflow_support import app as app
 from tests.gui_workflow_support import drawing as drawing

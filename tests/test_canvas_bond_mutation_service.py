@@ -69,7 +69,7 @@ def _runtime_state():
 def _service_for(canvas) -> CanvasBondMutationService:
     return CanvasBondMutationService(
         canvas,
-        hit_testing_service=canvas.services.selection.hit_testing_service,
+        hit_testing_service=canvas.services.hit_testing_service,
         graph_service=canvas.services.graph_service,
         atom_label_relayout=lambda _atom_ids: None,
     )

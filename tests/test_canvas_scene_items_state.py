@@ -2,16 +2,18 @@ from types import SimpleNamespace
 
 from chemvas.ui.canvas_scene_items_state import (
     CanvasSceneItemsState,
-    add_selected_note_for,
     append_scene_item_for,
     clear_scene_item_collections_for,
     mark_items_for,
     remove_scene_item_from_collection_for,
-    remove_selected_note_for,
     ring_items_for,
     scene_items_state_for,
-    selected_notes_for,
     set_scene_item_collection_for,
+)
+from chemvas.ui.selection_state import (
+    add_selected_note_for,
+    remove_selected_note_for,
+    selected_notes_for,
 )
 from tests.runtime_state import canvas_runtime_state
 
@@ -30,11 +32,9 @@ def test_scene_items_state_for_uses_runtime_state() -> None:
 
 
 def test_scene_items_state_for_does_not_read_legacy_fake_canvas_attrs() -> None:
-    notes = ["selected"]
     rings = ["ring"]
     marks = ["mark"]
     canvas = SimpleNamespace(
-        selected_notes=notes,
         ring_items=rings,
         mark_items=marks,
         runtime_state=canvas_runtime_state(scene_items_state=CanvasSceneItemsState()),
@@ -42,10 +42,8 @@ def test_scene_items_state_for_does_not_read_legacy_fake_canvas_attrs() -> None:
 
     state = scene_items_state_for(canvas)
 
-    assert state.selected_notes == []
     assert state.ring_items == []
     assert state.mark_items == []
-    assert state.selected_notes is not notes
     assert state.ring_items is not rings
     assert state.mark_items is not marks
     assert selected_notes_for(canvas) == []

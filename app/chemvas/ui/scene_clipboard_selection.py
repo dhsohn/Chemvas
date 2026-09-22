@@ -6,17 +6,13 @@ from dataclasses import dataclass
 from PyQt6.QtWidgets import QGraphicsItem, QGraphicsTextItem
 
 from chemvas.ui.atom_label_access import atom_item_for_id_for
-from chemvas.ui.selection_scene_access import (
+from chemvas.ui.selection_queries import (
     clear_scene_selection_for,
     scene_selected_items_for,
     selected_scene_notes_for,
     set_scene_items_selected_for,
 )
-from chemvas.ui.selection_service_access import (
-    clear_note_selection_for,
-    refresh_selection_outline_for,
-    select_note_for,
-)
+from chemvas.ui.selection_state import selection_for
 from chemvas.ui.selection_update_batch import batch_selection_updates
 
 NoteSelector = Callable[[QGraphicsTextItem], None]
@@ -42,11 +38,11 @@ def restore_clipboard_selection_snapshot_for_canvas(
     snapshot: SceneClipboardSelectionSnapshot,
 ) -> None:
     clear_scene_selection_for(canvas, block_signals=True)
-    clear_note_selection_for(canvas)
+    selection_for(canvas).clear_note_selection()
     set_scene_items_selected_for(canvas, snapshot.scene_items, True, block_signals=True)
     for note in snapshot.notes:
-        select_note_for(canvas, note, additive=True)
-    refresh_selection_outline_for(canvas)
+        selection_for(canvas).select_note(note, additive=True)
+    selection_for(canvas).update_selection_outline()
 
 
 def select_pasted_content_for_canvas(

@@ -148,7 +148,7 @@ class CanvasViewTransformHelperTest(unittest.TestCase):
                 atom_graphics_state=CanvasAtomGraphicsState(),
                 bond_graphics_state=CanvasBondGraphicsState(),
             ),
-            services=canvas_runtime_services(selection_controller=selection_controller),
+            services=canvas_runtime_services(selection=selection_controller),
         )
         set_atom_items_for(view, {1: atom_item})
         set_atom_dots_for(view, {2: atom_dot})
@@ -171,7 +171,7 @@ class CanvasViewTransformHelperTest(unittest.TestCase):
                 atom_graphics_state=CanvasAtomGraphicsState(),
                 bond_graphics_state=CanvasBondGraphicsState(),
             ),
-            services=canvas_runtime_services(selection_controller=selection_controller),
+            services=canvas_runtime_services(selection=selection_controller),
         )
         set_atom_items_for(view, {1: atom_item})
         set_atom_dots_for(view, {})

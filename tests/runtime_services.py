@@ -8,7 +8,6 @@ from chemvas.ui.canvas_runtime_services import CanvasRuntimeServices
 
 SERVICE_PATHS: dict[str, tuple[str, str]] = {
     "arrow_build_service": ("scene_decoration", "arrow_build_service"),
-    "selection_controller": ("selection", "selection_controller"),
     "scene_item_controller": ("scene_view", "scene_item_controller"),
     "scene_clipboard_controller": (
         "scene_operations",
@@ -38,7 +37,6 @@ SERVICE_PATHS: dict[str, tuple[str, str]] = {
         "canvas_bond_mutation_service",
     ),
     "chemdraw_shortcut_service": ("input", "chemdraw_shortcut_service"),
-    "hit_testing_service": ("selection", "hit_testing_service"),
     "canvas_color_mutation_service": (
         "scene_operations",
         "canvas_color_mutation_service",
@@ -85,7 +83,6 @@ _GROUP_NAMES = (
     "handles",
     "scene_decoration",
     "scene_operations",
-    "selection",
     "structure",
 )
 
@@ -112,11 +109,15 @@ class CanvasRuntimeServicesDouble(CanvasRuntimeServices):
         atom_label_service = services.pop("atom_label_service", None)
         graph_service = services.pop("graph_service", None)
         hover = services.pop("hover", SimpleNamespace())
+        selection = services.pop("selection", SimpleNamespace())
+        hit_testing_service = services.pop("hit_testing_service", None)
         history_service = services.pop("history_service", None)
         tool_controller = services.pop("tool_controller", None)
         super().__init__(
             **groups,
             hover=hover,
+            selection=selection,
+            hit_testing_service=hit_testing_service,
             atom_label_service=atom_label_service,
             graph_service=graph_service,
             history_service=history_service,

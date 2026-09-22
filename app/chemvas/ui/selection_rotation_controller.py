@@ -24,8 +24,8 @@ from chemvas.ui.canvas_model_access import (
 from chemvas.ui.canvas_rotation_state import rotation_state_for
 from chemvas.ui.canvas_window_access import notify_error_for
 from chemvas.ui.history_commands import SetSceneGeometryCommand
-from chemvas.ui.selection_collection_access import selected_ids_for
 from chemvas.ui.selection_info_access import emit_selection_info_for
+from chemvas.ui.selection_queries import scene_selected_items_for, selected_ids_for
 from chemvas.ui.selection_rotation_access import (
     apply_projected_atom_positions_for,
     flatten_planar_fragments_for,
@@ -43,8 +43,7 @@ from chemvas.ui.selection_rotation_session import (
     begin_selection_rotation_session,
     explicit_rotation_atom_ids_from_items,
 )
-from chemvas.ui.selection_scene_access import scene_selected_items_for
-from chemvas.ui.selection_service_access import refresh_selection_outline_for
+from chemvas.ui.selection_state import selection_for
 from chemvas.ui.selection_style_access import (
     restore_selection_from_ids_for,
 )
@@ -175,7 +174,7 @@ class SelectionRotationController:
             )
         else:
             update_ring_fills_for_atoms_for(self.canvas, atom_ids)
-        refresh_selection_outline_for(self.canvas)
+        selection_for(self.canvas).update_selection_outline()
 
     def rotate_point_around_axis(self, coords, axis_start, axis_end, angle: float):
         return rotate_point_around_axis_for(
@@ -404,7 +403,7 @@ class SelectionRotationController:
                 )
                 if callable(update_geometries):
                     update_geometries(rotated_atoms, rebuild_stale_bond_topology=True)
-                    refresh_selection_outline_for(self.canvas)
+                    selection_for(self.canvas).update_selection_outline()
         except Exception as original_error:
             # Fail closed: close the session and surface the error. Before the
             # push commits, revert the document to the gesture start (the

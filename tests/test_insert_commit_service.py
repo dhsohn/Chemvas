@@ -131,6 +131,7 @@ class _FakeCanvas:
             ),
             scene_operations=SimpleNamespace(),
             selection=SimpleNamespace(),
+            hit_testing_service=SimpleNamespace(),
             structure=SimpleNamespace(
                 canvas_atom_mutation_service=SimpleNamespace(add_atom=self.add_atom),
                 canvas_bond_mutation_service=SimpleNamespace(add_bond=self.add_bond),

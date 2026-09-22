@@ -104,9 +104,7 @@ def test_draw_over_existing_unknown_double_refuses_before_recorded_mutation(
     builder = _builder_for(canvas)
     builder.add_bond_between_points(QPointF(0, 0), QPointF(10, 0), "double", 2)
     canvas.model.bonds[0].style = "double_either"
-    canvas.services.selection.hit_testing_service.find_atom_near = Mock(
-        side_effect=[0, 1]
-    )
+    canvas.services.hit_testing_service.find_atom_near = Mock(side_effect=[0, 1])
     canvas.runtime_state.callback_state = CanvasCallbackState(error=Mock())
     builder = _builder_for(canvas)
     builder.committer.begin_recorded_change = Mock(

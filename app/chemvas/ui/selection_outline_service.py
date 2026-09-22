@@ -36,7 +36,6 @@ from chemvas.ui.scene_item_access import (
     add_item_to_canvas_scene,
     remove_item_from_canvas_scene,
 )
-from chemvas.ui.selection_collection_access import selected_ids_for
 from chemvas.ui.selection_info_access import emit_selection_info_for
 from chemvas.ui.selection_outline_items import (
     selection_center_outline_items,
@@ -46,12 +45,12 @@ from chemvas.ui.selection_outline_items import (
     selection_object_outline_item,
     selection_outline_pen,
 )
-from chemvas.ui.selection_outline_state import (
+from chemvas.ui.selection_queries import scene_selected_items_for, selected_ids_for
+from chemvas.ui.selection_state import (
     append_selection_outline_for,
     clear_selection_outlines_for,
     selection_outlines_for,
 )
-from chemvas.ui.selection_scene_access import scene_selected_items_for
 from chemvas.ui.selection_style_access import (
     selection_bond_overlay_width_for,
     selection_color_for,

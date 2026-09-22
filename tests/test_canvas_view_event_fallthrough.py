@@ -128,7 +128,7 @@ class CanvasViewEventFallthroughTest(unittest.TestCase):
             item_at_event=mock.Mock(return_value=None),
             bond_id_from_event=mock.Mock(return_value=None),
         )
-        view.services.selection.hit_testing_service = hit_testing_service
+        view.services.hit_testing_service = hit_testing_service
         tool_controller = SimpleNamespace(active=tool_active)
         view.services.tool_controller = tool_controller
         scene_transform_controller = SimpleNamespace(apply_bond_style=mock.Mock())
@@ -230,8 +230,8 @@ class CanvasViewEventFallthroughTest(unittest.TestCase):
             2: Atom("C", 20.0, 0.0),
         }
         view.model.bonds = [Bond(1, 2, 2, style="double_center")]
-        view.services.selection.hit_testing_service.item_at_event.return_value = None
-        view.services.selection.hit_testing_service.bond_id_from_event.return_value = 0
+        view.services.hit_testing_service.item_at_event.return_value = None
+        view.services.hit_testing_service.bond_id_from_event.return_value = 0
         view.apply_bond_style = mock.Mock(
             side_effect=AssertionError("canvas bond style wrapper should not run")
         )
@@ -243,7 +243,7 @@ class CanvasViewEventFallthroughTest(unittest.TestCase):
 
         controller = CanvasPointerController(
             view,
-            hit_testing_service=view.services.selection.hit_testing_service,
+            hit_testing_service=view.services.hit_testing_service,
             insert_controller=view.services.structure.insert_controller,
             hover_controller=view.services.hover,
             tool_controller=view.services.tool_controller,
@@ -291,14 +291,14 @@ class CanvasViewEventFallthroughTest(unittest.TestCase):
                     2: Atom("C", 20.0, 0.0),
                 }
                 view.model.bonds = [Bond(1, 2, 2, style=current_style)]
-                view.services.selection.hit_testing_service.item_at_event.return_value = None
-                view.services.selection.hit_testing_service.bond_id_from_event.return_value = 0
+                view.services.hit_testing_service.item_at_event.return_value = None
+                view.services.hit_testing_service.bond_id_from_event.return_value = 0
                 scene_transform_controller = SimpleNamespace(
                     apply_bond_style=mock.Mock()
                 )
                 controller = CanvasPointerController(
                     view,
-                    hit_testing_service=view.services.selection.hit_testing_service,
+                    hit_testing_service=view.services.hit_testing_service,
                     insert_controller=view.services.structure.insert_controller,
                     hover_controller=view.services.hover,
                     tool_controller=view.services.tool_controller,

@@ -189,7 +189,7 @@ class CanvasViewCenterTransformHelpersTest(unittest.TestCase):
             ),
         )
         view.services = canvas_runtime_services(
-            selection_controller=SimpleNamespace(
+            selection=SimpleNamespace(
                 update_selection_outline=view.refresh_selection_outline
             ),
             hover=SimpleNamespace(refresh=mock.Mock()),

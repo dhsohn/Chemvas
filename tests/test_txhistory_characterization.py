@@ -347,7 +347,7 @@ def test_moved_drag_gesture_pushes_one_command_and_round_trips(canvas) -> None:
 
     assert select_all_scene_items_for(canvas)
     tool = MoveTool(canvas, context=canvas.services.tool_controller.context)
-    from chemvas.ui.selection_collection_access import selection_snapshot_for
+    from chemvas.ui.selection_queries import selection_snapshot_for
 
     snapshot = selection_snapshot_for(canvas)
     assert snapshot is not None

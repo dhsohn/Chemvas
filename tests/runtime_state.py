@@ -5,6 +5,7 @@ from types import SimpleNamespace
 from typing import Any
 
 from chemvas.ui.canvas_runtime_state import CanvasRuntimeState
+from chemvas.ui.selection_state import SelectionState
 
 CANVAS_RUNTIME_STATE_FIELDS = frozenset(
     field.name for field in fields(CanvasRuntimeState)
@@ -22,6 +23,7 @@ def canvas_runtime_state(**states: Any) -> SimpleNamespace:
     unknown = sorted(set(states) - CANVAS_RUNTIME_STATE_FIELDS)
     if unknown:
         raise AssertionError(f"not CanvasRuntimeState fields: {unknown}")
+    states.setdefault("selection_state", SelectionState())
     return SimpleNamespace(**states)
 
 

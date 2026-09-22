@@ -62,14 +62,11 @@ from chemvas.ui.handle_state import (
 from chemvas.ui.history_commands import AddSceneItemsCommand
 from chemvas.ui.insert_mode_logic import clear_insert_session
 from chemvas.ui.selection_info_state import SelectionInfoState, selection_info_state_for
-from chemvas.ui.selection_outline_state import (
-    SelectionOutlineState,
+from chemvas.ui.selection_state import (
+    SelectionState,
     selection_outlines_for,
+    selection_state_for,
     set_selection_outlines_for,
-)
-from chemvas.ui.selection_style_state import (
-    SelectionStyleState,
-    selection_style_state_for,
 )
 from tests.canvas_factory import build_canvas_view
 from tests.runtime_state import canvas_runtime_state
@@ -98,7 +95,7 @@ def _attach_minimal_runtime_state(canvas) -> None:
         rotation_state=canvas.rotation_state,
         insert_state=canvas.insert_state,
         mark_registry=canvas.mark_registry,
-        selection_style_state=canvas.selection_style_state,
+        selection_state=canvas.selection_state,
         selection_info_state=canvas.selection_info_state,
         hover_preview_state=HoverState(),
         atom_coords_3d_state=CanvasAtomCoords3DState(),
@@ -116,7 +113,6 @@ def _attach_minimal_runtime_state(canvas) -> None:
             shape_items=canvas.shape_items,
             orbital_items=canvas.orbital_items,
         ),
-        selection_outline_state=SelectionOutlineState(),
         handle_state=CanvasHandleState(),
         group_state=CanvasGroupState(),
         calculation_plan_state=CanvasCalculationPlanState(),
@@ -369,7 +365,7 @@ class CanvasSceneResetServiceTest(unittest.TestCase):
         canvas = SimpleNamespace(
             scene=lambda: scene,
             runtime_state=canvas_runtime_state(
-                selection_style_state=SelectionStyleState(
+                selection_state=SelectionState(
                     suspend_outline=True,
                 ),
                 selection_info_state=SelectionInfoState.create(),
@@ -382,7 +378,7 @@ class CanvasSceneResetServiceTest(unittest.TestCase):
             service.clear_scene()
 
         self.assertEqual(scene.clear_calls, 0)
-        self.assertTrue(selection_style_state_for(canvas).suspend_outline)
+        self.assertTrue(selection_state_for(canvas).suspend_outline)
 
     def test_empty_status_publication_reentry_publishes_once(self) -> None:
         app = QApplication.instance() or QApplication([])
@@ -464,7 +460,7 @@ class CanvasSceneResetServiceTest(unittest.TestCase):
             orbital_items=[object()],
             mark_registry=CanvasMarkRegistry({1: [object()]}),
             insert_state=CanvasInsertState(smiles_preview_model=object()),
-            selection_style_state=SelectionStyleState(
+            selection_state=SelectionState(
                 suspend_outline=True,
             ),
             selection_info_state=SelectionInfoState(
@@ -488,7 +484,7 @@ class CanvasSceneResetServiceTest(unittest.TestCase):
 
         CanvasSceneResetService(
             canvas,
-            hit_testing_service=canvas.services.selection.hit_testing_service,
+            hit_testing_service=canvas.services.hit_testing_service,
         ).clear_scene()
 
         self.assertEqual(scene.clear_calls, 1)
@@ -497,7 +493,7 @@ class CanvasSceneResetServiceTest(unittest.TestCase):
         self.assertIsNone(hover_state_for(canvas).bond_id)
         self.assertIsNone(hover_state_for(canvas).style)
         self.assertIsInstance(canvas.model, MoleculeModel)
-        canvas.services.selection.hit_testing_service.mark_spatial_index_dirty.assert_called_once_with()
+        canvas.services.hit_testing_service.mark_spatial_index_dirty.assert_called_once_with()
         self.assertEqual(atom_coords_3d_for(canvas), {})
         self.assertIsNone(canvas.rotation_state.projection_center_3d)
         self.assertIsNone(canvas.rotation_state.projection_anchor_2d)
@@ -528,7 +524,7 @@ class CanvasSceneResetServiceTest(unittest.TestCase):
         self.assertEqual(shape_items_for(canvas), [])
         self.assertEqual(orbital_items_for(canvas), [])
         self.assertEqual(selection_outlines_for(canvas), [])
-        self.assertFalse(canvas.selection_style_state.suspend_outline)
+        self.assertFalse(canvas.selection_state.suspend_outline)
         self.assertIsNone(canvas.selection_info_state.signature)
         self.assertIsNone(canvas.selection_info_state.pending_signature)
         self.assertEqual(canvas.selection_info_state.cache, ("", ""))

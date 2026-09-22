@@ -3,6 +3,7 @@ import unittest
 from types import SimpleNamespace
 from unittest.mock import patch
 
+from chemvas.ui.selection_state import selected_notes_for, set_selected_notes_for
 from tests.runtime_services import canvas_runtime_services
 from tests.runtime_state import canvas_runtime_state
 from tests.scene_render_context import attach_scene_render_context
@@ -85,7 +86,7 @@ class _FakeCanvas:
             note_controller=SimpleNamespace(
                 apply_note_style=self.record_note_style_applied
             ),
-            selection_controller=SimpleNamespace(
+            selection=SimpleNamespace(
                 update_note_selection_box=self.record_note_selection_box_updated,
                 update_selection_outline=lambda: None,
             ),
@@ -129,8 +130,8 @@ class _FakeCanvas:
         set_scene_item_collection_for(self, name, value)
 
     selected_notes = property(
-        lambda self: self._scene_items("selected_notes"),
-        lambda self, value: self._set_scene_items("selected_notes", value),
+        lambda self: selected_notes_for(self),
+        lambda self, value: set_selected_notes_for(self, value),
     )
     ring_items = property(
         lambda self: self._scene_items("ring_items"),

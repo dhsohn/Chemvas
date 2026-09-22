@@ -67,9 +67,9 @@ from chemvas.ui.scene_single_item_mutation_logic import (
     delete_bond_with_history,
     delete_ring_with_history,
 )
-from chemvas.ui.selection_collection_access import selected_scene_items_for
 from chemvas.ui.selection_info_state import selection_info_state_for
-from chemvas.ui.selection_service_access import refresh_selection_outline_for
+from chemvas.ui.selection_queries import selected_scene_items_for
+from chemvas.ui.selection_state import selection_for
 from chemvas.ui.transactions.document import (
     DocumentSavepoint,
     document_transaction,
@@ -1260,7 +1260,7 @@ class SceneDeleteController:
             ),
             (
                 "refreshing the selection outline after a delete",
-                lambda: refresh_selection_outline_for(self.canvas),
+                lambda: selection_for(self.canvas).update_selection_outline(),
             ),
         )
         for phase, action in actions:

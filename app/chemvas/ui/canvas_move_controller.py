@@ -26,7 +26,7 @@ from chemvas.ui.canvas_scene_items_state import ring_items_for
 from chemvas.ui.handle_state import active_handles_for, handle_target_for
 from chemvas.ui.mark_item_access import mark_center_for
 from chemvas.ui.renderer_style_access import bond_length_px_for
-from chemvas.ui.selection_service_access import refresh_selection_outline_for
+from chemvas.ui.selection_state import selection_for
 from chemvas.ui.shape_record_access import (
     require_shape_record_for,
     set_shape_record_for,
@@ -147,7 +147,7 @@ class CanvasMoveController:
                 item.setData(2, data)
         self._shift_active_handles_for(item, dx, dy)
         if update_selection:
-            refresh_selection_outline_for(self.canvas)
+            selection_for(self.canvas).update_selection_outline()
 
     def _shift_active_handles_for(self, item, dx: float, dy: float) -> None:
         # Keep resize/transform handles glued to their item as it is dragged.
@@ -196,7 +196,7 @@ class CanvasMoveController:
                 affected_ring_items=affected_ring_items,
             )
         if update_selection:
-            refresh_selection_outline_for(self.canvas)
+            selection_for(self.canvas).update_selection_outline()
 
     def redraw_bonds_for_atoms(self, atom_ids: set[int]) -> None:
         for bond_id in self.bond_ids_for_atom_ids(atom_ids):

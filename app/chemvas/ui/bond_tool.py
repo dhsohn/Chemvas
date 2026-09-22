@@ -24,17 +24,14 @@ from chemvas.ui.bond_preview_access import (
 )
 from chemvas.ui.canvas_hover_state import hover_state_for
 from chemvas.ui.canvas_model_access import bond_for_id, model_for
-from chemvas.ui.canvas_scene_items_state import selected_notes_for
 from chemvas.ui.canvas_tool_settings_state import tool_settings_state_for
 from chemvas.ui.canvas_window_access import notify_error_for
 from chemvas.ui.renderer_style_access import bond_length_px_for
-from chemvas.ui.selection_scene_access import (
+from chemvas.ui.selection_queries import (
     clear_scene_selection_for,
     scene_selected_items_for,
 )
-from chemvas.ui.selection_service_access import (
-    clear_note_selection_for,
-)
+from chemvas.ui.selection_state import selected_notes_for, selection_for
 from chemvas.ui.structure_geometry_access import default_bond_endpoint_for
 from chemvas.ui.structure_mutation_access import add_bond_between_points_for
 from chemvas.ui.tool_base import Tool
@@ -163,7 +160,7 @@ class BondTool(Tool):
         if scene_selected_items_for(self.canvas):
             clear_scene_selection_for(self.canvas)
         if selected_notes_for(self.canvas):
-            clear_note_selection_for(self.canvas)
+            selection_for(self.canvas).clear_note_selection()
 
     @override
     def on_mouse_press(self, event) -> bool:

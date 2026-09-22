@@ -91,7 +91,7 @@ def _set_atom_graphics(canvas, items=None, dots=None) -> None:
 def _service_for(canvas) -> CanvasAtomMutationService:
     return CanvasAtomMutationService(
         canvas,
-        hit_testing_service=canvas.services.selection.hit_testing_service,
+        hit_testing_service=canvas.services.hit_testing_service,
         graph_service=canvas.services.graph_service,
     )
 

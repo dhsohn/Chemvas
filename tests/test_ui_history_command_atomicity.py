@@ -189,7 +189,6 @@ class _Canvas:
 
 def _install_scene_runtime_state(canvas: _Canvas) -> None:
     canvas.runtime_state.scene_items_state = SimpleNamespace(
-        selected_notes=[],
         ring_items=[],
         note_items=[],
         mark_items=[],
@@ -200,8 +199,8 @@ def _install_scene_runtime_state(canvas: _Canvas) -> None:
     )
     canvas.runtime_state.mark_registry = SimpleNamespace(by_atom={})
     canvas.runtime_state.handle_state = SimpleNamespace(active_handles=[], target=None)
-    canvas.runtime_state.selection_style_state = SimpleNamespace()
-    canvas.runtime_state.selection_outline_state = SimpleNamespace(outlines=[])
+    canvas.runtime_state.selection_state = SimpleNamespace()
+    canvas.runtime_state.selection_state = SimpleNamespace(outlines=[])
     canvas.runtime_state.selection_info_state = SimpleNamespace(
         signature=(frozenset({1}), frozenset()),
         pending_signature=None,
@@ -223,16 +222,16 @@ def _persistent_outline_failure(canvas: _Canvas):
     old_outline = _SceneItem("old-outline")
     canvas.scene().attach(old_outline)
     outlines = [old_outline]
-    canvas.runtime_state.selection_outline_state.outlines = outlines
+    canvas.runtime_state.selection_state.outlines = outlines
     partial_outlines: list[_SceneItem] = []
 
     def refresh_then_fail(_canvas) -> None:
-        for outline in list(canvas.runtime_state.selection_outline_state.outlines):
+        for outline in list(canvas.runtime_state.selection_state.outlines):
             canvas.scene().detach(outline)
         partial = _SceneItem(f"partial-{len(partial_outlines)}")
         partial_outlines.append(partial)
         canvas.scene().attach(partial)
-        canvas.runtime_state.selection_outline_state.outlines = [partial]
+        canvas.runtime_state.selection_state.outlines = [partial]
         raise RuntimeError("persistent outline rebuild failure")
 
     return old_outline, outlines, partial_outlines, refresh_then_fail
@@ -244,7 +243,7 @@ def _assert_original_outline_restored(
     outlines: list[_SceneItem],
     partial_outlines: list[_SceneItem],
 ) -> None:
-    assert canvas.runtime_state.selection_outline_state.outlines is outlines
+    assert canvas.runtime_state.selection_state.outlines is outlines
     assert outlines == [old_outline]
     assert old_outline.scene() is canvas.scene()
     assert all(partial.scene() is None for partial in partial_outlines)
@@ -1317,8 +1316,8 @@ def test_note_remove_failure_restores_collections_selection_and_container_identi
     selected_notes = [note]
     outlines = [_SceneItem("outline")]
     canvas.runtime_state.scene_items_state.note_items = note_items
-    canvas.runtime_state.scene_items_state.selected_notes = selected_notes
-    canvas.runtime_state.selection_outline_state.outlines = outlines
+    canvas.runtime_state.selection_state.selected_notes = selected_notes
+    canvas.runtime_state.selection_state.outlines = outlines
     before_order = canvas.scene().items()
     before_info = vars(canvas.runtime_state.selection_info_state).copy()
 
@@ -1326,7 +1325,7 @@ def test_note_remove_failure_restores_collections_selection_and_container_identi
         note_items.remove(item)
         selected_notes.remove(item)
         item.setSelected(False)
-        canvas.runtime_state.selection_outline_state.outlines = []
+        canvas.runtime_state.selection_state.outlines = []
         canvas.runtime_state.selection_info_state.signature = None
         canvas.runtime_state.selection_info_state.cache = ("mutated", "selection")
         raise RuntimeError("note remove failed before detach")
@@ -1349,9 +1348,9 @@ def test_note_remove_failure_restores_collections_selection_and_container_identi
     assert note.isSelected()
     assert canvas.runtime_state.scene_items_state.note_items is note_items
     assert note_items == [other, note]
-    assert canvas.runtime_state.scene_items_state.selected_notes is selected_notes
+    assert canvas.runtime_state.selection_state.selected_notes is selected_notes
     assert selected_notes == [note]
-    assert canvas.runtime_state.selection_outline_state.outlines is outlines
+    assert canvas.runtime_state.selection_state.outlines is outlines
     assert vars(canvas.runtime_state.selection_info_state) == before_info
 
 
@@ -1365,7 +1364,7 @@ def test_note_remove_failure_restores_selection_child_visual_state() -> None:
     canvas.scene().attach(selection_box)
     selected_notes = [note]
     note_items = [note]
-    canvas.runtime_state.scene_items_state.selected_notes = selected_notes
+    canvas.runtime_state.selection_state.selected_notes = selected_notes
     canvas.runtime_state.scene_items_state.note_items = note_items
 
     def remove_after_selection_box_mutation(_canvas, item) -> None:
@@ -1392,7 +1391,7 @@ def test_note_remove_failure_restores_selection_child_visual_state() -> None:
     ):
         command.redo(operations)
 
-    assert canvas.runtime_state.scene_items_state.selected_notes is selected_notes
+    assert canvas.runtime_state.selection_state.selected_notes is selected_notes
     assert selected_notes == [note]
     assert canvas.runtime_state.scene_items_state.note_items is note_items
     assert note_items == [note]
@@ -1898,19 +1897,19 @@ def test_update_scene_item_restores_old_outline_objects_when_refresh_rebuild_fai
     old_outline = _SceneItem("old-outline")
     canvas.scene().attach(old_outline)
     outlines = [old_outline]
-    canvas.runtime_state.selection_outline_state.outlines = outlines
+    canvas.runtime_state.selection_state.outlines = outlines
     partial_outlines: list[_SceneItem] = []
 
     def apply_state(_canvas, _item, state) -> None:
         canvas.value = state["value"]
 
     def refresh_then_fail(_canvas) -> None:
-        for outline in list(canvas.runtime_state.selection_outline_state.outlines):
+        for outline in list(canvas.runtime_state.selection_state.outlines):
             canvas.scene().detach(outline)
         partial = _SceneItem(f"partial-{len(partial_outlines)}")
         partial_outlines.append(partial)
         canvas.scene().attach(partial)
-        canvas.runtime_state.selection_outline_state.outlines = [partial]
+        canvas.runtime_state.selection_state.outlines = [partial]
         raise RuntimeError("outline rebuild failed after clear")
 
     command = UpdateSceneItemCommand("item", {"value": 1}, {"value": 2})
@@ -1928,7 +1927,7 @@ def test_update_scene_item_restores_old_outline_objects_when_refresh_rebuild_fai
         command.redo(operations)
 
     assert canvas.value == 1
-    assert canvas.runtime_state.selection_outline_state.outlines is outlines
+    assert canvas.runtime_state.selection_state.outlines is outlines
     assert outlines == [old_outline]
     assert canvas.scene().items() == [old_outline]
     assert all(partial.scene() is None for partial in partial_outlines)

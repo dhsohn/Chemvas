@@ -37,7 +37,7 @@ from chemvas.ui.handle_overlay_access import (
 )
 from chemvas.ui.handle_overlay_service import HandleOverlayService
 from chemvas.ui.handle_state import CanvasHandleState
-from chemvas.ui.selection_style_state import SelectionStyleState
+from chemvas.ui.selection_state import SelectionState
 
 
 class _RecordingScene(QGraphicsScene):
@@ -118,20 +118,18 @@ def _make_proxy(
         runtime_state=canvas_runtime_state(
             handle_state=CanvasHandleState(),
             scene_items_state=CanvasSceneItemsState(),
-            selection_style_state=SelectionStyleState(color=QColor("#1f5eff")),
+            selection_state=SelectionState(color=QColor("#1f5eff")),
             tool_settings_state=CanvasToolSettingsState(curved_snap_step=2),
         ),
         refresh_selection_outline=mock.Mock(),
         services=canvas_runtime_services(
-            selection_controller=SimpleNamespace(update_selection_outline=mock.Mock()),
+            selection=SimpleNamespace(update_selection_outline=mock.Mock()),
         ),
     )
     arrow_builder = CanvasArrowBuildService(attach_scene_render_context(view))
     arrow_builder.add_arrow_head = mock.Mock(wraps=arrow_builder.add_arrow_head)
     view.services.scene_decoration.arrow_build_service = arrow_builder
-    view.services.selection.selection_controller.update_selection_outline = (
-        view.refresh_selection_outline
-    )
+    view.services.selection.update_selection_outline = view.refresh_selection_outline
     view.clear_handles = lambda: clear_handles_for(view)
     view.services.handles.handle_overlay_service = HandleOverlayService(view)
     view.services.handles.curved_arrow_path_service = CurvedArrowPathService(view)

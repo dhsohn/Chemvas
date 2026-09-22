@@ -43,7 +43,7 @@ from chemvas.ui.scene_item_state import (
     bond_state_dict,
     scene_item_state_for,
 )
-from chemvas.ui.selection_collection_access import (
+from chemvas.ui.selection_queries import (
     selected_ids_for,
     selected_items_for_transform_for,
 )

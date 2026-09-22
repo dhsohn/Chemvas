@@ -24,12 +24,10 @@ from chemvas.ui.canvas_atom_graphics_state import CanvasAtomGraphicsState
 from chemvas.ui.canvas_hover_state import hover_state_for
 from chemvas.ui.canvas_input_controller import CanvasInputController
 from chemvas.ui.canvas_insert_state import CanvasInsertState, insert_state_for
-from chemvas.ui.canvas_scene_items_state import (
-    CanvasSceneItemsState,
-    set_selected_notes_for,
-)
+from chemvas.ui.canvas_scene_items_state import CanvasSceneItemsState
 from chemvas.ui.input_view_access import input_view_state_for
 from chemvas.ui.input_view_state import InputViewState
+from chemvas.ui.selection_state import set_selected_notes_for
 from chemvas.ui.sheet_setup_state import SheetSetupState
 from tests.runtime_state import canvas_runtime_state
 

@@ -20,7 +20,6 @@ from chemvas.ui.canvas_scene_view_service_bundle import CanvasSceneViewServiceBu
 from chemvas.ui.handle_service_bundle import HandleServiceBundle
 from chemvas.ui.scene_decoration_service_bundle import SceneDecorationServiceBundle
 from chemvas.ui.scene_operation_service_bundle import SceneOperationServiceBundle
-from chemvas.ui.selection_service_bundle import SelectionServiceBundle
 from chemvas.ui.structure_service_bundle import StructureServiceBundle
 from tests.runtime_services import SERVICE_PATHS, canvas_runtime_services
 
@@ -32,7 +31,6 @@ _BUNDLES = {
     "handles": HandleServiceBundle,
     "scene_decoration": SceneDecorationServiceBundle,
     "scene_operations": SceneOperationServiceBundle,
-    "selection": SelectionServiceBundle,
     "structure": StructureServiceBundle,
 }
 
@@ -99,36 +97,11 @@ def test_assignment_rejects_unknown_service_names(name: str) -> None:
     assert not hasattr(services, name)
 
 
-def test_constructor_checks_unknown_names_before_mutating_supplied_bundles() -> None:
-    original = object()
-    selection = SimpleNamespace(selection_controller=original)
-
-    with pytest.raises(TypeError, match="history_servcie"):
-        canvas_runtime_services(
-            selection=selection,
-            selection_controller=object(),
-            history_servcie=object(),
-        )
-    assert selection.selection_controller is original
-
-
-def test_alias_reuses_an_explicitly_supplied_bundle() -> None:
-    selection = SimpleNamespace(selection_controller=object())
-    controller = object()
-    services = canvas_runtime_services(
-        selection=selection, selection_controller=controller
-    )
-
-    assert services.selection is selection
-    assert services.selection_controller is controller
-    assert selection.selection_controller is controller
-
-
 def test_partial_defaults_remain_independent_between_fixtures() -> None:
     first = canvas_runtime_services()
     second = canvas_runtime_services()
 
-    for name in (*_BUNDLES, "hover"):
+    for name in (*_BUNDLES, "hover", "selection"):
         assert isinstance(getattr(first, name), SimpleNamespace)
         assert getattr(first, name) is not getattr(second, name)
     for name in (
@@ -138,6 +111,5 @@ def test_partial_defaults_remain_independent_between_fixtures() -> None:
         "tool_controller",
     ):
         assert getattr(first, name) is None
-    first.selection_controller = object()
-    with pytest.raises(AttributeError, match="selection_controller"):
-        _ = second.selection_controller
+    first.selection = object()
+    assert isinstance(second.selection, SimpleNamespace)

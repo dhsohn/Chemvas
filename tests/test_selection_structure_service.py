@@ -16,9 +16,10 @@ from chemvas.ui.canvas_scene_items_state import (
     CanvasSceneItemsState,
     set_scene_item_collection_for,
 )
-from chemvas.ui.selection_structure_service import SelectionStructureService
+from chemvas.ui.selection_state import selected_notes_for
 from tests.runtime_services import canvas_runtime_services
 from tests.runtime_state import canvas_runtime_state
+from tests.selection_support import build_selection_controller
 
 
 class _FakeItem:
@@ -58,9 +59,7 @@ def _make_canvas(**overrides):
                     mock.Mock(side_effect=lambda ids: set(ids)),
                 )
             ),
-            selection_controller=overrides.pop(
-                "selection_controller", SimpleNamespace()
-            ),
+            selection=overrides.pop("selection_controller", SimpleNamespace()),
         ),
         scene=lambda: scene,
         runtime_state=canvas_runtime_state(
@@ -76,11 +75,9 @@ def _make_canvas(**overrides):
     return canvas
 
 
-def _structure_service(canvas) -> SelectionStructureService:
-    return SelectionStructureService(
-        canvas,
-        graph_service=canvas.services.graph_service,
-    )
+def _structure_service(canvas):
+    controller = build_selection_controller(canvas, render=False)
+    return controller
 
 
 def test_structure_hit_and_item_resolution_cover_atoms_bonds_and_rings() -> None:
@@ -177,15 +174,15 @@ def test_select_structure_for_item_selects_connected_atoms_bonds_and_rings() -> 
 
     result = service.select_structure_for_item(_FakeItem("atom", data1=1))
 
-    assert result.selected
-    assert result.update_outline
+    assert result
+    service.outline_service.update_selection_outline.assert_called_once_with()
     assert scene.clear_selection_calls == 1
     assert atom_item.isSelected()
     assert atom_item_2.isSelected()
     assert bond_graphic.isSelected()
     assert ring_item.isSelected()
     assert not unrelated_ring_item.isSelected()
-    selection_controller.clear_note_selection.assert_called_once_with()
+    assert not selected_notes_for(service.canvas)
 
 
 def test_select_structure_for_item_selects_overlay_without_outline_refresh() -> None:
@@ -198,8 +195,8 @@ def test_select_structure_for_item_selects_overlay_without_outline_refresh() -> 
 
     result = service.select_structure_for_item(note_item)
 
-    assert result.selected
-    assert not result.update_outline
+    assert result
+    service.outline_service.update_selection_outline.assert_not_called()
     assert scene.clear_selection_calls == 1
     assert note_item.isSelected()
-    selection_controller.clear_note_selection.assert_called_once_with()
+    assert not selected_notes_for(service.canvas)

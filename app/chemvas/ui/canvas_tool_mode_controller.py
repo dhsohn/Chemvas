@@ -20,8 +20,8 @@ from chemvas.ui.history_commands import (
 )
 from chemvas.ui.scene_item_access import apply_scene_item_state
 from chemvas.ui.scene_item_state import shape_state_dict_for
-from chemvas.ui.selection_collection_access import selected_scene_items_for
-from chemvas.ui.selection_service_access import refresh_selection_outline_for
+from chemvas.ui.selection_queries import selected_scene_items_for
+from chemvas.ui.selection_state import selection_for
 from chemvas.ui.transactions.document import document_transaction
 
 if TYPE_CHECKING:
@@ -83,7 +83,7 @@ class CanvasToolModeController:
             callback()
 
     def _refresh_tool_mode(self) -> None:
-        refresh_selection_outline_for(self.canvas)
+        selection_for(self.canvas).update_selection_outline()
         self._emit_tool_changed()
         self._refresh_hover_for_tool_change()
 
@@ -187,7 +187,7 @@ class CanvasToolModeController:
             after = shape_state_dict_for(self.canvas, item)
             if before != after and history is not None:
                 history.push(UpdateSceneItemCommand(item, before, after))
-        refresh_selection_outline_for(self.canvas)
+        selection_for(self.canvas).update_selection_outline()
         return True
 
     def set_shape_stroke(self, stroke_style: str) -> None:

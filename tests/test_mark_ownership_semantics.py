@@ -5,6 +5,8 @@ from unittest.mock import Mock
 
 import pytest
 
+from chemvas.ui.selection_state import selection_for
+
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PyQt6.QtCore import QPointF
@@ -30,8 +32,7 @@ from chemvas.ui.scene_clipboard_copy_service import (
 )
 from chemvas.ui.scene_decoration_access import add_mark_for_atom_for
 from chemvas.ui.select_all_access import select_all_scene_items_for
-from chemvas.ui.selection_outline_state import selection_outlines_for
-from chemvas.ui.selection_service_access import refresh_selection_outline_for
+from chemvas.ui.selection_state import selection_outlines_for
 from chemvas.ui.structure_mutation_access import add_atom_for
 from chemvas.ui.structure_payload_access import build_structure_payload_for
 from tests.canvas_factory import build_canvas_view
@@ -315,7 +316,7 @@ def test_owner_feedback_is_visible_but_absent_from_figures_clipboard_and_state(
     before = snapshot_canvas_state_for(canvas)
     history = canvas.services.history_service.capture_stack_snapshot()
     item.setSelected(True)
-    refresh_selection_outline_for(canvas)
+    selection_for(canvas).update_selection_outline()
     outlines = [
         outline
         for outline in selection_outlines_for(canvas)

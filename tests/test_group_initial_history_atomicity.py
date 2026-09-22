@@ -16,6 +16,7 @@ from chemvas.ui.canvas_group_state import group_state_for, register_group_for
 from chemvas.ui.canvas_window_access import snapshot_canvas_state_for
 from chemvas.ui.history_commands import GroupSceneItemsCommand, UngroupSceneItemsCommand
 from chemvas.ui.scene_decoration_access import add_arrow_for
+from chemvas.ui.selection_state import selection_for
 from chemvas.ui.selection_style_access import restore_selection_from_ids_for
 from chemvas.ui.structure_mutation_access import add_atom_for, add_bond_for
 from chemvas.ui.transactions.document import DocumentSavepoint
@@ -51,7 +52,7 @@ def canvas(app):
     assert arrow.scene() is None
     assert view.services.history_service.can_redo()
     restore_selection_from_ids_for(view, set(all_ids[:4]), set())
-    scene_group_operations.expand_selection_to_groups_for(view)
+    selection_for(view).expand_selection_to_groups()
     mark_document_clean_for(view, snapshot_canvas_state_for(view))
     yield view
     view.services.document.canvas_scene_reset_service.clear_scene()
@@ -146,20 +147,20 @@ def test_initial_group_failure_restores_once_without_inverse_and_can_retry(
     before = _observe(canvas)
     primary = RuntimeError("initial group publication failed")
     real_push = history.push
-    real_refresh = scene_group_operations.refresh_selection_outline_for
+    real_refresh = selection_for(canvas).update_selection_outline
 
     def append_then_raise(command):
         assert real_push(command) is True
         raise primary
 
-    def refresh_then_raise(view):
-        real_refresh(view)
+    def refresh_then_raise():
+        real_refresh()
         raise primary
 
     if failure == "selection":
         injection = mock.patch.object(
-            scene_group_operations,
-            "refresh_selection_outline_for",
+            selection_for(canvas),
+            "update_selection_outline",
             side_effect=refresh_then_raise,
         )
     elif failure == "disabled":
@@ -260,7 +261,7 @@ def test_initial_group_noop_keeps_document_and_existing_redo(canvas, name):
     if name == "group":
         # The already-grouped selection adds no members.
         restore_selection_from_ids_for(canvas, {0, 1}, set())
-        scene_group_operations.expand_selection_to_groups_for(canvas)
+        selection_for(canvas).expand_selection_to_groups()
     else:
         group_state_for(canvas).groups.clear()
     mark_document_clean_for(canvas, snapshot_canvas_state_for(canvas))

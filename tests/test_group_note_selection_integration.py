@@ -4,6 +4,8 @@ import unittest
 from math import hypot
 from unittest import mock
 
+from chemvas.ui.selection_state import selection_for
+
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PyQt6.QtCore import QCoreApplication, QEvent, QPoint, QPointF, Qt
@@ -20,21 +22,16 @@ from chemvas.ui.canvas_document_state import snapshot_canvas_document_state
 from chemvas.ui.canvas_group_state import group_state_for
 from chemvas.ui.canvas_lifecycle import schedule_canvas_deletion_for
 from chemvas.ui.canvas_model_access import model_for
-from chemvas.ui.canvas_scene_items_state import (
-    append_scene_item_for,
-    selected_notes_for,
-)
+from chemvas.ui.canvas_scene_items_state import append_scene_item_for
 from chemvas.ui.canvas_service_ports import history_service_for_access
 from chemvas.ui.move_access import move_item_for
 from chemvas.ui.scene_decoration_access import add_arrow_for
-from chemvas.ui.scene_group_operations import (
-    expand_selection_to_groups_for,
-    group_selection_for,
-)
-from chemvas.ui.selection_collection_access import (
+from chemvas.ui.scene_group_operations import group_selection_for
+from chemvas.ui.selection_queries import (
     selection_snapshot_for,
     selection_status_count_for,
 )
+from chemvas.ui.selection_state import selected_notes_for
 from chemvas.ui.structure_mutation_access import (
     add_atom_for,
     add_benzene_ring_for,
@@ -85,7 +82,7 @@ class GroupedNoteSelectionIntegrationTest(unittest.TestCase):
         clipboard.select_pasted_content({atom_id}, notes)
         self.assertEqual(selection_status_count_for(canvas), 3)
 
-        canvas.services.selection.selection_controller.clear_note_selection()
+        canvas.services.selection.clear_note_selection()
         self.assertEqual(selection_status_count_for(canvas), 1)
         canvas.scene().clearSelection()
         self.assertEqual(selection_status_count_for(canvas), 0)
@@ -101,7 +98,7 @@ class GroupedNoteSelectionIntegrationTest(unittest.TestCase):
             {atom_id}, [note]
         )
         self.assertTrue(group_selection_for(canvas))
-        selection = canvas.services.selection.selection_controller
+        selection = canvas.services.selection
         selection.clear_note_selection()
         canvas.scene().clearSelection()
 
@@ -124,20 +121,18 @@ class GroupedNoteSelectionIntegrationTest(unittest.TestCase):
 
         atom_item_a.setSelected(True)
         atom_item_b.setSelected(True)
-        canvas.services.selection.selection_controller.select_note(note, additive=True)
+        canvas.services.selection.select_note(note, additive=True)
         self.assertTrue(group_selection_for(canvas))
         self.assertEqual(len(group_state_for(canvas).groups), 1)
 
-        canvas.services.selection.selection_controller.clear_note_selection()
+        canvas.services.selection.clear_note_selection()
         canvas.scene().clearSelection()
         self.assertNotIn(note, selected_notes_for(canvas))
 
         # Shift-click routes through toggle_item_selection, whose
         # set_scene_items_selected_for blocks the selectionChanged expansion hook,
         # so the grouped note must be toggled explicitly through the note service.
-        canvas.services.selection.selection_controller.toggle_item_selection(
-            atom_item_a
-        )
+        canvas.services.selection.toggle_item_selection(atom_item_a)
         self.assertTrue(atom_item_a.isSelected())
         self.assertTrue(atom_item_b.isSelected())
         self.assertIn(note, selected_notes_for(canvas))
@@ -152,9 +147,7 @@ class GroupedNoteSelectionIntegrationTest(unittest.TestCase):
         self.assertEqual(note.pos().y() - before.y(), 10.0)
 
         # Toggling the same member again drops the whole group, note included.
-        canvas.services.selection.selection_controller.toggle_item_selection(
-            atom_item_a
-        )
+        canvas.services.selection.toggle_item_selection(atom_item_a)
         self.assertFalse(atom_item_a.isSelected())
         self.assertFalse(atom_item_b.isSelected())
         self.assertNotIn(note, selected_notes_for(canvas))
@@ -323,7 +316,7 @@ class GroupedNoteSelectionIntegrationTest(unittest.TestCase):
 
         def expand_then_fail(target):
             nonlocal injected
-            expand_selection_to_groups_for(target)
+            selection_for(target).expand_selection_to_groups()
             if not injected and len(group_state_for(target).groups) == 2:
                 injected = True
                 self.assertIn(

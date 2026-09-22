@@ -148,7 +148,7 @@ class _FakeCanvas:
                     ("restore_mark_from_state", dict(mark_state))
                 ),
             ),
-            selection_controller=SimpleNamespace(
+            selection=SimpleNamespace(
                 update_selection_outline=self.refresh_selection_outline
             ),
             structure_build_service=SimpleNamespace(

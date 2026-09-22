@@ -168,7 +168,7 @@ def test_foreground_caption_receives_pointer_instead_of_underlying_molecule(
         "atom": QPointF(-20, 0),
         "bond": QPointF(-10, 0),
     }[point]
-    picked = canvas.services.selection.hit_testing_service.item_at_scene_pos(pos)
+    picked = canvas.services.hit_testing_service.item_at_scene_pos(pos)
     before = snapshot_canvas_state_for(canvas)
     history = canvas.services.history_service
     stacks = history.capture_stack_snapshot()
@@ -178,7 +178,7 @@ def test_foreground_caption_receives_pointer_instead_of_underlying_molecule(
     if tool == "select":
         assert (
             note in canvas.scene().selectedItems()
-            or note in canvas.runtime_state.scene_items_state.selected_notes
+            or note in canvas.runtime_state.selection_state.selected_notes
         )
         assert not any(
             item.data(0) in {"atom", "bond"} for item in canvas.scene().selectedItems()
@@ -238,9 +238,7 @@ def test_caption_pick_respects_direct_structure_ink_paint_order(drawing, foregro
     _load(canvas)
     note = note_controller_for_access(canvas).create_text_note(QPointF(-30, -6), "cat.")
     note.setZValue(1 if foreground else -1)
-    picked = canvas.services.selection.hit_testing_service.item_at_scene_pos(
-        QPointF(-10, 0)
-    )
+    picked = canvas.services.hit_testing_service.item_at_scene_pos(QPointF(-10, 0))
     assert picked.data(0) == ("note" if foreground else "bond")
 
 
@@ -255,7 +253,7 @@ def test_note_guard_does_not_lift_background_image_above_a_bond(drawing):
         canvas, image_state_from_bytes(image_bytes(), x=-30, y=-10, width=60)
     )
     assert image.zValue() == -2
-    picked = canvas.services.selection.hit_testing_service.item_at_scene_pos(QPointF())
+    picked = canvas.services.hit_testing_service.item_at_scene_pos(QPointF())
     assert picked.data(0) == "bond"
 
 
@@ -274,7 +272,7 @@ def test_visible_atom_ink_above_caption_remains_pickable(drawing, painted_dot):
     assert atom_item.zValue() > note.zValue()
     assert not atom_item.export_scene_bounding_rect().isEmpty()
     assert (
-        canvas.services.selection.hit_testing_service.item_at_scene_pos(QPointF(-20, 0))
+        canvas.services.hit_testing_service.item_at_scene_pos(QPointF(-20, 0))
         is atom_item
     )
 
@@ -287,9 +285,7 @@ def test_edit_handle_above_caption_keeps_priority(drawing):
     handle = active_handles_for(canvas)[0]
     assert handle.zValue() > note.zValue()
     pos = handle.sceneBoundingRect().center()
-    assert (
-        canvas.services.selection.hit_testing_service.item_at_scene_pos(pos) is handle
-    )
+    assert canvas.services.hit_testing_service.item_at_scene_pos(pos) is handle
 
 
 @pytest.mark.parametrize(

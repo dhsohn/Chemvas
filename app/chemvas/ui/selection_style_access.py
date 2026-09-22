@@ -11,17 +11,16 @@ from chemvas.ui.canvas_bond_graphics_state import bond_items_for
 from chemvas.ui.canvas_model_access import atom_for_id
 from chemvas.ui.pick_radius_access import atom_pick_radius_for
 from chemvas.ui.renderer_style_access import bond_spacing_px_for
-from chemvas.ui.selection_scene_access import clear_scene_selection_for
-from chemvas.ui.selection_service_access import selection_service_from_canvas
-from chemvas.ui.selection_style_state import selection_style_state_for
+from chemvas.ui.selection_queries import clear_scene_selection_for
+from chemvas.ui.selection_state import selection_for, selection_state_for
 
 
 def selection_color_for(canvas):
-    return selection_style_state_for(canvas).color
+    return selection_state_for(canvas).color
 
 
 def suspend_selection_outline_for(canvas) -> bool:
-    return bool(selection_style_state_for(canvas).suspend_outline)
+    return bool(selection_state_for(canvas).suspend_outline)
 
 
 def restore_selection_from_ids_for(
@@ -39,7 +38,7 @@ def restore_selection_from_ids_for(
         for item in bond_items_for(canvas).get(bond_id, []):
             item.setSelected(True)
     try:
-        controller = selection_service_from_canvas(canvas)
+        controller = selection_for(canvas)
     except AttributeError:
         controller = None
     update_selection_outline = getattr(controller, "update_selection_outline", None)

@@ -249,12 +249,13 @@ class Walkthrough:
     def rotate_selection(self, degrees: float, *, title: str, detail: str) -> None:
         """Drag the selection frame's rotation knob through ``degrees`` in
         captured steps, exactly as a pointer would."""
+        from chemvas.ui.selection_outline_state import selection_outlines_for
+
         from chemvas.features.selection import (
             HANDLE_SCREEN_PX,
             ROTATION_HANDLE_STEM_PX,
             ROTATION_HANDLE_TYPE,
         )
-        from chemvas.ui.selection_outline_state import selection_outlines_for
 
         knobs = [
             item

@@ -29,8 +29,8 @@ from chemvas.ui.insert_session_access import (
 )
 from chemvas.ui.scene_group_operations import group_selection_for, ungroup_selection_for
 from chemvas.ui.select_all_access import select_all_scene_items_for
-from chemvas.ui.selection_collection_access import selected_scene_items_for
-from chemvas.ui.selection_service_access import selection_service_from_canvas
+from chemvas.ui.selection_queries import selected_scene_items_for
+from chemvas.ui.selection_state import selection_for
 from chemvas.ui.sheet_setup_access import (
     OFF_SHEET_EDIT_GUIDANCE,
     scene_pos_in_sheet_for,
@@ -270,9 +270,7 @@ class CanvasInputController:
             return False
         # Resolve only on an attempted key edit. The normal off-sheet hover
         # remains empty, so no highlight or per-move warning is introduced.
-        hit = selection_service_from_canvas(
-            self.canvas
-        ).preferred_structure_hit_at_scene_pos(position)
+        hit = selection_for(self.canvas).preferred_structure_hit_at_scene_pos(position)
         if hit is None or hit.kind not in {"atom", "bond"}:
             return False
         return event.key() in (

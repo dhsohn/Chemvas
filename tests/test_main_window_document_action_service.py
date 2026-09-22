@@ -807,7 +807,7 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
                 ("mark", 1, 0),
                 ("all", 2, 1),
             ):
-                with self.subTest(selection=kind):
+                with self.subTest(selection_controller=kind):
                     canvas.scene().clearSelection()
                     if kind != "all":
                         item = next(

@@ -16,7 +16,7 @@ from chemvas.ui.scene_clipboard_transaction_logic import (
     build_clipboard_copy_plan,
     clipboard_copy_cache_values,
 )
-from chemvas.ui.selection_collection_access import selection_items_for_copy_for
+from chemvas.ui.selection_queries import selection_items_for_copy_for
 
 if TYPE_CHECKING:
     from collections.abc import Callable

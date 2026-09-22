@@ -96,7 +96,7 @@ class CanvasViewMoveHelpersTest(unittest.TestCase):
         if services is None:
             services = canvas_runtime_services()
             view.services = services
-        if not hasattr(services, "hit_testing_service"):
+        if services.hit_testing_service is None:
             services.hit_testing_service = SimpleNamespace(
                 mark_spatial_index_dirty=mock.Mock()
             )
@@ -108,7 +108,7 @@ class CanvasViewMoveHelpersTest(unittest.TestCase):
         if hasattr(view, "refresh_selection_outline") and not hasattr(
             services, "selection_controller"
         ):
-            services.selection_controller = SimpleNamespace(
+            services.selection = SimpleNamespace(
                 update_selection_outline=view.refresh_selection_outline
             )
         return controller
@@ -145,7 +145,7 @@ class CanvasViewMoveHelpersTest(unittest.TestCase):
         self.assertEqual(atom_item.moves, [(2.0, 3.0)])
         view.bond_renderer.redraw_bond.assert_called_once_with(0)
         view.refresh_selection_outline.assert_not_called()
-        view.services.selection.hit_testing_service.mark_spatial_index_dirty.assert_called_once_with()
+        view.services.hit_testing_service.mark_spatial_index_dirty.assert_called_once_with()
 
     def test_move_item_updates_bond_mark_and_scene_item_payloads(self) -> None:
         bond_item = _FakeItem("bond", data1=0)

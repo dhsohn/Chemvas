@@ -74,7 +74,7 @@ class _PerspectiveCanvas:
                 item_at_event=lambda event: self.item,
                 bond_id_from_event=lambda event: None,
             ),
-            selection_controller=SimpleNamespace(
+            selection=SimpleNamespace(
                 toggle_item_selection=self.toggle_item_selection,
                 preferred_structure_item_at_scene_pos=lambda pos: self.preferred_item,
                 selection_hit_test=lambda pos, snapshot=None: self.selection_hit,
@@ -126,10 +126,8 @@ class _PerspectiveCanvas:
 def _tool_context_for(canvas, *, hit_testing_service=None, selection_controller=None):
     return ToolContext(
         canvas,
-        hit_testing_service=hit_testing_service
-        or canvas.services.selection.hit_testing_service,
-        selection_controller=selection_controller
-        or canvas.services.selection.selection_controller,
+        hit_testing_service=hit_testing_service or canvas.services.hit_testing_service,
+        selection_controller=selection_controller or canvas.services.selection,
         note_controller=getattr(
             canvas.services,
             "note_controller",
@@ -229,7 +227,7 @@ class PerspectiveToolControllerTest(unittest.TestCase):
             selection_hit_test=mock.Mock(return_value=False),
             select_structure_for_item=mock.Mock(return_value=True),
         )
-        canvas.services.selection.hit_testing_service = SimpleNamespace(
+        canvas.services.hit_testing_service = SimpleNamespace(
             scene_pos_from_event=mock.Mock(
                 side_effect=AssertionError("canvas service should not be used")
             ),
@@ -237,7 +235,7 @@ class PerspectiveToolControllerTest(unittest.TestCase):
                 side_effect=AssertionError("canvas service should not be used")
             ),
         )
-        canvas.services.selection.selection_controller = SimpleNamespace(
+        canvas.services.selection = SimpleNamespace(
             preferred_structure_item_at_scene_pos=mock.Mock(
                 side_effect=AssertionError("canvas controller should not be used")
             ),

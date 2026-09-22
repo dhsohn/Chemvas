@@ -29,14 +29,11 @@ from chemvas.ui.scene_decoration_access import (
     add_shape_for,
     add_ts_bracket_for,
 )
-from chemvas.ui.scene_group_operations import (
-    expand_selection_to_groups_for,
-    group_selection_for,
-)
+from chemvas.ui.scene_group_operations import group_selection_for
 from chemvas.ui.scene_item_access import create_scene_item_from_state
 from chemvas.ui.scene_item_state import scene_item_state_for
 from chemvas.ui.select_all_access import select_all_scene_items_for
-from chemvas.ui.selection_outline_state import selection_outlines_for
+from chemvas.ui.selection_state import selection_for, selection_outlines_for
 from chemvas.ui.selection_style_access import restore_selection_from_ids_for
 from chemvas.ui.structure_mutation_access import add_atom_for, add_bond_for
 from tests.canvas_factory import build_canvas_view
@@ -212,7 +209,7 @@ def test_grouping_partial_molecule_records_and_moves_whole_component(canvas):
     restore_selection_from_ids_for(canvas, set(), set())
     restored_level = next(iter(group_state_for(canvas).groups.values())).items[0]
     restored_level.setSelected(True)
-    expand_selection_to_groups_for(canvas)
+    selection_for(canvas).expand_selection_to_groups()
     canvas.services.scene_operations.scene_transform_controller.translate_selected_items(
         0, 4
     )
@@ -342,15 +339,15 @@ def test_partial_molecule_group_failure_restores_exact_state(canvas, failure_mod
             side_effect=fail_after_register,
         )
     elif failure_mode == "selection":
-        real_expand = scene_group_operations.expand_selection_to_groups_for
+        real_expand = selection_for(canvas).expand_selection_to_groups
 
-        def fail_after_expand(view):
-            real_expand(view)
+        def fail_after_expand():
+            real_expand()
             raise RuntimeError("selection failed after publication")
 
         failure = mock.patch.object(
-            scene_group_operations,
-            "expand_selection_to_groups_for",
+            selection_for(canvas),
+            "expand_selection_to_groups",
             side_effect=fail_after_expand,
         )
     elif failure_mode == "push_false":

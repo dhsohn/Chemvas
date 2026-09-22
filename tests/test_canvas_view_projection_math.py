@@ -603,9 +603,7 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
                     mark_spatial_index_dirty=mock.Mock()
                 ),
                 # set_bond_length refreshes the selection outline on its way out.
-                selection_controller=SimpleNamespace(
-                    update_selection_outline=mock.Mock()
-                ),
+                selection=SimpleNamespace(update_selection_outline=mock.Mock()),
             ),
         )
         set_scene_item_collection_for(view, "ring_items", [ring_item])
@@ -613,7 +611,7 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
 
         CanvasGeometryController(
             view,
-            hit_testing_service=view.services.selection.hit_testing_service,
+            hit_testing_service=view.services.hit_testing_service,
             history_service=view.services.history_service,
         ).set_bond_length(30.0)
 

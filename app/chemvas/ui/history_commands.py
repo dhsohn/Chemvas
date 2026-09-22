@@ -422,7 +422,6 @@ class _DeletedSceneItemOrder:
                 if id(item) in item_ids
             ]
             for name in SCENE_ITEM_COLLECTION_ATTRS
-            if name != "selected_notes"
         }
         cohorts: set[tuple[QGraphicsScene, QGraphicsItem | None, float]] = set()
         for item in items:

@@ -3,8 +3,8 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from chemvas.ui.canvas_tool_settings_state import tool_settings_state_for
-from chemvas.ui.selection_collection_access import selected_scene_items_for
-from chemvas.ui.selection_service_access import select_single_structure_item_for
+from chemvas.ui.selection_queries import selected_scene_items_for
+from chemvas.ui.selection_state import selection_for
 from chemvas.ui.tool_controller import ToolController
 
 if TYPE_CHECKING:
@@ -52,9 +52,9 @@ def build_tool_controller(
             canvas,
             excluded_kinds=excluded_kinds,
         ),
-        select_single_structure_item=lambda item: select_single_structure_item_for(
-            canvas, item
-        ),
+        select_single_structure_item=lambda item: selection_for(
+            canvas
+        ).select_single_structure_item(item),
         atom_symbol_provider=lambda: tool_settings_state_for(canvas).atom_symbol,
         history_service=history_service,
         set_drag_mode=canvas.setDragMode,

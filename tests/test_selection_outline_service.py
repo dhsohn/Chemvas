@@ -22,11 +22,11 @@ from PyQt6.QtWidgets import (
 from chemvas.domain.document import Atom, Bond
 from chemvas.ui.canvas_bond_graphics_state import set_bond_items_for
 from chemvas.ui.selection_outline_service import SelectionOutlineService
-from chemvas.ui.selection_outline_state import (
+from chemvas.ui.selection_state import (
+    SelectionState,
     selection_outlines_for,
     set_selection_outlines_for,
 )
-from chemvas.ui.selection_style_state import SelectionStyleState
 from tests.selection_support import (
     _FakeCanvas,
     _FakeItem,
@@ -89,7 +89,7 @@ class SelectionOutlineServiceTest(unittest.TestCase):
         self,
     ) -> None:
         suspended_canvas = _make_canvas(
-            selection_style_state=SelectionStyleState(suspend_outline=True)
+            selection_state=SelectionState(suspend_outline=True)
         )
         _outline_service(suspended_canvas).update_selection_outline()
         suspended_canvas.selection_info_callback.assert_not_called()

@@ -74,11 +74,8 @@ from chemvas.ui.scene_item_state import (
 )
 from chemvas.ui.scene_render_access import scene_render_context_for
 from chemvas.ui.scene_signal_blocking import blocked_scene_signals
-from chemvas.ui.selection_collection_access import (
-    selected_ids_for,
-    selection_items_for_copy_for,
-)
 from chemvas.ui.selection_info_state import selection_info_state_for
+from chemvas.ui.selection_queries import selected_ids_for, selection_items_for_copy_for
 from chemvas.ui.shape_record_access import clear_shape_records_for
 from chemvas.ui.sheet_setup_access import apply_sheet_scene_rect_for
 from chemvas.ui.structure_payload_access import (
@@ -125,8 +122,7 @@ _DOCUMENT_MUTATED_RUNTIME_FIELDS = (
     "spatial_index_state",
     "rotation_state",
     "handle_state",
-    "selection_style_state",
-    "selection_outline_state",
+    "selection_state",
     "text_style_state",
     "tool_settings_state",
     "hover_preview_state",

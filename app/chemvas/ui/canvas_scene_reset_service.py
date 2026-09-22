@@ -29,8 +29,7 @@ from chemvas.ui.insert_session_access import (
 )
 from chemvas.ui.scene_signal_blocking import blocked_scene_signals
 from chemvas.ui.selection_info_state import selection_info_state_for
-from chemvas.ui.selection_outline_state import clear_selection_outlines_for
-from chemvas.ui.selection_style_state import selection_style_state_for
+from chemvas.ui.selection_state import clear_selection_outlines_for, selection_state_for
 from chemvas.ui.transactions.object_graph_snapshot import _MISSING_ATTRIBUTE
 
 
@@ -95,11 +94,12 @@ class CanvasSceneResetService:
 
     def _runtime_reset_steps(self, empty_model: MoleculeModel) -> tuple:
         canvas = self.canvas
-        selection_style = selection_style_state_for(canvas)
+        selection_style = selection_state_for(canvas)
         selection_info = selection_info_state_for(canvas)
 
         def clear_selection_runtime() -> None:
             selection_style.suspend_outline = False
+            selection_style.selected_notes = []
             selection_info.signature = None
             selection_info.pending_signature = None
             selection_info.cache = ("", "")

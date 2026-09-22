@@ -52,9 +52,8 @@ from chemvas.ui.move_access import (
 )
 from chemvas.ui.scene_decoration_build_access import show_connect_mark_for
 from chemvas.ui.scene_item_state import scene_item_history_state, scene_item_state_for
-from chemvas.ui.selection_collection_access import independent_selection_items
-from chemvas.ui.selection_outline_state import selection_outlines_for
-from chemvas.ui.selection_service_access import refresh_selection_outline_for
+from chemvas.ui.selection_queries import independent_selection_items
+from chemvas.ui.selection_state import selection_for, selection_outlines_for
 from chemvas.ui.selection_style_access import suspend_selection_outline_for
 
 if TYPE_CHECKING:
@@ -550,7 +549,7 @@ class SelectionDragMixin:
                 )
                 self._suspended_outline = False
             if self._moved and self._drag_has_net_movement():
-                refresh_selection_outline_for(self.canvas)
+                selection_for(self.canvas).update_selection_outline()
                 command = self._build_move_command()
                 if command is not None:
                     self._push_drag_history(owner, command)

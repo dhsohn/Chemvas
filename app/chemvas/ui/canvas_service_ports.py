@@ -44,7 +44,6 @@ if TYPE_CHECKING:
     from chemvas.ui.scene_delete_controller import SceneDeleteController
     from chemvas.ui.scene_item_controller import SceneItemController
     from chemvas.ui.scene_transform_controller import SceneTransformController
-    from chemvas.ui.selection_controller import SelectionController
     from chemvas.ui.structure_build_service import StructureBuildService
     from chemvas.ui.tool_controller import ToolController
 
@@ -78,7 +77,7 @@ def handle_overlay_service_for_access(canvas) -> HandleOverlayService:
 
 
 def history_hit_testing_service_for(canvas) -> CanvasHitTestingService:
-    return canvas_services_for(canvas).selection.hit_testing_service
+    return canvas_services_for(canvas).hit_testing_service
 
 
 def history_service_for_access(canvas) -> CanvasHistoryService:
@@ -139,10 +138,6 @@ def scene_transform_controller_for_access(canvas) -> SceneTransformController:
     return canvas_services_for(canvas).scene_operations.scene_transform_controller
 
 
-def selection_service_for_access(canvas) -> SelectionController:
-    return canvas_services_for(canvas).selection.selection_controller
-
-
 def structure_build_service_for_access(canvas) -> StructureBuildService:
     return canvas_services_for(canvas).structure.structure_build_service
 
@@ -200,7 +195,6 @@ __all__ = [
     "scene_item_controller_for_access",
     "scene_reset_service_for_access",
     "scene_transform_controller_for_access",
-    "selection_service_for_access",
     "structure_build_service_for_access",
     "structure_mutation_atom_service",
     "structure_mutation_bond_service",

@@ -44,7 +44,7 @@ from chemvas.ui.scene_group_operations import group_selection_for
 from chemvas.ui.scene_item_access import create_scene_item_from_state, remove_scene_item
 from chemvas.ui.scene_item_state import scene_item_state_for
 from chemvas.ui.select_all_access import select_all_scene_items_for
-from chemvas.ui.selection_outline_state import selection_outlines_for
+from chemvas.ui.selection_state import selection_outlines_for
 from chemvas.ui.structure_mutation_access import add_bond_between_points_for
 from chemvas.ui.transactions import document_transaction
 from tests.canvas_factory import build_canvas_view

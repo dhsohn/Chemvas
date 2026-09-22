@@ -14,11 +14,7 @@ from chemvas.ui.history_commands import SetAnnotationStyleCommand
 from chemvas.ui.note_item_access import set_committed_note_html_for
 from chemvas.ui.renderer_style_access import atom_color_for, font_size_pt_for
 from chemvas.ui.scene_decoration_build_access import apply_arrow_labels_for
-from chemvas.ui.selection_service_access import (
-    refresh_selection_outline_for,
-    update_note_selection_box_for,
-)
-from chemvas.ui.selection_style_state import selection_style_state_for
+from chemvas.ui.selection_state import selection_for, selection_state_for
 from chemvas.ui.transactions.document import document_transaction
 
 if TYPE_CHECKING:
@@ -103,7 +99,7 @@ class CanvasStyleController:
                 set_committed_note_html_for(item, item.toHtml())
         restyled_labels = self._restyle_arrow_labels(canvas, values)
         if restyle_notes or restyled_labels:
-            refresh_selection_outline_for(canvas)
+            selection_for(canvas).update_selection_outline()
 
     @staticmethod
     def _restyle_arrow_labels(canvas, values: dict[str, object]) -> bool:
@@ -145,11 +141,11 @@ class CanvasStyleController:
             assert document is not None
             document.setDefaultTextOption(note.text_option)
             self.note_controller.update_note_box(note.item)
-            update_note_selection_box_for(canvas, note.item)
+            selection_for(canvas).update_note_selection_box(note.item)
             set_committed_note_html_for(note.item, note.item.toHtml())
         restyled_labels = self._restyle_arrow_labels(canvas, state.settings)
         if state.notes or restyled_labels:
-            refresh_selection_outline_for(canvas)
+            selection_for(canvas).update_selection_outline()
 
     def _change_text_settings(
         self, values: dict[str, object], *, restyle_text: bool = False
@@ -216,7 +212,7 @@ class CanvasStyleController:
         self._change_text_settings({"text_font_family": family})
 
     def suspend_selection_outline(self, suspend: bool) -> None:
-        selection_style_state_for(self.canvas).suspend_outline = bool(suspend)
+        selection_state_for(self.canvas).suspend_outline = bool(suspend)
 
     def set_text_color(self, color: QColor) -> None:
         if color.isValid():

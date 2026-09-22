@@ -72,12 +72,12 @@ from chemvas.ui.scene_decoration_access import (
     materialize_mark_for_atom_for,
 )
 from chemvas.ui.scene_item_state import scene_item_state_for
-from chemvas.ui.selection_collection_access import selected_ids_for
-from chemvas.ui.selection_outline_state import selection_outlines_for
+from chemvas.ui.selection_queries import selected_ids_for
 from chemvas.ui.selection_rotation_access import (
     center_for_coords_3d,
     fragment_plane_normal_for,
 )
+from chemvas.ui.selection_state import selection_outlines_for
 from chemvas.ui.selection_style_access import selection_indicator_rect_for_atom_for
 from chemvas.ui.structure_mutation_access import (
     add_atom_for,
@@ -1712,9 +1712,7 @@ class GuiShortcutSmokeTest(unittest.TestCase):
 
         item = active_canvas_for_window(
             self.window
-        ).services.selection.selection_controller.preferred_structure_item_at_scene_pos(
-            QPointF(4.0, 0.0)
-        )
+        ).services.selection.preferred_structure_item_at_scene_pos(QPointF(4.0, 0.0))
 
         self.assertIsNotNone(item)
         self.assertEqual(item.data(0), "atom")
@@ -1727,7 +1725,7 @@ class GuiShortcutSmokeTest(unittest.TestCase):
 
         item = active_canvas_for_window(
             self.window
-        ).services.selection.selection_controller.preferred_structure_item_at_scene_pos(
+        ).services.selection.preferred_structure_item_at_scene_pos(
             QPointF(atom.x + 1.0, atom.y + 1.0)
         )
 
@@ -2035,9 +2033,7 @@ class GuiShortcutSmokeTest(unittest.TestCase):
         ]
         self.assertEqual(len(center_markers), 2)
         self.assertFalse(
-            active_canvas_for_window(
-                self.window
-            ).services.selection.selection_controller.selection_hit_test(
+            active_canvas_for_window(self.window).services.selection.selection_hit_test(
                 QPointF(0.0, 0.0)
             )
         )
@@ -2067,9 +2063,7 @@ class GuiShortcutSmokeTest(unittest.TestCase):
             )
             overlay_center = (
                 active_canvas_for_window(self.window)
-                .services.selection.selection_controller.outline_service.selection_path_for_bond(
-                    bond_id
-                )
+                .services.selection.outline_service.selection_path_for_bond(bond_id)
                 .boundingRect()
                 .center()
             )
@@ -2104,16 +2098,12 @@ class GuiShortcutSmokeTest(unittest.TestCase):
 
         single_rect = (
             active_canvas_for_window(self.window)
-            .services.selection.selection_controller.outline_service.selection_path_for_bond(
-                0
-            )
+            .services.selection.outline_service.selection_path_for_bond(0)
             .boundingRect()
         )
         double_rect = (
             active_canvas_for_window(self.window)
-            .services.selection.selection_controller.outline_service.selection_path_for_bond(
-                1
-            )
+            .services.selection.outline_service.selection_path_for_bond(1)
             .boundingRect()
         )
 
@@ -2138,9 +2128,7 @@ class GuiShortcutSmokeTest(unittest.TestCase):
         bond_item = bond_items_for_id(active_canvas_for_window(self.window), 0)[0]
         path_rect = (
             active_canvas_for_window(self.window)
-            .services.selection.selection_controller.outline_service.selection_path_for_bond_item(
-                bond_item
-            )
+            .services.selection.outline_service.selection_path_for_bond_item(bond_item)
             .boundingRect()
         )
         bond_rect = bond_item.sceneBoundingRect()
@@ -2260,7 +2248,7 @@ class GuiShortcutSmokeTest(unittest.TestCase):
 
         item = active_canvas_for_window(
             self.window
-        ).services.selection.selection_controller.preferred_structure_item_at_scene_pos(
+        ).services.selection.preferred_structure_item_at_scene_pos(
             QPointF(rect.right() + 1.0, rect.center().y())
         )
 
@@ -2294,16 +2282,12 @@ class GuiShortcutSmokeTest(unittest.TestCase):
         self.assertIsNotNone(left_atom)
         self.assertIsNotNone(right_atom)
         self.assertTrue(
-            active_canvas_for_window(
-                self.window
-            ).services.selection.selection_controller.selection_hit_test(
+            active_canvas_for_window(self.window).services.selection.selection_hit_test(
                 QPointF(left_atom.x, left_atom.y)
             )
         )
         self.assertTrue(
-            active_canvas_for_window(
-                self.window
-            ).services.selection.selection_controller.selection_hit_test(
+            active_canvas_for_window(self.window).services.selection.selection_hit_test(
                 QPointF(right_atom.x, right_atom.y)
             )
         )
@@ -2336,12 +2320,12 @@ class GuiShortcutSmokeTest(unittest.TestCase):
         self.assertIsNone(
             active_canvas_for_window(
                 self.window
-            ).services.selection.hit_testing_service.item_at_scene_pos(interior_point)
+            ).services.hit_testing_service.item_at_scene_pos(interior_point)
         )
         self.assertFalse(
-            active_canvas_for_window(
-                self.window
-            ).services.selection.selection_controller.selection_hit_test(interior_point)
+            active_canvas_for_window(self.window).services.selection.selection_hit_test(
+                interior_point
+            )
         )
 
         data = arrow.data(2) or {}
@@ -2353,9 +2337,7 @@ class GuiShortcutSmokeTest(unittest.TestCase):
             (start.x() + end.x()) * 0.5, (start.y() + end.y()) * 0.5
         )
         self.assertTrue(
-            active_canvas_for_window(
-                self.window
-            ).services.selection.selection_controller.selection_hit_test(
+            active_canvas_for_window(self.window).services.selection.selection_hit_test(
                 near_path_point
             )
         )

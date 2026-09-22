@@ -13,6 +13,11 @@ Chemvas에 관심을 가져 주셔서 감사합니다! 이 안내는 로컬 환�
 
 **Python 3.12+**가 필요합니다.
 
+개발·검증·커밋·PR은 macOS, Windows(네이티브·WSL), Linux 어디서든 진행할 수 있습니다.
+특정 호스트의 체크아웃을 정본으로 지정하지 않으며, 현재 기기에서 선택한 저장소와
+브랜치에서 작업합니다. 검사 결과에는 실행 플랫폼과 범위를 적으세요. 한 플랫폼의
+검사 통과가 다른 플랫폼의 네이티브 GUI·패키징 동작까지 검증한 것은 아닙니다.
+
 ```bash
 git clone https://github.com/dhsohn/Chemvas.git
 cd Chemvas
@@ -122,6 +127,12 @@ import해도 되는 것, 트랜잭션과 복구 소유권의 분할이 거기 �
 | `*_tool` / `*_tools` | `chemvas.ui.tool_base.Tool`을 뿌리로 하는 포인터 도구 계층의 구현. 이 계층의 모든 구현은 `*_tool.py`(도구 하나) 또는 `*_tools.py`(한 계열, `preview_tools.py`처럼 중간 베이스가 있을 수 있음) 모듈에 있다. | `bond_tool.py` (`BondTool`) |
 | `*_bundle` | 함께 구성되어 한 필드로 저장·전달되는 서비스 묶음 dataclass. 보통 `build_*` 팩토리 옆에 있다. | `canvas_input_service_bundle.py` (`CanvasInputServiceBundle`) |
 | `*_renderer` / `*_rendering` | Qt 페인팅과 그래픽 아이템 그리기 헬퍼: 렌더러 클래스 또는 그리기 함수 모듈. | `bond_renderer.py`, `hover_rendering.py` |
+
+Selection은 기존 계층을 의도적으로 통합했다. 호출자는
+`selection_state.selection_for(canvas)`로 구체 `SelectionController` 하나에 접근한다.
+이 leaf는 selection만 조회하며 별도 access wrapper나 bundle을 추가하지 않는다.
+순수 선택 정책, scene/note 조회, 실제 outline 렌더러의 경계는 유지한다
+(`docs/ARCHITECTURE.ko.md` 참고).
 
 앞의 다섯 행은 주입 포트 규율이며 경계 테스트가 그 대부분을 강제합니다(Qt 없는
 `*_logic` 규칙은 저장소 전체 게이트가 아니라 모듈별로 검사). 뒤의 네 행은
