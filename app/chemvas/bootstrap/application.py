@@ -307,15 +307,10 @@ def main() -> None:
 
         from chemvas.ui.session_recovery_service import create_session_recovery_service
 
-        window = open_new_window()
+        open_new_window()
         recovery = create_session_recovery_service()
-        # Auto-restore the previous session (recovered crash work + last
-        # workspace) on every launch, then open any explicitly-requested file the
-        # same way a macOS double-click does — through open_document, which
-        # reuses a blank window or opens its own and, via the duplicate-open
-        # guard, switches to the file if the restore already reopened it. Both
-        # the argv and the QEvent.FileOpen paths therefore behave identically.
-        recovery.restore_previous(window)
+        # A launch starts blank unless a document is explicitly requested.
+        # Autosave remains active; earlier recovery snapshots stay on disk.
         startup_document_path = _startup_document_path(desktop_arguments)
         if startup_document_path is not None:
             open_document(startup_document_path)

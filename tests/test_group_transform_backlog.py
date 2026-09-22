@@ -98,9 +98,7 @@ def _assert_point(actual, expected):
 @pytest.mark.parametrize("kind", ["note", "image", "shape", "ts_bracket"])
 @pytest.mark.parametrize("grouped", [False, True])
 @pytest.mark.parametrize("drag", [False, True])
-def test_rotation_orbits_every_upright_decoration_and_roundtrips(
-    canvas, kind, grouped, drag
-):
+def test_rotation_transforms_decorations_and_roundtrips(canvas, kind, grouped, drag):
     ids = _chain(canvas)
     item = _decoration(canvas, kind)
     select_all_scene_items_for(canvas)
@@ -125,8 +123,13 @@ def test_rotation_orbits_every_upright_decoration_and_roundtrips(
     else:
         controller.rotate_selected_items(90)
     _assert_point(item.sceneBoundingRect().center(), _turn(old_rect.center(), center))
-    assert item.sceneBoundingRect().size() == old_rect.size()
-    assert item.rotation() == 0
+    if kind == "note":
+        assert item.sceneBoundingRect().width() == pytest.approx(old_rect.height())
+        assert item.sceneBoundingRect().height() == pytest.approx(old_rect.width())
+        assert item.rotation() == 90
+    else:
+        assert item.sceneBoundingRect().size() == old_rect.size()
+        assert item.rotation() == 0
     after_item = scene_item_state_for(canvas, item)
     if kind == "image":
         assert after_item["data_base64"] == before_item["data_base64"]
@@ -383,7 +386,7 @@ def test_explicit_regroup_repairs_a_legacy_fragment_only_group(canvas):
 
 @pytest.mark.parametrize("kind", ["note", "image", "shape", "ts_bracket"])
 @pytest.mark.parametrize("outcome", ["commit", "cancel", "return"])
-def test_real_rotation_handle_preserves_upright_group_and_baseline_redo(
+def test_real_rotation_handle_preserves_group_and_baseline_redo(
     canvas, app, kind, outcome
 ):
     canvas.resize(800, 600)
@@ -428,7 +431,7 @@ def test_real_rotation_handle_preserves_upright_group_and_baseline_redo(
     if outcome == "commit":
         after = snapshot_canvas_state_for(canvas)
         assert after != before
-        assert item.rotation() == 0
+        assert item.rotation() == (pytest.approx(90, abs=1) if kind == "note" else 0)
         history.undo()
         assert snapshot_canvas_state_for(canvas) == before
         history.redo()

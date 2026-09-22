@@ -6,9 +6,10 @@ import pytest
 from PyQt6.QtCore import QPointF, Qt
 from PyQt6.QtGui import QColor, QImage
 from PyQt6.QtTest import QTest
-from PyQt6.QtWidgets import QGraphicsTextItem, QToolButton
+from PyQt6.QtWidgets import QColorDialog, QGraphicsTextItem, QToolButton
 
 from chemvas.ui.canvas_atom_graphics_state import atom_dots_for, visible_atom_item_for
+from chemvas.ui.canvas_scene_items_state import ring_items_for
 from chemvas.ui.canvas_window_access import snapshot_canvas_state_for
 from chemvas.ui.main_window_ports import (
     active_canvas_for_window,
@@ -19,7 +20,7 @@ from chemvas.ui.main_window_ports import (
 from chemvas.ui.move_access import move_item_for
 from chemvas.ui.scene_decoration_access import add_mark_for, add_mark_for_atom_for
 from chemvas.ui.scene_item_state import mark_state_dict_for
-from chemvas.ui.structure_mutation_access import add_atom_for
+from chemvas.ui.structure_mutation_access import add_atom_for, add_benzene_ring_for
 from tests.gui_workflow_support import app as app
 from tests.gui_workflow_support import drawing as drawing
 
@@ -95,7 +96,7 @@ def test_color_palette_reflects_only_the_actual_tool_color(drawing):
         for b in window.findChildren(QToolButton)
         if b.objectName().startswith("color_swatch_")
     ]
-    assert len(buttons) == 8
+    assert len(buttons) == 16
     assert all(b.isCheckable() for b in buttons)
     assert not any(b.isChecked() for b in buttons)
     for name in ("Red", "Blue", "Blue"):
@@ -315,3 +316,64 @@ def test_deferred_palette_does_not_paint_a_different_canvas(drawing, monkeypatch
     assert color_tool_for_window(window).current_color is None
     assert "canvas changed" in window.statusBar().currentMessage()
     assert "choose a swatch" in window.statusBar().currentMessage()
+
+
+@pytest.mark.parametrize("mode", ["color", "ring_fill"])
+def test_custom_palette_color_cancel_apply_undo_and_save(
+    drawing, tmp_path, monkeypatch, mode
+):
+    window, canvas = drawing
+    if mode == "color":
+        atom_id = add_atom_for(canvas, "N", 0, 0)
+        visible_atom_item_for(canvas, atom_id).setSelected(True)
+        _color_mode(window)
+    else:
+        add_benzene_ring_for(canvas, QPointF(0, 0))
+        ring_items_for(canvas)[0].setSelected(True)
+        QTest.mouseClick(
+            window.findChild(QToolButton, "toolButton_ring_fill"),
+            Qt.MouseButton.LeftButton,
+        )
+        QTest.qWait(1)
+    button = window.findChild(QToolButton, f"{mode}_more_colors")
+    assert button is not None and button.isVisible()
+    before = snapshot_canvas_state_for(canvas)
+    history = canvas.services.history_service
+    stacks = history.capture_stack_snapshot()
+    picked = [QColor(), QColor("#123456")]
+    initial_colors = []
+
+    def choose(initial, parent, title):
+        initial_colors.append(initial.name())
+        assert title == ("Color" if mode == "color" else "Ring Fill")
+        return picked.pop(0)
+
+    monkeypatch.setattr(QColorDialog, "getColor", choose)
+    QTest.mouseClick(button, Qt.MouseButton.LeftButton)
+    QTest.qWait(1)
+    assert snapshot_canvas_state_for(canvas) == before
+    history.verify_stack_snapshot(stacks)
+    QTest.mouseClick(button, Qt.MouseButton.LeftButton)
+    QTest.qWait(1)
+    if mode == "color":
+        assert canvas.model.atoms[atom_id].color == "#123456"
+        assert color_tool_for_window(window).current_color == "#123456"
+        assert not any(
+            b.isChecked()
+            for b in window.findChildren(QToolButton)
+            if b.objectName().startswith("color_swatch_")
+        )
+    else:
+        assert ring_items_for(canvas)[0].brush().color().name() == "#c4ccd5"
+    after = snapshot_canvas_state_for(canvas)
+    assert after != before
+    history.undo()
+    assert snapshot_canvas_state_for(canvas) == before
+    history.redo()
+    assert snapshot_canvas_state_for(canvas) == after
+    actions = services_for_window(window).document_action_service
+    path = tmp_path / "custom-color.chemvas"
+    assert actions.save_canvas_to_path(window, str(path))
+    assert actions.load_canvas_from_path(window, str(path))
+    assert snapshot_canvas_state_for(active_canvas_for_window(window)) == after
+    assert initial_colors == ["#000000", "#000000"]

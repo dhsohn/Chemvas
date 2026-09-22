@@ -121,6 +121,8 @@ def test_exact_decimal_file_boundary_is_checked_before_normalization(
     payload = {
         "type": CHEMVAS_FILE_TYPE,
         "version": CANVAS_FILE_VERSION,
+        "schema": 1,
+        "min_reader": "0.18.0",
         "state": state,
     }
     raw = json.dumps(payload).replace('"numeric-token"', token)

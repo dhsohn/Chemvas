@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+import re
 from collections.abc import Callable, Collection, Mapping
 from decimal import Decimal
 from typing import Any, TypeGuard, cast
@@ -14,8 +15,10 @@ StateDict = dict[Any, Any]
 CHEMVAS_FILE_TYPE = "chemvas"
 # New documents use this version. Supported durable readers are independent:
 # advancing the writer must not retire v7 (docs/DOCUMENT_COMPATIBILITY.md).
-CANVAS_FILE_VERSION = 7
-SUPPORTED_FILE_VERSIONS = frozenset((7,))
+CANVAS_FILE_VERSION = 8
+SUPPORTED_FILE_VERSIONS = frozenset((7, 8))
+DOCUMENT_SCHEMA_READERS = {(8, 1): "0.18.0"}
+DOCUMENT_SCHEMAS = {8: 1}
 CANVAS_STATE_KEYS = frozenset(
     (
         "model",
@@ -167,7 +170,8 @@ VALID_ORBITAL_KINDS = frozenset(
 VALID_SHAPE_KINDS = frozenset(("circle", "ellipse", "rounded_rect", "rect"))
 VALID_SHAPE_STROKES = frozenset(("solid", "dashed", "dotted", "none"))
 VALID_ATOM_ANNOTATION_KEYS = frozenset(("formal_charge", "radical_electrons"))
-CLIPBOARD_SELECTION_VERSION = 2
+CLIPBOARD_SELECTION_VERSION = 3
+SUPPORTED_CLIPBOARD_VERSIONS = frozenset((2, 3))
 CLIPBOARD_SELECTION_REQUIRED_KEYS = frozenset(
     (
         "format",
@@ -592,6 +596,8 @@ def selection_payload_to_canvas_state(
                 "x": item_state["x"],
                 "y": item_state["y"],
             }
+            if "rotation" in item_state:
+                note_state["rotation"] = item_state["rotation"]
             html = item_state.get("html")
             if isinstance(html, str):
                 note_state["html"] = html
@@ -694,11 +700,17 @@ def _clipboard_perspective_to_canvas_state(
 
 def build_document_payload(state: StateDict, version: int) -> StateDict:
     _validate_document_state(state, version)
-    return {
+    payload = {
         "type": CHEMVAS_FILE_TYPE,
         "version": version,
         "state": state,
     }
+    if version in DOCUMENT_SCHEMAS:
+        schema = DOCUMENT_SCHEMAS[version]
+        payload.update(
+            schema=schema, min_reader=DOCUMENT_SCHEMA_READERS[version, schema]
+        )
+    return payload
 
 
 def extract_document_state(payload: object) -> StateDict:
@@ -708,12 +720,6 @@ def extract_document_state(payload: object) -> StateDict:
 
 
 def _extract_wrapped_document_state(payload: Mapping[str, object]) -> StateDict:
-    if set(payload) != {"type", "version", "state"}:
-        raise ValueError(
-            "Invalid Chemvas file. Expected only type, version, and state fields."
-        )
-    if payload.get("type") != CHEMVAS_FILE_TYPE:
-        raise ValueError("Invalid Chemvas file.")
     version = payload.get("version")
     if type(version) is not int:
         raise ValueError("Invalid Chemvas file. version must be an integer.")
@@ -724,9 +730,40 @@ def _extract_wrapped_document_state(payload: Mapping[str, object]) -> StateDict:
             f"This release reads document versions: {supported}. "
             "Open it with a Chemvas release that supports this version."
         )
+    expected = {"type", "version", "state"}
+    if version == 8:
+        expected |= {"schema", "min_reader"}
+    if set(payload) != expected:
+        raise ValueError(
+            "Invalid Chemvas file. Expected only "
+            + (
+                "type, version, schema, min_reader, and state fields."
+                if version == 8
+                else "type, version, and state fields."
+            )
+        )
     state = payload.get("state")
-    if not isinstance(state, dict):
+    if payload.get("type") != CHEMVAS_FILE_TYPE or not isinstance(state, dict):
         raise ValueError("Invalid Chemvas file.")
+    if version == 8:
+        schema = payload.get("schema")
+        min_reader = payload.get("min_reader")
+        if (
+            type(schema) is not int
+            or schema < 1
+            or not isinstance(min_reader, str)
+            or re.fullmatch(
+                r"(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)", min_reader
+            )
+            is None
+        ):
+            raise ValueError("Invalid Chemvas file. Invalid schema or min_reader.")
+        if schema > DOCUMENT_SCHEMAS[version]:
+            raise ValueError(
+                f"Newer Chemvas document: format {version}, schema {schema}. "
+                f"This release reads up to schema {DOCUMENT_SCHEMAS[version]}; "
+                f"open it with Chemvas {min_reader} or later."
+            )
     _validate_document_state(state, version)
     return state
 
@@ -738,6 +775,19 @@ def _validate_document_state(state: Mapping[str, object], version: int) -> None:
     if state_kind != "canvas":
         raise ValueError("Invalid Chemvas file.")
     _validate_canvas_state(state)
+    if version == 7:
+        for collection, field in (
+            ("notes", "rotation"),
+            ("images", "z"),
+            ("shapes", "z"),
+        ):
+            if any(
+                field in item
+                for item in cast("list[StateDict]", state.get(collection, []))
+            ):
+                raise ValueError(
+                    f"Invalid Chemvas v7 file. {collection}.{field} requires v8."
+                )
 
 
 def _state_kind(state: Mapping[str, object]) -> str | None:
@@ -907,7 +957,7 @@ def _validate_note_fields(
     error: str,
 ) -> None:
     keys = set(note_state)
-    if not required_keys <= keys or not keys <= required_keys | {"html"}:
+    if not required_keys <= keys or not keys <= required_keys | {"html", "rotation"}:
         raise ValueError(error)
     if not isinstance(note_state.get("text"), str):
         raise ValueError(error)
@@ -916,6 +966,8 @@ def _validate_note_fields(
         raise ValueError(error)
     if "html" in note_state:
         _validate_utf8(note_state["html"], error=f"{error} html")
+    if "rotation" in note_state and not _is_number(note_state["rotation"]):
+        raise ValueError(error)
     if not _is_number(note_state.get("x")) or not _is_number(note_state.get("y")):
         raise ValueError(error)
 
@@ -1010,7 +1062,13 @@ def validate_shape_fields(shape_state: Mapping[str, object], *, error: str) -> N
     if not _SHAPE_STATE_BASE_KEYS <= keys or not keys <= _SHAPE_STATE_BASE_KEYS | {
         "fill",
         "fill_alpha",
+        "z",
     }:
+        raise ValueError(error)
+    if "z" in keys and (
+        not _is_number(shape_state["z"])
+        or not -12.0 <= cast("float", shape_state["z"]) <= 10.0
+    ):
         raise ValueError(error)
     if shape_state.get("kind") != "shape":
         raise ValueError(error)
@@ -1455,7 +1513,7 @@ def validate_clipboard_selection_payload(payload: Mapping[str, object]) -> bool:
             not isinstance(payload, Mapping)
             or payload.get("format") != "chemvas-selection"
             or type(payload.get("version")) is not int
-            or payload.get("version") != CLIPBOARD_SELECTION_VERSION
+            or payload.get("version") not in SUPPORTED_CLIPBOARD_VERSIONS
             or not CLIPBOARD_SELECTION_REQUIRED_KEYS <= set(payload)
             or not set(payload) <= CLIPBOARD_SELECTION_PAYLOAD_KEYS
         ):
@@ -1472,6 +1530,12 @@ def validate_clipboard_selection_payload(payload: Mapping[str, object]) -> bool:
         )
         for item_state in scene_items:
             _validate_clipboard_scene_item(item_state)
+            if payload["version"] == 2:
+                kind = item_state.get("kind")
+                if (kind == "note" and "rotation" in item_state) or (
+                    kind in {"image", "shape"} and "z" in item_state
+                ):
+                    raise ValueError("Clipboard transforms require version 3.")
         _validate_clipboard_perspective(payload, atom_ids)
         _validate_group_states(
             payload, atom_ids, item_keys=frozenset(("marks", "scene_items"))
@@ -1516,7 +1580,7 @@ def _validate_clipboard_perspective(
     if perspective_state is None:
         return
     version = payload.get("version")
-    if type(version) is not int or version != CLIPBOARD_SELECTION_VERSION:
+    if type(version) is not int or version not in SUPPORTED_CLIPBOARD_VERSIONS:
         raise ValueError("Invalid clipboard payload.")
     if not isinstance(perspective_state, Mapping):
         raise ValueError("Invalid clipboard payload.")

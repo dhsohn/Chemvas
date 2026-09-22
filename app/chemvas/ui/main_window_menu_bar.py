@@ -10,7 +10,6 @@ from PyQt6.QtGui import QAction, QDesktopServices, QKeySequence
 from PyQt6.QtWidgets import QApplication, QMenu, QMenuBar
 
 from chemvas.branding import APP_NAME
-from chemvas.ui.calculation_step_dialog import edit_calculation_plan_for_window
 from chemvas.ui.image_actions import (
     image_properties_for_window,
     insert_image_for_window,
@@ -42,6 +41,7 @@ from chemvas.ui.main_window_ports import (
 )
 from chemvas.ui.recent_menu import build_recent_menu
 from chemvas.ui.scheme_layout_dialog import arrange_scheme_for_window
+from chemvas.ui.stacking_actions import stack_selection_for_window
 
 if TYPE_CHECKING:
     from chemvas.ui.main_window_panel_toolbar import MainWindowPanelToolbarCallbacks
@@ -325,6 +325,16 @@ def _build_edit_menu(
         status_tip="Enter an angle to rotate the current selection",
         triggered=lambda: callbacks.show_rotate_options(window),
     )
+    for label, front in (("Bring to Front", True), ("Send to Back", False)):
+        _add_action(
+            edit_menu,
+            window,
+            label,
+            status_tip="Change the stacking order of selected images and shapes",
+            triggered=lambda front=front: stack_selection_for_window(
+                window, front=front
+            ),
+        )
     align_menu = edit_menu.addMenu("Align")
     for text, mode in ALIGN_MENU_SPECS:
         _add_action(
@@ -406,6 +416,14 @@ def _build_view_menu(
 
 
 def _build_calculation_menu(menu_bar: QMenuBar, window) -> None:
+    # This registration is the desktop boundary of Calculation support.
+    # Ordinary startup/editing must not import the operational feature; saved
+    # plan data remains owned independently by the document domain.
+    def open_editor() -> None:
+        from chemvas.ui.calculation_step_dialog import edit_calculation_plan_for_window
+
+        edit_calculation_plan_for_window(window)
+
     calculation_menu = _add_menu(menu_bar, "Calculation")
     _add_action(
         calculation_menu,
@@ -414,7 +432,7 @@ def _build_calculation_menu(menu_bar: QMenuBar, window) -> None:
         status_tip=(
             "Assign reactant, product, catalyst, and spectator roles for DFT export"
         ),
-        triggered=lambda: edit_calculation_plan_for_window(window),
+        triggered=open_editor,
     )
 
 

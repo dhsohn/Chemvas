@@ -55,12 +55,13 @@ class SceneRotationStateTest(unittest.TestCase):
         self.assertAlmostEqual(arrow_state["end"][1], 20.0)
         self.assertNotIn("control", arrow_state)
 
-    def test_rotate_state_orbits_note_center_while_keeping_text_upright(self) -> None:
+    def test_rotate_state_rotates_note_anchor_and_text(self) -> None:
         note_state = _rotate_state(
             _item("note", bounding_rect=QRectF(0.0, 0.0, 10.0, 10.0)),
             {"kind": "note", "text": "hi", "x": 10.0, "y": 0.0},
         )
-        self.assertAlmostEqual(note_state["x"], -10.0)
+        self.assertAlmostEqual(note_state["x"], 0.0)
+        self.assertEqual(note_state["rotation"], 90.0)
         self.assertAlmostEqual(note_state["y"], 10.0)
 
         fallback_state = _rotate_state(

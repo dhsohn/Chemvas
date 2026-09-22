@@ -80,6 +80,11 @@ def _inspect_document(source: Path) -> dict[str, object]:
         "source": str(source),
         "source_sha256": document.source_sha256,
         "chemvas_document_version": int(document.payload["version"]),
+        "document_format": {
+            "version": int(document.payload["version"]),
+            "schema": document.payload.get("schema"),
+            "min_reader": document.payload.get("min_reader"),
+        },
     }
 
 

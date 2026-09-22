@@ -148,6 +148,38 @@ class ParseAtomLabelTest(unittest.TestCase):
     def test_digit_after_letter_is_subscript(self):
         self.assertEqual(self.roles("CH3"), [("CH", "normal"), ("3", "sub")])
 
+    def test_unicode_subscript_digits_use_ordinary_digit_glyphs(self):
+        for digit, subscript in zip("0123456789", "₀₁₂₃₄₅₆₇₈₉", strict=True):
+            with self.subTest(digit=digit):
+                self.assertEqual(
+                    self.roles("PPh" + subscript),
+                    [("PPh", "normal"), (digit, "sub")],
+                )
+
+    def test_mixed_subscript_digits_keep_one_run(self):
+        self.assertEqual(
+            self.roles("C₁0H2₁"),
+            [("C", "normal"), ("10", "sub"), ("H", "normal"), ("21", "sub")],
+        )
+
+    def test_explicit_subscript_keeps_its_role_without_a_preceding_letter(self):
+        self.assertEqual(
+            self.roles("₁₃C / ₂"),
+            [("13", "sub"), ("C / ", "normal"), ("2", "sub")],
+        )
+
+    def test_unicode_subscripts_in_parentheses_preserve_other_characters(self):
+        self.assertEqual(
+            self.roles("(CH₃)₂+"),
+            [
+                ("(CH", "normal"),
+                ("3", "sub"),
+                (")", "normal"),
+                ("2", "sub"),
+                ("+", "normal"),
+            ],
+        )
+
     def test_interior_digit_then_more_text(self):
         self.assertEqual(
             self.roles("CO2Me"),

@@ -166,7 +166,7 @@ def test_mirror_survives_native_and_clipboard_roundtrip_with_same_ink(
     document = tmp_path / "equilibrium.chemvas"
     write_document(document, state, version=CANVAS_FILE_VERSION)
     serialized = json.loads(document.read_text())
-    assert serialized["version"] == CANVAS_FILE_VERSION == 7
+    assert serialized["version"] == CANVAS_FILE_VERSION
     assert serialized["state"]["arrows"][0]["mirrored"] is True
     before_bytes = document.read_bytes()
     restored = canvases()
@@ -195,7 +195,7 @@ def test_mirror_survives_native_and_clipboard_roundtrip_with_same_ink(
     assert not QImage(str(tmp_path / "live.png")).isNull()
     payload = canvas.services.scene_operations.scene_clipboard_controller.selection_payload_for_clipboard()
     assert validate_clipboard_selection_payload(payload)
-    assert payload["version"] == 2
+    assert payload["version"] == 3
     assert payload["scene_items"][0]["mirrored"] is True
     target = canvases()
     clip = target.services.scene_operations.scene_clipboard_controller

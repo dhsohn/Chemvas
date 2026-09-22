@@ -108,6 +108,7 @@ def render_shape_item(context: SceneRenderContext, item: Any, shape: Shape) -> N
         fill.setAlphaF(1.0 if shape.fill_alpha is None else shape.fill_alpha)
     item.setBrush(QBrush(fill))
     item.setData(0, "shape")
+    item.setZValue(-10.0 if shape.z is None else shape.z)
 
 
 def set_shape_record(context: SceneRenderContext, item: Any, shape: Shape) -> Shape:

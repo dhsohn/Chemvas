@@ -75,9 +75,9 @@ def _document(arrows):
 @pytest.mark.parametrize("color", ["#aBc", "#A1b2C3"])
 def test_v7_arrow_color_round_trips_as_optional_hex(kind, color):
     state = _document([_arrow(kind, color=color), _arrow(kind)])
-    payload = build_document_payload(state, CANVAS_FILE_VERSION)
+    payload = build_document_payload(state, 7)
     restored = extract_document_state(json.loads(json.dumps(payload)))
-    assert CANVAS_FILE_VERSION == 7
+    assert payload["version"] == 7
     assert restored["arrows"] == state["arrows"]
 
 

@@ -24,12 +24,13 @@ when sharing with an older installation.
 ## Format changes
 
 - The application release number and document format number are independent.
-  The current writer still emits **v7**; this policy introduces no new format.
+  The current writer emits **v8, schema 1**, readable by Chemvas 0.18.0 and later.
+  Supported v7 documents remain readable.
 - A serialized change that an existing reader cannot correctly interpret needs
   a new document format version. This includes new fields rejected by the
   existing strict schema, new enum values, and changes to a field's meaning.
   Do not add another incompatible feature under the v7 label. From v8 on, the
-  revision rule in "Next format version" below decides whether such a change
+  revision rule in "Format v8" below decides whether such a change
   takes a new revision or a new version; under v7 every one of them takes a
   new version.
 - A future writer version must not remove v7 from the readable versions. Version
@@ -44,7 +45,7 @@ when sharing with an older installation.
   remain errors. Do not guess their meaning, silently omit unsupported content,
   or bypass validation to make a file appear to open successfully.
 
-## Next format version
+## Format v8
 
 Version 7 is frozen as the contract supported on 2026-09-13; it carries no
 revision number, and nothing more is added under its label. Several additions
@@ -54,15 +55,14 @@ them rejects a newer v7 file as an invalid document even though both say
 is closed, so that information cannot be added to v7 either: it arrives with the
 next format version.
 
-The next format version, v8, extends the wrapper to exactly these keys (the
-release number is illustrative; the writer fills the real one):
+Format v8 extends the wrapper to exactly these keys:
 
 ```json
 {
   "type": "chemvas",
   "version": 8,
   "schema": 1,
-  "min_reader": "0.17.0",
+  "min_reader": "0.18.0",
   "state": {}
 }
 ```
@@ -108,10 +108,16 @@ A reader judges a document in this order and reports the first failure:
 so an agent can compare a file with the release its user has installed before
 handing it over.
 
-Introducing v8 follows the rules above: keep reading v7, convert at the
-document boundary, verify the frozen v7 fixtures, and freeze a v8 fixture set
-separately. Until a real change to the document requires v8, none of this is
-implemented; this section is the requirement it will be built to.
+V8 schema 1 adds optional note `rotation` and image/shape `z` fields. The v7
+reader rejects these fields rather than interpreting them under the frozen v7
+contract. Saving in the editor writes v8; Graph Patch and other operations that
+preserve the input version keep v7 when working on valid v7 information.
+`inspect-document` reports null schema/min_reader values for legacy v7 files.
+
+Older installations, including 0.17.1, cannot open v8 files. Preserve the original
+v7 file when sharing with them. The fixed v8 fixture is maintained separately in
+`tests/fixtures/document-v8`, with native, editable SVG and Graph Patch tests in
+`tests/test_document_v8.py`.
 
 ## Scope and limits
 
@@ -162,3 +168,6 @@ checks the desktop editing and save/reopen path. Both run under `make check`.
 Tests for unsupported history pin versions 1–6 rather than treating every version
 below the current writer as unsupported. Updating the writer constant alone must
 not invalidate the v7 reading baseline.
+
+New clipboard selections use version 3 for note rotation and image/shape depth.
+Valid version 2 selections remain readable, but cannot carry these new fields.

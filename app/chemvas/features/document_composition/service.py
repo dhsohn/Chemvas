@@ -39,7 +39,8 @@ from chemvas.features.insertion import (
 )
 
 COMPOSITION_FORMAT = "chemvas-document-composition"
-COMPOSITION_VERSION = 1
+COMPOSITION_VERSION = 2
+SUPPORTED_COMPOSITION_VERSIONS = frozenset((1, 2))
 MAX_ATOMS = 4096
 MAX_BONDS = 8192
 MAX_SCENE_ITEMS = 4096
@@ -66,7 +67,7 @@ _ATOM_ALLOWED = _ATOM_REQUIRED | {
 _BOND_REQUIRED = frozenset(("a", "b", "order"))
 _BOND_ALLOWED = _BOND_REQUIRED | {"style", "color"}
 _NOTE_REQUIRED = frozenset(("x", "y"))
-_NOTE_ALLOWED = _NOTE_REQUIRED | {"text", "runs", "style"}
+_NOTE_ALLOWED = _NOTE_REQUIRED | {"text", "runs", "style", "rotation"}
 _NOTE_STYLE_ALLOWED = frozenset(
     ("font_size", "font_weight", "italic", "color", "vertical_align")
 )
@@ -75,12 +76,12 @@ _ARROW_ALLOWED = _ARROW_REQUIRED | {"control", "double", "labels", "color"}
 _SHAPE_REQUIRED = frozenset(
     ("shape_kind", "left", "top", "right", "bottom", "stroke_style")
 )
-_SHAPE_ALLOWED = _SHAPE_REQUIRED | {"fill", "fill_alpha"}
+_SHAPE_ALLOWED = _SHAPE_REQUIRED | {"fill", "fill_alpha", "z"}
 _RING_REQUIRED = frozenset(("atom_ids", "color", "alpha"))
 _TS_BRACKET_REQUIRED = frozenset(("bracket_kind", "left", "top", "right", "bottom"))
 _DEFAULT_BOND_STYLE = {1: "single", 2: "double", 3: "triple"}
 _IMAGE_REQUIRED = frozenset(("source", "x", "y"))
-_IMAGE_ALLOWED = _IMAGE_REQUIRED | {"width", "height", "opacity", "lock_aspect"}
+_IMAGE_ALLOWED = _IMAGE_REQUIRED | {"width", "height", "opacity", "lock_aspect", "z"}
 
 
 def compose_document_state(
@@ -94,9 +95,24 @@ def compose_document_state(
         raise ValueError(f"composition format must be {COMPOSITION_FORMAT!r}")
     if (
         type(root.get("version")) is not int
-        or root.get("version") != COMPOSITION_VERSION
+        or root.get("version") not in SUPPORTED_COMPOSITION_VERSIONS
     ):
-        raise ValueError("composition version must be 1")
+        raise ValueError(
+            "unsupported composition version; supported versions are 1 and 2"
+        )
+    if root["version"] == 1:
+        for collection, field in (
+            ("notes", "rotation"),
+            ("images", "z"),
+            ("shapes", "z"),
+        ):
+            for item in _list(
+                root.get(collection, []), collection, maximum=MAX_SCENE_ITEMS
+            ):
+                if isinstance(item, Mapping) and field in item:
+                    raise ValueError(
+                        f"{collection}.{field} requires composition version 2"
+                    )
 
     raw_atoms = _list(root.get("atoms"), "atoms", maximum=MAX_ATOMS)
     raw_bonds = _list(root.get("bonds"), "bonds", maximum=MAX_BONDS)
@@ -185,6 +201,7 @@ def _images(
                 height=height,
                 opacity=opacity,
                 lock_aspect=lock_aspect,
+                z=_number(image.get("z", -2.0), f"{name} z"),
             )
         except ValueError as exc:
             raise ValueError(f"{name}: {exc}") from exc
@@ -295,7 +312,7 @@ def _settings(value: object) -> dict[str, object]:
     if not set(overrides) <= SETTINGS_KEYS:
         unknown = sorted(str(key) for key in set(overrides) - SETTINGS_KEYS)
         raise ValueError(f"settings has unknown keys: {unknown}")
-    # Composition v1 is a bounded authoring API even though persisted v7
+    # Composition is a bounded authoring API even though persisted documents
     # documents retain their older, unbounded-above compatibility contract.
     overridden_font_size = overrides.get("text_font_size")
     if type(overridden_font_size) is int and overridden_font_size > 96:
@@ -322,6 +339,8 @@ def _notes(value: object) -> list[dict[str, object]]:
             "x": _number(note.get("x"), f"note {index} x"),
             "y": _number(note.get("y"), f"note {index} y"),
         }
+        if "rotation" in note:
+            state["rotation"] = _number(note["rotation"], f"note {index} rotation")
         if "runs" in note:
             state["text"], state["html"] = _note_runs(note, index)
         else:
@@ -536,6 +555,8 @@ def _shapes(value: object) -> list[dict[str, object]]:
         }
         for key in ("left", "top", "right", "bottom"):
             state[key] = _number(shape.get(key), f"shape {index} {key}")
+        if "z" in shape:
+            state["z"] = _number(shape["z"], f"shape {index} z")
         if "fill" in shape:
             state["fill"] = _color(shape["fill"], f"shape {index} fill")
         if "fill_alpha" in shape:

@@ -176,7 +176,7 @@ def test_native_editable_svg_clipboard_and_history_preserve_unknown(canvas, tmp_
     clipboard = canvas.services.scene_operations.scene_clipboard_controller
     payload = clipboard.selection_payload_for_clipboard()
     assert validate_clipboard_selection_payload(payload)
-    assert payload["version"] == 2
+    assert payload["version"] == 3
     assert payload["bonds"][0]["style"] == "double_either"
     invalid = deepcopy(payload)
     invalid["bonds"][0]["order"] = 1

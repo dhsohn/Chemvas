@@ -28,6 +28,14 @@ COLOR_PALETTE_SPECS: list[tuple[str, str]] = [
     ("Green", "#2e8b57"),
     ("Purple", "#6a2ea6"),
     ("Orange", "#c77c00"),
+    ("White", "#ffffff"),
+    ("Light Gray", "#bdbdbd"),
+    ("Cyan", "#00bcd4"),
+    ("Teal", "#008080"),
+    ("Navy", "#1b365d"),
+    ("Pink", "#e78ac3"),
+    ("Magenta", "#c51b7d"),
+    ("Brown", "#8c510a"),
 ]
 
 TEMPLATE_ENTRY_SPECS: list[tuple[str, int, str]] = [

@@ -149,9 +149,9 @@ def plan_restore(
 
     *Every* crashed session (unclean + dead pid) is restored so unsaved work is
     never pruned unrecovered, and at most one *clean* session is reopened (the
-    newest, for last-session continuity) — on every launch, including one that
-    opens a startup file on top of the restored workspace. Every consumable
-    session is pruned; a live instance's session is untouched.
+    newest, for last-session continuity) when explicit recovery is requested.
+    Desktop startup does not invoke this policy. Every consumable session is
+    pruned; a live instance's session is untouched.
     """
     consumable = [
         (sid, manifest, key)

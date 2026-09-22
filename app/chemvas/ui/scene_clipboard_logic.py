@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING, cast
 from chemvas.domain.document import (
     CLIPBOARD_SELECTION_VERSION,
     MAX_DOCUMENT_BYTES,
+    SUPPORTED_CLIPBOARD_VERSIONS,
     Bond,
     normalize_json_numbers,
     validate_clipboard_selection_payload,
@@ -268,9 +269,10 @@ def _is_supported_selection_payload_version(
 ) -> bool:
     return (
         type(payload_version) is int
-        and payload_version == CLIPBOARD_SELECTION_VERSION
+        and payload_version in SUPPORTED_CLIPBOARD_VERSIONS
         and type(current_version) is int
-        and current_version == CLIPBOARD_SELECTION_VERSION
+        and current_version in SUPPORTED_CLIPBOARD_VERSIONS
+        and payload_version <= current_version
     )
 
 

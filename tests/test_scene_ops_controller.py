@@ -714,7 +714,7 @@ class SceneOpsControllerTest(unittest.TestCase):
 
         assert payload is not None
         self.assertEqual(payload["format"], "chemvas-selection")
-        self.assertEqual(payload["version"], 2)
+        self.assertEqual(payload["version"], 3)
         self.assertEqual([atom["id"] for atom in payload["atoms"]], [1, 2])
         self.assertEqual(
             payload["bonds"],

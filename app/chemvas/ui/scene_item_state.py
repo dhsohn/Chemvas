@@ -180,6 +180,7 @@ def _apply_note_state(
         )
     )
     note_style_applier(item)
+    item.setRotation(_float_state_value(state.get("rotation"), 0.0))
     item.setTextInteractionFlags(Qt.TextInteractionFlag.NoTextInteraction)
 
 

@@ -34,6 +34,7 @@ class Shape:
     # either without the other, and an absent key stays absent.
     fill: str | None = None
     fill_alpha: float | None = None
+    z: float | None = None
 
     def __post_init__(self) -> None:
         # Edits build new records with dataclasses.replace; a record that
@@ -54,6 +55,7 @@ def shape_from_state(
         shape_kind=cast("str", state["shape_kind"]),
         stroke_style=cast("str", state["stroke_style"]),
         fill=cast("str | None", state.get("fill")),
+        z=None if "z" not in state else float(cast("Any", state["z"])),
         fill_alpha=None if fill_alpha is None else float(cast("Any", fill_alpha)),
     )
 
@@ -72,6 +74,8 @@ def shape_to_state(shape: Shape) -> dict[str, object]:
         state["fill"] = shape.fill
     if shape.fill_alpha is not None:
         state["fill_alpha"] = shape.fill_alpha
+    if shape.z is not None:
+        state["z"] = shape.z
     return state
 
 

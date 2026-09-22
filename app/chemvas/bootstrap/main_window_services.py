@@ -16,7 +16,6 @@ from chemvas.ui.main_window_active_canvas_ui_service import (
 from chemvas.ui.main_window_canvas_document_service import (
     MainWindowCanvasDocumentService,
 )
-from chemvas.ui.main_window_canvas_tab_ui_service import MainWindowCanvasTabUIService
 from chemvas.ui.main_window_context_bar_pages import MainWindowContextBarPageBuilder
 from chemvas.ui.main_window_context_bar_service import MainWindowContextBarService
 from chemvas.ui.main_window_context_page_state_service import (
@@ -263,9 +262,6 @@ def build_main_window_services() -> MainWindowServices:
             services_for_window(window).canvas_document_service
         ),
     )
-    canvas_tab_ui_service = MainWindowCanvasTabUIService(
-        close_canvas_tab_for_window=document_action_service.close_canvas_tab,
-    )
     tool_routing_service = MainWindowToolRoutingService(
         tool_mode_controller_for_window=tool_mode_controller_for_window,
         color_mutation_service_for_window=color_mutation_service_for_window,
@@ -325,7 +321,6 @@ def build_main_window_services() -> MainWindowServices:
         context_page_state_service=context_page_state_service,
         tool_routing_service=tool_routing_service,
         text_style_service=text_style_service,
-        canvas_tab_ui_service=canvas_tab_ui_service,
         canvas_document_service=canvas_document_service,
         active_canvas_ui_service=active_canvas_ui_service,
         ui_assembly_service=ui_assembly_service,

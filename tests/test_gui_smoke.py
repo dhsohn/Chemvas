@@ -453,13 +453,10 @@ class GuiShortcutSmokeTest(unittest.TestCase):
     def test_close_canvas_tab_removes_clean_target_canvas(self) -> None:
         services_for_window(self.window).canvas_document_service.new_canvas(self.window)
 
-        closed = services_for_window(
-            self.window
-        ).canvas_tab_ui_service.close_canvas_tab(self.window, 0)
+        self.window.tab_references.canvas_tabs.tabCloseRequested.emit(0)
         self.app.processEvents()
         QTest.qWait(10)
 
-        self.assertIsNone(closed)
         self.assertEqual(self.window.tab_references.canvas_count(), 1)
         self.assertEqual(self.window.tab_references.canvas_tabs.count(), 1)
         self.assertEqual(self.window.tab_references.canvas_tabs.tabText(0), "Canvas 2")
@@ -467,13 +464,10 @@ class GuiShortcutSmokeTest(unittest.TestCase):
     def test_close_last_canvas_tab_creates_replacement_canvas(self) -> None:
         first_canvas = active_canvas_for_window(self.window)
 
-        closed = services_for_window(
-            self.window
-        ).canvas_tab_ui_service.close_canvas_tab(self.window, 0)
+        self.window.tab_references.canvas_tabs.tabCloseRequested.emit(0)
         self.app.processEvents()
         QTest.qWait(10)
 
-        self.assertIsNone(closed)
         self.assertEqual(self.window.tab_references.canvas_count(), 1)
         self.assertIsNot(active_canvas_for_window(self.window), first_canvas)
         self.assertEqual(self.window.tab_references.canvas_tabs.tabText(0), "Canvas 2")

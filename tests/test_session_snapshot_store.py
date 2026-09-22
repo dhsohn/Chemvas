@@ -1476,3 +1476,65 @@ def test_snapshot_with_an_uncomparable_number_is_skipped_not_fatal(
 
     assert result.recovered_unsaved == 1
     assert [doc.display_name for doc in result.docs] == ["Good"]
+
+
+@pytest.mark.parametrize(
+    "case",
+    ["clean", "live", "uncertain", "crash", "dirty", "orphan", "malformed", "unknown"],
+)
+def test_completed_cleanup_retains_every_recovery_or_uncertain_case(
+    tmp_path, monkeypatch, case
+):
+    previous = _store(tmp_path, "previous")
+    previous.begin()
+    dirty = case == "dirty"
+    previous.save_documents(
+        [DocDescriptor(_valid_state(), "/saved.chemvas", "Saved", dirty)]
+    )
+    if case != "crash":
+        previous.mark_clean_exit()
+    if case == "orphan":
+        (previous.session_dir / "doc-orphan.json").write_text("unique work")
+    if case == "unknown":
+        (previous.session_dir / "other.txt").write_text("preserve")
+    if case == "malformed":
+        (previous.session_dir / "session.json").write_text("broken")
+    monkeypatch.setattr(
+        session_snapshot_store, "_pid_alive", lambda pid: case in {"live", "uncertain"}
+    )
+    monkeypatch.setattr(session_snapshot_store, "_process_identity", lambda pid: None)
+    before = {p.name: p.read_bytes() for p in previous.session_dir.iterdir()}
+    current = _store(tmp_path, "current")
+    current.begin()
+    current.prune_completed_sessions()
+    assert current.session_dir.exists()
+    if case == "clean":
+        assert not previous.session_dir.exists()
+    else:
+        assert {
+            p.name: p.read_bytes() for p in previous.session_dir.iterdir()
+        } == before
+
+
+def test_completed_cleanup_preserves_nested_or_symlinked_metadata(
+    tmp_path, monkeypatch
+):
+    _dead_pids(monkeypatch)
+    for kind in ("directory", "symlink"):
+        previous = _store(tmp_path, kind)
+        previous.begin()
+        previous.mark_clean_exit()
+        owner = previous.session_dir / "owner.json"
+        owner.unlink(missing_ok=True)
+        if kind == "directory":
+            owner.mkdir()
+            payload = owner / "snapshot.json"
+            payload.write_text("unique work")
+        else:
+            payload = tmp_path / "outside.json"
+            payload.write_text("unique work")
+            owner.symlink_to(payload)
+        _store(tmp_path, "current").prune_completed_sessions()
+        assert previous.session_dir.exists()
+        assert payload.read_text() == "unique work"
+        assert owner.exists()

@@ -278,12 +278,18 @@ def cached_bond_in_cycle(
     # A second bond between the same two atoms is itself the alternative path,
     # so the direct edge only has to be blocked when this bond is the only one.
     has_alt_between = any(other_id != bond_id for other_id in shared)
-    in_cycle = edge_has_reachable_alternative_path(
-        bond.a,
-        bond.b,
-        graph.atom_neighbors,
-        skip_direct_edge=not has_alt_between,
-    )
+    if not has_alt_between and (
+        len(graph.atom_neighbors.get(bond.a, ())) < 2
+        or len(graph.atom_neighbors.get(bond.b, ())) < 2
+    ):
+        in_cycle = False
+    else:
+        in_cycle = edge_has_reachable_alternative_path(
+            bond.a,
+            bond.b,
+            graph.atom_neighbors,
+            skip_direct_edge=not has_alt_between,
+        )
     graph.bond_cycle_cache[bond_id] = (graph.graph_version, in_cycle)
     return in_cycle
 

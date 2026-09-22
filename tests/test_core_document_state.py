@@ -985,6 +985,8 @@ class DocumentStateTest(unittest.TestCase):
                         payload = {
                             "type": CHEMVAS_FILE_TYPE,
                             "version": CANVAS_FILE_VERSION,
+                            "schema": 1,
+                            "min_reader": "0.18.0",
                             "state": state,
                         }
                         original = deepcopy(payload)
@@ -1253,6 +1255,8 @@ class DocumentStateTest(unittest.TestCase):
         payload = {
             "type": "litedraw",
             "version": CANVAS_FILE_VERSION,
+            "schema": 1,
+            "min_reader": "0.18.0",
             "state": state,
         }
 
@@ -1381,6 +1385,8 @@ class DocumentStateTest(unittest.TestCase):
                 {
                     "type": "unexpected",
                     "version": CANVAS_FILE_VERSION,
+                    "schema": 1,
+                    "min_reader": "0.18.0",
                     "state": _canvas_state(),
                 }
             )
@@ -1397,6 +1403,8 @@ class DocumentStateTest(unittest.TestCase):
                 {
                     "type": CHEMVAS_FILE_TYPE,
                     "version": CANVAS_FILE_VERSION,
+                    "schema": 1,
+                    "min_reader": "0.18.0",
                     "state": {"active_sheet_index": 0, "sheets": []},
                 }
             )
@@ -1405,6 +1413,8 @@ class DocumentStateTest(unittest.TestCase):
                 {
                     "model": {"atoms": {}, "bonds": [], "next_atom_id": 0},
                     "version": CANVAS_FILE_VERSION,
+                    "schema": 1,
+                    "min_reader": "0.18.0",
                 }
             )
         with self.assertRaises(ValueError):
@@ -1412,6 +1422,8 @@ class DocumentStateTest(unittest.TestCase):
                 {
                     "type": CHEMVAS_FILE_TYPE,
                     "version": CANVAS_FILE_VERSION,
+                    "schema": 1,
+                    "min_reader": "0.18.0",
                     "state": [],
                 }
             )

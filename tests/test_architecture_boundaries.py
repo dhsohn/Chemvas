@@ -759,38 +759,6 @@ def test_main_window_canvas_document_service_uses_injected_tab_collaborators() -
     assert _matching_lines(pattern, [service]) == []
 
 
-def test_main_window_canvas_tab_ui_service_uses_injected_close_port() -> None:
-    service = APP_ROOT / "chemvas" / "ui" / "main_window_canvas_tab_ui_service.py"
-    source = service.read_text(encoding="utf-8")
-    pattern = re.compile(
-        r"\bwindow\.plus_tab_index\("
-        r"|\bwindow\.recreate_sheet_add_tab\("
-        r"|\bwindow\.set_sheet_add_tab_index\("
-        r"|\bwindow\.move_sheet_tab\("
-        r"|\bwindow\.sheet_tab_at\("
-        r"|\bwindow\.sheet_tab_global_pos\("
-        r"|\bwindow\.canvas_sheet_count\("
-    )
-    tree = _parse_source(source)
-    service_class = next(
-        node
-        for node in tree.body
-        if isinstance(node, ast.ClassDef)
-        and node.name == "MainWindowCanvasTabUIService"
-    )
-    init_method = next(
-        node
-        for node in service_class.body
-        if isinstance(node, ast.FunctionDef) and node.name == "__init__"
-    )
-    init_arg_names = {arg.arg for arg in init_method.args.kwonlyargs}
-
-    assert init_arg_names == {"close_canvas_tab_for_window"}
-    assert "window.refresh_active_canvas_ui()" not in source
-    assert "window.add_canvas_sheet_from_service()" not in source
-    assert _matching_lines(pattern, [service]) == []
-
-
 def test_main_window_text_style_service_uses_injected_style_controller_port() -> None:
     service = APP_ROOT / "chemvas" / "ui" / "main_window_text_style_service.py"
     pattern = re.compile(
@@ -1269,7 +1237,6 @@ def test_selection_flow_does_not_use_selection_context_facade() -> None:
         APP_ROOT / "chemvas" / "ui" / "selection_service_access.py",
         APP_ROOT / "chemvas" / "ui" / "move_access.py",
         APP_ROOT / "chemvas" / "ui" / "selection_style_access.py",
-        APP_ROOT / "chemvas" / "ui" / "note_selection_box.py",
     ]
     pattern = re.compile(
         r"\bSelectionContext\b"
@@ -3010,7 +2977,7 @@ def test_main_window_canvas_tab_services_do_not_use_context_facade() -> None:
     removed_context = APP_ROOT / "chemvas" / "ui" / "main_window_canvas_tab_context.py"
     paths = [
         APP_ROOT / "chemvas" / "ui" / "main_window_canvas_document_service.py",
-        APP_ROOT / "chemvas" / "ui" / "main_window_canvas_tab_ui_service.py",
+        APP_ROOT / "chemvas" / "ui" / "main_window_document_action_service.py",
         APP_ROOT / "chemvas" / "ui" / "main_window_active_canvas_ui_service.py",
     ]
     pattern = re.compile(

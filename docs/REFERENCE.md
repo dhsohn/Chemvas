@@ -253,13 +253,15 @@ File ▸ Save / Open works with `.chemvas` files — a JSON-based format holding
 molecule model, annotations, arrows, bracket annotations, and settings:
 
 ```json
-{ "type": "chemvas", "version": 7, "state": { /* ... */ } }
+{ "type": "chemvas", "version": 8, "schema": 1, "min_reader": "0.18.0", "state": { /* ... */ } }
 ```
 
-Version 7 is the only supported document contract. It can carry an optional
+The writer emits version 8, schema 1; supported version 7 files remain readable.
+V8 adds text rotation and image/shape stacking and requires Chemvas 0.18.0 or later.
+Keep original v7 files when sharing with older installations. Both can carry an optional
 Calculation Plan v2; precomplex candidates and review selections stored by
-Chemvas 0.15.0 and earlier stay readable and are preserved. Earlier document
-versions and Calculation Plan v1 payloads are rejected.
+Chemvas 0.15.0 and earlier stay readable and are preserved. Document versions before 7
+and Calculation Plan v1 payloads are rejected.
 
 Opening or inserting a drawing preserves overlapping atoms: move or edit them
 on the canvas to correct the layout. Save asks before replacing a file changed
@@ -276,14 +278,14 @@ files used by headless commands remain separate protocols and are unaffected.
 ## Autosave & recovery
 
 Chemvas snapshots every open document to a per-user app-data folder every few
-seconds — nothing is written next to your own files. If the app is killed or
-crashes, the next launch restores those documents (unsaved ones flagged with a
-`●` and a status-bar note); a clean quit simply reopens whatever files were
-open. Snapshots are pruned once a session has been restored or closed cleanly.
-Stale recent-file and clean-session entries for unsupported drawing paths are
-ignored. A current internal crash autosave can still recover the drawing data,
-but an unsupported original path is discarded and the recovered canvas opens
-unbound as an unsaved document.
+seconds — nothing is written next to your own files. Startup opens a blank
+workspace or the explicitly requested document, without restoring earlier clean
+or crashed sessions. Existing snapshots remain on disk for manual recovery;
+a status-bar notice identifies retained unsaved recovery files. Stopped clean
+sessions with only saved-file references and no recovery payloads are cleaned up.
+During explicit
+recovery, an unsupported original path is discarded and the recovered canvas
+opens unbound as an unsaved document.
 
 Autosave never replaces a complete recovery snapshot with one whose capture
 reported a warning. It keeps the last good snapshot and shows a persistent
@@ -408,7 +410,7 @@ annotation model can preserve spin multiplicity.
 
 Double-bond stereo flag 3 (explicitly unspecified/either) is imported as
 `double_either`, drawn as two crossed lines, and retained on MOL export, including
-abbreviation expansion. Native v7 documents, clipboard v2 selections, editable
+abbreviation expansion. Native v7/v8 documents, clipboard v2 selections, editable
 SVG and Undo/Redo preserve this style; older readers that lack it reject those
 documents. It requires bond order 2. Bold, dotted and double-position commands
 refuse to erase the marker; choosing a different bond type explicitly (for

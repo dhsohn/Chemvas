@@ -464,7 +464,7 @@ def test_partial_clipboard_selection_does_not_reference_uncopied_group_members(d
         atom_state_getter=lambda _: {},
         bond_state_getter=lambda _: {},
         scene_item_state_getter=lambda item: scene_item_state_for(canvas, item),
-        version=2,
+        version=3,
         groups=[(set(), [arrow, note])],
     )
     assert len(payload["scene_items"]) == 1

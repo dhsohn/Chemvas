@@ -33,11 +33,16 @@ it supplies only a decoded image, Chemvas embeds a lossless PNG of those clipboa
 pixels; the original file's JPEG encoding or metadata is not available on that path.
 Copying and pasting Chemvas selections retains the embedded bytes and native
 objects. Image insertion and property edits participate in undo/redo.
-Images have a fixed layer above shapes and ring fills, below native labels and
-arrows. Their order relative to other images follows insertion order. Resizing
-uses the properties dialog; there are no image corner handles. Group rotation
-and flipping reposition image rectangles while keeping their pixels upright,
-like text labels; pixel rotation, mirroring, cropping and filters are not supported.
+New images start above shapes and ring fills, below native labels and arrows.
+Select images, shapes, or a mixture and choose **Edit → Bring to Front** or
+**Edit → Send to Back** to move them above or below the drawing. Their relative
+order within the selection is retained; saved documents, clipboard selections,
+figure exports, and undo/redo retain the new order.
+Resizing uses the properties dialog; there are no image corner handles. Group
+rotation and flipping reposition image rectangles while keeping their pixels
+upright; pixel rotation, mirroring, cropping and filters are not supported.
+Notes rotate with **Edit → Rotate…** and the selection rotation handle. Their
+text and background boxes turn together; the angle survives save/reopen and export.
 Automatic **Arrange Scheme** does not support image-containing groups; use manual
 Select, alignment, and Image Properties for image panels.
 
@@ -172,3 +177,11 @@ validation. The editable SVG input envelope is bounded at 256 MiB (native payloa
 re-encoded into SVG may exceed it. Keep `.chemvas` as the editable source and
 visually inspect exported axes, labels, scale bars, and image edges at the intended
 publication size.
+
+Composition v2 notes accept an optional finite `rotation` angle in degrees, clockwise
+in canvas coordinates, about the note anchor `(x, y)`. Images and shapes accept
+an optional `z` from −12 to 10; greater values draw in front. Omitted `z` keeps
+the default image layer (−2) or shape layer (−10).
+
+Composition v1 remains supported with its original fields; `rotation` and `z`
+require request version 2. Unknown request versions and fields are rejected.

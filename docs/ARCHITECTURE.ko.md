@@ -76,6 +76,29 @@ structural validation을 사용하므로 사용자가 맞지 않는 전하 같�
 step-edit 연산이 소유하며, dialog는 widget 입력 수집과 오류 표시를 맡는다. 문서 편집
 사이에 inventory를 캐시하지 않는다.
 
+**Calculation 지원 경계.** Calculation 메뉴의 동작과 문서에 저장된 계산 계획은
+별도 책임이다. 메뉴는 지연 콜백을 등록하므로 메인 창을 열 때 계산 dialog, mapping
+표시, 계산 feature를 불러오지 않는다. 기존 CLI dispatcher도 등록된 계산 명령에서만
+계산 bootstrap을 불러온다. 현재 기능은 계속 지원하며 새 기능 스위치나 플러그인
+프레임워크를 추가하지 않는다.
+
+| 책임 | 소유자와 향후 지원 중단 시 원칙 |
+| --- | --- |
+| 계산 UI 동작 | `ui/calculation_step_dialog.py`, `ui/calculation_mapping_highlight.py`; 진입점은 `ui/main_window_menu_bar.py`의 `_build_calculation_menu`. |
+| 계산 준비와 전달 | `features/calculation_bundle`, `bootstrap/calculation_bundle.py`; `bootstrap/application.py`가 `inspect`, `attach-plan`, `inspect-plan`, `pack-step`의 CLI 등록과 도움말을 소유한다. |
+| 기존 문서 데이터 | document domain, canvas plan state, snapshot, history가 지원 중인 plan 스키마, 구조 검증, 보존, 편집 무결성 규칙을 유지한다. 선택적 계산 동작이 아니라 문서 호환성의 책임이다. |
+| 공용 화학 서비스 | RDKit, 분자 검사, SMILES/MOL/XYZ 변환, Molecule Info는 다른 기능도 사용한다. Calculation 중단을 이유로 백엔드와 이 기능들을 함께 제거하지 않는다. 계산 전용 adapter 메서드는 실제 중단 시 호출자를 확인한다. |
+
+나중에 지원을 중단하면 GUI 등록과 계산 CLI 등록·도움말을 동작 소비자와 함께 제거한다.
+지원 중인 계획 데이터와 무결성 검사는 문서 호환성 정책에 따라 보존한다. 데이터 제거는
+별도의 명시적 호환성 결정이 필요하다. 기능 import 실패를 잡아 계획을 조용히 버리지
+않는다. 일반 편집 코드는 계산 동작 모듈에 새로 의존하지 않으며, 패키지 의존성 검사는
+명시된 진입점과 내부 의존만 허용한다.
+`test_calculation_feature_boundary.py`는 새 프로세스에서 계산 동작 모듈의 import를
+차단하고 실제 메인 창 생성, draft plan 문서 열기, 원자 이동, 저장·다시 열기, PNG
+렌더링을 수행한다. 결과 바이트를 정상 기준 실행 두 번과 대조하며, 메뉴 호출도 별도로
+검사한다.
+
 Figure export의 사전 검사와 렌더링은 동기 요청 하나 안에서 feature의
 `resolve_export_plan`이 반환한 항목과 기하 정보를 공유한다. export service가 plan을 검증하면
 `render_export_plan`이 다시 측정하지 않고 그린다. 별도의 `export_scene` 및
@@ -171,7 +194,8 @@ Figure export의 사전 검사와 렌더링은 동기 요청 하나 안에서 fe
   기존 비동기 preview shutdown으로 창이 닫히는 동안 snapshot을 동결한다.
   다른 앱 데이터 위치의 복구 파일 탐색은 읽기 전용으로 경로만 알린다.
   세션을 병합하거나 별도의 영속 복구 장부를 만들지 않는다.
-- Desktop document path는 canonical `.chemvas`다. Startup, OS-open, File Open, Open Recent, clean-session restore는 `.json` drawing path를 거부하거나 무시한다. 비정상 session snapshot은 현재 내부 autosave state를 복구할 수 있지만, 지원하지 않는 원본 path는 지우므로 recovered canvas는 path에 연결되지 않은 미저장 문서다.
+- 앱 시작 시 이전 문서를 자동으로 열지 않는다. 명시적으로 연 파일만 로드하며, 비정상 종료의 autosave snapshot은 삭제하지 않고 수동 복구 안내를 제공한다. 명시적 recovery API와 snapshot 형식은 유지한다.
+- Desktop document path는 canonical `.chemvas`다. Startup, OS-open, File Open, Open Recent는 `.json` drawing path를 거부하거나 무시한다. 비정상 session snapshot은 현재 내부 autosave state를 복구할 수 있지만, 지원하지 않는 원본 path는 지우므로 recovered canvas는 path에 연결되지 않은 미저장 문서다.
 
 ## 데이터/렌더 흐름 (Data/Render Flow)
 Tools -> CanvasView -> MoleculeModel 변경(mutation) -> Renderer/BondRenderer -> QGraphicsScene 업데이트 -> HistoryCommand 푸시.
@@ -183,7 +207,7 @@ flowchart LR
 
 3D 흐름: 내보내기 커맨드 또는 미리보기 새로고침 -> 현재 분자 / 활성 원자-결합 선택 -> MoleculeModel 서브그래프 + 원자 마크 주석(atom mark annotations) -> RDKitAdapter 변환 그래프 구성 -> RDKit 3D 임베딩 -> `.xyz` 라이터(writer) 또는 미리보기 씬.
 
-계산 흐름: headless `inspect` -> 검증된 `.chemvas` state -> 안정적으로 index된 연결 성분·결합·alias attachment 목록; `attach-plan` 또는 Calculation dialog -> 재사용 state, endpoint별 역할, 명시적 included-atom 대응표, Calculation Plan v2를 가진 v7 문서; dialog 수명 동안 mapping 상태 색상의 임시 atom-ID label; `inspect-plan` -> mapping/readiness와 path precheck 보고. 매핑이 완전하고 전하와 다중도가 같은 step은 성분 수와 관계없이 `pack-step`으로 갈 수 있다. `pack-step`은 전하·다중도·완전 bijection gate를 적용하고, 포함된 성분을 하나씩 따로 임베딩한 뒤 `factory/machine-observation` v1 / `chemistry/elementary-step` v2 `machine.json` 하나를 원자적으로 공개한다. 적합한 artifact는 reactant identity 순서 하나로 index한 성분별 XYZ, 공통 0-based 반응중심 index, 원자 index가 붙은 결합 변화를 담지만 서로 다른 분자의 상대 배치는 담지 않는다. GUI는 정확히 공유된 ID와 선택적인 same-element 구조 mapping을 제안할 뿐 반응기구를 추론하지 않는다. Chemvas는 성분을 배치하거나 최적화·안정성을 주장하지 않으며, 후속 양자화학 최적화와 과학적 검토를 대체하지 않는다.
+계산 흐름: headless `inspect` -> 검증된 `.chemvas` state -> 안정적으로 index된 연결 성분·결합·alias attachment 목록; `attach-plan` 또는 Calculation dialog -> 재사용 state, endpoint별 역할, 명시적 included-atom 대응표, Calculation Plan v2를 가진 문서; dialog 수명 동안 mapping 상태 색상의 임시 atom-ID label; `inspect-plan` -> mapping/readiness와 path precheck 보고. 매핑이 완전하고 전하와 다중도가 같은 step은 성분 수와 관계없이 `pack-step`으로 갈 수 있다. `pack-step`은 전하·다중도·완전 bijection gate를 적용하고, 포함된 성분을 하나씩 따로 임베딩한 뒤 `factory/machine-observation` v1 / `chemistry/elementary-step` v2 `machine.json` 하나를 원자적으로 공개한다. 적합한 artifact는 reactant identity 순서 하나로 index한 성분별 XYZ, 공통 0-based 반응중심 index, 원자 index가 붙은 결합 변화를 담지만 서로 다른 분자의 상대 배치는 담지 않는다. GUI는 정확히 공유된 ID와 선택적인 same-element 구조 mapping을 제안할 뿐 반응기구를 추론하지 않는다. Chemvas는 성분을 배치하거나 최적화·안정성을 주장하지 않으며, 후속 양자화학 최적화와 과학적 검토를 대체하지 않는다.
 
 Agent 편집 흐름: `inspect-document` -> 정확한 source SHA-256과 안정적인 atom/bond 목록 -> 신뢰하지 않는 Graph Patch v1 -> 엄격한 schema/hash gate -> deep copy에서 순차 mutation -> 구조 및 Calculation Plan 의미 검증 -> 결정적 후보 hash -> dry-run 보고 또는 단 한 번의 원자적 비덮어쓰기 `.chemvas` 공개. 입력 파일 버전과 범위 밖 scene state를 보존하며, 어느 operation이나 stale plan이라도 실패하면 output은 없다.
 
@@ -379,7 +403,7 @@ GUI 내보내기는 공통 크기 한도와 가독성 검사를 사용하며,
 - 미리보기 창은 사용자가 보는 것과 실제로 내보내지는 것 사이의 불일치를 피하기 위해 `.xyz` 내보내기와 동일한 변환 경로를 재사용해야 한다.
 - 3D 미리보기는 **View ▸ Molecule Info**에서 별도의 모덜리스(modeless) 창으로 열린다. 선택된 구조 변환 경로를 사용하고, 선택된 분자에 대한 `Export 3D XYZ` 동작을 소유하며, 선택된 화학 구조가 없을 때는 빈 미리보기를 표시한다.
 - 열려 있는 각 캔버스 탭은 자체 파일 경로와 clean/dirty 다이제스트(digest)를 가진 독립적인 문서다. `.chemvas` 로딩은 표준 단일 캔버스 페이로드만 허용한다.
-- `.chemvas`는 현재 version 7을 읽고 쓴다. [문서 호환성 정책](DOCUMENT_COMPATIBILITY.ko.md)에 따라 앞으로 쓰기 버전이 바뀌어도 지원 중인 v7 읽기는 유지한다. Native I/O와 editable SVG에 내장된 문서는 domain의 같은 reader 검증을 사용한다. Canonical payload는 deleted-slot tombstone이 없는 compact bond array를 사용하며 plan이 있으면 Calculation Plan v2다. Calculation plan은 bond 위치가 아니라 안정적 atom id와 완전한 연결 성분 atom-id 집합을 참조한다.
+- `.chemvas`는 version 7과 8을 읽으며 version 8, schema 1(최소 읽기 버전 0.18.0)로 쓴다. [문서 호환성 정책](DOCUMENT_COMPATIBILITY.ko.md)에 따라 앞으로 쓰기 버전이 바뀌어도 지원 중인 v7 읽기는 유지한다. Native I/O와 editable SVG에 내장된 문서는 domain의 같은 reader 검증을 사용한다. Canonical payload는 deleted-slot tombstone이 없는 compact bond array를 사용하며 plan이 있으면 Calculation Plan v2다. Calculation plan은 bond 위치가 아니라 안정적 atom id와 완전한 연결 성분 atom-id 집합을 참조한다.
 
 ## 리팩토링 순서
 

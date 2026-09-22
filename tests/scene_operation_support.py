@@ -173,7 +173,7 @@ class _FakeSceneItemController:
 
 class _FakeCanvas:
     CLIPBOARD_SELECTION_MIME = "application/x-chemvas-selection+json"
-    CLIPBOARD_SELECTION_VERSION = 2
+    CLIPBOARD_SELECTION_VERSION = 3
 
     def __init__(self) -> None:
         self._scene = QGraphicsScene()

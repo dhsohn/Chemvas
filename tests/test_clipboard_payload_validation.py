@@ -471,3 +471,49 @@ class ClipboardPayloadValidationTest(unittest.TestCase):
             lambda p: p["scene_items"][0].__setitem__("kind", ["note"])
         )
         self._assert_rejected(lambda p: p["marks"][0].__setitem__("mark_kind", {}))
+
+
+def test_v2_selection_still_decodes_with_perspective():
+    import json
+
+    from chemvas.ui.scene_clipboard_logic import decode_clipboard_selection_payload
+
+    payload = _valid_payload()
+    payload["version"] = 2
+    payload["perspective"] = {
+        "atom_coords_3d": [{"atom_id": 0, "coords": [1, 2, 3]}],
+        "projection_center_3d": None,
+        "projection_anchor_2d": None,
+    }
+    assert validate_clipboard_selection_payload(payload)
+    decoded, _ = decode_clipboard_selection_payload([json.dumps(payload)], version=3)
+    assert decoded == payload
+
+
+def test_transform_fields_require_v3_and_survive_decoding():
+    import json
+    from pathlib import Path
+
+    from chemvas.ui.scene_clipboard_logic import decode_clipboard_selection_payload
+
+    state = json.loads(
+        (Path(__file__).parent / "fixtures/document-v8/extended.chemvas").read_text()
+    )["state"]
+    for collection, kind, field in (
+        ("notes", "note", "rotation"),
+        ("images", "image", "z"),
+        ("shapes", "shape", "z"),
+    ):
+        item = {**state[collection][0], "kind": kind}
+        payload = _valid_payload()
+        payload["scene_items"] = [item]
+        assert payload["version"] == 3
+        assert validate_clipboard_selection_payload(payload)
+        decoded, _ = decode_clipboard_selection_payload(
+            [json.dumps(payload)], version=3
+        )
+        assert decoded["scene_items"] == [item]
+        payload["version"] = 2
+        assert not validate_clipboard_selection_payload(payload)
+        item.pop(field)
+        assert validate_clipboard_selection_payload(payload)

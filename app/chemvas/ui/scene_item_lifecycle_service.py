@@ -16,14 +16,16 @@ from chemvas.ui.canvas_scene_items_state import (
 from chemvas.ui.handle_overlay_access import clear_handles_for
 from chemvas.ui.handle_state import handle_target_for
 from chemvas.ui.mark_item_access import remove_mark_item_for, sync_marks_for_atom_for
-from chemvas.ui.note_selection_box import update_note_selection_box_for
 from chemvas.ui.scene_item_access import (
     canvas_scene_for_item_operation,
     item_is_unavailable_for_scene_operation,
     remove_attached_item_from_canvas_scene,
 )
 from chemvas.ui.scene_item_state import ARROW_KINDS
-from chemvas.ui.selection_service_access import refresh_selection_outline_for
+from chemvas.ui.selection_service_access import (
+    refresh_selection_outline_for,
+    update_note_selection_box_for,
+)
 from chemvas.ui.shape_record_access import require_attached_shape_record_for
 from chemvas.ui.transactions.scene_item_attach import (
     SceneItemAttachPorts,

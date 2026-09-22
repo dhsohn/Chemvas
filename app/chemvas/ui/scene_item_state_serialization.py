@@ -107,6 +107,7 @@ def note_state_dict(item: QGraphicsTextItem) -> dict:
         "html": html,
         "x": item.pos().x(),
         "y": item.pos().y(),
+        **({"rotation": item.rotation()} if item.rotation() else {}),
     }
 
 

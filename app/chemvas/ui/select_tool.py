@@ -347,6 +347,8 @@ class SelectTool(SelectionDragMixin, Tool):
                 select_note_for(self.canvas, item)
             elif not self._select_structure_item(item):
                 return False
+            if item.data(0) == "shape":
+                return self._begin_object_handle_toggle_or_drag(item, press_pos)
             atom_ids, selection_items = self._selection_drag_context()
             return self._begin_selection_drag(atom_ids, selection_items, press_pos)
         if item is not None and item.data(0) in VALID_ARROW_KINDS:

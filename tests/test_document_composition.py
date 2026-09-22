@@ -129,3 +129,52 @@ def test_composition_preserves_one_sided_arrow_label() -> None:
 
     state = compose_document_state(composition)
     assert state["arrows"][0]["labels"] == {"above": "THF"}
+
+
+@pytest.mark.parametrize(
+    "collection,item",
+    [
+        ("notes", {"text": "rotated", "x": 0, "y": 0, "rotation": 35}),
+        (
+            "shapes",
+            {
+                "shape_kind": "rect",
+                "left": 0,
+                "top": 0,
+                "right": 10,
+                "bottom": 10,
+                "stroke_style": "solid",
+                "z": 4,
+            },
+        ),
+        ("images", {"source": "synthetic.png", "x": 0, "y": 0, "z": -12}),
+    ],
+)
+def test_transform_composition_requires_v2_preserving_v1(collection, item):
+    from io import BytesIO
+
+    from PIL import Image
+
+    image = BytesIO()
+    Image.new("RGB", (2, 2), "white").save(image, format="PNG")
+    request = {
+        "format": "chemvas-document-composition",
+        "version": 1,
+        "atoms": [],
+        "bonds": [],
+        collection: [item],
+    }
+    with pytest.raises(ValueError, match="requires composition version 2"):
+        compose_document_state(request, image_source_reader=lambda _: image.getvalue())
+    request["version"] = 2
+    state = compose_document_state(
+        request, image_source_reader=lambda _: image.getvalue()
+    )
+    field = "rotation" if collection == "notes" else "z"
+    assert state[collection][0][field] == item[field]
+    request["version"] = 1
+    request[collection] = [{k: v for k, v in item.items() if k != field}]
+    legacy = compose_document_state(
+        request, image_source_reader=lambda _: image.getvalue()
+    )
+    assert field not in legacy[collection][0]

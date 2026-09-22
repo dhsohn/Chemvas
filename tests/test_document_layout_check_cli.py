@@ -89,7 +89,7 @@ def test_check_layout_reports_overlapping_notes_without_mutating_source(
     assert report["format"] == "chemvas-layout-check-report"
     assert report["version"] == 1
     assert report["source_sha256"] == hashlib.sha256(before).hexdigest()
-    assert report["chemvas_document_version"] == 7
+    assert report["chemvas_document_version"] == json.loads(before)["version"]
     assert report["ok"] is False
     assert report["warning_count"] == 1
     assert report["counts"] == {

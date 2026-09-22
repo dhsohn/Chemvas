@@ -98,6 +98,8 @@ class DocumentIOTest(unittest.TestCase):
         payload = {
             "type": CHEMVAS_FILE_TYPE,
             "version": CANVAS_FILE_VERSION,
+            "schema": 1,
+            "min_reader": "0.18.0",
             "state": _canvas_state(),
         }
         serialized = json.dumps(payload, separators=(",", ":"))
@@ -143,6 +145,8 @@ class DocumentIOTest(unittest.TestCase):
             {
                 "type": CHEMVAS_FILE_TYPE,
                 "version": CANVAS_FILE_VERSION,
+                "schema": 1,
+                "min_reader": "0.18.0",
                 "state": _canvas_state(),
             }
         )
@@ -243,6 +247,8 @@ class DocumentIOTest(unittest.TestCase):
             {
                 "type": CHEMVAS_FILE_TYPE,
                 "version": CANVAS_FILE_VERSION,
+                "schema": 1,
+                "min_reader": "0.18.0",
                 "state": state,
             },
         )
@@ -253,6 +259,8 @@ class DocumentIOTest(unittest.TestCase):
         payload = {
             "type": CHEMVAS_FILE_TYPE,
             "version": CANVAS_FILE_VERSION,
+            "schema": 1,
+            "min_reader": "0.18.0",
             "state": state,
         }
 
@@ -272,6 +280,8 @@ class DocumentIOTest(unittest.TestCase):
         payload = {
             "type": CHEMVAS_FILE_TYPE,
             "version": CANVAS_FILE_VERSION,
+            "schema": 1,
+            "min_reader": "0.18.0",
             "state": state,
         }
         before = deepcopy(payload)
@@ -303,6 +313,8 @@ class DocumentIOTest(unittest.TestCase):
                 {
                     "type": CHEMVAS_FILE_TYPE,
                     "version": CANVAS_FILE_VERSION,
+                    "schema": 1,
+                    "min_reader": "0.18.0",
                     "state": state,
                 },
                 ensure_ascii=False,
@@ -332,6 +344,8 @@ class DocumentIOTest(unittest.TestCase):
                 payload = {
                     "type": CHEMVAS_FILE_TYPE,
                     "version": CANVAS_FILE_VERSION,
+                    "schema": 1,
+                    "min_reader": "0.18.0",
                     "state": state,
                 }
                 if defect == "wrapper":
@@ -363,6 +377,8 @@ class DocumentIOTest(unittest.TestCase):
         payload = {
             "type": CHEMVAS_FILE_TYPE,
             "version": CANVAS_FILE_VERSION,
+            "schema": 1,
+            "min_reader": "0.18.0",
             "state": state,
             "extra": extra,
         }
@@ -428,6 +444,8 @@ class DocumentIOTest(unittest.TestCase):
             {
                 "type": "unexpected",
                 "version": CANVAS_FILE_VERSION,
+                "schema": 1,
+                "min_reader": "0.18.0",
                 "state": _canvas_state(),
             },
             {
@@ -438,11 +456,15 @@ class DocumentIOTest(unittest.TestCase):
             {
                 "type": CHEMVAS_FILE_TYPE,
                 "version": CANVAS_FILE_VERSION,
+                "schema": 1,
+                "min_reader": "0.18.0",
                 "state": {"active_sheet_index": 0, "sheets": []},
             },
             {
                 "model": {"atoms": {}, "bonds": [], "next_atom_id": 0},
                 "version": CANVAS_FILE_VERSION,
+                "schema": 1,
+                "min_reader": "0.18.0",
             },
         )
         for payload in cases:
@@ -523,6 +545,8 @@ class DocumentIOTest(unittest.TestCase):
             {
                 "type": CHEMVAS_FILE_TYPE,
                 "version": CANVAS_FILE_VERSION,
+                "schema": 1,
+                "min_reader": "0.18.0",
                 "state": state,
             },
         )
@@ -558,6 +582,8 @@ class DocumentIOTest(unittest.TestCase):
         payload = {
             "type": CHEMVAS_FILE_TYPE,
             "version": CANVAS_FILE_VERSION,
+            "schema": 1,
+            "min_reader": "0.18.0",
             "state": state,
         }
 
@@ -628,6 +654,8 @@ class DocumentIOTest(unittest.TestCase):
             payload = {
                 "type": CHEMVAS_FILE_TYPE,
                 "version": CANVAS_FILE_VERSION,
+                "schema": 1,
+                "min_reader": "0.18.0",
                 "state": _canvas_state(
                     _model_state(
                         {
@@ -658,6 +686,8 @@ class DocumentIOTest(unittest.TestCase):
             payload = {
                 "type": CHEMVAS_FILE_TYPE,
                 "version": CANVAS_FILE_VERSION,
+                "schema": 1,
+                "min_reader": "0.18.0",
                 "state": _canvas_state(
                     _model_state(
                         {
@@ -688,6 +718,8 @@ class DocumentIOTest(unittest.TestCase):
         payload = {
             "type": CHEMVAS_FILE_TYPE,
             "version": CANVAS_FILE_VERSION,
+            "schema": 1,
+            "min_reader": "0.18.0",
             "state": _canvas_state(
                 _model_state(
                     {
@@ -714,6 +746,8 @@ class DocumentIOTest(unittest.TestCase):
         payload = {
             "type": CHEMVAS_FILE_TYPE,
             "version": CANVAS_FILE_VERSION,
+            "schema": 1,
+            "min_reader": "0.18.0",
             "state": _canvas_state(
                 _model_state(
                     {
@@ -840,6 +874,8 @@ class DocumentNumberBoundsTest(unittest.TestCase):
             {
                 "type": CHEMVAS_FILE_TYPE,
                 "version": CANVAS_FILE_VERSION,
+                "schema": 1,
+                "min_reader": "0.18.0",
                 "state": _canvas_state(),
             }
         )

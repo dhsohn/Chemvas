@@ -74,7 +74,7 @@ def _argument_parser() -> argparse.ArgumentParser:
         "compose-document",
         help="create a new canonical .chemvas document",
     )
-    compose.add_argument("composition", help="input composition v1 JSON file")
+    compose.add_argument("composition", help="input composition v1 or v2 JSON file")
     compose.add_argument("--output", required=True, help="new .chemvas output path")
     return parser
 

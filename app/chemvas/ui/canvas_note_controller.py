@@ -47,13 +47,13 @@ from chemvas.ui.note_rendering import (
     apply_note_style,
     update_note_box,
 )
-from chemvas.ui.note_selection_box import update_note_selection_box_for
 from chemvas.ui.scene_item_access import attach_scene_item, remove_scene_item
 from chemvas.ui.scene_item_state import note_state_dict_for
 from chemvas.ui.selection_collection_access import selected_scene_items_for
 from chemvas.ui.selection_service_access import (
     refresh_selection_outline_for,
     selection_service_from_canvas,
+    update_note_selection_box_for,
 )
 from chemvas.ui.transactions.scene_item_attach import SceneItemAttachSnapshot
 from chemvas.ui.transactions.scene_rect import SceneRectSnapshot

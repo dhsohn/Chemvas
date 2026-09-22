@@ -13,7 +13,7 @@ User-facing detail (GUI, file format, shortcuts) is in
 
 ```mermaid
 flowchart LR
-    compose["compose-document<br/>Composition v1 JSON"] --> doc[("scheme.chemvas")]
+    compose["compose-document<br/>Composition v1/v2 JSON"] --> doc[("scheme.chemvas")]
     template["insert-template"] --> doc
     desktop["Desktop app<br/>File ▸ Save"] --> doc
     doc --> inspect["inspect-document<br/>exact SHA-256 + atom IDs"]
@@ -40,8 +40,8 @@ sharing policy from the directory. Root CLI typos fail before desktop startup.
 
 ## Headless document composition
 
-An agent can create a canonical, reopenable Chemvas v7 document from the smaller
-public Composition v1 contract instead of constructing internal document state:
+An agent can create a canonical, reopenable Chemvas v8 document from the smaller
+public Composition v1/v2 contract instead of constructing internal document state:
 
 ```bash
 chemvas compose-document scheme.json --output scheme.chemvas

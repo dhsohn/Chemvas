@@ -1,0 +1,441 @@
+{
+  "type": "chemvas",
+  "version": 8,
+  "state": {
+    "model": {
+      "atoms": {
+        "0": {
+          "element": "C",
+          "x": 72,
+          "y": 72,
+          "color": "#000000",
+          "explicit_label": false
+        },
+        "1": {
+          "element": "C",
+          "x": 92,
+          "y": 72,
+          "color": "#000000",
+          "explicit_label": false
+        },
+        "2": {
+          "element": "C",
+          "x": 172,
+          "y": 72,
+          "color": "#000000",
+          "explicit_label": false
+        },
+        "3": {
+          "element": "C",
+          "x": 192,
+          "y": 72,
+          "color": "#000000",
+          "explicit_label": false
+        },
+        "4": {
+          "element": "Pt",
+          "x": 132,
+          "y": 132,
+          "color": "#000000",
+          "explicit_label": false
+        },
+        "5": {
+          "element": "Cl",
+          "x": 132,
+          "y": 32,
+          "color": "#000000",
+          "explicit_label": false
+        },
+        "6": {
+          "element": "C",
+          "x": 272,
+          "y": 72,
+          "color": "#234567",
+          "explicit_label": true
+        },
+        "7": {
+          "element": "C",
+          "x": 292,
+          "y": 72,
+          "color": "#234567",
+          "explicit_label": false
+        },
+        "8": {
+          "element": "C",
+          "x": 282,
+          "y": 89.32050807568876,
+          "color": "#234567",
+          "explicit_label": false
+        }
+      },
+      "bonds": [
+        {
+          "a": 0,
+          "b": 1,
+          "order": 2,
+          "style": "double_either",
+          "color": "#000000"
+        },
+        {
+          "a": 2,
+          "b": 3,
+          "order": 1,
+          "style": "single",
+          "color": "#000000"
+        },
+        {
+          "a": 6,
+          "b": 7,
+          "order": 1,
+          "style": "single",
+          "color": "#234567"
+        },
+        {
+          "a": 7,
+          "b": 8,
+          "order": 1,
+          "style": "single",
+          "color": "#234567"
+        },
+        {
+          "a": 8,
+          "b": 6,
+          "order": 1,
+          "style": "single",
+          "color": "#234567"
+        }
+      ],
+      "next_atom_id": 42,
+      "atom_annotations": {
+        "6": {
+          "formal_charge": 1
+        }
+      }
+    },
+    "ring_fills": [
+      {
+        "atom_ids": [
+          6,
+          7,
+          8
+        ],
+        "points": [
+          [
+            272,
+            72
+          ],
+          [
+            292,
+            72
+          ],
+          [
+            282,
+            89.32050807568876
+          ]
+        ],
+        "color": "#abcdef",
+        "alpha": 0.375
+      }
+    ],
+    "notes": [
+      {
+        "text": "Frozen v7 \ud55c\uae00\nSecond line",
+        "html": "<html><body><p><b>Frozen v7 \ud55c\uae00</b><br>Second line</p></body></html>",
+        "x": 72,
+        "y": 172,
+        "rotation": 35.0
+      }
+    ],
+    "marks": [
+      {
+        "kind": "plus",
+        "text": "+",
+        "atom_id": 6,
+        "dx": 6,
+        "dy": -6,
+        "x": 278,
+        "y": 66,
+        "color": "#123456"
+      },
+      {
+        "kind": "radical",
+        "text": null,
+        "atom_id": null,
+        "dx": null,
+        "dy": null,
+        "x": 332,
+        "y": 82,
+        "color": "#ab12ef"
+      }
+    ],
+    "arrows": [
+      {
+        "kind": "equilibrium",
+        "start": [
+          72,
+          142
+        ],
+        "end": [
+          192,
+          142
+        ],
+        "mirrored": true,
+        "color": "#345678",
+        "labels": {
+          "above": "k_1\n\u0394",
+          "below": "0 \u00b0C"
+        }
+      }
+    ],
+    "ts_brackets": [
+      {
+        "kind": "ts_bracket",
+        "left": 350,
+        "top": 60,
+        "right": 390,
+        "bottom": 100,
+        "bracket_kind": "square_pair"
+      }
+    ],
+    "shapes": [
+      {
+        "kind": "shape",
+        "left": 350,
+        "top": 130,
+        "right": 390,
+        "bottom": 155,
+        "shape_kind": "ellipse",
+        "stroke_style": "dashed",
+        "fill": "#fedcba",
+        "fill_alpha": 0.25,
+        "z": -12.0
+      }
+    ],
+    "orbitals": [
+      {
+        "kind": "p",
+        "center": [
+          420,
+          82
+        ],
+        "scale": 1.25,
+        "rotation": 15
+      }
+    ],
+    "settings": {
+      "bond_length_px": 20.0,
+      "arrow_line_width": 1.5,
+      "arrow_head_scale": 0.3,
+      "orbital_phase_enabled": true,
+      "text_font_family": "DejaVu Sans",
+      "text_font_size": 13,
+      "text_font_weight": 600,
+      "text_italic": false,
+      "text_color": "#345678",
+      "text_alignment": "left",
+      "text_line_spacing": 1.0,
+      "note_box_enabled": true,
+      "note_box_color": "#ffffff",
+      "note_box_alpha": 0.25,
+      "note_border_enabled": false,
+      "note_border_color": "#333333",
+      "note_border_width": 1.0,
+      "note_padding": 6.0,
+      "sheet_size": "A4",
+      "sheet_orientation": "portrait"
+    },
+    "last_smiles_input": "CC",
+    "images": [
+      {
+        "kind": "image",
+        "mime_type": "image/png",
+        "data_base64": "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGMIaLoEAALKAaWv8zswAAAAAElFTkSuQmCC",
+        "pixel_width": 1,
+        "pixel_height": 1,
+        "x": 350,
+        "y": 190,
+        "width": 24,
+        "height": 24,
+        "opacity": 0.75,
+        "lock_aspect": true,
+        "z": 4.0
+      }
+    ],
+    "groups": [
+      {
+        "atoms": [
+          6,
+          7,
+          8
+        ],
+        "items": [
+          [
+            "notes",
+            0
+          ],
+          [
+            "arrows",
+            0
+          ],
+          [
+            "images",
+            0
+          ],
+          [
+            "marks",
+            1
+          ]
+        ]
+      }
+    ],
+    "perspective": {
+      "atom_coords_3d": {
+        "0": [
+          72,
+          72,
+          0
+        ],
+        "1": [
+          92,
+          72,
+          3
+        ]
+      },
+      "projection_center_3d": null,
+      "projection_anchor_2d": null
+    },
+    "calculation_plan": {
+      "format": "chemvas-calculation-plan",
+      "version": 2,
+      "states": [
+        {
+          "id": "R01",
+          "charge": 0,
+          "multiplicity": 1,
+          "members": [
+            {
+              "component_atom_ids": [
+                0,
+                1
+              ],
+              "inclusion": "included"
+            },
+            {
+              "component_atom_ids": [
+                4
+              ],
+              "inclusion": "included"
+            },
+            {
+              "component_atom_ids": [
+                5
+              ],
+              "inclusion": "context_only"
+            }
+          ]
+        },
+        {
+          "id": "P01",
+          "charge": 0,
+          "multiplicity": 1,
+          "members": [
+            {
+              "component_atom_ids": [
+                2,
+                3
+              ],
+              "inclusion": "included"
+            },
+            {
+              "component_atom_ids": [
+                4
+              ],
+              "inclusion": "included"
+            },
+            {
+              "component_atom_ids": [
+                5
+              ],
+              "inclusion": "context_only"
+            }
+          ]
+        }
+      ],
+      "steps": [
+        {
+          "id": "S01",
+          "reactant": {
+            "state_id": "R01",
+            "roles": [
+              {
+                "component_atom_ids": [
+                  0,
+                  1
+                ],
+                "role": "reactant"
+              },
+              {
+                "component_atom_ids": [
+                  4
+                ],
+                "role": "catalyst"
+              },
+              {
+                "component_atom_ids": [
+                  5
+                ],
+                "role": "spectator"
+              }
+            ],
+            "precomplex": {
+              "kind": "none"
+            }
+          },
+          "product": {
+            "state_id": "P01",
+            "roles": [
+              {
+                "component_atom_ids": [
+                  2,
+                  3
+                ],
+                "role": "product"
+              },
+              {
+                "component_atom_ids": [
+                  4
+                ],
+                "role": "catalyst"
+              },
+              {
+                "component_atom_ids": [
+                  5
+                ],
+                "role": "spectator"
+              }
+            ],
+            "precomplex": {
+              "kind": "none"
+            }
+          },
+          "atom_correspondence": [
+            {
+              "reactant_atom_id": 0,
+              "product_atom_id": 2
+            },
+            {
+              "reactant_atom_id": 1,
+              "product_atom_id": 3
+            },
+            {
+              "reactant_atom_id": 4,
+              "product_atom_id": 4
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "schema": 1,
+  "min_reader": "0.18.0"
+}

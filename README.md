@@ -91,7 +91,7 @@ Patch, scheme layout and their limits:
   [Image objects](https://github.com/dhsohn/Chemvas/blob/main/docs/IMAGE_OBJECTS.md) ·
   [Limits and roadmap](https://github.com/dhsohn/Chemvas/blob/main/docs/REFERENCE.md#roadmap--not-yet-supported)
 - [Calculation handoff (RDKit)](https://github.com/dhsohn/Chemvas/blob/main/docs/AGENT_CLI.md#calculation-states-and-elementary-steps): elementary steps with separately embedded components, one `machine.json` per step.
-- Documents are editable `.chemvas` JSON files (version 7).
+- Documents are editable `.chemvas` JSON files (version 8, schema 1).
   [More examples](https://github.com/dhsohn/Chemvas/tree/main/examples)
 - [Contributing](https://github.com/dhsohn/Chemvas/blob/main/CONTRIBUTING.md) ·
   [Architecture](https://github.com/dhsohn/Chemvas/blob/main/docs/ARCHITECTURE.md) ·
