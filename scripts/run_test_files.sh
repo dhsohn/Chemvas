@@ -51,12 +51,14 @@ done |
     index="$1"
     file="$2"
     log="$logs/$index.log"
-    if "$PYTHON" -m pytest -q -ra "$file" >"$log" 2>&1; then
+    if "$PYTHON" -m pytest -q -ra --capture=tee-sys "$file" >"$log" 2>&1; then
       printf "[tests] %s: %s\n" "$file" "$(tail -1 "$log")"
       awk '\''/^SKIPPED / { print "[tests] " $0 }'\'' "$log"
       rm -f "$log"
     else
+      code=$?
       printf "[tests] FAILED %s\n" "$file" >&2
+      printf "[tests] pytest exit code: %s\n" "$code" >&2
       cat "$log" >&2
       exit 1
     fi

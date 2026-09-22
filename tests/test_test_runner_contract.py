@@ -89,6 +89,21 @@ def test_runner_reports_skip_reason(tmp_path) -> None:
     assert "native compiler unavailable" in result.stdout
 
 
+def test_runner_retains_native_stderr_and_exit_code_after_abrupt_exit(tmp_path) -> None:
+    crash = tmp_path / "test_crash.py"
+    crash.write_text(
+        "import os\n"
+        "def test_crash():\n"
+        "    os.write(2, b'native-crash-detail\\n')\n"
+        "    os._exit(27)\n",
+        encoding="utf-8",
+    )
+    result = _run_runner(crash, jobs="1")
+    assert result.returncode == 1
+    assert "native-crash-detail" in result.stderr
+    assert "pytest exit code: 27" in result.stderr
+
+
 def test_runner_reports_failure_while_another_file_is_still_running(tmp_path) -> None:
     failing = tmp_path / "test_failure.py"
     waiting = tmp_path / "test_waiting.py"

@@ -47,14 +47,14 @@ def test_gate_routes_every_file_and_propagates_failures(tmp_path, platform, fail
     probe.write_text(
         "import json, os, pathlib, sys\n"
         "args = sys.argv[1:]\n"
-        "if args[:4] == ['-m', 'pytest', '-q', '-ra']:\n"
-        "    assert len(args) == 5, args\n"
+        "if args[:5] == ['-m', 'pytest', '-q', '-ra', '--capture=tee-sys']:\n"
+        "    assert len(args) == 6, args\n"
         "    target = pathlib.Path(os.environ['GATE_PROBE_OUTPUT']) / "
-        "(pathlib.Path(args[4]).name + '.json')\n"
+        "(pathlib.Path(args[5]).name + '.json')\n"
         "    target.write_text(json.dumps({'args': args, "
         "'qt': os.environ['QT_QPA_PLATFORM'], "
         "'jobs': os.environ['CHECK_JOBS']}), encoding='utf-8')\n"
-        "    sys.exit(1 if pathlib.Path(args[4]).name == os.environ['GATE_PROBE_FAIL'] else 0)\n"
+        "    sys.exit(1 if pathlib.Path(args[5]).name == os.environ['GATE_PROBE_FAIL'] else 0)\n"
         "elif args == ['-c', 'import sys; print(sys.platform)']:\n"
         "    sys.stdout.buffer.write((os.environ['GATE_PROBE_PLATFORM'] + chr(13) + chr(10)).encode())\n"
         "elif args[:1] == ['-c'] or args[:2] in "
@@ -92,10 +92,11 @@ def test_gate_routes_every_file_and_propagates_failures(tmp_path, platform, fail
     assert result.returncode == (1 if failing else 0), result.stdout + result.stderr
     observed = [json.loads(path.read_text()) for path in output.glob("*.json")]
     assert sorted(entry["args"] for entry in observed) == [
-        ["-m", "pytest", "-q", "-ra", path] for path in sorted(tests)
+        ["-m", "pytest", "-q", "-ra", "--capture=tee-sys", path]
+        for path in sorted(tests)
     ]
     for entry in observed:
-        native = platform == "darwin" and "test_note_" in entry["args"][4]
+        native = platform == "darwin" and "test_note_" in entry["args"][5]
         backend = (
             "windows" if platform == "win32" else "cocoa" if native else "offscreen"
         )

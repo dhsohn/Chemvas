@@ -4,7 +4,7 @@ import math
 
 import pytest
 from PyQt6.QtCore import QEvent, QPointF
-from PyQt6.QtGui import QFontMetricsF, QPainterPath
+from PyQt6.QtGui import QTextLayout
 from PyQt6.QtWidgets import QApplication
 
 from chemvas.adapters.qt.renderer import Renderer
@@ -36,23 +36,22 @@ def _assert_attachment(canvas, raw, angle):
     right = math.cos(math.radians(angle)) > 0
     if raw in {"OR", "RO"}:
         expected = "RO" if right else "OR"
-        glyph = "O"
     else:
         expected = raw
-        glyph = raw[-1] if right else raw[0]
     assert item.toPlainText() == expected
-    fm = QFontMetricsF(item.font())
-    prefix = expected[:-1] if right else ""
+    layout = QTextLayout(expected, item.font())
+    layout.beginLayout()
+    line = layout.createLine()
+    layout.endLayout()
+    index = len(expected) - 1 if right else 0
+    left = line.cursorToX(index)[0]
+    right_edge = line.cursorToX(index + 1)[0]
     margin = item.document().documentMargin()
-    path = QPainterPath()
-    path.addText(
-        QPointF(margin + fm.horizontalAdvance(prefix), margin + fm.ascent()),
-        item.font(),
-        glyph,
-    )
-    ink = item.mapToScene(path).boundingRect()
+    # Attachment centers the facing character's advance cell, which need not
+    # share its ink center (notably the right side bearing of Windows "r").
+    center = item.mapToScene(QPointF(margin + (left + right_edge) / 2, 0))
     offset = atom_label_offset_px_for(canvas)
-    assert ink.center().x() == pytest.approx(canvas.model.atoms[1].x + offset, abs=0.7)
+    assert center.x() == pytest.approx(canvas.model.atoms[1].x + offset, abs=1e-6)
     assert canvas.model.atoms[1].element == raw
 
 

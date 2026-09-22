@@ -156,6 +156,11 @@ class NoSelectTextItem(_NoSelectPaintMixin, QGraphicsTextItem):
 
 def note_paint_scene_path(item: QGraphicsTextItem) -> QPainterPath:
     """Use the shaped text that Qt paints, not its rectangular hit target."""
+    return item.mapToScene(_text_document_paint_path(item))
+
+
+def _text_document_paint_path(item: QGraphicsTextItem) -> QPainterPath:
+    """Read native document glyph positions in the item's local coordinates."""
     path = QPainterPath()
     path.setFillRule(Qt.FillRule.WindingFill)
     document = item.document()
@@ -217,7 +222,7 @@ def note_paint_scene_path(item: QGraphicsTextItem) -> QPainterPath:
                             path.addPath(transform.map(font.pathForGlyph(glyph)))
                 fragment_iterator += 1
         block = block.next()
-    return item.mapToScene(path)
+    return path
 
 
 def _fragment_baseline_shift(format_: QTextCharFormat, font: QRawFont) -> float:
@@ -709,8 +714,9 @@ class AtomLabelItem(NoSelectTextItem):
                     QPointF(margin + run.x, margin + run.baseline), run_font, run.text
                 )
         else:
-            ascent = QFontMetricsF(font).ascent()
-            path.addText(QPointF(margin, margin + ascent), font, text)
+            # Plain labels paint via QTextDocument's device metrics. addText()
+            # uses design metrics and can place native Windows glyphs differently.
+            return _text_document_paint_path(self)
         return path
 
     def _paint_outlined(self, painter) -> None:

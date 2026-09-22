@@ -142,7 +142,7 @@ def test_viewport_event_passes_the_timer_and_returns_the_controller_answer(
             assert view.viewportEvent(event) is True
         controller.viewport_event.assert_called_once_with(
             event,
-            single_shot=canvas_view_module.QTimer.singleShot,
+            single_shot=view._single_shot,
             base_viewport_event=base,
         )
         base.assert_not_called()

@@ -80,3 +80,30 @@ def test_replacement_releases_old_note_while_application_stays_alive(
     assert QApplication.instance() is qt_application
     assert not sip.isdeleted(qt_application)
     assert session.snapshot_state() == blank
+
+
+@pytest.mark.parametrize("delete_before_refresh", [False, True])
+def test_queued_hover_refresh_is_owned_by_the_canvas(
+    qt_application, monkeypatch, delete_before_refresh
+):
+    from PyQt6.QtGui import QEnterEvent
+
+    view = build_canvas_view()
+    refresh = mock.Mock()
+    monkeypatch.setattr(view.services.hover, "refresh", refresh)
+    view.viewportEvent(QEnterEvent(QPointF(), QPointF(), QPointF()))
+    refresh.assert_not_called()
+    if delete_before_refresh:
+        schedule_canvas_deletion_for(view)
+        qt_application.sendPostedEvents(view, QEvent.Type.DeferredDelete)
+        assert sip.isdeleted(view)
+    try:
+        qt_application.processEvents()
+        if delete_before_refresh:
+            refresh.assert_not_called()
+        else:
+            refresh.assert_called_once_with()
+    finally:
+        if not sip.isdeleted(view):
+            schedule_canvas_deletion_for(view)
+            qt_application.sendPostedEvents(view, QEvent.Type.DeferredDelete)

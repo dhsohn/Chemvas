@@ -27,6 +27,8 @@ from chemvas.ui.canvas_view_setup import initialize_canvas_view
 from chemvas.ui.canvas_window_access import notify_error_for
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from PyQt6.QtGui import (
         QPainter,
     )
@@ -169,9 +171,18 @@ class CanvasView(QGraphicsView):
             return base_viewport_event(event)
         return pointer_controller.viewport_event(
             event,
-            single_shot=QTimer.singleShot,
+            single_shot=self._single_shot,
             base_viewport_event=base_viewport_event,
         )
+
+    def _single_shot(self, delay: int, callback: Callable[[], None]) -> None:
+        # A static singleShot retains a Python service callback after its canvas
+        # is deleted. A child timer cancels that callback with the Qt view.
+        timer = QTimer(self)
+        timer.setSingleShot(True)
+        timer.timeout.connect(callback)
+        timer.timeout.connect(timer.deleteLater)
+        timer.start(delay)
 
     @override
     def wheelEvent(self, event) -> None:
