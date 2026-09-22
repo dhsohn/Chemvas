@@ -237,8 +237,10 @@ class SceneGeometry:
         self._glyph_clip_geometry: WeakKeyDictionary[
             AtomLabelItem, _GlyphClipGeometry
         ] = WeakKeyDictionary()
-        self._ring_topology: frozenset[tuple[int, int]] | None = None
-        self._graph_rings: list[list[int]] = []
+        self._ring_model: MoleculeModel | None = None
+        self._ring_graph_neighbors: object | None = None
+        self._ring_graph_version = -1
+        self._rings_by_edge: dict[tuple[int, int], list[int]] = {}
 
     def current_atom_coords_3d(self, atom_id: int) -> tuple[float, float, float] | None:
         rotation = self.context.state.rotation_state
@@ -340,27 +342,30 @@ class SceneGeometry:
     def _ring_atom_ids_for_bond(self, bond) -> list[int] | None:
         for _, atom_ids in self._ring_items_for_bond(bond):
             return atom_ids
-        # Documents composed from atoms/bonds need no invisible ring fill to
-        # render chemically. Cache topology only: coordinates stay live during
-        # drag/rotation, while deletion, restoration and endpoint edits invalidate.
-        topology = frozenset(
-            (min(edge.a, edge.b), max(edge.a, edge.b))
-            for edge in self.context.model.bonds
-            if edge is not None
-            and edge.a in self.context.model.atoms
-            and edge.b in self.context.model.atoms
-        )
-        if topology != self._ring_topology:
-            self._ring_topology = topology
-            self._graph_rings = find_rings(Bond(a, b) for a, b in sorted(topology))
-        return next(
-            (
-                ring
-                for ring in self._graph_rings
-                if self._ring_contains_edge(ring, bond)
-            ),
-            None,
-        )
+        # Coordinates remain live; only topology is cached. Neighbor-map identity
+        # also changes on graph reset, whose version counter restarts at zero.
+        model = self.context.model
+        graph = self.context.state.graph_state
+        if (
+            self._ring_model is not model
+            or self._ring_graph_neighbors is not graph.atom_neighbors
+            or self._ring_graph_version != graph.graph_version
+        ):
+            topology = {
+                (min(edge.a, edge.b), max(edge.a, edge.b))
+                for edge in model.bonds
+                if edge is not None and edge.a in model.atoms and edge.b in model.atoms
+            }
+            rings = find_rings(Bond(a, b) for a, b in sorted(topology))
+            self._rings_by_edge = {}
+            for ring in rings:
+                for index, a in enumerate(ring):
+                    b = ring[(index + 1) % len(ring)]
+                    self._rings_by_edge.setdefault((min(a, b), max(a, b)), ring)
+            self._ring_model = model
+            self._ring_graph_neighbors = graph.atom_neighbors
+            self._ring_graph_version = graph.graph_version
+        return self._rings_by_edge.get((min(bond.a, bond.b), max(bond.a, bond.b)))
 
     def _padded_label_rect(self, rect: QRectF) -> QRectF:
         pad = max(0.05, self.context.renderer.style.bond_line_width * 0.05)

@@ -142,3 +142,46 @@ def test_exterior_substituents_do_not_pull_ring_double_outward(canvas, reverse):
         for edge in edges[::2]:
             line = scene.state.bond_graphics_state.bond_items[edge][1].line()
             assert polygon.containsPoint(line.center(), Qt.FillRule.OddEvenFill)
+
+
+def test_ring_queries_scan_topology_once_per_graph_revision(canvas, monkeypatch):
+    from unittest.mock import Mock
+
+    from chemvas.ui import scene_geometry
+
+    ids, edges = _ring(canvas)
+    context = scene_render_context_for(canvas)
+    geometry = context.geometry
+
+    class CountedBonds(list):
+        scans = 0
+
+        def __iter__(self):
+            self.scans += 1
+            return super().__iter__()
+
+    bonds = CountedBonds(canvas.model.bonds)
+    canvas.model.bonds = bonds
+    context.state.graph_state.bump_version()
+    finder = Mock(wraps=scene_geometry.find_rings)
+    monkeypatch.setattr(scene_geometry, "find_rings", finder)
+    for _ in range(4):
+        for edge in edges:
+            assert geometry.ring_center_for_bond(bonds[edge]) is not None
+            geometry.ring_center_3d_for_bond(bonds[edge])
+    assert bonds.scans == 1
+    assert finder.call_count == 1
+    before = geometry.ring_center_for_bond(bonds[edges[0]])
+    for atom_id in ids:
+        canvas.model.atoms[atom_id].x += 12
+    after = geometry.ring_center_for_bond(bonds[edges[0]])
+    assert after.x() == pytest.approx(before.x() + 12)
+    assert bonds.scans == 1
+    # Graph reset can reuse the same revision number; its new neighbor map
+    # must invalidate the cache even when the model object is retained.
+    revision = context.state.graph_state.graph_version
+    context.state.graph_state.reset()
+    context.state.graph_state.graph_version = revision
+    geometry.ring_center_for_bond(bonds[edges[0]])
+    assert bonds.scans == 2
+    assert finder.call_count == 2
