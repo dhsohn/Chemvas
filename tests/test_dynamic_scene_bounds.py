@@ -41,7 +41,7 @@ def app():
 @pytest.fixture
 def drawing(app):
     window = build_main_window()
-    window.resize(1400, 900)
+    window.resize(1000, 700)
     window.show()
     assert QTest.qWaitForWindowExposed(window, 5000)
     canvas = active_canvas_for_window(window)
@@ -50,9 +50,10 @@ def drawing(app):
     select_all_scene_items_for(canvas)
     canvas.services.history_service.clear()
     services_for_window(window).canvas_document_service.mark_clean(canvas)
-    # Native window managers can cap the requested window size. Keep the
-    # off-sheet drag endpoint visible within the actual viewport.
-    set_zoom_for(canvas, min(0.2, canvas.viewport().width() / 6000.0))
+    # At the minimum zoom, align the sheet left so the off-sheet endpoint
+    # remains visible even on smaller native desktops.
+    set_zoom_for(canvas, 0.2)
+    canvas.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
     canvas.centerOn(0, 0)
     app.processEvents()
     yield window, canvas
