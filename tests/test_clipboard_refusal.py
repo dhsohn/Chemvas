@@ -53,7 +53,7 @@ def _payload(**changes):
 @pytest.mark.parametrize(
     "data,reason",
     [
-        (_payload(version=3), "version"),
+        (_payload(version=4), "version"),
         (_payload(version=1), "version"),
         (_payload(version=2.0), "version"),
         (b'{"format":', "damaged"),
@@ -152,7 +152,7 @@ def test_qt_paste_shortcut_shows_real_refusal_dialog(canvas, app):
     canvas.setFocus()
     app.processEvents()
     mime = QMimeData()
-    mime.setData(clipboard_selection_mime_for(canvas), _payload(version=3))
+    mime.setData(clipboard_selection_mime_for(canvas), _payload(version=4))
     app.clipboard().setMimeData(mime)
     state = snapshot_canvas_document_state(canvas)
     messages = []
