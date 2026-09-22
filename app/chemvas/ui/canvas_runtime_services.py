@@ -17,20 +17,17 @@ if TYPE_CHECKING:
     from chemvas.ui.canvas_document_service_bundle import CanvasDocumentServiceBundle
     from chemvas.ui.canvas_graph_service import CanvasGraphService
     from chemvas.ui.canvas_history_service import CanvasHistoryService
+    from chemvas.ui.canvas_hit_testing_service import CanvasHitTestingService
     from chemvas.ui.canvas_input_service_bundle import CanvasInputServiceBundle
     from chemvas.ui.canvas_interaction_service_bundle import (
         CanvasInteractionServiceBundle,
     )
-    from chemvas.ui.canvas_scene_view_service_bundle import (
-        CanvasSceneViewServiceBundle,
-    )
+    from chemvas.ui.canvas_scene_view_service_bundle import CanvasSceneViewServiceBundle
     from chemvas.ui.handle_service_bundle import HandleServiceBundle
     from chemvas.ui.hover import HoverController
-    from chemvas.ui.scene_decoration_service_bundle import (
-        SceneDecorationServiceBundle,
-    )
+    from chemvas.ui.scene_decoration_service_bundle import SceneDecorationServiceBundle
     from chemvas.ui.scene_operation_service_bundle import SceneOperationServiceBundle
-    from chemvas.ui.selection_service_bundle import SelectionServiceBundle
+    from chemvas.ui.selection_controller import SelectionController
     from chemvas.ui.structure_service_bundle import StructureServiceBundle
     from chemvas.ui.tool_controller import ToolController
 
@@ -46,7 +43,8 @@ class CanvasRuntimeServices:
     hover: HoverController
     scene_decoration: SceneDecorationServiceBundle
     scene_operations: SceneOperationServiceBundle
-    selection: SelectionServiceBundle
+    selection: SelectionController
+    hit_testing_service: CanvasHitTestingService
     structure: StructureServiceBundle
     tool_controller: ToolController
     atom_label_service: AtomLabelService

@@ -10,8 +10,8 @@ from chemvas.features.insertion import (
 )
 from chemvas.ui.canvas_model_access import model_for
 from chemvas.ui.mark_item_access import mark_kinds_by_atom_for
-from chemvas.ui.selection_collection_access import selected_structure_ids_for
 from chemvas.ui.selection_geometry_access import bounds_for_atoms_for
+from chemvas.ui.selection_queries import selected_structure_ids_for
 
 if TYPE_CHECKING:
     from chemvas.domain.document import MoleculeModel

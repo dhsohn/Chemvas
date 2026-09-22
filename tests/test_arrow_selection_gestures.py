@@ -250,7 +250,7 @@ def test_tool_switch_cancels_pending_or_active_arrow_drag(drawing, distance):
 def test_near_picking_ignores_hidden_items_and_respects_actual_item_hits(drawing):
     _, canvas = drawing
     item = _add(canvas)
-    hit = canvas_services_for(canvas).selection.hit_testing_service
+    hit = canvas_services_for(canvas).hit_testing_service
     assert hit.item_at_scene_pos(QPointF(0, 4)) is item
     item.hide()
     assert hit.item_at_scene_pos(QPointF(0, 4)) is None
@@ -266,7 +266,7 @@ def test_near_picking_maps_rotated_items_and_anisotropic_views(drawing):
     item.setRotation(90)
     item.setPos(10, 15)
     canvas.setTransform(QTransform().scale(2, 0.5))
-    hit = canvas_services_for(canvas).selection.hit_testing_service
+    hit = canvas_services_for(canvas).hit_testing_service
     center = canvas.viewportTransform().map(item.mapToScene(QPointF(0, 0)))
     inverse, ok = canvas.viewportTransform().inverted()
     assert ok

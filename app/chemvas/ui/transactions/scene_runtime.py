@@ -829,16 +829,14 @@ def capture_scene_runtime(
     )
     if handle_snapshot is not None:
         list_attributes.append(handle_snapshot)
-    selection_outline_state = _snapshot_runtime_state_object(
+    selection_state = _snapshot_runtime_state_object(
         canvas,
-        "selection_outline_state",
+        "selection_state",
     )
-    outlines_snapshot = _list_attribute_snapshot(
-        selection_outline_state,
-        "outlines",
-    )
-    if outlines_snapshot is not None:
-        list_attributes.append(outlines_snapshot)
+    for attribute in ("outlines", "selected_notes"):
+        snapshot = _list_attribute_snapshot(selection_state, attribute)
+        if snapshot is not None:
+            list_attributes.append(snapshot)
 
     selection_info_state = _snapshot_runtime_state_object(
         canvas,

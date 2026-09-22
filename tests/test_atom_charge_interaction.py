@@ -97,15 +97,11 @@ def assert_one_step_undo(canvas, before, after):
 def test_visible_bond_is_not_hidden_by_label_input_box(canvas, element, x, order, zoom):
     load(canvas, element, order=order, zoom=zoom)
     pos = QPointF(x, 0)
-    item = canvas.services.selection.hit_testing_service.item_at_scene_pos(pos)
+    item = canvas.services.hit_testing_service.item_at_scene_pos(pos)
     assert (item.data(0), item.data(1)) == ("bond", 1)
-    preferred = canvas.services.selection.selection_controller.preferred_structure_hit_at_scene_pos(
-        pos
-    )
+    preferred = canvas.services.selection.preferred_structure_hit_at_scene_pos(pos)
     assert (preferred.kind, preferred.id) == ("bond", 1)
-    atom = canvas.services.selection.hit_testing_service.item_at_scene_pos(
-        QPointF(20, 0)
-    )
+    atom = canvas.services.hit_testing_service.item_at_scene_pos(QPointF(20, 0))
     assert (atom.data(0), atom.data(1)) == ("atom", 2)
 
 
@@ -154,7 +150,7 @@ def test_full_label_ink_stays_pickable_without_changing_export_geometry(
     for polygon in ink.toSubpathPolygons():
         point = polygon.boundingRect().center()
         assert item.contains(point)
-        picked = canvas.services.selection.hit_testing_service.item_at_scene_pos(
+        picked = canvas.services.hit_testing_service.item_at_scene_pos(
             item.mapToScene(point)
         )
         assert picked is item

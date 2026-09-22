@@ -13,6 +13,12 @@ By participating you agree to abide by our [Code of Conduct](CODE_OF_CONDUCT.md)
 
 Requires **Python 3.12+**.
 
+Development, validation, commits and pull requests can be done on macOS,
+Windows (native or WSL), or Linux. No host-specific checkout is authoritative:
+work in the repository and branch you chose on your current machine. Report the
+platform and scope of each check; a check on one platform does not establish
+native GUI or packaging behavior on the others.
+
 ```bash
 git clone https://github.com/dhsohn/Chemvas.git
 cd Chemvas
@@ -129,6 +135,12 @@ Using the atom-label feature as a worked example:
 | `*_tool` / `*_tools` | Implementations of the pointer-tool hierarchy rooted at `chemvas.ui.tool_base.Tool`. Every implementation of that hierarchy lives in a `*_tool.py` (one tool) or `*_tools.py` (a family, possibly with an intermediate base as in `preview_tools.py`) module. | `bond_tool.py` (`BondTool`) |
 | `*_bundle` | A dataclass that groups services constructed together and stored or passed as one field, usually next to its `build_*` factory. | `canvas_input_service_bundle.py` (`CanvasInputServiceBundle`) |
 | `*_renderer` / `*_rendering` | Qt painting and graphics-item drawing helpers: a renderer class, or a module of drawing functions. | `bond_renderer.py`, `hover_rendering.py` |
+
+Selection is a deliberate consolidation of this older layering: callers use
+`selection_state.selection_for(canvas)` to reach one concrete `SelectionController`.
+The leaf resolves only selection; do not add an access wrapper or bundle around it.
+Pure selection policies, scene/note queries and the actual outline renderer retain
+separate boundaries (see `docs/ARCHITECTURE.md`).
 
 The first five rows are the injected-port discipline; the boundary tests
 enforce much of it (the Qt-free `*_logic` rule is checked per module, not by

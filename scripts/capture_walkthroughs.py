@@ -42,6 +42,7 @@ from chemvas.ui.rdkit_adapter_access import smiles_to_2d_for
 from chemvas.ui.renderer_style_access import bond_length_px_for
 from chemvas.ui.scene_decoration_access import add_arrow_for
 from chemvas.ui.scene_item_state_serialization import arrow_state_dict
+from chemvas.ui.selection_state import selection_for
 
 TOPICS = ("drawing", "arrows", "editing", "chemistry", "images", "arrange")
 
@@ -242,9 +243,7 @@ def editing(w: Walkthrough) -> None:
         detail="This drag moves one atom. Select the whole molecule first to move it as a unit.",
     )
     w.key(Qt.Key.Key_A, Qt.KeyboardModifier.ControlModifier)
-    from chemvas.ui.selection_service_access import refresh_selection_outline_for
-
-    refresh_selection_outline_for(w.canvas)
+    selection_for(w.canvas).update_selection_outline()
     w.app.processEvents()
     w.capture(
         title, "Ctrl+A selects everything; the frame carries a rotation knob.", 1500
@@ -426,7 +425,7 @@ def _group(w: Walkthrough, atom_ids: list[int], note) -> None:
         atom_item = visible_atom_item_for(w.canvas, atom_id)
         if atom_item is not None:
             atom_item.setSelected(True)
-    w.canvas.services.selection.selection_controller.select_note(note)
+    selection_for(w.canvas).select_note(note)
     w.app.processEvents()
     w.action("Group").trigger()
     w.app.processEvents()

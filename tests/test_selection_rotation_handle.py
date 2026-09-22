@@ -28,8 +28,7 @@ from chemvas.ui.main_window_ports import (
 )
 from chemvas.ui.pick_radius_access import atom_pick_radius_for
 from chemvas.ui.scene_decoration_access import add_arrow_for
-from chemvas.ui.selection_outline_state import selection_outlines_for
-from chemvas.ui.selection_service_access import refresh_selection_outline_for
+from chemvas.ui.selection_state import selection_for, selection_outlines_for
 from chemvas.ui.structure_mutation_access import add_atom_for, add_bond_for
 from tests.gui_workflow_support import _key, _redo
 from tests.gui_workflow_support import app as app
@@ -53,7 +52,7 @@ def _select_all(window, canvas) -> None:
     # loaded CI runner the selection signal can land after the assertion.
     select_all_for_window(window)
     QApplication.processEvents()
-    refresh_selection_outline_for(canvas)
+    selection_for(canvas).update_selection_outline()
     QApplication.processEvents()
 
 
@@ -284,7 +283,7 @@ def test_the_knob_is_picked_through_the_view_transform(drawing, zoom):
     _bonded_pair(canvas)
     _select_all(window, canvas)
     knob = _knob(canvas)
-    hit_testing = canvas_services_for(canvas).selection.hit_testing_service
+    hit_testing = canvas_services_for(canvas).hit_testing_service
     knob_screen = _knob_screen_pos(canvas, knob)
 
     # Three screen pixels off the knob's centre is inside its 8 px circle
@@ -354,7 +353,7 @@ def test_a_ring_double_bond_band_stays_on_the_atom_axis(drawing):
         add_bond_graphics_for(canvas, bond_id)
         if order == 2:
             double_bond_ids.append(bond_id)
-    controller = canvas_services_for(canvas).selection.selection_controller
+    controller = canvas_services_for(canvas).selection
 
     for bond_id in double_bond_ids:
         bond = canvas.model.bonds[bond_id]

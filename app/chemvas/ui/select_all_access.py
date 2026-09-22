@@ -13,10 +13,8 @@ from chemvas.ui.canvas_scene_items_state import (
     ts_bracket_items_for,
 )
 from chemvas.ui.scene_item_access import attached_canvas_scene_items
-from chemvas.ui.selection_scene_access import set_scene_items_selected_for
-from chemvas.ui.selection_service_access import (
-    select_note_for,
-)
+from chemvas.ui.selection_queries import set_scene_items_selected_for
+from chemvas.ui.selection_state import selection_for
 from chemvas.ui.selection_update_batch import batch_selection_updates
 
 
@@ -48,7 +46,7 @@ def select_all_scene_items_for(canvas) -> bool:
     with batch_selection_updates(canvas):
         set_scene_items_selected_for(canvas, items, True)
         for note in notes:
-            select_note_for(canvas, note, additive=True)
+            selection_for(canvas).select_note(note, additive=True)
     return True
 
 

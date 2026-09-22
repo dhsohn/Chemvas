@@ -9,13 +9,13 @@ from chemvas.core.tool_overlay_logic import activate_tool_no_drag
 from chemvas.domain.document import VALID_ARROW_KINDS
 from chemvas.ui.canvas_scene_items_state import ring_items_for_atoms
 from chemvas.ui.move_access import move_atoms_for, move_item_for
-from chemvas.ui.selection_collection_access import selection_snapshot_for
 from chemvas.ui.selection_drag_tool import (
     SelectionDragMixin,
     atom_ids_with_bonds,
     independent_selection_items,
 )
-from chemvas.ui.selection_service_access import refresh_selection_outline_for
+from chemvas.ui.selection_queries import selection_snapshot_for
+from chemvas.ui.selection_state import selection_for
 from chemvas.ui.tool_base import Tool
 
 # Every arrow kind the document schema knows, plus the structure and annotation
@@ -95,7 +95,7 @@ class MoveTool(SelectionDragMixin, Tool):
         def commit(owner) -> None:
             if not self._moved or not self._drag_has_net_movement() or item is None:
                 return
-            refresh_selection_outline_for(self.canvas)
+            selection_for(self.canvas).update_selection_outline()
             self._ensure_drag_owner(
                 owner,
                 phase="refreshing its directly moved item",

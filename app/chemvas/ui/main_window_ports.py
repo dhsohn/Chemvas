@@ -473,7 +473,7 @@ def color_tool_for_window(window):
 
 
 def selected_scene_items_for_window(window, *, excluded_kinds):
-    from chemvas.ui.selection_collection_access import selected_scene_items_for
+    from chemvas.ui.selection_queries import selected_scene_items_for
 
     return selected_scene_items_for(
         active_canvas_for_window(window), excluded_kinds=excluded_kinds

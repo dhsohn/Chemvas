@@ -61,7 +61,7 @@ from chemvas.ui.open_document_lookup import (
 )
 from chemvas.ui.rdkit_export_job_state import rdkit_export_jobs_for
 from chemvas.ui.recent_documents_store import record_recent
-from chemvas.ui.selection_collection_access import selected_structure_ids_for
+from chemvas.ui.selection_queries import selected_structure_ids_for
 
 
 def _annotation_mark_states(model: MoleculeModel) -> list[dict[str, object]]:

@@ -13,12 +13,11 @@ from PyQt6.QtWidgets import (
 )
 
 from chemvas.core.document_io import read_document
-from chemvas.ui.canvas_scene_items_state import selected_notes_for
 from chemvas.ui.canvas_service_ports import note_controller_for_access
 from chemvas.ui.canvas_text_style_state import text_style_state_for
 from chemvas.ui.canvas_window_access import snapshot_canvas_state_for
 from chemvas.ui.main_window_ports import services_for_window
-from chemvas.ui.selection_service_access import selection_service_from_canvas
+from chemvas.ui.selection_state import selected_notes_for, selection_for
 from tests.gui_workflow_support import _tool
 from tests.gui_workflow_support import app as app
 from tests.gui_workflow_support import drawing as drawing
@@ -358,7 +357,7 @@ def test_all_text_buttons_reach_selected_notes_once_and_roundtrip(
     window, canvas = drawing
     controller, note = _note(drawing, "Caption")
     controller.finish_note_edit()
-    selection = selection_service_from_canvas(canvas)
+    selection = selection_for(canvas)
     selection.clear_note_selection()
     canvas.scene().clearSelection()
     if selection_route != "qt-only":
@@ -392,7 +391,7 @@ def test_actual_marquee_then_text_page_formats_without_sticky_note_selection(dra
     window, canvas = drawing
     controller, note = _note(drawing, "Marquee caption")
     controller.finish_note_edit()
-    selection_service_from_canvas(canvas).clear_note_selection()
+    selection_for(canvas).clear_note_selection()
     _tool(window, "select")
     rect = note.sceneBoundingRect().adjusted(-15, -15, 15, 15)
     start, end = (
@@ -441,7 +440,7 @@ def test_selected_note_formatting_failure_keeps_all_notes_and_history_exact(
     controller, first = _note(drawing, "first")
     controller.finish_note_edit()
     second = controller.create_text_note(QPointF(0, 50), "second")
-    selection_service_from_canvas(canvas).select_note(first, additive=False)
+    selection_for(canvas).select_note(first, additive=False)
     second.setSelected(True)
     before = snapshot_canvas_state_for(canvas)
     history = canvas.services.history_service
@@ -508,7 +507,7 @@ def test_selected_note_formatting_respects_intentionally_disabled_history(drawin
     _window, canvas = drawing
     controller, note = _note(drawing, "Caption")
     controller.finish_note_edit()
-    selection_service_from_canvas(canvas).select_note(note, additive=False)
+    selection_for(canvas).select_note(note, additive=False)
     history = canvas.services.history_service
     history.set_enabled(False)
     before = history.capture_stack_snapshot()
@@ -528,7 +527,7 @@ def test_clamped_selected_note_size_is_a_noop_and_keeps_redo(drawing, size, delt
     fmt.setFontPointSize(size)
     _format_range(note, 0, 7, fmt)
     controller.finish_note_edit()
-    selection_service_from_canvas(canvas).select_note(note, additive=False)
+    selection_for(canvas).select_note(note, additive=False)
     controller.toggle_text_bold()
     assert "font-weight:700" in note.toHtml()
     history = canvas.services.history_service

@@ -3,6 +3,7 @@ import unittest
 from types import SimpleNamespace
 from unittest import mock
 
+from chemvas.ui.selection_state import selected_notes_for
 from tests.runtime_services import canvas_runtime_services
 from tests.runtime_state import canvas_runtime_state
 
@@ -21,7 +22,6 @@ from PyQt6.QtWidgets import (
 from chemvas.ui.canvas_note_controller import CanvasNoteController
 from chemvas.ui.canvas_scene_items_state import (
     CanvasSceneItemsState,
-    scene_item_collection_for,
 )
 from chemvas.ui.canvas_service_access import canvas_services_for
 from chemvas.ui.canvas_text_style_state import (
@@ -81,7 +81,7 @@ def _make_canvas_note_view(scene: QGraphicsScene) -> SimpleNamespace:
     )
 
     def select_note(target, additive: bool = False) -> None:
-        selected_notes = scene_item_collection_for(view, "selected_notes")
+        selected_notes = selected_notes_for(view)
         if not additive:
             selected_notes.clear()
         if target not in selected_notes:
@@ -90,7 +90,7 @@ def _make_canvas_note_view(scene: QGraphicsScene) -> SimpleNamespace:
     view.select_note = select_note
     view.services = canvas_runtime_services(
         history_service=SimpleNamespace(push=mock.Mock()),
-        selection_controller=SimpleNamespace(
+        selection=SimpleNamespace(
             select_note=select_note,
             update_note_selection_box=mock.Mock(),
         ),
@@ -157,7 +157,7 @@ class CanvasViewNoteWrapperContractTest(unittest.TestCase):
 
         controller.begin_note_edit(item)
 
-        self.assertIn(item, scene_item_collection_for(view, "selected_notes"))
+        self.assertIn(item, selected_notes_for(view))
         self.assertEqual(
             item.textInteractionFlags(), Qt.TextInteractionFlag.TextEditorInteraction
         )
@@ -185,9 +185,7 @@ class CanvasViewNoteWrapperContractTest(unittest.TestCase):
         )
         self.assertIsNotNone(item.data(20))
         self.assertTrue(item.data(20).isVisible())
-        view.services.selection.selection_controller.update_note_selection_box.assert_called_once_with(
-            item
-        )
+        view.services.selection.update_note_selection_box.assert_called_once_with(item)
 
     def test_note_controller_update_text_note_and_box_toggle(self) -> None:
         scene = QGraphicsScene()

@@ -6,8 +6,10 @@ from unittest import mock
 
 from chemvas.core.history import HistoryCommand
 from chemvas.ui.history_operations import CanvasHistoryOperations
+from chemvas.ui.selection_state import selection_for
 from tests.runtime_services import canvas_runtime_services
 from tests.runtime_state import canvas_runtime_state
+from tests.selection_support import build_selection_controller
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -63,7 +65,6 @@ from chemvas.ui.canvas_ring_fill_scene_access import (
 from chemvas.ui.canvas_rotation_state import CanvasRotationState
 from chemvas.ui.canvas_scene_items_state import (
     CanvasSceneItemsState,
-    selected_notes_for,
     set_scene_item_collection_for,
 )
 from chemvas.ui.canvas_scene_reset_access import clear_scene_for
@@ -135,24 +136,17 @@ from chemvas.ui.scene_item_access import (
     restore_ts_bracket_from_state,
 )
 from chemvas.ui.scene_item_state import atom_state_dict_for, scene_item_state_for
-from chemvas.ui.selection_collection_access import (
+from chemvas.ui.selection_info_state import SelectionInfoState
+from chemvas.ui.selection_queries import (
     selected_chemical_ids_for,
     selected_ids_for,
     selected_items_for_transform_for,
     selection_items_for_copy_for,
 )
-from chemvas.ui.selection_info_state import SelectionInfoState
-from chemvas.ui.selection_outline_state import SelectionOutlineState
-from chemvas.ui.selection_service_access import (
-    clear_note_selection_for,
-    refresh_selection_outline_for,
-    select_note_for,
-    toggle_note_selection_for,
-    update_note_selection_box_for,
-)
-from chemvas.ui.selection_service_bundle import build_selection_services
-from chemvas.ui.selection_style_state import (
-    SelectionStyleState,
+from chemvas.ui.selection_state import (
+    SelectionState,
+    selected_notes_for,
+    set_selected_notes_for,
 )
 from chemvas.ui.structure_build_access import (
     fuse_benzene_to_bond_for,
@@ -183,9 +177,7 @@ def _selection_controller_for(view):
             connected_components=lambda atom_ids: [set(atom_ids)] if atom_ids else [],
         )
         services.graph_service = graph_service
-    return build_selection_services(
-        view, graph_service=graph_service
-    ).selection_controller
+    return build_selection_controller(view, graph_service=graph_service)
 
 
 def _color_service_for(view, *, graph_service=None):
@@ -444,7 +436,7 @@ class CanvasViewAdditionalTest(unittest.TestCase):
                 tool_settings_state=CanvasToolSettingsState(mark_kind="plus"),
             ),
         )
-        tool_view.services.selection.selection_controller = SimpleNamespace(
+        tool_view.services.selection = SimpleNamespace(
             update_selection_outline=tool_view.refresh_selection_outline
         )
         tool_view.services.input.tool_mode_controller = CanvasToolModeController(
@@ -649,7 +641,7 @@ class CanvasViewAdditionalTest(unittest.TestCase):
                 insert_state=SimpleNamespace(template_active=True, smiles_active=False),
             ),
         )
-        view.services.selection.selection_controller = SimpleNamespace(
+        view.services.selection = SimpleNamespace(
             update_selection_outline=view.refresh_selection_outline
         )
         view.services.input.tool_mode_controller = CanvasToolModeController(
@@ -725,14 +717,14 @@ class CanvasViewAdditionalTest(unittest.TestCase):
         selection_controller = mock.Mock()
         item = object()
         view = SimpleNamespace(
-            services=canvas_runtime_services(selection_controller=selection_controller)
+            services=canvas_runtime_services(selection=selection_controller)
         )
 
-        select_note_for(view, item, additive=True)
-        toggle_note_selection_for(view, item)
-        clear_note_selection_for(view)
-        update_note_selection_box_for(view, item)
-        refresh_selection_outline_for(view)
+        selection_for(view).select_note(item, additive=True)
+        selection_for(view).toggle_note_selection(item)
+        selection_for(view).clear_note_selection()
+        selection_for(view).update_note_selection_box(item)
+        selection_for(view).update_selection_outline()
         shift_selection_outlines_for(view, 1.5, -2.0)
 
         selection_controller.select_note.assert_called_once_with(item, additive=True)
@@ -1240,12 +1232,9 @@ class CanvasViewAdditionalTest(unittest.TestCase):
                     text_alignment=Qt.AlignmentFlag.AlignRight,
                     text_line_spacing=1.25,
                 ),
-                selection_style_state=SelectionStyleState(
-                    color=QColor("#1f5eff"),
-                ),
+                selection_state=SelectionState(color=QColor("#1f5eff")),
                 scene_items_state=CanvasSceneItemsState(),
                 group_state=CanvasGroupState(),
-                selection_outline_state=SelectionOutlineState(),
                 selection_info_state=SelectionInfoState.create(),
             ),
             scene=lambda: scene,
@@ -1254,19 +1243,21 @@ class CanvasViewAdditionalTest(unittest.TestCase):
                 history_service=SimpleNamespace(push=mock.Mock())
             ),
         )
-        set_scene_item_collection_for(note_view, "selected_notes", [])
-        note_view.clear_note_selection = lambda: clear_note_selection_for(note_view)
-        note_view.select_note = lambda target, additive=False: select_note_for(
-            note_view, target, additive=additive
-        )
+        set_selected_notes_for(note_view, [])
+        note_view.clear_note_selection = lambda: selection_for(
+            note_view
+        ).clear_note_selection()
+        note_view.select_note = lambda target, additive=False: selection_for(
+            note_view
+        ).select_note(target, additive=additive)
         selection_controller = _selection_controller_for(note_view)
         note_controller = CanvasNoteController(note_view)
         note_view.services = canvas_runtime_services(
-            selection_controller=selection_controller,
+            selection=selection_controller,
             note_controller=note_controller,
         )
 
-        select_note_for(note_view, item, additive=False)
+        selection_for(note_view).select_note(item, additive=False)
         self.assertEqual(selected_notes_for(note_view), [item])
         selection_box = item.data(21)
         self.assertIsNotNone(selection_box)
@@ -1295,12 +1286,12 @@ class CanvasViewAdditionalTest(unittest.TestCase):
             item.textInteractionFlags(), Qt.TextInteractionFlag.NoTextInteraction
         )
 
-        toggle_note_selection_for(note_view, item)
+        selection_for(note_view).toggle_note_selection(item)
         self.assertEqual(selected_notes_for(note_view), [])
         self.assertFalse(item.data(21).isVisible())
 
-        select_note_for(note_view, item, additive=False)
-        clear_note_selection_for(note_view)
+        selection_for(note_view).select_note(item, additive=False)
+        selection_for(note_view).clear_note_selection()
         self.assertEqual(selected_notes_for(note_view), [])
         self.assertFalse(item.data(21).isVisible())
 
@@ -1318,9 +1309,7 @@ class CanvasViewAdditionalTest(unittest.TestCase):
         )
         pos = QPointF(3.0, 4.0)
 
-        self.assertEqual(
-            view.services.selection.hit_testing_service.find_bond_near(pos, 7.0), 4
-        )
+        self.assertEqual(view.services.hit_testing_service.find_bond_near(pos, 7.0), 4)
 
         service.find_bond_near.assert_called_once_with(pos, 7.0)
 
@@ -1345,9 +1334,8 @@ class CanvasViewAdditionalTest(unittest.TestCase):
                 scene_items_state=CanvasSceneItemsState()
             ),
         )
-        set_scene_item_collection_for(
+        set_selected_notes_for(
             transform_view,
-            "selected_notes",
             [selected_note, _FakeItem("note", scene_token=object())],
         )
         transformed_items = selected_items_for_transform_for(transform_view)
@@ -1419,8 +1407,8 @@ class CanvasViewAdditionalTest(unittest.TestCase):
                 bond_graphics_state=CanvasBondGraphicsState(),
             ),
         )
-        set_scene_item_collection_for(
-            copy_view, "selected_notes", [note, _FakeItem("note", scene_token=object())]
+        set_selected_notes_for(
+            copy_view, [note, _FakeItem("note", scene_token=object())]
         )
         set_bond_items_for(copy_view, {5: [bond_graphic]})
         copied_items = selection_items_for_copy_for(copy_view)
@@ -1470,7 +1458,7 @@ class CanvasViewAdditionalTest(unittest.TestCase):
         )
         set_atom_items_for(view, {1: label_item})
         set_atom_dots_for(view, {1: dot_item})
-        view.services.selection.selection_controller = SimpleNamespace(
+        view.services.selection = SimpleNamespace(
             update_selection_outline=view.refresh_selection_outline
         )
 
@@ -1501,7 +1489,7 @@ class CanvasViewAdditionalTest(unittest.TestCase):
         view.services.scene_view.canvas_ring_fill_scene_service.update_ring_fills_for_atoms.assert_called_once_with(
             {1, 2}, ring_items=None
         )
-        view.services.selection.hit_testing_service.mark_spatial_index_dirty.assert_called_once_with()
+        view.services.hit_testing_service.mark_spatial_index_dirty.assert_called_once_with()
         view.refresh_selection_outline.assert_called_once_with()
 
         quiet_view = SimpleNamespace(
@@ -1529,7 +1517,7 @@ class CanvasViewAdditionalTest(unittest.TestCase):
         set_atom_items_for(quiet_view, {})
         set_atom_dots_for(quiet_view, {})
         set_atom_positions_for_history(quiet_view, positions={}, coords_3d=None)
-        quiet_view.services.selection.hit_testing_service.mark_spatial_index_dirty.assert_not_called()
+        quiet_view.services.hit_testing_service.mark_spatial_index_dirty.assert_not_called()
 
         noop_view = SimpleNamespace(
             model=SimpleNamespace(atoms={1: Atom("C", 1.0, 1.0)}),
@@ -1563,7 +1551,7 @@ class CanvasViewAdditionalTest(unittest.TestCase):
         )
         noop_view.services.interaction.move_controller.redraw_bonds_for_atoms.assert_not_called()
         noop_view.services.scene_view.canvas_ring_fill_scene_service.update_ring_fills_for_atoms.assert_not_called()
-        noop_view.services.selection.hit_testing_service.mark_spatial_index_dirty.assert_called_once_with()
+        noop_view.services.hit_testing_service.mark_spatial_index_dirty.assert_called_once_with()
         noop_view.refresh_selection_outline.assert_not_called()
 
     def test_ring_fill_access_helpers_delegate_to_scene_service(self) -> None:
@@ -1630,7 +1618,7 @@ class CanvasViewAdditionalTest(unittest.TestCase):
         set_bond_items_for(view, {0: [bond_graphic]})
         selection_controller = _selection_controller_for(view)
         selection_controller.update_selection_outline = mock.Mock()
-        view.services.selection.selection_controller = selection_controller
+        view.services.selection = selection_controller
 
         self.assertTrue(selection_controller.select_structure_for_item(atom_item))
         self.assertEqual(selection_scene.clear_selection_calls, 1)
@@ -1673,7 +1661,7 @@ class CanvasViewAdditionalTest(unittest.TestCase):
         set_bond_items_for(ring_view, {})
         ring_controller = _selection_controller_for(ring_view)
         ring_controller.update_selection_outline = mock.Mock()
-        ring_view.services.selection.selection_controller = ring_controller
+        ring_view.services.selection = ring_controller
         self.assertTrue(ring_controller.select_structure_for_item(ring_only))
         self.assertTrue(ring_only.isSelected())
 
@@ -1697,7 +1685,7 @@ class CanvasViewAdditionalTest(unittest.TestCase):
         set_bond_items_for(note_view, {})
         note_controller = _selection_controller_for(note_view)
         note_controller.update_selection_outline = mock.Mock()
-        note_view.services.selection.selection_controller = note_controller
+        note_view.services.selection = note_controller
         self.assertTrue(note_controller.select_structure_for_item(note_item))
         self.assertEqual(note_scene.clear_selection_calls, 1)
         self.assertTrue(note_item.isSelected())
@@ -1724,7 +1712,7 @@ class CanvasViewAdditionalTest(unittest.TestCase):
         set_atom_dots_for(invalid_view, {})
         set_bond_items_for(invalid_view, {})
         invalid_controller = _selection_controller_for(invalid_view)
-        invalid_view.services.selection.selection_controller = invalid_controller
+        invalid_view.services.selection = invalid_controller
         self.assertFalse(invalid_controller.select_structure_for_item(invalid_atom))
         self.assertFalse(invalid_controller.select_structure_for_item(None))
 

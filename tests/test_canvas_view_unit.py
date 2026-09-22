@@ -5,6 +5,7 @@ from types import SimpleNamespace
 from unittest import mock
 
 from chemvas.ui.note_item_access import new_note_item_for
+from chemvas.ui.selection_state import selection_for
 from tests.runtime_services import canvas_runtime_services
 from tests.runtime_state import canvas_runtime_state
 
@@ -39,9 +40,7 @@ from chemvas.ui.canvas_note_controller import CanvasNoteController
 from chemvas.ui.canvas_scene_items_state import (
     CanvasSceneItemsState,
     ring_items_for,
-    selected_notes_for,
     set_scene_item_collection_for,
-    set_selected_notes_for,
 )
 from chemvas.ui.canvas_service_access import canvas_services_for
 from chemvas.ui.canvas_tool_settings_state import tool_settings_state_for
@@ -61,15 +60,13 @@ from chemvas.ui.scene_clipboard_transaction_logic import (
     translated_scene_item_state,
 )
 from chemvas.ui.scene_flip_geometry import bounds_from_points, flip_point
-from chemvas.ui.selection_collection_access import (
+from chemvas.ui.selection_queries import (
     selected_bond_atom_ids_for,
     selected_structure_ids_for,
     selection_snapshot_for,
     selection_target_item,
 )
-from chemvas.ui.selection_service_access import (
-    structure_item_is_selected_for,
-)
+from chemvas.ui.selection_state import selected_notes_for, set_selected_notes_for
 from chemvas.ui.selection_style_access import (
     selection_bond_overlay_width_for,
     selection_indicator_rect_for_atom_for,
@@ -116,7 +113,7 @@ class _FakeNoteCanvas:
             scene_item_controller=SimpleNamespace(
                 remove_scene_item=self.removed_items.append
             ),
-            selection_controller=SimpleNamespace(
+            selection=SimpleNamespace(
                 update_note_selection_box=self.record_note_selection_box_updated,
                 update_selection_outline=mock.Mock(),
             ),
@@ -455,7 +452,11 @@ class CanvasViewUnitTest(unittest.TestCase):
         self,
     ) -> None:
         selected_item = SimpleNamespace(isSelected=lambda: True)
-        selection_controller = mock.Mock()
+        from tests.selection_support import build_selection_controller
+
+        owner_canvas = SimpleNamespace(services=canvas_runtime_services())
+        selection_controller = build_selection_controller(owner_canvas, render=False)
+        selection_controller.structure_hit_from_item = mock.Mock()
         selection_controller.structure_hit_from_item.side_effect = [
             (SimpleNamespace(kind="atom", id=1), None, ()),
             (SimpleNamespace(kind="bond", id=9), (1, 2), ()),
@@ -464,16 +465,24 @@ class CanvasViewUnitTest(unittest.TestCase):
             (None, None, ()),
         ]
         view = SimpleNamespace(
-            services=canvas_runtime_services(selection_controller=selection_controller)
+            services=canvas_runtime_services(selection=selection_controller)
         )
 
-        self.assertTrue(structure_item_is_selected_for(view, selected_item, {1}, set()))
-        self.assertTrue(structure_item_is_selected_for(view, selected_item, {1}, set()))
-        self.assertTrue(structure_item_is_selected_for(view, selected_item, {7}, set()))
         self.assertTrue(
-            structure_item_is_selected_for(view, selected_item, set(), set())
+            selection_for(view).structure_item_is_selected(selected_item, {1}, set())
         )
-        self.assertFalse(structure_item_is_selected_for(view, None, set(), set()))
+        self.assertTrue(
+            selection_for(view).structure_item_is_selected(selected_item, {1}, set())
+        )
+        self.assertTrue(
+            selection_for(view).structure_item_is_selected(selected_item, {7}, set())
+        )
+        self.assertTrue(
+            selection_for(view).structure_item_is_selected(selected_item, set(), set())
+        )
+        self.assertFalse(
+            selection_for(view).structure_item_is_selected(None, set(), set())
+        )
 
         selected_scene = SimpleNamespace(
             selectedItems=lambda: (_FakeItem("atom", 3), _FakeItem("bond", 4))

@@ -18,7 +18,7 @@ from chemvas.ui.canvas_tool_settings_state import CanvasToolSettingsState
 from chemvas.ui.handle_state import CanvasHandleState
 from chemvas.ui.move_tool import MoveTool
 from chemvas.ui.select_tool import SelectTool
-from chemvas.ui.selection_style_state import SelectionStyleState
+from chemvas.ui.selection_state import SelectionState
 from chemvas.ui.text_tool import TextTool
 from chemvas.ui.tool_context import ToolContext
 
@@ -50,7 +50,7 @@ def _tool_context_for(canvas):
     return ToolContext(
         canvas,
         hit_testing_service=getattr(services, "hit_testing_service", None),
-        selection_controller=getattr(services, "selection_controller", None),
+        selection_controller=getattr(services, "selection", None),
         note_controller=getattr(
             services,
             "note_controller",
@@ -330,7 +330,7 @@ class _SelectCanvas:
         self.runtime_state = canvas_runtime_state(
             handle_state=CanvasHandleState(),
             scene_items_state=CanvasSceneItemsState(),
-            selection_style_state=SelectionStyleState(),
+            selection_state=SelectionState(),
         )
         self.clear_handles_calls = 0
         self.curved_handles = []
@@ -341,7 +341,7 @@ class _SelectCanvas:
                 scene_pos_from_event=self.scene_pos_from_event,
                 item_at_event=self.item_at_event,
             ),
-            selection_controller=SimpleNamespace(
+            selection=SimpleNamespace(
                 preferred_structure_item_at_scene_pos=self.preferred_structure_item_at_scene_pos,
                 selection_hit_test=self.selection_hit_test,
                 select_structure_for_item=self.select_structure_for_item,

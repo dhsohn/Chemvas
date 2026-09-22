@@ -3,6 +3,7 @@
 import os
 from types import SimpleNamespace
 
+from chemvas.ui.selection_state import selected_notes_for, set_selected_notes_for
 from tests.runtime_services import canvas_runtime_services
 from tests.runtime_state import canvas_runtime_state
 
@@ -55,7 +56,7 @@ from chemvas.ui.scene_clipboard_controller import (
 from chemvas.ui.scene_clipboard_state import SceneClipboardState
 from chemvas.ui.scene_delete_controller import SceneDeleteController
 from chemvas.ui.scene_transform_controller import SceneTransformController
-from chemvas.ui.selection_style_state import SelectionStyleState
+from chemvas.ui.selection_state import SelectionState
 
 
 def _set_selectable(item: QGraphicsItem) -> QGraphicsItem:
@@ -126,7 +127,7 @@ def _make_model_ring_item(
 def scene_clipboard_controller_for(canvas) -> SceneClipboardController:
     return SceneClipboardController(
         canvas,
-        selection_controller=canvas.services.selection.selection_controller,
+        selection_controller=canvas.services.selection,
         bond_mutation_service=canvas.services.structure.canvas_bond_mutation_service,
     )
 
@@ -196,7 +197,7 @@ class _FakeCanvas:
             rotation_state=CanvasRotationState(),
             scene_clipboard_state=self.scene_clipboard_state,
             scene_items_state=CanvasSceneItemsState(),
-            selection_style_state=SelectionStyleState(),
+            selection_state=SelectionState(),
             smiles_input_state=CanvasSmilesInputState(),
         )
         set_last_smiles_input_for(self, None)
@@ -288,7 +289,7 @@ class _FakeCanvas:
             canvas_history_recording_service=SimpleNamespace(
                 record_additions=self._record_additions
             ),
-            selection_controller=SimpleNamespace(
+            selection=SimpleNamespace(
                 clear_note_selection=self.clear_note_selection,
                 select_note=self.select_note,
                 update_selection_outline=self.refresh_selection_outline,
@@ -317,8 +318,8 @@ class _FakeCanvas:
         set_scene_item_collection_for(self, name, value)
 
     selected_notes = property(
-        lambda self: self._scene_items("selected_notes"),
-        lambda self, value: self._set_scene_items("selected_notes", value),
+        lambda self: selected_notes_for(self),
+        lambda self, value: set_selected_notes_for(self, value),
     )
     ring_items = property(
         lambda self: self._scene_items("ring_items"),

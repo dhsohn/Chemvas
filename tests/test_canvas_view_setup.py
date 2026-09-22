@@ -38,7 +38,7 @@ def test_initialize_canvas_view_configures_view_runtime_and_services(
     callback_state = CanvasCallbackState()
     services = canvas_runtime_services(
         selection=SimpleNamespace(
-            selection_controller=SimpleNamespace(update_selection_outline=mock.Mock())
+            update_selection_outline=mock.Mock(), expand_selection_to_groups=mock.Mock()
         ),
         tool_controller=SimpleNamespace(set_active=mock.Mock()),
     )
@@ -84,7 +84,6 @@ def test_initialize_canvas_view_configures_view_runtime_and_services(
         setup, "callback_state_for", mock.Mock(return_value=callback_state)
     )
     monkeypatch.setattr(setup, "QGraphicsScene", mock.Mock(return_value="scene"))
-    monkeypatch.setattr(setup, "expand_selection_to_groups_for", mock.Mock())
     renderer = object()
     setup.initialize_canvas_view(canvas, renderer=renderer)
 
@@ -131,9 +130,9 @@ def test_initialize_canvas_view_configures_view_runtime_and_services(
     ]
     assert callback_state.scene_selection_group is not None
     callback_state.scene_selection_group()
-    setup.expand_selection_to_groups_for.assert_called_once_with(canvas)
+    services.selection.expand_selection_to_groups.assert_called_once_with()
     assert (
         callback_state.scene_selection_outline
-        is services.selection.selection_controller.update_selection_outline
+        is services.selection.update_selection_outline
     )
     services.tool_controller.set_active.assert_called_once_with("bond")

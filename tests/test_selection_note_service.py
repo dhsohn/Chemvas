@@ -5,6 +5,7 @@ from unittest import mock
 
 from tests.runtime_services import canvas_runtime_services
 from tests.runtime_state import canvas_runtime_state
+from tests.selection_support import build_selection_controller
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -13,14 +14,13 @@ from PyQt6.QtWidgets import QApplication, QGraphicsScene, QGraphicsTextItem
 
 from chemvas.domain.document import MoleculeModel
 from chemvas.ui.canvas_group_state import CanvasGroupState, register_group_for
-from chemvas.ui.canvas_scene_items_state import (
-    CanvasSceneItemsState,
+from chemvas.ui.canvas_scene_items_state import CanvasSceneItemsState
+from chemvas.ui.canvas_text_style_state import CanvasTextStyleState
+from chemvas.ui.selection_state import (
+    SelectionState,
     selected_notes_for,
     set_selected_notes_for,
 )
-from chemvas.ui.canvas_text_style_state import CanvasTextStyleState
-from chemvas.ui.selection_note_service import SelectionNoteService
-from chemvas.ui.selection_style_state import SelectionStyleState
 
 
 class SelectionNoteServiceTest(unittest.TestCase):
@@ -41,19 +41,17 @@ class SelectionNoteServiceTest(unittest.TestCase):
             runtime_state=canvas_runtime_state(
                 group_state=CanvasGroupState(),
                 scene_items_state=CanvasSceneItemsState(),
-                selection_style_state=SelectionStyleState(color=QColor("#1f5eff")),
+                selection_state=SelectionState(color=QColor("#1f5eff")),
                 text_style_state=CanvasTextStyleState(note_padding=6.0),
             ),
             # Note-selection changes refresh the selection outline through the
             # selection controller port.
             services=canvas_runtime_services(
-                selection_controller=SimpleNamespace(
-                    update_selection_outline=mock.Mock()
-                )
+                selection=SimpleNamespace(update_selection_outline=mock.Mock())
             ),
         )
         set_selected_notes_for(canvas, [note_a])
-        service = SelectionNoteService(canvas)
+        service = build_selection_controller(canvas, render=False)
 
         service.select_note(note_b, additive=False)
 
@@ -76,19 +74,17 @@ class SelectionNoteServiceTest(unittest.TestCase):
             runtime_state=canvas_runtime_state(
                 group_state=CanvasGroupState(),
                 scene_items_state=CanvasSceneItemsState(),
-                selection_style_state=SelectionStyleState(color=QColor("#1f5eff")),
+                selection_state=SelectionState(color=QColor("#1f5eff")),
                 text_style_state=CanvasTextStyleState(note_padding=6.0),
             ),
             # Note-selection changes refresh the selection outline through the
             # selection controller port.
             services=canvas_runtime_services(
-                selection_controller=SimpleNamespace(
-                    update_selection_outline=mock.Mock()
-                )
+                selection=SimpleNamespace(update_selection_outline=mock.Mock())
             ),
         )
         set_selected_notes_for(canvas, [])
-        service = SelectionNoteService(canvas)
+        service = build_selection_controller(canvas, render=False)
 
         service.toggle_note_selection(note)
         self.assertEqual(selected_notes_for(canvas), [note])
@@ -108,19 +104,17 @@ class SelectionNoteServiceTest(unittest.TestCase):
             runtime_state=canvas_runtime_state(
                 group_state=CanvasGroupState(),
                 scene_items_state=CanvasSceneItemsState(),
-                selection_style_state=SelectionStyleState(color=QColor("#1f5eff")),
+                selection_state=SelectionState(color=QColor("#1f5eff")),
                 text_style_state=CanvasTextStyleState(note_padding=6.0),
             ),
             # Note-selection changes refresh the selection outline through the
             # selection controller port.
             services=canvas_runtime_services(
-                selection_controller=SimpleNamespace(
-                    update_selection_outline=mock.Mock()
-                )
+                selection=SimpleNamespace(update_selection_outline=mock.Mock())
             ),
         )
         set_selected_notes_for(canvas, [note_a, note_b])
-        service = SelectionNoteService(canvas)
+        service = build_selection_controller(canvas, render=False)
         service.update_note_selection_box(note_a)
         service.update_note_selection_box(note_b)
 
@@ -136,15 +130,13 @@ class SelectionNoteServiceTest(unittest.TestCase):
             runtime_state=canvas_runtime_state(
                 group_state=CanvasGroupState(),
                 scene_items_state=CanvasSceneItemsState(),
-                selection_style_state=SelectionStyleState(color=QColor("#1f5eff")),
+                selection_state=SelectionState(color=QColor("#1f5eff")),
                 text_style_state=CanvasTextStyleState(note_padding=6.0),
             ),
             # Note-selection changes refresh the selection outline through the
             # selection controller port.
             services=canvas_runtime_services(
-                selection_controller=SimpleNamespace(
-                    update_selection_outline=mock.Mock()
-                )
+                selection=SimpleNamespace(update_selection_outline=mock.Mock())
             ),
         )
 
@@ -160,7 +152,7 @@ class SelectionNoteServiceTest(unittest.TestCase):
         canvas.scene = lambda: scene
         set_selected_notes_for(canvas, [note_a, note_b])
         register_group_for(canvas, set(), [note_a, note_b])
-        service = SelectionNoteService(canvas)
+        service = build_selection_controller(canvas, render=False)
 
         # Ctrl-clicking one member must drop the whole notes-only group, not
         # leave a partial selection behind.
@@ -173,14 +165,9 @@ class SelectionNoteServiceTest(unittest.TestCase):
         note = QGraphicsTextItem("A")
         scene.addItem(note)
         canvas = self._note_canvas()
-        outline_refresh = mock.Mock()
-        canvas.services = canvas_runtime_services(
-            selection_controller=SimpleNamespace(
-                update_selection_outline=outline_refresh
-            )
-        )
         set_selected_notes_for(canvas, [])
-        service = SelectionNoteService(canvas)
+        service = build_selection_controller(canvas, render=False)
+        outline_refresh = service.outline_service.update_selection_outline
 
         # No-op paths must not redraw.
         service.clear_note_selection()
@@ -204,7 +191,7 @@ class SelectionNoteServiceTest(unittest.TestCase):
         scene.addItem(note)
         canvas = self._note_canvas()
         set_selected_notes_for(canvas, [])
-        service = SelectionNoteService(canvas)
+        service = build_selection_controller(canvas, render=False)
 
         service.set_note_selected(note, False)
         self.assertEqual(selected_notes_for(canvas), [])
@@ -226,7 +213,7 @@ class SelectionNoteServiceTest(unittest.TestCase):
         scene.addItem(note_b)
         canvas = self._note_canvas()
         set_selected_notes_for(canvas, [])
-        service = SelectionNoteService(canvas)
+        service = build_selection_controller(canvas, render=False)
 
         # Explicit select, then explicit deselect.
         service.apply_group_note_toggle([note_a, note_b], True)

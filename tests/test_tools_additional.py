@@ -53,7 +53,7 @@ def _tool_context_for(canvas):
     return ToolContext(
         canvas,
         hit_testing_service=getattr(services, "hit_testing_service", None),
-        selection_controller=getattr(services, "selection_controller", None),
+        selection_controller=getattr(services, "selection", None),
         note_controller=getattr(
             services,
             "note_controller",
@@ -452,7 +452,7 @@ class _MoveCanvas:
                 item_at_event=self.item_at_event,
                 scene_pos_from_event=lambda event: event.position(),
             ),
-            selection_controller=SimpleNamespace(
+            selection=SimpleNamespace(
                 update_selection_outline=self._update_selection_outline
             ),
         )
@@ -515,7 +515,7 @@ class _OrbitalMarkNoteCanvas:
                 create_text_note=self.add_text_note,
                 begin_note_edit=self.begin_note_edit,
             ),
-            selection_controller=SimpleNamespace(
+            selection=SimpleNamespace(
                 toggle_note_selection=self.toggle_note_selection,
                 select_note=self.select_note,
                 clear_note_selection=self.clear_note_selection,
@@ -610,7 +610,7 @@ class _PerspectiveCanvas:
                 item_at_event=lambda event: self.item,
                 bond_id_from_event=lambda event: None,
             ),
-            selection_controller=SimpleNamespace(
+            selection=SimpleNamespace(
                 toggle_item_selection=self.toggle_item_selection,
                 preferred_structure_item_at_scene_pos=lambda pos: self.preferred_item,
                 selection_hit_test=lambda pos, snapshot=None: self.selection_hit,
@@ -1470,7 +1470,7 @@ class ToolsAdditionalTest(unittest.TestCase):
         canvas = _ToolControllerPreviewCanvas()
         controller = ToolController(
             canvas,
-            hit_testing_service=canvas.services.selection.hit_testing_service,
+            hit_testing_service=canvas.services.hit_testing_service,
             selection_controller=SimpleNamespace(),
             note_controller=SimpleNamespace(
                 create_text_note=mock.Mock(), begin_note_edit=mock.Mock()

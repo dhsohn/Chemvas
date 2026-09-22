@@ -360,7 +360,7 @@ class _FakeCanvas:
 
 def _controller_for(canvas: _FakeCanvas, **kwargs) -> InsertController:
     hit_testing_service = kwargs.pop(
-        "hit_testing_service", canvas.services.selection.hit_testing_service
+        "hit_testing_service", canvas.services.hit_testing_service
     )
     graph_service = kwargs.pop("graph_service", canvas.services.graph_service)
     return InsertController(
@@ -972,7 +972,7 @@ class InsertControllerTest(unittest.TestCase):
         canvas.insert_state.template_active = True
         canvas.insert_state.template_ring_size = 6
         canvas.insert_state.template_ring_style = "chair"
-        canvas.services.selection.hit_testing_service.find_bond_near.return_value = 5
+        canvas.services.hit_testing_service.find_bond_near.return_value = 5
         controller = _controller_for(canvas)
         with (
             patch(
@@ -1043,7 +1043,7 @@ class InsertControllerTest(unittest.TestCase):
         canvas.insert_state.template_active = True
         canvas.insert_state.template_ring_size = 6
         injected_hit_testing = SimpleNamespace(find_bond_near=Mock(return_value=7))
-        canvas.services.selection.hit_testing_service = SimpleNamespace(
+        canvas.services.hit_testing_service = SimpleNamespace(
             find_bond_near=Mock(
                 side_effect=AssertionError("registry service should not be used")
             )
@@ -1061,7 +1061,7 @@ class InsertControllerTest(unittest.TestCase):
         injected_hit_testing.find_bond_near.assert_called_once_with(
             QPointF(1.0, 2.0), 7.0
         )
-        canvas.services.selection.hit_testing_service.find_bond_near.assert_not_called()
+        canvas.services.hit_testing_service.find_bond_near.assert_not_called()
         canvas.find_bond_near.assert_not_called()
 
     def test_commit_template_insert_cancels_for_missing_request_or_plan(self) -> None:

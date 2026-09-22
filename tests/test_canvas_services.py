@@ -10,6 +10,7 @@ from chemvas.ui.canvas_runtime_services import CanvasRuntimeServices
 from chemvas.ui.canvas_services import attach_canvas_services, build_canvas_services
 
 CANONICAL_SERVICE_FIELDS = {
+    "hit_testing_service",
     "document",
     "graph_service",
     "input",
@@ -80,10 +81,6 @@ def test_build_canvas_services_composes_grouped_runtimes(monkeypatch) -> None:
     active_tool = SimpleNamespace(name="perspective")
     tool_controller = SimpleNamespace(active=active_tool)
 
-    selection = SimpleNamespace(
-        hit_testing_service=hit_testing_service,
-        selection_controller=selection_controller,
-    )
     handles = SimpleNamespace(
         handle_controller=object(),
         handle_overlay_service=object(),
@@ -133,7 +130,8 @@ def test_build_canvas_services_composes_grouped_runtimes(monkeypatch) -> None:
 
     builders = {
         "CanvasGraphService": mock.Mock(return_value=graph_service),
-        "build_selection_services": mock.Mock(return_value=selection),
+        "SelectionController": mock.Mock(return_value=selection_controller),
+        "CanvasHitTestingService": mock.Mock(return_value=hit_testing_service),
         "build_handle_services": mock.Mock(return_value=handles),
         "build_canvas_interaction_services": mock.Mock(return_value=interaction),
         "build_structure_services": mock.Mock(return_value=structure),
@@ -157,7 +155,8 @@ def test_build_canvas_services_composes_grouped_runtimes(monkeypatch) -> None:
     )
 
     assert services.graph_service is graph_service
-    assert services.selection is selection
+    assert services.selection is selection_controller
+    assert services.hit_testing_service is hit_testing_service
     assert services.handles is handles
     assert services.interaction is interaction
     assert services.structure is structure
@@ -175,7 +174,7 @@ def test_build_canvas_services_composes_grouped_runtimes(monkeypatch) -> None:
         canvas,
         graph_state=graph_state,
     )
-    selection_kwargs = builders["build_selection_services"].call_args.kwargs
+    selection_kwargs = builders["SelectionController"].call_args.kwargs
     assert selection_kwargs["graph_service"] is graph_service
     assert selection_kwargs["active_tool_name_provider"]() == "perspective"
     builders["build_handle_services"].assert_called_once_with(canvas)

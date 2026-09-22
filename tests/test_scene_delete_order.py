@@ -40,7 +40,7 @@ def test_delete_undo_restores_note_order_and_clean_document(canvas, selected, gr
         )
         for text in ("first", "second", "third")
     ]
-    selection = canvas.services.selection.selection_controller
+    selection = canvas.services.selection
     if grouping != "none":
         if grouping == "mixed":
             atom_id = canvas.services.structure.canvas_atom_mutation_service.add_atom(

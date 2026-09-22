@@ -23,11 +23,7 @@ from chemvas.ui.canvas_atom_graphics_state import CanvasAtomGraphicsState
 from chemvas.ui.canvas_color_mutation_service import CanvasColorMutationService
 from chemvas.ui.canvas_note_controller import CanvasNoteController
 from chemvas.ui.canvas_ring_fill_scene_service import CanvasRingFillSceneService
-from chemvas.ui.canvas_scene_items_state import (
-    CanvasSceneItemsState,
-    selected_notes_for,
-    set_selected_notes_for,
-)
+from chemvas.ui.canvas_scene_items_state import CanvasSceneItemsState
 from chemvas.ui.canvas_text_style_state import CanvasTextStyleState
 from chemvas.ui.handle_mutation_service import HandleMutationService
 from chemvas.ui.history_operations import CanvasHistoryOperations
@@ -39,6 +35,7 @@ from chemvas.ui.note_item_access import (
 from chemvas.ui.scene_flip_state import flip_scene_item_state
 from chemvas.ui.scene_item_restore import create_orbital_item_from_state
 from chemvas.ui.scene_paste_apply_logic import apply_paste_payload
+from chemvas.ui.selection_state import selected_notes_for, set_selected_notes_for
 
 
 def _history_service(push=None):
@@ -243,7 +240,11 @@ class UIServiceTailCoverageTest(unittest.TestCase):
             ),
             services=canvas_runtime_services(
                 history_service=_history_service(),
-                selection_controller=SimpleNamespace(select_note=mock.Mock()),
+                selection=SimpleNamespace(
+                    select_note=mock.Mock(),
+                    update_note_selection_box=mock.Mock(),
+                    update_selection_outline=mock.Mock(),
+                ),
             ),
         )
         set_selected_notes_for(canvas, [item])
@@ -257,7 +258,7 @@ class UIServiceTailCoverageTest(unittest.TestCase):
 
         controller.begin_note_edit(item)
         # Re-editing a now-deselected note selects it again.
-        canvas.services.selection.selection_controller.select_note.assert_called_once_with(
+        canvas.services.selection.select_note.assert_called_once_with(
             item, additive=False
         )
         canvas.setFocus.assert_called_once_with(Qt.FocusReason.MouseFocusReason)
@@ -323,9 +324,7 @@ class UIServiceTailCoverageTest(unittest.TestCase):
             ),
             services=canvas_runtime_services(
                 history_service=_history_service(),
-                selection_controller=SimpleNamespace(
-                    update_note_selection_box=mock.Mock()
-                ),
+                selection=SimpleNamespace(update_note_selection_box=mock.Mock()),
             ),
         )
         controller = CanvasNoteController(canvas)
@@ -341,7 +340,7 @@ class UIServiceTailCoverageTest(unittest.TestCase):
 
         self.assertEqual(_FakeCursor.last_instance.block_format.height, (140, 42))
         update_box.assert_called_once_with(item, canvas.runtime_state.text_style_state)
-        canvas.services.selection.selection_controller.update_note_selection_box.assert_called_once_with(
+        canvas.services.selection.update_note_selection_box.assert_called_once_with(
             item
         )
 
@@ -394,9 +393,7 @@ class UIServiceTailCoverageTest(unittest.TestCase):
             ),
             services=canvas_runtime_services(
                 history_service=_history_service(),
-                selection_controller=SimpleNamespace(
-                    update_note_selection_box=mock.Mock()
-                ),
+                selection=SimpleNamespace(update_note_selection_box=mock.Mock()),
             ),
         )
         controller = CanvasNoteController(canvas)

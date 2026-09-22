@@ -37,7 +37,7 @@ from chemvas.ui.scene_item_state import (
     shape_state_dict_for,
     ts_bracket_state_dict_for,
 )
-from chemvas.ui.selection_service_access import refresh_selection_outline_for
+from chemvas.ui.selection_state import selection_for
 from chemvas.ui.shape_record_access import (
     discard_shape_record_for,
     set_shape_record_for,
@@ -144,7 +144,7 @@ class SceneDecorationService:
                 return False
             apply_scene_item_state(self.canvas, item, after)
             self.history.push(UpdateSceneItemCommand(item, before, after))
-        refresh_selection_outline_for(self.canvas)
+        selection_for(self.canvas).update_selection_outline()
         return True
 
     def add_ts_bracket(self, rect: QRectF, *, bracket_kind: str | None = None):

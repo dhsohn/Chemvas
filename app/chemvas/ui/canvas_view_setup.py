@@ -13,7 +13,6 @@ from chemvas.ui.canvas_model_state import model_for, set_model_for
 from chemvas.ui.canvas_runtime_state import attach_canvas_runtime_state
 from chemvas.ui.canvas_services import attach_canvas_services, build_canvas_services
 from chemvas.ui.renderer_style_access import bond_line_width_for
-from chemvas.ui.scene_group_operations import expand_selection_to_groups_for
 from chemvas.ui.scene_rendering import build_scene_render_context
 from chemvas.ui.sheet_setup_access import apply_sheet_scene_rect_for
 from chemvas.ui.sheet_setup_logic import DEFAULT_SHEET_ORIENTATION, DEFAULT_SHEET_SIZE
@@ -56,10 +55,8 @@ def initialize_canvas_view(canvas, *, renderer) -> None:
     )
     attach_canvas_services(canvas, services)
     callbacks = callback_state_for(canvas)
-    callbacks.scene_selection_group = partial(expand_selection_to_groups_for, canvas)
-    callbacks.scene_selection_outline = (
-        services.selection.selection_controller.update_selection_outline
-    )
+    callbacks.scene_selection_group = services.selection.expand_selection_to_groups
+    callbacks.scene_selection_outline = services.selection.update_selection_outline
     canvas.scene().selectionChanged.connect(canvas.handle_scene_selection_group_changed)
     canvas.scene().selectionChanged.connect(
         canvas.handle_scene_selection_outline_changed

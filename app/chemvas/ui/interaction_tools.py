@@ -7,11 +7,7 @@ from PyQt6.QtCore import Qt
 from chemvas.core.tool_overlay_logic import activate_tool_no_drag
 from chemvas.ui.mark_item_access import find_atom_for_mark_for
 from chemvas.ui.scene_decoration_access import add_mark_for, add_mark_for_atom_for
-from chemvas.ui.selection_service_access import (
-    clear_note_selection_for,
-    select_note_for,
-    toggle_note_selection_for,
-)
+from chemvas.ui.selection_state import selection_for
 from chemvas.ui.tool_base import Tool
 
 
@@ -61,16 +57,16 @@ class NoteTool(Tool):
                 return False
             modifiers = event.modifiers()
             if modifiers & Qt.KeyboardModifier.ControlModifier:
-                toggle_note_selection_for(self.canvas, item)
+                selection_for(self.canvas).toggle_note_selection(item)
                 return True
             if modifiers & Qt.KeyboardModifier.ShiftModifier:
-                select_note_for(self.canvas, item, additive=True)
+                selection_for(self.canvas).select_note(item, additive=True)
                 return True
-            select_note_for(self.canvas, item, additive=False)
+            selection_for(self.canvas).select_note(item, additive=False)
             self.context.begin_note_edit(item)
             return True
         pos = self.context.scene_pos_from_event(event)
-        clear_note_selection_for(self.canvas)
+        selection_for(self.canvas).clear_note_selection()
         item = self.context.create_text_note(pos, "")
         self.context.begin_note_edit(item)
         return True

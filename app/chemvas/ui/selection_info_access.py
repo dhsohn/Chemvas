@@ -17,7 +17,7 @@ from chemvas.ui.selection_info_state import (
 
 
 def _selection_ids_for_info(canvas) -> tuple[set[int], set[int]]:
-    from chemvas.ui.selection_collection_access import selected_chemical_ids_for
+    from chemvas.ui.selection_queries import selected_chemical_ids_for
 
     return selected_chemical_ids_for(canvas)
 

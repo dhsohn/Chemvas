@@ -15,16 +15,14 @@ from PyQt6.QtWidgets import (
     QGraphicsView,
 )
 
-from chemvas.ui.canvas_scene_items_state import (
-    CanvasSceneItemsState,
-    set_selected_notes_for,
-)
-from chemvas.ui.selection_scene_access import (
+from chemvas.ui.canvas_scene_items_state import CanvasSceneItemsState
+from chemvas.ui.selection_queries import (
     clear_scene_selection_for,
     scene_selected_items_for,
     selected_scene_notes_for,
     set_scene_items_selected_for,
 )
+from chemvas.ui.selection_state import set_selected_notes_for
 from tests.runtime_state import canvas_runtime_state
 
 

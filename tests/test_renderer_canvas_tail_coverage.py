@@ -32,7 +32,7 @@ from chemvas.ui.canvas_rotation_state import CanvasRotationState
 from chemvas.ui.canvas_scene_items_state import CanvasSceneItemsState
 from chemvas.ui.history_commands import SetBondLengthGeometryCommand
 from chemvas.ui.scene_clipboard_transaction_logic import translated_scene_item_state
-from chemvas.ui.selection_collection_access import append_selected_item_ids
+from chemvas.ui.selection_queries import append_selected_item_ids
 from chemvas.ui.selection_style_access import restore_selection_from_ids_for
 
 
@@ -212,15 +212,13 @@ class RendererCanvasTailCoverageTest(unittest.TestCase):
                 ),
                 structure_build_service=SimpleNamespace(render_model=mock.Mock()),
                 # set_bond_length refreshes the selection outline on its way out.
-                selection_controller=SimpleNamespace(
-                    update_selection_outline=mock.Mock()
-                ),
+                selection=SimpleNamespace(update_selection_outline=mock.Mock()),
             ),
         )
 
         CanvasGeometryController(
             view,
-            hit_testing_service=view.services.selection.hit_testing_service,
+            hit_testing_service=view.services.hit_testing_service,
             history_service=view.services.history_service,
         ).set_bond_length(30.0)
 
@@ -268,7 +266,7 @@ class RendererCanvasTailCoverageTest(unittest.TestCase):
                 atom_graphics_state=CanvasAtomGraphicsState(),
                 bond_graphics_state=CanvasBondGraphicsState(),
             ),
-            services=canvas_runtime_services(selection_controller=selection_controller),
+            services=canvas_runtime_services(selection=selection_controller),
         )
         restore_selection_from_ids_for(restore_view, {99}, {42})
         scene.clearSelection.assert_called_once_with()

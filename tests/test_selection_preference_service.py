@@ -3,6 +3,8 @@ import unittest
 from types import SimpleNamespace
 from unittest import mock
 
+from tests.selection_support import build_selection_controller
+
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PyQt6.QtCore import QPointF
@@ -10,24 +12,11 @@ from PyQt6.QtWidgets import QApplication
 
 from chemvas.domain.document import Atom
 from chemvas.features.selection import StructureHit
-from chemvas.ui.selection_preference_service import SelectionPreferenceService
-from chemvas.ui.selection_structure_service import SelectionStructureService
 from tests.selection_support import _FakeItem, _make_canvas
 
 
-def _make_service(canvas, *, hit_testing_service=None, structure_service=None):
-    if hit_testing_service is None:
-        hit_testing_service = canvas.services.selection.hit_testing_service
-    if structure_service is None:
-        structure_service = SelectionStructureService(
-            canvas,
-            graph_service=canvas.services.graph_service,
-        )
-    return SelectionPreferenceService(
-        canvas,
-        hit_testing_service=hit_testing_service,
-        structure_service=structure_service,
-    )
+def _make_service(canvas, *, hit_testing_service=None):
+    return build_selection_controller(canvas, hit_testing_service=hit_testing_service)
 
 
 class SelectionPreferenceServiceTest(unittest.TestCase):
@@ -85,11 +74,11 @@ class SelectionPreferenceServiceTest(unittest.TestCase):
 
         with (
             mock.patch(
-                "chemvas.ui.selection_preference_service.choose_preferred_structure_hit",
+                "chemvas.ui.selection_controller.choose_preferred_structure_hit",
                 return_value=None,
             ),
             mock.patch(
-                "chemvas.ui.selection_preference_service.nearest_ring_atom_id",
+                "chemvas.ui.selection_controller.nearest_ring_atom_id",
                 return_value=2,
             ),
         ):
@@ -101,11 +90,11 @@ class SelectionPreferenceServiceTest(unittest.TestCase):
         canvas.atom_items = {}
         with (
             mock.patch(
-                "chemvas.ui.selection_preference_service.choose_preferred_structure_hit",
+                "chemvas.ui.selection_controller.choose_preferred_structure_hit",
                 return_value=None,
             ),
             mock.patch(
-                "chemvas.ui.selection_preference_service.nearest_ring_atom_id",
+                "chemvas.ui.selection_controller.nearest_ring_atom_id",
                 return_value=2,
             ),
         ):
@@ -126,7 +115,7 @@ class SelectionPreferenceServiceTest(unittest.TestCase):
         )
 
         with mock.patch(
-            "chemvas.ui.selection_preference_service.choose_preferred_structure_hit",
+            "chemvas.ui.selection_controller.choose_preferred_structure_hit",
             return_value=StructureHit(kind="atom", id=1),
         ):
             self.assertEqual(

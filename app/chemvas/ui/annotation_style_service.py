@@ -12,7 +12,7 @@ from chemvas.ui.canvas_tool_settings_state import (
 from chemvas.ui.scene_decoration_build_access import build_orbital_items_for
 from chemvas.ui.scene_item_access import apply_scene_item_state
 from chemvas.ui.scene_item_state import arrow_state_dict_for
-from chemvas.ui.selection_service_access import refresh_selection_outline_for
+from chemvas.ui.selection_state import selection_for
 
 
 def apply_annotation_style_for(canvas, values: dict[str, float | bool]) -> None:
@@ -40,7 +40,7 @@ def apply_annotation_style_for(canvas, values: dict[str, float | bool]) -> None:
             ]
             for child, template in zip(existing_lobes, rebuilt_lobes, strict=True):
                 child.setBrush(template.brush())
-    refresh_selection_outline_for(canvas)
+    selection_for(canvas).update_selection_outline()
     callback = callback_state_for(canvas).tool_change
     if callback is not None:
         callback()

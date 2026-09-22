@@ -22,13 +22,12 @@ from chemvas.ui.handle_overlay_access import (
 from chemvas.ui.handle_state import active_handles_for, handle_target_for
 from chemvas.ui.history_commands import UpdateSceneItemCommand
 from chemvas.ui.scene_item_state import scene_item_state_for
-from chemvas.ui.selection_collection_access import selection_snapshot_for
 from chemvas.ui.selection_drag_tool import SelectionDragMixin
-from chemvas.ui.selection_scene_access import clear_scene_selection_for
-from chemvas.ui.selection_service_access import (
-    clear_note_selection_for,
-    select_note_for,
+from chemvas.ui.selection_queries import (
+    clear_scene_selection_for,
+    selection_snapshot_for,
 )
+from chemvas.ui.selection_state import selection_for
 from chemvas.ui.tool_base import Tool
 
 # Holding Shift while turning the rotation handle snaps the sweep to this
@@ -344,7 +343,7 @@ class SelectTool(SelectionDragMixin, Tool):
                 clear_scene_selection_for(self.canvas)
                 # Notes own selection outside Qt; their service expands
                 # notes-only groups before the drag snapshot is collected.
-                select_note_for(self.canvas, item)
+                selection_for(self.canvas).select_note(item)
             elif not self._select_structure_item(item):
                 return False
             if item.data(0) == "shape":
@@ -413,7 +412,7 @@ class SelectTool(SelectionDragMixin, Tool):
             if not event.modifiers() & (
                 Qt.KeyboardModifier.ControlModifier | Qt.KeyboardModifier.ShiftModifier
             ):
-                clear_note_selection_for(self.canvas)
+                selection_for(self.canvas).clear_note_selection()
             return False
         if decision.action == "reselect_preferred_and_drag":
             if preferred is None or preferred.data(0) not in {"atom", "bond", "ring"}:

@@ -313,7 +313,7 @@ class _FakeCanvas:
 def _service_for(canvas: _FakeCanvas) -> StructureBuildService:
     return StructureBuildService(
         canvas,
-        hit_testing_service=canvas.services.selection.hit_testing_service,
+        hit_testing_service=canvas.services.hit_testing_service,
         move_controller=canvas.services.interaction.move_controller,
         graph_service=canvas.services.graph_service,
     )
@@ -960,7 +960,7 @@ class StructureBuildServiceTest(unittest.TestCase):
 
         canvas.record_calls.clear()
         canvas.hit_testing_find_atom_near = Mock(side_effect=[0, 1])
-        canvas.services.selection.hit_testing_service.find_atom_near = (
+        canvas.services.hit_testing_service.find_atom_near = (
             canvas.hit_testing_find_atom_near
         )
         updated = service.add_bond_between_points(
@@ -980,7 +980,7 @@ class StructureBuildServiceTest(unittest.TestCase):
         hit_testing_service = SimpleNamespace(
             find_atom_near=Mock(side_effect=[None, None])
         )
-        canvas.services.selection.hit_testing_service = hit_testing_service
+        canvas.services.hit_testing_service = hit_testing_service
         canvas.find_atom_near = Mock(
             side_effect=AssertionError("canvas facade should not be used")
         )
@@ -1014,7 +1014,7 @@ class StructureBuildServiceTest(unittest.TestCase):
                 side_effect=AssertionError("direct alias should not be used")
             )
         )
-        canvas.services.selection.hit_testing_service = registry_hit_testing_service
+        canvas.services.hit_testing_service = registry_hit_testing_service
         canvas.hit_testing = direct_alias_hit_testing_service
         canvas.find_atom_near = Mock(
             side_effect=AssertionError("canvas facade should not be used")
@@ -1082,7 +1082,7 @@ class StructureBuildServiceTest(unittest.TestCase):
         )
         canvas.model.next_atom_id = 2
         canvas.hit_testing_find_atom_near = Mock(side_effect=[0, 1])
-        canvas.services.selection.hit_testing_service.find_atom_near = (
+        canvas.services.hit_testing_service.find_atom_near = (
             canvas.hit_testing_find_atom_near
         )
         canvas.services.interaction.move_controller.redraw_bond = Mock(
@@ -1111,7 +1111,7 @@ class StructureBuildServiceTest(unittest.TestCase):
         )
         canvas.model.next_atom_id = 2
         canvas.hit_testing_find_atom_near = Mock(side_effect=[0, 1])
-        canvas.services.selection.hit_testing_service.find_atom_near = (
+        canvas.services.hit_testing_service.find_atom_near = (
             canvas.hit_testing_find_atom_near
         )
         redrawn_states: list[tuple[int, str]] = []
@@ -1160,7 +1160,7 @@ class StructureBuildServiceTest(unittest.TestCase):
         )
         canvas.model.next_atom_id = 4
         canvas.hit_testing_find_atom_near = Mock(side_effect=[0, 1])
-        canvas.services.selection.hit_testing_service.find_atom_near = (
+        canvas.services.hit_testing_service.find_atom_near = (
             canvas.hit_testing_find_atom_near
         )
         redrawn_bond_states: list[tuple[int, str]] = []
@@ -1582,7 +1582,7 @@ class StructureBuildServiceTest(unittest.TestCase):
         )
 
         canvas.hit_testing_find_atom_near = Mock(side_effect=[0, 0])
-        canvas.services.selection.hit_testing_service.find_atom_near = (
+        canvas.services.hit_testing_service.find_atom_near = (
             canvas.hit_testing_find_atom_near
         )
         self.assertIsNone(
@@ -1592,7 +1592,7 @@ class StructureBuildServiceTest(unittest.TestCase):
         )
 
         canvas.hit_testing_find_atom_near = Mock(side_effect=[0, 1])
-        canvas.services.selection.hit_testing_service.find_atom_near = (
+        canvas.services.hit_testing_service.find_atom_near = (
             canvas.hit_testing_find_atom_near
         )
         canvas.model.bonds = [None]

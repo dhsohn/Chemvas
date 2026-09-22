@@ -1,10 +1,11 @@
 import os
 import unittest
-from types import SimpleNamespace
 from unittest import mock
 
+from chemvas.ui.selection_state import selection_for
 from tests.runtime_services import canvas_runtime_services
 from tests.runtime_state import canvas_runtime_state
+from tests.selection_support import build_selection_controller
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
@@ -36,9 +37,7 @@ from chemvas.ui.canvas_mark_registry import CanvasMarkRegistry, mark_registry_fo
 from chemvas.ui.canvas_model_access import model_for
 from chemvas.ui.canvas_scene_items_state import (
     CanvasSceneItemsState,
-    add_selected_note_for,
     append_scene_item_for,
-    selected_notes_for,
 )
 from chemvas.ui.canvas_text_style_state import CanvasTextStyleState
 from chemvas.ui.history_commands import (
@@ -47,14 +46,12 @@ from chemvas.ui.history_commands import (
 )
 from chemvas.ui.history_operations import CanvasHistoryOperations
 from chemvas.ui.scene_group_operations import (
-    expand_note_selection_to_groups_for,
-    expand_selection_to_groups_for,
     group_selection_for,
     group_selection_targets_for,
     selected_group_rects_for,
     ungroup_selection_for,
 )
-from chemvas.ui.selection_note_service import SelectionNoteService
+from chemvas.ui.selection_state import add_selected_note_for, selected_notes_for
 
 
 class _History:
@@ -84,14 +81,16 @@ class _Canvas(QGraphicsView):
             scene_items_state=CanvasSceneItemsState(),
             text_style_state=CanvasTextStyleState(),
         )
-        self.selection_controller = SimpleNamespace(
-            select_note=mock.Mock(),
-            toggle_note_selection=mock.Mock(),
-            update_selection_outline=mock.Mock(),
-        )
-        self.services = canvas_runtime_services(
-            selection_controller=self.selection_controller
-        )
+        self.services = canvas_runtime_services()
+        self.selection_controller = build_selection_controller(self, render=False)
+        for name in (
+            "select_note",
+            "toggle_note_selection",
+            "update_selection_outline",
+        ):
+            method = getattr(self.selection_controller, name)
+            setattr(self.selection_controller, name, mock.Mock(wraps=method))
+        self.selection_controller.update_note_selection_box = mock.Mock()
 
     def add_scene_item(self, kind: str, *, selected: bool = False):
         item = QGraphicsRectItem(0.0, 0.0, 5.0, 5.0)
@@ -322,7 +321,7 @@ class SceneGroupOperationsTest(unittest.TestCase):
         register_group_for(canvas, {atom_a, atom_b}, [arrow, note])
         item_a.setSelected(True)
 
-        expand_selection_to_groups_for(canvas)
+        selection_for(canvas).expand_selection_to_groups()
 
         self.assertTrue(item_b.isSelected())
         self.assertTrue(bond_item.isSelected())
@@ -330,7 +329,9 @@ class SceneGroupOperationsTest(unittest.TestCase):
         canvas.selection_controller.select_note.assert_called_once_with(
             note, additive=True
         )
-        canvas.selection_controller.update_selection_outline.assert_called_once_with()
+        self.assertEqual(
+            canvas.selection_controller.update_selection_outline.call_count, 2
+        )
         self.assertFalse(group_state_for(canvas).expanding)
 
     def test_expand_selection_is_noop_when_group_fully_selected(self) -> None:
@@ -341,7 +342,7 @@ class SceneGroupOperationsTest(unittest.TestCase):
         item_a.setSelected(True)
         arrow.setSelected(True)
 
-        expand_selection_to_groups_for(canvas)
+        selection_for(canvas).expand_selection_to_groups()
 
         canvas.selection_controller.update_selection_outline.assert_not_called()
 
@@ -358,14 +359,16 @@ class SceneGroupOperationsTest(unittest.TestCase):
         atom_b, item_b = _add_atom(canvas, 50.0, 0.0)
         item_b.setSelected(True)
 
-        expand_selection_to_groups_for(canvas)
+        selection_for(canvas).expand_selection_to_groups()
 
         # The lingering note must not re-anchor the group...
         self.assertFalse(item_a.isSelected())
         self.assertFalse(arrow.isSelected())
         # ...and must itself be deselected so the group drops as a unit.
         canvas.selection_controller.toggle_note_selection.assert_called_once_with(note)
-        canvas.selection_controller.update_selection_outline.assert_called_once_with()
+        self.assertEqual(
+            canvas.selection_controller.update_selection_outline.call_count, 2
+        )
 
     def test_expand_selection_keeps_notes_only_group_selection(self) -> None:
         canvas = _Canvas()
@@ -375,7 +378,7 @@ class SceneGroupOperationsTest(unittest.TestCase):
         _, item = _add_atom(canvas)
         item.setSelected(True)
 
-        expand_selection_to_groups_for(canvas)
+        selection_for(canvas).expand_selection_to_groups()
 
         canvas.selection_controller.toggle_note_selection.assert_not_called()
 
@@ -386,7 +389,7 @@ class SceneGroupOperationsTest(unittest.TestCase):
         register_group_for(canvas, {atom_b}, [])
         item_a.setSelected(True)
 
-        expand_selection_to_groups_for(canvas)
+        selection_for(canvas).expand_selection_to_groups()
 
         self.assertFalse(item_b.isSelected())
         canvas.selection_controller.update_selection_outline.assert_not_called()
@@ -516,7 +519,7 @@ class SceneGroupOperationsTest(unittest.TestCase):
 
         # Notes-only groups have no scene shrink path, so a Qt-selected note
         # must not scene-expand them (sticky-marquee prevention).
-        expand_selection_to_groups_for(canvas)
+        selection_for(canvas).expand_selection_to_groups()
 
         canvas.selection_controller.select_note.assert_not_called()
 
@@ -528,7 +531,7 @@ class SceneGroupOperationsTest(unittest.TestCase):
         note_a.setSelected(True)
         note_b.setSelected(True)
         register_group_for(canvas, set(), [note_a, note_b])
-        service = SelectionNoteService(canvas)
+        service = canvas.selection_controller
 
         # NoteTool press on empty canvas clears the note selection wholesale;
         # the Qt flags must drop too or an invisible selection would remain.
@@ -546,7 +549,7 @@ class SceneGroupOperationsTest(unittest.TestCase):
         note_a.setSelected(True)
         note_b.setSelected(True)
         register_group_for(canvas, set(), [note_a, note_b])
-        service = SelectionNoteService(canvas)
+        service = canvas.selection_controller
 
         service.toggle_note_selection(note_a)
 
@@ -570,7 +573,7 @@ class SceneGroupOperationsTest(unittest.TestCase):
         note_b = _add_note(canvas)
         register_group_for(canvas, set(), [note_a, note_b])
 
-        expand_note_selection_to_groups_for(canvas, note_a)
+        selection_for(canvas).expand_note_selection_to_groups(note_a)
 
         canvas.selection_controller.select_note.assert_called_once_with(
             note_b, additive=True
@@ -584,7 +587,7 @@ class SceneGroupOperationsTest(unittest.TestCase):
         note = _add_note(canvas)
         other = _add_note(canvas)
         register_group_for(canvas, {atom_a}, [arrow, note, other])
-        service = SelectionNoteService(canvas)
+        service = canvas.selection_controller
 
         # A direct Note-tool selection is an explicit group anchor even though
         # raw Qt note selection remains excluded from the marquee expansion.
@@ -594,9 +597,7 @@ class SceneGroupOperationsTest(unittest.TestCase):
         self.assertIn(note, selected_notes_for(canvas))
         self.assertTrue(atom_item.isSelected())
         self.assertTrue(arrow.isSelected())
-        canvas.selection_controller.select_note.assert_called_once_with(
-            other, additive=True
-        )
+        canvas.selection_controller.select_note.assert_any_call(other, additive=True)
         self.assertFalse(group_state_for(canvas).expanding)
 
         notes_only_canvas = _Canvas()
@@ -605,7 +606,7 @@ class SceneGroupOperationsTest(unittest.TestCase):
         register_group_for(notes_only_canvas, set(), [note_a, note_b])
         group_state_for(notes_only_canvas).expanding = True
 
-        expand_note_selection_to_groups_for(notes_only_canvas, note_a)
+        selection_for(notes_only_canvas).expand_note_selection_to_groups(note_a)
         notes_only_canvas.selection_controller.select_note.assert_not_called()
 
     def test_deselecting_mixed_group_note_deselects_whole_group(self) -> None:
@@ -618,7 +619,7 @@ class SceneGroupOperationsTest(unittest.TestCase):
         note.setSelected(True)
         other_note.setSelected(True)
         register_group_for(canvas, {atom_a}, [arrow, note, other_note])
-        service = SelectionNoteService(canvas)
+        service = canvas.selection_controller
 
         # Note focus-out / NoteTool Ctrl-click deselects through the note
         # service; the mixed group must drop as a unit or the box would span a
@@ -644,7 +645,7 @@ class SceneGroupOperationsTest(unittest.TestCase):
         # A charge mark bound to the grouped atom, Qt-selected via rubber band.
         mark = _add_mark(canvas, atom_id=atom_a, selected=True)
         mark_registry_for(canvas).add_for_atom(atom_a, mark)
-        service = SelectionNoteService(canvas)
+        service = canvas.selection_controller
 
         service.toggle_note_selection(note)
 
@@ -660,7 +661,7 @@ class SceneGroupOperationsTest(unittest.TestCase):
         note = _add_note(canvas, selected=True)
         register_group_for(canvas, {atom_a}, [note])
         atom_b, item_b = _add_atom(canvas, 60.0, 0.0, selected=True)
-        service = SelectionNoteService(canvas)
+        service = canvas.selection_controller
 
         # NoteTool press on empty canvas clears the note selection wholesale;
         # the mixed group's scene members must drop with their note.
@@ -713,7 +714,7 @@ class SceneGroupOperationsTest(unittest.TestCase):
         _add_mark(canvas, atom_id=atom_a, selected=True)
         register_group_for(canvas, {atom_a}, [arrow])
 
-        expand_selection_to_groups_for(canvas)
+        selection_for(canvas).expand_selection_to_groups()
 
         self.assertTrue(item_a.isSelected())
         self.assertTrue(arrow.isSelected())

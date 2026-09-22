@@ -14,7 +14,7 @@ from chemvas.ui.canvas_bond_graphics_state import bond_items_for_id
 from chemvas.ui.canvas_hover_state import hover_state_for
 from chemvas.ui.canvas_window_access import snapshot_canvas_state_for
 from chemvas.ui.select_all_access import select_all_scene_items_for
-from chemvas.ui.selection_collection_access import selected_ids_for
+from chemvas.ui.selection_queries import selected_ids_for
 from chemvas.ui.structure_payload_access import build_selected_3d_conversion_payload_for
 from tests.canvas_factory import build_canvas_view
 

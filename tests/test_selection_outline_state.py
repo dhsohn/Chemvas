@@ -1,11 +1,11 @@
 from types import SimpleNamespace
 
-from chemvas.ui.selection_outline_state import (
-    SelectionOutlineState,
+from chemvas.ui.selection_state import (
+    SelectionState,
     append_selection_outline_for,
     clear_selection_outlines_for,
-    selection_outline_state_for,
     selection_outlines_for,
+    selection_state_for,
     set_selection_outlines_for,
 )
 from tests.runtime_state import canvas_runtime_state
@@ -13,11 +13,11 @@ from tests.runtime_state import canvas_runtime_state
 
 def test_selection_outline_state_for_uses_runtime_state() -> None:
     runtime_state = SimpleNamespace(
-        selection_outline_state=SelectionOutlineState(outlines=["outline"])
+        selection_state=SelectionState(outlines=["outline"])
     )
     canvas = SimpleNamespace(runtime_state=runtime_state)
 
-    assert selection_outline_state_for(canvas) is runtime_state.selection_outline_state
+    assert selection_state_for(canvas) is runtime_state.selection_state
     assert selection_outlines_for(canvas) == ["outline"]
 
 
@@ -25,12 +25,10 @@ def test_selection_outline_state_for_does_not_read_legacy_fake_canvas_attrs() ->
     outlines = ["existing"]
     canvas = SimpleNamespace(
         selection_outlines=outlines,
-        runtime_state=canvas_runtime_state(
-            selection_outline_state=SelectionOutlineState()
-        ),
+        runtime_state=canvas_runtime_state(selection_state=SelectionState()),
     )
 
-    state = selection_outline_state_for(canvas)
+    state = selection_state_for(canvas)
 
     assert state.outlines == []
     assert selection_outlines_for(canvas) == []
@@ -40,9 +38,7 @@ def test_selection_outline_state_setters_update_state_without_canvas_attr_mirror
     None
 ):
     canvas = SimpleNamespace(
-        runtime_state=canvas_runtime_state(
-            selection_outline_state=SelectionOutlineState()
-        )
+        runtime_state=canvas_runtime_state(selection_state=SelectionState())
     )
 
     set_selection_outlines_for(canvas, ["a"])

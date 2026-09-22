@@ -18,11 +18,10 @@ from PyQt6.QtWidgets import (
 from chemvas.ui.canvas_mark_registry import CanvasMarkRegistry
 from chemvas.ui.canvas_scene_items_state import (
     CanvasSceneItemsState,
-    add_selected_note_for,
     append_scene_item_for,
-    selected_notes_for,
 )
 from chemvas.ui.scene_item_lifecycle_service import SceneItemLifecycleService
+from chemvas.ui.selection_state import add_selected_note_for, selected_notes_for
 
 
 class _Canvas(QGraphicsView):
@@ -33,11 +32,9 @@ class _Canvas(QGraphicsView):
             scene_items_state=CanvasSceneItemsState(),
         )
         self.selection_controller = SimpleNamespace(
-            update_selection_outline=mock.Mock()
+            update_selection_outline=mock.Mock(), update_note_selection_box=mock.Mock()
         )
-        self.services = canvas_runtime_services(
-            selection_controller=self.selection_controller
-        )
+        self.services = canvas_runtime_services(selection=self.selection_controller)
 
     def add_note(self, *, selected: bool) -> QGraphicsTextItem:
         note = QGraphicsTextItem("note")

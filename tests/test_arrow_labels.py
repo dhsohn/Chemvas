@@ -67,7 +67,7 @@ from chemvas.ui.move_access import move_item_for
 from chemvas.ui.scene_item_restore import create_arrow_item_from_state
 from chemvas.ui.scene_item_state import apply_scene_item_state
 from chemvas.ui.scene_item_state_serialization import arrow_state_dict
-from chemvas.ui.selection_collection_access import selection_items_for_copy_for
+from chemvas.ui.selection_queries import selection_items_for_copy_for
 
 
 class ArrowLabelSyntaxTest(unittest.TestCase):
@@ -929,9 +929,7 @@ class ArrowLabelGuiTest(unittest.TestCase):
             arrow, {"above": "k_1"}
         )
         (above,) = _label_children(arrow)
-        hit = canvas_services_for(
-            canvas
-        ).selection.hit_testing_service.item_at_scene_pos(
+        hit = canvas_services_for(canvas).hit_testing_service.item_at_scene_pos(
             above.sceneBoundingRect().center()
         )
         self.assertIs(hit, arrow)

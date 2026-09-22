@@ -29,10 +29,7 @@ from chemvas.ui.scene_item_access import (
     restore_note_from_state,
     restore_ring_from_state,
 )
-from chemvas.ui.selection_collection_access import (
-    selected_ids_for,
-    selection_items_for_copy_for,
-)
+from chemvas.ui.selection_queries import selected_ids_for, selection_items_for_copy_for
 from chemvas.ui.structure_mutation_access import add_atom_for, add_bond_for
 from tests.canvas_factory import build_canvas_view
 
@@ -162,7 +159,7 @@ def test_note_copy_matches_deselected_render_without_changing_note(canvas):
     text, html = note.toPlainText(), note.toHtml()
     selected_image = _copy(canvas).imageData()
     note.setSelected(False)
-    canvas.runtime_state.scene_items_state.selected_notes = [note]
+    canvas.runtime_state.selection_state.selected_notes = [note]
     unselected_image = _copy(canvas).imageData()
     assert selected_image.size() == unselected_image.size()
     assert _image_bytes(selected_image) == _image_bytes(unselected_image)
@@ -188,7 +185,7 @@ def test_qt_rubber_band_note_copy_omits_selection_frame(canvas, app):
     assert note.isSelected()
     selected_image = _copy(canvas).imageData()
     note.setSelected(False)
-    canvas.runtime_state.scene_items_state.selected_notes = [note]
+    canvas.runtime_state.selection_state.selected_notes = [note]
     assert _image_bytes(selected_image) == _image_bytes(_copy(canvas).imageData())
 
 

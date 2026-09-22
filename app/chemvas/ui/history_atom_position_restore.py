@@ -17,7 +17,7 @@ from chemvas.ui.mark_item_access import set_mark_center_for
 from chemvas.ui.move_access import move_service_from_canvas
 from chemvas.ui.renderer_style_access import bond_length_px_for
 from chemvas.ui.selection_rotation_access import update_ring_fills_for_atoms_for
-from chemvas.ui.selection_service_access import refresh_selection_outline_for
+from chemvas.ui.selection_state import selection_for
 
 
 def set_atom_positions_for_history(
@@ -92,7 +92,7 @@ def set_atom_positions_for_history(
         update_ring_fills_for_atoms_for(canvas, atom_ids)
     history_hit_testing_service_for(canvas).mark_spatial_index_dirty()
     if update_selection:
-        refresh_selection_outline_for(canvas)
+        selection_for(canvas).update_selection_outline()
 
 
 __all__ = ["set_atom_positions_for_history"]

@@ -15,7 +15,7 @@ from chemvas.ui.scene_item_access import (
     remove_item_from_canvas_scene,
 )
 from chemvas.ui.selection_outline_items import selection_object_outline_item
-from chemvas.ui.selection_outline_state import (
+from chemvas.ui.selection_state import (
     append_selection_outline_for,
     selection_outlines_for,
 )

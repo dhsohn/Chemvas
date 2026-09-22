@@ -29,15 +29,14 @@ from chemvas.ui.canvas_rotation_state import CanvasRotationState
 from chemvas.ui.canvas_scene_items_state import (
     CanvasSceneItemsState,
     set_scene_item_collection_for,
-    set_selected_notes_for,
 )
 from chemvas.ui.canvas_text_style_state import CanvasTextStyleState
 from chemvas.ui.selection_info_state import SelectionInfoState
-from chemvas.ui.selection_outline_state import (
-    SelectionOutlineState,
+from chemvas.ui.selection_state import (
+    SelectionState,
+    set_selected_notes_for,
     set_selection_outlines_for,
 )
-from chemvas.ui.selection_style_state import SelectionStyleState
 
 
 class _FakeItem:
@@ -148,8 +147,7 @@ def _canvas_runtime_state():
         rotation_state=CanvasRotationState(),
         scene_items_state=CanvasSceneItemsState(),
         selection_info_state=SelectionInfoState.create(),
-        selection_outline_state=SelectionOutlineState(),
-        selection_style_state=SelectionStyleState(),
+        selection_state=SelectionState(),
         text_style_state=CanvasTextStyleState(),
     )
 
@@ -204,7 +202,7 @@ def _make_canvas(**overrides):
         ring_items=[],
         selected_notes=[],
         selection_outlines=[],
-        selection_style_state=SelectionStyleState(color=QColor("#1f5eff")),
+        selection_state=SelectionState(color=QColor("#1f5eff")),
         selection_info_callback=mock.Mock(),
         scene=lambda: scene,
         item_at_scene_pos=mock.Mock(return_value=None),
@@ -225,7 +223,7 @@ def _make_canvas(**overrides):
     selected_notes = defaults.pop("selected_notes")
     selection_outlines = defaults.pop("selection_outlines")
     selection_info_callback = defaults.pop("selection_info_callback")
-    selection_style_state = defaults.pop("selection_style_state")
+    selection_state = defaults.pop("selection_state")
     hit_testing_service = defaults.pop("hit_testing_service", None)
     graph_service = defaults.pop("graph_service", None)
     graph_expand_connected_atoms = defaults.pop("graph_expand_connected_atoms")
@@ -233,7 +231,7 @@ def _make_canvas(**overrides):
     tool_controller = defaults.pop("tool_controller", SimpleNamespace(active=None))
     services = defaults.pop("services", canvas_runtime_services())
     canvas = _FakeCanvas(**defaults)
-    canvas.runtime_state.selection_style_state = selection_style_state
+    canvas.runtime_state.selection_state = selection_state
     canvas.runtime_state.selection_info_state = SelectionInfoState(
         callback=selection_info_callback
     )
@@ -257,12 +255,52 @@ def _make_canvas(**overrides):
     services.graph_service = graph_service
     services.hit_testing_service = hit_testing_service
     services.tool_controller = tool_controller
-    if not hasattr(services.selection, "selection_controller"):
+    if not hasattr(services, "selection"):
         # The structure service clears note selection through this port; the
         # controller under test is created after the canvas, so stand in for it.
-        services.selection_controller = SimpleNamespace(
-            clear_note_selection=mock.Mock()
-        )
+        services.selection = SimpleNamespace(clear_note_selection=mock.Mock())
     canvas.services = services
     canvas.selection_info_callback = selection_info_callback
     return canvas
+
+
+def build_selection_controller(
+    canvas,
+    *,
+    graph_service=None,
+    hit_testing_service=None,
+    active_tool_name_provider=None,
+    render=True,
+):
+    """Build the real selection owner with explicit focused-test collaborators."""
+    from chemvas.ui.canvas_hit_testing_service import CanvasHitTestingService
+    from chemvas.ui.canvas_view_ports import scene_pos_from_event_for_view
+    from chemvas.ui.selection_controller import SelectionController
+
+    if not hasattr(canvas, "services"):
+        canvas.services = canvas_runtime_services()
+    if graph_service is None:
+        graph_service = getattr(canvas.services, "graph_service", None)
+    if graph_service is None:
+        graph_service = SimpleNamespace(
+            expand_connected_atoms=lambda ids: set(ids),
+            connected_components=lambda ids: [set(ids)] if ids else [],
+        )
+    if hit_testing_service is None:
+        hit_testing_service = getattr(canvas.services, "hit_testing_service", None)
+    if hit_testing_service is None:
+        hit_testing_service = CanvasHitTestingService(
+            canvas,
+            scene_pos_mapper=lambda event: scene_pos_from_event_for_view(canvas, event),
+            viewport_transform=lambda: canvas.viewportTransform(),
+        )
+    controller = SelectionController(
+        canvas,
+        graph_service=graph_service,
+        hit_testing_service=hit_testing_service,
+        active_tool_name_provider=active_tool_name_provider,
+    )
+    if not render:
+        controller.outline_service = mock.Mock()
+    canvas.services.selection = controller
+    return controller

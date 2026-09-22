@@ -3,6 +3,7 @@ import unittest
 from types import SimpleNamespace
 from unittest import mock
 
+from chemvas.ui.selection_state import set_selected_notes_for
 from tests.runtime_services import canvas_runtime_services
 from tests.runtime_state import canvas_runtime_state
 
@@ -25,11 +26,11 @@ from chemvas.ui.canvas_bond_graphics_state import (
 from chemvas.ui.canvas_mark_registry import CanvasMarkRegistry
 from chemvas.ui.canvas_scene_items_state import (
     CanvasSceneItemsState,
-    set_scene_item_collection_for,
 )
 from chemvas.ui.mark_item_access import mark_kinds_by_atom_for
 from chemvas.ui.scene_clipboard_transaction_logic import _copy_bounds_for_items
-from chemvas.ui.selection_collection_access import (
+from chemvas.ui.selection_geometry_access import extend_bounds_with_item_rect
+from chemvas.ui.selection_queries import (
     append_ring_selection_atom_ids,
     append_selected_item_ids,
     append_unique_scene_item,
@@ -37,10 +38,9 @@ from chemvas.ui.selection_collection_access import (
     selected_items_for_transform_for,
     selected_mark_atom_ids_for,
     selected_scene_items_for,
+    selected_scene_notes_for,
     selection_items_for_copy_for,
 )
-from chemvas.ui.selection_geometry_access import extend_bounds_with_item_rect
-from chemvas.ui.selection_scene_access import selected_scene_notes_for
 
 
 class _FakeItem:
@@ -108,9 +108,7 @@ class CanvasViewSelectionClipboardWrappersTest(unittest.TestCase):
                 scene_items_state=CanvasSceneItemsState()
             ),
         )
-        set_scene_item_collection_for(
-            view, "selected_notes", [included_note, other_scene_note]
-        )
+        set_selected_notes_for(view, [included_note, other_scene_note])
 
         selected_items = selected_items_for_transform_for(view)
 
@@ -132,9 +130,7 @@ class CanvasViewSelectionClipboardWrappersTest(unittest.TestCase):
                 scene_items_state=CanvasSceneItemsState()
             ),
         )
-        set_scene_item_collection_for(
-            view, "selected_notes", [selected_note, other_scene_note]
-        )
+        set_selected_notes_for(view, [selected_note, other_scene_note])
 
         self.assertEqual(selected_scene_notes_for(view), [selected_note])
         self.assertEqual(
@@ -206,7 +202,7 @@ class CanvasViewSelectionClipboardWrappersTest(unittest.TestCase):
 
     def test_selection_items_for_copy_covers_empty_child_and_skip_paths(self) -> None:
         with mock.patch(
-            "chemvas.ui.selection_collection_access.selected_scene_items_for",
+            "chemvas.ui.selection_queries.selected_scene_items_for",
             return_value=[],
         ):
             self.assertEqual(
@@ -224,7 +220,7 @@ class CanvasViewSelectionClipboardWrappersTest(unittest.TestCase):
         invalid_bond = _FakeItem("bond", data1="bad")
         invalid_bond._children = [child]
         with mock.patch(
-            "chemvas.ui.selection_collection_access.selected_scene_items_for",
+            "chemvas.ui.selection_queries.selected_scene_items_for",
             return_value=[invalid_bond],
         ):
             copied = selection_items_for_copy_for(
@@ -239,11 +235,11 @@ class CanvasViewSelectionClipboardWrappersTest(unittest.TestCase):
         root = _FakeItem("note", children=[_FakeItem("note")])
         with (
             mock.patch(
-                "chemvas.ui.selection_collection_access.selected_scene_items_for",
+                "chemvas.ui.selection_queries.selected_scene_items_for",
                 return_value=[root],
             ),
             mock.patch(
-                "chemvas.ui.selection_collection_access.append_unique_scene_item",
+                "chemvas.ui.selection_queries.append_unique_scene_item",
                 return_value=False,
             ) as append_unique,
         ):
@@ -262,7 +258,7 @@ class CanvasViewSelectionClipboardWrappersTest(unittest.TestCase):
     def test_selection_copy_helpers_use_selected_items_and_bounds(self) -> None:
         child = _FakeItem("note")
         with mock.patch(
-            "chemvas.ui.selection_collection_access.selected_scene_items_for",
+            "chemvas.ui.selection_queries.selected_scene_items_for",
             return_value=[child],
         ):
             self.assertEqual(
@@ -303,7 +299,7 @@ class CanvasViewSelectionClipboardWrappersTest(unittest.TestCase):
         set_atom_dots_for(view, {2: atom_dot})
 
         with mock.patch(
-            "chemvas.ui.selection_collection_access.selected_scene_items_for",
+            "chemvas.ui.selection_queries.selected_scene_items_for",
             return_value=[selected_bond],
         ):
             copied = selection_items_for_copy_for(view)

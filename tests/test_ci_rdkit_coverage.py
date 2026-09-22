@@ -154,10 +154,10 @@ def _direct_runner_arguments(command: list[str]) -> list[str] | None:
 
 
 def _test_discovery_find_argv(command: list[str]) -> list[str] | None:
-    """Extract the direct or mapfile-process-substitution test-tree ``find``."""
+    """Extract direct discovery or discovery feeding a shell array/read loop."""
     if command[:2] in (["find", "tests"], ["find", "./tests"]):
         find_index = 0
-    elif command and command[0] == "mapfile":
+    elif command and command[0] in {"mapfile", "done"}:
         try:
             find_index = next(
                 index + 2

@@ -3,6 +3,8 @@ import unittest
 from types import SimpleNamespace
 from unittest import mock
 
+from tests.selection_support import build_selection_controller
+
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PyQt6.QtCore import QPointF, QRectF
@@ -10,25 +12,11 @@ from PyQt6.QtWidgets import QApplication
 
 from chemvas.domain.document import Atom, Bond
 from chemvas.features.selection import StructureHit
-from chemvas.ui.selection_hit_test_service import SelectionHitTestService
-from chemvas.ui.selection_structure_service import SelectionStructureService
 from tests.selection_support import _FakeItem, _make_canvas
 
 
-def _make_service(canvas, *, hit_testing_service=None, structure_service=None):
-    if hit_testing_service is None:
-        hit_testing_service = canvas.services.selection.hit_testing_service
-    graph_service = canvas.services.graph_service
-    if structure_service is None:
-        structure_service = SelectionStructureService(
-            canvas, graph_service=graph_service
-        )
-    return SelectionHitTestService(
-        canvas,
-        hit_testing_service=hit_testing_service,
-        structure_service=structure_service,
-        graph_service=graph_service,
-    )
+def _make_service(canvas, *, hit_testing_service=None):
+    return build_selection_controller(canvas, hit_testing_service=hit_testing_service)
 
 
 class SelectionHitTestServiceTest(unittest.TestCase):
@@ -92,7 +80,7 @@ class SelectionHitTestServiceTest(unittest.TestCase):
         service = _make_service(canvas)
 
         with mock.patch(
-            "chemvas.ui.selection_hit_test_service.selection_hit_matches",
+            "chemvas.ui.selection_controller.selection_hit_matches",
             return_value=True,
         ) as matches:
             self.assertTrue(

@@ -26,7 +26,7 @@ from chemvas.ui.renderer_style_access import (
     bond_line_width_for,
     renderer_bond_line_width_for,
 )
-from chemvas.ui.selection_service_access import refresh_selection_outline_for
+from chemvas.ui.selection_state import selection_for
 
 
 def _optional_graphics_callable(item, name: str):
@@ -231,7 +231,7 @@ def refresh_bond_length_graphics_for(canvas) -> None:
                 center = QPointF(atom.x + data["dx"], atom.y + data["dy"])
             refresh_mark_item_geometry_for(canvas, item, data["kind"])
             set_mark_center_for(canvas, item, center)
-    refresh_selection_outline_for(canvas)
+    selection_for(canvas).update_selection_outline()
 
 
 __all__ = ["refresh_bond_length_graphics_for"]

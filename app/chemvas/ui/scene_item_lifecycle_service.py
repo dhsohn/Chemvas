@@ -10,8 +10,6 @@ from chemvas.ui.canvas_mark_registry import mark_registry_for
 from chemvas.ui.canvas_scene_items_state import (
     append_scene_item_for,
     remove_scene_item_from_collection_for,
-    remove_selected_note_for,
-    selected_notes_for,
 )
 from chemvas.ui.handle_overlay_access import clear_handles_for
 from chemvas.ui.handle_state import handle_target_for
@@ -22,9 +20,10 @@ from chemvas.ui.scene_item_access import (
     remove_attached_item_from_canvas_scene,
 )
 from chemvas.ui.scene_item_state import ARROW_KINDS
-from chemvas.ui.selection_service_access import (
-    refresh_selection_outline_for,
-    update_note_selection_box_for,
+from chemvas.ui.selection_state import (
+    remove_selected_note_for,
+    selected_notes_for,
+    selection_for,
 )
 from chemvas.ui.shape_record_access import require_attached_shape_record_for
 from chemvas.ui.transactions.scene_item_attach import (
@@ -291,7 +290,7 @@ class SceneItemLifecycleService:
         was_selected_note = kind == "note" and item in selected_notes_for(self.canvas)
         self._remove_scene_item_registration(item, kind)
         if kind == "note":
-            update_note_selection_box_for(self.canvas, item)
+            selection_for(self.canvas).update_note_selection_box(item)
         if kind in HANDLE_BEARING_KINDS and item is handle_target_for(self.canvas):
             clear_handles_for(self.canvas)
         removed = remove_attached_item_from_canvas_scene(self.canvas, item)
@@ -300,7 +299,7 @@ class SceneItemLifecycleService:
             # which redraws the outline; notes carry their own selection state,
             # so an erased selected note must refresh explicitly or a stale
             # group box would linger.
-            refresh_selection_outline_for(self.canvas)
+            selection_for(self.canvas).update_selection_outline()
         if removed is None:
             return
         if kind == "ring":

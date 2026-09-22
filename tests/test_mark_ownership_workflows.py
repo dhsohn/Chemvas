@@ -20,7 +20,7 @@ from chemvas.ui.mark_item_access import mark_center_for
 from chemvas.ui.mark_reassignment_dialog import MarkReassignmentDialog
 from chemvas.ui.move_access import move_item_for
 from chemvas.ui.scene_decoration_access import add_mark_for_atom_for
-from chemvas.ui.selection_outline_state import selection_outlines_for
+from chemvas.ui.selection_state import selection_outlines_for
 from chemvas.ui.structure_mutation_access import add_atom_for
 
 

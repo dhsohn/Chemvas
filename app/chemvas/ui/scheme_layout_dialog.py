@@ -40,7 +40,7 @@ from chemvas.ui.main_window_ports import active_canvas_for_window
 from chemvas.ui.scene_item_state import arrow_state_dict_for
 from chemvas.ui.scene_signal_blocking import blocked_scene_signals
 from chemvas.ui.scheme_layout_service import plan_canvas_layout
-from chemvas.ui.selection_service_access import refresh_selection_outline_for
+from chemvas.ui.selection_state import selection_for
 from chemvas.ui.transactions.document import document_transaction
 
 if TYPE_CHECKING:
@@ -213,7 +213,7 @@ def arrange_grouped_canvas(
                     ),
                 ],
             )
-            refresh_selection_outline_for(canvas)
+            selection_for(canvas).update_selection_outline()
             if not history.push(command):
                 raise ValueError("History is disabled; the layout was not applied.")
     return plan.report

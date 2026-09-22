@@ -57,10 +57,7 @@ from chemvas.ui.selection_info_state import (
     SelectionInfoState,
     selection_info_state_for,
 )
-from chemvas.ui.selection_style_state import (
-    SelectionStyleState,
-    selection_style_state_for,
-)
+from chemvas.ui.selection_state import SelectionState, selection_state_for
 from chemvas.ui.sheet_setup_access import sheet_setup_for
 from chemvas.ui.sheet_setup_state import SheetSetupState, set_sheet_setup_state_for
 from chemvas.ui.structure_mutation_access import add_atom_for, add_bond_for
@@ -126,7 +123,7 @@ def _document_runtime_state(**states):
     only asserts on history.
     """
     states.setdefault("history_state", CanvasHistoryState())
-    states.setdefault("selection_style_state", SelectionStyleState())
+    states.setdefault("selection_state", SelectionState())
     states.setdefault("selection_info_state", SelectionInfoState.create())
     states.setdefault("scene_items_state", CanvasSceneItemsState())
     states.setdefault("calculation_plan_state", CanvasCalculationPlanState())
@@ -167,10 +164,10 @@ def _session_service(canvas):
         services = canvas_runtime_services()
         canvas.services = services
     try:
-        hit_testing_service = services.selection.hit_testing_service
+        hit_testing_service = services.hit_testing_service
     except AttributeError:
         hit_testing_service = SimpleNamespace(mark_spatial_index_dirty=mock.Mock())
-        services.selection.hit_testing_service = hit_testing_service
+        services.hit_testing_service = hit_testing_service
     try:
         graph_service = services.graph_service
     except AttributeError:
@@ -260,7 +257,7 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
             clear_scene=mock.Mock(side_effect=lambda: events.append("clear")),
             model="old-model",
             runtime_state=_document_runtime_state(
-                selection_style_state=SelectionStyleState(),
+                selection_state=SelectionState(),
                 selection_info_state=SimpleNamespace(
                     callback=selection_callback,
                     signature=(frozenset({1}), frozenset()),
@@ -779,9 +776,7 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
             settings="old-settings",
             scene_items=scene_registry,
             scene=lambda: scene,
-            runtime_state=_document_runtime_state(
-                selection_style_state=SelectionStyleState()
-            ),
+            runtime_state=_document_runtime_state(selection_state=SelectionState()),
         )
 
         def clear_scene() -> None:
@@ -1053,7 +1048,7 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
         for item in selected_items:
             item.setSelected(True)
 
-        selection_style = selection_style_state_for(canvas)
+        selection_style = selection_state_for(canvas)
         selection_style.suspend_outline = True
         selection_info = selection_info_state_for(canvas)
         selection_callback = mock.Mock()
@@ -1258,7 +1253,10 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
 
             self.assertIs(plan, expected_plan)
             parameters.assert_called_once_with(
-                scope="selection", selection=[], sizing="bond", target_width_mm=None
+                scope="selection",
+                selection=[],
+                sizing="bond",
+                target_width_mm=None,
             )
             resolve_plan.assert_called_once_with(
                 canvas.scene(),

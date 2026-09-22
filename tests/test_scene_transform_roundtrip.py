@@ -35,10 +35,7 @@ from chemvas.ui.scene_decoration_access import (
 )
 from chemvas.ui.scene_signal_blocking import blocked_scene_signals
 from chemvas.ui.select_all_access import select_all_scene_items_for
-from chemvas.ui.selection_service_access import (
-    refresh_selection_outline_for,
-    selection_service_from_canvas,
-)
+from chemvas.ui.selection_state import selection_for
 from chemvas.ui.structure_mutation_access import (
     add_atom_for,
     add_benzene_ring_for,
@@ -189,7 +186,7 @@ def test_2d_transforms_preserve_depth_and_exact_history(canvas, tmp_path, kind):
 
 def test_nudge_and_history_batch_outline_work(canvas):
     _chain(canvas, 32)
-    outline = selection_service_from_canvas(canvas).outline_service
+    outline = selection_for(canvas).outline_service
     history = canvas.services.history_service
     for action in (lambda: _transform(canvas, "nudge"), history.undo, history.redo):
         with mock.patch.object(
@@ -208,7 +205,7 @@ def test_disconnected_transform_and_history_refresh_outline_once(canvas, kind):
         second = add_atom_for(canvas, "C", index * 43.1234 + 20.0, index * 12.789)
         add_bond_for(canvas, first, second)
     select_all_scene_items_for(canvas)
-    outline = selection_service_from_canvas(canvas).outline_service
+    outline = selection_for(canvas).outline_service
     history = canvas.services.history_service
     for action in (lambda: _transform(canvas, kind), history.undo, history.redo):
         with mock.patch.object(
@@ -273,7 +270,7 @@ def test_partial_transform_preserves_boundary_bond_and_unselected_depth(canvas, 
         canvas.scene().clearSelection()
         for atom_id in ids[:2]:
             visible_atom_item_for(canvas, atom_id).setSelected(True)
-    refresh_selection_outline_for(canvas)
+    selection_for(canvas).update_selection_outline()
     before = snapshot_canvas_state_for(canvas)
     untouched_coords = {aid: atom_coords_3d_for(canvas)[aid] for aid in ids[2:]}
     boundary_items = tuple(bond_items_for_id(canvas, 1))

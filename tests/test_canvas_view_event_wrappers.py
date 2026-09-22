@@ -93,7 +93,7 @@ class CanvasViewEventWrapperTest(unittest.TestCase):
             item_at_event=mock.Mock(return_value=None),
             bond_id_from_event=mock.Mock(return_value=None),
         )
-        view.services.selection.hit_testing_service = hit_testing_service
+        view.services.hit_testing_service = hit_testing_service
         tool_controller = SimpleNamespace(active=tool_active)
         view.services.tool_controller = tool_controller
         scene_transform_controller = SimpleNamespace(apply_bond_style=mock.Mock())
@@ -181,7 +181,9 @@ class CanvasViewEventWrapperTest(unittest.TestCase):
             ),
         )
         template_view = self._new_view(tool_active=template_tool)
-        template_view.services.selection.hit_testing_service.scene_pos_from_event.return_value = outside_pos
+        template_view.services.hit_testing_service.scene_pos_from_event.return_value = (
+            outside_pos
+        )
         insert_state_for(template_view).template_active = True
 
         CanvasView.mousePressEvent(template_view, press_event)
@@ -200,7 +202,9 @@ class CanvasViewEventWrapperTest(unittest.TestCase):
             ),
         )
         tool_view = self._new_view(tool_active=drawing_tool)
-        tool_view.services.selection.hit_testing_service.scene_pos_from_event.return_value = outside_pos
+        tool_view.services.hit_testing_service.scene_pos_from_event.return_value = (
+            outside_pos
+        )
 
         CanvasView.mousePressEvent(tool_view, tool_event)
 
@@ -258,7 +262,9 @@ class CanvasViewEventWrapperTest(unittest.TestCase):
         move_event = _FakeEvent(buttons=Qt.MouseButton.NoButton)
 
         template_view = self._new_view()
-        template_view.services.selection.hit_testing_service.scene_pos_from_event.return_value = outside_pos
+        template_view.services.hit_testing_service.scene_pos_from_event.return_value = (
+            outside_pos
+        )
         insert_state_for(template_view).template_active = True
         CanvasView.mouseMoveEvent(template_view, move_event)
 
@@ -267,7 +273,9 @@ class CanvasViewEventWrapperTest(unittest.TestCase):
         template_view.services.hover.clear_hover_highlight.assert_called_once_with()
 
         hover_view = self._new_view()
-        hover_view.services.selection.hit_testing_service.scene_pos_from_event.return_value = outside_pos
+        hover_view.services.hit_testing_service.scene_pos_from_event.return_value = (
+            outside_pos
+        )
         CanvasView.mouseMoveEvent(hover_view, move_event)
 
         hover_view.services.hover.update_hover_highlight.assert_not_called()
@@ -281,7 +289,7 @@ class CanvasViewEventWrapperTest(unittest.TestCase):
                         name=name, on_mouse_move=mock.Mock(return_value=handled)
                     )
                     view = self._new_view(tool_active=tool)
-                    view.services.selection.hit_testing_service.scene_pos_from_event.return_value = QPointF(
+                    view.services.hit_testing_service.scene_pos_from_event.return_value = QPointF(
                         999, 999
                     )
                     event = _FakeEvent(buttons=Qt.MouseButton.LeftButton)
@@ -319,8 +327,8 @@ class CanvasViewEventWrapperTest(unittest.TestCase):
                     deactivate=mock.Mock(),
                 )
                 view = self._new_view(tool_active=tool)
-                view.services.selection.hit_testing_service.scene_pos_from_event.return_value = QPointF(
-                    999, 999
+                view.services.hit_testing_service.scene_pos_from_event.return_value = (
+                    QPointF(999, 999)
                 )
                 buttons = (
                     Qt.MouseButton.NoButton
@@ -343,8 +351,8 @@ class CanvasViewEventWrapperTest(unittest.TestCase):
             with self.subTest(insert=kind):
                 tool = SimpleNamespace(name="select", on_mouse_move=mock.Mock())
                 view = self._new_view(tool_active=tool)
-                view.services.selection.hit_testing_service.scene_pos_from_event.return_value = QPointF(
-                    999, 999
+                view.services.hit_testing_service.scene_pos_from_event.return_value = (
+                    QPointF(999, 999)
                 )
                 setattr(insert_state_for(view), f"{kind}_active", True)
                 base = mock.Mock()
@@ -528,7 +536,7 @@ class CanvasViewEventWrapperTest(unittest.TestCase):
             ),
         )
         view = self._new_view(tool_active=tool)
-        view.services.selection.hit_testing_service.scene_pos_from_event.return_value = QPointF(
+        view.services.hit_testing_service.scene_pos_from_event.return_value = QPointF(
             999.0, 999.0
         )
         release_event = _FakeEvent(

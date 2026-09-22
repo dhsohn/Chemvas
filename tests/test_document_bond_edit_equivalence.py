@@ -28,7 +28,7 @@ from chemvas.ui.canvas_group_state import group_state_for
 from chemvas.ui.canvas_hover_state import hover_state_for
 from chemvas.ui.canvas_scene_items_state import ring_items_for
 from chemvas.ui.mark_item_access import mark_center_for
-from chemvas.ui.selection_collection_access import selected_ids_for
+from chemvas.ui.selection_queries import selected_ids_for
 from tests.document_patch_workflow_support import run_patch
 from tests.gui_workflow_support import app as app
 from tests.gui_workflow_support import drawing as drawing

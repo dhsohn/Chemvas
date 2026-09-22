@@ -3,10 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Any
 
 from chemvas.ui.canvas_service_ports import move_controller_for_access
-from chemvas.ui.selection_service_access import (
-    refresh_selection_outline_for,
-    selection_service_from_canvas,
-)
+from chemvas.ui.selection_state import selection_for
 
 if TYPE_CHECKING:
     from chemvas.ui.canvas_move_controller import CanvasMoveController
@@ -52,11 +49,11 @@ def move_atoms_for(
 
 
 def shift_selection_outlines_for(canvas, dx: float, dy: float) -> None:
-    selection_service_from_canvas(canvas).shift_selection_outlines(dx, dy)
+    selection_for(canvas).shift_selection_outlines(dx, dy)
 
 
 def refresh_selection_outline_for_canvas(canvas) -> None:
-    refresh_selection_outline_for(canvas)
+    selection_for(canvas).update_selection_outline()
 
 
 __all__ = [

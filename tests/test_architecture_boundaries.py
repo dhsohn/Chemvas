@@ -83,7 +83,6 @@ LEGACY_CANVAS_SERVICE_NAMES = frozenset(
         "canvas_atom_mutation_service",
         "canvas_bond_mutation_service",
         "chemdraw_shortcut_service",
-        "hit_testing_service",
         "canvas_color_mutation_service",
         "canvas_document_session_service",
         "canvas_graph_service",
@@ -1234,7 +1233,7 @@ def test_selection_flow_does_not_use_selection_context_facade() -> None:
     removed_context = APP_ROOT / "chemvas" / "ui" / "selection_context.py"
     paths = [
         APP_ROOT / "chemvas" / "ui" / "selection_controller.py",
-        APP_ROOT / "chemvas" / "ui" / "selection_service_access.py",
+        APP_ROOT / "chemvas" / "ui" / "selection_state.py",
         APP_ROOT / "chemvas" / "ui" / "move_access.py",
         APP_ROOT / "chemvas" / "ui" / "selection_style_access.py",
     ]
@@ -1247,32 +1246,6 @@ def test_selection_flow_does_not_use_selection_context_facade() -> None:
 
     assert not removed_context.exists()
     assert _matching_lines(pattern, paths) == []
-
-
-def test_selection_collection_helpers_live_in_canonical_modules() -> None:
-    collection = APP_ROOT / "chemvas" / "ui" / "selection_collection_access.py"
-    service_access = APP_ROOT / "chemvas" / "ui" / "selection_service_access.py"
-    collection_source = collection.read_text(encoding="utf-8")
-    service_source = service_access.read_text(encoding="utf-8")
-    moved_defs = (
-        "selected_ids_for",
-        "selected_scene_items_for",
-        "selection_items_for_copy_for",
-        "selected_atom_ids_for_transform_for",
-        "selection_status_count_for",
-        "selection_snapshot_for",
-    )
-    service_defs = (
-        "selection_service_from_canvas",
-        "refresh_selection_outline_for",
-        "selection_targets_for_item_for",
-        "select_single_structure_item_for",
-    )
-
-    for helper in moved_defs:
-        assert f"def {helper}" in collection_source
-    for helper in service_defs:
-        assert f"def {helper}" in service_source
 
 
 def test_production_code_uses_selection_specific_access_modules_instead_of_compat_facade() -> (
@@ -1291,6 +1264,7 @@ def test_production_canvas_service_container_lookup_is_canonical() -> None:
         APP_ROOT / "chemvas" / "bootstrap" / "main_window_runtime.py": "runtime",
         APP_ROOT / "chemvas" / "shell" / "main_window.py": "runtime",
         APP_ROOT / "chemvas" / "ui" / "canvas_services.py": "canvas",
+        APP_ROOT / "chemvas" / "ui" / "selection_state.py": "canvas",
     }
     canonical_getattr_path = APP_ROOT / "chemvas" / "ui" / "canvas_service_access.py"
     violations: list[str] = []
@@ -1328,6 +1302,7 @@ CANVAS_SERVICE_CONTAINER_RESOLVERS = (
     # the container themselves.
     "app/chemvas/ui/canvas_service_ports.py",
     "app/chemvas/ui/canvas_view_ports.py",
+    "app/chemvas/ui/selection_state.py",
 )
 
 
@@ -1602,10 +1577,8 @@ def test_service_fallbacks_use_canvas_service_accessor_instead_of_services_looku
         APP_ROOT / "chemvas" / "ui" / "canvas_color_mutation_service.py",
         APP_ROOT / "chemvas" / "ui" / "insert_controller.py",
         APP_ROOT / "chemvas" / "ui" / "scene_item_controller.py",
-        APP_ROOT / "chemvas" / "ui" / "selection_service_bundle.py",
-        APP_ROOT / "chemvas" / "ui" / "selection_hit_test_service.py",
+        APP_ROOT / "chemvas" / "ui" / "selection_controller.py",
         APP_ROOT / "chemvas" / "ui" / "selection_outline_service.py",
-        APP_ROOT / "chemvas" / "ui" / "selection_structure_service.py",
         APP_ROOT / "chemvas" / "ui" / "structure_bond_build_service.py",
         APP_ROOT / "chemvas" / "ui" / "structure_build_service.py",
     ]
@@ -1753,19 +1726,6 @@ def test_mark_and_handle_services_use_explicit_collaborators() -> None:
     assert _matching_lines(pattern, paths) == []
 
 
-def test_selection_controller_delegates_structure_selection_details() -> None:
-    controller = APP_ROOT / "chemvas" / "ui" / "selection_controller.py"
-    service = APP_ROOT / "chemvas" / "ui" / "selection_structure_service.py"
-    controller_pattern = re.compile(r"\bring_items_for\b|\bclear_scene_selection_for\b")
-    service_pattern = re.compile(
-        r"\bclass SelectionStructureService\b|\bStructureSelectionResult\b"
-    )
-
-    assert service.exists()
-    assert _matching_lines(controller_pattern, [controller]) == []
-    assert _matching_lines(service_pattern, [service]) != []
-
-
 def test_selection_controller_delegates_outline_rendering_details() -> None:
     controller = APP_ROOT / "chemvas" / "ui" / "selection_controller.py"
     service = APP_ROOT / "chemvas" / "ui" / "selection_outline_service.py"
@@ -1774,7 +1734,6 @@ def test_selection_controller_delegates_outline_rendering_details() -> None:
         r"|\bring_center_for_bond_for\b|\btrim_line_for_labels_for\b"
         r"|\bselection_indicator_rect_for_atom_for\b|\bselection_bond_overlay_width_for\b"
         r"|\bbounding_box_center_for_atoms\b|\bactive_tool_name_for\b"
-        r"|\bscene_selected_items_for\b"
     )
     service_pattern = re.compile(
         r"\bclass SelectionOutlineService\b|\bOBJECT_OVERLAY_KINDS\b"
@@ -1785,116 +1744,9 @@ def test_selection_controller_delegates_outline_rendering_details() -> None:
     assert _matching_lines(service_pattern, [service]) != []
 
 
-def test_selection_controller_delegates_hit_test_details() -> None:
-    controller = APP_ROOT / "chemvas" / "ui" / "selection_controller.py"
-    service = APP_ROOT / "chemvas" / "ui" / "selection_hit_test_service.py"
-    controller_pattern = re.compile(
-        r"\bSelectionHitRequest\b|\bselection_hit_matches\b"
-        r"|\bbounds_for_atoms_for\b|\bselection_snapshot_for\b"
-        r"|\bselection_outlines_for\b"
-    )
-    service_pattern = re.compile(
-        r"\bclass SelectionHitTestService\b|\bSelectionHitRequest\b"
-    )
-
-    assert service.exists()
-    assert _matching_lines(controller_pattern, [controller]) == []
-    assert _matching_lines(service_pattern, [service]) != []
-
-
-def test_selection_controller_delegates_note_selection_details() -> None:
-    controller = APP_ROOT / "chemvas" / "ui" / "selection_controller.py"
-    service = APP_ROOT / "chemvas" / "ui" / "selection_note_service.py"
-    controller_pattern = re.compile(
-        r"\bselected_notes_for\b|\badd_selected_note_for\b|\bremove_selected_note_for\b"
-        r"|\bclear_selected_notes_for\b|\bNoSelectRectItem\b|\btext_style_state_for\b"
-    )
-    service_pattern = re.compile(r"\bclass SelectionNoteService\b|\bnote_select\b")
-
-    assert service.exists()
-    assert _matching_lines(controller_pattern, [controller]) == []
-    assert _matching_lines(service_pattern, [service]) != []
-
-
-def test_selection_controller_delegates_preference_details() -> None:
-    controller = APP_ROOT / "chemvas" / "ui" / "selection_controller.py"
-    service = APP_ROOT / "chemvas" / "ui" / "selection_preference_service.py"
-    controller_pattern = re.compile(
-        r"\batom_has_visible_label_for\b|\bvisible_atom_item_for\b"
-        r"|\bchoose_preferred_structure_hit\b|\bnearest_ring_atom_id\b"
-        r"|\batom_pick_radius_for\b|\bbond_pick_radius_for\b"
-        r"|\bcanvas_hit_testing_service_for\b"
-    )
-    service_pattern = re.compile(
-        r"\bclass SelectionPreferenceService\b|\bchoose_preferred_structure_hit\b"
-    )
-
-    assert service.exists()
-    assert _matching_lines(controller_pattern, [controller]) == []
-    assert _matching_lines(service_pattern, [service]) != []
-
-
-def test_selection_controller_does_not_reintroduce_private_delegate_wrappers() -> None:
-    controller = APP_ROOT / "chemvas" / "ui" / "selection_controller.py"
-    tree = _parse_source(controller.read_text(encoding="utf-8"))
-    private_methods: list[str] = []
-    for node in ast.walk(tree):
-        if not isinstance(node, ast.ClassDef) or node.name != "SelectionController":
-            continue
-        private_methods = [
-            child.name
-            for child in node.body
-            if isinstance(child, ast.FunctionDef)
-            and child.name.startswith("_")
-            and not (child.name.startswith("__") and child.name.endswith("__"))
-        ]
-        break
-
-    assert private_methods == []
-
-
-def test_selection_controller_does_not_construct_collaborator_services() -> None:
-    controller = APP_ROOT / "chemvas" / "ui" / "selection_controller.py"
-    forbidden_collaborators = {
-        "SelectionStructureService",
-        "SelectionPreferenceService",
-        "SelectionOutlineService",
-        "SelectionNoteService",
-        "SelectionHitTestService",
-    }
-    matches: list[str] = []
-    tree = _parse_source(controller.read_text(encoding="utf-8"))
-    for node in ast.walk(tree):
-        if not isinstance(node, ast.Call):
-            continue
-        if isinstance(node.func, ast.Name) and node.func.id in forbidden_collaborators:
-            matches.append(f"{node.func.id}(...):{node.lineno}")
-
-    assert matches == []
-
-
-def test_selection_controller_is_only_assembled_by_selection_service_bundle() -> None:
+def test_selection_controller_is_only_assembled_by_canvas_services() -> None:
     pattern = re.compile(r"\bSelectionController\(")
-    paths = [
-        path
-        for path in _app_python_files()
-        if path.name != "selection_service_bundle.py"
-    ]
-
-    assert _matching_lines(pattern, paths) == []
-
-
-def test_selection_lookup_services_require_explicit_collaborators() -> None:
-    paths = [
-        APP_ROOT / "chemvas" / "ui" / "selection_preference_service.py",
-        APP_ROOT / "chemvas" / "ui" / "selection_hit_test_service.py",
-    ]
-    pattern = re.compile(
-        r"\bcanvas_hit_testing_service_for\b"
-        r"|\bSelectionStructureService\("
-        r"|\bdef _hit_testing_service\b"
-        r"|\bdef _item_at_scene_pos\b"
-    )
+    paths = [path for path in _app_python_files() if path.name != "canvas_services.py"]
 
     assert _matching_lines(pattern, paths) == []
 
@@ -1961,7 +1813,9 @@ def test_canvas_runtime_services_exposes_single_runtimes_directly() -> None:
     assert annotations["tool_controller"] == "ToolController"
     # The container says what it holds; an Any anywhere in an annotation hides
     # a dependency from mypy.
-    assert len(annotations) == 14
+    assert annotations["selection"] == "SelectionController"
+    assert annotations["hit_testing_service"] == "CanvasHitTestingService"
+    assert len(annotations) == 15
     assert mentions_any == []
     assert "graph" not in annotations
     assert "tooling" not in annotations
@@ -2069,17 +1923,6 @@ def test_tool_implementations_do_not_reach_past_their_context() -> None:
     assert _matching_lines(pattern, paths) == []
 
 
-def test_canvas_services_delegates_selection_service_assembly_to_bundle() -> None:
-    source = _canvas_services_entrypoint_source()
-
-    assert "SelectionStructureService" not in source
-    assert "SelectionPreferenceService" not in source
-    assert "SelectionOutlineService" not in source
-    assert "SelectionNoteService" not in source
-    assert "SelectionHitTestService" not in source
-    assert "SelectionController(canvas)" not in source
-
-
 def test_production_canvas_service_consumers_use_grouped_runtime_api() -> None:
     legacy_names = LEGACY_CANVAS_SERVICE_NAMES
     runtime_services = APP_ROOT / "chemvas" / "ui" / "canvas_runtime_services.py"
@@ -2132,21 +1975,10 @@ def test_production_canvas_service_consumers_use_grouped_runtime_api() -> None:
     assert violations == []
 
 
-def test_selection_service_bundle_assembles_selection_controller_collaborators_explicitly() -> (
-    None
-):
-    source = (APP_ROOT / "chemvas" / "ui" / "selection_service_bundle.py").read_text(
-        encoding="utf-8"
-    )
-
-    assert "resolve_canvas_graph_service" not in source
-
-
 def test_selection_graph_services_use_injected_graph_service() -> None:
     paths = [
-        APP_ROOT / "chemvas" / "ui" / "selection_hit_test_service.py",
+        APP_ROOT / "chemvas" / "ui" / "selection_controller.py",
         APP_ROOT / "chemvas" / "ui" / "selection_outline_service.py",
-        APP_ROOT / "chemvas" / "ui" / "selection_structure_service.py",
     ]
     pattern = re.compile(r"graph_service=None")
 
@@ -3640,7 +3472,6 @@ def test_tool_context_requires_explicit_ports_without_service_lookup() -> None:
     )
 
     for port_name in (
-        "hit_testing_service",
         "selection_controller",
         "note_controller",
         "handle_controller",
@@ -4594,8 +4425,7 @@ EXPECTED_RUNTIME_STATE_ACCESSORS = {
     "input_view_access.py:input_view_state_for",
     "scene_clipboard_state.py:scene_clipboard_state_for",
     "selection_info_state.py:selection_info_state_for",
-    "selection_outline_state.py:selection_outline_state_for",
-    "selection_style_state.py:selection_style_state_for",
+    "selection_state.py:selection_state_for",
     "sheet_setup_state.py:sheet_setup_state_for",
     "spatial_index_state.py:spatial_index_state_for",
 }
@@ -6496,3 +6326,62 @@ def test_rollback_runner_has_one_owner() -> None:
         TRANSACTION_RECOVERY_MODULE
     ]
     assert [runner.rsplit(": ", 1)[1] for runner in runners] == ROLLBACK_RUNNER_BODIES
+
+
+@pytest.mark.parametrize(
+    "module",
+    [
+        "selection_service_access",
+        "selection_service_bundle",
+        "selection_note_service",
+        "selection_structure_service",
+        "selection_preference_service",
+        "selection_hit_test_service",
+        "selection_style_state",
+        "selection_outline_state",
+        "selection_collection_access",
+        "selection_scene_access",
+    ],
+)
+def test_selection_removed_layers_stay_removed(module: str) -> None:
+    assert not (APP_ROOT / "chemvas" / "ui" / f"{module}.py").exists()
+    sources = [
+        *_app_python_files(),
+        *sorted((APP_ROOT.parent / "scripts").rglob("*.py")),
+    ]
+    assert _matching_lines(re.compile(rf"\b{module}\b"), sources) == []
+
+
+def test_selection_callers_do_not_use_removed_bundle() -> None:
+    sources = [
+        *_app_python_files(),
+        *sorted((APP_ROOT.parent / "scripts").rglob("*.py")),
+    ]
+    assert (
+        _matching_lines(re.compile(r"\bselection\.selection_controller\b"), sources)
+        == []
+    )
+
+
+def test_selection_owner_does_not_resolve_itself_through_canvas() -> None:
+    controller = APP_ROOT / "chemvas" / "ui" / "selection_controller.py"
+    assert _matching_lines(re.compile(r"\bselection_for\b"), [controller]) == []
+
+
+def test_selection_leaf_resolves_only_the_selection_service() -> None:
+    path = APP_ROOT / "chemvas" / "ui" / "selection_state.py"
+    tree = _parse_source(path.read_text(encoding="utf-8"))
+    accesses = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Attribute) and isinstance(node.value, ast.Attribute):
+            if node.value.attr == "services":
+                accesses.append(node.attr)
+    assert accesses == ["selection"]
+    functions = [node for node in tree.body if isinstance(node, ast.FunctionDef)]
+    resolver = next(node for node in functions if node.name == "selection_for")
+    assert _return_annotation_names(resolver) == frozenset({"SelectionController"})
+
+
+def test_document_item_state_does_not_own_transient_selection() -> None:
+    path = APP_ROOT / "chemvas" / "ui" / "canvas_scene_items_state.py"
+    assert _matching_lines(re.compile(r"\bselected_notes\b"), [path]) == []

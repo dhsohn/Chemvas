@@ -17,7 +17,7 @@ from chemvas.ui.canvas_window_access import snapshot_canvas_state_for
 from chemvas.ui.input_view_access import set_zoom_for
 from chemvas.ui.main_window_ports import active_canvas_for_window, services_for_window
 from chemvas.ui.select_all_access import select_all_scene_items_for
-from chemvas.ui.selection_scene_access import clear_scene_selection_for
+from chemvas.ui.selection_queries import clear_scene_selection_for
 from chemvas.ui.structure_mutation_access import add_bond_between_points_for
 
 

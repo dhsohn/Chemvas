@@ -11,8 +11,7 @@ from chemvas.ui.canvas_service_ports import mark_scene_service_for_access
 from chemvas.ui.canvas_window_access import snapshot_canvas_state_for
 from chemvas.ui.mark_item_access import apply_mark_color_for, mark_center_for
 from chemvas.ui.scene_decoration_access import add_mark_for_atom_for
-from chemvas.ui.selection_outline_state import selection_outlines_for
-from chemvas.ui.selection_service_access import refresh_selection_outline_for
+from chemvas.ui.selection_state import selection_for, selection_outlines_for
 from chemvas.ui.structure_mutation_access import add_atom_for
 from chemvas.ui.transactions.document import DocumentSavepoint
 from tests.canvas_factory import build_canvas_view
@@ -48,14 +47,14 @@ def test_selected_distant_mark_shows_actual_owner_without_document_mutation(draw
     canvas.services.interaction.move_controller.move_item(item, 90, 30)
     before = snapshot_canvas_state_for(canvas)
     item.setSelected(True)
-    refresh_selection_outline_for(canvas)
+    selection_for(canvas).update_selection_outline()
     outlines = owner_outlines(canvas)
     assert len(outlines) == 1
     assert outlines[0].data(2)["atom_id"] == old
     assert "far" in outlines[0].toolTip().lower()
     assert snapshot_canvas_state_for(canvas) == before
     item.setSelected(False)
-    refresh_selection_outline_for(canvas)
+    selection_for(canvas).update_selection_outline()
     assert not owner_outlines(canvas)
 
 
@@ -212,7 +211,7 @@ def test_owner_guide_tracks_actual_owner_and_mark_and_savepoint_restores_it(
     item.setSelected(True)
     if move_owner:
         atom_items_for(canvas)[old].setSelected(True)
-    refresh_selection_outline_for(canvas)
+    selection_for(canvas).update_selection_outline()
     outline = owner_outlines(canvas)[0]
     path, pen, tooltip = outline.path(), outline.pen(), outline.toolTip()
     before = snapshot_canvas_state_for(canvas)
@@ -224,7 +223,7 @@ def test_owner_guide_tracks_actual_owner_and_mark_and_savepoint_restores_it(
         move.move_atom(old, 90, 30)
     else:
         move.move_item(item, 90, 30, update_selection=False)
-    canvas.services.selection.selection_controller.shift_selection_outlines(90, 30)
+    canvas.services.selection.shift_selection_outlines(90, 30)
     owner = canvas.model.atoms[old]
     center = mark_center_for(canvas, item)
     actual = outline.path()

@@ -42,9 +42,7 @@ from chemvas.ui.canvas_hover_state import hover_state_for
 from chemvas.ui.canvas_mark_registry import CanvasMarkRegistry
 from chemvas.ui.canvas_scene_items_state import (
     CanvasSceneItemsState,
-    selected_notes_for,
     set_scene_item_collection_for,
-    set_selected_notes_for,
 )
 from chemvas.ui.canvas_tool_settings_state import (
     CanvasToolSettingsState,
@@ -61,10 +59,11 @@ from chemvas.ui.preview_tools import ArrowTool, PreviewDragTool, TSBracketTool
 from chemvas.ui.scene_item_state import scene_item_state_for
 from chemvas.ui.select_tool import SelectTool
 from chemvas.ui.selection_drag_tool import independent_selection_items
-from chemvas.ui.selection_outline_state import SelectionOutlineState
-from chemvas.ui.selection_style_state import (
-    SelectionStyleState,
-    selection_style_state_for,
+from chemvas.ui.selection_state import (
+    SelectionState,
+    selected_notes_for,
+    selection_state_for,
+    set_selected_notes_for,
 )
 from chemvas.ui.tool_base import Tool
 from chemvas.ui.tool_context import ToolContext
@@ -91,7 +90,7 @@ def _tool_context_for(canvas):
     return ToolContext(
         canvas,
         hit_testing_service=getattr(services, "hit_testing_service", None),
-        selection_controller=getattr(services, "selection_controller", None),
+        selection_controller=getattr(services, "selection", None),
         note_controller=getattr(
             services,
             "note_controller",
@@ -245,8 +244,7 @@ class _FakeSelectCanvas:
             handle_state=self.handle_state,
             mark_registry=CanvasMarkRegistry(),
             scene_items_state=CanvasSceneItemsState(),
-            selection_outline_state=SelectionOutlineState(),
-            selection_style_state=SelectionStyleState(),
+            selection_state=SelectionState(),
         )
         set_atom_items_for(self, {})
         set_atom_dots_for(self, {})
@@ -285,7 +283,7 @@ class _FakeSelectCanvas:
                 scene_pos_from_event=self.scene_pos_from_event,
                 item_at_event=self.item_at_event,
             ),
-            selection_controller=SimpleNamespace(
+            selection=SimpleNamespace(
                 toggle_item_selection=self.toggle_item_selection,
                 clear_note_selection=mock.Mock(),
                 preferred_structure_item_at_scene_pos=self.preferred_structure_item_at_scene_pos,
@@ -478,7 +476,7 @@ class _FakeBondCanvas:
                 find_atom_near=self.find_atom_near,
                 find_bond_near=self.find_bond_near,
             ),
-            selection_controller=SimpleNamespace(
+            selection=SimpleNamespace(
                 preferred_structure_item_at_scene_pos=self.preferred_structure_item_at_scene_pos,
                 clear_note_selection=self.clear_note_selection,
             ),
@@ -1407,7 +1405,7 @@ class ToolsUnitTest(unittest.TestCase):
                     self.assertNotEqual(
                         scene_item_state_for(canvas, shape), before_state
                     )
-                    self.assertTrue(selection_style_state_for(canvas).suspend_outline)
+                    self.assertTrue(selection_state_for(canvas).suspend_outline)
 
                     if cancel_mode == "deactivate":
                         tool.deactivate()
@@ -1430,7 +1428,7 @@ class ToolsUnitTest(unittest.TestCase):
 
                     self.assertEqual(scene_item_state_for(canvas, shape), before_state)
                     self.assertTrue(shape.isSelected())
-                    self.assertFalse(selection_style_state_for(canvas).suspend_outline)
+                    self.assertFalse(selection_state_for(canvas).suspend_outline)
                     self.assertEqual(canvas.services.history_service.state.history, [])
                     self.assertIsNone(tool._drag_transaction)
                     self.assertFalse(tool._drag_selection)
@@ -1478,7 +1476,7 @@ class ToolsUnitTest(unittest.TestCase):
 
             self.assertEqual(scene_item_state_for(canvas, shape), before_state)
             self.assertTrue(shape.isSelected())
-            self.assertFalse(selection_style_state_for(canvas).suspend_outline)
+            self.assertFalse(selection_state_for(canvas).suspend_outline)
             self.assertIs(history.state.history, history_list)
             self.assertIs(history.state.redo_stack, redo_list)
             self.assertEqual(history_list, [baseline])
@@ -1610,7 +1608,7 @@ class ToolsUnitTest(unittest.TestCase):
         canvas, shapes = self._canvas_with_shapes(count=1)
         shape = shapes[0]
         shape.setSelected(True)
-        selection_style_state_for(canvas).suspend_outline = True
+        selection_state_for(canvas).suspend_outline = True
         tool = MoveTool(canvas, context=canvas.services.tool_controller.context)
         try:
             self.assertTrue(
@@ -1623,7 +1621,7 @@ class ToolsUnitTest(unittest.TestCase):
             tool._apply_drag_delta(QPointF(3.0, 2.0))
             tool._commit_selection_drag()
 
-            self.assertTrue(selection_style_state_for(canvas).suspend_outline)
+            self.assertTrue(selection_state_for(canvas).suspend_outline)
             self.assertEqual(len(canvas.services.history_service.state.history), 1)
             self.assertIsNone(tool._drag_transaction)
         finally:

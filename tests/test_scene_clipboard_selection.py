@@ -18,15 +18,13 @@ from PyQt6.QtWidgets import (
 )
 
 from chemvas.ui.scene_clipboard_selection import select_pasted_content_for_canvas
-from chemvas.ui.selection_style_state import SelectionStyleState
+from chemvas.ui.selection_state import SelectionState
 
 
 class _FakeCanvas:
     def __init__(self, atom_item) -> None:
         self._scene = QGraphicsScene()
-        self.runtime_state = canvas_runtime_state(
-            selection_style_state=SelectionStyleState()
-        )
+        self.runtime_state = canvas_runtime_state(selection_state=SelectionState())
         self.selection_controller = SimpleNamespace(
             update_selection_outline=mock.Mock()
         )
@@ -35,7 +33,7 @@ class _FakeCanvas:
         )
         self.services = canvas_runtime_services(
             atom_label_service=self.atom_label_service,
-            selection_controller=self.selection_controller,
+            selection=self.selection_controller,
         )
 
     def scene(self) -> QGraphicsScene:
