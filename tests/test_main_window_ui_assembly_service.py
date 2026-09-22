@@ -304,6 +304,8 @@ class MainWindowUIAssemblyServiceTest(unittest.TestCase):
                 "Flip Horizontal",
                 "Flip Vertical",
                 "Rotate...",
+                "Bring to Front",
+                "Send to Back",
                 "Align",
                 "Distribute",
             ],
@@ -470,7 +472,7 @@ class MainWindowUIAssemblyServiceTest(unittest.TestCase):
             ["Edit States and Steps..."],
         )
         with mock.patch(
-            "chemvas.ui.main_window_menu_bar.edit_calculation_plan_for_window"
+            "chemvas.ui.calculation_step_dialog.edit_calculation_plan_for_window"
         ) as edit_plan:
             self._menu_action(calculation_menu, "Edit States and Steps...").trigger()
         edit_plan.assert_called_once_with(window)

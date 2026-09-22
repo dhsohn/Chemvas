@@ -380,7 +380,7 @@ class SceneOpsControllerAdditionalTest(unittest.TestCase):
         self.assertAlmostEqual(arrow_state["control"][0], 15.0)
         self.assertAlmostEqual(arrow_state["control"][1], 25.0)
 
-    def test_rotate_selected_items_orbits_notes_without_rotating_text(self) -> None:
+    def test_rotate_selected_items_rotates_note_state(self) -> None:
         canvas = _FakeCanvas()
         atom_1_id = canvas.add_atom("C", 0.0, 0.0)
         atom_2_id = canvas.add_atom("O", 20.0, 0.0)
@@ -392,19 +392,17 @@ class SceneOpsControllerAdditionalTest(unittest.TestCase):
         canvas.add_item(note_item, selected=True)
         before_rect = note_item.sceneBoundingRect()
         pivot = QPointF(before_rect.right() / 2, before_rect.bottom() / 2)
-        note_center = before_rect.center()
-        turned_center = QPointF(
-            pivot.x() - (note_center.y() - pivot.y()),
-            pivot.y() + note_center.x() - pivot.x(),
+        turned_anchor = QPointF(
+            pivot.x() - (10 - pivot.y()), pivot.y() + 40 - pivot.x()
         )
 
         scene_transform_controller_for(canvas).rotate_selected_items(90.0)
 
         state = note_item.data(9)
         self.assertEqual(state["text"], "upright")
-        self.assertAlmostEqual(state["x"], 40 + turned_center.x() - note_center.x())
-        self.assertAlmostEqual(state["y"], 10 + turned_center.y() - note_center.y())
-        self.assertEqual(note_item.rotation(), 0.0)
+        self.assertAlmostEqual(state["x"], turned_anchor.x())
+        self.assertAlmostEqual(state["y"], turned_anchor.y())
+        self.assertEqual(state["rotation"], 90.0)
         self.assertEqual(len(canvas.pushed_commands), 1)
 
     def test_rotate_selected_items_rotates_standalone_scene_items(self) -> None:

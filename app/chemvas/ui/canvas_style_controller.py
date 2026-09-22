@@ -12,10 +12,12 @@ from chemvas.ui.canvas_scene_items_state import arrow_items_for, note_items_for
 from chemvas.ui.canvas_text_style_state import set_text_style_for, text_style_state_for
 from chemvas.ui.history_commands import SetAnnotationStyleCommand
 from chemvas.ui.note_item_access import set_committed_note_html_for
-from chemvas.ui.note_selection_box import update_note_selection_box_for
 from chemvas.ui.renderer_style_access import atom_color_for, font_size_pt_for
 from chemvas.ui.scene_decoration_build_access import apply_arrow_labels_for
-from chemvas.ui.selection_service_access import refresh_selection_outline_for
+from chemvas.ui.selection_service_access import (
+    refresh_selection_outline_for,
+    update_note_selection_box_for,
+)
 from chemvas.ui.selection_style_state import selection_style_state_for
 from chemvas.ui.transactions.document import document_transaction
 

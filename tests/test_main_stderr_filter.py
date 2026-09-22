@@ -412,4 +412,4 @@ class MainStderrFilterTest(unittest.TestCase):
             ):
                 runpy.run_module("main", run_name="__main__")
 
-        self.assertEqual(events, ["app", "show", "restore", "start", "exec"])
+        self.assertEqual(events, ["app", "show", "start", "exec"])

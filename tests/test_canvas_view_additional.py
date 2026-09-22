@@ -103,7 +103,6 @@ from chemvas.ui.history_recording_access import (
     record_bond_update_for,
 )
 from chemvas.ui.move_access import shift_selection_outlines_for
-from chemvas.ui.note_selection_box import update_note_selection_box_for
 from chemvas.ui.pick_radius_access import atom_pick_radius_for, bond_pick_radius_for
 from chemvas.ui.scene_decoration_access import (
     add_arrow_for,
@@ -149,6 +148,7 @@ from chemvas.ui.selection_service_access import (
     refresh_selection_outline_for,
     select_note_for,
     toggle_note_selection_for,
+    update_note_selection_box_for,
 )
 from chemvas.ui.selection_service_bundle import build_selection_services
 from chemvas.ui.selection_style_state import (

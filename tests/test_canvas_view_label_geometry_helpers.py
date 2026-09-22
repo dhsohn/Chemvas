@@ -73,10 +73,11 @@ class CanvasViewLabelGeometryHelperTest(unittest.TestCase):
     ) -> None:
         view = SimpleNamespace(
             model=SimpleNamespace(
+                bonds=[],
                 atoms={
                     1: Atom("C", 0.0, 0.0),
                     2: Atom("C", 4.0, -2.0),
-                }
+                },
             ),
             renderer=SimpleNamespace(style=SimpleNamespace(bond_line_width=1.0)),
             runtime_state=canvas_runtime_state(
@@ -226,6 +227,7 @@ class CanvasViewLabelGeometryHelperTest(unittest.TestCase):
     def test_ring_center_for_bond_averages_atoms_in_matching_ring(self) -> None:
         view = SimpleNamespace(
             model=SimpleNamespace(
+                bonds=[],
                 atoms={
                     1: Atom("C", 0.0, 0.0),
                     2: Atom("C", 6.0, 0.0),
@@ -233,7 +235,7 @@ class CanvasViewLabelGeometryHelperTest(unittest.TestCase):
                     4: Atom("C", 50.0, 50.0),
                     5: Atom("C", 60.0, 50.0),
                     6: Atom("C", 50.0, 60.0),
-                }
+                },
             ),
             runtime_state=canvas_runtime_state(
                 scene_items_state=CanvasSceneItemsState()
@@ -268,11 +270,12 @@ class CanvasViewLabelGeometryHelperTest(unittest.TestCase):
         renderer = SimpleNamespace(style=SimpleNamespace(bond_length_px=20.0))
         view = SimpleNamespace(
             model=SimpleNamespace(
+                bonds=[],
                 atoms={
                     1: Atom("C", 0.0, 0.0),
                     2: Atom("C", 6.0, 0.0),
                     3: Atom("C", 0.0, 6.0),
-                }
+                },
             ),
             renderer=renderer,
             runtime_state=canvas_runtime_state(
@@ -291,10 +294,11 @@ class CanvasViewLabelGeometryHelperTest(unittest.TestCase):
 
         sparse_view = SimpleNamespace(
             model=SimpleNamespace(
+                bonds=[],
                 atoms={
                     1: Atom("C", 0.0, 0.0),
                     2: Atom("C", 6.0, 0.0),
-                }
+                },
             ),
             renderer=renderer,
             runtime_state=canvas_runtime_state(

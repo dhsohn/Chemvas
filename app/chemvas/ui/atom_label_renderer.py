@@ -378,6 +378,14 @@ class AtomLabelRenderer:
             # reverse the user's text or select one end as the bond anchor.
             return text, None, False, None
         open_x, open_y = _open_direction(vectors)
+        # Compact alkyl names have no explicit attachment-carbon glyph and
+        # cannot reverse as element groups. Keep their conventional spelling,
+        # but align the facing terminal glyph rather than the whole word.
+        if text in {"tBu", "t-Bu", "i-Pr"} and abs(open_x) >= 1e-6:
+            at_end = open_x < 0.0
+            body_direction = -1.0 if at_end else 1.0
+            if not any(dx * body_direction > 0.95 for dx, _ in vectors):
+                return text, text[-1] if at_end else text[0], at_end, None
         attachment_at_end = self._attachment_at_end(text)
         if abs(open_y) > abs(open_x) and (
             attachment_at_end is None or reversed_display_text(text) is None
@@ -410,6 +418,10 @@ class AtomLabelRenderer:
         # a label whose group-reversal matches a key ("Ph3P" -> "PPh3", "MeO"
         # -> "OMe") attaches at the end. Unknown labels fall back to the
         # syntactic signals; None means the end is genuinely ambiguous.
+        # Generic substituent R is not an expandable molecular alias. Its
+        # display still has an unambiguous oxygen attachment in OR / RO.
+        if text in {"OR", "RO"}:
+            return text == "RO"
         if text in ATOM_ALIAS_DEFINITIONS:
             return False
         flipped = reversed_display_text(text)

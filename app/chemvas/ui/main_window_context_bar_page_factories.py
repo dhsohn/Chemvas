@@ -3,8 +3,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QColor
 from PyQt6.QtWidgets import (
     QButtonGroup,
+    QColorDialog,
     QLineEdit,
     QSizePolicy,
     QSlider,
@@ -663,6 +665,18 @@ def build_color_palette_page(
     page, layout = new_context_page()
     group = QButtonGroup(page)
     buttons = {}
+    selected_color = QColor("#000000")
+
+    def apply_color(value: str) -> None:
+        nonlocal selected_color
+        selected_color = QColor(value)
+        apply_preset(value)
+
+    def choose_color() -> None:
+        color = QColorDialog.getColor(selected_color, page, tooltip_prefix)
+        if color.isValid():
+            apply_color(color.name())
+
     layout.addWidget(hint_label(tooltip_prefix))
     for label, hex_value in COLOR_PALETTE_SPECS:
         button = color_swatch_button(label, hex_value, tooltip_prefix)
@@ -670,9 +684,14 @@ def build_color_palette_page(
         group.addButton(button)
         buttons[hex_value] = button
         button.clicked.connect(
-            lambda _checked=False, value=hex_value: apply_preset(value)
+            lambda _checked=False, value=hex_value: apply_color(value)
         )
         layout.addWidget(button)
+    custom = action_button("More colors…", f"{tooltip_prefix}: choose a custom color")
+    custom.setObjectName(f"{tooltip_prefix.lower().replace(' ', '_')}_more_colors")
+    custom.setFocusPolicy(Qt.FocusPolicy.NoFocus)
+    custom.clicked.connect(lambda _checked=False: choose_color())
+    layout.addWidget(custom)
     layout.addStretch(1)
     return ButtonGroupPage(page, group, buttons)
 

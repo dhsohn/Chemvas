@@ -203,6 +203,7 @@ def test_alternate_recovery_warning_has_a_safe_action_and_survives_autosave(
     alternate = tmp_path / "fallback"
     previous = alternate / "previous"
     primary_store = _FakeStore(RestoreResult())
+    primary_store.unrestored_snapshot_directories = mock.Mock(return_value=[])
     alternate_store = mock.Mock()
     alternate_store.unrestored_snapshot_directories.return_value = [previous]
     monkeypatch.setattr(module, "sessions_dir", lambda: primary)

@@ -46,7 +46,7 @@ def build_main_window_runtime(
         services.active_canvas_ui_service.on_canvas_tab_changed(window, index)
 
     def on_canvas_tab_close_requested(index: int) -> None:
-        services.canvas_tab_ui_service.close_canvas_tab(window, index)
+        services.document_action_service.close_canvas_tab(window, index)
 
     tab_assembly = build_tabs(
         window,

@@ -64,9 +64,6 @@ class ImageItem(QGraphicsRectItem):
         image.setDevicePixelRatio(1.0)
         self._image = image
         self.setPen(QPen(Qt.PenStyle.NoPen))
-        # Keep annotation stacking independent of insertion/restore order:
-        # shapes and ring fills are below images; native labels are above them.
-        self.setZValue(-2.0)
         self.setData(0, "image")
         self.setData(1, {key: state[key] for key in _SOURCE_KEYS})
         self.setFlag(self.GraphicsItemFlag.ItemIsSelectable, True)
@@ -91,6 +88,8 @@ class ImageItem(QGraphicsRectItem):
             height=self.rect().height(),
             opacity=self.opacity(),
         )
+        if self.zValue() != -2.0:
+            state["z"] = self.zValue()
         return state
 
     def apply_image_state(self, state: Mapping[str, object]) -> None:
@@ -113,6 +112,7 @@ class ImageItem(QGraphicsRectItem):
         )
         self.setPos(float(cast("float", state["x"])), float(cast("float", state["y"])))
         self.setOpacity(float(cast("float", state["opacity"])))
+        self.setZValue(float(cast("float", state.get("z", -2.0))))
         self.setData(1, {**self.data(1), "lock_aspect": state["lock_aspect"]})
 
     @override

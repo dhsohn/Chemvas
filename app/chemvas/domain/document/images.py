@@ -50,6 +50,7 @@ def image_state_from_bytes(
     height: float | None = None,
     opacity: float = 1.0,
     lock_aspect: bool = True,
+    z: float = -2.0,
 ) -> dict[str, object]:
     """Embed a complete raster; omitted dimensions follow its native ratio.
 
@@ -78,6 +79,8 @@ def image_state_from_bytes(
         "opacity": opacity,
         "lock_aspect": lock_aspect,
     }
+    if z != -2.0:
+        state["z"] = z
     _validate_fields(state)
     return state
 
@@ -145,7 +148,10 @@ def validate_image_collection_budget(states: object) -> None:
 
 
 def _validate_fields(state: Mapping[str, object]) -> None:
-    if set(state) != _IMAGE_KEYS or state.get("kind") != "image":
+    if (
+        not _IMAGE_KEYS <= set(state) <= _IMAGE_KEYS | {"z"}
+        or state.get("kind") != "image"
+    ):
         raise ValueError("Image state has missing or unknown fields.")
     mime_type = state.get("mime_type")
     if not isinstance(mime_type, str) or mime_type not in _FORMAT_MIME.values():
@@ -160,6 +166,8 @@ def _validate_fields(state: Mapping[str, object]) -> None:
         value = _number(state.get(key), key, positive=key in {"width", "height"})
         if key == "opacity" and not 0.0 <= value <= 1.0:
             raise ValueError("Image opacity must be between 0 and 1.")
+    if "z" in state and not -12.0 <= _number(state["z"], "z") <= 10.0:
+        raise ValueError("Image z must be between -12 and 10.")
     if type(state.get("lock_aspect")) is not bool:
         raise ValueError("Image lock_aspect must be a boolean.")
 

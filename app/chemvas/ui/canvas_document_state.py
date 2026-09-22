@@ -307,6 +307,8 @@ def _snapshot_notes(canvas, items: list) -> list[dict]:
             "x": note_state["x"],
             "y": note_state["y"],
         }
+        if "rotation" in note_state:
+            snapshot["rotation"] = note_state["rotation"]
         html = note_state.get("html")
         if isinstance(html, str):
             snapshot["html"] = html

@@ -592,6 +592,8 @@ def selection_payload_to_canvas_state(
                 "x": item_state["x"],
                 "y": item_state["y"],
             }
+            if "rotation" in item_state:
+                note_state["rotation"] = item_state["rotation"]
             html = item_state.get("html")
             if isinstance(html, str):
                 note_state["html"] = html
@@ -907,7 +909,7 @@ def _validate_note_fields(
     error: str,
 ) -> None:
     keys = set(note_state)
-    if not required_keys <= keys or not keys <= required_keys | {"html"}:
+    if not required_keys <= keys or not keys <= required_keys | {"html", "rotation"}:
         raise ValueError(error)
     if not isinstance(note_state.get("text"), str):
         raise ValueError(error)
@@ -916,6 +918,8 @@ def _validate_note_fields(
         raise ValueError(error)
     if "html" in note_state:
         _validate_utf8(note_state["html"], error=f"{error} html")
+    if "rotation" in note_state and not _is_number(note_state["rotation"]):
+        raise ValueError(error)
     if not _is_number(note_state.get("x")) or not _is_number(note_state.get("y")):
         raise ValueError(error)
 
@@ -1010,7 +1014,13 @@ def validate_shape_fields(shape_state: Mapping[str, object], *, error: str) -> N
     if not _SHAPE_STATE_BASE_KEYS <= keys or not keys <= _SHAPE_STATE_BASE_KEYS | {
         "fill",
         "fill_alpha",
+        "z",
     }:
+        raise ValueError(error)
+    if "z" in keys and (
+        not _is_number(shape_state["z"])
+        or not -12.0 <= cast("float", shape_state["z"]) <= 10.0
+    ):
         raise ValueError(error)
     if shape_state.get("kind") != "shape":
         raise ValueError(error)

@@ -15,9 +15,6 @@ if TYPE_CHECKING:
     from chemvas.ui.main_window_canvas_document_service import (
         MainWindowCanvasDocumentService,
     )
-    from chemvas.ui.main_window_canvas_tab_ui_service import (
-        MainWindowCanvasTabUIService,
-    )
     from chemvas.ui.main_window_context_bar_service import MainWindowContextBarService
     from chemvas.ui.main_window_context_page_state_service import (
         MainWindowContextPageStateService,
@@ -43,7 +40,6 @@ class MainWindowServices:
     context_page_state_service: MainWindowContextPageStateService
     tool_routing_service: MainWindowToolRoutingService
     text_style_service: MainWindowTextStyleService
-    canvas_tab_ui_service: MainWindowCanvasTabUIService
     canvas_document_service: MainWindowCanvasDocumentService
     active_canvas_ui_service: MainWindowActiveCanvasUIService
     ui_assembly_service: MainWindowUIAssemblyService

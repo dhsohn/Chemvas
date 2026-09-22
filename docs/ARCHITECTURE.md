@@ -80,6 +80,32 @@ clearing of stored precomplex state; the dialog collects widget values and
 presents errors.
 No inventory is cached across document edits.
 
+**Calculation support boundary.** Calculation-menu operations are separate from
+saved calculation-plan data. The menu registers a lazy callback: opening the
+main window does not load the calculation dialog, mapping overlay or calculation
+feature. The existing command-line dispatcher likewise loads its calculation
+bootstrap only for the registered calculation commands. Support remains enabled;
+this boundary introduces no feature switch or plugin framework.
+
+| Responsibility | Owner and support-retirement rule |
+| --- | --- |
+| Operational calculation UI | `ui/calculation_step_dialog.py` and `ui/calculation_mapping_highlight.py`; entered through `_build_calculation_menu` in `ui/main_window_menu_bar.py`. |
+| Preparation and handoff | `features/calculation_bundle` and `bootstrap/calculation_bundle.py`; CLI registration/help in `bootstrap/application.py` owns `inspect`, `attach-plan`, `inspect-plan`, and `pack-step`. |
+| Existing document data | The document domain, canvas plan state, snapshots and history retain the supported plan schema, structural validation, preservation and edit-integrity rules. These are document compatibility responsibilities, not optional calculation operations. |
+| Shared chemical services | RDKit, molecule inspection, SMILES/MOL/XYZ conversion and Molecule Info serve other features. Retiring Calculation does not retire that backend or those capabilities. Calculation-specific adapter methods must be audited by their callers at retirement. |
+
+If support is later retired, remove the GUI registration and the calculation CLI
+registrations/help together with their operational consumers. Preserve supported
+plan data and its integrity checks under the document compatibility policy;
+removing that data would require a separate explicit compatibility decision.
+Do not catch missing feature imports and silently discard plans. General editing
+must not acquire new imports of these operational modules: the package dependency
+check permits only their declared entry points and internal dependencies.
+`test_calculation_feature_boundary.py` blocks operational-module imports in a
+fresh process, opens the real main window, opens a document with a draft plan,
+moves atoms, saves/reopens and renders PNG. Its output bytes must match two
+normal baseline runs; menu dispatch remains separately tested.
+
 Figure-export preflight and rendering share the items and geometry returned by
 the feature's `resolve_export_plan` within one synchronous request. After the
 export service validates the plan, `render_export_plan` paints it without measuring
@@ -188,7 +214,8 @@ end state is decided.
   while existing asynchronous preview shutdown closes the
   windows. Alternate app-data recovery discovery is read-only and reports paths;
   it does not merge sessions or establish another durable recovery journal.
-- Desktop document paths are canonical `.chemvas` paths. Startup, OS-open, File Open, Open Recent, and clean-session restoration reject or ignore `.json` drawing paths. An abnormal-session snapshot may recover current internal autosave state, but an unsupported original path is cleared so the recovered canvas is unbound and unsaved.
+- Desktop startup does not reopen previous documents. Only explicitly requested files are loaded; crash autosave snapshots remain on disk with manual recovery instructions. Explicit recovery APIs and snapshot formats remain supported.
+- Desktop document paths are canonical `.chemvas` paths. Startup, OS-open, File Open, and Open Recent reject or ignore `.json` drawing paths. An abnormal-session snapshot may recover current internal autosave state, but an unsupported original path is cleared so the recovered canvas is unbound and unsaved.
 
 ## Data/Render Flow
 Tools -> CanvasView -> MoleculeModel mutation -> Renderer/BondRenderer -> QGraphicsScene updates -> HistoryCommand push.

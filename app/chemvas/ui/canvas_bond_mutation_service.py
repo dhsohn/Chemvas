@@ -10,6 +10,7 @@ from chemvas.ui.canvas_model_access import (
     bond_count_for,
     bond_for_id,
     bond_ids_from,
+    bonds_for,
     clear_bond_for_id,
     has_bond_slot_for,
     set_bond_for_id,
@@ -128,6 +129,16 @@ class CanvasBondMutationService:
     def _relayout_atom_labels(self, atom_ids: set[int]) -> None:
         if atom_ids:
             self._atom_label_relayout(atom_ids)
+            # Closing/opening a cycle changes the side of double bonds even far
+            # from the edited endpoints. Refresh live ring-dependent graphics;
+            # creation/restoration still owns any not-yet-built bond items.
+            for bond_id, bond in enumerate(bonds_for(self.canvas)):
+                if (
+                    bond is not None
+                    and (bond.order == 2 or bond.style in {"bold_in", "bold_out"})
+                    and bond_items_for_id(self.canvas, bond_id)
+                ):
+                    bond_renderer_for(self.canvas).update_bond_geometry(bond_id)
 
     def _clear_bond_graphics(self, bond_id: int) -> None:
         remove_items_from_canvas_scene(

@@ -48,11 +48,15 @@ def flip_scene_item_state(
         rect = item.sceneBoundingRect()
         if rect.isValid():
             if horizontal:
-                after_state["x"] = center.x() - (rect.right() - center.x())
+                after_state["x"] = before_state.get("x", 0.0) + 2 * (
+                    center.x() - rect.center().x()
+                )
                 after_state["y"] = before_state.get("y", 0.0)
             else:
                 after_state["x"] = before_state.get("x", 0.0)
-                after_state["y"] = center.y() - (rect.bottom() - center.y())
+                after_state["y"] = before_state.get("y", 0.0) + 2 * (
+                    center.y() - rect.center().y()
+                )
         else:
             flipped = flip_point(
                 QPointF(before_state.get("x", 0.0), before_state.get("y", 0.0)),

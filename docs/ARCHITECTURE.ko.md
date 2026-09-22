@@ -76,6 +76,29 @@ structural validation을 사용하므로 사용자가 맞지 않는 전하 같�
 step-edit 연산이 소유하며, dialog는 widget 입력 수집과 오류 표시를 맡는다. 문서 편집
 사이에 inventory를 캐시하지 않는다.
 
+**Calculation 지원 경계.** Calculation 메뉴의 동작과 문서에 저장된 계산 계획은
+별도 책임이다. 메뉴는 지연 콜백을 등록하므로 메인 창을 열 때 계산 dialog, mapping
+표시, 계산 feature를 불러오지 않는다. 기존 CLI dispatcher도 등록된 계산 명령에서만
+계산 bootstrap을 불러온다. 현재 기능은 계속 지원하며 새 기능 스위치나 플러그인
+프레임워크를 추가하지 않는다.
+
+| 책임 | 소유자와 향후 지원 중단 시 원칙 |
+| --- | --- |
+| 계산 UI 동작 | `ui/calculation_step_dialog.py`, `ui/calculation_mapping_highlight.py`; 진입점은 `ui/main_window_menu_bar.py`의 `_build_calculation_menu`. |
+| 계산 준비와 전달 | `features/calculation_bundle`, `bootstrap/calculation_bundle.py`; `bootstrap/application.py`가 `inspect`, `attach-plan`, `inspect-plan`, `pack-step`의 CLI 등록과 도움말을 소유한다. |
+| 기존 문서 데이터 | document domain, canvas plan state, snapshot, history가 지원 중인 plan 스키마, 구조 검증, 보존, 편집 무결성 규칙을 유지한다. 선택적 계산 동작이 아니라 문서 호환성의 책임이다. |
+| 공용 화학 서비스 | RDKit, 분자 검사, SMILES/MOL/XYZ 변환, Molecule Info는 다른 기능도 사용한다. Calculation 중단을 이유로 백엔드와 이 기능들을 함께 제거하지 않는다. 계산 전용 adapter 메서드는 실제 중단 시 호출자를 확인한다. |
+
+나중에 지원을 중단하면 GUI 등록과 계산 CLI 등록·도움말을 동작 소비자와 함께 제거한다.
+지원 중인 계획 데이터와 무결성 검사는 문서 호환성 정책에 따라 보존한다. 데이터 제거는
+별도의 명시적 호환성 결정이 필요하다. 기능 import 실패를 잡아 계획을 조용히 버리지
+않는다. 일반 편집 코드는 계산 동작 모듈에 새로 의존하지 않으며, 패키지 의존성 검사는
+명시된 진입점과 내부 의존만 허용한다.
+`test_calculation_feature_boundary.py`는 새 프로세스에서 계산 동작 모듈의 import를
+차단하고 실제 메인 창 생성, draft plan 문서 열기, 원자 이동, 저장·다시 열기, PNG
+렌더링을 수행한다. 결과 바이트를 정상 기준 실행 두 번과 대조하며, 메뉴 호출도 별도로
+검사한다.
+
 Figure export의 사전 검사와 렌더링은 동기 요청 하나 안에서 feature의
 `resolve_export_plan`이 반환한 항목과 기하 정보를 공유한다. export service가 plan을 검증하면
 `render_export_plan`이 다시 측정하지 않고 그린다. 별도의 `export_scene` 및
@@ -171,7 +194,8 @@ Figure export의 사전 검사와 렌더링은 동기 요청 하나 안에서 fe
   기존 비동기 preview shutdown으로 창이 닫히는 동안 snapshot을 동결한다.
   다른 앱 데이터 위치의 복구 파일 탐색은 읽기 전용으로 경로만 알린다.
   세션을 병합하거나 별도의 영속 복구 장부를 만들지 않는다.
-- Desktop document path는 canonical `.chemvas`다. Startup, OS-open, File Open, Open Recent, clean-session restore는 `.json` drawing path를 거부하거나 무시한다. 비정상 session snapshot은 현재 내부 autosave state를 복구할 수 있지만, 지원하지 않는 원본 path는 지우므로 recovered canvas는 path에 연결되지 않은 미저장 문서다.
+- 앱 시작 시 이전 문서를 자동으로 열지 않는다. 명시적으로 연 파일만 로드하며, 비정상 종료의 autosave snapshot은 삭제하지 않고 수동 복구 안내를 제공한다. 명시적 recovery API와 snapshot 형식은 유지한다.
+- Desktop document path는 canonical `.chemvas`다. Startup, OS-open, File Open, Open Recent는 `.json` drawing path를 거부하거나 무시한다. 비정상 session snapshot은 현재 내부 autosave state를 복구할 수 있지만, 지원하지 않는 원본 path는 지우므로 recovered canvas는 path에 연결되지 않은 미저장 문서다.
 
 ## 데이터/렌더 흐름 (Data/Render Flow)
 Tools -> CanvasView -> MoleculeModel 변경(mutation) -> Renderer/BondRenderer -> QGraphicsScene 업데이트 -> HistoryCommand 푸시.

@@ -82,6 +82,7 @@ class CanvasBondMutationServiceTest(unittest.TestCase):
         canvas = SimpleNamespace(
             services=_services(graph=graph, hit_testing=hit_testing),
             model=model,
+            runtime_state=_runtime_state(),
         )
 
         bond_id = _service_for(canvas).add_bond(1, 2, 2)
@@ -109,6 +110,7 @@ class CanvasBondMutationServiceTest(unittest.TestCase):
         canvas = SimpleNamespace(
             services=_services(graph=graph, hit_testing=registry_hit_testing),
             model=model,
+            runtime_state=_runtime_state(),
         )
 
         bond_id = CanvasBondMutationService(
@@ -129,6 +131,7 @@ class CanvasBondMutationServiceTest(unittest.TestCase):
         canvas = SimpleNamespace(
             services=_services(graph=graph, hit_testing=hit_testing),
             model=model,
+            runtime_state=_runtime_state(),
         )
 
         bond_id = _service_for(canvas).add_bond(1, 2, 3)
@@ -150,7 +153,9 @@ class CanvasBondMutationServiceTest(unittest.TestCase):
             services=_services(graph=graph, hit_testing=hit_testing),
             scene=lambda: scene,
             model=SimpleNamespace(bonds=[Bond(1, 2, 1)]),
-            bond_renderer=SimpleNamespace(redraw_bond=mock.Mock()),
+            bond_renderer=SimpleNamespace(
+                redraw_bond=mock.Mock(), update_bond_geometry=mock.Mock()
+            ),
             runtime_state=_runtime_state(),
         )
         set_bond_items_for(canvas, {0: [old_item]})
@@ -178,7 +183,9 @@ class CanvasBondMutationServiceTest(unittest.TestCase):
             services=_services(graph=graph, hit_testing=hit_testing),
             scene=lambda: _FakeScene(),
             model=SimpleNamespace(bonds=[]),
-            bond_renderer=SimpleNamespace(redraw_bond=mock.Mock()),
+            bond_renderer=SimpleNamespace(
+                redraw_bond=mock.Mock(), update_bond_geometry=mock.Mock()
+            ),
             runtime_state=_runtime_state(),
         )
         set_bond_items_for(canvas, {})
@@ -298,6 +305,7 @@ class CanvasBondMutationServiceStaleIndexTest(unittest.TestCase):
         canvas = SimpleNamespace(
             services=_services(graph=graph, hit_testing=hit_testing),
             model=model,
+            runtime_state=_runtime_state(),
         )
 
         bond_id = _service_for(canvas).add_bond(1, 2, 1)

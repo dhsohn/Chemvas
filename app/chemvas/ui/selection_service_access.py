@@ -13,6 +13,16 @@ if TYPE_CHECKING:
     from chemvas.ui.selection_controller import SelectionController
 
 
+def update_note_selection_box_for(canvas, item) -> None:
+    try:
+        controller = selection_service_from_canvas(canvas)
+    except AttributeError:
+        controller = None
+    update_note_selection_box = getattr(controller, "update_note_selection_box", None)
+    if callable(update_note_selection_box):
+        update_note_selection_box(item)
+
+
 def selection_service_from_canvas(canvas) -> SelectionController:
     return selection_service_for_access(canvas)
 
@@ -76,4 +86,5 @@ __all__ = [
     "selection_targets_for_item_for",
     "structure_item_is_selected_for",
     "toggle_note_selection_for",
+    "update_note_selection_box_for",
 ]

@@ -7,6 +7,42 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Color and Ring Fill offer 16 preset colors and a More colors picker for
+  arbitrary custom colors.
+
+- Bring to Front and Send to Back for selected images and shapes in the Edit
+  menu, with saved stacking order and undo/redo support.
+- Text rotation through the existing selection Rotate controls. The angle is
+  retained in documents, clipboard content, history and figure exports.
+
+### Fixed
+
+- Desktop launches start blank or open only the explicitly requested document.
+  Previous documents are no longer reopened automatically; existing crash
+  snapshots remain available on disk for manual recovery.
+- Selecting a shape once exposes its corner and edge resize handles.
+
+- Opening the editor no longer loads Calculation operations before they are
+  requested. Existing saved plans remain part of the document compatibility
+  contract independently of Calculation support.
+
+- Generic `OR`/`RO` labels align bonds to oxygen. Compact `tBu`, `t-Bu` and
+  `i-Pr` labels retain their spelling and align their facing end on diagonal
+  attachments instead of centering the whole label on the bond.
+
+- Rings composed directly from atoms and bonds keep double bonds inside the
+  ring without requiring a separate ring-fill object, including after closing
+  or opening a cycle.
+- Bonds clear the complete atom-label silhouette, so vertical connections to
+  labels such as `Ph` do not enter the gaps between their letters.
+
+- Unicode subscript digits in Atom labels, such as `PPh₃`, use ordinary digit
+  glyphs with a single subscript size and baseline adjustment on the canvas and
+  in exported figures. They no longer shrink and drop a second time; the stored
+  label text is preserved.
+
 ## [0.17.1] - 2026-09-21
 
 ### Fixed

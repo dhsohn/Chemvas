@@ -2,7 +2,7 @@
 
 Owns the periodic snapshot timer, marks app-wide last-window shutdown before
 deferred close snapshots run, records clean exit on ``QApplication.aboutToQuit``,
-and — on launch — rebuilds the previous session's windows from the store. All
+and supports explicit reconstruction of previous session windows. All
 heavy lifting (what to persist, what to restore) lives in
 :mod:`chemvas.features.session` / :mod:`chemvas.ui.session_snapshot_store`; this
 class just wires those to Qt and the window services.
@@ -123,8 +123,7 @@ class SessionRecoveryService:
         blank tab for the first one. Returns the count of recovered unsaved
         documents (a crash), which is also surfaced in the status bar.
 
-        This runs on every launch; a startup file is then opened on top of the
-        restored workspace through the duplicate-open guard.
+        Explicit recovery entry point; desktop startup does not call this.
         """
         result = self._store.consume_previous_sessions()
         # Prune the consumed source sessions only after start() re-snapshots the
@@ -360,9 +359,7 @@ def create_session_recovery_service() -> SessionRecoveryService:
     """
     root = sessions_dir()
     warnings = []
-    for candidate in existing_session_roots():
-        if candidate == root.resolve():
-            continue
+    for candidate in dict.fromkeys((root.resolve(), *existing_session_roots())):
         for directory in new_session_store(candidate).unrestored_snapshot_directories():
             warnings.append(
                 f"Unsaved recovery files were found in {directory} and kept there. "

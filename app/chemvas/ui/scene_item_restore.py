@@ -94,6 +94,7 @@ def create_note_item_from_state(
         )
     )
     note_style_applier(item)
+    item.setRotation(float(cast("Any", note_state.get("rotation", 0.0))))
     # The committed baseline must match the styled live document, otherwise
     # merely entering/leaving a restored note records a false format edit.
     set_committed_note_text_for(item, item.toPlainText())

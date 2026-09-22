@@ -20,7 +20,6 @@ from chemvas.ui.canvas_model_access import atoms_for, bonds_for
 from chemvas.ui.canvas_scene_items_state import remove_selected_note_for, ring_items_for
 from chemvas.ui.canvas_window_access import history_service_for_canvas, notify_error_for
 from chemvas.ui.history_commands import GroupSceneItemsCommand, UngroupSceneItemsCommand
-from chemvas.ui.note_selection_box import update_note_selection_box_for
 from chemvas.ui.renderer_style_access import bond_length_px_for
 from chemvas.ui.scene_item_access import attached_canvas_scene_items
 from chemvas.ui.scene_item_state_serialization import ARROW_KINDS
@@ -40,6 +39,7 @@ from chemvas.ui.selection_service_access import (
     refresh_selection_outline_for,
     select_note_for,
     toggle_note_selection_for,
+    update_note_selection_box_for,
 )
 from chemvas.ui.selection_style_access import selection_indicator_rect_for_atom_for
 from chemvas.ui.transactions.document import document_transaction

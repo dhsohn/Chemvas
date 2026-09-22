@@ -13,6 +13,8 @@ APP_ROOT = CHEMVAS_ROOT.parent
 TARGET_LAYERS = frozenset(("domain", "features", "adapters", "shell", "bootstrap"))
 REMOVED_COMPATIBILITY_MODULES = frozenset(
     {
+        "chemvas.ui.main_window_canvas_tab_ui_service",
+        "chemvas.ui.note_selection_box",
         "chemvas.core.document_state",
         "chemvas.core.model",
         "chemvas.core.rdkit_types",
@@ -300,23 +302,56 @@ def test_bootstrap_legacy_dependencies_are_confined_to_composition_modules() -> 
     assert violations == []
 
 
-def test_general_editing_does_not_depend_on_the_calculation_feature() -> None:
-    """The plan's consistency rules and the RDKit conversion records live in
-    the domain, so saving, patching and converting a drawing never reach into
-    the calculation feature. Only the feature's own consumers may."""
-    general_sources = (
-        "chemvas.core.",
-        "chemvas.features.document_patch",
-        "chemvas.ui.main_window_document_action_service",
-    )
-    violations = [
-        _formatted(edge)
-        for edge in _import_edges()
-        if edge.source.startswith(general_sources)
-        and edge.dependency.startswith("chemvas.features.calculation_bundle")
-    ]
+# Explicit operation entry points; document plan schema/preservation is outside
+# this set and stays available if Calculation support is later retired.
+CALCULATION_OPERATION_CALLERS = {
+    "chemvas.features.calculation_bundle": frozenset(
+        {"chemvas.bootstrap.calculation_bundle", "chemvas.ui.calculation_step_dialog"}
+    ),
+    "chemvas.bootstrap.calculation_bundle": frozenset(
+        {"chemvas.bootstrap.application"}
+    ),
+    "chemvas.ui.calculation_step_dialog": frozenset(
+        {"chemvas.ui.main_window_menu_bar"}
+    ),
+    "chemvas.ui.calculation_mapping_highlight": frozenset(
+        {"chemvas.ui.calculation_step_dialog"}
+    ),
+}
 
-    assert violations == []
+
+def _calculation_boundary_violations(
+    edges: tuple[ImportEdge, ...],
+) -> tuple[ImportEdge, ...]:
+    return tuple(
+        edge
+        for edge in edges
+        for operation, callers in CALCULATION_OPERATION_CALLERS.items()
+        if (edge.dependency == operation or edge.dependency.startswith(operation + "."))
+        and not (edge.source == operation or edge.source.startswith(operation + "."))
+        and edge.source not in callers
+    )
+
+
+def test_general_editing_does_not_depend_on_the_calculation_feature() -> None:
+    assert [
+        _formatted(edge) for edge in _calculation_boundary_violations(_import_edges())
+    ] == []
+
+
+def test_calculation_boundary_rejects_new_consumers_and_allows_registrations() -> None:
+    for operation, callers in CALCULATION_OPERATION_CALLERS.items():
+        for consumer in (
+            "chemvas.core.document_io",
+            "chemvas.features.document_patch.service",
+            "chemvas.ui.canvas_document_state",
+            "chemvas.features.export.service",
+        ):
+            edge = ImportEdge(consumer, operation, CHEMVAS_ROOT / "injected.py", 1)
+            assert _calculation_boundary_violations((edge,)) == (edge,)
+        for consumer in callers | {operation + ".service"}:
+            edge = ImportEdge(consumer, operation, CHEMVAS_ROOT / "injected.py", 1)
+            assert _calculation_boundary_violations((edge,)) == ()
 
 
 def test_domain_has_no_framework_or_adapter_dependencies() -> None:

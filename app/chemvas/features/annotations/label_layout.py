@@ -158,6 +158,7 @@ def reversed_display_text(text: str) -> str | None:
 
 # A subscript/superscript glyph is drawn at this fraction of the base font size.
 SUB_SCALE = 0.72
+_SUBSCRIPT_DIGITS = dict(zip("₀₁₂₃₄₅₆₇₈₉", "0123456789", strict=True))
 # Vertical offsets, expressed as a fraction of the base em (ascent + descent).
 SUB_DROP_RATIO = 0.20
 SUPER_RISE_RATIO = 0.34
@@ -201,6 +202,9 @@ def parse_atom_label(text: str) -> list[LabelRun]:
       * A digit immediately following a letter, ``)`` or ``]`` is a subscript;
         consecutive digits stay in the same subscript run (``C10`` -> ``C`` + ₁₀).
       * A leading digit stays normal (isotope typography is out of scope).
+      * Unicode subscript digits use ordinary digit glyphs in a subscript run,
+        including at the start of a label. Their built-in size and baseline
+        must not be applied again on top of the run's typography.
       * Everything else, including ``+``/``-`` signs, stays normal. Folding a
         formal charge into a superscript is intentionally deferred to the charge
         slice -- inline charge magnitude (``Ca2+`` vs ``H2O``) is ambiguous to
@@ -223,7 +227,10 @@ def parse_atom_label(text: str) -> list[LabelRun]:
             buf = ""
 
     for ch in source:
-        if ch.isdigit() and prev and (prev.isalpha() or prev in (")", "]")):
+        if ch in _SUBSCRIPT_DIGITS:
+            ch = _SUBSCRIPT_DIGITS[ch]
+            role = "sub"
+        elif ch.isdigit() and prev and (prev.isalpha() or prev in (")", "]")):
             role = "sub"
         elif ch.isdigit() and prev.isdigit() and buf_role == "sub":
             role = "sub"

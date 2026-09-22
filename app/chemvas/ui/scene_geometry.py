@@ -15,6 +15,8 @@ from PyQt6.QtGui import (
 )
 from PyQt6.QtWidgets import QGraphicsTextItem
 
+from chemvas.domain.document import Bond
+from chemvas.features.graph import find_rings
 from chemvas.features.selection import project_point_3d
 from chemvas.ui.canvas_geometry_logic import line_rect_clip_t as line_rect_clip_t_helper
 from chemvas.ui.canvas_geometry_logic import (
@@ -42,40 +44,41 @@ def _bounds(rect: QRectF) -> tuple[float, float, float, float]:
 
 
 def _glyph_clearance_path(path: QPainterPath) -> QPainterPath:
-    """Close each glyph contour's open interior, not the label's hit box.
+    """Keep bonds outside the label silhouette, including inter-letter gaps.
 
-    Convex contour envelopes keep a bond out of C/N/H openings while retaining
-    curved letter silhouettes and the gaps between distinct typographic runs.
-    Work in scene space so rotated/scaled labels use the same visible geometry.
+    A convex envelope closes letter counters and the narrow gap between P and h:
+    a vertical bond must not end halfway inside the label merely because it
+    misses the ink. Use glyph geometry, never the padded editing/hit rectangle.
+    The exterior retains curved glyph edges and follows scene transforms.
     """
     result = QPainterPath()
     result.setFillRule(Qt.FillRule.WindingFill)
     scale = 64.0
-    for polygon in path.toSubpathPolygons(QTransform.fromScale(scale, scale)):
-        points = sorted(
-            {
-                (point.x() / scale, point.y() / scale)
-                for point in (polygon.at(i) for i in range(polygon.size()))
-            }
-        )
-        if len(points) < 3:
-            continue
-        hulls = []
-        for ordered in (points, list(reversed(points))):
-            half: list[tuple[float, float]] = []
-            for point in ordered:
-                while len(half) >= 2:
-                    a, b = half[-2:]
-                    cross = (b[0] - a[0]) * (point[1] - a[1]) - (b[1] - a[1]) * (
-                        point[0] - a[0]
-                    )
-                    if cross > 0:
-                        break
-                    half.pop()
-                half.append(point)
-            hulls.extend(half[:-1])
-        result.addPolygon(QPolygonF([QPointF(x, y) for x, y in hulls]))
-        result.closeSubpath()
+    points = sorted(
+        {
+            (point.x() / scale, point.y() / scale)
+            for polygon in path.toSubpathPolygons(QTransform.fromScale(scale, scale))
+            for point in (polygon.at(i) for i in range(polygon.size()))
+        }
+    )
+    if len(points) < 3:
+        return result
+    hulls = []
+    for ordered in (points, list(reversed(points))):
+        half: list[tuple[float, float]] = []
+        for point in ordered:
+            while len(half) >= 2:
+                a, b = half[-2:]
+                cross = (b[0] - a[0]) * (point[1] - a[1]) - (b[1] - a[1]) * (
+                    point[0] - a[0]
+                )
+                if cross > 0:
+                    break
+                half.pop()
+            half.append(point)
+        hulls.extend(half[:-1])
+    result.addPolygon(QPolygonF([QPointF(x, y) for x, y in hulls]))
+    result.closeSubpath()
     return result
 
 
@@ -234,6 +237,8 @@ class SceneGeometry:
         self._glyph_clip_geometry: WeakKeyDictionary[
             AtomLabelItem, _GlyphClipGeometry
         ] = WeakKeyDictionary()
+        self._ring_topology: frozenset[tuple[int, int]] | None = None
+        self._graph_rings: list[list[int]] = []
 
     def current_atom_coords_3d(self, atom_id: int) -> tuple[float, float, float] | None:
         rotation = self.context.state.rotation_state
@@ -322,15 +327,48 @@ class SceneGeometry:
             ring_atom_ids = self._ring_atom_ids(ring_item)
             if ring_atom_ids is None:
                 continue
-            if bond.a in ring_atom_ids and bond.b in ring_atom_ids:
+            if self._ring_contains_edge(ring_atom_ids, bond):
                 yield ring_item, ring_atom_ids
+
+    @staticmethod
+    def _ring_contains_edge(atom_ids, bond) -> bool:
+        return any(
+            {atom_ids[index], atom_ids[(index + 1) % len(atom_ids)]} == {bond.a, bond.b}
+            for index in range(len(atom_ids))
+        )
+
+    def _ring_atom_ids_for_bond(self, bond) -> list[int] | None:
+        for _, atom_ids in self._ring_items_for_bond(bond):
+            return atom_ids
+        # Documents composed from atoms/bonds need no invisible ring fill to
+        # render chemically. Cache topology only: coordinates stay live during
+        # drag/rotation, while deletion, restoration and endpoint edits invalidate.
+        topology = frozenset(
+            (min(edge.a, edge.b), max(edge.a, edge.b))
+            for edge in self.context.model.bonds
+            if edge is not None
+            and edge.a in self.context.model.atoms
+            and edge.b in self.context.model.atoms
+        )
+        if topology != self._ring_topology:
+            self._ring_topology = topology
+            self._graph_rings = find_rings(Bond(a, b) for a, b in sorted(topology))
+        return next(
+            (
+                ring
+                for ring in self._graph_rings
+                if self._ring_contains_edge(ring, bond)
+            ),
+            None,
+        )
 
     def _padded_label_rect(self, rect: QRectF) -> QRectF:
         pad = max(0.05, self.context.renderer.style.bond_line_width * 0.05)
         return rect.adjusted(-pad, -pad, pad, pad)
 
     def ring_center_for_bond(self, bond) -> QPointF | None:
-        for _, ring_atom_ids in self._ring_items_for_bond(bond):
+        ring_atom_ids = self._ring_atom_ids_for_bond(bond)
+        if ring_atom_ids is not None:
             xs = []
             ys = []
             for atom_id in ring_atom_ids:
@@ -344,7 +382,8 @@ class SceneGeometry:
         return None
 
     def ring_center_3d_for_bond(self, bond) -> tuple[float, float, float] | None:
-        for _, ring_atom_ids in self._ring_items_for_bond(bond):
+        ring_atom_ids = self._ring_atom_ids_for_bond(bond)
+        if ring_atom_ids is not None:
             coords = []
             for atom_id in ring_atom_ids:
                 coord = self.current_atom_coords_3d(atom_id)

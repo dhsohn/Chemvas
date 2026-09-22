@@ -73,7 +73,7 @@ def test_bootstrap_main_window_initializes_runtime_references_and_services() -> 
         canvas_document_service=SimpleNamespace(
             add_canvas=mock.Mock(),
         ),
-        canvas_tab_ui_service=SimpleNamespace(
+        document_action_service=SimpleNamespace(
             close_canvas_tab=mock.Mock(),
         ),
     )
@@ -102,7 +102,7 @@ def test_bootstrap_main_window_initializes_runtime_references_and_services() -> 
     services.active_canvas_ui_service.on_canvas_tab_changed.assert_called_once_with(
         window, 3
     )
-    services.canvas_tab_ui_service.close_canvas_tab.assert_called_once_with(window, 4)
+    services.document_action_service.close_canvas_tab.assert_called_once_with(window, 4)
     window.on_canvas_tab_changed.assert_not_called()
     assert isinstance(runtime.state, MainWindowState)
     assert isinstance(runtime.ui_refs, MainWindowUiReferences)
