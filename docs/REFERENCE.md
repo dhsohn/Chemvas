@@ -278,14 +278,12 @@ files used by headless commands remain separate protocols and are unaffected.
 ## Autosave & recovery
 
 Chemvas snapshots every open document to a per-user app-data folder every few
-seconds — nothing is written next to your own files. If the app is killed or
-crashes, the next launch restores those documents (unsaved ones flagged with a
-`●` and a status-bar note); a clean quit simply reopens whatever files were
-open. Snapshots are pruned once a session has been restored or closed cleanly.
-Stale recent-file and clean-session entries for unsupported drawing paths are
-ignored. A current internal crash autosave can still recover the drawing data,
-but an unsupported original path is discarded and the recovered canvas opens
-unbound as an unsaved document.
+seconds — nothing is written next to your own files. Startup opens a blank
+workspace or the explicitly requested document, without restoring earlier clean
+or crashed sessions. Existing snapshots remain on disk for manual recovery;
+a status-bar notice identifies retained unsaved recovery files. During explicit
+recovery, an unsupported original path is discarded and the recovered canvas
+opens unbound as an unsaved document.
 
 Autosave never replaces a complete recovery snapshot with one whose capture
 reported a warning. It keeps the last good snapshot and shows a persistent

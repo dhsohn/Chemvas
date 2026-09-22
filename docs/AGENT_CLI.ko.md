@@ -40,7 +40,7 @@ POSIX에서 원자적으로 게시한 새 파일은 소유자 전용 권한(0600
 ## 헤드리스 문서 구성
 
 에이전트는 내부 문서 상태를 조립하는 대신 더 작은 공개 Composition v1 계약으로
-정규적이고 다시 열 수 있는 Chemvas v7 문서를 만들 수 있습니다.
+정규적이고 다시 열 수 있는 Chemvas v8 문서를 만들 수 있습니다.
 
 ```bash
 chemvas compose-document scheme.json --output scheme.chemvas
