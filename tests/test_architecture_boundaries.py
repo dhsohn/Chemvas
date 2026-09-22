@@ -4003,7 +4003,7 @@ def test_rollback_kernel_has_no_restore_retry_or_qt_base_port_bypass() -> None:
         APP_ROOT / "chemvas" / "ui" / "history_canvas_access.py",
         APP_ROOT / "chemvas" / "ui" / "history_commands.py",
         APP_ROOT / "chemvas" / "ui" / "history_operations.py",
-        APP_ROOT / "chemvas" / "ui" / "insert_smiles_service.py",
+        APP_ROOT / "chemvas" / "ui" / "insert_controller.py",
         APP_ROOT / "chemvas" / "ui" / "sheet_setup_access.py",
         *sorted((APP_ROOT / "chemvas" / "ui" / "transactions").glob("*.py")),
     ]
@@ -6011,7 +6011,7 @@ def _scene_item_pool_resets(source: str) -> list[tuple[int, str]]:
     Two marks, and the first is what keeps the rule narrow: ``removeItem`` is
     called from inside a loop on a name the function was *handed*. A function
     that goes and resolves its own scene is asking a different question, so
-    ``ui.insert_smiles_service``, ``ui.calculation_mapping_highlight`` and
+    ``ui.insert_controller``, ``ui.calculation_mapping_highlight`` and
     ``core.tool_overlay_logic`` are all out, and ``ui.scene_item_access`` is
     out twice over -- it needs a canvas, and ``_canvas_scoped_detachers``
     above owns that rule. Reaching the scene through ``self`` is out for the
@@ -6024,7 +6024,7 @@ def _scene_item_pool_resets(source: str) -> list[tuple[int, str]]:
       ``calculation_mapping_highlight._remove_items`` is already almost this
       loop written that way, differing in that it finds its own scene and
       clears the pool in place. Dropping the parameter mark to reach it also
-      sweeps in ``insert_smiles_service``'s pre-clear detach, so the rule
+      sweeps in ``insert_controller``'s pre-clear detach, so the rule
       would need a third and fourth owner spelled out to stay green and would
       stop meaning "two owners". The mark stays and the escape is written
       down here.
@@ -6366,6 +6366,16 @@ def test_selection_callers_do_not_use_removed_bundle() -> None:
 def test_selection_owner_does_not_resolve_itself_through_canvas() -> None:
     controller = APP_ROOT / "chemvas" / "ui" / "selection_controller.py"
     assert _matching_lines(re.compile(r"\bselection_for\b"), [controller]) == []
+
+
+@pytest.mark.parametrize("module", ["insert_smiles_service", "insert_template_service"])
+def test_insertion_removed_lifecycle_services_stay_removed(module: str) -> None:
+    assert not (APP_ROOT / "chemvas" / "ui" / f"{module}.py").exists()
+    sources = [
+        *_app_python_files(),
+        *sorted((APP_ROOT.parent / "scripts").rglob("*.py")),
+    ]
+    assert _matching_lines(re.compile(rf"\b{module}\b"), sources) == []
 
 
 def test_selection_leaf_resolves_only_the_selection_service() -> None:

@@ -1558,7 +1558,7 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
                 "smiles_to_2d",
                 return_value=None,
             ),
-            patch("chemvas.ui.insert_smiles_service.QMessageBox.warning") as warning,
+            patch("chemvas.ui.insert_controller.QMessageBox.warning") as warning,
         ):
             active_canvas_for_window(
                 self.window

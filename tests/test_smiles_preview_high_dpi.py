@@ -171,7 +171,7 @@ def _canvas_insertion(ratio, *, real_smiles=False):
             controller.begin_smiles_insert("c1ccccc1C(=O)O")
         else:
             with mock.patch(
-                "chemvas.ui.insert_smiles_service.smiles_to_2d_for", return_value=model
+                "chemvas.ui.insert_controller.smiles_to_2d_for", return_value=model
             ):
                 controller.begin_smiles_insert("CO")
         state = insert_state_for(canvas)
