@@ -218,3 +218,31 @@ def test_failed_ring_edit_then_different_cycle_does_not_reuse_topology(canvas):
     assert center.y() == pytest.approx(
         sum(canvas.model.atoms[i].y for i in ids[1:5]) / 4
     )
+
+
+def test_acyclic_growth_and_style_changes_do_not_refresh_remote_ring_bonds(
+    canvas, monkeypatch
+):
+    from unittest.mock import Mock
+
+    from chemvas.ui import canvas_bond_mutation_service as module
+
+    ids, edges = _ring(canvas)
+    mutation = canvas_services_for(canvas).structure.canvas_bond_mutation_service
+    atoms = canvas_services_for(canvas).structure.canvas_atom_mutation_service
+    scans = Mock(wraps=module.bonds_for)
+    monkeypatch.setattr(module, "bonds_for", scans)
+    previous = ids[0]
+    for index in range(30):
+        atom = atoms.add_atom("C", 80 + index * 20, 0)
+        edge = mutation.add_bond(previous, atom)
+        canvas.bond_renderer.add_bond_graphics(edge)
+        mutation.restore_bond_from_state(
+            edge, {"a": previous, "b": atom, "order": 1, "color": "#123456"}
+        )
+        previous = atom
+    assert scans.call_count == 0
+    # Retarget a cyclic edge at unchanged cycle rank: a different ring must
+    # still refresh remote double-bond geometry.
+    mutation.restore_bond_from_state(edges[-1], {"a": ids[-1], "b": ids[1], "order": 1})
+    assert scans.call_count == 1

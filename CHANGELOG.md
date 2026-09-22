@@ -19,6 +19,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Composition v2 requests support note rotation and image/shape stacking; v1
+  remains supported with its original strict fields.
+
 - New clipboard selections use v3 for rotation and stacking; valid legacy v2
   selections remain pasteable, with strict validation of their original fields.
 

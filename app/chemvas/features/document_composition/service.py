@@ -39,7 +39,8 @@ from chemvas.features.insertion import (
 )
 
 COMPOSITION_FORMAT = "chemvas-document-composition"
-COMPOSITION_VERSION = 1
+COMPOSITION_VERSION = 2
+SUPPORTED_COMPOSITION_VERSIONS = frozenset((1, 2))
 MAX_ATOMS = 4096
 MAX_BONDS = 8192
 MAX_SCENE_ITEMS = 4096
@@ -94,9 +95,24 @@ def compose_document_state(
         raise ValueError(f"composition format must be {COMPOSITION_FORMAT!r}")
     if (
         type(root.get("version")) is not int
-        or root.get("version") != COMPOSITION_VERSION
+        or root.get("version") not in SUPPORTED_COMPOSITION_VERSIONS
     ):
-        raise ValueError("composition version must be 1")
+        raise ValueError(
+            "unsupported composition version; supported versions are 1 and 2"
+        )
+    if root["version"] == 1:
+        for collection, field in (
+            ("notes", "rotation"),
+            ("images", "z"),
+            ("shapes", "z"),
+        ):
+            for item in _list(
+                root.get(collection, []), collection, maximum=MAX_SCENE_ITEMS
+            ):
+                if isinstance(item, Mapping) and field in item:
+                    raise ValueError(
+                        f"{collection}.{field} requires composition version 2"
+                    )
 
     raw_atoms = _list(root.get("atoms"), "atoms", maximum=MAX_ATOMS)
     raw_bonds = _list(root.get("bonds"), "bonds", maximum=MAX_BONDS)
@@ -296,7 +312,7 @@ def _settings(value: object) -> dict[str, object]:
     if not set(overrides) <= SETTINGS_KEYS:
         unknown = sorted(str(key) for key in set(overrides) - SETTINGS_KEYS)
         raise ValueError(f"settings has unknown keys: {unknown}")
-    # Composition v1 is a bounded authoring API even though persisted v7
+    # Composition is a bounded authoring API even though persisted documents
     # documents retain their older, unbounded-above compatibility contract.
     overridden_font_size = overrides.get("text_font_size")
     if type(overridden_font_size) is int and overridden_font_size > 96:

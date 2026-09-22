@@ -178,7 +178,10 @@ re-encoded into SVG may exceed it. Keep `.chemvas` as the editable source and
 visually inspect exported axes, labels, scale bars, and image edges at the intended
 publication size.
 
-Composition notes accept an optional finite `rotation` angle in degrees, clockwise
+Composition v2 notes accept an optional finite `rotation` angle in degrees, clockwise
 in canvas coordinates, about the note anchor `(x, y)`. Images and shapes accept
 an optional `z` from −12 to 10; greater values draw in front. Omitted `z` keeps
 the default image layer (−2) or shape layer (−10).
+
+Composition v1 remains supported with its original fields; `rotation` and `z`
+require request version 2. Unknown request versions and fields are rejected.

@@ -40,6 +40,7 @@ class _FakeScene:
 
 def _graph_service(*, bond_id_between=None):
     return SimpleNamespace(
+        bond_in_cycle=mock.Mock(return_value=False),
         bond_id_between=mock.Mock(return_value=bond_id_between),
         bond_id_between_with_repair=mock.Mock(return_value=bond_id_between),
         add_bond_neighbors=mock.Mock(),

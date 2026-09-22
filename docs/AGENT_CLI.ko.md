@@ -12,7 +12,7 @@ Chemvas는 문서 연산을 헤드리스 명령으로 노출하므로, 에이전
 
 ```mermaid
 flowchart LR
-    compose["compose-document<br/>Composition v1 JSON"] --> doc[("scheme.chemvas")]
+    compose["compose-document<br/>Composition v1/v2 JSON"] --> doc[("scheme.chemvas")]
     template["insert-template"] --> doc
     desktop["데스크톱 앱<br/>File ▸ Save"] --> doc
     doc --> inspect["inspect-document<br/>정확한 SHA-256 + 원자 ID"]
