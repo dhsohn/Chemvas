@@ -17,6 +17,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Text rotation through the existing selection Rotate controls. The angle is
   retained in documents, clipboard content, history and figure exports.
 
+### Changed
+
+- New saves use document format v8, schema 1, for text rotation and image/shape
+  stacking. Supported v7 files remain readable; v8 requires Chemvas 0.18.0 or
+  later. Keep the original v7 file when sharing with older installations.
+
 ### Fixed
 
 - Desktop launches start blank or open only the explicitly requested document.

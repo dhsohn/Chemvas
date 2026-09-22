@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+import re
 from collections.abc import Callable, Collection, Mapping
 from decimal import Decimal
 from typing import Any, TypeGuard, cast
@@ -14,8 +15,10 @@ StateDict = dict[Any, Any]
 CHEMVAS_FILE_TYPE = "chemvas"
 # New documents use this version. Supported durable readers are independent:
 # advancing the writer must not retire v7 (docs/DOCUMENT_COMPATIBILITY.md).
-CANVAS_FILE_VERSION = 7
-SUPPORTED_FILE_VERSIONS = frozenset((7,))
+CANVAS_FILE_VERSION = 8
+SUPPORTED_FILE_VERSIONS = frozenset((7, 8))
+DOCUMENT_SCHEMA_READERS = {(8, 1): "0.18.0"}
+DOCUMENT_SCHEMAS = {8: 1}
 CANVAS_STATE_KEYS = frozenset(
     (
         "model",
@@ -696,11 +699,17 @@ def _clipboard_perspective_to_canvas_state(
 
 def build_document_payload(state: StateDict, version: int) -> StateDict:
     _validate_document_state(state, version)
-    return {
+    payload = {
         "type": CHEMVAS_FILE_TYPE,
         "version": version,
         "state": state,
     }
+    if version in DOCUMENT_SCHEMAS:
+        schema = DOCUMENT_SCHEMAS[version]
+        payload.update(
+            schema=schema, min_reader=DOCUMENT_SCHEMA_READERS[version, schema]
+        )
+    return payload
 
 
 def extract_document_state(payload: object) -> StateDict:
@@ -710,12 +719,6 @@ def extract_document_state(payload: object) -> StateDict:
 
 
 def _extract_wrapped_document_state(payload: Mapping[str, object]) -> StateDict:
-    if set(payload) != {"type", "version", "state"}:
-        raise ValueError(
-            "Invalid Chemvas file. Expected only type, version, and state fields."
-        )
-    if payload.get("type") != CHEMVAS_FILE_TYPE:
-        raise ValueError("Invalid Chemvas file.")
     version = payload.get("version")
     if type(version) is not int:
         raise ValueError("Invalid Chemvas file. version must be an integer.")
@@ -726,9 +729,40 @@ def _extract_wrapped_document_state(payload: Mapping[str, object]) -> StateDict:
             f"This release reads document versions: {supported}. "
             "Open it with a Chemvas release that supports this version."
         )
+    expected = {"type", "version", "state"}
+    if version == 8:
+        expected |= {"schema", "min_reader"}
+    if set(payload) != expected:
+        raise ValueError(
+            "Invalid Chemvas file. Expected only "
+            + (
+                "type, version, schema, min_reader, and state fields."
+                if version == 8
+                else "type, version, and state fields."
+            )
+        )
     state = payload.get("state")
-    if not isinstance(state, dict):
+    if payload.get("type") != CHEMVAS_FILE_TYPE or not isinstance(state, dict):
         raise ValueError("Invalid Chemvas file.")
+    if version == 8:
+        schema = payload.get("schema")
+        min_reader = payload.get("min_reader")
+        if (
+            type(schema) is not int
+            or schema < 1
+            or not isinstance(min_reader, str)
+            or re.fullmatch(
+                r"(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)", min_reader
+            )
+            is None
+        ):
+            raise ValueError("Invalid Chemvas file. Invalid schema or min_reader.")
+        if schema > DOCUMENT_SCHEMAS[version]:
+            raise ValueError(
+                f"Newer Chemvas document: format {version}, schema {schema}. "
+                f"This release reads up to schema {DOCUMENT_SCHEMAS[version]}; "
+                f"open it with Chemvas {min_reader} or later."
+            )
     _validate_document_state(state, version)
     return state
 
@@ -740,6 +774,19 @@ def _validate_document_state(state: Mapping[str, object], version: int) -> None:
     if state_kind != "canvas":
         raise ValueError("Invalid Chemvas file.")
     _validate_canvas_state(state)
+    if version == 7:
+        for collection, field in (
+            ("notes", "rotation"),
+            ("images", "z"),
+            ("shapes", "z"),
+        ):
+            if any(
+                field in item
+                for item in cast("list[StateDict]", state.get(collection, []))
+            ):
+                raise ValueError(
+                    f"Invalid Chemvas v7 file. {collection}.{field} requires v8."
+                )
 
 
 def _state_kind(state: Mapping[str, object]) -> str | None:

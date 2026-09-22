@@ -40,7 +40,7 @@ sharing policy from the directory. Root CLI typos fail before desktop startup.
 
 ## Headless document composition
 
-An agent can create a canonical, reopenable Chemvas v7 document from the smaller
+An agent can create a canonical, reopenable Chemvas v8 document from the smaller
 public Composition v1 contract instead of constructing internal document state:
 
 ```bash

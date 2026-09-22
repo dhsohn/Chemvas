@@ -207,7 +207,7 @@ flowchart LR
 
 3D 흐름: 내보내기 커맨드 또는 미리보기 새로고침 -> 현재 분자 / 활성 원자-결합 선택 -> MoleculeModel 서브그래프 + 원자 마크 주석(atom mark annotations) -> RDKitAdapter 변환 그래프 구성 -> RDKit 3D 임베딩 -> `.xyz` 라이터(writer) 또는 미리보기 씬.
 
-계산 흐름: headless `inspect` -> 검증된 `.chemvas` state -> 안정적으로 index된 연결 성분·결합·alias attachment 목록; `attach-plan` 또는 Calculation dialog -> 재사용 state, endpoint별 역할, 명시적 included-atom 대응표, Calculation Plan v2를 가진 v7 문서; dialog 수명 동안 mapping 상태 색상의 임시 atom-ID label; `inspect-plan` -> mapping/readiness와 path precheck 보고. 매핑이 완전하고 전하와 다중도가 같은 step은 성분 수와 관계없이 `pack-step`으로 갈 수 있다. `pack-step`은 전하·다중도·완전 bijection gate를 적용하고, 포함된 성분을 하나씩 따로 임베딩한 뒤 `factory/machine-observation` v1 / `chemistry/elementary-step` v2 `machine.json` 하나를 원자적으로 공개한다. 적합한 artifact는 reactant identity 순서 하나로 index한 성분별 XYZ, 공통 0-based 반응중심 index, 원자 index가 붙은 결합 변화를 담지만 서로 다른 분자의 상대 배치는 담지 않는다. GUI는 정확히 공유된 ID와 선택적인 same-element 구조 mapping을 제안할 뿐 반응기구를 추론하지 않는다. Chemvas는 성분을 배치하거나 최적화·안정성을 주장하지 않으며, 후속 양자화학 최적화와 과학적 검토를 대체하지 않는다.
+계산 흐름: headless `inspect` -> 검증된 `.chemvas` state -> 안정적으로 index된 연결 성분·결합·alias attachment 목록; `attach-plan` 또는 Calculation dialog -> 재사용 state, endpoint별 역할, 명시적 included-atom 대응표, Calculation Plan v2를 가진 문서; dialog 수명 동안 mapping 상태 색상의 임시 atom-ID label; `inspect-plan` -> mapping/readiness와 path precheck 보고. 매핑이 완전하고 전하와 다중도가 같은 step은 성분 수와 관계없이 `pack-step`으로 갈 수 있다. `pack-step`은 전하·다중도·완전 bijection gate를 적용하고, 포함된 성분을 하나씩 따로 임베딩한 뒤 `factory/machine-observation` v1 / `chemistry/elementary-step` v2 `machine.json` 하나를 원자적으로 공개한다. 적합한 artifact는 reactant identity 순서 하나로 index한 성분별 XYZ, 공통 0-based 반응중심 index, 원자 index가 붙은 결합 변화를 담지만 서로 다른 분자의 상대 배치는 담지 않는다. GUI는 정확히 공유된 ID와 선택적인 same-element 구조 mapping을 제안할 뿐 반응기구를 추론하지 않는다. Chemvas는 성분을 배치하거나 최적화·안정성을 주장하지 않으며, 후속 양자화학 최적화와 과학적 검토를 대체하지 않는다.
 
 Agent 편집 흐름: `inspect-document` -> 정확한 source SHA-256과 안정적인 atom/bond 목록 -> 신뢰하지 않는 Graph Patch v1 -> 엄격한 schema/hash gate -> deep copy에서 순차 mutation -> 구조 및 Calculation Plan 의미 검증 -> 결정적 후보 hash -> dry-run 보고 또는 단 한 번의 원자적 비덮어쓰기 `.chemvas` 공개. 입력 파일 버전과 범위 밖 scene state를 보존하며, 어느 operation이나 stale plan이라도 실패하면 output은 없다.
 
@@ -403,7 +403,7 @@ GUI 내보내기는 공통 크기 한도와 가독성 검사를 사용하며,
 - 미리보기 창은 사용자가 보는 것과 실제로 내보내지는 것 사이의 불일치를 피하기 위해 `.xyz` 내보내기와 동일한 변환 경로를 재사용해야 한다.
 - 3D 미리보기는 **View ▸ Molecule Info**에서 별도의 모덜리스(modeless) 창으로 열린다. 선택된 구조 변환 경로를 사용하고, 선택된 분자에 대한 `Export 3D XYZ` 동작을 소유하며, 선택된 화학 구조가 없을 때는 빈 미리보기를 표시한다.
 - 열려 있는 각 캔버스 탭은 자체 파일 경로와 clean/dirty 다이제스트(digest)를 가진 독립적인 문서다. `.chemvas` 로딩은 표준 단일 캔버스 페이로드만 허용한다.
-- `.chemvas`는 현재 version 7을 읽고 쓴다. [문서 호환성 정책](DOCUMENT_COMPATIBILITY.ko.md)에 따라 앞으로 쓰기 버전이 바뀌어도 지원 중인 v7 읽기는 유지한다. Native I/O와 editable SVG에 내장된 문서는 domain의 같은 reader 검증을 사용한다. Canonical payload는 deleted-slot tombstone이 없는 compact bond array를 사용하며 plan이 있으면 Calculation Plan v2다. Calculation plan은 bond 위치가 아니라 안정적 atom id와 완전한 연결 성분 atom-id 집합을 참조한다.
+- `.chemvas`는 version 7과 8을 읽으며 version 8, schema 1(최소 읽기 버전 0.18.0)로 쓴다. [문서 호환성 정책](DOCUMENT_COMPATIBILITY.ko.md)에 따라 앞으로 쓰기 버전이 바뀌어도 지원 중인 v7 읽기는 유지한다. Native I/O와 editable SVG에 내장된 문서는 domain의 같은 reader 검증을 사용한다. Canonical payload는 deleted-slot tombstone이 없는 compact bond array를 사용하며 plan이 있으면 Calculation Plan v2다. Calculation plan은 bond 위치가 아니라 안정적 atom id와 완전한 연결 성분 atom-id 집합을 참조한다.
 
 ## 리팩토링 순서
 

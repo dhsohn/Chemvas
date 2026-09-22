@@ -77,7 +77,7 @@ chemvas render-document first-scheme.chemvas --output first-scheme.pdf --width-m
   [이미지 객체](https://github.com/dhsohn/Chemvas/blob/main/docs/IMAGE_OBJECTS.ko.md) ·
   [현재 제한·로드맵](https://github.com/dhsohn/Chemvas/blob/main/docs/REFERENCE.ko.md#로드맵--아직-지원하지-않는-것)
 - [계산 전달 (RDKit)](https://github.com/dhsohn/Chemvas/blob/main/docs/AGENT_CLI.ko.md#계산-상태와-기본-단계): 반응 단계를 성분별로 따로 임베딩해 단계별 `machine.json`으로 내보냅니다.
-- 문서는 편집 가능한 `.chemvas` JSON 파일(version 7)입니다.
+- 문서는 편집 가능한 `.chemvas` JSON 파일(version 8, schema 1)입니다.
   [다른 예제](https://github.com/dhsohn/Chemvas/tree/main/examples)
 - [기여 안내](https://github.com/dhsohn/Chemvas/blob/main/CONTRIBUTING.ko.md) ·
   [아키텍처](https://github.com/dhsohn/Chemvas/blob/main/docs/ARCHITECTURE.ko.md) ·

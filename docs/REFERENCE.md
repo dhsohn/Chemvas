@@ -253,13 +253,15 @@ File ▸ Save / Open works with `.chemvas` files — a JSON-based format holding
 molecule model, annotations, arrows, bracket annotations, and settings:
 
 ```json
-{ "type": "chemvas", "version": 7, "state": { /* ... */ } }
+{ "type": "chemvas", "version": 8, "schema": 1, "min_reader": "0.18.0", "state": { /* ... */ } }
 ```
 
-Version 7 is the only supported document contract. It can carry an optional
+The writer emits version 8, schema 1; supported version 7 files remain readable.
+V8 adds text rotation and image/shape stacking and requires Chemvas 0.18.0 or later.
+Keep original v7 files when sharing with older installations. Both can carry an optional
 Calculation Plan v2; precomplex candidates and review selections stored by
-Chemvas 0.15.0 and earlier stay readable and are preserved. Earlier document
-versions and Calculation Plan v1 payloads are rejected.
+Chemvas 0.15.0 and earlier stay readable and are preserved. Document versions before 7
+and Calculation Plan v1 payloads are rejected.
 
 Opening or inserting a drawing preserves overlapping atoms: move or edit them
 on the canvas to correct the layout. Save asks before replacing a file changed
@@ -408,7 +410,7 @@ annotation model can preserve spin multiplicity.
 
 Double-bond stereo flag 3 (explicitly unspecified/either) is imported as
 `double_either`, drawn as two crossed lines, and retained on MOL export, including
-abbreviation expansion. Native v7 documents, clipboard v2 selections, editable
+abbreviation expansion. Native v7/v8 documents, clipboard v2 selections, editable
 SVG and Undo/Redo preserve this style; older readers that lack it reject those
 documents. It requires bond order 2. Bold, dotted and double-position commands
 refuse to erase the marker; choosing a different bond type explicitly (for

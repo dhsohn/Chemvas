@@ -810,7 +810,7 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
         warning.assert_called_once_with(
             self.window,
             "Load Error",
-            "Failed to load file:\nInvalid Chemvas file. Expected only type, version, and state fields.",
+            "Failed to load file:\nInvalid Chemvas file. version must be an integer.",
         )
         self.assertEqual(self._current_file_path(), "/tmp/original.chemvas")
         self.assertEqual(self.window.statusBar().currentMessage(), "Before load")
