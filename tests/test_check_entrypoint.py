@@ -56,7 +56,7 @@ def test_gate_routes_every_file_and_propagates_failures(tmp_path, platform, fail
         "'jobs': os.environ['CHECK_JOBS']}), encoding='utf-8')\n"
         "    sys.exit(1 if pathlib.Path(args[4]).name == os.environ['GATE_PROBE_FAIL'] else 0)\n"
         "elif args == ['-c', 'import sys; print(sys.platform)']:\n"
-        "    print(os.environ['GATE_PROBE_PLATFORM'])\n"
+        "    sys.stdout.buffer.write((os.environ['GATE_PROBE_PLATFORM'] + chr(13) + chr(10)).encode())\n"
         "elif args[:1] == ['-c'] or args[:2] in "
         "(['-m', 'ruff'], ['-m', 'mypy']):\n"
         "    pass\n"

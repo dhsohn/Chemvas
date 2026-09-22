@@ -47,6 +47,7 @@ fi
 
 echo "[check] Using Python: $("$PYTHON" -c 'import sys; print(sys.executable)')"
 platform="$("$PYTHON" -c 'import sys; print(sys.platform)')"
+platform="${platform%$'\r'}"
 case "$platform" in
   linux) echo "[check] Scope: Linux/WSL common suite and Linux filesystem cases (Qt offscreen)." ;;
   darwin) echo "[check] Scope: macOS common suite (Qt offscreen) and serial Cocoa menu/focus workflows." ;;

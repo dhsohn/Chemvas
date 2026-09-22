@@ -71,6 +71,8 @@ Linux/WSL·네이티브 Windows·macOS에서 실행하며, 플랫폼별 범위�
 OS 전용 테스트는 실행 조건과 skip 사유를 테스트 옆에 명시합니다. 경로 별칭, Mac 대화상자의
 없는 제목, Qt 래스터 반올림은 공통 테스트에서 처리합니다. Cocoa workflow에는
 그래픽 Mac 세션이 필요하며 네이티브 백엔드를 실행할 수 없으면 명시적으로 실패해야 합니다.
+메뉴 fixture는 합성 클릭을 위해 QWidget 메뉴를 사용하므로 Mac 시스템 메뉴 막대와
+그 밖의 데스크톱 상호작용은 기능별 실검증이 필요합니다.
 Windows에서는 Git Bash를 사용하세요. `.venv/Scripts/python.exe`도 자동 선택하며
 Make가 없으면 `bash scripts/check.sh`로 같은 게이트를 실행합니다.
 
