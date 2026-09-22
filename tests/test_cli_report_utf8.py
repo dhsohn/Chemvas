@@ -50,7 +50,7 @@ def _byte_name(stem, suffix):
 
 
 @pytest.mark.skipif(
-    os.name != "posix", reason="POSIX byte filenames use surrogateescape"
+    sys.platform != "linux", reason="Linux/WSL filesystem permits non-UTF-8 byte names"
 )
 @pytest.mark.parametrize("stdout_errors", ["surrogateescape", "strict"])
 @pytest.mark.parametrize(

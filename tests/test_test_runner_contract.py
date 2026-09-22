@@ -63,3 +63,19 @@ def test_runner_keeps_recursive_path_failure_logs_distinct(tmp_path) -> None:
     assert result.returncode == 1
     assert "nested-marker" in result.stderr
     assert "flat-marker" in result.stderr
+
+
+def test_runner_reports_skip_reason(tmp_path) -> None:
+    skipped = tmp_path / "test_skip.py"
+    skipped.write_text(
+        "import pytest\n"
+        "@pytest.mark.skip(reason='native compiler unavailable')\n"
+        "def test_native():\n    assert False\n",
+        encoding="utf-8",
+    )
+
+    result = _run_runner(skipped, jobs="1")
+
+    assert result.returncode == 0
+    assert "1 skipped" in result.stdout
+    assert "native compiler unavailable" in result.stdout

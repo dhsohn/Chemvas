@@ -1319,7 +1319,7 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
             export_args, export_kwargs = export_canvas_scene.call_args
             self.assertIs(export_args[0], scene)
             tmp_path = Path(export_args[1])
-            self.assertEqual(tmp_path.parent, path.parent)
+            self.assertEqual(tmp_path.parent.resolve(), path.parent.resolve())
             self.assertTrue(tmp_path.name.startswith(".chemvas-"))
             self.assertTrue(tmp_path.name.isascii())
             self.assertTrue(tmp_path.name.endswith(".tmp"))
@@ -1789,7 +1789,7 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
             export_canvas_scene.assert_called_once()
             export_args, _export_kwargs = export_canvas_scene.call_args
             tmp_path = Path(export_args[1])
-            self.assertEqual(tmp_path.parent, path.parent)
+            self.assertEqual(tmp_path.parent.resolve(), path.parent.resolve())
             self.assertTrue(tmp_path.name.startswith(".chemvas-"))
             self.assertTrue(tmp_path.name.isascii())
             self.assertTrue(tmp_path.name.endswith(".tmp"))

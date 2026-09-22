@@ -8,8 +8,12 @@ if [[ -n "${PYTHON_BIN:-}" ]]; then
   PYTHON="$PYTHON_BIN"
 elif [[ -n "${VIRTUAL_ENV:-}" && -x "$VIRTUAL_ENV/bin/python" ]]; then
   PYTHON="$VIRTUAL_ENV/bin/python"
+elif [[ -n "${VIRTUAL_ENV:-}" && -x "$VIRTUAL_ENV/Scripts/python.exe" ]]; then
+  PYTHON="$VIRTUAL_ENV/Scripts/python.exe"
 elif [[ -x "$ROOT/.venv/bin/python" ]]; then
   PYTHON="$ROOT/.venv/bin/python"
+elif [[ -x "$ROOT/.venv/Scripts/python.exe" ]]; then
+  PYTHON="$ROOT/.venv/Scripts/python.exe"
 elif command -v python3 >/dev/null 2>&1; then
   PYTHON="$(command -v python3)"
 else
@@ -42,6 +46,14 @@ if ! "$PYTHON" -c 'import jsonschema' >/dev/null 2>&1; then
 fi
 
 echo "[check] Using Python: $("$PYTHON" -c 'import sys; print(sys.executable)')"
+platform="$("$PYTHON" -c 'import sys; print(sys.platform)')"
+case "$platform" in
+  linux) echo "[check] Scope: Linux/WSL common suite and Linux filesystem cases (Qt offscreen)." ;;
+  darwin) echo "[check] Scope: macOS common suite (Qt offscreen) and serial Cocoa menu/focus workflows." ;;
+  win32) echo "[check] Scope: Windows common suite and available native cases (Qt offscreen)." ;;
+  *) echo "[check] Scope: $platform common suite (Qt offscreen); platform support is not established." ;;
+esac
+echo "[check] Platform/dependency skips are reported by pytest; native packaging and RDKit have dedicated CI jobs."
 
 pinned="$(sed -n 's/^ *ref: *\([0-9a-f]\{40\}\).*/\1/p' .github/workflows/ci.yml | head -1)"
 local_head="$(git -C "$CONTRACT_REPO" rev-parse HEAD 2>/dev/null || echo unknown)"
@@ -76,4 +88,27 @@ else
   done < <(find tests -name 'test_*.py' | sort)
 fi
 
-bash "$ROOT/scripts/run_test_files.sh" --python "$PYTHON" "${files[@]}"
+# macOS offscreen cannot restore popup focus like Cocoa. These shown-window
+# workflow files run against Cocoa, one at a time so windows do not steal focus.
+offscreen_files=()
+cocoa_files=()
+for file in "${files[@]}"; do
+  if [[ "$platform" == "darwin" ]]; then
+    case "${file##*/}" in
+      test_note_formatting_workflows.py|test_note_appearance_workflows.py)
+        cocoa_files+=("$file")
+        continue
+        ;;
+    esac
+  fi
+  offscreen_files+=("$file")
+done
+status=0
+if [[ ${#offscreen_files[@]} -gt 0 ]]; then
+  QT_QPA_PLATFORM=offscreen bash "$ROOT/scripts/run_test_files.sh" --python "$PYTHON" "${offscreen_files[@]}" || status=1
+fi
+if [[ ${#cocoa_files[@]} -gt 0 ]]; then
+  echo "[check] Cocoa workflows: ${#cocoa_files[@]} files, serial native window input."
+  QT_QPA_PLATFORM=cocoa CHECK_JOBS=1 bash "$ROOT/scripts/run_test_files.sh" --python "$PYTHON" "${cocoa_files[@]}" || status=1
+fi
+exit "$status"

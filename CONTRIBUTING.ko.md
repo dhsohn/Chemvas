@@ -59,17 +59,31 @@ python -m ruff format --check .  # deterministic formatting
 python -m mypy             # all production code; migrated owner packages are strict
 ```
 
-테스트는 PyQt6를 쓰며 `offscreen` 플랫폼 플러그인으로 헤드리스 실행됩니다. 개발
-중에는 손댄 파일만 실행하세요.
+게이트는 실제 Python 플랫폼과 각 skip 사유를 출력합니다. 공통 스위트는
+Linux/WSL·네이티브 Windows·macOS에서 실행하며, 플랫폼별 범위는 다음과 같습니다.
+
+| 호스트 | 공통 스위트와 플랫폼 검사 |
+| --- | --- |
+| Linux / WSL | Qt offscreen과 Linux의 비 UTF-8 바이트 파일명 검사. WSL은 Linux Python 기준입니다. |
+| 네이티브 Windows | Qt offscreen 공통 스위트. 별도 CI 잡은 Inno Setup을 필수로 확인하고 설치기·번들을 검사합니다. |
+| macOS | Qt offscreen 공통 스위트. 노트 서식·모양 workflow 두 파일은 실제 팝업 포커스를 위해 Cocoa로 직렬 실행합니다. CoreFoundation 앱 이름 검사도 포함합니다. |
+
+OS 전용 테스트는 실행 조건과 skip 사유를 테스트 옆에 명시합니다. 경로 별칭, Mac 대화상자의
+없는 제목, Qt 래스터 반올림은 공통 테스트에서 처리합니다. Cocoa workflow에는
+그래픽 Mac 세션이 필요하며 네이티브 백엔드를 실행할 수 없으면 명시적으로 실패해야 합니다.
+Windows에서는 Git Bash를 사용하세요. `.venv/Scripts/python.exe`도 자동 선택하며
+Make가 없으면 `bash scripts/check.sh`로 같은 게이트를 실행합니다.
+
+개발 중에는 플랫폼별 실행 선택을 유지하도록 게이트에 손댄 파일을 넘기세요.
 
 ```bash
-QT_QPA_PLATFORM=offscreen python -m pytest tests/test_<area>.py
+bash scripts/check.sh tests/test_<area>.py
 ```
 
 > **테스트 파일마다 별도의 pytest 프로세스를 주세요.** Qt는 테스트 모듈 사이에
 > 완전히 초기화되지 않는 전역 애플리케이션 상태를 유지하므로, 한 프로세스에서
 > 몰아 돌리면 CI에서는 실패할 테스트가 통과합니다. 이 규칙은
-> `scripts/run_test_files.sh` 한 곳에 있습니다. `make check`와 두 CI 잡이 모두 이
+> `scripts/run_test_files.sh` 한 곳에 있습니다. `make check`와 CI 테스트 잡이 모두 이
 > 스크립트를 호출하며, 여러 프로세스를 동시에 돌리되 두 파일을 한 프로세스에 넣는
 > 일은 없습니다. 손댄 파일로 범위를 좁히려면 게이트에 파일을 직접 넘기세요.
 >

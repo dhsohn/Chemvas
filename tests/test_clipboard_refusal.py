@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import sys
 from unittest.mock import Mock, patch
 
 import pytest
@@ -175,6 +176,8 @@ def test_qt_paste_shortcut_shows_real_refusal_dialog(canvas, app):
         responder.stop()
         app.clipboard().clear()
     assert len(messages) == 1
-    assert messages[0][0] == "Paste" and "unsupported version" in messages[0][1]
+    # QMessageBox deliberately omits its window title on macOS.
+    assert messages[0][0] == ("" if sys.platform == "darwin" else "Paste")
+    assert "unsupported version" in messages[0][1]
     assert messages[0][2]
     assert snapshot_canvas_document_state(canvas) == state

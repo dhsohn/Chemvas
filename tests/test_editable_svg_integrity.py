@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import sys
 from copy import deepcopy
 from unittest.mock import Mock, patch
 
@@ -186,7 +187,10 @@ def test_real_export_draft_notice_escape_preserves_destination(window, tmp_path,
     QTimer.singleShot(0, dismiss)
     _export(window, output, QMessageBox)
     assert len(observed) == 1
-    assert observed[0][0] == "Calculation Plan Needs Attention"
+    # QMessageBox deliberately omits its window title on macOS.
+    assert observed[0][0] == (
+        "" if sys.platform == "darwin" else "Calculation Plan Needs Attention"
+    )
     assert observed[0][2] == QMessageBox.StandardButton.No
     assert "Export anyway?" in observed[0][1]
     assert output.read_bytes() == b"original SVG destination"

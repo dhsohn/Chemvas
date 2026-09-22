@@ -37,7 +37,7 @@ logs="$(mktemp -d)"
 trap 'rm -rf "$logs"' EXIT
 
 export PYTHON logs
-export QT_QPA_PLATFORM=offscreen
+export QT_QPA_PLATFORM="${QT_QPA_PLATFORM:-offscreen}"
 
 echo "[tests] $# files, $jobs at a time"
 
@@ -51,8 +51,9 @@ done |
     index="$1"
     file="$2"
     log="$logs/$index.log"
-    if "$PYTHON" -m pytest -q "$file" >"$log" 2>&1; then
+    if "$PYTHON" -m pytest -q -ra "$file" >"$log" 2>&1; then
       printf "[tests] %s: %s\n" "$file" "$(tail -1 "$log")"
+      awk '\''/^SKIPPED / { print "[tests] " $0 }'\'' "$log"
       rm -f "$log"
     else
       printf "[tests] FAILED %s\n" "$file" >&2

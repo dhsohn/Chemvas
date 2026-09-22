@@ -79,6 +79,41 @@ jobs:
             | sort)
           bash scripts/run_test_files.sh --python python "${files[@]}"
 
+  platform-tests:
+    name: Common tests (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-15, windows-2025]
+    permissions:
+      contents: read
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+
+      - name: Install Python dependencies
+        run: python -m pip install -e ".[dev]"
+
+      - name: Check out machine observation contract
+        uses: actions/checkout@v7
+        with:
+          repository: dhsohn/machine-contracts
+          ref: 38581a7737cd0521bb3d50b59115eefe3c9254ca
+          path: .machine-contracts
+          persist-credentials: false
+
+      - name: Run the host platform gate
+        shell: bash
+        run: |
+          FACTORY_MACHINE_CONTRACT_REPO="$PWD/.machine-contracts" bash scripts/check.sh
+
   windows-native:
     name: Windows native packaging tests
     runs-on: windows-2025

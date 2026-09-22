@@ -21,7 +21,11 @@ make check
 ```
 
 Ruff·format·mypy를 돌린 뒤 **테스트를 `test_*.py` 파일마다 별도 pytest 프로세스로**
-실행한다(offscreen). Qt가 모듈 간에 완전히 리셋되지 않는 전역 상태를 유지하므로, 전체를
+실행한다. 공통 검사는 offscreen이며, macOS의 메뉴·포커스 workflow 두 파일은 Cocoa로
+직렬 실행한다. 실제 Python의 OS에 따라 범위를 선택하고 범위·skip 사유를 출력한다.
+Linux/WSL의 비 UTF-8 바이트 파일명 검사는 다른 OS에서 제외하고, 경로 별칭·대화상자
+표시 차이는 공통 테스트에서 처리한다. Windows는 Git Bash에서 같은 게이트를 실행하며
+`.venv/Scripts/python.exe`도 자동 선택한다. Qt가 모듈 간에 완전히 리셋되지 않는 전역 상태를 유지하므로, 전체를
 한 프로세스에 몰아넣은 실행은 통과해도 CI를 대표하지 않는다 — 이 루프가 게이트다.
 `machine.json` 적합성 검증은 게이트가 `~/machine_contracts`의 정본 validator를 직접
 연결한다(`FACTORY_MACHINE_CONTRACT_REPO`로 위치 변경 가능). 해당 테스트를 직접 돌릴
@@ -46,7 +50,8 @@ pin(`.github/workflows/ci.yml`의 `ref:`)을 의도적으로 전진시킨다.
 
 - **RDKit·wheel 스모크는 CI 전용이다.** 선택적 RDKit 백엔드와 휠 패키징이 걸린 변경은
   CI의 `rdkit-smoke`·`package-smoke` 잡이 판정한다.
-- **GUI 실검증은 별도다.** offscreen 스위트는 실제 창·입력기·플랫폼별 창 시스템 상호작용을 증명하지
-  않는다 — 캔버스가 걸린 변경은 실캔버스 확인을 따로 한다.
+- **GUI 실검증은 별도다.** Mac 게이트의 Cocoa workflow는 메뉴·포커스 범위를 검증한다.
+  offscreen 스위트나 이 제한된 Cocoa 검사가 모든 실제 창·입력기 상호작용을 증명하지는
+  않는다 — 캔버스가 걸린 변경은 해당 기능의 실캔버스 확인을 따로 한다.
 - **사용자 문서(`.chemvas`)는 실물이다.** 라이브 확인에 쓴 문서에 테스트 잔여물이 남지
   않았는지 되돌려 확인한다.
