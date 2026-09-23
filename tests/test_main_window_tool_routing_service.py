@@ -59,10 +59,11 @@ class MainWindowToolRoutingServiceTest(unittest.TestCase):
         )
 
     def tearDown(self) -> None:
-        document_service = services_for_window(self.window).canvas_document_service
-        for canvas in self.window.tab_references.all_canvases():
-            document_service.mark_clean(canvas)
-        self.window.close()
+        if not sip.isdeleted(self.window) and not self.window.is_closing:
+            document_service = services_for_window(self.window).canvas_document_service
+            for canvas in self.window.tab_references.all_canvases():
+                document_service.mark_clean(canvas)
+            self.window.close()
         self.app.processEvents()
 
     def test_color_and_ring_fill_presets_route_selected_items(self) -> None:
