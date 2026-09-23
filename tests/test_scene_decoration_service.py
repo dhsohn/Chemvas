@@ -340,15 +340,12 @@ class SceneDecorationServiceTest(unittest.TestCase):
         self.assertEqual(len(scene_items_state.mark_items), 200)
         self.assertEqual(len(mark_registry.by_atom), 200)
 
-    def test_add_arrow_and_ts_bracket_register_items_and_push_history(self) -> None:
+    def test_add_ts_bracket_registers_item_and_pushes_history(self) -> None:
         scene = _FakeScene()
         pushed = []
-        arrow_item = _FakeItem()
-        arrow_item.setData(2, {"control": QPointF(2.0, 3.0)})
         ts_item = QGraphicsPathItem()
         ts_item.setData(0, "ts_bracket")
         build_service = SimpleNamespace(
-            build_arrow_item=mock.Mock(return_value=arrow_item),
             build_ts_bracket_item=mock.Mock(return_value=ts_item),
         )
 
@@ -377,32 +374,25 @@ class SceneDecorationServiceTest(unittest.TestCase):
         )
         service = _scene_decoration_service(canvas)
 
-        canvas.services.scene_decoration.arrow_build_service = build_service
-        arrow = service.add_arrow(QPointF(1.0, 2.0), QPointF(6.0, 7.0), "curved_double")
         with plain_ts_bracket_paint():
             ts_bracket = service.add_ts_bracket(
                 QRectF(QPointF(0.0, 0.0), QPointF(4.0, 8.0))
             )
 
-        self.assertIs(arrow, arrow_item)
-        self.assertEqual(arrow.data(0), "curved_double")
-        self.assertEqual(arrow.data(2)["start"], QPointF(1.0, 2.0))
-        self.assertEqual(arrow.data(2)["end"], QPointF(6.0, 7.0))
-        self.assertTrue(arrow.data(2)["double"])
         self.assertIs(ts_bracket, ts_item)
         record = ts_bracket_record_for(canvas, ts_item)
         self.assertEqual(
             (record.left, record.top, record.right, record.bottom),
             (0.0, 0.0, 4.0, 8.0),
         )
-        self.assertEqual(scene_items_state.arrow_items, [arrow_item])
+        self.assertEqual(scene_items_state.arrow_items, [])
         self.assertEqual(scene_items_state.ts_bracket_items, [ts_item])
-        self.assertEqual(scene.items, [arrow_item, ts_item])
+        self.assertEqual(scene.items, [ts_item])
         self.assertEqual(
             canvas.attach_scene_item.call_args_list,
-            [mock.call(arrow_item), mock.call(ts_item)],
+            [mock.call(ts_item)],
         )
-        self.assertEqual(len(pushed), 2)
+        self.assertEqual(len(pushed), 1)
         self.assertTrue(
             all(isinstance(command, AddSceneItemsCommand) for command in pushed)
         )

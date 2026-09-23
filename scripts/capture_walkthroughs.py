@@ -41,7 +41,7 @@ from chemvas.ui.main_window_ports import (
 from chemvas.ui.rdkit_adapter_access import smiles_to_2d_for
 from chemvas.ui.renderer_style_access import bond_length_px_for
 from chemvas.ui.scene_decoration_access import add_arrow_for
-from chemvas.ui.scene_item_state_serialization import arrow_state_dict
+from chemvas.ui.scene_item_state_serialization import arrow_state_dict_for
 from chemvas.ui.selection_state import selection_for
 
 TOPICS = ("drawing", "arrows", "editing", "chemistry", "images", "arrange")
@@ -201,7 +201,7 @@ def arrows(w: Walkthrough) -> None:
     items = arrow_items_for(w.canvas)
     if len(items) != 8:
         raise RuntimeError(f"expected 3 arrows and 5 lines, got {len(items)}")
-    connectors = [arrow_state_dict(item) for item in items[-2:]]
+    connectors = [arrow_state_dict_for(w.canvas, item) for item in items[-2:]]
     for connector, ((_, _, x2, y2), (nx1, ny1, _, _)) in zip(
         connectors, pairwise(levels), strict=True
     ):

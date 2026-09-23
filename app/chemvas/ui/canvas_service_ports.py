@@ -34,7 +34,6 @@ if TYPE_CHECKING:
     from chemvas.ui.canvas_scene_reset_service import CanvasSceneResetService
     from chemvas.ui.canvas_style_controller import CanvasStyleController
     from chemvas.ui.canvas_tool_mode_controller import CanvasToolModeController
-    from chemvas.ui.curved_arrow_path_service import CurvedArrowPathService
     from chemvas.ui.handle_mutation_service import HandleMutationService
     from chemvas.ui.handle_overlay_service import HandleOverlayService
     from chemvas.ui.history_operations import CanvasHistoryOperations
@@ -58,10 +57,6 @@ def atom_label_service_for_access(canvas) -> AtomLabelService:
 
 def canvas_window_document_session_service(canvas) -> CanvasDocumentSessionService:
     return canvas_services_for(canvas).document.canvas_document_session_service
-
-
-def curved_arrow_path_service_for_access(canvas) -> CurvedArrowPathService:
-    return canvas_services_for(canvas).handles.curved_arrow_path_service
 
 
 def geometry_controller_for_access(canvas) -> CanvasGeometryController:
@@ -175,7 +170,6 @@ __all__ = [
     "atom_label_service_for_access",
     "canvas_window_document_session_service",
     "color_mutation_service_for_access",
-    "curved_arrow_path_service_for_access",
     "geometry_controller_for_access",
     "handle_mutation_service_for_access",
     "handle_overlay_service_for_access",

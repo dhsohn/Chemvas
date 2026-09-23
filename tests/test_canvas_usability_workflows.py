@@ -25,7 +25,7 @@ from chemvas.ui.main_window_ports import (
 from chemvas.ui.scene_clipboard_controller import SceneClipboardController
 from chemvas.ui.scene_clipboard_logic import build_selection_clipboard_payload
 from chemvas.ui.scene_item_state import scene_item_state_for
-from chemvas.ui.scene_item_state_serialization import arrow_state_dict
+from chemvas.ui.scene_item_state_serialization import arrow_state_dict_for
 from chemvas.ui.selection_queries import selection_status_count_for
 from chemvas.ui.selection_state import selected_notes_for
 from tests.gui_workflow_support import _click, _key, _redo, _tool
@@ -183,7 +183,7 @@ def test_first_drag_moves_notes_only_group_as_unit(
     assert not selected_notes_for(canvas)
     _save(window, canvas, tmp_path / "note-group.chemvas")
     baseline = snapshot_canvas_state_for(canvas)
-    arrow_before = arrow_state_dict(arrow)
+    arrow_before = arrow_state_dict_for(canvas, arrow)
     notes = (first, second)
     centers = [note.sceneBoundingRect().center() for note in notes]
     start = centers[pressed_member]
@@ -193,7 +193,7 @@ def test_first_drag_moves_notes_only_group_as_unit(
     _drag(canvas, start, start + delta, cancel=cancel)
     assert set(selected_notes_for(canvas)) == set(notes)
     assert not arrow.isSelected()
-    assert arrow_state_dict(arrow) == arrow_before
+    assert arrow_state_dict_for(canvas, arrow) == arrow_before
     assert set(group.items) == set(notes)
     if cancel:
         assert snapshot_canvas_state_for(canvas) == baseline
@@ -267,11 +267,11 @@ def test_escape_rolls_back_drag_without_history_or_dirty_change(drawing, tmp_pat
     window, canvas = drawing
     arrow = _arrow(window, canvas)
     _save(window, canvas, tmp_path / "arrow.chemvas")
-    before = arrow_state_dict(arrow)
+    before = arrow_state_dict_for(canvas, arrow)
     history = history_service_for_window(window)
     count = len(history.state.history)
     _drag(canvas, QPointF(20, -20), QPointF(90, -5), cancel=True)
-    assert arrow_state_dict(arrow) == before
+    assert arrow_state_dict_for(canvas, arrow) == before
     assert len(history.state.history) == count
     assert not window.isWindowModified()
     _drag(canvas, QPointF(20, -20), QPointF(90, -5))
@@ -441,10 +441,10 @@ def test_escape_cancels_arrow_endpoint_drag(drawing, tmp_path):
     _click(canvas, QPointF(20, -20))
     _click(canvas, QPointF(20, -20))
     handle = active_handles_for(canvas)[0]
-    before = arrow_state_dict(arrow)
+    before = arrow_state_dict_for(canvas, arrow)
     start = handle.sceneBoundingRect().center()
     _drag(canvas, start, start + QPointF(30, 15), cancel=True)
-    assert arrow_state_dict(arrow) == before
+    assert arrow_state_dict_for(canvas, arrow) == before
     assert not active_handles_for(canvas)
     assert not window.isWindowModified()
 

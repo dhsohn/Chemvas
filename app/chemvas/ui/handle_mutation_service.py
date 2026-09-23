@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+from dataclasses import replace
 from typing import TYPE_CHECKING
 
 from PyQt6.QtCore import QPointF
@@ -18,15 +19,11 @@ from chemvas.ui.endpoint_snap_access import snap_drawing_point_for
 from chemvas.ui.handle_mutation_access import (
     clamp_curved_midpoint_for,
     control_from_midpoint_for,
-    default_curved_control_for,
     orbital_snap_enabled_for,
     orbital_snap_step_for,
 )
 from chemvas.ui.renderer_style_access import bond_length_px_for
-from chemvas.ui.scene_decoration_build_access import (
-    apply_arrow_labels_for,
-    build_arrow_item_for,
-)
+from chemvas.ui.scene_render_access import scene_render_context_for
 from chemvas.ui.selection_state import selection_for
 from chemvas.ui.shape_record_access import (
     require_shape_record_for,
@@ -44,9 +41,8 @@ MIN_ARROW_LENGTH_BOND_LENGTHS = 0.1
 
 
 class HandleMutationService:
-    def __init__(self, canvas: CanvasView, *, curved_arrow_path_service=None) -> None:
+    def __init__(self, canvas: CanvasView) -> None:
         self.canvas = canvas
-        self.curved_arrow_path_service = curved_arrow_path_service
 
     def update_orbital_scale(self, item, pos: QPointF) -> None:
         data = item.data(1) or {}
@@ -77,107 +73,35 @@ class HandleMutationService:
         item.setRotation(angle)
 
     def update_arrow_endpoint(self, item, pos: QPointF, endpoint: str) -> None:
-        """Move one end of a non-curved arrow or line to ``pos``.
-
-        The item is rebuilt from its own kind, so an arc keeps its sweep and an
-        equilibrium pair keeps its harpoons. A drag that would shrink the item
-        below a usable length is refused rather than leaving a degenerate arrow
-        behind.
-        """
+        """Move either endpoint through the same record owner for every arrow kind."""
         if endpoint not in {"start", "end"}:
             return
-        data = item.data(2) or {}
-        start = data.get("start")
-        end = data.get("end")
-        if not isinstance(start, QPointF) or not isinstance(end, QPointF):
-            return
+        arrows = scene_render_context_for(self.canvas).arrows
+        record = arrows.record(item)
         moved = snap_drawing_point_for(self.canvas, pos, exclude=item)
-        if endpoint == "start":
-            start, anchor = moved, end
-        else:
-            end, anchor = moved, start
-        if math.hypot(moved.x() - anchor.x(), moved.y() - anchor.y()) < (
+        anchor = record.end if endpoint == "start" else record.start
+        if math.hypot(moved.x() - anchor[0], moved.y() - anchor[1]) < (
             bond_length_px_for(self.canvas) * MIN_ARROW_LENGTH_BOND_LENGTHS
         ):
             return
-        kind = str(item.data(0) or "arrow")
-        rebuilt = build_arrow_item_for(
-            self.canvas, start, end, kind, bool(data.get("mirrored", False))
+        point = (moved.x(), moved.y())
+        arrows.set_record(
+            item,
+            replace(
+                record,
+                start=point if endpoint == "start" else record.start,
+                end=point if endpoint == "end" else record.end,
+            ),
         )
-        # Arrow geometry is absolute, but a moved item carries its offset in
-        # pos(); clear it or the rebuilt path renders shifted by that delta.
-        item.setPos(0.0, 0.0)
-        item.setPath(rebuilt.path())
-        pen = rebuilt.pen()
-        if data.get("color"):
-            pen.setColor(item.pen().color())
-        item.setPen(pen)
-        item.setBrush(rebuilt.brush())
-        data["start"] = start
-        data["end"] = end
-        item.setData(2, data)
-        if data.get("labels"):
-            apply_arrow_labels_for(self.canvas, item, data["labels"])
         selection_for(self.canvas).update_selection_outline()
 
     def update_curved_control(self, item, pos: QPointF) -> None:
-        data = item.data(2) or {}
-        start = data.get("start")
-        end = data.get("end")
-        double = data.get("double", False)
-        if not isinstance(start, QPointF) or not isinstance(end, QPointF):
-            return
+        arrows = scene_render_context_for(self.canvas).arrows
+        record = arrows.record(item)
+        start, end = QPointF(*record.start), QPointF(*record.end)
         mid = clamp_curved_midpoint_for(self.canvas, start, end, pos)
         control = control_from_midpoint_for(self.canvas, start, end, mid)
-        if self.curved_arrow_path_service is not None:
-            self.curved_arrow_path_service.set_curved_arrow_path(
-                item, start, end, control, double
-            )
-        data["control"] = control
-        item.setData(2, data)
-        if data.get("labels"):
-            apply_arrow_labels_for(self.canvas, item, data["labels"])
-        selection_for(self.canvas).update_selection_outline()
-
-    def update_curved_endpoint(self, item, pos: QPointF, endpoint: str) -> None:
-        """Move one end of a curved arrow to ``pos``.
-
-        A curved arrow's ends carry the same kind of handle as every other
-        arrow's, so they snap the same way: another item's endpoint first,
-        then the grid, and never this item's own far end. A drag that would
-        collapse the curve onto that far end is refused, which snapping
-        otherwise makes easy to do by accident.
-        """
-        if endpoint not in {"start", "end"}:
-            return
-        data = item.data(2) or {}
-        start = data.get("start")
-        end = data.get("end")
-        control = data.get("control")
-        double = data.get("double", False)
-        if not isinstance(start, QPointF) or not isinstance(end, QPointF):
-            return
-        moved = QPointF(snap_drawing_point_for(self.canvas, pos, exclude=item))
-        if endpoint == "start":
-            start, anchor = moved, end
-        else:
-            end, anchor = moved, start
-        if math.hypot(moved.x() - anchor.x(), moved.y() - anchor.y()) < (
-            bond_length_px_for(self.canvas) * MIN_ARROW_LENGTH_BOND_LENGTHS
-        ):
-            return
-        if not isinstance(control, QPointF):
-            control = default_curved_control_for(self.canvas, start, end)
-        if self.curved_arrow_path_service is not None:
-            self.curved_arrow_path_service.set_curved_arrow_path(
-                item, start, end, control, double
-            )
-        data["start"] = start
-        data["end"] = end
-        data["control"] = control
-        item.setData(2, data)
-        if data.get("labels"):
-            apply_arrow_labels_for(self.canvas, item, data["labels"])
+        arrows.set_record(item, replace(record, control=(control.x(), control.y())))
         selection_for(self.canvas).update_selection_outline()
 
 

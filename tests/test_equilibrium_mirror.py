@@ -296,7 +296,7 @@ def test_failed_second_arrow_rebuild_rolls_back_same_history_owner(
     stacks = (tuple(history.state.history), tuple(history.state.redo_stack))
     paths = [_segments(item.mapToScene(item.path())) for item in (first, second)]
     builder = arrow_build_service_for_access(canvas)
-    original = builder.build_arrow_item
+    original = builder.render_record
     calls = 0
 
     def fail_once(*args, **kwargs):
@@ -306,7 +306,7 @@ def test_failed_second_arrow_rebuild_rolls_back_same_history_owner(
             raise RuntimeError("second equilibrium rebuild failed")
         return original(*args, **kwargs)
 
-    monkeypatch.setattr(builder, "build_arrow_item", fail_once)
+    monkeypatch.setattr(builder, "render_record", fail_once)
     action = (
         (lambda: controller.flip_selected_items(True))
         if phase == "flip"

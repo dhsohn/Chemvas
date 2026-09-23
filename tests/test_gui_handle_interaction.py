@@ -190,8 +190,10 @@ class GuiHandleInteractionTest(unittest.TestCase):
             start_handle, QPointF(30.0, -10.0)
         )
 
-        data = curved.data(2)
-        self.assertEqual(data["start"], QPointF(30.0, -10.0))
+        record = active_canvas_for_window(self.window).render_context.arrows.record(
+            curved
+        )
+        self.assertEqual(record.start, (30.0, -10.0))
         self.assertEqual(curved.pos(), QPointF())
         self.assertEqual(start_handle.data(2), curved)
         self.assertEqual(

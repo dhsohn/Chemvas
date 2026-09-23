@@ -28,7 +28,7 @@ from chemvas.ui.main_window_ports import (
 )
 from chemvas.ui.scene_decoration_access import add_arrow_for
 from chemvas.ui.scene_decoration_build_access import SNAP_MARK_ROLE
-from chemvas.ui.scene_item_state_serialization import arrow_state_dict
+from chemvas.ui.scene_item_state_serialization import arrow_state_dict_for
 
 
 class SnapRadiusTest(unittest.TestCase):
@@ -102,7 +102,9 @@ class SnapFeedbackTest(unittest.TestCase):
         self._drag(QPointF(end.x() + 60.0, end.y() + 60.0), end)
 
     def _last_end(self) -> tuple[float, float]:
-        return arrow_state_dict(arrow_items_for(self.canvas)[-1])["end"]
+        return arrow_state_dict_for(self.canvas, arrow_items_for(self.canvas)[-1])[
+            "end"
+        ]
 
     def _snap_marks(self):
         return [
@@ -171,7 +173,9 @@ class SnapFeedbackTest(unittest.TestCase):
             active_handles_for(self.canvas)[0], QPointF(-24.0, 3.0)
         )
 
-        self.assertEqual(arrow_state_dict(connector)["start"], (-20.0, 0.0))
+        self.assertEqual(
+            arrow_state_dict_for(self.canvas, connector)["start"], (-20.0, 0.0)
+        )
         self.assertEqual(self._handle_fills(), [HANDLE_ACCENT_COLOR, "#ffffff"])
 
     def _handle_fills(self) -> list[str]:
@@ -285,8 +289,12 @@ class MoveConnectTest(unittest.TestCase):
         self._move(self.GRAB, self.NEAR)
         self._release(self.NEAR)
 
-        self.assertEqual(arrow_state_dict(self.mover)["start"], self.TARGET)
-        self.assertEqual(arrow_state_dict(self.level)["end"], self.TARGET)
+        self.assertEqual(
+            arrow_state_dict_for(self.canvas, self.mover)["start"], self.TARGET
+        )
+        self.assertEqual(
+            arrow_state_dict_for(self.canvas, self.level)["end"], self.TARGET
+        )
 
     def test_a_selected_line_carried_onto_another_end_connects_them(self) -> None:
         self._tool("select")
@@ -296,7 +304,9 @@ class MoveConnectTest(unittest.TestCase):
         self._move(self.GRAB, self.NEAR)
         self._release(self.NEAR)
 
-        self.assertEqual(arrow_state_dict(self.mover)["start"], self.TARGET)
+        self.assertEqual(
+            arrow_state_dict_for(self.canvas, self.mover)["start"], self.TARGET
+        )
 
     def test_the_meeting_point_is_ringed_only_while_the_drag_holds_it(self) -> None:
         self._tool("move")
@@ -325,7 +335,7 @@ class MoveConnectTest(unittest.TestCase):
 
         travelled = (far.x() - self.GRAB.x(), far.y() - self.GRAB.y())
         self.assertEqual(
-            arrow_state_dict(self.mover)["start"],
+            arrow_state_dict_for(self.canvas, self.mover)["start"],
             (0.0 + travelled[0], 20.0 + travelled[1]),
         )
         self.assertEqual(self._rings(), [])
@@ -336,12 +346,16 @@ class MoveConnectTest(unittest.TestCase):
         self._press(self.GRAB)
         self._move(self.GRAB, self.NEAR)
         self._release(self.NEAR)
-        self.assertEqual(arrow_state_dict(self.mover)["start"], self.TARGET)
+        self.assertEqual(
+            arrow_state_dict_for(self.canvas, self.mover)["start"], self.TARGET
+        )
 
         history_service_for_canvas(self.canvas).undo()
         self.app.processEvents()
 
-        self.assertEqual(arrow_state_dict(self.mover)["start"], (0.0, 20.0))
+        self.assertEqual(
+            arrow_state_dict_for(self.canvas, self.mover)["start"], (0.0, 20.0)
+        )
 
     def test_a_click_without_movement_does_not_connect(self) -> None:
         # Qt delivers a move event at the press coordinate. Clicking a line that
@@ -358,7 +372,9 @@ class MoveConnectTest(unittest.TestCase):
         self.app.processEvents()
         self._release(QPointF(-20.0, -37.0))
 
-        self.assertEqual(arrow_state_dict(near)["start"], (-57.0, -37.0))
+        self.assertEqual(
+            arrow_state_dict_for(self.canvas, near)["start"], (-57.0, -37.0)
+        )
         self.assertEqual(self._rings(), [])
 
     def test_connection_reports_the_smallest_shift_and_ignores_its_own_ends(

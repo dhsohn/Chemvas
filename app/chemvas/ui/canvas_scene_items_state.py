@@ -1,9 +1,18 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
 
 from PyQt6 import sip
+
+if TYPE_CHECKING:
+    from chemvas.domain.document import Arrow
+
+
+@dataclass(slots=True, kw_only=True)
+class CanvasArrowState:
+    # Detached items retained by history keep their records until finalization.
+    records: dict[int, Arrow] = field(default_factory=dict)
 
 
 @dataclass(slots=True, kw_only=True)

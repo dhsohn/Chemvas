@@ -25,7 +25,7 @@ from chemvas.ui.main_window_ports import (
 from chemvas.ui.move_access import move_item_for
 from chemvas.ui.scene_decoration_access import add_arrow_for
 from chemvas.ui.scene_item_access import remove_scene_item
-from chemvas.ui.scene_item_state_serialization import arrow_state_dict
+from chemvas.ui.scene_item_state_serialization import arrow_state_dict_for
 
 
 def _handle_types(canvas) -> list[str]:
@@ -111,7 +111,7 @@ class EndpointHandleTest(unittest.TestCase):
 
         controller.update_handle_drag(end_handle, QPointF(60.0, 30.0))
 
-        state = arrow_state_dict(item)
+        state = arrow_state_dict_for(self.canvas, item)
         self.assertEqual(state["start"], (-40.0, 0.0))
         self.assertEqual(state["end"], (60.0, 30.0))
         # The handles follow the change, so a second drag starts from the new end.
@@ -131,8 +131,10 @@ class EndpointHandleTest(unittest.TestCase):
 
         controller.update_handle_drag(start_handle, QPointF(-18.0, 2.0))
 
-        self.assertEqual(arrow_state_dict(connector)["start"], (-20.0, 0.0))
-        self.assertEqual(arrow_state_dict(level)["end"], (-20.0, 0.0))
+        self.assertEqual(
+            arrow_state_dict_for(self.canvas, connector)["start"], (-20.0, 0.0)
+        )
+        self.assertEqual(arrow_state_dict_for(self.canvas, level)["end"], (-20.0, 0.0))
         # The dragged item's own far end is not a snap candidate.
         self.assertNotIn(
             (80.0, 40.0), arrow_endpoints_for(self.canvas, exclude=connector)
@@ -150,7 +152,7 @@ class EndpointHandleTest(unittest.TestCase):
             active_handles_for(self.canvas)[1], QPointF(5.0, 0.0)
         )
 
-        self.assertEqual(arrow_state_dict(item)["end"], (5.0, 0.0))
+        self.assertEqual(arrow_state_dict_for(self.canvas, item)["end"], (5.0, 0.0))
 
     def test_a_drag_onto_the_other_end_is_refused(self) -> None:
         item = self._add("arrow", QPointF(0.0, 0.0), QPointF(40.0, 0.0))
@@ -160,7 +162,7 @@ class EndpointHandleTest(unittest.TestCase):
 
         controller.update_handle_drag(end_handle, QPointF(0.0, 0.0))
 
-        self.assertEqual(arrow_state_dict(item)["end"], (40.0, 0.0))
+        self.assertEqual(arrow_state_dict_for(self.canvas, item)["end"], (40.0, 0.0))
 
     def test_a_curved_endpoint_takes_another_items_endpoint(self) -> None:
         # A curved arrow's ends carry the same kind of handle, so they snap the
@@ -174,7 +176,7 @@ class EndpointHandleTest(unittest.TestCase):
             active_handles_for(self.canvas)[0], QPointF(-18.0, 2.0)
         )
 
-        state = arrow_state_dict(curved)
+        state = arrow_state_dict_for(self.canvas, curved)
         self.assertEqual(state["start"], (-20.0, 0.0))
         self.assertEqual(state["end"], (100.0, 40.0))
 
@@ -189,7 +191,7 @@ class EndpointHandleTest(unittest.TestCase):
             active_handles_for(self.canvas)[2], QPointF(5.0, 0.0)
         )
 
-        self.assertEqual(arrow_state_dict(curved)["end"], (5.0, 0.0))
+        self.assertEqual(arrow_state_dict_for(self.canvas, curved)["end"], (5.0, 0.0))
 
     def test_a_curved_drag_onto_the_other_end_is_refused(self) -> None:
         curved = self._add("curved_single", QPointF(0.0, 0.0), QPointF(40.0, 0.0))
@@ -200,7 +202,7 @@ class EndpointHandleTest(unittest.TestCase):
             active_handles_for(self.canvas)[0], QPointF(40.0, 0.0)
         )
 
-        self.assertEqual(arrow_state_dict(curved)["start"], (0.0, 0.0))
+        self.assertEqual(arrow_state_dict_for(self.canvas, curved)["start"], (0.0, 0.0))
 
     def test_an_arc_keeps_its_sweep_and_its_label_follows(self) -> None:
         item = self._add("arc_90_left", QPointF(-40.0, 0.0), QPointF(40.0, 0.0))
@@ -220,7 +222,7 @@ class EndpointHandleTest(unittest.TestCase):
             active_handles_for(self.canvas)[1], QPointF(120.0, 0.0)
         )
 
-        state = arrow_state_dict(item)
+        state = arrow_state_dict_for(self.canvas, item)
         self.assertEqual(state["end"], (120.0, 0.0))
         self.assertEqual(state["labels"], {"above": "k_1"})
         # Same sweep, so the same sample count; the bulge and label follow the
@@ -271,12 +273,12 @@ class EndpointHandleTest(unittest.TestCase):
         self.app.processEvents()
         QTest.qWait(10)
 
-        self.assertEqual(arrow_state_dict(item)["end"], (90.0, 25.0))
+        self.assertEqual(arrow_state_dict_for(self.canvas, item)["end"], (90.0, 25.0))
         self.assertEqual(len(history.state.history), depth_before + 1)
         history.undo()
-        self.assertEqual(arrow_state_dict(item)["end"], (40.0, 0.0))
+        self.assertEqual(arrow_state_dict_for(self.canvas, item)["end"], (40.0, 0.0))
         history.redo()
-        self.assertEqual(arrow_state_dict(item)["end"], (90.0, 25.0))
+        self.assertEqual(arrow_state_dict_for(self.canvas, item)["end"], (90.0, 25.0))
 
     def test_deleting_a_handled_arrow_clears_its_handles(self) -> None:
         item = self._add("arrow", QPointF(-40.0, 0.0), QPointF(40.0, 0.0))
@@ -298,22 +300,24 @@ class EndpointHandleTest(unittest.TestCase):
 
         self.assertEqual(active_handles_for(self.canvas), [])
 
-    def test_endpoint_mutation_ignores_bad_geometry_and_bad_endpoint_names(
+    def test_endpoint_mutation_requires_a_record_and_ignores_bad_endpoint_names(
         self,
     ) -> None:
         mutation = self._handles().handle_mutation_service
         good = self._add("arrow", QPointF(0.0, 0.0), QPointF(40.0, 0.0))
         blank = self._add("arrow", QPointF(0.0, 60.0), QPointF(40.0, 60.0))
-        blank.setData(2, {})
+        self.canvas.runtime_state.arrow_state.records.pop(blank.data(3))
 
         with mock.patch.object(blank, "setPath") as blank_path:
-            mutation.update_arrow_endpoint(blank, QPointF(10.0, 10.0), "start")
+            with self.assertRaisesRegex(RuntimeError, "no record"):
+                mutation.update_arrow_endpoint(blank, QPointF(10.0, 10.0), "start")
         blank_path.assert_not_called()
+        remove_scene_item(self.canvas, blank)
 
         with mock.patch.object(good, "setPath") as good_path:
             mutation.update_arrow_endpoint(good, QPointF(10.0, 10.0), "sideways")
         good_path.assert_not_called()
-        self.assertEqual(arrow_state_dict(good)["end"], (40.0, 0.0))
+        self.assertEqual(arrow_state_dict_for(self.canvas, good)["end"], (40.0, 0.0))
 
     def test_dragging_an_endpoint_of_a_moved_arrow_stays_aligned(self) -> None:
         # A moved item carries its offset in pos() while its geometry stays
@@ -328,7 +332,7 @@ class EndpointHandleTest(unittest.TestCase):
             active_handles_for(self.canvas)[1], QPointF(300.0, 0.0)
         )
 
-        state = arrow_state_dict(item)
+        state = arrow_state_dict_for(self.canvas, item)
         self.assertEqual(state["start"], (200.0, 0.0))
         self.assertEqual(state["end"], (300.0, 0.0))
         rect = item.sceneBoundingRect()
@@ -343,10 +347,10 @@ class EndpointHandleTest(unittest.TestCase):
 
         # 1.0 is inside the 0.1 x 20 px floor even though it is not the anchor.
         controller.update_handle_drag(handle, QPointF(1.0, 0.0))
-        self.assertEqual(arrow_state_dict(item)["end"], (40.0, 0.0))
+        self.assertEqual(arrow_state_dict_for(self.canvas, item)["end"], (40.0, 0.0))
 
         controller.update_handle_drag(handle, QPointF(6.0, 0.0))
-        self.assertEqual(arrow_state_dict(item)["end"], (6.0, 0.0))
+        self.assertEqual(arrow_state_dict_for(self.canvas, item)["end"], (6.0, 0.0))
 
     def test_undo_of_a_handle_drag_clears_the_stale_handles(self) -> None:
         item = self._add("line", QPointF(-40.0, 0.0), QPointF(40.0, 0.0))
@@ -355,17 +359,17 @@ class EndpointHandleTest(unittest.TestCase):
         self._click(QPointF(0.0, 0.0))
         self.assertEqual(len(active_handles_for(self.canvas)), 2)
         controller = self._handles().handle_controller
-        before = arrow_state_dict(item)
+        before = arrow_state_dict_for(self.canvas, item)
         controller.update_handle_drag(
             active_handles_for(self.canvas)[1], QPointF(90.0, 0.0)
         )
-        after = arrow_state_dict(item)
+        after = arrow_state_dict_for(self.canvas, item)
         history = self.canvas.runtime_state.history_service
         history.push(UpdateSceneItemCommand(item, before, after))
 
         history.undo()
 
-        self.assertEqual(arrow_state_dict(item)["end"], (40.0, 0.0))
+        self.assertEqual(arrow_state_dict_for(self.canvas, item)["end"], (40.0, 0.0))
         self.assertEqual(active_handles_for(self.canvas), [])
         self.assertIsNone(handle_target_for(self.canvas))
 
@@ -409,7 +413,7 @@ class EndpointHandleTest(unittest.TestCase):
         self.app.processEvents()
         QTest.qWait(10)
 
-        state = arrow_state_dict(item)
+        state = arrow_state_dict_for(self.canvas, item)
         self.assertAlmostEqual(state["start"][1], 50.0, delta=1.0)
         self.assertEqual(active_handles_for(self.canvas), [])
 
@@ -440,4 +444,4 @@ class EndpointHandleTest(unittest.TestCase):
         QTest.qWait(10)
 
         self.assertEqual(len(history.state.history), depth_before)
-        self.assertEqual(arrow_state_dict(item)["end"], (40.0, 0.0))
+        self.assertEqual(arrow_state_dict_for(self.canvas, item)["end"], (40.0, 0.0))

@@ -2009,7 +2009,7 @@ CONTEXT_FACADE_RULES: tuple[
 ] = (
     (
         "curved_arrow_path_context.py",
-        ("curved_arrow_path_service.py",),
+        (),
         (
             r"\bCurvedArrowPathContext\b",
             r"\bcurved_arrow_path_context_for\b",

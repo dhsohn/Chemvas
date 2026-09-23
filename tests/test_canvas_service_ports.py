@@ -21,7 +21,6 @@ def _canvas_with_service(service_name: str, service):
             ports.canvas_window_document_session_service,
             "canvas_document_session_service",
         ),
-        (ports.curved_arrow_path_service_for_access, "curved_arrow_path_service"),
         (ports.geometry_controller_for_access, "geometry_controller"),
         (ports.handle_mutation_service_for_access, "handle_mutation_service"),
         (ports.handle_overlay_service_for_access, "handle_overlay_service"),

@@ -19,7 +19,6 @@ def _stub_service_class(name: str):
 def test_build_handle_services_wires_explicit_collaborators(monkeypatch) -> None:
     for class_name in (
         "CanvasHandleController",
-        "CurvedArrowPathService",
         "HandleMutationService",
         "HandleOverlayService",
     ):
@@ -33,10 +32,7 @@ def test_build_handle_services_wires_explicit_collaborators(monkeypatch) -> None
 
     assert isinstance(services, HandleServiceBundle)
     assert services.handle_overlay_service.service_name == "HandleOverlayService"
-    assert services.curved_arrow_path_service.service_name == "CurvedArrowPathService"
-    assert services.handle_mutation_service.kwargs == {
-        "curved_arrow_path_service": services.curved_arrow_path_service
-    }
+    assert services.handle_mutation_service.kwargs == {}
     assert services.handle_controller.kwargs == {
         "handle_overlay_service": services.handle_overlay_service,
         "handle_mutation_service": services.handle_mutation_service,

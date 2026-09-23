@@ -22,12 +22,8 @@ from chemvas.ui.note_item_access import (
 from chemvas.ui.ring_fill_state import set_ring_fill_brush
 from chemvas.ui.scene_item_state import (
     ARROW_KINDS,
-    ArrowItemBuilder,
-    ArrowLabelSetter,
     MarkColorSetter,
-    arrow_labels_from_state,
     mark_center_from_state,
-    set_arrow_labels_from_state,
     shape_fill_from_state,
     shape_kind_from_state,
     shape_rect_from_state,
@@ -41,9 +37,7 @@ NoteItemFactory = Callable[[], QGraphicsTextItem]
 NoteStyleApplier = Callable[[QGraphicsTextItem], None]
 MarkItemBuilder = Callable[[str], Any | None]
 MarkCenterSetter = Callable[[Any, QPointF], None]
-CurvedArrowPathSetter = Callable[
-    [QGraphicsPathItem, QPointF, QPointF, QPointF, bool], None
-]
+ArrowItemFactory = Callable[[Mapping[str, object]], QGraphicsPathItem]
 TsBracketItemBuilder = Callable[..., QGraphicsPathItem]
 ShapeItemBuilder = Callable[..., QGraphicsPathItem]
 OrbitalItemsBuilder = Callable[[QPointF, str], list[Any]]
@@ -139,57 +133,6 @@ def create_mark_item_from_state(
     return item
 
 
-def create_arrow_item_from_state(
-    arrow_state: Mapping[str, object],
-    *,
-    build_arrow_item: ArrowItemBuilder,
-    set_curved_arrow_path: CurvedArrowPathSetter,
-    set_arrow_labels: ArrowLabelSetter | None = None,
-) -> QGraphicsPathItem | None:
-    kind = str(arrow_state.get("kind", "arrow"))
-    start = arrow_state.get("start")
-    end = arrow_state.get("end")
-    if start is None or end is None:
-        return None
-    start_pt = QPointF(*cast("Any", start))
-    end_pt = QPointF(*cast("Any", end))
-    item = build_arrow_item(
-        start_pt, end_pt, kind, bool(arrow_state.get("mirrored", False))
-    )
-    item.setData(0, kind)
-    control = arrow_state.get("control")
-    double = bool(arrow_state.get("double", False))
-    data: dict[str, object] = {
-        "start": start_pt,
-        "end": end_pt,
-        "control": None,
-        "double": double,
-    }
-    if arrow_state.get("mirrored"):
-        data["mirrored"] = True
-    if kind in {"curved_single", "curved_double"} and control is not None:
-        control_pt = QPointF(*cast("Any", control))
-        set_curved_arrow_path(item, start_pt, end_pt, control_pt, double)
-        data["control"] = control_pt
-    elif kind in {"curved_single", "curved_double"}:
-        # Keep the default curve that the native builder already painted.
-        built_data = item.data(2)
-        data["control"] = built_data["control"]
-        data["double"] = built_data["double"]
-    color = arrow_state.get("color")
-    if isinstance(color, str):
-        data["color"] = color
-        pen = item.pen()
-        pen.setColor(QColor(color))
-        item.setPen(pen)
-    labels = arrow_labels_from_state(arrow_state)
-    if labels:
-        data["labels"] = labels
-    item.setData(2, data)
-    set_arrow_labels_from_state(set_arrow_labels, item, arrow_state)
-    return item
-
-
 def create_ts_bracket_item_from_state(
     ts_bracket_state: Mapping[str, object],
     *,
@@ -260,13 +203,11 @@ def create_scene_item_from_state(
     set_mark_center: MarkCenterSetter,
     set_mark_color: MarkColorSetter,
     ring_fill_brush_getter: RingFillBrushGetter,
-    build_arrow_item: ArrowItemBuilder,
-    set_curved_arrow_path: CurvedArrowPathSetter,
+    create_arrow_item: ArrowItemFactory,
     build_ts_bracket_item: TsBracketItemBuilder,
     build_shape_item: ShapeItemBuilder | None = None,
     build_orbital_items: OrbitalItemsBuilder,
     orbital_base_handle_dist: float,
-    set_arrow_labels: ArrowLabelSetter | None = None,
 ):
     kind = state.get("kind")
     if kind == "image":
@@ -304,10 +245,5 @@ def create_scene_item_from_state(
             orbital_base_handle_dist=orbital_base_handle_dist,
         )
     if kind in ARROW_KINDS:
-        return create_arrow_item_from_state(
-            state,
-            build_arrow_item=build_arrow_item,
-            set_curved_arrow_path=set_curved_arrow_path,
-            set_arrow_labels=set_arrow_labels,
-        )
+        return create_arrow_item(state)
     return None

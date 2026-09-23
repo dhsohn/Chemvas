@@ -7,7 +7,6 @@ from PyQt6.QtCore import QPointF, QRectF, Qt
 from PyQt6.QtGui import QBrush, QColor, QPolygonF
 from PyQt6.QtWidgets import (
     QGraphicsItemGroup,
-    QGraphicsPathItem,
     QGraphicsPolygonItem,
     QGraphicsTextItem,
 )
@@ -27,7 +26,6 @@ from chemvas.ui.ring_fill_state import set_ring_fill_brush
 from chemvas.ui.scene_item_state_serialization import (
     ARROW_KINDS,
     MarkCenterGetter,
-    arrow_state_dict,
     arrow_state_dict_for,
     atom_state_dict_for,
     bond_state_dict,
@@ -50,11 +48,6 @@ MarkCenterSetter = Callable[[Any, QPointF], None]
 MarkColorSetter = Callable[[Any, str | None], None]
 NoteStyleApplier = Callable[[QGraphicsTextItem], None]
 RingFillBrushGetter = Callable[[], QBrush]
-ArrowItemBuilder = Callable[[QPointF, QPointF, str, bool], QGraphicsPathItem]
-CurvedArrowPathSetter = Callable[
-    [QGraphicsPathItem, QPointF, QPointF, QPointF, bool], None
-]
-ArrowLabelSetter = Callable[[QGraphicsPathItem, Mapping[str, str] | None], None]
 
 
 def scene_item_history_state(item, state: dict) -> dict:
@@ -68,31 +61,6 @@ def scene_item_history_state(item, state: dict) -> dict:
         return state
     position = item.pos()
     return {**state, "item_pos": (position.x(), position.y())}
-
-
-def arrow_labels_from_state(state: Mapping[str, object]) -> dict[str, str] | None:
-    labels = state.get("labels")
-    if not isinstance(labels, Mapping) or not labels:
-        return None
-    return {str(side): str(text) for side, text in labels.items()}
-
-
-def set_arrow_labels_from_state(
-    setter: ArrowLabelSetter | None,
-    item: QGraphicsPathItem,
-    state: Mapping[str, object],
-) -> None:
-    """Rebuild an arrow's label children through ``setter``.
-
-    A state that carries labels needs the port; silently dropping them would
-    lose user text on restore, so that case fails closed.
-    """
-    labels = arrow_labels_from_state(state)
-    if setter is None:
-        if labels:
-            raise ValueError("Arrow labels require a set_arrow_labels port.")
-        return
-    setter(item, labels)
 
 
 def _float_state_value(value: object, default: float) -> float:
@@ -193,11 +161,7 @@ def apply_scene_item_state(
     mark_center_setter: MarkCenterSetter,
     mark_color_setter: MarkColorSetter,
     ring_fill_brush_getter: RingFillBrushGetter,
-    bond_color: str,
-    build_arrow_item: ArrowItemBuilder,
-    set_curved_arrow_path: CurvedArrowPathSetter,
     orbital_base_handle_dist: float,
-    set_arrow_labels: ArrowLabelSetter | None = None,
 ) -> None:
     if item is None or not state:
         return
@@ -267,52 +231,6 @@ def apply_scene_item_state(
         item.setScale(_float_state_value(state.get("scale"), item.scale()))
         item.setRotation(_float_state_value(state.get("rotation"), item.rotation()))
         return
-    if kind in ARROW_KINDS and isinstance(item, QGraphicsPathItem):
-        start_pt = _point_from_state(state.get("start"))
-        end_pt = _point_from_state(state.get("end"))
-        if start_pt is None or end_pt is None:
-            return
-        # start/end are scene coordinates, so the rebuilt path is absolute.
-        # Clear any translation left by a prior drag/nudge (move_item shifts
-        # item.pos() via moveBy) or the arrow would render double-offset.
-        item.setPos(0.0, 0.0)
-        control_pt = _point_from_state(state.get("control"))
-        double = bool(state.get("double", False))
-        if kind in {"curved_single", "curved_double"} and control_pt is not None:
-            set_curved_arrow_path(item, start_pt, end_pt, control_pt, double)
-            data = {
-                "start": start_pt,
-                "end": end_pt,
-                "control": control_pt,
-                "double": double,
-            }
-        else:
-            rebuilt = build_arrow_item(
-                start_pt, end_pt, str(kind), bool(state.get("mirrored", False))
-            )
-            item.setPath(rebuilt.path())
-            item.setPen(rebuilt.pen())
-            item.setBrush(rebuilt.brush())
-            data = {"start": start_pt, "end": end_pt, "control": None, "double": double}
-        if state.get("mirrored"):
-            data["mirrored"] = True
-        color = state.get("color")
-        if isinstance(color, str):
-            data["color"] = color
-        pen = item.pen()
-        if isinstance(color, str):
-            pen.setColor(QColor(color))
-        elif kind in {"curved_single", "curved_double"} and control_pt is not None:
-            # Curves update their path in place, so clear a previous override.
-            # Other kinds already have the native builder's default pen.
-            pen.setColor(QColor(bond_color))
-        item.setPen(pen)
-        labels = arrow_labels_from_state(state)
-        if labels:
-            data["labels"] = labels
-        item.setData(0, kind)
-        item.setData(2, data)
-        set_arrow_labels_from_state(set_arrow_labels, item, state)
 
 
 def _restore_mark_position(item, state, model_atoms, mark_center_setter) -> None:
@@ -351,11 +269,8 @@ def mark_center_from_state(
 
 __all__ = [
     "ARROW_KINDS",
-    "ArrowLabelSetter",
     "MarkCenterGetter",
     "apply_scene_item_state",
-    "arrow_labels_from_state",
-    "arrow_state_dict",
     "arrow_state_dict_for",
     "atom_state_dict_for",
     "bond_state_dict",
@@ -372,7 +287,6 @@ __all__ = [
     "scene_item_history_state",
     "scene_item_state",
     "scene_item_state_for",
-    "set_arrow_labels_from_state",
     "shape_fill_from_state",
     "shape_kind_from_state",
     "shape_rect_from_state",

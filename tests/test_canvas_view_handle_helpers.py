@@ -22,18 +22,13 @@ from chemvas.ui.canvas_handle_controller import CanvasHandleController
 from chemvas.ui.canvas_scene_items_state import CanvasSceneItemsState
 from chemvas.ui.canvas_service_ports import handle_overlay_service_for_access
 from chemvas.ui.canvas_tool_settings_state import CanvasToolSettingsState
-from chemvas.ui.curved_arrow_path_service import CurvedArrowPathService
 from chemvas.ui.handle_mutation_access import (
-    curved_midpoint_for,
-    update_curved_control_for,
-    update_curved_endpoint_for,
     update_orbital_rotate_for,
     update_orbital_scale_for,
 )
 from chemvas.ui.handle_mutation_service import HandleMutationService
 from chemvas.ui.handle_overlay_access import (
     clear_handles_for,
-    show_curved_handles_for,
 )
 from chemvas.ui.handle_overlay_service import HandleOverlayService
 from chemvas.ui.handle_state import CanvasHandleState
@@ -132,10 +127,8 @@ def _make_proxy(
     view.services.selection.update_selection_outline = view.refresh_selection_outline
     view.clear_handles = lambda: clear_handles_for(view)
     view.services.handles.handle_overlay_service = HandleOverlayService(view)
-    view.services.handles.curved_arrow_path_service = CurvedArrowPathService(view)
     view.services.handles.handle_mutation_service = HandleMutationService(
         view,
-        curved_arrow_path_service=view.services.handles.curved_arrow_path_service,
     )
     view.services.handles.handle_controller = CanvasHandleController(
         view,
@@ -201,47 +194,6 @@ class CanvasViewHandleHelpersTest(unittest.TestCase):
         )
         self.assertGreaterEqual(len(scene.removed_items), 2)
 
-    def test_show_curved_handles_and_update_curved_control_cover_valid_and_fallback_paths(
-        self,
-    ) -> None:
-        scene = _RecordingScene()
-        view = _make_proxy(scene)
-
-        curved_item = _FakeGraphicsItem()
-        curved_item.setData(2, {"start": QPointF(0.0, 0.0), "end": QPointF(10.0, 0.0)})
-
-        show_curved_handles_for(view, curved_item)
-
-        self.assertEqual(len(view.runtime_state.handle_state.active_handles), 3)
-        self.assertIs(view.runtime_state.handle_state.target, curved_item)
-        self.assertFalse(curved_item.path().isEmpty())
-        self.assertIn("control", curved_item.data(2))
-        expected_mid = curved_midpoint_for(
-            view, QPointF(0.0, 0.0), curved_item.data(2)["control"], QPointF(10.0, 0.0)
-        )
-        self.assertEqual(
-            [
-                (handle.data(1), _point_tuple(handle.pos()))
-                for handle in view.runtime_state.handle_state.active_handles
-            ],
-            [
-                ("curved_start", (0.0, 0.0)),
-                ("curved_control", _point_tuple(expected_mid)),
-                ("curved_end", (10.0, 0.0)),
-            ],
-        )
-        self.assertEqual(view.refresh_selection_outline.call_count, 1)
-
-        fallback_item = _FakeGraphicsItem(rect=QRectF(0.0, 0.0, 20.0, 20.0))
-        fallback_item.setData(2, {})
-
-        show_curved_handles_for(view, fallback_item)
-
-        self.assertEqual(
-            _point_tuple(view.runtime_state.handle_state.active_handles[0].pos()),
-            (10.0, 10.0),
-        )
-
     def test_update_handle_drag_dispatches_by_handle_type(self) -> None:
         scene = _RecordingScene()
         view = _make_proxy(scene)
@@ -294,48 +246,13 @@ class CanvasViewHandleHelpersTest(unittest.TestCase):
         mutation_service.update_curved_control.assert_called_once_with(
             target, QPointF(5.0, 6.0)
         )
-        mutation_service.update_curved_endpoint.assert_has_calls(
+        mutation_service.update_arrow_endpoint.assert_has_calls(
             [
                 mock.call(target, QPointF(7.0, 8.0), "start"),
                 mock.call(target, QPointF(9.0, 10.0), "end"),
             ]
         )
         self.assertEqual(overlay_service.show_curved_handles.call_count, 3)
-
-    def test_update_curved_endpoint_updates_path_and_handles_invalid_input(
-        self,
-    ) -> None:
-        scene = _RecordingScene()
-        view = _make_proxy(scene)
-
-        curved_item = _FakeGraphicsItem()
-        curved_item.setData(
-            2,
-            {
-                "start": QPointF(0.0, 0.0),
-                "end": QPointF(10.0, 0.0),
-                "control": QPointF(5.0, 8.0),
-                "double": True,
-            },
-        )
-        curved_item.setPos(-8.0, 6.0)
-
-        update_curved_endpoint_for(view, curved_item, QPointF(-2.0, 1.0), "start")
-
-        self.assertFalse(curved_item.path().isEmpty())
-        self.assertEqual(curved_item.data(2)["start"], QPointF(-2.0, 1.0))
-        self.assertEqual(curved_item.data(2)["control"], QPointF(5.0, 8.0))
-        self.assertEqual(curved_item.pos(), QPointF())
-        self.assertEqual(
-            view.services.scene_decoration.arrow_build_service.add_arrow_head.call_count,
-            2,
-        )
-        self.assertEqual(view.refresh_selection_outline.call_count, 1)
-
-        invalid_item = _FakeGraphicsItem()
-        invalid_item.setData(2, {"start": QPointF(0.0, 0.0)})
-        update_curved_endpoint_for(view, invalid_item, QPointF(3.0, 3.0), "end")
-        self.assertTrue(invalid_item.path().isEmpty())
 
     def test_update_orbital_scale_and_rotate_use_center_or_bounds(self) -> None:
         scene = _RecordingScene()
@@ -360,29 +277,3 @@ class CanvasViewHandleHelpersTest(unittest.TestCase):
 
         self.assertAlmostEqual(fallback_item._scale, 1.0)
         self.assertAlmostEqual(fallback_item._rotation, 0.0)
-
-    def test_update_curved_control_updates_path_and_handles_invalid_input(self) -> None:
-        scene = _RecordingScene()
-        view = _make_proxy(scene)
-
-        curved_item = _FakeGraphicsItem()
-        curved_item.setData(
-            2, {"start": QPointF(0.0, 0.0), "end": QPointF(10.0, 0.0), "double": True}
-        )
-        curved_item.setPos(11.0, -3.0)
-
-        update_curved_control_for(view, curved_item, QPointF(5.0, 4.0))
-
-        self.assertFalse(curved_item.path().isEmpty())
-        self.assertIn("control", curved_item.data(2))
-        self.assertEqual(curved_item.pos(), QPointF())
-        self.assertEqual(
-            view.services.scene_decoration.arrow_build_service.add_arrow_head.call_count,
-            2,
-        )
-        self.assertEqual(view.refresh_selection_outline.call_count, 1)
-
-        invalid_item = _FakeGraphicsItem()
-        invalid_item.setData(2, {"start": QPointF(0.0, 0.0)})
-        update_curved_control_for(view, invalid_item, QPointF(3.0, 3.0))
-        self.assertTrue(invalid_item.path().isEmpty())

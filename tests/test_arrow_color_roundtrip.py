@@ -20,7 +20,7 @@ from chemvas.ui.canvas_window_access import (
     snapshot_canvas_state_for,
 )
 from chemvas.ui.history_operations import CanvasHistoryOperations
-from chemvas.ui.scene_item_state_serialization import arrow_state_dict
+from chemvas.ui.scene_item_state_serialization import arrow_state_dict_for
 
 
 @pytest.fixture(scope="module")
@@ -87,7 +87,7 @@ def test_native_document_restore_preserves_arrow_color_and_pen_style(canvas, kin
     (default,) = arrow_items_for(canvas)
     default_pen = default.pen()
     default_path = default.path()
-    assert "color" not in arrow_state_dict(default)
+    assert "color" not in arrow_state_dict_for(canvas, default)
 
     restore_canvas_state_for(canvas, _document([_arrow(kind, color="#A1b2C3")]))
     (colored,) = arrow_items_for(canvas)
@@ -103,7 +103,7 @@ def test_native_document_restore_preserves_arrow_color_and_pen_style(canvas, kin
     restore_canvas_state_for(canvas, extract_document_state(payload))
     (restored,) = arrow_items_for(canvas)
     assert restored.pen() == expected_pen
-    assert arrow_state_dict(restored)["color"] == "#A1b2C3"
+    assert arrow_state_dict_for(canvas, restored)["color"] == "#A1b2C3"
 
 
 @pytest.mark.parametrize(
@@ -149,21 +149,21 @@ def test_arrow_state_edit_and_history_restore_color_including_default(canvas, ki
     (item,) = arrow_items_for(canvas)
     default_pen = item.pen()
     default_label_color = item.childItems()[0].defaultTextColor()
-    before = arrow_state_dict(item)
+    before = arrow_state_dict_for(canvas, item)
     after = {**before, "end": (100.0, 20.0), "color": "#123abc"}
     command = UpdateSceneItemCommand(item, before, after)
     command.redo(operations)
-    assert arrow_state_dict(item) == after
+    assert arrow_state_dict_for(canvas, item) == after
     assert item.pen().color() == QColor("#123abc")
     assert item.childItems()[0].defaultTextColor() == QColor("#123abc")
     history = canvas.runtime_state.history_service
     history.push(command)
     history.undo()
-    assert arrow_state_dict(item) == before
+    assert arrow_state_dict_for(canvas, item) == before
     assert item.pen() == default_pen
     assert item.childItems()[0].defaultTextColor() == default_label_color
     history.redo()
-    assert arrow_state_dict(item) == after
+    assert arrow_state_dict_for(canvas, item) == after
     assert item.pen().color() == QColor("#123abc")
     assert item.childItems()[0].defaultTextColor() == QColor("#123abc")
 
@@ -182,11 +182,11 @@ def test_arrow_handle_edit_preserves_color_and_labels(canvas, kind):
     handles = canvas_services_for(canvas).handles.handle_mutation_service
     if kind in {"curved_single", "curved_double"}:
         handles.update_curved_control(item, QPointF(40.0, -50.0))
-        handles.update_curved_endpoint(item, QPointF(110.0, 25.0), "end")
+        handles.update_arrow_endpoint(item, QPointF(110.0, 25.0), "end")
     else:
         handles.update_arrow_endpoint(item, QPointF(110.0, 25.0), "end")
     assert item.pen() == pen
-    state = arrow_state_dict(item)
+    state = arrow_state_dict_for(canvas, item)
     assert state["end"] != (90.0, 20.0)
     assert state["color"] == "#2468ac"
     assert state["labels"] == {"above": "k_1"}
@@ -209,7 +209,7 @@ def test_color_operation_recolors_arrows_with_one_undo_step(canvas, kind):
         ),
     )
     items = list(arrow_items_for(canvas))
-    before = [arrow_state_dict(item) for item in items]
+    before = [arrow_state_dict_for(canvas, item) for item in items]
     pens = [item.pen() for item in items]
     history = canvas.runtime_state.history_service
     colors = CanvasColorMutationService(
@@ -219,11 +219,13 @@ def test_color_operation_recolors_arrows_with_one_undo_step(canvas, kind):
         history_service=history,
     )
     colors.apply_color_to_items(items, QColor("#135ace"))
-    assert all(arrow_state_dict(item).get("color") == "#135ace" for item in items)
+    assert all(
+        arrow_state_dict_for(canvas, item).get("color") == "#135ace" for item in items
+    )
     assert all(item.pen().color() == QColor("#135ace") for item in items)
     assert items[0].childItems()[0].defaultTextColor() == QColor("#135ace")
     history.undo()
-    assert [arrow_state_dict(item) for item in items] == before
+    assert [arrow_state_dict_for(canvas, item) for item in items] == before
     assert [item.pen() for item in items] == pens
     history.redo()
     assert all(item.pen().color() == QColor("#135ace") for item in items)
@@ -250,7 +252,7 @@ def test_existing_palette_recolors_selected_arrow(app):
         assert item.pen().color() == QColor("#123abc")
         assert item.childItems()[0].defaultTextColor() == QColor("#123abc")
         view.runtime_state.history_service.undo()
-        assert "color" not in arrow_state_dict(item)
+        assert "color" not in arrow_state_dict_for(view, item)
     finally:
         services.canvas_document_service.mark_clean(view)
         window.close()
@@ -309,10 +311,10 @@ def test_native_clipboard_copy_paste_round_trips_colored_arrow(canvas, kind):
     pasted = [arrow for arrow in arrow_items_for(canvas) if arrow is not item]
     assert len(pasted) == 1
     pasted = pasted[0]
-    state = arrow_state_dict(pasted)
+    state = arrow_state_dict_for(canvas, pasted)
     assert state["color"] == "#bCd"
     assert state["labels"] == {"above": "k_1"}
-    assert state["start"] != arrow_state_dict(item)["start"]
+    assert state["start"] != arrow_state_dict_for(canvas, item)["start"]
     assert pasted.pen() == item.pen()
     assert pasted.childItems()[0].defaultTextColor() == QColor("#bCd")
     history = canvas.runtime_state.history_service
@@ -320,7 +322,7 @@ def test_native_clipboard_copy_paste_round_trips_colored_arrow(canvas, kind):
     assert list(arrow_items_for(canvas)) == [item]
     history.redo()
     assert pasted.scene() is canvas.scene()
-    assert arrow_state_dict(pasted) == state
+    assert arrow_state_dict_for(canvas, pasted) == state
     assert pasted.pen().color() == QColor("#bCd")
 
 

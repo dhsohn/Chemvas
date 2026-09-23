@@ -51,10 +51,6 @@ def mark_snapped_points_for(canvas, item, points) -> None:
         build_snap_mark_for(canvas, point).setParentItem(item)
 
 
-def apply_arrow_labels_for(canvas, item, labels) -> None:
-    arrow_build_service_for_access(canvas).apply_arrow_labels(item, labels)
-
-
 def ts_bracket_path_for(canvas, rect, bracket_kind: str = DEFAULT_BRACKET_KIND):
     return scene_decoration_build_service_for_access(canvas).ts_bracket_path(
         rect, bracket_kind
@@ -92,7 +88,6 @@ def build_curved_arrow_path_for(canvas, start, end, control, double: bool):
 
 
 __all__ = [
-    "apply_arrow_labels_for",
     "build_arrow_item_for",
     "build_curved_arrow_path_for",
     "build_orbital_items_for",

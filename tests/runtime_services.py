@@ -23,7 +23,6 @@ SERVICE_PATHS: dict[str, tuple[str, str]] = {
     "handle_controller": ("handles", "handle_controller"),
     "handle_overlay_service": ("handles", "handle_overlay_service"),
     "handle_mutation_service": ("handles", "handle_mutation_service"),
-    "curved_arrow_path_service": ("handles", "curved_arrow_path_service"),
     "move_controller": ("interaction", "move_controller"),
     "note_controller": ("interaction", "note_controller"),
     "pointer_controller": ("input", "pointer_controller"),

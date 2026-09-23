@@ -80,15 +80,13 @@ def populate_document_scene(
             set_mark_center=decorations.set_mark_center,
             set_mark_color=decorations.apply_mark_color,
             ring_fill_brush_getter=context.renderer.ring_fill_brush,
-            build_arrow_item=arrows.build_arrow_item,
-            set_curved_arrow_path=arrows.set_curved_arrow_path,
+            create_arrow_item=arrows.create_from_state,
             build_ts_bracket_item=decorations.build_ts_bracket_item,
             build_shape_item=lambda rect, kind, stroke, fill: (
                 decorations.build_shape_item(rect, kind, stroke, fill=fill)
             ),
             build_orbital_items=decorations.build_orbital_items,
             orbital_base_handle_dist=context.renderer.style.bond_length_px * 0.8,
-            set_arrow_labels=arrows.apply_arrow_labels,
         )
         if item is None:
             if item_state["kind"] == "mark" and item_state.get("_auto_position"):

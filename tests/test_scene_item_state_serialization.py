@@ -103,4 +103,4 @@ class SceneItemStateSerializationTest(unittest.TestCase):
     def test_scene_item_state_facade_reexports_serialization_contract(self) -> None:
         self.assertIs(facade.scene_item_state, serialization.scene_item_state)
         self.assertIs(facade.scene_item_state_for, serialization.scene_item_state_for)
-        self.assertIs(facade.arrow_state_dict, serialization.arrow_state_dict)
+        self.assertIs(facade.arrow_state_dict_for, serialization.arrow_state_dict_for)

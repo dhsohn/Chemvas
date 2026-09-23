@@ -16,7 +16,6 @@ from PyQt6.QtWidgets import QApplication
 from chemvas.ui.canvas_arrow_build_service import CanvasArrowBuildService
 from chemvas.ui.canvas_scene_items_state import CanvasSceneItemsState
 from chemvas.ui.canvas_tool_settings_state import CanvasToolSettingsState
-from chemvas.ui.curved_arrow_path_service import CurvedArrowPathService
 from chemvas.ui.handle_mutation_service import HandleMutationService
 
 
@@ -85,15 +84,11 @@ class HandleMutationServiceTest(unittest.TestCase):
                 update_selection_outline=canvas.refresh_selection_outline
             ),
         )
-        canvas.services.handles.curved_arrow_path_service = CurvedArrowPathService(
-            canvas
-        )
         return canvas
 
     def _service(self, canvas) -> HandleMutationService:
         return HandleMutationService(
             canvas,
-            curved_arrow_path_service=canvas.services.handles.curved_arrow_path_service,
         )
 
     def test_update_orbital_scale_and_rotate_use_center_or_bounds(self) -> None:
@@ -117,82 +112,3 @@ class HandleMutationServiceTest(unittest.TestCase):
         service.update_orbital_rotate(fallback_item, QPointF(42.0, 5.0))
         self.assertAlmostEqual(fallback_item._scale, 1.0)
         self.assertAlmostEqual(fallback_item._rotation, 0.0)
-
-    def test_update_curved_control_updates_path_and_handles_invalid_input(self) -> None:
-        canvas = self._make_canvas()
-        service = self._service(canvas)
-        curved_item = _FakeGraphicsItem(
-            data={
-                2: {
-                    "start": QPointF(0.0, 0.0),
-                    "end": QPointF(10.0, 0.0),
-                    "double": True,
-                }
-            }
-        )
-        curved_item.setPos(14.0, -6.0)
-
-        service.update_curved_control(curved_item, QPointF(5.0, 4.0))
-
-        self.assertFalse(curved_item.path().isEmpty())
-        self.assertEqual(curved_item.data(2)["control"], QPointF(5.0, 8.0))
-        self.assertEqual(curved_item.pos(), QPointF())
-        add_arrow_head = (
-            canvas.services.scene_decoration.arrow_build_service.add_arrow_head
-        )
-        self.assertEqual(add_arrow_head.call_count, 2)
-        canvas.refresh_selection_outline.assert_called_once_with()
-
-        invalid_item = _FakeGraphicsItem(data={2: {"start": QPointF(0.0, 0.0)}})
-        add_arrow_head.reset_mock()
-        canvas.refresh_selection_outline.reset_mock()
-        service.update_curved_control(invalid_item, QPointF(3.0, 3.0))
-        self.assertTrue(invalid_item.path().isEmpty())
-        add_arrow_head.assert_not_called()
-        canvas.refresh_selection_outline.assert_not_called()
-
-    def test_update_curved_endpoint_updates_path_and_preserves_existing_control(
-        self,
-    ) -> None:
-        canvas = self._make_canvas()
-        service = self._service(canvas)
-        curved_item = _FakeGraphicsItem(
-            data={
-                2: {
-                    "start": QPointF(0.0, 0.0),
-                    "end": QPointF(10.0, 0.0),
-                    "control": QPointF(5.0, 8.0),
-                    "double": False,
-                }
-            }
-        )
-        curved_item.setPos(22.0, 9.0)
-
-        service.update_curved_endpoint(curved_item, QPointF(-2.0, 1.0), "start")
-
-        self.assertFalse(curved_item.path().isEmpty())
-        self.assertEqual(curved_item.data(2)["start"], QPointF(-2.0, 1.0))
-        self.assertEqual(curved_item.data(2)["end"], QPointF(10.0, 0.0))
-        self.assertEqual(curved_item.data(2)["control"], QPointF(5.0, 8.0))
-        self.assertEqual(curved_item.pos(), QPointF())
-        canvas.refresh_selection_outline.assert_called_once_with()
-
-        add_arrow_head = (
-            canvas.services.scene_decoration.arrow_build_service.add_arrow_head
-        )
-        add_arrow_head.reset_mock()
-        canvas.refresh_selection_outline.reset_mock()
-        fallback_item = _FakeGraphicsItem(
-            data={
-                2: {
-                    "start": QPointF(0.0, 0.0),
-                    "end": QPointF(10.0, 0.0),
-                    "double": True,
-                }
-            }
-        )
-        service.update_curved_endpoint(fallback_item, QPointF(12.0, -1.0), "end")
-        self.assertEqual(fallback_item.data(2)["end"], QPointF(12.0, -1.0))
-        self.assertEqual(fallback_item.data(2)["control"], QPointF(6.3, 3.1))
-        self.assertEqual(add_arrow_head.call_count, 2)
-        canvas.refresh_selection_outline.assert_called_once_with()

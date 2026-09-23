@@ -53,91 +53,6 @@ class CanvasArrowBuildServiceTest(unittest.TestCase):
         )
         return CanvasArrowBuildService(attach_scene_render_context(canvas)), scene
 
-    def test_build_arrow_item_dispatches_supported_kinds(self) -> None:
-        service, _ = self._make_service()
-        start = QPointF(1.0, 2.0)
-        end = QPointF(8.0, 9.0)
-        equilibrium = object()
-        resonance = object()
-        curved_single = object()
-        curved_double = object()
-        inhibit = object()
-        dotted = object()
-        line = object()
-        default = object()
-
-        arc = object()
-        service.build_arc_arrow = mock.Mock(return_value=arc)
-        service.build_line_item = mock.Mock(return_value=line)
-        service.build_equilibrium_item = mock.Mock(return_value=equilibrium)
-        service.build_double_head_arrow = mock.Mock(return_value=resonance)
-        service.build_curved_arrow = mock.Mock(
-            side_effect=[curved_single, curved_double]
-        )
-        service.build_inhibition_arrow = mock.Mock(return_value=inhibit)
-        service.build_dotted_arrow = mock.Mock(return_value=dotted)
-        service.build_single_head_arrow = mock.Mock(return_value=default)
-
-        self.assertIs(service.build_arrow_item(start, end, "equilibrium"), equilibrium)
-        self.assertIs(
-            service.build_arrow_item(start, end, "equilibrium_forward"), equilibrium
-        )
-        self.assertIs(
-            service.build_arrow_item(start, end, "equilibrium_reverse"), equilibrium
-        )
-        self.assertIs(service.build_arrow_item(start, end, "resonance"), resonance)
-        self.assertIs(
-            service.build_arrow_item(start, end, "curved_single"), curved_single
-        )
-        self.assertIs(
-            service.build_arrow_item(start, end, "curved_double"), curved_double
-        )
-        self.assertIs(service.build_arrow_item(start, end, "inhibit"), inhibit)
-        self.assertIs(service.build_arrow_item(start, end, "dotted"), dotted)
-        self.assertIs(service.build_arrow_item(start, end, "line_wavy"), line)
-        self.assertIs(service.build_arrow_item(start, end, "arc_180_right"), arc)
-        service.build_arc_arrow.assert_called_once_with(start, end, "arc_180_right")
-        self.assertIs(service.build_arrow_item(start, end, "reaction"), default)
-
-        service.build_line_item.assert_called_once_with(start, end, "line_wavy")
-        self.assertEqual(
-            service.build_equilibrium_item.call_args_list,
-            [
-                mock.call(start, end, mirrored=False),
-                mock.call(start, end, favored="forward", mirrored=False),
-                mock.call(start, end, favored="reverse", mirrored=False),
-            ],
-        )
-        service.build_double_head_arrow.assert_called_once_with(start, end)
-        self.assertEqual(
-            service.build_curved_arrow.call_args_list,
-            [mock.call(start, end, double=False), mock.call(start, end, double=True)],
-        )
-        service.build_inhibition_arrow.assert_called_once_with(start, end)
-        service.build_dotted_arrow.assert_called_once_with(start, end)
-        service.build_single_head_arrow.assert_called_once_with(start, end)
-
-    def test_build_curved_arrow_sets_metadata_control_and_double_flag(self) -> None:
-        service, _ = self._make_service()
-        start = QPointF(0.0, 0.0)
-        end = QPointF(10.0, 0.0)
-
-        with mock.patch.object(
-            service, "add_arrow_head", wraps=service.add_arrow_head
-        ) as add_arrow_head:
-            item = service.build_curved_arrow(start, end, double=True)
-
-        data = item.data(2) or {}
-        control = data.get("control")
-        self.assertFalse(item.path().isEmpty())
-        self.assertEqual(data.get("start"), start)
-        self.assertEqual(data.get("end"), end)
-        self.assertTrue(data.get("double"))
-        self.assertIsInstance(control, QPointF)
-        self.assertAlmostEqual(control.x(), 5.0)
-        self.assertAlmostEqual(control.y(), 3.0)
-        self.assertEqual(add_arrow_head.call_count, 2)
-
     def test_preview_arrow_adds_built_item_to_scene(self) -> None:
         service, scene = self._make_service()
         start = QPointF(-5.0, 1.0)
@@ -147,10 +62,6 @@ class CanvasArrowBuildServiceTest(unittest.TestCase):
 
         self.assertIs(scene.items[-1], item)
         self.assertFalse(item.path().isEmpty())
-        self.assertEqual(item.data(2)["start"], start)
-        self.assertEqual(item.data(2)["end"], end)
-        self.assertFalse(item.data(2)["double"])
-        self.assertIsNotNone(item.data(2)["control"])
 
     def test_build_double_head_and_dotted_arrow_preserve_metadata_and_pen_style(
         self,
@@ -173,14 +84,6 @@ class CanvasArrowBuildServiceTest(unittest.TestCase):
                 mock.call(mock.ANY, start, end, double=False),
             ],
         )
-        self.assertEqual(
-            double_head.data(2),
-            {"start": start, "end": end, "control": None, "double": False},
-        )
-        self.assertEqual(
-            dotted.data(2),
-            {"start": start, "end": end, "control": None, "double": False},
-        )
         self.assertEqual(dotted.pen().style(), Qt.PenStyle.DashLine)
         self.assertNotEqual(double_head.pen().style(), dotted.pen().style())
         self.assertFalse(double_head.path().isEmpty())
@@ -197,19 +100,11 @@ class CanvasArrowBuildServiceTest(unittest.TestCase):
         equilibrium = service.build_equilibrium_item(start, end)
 
         inhibition_path = inhibition.path()
-        self.assertEqual(
-            inhibition.data(2),
-            {"start": start, "end": end, "control": None, "double": False},
-        )
         self.assertEqual(inhibition_path.elementCount(), 4)
         self.assertAlmostEqual(inhibition_path.elementAt(2).x, 10.0)
         self.assertAlmostEqual(abs(inhibition_path.elementAt(2).y), 4.0)
         self.assertAlmostEqual(inhibition_path.boundingRect().width(), 10.0, delta=1.0)
 
-        self.assertEqual(
-            equilibrium.data(2),
-            {"start": start, "end": end, "control": None, "double": False},
-        )
         self.assertFalse(equilibrium.path().isEmpty())
         self.assertGreater(equilibrium.path().boundingRect().height(), 8.0)
         self.assertGreater(equilibrium.path().boundingRect().width(), 9.0)
@@ -238,8 +133,6 @@ class CanvasArrowBuildServiceTest(unittest.TestCase):
                             (reverse.x - forward.x) * -dy + (reverse.y - forward.y) * dx
                         ) / length
                         self.assertAlmostEqual(gap, spacing)
-                        self.assertEqual(item.data(2)["start"], start)
-                        self.assertEqual(item.data(2)["end"], end)
 
     def test_thick_equilibrium_shafts_keep_one_stroke_of_clearance(self) -> None:
         service, _ = self._make_service()

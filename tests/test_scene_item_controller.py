@@ -14,7 +14,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PyQt6 import sip
 from PyQt6.QtCore import QPointF, QRectF, Qt
-from PyQt6.QtGui import QBrush, QColor, QPainterPath, QPen, QPolygonF
+from PyQt6.QtGui import QPainterPath, QPen, QPolygonF
 from PyQt6.QtWidgets import (
     QApplication,
     QGraphicsItemGroup,
@@ -24,6 +24,7 @@ from PyQt6.QtWidgets import (
     QGraphicsTextItem,
 )
 
+from chemvas.adapters.qt.renderer import Renderer
 from chemvas.ui.canvas_mark_registry import CanvasMarkRegistry
 from chemvas.ui.canvas_mark_scene_service import CanvasMarkSceneService
 from chemvas.ui.canvas_scene_decoration_build_service import (
@@ -45,12 +46,7 @@ from chemvas.ui.transactions.scene_rect import scene_rect_is_automatic
 class _FakeCanvas:
     def __init__(self) -> None:
         self._scene = QGraphicsScene()
-        self.renderer = SimpleNamespace(
-            style=SimpleNamespace(
-                bond_length_px=20.0, bond_color="#000000", atom_color="#000000"
-            ),
-            ring_fill_brush=lambda: QBrush(QColor("#AA4400")),
-        )
+        self.renderer = Renderer()
         self.bond_renderer = SimpleNamespace(
             update_bond_geometry=self.update_bond_geometry
         )
@@ -77,8 +73,6 @@ class _FakeCanvas:
         self.applied_note_style_items = []
         self.mark_centers = {}
         self.built_mark_kinds = []
-        self.built_arrow_calls = []
-        self.curved_arrow_path_calls = []
         self.built_ts_bracket_rects = []
         self.built_orbital_calls = []
         self.services = canvas_runtime_services(
@@ -101,10 +95,7 @@ class _FakeCanvas:
                 ts_bracket_path=self.record_ts_bracket_path,
                 shape_pen=lambda stroke_style: QPen(),
             ),
-            arrow_build_service=SimpleNamespace(
-                build_arrow_item=self.record_build_arrow_item,
-                apply_arrow_labels=lambda item, labels: None,
-            ),
+            arrow_build_service=self.render_context.arrows,
             canvas_mark_scene_service=SimpleNamespace(
                 remove_mark_item=self.record_remove_mark_item,
                 # Undo restore of an atom-bound mark reconciles the annotation
@@ -112,9 +103,6 @@ class _FakeCanvas:
                 sync_marks_for_atom=CanvasMarkSceneService(self).sync_marks_for_atom,
             ),
             handle_overlay_service=SimpleNamespace(clear_handles=self.clear_handles),
-            curved_arrow_path_service=SimpleNamespace(
-                set_curved_arrow_path=self.record_set_curved_arrow_path
-            ),
         )
         self.render_context.decorations = (
             self.services.scene_decoration.scene_decoration_build_service
@@ -174,26 +162,6 @@ class _FakeCanvas:
     def record_set_mark_center(self, item, center: QPointF) -> None:
         self.mark_centers[item] = QPointF(center)
         item.setPos(center)
-
-    def record_build_arrow_item(
-        self, start: QPointF, end: QPointF, kind: str, mirrored: bool = False
-    ) -> QGraphicsPathItem:
-        assert mirrored is False
-        item = QGraphicsPathItem(QPainterPath())
-        self.built_arrow_calls.append((QPointF(start), QPointF(end), kind, item))
-        return item
-
-    def record_set_curved_arrow_path(
-        self,
-        item: QGraphicsPathItem,
-        start: QPointF,
-        end: QPointF,
-        control: QPointF,
-        double: bool,
-    ) -> None:
-        self.curved_arrow_path_calls.append(
-            (item, QPointF(start), QPointF(end), QPointF(control), double)
-        )
 
     def record_build_ts_bracket_item(self, rect, bracket_kind) -> QGraphicsPathItem:
         item = QGraphicsPathItem(QPainterPath())
@@ -496,8 +464,9 @@ class SceneItemControllerTest(unittest.TestCase):
     def test_restore_scene_item_registers_arrow_ts_bracket_and_orbital_items(
         self,
     ) -> None:
-        curved = QGraphicsPathItem(QPainterPath())
-        curved.setData(0, "curved_double")
+        curved = self.canvas.render_context.arrows.build_arrow_item(
+            QPointF(), QPointF(40, 0), "curved_double"
+        )
         ts_bracket = QGraphicsPathItem(QPainterPath())
         ts_bracket.setData(0, "ts_bracket")
         orbital = QGraphicsItemGroup()
@@ -569,8 +538,9 @@ class SceneItemControllerTest(unittest.TestCase):
         free_mark = QGraphicsTextItem("free")
         free_mark.setData(0, "mark")
         free_mark.setData(1, {"atom_id": None})
-        curved = QGraphicsPathItem(QPainterPath())
-        curved.setData(0, "curved_single")
+        curved = self.canvas.render_context.arrows.build_arrow_item(
+            QPointF(), QPointF(40, 0), "curved_single"
+        )
         ts_bracket = QGraphicsPathItem(QPainterPath())
         ts_bracket.setData(0, "ts_bracket")
         orbital = QGraphicsItemGroup()
@@ -657,8 +627,10 @@ class SceneItemControllerTest(unittest.TestCase):
         self.assertAlmostEqual(self.canvas.mark_centers[mark].y(), 18.0)
         self.assertIsNotNone(arrow)
         self.assertIn(arrow, self.canvas.arrow_items)
-        self.assertEqual(len(self.canvas.built_arrow_calls), 1)
-        self.assertEqual(len(self.canvas.curved_arrow_path_calls), 1)
+        self.assertEqual(
+            self.canvas.render_context.arrows.record(arrow).control, (4.0, 9.0)
+        )
+        self.assertFalse(arrow.path().isEmpty())
         self.assertIsNotNone(ts_bracket)
         self.assertIn(ts_bracket, self.canvas.ts_bracket_items)
         self.assertEqual(len(self.canvas.built_ts_bracket_rects), 1)
@@ -677,11 +649,10 @@ class SceneItemControllerTest(unittest.TestCase):
                 {"mark_kind": "plus", "atom_id": 99, "dx": 1.0, "dy": 2.0}
             )
         )
-        self.assertIsNone(
+        with self.assertRaisesRegex(ValueError, "Invalid arrow"):
             self.controller.restore_arrow_from_state(
                 {"kind": "curved_double", "start": (1.0, 2.0)}
             )
-        )
         self.assertIsNone(
             self.controller.restore_ts_bracket_from_state({"left": 1.0, "top": 2.0})
         )
@@ -713,9 +684,10 @@ class SceneItemControllerTest(unittest.TestCase):
         invalid_ring = self.controller.create_scene_item_from_state(
             {"kind": "ring", "points": [(0.0, 0.0), (1.0, 1.0)]}
         )
-        invalid_arrow = self.controller.create_scene_item_from_state(
-            {"kind": "arrow", "start": (0.0, 0.0)}
-        )
+        with self.assertRaisesRegex(ValueError, "Invalid arrow"):
+            self.controller.create_scene_item_from_state(
+                {"kind": "arrow", "start": (0.0, 0.0)}
+            )
         invalid_mark = self.controller.create_scene_item_from_state(
             {"kind": "mark", "mark_kind": "missing", "atom_id": 3, "dx": 2.0, "dy": 1.0}
         )
@@ -732,7 +704,6 @@ class SceneItemControllerTest(unittest.TestCase):
         self.assertEqual(self.canvas.built_mark_kinds[:2], ["plus", "plus"])
         self.assertIsNone(unknown)
         self.assertIsNone(invalid_ring)
-        self.assertIsNone(invalid_arrow)
         self.assertIsNone(invalid_mark)
         self.assertIsNone(invalid_orbital)
 
@@ -751,8 +722,9 @@ class SceneItemControllerTest(unittest.TestCase):
     def test_remove_scene_item_cleans_note_selection_and_handle_targets(self) -> None:
         note = QGraphicsTextItem("Label")
         note.setData(0, "note")
-        curved = QGraphicsPathItem(QPainterPath())
-        curved.setData(0, "curved_single")
+        curved = self.canvas.render_context.arrows.build_arrow_item(
+            QPointF(), QPointF(40, 0), "curved_single"
+        )
 
         self.canvas.scene().addItem(note)
         self.canvas.note_items.append(note)
@@ -792,8 +764,9 @@ class SceneItemControllerTest(unittest.TestCase):
         note = QGraphicsTextItem("Loose")
         note.setData(0, "note")
         self.canvas.scene().addItem(note)
-        curved = QGraphicsPathItem(QPainterPath())
-        curved.setData(0, "curved_single")
+        curved = self.canvas.render_context.arrows.build_arrow_item(
+            QPointF(), QPointF(40, 0), "curved_single"
+        )
         self.canvas.scene().addItem(curved)
         ts_bracket = QGraphicsPathItem(QPainterPath())
         ts_bracket.setData(0, "ts_bracket")

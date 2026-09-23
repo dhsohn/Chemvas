@@ -1,12 +1,21 @@
 from __future__ import annotations
 
 import math
+from dataclasses import replace
 from typing import TYPE_CHECKING
+from weakref import finalize
 
 from PyQt6.QtCore import QPointF, Qt
 from PyQt6.QtGui import QBrush, QColor, QFont, QPainterPath
 
-from chemvas.domain.document import ARC_KIND_SWEEPS, VALID_ARC_KINDS, VALID_LINE_KINDS
+from chemvas.domain.document import (
+    ARC_KIND_SWEEPS,
+    VALID_ARC_KINDS,
+    VALID_CURVED_ARROW_KINDS,
+    VALID_LINE_KINDS,
+    Arrow,
+    arrow_from_state,
+)
 from chemvas.features.annotations import arrow_label_html, arrow_label_normal
 from chemvas.features.rendering import arc_midpoint, arc_points, wavy_line_points
 from chemvas.features.selection import default_curved_control
@@ -14,16 +23,26 @@ from chemvas.ui.graphics_items import (
     ArrowLabelItem,
     ArrowPathItem,
 )
+from chemvas.ui.scene_record_ids import new_scene_record_id
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
+    from PyQt6.QtWidgets import QGraphicsPathItem
+
+    from chemvas.ui.canvas_scene_items_state import CanvasArrowState
     from chemvas.ui.scene_render_context import SceneRenderContext
 
 # Role of the child text items that carry an arrow's labels. Hit testing maps
 # the role back to the parent arrow, and export collects it so the label
 # widens the figure bounds.
 ARROW_LABEL_ROLE = "arrow_label"
+ARROW_ID_ROLE = 3
+
+
+def _discard_arrow_record(state: CanvasArrowState, record_id: int) -> None:
+    # Rollback can replace the mapping. Retain the owner, not the old mapping.
+    state.records.pop(record_id, None)
 
 
 class CanvasArrowBuildService:
@@ -39,11 +58,85 @@ class CanvasArrowBuildService:
         self.context.scene.addItem(item)
         return item
 
-    def set_curved_arrow_path(self, item, start, end, control, double: bool) -> None:
+    def record(self, item: QGraphicsPathItem) -> Arrow:
+        record = self.context.state.arrow_state.records.get(item.data(ARROW_ID_ROLE))
+        if record is None:
+            raise RuntimeError("arrow item has no record; its state cannot be read")
+        return record
+
+    def discard_record(self, item: QGraphicsPathItem) -> None:
+        self.context.state.arrow_state.records.pop(item.data(ARROW_ID_ROLE), None)
+
+    def set_record(self, item: QGraphicsPathItem, record: Arrow) -> None:
+        """The sole mutation path for document arrows, including their paint."""
+        if record.kind in VALID_CURVED_ARROW_KINDS and record.control is None:
+            control = default_curved_control(
+                QPointF(*record.start), QPointF(*record.end)
+            )
+            record = replace(
+                record,
+                control=(control.x(), control.y()),
+                double=record.kind == "curved_double",
+            )
+        elif record.kind not in VALID_CURVED_ARROW_KINDS and record.control is not None:
+            record = replace(record, control=None)
+        state = self.context.state.arrow_state
+        record_id = item.data(ARROW_ID_ROLE)
+        if record_id is None:
+            record_id = new_scene_record_id()
+            item.setData(ARROW_ID_ROLE, record_id)
+            finalize(item, _discard_arrow_record, state, record_id)
+        previous = state.records.get(record_id)
+        state.records[record_id] = record
+        try:
+            self.render_record(item, record)
+        except Exception:
+            if previous is None:
+                state.records.pop(record_id, None)
+            else:
+                state.records[record_id] = previous
+            raise
+
+    def create_from_state(self, state: Mapping[str, object]) -> ArrowPathItem:
+        item = ArrowPathItem()
+        self.set_record(item, arrow_from_state(state))
+        return item
+
+    def render_record(self, item: QGraphicsPathItem, record: Arrow) -> None:
+        start, end = QPointF(*record.start), QPointF(*record.end)
+        rebuilt = self._build_arrow_graphics(start, end, record.kind, record.mirrored)
+        if record.kind in VALID_CURVED_ARROW_KINDS and record.control is not None:
+            rebuilt.setPath(
+                self.build_curved_arrow_path(
+                    start, end, QPointF(*record.control), record.double
+                )
+            )
         item.setPos(0.0, 0.0)
-        item.setPath(self.build_curved_arrow_path(start, end, control, double))
+        item.setPath(rebuilt.path())
+        pen = rebuilt.pen()
+        if record.color is not None:
+            pen.setColor(QColor(record.color))
+        item.setPen(pen)
+        item.setBrush(rebuilt.brush())
+        item.setData(0, record.kind)
+        self.render_labels(item)
 
     def build_arrow_item(
+        self, start: QPointF, end: QPointF, kind: str, mirrored: bool = False
+    ):
+        item = ArrowPathItem()
+        self.set_record(
+            item,
+            Arrow(
+                kind="arrow" if kind == "reaction" else kind,
+                start=(start.x(), start.y()),
+                end=(end.x(), end.y()),
+                mirrored=mirrored,
+            ),
+        )
+        return item
+
+    def _build_arrow_graphics(
         self, start: QPointF, end: QPointF, kind: str, mirrored: bool = False
     ):
         if kind in VALID_LINE_KINDS:
@@ -80,7 +173,6 @@ class CanvasArrowBuildService:
         item = ArrowPathItem(path)
         item.setPen(self.arrow_pen())
         item.setBrush(QBrush(Qt.BrushStyle.NoBrush))
-        item.setData(2, {"start": start, "end": end, "control": None, "double": False})
         return item
 
     def build_double_head_arrow(self, start: QPointF, end: QPointF):
@@ -92,7 +184,6 @@ class CanvasArrowBuildService:
         item = ArrowPathItem(path)
         item.setPen(self.arrow_pen())
         item.setBrush(QBrush(Qt.BrushStyle.NoBrush))
-        item.setData(2, {"start": start, "end": end, "control": None, "double": False})
         return item
 
     def build_dotted_arrow(self, start: QPointF, end: QPointF):
@@ -103,7 +194,6 @@ class CanvasArrowBuildService:
         item = ArrowPathItem(path)
         item.setPen(self.arrow_pen(dotted=True))
         item.setBrush(QBrush(Qt.BrushStyle.NoBrush))
-        item.setData(2, {"start": start, "end": end, "control": None, "double": False})
         return item
 
     def build_arc_arrow(self, start: QPointF, end: QPointF, kind: str):
@@ -123,7 +213,6 @@ class CanvasArrowBuildService:
         item = ArrowPathItem(path)
         item.setPen(self.arrow_pen())
         item.setBrush(QBrush(Qt.BrushStyle.NoBrush))
-        item.setData(2, {"start": start, "end": end, "control": None, "double": False})
         return item
 
     def build_line_item(self, start: QPointF, end: QPointF, kind: str):
@@ -150,7 +239,6 @@ class CanvasArrowBuildService:
         else:
             item.setPen(self.arrow_pen(dotted=kind == "line_dashed"))
         item.setBrush(QBrush(Qt.BrushStyle.NoBrush))
-        item.setData(2, {"start": start, "end": end, "control": None, "double": False})
         return item
 
     def build_curved_arrow(self, start: QPointF, end: QPointF, double: bool):
@@ -158,9 +246,6 @@ class CanvasArrowBuildService:
         item = ArrowPathItem(self.build_curved_arrow_path(start, end, control, double))
         item.setPen(self.arrow_pen())
         item.setBrush(QBrush(Qt.BrushStyle.NoBrush))
-        item.setData(
-            2, {"start": start, "end": end, "control": control, "double": double}
-        )
         return item
 
     def build_curved_arrow_path(
@@ -195,7 +280,6 @@ class CanvasArrowBuildService:
         item = ArrowPathItem(path)
         item.setPen(self.arrow_pen())
         item.setBrush(QBrush(Qt.BrushStyle.NoBrush))
-        item.setData(2, {"start": start, "end": end, "control": None, "double": False})
         return item
 
     def build_equilibrium_item(
@@ -236,10 +320,6 @@ class CanvasArrowBuildService:
         item = ArrowPathItem(path)
         item.setPen(self.arrow_pen())
         item.setBrush(QBrush(Qt.BrushStyle.NoBrush))
-        data = {"start": start, "end": end, "control": None, "double": False}
-        if mirrored:
-            data["mirrored"] = True
-        item.setData(2, data)
         return item
 
     @staticmethod
@@ -253,29 +333,21 @@ class CanvasArrowBuildService:
             QPointF(mid_x + (end.x() - mid_x) * 0.5, mid_y + (end.y() - mid_y) * 0.5),
         )
 
-    def apply_arrow_labels(self, item, labels: Mapping[str, str] | None) -> None:
-        """Replace the label children of ``item`` from ``labels``.
-
-        Positions come from the arrow's scene-coordinate ``start``/``end``
-        (and ``control`` for a curved arrow) already stored in ``data(2)``,
-        so callers set that data first. Children are parented to the arrow
-        and therefore follow every later move.
-        """
+    def render_labels(self, item: QGraphicsPathItem) -> None:
+        """Draw label children from the record and current document typography."""
+        record = self.record(item)
         for child in list(item.childItems()):
             if child.data(0) == ARROW_LABEL_ROLE:
                 child.setParentItem(None)
                 scene = child.scene()
                 if scene is not None:
                     scene.removeItem(child)
-        if not labels:
+        if not record.labels:
             return
-        data = item.data(2) or {}
-        start = data.get("start")
-        end = data.get("end")
-        if not isinstance(start, QPointF) or not isinstance(end, QPointF):
-            return
-        control = data.get("control")
-        kind = str(item.data(0) or "")
+        labels = dict(record.labels)
+        start, end = QPointF(*record.start), QPointF(*record.end)
+        control = None if record.control is None else QPointF(*record.control)
+        kind = record.kind
         if isinstance(control, QPointF):
             # Midpoint of the quadratic curve at t = 0.5.
             mid = QPointF(
@@ -321,7 +393,7 @@ class CanvasArrowBuildService:
             child.setData(0, ARROW_LABEL_ROLE)
             child.setData(1, side)
             child.setFont(font)
-            child.setDefaultTextColor(QColor(data.get("color", style.text_color)))
+            child.setDefaultTextColor(QColor(record.color or style.text_color))
             child.setHtml(arrow_label_html(text))
             rect = child.boundingRect()
             # Half of the label box projected onto the normal, so a vertical

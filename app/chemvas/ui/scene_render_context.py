@@ -15,7 +15,7 @@ from chemvas.ui.canvas_atom_graphics_state import CanvasAtomGraphicsState
 from chemvas.ui.canvas_bond_graphics_state import CanvasBondGraphicsState
 from chemvas.ui.canvas_mark_registry import CanvasMarkRegistry
 from chemvas.ui.canvas_rotation_state import CanvasRotationState
-from chemvas.ui.canvas_scene_items_state import CanvasSceneItemsState
+from chemvas.ui.canvas_scene_items_state import CanvasArrowState, CanvasSceneItemsState
 from chemvas.ui.canvas_shape_state import CanvasShapeState
 from chemvas.ui.canvas_text_style_state import CanvasTextStyleState
 from chemvas.ui.canvas_tool_settings_state import CanvasToolSettingsState
@@ -75,6 +75,7 @@ class SceneRenderState:
         default_factory=CanvasSceneItemsState
     )
     shape_state: CanvasShapeState = field(default_factory=CanvasShapeState)
+    arrow_state: CanvasArrowState = field(default_factory=CanvasArrowState)
     ts_bracket_state: CanvasTSBracketState = field(default_factory=CanvasTSBracketState)
     text_style_state: CanvasTextStyleState = field(default_factory=CanvasTextStyleState)
     tool_settings_state: CanvasToolSettingsState = field(

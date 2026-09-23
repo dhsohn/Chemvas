@@ -423,10 +423,10 @@ def test_omitted_curve_control_retains_native_geometry_after_roundtrip(
         expected = CanvasArrowBuildService(
             attach_scene_render_context(canvas)
         ).build_arrow_item(QPointF(0, 0), QPointF(60, 0), kind)
-        control = expected.data(2)["control"]
+        control = canvas.render_context.arrows.record(expected).control
         for _ in range(2):
             saved = snapshot_canvas_state_for(canvas)
-            assert saved["arrows"][0]["control"] == (control.x(), control.y())
+            assert saved["arrows"][0]["control"] == control
             assert saved["arrows"][0]["double"] is (kind == "curved_double")
             assert arrow_items_for(canvas)[0].path() == expected.path()
             restore_canvas_state_for(canvas, saved)

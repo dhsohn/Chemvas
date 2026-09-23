@@ -30,7 +30,7 @@ from chemvas.ui.main_window_ports import (
     services_for_window,
 )
 from chemvas.ui.scene_decoration_access import add_arrow_for
-from chemvas.ui.scene_item_state_serialization import arrow_state_dict
+from chemvas.ui.scene_item_state_serialization import arrow_state_dict_for
 from chemvas.ui.sheet_setup_access import sheet_rect_for
 
 
@@ -136,7 +136,7 @@ class GridSnapCanvasTest(unittest.TestCase):
         self._drag(QPointF(-37.0, 3.0), QPointF(24.0, -6.0))
 
         (item,) = arrow_items_for(self.canvas)
-        state = arrow_state_dict(item)
+        state = arrow_state_dict_for(self.canvas, item)
         self.assertEqual(state["start"], (-40.0, 0.0))
         self.assertEqual(state["end"], (20.0, -10.0))
 
@@ -152,7 +152,7 @@ class GridSnapCanvasTest(unittest.TestCase):
             active_handles_for(self.canvas)[1], QPointF(63.0, 24.0)
         )
 
-        self.assertEqual(arrow_state_dict(item)["end"], (60.0, 20.0))
+        self.assertEqual(arrow_state_dict_for(self.canvas, item)["end"], (60.0, 20.0))
 
     def test_a_click_still_refuses_an_arrow_and_places_a_level(self) -> None:
         # The press point is snapped, so a click must compare snapped to
@@ -168,7 +168,7 @@ class GridSnapCanvasTest(unittest.TestCase):
         tool_mode.set_line_kind("line_bold")
         self._click(QPointF(-133.0, 47.0))
         (level,) = arrow_items_for(self.canvas)
-        state = arrow_state_dict(level)
+        state = arrow_state_dict_for(self.canvas, level)
         self.assertEqual(state["start"], (-130.0, 50.0))
         self.assertEqual(state["end"], (-90.0, 50.0))
 
@@ -181,7 +181,7 @@ class GridSnapCanvasTest(unittest.TestCase):
         self._drag(QPointF(-83.0, -37.0), QPointF(-81.0, -35.0))
 
         (item,) = arrow_items_for(self.canvas)
-        state = arrow_state_dict(item)
+        state = arrow_state_dict_for(self.canvas, item)
         self.assertEqual(state["start"], (-80.0, -40.0))
         self.assertEqual(state["end"], (-40.0, -40.0))
 
@@ -208,7 +208,7 @@ class GridSnapCanvasTest(unittest.TestCase):
         QTest.qWait(10)
 
         (item,) = arrow_items_for(self.canvas)
-        state = arrow_state_dict(item)
+        state = arrow_state_dict_for(self.canvas, item)
         angle = math.degrees(
             math.atan2(
                 state["end"][1] - state["start"][1],
@@ -291,7 +291,9 @@ class GridSnapCanvasTest(unittest.TestCase):
             active_handles_for(self.canvas)[0], QPointF(203.0, 7.0)
         )
 
-        self.assertEqual(arrow_state_dict(item)["start"], (200.0, 10.0))
+        self.assertEqual(
+            arrow_state_dict_for(self.canvas, item)["start"], (200.0, 10.0)
+        )
 
     def _paint_background(self, *, scale: float) -> QPixmap:
         pixmap = QPixmap(120, 120)

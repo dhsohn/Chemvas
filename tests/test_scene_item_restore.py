@@ -120,11 +120,13 @@ class SceneItemRestoreTest(unittest.TestCase):
 
         self.assertIsNotNone(item)
         self.assertIn(item, arrow_items_for(active_canvas_for_window(self.window)))
-        data = item.data(2) or {}
-        self.assertEqual((data["start"].x(), data["start"].y()), state["start"])
-        self.assertEqual((data["end"].x(), data["end"].y()), state["end"])
-        self.assertEqual((data["control"].x(), data["control"].y()), state["control"])
-        self.assertTrue(data["double"])
+        record = active_canvas_for_window(self.window).render_context.arrows.record(
+            item
+        )
+        self.assertEqual(record.start, state["start"])
+        self.assertEqual(record.end, state["end"])
+        self.assertEqual(record.control, state["control"])
+        self.assertTrue(record.double)
 
     def test_create_scene_item_from_state_round_trips_ts_bracket(self) -> None:
         state = {

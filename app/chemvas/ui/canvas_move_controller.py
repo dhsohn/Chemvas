@@ -26,6 +26,7 @@ from chemvas.ui.canvas_scene_items_state import ring_items_for
 from chemvas.ui.handle_state import active_handles_for, handle_target_for
 from chemvas.ui.mark_item_access import mark_center_for
 from chemvas.ui.renderer_style_access import bond_length_px_for
+from chemvas.ui.scene_render_access import scene_render_context_for
 from chemvas.ui.selection_state import selection_for
 from chemvas.ui.shape_record_access import (
     require_shape_record_for,
@@ -37,9 +38,8 @@ from chemvas.ui.ts_bracket_record_access import (
     set_ts_bracket_record_for,
 )
 
-# Every arrow kind the document schema knows, plus the annotation items that
-# move by a plain moveBy with their stored geometry patched afterwards.
-_MOVE_BY_ITEM_KINDS = VALID_ARROW_KINDS | frozenset(
+# Annotation items whose geometry follows their Qt translation.
+_MOVE_BY_ITEM_KINDS = frozenset(
     {
         "orbital",
         "note",
@@ -126,6 +126,20 @@ class CanvasMoveController:
                     require_ts_bracket_record_for(self.canvas, item), dx, dy
                 ),
             )
+        elif kind in VALID_ARROW_KINDS:
+            arrows = scene_render_context_for(self.canvas).arrows
+            record = arrows.record(item)
+            arrows.set_record(
+                item,
+                replace(
+                    record,
+                    start=(record.start[0] + dx, record.start[1] + dy),
+                    end=(record.end[0] + dx, record.end[1] + dy),
+                    control=None
+                    if record.control is None
+                    else (record.control[0] + dx, record.control[1] + dy),
+                ),
+            )
         elif kind in _MOVE_BY_ITEM_KINDS:
             item.moveBy(dx, dy)
             if kind == "orbital":
@@ -134,17 +148,6 @@ class CanvasMoveController:
                 if isinstance(center, QPointF):
                     data["center"] = QPointF(center.x() + dx, center.y() + dy)
                     item.setData(1, data)
-            else:
-                data = item.data(2) or {}
-                start = data.get("start")
-                end = data.get("end")
-                control = data.get("control")
-                if isinstance(start, QPointF) and isinstance(end, QPointF):
-                    data["start"] = QPointF(start.x() + dx, start.y() + dy)
-                    data["end"] = QPointF(end.x() + dx, end.y() + dy)
-                if isinstance(control, QPointF):
-                    data["control"] = QPointF(control.x() + dx, control.y() + dy)
-                item.setData(2, data)
         self._shift_active_handles_for(item, dx, dy)
         if update_selection:
             selection_for(self.canvas).update_selection_outline()

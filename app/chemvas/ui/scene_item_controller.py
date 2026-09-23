@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from chemvas.domain.document import VALID_ARROW_KINDS, arrow_from_state
 from chemvas.features.annotations import DEFAULT_BRACKET_KIND
 from chemvas.ui.canvas_model_access import atoms_for
-from chemvas.ui.handle_mutation_access import set_curved_arrow_path_for
 from chemvas.ui.mark_item_access import (
     apply_mark_color_for,
     build_mark_item_for,
@@ -12,21 +12,15 @@ from chemvas.ui.mark_item_access import (
 )
 from chemvas.ui.note_item_access import apply_note_style_for, new_note_item_for
 from chemvas.ui.renderer_style_access import (
-    bond_color_for,
     bond_length_px_for,
     ring_fill_brush_for,
 )
 from chemvas.ui.scene_decoration_build_access import (
-    apply_arrow_labels_for,
-    build_arrow_item_for,
     build_orbital_items_for,
     build_shape_item_for,
     build_ts_bracket_item_for,
 )
 from chemvas.ui.scene_item_lifecycle_service import SceneItemLifecycleService
-from chemvas.ui.scene_item_restore import (
-    create_arrow_item_from_state as create_arrow_item_from_state_helper,
-)
 from chemvas.ui.scene_item_restore import (
     create_mark_item_from_state as create_mark_item_from_state_helper,
 )
@@ -51,6 +45,7 @@ from chemvas.ui.scene_item_restore import (
 from chemvas.ui.scene_item_state import (
     apply_scene_item_state as apply_scene_item_state_helper,
 )
+from chemvas.ui.scene_render_access import scene_render_context_for
 from chemvas.ui.shape_record_access import record_shape_state
 from chemvas.ui.ts_bracket_record_access import record_ts_bracket_state
 
@@ -90,15 +85,6 @@ class SceneItemController:
 
     def _set_mark_center(self, item, center) -> None:
         set_mark_center_for(self.canvas, item, center)
-
-    def _build_arrow_item(self, start, end, kind: str, mirrored: bool = False):
-        return build_arrow_item_for(self.canvas, start, end, kind, mirrored)
-
-    def _set_curved_arrow_path(self, item, start, end, control, double: bool) -> None:
-        set_curved_arrow_path_for(self.canvas, item, start, end, control, double)
-
-    def _set_arrow_labels(self, item, labels) -> None:
-        apply_arrow_labels_for(self.canvas, item, labels)
 
     def _build_ts_bracket_item(self, rect, bracket_kind: str = DEFAULT_BRACKET_KIND):
         return build_ts_bracket_item_for(self.canvas, rect, bracket_kind)
@@ -140,11 +126,8 @@ class SceneItemController:
         return item
 
     def restore_arrow_from_state(self, arrow_state: dict):
-        item = create_arrow_item_from_state_helper(
-            arrow_state,
-            build_arrow_item=self._build_arrow_item,
-            set_curved_arrow_path=self._set_curved_arrow_path,
-            set_arrow_labels=self._set_arrow_labels,
+        item = scene_render_context_for(self.canvas).arrows.create_from_state(
+            arrow_state
         )
         self.attach_scene_item(item)
         return item
@@ -190,13 +173,13 @@ class SceneItemController:
             set_mark_center=self._set_mark_center,
             set_mark_color=self._set_mark_color,
             ring_fill_brush_getter=self._ring_fill_brush,
-            build_arrow_item=self._build_arrow_item,
-            set_curved_arrow_path=self._set_curved_arrow_path,
+            create_arrow_item=scene_render_context_for(
+                self.canvas
+            ).arrows.create_from_state,
             build_ts_bracket_item=self._build_ts_bracket_item,
             build_shape_item=self._build_shape_item,
             build_orbital_items=self._build_orbital_items,
             orbital_base_handle_dist=self._orbital_base_handle_dist(),
-            set_arrow_labels=self._set_arrow_labels,
         )
         if item is not None:
             # Paste and undo re-creation arrive here: the record is the state
@@ -231,6 +214,11 @@ class SceneItemController:
         if state.get("kind") == "ts_bracket" and item.data(0) == "ts_bracket":
             record_ts_bracket_state(self.canvas, item, state)
             return
+        if state.get("kind") in VALID_ARROW_KINDS:
+            scene_render_context_for(self.canvas).arrows.set_record(
+                item, arrow_from_state(state)
+            )
+            return
         apply_scene_item_state_helper(
             item,
             state,
@@ -239,11 +227,7 @@ class SceneItemController:
             mark_center_setter=self._set_mark_center,
             mark_color_setter=self._set_mark_color,
             ring_fill_brush_getter=self._ring_fill_brush,
-            bond_color=bond_color_for(self.canvas),
-            build_arrow_item=self._build_arrow_item,
-            set_curved_arrow_path=self._set_curved_arrow_path,
             orbital_base_handle_dist=self._orbital_base_handle_dist(),
-            set_arrow_labels=self._set_arrow_labels,
         )
 
 

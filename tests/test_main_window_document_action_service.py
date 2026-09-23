@@ -753,7 +753,7 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
     ) -> None:
         canvas = active_canvas_for_window(self.window)
         add_bond_between_points_for(canvas, QPointF(-20, 0), QPointF(20, 0))
-        arrow = add_arrow_for(canvas, QPointF(0, 50), QPointF(80, 50), "forward")
+        arrow = add_arrow_for(canvas, QPointF(0, 50), QPointF(80, 50), "arrow")
         canvas.scene().clearSelection()
         before = snapshot_canvas_state_for(canvas)
         self.window.statusBar().showMessage("Keep this feedback")

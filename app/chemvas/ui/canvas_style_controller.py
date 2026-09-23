@@ -13,7 +13,7 @@ from chemvas.ui.canvas_text_style_state import set_text_style_for, text_style_st
 from chemvas.ui.history_commands import SetAnnotationStyleCommand
 from chemvas.ui.note_item_access import set_committed_note_html_for
 from chemvas.ui.renderer_style_access import atom_color_for, font_size_pt_for
-from chemvas.ui.scene_decoration_build_access import apply_arrow_labels_for
+from chemvas.ui.scene_render_access import scene_render_context_for
 from chemvas.ui.selection_state import selection_for, selection_state_for
 from chemvas.ui.transactions.document import document_transaction
 
@@ -107,11 +107,12 @@ class CanvasStyleController:
             return False
         changed = False
         for item in arrow_items_for(canvas):
-            labels = (item.data(2) or {}).get("labels")
+            arrows = scene_render_context_for(canvas).arrows
+            labels = arrows.record(item).labels
             if labels:
                 # Use the same layout and explicit arrow-color precedence as
                 # document restore, without rebuilding the arrow's own path.
-                apply_arrow_labels_for(canvas, item, labels)
+                arrows.render_labels(item)
                 changed = True
         return changed
 
