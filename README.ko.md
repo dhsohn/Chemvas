@@ -11,20 +11,20 @@
 
 <p align="center"><a href="https://github.com/dhsohn/Chemvas/blob/main/README.md">English</a> · <b>한국어</b></p>
 
-Chemvas는 연구자와 자동화 스크립트가 함께 편집할 수 있는 **오픈소스 화학 구조 드로잉 애플리케이션**입니다. 데스크톱 캔버스에서 직관적으로 그리고, 전용 CLI를 통해 헤드리스로 편집하거나 검사하며, 작업 결과물을 언제든 다시 열어 자유롭게 편집할 수 있습니다.
+Chemvas는 직관적인 반응식 작성과 출판용 그림 제작을 위한 **오픈소스 화학 구조 드로잉 애플리케이션**입니다. 데스크톱 캔버스에서 화학 구조를 스케치하고, SMILES를 삽입하고, 반응식을 정렬하여 논문 규격에 맞는 고품질 그림으로 내보낼 수 있습니다.
 
 ## 주요 기능
 
 - **직관적인 캔버스 드로잉**: 화학 구조 스케치, SMILES 즉시 삽입, 반응 화살표 및 조건 라벨링, 정렬 기능을 제공하며 자동 저장과 세션 복구를 지원합니다.
-- **헤드리스 자동화 및 CLI**: GUI 창을 띄우지 않고도 원자 ID 검사, 반응식 배치 검증, 프로그래밍 방식의 패치 적용, 논문 규격 렌더링이 가능합니다.
 - **논문 출판용 고품질 출력**: 논문 컬럼 규격(예: 82 mm, 174 mm)에 맞춰 벡터(SVG, PDF) 및 래스터(PNG, TIFF) 그림을 정확한 물리 크기로 내보낼 수 있습니다.
+- **화학 정보학 및 3D 미리보기**: 분자 물성 확인, 대화형 3D 구조 회전, XYZ 좌표 내보내기 기능을 선택적 RDKit 백엔드를 통해 제공합니다.
 - **신뢰할 수 있는 문서 형식**: 저장된 `.chemvas` 파일은 사람이 읽고 수정할 수 있는 표준 JSON 형식(version 8, schema 1)입니다. 자세한 내용은 [문서 호환성 정책](https://github.com/dhsohn/Chemvas/blob/main/docs/DOCUMENT_COMPATIBILITY.ko.md)을 참고하세요.
 
 ## 설치
 
 **Python 3.12+**가 필요합니다.
 
-SMILES 삽입, 분자 물성 조회, 3D XYZ 출력, 구조 기반 추천, `pack-step` 등 화학 정보학 기능을 사용하려면 RDKit 백엔드를 함께 설치하세요.
+SMILES 삽입, 분자 물성 조회, 3D XYZ 출력 등 화학 정보학 기능을 사용하려면 RDKit 백엔드를 함께 설치하세요:
 
 ```bash
 pip install "chemvas[rdkit]"
@@ -48,22 +48,11 @@ Windows 로컬 빌드 및 패키징은 [패키징 안내](https://github.com/dhs
 
 자세한 튜토리얼과 예제 파일은 [단계별 안내](https://github.com/dhsohn/Chemvas/blob/main/docs/FIRST_SCHEME.ko.md)를 참고하세요.
 
-## 스크립트 및 CLI
-
-터미널에서 직접 문서를 검사하고 렌더링할 수 있습니다:
-
-```bash
-chemvas inspect-document first-scheme.chemvas
-chemvas check-layout first-scheme.chemvas
-chemvas render-document first-scheme.chemvas --output first-scheme.pdf --width-mm 174
-```
-
-다양한 CLI 활용법은 [에이전트 CLI 안내](https://github.com/dhsohn/Chemvas/blob/main/docs/AGENT_CLI.ko.md), [반응 도식 배치](https://github.com/dhsohn/Chemvas/blob/main/docs/SCHEME_LAYOUT.ko.md), [논문 그림 작성 예제](https://github.com/dhsohn/Chemvas/blob/main/docs/PUBLICATION_SCHEMES.ko.md)를 참고하세요.
-
 ## 문서 및 가이드
 
 - [그리기 도구 및 단축키](https://github.com/dhsohn/Chemvas/blob/main/docs/REFERENCE.ko.md) · [화학 입출력](https://github.com/dhsohn/Chemvas/blob/main/docs/REFERENCE.ko.md#화학-입출력) · [이미지 객체](https://github.com/dhsohn/Chemvas/blob/main/docs/IMAGE_OBJECTS.ko.md)
 - [계산 전달 (RDKit)](https://github.com/dhsohn/Chemvas/blob/main/docs/AGENT_CLI.ko.md#계산-상태와-기본-단계): 반응 단계별 성분을 임베딩하여 `machine.json`으로 내보냅니다.
+- [헤드리스 & 에이전트 CLI](https://github.com/dhsohn/Chemvas/blob/main/docs/AGENT_CLI.ko.md) · [반응 도식 배치](https://github.com/dhsohn/Chemvas/blob/main/docs/SCHEME_LAYOUT.ko.md) · [논문 그림 작성 예제](https://github.com/dhsohn/Chemvas/blob/main/docs/PUBLICATION_SCHEMES.ko.md)
 - [예제 모음](https://github.com/dhsohn/Chemvas/tree/main/examples): 샘플 `.chemvas` 문서 (version 8, schema 1).
 - [기여 안내](https://github.com/dhsohn/Chemvas/blob/main/CONTRIBUTING.ko.md) · [아키텍처](https://github.com/dhsohn/Chemvas/blob/main/docs/ARCHITECTURE.ko.md) · [변경 이력](https://github.com/dhsohn/Chemvas/blob/main/CHANGELOG.md) · [릴리스](https://github.com/dhsohn/Chemvas/blob/main/RELEASING.ko.md) · [라이선스 (MIT)](https://github.com/dhsohn/Chemvas/blob/main/LICENSE)
 

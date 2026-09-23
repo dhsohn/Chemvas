@@ -11,20 +11,20 @@
 
 <p align="center"><b>English</b> · <a href="https://github.com/dhsohn/Chemvas/blob/main/README.ko.md">한국어</a></p>
 
-Chemvas is an **open-source chemical drawing application** where chemists and automation scripts share the same editable canvas. Draw intuitively on the desktop canvas, automate edits or inspections through a dedicated CLI, and reopen the results anytime without losing editability.
+Chemvas is an **open-source chemical drawing application** designed for desktop drafting and publication-quality figure preparation. Draw structures and reaction schemes intuitively on the canvas, insert SMILES, align components, and export figures with exact journal dimensions.
 
 ## Features
 
 - **Intuitive Canvas Drawing**: Sketch structures, insert SMILES, label reaction arrows, and align molecules with real-time feedback, autosave, and session recovery.
-- **Headless Automation & CLI**: Inspect atom IDs, validate layouts, apply programmatic patches, and render publication figures without launching the GUI.
 - **Publication-Ready Figure Export**: Export vector graphics (SVG, PDF) and raster images (PNG, TIFF) at exact publication column widths (e.g., 82 mm, 174 mm) while retaining full canvas editability.
+- **Chemistry & 3D Preview**: Inspect molecular properties, view interactive 3D conformations, and export XYZ coordinates with optional RDKit integration.
 - **Reliable Document Format**: Saved `.chemvas` documents remain fully editable JSON files (version 8, schema 1). See our [document compatibility policy](https://github.com/dhsohn/Chemvas/blob/main/docs/DOCUMENT_COMPATIBILITY.md).
 
 ## Install
 
 Requires **Python 3.12+**.
 
-To use chemical informatics features (SMILES insertion, molecular properties, 3D XYZ export, structure-based suggestions, and `pack-step`), install with the optional RDKit backend:
+To use chemical informatics features (SMILES insertion, molecular properties, 3D XYZ export, and structure suggestions), install with the optional RDKit backend:
 
 ```bash
 pip install "chemvas[rdkit]"
@@ -48,22 +48,11 @@ For local Windows packaging, see the [Windows packaging guide](https://github.co
 
 For detailed instructions and example files, see the [step-by-step guide](https://github.com/dhsohn/Chemvas/blob/main/docs/FIRST_SCHEME.md).
 
-## Automation & CLI
-
-Inspect, validate, and render documents directly from the command line:
-
-```bash
-chemvas inspect-document first-scheme.chemvas
-chemvas check-layout first-scheme.chemvas
-chemvas render-document first-scheme.chemvas --output first-scheme.pdf --width-mm 174
-```
-
-For more CLI workflows, see the [Agent CLI guide](https://github.com/dhsohn/Chemvas/blob/main/docs/AGENT_CLI.md), [Scheme Layout guide](https://github.com/dhsohn/Chemvas/blob/main/docs/SCHEME_LAYOUT.md), and [Publication Schemes guide](https://github.com/dhsohn/Chemvas/blob/main/docs/PUBLICATION_SCHEMES.md).
-
 ## Documentation
 
 - [Drawing Tools & Shortcuts](https://github.com/dhsohn/Chemvas/blob/main/docs/REFERENCE.md) · [Chemistry I/O](https://github.com/dhsohn/Chemvas/blob/main/docs/REFERENCE.md#chemistry-io) · [Image Objects](https://github.com/dhsohn/Chemvas/blob/main/docs/IMAGE_OBJECTS.md)
 - [Calculation Handoff (RDKit)](https://github.com/dhsohn/Chemvas/blob/main/docs/AGENT_CLI.md#calculation-states-and-elementary-steps): Export reaction steps with embedded components to `machine.json`.
+- [Headless & Agent CLI](https://github.com/dhsohn/Chemvas/blob/main/docs/AGENT_CLI.md) · [Scheme Layout](https://github.com/dhsohn/Chemvas/blob/main/docs/SCHEME_LAYOUT.md) · [Publication Schemes](https://github.com/dhsohn/Chemvas/blob/main/docs/PUBLICATION_SCHEMES.md)
 - [Examples](https://github.com/dhsohn/Chemvas/tree/main/examples): Sample `.chemvas` documents (version 8, schema 1).
 - [Architecture](https://github.com/dhsohn/Chemvas/blob/main/docs/ARCHITECTURE.md) · [Contributing](https://github.com/dhsohn/Chemvas/blob/main/CONTRIBUTING.md) · [Changelog](https://github.com/dhsohn/Chemvas/blob/main/CHANGELOG.md) · [Releasing](https://github.com/dhsohn/Chemvas/blob/main/RELEASING.md) · [License (MIT)](https://github.com/dhsohn/Chemvas/blob/main/LICENSE)
 
