@@ -92,7 +92,7 @@ class MainWindowActiveCanvasUIServiceTest(unittest.TestCase):
         self.status_service.has_zoom_label.return_value = True
         self.context_bar_service = mock.Mock()
         self.action_availability_service = mock.Mock()
-        self.context_page_state_service = mock.Mock()
+        self.tool_state_service = mock.Mock()
         self.tab_refs_for_window = mock.Mock(
             side_effect=lambda window: SimpleNamespace(canvas_tabs=window.canvas_tabs)
         )
@@ -116,7 +116,7 @@ class MainWindowActiveCanvasUIServiceTest(unittest.TestCase):
             status_service=self.status_service,
             context_bar_service=self.context_bar_service,
             action_availability_service=self.action_availability_service,
-            context_page_state_service=self.context_page_state_service,
+            tool_state_service=self.tool_state_service,
             tab_refs_for_window=self.tab_refs_for_window,
             preview_for_window=self.preview_for_window,
             atom_input_for_window=self.atom_input_for_window,
@@ -195,7 +195,7 @@ class MainWindowActiveCanvasUIServiceTest(unittest.TestCase):
     ) -> None:
         self.service.bind_active_canvas(self.window)
         self.status_service.reset_mock()
-        self.context_page_state_service.reset_mock()
+        self.tool_state_service.reset_mock()
         self.context_bar_service.reset_mock()
 
         self.window.canvas_a.runtime_state.history_service.state.change_callback()
@@ -204,7 +204,7 @@ class MainWindowActiveCanvasUIServiceTest(unittest.TestCase):
         self.context_bar_service.reflect_bond_length.assert_called_once_with(
             self.window
         )
-        self.context_page_state_service.sync_tool_actions_from_canvas.assert_not_called()
+        self.tool_state_service.sync_tool_actions_from_canvas.assert_not_called()
         self.status_service.assert_not_called()
         self.assertEqual(self.status_service.method_calls, [])
 
@@ -214,7 +214,7 @@ class MainWindowActiveCanvasUIServiceTest(unittest.TestCase):
         self.window.canvas_tabs.setCurrentWidget(self.window.canvas_b)
         self.service.bind_active_canvas(self.window)
         self.status_service.reset_mock()
-        self.context_page_state_service.reset_mock()
+        self.tool_state_service.reset_mock()
         self.action_availability_service.reset_mock()
         self.window.preview_3d.refresh_selected_from_canvas.reset_mock()
 
@@ -230,7 +230,7 @@ class MainWindowActiveCanvasUIServiceTest(unittest.TestCase):
         self.status_service.update_selection_status_label.assert_called_once_with(
             self.window
         )
-        self.context_page_state_service.sync_tool_actions_from_canvas.assert_called_once_with(
+        self.tool_state_service.sync_tool_actions_from_canvas.assert_called_once_with(
             self.window
         )
         self.context_bar_service.refresh_window.assert_called_once_with(self.window)
@@ -343,7 +343,7 @@ class MainWindowActiveCanvasUIServiceTest(unittest.TestCase):
         )
         self.status_service.update_zoom_label.assert_called_once_with(275)
         self.window.update_zoom_label.assert_not_called()
-        self.context_page_state_service.sync_tool_actions_from_canvas.assert_called_once_with(
+        self.tool_state_service.sync_tool_actions_from_canvas.assert_called_once_with(
             self.window
         )
         self.window.sync_tool_actions_from_canvas.assert_not_called()
@@ -371,7 +371,7 @@ class MainWindowActiveCanvasUIServiceTest(unittest.TestCase):
         self.window.refresh_active_canvas_ui.assert_not_called()
         self.assertEqual(self.window.last_canvas_tab_index, 0)
         self.assertEqual(self.status_service.refresh_status_context.call_count, 2)
-        self.assertEqual(self.context_bar_service.refresh_window.call_count, 2)
+        self.context_bar_service.refresh_window.assert_not_called()
 
     def test_on_canvas_tab_changed_tracks_last_canvas_tab_index_and_refreshes_ui(
         self,
@@ -386,4 +386,4 @@ class MainWindowActiveCanvasUIServiceTest(unittest.TestCase):
         self.status_service.refresh_status_context.assert_called_once_with(
             self.window, update_zoom=False
         )
-        self.context_bar_service.refresh_window.assert_called_once_with(self.window)
+        self.context_bar_service.refresh_window.assert_not_called()

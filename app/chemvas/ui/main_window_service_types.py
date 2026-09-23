@@ -16,9 +16,6 @@ if TYPE_CHECKING:
         MainWindowCanvasDocumentService,
     )
     from chemvas.ui.main_window_context_bar_service import MainWindowContextBarService
-    from chemvas.ui.main_window_context_page_state_service import (
-        MainWindowContextPageStateService,
-    )
     from chemvas.ui.main_window_document_action_service import (
         MainWindowDocumentActionService,
     )
@@ -37,7 +34,6 @@ class MainWindowServices:
     document_action_service: MainWindowDocumentActionService
     tool_action_service: MainWindowToolActionService
     tool_state_service: MainWindowToolStateService
-    context_page_state_service: MainWindowContextPageStateService
     tool_routing_service: MainWindowToolRoutingService
     text_style_service: MainWindowTextStyleService
     canvas_document_service: MainWindowCanvasDocumentService

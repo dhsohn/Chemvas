@@ -71,10 +71,6 @@ def set_atom_input_for_window(window, atom_input) -> None:
     ui_references_for_window(window).set_atom_input(atom_input)
 
 
-def tool_actions_for_window(window):
-    return ui_references_for_window(window).tool_actions
-
-
 def tool_action_for_window(window, action_key: str):
     return ui_references_for_window(window).tool_action_for_key(action_key)
 
@@ -548,7 +544,6 @@ __all__ = [
     "tab_references_for_window",
     "text_history_availability_for_window",
     "tool_action_for_window",
-    "tool_actions_for_window",
     "tool_mode_controller_for_window",
     "ui_references_for_window",
     "undo_action_for_window",

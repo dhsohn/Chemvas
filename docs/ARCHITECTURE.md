@@ -481,6 +481,30 @@ text layout or SVG-font parser is maintained.
 When an operation touches multiple entity types at once (ex: atom creation plus bond creation), CanvasView groups the individual delta commands into a single `CompositeCommand` so the whole operation undoes/redoes atomically.
 
 ## 3D Conversion Constraints
+
+Tool commands and canvas notifications meet at `MainWindowToolStateService`.
+It maps UI choices to one canvas mode operation and reflects the completed
+callback in checked actions, status hints and the context bar. The former
+context-page forwarding service is removed. Widget factories remain separate;
+Ring Fill remains a context-page override of Select. History refreshes still
+reflect restored annotation controls without announcing a new tool.
+
+The preview payload key uses atom-id-anchored relative 2D coordinates (rounded
+to nine decimal places to absorb translation noise), chemistry and effective
+charge/radical annotations. Translation preserves both ready results and an
+in-flight request. Relative layout, wedge/hash and drawn double-bond changes
+invalidate the key; coordinates cannot simply be omitted. Failed conversions
+and pause/clear still invalidate it, allowing retry and fresh selection data.
+
+Each canvas owns one `ValenceWarningCache` as disposable view state. Every
+foreground paint compares the actual chemical inputs, excluding coordinates and
+colour, before reusing its immutable warning set. This key read remains linear
+in atoms and bonds; repeated valence-total construction and classification are
+avoided. The graph index version alone cannot validate element or charge edits.
+Content comparison also handles model replacement, Undo and exact rollback
+without an additional mutation-notification protocol. The cache is neither
+document truth nor part of scene export or recovery snapshots.
+
 - Export scope is limited to chemical graph data. Arrows, bracket annotations, free text, and other scene-only annotations must be ignored when building the export payload.
 - RDKit stays optional. If it is unavailable, the export action should fail with a clear message rather than introducing a hard dependency into app startup.
 - Canvas charge/radical marks should be normalized into per-atom annotations before conversion so formal charge and radical electrons survive into RDKit.

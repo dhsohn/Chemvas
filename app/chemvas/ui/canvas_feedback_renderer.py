@@ -7,7 +7,6 @@ import math
 from PyQt6.QtCore import QPointF, QRectF, Qt
 from PyQt6.QtGui import QColor, QFont, QPainterPath, QPen
 
-from chemvas.features.rendering import overvalent_atom_ids
 from chemvas.shell.palette import PALETTE
 from chemvas.ui.canvas_atom_graphics_state import visible_atom_item_for
 from chemvas.ui.canvas_model_access import model_for
@@ -23,7 +22,7 @@ def draw_canvas_feedback_for(canvas, painter, rect) -> None:
         if tool_settings_state_for(canvas).valence_checking:
             model = model_for(canvas)
             painter.setPen(QPen(QColor(PALETTE["danger_text"]), 1.0))
-            for atom_id in overvalent_atom_ids(model):
+            for atom_id in canvas.runtime_state.valence_warnings.warnings_for(model):
                 atom = model.atoms[atom_id]
                 item = visible_atom_item_for(canvas, atom_id)
                 bounds = (

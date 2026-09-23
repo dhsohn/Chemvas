@@ -9,9 +9,6 @@ from chemvas.bootstrap.main_window_services import build_main_window_services
 from chemvas.ui.main_window_action_availability_service import (
     MainWindowActionAvailabilityService,
 )
-from chemvas.ui.main_window_context_page_state_service import (
-    MainWindowContextPageStateService,
-)
 from chemvas.ui.main_window_ports import (
     active_tool_name_for_window,
     align_selection_for_window,
@@ -32,6 +29,7 @@ from chemvas.ui.main_window_ports import (
     style_controller_for_window,
     tool_mode_controller_for_window,
 )
+from chemvas.ui.main_window_tool_state_service import MainWindowToolStateService
 from tests.runtime_services import canvas_runtime_services
 
 
@@ -198,9 +196,7 @@ def test_build_main_window_services_includes_action_availability_service() -> No
     )
 
 
-def test_build_main_window_services_includes_context_page_state_service() -> None:
+def test_build_main_window_services_includes_tool_state_service() -> None:
     services = build_main_window_services()
 
-    assert isinstance(
-        services.context_page_state_service, MainWindowContextPageStateService
-    )
+    assert isinstance(services.tool_state_service, MainWindowToolStateService)

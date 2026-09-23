@@ -85,6 +85,48 @@ def test_worker_publishes_identifiers_before_entering_3d_build() -> None:
     assert events[1][0][0:6] == events[0][0]
 
 
+def test_translation_keeps_the_actual_in_flight_worker_and_its_result(app):
+    adapter = SlowSceneAdapter()
+    preview = Preview3D(rdkit_adapter=adapter)
+    preview._async_enabled = True
+    try:
+        with (
+            mock.patch("chemvas.ui.preview_3d.RDKitAdapter", return_value=adapter),
+            mock.patch.object(
+                adapter, "compute_identifiers", wraps=adapter.compute_identifiers
+            ) as identifiers,
+            mock.patch.object(
+                adapter,
+                "model_to_3d_scene_result",
+                wraps=adapter.model_to_3d_scene_result,
+            ) as build,
+        ):
+            preview.set_structure(make_model())
+            preview._update_timer.stop()
+            preview._rebuild_scene()
+            wait_until(lambda: adapter.entered.is_set())
+            wait_until(lambda: preview._formula_text == "CH4")
+            request = preview._preview_request_id
+            translated = make_model()
+            translated.atoms[0].x = 123.45
+            translated.atoms[0].y = -321.5
+            preview.set_structure(translated)
+            assert preview._preview_request_id == request
+            assert preview._formula_text == "CH4"
+            assert not preview._update_timer.isActive()
+            adapter.release.set()
+            wait_until(lambda: not preview._preview_jobs)
+            assert preview._scene is not None
+            assert preview._formula_text == "CH4"
+            assert not preview._preview_restart_pending
+            identifiers.assert_called_once()
+            build.assert_called_once()
+    finally:
+        adapter.release.set()
+        preview.close()
+        wait_until(lambda: not preview._preview_jobs)
+
+
 @pytest.mark.parametrize("fail", [False, True])
 def test_real_worker_shows_and_copies_identifiers_while_3d_is_blocked(app, fail):
     adapter = SlowSceneAdapter(fail=fail)
@@ -151,7 +193,7 @@ def test_identifier_progress_rejects_obsolete_requests(app, invalidate):
         assert preview._formula_text == "CH4"
         if invalidate == "new_structure":
             model = make_model()
-            model.atoms[0].x = 20.0
+            model.atoms[0].element = "N"
             preview.set_structure(model)
             preview._update_timer.stop()
             assert preview._formula_text == ""

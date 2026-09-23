@@ -18,9 +18,6 @@ from chemvas.ui.main_window_canvas_document_service import (
 )
 from chemvas.ui.main_window_context_bar_pages import MainWindowContextBarPageBuilder
 from chemvas.ui.main_window_context_bar_service import MainWindowContextBarService
-from chemvas.ui.main_window_context_page_state_service import (
-    MainWindowContextPageStateService,
-)
 from chemvas.ui.main_window_document_action_service import (
     MainWindowDocumentActionService,
 )
@@ -65,7 +62,6 @@ from chemvas.ui.main_window_ports import (
     tab_references_for_window,
     text_history_availability_for_window,
     tool_action_for_window,
-    tool_actions_for_window,
     tool_mode_controller_for_window,
     undo_action_for_window,
     zoom_in_for_window,
@@ -130,23 +126,19 @@ def build_main_window_services() -> MainWindowServices:
         fit_canvas_to_view_for_window=fit_canvas_to_view_for_window,
         set_zoom_percent_for_window=set_zoom_percent_for_window,
     )
+    context_bar_service: MainWindowContextBarService
     tool_state_service = MainWindowToolStateService(
         tool_mode_controller_for_window=tool_mode_controller_for_window,
         active_tool_name_for_window=active_tool_name_for_window,
-        tool_actions_for_window=tool_actions_for_window,
         tool_action_for_window=tool_action_for_window,
         status_service=status_service,
+        refresh_context_bar_for_window=lambda window: (
+            context_bar_service.refresh_window(window)
+        ),
+        clear_context_bar_page_override_for_window=clear_context_bar_page_override_for_window,
+        set_context_bar_page_override_for_window=set_context_bar_page_override_for_window,
     )
-    context_page_state_service: MainWindowContextPageStateService
     document_action_service: MainWindowDocumentActionService
-
-    def activate_bond_style_for_window(window: Any, value: str) -> None:
-        context_page_state_service.set_tool_with_status(
-            window,
-            "bond",
-            reset_bond_style=False,
-        )
-        tool_state_service.set_bond_style(window, value)
 
     def set_bond_length_value_for_window(window: Any, value: Any) -> None:
         controller = resolve_geometry_controller(window)
@@ -196,7 +188,7 @@ def build_main_window_services() -> MainWindowServices:
             insert_controller_for_window=insert_controller_for_window,
             tool_mode_controller_for_window=tool_mode_controller_for_window,
             tool_state_service=tool_state_service,
-            activate_bond_style_for_window=activate_bond_style_for_window,
+            activate_bond_style_for_window=tool_state_service.set_bond_style,
             set_bond_length_value_for_window=set_bond_length_value_for_window,
             bond_length_px_for_window=bond_length_px_for_window,
             apply_color_preset_for_window=apply_color_preset_for_window,
@@ -213,14 +205,7 @@ def build_main_window_services() -> MainWindowServices:
         set_atom_input_for_window=set_atom_input_for_window,
         bond_length_px_for_window=bond_length_px_for_window,
     )
-    context_page_state_service = MainWindowContextPageStateService(
-        tool_state_service=tool_state_service,
-        status_service=status_service,
-        context_bar_service=context_bar_service,
-        clear_context_bar_page_override_for_window=clear_context_bar_page_override_for_window,
-        set_context_bar_page_override_for_window=set_context_bar_page_override_for_window,
-        tool_action_for_window=tool_action_for_window,
-    )
+
     canvas_document_service: MainWindowCanvasDocumentService
 
     def refresh_document_chrome_for_window(
@@ -242,7 +227,7 @@ def build_main_window_services() -> MainWindowServices:
         status_service=status_service,
         context_bar_service=context_bar_service,
         action_availability_service=action_availability_service,
-        context_page_state_service=context_page_state_service,
+        tool_state_service=tool_state_service,
         tab_refs_for_window=tab_references_for_window,
         preview_for_window=preview_for_window,
         atom_input_for_window=atom_input_for_window,
@@ -267,19 +252,14 @@ def build_main_window_services() -> MainWindowServices:
         ),
     )
     tool_routing_service = MainWindowToolRoutingService(
-        tool_mode_controller_for_window=tool_mode_controller_for_window,
         color_mutation_service_for_window=color_mutation_service_for_window,
         color_tool_for_window=color_tool_for_window,
         selected_scene_items_for_window=selected_scene_items_for_window,
         tool_state_service=tool_state_service,
-        context_page_state_service=context_page_state_service,
     )
     tool_action_service = MainWindowToolActionService(
-        tool_mode_controller_for_window=tool_mode_controller_for_window,
         tool_state_service=tool_state_service,
-        context_page_state_service=context_page_state_service,
         icon_factory_for_window=icon_factory_for_window,
-        status_service=status_service,
     )
     panel_service = MainWindowPanelService(
         preview_for_window=preview_for_window,
@@ -303,8 +283,8 @@ def build_main_window_services() -> MainWindowServices:
         # Edit > Rotate... hands the canvas to the Select tool, whose options
         # bar carries the angle input; checking the button alone would leave
         # the canvas in the previous tool.
-        show_rotate_options=lambda window: (
-            context_page_state_service.set_tool_with_status(window, "select")
+        show_rotate_options=lambda window: tool_state_service.set_tool_with_status(
+            window, "select"
         ),
         set_note_font_family=set_note_font_family_for_window,
         open_recent_path=lambda window, path: (
@@ -322,7 +302,6 @@ def build_main_window_services() -> MainWindowServices:
         document_action_service=document_action_service,
         tool_action_service=tool_action_service,
         tool_state_service=tool_state_service,
-        context_page_state_service=context_page_state_service,
         tool_routing_service=tool_routing_service,
         text_style_service=text_style_service,
         canvas_document_service=canvas_document_service,

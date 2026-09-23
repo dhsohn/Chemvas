@@ -13,20 +13,11 @@ class MainWindowToolActionService:
     def __init__(
         self,
         *,
-        tool_mode_controller_for_window,
         tool_state_service,
-        context_page_state_service,
         icon_factory_for_window,
-        status_service,
     ) -> None:
-        self._tool_mode_controller_for_window = tool_mode_controller_for_window
         self._tool_state = tool_state_service
-        self._context_page_state = context_page_state_service
         self._icon_factory_for_window = icon_factory_for_window
-        self._status = status_service
-
-    def _tool_mode_controller(self, window):
-        return self._tool_mode_controller_for_window(window)
 
     def build_checkable_tool_action(
         self,
@@ -48,16 +39,9 @@ class MainWindowToolActionService:
         tool_group.addAction(action)
         return key, action
 
-    def activate_bond_style_tool(self, window, value: str) -> None:
-        self._context_page_state.set_tool_with_status(
-            window, "bond", reset_bond_style=False
-        )
-        self._tool_state.set_bond_style(window, value)
-
     def activate_ring_fill_tool(self, window) -> None:
-        self._context_page_state.set_tool_with_status(window, "select")
-        self._context_page_state.show_context_page(window, "ring_fill")
-        self._status.refresh_status_context(window)
+        self._tool_state.set_tool_with_status(window, "select")
+        self._tool_state.show_context_page(window, "ring_fill")
 
     def build_tool_actions(self, window, tool_group) -> dict[str, QAction]:
         actions = dict(
@@ -68,8 +52,8 @@ class MainWindowToolActionService:
                 label=label,
                 icon_method=icon_method,
                 tooltip=tooltip,
-                callback=lambda tool=tool: (
-                    self._context_page_state.set_tool_with_status(window, tool)
+                callback=lambda tool=tool: self._tool_state.set_tool_with_status(
+                    window, tool
                 ),
             )
             for key, label, tool, icon_method, tooltip in TOOL_ACTION_SPECS
@@ -92,7 +76,7 @@ class MainWindowToolActionService:
                     label=label,
                     icon_method=icon_method,
                     tooltip=tooltip,
-                    callback=lambda value=value: self.activate_bond_style_tool(
+                    callback=lambda value=value: self._tool_state.set_bond_style(
                         window, value
                     ),
                 )

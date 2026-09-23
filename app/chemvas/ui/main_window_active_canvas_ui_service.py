@@ -21,7 +21,7 @@ class MainWindowActiveCanvasUIService:
         status_service,
         context_bar_service,
         action_availability_service,
-        context_page_state_service,
+        tool_state_service,
         tab_refs_for_window,
         preview_for_window,
         atom_input_for_window,
@@ -35,7 +35,7 @@ class MainWindowActiveCanvasUIService:
         self._status = status_service
         self._context_bar = context_bar_service
         self._action_availability = action_availability_service
-        self._context_page_state = context_page_state_service
+        self._tool_state = tool_state_service
         self._tab_refs_for_window = tab_refs_for_window
         self._preview_for_window = preview_for_window
         self._atom_input_for_window = atom_input_for_window
@@ -55,8 +55,8 @@ class MainWindowActiveCanvasUIService:
             selection_info_callback=lambda _formula, _mw: self.handle_selection_info(
                 window
             ),
-            tool_change_callback=lambda: (
-                self._context_page_state.sync_tool_actions_from_canvas(window)
+            tool_change_callback=lambda: self._tool_state.sync_tool_actions_from_canvas(
+                window
             ),
             zoom_callback=self._status.update_zoom_label,
             history_change_callback=lambda: self._on_history_change(window),
@@ -110,7 +110,7 @@ class MainWindowActiveCanvasUIService:
             atom_input.blockSignals(False)
         if self._status.has_zoom_label():
             self._status.update_zoom_label(self.current_zoom_percent(window))
-        self._context_page_state.sync_tool_actions_from_canvas(window)
+        self._tool_state.sync_tool_actions_from_canvas(window)
         self._refresh_selection_derived_ui(window)
 
     def _refresh_selection_derived_ui(self, window) -> None:
@@ -132,7 +132,6 @@ class MainWindowActiveCanvasUIService:
     def on_canvas_tab_changed(self, window, index: int) -> None:
         self._on_canvas_tab_changed(window, index)
         self._status.refresh_status_context(window, update_zoom=False)
-        self._context_bar.refresh_window(window)
 
     def _on_canvas_tab_changed(self, window, index: int) -> None:
         if index < 0:
