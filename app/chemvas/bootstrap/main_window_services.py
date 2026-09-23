@@ -223,12 +223,16 @@ def build_main_window_services() -> MainWindowServices:
     )
     canvas_document_service: MainWindowCanvasDocumentService
 
-    def refresh_document_chrome_for_window(window: Any) -> None:
+    def refresh_document_chrome_for_window(
+        window: Any, *, edited_note: object | None = None
+    ) -> None:
         # Late-bound: canvas_document_service is assigned just below. Refreshes
         # the active tab's unsaved marker + the window-modified title after edits.
         canvas = active_canvas_or_none(window)
         if canvas is not None:
-            canvas_document_service.refresh_tab_title(window, canvas)
+            canvas_document_service.refresh_tab_title(
+                window, canvas, edited_note=edited_note
+            )
 
     active_canvas_ui_service = MainWindowActiveCanvasUIService(
         tool_mode_controller_for_window=tool_mode_controller_for_window,

@@ -3,6 +3,7 @@ import unittest
 from types import SimpleNamespace
 from unittest import mock
 
+from chemvas.ui.canvas_note_controller import CanvasNoteController
 from tests.runtime_services import canvas_runtime_services
 from tests.runtime_state import canvas_runtime_state
 
@@ -21,12 +22,10 @@ from PyQt6.QtWidgets import (
 from chemvas.shell.toolbar_buttons import ArrowButton
 from chemvas.ui.canvas_atom_graphics_state import CanvasAtomGraphicsState
 from chemvas.ui.canvas_color_mutation_service import CanvasColorMutationService
-from chemvas.ui.canvas_note_controller import CanvasNoteController
 from chemvas.ui.canvas_ring_fill_scene_service import CanvasRingFillSceneService
 from chemvas.ui.canvas_scene_items_state import CanvasSceneItemsState
 from chemvas.ui.canvas_text_style_state import CanvasTextStyleState
 from chemvas.ui.handle_mutation_service import HandleMutationService
-from chemvas.ui.history_operations import CanvasHistoryOperations
 from chemvas.ui.main_window_panel_toolbar import MainWindowPanelToolbarCallbacks
 from chemvas.ui.note_item_access import (
     set_committed_note_html_for,
@@ -63,7 +62,7 @@ def _color_service_for(canvas) -> CanvasColorMutationService:
     )
     return CanvasColorMutationService(
         canvas,
-        history_operations=CanvasHistoryOperations(canvas),
+        note_controller=CanvasNoteController(canvas),
         graph_service=graph_service,
     )
 

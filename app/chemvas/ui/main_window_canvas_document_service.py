@@ -7,8 +7,10 @@ from chemvas.ui.canvas_document_metadata_state import (
     document_display_name_for,
     document_file_path_for,
     document_is_dirty_for,
+    invalidate_note_chrome_for,
     mark_document_clean_for,
     mark_document_dirty_for,
+    note_chrome_dirty_for,
     set_document_display_name_for,
     set_document_file_path_for,
     validate_document_file_path,
@@ -214,9 +216,17 @@ class MainWindowCanvasDocumentService:
     def display_name(self, canvas: CanvasView) -> str:
         return document_display_name_for(canvas)
 
-    def refresh_tab_title(self, window, canvas: CanvasView) -> None:
+    def refresh_tab_title(
+        self, window, canvas: CanvasView, *, edited_note=None
+    ) -> None:
         tab_refs = self._tab_refs_for_window(window)
-        dirty = self.is_dirty(canvas)
+        if edited_note is None:
+            invalidate_note_chrome_for(canvas)
+            dirty = self.is_dirty(canvas)
+        else:
+            dirty = note_chrome_dirty_for(
+                canvas, edited_note, snapshot_canvas_state_for
+            )
         index = tab_refs.active_canvas_tab_index(canvas)
         if index >= 0:
             tab_refs.canvas_tabs.setTabText(

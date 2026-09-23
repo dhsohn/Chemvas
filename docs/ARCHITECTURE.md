@@ -194,6 +194,19 @@ end state is decided.
   Its existing annotation-style history command carries exact settings and affected
   note HTML/font/color/default text-option payloads; `DocumentSavepoint` remains
   the rollback owner.
+- `CanvasNoteController` owns pending-note detection and the committed editing
+  baseline for both focus-out and color actions. `NoteTextState` is a value
+  payload shared by annotation-style commands and the document savepoint; it
+  includes cursor selection, interaction flags and committed text/HTML.
+  Color batches collect value commands and publish one history action inside
+  `document_transaction`, including newly created ring fills. The color service
+  has no temporary history service or separate rollback implementation.
+- Live note typing uses a bounded unsaved-marker cache: one full snapshot per
+  editing session, then the existing canonical serializer for the edited note.
+  Save, general document refresh, history publication and tab binding invalidate
+  it. The saved baseline contains separate non-note and ordered note fingerprints.
+  The cache is only a UI hint: save/close decisions and recovery collection keep
+  the exact full-document digest, including direct mutations without callbacks.
 - Selection nudge/alignment and Select/Move drag commands record exact before/after geometry,
   including existing depth coordinates and dependent marks/ring fills. Replay
   restores atoms before their dependent scene items, then refreshes the selection

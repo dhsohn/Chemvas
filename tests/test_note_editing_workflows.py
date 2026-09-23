@@ -380,12 +380,16 @@ def test_dirty_observer_failure_does_not_lose_editor_text_or_history(drawing, tm
     callback_state = callback_state_for(canvas)
     original = callback_state.document_change
 
-    def fail_refresh():
+    refresh_calls = []
+
+    def fail_refresh(**kwargs):
+        refresh_calls.append(kwargs)
         raise RuntimeError("chrome refresh failed")
 
     callback_state.document_change = fail_refresh
     try:
         QTest.keyClicks(canvas, " changed")
+        assert refresh_calls and refresh_calls[0]["edited_note"] is note
         assert note.toPlainText() == "alpha beta gamma changed"
         _key(canvas, Qt.Key.Key_Z, Qt.KeyboardModifier.ControlModifier)
         assert note.toPlainText() == "alpha beta gamma"

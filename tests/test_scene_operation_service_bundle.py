@@ -78,5 +78,5 @@ def test_build_scene_operation_services_wires_explicit_collaborators(
     assert services.canvas_color_mutation_service.kwargs == {
         "graph_service": graph_service,
         "history_service": history_service,
-        "history_operations": history_operations,
+        "note_controller": note_controller,
     }

@@ -299,21 +299,22 @@ def _snapshot_ring_fills(canvas) -> list[dict]:
 
 
 def _snapshot_notes(canvas, items: list) -> list[dict]:
-    notes: list[dict] = []
-    for item in items:
-        note_state = note_state_dict_for(canvas, item)
-        snapshot = {
-            "text": note_state["text"],
-            "x": note_state["x"],
-            "y": note_state["y"],
-        }
-        if "rotation" in note_state:
-            snapshot["rotation"] = note_state["rotation"]
-        html = note_state.get("html")
-        if isinstance(html, str):
-            snapshot["html"] = html
-        notes.append(snapshot)
-    return notes
+    return [snapshot_note_document_state(canvas, item) for item in items]
+
+
+def snapshot_note_document_state(canvas, item) -> dict:
+    note_state = note_state_dict_for(canvas, item)
+    snapshot = {
+        "text": note_state["text"],
+        "x": note_state["x"],
+        "y": note_state["y"],
+    }
+    if "rotation" in note_state:
+        snapshot["rotation"] = note_state["rotation"]
+    html = note_state.get("html")
+    if isinstance(html, str):
+        snapshot["html"] = html
+    return snapshot
 
 
 def _snapshot_marks(canvas, items: list) -> list[dict]:

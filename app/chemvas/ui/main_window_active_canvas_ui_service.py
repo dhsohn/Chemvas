@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from PyQt6.QtCore import QTimer
 
+from chemvas.ui.canvas_document_metadata_state import invalidate_note_chrome_for
 from chemvas.ui.canvas_view import CanvasView
 from chemvas.ui.main_window_canvas_logic import bind_active_canvas_callbacks
 from chemvas.ui.rdkit_adapter_access import rdkit_adapter_for
@@ -59,8 +60,8 @@ class MainWindowActiveCanvasUIService:
             ),
             zoom_callback=self._status.update_zoom_label,
             history_change_callback=lambda: self._on_history_change(window),
-            document_change_callback=lambda: self._refresh_document_chrome_for_window(
-                window
+            document_change_callback=lambda **kwargs: (
+                self._refresh_document_chrome_for_window(window, **kwargs)
             ),
             error_callback=lambda message: self._status.show_error_message(
                 window, message, timeout=6000
@@ -68,6 +69,7 @@ class MainWindowActiveCanvasUIService:
         )
 
     def _on_history_change(self, window) -> None:
+        invalidate_note_chrome_for(self._active_canvas_for_window(window))
         self._action_availability.update_action_availability(window)
         # Undo/redo can change the bond length without re-showing the bond page,
         # so keep its spin box in sync to avoid writing a stale value later.

@@ -50,15 +50,15 @@ def test_recovered_dirty_state_does_not_hash_until_marked_clean(monkeypatch):
     assert digest.call_count == 0
 
     mark_document_clean_for(canvas, state)
-    assert digest.call_count == 1
+    saved_calls = digest.call_count
     assert not document_is_dirty_for(canvas, state)
-    assert digest.call_count == 2
+    assert digest.call_count == saved_calls + 1
     state["notes"][0]["text"] = "Edited after save"
     assert document_is_dirty_for(canvas, state)
-    assert digest.call_count == 3
+    assert digest.call_count == saved_calls + 2
     state["notes"][0]["text"] = "Still unsaved"
     assert not document_is_dirty_for(canvas, state)
-    assert digest.call_count == 4
+    assert digest.call_count == saved_calls + 3
 
 
 def test_uninitialized_clean_baseline_still_does_not_hash(monkeypatch):

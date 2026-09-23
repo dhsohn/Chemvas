@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from chemvas.ui.canvas_callback_state import callback_state_for
+from chemvas.ui.canvas_document_metadata_state import invalidate_note_chrome_for
 from chemvas.ui.canvas_service_ports import canvas_window_document_session_service
 from chemvas.ui.selection_info_state import selection_info_state_for
 
@@ -59,14 +60,20 @@ def set_history_change_callback_for(canvas, callback) -> None:
 
 
 def set_document_change_callback_for(canvas, callback) -> None:
+    invalidate_note_chrome_for(canvas)
     callback_state_for(canvas).document_change = callback
 
 
-def notify_document_change_for(canvas) -> None:
+def notify_document_change_for(canvas, *, edited_note=None) -> None:
+    if edited_note is None:
+        invalidate_note_chrome_for(canvas)
     callback = callback_state_for(canvas).document_change
     if callback is not None:
         try:
-            callback()
+            if edited_note is None:
+                callback()
+            else:
+                callback(edited_note=edited_note)
         except Exception:
             # Chrome is an observer, not an authority over editor/history state.
             return

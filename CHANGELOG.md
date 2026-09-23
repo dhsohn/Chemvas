@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- Reapplying a note's existing color preserves Redo, including notes restored
+  with leading or trailing whitespace. Pending typing and color now share one
+  history action and the document's transaction rollback.
+- Typing in a note updates the unsaved marker without serializing embedded
+  images on every keystroke. Saving, closing and recovery retain exact full
+  document comparisons.
 - Deferred Ring Fill presets are cancelled when the active canvas changes or
   the window is destroyed, preventing a swatch from changing another document.
 

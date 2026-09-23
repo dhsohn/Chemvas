@@ -5,6 +5,7 @@ from types import SimpleNamespace
 from unittest import mock
 
 from chemvas.core.history import HistoryCommand
+from chemvas.ui.canvas_note_controller import CanvasNoteController
 from chemvas.ui.history_operations import CanvasHistoryOperations
 from chemvas.ui.selection_state import selection_for
 from tests.runtime_services import canvas_runtime_services
@@ -57,7 +58,6 @@ from chemvas.ui.canvas_group_state import CanvasGroupState
 from chemvas.ui.canvas_history_service import CanvasHistoryService
 from chemvas.ui.canvas_history_state import CanvasHistoryState, history_state_for
 from chemvas.ui.canvas_mark_registry import CanvasMarkRegistry
-from chemvas.ui.canvas_note_controller import CanvasNoteController
 from chemvas.ui.canvas_ring_fill_scene_access import (
     create_ring_fill_item_for,
     update_ring_fills_for_atoms_for,
@@ -184,7 +184,7 @@ def _color_service_for(view, *, graph_service=None):
         )
     return CanvasColorMutationService(
         view,
-        history_operations=CanvasHistoryOperations(view),
+        note_controller=CanvasNoteController(view),
         graph_service=graph_service,
         history_service=getattr(
             getattr(view, "services", None), "history_service", None
@@ -1769,20 +1769,19 @@ class CanvasViewAdditionalTest(unittest.TestCase):
         set_atom_dots_for(recurse_view, {2: object()})
         set_bond_items_for(recurse_view, {3: [object()]})
         recurse_service = _color_service_for(recurse_view, graph_service=graph_service)
-        recurse_service.apply_color_to_item = mock.Mock()
-        recurse_service._apply_ring_structure_color(ring_item, QColor("#336699"))
-        graph_service.bond_sets_for_atoms.assert_called_once_with({1, 2})
         self.assertEqual(
-            recurse_service.apply_color_to_item.call_args_list,
-            [
-                mock.call(atom_items_for(recurse_view)[1], QColor("#336699")),
-                mock.call(atom_dots_for(recurse_view)[2], QColor("#336699")),
-                mock.call(bond_items_for(recurse_view)[3][0], QColor("#336699")),
-            ],
+            recurse_service._resolve_ring_structure_targets(ring_item),
+            (
+                atom_items_for(recurse_view)[1],
+                atom_dots_for(recurse_view)[2],
+                bond_items_for(recurse_view)[3][0],
+            ),
         )
+        graph_service.bond_sets_for_atoms.assert_called_once_with({1, 2})
 
         fill_pushes = []
         fill_view = SimpleNamespace(
+            scene=lambda: scene,
             services=canvas_runtime_services(
                 history_service=SimpleNamespace(push=fill_pushes.append)
             ),
