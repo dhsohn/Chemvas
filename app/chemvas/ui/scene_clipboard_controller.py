@@ -1,27 +1,54 @@
 from __future__ import annotations
 
+from functools import partial
+from typing import TYPE_CHECKING
+
 from PyQt6.QtWidgets import QApplication, QGraphicsItem, QMessageBox
 
+from chemvas.domain.document import (
+    validate_image_collection_budget,
+    validate_image_states,
+)
+from chemvas.domain.transactions import add_recovery_error_note
+from chemvas.features.selection import unproject_point_3d
+from chemvas.ui.atom_coords_access import atom_coords_3d_for
 from chemvas.ui.atom_label_access import add_or_update_atom_label
 from chemvas.ui.canvas_format_access import (
     clipboard_selection_mime_for,
     clipboard_selection_version_for,
 )
+from chemvas.ui.canvas_group_state import register_group_for
 from chemvas.ui.canvas_mark_registry import mark_registry_for
 from chemvas.ui.canvas_model_access import (
+    atom_for_id,
+    bond_count_for,
     bonds_for,
+    next_atom_id_for,
     set_atom_annotation_for,
 )
+from chemvas.ui.canvas_rotation_state import rotation_state_for
 from chemvas.ui.canvas_scene_items_state import ring_items_for
-from chemvas.ui.history_canvas_access import apply_atom_color_for_history
+from chemvas.ui.canvas_service_ports import history_service_for_access
+from chemvas.ui.canvas_smiles_input_state import last_smiles_input_for
+from chemvas.ui.history_canvas_access import (
+    apply_atom_color_for_history,
+    capture_history_transaction_for_history,
+    release_history_transaction_for_history,
+    restore_history_transaction_for_history,
+)
+from chemvas.ui.history_commands import GroupSceneItemsCommand
+from chemvas.ui.history_recording_access import record_additions_for
 from chemvas.ui.image_actions import image_bytes_from_mime, insert_image_bytes
+from chemvas.ui.insert_commit_rollback import rollback_insert_mutation
+from chemvas.ui.renderer_style_access import bond_length_px_for
 from chemvas.ui.scene_clipboard_access import (
     build_selection_clipboard_payload_for_canvas,
+    clipboard_paste_count_for,
+    clipboard_paste_source_json_for,
+    set_clipboard_paste_count_for,
+    set_clipboard_paste_source_json_for,
 )
-from chemvas.ui.scene_clipboard_copy_io import (
-    CLIPBOARD_PDF_MIME,
-    CLIPBOARD_SVG_MIME,
-)
+from chemvas.ui.scene_clipboard_copy_io import CLIPBOARD_PDF_MIME, CLIPBOARD_SVG_MIME
 from chemvas.ui.scene_clipboard_copy_service import (
     copy_selection_to_clipboard_for_canvas,
 )
@@ -29,25 +56,34 @@ from chemvas.ui.scene_clipboard_logic import (
     clipboard_payload_candidates,
     decode_clipboard_selection_payload,
 )
-from chemvas.ui.scene_clipboard_paste_service import (
-    SceneClipboardPasteCallbacks,
-    apply_pasted_perspective_for_canvas,
-    paste_selection_from_clipboard_for_canvas,
+from chemvas.ui.scene_clipboard_selection import (
+    capture_clipboard_selection_snapshot_for_canvas,
+    restore_clipboard_selection_snapshot_for_canvas,
+    select_pasted_content_for_canvas,
 )
-from chemvas.ui.scene_clipboard_selection import select_pasted_content_for_canvas
+from chemvas.ui.scene_clipboard_transaction_logic import (
+    build_clipboard_paste_plan,
+    clipboard_paste_offset,
+    translated_scene_item_state,
+)
 from chemvas.ui.scene_item_access import (
     create_scene_item_from_state as create_scene_item_from_state_helper,
 )
+from chemvas.ui.scene_item_access import remove_scene_item
 from chemvas.ui.scene_item_state import (
     atom_state_dict_for,
     bond_state_dict,
     scene_item_state_for,
 )
+from chemvas.ui.scene_paste_apply_logic import apply_paste_payload
 from chemvas.ui.selection_queries import (
     selected_ids_for,
     selected_items_for_transform_for,
 )
 from chemvas.ui.structure_mutation_access import add_atom_for, add_bond_for
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 
 class SceneClipboardController:
@@ -63,75 +99,20 @@ class SceneClipboardController:
         self.bond_mutation_service = bond_mutation_service
         self.marks = mark_registry_for(canvas)
 
-    @property
-    def _bonds(self):
-        return bonds_for(self.canvas)
-
-    def _bond_mutation_service(self):
-        if self.bond_mutation_service is None:
-            msg = "SceneClipboardController requires bond_mutation_service"
-            raise RuntimeError(msg)
-        return self.bond_mutation_service
-
-    def _add_atom(self, element: str, x: float, y: float) -> int:
-        return add_atom_for(self.canvas, element, x, y)
-
-    def _add_bond(self, a_id: int, b_id: int, order: int = 1) -> int:
-        return add_bond_for(self.canvas, a_id, b_id, order)
-
-    def _add_or_update_atom_label(self, atom_id: int, element: str, **kwargs) -> None:
-        add_or_update_atom_label(self.canvas, atom_id, element, **kwargs)
-
-    def _apply_atom_color(self, atom_id: int, color) -> None:
-        apply_atom_color_for_history(self.canvas, atom_id, color)
-
-    def _set_atom_annotation(
-        self, atom_id: int, annotation: dict[str, int] | None
-    ) -> None:
-        set_atom_annotation_for(self.canvas, atom_id, annotation)
-
     def _restore_bond(self, bond_id: int, bond_state: dict) -> None:
-        self._bond_mutation_service().restore_bond_from_state(bond_id, bond_state)
-
-    def _atom_state(self, atom_id: int) -> dict:
-        return atom_state_dict_for(self.canvas, atom_id)
-
-    def _bond_state(self, bond) -> dict:
-        return bond_state_dict(bond)
-
-    def _scene_item_state(self, item) -> dict:
-        return scene_item_state_for(self.canvas, item)
-
-    def _create_scene_item_from_state(self, state: dict):
-        return create_scene_item_from_state_helper(self.canvas, state)
-
-    def _paste_callbacks(self) -> SceneClipboardPasteCallbacks:
-        return SceneClipboardPasteCallbacks(
-            add_atom=self._add_atom,
-            apply_atom_color=self._apply_atom_color,
-            set_atom_annotation=self._set_atom_annotation,
-            add_or_update_atom_label=self._add_or_update_atom_label,
-            add_bond=self._add_bond,
-            restore_bond_from_state=self._restore_bond,
-            create_scene_item_from_state=self._create_scene_item_from_state,
-            select_pasted_content=self.select_pasted_content,
-            # The anchor the callback protocol carries is unused: the target
-            # frame's anchor comes from the canvas rotation state.
-            apply_perspective=lambda coords, center, _anchor: (
-                apply_pasted_perspective_for_canvas(self.canvas, coords, center)
-            ),
-        )
+        if self.bond_mutation_service is None:
+            raise RuntimeError(
+                "SceneClipboardController requires bond_mutation_service"
+            )
+        self.bond_mutation_service.restore_bond_from_state(bond_id, bond_state)
 
     def _clear_note_selection(self) -> None:
         if self.selection_controller is not None:
             self.selection_controller.clear_note_selection()
 
-    def _select_note(self, item, *, additive: bool = False) -> None:
-        if self.selection_controller is not None:
-            self.selection_controller.select_note(item, additive=additive)
-
     def _select_pasted_note(self, item) -> None:
-        self._select_note(item, additive=True)
+        if self.selection_controller is not None:
+            self.selection_controller.select_note(item, additive=True)
 
     def _clipboard(self):
         clipboard = QApplication.clipboard()
@@ -148,12 +129,12 @@ class SceneClipboardController:
             selected_items=selected_items,
             explicit_atom_ids=explicit_atom_ids,
             selected_bond_ids=bond_ids,
-            bonds=self._bonds,
+            bonds=bonds_for(self.canvas),
             ring_items=ring_items_for(self.canvas),
             marks_by_atom=self.marks.by_atom,
-            atom_state_getter=self._atom_state,
-            bond_state_getter=self._bond_state,
-            scene_item_state_getter=self._scene_item_state,
+            atom_state_getter=partial(atom_state_dict_for, self.canvas),
+            bond_state_getter=bond_state_dict,
+            scene_item_state_getter=partial(scene_item_state_for, self.canvas),
             version=clipboard_selection_version_for(self.canvas),
         )
 
@@ -217,16 +198,218 @@ class SceneClipboardController:
             else self.clipboard_selection_payload
         )
         try:
-            return paste_selection_from_clipboard_for_canvas(
-                self.canvas,
-                payload_provider=provider,
-                callbacks=self._paste_callbacks(),
-            )
+            return self._paste_payload(provider)
         except ValueError as error:
             if payload_provider is not None:
                 raise
             QMessageBox.warning(self.canvas, "Paste", str(error))
             return False
+
+    def _paste_payload(
+        self, payload_provider: Callable[[], tuple[dict | None, str | None]]
+    ) -> bool:
+        canvas = self.canvas
+        payload, payload_json = payload_provider()
+        previous_source_json = clipboard_paste_source_json_for(canvas)
+        previous_paste_count = clipboard_paste_count_for(canvas)
+        plan = build_clipboard_paste_plan(
+            payload=payload,
+            payload_json=payload_json,
+            previous_source_json=previous_source_json,
+            previous_paste_count=previous_paste_count,
+            bond_length_px=bond_length_px_for(canvas),
+            clipboard_paste_offset=clipboard_paste_offset,
+            before_next_atom_id=next_atom_id_for(canvas),
+            before_bond_count=bond_count_for(canvas),
+            before_smiles_input=last_smiles_input_for(canvas),
+        )
+        if plan is None:
+            return False
+        # Only advance the paste offset bookkeeping once we know the payload is
+        # actually applicable; an empty/invalid payload must not perturb the
+        # cascade offset for the next real paste.
+        if not plan.has_payload_content():
+            return False
+        incoming_images = [
+            state
+            for state in plan.scene_items
+            if isinstance(state, dict) and state.get("kind") == "image"
+        ]
+        if incoming_images:
+            from chemvas.ui.canvas_document_state import document_item_lists_for
+
+            existing_images = [
+                item.image_state() for item in document_item_lists_for(canvas)["images"]
+            ]
+            validate_image_collection_budget([*existing_images, *incoming_images])
+            validate_image_states(incoming_images)
+        before_smiles_input = (
+            plan.before_smiles_input
+            if isinstance(plan.before_smiles_input, str)
+            else None
+        )
+        selection_snapshot = capture_clipboard_selection_snapshot_for_canvas(canvas)
+        tracked_scene_items: list[object] = []
+
+        def create_tracked_scene_item_from_state(state: dict) -> object:
+            item = create_scene_item_from_state_helper(canvas, state)
+            if item is not None:
+                tracked_scene_items.append(item)
+            return item
+
+        exact_transaction = capture_history_transaction_for_history(
+            canvas,
+            history_service=history_service_for_access(canvas),
+        )
+        try:
+            result = apply_paste_payload(
+                atoms=plan.atoms,
+                bonds=plan.bonds,
+                rings=plan.rings,
+                marks=plan.marks,
+                scene_items=plan.scene_items,
+                perspective=plan.perspective,
+                dx=plan.dx,
+                dy=plan.dy,
+                add_atom=partial(add_atom_for, canvas),
+                apply_atom_color=partial(apply_atom_color_for_history, canvas),
+                set_atom_annotation=partial(set_atom_annotation_for, canvas),
+                add_or_update_atom_label=partial(add_or_update_atom_label, canvas),
+                add_bond=partial(add_bond_for, canvas),
+                restore_bond_from_state=self._restore_bond,
+                translated_scene_item_state=translated_scene_item_state,
+                create_scene_item_from_state=create_tracked_scene_item_from_state,
+                apply_perspective=self._apply_pasted_perspective,
+            )
+
+            if not result.has_changes():
+                release_history_transaction_for_history(canvas, exact_transaction)
+                return False
+
+            added_scene_items = [
+                item
+                for item in result.added_scene_items
+                if isinstance(item, QGraphicsItem)
+            ]
+            added_groups = []
+            for group in plan.groups:
+                atom_ids = {result.atom_id_map[atom_id] for atom_id in group["atoms"]}
+                items = [result.scene_item_map[tuple(ref)] for ref in group["items"]]
+                group_id = register_group_for(canvas, atom_ids, items)
+                added_groups.append(
+                    GroupSceneItemsCommand(atom_ids, items, group_id=group_id)
+                )
+            self.select_pasted_content(result.new_atom_ids, added_scene_items)
+            record_additions_for(
+                canvas,
+                plan.before_next_atom_id,
+                plan.before_bond_count,
+                before_smiles_input,
+                added_scene_items=added_scene_items,
+                added_groups=added_groups,
+            )
+            set_clipboard_paste_source_json_for(canvas, plan.paste_source_json)
+            set_clipboard_paste_count_for(canvas, plan.paste_count)
+            release_history_transaction_for_history(canvas, exact_transaction)
+        except Exception as error:
+            for item in reversed(tracked_scene_items):
+                try:
+                    remove_scene_item(canvas, item)
+                except Exception as cleanup_error:
+                    add_recovery_error_note(
+                        error,
+                        cleanup_error,
+                        phase="removing the pasted scene items",
+                    )
+            try:
+                rollback_insert_mutation(
+                    canvas,
+                    before_next_atom_id=plan.before_next_atom_id,
+                    before_bond_count=plan.before_bond_count,
+                    before_smiles_input=before_smiles_input,
+                    exact_transaction=None,
+                    original_error=error,
+                )
+            except Exception as cleanup_error:
+                add_recovery_error_note(
+                    error,
+                    cleanup_error,
+                    phase="rolling back the paste mutation",
+                )
+            try:
+                restore_clipboard_selection_snapshot_for_canvas(
+                    canvas, selection_snapshot
+                )
+            except Exception as cleanup_error:
+                add_recovery_error_note(
+                    error,
+                    cleanup_error,
+                    phase="restoring the selection from before the paste",
+                )
+            try:
+                set_clipboard_paste_source_json_for(canvas, previous_source_json)
+            except Exception as cleanup_error:
+                add_recovery_error_note(
+                    error,
+                    cleanup_error,
+                    phase="restoring the clipboard paste source",
+                )
+            try:
+                set_clipboard_paste_count_for(canvas, previous_paste_count)
+            except Exception as cleanup_error:
+                add_recovery_error_note(
+                    error,
+                    cleanup_error,
+                    phase="restoring the clipboard paste count",
+                )
+            try:
+                restore_result = restore_history_transaction_for_history(
+                    canvas,
+                    exact_transaction,
+                )
+                for exact_restore_error in restore_result.errors:
+                    add_recovery_error_note(
+                        error,
+                        exact_restore_error,
+                        phase="restoring the exact paste transaction",
+                    )
+            except Exception as cleanup_error:
+                add_recovery_error_note(
+                    error,
+                    cleanup_error,
+                    phase="restoring the exact paste transaction",
+                )
+            raise
+
+        return True
+
+    def _apply_pasted_perspective(
+        self,
+        coords_3d: dict[int, tuple[float, float, float]],
+        projection_center_3d: tuple[float, float, float] | None,
+        _source_anchor: tuple[float, float] | None,
+    ) -> None:
+        # The pure payload callback supplies the source anchor. Reprojection
+        # uses the target canvas anchor, as it did before the transfer.
+        canvas = self.canvas
+        rotation = rotation_state_for(canvas)
+        target_center = rotation.projection_center_3d
+        target_anchor = rotation.projection_anchor_2d
+        stored_coords = atom_coords_3d_for(canvas)
+        for atom_id, coords in coords_3d.items():
+            atom = atom_for_id(canvas, atom_id)
+            if atom is None:
+                continue
+            target_z = coords[2]
+            if target_center is not None and projection_center_3d is not None:
+                target_z = target_center[2] + (coords[2] - projection_center_3d[2])
+            stored_coords[atom_id] = unproject_point_3d(
+                (atom.x, atom.y),
+                target_z,
+                bond_length_px=bond_length_px_for(canvas),
+                center_3d=target_center,
+                anchor_2d=target_anchor,
+            )
 
 
 __all__ = [

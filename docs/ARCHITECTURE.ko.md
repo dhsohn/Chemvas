@@ -150,6 +150,13 @@ Figure export의 사전 검사와 렌더링은 동기 요청 하나 안에서 fe
 
 ## 트랜잭션과 복구 소유권
 
+- `SceneClipboardController`가 붙여넣기의 계획, 이미지 용량 검사, 변경, 그룹 선택,
+  history 기록과 위치 오프셋 갱신을 직접 소유한다. Qt-free 붙여넣기 계획·payload
+  helper, copy/export와 시스템 클립보드 I/O는 각각 유지한다. 컨트롤러가 구체적인
+  연산을 payload helper에 직접 결합하며, 9개 필드의 paste callback 묶음과 단일
+  호출용 paste service는 제거되었다. 실패 시 기존 보상 정리와 정확한 문서
+  savepoint를 사용해 선택, 원본 식별값과 붙여넣기 횟수까지 복구한다.
+  Perspective 좌표는 대상 캔버스의 좌표계로 다시 투영한다.
 - `ToolController.prepare_for_document_edit`는 키보드/메뉴의 문서 변경 전에
   진행 중인 포인터 제스처를 각 도구의 기존 소유자를 통해 취소한다. 도구의 기존
   상태를 읽으며 별도 마우스 상태를 만들지 않는다. 포커스가 있는 텍스트 편집기는

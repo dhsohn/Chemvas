@@ -2862,21 +2862,15 @@ def test_scene_ops_controller_module_stays_removed() -> None:
     assert not controller.exists()
 
 
-def test_scene_clipboard_controller_delegates_copy_paste_workflows_to_services() -> (
-    None
-):
+def test_scene_clipboard_controller_keeps_copy_export_in_its_service() -> None:
     controller = APP_ROOT / "chemvas" / "ui" / "scene_clipboard_controller.py"
     controller_source = controller.read_text(encoding="utf-8")
 
     for forbidden in (
         "build_clipboard_copy_plan",
-        "build_clipboard_paste_plan",
         "build_clipboard_mime_data",
         "exported_scene",
-        "apply_paste_payload",
-        "record_additions_for",
         "clipboard_copy_cache_values",
-        "translated_scene_item_state",
     ):
         assert forbidden not in controller_source
 

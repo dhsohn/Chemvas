@@ -160,6 +160,14 @@ end state is decided.
 
 ## Transaction and Recovery Ownership
 
+- `SceneClipboardController` owns the paste lifecycle directly: plan, image-budget
+  validation, mutation, group selection, history recording and offset bookkeeping.
+  The Qt-free paste-plan and payload helpers remain separate, as do copy/export
+  and system-clipboard I/O. The controller binds concrete operations directly to
+  the payload helper; the nine-field paste callback bundle and one-use paste
+  service are removed. Failures retain the existing compensating cleanup and
+  exact document savepoint, including selection, source identity and paste count.
+  Perspective coordinates are reprojected into the target canvas frame.
 - `ToolController.prepare_for_document_edit` cancels an active pointer gesture
   through that tool's existing owner before keyboard/menu document mutations.
   Tools expose their existing gesture state; there is no parallel mouse-state
