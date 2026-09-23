@@ -26,6 +26,7 @@ from chemvas.ui.canvas_hover_state import hover_state_for
 from chemvas.ui.canvas_model_access import bond_for_id, model_for
 from chemvas.ui.canvas_tool_settings_state import tool_settings_state_for
 from chemvas.ui.canvas_window_access import notify_error_for
+from chemvas.ui.input_view_access import update_viewport_for
 from chemvas.ui.renderer_style_access import bond_length_px_for
 from chemvas.ui.selection_queries import (
     clear_scene_selection_for,
@@ -45,6 +46,12 @@ class BondTool(Tool):
         self._press_scene_pos: QPointF | None = None
         self._preview_items: list = []
         self._preview_signature: str | None = None
+        self._angle_guide: tuple[tuple[float, float], tuple[float, float]] | None = None
+
+    @property
+    @override
+    def angle_guide(self) -> tuple[tuple[float, float], tuple[float, float]] | None:
+        return self._angle_guide
 
     @property
     @override
@@ -63,6 +70,9 @@ class BondTool(Tool):
         self._press_scene_pos = None
 
     def _clear_preview_items(self) -> None:
+        if self._angle_guide is not None:
+            self._angle_guide = None
+            update_viewport_for(self.canvas)
         if not self._preview_items:
             self._preview_signature = None
             return
@@ -206,6 +216,16 @@ class BondTool(Tool):
         )
         snapped = self._snap_endpoint(self._start_pos, current_pos)
         self._set_preview_items(self._start_pos, snapped)
+        # Atom targets keep their exact geometry; they are not angle snaps.
+        target_atom = self.context.find_atom_near(
+            snapped.x(), snapped.y(), bond_length_px_for(self.canvas) * 0.35
+        )
+        self._angle_guide = (
+            ((self._start_pos.x(), self._start_pos.y()), (snapped.x(), snapped.y()))
+            if target_atom is None and snapped != self._start_pos
+            else None
+        )
+        update_viewport_for(self.canvas)
         return True
 
     @override

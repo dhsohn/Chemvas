@@ -170,11 +170,10 @@ class MainWindowUIAssemblyServiceTest(unittest.TestCase):
         note_button = assembly.panel_bar.findChild(QToolButton, "toolButton_note")
         self.assertIsNotNone(note_button)
         self.assertIsNotNone(note_button.menu())
-        # The tool buttons form one continuous row: no divider line and no
-        # blank gap widget between the groups.
+        # Five logical tool groups share four separators.
         self.assertEqual(
             sum(1 for action in assembly.panel_bar.actions() if action.isSeparator()),
-            0,
+            4,
         )
         self.assertEqual(
             assembly.panel_bar.findChildren(QWidget, "toolbarGroupGap"), []
@@ -424,6 +423,7 @@ class MainWindowUIAssemblyServiceTest(unittest.TestCase):
                 "Zoom In",
                 "Zoom Out",
                 "Snap to Grid",
+                "Valence Checking",
                 "Molecule Info",
             ],
         )

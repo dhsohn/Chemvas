@@ -4,6 +4,7 @@ from typing import TYPE_CHECKING, Any
 
 from PyQt6.QtGui import QColor
 
+from chemvas.domain.document import connected_atom_components
 from chemvas.shell.palette import PALETTE
 
 if TYPE_CHECKING:
@@ -43,12 +44,28 @@ def preview_payload_signature(model: Any, atom_annotations: Any) -> tuple:
     return atom_sig, bond_sig, annotation_sig
 
 
-def preview_info_items(formula: str, mw: str) -> list[tuple[str, str]]:
+def preview_info_items(
+    formula: str, mw: str, scene: Molecule3DScene | None = None
+) -> list[tuple[str, str]]:
     items: list[tuple[str, str]] = []
     if formula:
         items.append(("FORMULA", formula))
     if mw:
         items.append(("MW", mw))
+    if scene is not None:
+        # Cycle rank counts independent rings, not every possible cycle in a
+        # fused/bridged cage. Atom count includes the generated hydrogens.
+        count = len(scene.atoms)
+        components = connected_atom_components(
+            range(count), ((bond.a, bond.b) for bond in scene.bonds)
+        )
+        items.extend(
+            [
+                ("ATOMS (incl. H)", str(count)),
+                ("INDEP. RINGS", str(len(scene.bonds) - count + len(components))),
+                ("STYLE", "ACS 1996"),
+            ]
+        )
     return items
 
 

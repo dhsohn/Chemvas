@@ -12,7 +12,7 @@ if TYPE_CHECKING:
     from chemvas.ui.main_window_panel_toolbar import MainWindowPanelToolbarAssembly
     from chemvas.ui.main_window_preview_window import (
         MainWindowPreviewWindowAssembly,
-        Preview3DWindow,
+        MoleculeInspectorDock,
     )
 
 
@@ -24,7 +24,7 @@ class MainWindowUiReferences:
     undo_action: QAction | None = None
     redo_action: QAction | None = None
     grid_snap_action: QAction | None = None
-    preview_window: Preview3DWindow | None = None
+    preview_window: MoleculeInspectorDock | None = None
 
     def require_icon_factory(self) -> MainWindowIconFactory:
         if self.icon_factory is None:

@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import math
 
-from PyQt6.QtCore import QPointF, Qt
+from PyQt6.QtCore import QLineF, Qt
 from PyQt6.QtGui import QColor, QPen
 
+from chemvas.features.rendering import hex_grid_cells
+from chemvas.ui.canvas_tool_settings_state import tool_settings_state_for
 from chemvas.ui.endpoint_snap_access import grid_snap_enabled_for, grid_step_for
 from chemvas.ui.sheet_setup_access import sheet_rect_for
 
@@ -53,19 +55,33 @@ def _draw_grid(canvas, painter, rect, sheet_rect) -> None:
     scale = min(abs(transform.m11()), abs(transform.m22())) or 1.0
     if step * scale < MIN_GRID_SPACING_PX:
         return
-    pen = QPen(QColor("#c9c9c4"))
+    settings = tool_settings_state_for(canvas)
+    color = QColor("#8c8c87")
+    color.setAlphaF(settings.grid_opacity)
+    pen = QPen(color)
     pen.setWidthF(0.0)
     pen.setCapStyle(Qt.PenCapStyle.RoundCap)
     painter.setPen(pen)
-    first_x = math.ceil(area.left() / step) * step
-    first_y = math.ceil(area.top() / step) * step
-    points = [
-        QPointF(x, y)
-        for x in _grid_coordinates(first_x, area.right(), step)
-        for y in _grid_coordinates(first_y, area.bottom(), step)
-    ]
-    if points:
-        painter.drawPoints(*points)
+    painter.setClipRect(area, Qt.ClipOperation.IntersectClip)
+    if settings.grid_style == "hex":
+        cells = hex_grid_cells(
+            (area.left(), area.top(), area.right(), area.bottom()), step=step
+        )
+        # Three sides per cell cover each shared edge once, preserving alpha.
+        lines = [QLineF(*cell[i], *cell[i + 1]) for cell in cells for i in range(3)]
+    else:
+        first_x = math.ceil(area.left() / step) * step
+        first_y = math.ceil(area.top() / step) * step
+        lines = [
+            QLineF(x, area.top(), x, area.bottom())
+            for x in _grid_coordinates(first_x, area.right(), step)
+        ]
+        lines.extend(
+            QLineF(area.left(), y, area.right(), y)
+            for y in _grid_coordinates(first_y, area.bottom(), step)
+        )
+    if lines:
+        painter.drawLines(lines)
 
 
 def _grid_coordinates(first: float, limit: float, step: float) -> list[float]:

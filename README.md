@@ -56,7 +56,7 @@ available. Local Windows builds:
 
 ![Chemvas walkthrough: insert structures, label an arrow, align the scheme, and export SVG](https://raw.githubusercontent.com/dhsohn/Chemvas/main/docs/images/demo.gif)
 
-1. Choose **Ring**, type `OCc1ccccc1` in its SMILES field, click **Insert**, then
+1. Type `OCc1ccccc1` in the shared SMILES field below the toolbar, click **Insert**, then
    click the canvas. Hover the oxygen, press **Enter**, label it `OH`.
 2. Insert `O=Cc1ccccc1` to the right. Choose **Arrow**, drag between the two
    structures, then double-click the arrow to label it.

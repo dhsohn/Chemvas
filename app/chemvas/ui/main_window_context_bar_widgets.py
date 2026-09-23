@@ -4,7 +4,7 @@ from decimal import Decimal
 from typing import override
 
 from PyQt6.QtCore import QPointF, QSize, Qt
-from PyQt6.QtGui import QColor, QPainter, QPolygonF
+from PyQt6.QtGui import QColor, QFontDatabase, QPainter, QPolygonF
 from PyQt6.QtWidgets import (
     QDoubleSpinBox,
     QFrame,
@@ -15,6 +15,7 @@ from PyQt6.QtWidgets import (
     QSizePolicy,
     QSlider,
     QSpinBox,
+    QStackedWidget,
     QToolButton,
     QVBoxLayout,
     QWidget,
@@ -30,6 +31,7 @@ from chemvas.shell.theme import (
     TOOLBAR_BUTTON_SIZE,
     TOOLBAR_BUTTON_STYLE,
 )
+from chemvas.shell.toolbar_buttons import CornerMenuButton
 
 
 class _StepArrowButton(QToolButton):
@@ -117,9 +119,28 @@ def new_context_page() -> tuple[QWidget, QHBoxLayout]:
     return page, layout
 
 
+class ToolOptionsStack(QStackedWidget):
+    """Hidden pages must not reserve space beside the shared SMILES field."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.currentChanged.connect(self.updateGeometry)
+
+    @override
+    def sizeHint(self) -> QSize:
+        page = self.currentWidget()
+        return page.sizeHint() if page is not None else QSize(0, 0)
+
+    @override
+    def minimumSizeHint(self) -> QSize:
+        page = self.currentWidget()
+        return page.minimumSizeHint() if page is not None else QSize(0, 0)
+
+
 def hint_label(text: str) -> QLabel:
     label = QLabel(text)
     label.setObjectName("toolbarSectionLabel")
+    label.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Preferred)
     return label
 
 
@@ -149,7 +170,64 @@ def icon_button(
     return button
 
 
-class KindMenuButton(QToolButton):
+class SegmentedButtonGroup(QFrame):
+    """A visual container; QButtonGroup remains the owner of exclusivity."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.setObjectName("segmentedControl")
+        self.setStyleSheet(
+            f"QFrame#segmentedControl {{ background: {_P['surface_app']};"
+            f" border: 1px solid {_P['border_soft']}; border-radius: 6px; }}"
+        )
+        self.button_layout = QHBoxLayout(self)
+        self.button_layout.setContentsMargins(2, 2, 2, 2)
+        self.button_layout.setSpacing(1)
+
+    def add_button(self, button: QToolButton) -> None:
+        button.setStyleSheet(
+            _ICON_BUTTON_STYLE
+            + "QToolButton { background: transparent; border: 1px solid transparent; border-radius: 4px; }"
+            + f"QToolButton:hover {{ background: {_P['hover']}; }}"
+            + f"QToolButton:checked {{ background: {_P['surface_input']};"
+            + f" border-color: {_P['border_soft']}; color: {_P['checked_text']}; }}"
+            + f"QToolButton:focus {{ border-color: {_P['accent']}; }}"
+        )
+        self.button_layout.addWidget(button)
+
+
+def smiles_entry(begin_smiles_insert) -> QWidget:
+    entry, layout = new_context_page()
+    entry.setObjectName("quickSmilesEntry")
+    entry.setSizePolicy(QSizePolicy.Policy.Maximum, QSizePolicy.Policy.Fixed)
+    layout.addWidget(hint_label("SMILES"))
+    input_box = QLineEdit()
+    input_box.setObjectName("contextSmilesInput")
+    input_box.setPlaceholderText("CC(=O)Oc1ccccc1C(=O)O")
+    input_box.setFont(QFontDatabase.systemFont(QFontDatabase.SystemFont.FixedFont))
+    input_box.setMinimumWidth(120)
+    input_box.setMaximumWidth(250)
+    input_box.setFixedHeight(CONTEXT_BAR_BUTTON_HEIGHT)
+    input_box.setToolTip(
+        "SMILES: Enter to preview and place a structure (requires RDKit)"
+    )
+    input_box.setAccessibleName("SMILES")
+    button = action_button("Insert", "Preview and place the typed SMILES structure")
+    button.setObjectName("smiles_render_button")
+    button.setStyleSheet(
+        CONTEXT_ACTION_BUTTON_STYLE
+        + f"QToolButton {{ background: {_P['accent']}; border-color: {_P['accent']}; color: {_P['accent_contrast']}; }}"
+        + f"QToolButton:hover {{ background: {_P['accent_hover']}; }}"
+        + f"QToolButton:pressed {{ background: {_P['accent_pressed']}; }}"
+    )
+    button.clicked.connect(lambda _checked=False: begin_smiles_insert(input_box.text()))
+    input_box.returnPressed.connect(lambda: begin_smiles_insert(input_box.text()))
+    layout.addWidget(input_box)
+    layout.addWidget(button)
+    return entry
+
+
+class KindMenuButton(CornerMenuButton):
     """One checkable button standing in for several rarely used kinds.
 
     Its menu lists the kinds; picking one fires ``on_pick`` and the button

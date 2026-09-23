@@ -19,7 +19,8 @@ def preview_layout_rects(
         panel = QRectF(widget_rect)
 
     pad = 12.0
-    header_height = 42.0
+    # In a narrow inspector, identifier/export controls wrap below the title.
+    header_height = 100.0 if widget_rect.width() < 500 else 42.0
     footer_gap = 8.0 if footer_height > 0.0 else 0.0
 
     header = QRectF(

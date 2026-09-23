@@ -1029,7 +1029,9 @@ def test_main_window_panel_service_owns_preview_window_assembly() -> None:
         re.search(r"\bwindow\.panel_(?:splitter|dock)\b", panel_service_source) is None
     )
     assert "preview_export_xyz_button" not in preview_window_source
-    assert "QDockWidget" not in preview_window_source
+    assert "class MoleculeInspectorDock(QDockWidget)" in preview_window_source
+    assert "window.addDockWidget" in preview_window_source
+    assert "toggleViewAction" in preview_window_source
     assert "QSplitter" not in preview_window_source
 
 

@@ -66,7 +66,11 @@ class MainWindowIconPixmapFactory:
         return self._icon_from_pixmaps([self._render_pixmap(painter_fn, size, dpr)])
 
     def make_sized_icon(
-        self, sized_painter_fn: Callable[[QPainter, int], None], sizes: Iterable[int]
+        self,
+        sized_painter_fn: Callable[[QPainter, int], None],
+        sizes: Iterable[int],
+        *,
+        checked_painter_fn: Callable[[QPainter, int], None] | None = None,
     ) -> QIcon:
         """Build a single QIcon holding a crisp pixmap for each requested logical
         size, so small toolbars/option bars get an exact render instead of a
@@ -74,13 +78,22 @@ class MainWindowIconPixmapFactory:
         and the logical size it should render at."""
         dpr = self._device_pixel_ratio()
 
-        def render_at(size: int) -> QPixmap:
+        def render_at(size: int, paint_fn: Callable[[QPainter, int], None]) -> QPixmap:
             def paint(painter: QPainter) -> None:
-                sized_painter_fn(painter, size)
+                paint_fn(painter, size)
 
             return self._render_pixmap(paint, size, dpr)
 
-        return self._icon_from_pixmaps([render_at(size) for size in sizes])
+        sizes = tuple(sizes)
+        icon = self._icon_from_pixmaps(
+            [render_at(size, sized_painter_fn) for size in sizes]
+        )
+        if checked_painter_fn is not None:
+            for size in sizes:
+                pixmap = render_at(size, checked_painter_fn)
+                for mode in (QIcon.Mode.Normal, QIcon.Mode.Active, QIcon.Mode.Selected):
+                    icon.addPixmap(pixmap, mode, QIcon.State.On)
+        return icon
 
 
 __all__ = ["MainWindowIconPixmapFactory"]

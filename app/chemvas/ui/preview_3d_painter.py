@@ -94,7 +94,7 @@ def paint_preview_3d_panel(
     painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
     painter.fillRect(widget_rect, QColor(PALETTE["surface_app"]))
 
-    info_items = preview_info_items(state.formula_text, state.mw_text)
+    info_items = preview_info_items(state.formula_text, state.mw_text, state.scene)
     info_lines = [f"{label}: {value}" for label, value in info_items]
     layout = preview_layout_for_widget(widget_rect, info_lines, base_font)
     caption_font = preview_caption_font(base_font)

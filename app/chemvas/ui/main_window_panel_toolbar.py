@@ -59,8 +59,6 @@ def _normalize_tool_action_button(
     panel_bar: QToolBar,
     action: QAction,
     action_key: str,
-    *,
-    primary: bool = False,
 ) -> None:
     widget = panel_bar.widgetForAction(action)
     if not isinstance(widget, QToolButton):
@@ -71,13 +69,8 @@ def _normalize_tool_action_button(
     widget.setAutoRaise(True)
     widget.setFocusPolicy(Qt.FocusPolicy.NoFocus)
     widget.setFixedHeight(TOOLBAR_BUTTON_SIZE)
-    if primary:
-        widget.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonIconOnly)
-        widget.setText("")
-        widget.setProperty("iconOnly", True)
-        widget.setFixedWidth(TOOLBAR_BUTTON_SIZE)
-        return
     widget.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonIconOnly)
+    widget.setText("")
     widget.setProperty("iconOnly", True)
     widget.setFixedWidth(TOOLBAR_BUTTON_SIZE)
 
@@ -143,7 +136,7 @@ def build_panel_toolbar(
     tool_actions = build_tool_actions(window, tool_group)
     tool_actions["bond"].setChecked(True)
 
-    def add_tool(action_key: str, *, primary: bool) -> None:
+    def add_tool(action_key: str) -> None:
         action = tool_actions[action_key]
         if action_key == "note":
             panel_bar.addWidget(
@@ -151,15 +144,14 @@ def build_panel_toolbar(
             )
             return
         panel_bar.addAction(action)
-        _normalize_tool_action_button(panel_bar, action, action_key, primary=primary)
+        _normalize_tool_action_button(panel_bar, action, action_key)
 
-    # The groups only fix the order; the buttons sit in one continuous row
-    # with no divider line or gap between groups.
     for action_key in TOOLBAR_PRIMARY_TOOL_GROUP:
-        add_tool(action_key, primary=True)
+        add_tool(action_key)
     for action_keys in TOOLBAR_TOOL_GROUPS[1:]:
+        panel_bar.addSeparator()
         for action_key in action_keys:
-            add_tool(action_key, primary=False)
+            add_tool(action_key)
     panel_bar.addWidget(_toolbar_spacer())
 
     return MainWindowPanelToolbarAssembly(

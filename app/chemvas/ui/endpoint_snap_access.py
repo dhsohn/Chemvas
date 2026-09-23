@@ -8,6 +8,7 @@ from chemvas.domain.document import VALID_ARROW_KINDS
 from chemvas.features.rendering import (
     nearest_endpoint,
     snapped_to_grid,
+    snapped_to_hex_grid,
 )
 from chemvas.ui.canvas_scene_items_state import arrow_items_for
 from chemvas.ui.canvas_tool_settings_state import tool_settings_state_for
@@ -142,7 +143,12 @@ def snap_to_grid_for(canvas, pos: QPointF) -> QPointF:
     """``pos`` on the grid, or unchanged when the grid is off."""
     if not grid_snap_enabled_for(canvas):
         return pos
-    x, y = snapped_to_grid((pos.x(), pos.y()), step=grid_step_for(canvas))
+    snap = (
+        snapped_to_hex_grid
+        if tool_settings_state_for(canvas).grid_style == "hex"
+        else snapped_to_grid
+    )
+    x, y = snap((pos.x(), pos.y()), step=grid_step_for(canvas))
     return QPointF(x, y)
 
 

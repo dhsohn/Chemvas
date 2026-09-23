@@ -224,6 +224,8 @@ jobs:
             tests/test_chemical_conversion_workflows.py \
             tests/test_core_molfile.py \
             tests/test_core_rdkit_adapter.py \
+            tests/test_editor_feedback_policy.py \
+            tests/test_ui_design_workflows.py \
             tests/test_mark_ownership_semantics.py \
             tests/test_native_geometry_backlog.py \
             tests/test_rdkit_drawn_double_stereo.py \

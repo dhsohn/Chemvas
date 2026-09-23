@@ -10,7 +10,9 @@ from PyQt6.QtCore import QCoreApplication, QEvent, QTimer
 from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import QApplication, QMainWindow
 
+from chemvas.ui.canvas_tool_settings_state import CanvasToolSettingsState
 from chemvas.ui.main_window_status_service import MainWindowStatusService
+from tests.runtime_state import canvas_runtime_state
 
 
 @pytest.fixture(scope="module")
@@ -41,7 +43,13 @@ def _service(
         current_zoom_percent_for_window=current_zoom_percent_for_window
         or mock.Mock(return_value=100),
         active_canvas_or_none_for_window=active_canvas_or_none_for_window
-        or mock.Mock(return_value=object()),
+        or mock.Mock(
+            return_value=SimpleNamespace(
+                runtime_state=canvas_runtime_state(
+                    tool_settings_state=CanvasToolSettingsState()
+                )
+            )
+        ),
         canvas_count_for_window=canvas_count_for_window or mock.Mock(return_value=1),
         active_canvas_name_for_window=active_canvas_name_for_window
         or mock.Mock(return_value="Canvas 1"),

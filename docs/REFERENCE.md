@@ -17,7 +17,7 @@ chemvas --version     # package version without starting Qt
 ```
 
 Pick a tool from the top toolbar and click/drag on the canvas to draw. For SMILES,
-choose **Ring**, enter a string in its options bar, and press **Insert** to enter
+enter a string in the shared field below the toolbar, and press **Insert** or Enter to enter
 placement mode: move the mouse to preview, click to insert, `Esc` to cancel.
 Templates work the same preview-and-click way.
 
@@ -175,13 +175,21 @@ its knob, flip, align, and distribute.
   its atom, or vice versa. Colors survive Undo/Redo, copy/paste and save/reopen.
   Coloring an implicit carbon does not reveal a label or recolor its bonds;
   choose a visible label or bond when you need a visible color change.
-- **Snap to grid** — **View ▸ Snap to Grid** shows a faint grid of half a bond
-  length on the sheet and snaps the points arrows and lines are drawn at, and
+- **Snap to grid** — the status bar's **Grid** button cycles **None → Hex → Square**.
+  Its menu sets strength to 15%, 20%, or 25%. **View ▸ Snap to Grid** toggles the
+  last grid style. Square spacing and hexagon side length are half a bond length.
+  The grid snaps the points arrows and lines are drawn at, and
   the ends dragged with their endpoint handles, curved arrows included, onto
   it. Order of precedence: an existing endpoint wins, then `Shift`, then the
   grid. A click, and a drag shorter than one grid step, both read as a click.
   The grid is hidden while it would be too dense to read on screen, and it
-  belongs to the window, not the document.
+  is a per-canvas view setting, excluded from saved documents and figure exports.
+- **Drawing feedback** — dragging a bond shows a teal guide and angle badge;
+  release or cancel the gesture to dismiss it. **View ▸ Valence Checking** toggles
+  red underlines for excess drawn bond order on common H/B/C/N/O/F charge states.
+  This is a conservative drawing hint, not a chemical validity check: aliases,
+  radicals, partial bonds, metals and unsupported charge states are unassessed.
+  The overlays do not change the molecule, history, saved document or exported figure.
 - **Editing** — endpoint handles (select an arrow or line, then click it to
   show a handle at each end; drag one to move that end, snapping to nearby
   endpoints — a handle sitting on another item's endpoint is drawn filled
@@ -371,7 +379,7 @@ RDKit is an optional backend — Chemvas runs without it. The features marked
 
 ### SMILES import *(RDKit)*
 
-Choose **Ring**, type a SMILES string in its options bar, and press **Insert**.
+Type a SMILES string in the shared context-bar field, then press **Insert** or Enter.
 Preview it under the cursor and click to place it on the canvas.
 `Ts` and `Ac` name the tosyl and acetyl abbreviations on
 the canvas, so a SMILES asking for tennessine or actinium is refused rather than
@@ -419,12 +427,19 @@ assigned a specific E/Z isomer. Ordinary SMILES cannot preserve the distinction
 between explicit unknown stereo and no stereo annotation, and a generated 3D
 geometry does not resolve it.
 
-### Molecule Info window *(RDKit)*
+### Molecule Info inspector *(RDKit)*
 
-**View ▸ Molecule Info** opens a separate window with a 3D preview (drag to
+![Molecule Info dock with aspirin on a macOS canvas](images/editor-inspector.png)
+
+**View ▸ Molecule Info** or the toolbar's cube button opens a right-hand inspector
+that can be resized, closed, or floated by dragging its title bar. It has a 3D preview (drag to
 rotate, scroll to zoom), the molecular formula and weight, and one-click copy of
 the canonical SMILES, InChI, and InChIKey for the current selection. The
-`Export 3D XYZ` button exports the selected molecule.
+`Export .xyz` button exports the selected molecule. Properties include the atom
+count **including generated hydrogens**, the number of **independent rings**
+(cycle rank, not every possible cycle), and the ACS 1996 drawing style.
+Closing the inspector pauses preview work. Ring Fill colors remain in the
+toolbar's Ring Fill options.
 The initial view fits the projected atom footprints, including depth. Rotation
 and zoom stay inside the molecule viewport, leaving the title, formula and
 weight readable; zooming in can crop the molecule at that viewport's edges.

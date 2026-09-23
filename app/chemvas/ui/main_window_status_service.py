@@ -1,10 +1,21 @@
 from __future__ import annotations
 
-from typing import override
+from typing import Literal, override
 
 from PyQt6.QtCore import Qt, QTimer
-from PyQt6.QtWidgets import QApplication, QFrame, QHBoxLayout, QLabel, QToolButton
+from PyQt6.QtGui import QAction, QActionGroup
+from PyQt6.QtWidgets import (
+    QApplication,
+    QFrame,
+    QHBoxLayout,
+    QLabel,
+    QMenu,
+    QToolButton,
+)
 
+from chemvas.shell.toolbar_buttons import CornerMenuButton
+from chemvas.shell.toolbar_styles import TOOLBAR_MENU_BUTTON_STYLE
+from chemvas.ui.canvas_tool_settings_state import tool_settings_state_for
 from chemvas.ui.main_window_document_dialogs import prompt_zoom_percent
 from chemvas.ui.main_window_toolbar_logic import tool_display_name
 from chemvas.ui.mark_ownership import mark_is_distant_for, mark_owner_text_for
@@ -133,6 +144,9 @@ class MainWindowStatusService:
         self.zoom_in_button: QToolButton | None = None
         self.zoom_fit_button: QToolButton | None = None
         self.zoom_label: QToolButton | None = None
+        self.grid_button: QToolButton | None = None
+        self._grid_actions: dict[str, QAction] = {}
+        self._grid_opacity_actions: dict[int, QAction] = {}
 
     def init_status_bar(self, window) -> None:
         self.tool_label = QLabel()
@@ -195,6 +209,7 @@ class MainWindowStatusService:
         window.statusBar().addPermanentWidget(self.tool_label)
         window.statusBar().addPermanentWidget(self.sheet_label)
         window.statusBar().addPermanentWidget(self.selection_label)
+        window.statusBar().addPermanentWidget(self._build_grid_control(window))
         window.statusBar().addPermanentWidget(self.zoom_caption)
         # The four zoom controls read as one instrument: a single outlined
         # pill with the percentage in the middle and Fit set off at the end.
@@ -216,6 +231,96 @@ class MainWindowStatusService:
         )
         self.refresh_status_context(window)
         self.show_active_tool_hint(window)
+
+    def _build_grid_control(self, window) -> QToolButton:
+        button = CornerMenuButton()
+        button.setObjectName("statusGridButton")
+        button.setStyleSheet(TOOLBAR_MENU_BUTTON_STYLE)
+        button.setAutoRaise(True)
+        button.setToolTip(
+            "Cycle grid and arrow/line snapping; open the menu for grid strength"
+        )
+        button.setPopupMode(QToolButton.ToolButtonPopupMode.MenuButtonPopup)
+        button.clicked.connect(lambda _checked=False: self._cycle_grid(window))
+        menu = QMenu(button)
+        group = QActionGroup(menu)
+        modes: tuple[Literal["none", "hex", "square"], ...] = ("none", "hex", "square")
+        for mode in modes:
+            action = QAction(mode.title(), menu)
+            action.setCheckable(True)
+            group.addAction(action)
+            action.triggered.connect(
+                lambda _checked=False, value=mode: self._set_grid(window, value)
+            )
+            menu.addAction(action)
+            self._grid_actions[mode] = action
+        menu.addSeparator()
+        opacity_group = QActionGroup(menu)
+        for percent in (15, 20, 25):
+            action = QAction(f"Strength {percent}%", menu)
+            action.setCheckable(True)
+            opacity_group.addAction(action)
+            action.triggered.connect(
+                lambda _checked=False, value=percent: self._set_grid_opacity(
+                    window, value
+                )
+            )
+            menu.addAction(action)
+            self._grid_opacity_actions[percent] = action
+        menu.aboutToShow.connect(lambda: self.update_grid_control(window))
+        button.setMenu(menu)
+        self.grid_button = button
+        return button
+
+    def _set_grid(self, window, mode: Literal["none", "hex", "square"]) -> None:
+        from chemvas.ui.main_window_ports import set_grid_snap_for_window
+
+        canvas = self._active_canvas_or_none_for_window(window)
+        if canvas is None:
+            return
+        if mode != "none":
+            tool_settings_state_for(canvas).grid_style = mode
+        set_grid_snap_for_window(window, mode != "none")
+
+    def _cycle_grid(self, window) -> None:
+        canvas = self._active_canvas_or_none_for_window(window)
+        if canvas is None:
+            return
+        settings = tool_settings_state_for(canvas)
+        if not settings.grid_snap_enabled:
+            self._set_grid(window, "hex")
+        elif settings.grid_style == "hex":
+            self._set_grid(window, "square")
+        else:
+            self._set_grid(window, "none")
+
+    def _set_grid_opacity(self, window, percent: int) -> None:
+        from chemvas.ui.input_view_access import update_viewport_for
+
+        canvas = self._active_canvas_or_none_for_window(window)
+        if canvas is not None:
+            tool_settings_state_for(canvas).grid_opacity = percent / 100
+            update_viewport_for(canvas)
+            self.update_grid_control(window)
+
+    def update_grid_control(self, window) -> None:
+        if self.grid_button is None:
+            return
+        canvas = self._active_canvas_or_none_for_window(window)
+        self.grid_button.setEnabled(canvas is not None)
+        settings = tool_settings_state_for(canvas) if canvas is not None else None
+        mode = (
+            settings.grid_style
+            if settings is not None and settings.grid_snap_enabled
+            else "none"
+        )
+        self.grid_button.setText(f"Grid: {mode.title()}")
+        for key, action in self._grid_actions.items():
+            action.setChecked(key == mode)
+        for percent, action in self._grid_opacity_actions.items():
+            action.setChecked(
+                settings is not None and round(settings.grid_opacity * 100) == percent
+            )
 
     @staticmethod
     def _build_zoom_button(text: str, tooltip: str, callback) -> QToolButton:
@@ -243,6 +348,7 @@ class MainWindowStatusService:
             self.update_zoom_label(self._set_zoom_percent_for_window(window, selected))
 
     def refresh_status_context(self, window, *, update_zoom: bool = True) -> None:
+        self.update_grid_control(window)
         self.update_tool_status_label(window)
         self.update_sheet_status_label(window)
         self.update_selection_status_label(window)

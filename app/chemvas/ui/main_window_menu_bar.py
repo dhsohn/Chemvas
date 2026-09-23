@@ -17,6 +17,7 @@ from chemvas.ui.image_actions import (
 from chemvas.ui.main_window_about_dialog import GITHUB_URL, show_about_dialog
 from chemvas.ui.main_window_document_dialogs import prompt_sheet_setup
 from chemvas.ui.main_window_ports import (
+    active_canvas_or_none_for_window,
     align_selection_for_window,
     copy_selection_for_window,
     cut_selection_for_window,
@@ -32,6 +33,7 @@ from chemvas.ui.main_window_ports import (
     services_for_window,
     set_grid_snap_for_window,
     set_sheet_setup_for_window,
+    set_valence_checking_for_window,
     sheet_orientation_for_window,
     sheet_size_for_window,
     undo_for_window,
@@ -404,12 +406,32 @@ def _build_view_menu(
         triggered=lambda checked: set_grid_snap_for_window(window, checked),
         checkable=True,
     )
+    valence_action = _add_action(
+        view_menu,
+        window,
+        "Valence Checking",
+        status_tip="Underline common overvalent atoms; aliases, radicals and metal coordination are not assessed",
+        triggered=lambda checked: set_valence_checking_for_window(window, checked),
+        checkable=True,
+    )
+    valence_action.setObjectName("valenceCheckingAction")
+    valence_action.setChecked(True)
+
+    def sync_valence_checking() -> None:
+        from chemvas.ui.canvas_tool_settings_state import tool_settings_state_for
+
+        canvas = active_canvas_or_none_for_window(window)
+        valence_action.setChecked(
+            canvas is not None and tool_settings_state_for(canvas).valence_checking
+        )
+
+    view_menu.aboutToShow.connect(sync_valence_checking)
     view_menu.addSeparator()
     _add_action(
         view_menu,
         window,
         "Molecule Info",
-        status_tip="Open the selected molecule in a separate molecule info window",
+        status_tip="Show the dockable inspector for the selected molecule",
         triggered=lambda: callbacks.open_preview_window(window),
     )
     return grid_snap_action

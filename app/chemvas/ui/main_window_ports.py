@@ -110,6 +110,19 @@ def set_grid_snap_for_window(window, enabled: bool) -> None:
         return
     set_grid_snap_enabled_for(canvas, enabled)
     update_viewport_for(canvas)
+    services = services_for_window(window)
+    services.action_availability_service.sync_grid_snap_action(window)
+    services.status_service.update_grid_control(window)
+
+
+def set_valence_checking_for_window(window, enabled: bool) -> None:
+    from chemvas.ui.canvas_tool_settings_state import tool_settings_state_for
+    from chemvas.ui.input_view_access import update_viewport_for
+
+    canvas = active_canvas_or_none_for_window(window)
+    if canvas is not None:
+        tool_settings_state_for(canvas).valence_checking = enabled
+        update_viewport_for(canvas)
 
 
 def active_canvas_for_window(window) -> CanvasView:

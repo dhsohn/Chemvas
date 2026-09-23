@@ -7,7 +7,7 @@ _P = PALETTE
 # The two bars share one scale: a 20 px glyph in a 32 px button on the tool
 # bar, an 18 px glyph in a 26 px button on the context bar, 4 px between
 # buttons and 12 px between groups.
-TOOLBAR_THICKNESS = 40
+TOOLBAR_THICKNESS = 38
 TOOLBAR_BUTTON_SIZE = 32
 TOOLBAR_ICON_SIZE = 20
 CONTEXT_BAR_CONTENT_HEIGHT = 32

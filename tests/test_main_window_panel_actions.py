@@ -325,6 +325,7 @@ class MainWindowPanelActionsTest(unittest.TestCase):
         )
 
     def test_molecule_info_menu_action_opens_preview_window(self) -> None:
+        self.window.show()
         self.assertIsNone(self.window.findChild(QToolButton, "preview_panel_button"))
         preview_action = self._find_action("Molecule Info")
         preview_window = preview_window_for_window(self.window)

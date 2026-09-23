@@ -58,7 +58,7 @@ def _canvas_file_version() -> int:
 
 
 def _smiles_button_label() -> str:
-    src = _read(APP / "chemvas" / "ui" / "main_window_context_bar_page_factories.py")
+    src = _read(APP / "chemvas" / "ui" / "main_window_context_bar_widgets.py")
     # The SMILES insert button is built as action_button("<label>", ...) just
     # before it is tagged with objectName "smiles_render_button".
     anchor = src.index('"smiles_render_button"')

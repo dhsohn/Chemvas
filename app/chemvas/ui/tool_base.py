@@ -33,6 +33,10 @@ class Tool:
         """Whether a later pointer frame can still mutate this document."""
         return False
 
+    @property
+    def angle_guide(self) -> tuple[tuple[float, float], tuple[float, float]] | None:
+        return None
+
     def activate(self) -> None:
         pass
 

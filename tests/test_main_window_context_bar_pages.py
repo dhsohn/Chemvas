@@ -340,14 +340,16 @@ class MainWindowContextBarPagesTest(unittest.TestCase):
             ],
             ["horizontal", "vertical"],
         )
-        # The SMILES field and Insert button sit on the Ring page.
-        ring_page = pages.pages["ring"]
-        field = ring_page.findChild(QLineEdit, "contextSmilesInput")
+        # One shared SMILES entry sits outside the tool pages.
+        self.assertIsNone(
+            pages.pages["ring"].findChild(QLineEdit, "contextSmilesInput")
+        )
+        field = pages.smiles_entry.findChild(QLineEdit, "contextSmilesInput")
         field.setText("c1ccccc1")
         with mock.patch.object(
             self.insert_controller, "begin_smiles_insert"
         ) as begin_smiles_insert:
-            ring_page.findChild(QToolButton, "smiles_render_button").click()
+            pages.smiles_entry.findChild(QToolButton, "smiles_render_button").click()
         begin_smiles_insert.assert_called_once_with("c1ccccc1")
         # The eraser has no options: its page is quiet.
         self.assertEqual(pages.pages["empty"].findChildren(QToolButton), [])

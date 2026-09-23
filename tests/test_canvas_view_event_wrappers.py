@@ -70,6 +70,8 @@ class CanvasViewEventWrapperTest(unittest.TestCase):
 
     def _new_view(self, *, tool_active=None):
         view = build_canvas_view()
+        if tool_active is not None:
+            tool_active.angle_guide = None
         hover_controller = SimpleNamespace(
             clear_hover_highlight=mock.Mock(),
             update_hover_highlight=mock.Mock(),
