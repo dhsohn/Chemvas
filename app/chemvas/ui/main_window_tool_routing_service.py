@@ -36,7 +36,7 @@ class MainWindowToolRoutingService:
             set_color(color)
 
         def apply_color() -> None:
-            if sip.isdeleted(window):
+            if sip.isdeleted(window) or window.is_closing:
                 return
             if self._color_tool_for_window(window) is not tool:
                 window.statusBar().showMessage(
@@ -59,9 +59,17 @@ class MainWindowToolRoutingService:
 
     def apply_ring_fill_preset(self, window, hex_value: str, *, qtimer=QTimer) -> None:
         color = QColor(hex_value)
+        color_service = self._color_mutation_service_for_window(window)
 
         def apply_fill() -> None:
-            color_service = self._color_mutation_service_for_window(window)
+            if sip.isdeleted(window) or window.is_closing:
+                return
+            if self._color_mutation_service_for_window(window) is not color_service:
+                window.statusBar().showMessage(
+                    "Ring fill not applied: active canvas changed; choose a swatch again.",
+                    6000,
+                )
+                return
             items = [
                 item
                 for item in self._selected_scene_items(window)

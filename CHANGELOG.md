@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- Deferred Ring Fill presets are cancelled when the active canvas changes or
+  the window is destroyed, preventing a swatch from changing another document.
+
 ## [0.18.0] - 2026-09-22
 
 ### Added

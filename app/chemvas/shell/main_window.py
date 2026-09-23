@@ -94,6 +94,10 @@ class MainWindow(QMainWindow):
     def runtime_state(self) -> object:
         return self._state
 
+    @property
+    def is_closing(self) -> bool:
+        return self._close_state != "open"
+
     def close_after_confirmation(self) -> None:
         """Finish a close already confirmed by the application Quit coordinator."""
         if self._close_state == "open":
