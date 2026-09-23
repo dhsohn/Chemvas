@@ -440,6 +440,7 @@ class _FakeBondCanvas:
     DragMode = SimpleNamespace(NoDrag="none")
 
     def __init__(self) -> None:
+        self.viewport = mock.Mock(return_value=mock.Mock())
         self.drag_mode = None
         self.scene_obj = _FakeScene()
         self.renderer = SimpleNamespace(style=SimpleNamespace(bond_length_px=20.0))

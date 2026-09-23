@@ -19,6 +19,7 @@ from chemvas.ui.canvas_callback_state import (
     run_scene_selection_group_callback_for,
     run_scene_selection_outline_callback_for,
 )
+from chemvas.ui.canvas_feedback_renderer import draw_canvas_feedback_for
 from chemvas.ui.canvas_view_ports import (
     input_controller_for_view,
     pointer_controller_for_view,
@@ -74,6 +75,11 @@ class CanvasView(QGraphicsView):
         if painter is None:
             return
         draw_canvas_background_for(self, painter, rect)
+
+    @override
+    def drawForeground(self, painter: QPainter | None, rect: QRectF) -> None:
+        if painter is not None:
+            draw_canvas_feedback_for(self, painter, rect)
 
     @override
     def keyPressEvent(self, event) -> None:

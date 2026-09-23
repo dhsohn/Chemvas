@@ -437,7 +437,8 @@ GUI 내보내기는 공통 크기 한도와 가독성 검사를 사용하며,
 - `.xyz`는 좌표 전용이다. 결합 차수(bond order)와 반응 의미(reaction semantics)는 출력 포맷에 보존되지 않으며 왕복 가능한(round-trippable) 상태로 취급해서는 안 된다.
 - Calculation Plan v2는 명시적 state, `included`/`context_only` membership, endpoint별 역할, source atom correspondence를 저장한다. Chemvas 0.15.0 이하가 저장한 plan에는 `chemvas-rigid-precomplex-placement/2` profile로 만든 step-side precomplex ensemble과 reviewer 선택이 있을 수 있으며, 계속 읽고 보존하지만 사용하지 않는다. Plan은 역할·contact·spin state·coordination·반응기구를 추론하지 않는다. elementary-step handoff는 공통 envelope와 inline domain payload 안에 provenance, mapping, bond change, 조건부로 성분별 따로 임베딩한 기하를 담은 `machine.json` 하나다. 이 기하는 후속 배치, 양자화학 최적화, 연구자 검토가 필요한 초기 추정값이다.
 - 미리보기 창은 사용자가 보는 것과 실제로 내보내지는 것 사이의 불일치를 피하기 위해 `.xyz` 내보내기와 동일한 변환 경로를 재사용해야 한다.
-- 3D 미리보기는 **View ▸ Molecule Info**에서 별도의 모덜리스(modeless) 창으로 열린다. 선택된 구조 변환 경로를 사용하고, 선택된 분자에 대한 `Export 3D XYZ` 동작을 소유하며, 선택된 화학 구조가 없을 때는 빈 미리보기를 표시한다.
+- `MainWindowPanelService`가 **View ▸ Molecule Info**와 툴바 큐브 토글의 `MoleculeInspectorDock`을 조립한다. 기존 `Preview3D`를 담고 선택 범위 변환·XYZ 출력·숨김 시 일시 정지·비동기 종료를 유지한다. 원자 수는 생성된 수소를 포함하며 고리 수는 그래프의 독립 순환 수다.
+- `CanvasView.drawForeground`가 각도·보수적 원자가 피드백을 화면에만 그리며 장면 항목을 만들지 않는다. 순수 원자가 정책은 `features.rendering`에 있고 RDKit을 불러오거나 문서를 변경하지 않는다. 격자 종류·투명도·경고 토글은 캔버스별 도구 설정으로 직렬화하지 않는다. 육각 격자 그리기와 끝점 스냅은 같은 기하를 사용한다.
 - 열려 있는 각 캔버스 탭은 자체 파일 경로와 clean/dirty 다이제스트(digest)를 가진 독립적인 문서다. `.chemvas` 로딩은 표준 단일 캔버스 페이로드만 허용한다.
 - `.chemvas`는 version 7과 8을 읽으며 version 8, schema 1(최소 읽기 버전 0.18.0)로 쓴다. [문서 호환성 정책](DOCUMENT_COMPATIBILITY.ko.md)에 따라 앞으로 쓰기 버전이 바뀌어도 지원 중인 v7 읽기는 유지한다. Native I/O와 editable SVG에 내장된 문서는 domain의 같은 reader 검증을 사용한다. Canonical payload는 deleted-slot tombstone이 없는 compact bond array를 사용하며 plan이 있으면 Calculation Plan v2다. Calculation plan은 bond 위치가 아니라 안정적 atom id와 완전한 연결 성분 atom-id 집합을 참조한다.
 

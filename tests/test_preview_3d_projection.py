@@ -34,7 +34,7 @@ def test_project_3d_scene_returns_empty_for_empty_scene() -> None:
 
 
 def test_preview_layout_reserves_footer_space_outside_molecular_content() -> None:
-    widget_rect = QRectF(0.0, 0.0, 320.0, 260.0)
+    widget_rect = QRectF(0.0, 0.0, 320.0, 420.0)
     plain_layout = preview_layout_rects(widget_rect, footer_height=0.0)
     footer_layout = preview_layout_rects(widget_rect, footer_height=60.0)
     without_footer = plain_layout["molecule"]

@@ -22,7 +22,7 @@ class MainWindowPanelService:
         )
         self._preview_window_for_window = preview_window_for_window
 
-    def init_panels(self, window) -> None:
+    def init_panels(self, window, *, panel_bar) -> None:
         preview = self._preview_for_window(window)
         preview.pause_updates()
         set_export_action = getattr(preview, "set_export_xyz_action", None)
@@ -31,13 +31,15 @@ class MainWindowPanelService:
         assembly = build_preview_window(
             window,
             preview_widget=preview,
+            panel_bar=panel_bar,
         )
         self._apply_preview_window_assembly_for_window(window, assembly)
+        assembly.preview_window.visibilityChanged.connect(
+            lambda visible: self._refresh_preview(window) if visible else None
+        )
 
     def _export_selected_xyz(self, window) -> None:
-        # The Export button lives inside the separate preview window, so the
-        # save dialog, error dialog and status feedback should target that
-        # window rather than the main window behind it.
+        # The same parent and status sink serve docked and floating inspectors.
         preview_window = self._preview_window_for_window(window)
         status_sink = None
         if preview_window is not None:
@@ -55,6 +57,13 @@ class MainWindowPanelService:
         preview_window = self._preview_window_for_window(window)
         if preview_window is None:
             return
+        was_visible = preview_window.isVisible()
+        preview_window.show()
+        preview_window.raise_()
+        if was_visible:
+            self._refresh_preview(window)
+
+    def _refresh_preview(self, window) -> None:
         preview = self._preview_for_window(window)
         try:
             canvas = self._active_canvas_for_window(window)
@@ -65,9 +74,6 @@ class MainWindowPanelService:
             preview.set_rdkit_adapter(rdkit_adapter_for(canvas))
             preview.resume_updates()
             preview.refresh_selected_from_canvas(canvas)
-        preview_window.show()
-        preview_window.raise_()
-        preview_window.activateWindow()
 
 
 __all__ = ["MainWindowPanelService"]

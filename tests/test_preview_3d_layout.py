@@ -16,9 +16,9 @@ def test_preview_footer_height_uses_row_minimum_and_gap() -> None:
 
 
 def test_preview_layout_rects_builds_ordered_sections_with_footer() -> None:
-    layout = preview_layout_rects(QRectF(0.0, 0.0, 320.0, 260.0), footer_height=74.0)
+    layout = preview_layout_rects(QRectF(0.0, 0.0, 320.0, 420.0), footer_height=74.0)
 
-    assert layout["panel"] == QRectF(8.0, 8.0, 304.0, 244.0)
+    assert layout["panel"] == QRectF(8.0, 8.0, 304.0, 404.0)
     assert layout["header"].bottom() < layout["viewport"].top()
     assert layout["viewport"].bottom() < layout["footer"].top()
     assert layout["viewport"].contains(layout["molecule"])

@@ -45,20 +45,17 @@ from chemvas.ui.scene_item_state_serialization import arrow_state_dict_for
 class FirstScheme(Walkthrough):
     def insert(self, smiles: str, x: float, y: float, title: str) -> None:
         previous_ids = set(self.canvas.model.atoms)
-        # The SMILES controls live on the Ring tool's options bar, so the
-        # walkthrough chooses that tool the way the tutorial describes.
-        tool_action_for_window(self.window, "benzene").trigger()
-        self.app.processEvents()
+        # Use the shared entry without changing the active drawing tool.
         field = self.window.findChild(QLineEdit, "contextSmilesInput")
         button = self.window.findChild(QToolButton, "smiles_render_button")
         if field is None or button is None or not field.isVisible():
-            raise RuntimeError("SMILES controls are unavailable on the Ring bar")
+            raise RuntimeError("Shared SMILES controls are unavailable")
         field.setFocus()
         field.selectAll()
         QTest.keyClicks(field, smiles)
         self.capture(
             title,
-            f"Choose Ring, enter {smiles} on its options bar, click Insert.",
+            f"Enter {smiles} in the SMILES field, click Insert.",
             1200,
         )
         QTest.mouseClick(button, LEFT_BUTTON)

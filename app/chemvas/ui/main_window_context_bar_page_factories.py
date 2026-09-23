@@ -8,13 +8,11 @@ from PyQt6.QtWidgets import (
     QButtonGroup,
     QColorDialog,
     QLineEdit,
-    QSizePolicy,
     QSlider,
     QToolButton,
     QWidget,
 )
 
-from chemvas.shell.theme import CONTEXT_BAR_BUTTON_HEIGHT
 from chemvas.ui.main_window_config import (
     ARROW_MENU_SPECS,
     ARROW_PRESET_SPECS,
@@ -26,6 +24,7 @@ from chemvas.ui.main_window_config import (
 from chemvas.ui.main_window_context_bar_widgets import (
     BondLengthSpinBox,
     KindMenuButton,
+    SegmentedButtonGroup,
     action_button,
     atom_symbol_input,
     bond_length_input,
@@ -99,17 +98,22 @@ def bond_label_for_state(style: str, order: int) -> str | None:
     return _LABEL_BY_STYLE.get((style, order))
 
 
-def _add_group_buttons(group: QButtonGroup, layout, buttons: dict, entries) -> None:
+def _add_group_buttons(
+    group: QButtonGroup, layout, buttons: dict, entries
+) -> SegmentedButtonGroup:
     """Append checkable icon buttons to ``group``/``layout``, keyed into ``buttons``.
 
     Each entry is ``(key, icon, tooltip, on_click)``.
     """
+    segments = SegmentedButtonGroup()
+    layout.addWidget(segments)
     for key, icon, tooltip, handler in entries:
         button = icon_button(icon, tooltip, checkable=True)
         button.clicked.connect(handler)
         group.addButton(button)
         buttons[key] = button
-        layout.addWidget(button)
+        segments.add_button(button)
+    return segments
 
 
 def build_empty_page() -> QWidget:
@@ -247,9 +251,7 @@ def build_bond_page(
     )
 
 
-def build_template_page(
-    window, begin_ring_template_insert, *, begin_smiles_insert
-) -> TemplateContextPage:
+def build_template_page(window, begin_ring_template_insert) -> TemplateContextPage:
     page, layout = new_context_page()
     icon_factory = icon_factory_for_window(window)
     layout.addWidget(hint_label("Ring"))
@@ -273,26 +275,6 @@ def build_template_page(
             for label, ring_size, style in TEMPLATE_ENTRY_SPECS
         ],
     )
-    # A SMILES string is the other way to drop a ready-made structure, so it
-    # sits beside the ring templates rather than on the tool bar.
-    layout.addWidget(divider())
-    smiles_input = QLineEdit()
-    smiles_input.setObjectName("contextSmilesInput")
-    smiles_input.setPlaceholderText("CC(=O)Oc1ccccc1C(=O)O")
-    smiles_input.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-    smiles_input.setMinimumWidth(120)
-    smiles_input.setMaximumWidth(340)
-    smiles_input.setFixedHeight(CONTEXT_BAR_BUTTON_HEIGHT)
-    smiles_input.setToolTip("SMILES")
-    smiles_input.setStatusTip("Type a SMILES string to insert")
-    insert_button = action_button("Insert", "Insert the typed SMILES structure")
-    insert_button.setObjectName("smiles_render_button")
-    insert_button.clicked.connect(
-        lambda _checked=False: begin_smiles_insert(smiles_input.text())
-    )
-    smiles_input.returnPressed.connect(lambda: begin_smiles_insert(smiles_input.text()))
-    layout.addWidget(smiles_input)
-    layout.addWidget(insert_button)
     layout.addStretch(1)
     return TemplateContextPage(page=page, group=group, buttons=buttons)
 

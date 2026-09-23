@@ -616,7 +616,7 @@ class Preview3DRecoveryTest(unittest.TestCase):
 
     def test_export_button_sits_left_of_ready_badge(self) -> None:
         preview = self._create_preview(SequencedAdapter([]))
-        preview.resize(420, 320)
+        preview.resize(560, 420)
         export_callback = mock.Mock()
 
         preview.set_export_xyz_action(export_callback)
@@ -637,7 +637,7 @@ class Preview3DRecoveryTest(unittest.TestCase):
         )
         self.assertTrue(button.isVisible())
         self.assertEqual(button.objectName(), "preview_export_xyz_button")
-        self.assertEqual(button.text(), "Export 3D")
+        self.assertEqual(button.text(), "Export .xyz")
         self.assertTrue(button.icon().isNull())
         self.assertEqual(
             button.toolButtonStyle(), Qt.ToolButtonStyle.ToolButtonTextOnly

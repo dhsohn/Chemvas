@@ -7,6 +7,7 @@ from PyQt6.QtCore import QRectF, Qt
 from PyQt6.QtGui import QColor, QTransform
 
 import chemvas.ui.canvas_background_painter as background_painter
+from chemvas.ui.canvas_tool_settings_state import CanvasToolSettingsState
 
 
 def test_draw_canvas_background_paints_workspace_shadow_and_sheet(monkeypatch) -> None:
@@ -35,15 +36,20 @@ def test_draw_canvas_background_paints_workspace_shadow_and_sheet(monkeypatch) -
     pen = painter.setPen.call_args.args[0]
     assert pen.color() == QColor("#dededa")
     assert pen.widthF() == 1.0
-    # With the grid off the painter asks once and draws no points.
+    # With the grid off the painter asks once and draws no lines.
     background_painter.grid_snap_enabled_for.assert_called_once_with(canvas)
-    painter.drawPoints.assert_not_called()
+    painter.drawLines.assert_not_called()
 
 
-def test_draw_canvas_background_draws_grid_points_when_the_grid_is_on(
+def test_draw_canvas_background_draws_square_grid_lines_when_the_grid_is_on(
     monkeypatch,
 ) -> None:
     canvas = SimpleNamespace()
+    monkeypatch.setattr(
+        background_painter,
+        "tool_settings_state_for",
+        lambda _canvas: CanvasToolSettingsState(),
+    )
     painter = mock.Mock()
     painter.transform.return_value = QTransform()
     sheet_rect = QRectF(0.0, 0.0, 40.0, 30.0)
@@ -61,9 +67,10 @@ def test_draw_canvas_background_draws_grid_points_when_the_grid_is_on(
         canvas, painter, QRectF(-100.0, -100.0, 400.0, 400.0)
     )
 
-    points = painter.drawPoints.call_args.args
-    # 5 columns (0..40) x 4 rows (0..30) inside the sheet, and nothing outside.
-    assert len(points) == 20
+    lines = painter.drawLines.call_args.args[0]
+    # 5 columns and 4 rows; intersections match the square snap coordinates.
+    assert len(lines) == 9
+    points = [point for line in lines for point in (line.p1(), line.p2())]
     assert all(
         sheet_rect.contains(point) or sheet_rect.intersects(QRectF(point, point))
         for point in points
@@ -93,4 +100,4 @@ def test_draw_canvas_background_skips_a_grid_too_dense_to_read(monkeypatch) -> N
         canvas, painter, QRectF(-100.0, -100.0, 900.0, 900.0)
     )
 
-    painter.drawPoints.assert_not_called()
+    painter.drawLines.assert_not_called()

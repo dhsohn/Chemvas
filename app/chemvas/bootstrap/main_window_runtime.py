@@ -79,7 +79,9 @@ def bootstrap_main_window(window: Any, runtime: MainWindowBootstrapRuntime) -> N
     runtime.ui_refs.apply_menu_bar_assembly(menu_bar_assembly)
     runtime.services.action_availability_service.update_action_availability(window)
     runtime.services.context_bar_service.init_context_bar(window)
-    runtime.services.panel_service.init_panels(window)
+    runtime.services.panel_service.init_panels(
+        window, panel_bar=toolbar_assembly.panel_bar
+    )
     runtime.services.ui_assembly_service.apply_theme(window)
     runtime.services.active_canvas_ui_service.bind_active_canvas(window)
     runtime.services.status_service.init_status_bar(window)

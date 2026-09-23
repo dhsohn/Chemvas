@@ -94,7 +94,7 @@ def draw_header(
         title_rect,
         int(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter),
         QFontMetricsF(title_font).elidedText(
-            "Molecule Info", Qt.TextElideMode.ElideRight, text_width
+            "3D Preview", Qt.TextElideMode.ElideRight, text_width
         ),
     )
 

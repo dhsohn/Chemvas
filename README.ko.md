@@ -42,7 +42,7 @@ Windows 로컬 빌드는 [패키징 안내](https://github.com/dhsohn/Chemvas/bl
 
 ![Chemvas 따라 그리기: 구조 삽입, 화살표 라벨 작성, 반응식 정렬, SVG 출력](https://raw.githubusercontent.com/dhsohn/Chemvas/main/docs/images/demo.gif)
 
-1. **Ring** 도구를 고르고 SMILES 입력란에 `OCc1ccccc1`을 넣은 뒤 **Insert**를
+1. 툴바 아래 공통 SMILES 입력란에 `OCc1ccccc1`을 넣은 뒤 **Insert**를
    누르고 캔버스를 클릭하세요. 산소 위에 포인터를 두고 **Enter**를 눌러 `OH`로
    바꾸세요.
 2. 오른쪽에 `O=Cc1ccccc1`도 삽입하세요. **Arrow** 도구로 두 구조 사이를

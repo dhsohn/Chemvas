@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import pytest
 from PyQt6.QtGui import QColor
 
 from chemvas.domain.document import MoleculeModel
@@ -41,6 +42,28 @@ def test_preview_info_text_helpers_skip_empty_fields() -> None:
     assert preview_info_items("C2H6O", "") == [("FORMULA", "C2H6O")]
     assert preview_info_items("", "46.07") == [("MW", "46.07")]
     assert preview_info_items("", "") == []
+
+
+@pytest.mark.parametrize(
+    "atom_count,edges,expected_rings",
+    [
+        (1, [], 0),
+        (5, [(0, 1), (1, 2), (2, 0), (3, 4)], 1),
+        (4, [(0, 1), (1, 2), (2, 0), (1, 3), (3, 2)], 2),
+    ],
+)
+def test_inspector_counts_independent_rings_in_disconnected_and_fused_graphs(
+    atom_count, edges, expected_rings
+):
+    scene = Molecule3DScene(
+        atoms=tuple(Molecule3DAtom("C", i, 0, 0) for i in range(atom_count)),
+        bonds=tuple(Molecule3DBond(a, b, 1) for a, b in edges),
+    )
+    assert preview_info_items("", "", scene) == [
+        ("ATOMS (incl. H)", str(atom_count)),
+        ("INDEP. RINGS", str(expected_rings)),
+        ("STYLE", "ACS 1996"),
+    ]
 
 
 def test_preview_status_text_helpers_cover_empty_building_issue_and_ready_states() -> (

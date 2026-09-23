@@ -79,7 +79,7 @@ class Preview3D(QWidget):
         self._update_timer.setSingleShot(True)
         self._update_timer.setInterval(120)
         self._update_timer.timeout.connect(self._handle_update_timer_timeout)
-        self.setMinimumSize(260, 220)
+        self.setMinimumSize(260, 420)
         self.setMouseTracking(True)
 
     @property
@@ -454,7 +454,7 @@ class Preview3D(QWidget):
             return self._export_xyz_button
         button = QToolButton(self)
         button.setObjectName("preview_export_xyz_button")
-        button.setText("Export 3D")
+        button.setText("Export .xyz")
         button.setToolTip("Export 3D XYZ")
         button.setStatusTip("Export the selected molecule as 3D XYZ")
         button.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -572,6 +572,10 @@ class Preview3D(QWidget):
         ]
         font = preview_caption_font(self.font())
         font.setWeight(QFont.Weight.DemiBold)
+        if self.width() < 500:
+            self._layout_compact_controls(specs, font)
+            self._set_header_controls_left(None)
+            return
         if self._scene is not None and export is not None:
             geometry = export.geometry()
             right_edge = float(geometry.x())
@@ -607,6 +611,30 @@ class Preview3D(QWidget):
         # Report where the button row actually starts on screen (geometry is
         # set with rounded x), so the painted title elides exactly at it.
         self._set_header_controls_left(controls_left)
+
+    def _layout_compact_controls(self, specs, font: QFont) -> None:
+        header = preview_layout_for_widget(QRectF(self.rect()), [], self.font())[
+            "header"
+        ]
+        controls = []
+        if self._export_xyz_button is not None and self._scene is not None:
+            controls.append(self._export_xyz_button)
+        for button, tooltip, value in reversed(specs):
+            button.setVisible(bool(value))
+            button.setEnabled(bool(value))
+            button.setToolTip(f"{tooltip}\n{value}")
+            if value:
+                controls.append(button)
+        x, y = header.left(), header.top() + 44
+        for button in controls:
+            button.setFont(font)
+            width = max(
+                56, round(QFontMetricsF(font).horizontalAdvance(button.text()) + 20)
+            )
+            if x + width > header.right() and x > header.left():
+                x, y = header.left(), y + 26
+            button.setGeometry(round(x), round(y), width, 22)
+            x += width + 6
 
     def _set_header_controls_left(self, value: float | None) -> None:
         if value == self._header_controls_left:

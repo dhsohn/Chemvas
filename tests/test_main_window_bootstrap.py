@@ -44,6 +44,7 @@ def test_bootstrap_main_window_initializes_runtime_references_and_services() -> 
         canvas_tabs=canvas_tabs,
     )
     toolbar_assembly = SimpleNamespace(
+        panel_bar=object(),
         tool_actions={"bond": object()},
         load_action=object(),
         export_xyz_button=object(),
@@ -143,7 +144,9 @@ def test_bootstrap_main_window_initializes_runtime_references_and_services() -> 
         window
     )
     services.context_bar_service.init_context_bar.assert_called_once_with(window)
-    services.panel_service.init_panels.assert_called_once_with(window)
+    services.panel_service.init_panels.assert_called_once_with(
+        window, panel_bar=toolbar_assembly.panel_bar
+    )
     services.ui_assembly_service.apply_theme.assert_called_once_with(window)
     services.active_canvas_ui_service.bind_active_canvas.assert_called_once_with(window)
     preview.refresh_selected_from_canvas.assert_not_called()

@@ -93,7 +93,15 @@ def test_real_widget_wheel_keeps_header_footer_and_viewport_chrome_unchanged(
         assert preview._zoom == 3.0
         assert preview._scene is scene
         layout = preview_layout_for_widget(
-            QRectF(preview.rect()), ["FORMULA: CO", "MW: 28.01"], preview.font()
+            QRectF(preview.rect()),
+            [
+                "FORMULA: CO",
+                "MW: 28.01",
+                "ATOMS (incl. H): 2",
+                "INDEP. RINGS: 0",
+                "STYLE: ACS 1996",
+            ],
+            preview.font(),
         )
         changed = {
             name: _changed_pixels(before, after, layout[name])
@@ -240,7 +248,15 @@ def test_molecule_clip_intersects_and_restores_callers_clip_even_on_failure(
     painter.setClipRect(original)
     font = QFont("DejaVu Sans", 10)
     layout = preview_layout_for_widget(
-        QRectF(image.rect()), ["FORMULA: CO", "MW: 28.01"], font
+        QRectF(image.rect()),
+        [
+            "FORMULA: CO",
+            "MW: 28.01",
+            "ATOMS (incl. H): 2",
+            "INDEP. RINGS: 0",
+            "STYLE: ACS 1996",
+        ],
+        font,
     )
     observed = []
 

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, cast
+from typing import Any, Literal, cast
 
 from chemvas.features.annotations import DEFAULT_BRACKET_KIND
 
@@ -28,6 +28,9 @@ class CanvasToolSettingsState:
     orbital_snap_step: int = 15
     grid_snap_enabled: bool = False
     grid_snap_step: float = 0.5
+    grid_style: Literal["square", "hex"] = "square"
+    grid_opacity: float = 0.20
+    valence_checking: bool = True
 
 
 def tool_settings_state_for(canvas: Any) -> CanvasToolSettingsState:

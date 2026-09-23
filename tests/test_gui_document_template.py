@@ -1775,7 +1775,7 @@ class GuiDocumentAndTemplateTest(unittest.TestCase):
         self.assertEqual(preview._mw_text, "18.04")
         preview_window = preview_window_for_window(self.window)
         self.assertIsNotNone(preview_window)
-        self.assertIs(preview.parent(), preview_window)
+        self.assertIs(preview.parent(), preview_window.widget())
 
     def test_preview_panel_uses_selected_structure_when_scene_only_items_are_also_selected(
         self,

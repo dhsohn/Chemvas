@@ -19,7 +19,7 @@ from chemvas.shell.theme import (
 from chemvas.ui.canvas_insert_state import insert_state_for
 from chemvas.ui.canvas_tool_settings_state import tool_settings_state_for
 from chemvas.ui.main_window_context_bar_pages import bond_label_for_state
-from chemvas.ui.main_window_context_bar_widgets import KindMenuButton
+from chemvas.ui.main_window_context_bar_widgets import KindMenuButton, ToolOptionsStack
 
 # Maps the active canvas tool name to the context page key shown in the bar.
 _TOOL_PAGE_KEYS = {
@@ -91,7 +91,7 @@ class MainWindowContextBarService:
         bar.setFixedHeight(TOOLBAR_THICKNESS)
         bar.setIconSize(QSize(TOOLBAR_ICON_SIZE, TOOLBAR_ICON_SIZE))
 
-        stack = QStackedWidget()
+        stack = ToolOptionsStack()
         stack.setFixedHeight(CONTEXT_BAR_CONTENT_HEIGHT)
         stack.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self._stack = stack
@@ -121,6 +121,7 @@ class MainWindowContextBarService:
             stack.addWidget(page)
         stack.setCurrentWidget(self._pages["empty"])
         bar.addWidget(stack)
+        bar.addWidget(context_pages.smiles_entry)
 
         window.addToolBarBreak(Qt.ToolBarArea.TopToolBarArea)
         window.addToolBar(Qt.ToolBarArea.TopToolBarArea, bar)

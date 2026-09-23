@@ -157,6 +157,47 @@ def arc_points(
     return points
 
 
+def hex_grid_cells(
+    bounds: tuple[float, float, float, float], *, step: float
+) -> list[tuple[Point2D, ...]]:
+    """Flat-top hexagons shared by painting and endpoint snapping."""
+    if step <= 0:
+        return []
+    left, top, right, bottom = bounds
+    height = math.sqrt(3) * step
+    cells = []
+    for column in range(
+        math.floor(left / (1.5 * step)) - 1, math.ceil(right / (1.5 * step)) + 2
+    ):
+        cx = column * 1.5 * step
+        offset = (column % 2) * height / 2
+        for row in range(
+            math.floor((top - offset) / height) - 1,
+            math.ceil((bottom - offset) / height) + 2,
+        ):
+            cy = row * height + offset
+            cells.append(
+                tuple(
+                    (
+                        cx + step * math.cos(i * math.pi / 3),
+                        cy + step * math.sin(i * math.pi / 3),
+                    )
+                    for i in range(6)
+                )
+            )
+    return cells
+
+
+def snapped_to_hex_grid(point: Point2D, *, step: float) -> Point2D:
+    if step <= 0:
+        return point
+    x, y = point
+    vertices = (
+        vertex for cell in hex_grid_cells((x, y, x, y), step=step) for vertex in cell
+    )
+    return min(vertices, key=lambda vertex: (vertex[0] - x) ** 2 + (vertex[1] - y) ** 2)
+
+
 def arc_midpoint(
     start: Point2D, end: Point2D, *, sweep_degrees: float, bulge_left: bool
 ) -> Point2D:
@@ -171,9 +212,11 @@ def arc_midpoint(
 __all__ = [
     "arc_midpoint",
     "arc_points",
+    "hex_grid_cells",
     "nearest_endpoint",
     "snapped_endpoint",
     "snapped_line_end",
     "snapped_to_grid",
+    "snapped_to_hex_grid",
     "wavy_line_points",
 ]

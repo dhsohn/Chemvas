@@ -7,6 +7,7 @@ from chemvas.shell.icon_design import (
     has_design_icon,
 )
 from chemvas.shell.icon_pixmap_factory import MainWindowIconPixmapFactory
+from chemvas.shell.palette import PALETTE
 from chemvas.shell.toolbar_styles import CONTEXT_BAR_ICON_SIZE, TOOLBAR_ICON_SIZE
 
 if TYPE_CHECKING:
@@ -39,6 +40,9 @@ class MainWindowIconFactory:
         return self._pixmap_icons.make_sized_icon(
             lambda painter, size: draw_design_icon(painter, name, size=size),
             self.DESIGN_ICON_SIZES,
+            checked_painter_fn=lambda painter, size: draw_design_icon(
+                painter, name, size=size, color=PALETTE["checked_text"]
+            ),
         )
 
     def _design_icon(self, name: str, fallback: str) -> QIcon:

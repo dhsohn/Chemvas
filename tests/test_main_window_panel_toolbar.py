@@ -129,9 +129,8 @@ class MainWindowPanelToolbarTest(unittest.TestCase):
     def _toolbar_widgets(self, toolbar):
         names = []
         for action in toolbar.actions():
-            # The buttons form one continuous row: no divider line and no
-            # blank gap widget between the tool groups.
-            self.assertFalse(action.isSeparator())
+            if action.isSeparator():
+                continue
             widget = (
                 action.defaultWidget()
                 if hasattr(action, "defaultWidget")
@@ -175,18 +174,15 @@ class MainWindowPanelToolbarTest(unittest.TestCase):
                 assembly.panel_bar.findChild(QToolButton, removed_name),
                 removed_name,
             )
-        # One continuous row in the configured order: Brackets is followed
-        # directly by Mark, and Orbital directly by the note (Text) tool. The
-        # SMILES controls live on the Ring options bar now; the eraser closes
-        # the toolbar.
+        self.assertEqual(sum(a.isSeparator() for a in assembly.panel_bar.actions()), 4)
         self.assertEqual(
             self._toolbar_widgets(assembly.panel_bar),
             [
                 "toolButton_select",
                 "toolButton_perspective",
-                "toolButton_text",
                 "toolButton_bond",
                 "toolButton_benzene",
+                "toolButton_text",
                 "toolButton_arrow",
                 "toolButton_line",
                 "toolButton_ts_bracket",

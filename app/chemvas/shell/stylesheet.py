@@ -13,6 +13,14 @@ def main_window_chrome_stylesheet(palette: Mapping[str, str]) -> str:
             QMainWindow {{
                 background: {palette["surface_app"]};
             }}
+            QDockWidget#inspectorDock {{
+                color: {palette["text"]};
+            }}
+            QDockWidget#inspectorDock::title {{
+                background: {palette["surface_bar"]};
+                padding: 5px 8px;
+                border-bottom: 1px solid {palette["border"]};
+            }}
             QToolBar {{
                 background: {palette["surface_bar"]};
                 border: none;
@@ -22,6 +30,11 @@ def main_window_chrome_stylesheet(palette: Mapping[str, str]) -> str:
             }}
             QToolBar#topRoleToolbar {{
                 padding: 2px 4px;
+            }}
+            QToolBar::separator {{
+                background: {palette["border_soft"]};
+                width: 1px;
+                margin: 7px 5px;
             }}
             QToolBar#contextOptionsBar {{
                 background: {palette["surface_context"]};
@@ -108,7 +121,7 @@ def main_window_canvas_tab_stylesheet(palette: Mapping[str, str]) -> str:
                 border-top: 2px solid transparent;
                 border-bottom-left-radius: 6px;
                 border-bottom-right-radius: 6px;
-                padding: 4px 14px 5px 14px;
+                padding: 3px 12px;
                 margin: 0 2px 0 0;
             }}
             QTabWidget#canvasTabs QTabBar::tab:hover:!selected {{

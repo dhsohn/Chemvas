@@ -4,7 +4,7 @@ from unittest import mock
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PyQt6.QtWidgets import QApplication, QMainWindow, QWidget
+from PyQt6.QtWidgets import QApplication, QMainWindow, QToolBar, QWidget
 
 from chemvas.ui.main_window_preview_window import build_preview_window
 
@@ -32,14 +32,16 @@ class MainWindowPreviewPanelTest(unittest.TestCase):
         assembly = build_preview_window(
             window,
             preview_widget=window.preview_widget,
+            panel_bar=QToolBar(window),
         )
 
-        self.assertIs(window.preview_widget.parent(), assembly.preview_window)
+        self.assertIs(window.preview_widget.parent(), assembly.preview_window.widget())
         self.assertEqual(assembly.preview_window.windowTitle(), "Molecule Info")
-        self.assertGreaterEqual(assembly.preview_window.minimumWidth(), 420)
+        self.assertEqual(assembly.preview_window.objectName(), "inspectorDock")
         self.assertIsNone(
             assembly.preview_window.findChild(QWidget, "preview_export_xyz_button")
         )
+        window.show()
         assembly.preview_window.show()
         self.app.processEvents()
         self.assertTrue(assembly.preview_window.isVisible())
@@ -47,4 +49,4 @@ class MainWindowPreviewPanelTest(unittest.TestCase):
         self.assertTrue(assembly.preview_window.close())
         self.app.processEvents()
         self.assertFalse(assembly.preview_window.isVisible())
-        window.preview_widget.pause_updates.assert_called_once_with()
+        self.assertTrue(window.preview_widget.pause_updates.called)

@@ -53,11 +53,13 @@ class CornerMenuButton(QToolButton):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
         painter.setPen(Qt.PenStyle.NoPen)
-        painter.setBrush(QColor(PALETTE["text_faint"]))
+        painter.setBrush(
+            QColor(PALETTE["checked_text" if self.isChecked() else "text_muted"])
+        )
         rect = self.rect()
-        size = 6
-        right = rect.right() - 2
-        bottom = rect.bottom() - 2
+        size = 3
+        right = rect.right() - 3
+        bottom = rect.bottom() - 3
         left = right - size
         top = bottom - size
         points = [
@@ -85,7 +87,10 @@ class CornerMenuToolButton(CornerMenuButton):
         if (
             event is not None
             and self.menu() is not None
-            and self._is_in_corner(event.position().toPoint())
+            and (
+                event.button() == Qt.MouseButton.RightButton
+                or self._is_in_corner(event.position().toPoint())
+            )
         ):
             self.showMenu()
             event.accept()

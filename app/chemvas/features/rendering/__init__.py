@@ -52,12 +52,15 @@ from .bond_style import (
 from .line_geometry import (
     arc_midpoint,
     arc_points,
+    hex_grid_cells,
     nearest_endpoint,
     snapped_endpoint,
     snapped_line_end,
     snapped_to_grid,
+    snapped_to_hex_grid,
     wavy_line_points,
 )
+from .valence import overvalent_atom_ids
 
 __all__ = [
     "BOLD_BOND_STYLES",
@@ -86,6 +89,7 @@ __all__ = [
     "double_position_for_style",
     "extend_segment",
     "hash_segments_from_segment",
+    "hex_grid_cells",
     "is_bold_double_bond_style",
     "is_dotted_double_bond_style",
     "is_plain_double_bond_style",
@@ -97,12 +101,14 @@ __all__ = [
     "normalized_bold_double_style",
     "normalized_plain_double_style",
     "offset_segment",
+    "overvalent_atom_ids",
     "plain_double_preview_segments",
     "refresh_bond_graphics",
     "scale_segment",
     "snapped_endpoint",
     "snapped_line_end",
     "snapped_to_grid",
+    "snapped_to_hex_grid",
     "strip_corners",
     "style_for_double_position",
     "style_for_existing_bond_overlay",

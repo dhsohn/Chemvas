@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- A dockable Molecule Info inspector with 3D rotation/zoom, XYZ export,
+  hydrogen-inclusive atom counts and independent ring counts.
+- View-only bond angle guides and conservative, optional valence warnings for
+  common H/B/C/N/O/F charge states; document data and figure exports are unchanged.
+- A status-bar None/Hex/Square grid control with 15%, 20% and 25% strength.
+
+### Changed
+
+- Group the drawing toolbar into five sections, use teal checked icons and
+  segmented options, and reduce toolbar/tab padding while keeping button sizes.
+- Keep one shared SMILES field beside the active tool options, with Enter or
+  Insert starting placement. Actual menu buttons carry a small corner indicator.
+
 ### Fixed
 
 - Reapplying a note's existing color preserves Redo, including notes restored

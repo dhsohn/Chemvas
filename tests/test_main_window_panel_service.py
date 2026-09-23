@@ -8,6 +8,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 from PyQt6.QtWidgets import (
     QApplication,
     QMainWindow,
+    QToolBar,
     QWidget,
 )
 
@@ -50,13 +51,13 @@ class MainWindowPanelServiceTest(unittest.TestCase):
             preview_window_for_window=preview_window_for_window,
         )
 
-        service.init_panels(window)
+        service.init_panels(window, panel_bar=QToolBar(window))
 
         preview_window = preview_window_for_window(window)
         self.assertIsNotNone(preview_window)
-        self.assertIs(preview_3d.parent(), preview_window)
+        self.assertIs(preview_3d.parent(), preview_window.widget())
         self.assertFalse(preview_window.isVisible())
-        preview_3d.pause_updates.assert_called_once_with()
+        self.assertTrue(preview_3d.pause_updates.called)
         export_callback = preview_3d.set_export_xyz_action.call_args.args[0]
         export_callback()
         export_xyz_for_window.assert_called_once_with(
@@ -88,6 +89,7 @@ class MainWindowPanelServiceTest(unittest.TestCase):
         preview.set_rdkit_adapter.assert_not_called()
 
         preview_window = mock.Mock()
+        preview_window.isVisible.return_value = True
         window = SimpleNamespace(
             ui_references=SimpleNamespace(preview_window=preview_window)
         )
@@ -115,4 +117,4 @@ class MainWindowPanelServiceTest(unittest.TestCase):
         )
         preview_window.show.assert_called_once_with()
         preview_window.raise_.assert_called_once_with()
-        preview_window.activateWindow.assert_called_once_with()
+        preview_window.activateWindow.assert_not_called()

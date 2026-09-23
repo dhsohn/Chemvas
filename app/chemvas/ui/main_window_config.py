@@ -133,19 +133,15 @@ MARK_TOOL_ACTION_SPECS: list[tuple[str, str, str, str, str]] = [
 TOOLBAR_PRIMARY_TOOL_GROUP: tuple[str, ...] = (
     "select",
     "perspective",
-    "text",
-    "bond",
-    "benzene",
-    "arrow",
-    "line",
-    "ts_bracket",
 )
 
 # "note" is the tool labelled "Text" in the UI; "shape" sits to its right.
 TOOLBAR_TOOL_GROUPS: list[tuple[str, ...]] = [
     TOOLBAR_PRIMARY_TOOL_GROUP,
-    ("mark", "orbital"),
-    ("note", "shape", "color", "ring_fill", "delete"),
+    ("bond", "benzene", "text", "arrow"),
+    ("line", "ts_bracket", "mark", "orbital"),
+    ("note", "shape", "color", "ring_fill"),
+    ("delete",),
 ]
 
 TOOLBAR_TOOL_ACTION_ORDER: list[str] = [
