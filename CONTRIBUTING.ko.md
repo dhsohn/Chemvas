@@ -2,21 +2,17 @@
 
 [English](CONTRIBUTING.md)
 
-Chemvas에 관심을 가져 주셔서 감사합니다! 이 안내는 로컬 환경 설정, 검사 실행
-방법, 그리고 무엇보다 이 코드베이스가 따르는 **아키텍처 관례**를 다룹니다. 코드를
-옮기기 전에 아키텍처 절을 꼭 읽어 주세요. 모듈 배치는 의도된 것이고 테스트가
-강제하므로, 선의의 "정리"라도 CI에서 실패합니다.
+Chemvas에 관심을 가져 주셔서 감사합니다! 이 가이드는 로컬 개발 환경 구축, 검사 실행 방법, 그리고 코드베이스가 준수하는 **아키텍처 규칙**을 안내합니다.
 
-참여함으로써 [행동 강령](CODE_OF_CONDUCT.ko.md)을 따르는 데 동의하는 것으로 봅니다.
+모듈 구조 변경 전에 아키텍처 규칙을 꼭 확인해 주세요. 패키지 간의 경계는 자동화된 테스트를 통해 엄격하게 검증됩니다.
+
+모든 기여자는 [행동 강령](CODE_OF_CONDUCT.ko.md)을 준수해야 합니다.
 
 ## 개발 환경 설정
 
 **Python 3.12+**가 필요합니다.
 
-개발·검증·커밋·PR은 macOS, Windows(네이티브·WSL), Linux 어디서든 진행할 수 있습니다.
-특정 호스트의 체크아웃을 정본으로 지정하지 않으며, 현재 기기에서 선택한 저장소와
-브랜치에서 작업합니다. 검사 결과에는 실행 플랫폼과 범위를 적으세요. 한 플랫폼의
-검사 통과가 다른 플랫폼의 네이티브 GUI·패키징 동작까지 검증한 것은 아닙니다.
+macOS, Linux, Windows(네이티브 및 WSL) 환경에서 개발하고 검증할 수 있습니다.
 
 ```bash
 git clone https://github.com/dhsohn/Chemvas.git
@@ -26,17 +22,15 @@ python -m pip install -e ".[dev]"                    # dev tooling
 python -m pip install -e ".[dev,rdkit]"              # also enable RDKit features
 ```
 
-`make check`가 쓰는 공용 `machine.json` 계약 검증기는 별도의 개발 체크아웃입니다.
+전체 검증 게이트를 실행하려면 공용 `machine.json` 계약 검증기가 필요합니다:
 
 ```bash
 git clone https://github.com/dhsohn/machine-contracts.git ~/machine_contracts
 ```
 
-그 체크아웃이 다른 곳에 있으면 `FACTORY_MACHINE_CONTRACT_REPO`를 설정하세요.
-`make check`는 활성화된 가상환경을 먼저 쓰고, 다음으로 저장소의 `.venv`, 마지막으로
-`python3`를 씁니다. 인터프리터를 명시하려면 `PYTHON_BIN`을 설정하세요.
+다른 경로에 클론한 경우 `FACTORY_MACHINE_CONTRACT_REPO` 환경변수에 해당 경로를 설정하세요.
 
-개발 트리에서 앱을 실행하려면:
+소스 코드에서 앱을 실행하려면:
 
 ```bash
 python app/main.py
@@ -44,14 +38,13 @@ python app/main.py
 
 ## 검사 실행
 
-PR을 열기 전에 명령 하나로 기본 로컬 게이트(lint, 포맷, mypy, 전체 테스트 스위트,
-`machine.json` 적합성 검사)를 실행합니다.
+PR을 제출하기 전 다음 단일 명령어로 기본 로컬 게이트(린트, 포맷, mypy, 전체 테스트, 계약 검증)를 실행합니다:
 
 ```bash
 make check
 ```
 
-참고로 개별 게이트는 다음과 같습니다.
+개별 검사 도구는 다음과 같이 수동 실행할 수 있습니다:
 
 ```bash
 python -m ruff check .     # lint + import sorting
@@ -59,106 +52,39 @@ python -m ruff format --check .  # deterministic formatting
 python -m mypy             # all production code; migrated owner packages are strict
 ```
 
-게이트는 실제 Python 플랫폼과 각 skip 사유를 출력합니다. 공통 스위트는
-Linux/WSL·네이티브 Windows·macOS에서 실행하며, 플랫폼별 범위는 다음과 같습니다.
-
-| 호스트 | 공통 스위트와 플랫폼 검사 |
-| --- | --- |
-| Linux / WSL | Qt offscreen과 Linux의 비 UTF-8 바이트 파일명 검사. WSL은 Linux Python 기준입니다. |
-| 네이티브 Windows | 공통 스위트는 제품과 같은 Windows Qt 백엔드로 네이티브 글꼴을 지원하고, 창 포커스 충돌을 막도록 직렬 실행합니다. 별도 CI 잡은 Inno Setup을 필수로 확인하고 설치기·번들을 검사합니다. |
-| macOS | Qt offscreen 공통 스위트. 노트 서식·모양 workflow 두 파일은 실제 팝업 포커스를 위해 Cocoa로 직렬 실행합니다. CoreFoundation 앱 이름 검사도 포함합니다. |
-
-OS 전용 테스트는 실행 조건과 skip 사유를 테스트 옆에 명시합니다. 경로 별칭, Mac 대화상자의
-없는 제목, Qt 래스터 반올림은 공통 테스트에서 처리합니다. 네이티브 Windows 검사와
-Cocoa workflow에는 창 포커스를 유지할 수 있는 그래픽 세션이 필요하므로 실행 중 다른
-앱으로 전환하지 마세요. 네이티브 백엔드 시작이나 창 활성화 실패는 테스트 실패로 보고합니다.
-메뉴 fixture는 합성 클릭을 위해 QWidget 메뉴를 사용하므로 Mac 시스템 메뉴 막대와
-그 밖의 데스크톱 상호작용은 기능별 실검증이 필요합니다.
-Windows에서는 Git Bash를 사용하세요. `.venv/Scripts/python.exe`도 자동 선택하며
-Make가 없으면 `bash scripts/check.sh`로 같은 게이트를 실행합니다.
-
-개발 중에는 플랫폼별 실행 선택을 유지하도록 게이트에 손댄 파일을 넘기세요.
+수정한 파일과 관련된 테스트만 실행하려면:
 
 ```bash
 bash scripts/check.sh tests/test_<area>.py
 ```
 
-> **테스트 파일마다 별도의 pytest 프로세스를 주세요.** Qt는 테스트 모듈 사이에
-> 완전히 초기화되지 않는 전역 애플리케이션 상태를 유지하므로, 한 프로세스에서
-> 몰아 돌리면 CI에서는 실패할 테스트가 통과합니다. 이 규칙은
-> `scripts/run_test_files.sh` 한 곳에 있습니다. `make check`와 CI 테스트 잡이 모두 이
-> 스크립트를 호출하며, offscreen 검사는 여러 프로세스를 동시에 돌립니다. 네이티브
-> Windows와 Cocoa 파일은 직렬 실행하며, 두 파일을 한 프로세스에 넣는 일은 없습니다.
-> 손댄 파일로 범위를 좁히려면 게이트에 파일을 직접 넘기세요.
+> **프로세스 격리 원칙**: Qt는 전역 상태를 유지하므로 서로 다른 테스트 모듈이 한 프로세스에서 실행되면 비정상적인 결과가 발생할 수 있습니다. 테스트는 항상 프로세스 격리를 보장하는 `scripts/check.sh` 또는 `scripts/run_test_files.sh`를 통해 실행하세요:
 >
 > ```bash
 > bash scripts/check.sh tests/test_<area>.py
 > ```
 
-새 동작에는 테스트가 따라야 합니다. 대부분의 모듈에는 짝이 되는
-`tests/test_<module>.py`가 있습니다.
+## 아키텍처 규칙
 
-테스트 모듈 하나는 한 가지 스타일로 유지하세요. 기존 모듈을 확장할 때는 그 파일의
-현재 `unittest` 또는 순수 pytest 스타일을 따릅니다. 새로 만드는 독립 테스트
-모듈은 순수 pytest 함수를 씁니다. 스타일만 바꾸려고 무관한 테스트를 변환하지 마세요.
+자세한 아키텍처 설계는 [`docs/ARCHITECTURE.ko.md`](docs/ARCHITECTURE.ko.md) (영문: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)) 및 [`ADR 0001`](docs/adr/0001-feature-oriented-modularization.md)에 기술되어 있습니다.
 
-pytest 그래픽 테스트는 `tests/conftest.py`의 session 범위 `qt_application`
-fixture를 명시적으로 사용합니다. 파일별 독립 실행에서 매개변수별 사례와 중첩된
-offscreen context가 같은 `QApplication`을 빌리도록 강한 참조를 유지합니다.
-위젯 fixture는 이 fixture에 의존하고, 종료 전에 자신이 만든 위젯의 삭제를 예약한 뒤
-그 대상의 `DeferredDelete` 이벤트를 처리합니다. 창을 닫는 것만으로는 객체가
-삭제되지 않습니다. Qt 없는 테스트와 시작 subprocess 테스트의 경계를 유지하도록
-application fixture를 전역 autouse로 만들지 않습니다. 기존 unittest 모듈은
-클래스가 application을 보유하고 위젯을 명시적으로 정리하는 방식을 유지할 수 있습니다.
+패키지 경계 규칙은 [`tests/test_architecture_boundaries.py`](tests/test_architecture_boundaries.py) 및 [`tests/test_package_dependencies.py`](tests/test_package_dependencies.py)에 의해 강제됩니다.
 
-CI는 추가로 선택적 RDKit 스모크와 wheel 패키징 스모크를 돌립니다. 이 두
-환경 의존 잡은 `make check`에 포함되지 않습니다.
+### 모듈 역할 및 접미사 규칙
 
-## 아키텍처 관례 (구조를 바꾸기 전에 읽으세요)
-
-규칙 자체는 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)가 규범입니다. 평면
-`app/chemvas/ui` 패키지의 ports / access / state / service 규율, `core`가
-import해도 되는 것, 트랜잭션과 복구 소유권의 분할이 거기 있습니다(한국어판:
-[`docs/ARCHITECTURE.ko.md`](docs/ARCHITECTURE.ko.md)). 목표 패키지 경계와 의존
-방향은 [`ADR 0001`](docs/adr/0001-feature-oriented-modularization.md)이 정합니다.
-코드를 옮기기 전에 둘 다 읽으세요. 아래는 기여자 시점의 요약입니다.
-
-**이 경계는
-[`tests/test_architecture_boundaries.py`](tests/test_architecture_boundaries.py)와
-[`tests/test_package_dependencies.py`](tests/test_package_dependencies.py)가
-강제합니다.** 두 테스트는 AST와 정규식으로 소스를 훑어 금지된 패턴이 다시
-나타나면 실패합니다. 이 모듈들을 합치거나 내부에 손을 넣어 "단순화"하려 하면
-테스트가 거부합니다.
-
-### 모듈 역할, 예시로 보기
-
-원자 라벨 기능을 예로 들면:
-
-| 접미사 | 역할 | 예 |
+| 접미사 | 역할 | 예시 |
 | --- | --- | --- |
-| `*_ports` | 캔버스나 창에서 서비스/협력자를 해석하는 유일한 정식 경로. | [`canvas_service_ports.py`](app/chemvas/ui/canvas_service_ports.py): `atom_label_service_for_access(canvas)` → `canvas_services_for(canvas).atom_label_service` |
-| `*_access` | 호출자 대면 자유 함수. 다른 모듈은 속성을 건드리는 대신 이것을 부른다. | [`atom_label_access.py`](app/chemvas/ui/atom_label_access.py): `add_or_update_atom_label(canvas, atom_id, text)` |
-| `*_service` | 실제 구현/로직. 협력자를 **주입된 포트**로 받는다. | `atom_label_service.py` |
-| `*_state` | 런타임 상태를 창/캔버스의 private 속성이 아니라 전용 객체에 둔다. | `main_window_state.py` (`MainWindowState`) |
-| `*_logic` | 단위 테스트가 쉬운, Qt 없는 순수 헬퍼(파싱, 기하, 레이아웃). | `chemvas.features.annotations` 라벨 레이아웃 API |
-| `*_controller` | 캔버스나 창의 한 영역에 대한 상호작용 흐름을 소유하는 조정 클래스(`foo_controller.py`의 `FooController`). 캔버스와 주입된 협력자를 들고 있다. 의도된 예외 하나가 다른 곳에 있다: `ui/hover.py`의 `HoverController`는 hover feature 경계 옆에서 Qt hover 조율을 소유한다(`docs/ARCHITECTURE.md` 참조). | `scene_delete_controller.py` (`SceneDeleteController`) |
-| `*_tool` / `*_tools` | `chemvas.ui.tool_base.Tool`을 뿌리로 하는 포인터 도구 계층의 구현. 이 계층의 모든 구현은 `*_tool.py`(도구 하나) 또는 `*_tools.py`(한 계열, `preview_tools.py`처럼 중간 베이스가 있을 수 있음) 모듈에 있다. | `bond_tool.py` (`BondTool`) |
-| `*_bundle` | 함께 구성되어 한 필드로 저장·전달되는 서비스 묶음 dataclass. 보통 `build_*` 팩토리 옆에 있다. | `canvas_input_service_bundle.py` (`CanvasInputServiceBundle`) |
-| `*_renderer` / `*_rendering` | Qt 페인팅과 그래픽 아이템 그리기 헬퍼: 렌더러 클래스 또는 그리기 함수 모듈. | `bond_renderer.py`, `hover_rendering.py` |
+| `*_ports` | 캔버스 또는 창에서 서비스/협력자를 조회하는 단일 표준 진입점 | [`canvas_service_ports.py`](app/chemvas/ui/canvas_service_ports.py) |
+| `*_access` | 호출자용 함수 인터페이스; 모듈은 상태 속성을 직접 읽는 대신 이 함수를 호출 | [`atom_label_access.py`](app/chemvas/ui/atom_label_access.py) |
+| `*_service` | 비즈니스 로직 구현체; 주입된 포트를 통해 협력자를 전달받음 | `atom_label_service.py` |
+| `*_state` | 런타임 상태 데이터클래스; 위젯에 직접 속성을 두는 것을 방지 | `main_window_state.py` |
+| `*_logic` | Qt 의존성이 없는 순수 함수 (파싱, 기하 계산 등) | `chemvas.features.annotations` |
+| `*_controller` | 특정 기능 영역의 상호작용 흐름을 조율하는 클래스 | `scene_delete_controller.py` |
+| `*_tool` | `chemvas.ui.tool_base.Tool`을 상속하는 포인터 도구 구현체 | `bond_tool.py` |
+| `*_bundle` | 함께 생성되어 전달되는 서비스들을 묶은 데이터클래스 | `canvas_input_service_bundle.py` |
+| `*_renderer` | Qt 페인팅 및 그래픽 아이템 그리기 헬퍼 | `bond_renderer.py` |
 
-Selection은 기존 계층을 의도적으로 통합했다. 호출자는
-`selection_state.selection_for(canvas)`로 구체 `SelectionController` 하나에 접근한다.
-이 leaf는 selection만 조회하며 별도 access wrapper나 bundle을 추가하지 않는다.
-순수 선택 정책, scene/note 조회, 실제 outline 렌더러의 경계는 유지한다
-(`docs/ARCHITECTURE.ko.md` 참고).
-
-앞의 다섯 행은 주입 포트 규율이며 경계 테스트가 그 대부분을 강제합니다(Qt 없는
-`*_logic` 규칙은 저장소 전체 게이트가 아니라 모듈별로 검사). 뒤의 네 행은
-코드베이스가 이미 일관되게 쓰는 어휘를 문서화한 것입니다. 새 모듈도 이에 맞추되,
-그 접미사를 검사하는 자동 게이트는 없습니다.
-
-런타임의 일부만 필요한 집중 테스트는 더블에 상태나 서비스를 손으로 매달지 말고
-그 부분을 실제로 만듭니다.
+테스트 작성 시 필요한 런타임 상태만 부분적으로 구성할 수 있습니다:
 
 ```python
 canvas = SimpleNamespace(
@@ -166,55 +92,21 @@ canvas = SimpleNamespace(
 )
 ```
 
-`tests/runtime_state.canvas_runtime_state(**states)`는 필드 이름을 실제
-`CanvasRuntimeState`와 대조하고, `tests/runtime_services.py`는 부분
-`CanvasRuntimeServices`에 대해 같은 일을 합니다.
+### 핵심 아키텍처 제약
 
-### 경계 테스트가 막는 것
+- **비공개 멤버 직접 접근 금지**: `canvas._foo`와 같은 내부 멤버에 직접 접근하지 않습니다.
+- **액세서 함수 사용**: 상태 속성을 직접 읽지 않고 `*_access` 헬퍼를 통해 접근합니다.
+- **의존성 주입**: 전역 싱글턴에 의존하지 않고 생성자 인자나 포트를 통해 협력자를 주입받습니다.
+- **기능 패키지화**: 순수 도메인 로직은 `chemvas.domain`, 사용자 기능 조율은 `chemvas.features`에 배치합니다.
 
-- **private 멤버에 손대지 않기.** 프로덕션 코드에서 `canvas._foo`,
-  `getattr(canvas, "_foo")`, `setattr(canvas, "_foo", ...)`를 쓰지 마세요.
-- **상태 속성이 아니라 접근자를 거치기.** `canvas.hover_atom_id`,
-  `canvas.atom_items`, `canvas.active_bond_order` 같은 캔버스 상태를 직접 읽지
-  말고 해당 `*_access` 헬퍼를 쓰세요.
-- **서비스는 주입된 포트를 받기.** 서비스는 `window.canvas`, `window.services`,
-  `window.canvas_tabs`를 거쳐 들어가면 안 됩니다. 협력자는 전달됩니다
-  (`chemvas.bootstrap.main_window_services`의 배선을 보세요). 그래야 서비스마다
-  격리해서 테스트할 수 있습니다.
-- **`window.canvas` / `window.canvas_tabs`는 shell 표면에서 빠져 있기.**
-  `app/chemvas/shell/main_window.py` 밖에서는 캔버스/탭 참조 포트를 쓰세요.
-- **제거된 파사드는 제거된 채로.** 경계 테스트에는 `MainWindow`에 다시 넣으면 안
-  되는 옛 god-object 메서드 이름이 많이 나열되어 있습니다(예: `set_bond_style`,
-  `export_figure`, `bind_active_canvas`). 동작은 적절한 서비스에 추가하세요.
+## 풀 리퀘스트 (PR)
 
-### 기능을 추가하거나 옮기기
+- 하나의 논리적 변경 사항 단위로 PR을 작성합니다.
+- 로컬에서 `make check`가 오류 없이 통과하는지 확인합니다.
+- 새로운 기능이나 버그 수정 시 관련 회귀 테스트를 반드시 추가합니다.
+- PR 템플릿의 항목에 따라 변경 동기와 검증 방법을 상세히 작성합니다.
+- 사용자에게 영향을 주는 변경 사항은 `CHANGELOG.md`의 `## [Unreleased]` 항목에 기록합니다.
 
-1. Qt 없는 도메인 규칙은 `chemvas.domain`에, 기능 조율은 `chemvas.features` 아래
-   패키지에 둡니다.
-2. 저장소, RDKit, Qt 통합을 위한 작은 기능 소유 프로토콜을 정의합니다. 구체
-   구현은 `chemvas.adapters` 아래에 둡니다.
-3. 기능 간 동작은 기능 패키지의 공개 API로 노출합니다. 다른 기능의 내부 모듈을
-   import하지 마세요.
-4. `state.py`, `ports.py`, `service.py`, `qt.py`는 그 역할이 실제 경계일 때만
-   만듭니다. 연산 하나에 기본으로 래퍼 사슬이 필요하지는 않습니다.
-5. 구체 어댑터는 `chemvas.bootstrap`에서 배선하고 애플리케이션 shell은
-   `chemvas.shell` 아래에 둡니다.
-6. `tests/test_package_dependencies.py`와
-   `tests/test_architecture_boundaries.py`를 둘 다 실행합니다.
+## 버그 제보 및 기능 제안
 
-레거시 코드를 옮길 때는 기능 전체가 공개 API를 갖추고 해당 레거시 아키텍처 검사를
-퇴역시킬 수 있을 때까지 기존 접근 규칙을 유지합니다.
-
-## Pull request
-
-- PR은 집중해서, 논리적 변경 하나에 PR 하나.
-- `ruff`, `mypy`, 영향받는 테스트가 로컬에서 통과하는지 확인합니다.
-- 동작 변경에는 테스트를 추가하거나 갱신합니다.
-- 무엇을 왜 바꿨고 어떻게 검증했는지 적고, 관련 이슈를 링크합니다. PR 템플릿의
-  `Motivation` / `Changes` / `Verification` 절이 바로 그 용도입니다.
-- 사용자에게 보이는 변경이면 `CHANGELOG.md`의 `## [Unreleased]` 아래를 갱신합니다.
-
-## 버그 신고와 기능 요청
-
-GitHub 이슈 템플릿을 쓰세요. 버그는 OS, Python 버전, RDKit 설치 여부, 재현 단계를
-적어 주세요. 그리기 이상은 스크린샷이나 작은 `.chemvas` 파일이 큰 도움이 됩니다.
+GitHub 이슈 템플릿을 사용하여 등록해 주세요. 버그 제보 시 OS, Python 버전, RDKit 설치 여부 및 재현 단계를 포함해 주시면 해결에 큰 도움이 됩니다.

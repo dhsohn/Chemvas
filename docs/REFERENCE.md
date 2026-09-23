@@ -2,10 +2,7 @@
 
 [한국어](REFERENCE.ko.md)
 
-User-facing detail for Chemvas: running the app, drawing features, the document
-format, export behavior, and shortcuts. The landing overview is the
-[README](../README.md); headless and agent contracts are in
-[AGENT_CLI.md](AGENT_CLI.md).
+Detailed reference guide for Chemvas covering application startup, drawing tools, document formats, figure export, and keyboard shortcuts. For a quick start, see the [README](../README.md); for headless automation, see the [Agent CLI guide](AGENT_CLI.md).
 
 ## Running
 
@@ -16,529 +13,159 @@ chemvas --help        # root CLI help without starting Qt
 chemvas --version     # package version without starting Qt
 ```
 
-Pick a tool from the top toolbar and click/drag on the canvas to draw. For SMILES,
-enter a string in the shared field below the toolbar, and press **Insert** or Enter to enter
-placement mode: move the mouse to preview, click to insert, `Esc` to cancel.
-Templates work the same preview-and-click way.
-
-Open a sample document from [`examples/`](../examples/) via **File ▸ Open** —
-the [examples README](../examples/README.md) describes what each one contains.
-
-**File ▸ New Canvas** (`Ctrl+N`) opens an empty window with the current document's
-sheet size/orientation, bond length, arrow appearance, orbital phase setting and
-text/note appearance. Drawing contents, file paths and edit history are not
-copied, and later setting changes are independent. A fresh empty startup canvas
-uses factory defaults; opened files and restored sessions keep their own settings.
+- **Drawing**: Select a tool from the toolbar and click/drag on the canvas.
+- **SMILES**: Enter a SMILES string in the field below the toolbar, click **Insert** (or press Enter), preview on the canvas, and click to place (`Esc` to cancel).
+- **Templates**: Select a ring or structure template and click on the canvas to insert.
+- **Sample Files**: Open pre-built examples via **File ▸ Open** from [`examples/`](../examples/) (see [examples README](../examples/README.md)).
+- **New Canvas (`Ctrl+N`)**: Opens a fresh canvas inheriting page size, orientation, bond length, and styling from the active document.
 
 ## Drawing features
 
-Three short walkthroughs captured from the application; the
-[first reaction scheme](FIRST_SCHEME.md) covers SMILES insertion and export.
-
-**Draw a structure** — bonds by dragging, bond order and element hotkeys under
-the pointer, a charge, and a benzene ring fused onto a bond.
-
 ![Draw a structure: drag bonds, press 2 on a bond, type o on an atom, fuse a ring](images/walkthrough-drawing.gif)
-
-**Arrows and labels** — reaction, equilibrium and curved arrows, labels typed
-through the arrow dialog, and a reaction profile drawn with the Line tool whose
-connectors snap to the energy-level ends.
 
 ![Arrows and labels: draw arrows, double-click to label, draw a reaction profile with snapping lines](images/walkthrough-arrows.gif)
 
-**Select, move, rotate, align** — move an atom, rotate the selection with
-its knob, flip, align, and distribute.
-
 ![Select, move, rotate, align: move, rotate knob, flip, align middle, distribute](images/walkthrough-editing.gif)
 
-- **Bonds** — single / double / triple, bold, wedge & hash; 30° angle snapping and
-  a consistent default bond length. Single, Double and Triple in the Bond bar
-  apply the named order to an existing bond; repeating the same choice leaves
-  it unchanged. Undo/Redo retains the current bond selection, including the
-  selection used by chemical exports.
-  Dotted overlay requires an inner/outer plain double when the target is a
-  double bond; unsupported centered/bold variants give guidance without changing
-  the bond. Returning from Single to Double does not remember an earlier
-  double-line position. The `d`/`Shift+D` shortcuts still explicitly request
-  a dotted single/double rather than preserving the previous order.
-  Changing bond length rescales molecular geometry about the overall model
-  center, including ring fills and atom-bound charge/radical marks. Free marks,
-  arrows, notes, brackets and other independent annotations keep their positions;
-  this is not a whole-figure scaling command. The length field reflects loaded
-  values such as 300 px without the former 200 px clamp; simply focusing it
-  does not rescale the drawing.
-- **Rings & templates** — benzene, cycloalkanes, and the two chair orientations
-  placed by live preview and click-to-insert. The boat template is available
-  through [`insert-template`](AGENT_CLI.md), not the desktop Ring bar.
-  Fusion detects occupied sides from graph rings, including imports without
-  decorative fills. Ring Fill accepts a complete selected graph cycle; select
-  all its atoms/bonds, not a partial arc. Ambiguous ring perception may still
-  require a manual choice. Ring Fill opens its palette with Select active;
-  it is not a separate drawing tool and does not leave Eraser armed.
-- **Arrows** — reaction, equilibrium (balanced, or favored in either direction
-  with a shortened harpoon), resonance, curved, dashed, and arc arrows (90°,
-  180°, 270° for catalytic cycles; hold `Shift` while dragging to bulge the
-  arc to the other side). Width and head scale are document-wide: changing them
-  restyles existing arrows immediately and supports Undo. Default is 1.5 / 0.3;
-  ACS is 1.2 / 0.3. Width controls step by 0.1 and reflect presets and loaded
-  settings. `Shift` does not lock an Arrow drag's angle; that lock belongs to
-  the Line tool. Arrow and line
-  endpoints snap to nearby arrow and line endpoints while drawing, within
-  twelve pixels of the cursor whatever the zoom, and a ring marks an end
-  that has taken one. A snap takes precedence over the `Shift` angle lock.
-  Moving an arrow or line — or a selection containing one — connects the
-  same way: carrying an end within reach of another item's end joins them
-  exactly, and carrying on past it leaves the drag where the pointer is.
-  Snapping aligns endpoints once; it does not create a persistent attachment.
-- **Arrow labels** — double-click an arrow or line to give it a label above and
-  below, such as rate constants. `_` starts a subscript and `^` a superscript,
-  and a non-nesting braced group sets the range: `K_{2}CO_{3}`, `H_{2}SO_{4}`, `ΔG^{‡}`.
-  Without braces, a marker applies until the next space, `_`, or `^`;
-  `K_2CO_3` therefore also puts `CO` in the subscript. The dialog previews
-  both labels as you type so you can check their scope before choosing OK.
-  A group ends at the first `}`; backslash escaping is not supported. A marker
-  at the end or followed by whitespace is literal (`t_ Bu` keeps the underscore
-  and the space; `t\_Bu` does not escape it). Each field supports multiple lines:
-  Enter inserts a line break, Tab moves to the next field, and OK applies the
-  edit. Line breaks are preserved in the preview, canvas and exported label.
-  Each field has a 200-character limit and a counter; text is not silently
-  truncated, and OK is disabled while either field exceeds the limit.
-  A field containing only whitespace removes that label; otherwise its text,
-  including leading and trailing line breaks, is preserved.
-  Use a Note for longer text.
-  Labels follow the document's text font and color settings immediately,
-  including after preset changes and Undo/Redo, and move with their arrow.
-  An explicit arrow color also colors its labels and takes precedence over
-  the document text color. Saved and reopened labels use the same settings;
-  there is no separately stored label font.
-- **Lines** — plain, dashed, wavy, and bold lines that are not bonds, for
-  energy-level diagrams, connectors, and annotations. Hold `Shift` while
-  dragging to lock the angle to 15° steps; a click without a drag places a
-  horizontal level two bond lengths long. Plain, dashed, and wavy lines
-  follow the arrow line width; bold lines use the bold bond width. Lines are
-  saved in the document's arrow list.
-- **Brackets & annotations** — square / round / curly brackets, dagger (`†`) and
-  double dagger (`‡`) annotation objects. In Select, pick near a bracket stroke
-  and continue dragging to move it.
-- **Orbitals** — s, p, sp, sp2, sp3, d, MO bonding and MO antibonding. Select an
-  orbital, then click it again to show scale and rotation handles. Phase On/Off
-  is document-wide and updates existing orbitals with Undo support.
-- **Notes** — Return/Enter retains empty paragraphs. Center/right alignment
-  uses the longest natural line's width; notes still auto-size without a saved
-  wrapping width. A note's background box is painted behind its text.
-  Text formatting applies to the current text selection (or typing position)
-  while editing, and to whole selected notes otherwise, including drag selection.
-  Size buttons adjust each mixed-size run; alignment affects the selected
-  paragraphs. The font-family menu keeps the text selection while open; with no
-  note selected or being edited, it sets the default for new notes in this document
-  without restyling existing notes. That document font-family change also updates
-  existing arrow labels.
-  **Edit ▸ Note Appearance…** controls background fill/color/opacity, border
-  color/width, padding and line spacing for every existing and new note in the
-  document. It preserves character formatting and supports Undo/Redo; it does
-  not provide per-note box styling.
-- **Atom labels** — elements, charges, radicals, and common alias labels
-  (`Me`, `Et`, `OH`, `NH2`, `SH`, `Ph`, `PPh3`, `OMe`, `Boc`, `CO2Me`, `t-Bu`, `tBu`,
-  `i-Pr`, `CF3`, `OTs`, `Ts`, `OMs`, `Ms`, `OTf`, `Tf`, `Ns`, `OAc`, `Ac`).
-  OH, NH2, and SH support Molecule Info identifiers when neutral and attached
-  through exactly one single bond, including wedge/hash. Use an element label
-  for a charged or radical atom; these hydride aliases reject those annotations.
-  Other aliases do not provide identifiers. SMILES insertion keeps element labels.
-- **Charge marks** — over an atom, `+` / `-` changes its charge by one: an opposite bound charge
-  mark is removed first; otherwise a new mark is placed without overlapping
-  its existing marks. Each shortcut is one undoable edit. Radical and free
-  marks are left alone. Bound marks can be selected, moved, or erased without
-  selecting their atom; the Mark tool previews the same binding its click uses.
-  Dragging or nudging a bound mark changes its position, **not its chemical
-  owner**. In Select/Move, selecting it shows a dashed line to its owner and an
-  owner outline; amber and the selection status warn when it is far away. This
-  is a drawing aid, not a chemical-validity check: the warning starts beyond one
-  bond length, extended for long atom labels. The guides are not saved, copied,
-  or exported. To change ownership, right-click the mark → **Reassign to atom…**,
-  choose the purple-highlighted atom, then click **Reassign**. The current owner
-  is the initial choice; Cancel or accepting that choice changes nothing.
-  Reassignment keeps the mark's position, kind and independent color, transfers
-  its charge/radical contribution, and is one Undo/Redo operation. A free mark
-  can be attached through the same explicit chooser. Moving alone never attaches
-  a free mark or transfers charge to a nearby atom. Figure exports and
-  `check-layout` do not validate chemical ownership; inspect the selected mark
-  before sharing a drawing whose marks are distant from their owners.
-  If cancelling, deleting, cutting, erasing or reassigning the last bound mark
-  would leave a surviving isolated carbon invisible, that carbon is kept and
-  shown with an explicit `C` label in the same undoable edit. The label is saved
-  and remains explicit if you later attach a bond. Atoms deliberately included
-  in a deletion are still deleted; opening an existing document does not change
-  its label choices.
-- **Color** — choose a swatch before painting; entering the tool alone does not
-  choose a color. The active swatch is highlighted. Charge and radical marks,
-  including free marks, have independent colors: coloring a mark does not color
-  its atom, or vice versa. Colors survive Undo/Redo, copy/paste and save/reopen.
-  Coloring an implicit carbon does not reveal a label or recolor its bonds;
-  choose a visible label or bond when you need a visible color change.
-- **Snap to grid** — the status bar's **Grid** button cycles **None → Hex → Square**.
-  Its menu sets strength to 15%, 20%, or 25%. **View ▸ Snap to Grid** toggles the
-  last grid style. Square spacing and hexagon side length are half a bond length.
-  The grid snaps the points arrows and lines are drawn at, and
-  the ends dragged with their endpoint handles, curved arrows included, onto
-  it. Order of precedence: an existing endpoint wins, then `Shift`, then the
-  grid. A click, and a drag shorter than one grid step, both read as a click.
-  The grid is hidden while it would be too dense to read on screen, and it
-  is a per-canvas view setting, excluded from saved documents and figure exports.
-- **Drawing feedback** — dragging a bond shows a teal guide and angle badge;
-  release or cancel the gesture to dismiss it. **View ▸ Valence Checking** toggles
-  red underlines for excess drawn bond order on common H/B/C/N/O/F charge states.
-  This is a conservative drawing hint, not a chemical validity check: aliases,
-  radicals, partial bonds, metals and unsupported charge states are unassessed.
-  The overlays do not change the molecule, history, saved document or exported figure.
-- **Editing** — endpoint handles (select an arrow or line, then click it to
-  show a handle at each end; drag one to move that end, snapping to nearby
-  endpoints — a handle sitting on another item's endpoint is drawn filled
-  rather than hollow — and curved arrows keep their third handle for the
-  curve),
-  select / move, an eraser tool (click or drag to erase; atom or bond deletion
-  also removes any newly isolated atoms with no visible label or mark).
-  A foreground note wins over underlying structure and
-  invisible carbon hit targets when selecting or erasing; visible foreground
-  structure and editing handles remain pickable. Other editing tools include
-  horizontal & vertical flip, perspective rotation, and undo/redo.
-  Flip mirrors geometry without swapping wedge/hash styles and can
-  invert stereocentres; mirroring a whole chiral molecule gives its enantiomer.
-  Check the chemistry after flipping; use in-plane rotation for orientation
-  changes that should not mirror the molecule.
-  Equilibrium arrows mirror both harpoons exactly, including unequal lengths,
-  while each label stays associated with its harpoon and remains readable.
-  The reflection survives Undo/Redo, copy/paste and save/reopen. Saved reflected
-  equilibrium arrows require a version that supports the optional `mirrored`
-  field; older versions reject those documents rather than draw them incorrectly.
-  If a selected equilibrium arrow has coincident endpoints, Flip refuses the
-  selection without changing it; separate its endpoints first.
-  Perspective refuses affected components with wedge/hash stereo before changing
-  the drawing; use in-plane transforms for those components. Group includes
-  complete connected molecules, and explicitly regrouping an older partial group
-  repairs its membership without changing groups automatically on load.
-  In Select mode, selecting a member, including a caption touched by a selection
-  band, selects its whole group. Check the highlighted structures and dashed
-  group outline.
-  **Edit ▸ Group** merges selected groups immediately, without a confirmation
-  dialog; Undo restores the previous grouping. To inspect just one molecule in
-  a larger group, Ungroup first, then select that molecule for Molecule Info.
-  New atoms and fused rings inherit their molecule's group. Erasing members
-  keeps the surviving members together; Undo/Redo restores the matching group
-  membership with the drawing. Connecting different groups requires selecting
-  both structures and using **Edit ▸ Group** before retrying the connection.
-  Creating a new group requires at least two objects; a connected molecule counts as one, so
-  include its caption or another object when preparing an Arrange Scheme block.
-  Rotation and flips share one selection/group pivot. Notes, images, shapes and
-  TS brackets orbit that pivot but remain upright/axis-aligned.
-  Pressing an unselected atom and dragging moves that atom; pressing a bond
-  moves its two atoms. Select the whole molecule first to drag it as a unit.
-  Nudging and aligning selections restore their recorded coordinates
-  exactly, including existing perspective depth.
-  With Select, press near a line or arrow's stroke to select it and keep
-  dragging to move it in the same gesture. The click margin is measured on
-  screen, independent of zoom; a curve's interior is not treated as a filled
-  click target. Before a drag starts, pointer movements below the system drag
-  threshold leave the drawing and undo/redo stacks unchanged. Click an already
-  selected stroke to toggle its endpoint handles.
-- **Desktop menus** — standard File / Edit / View menus, including a
-  **Canvas Size** dialog for the sheet size and orientation. Changes support
-  Undo/Redo; off-sheet objects remain reachable by scrolling, not deleted or fitted
-  into the sheet. Sheet-only export/check boundaries still use the actual sheet.
-  Select/Move drag previews continue outside the sheet. Drawing and hover-based
-  atom/bond editing remain sheet-limited; a blocked attempt shows a status message
-  explaining how to move the content back onto the sheet for editing.
-- **Keyboard shortcuts** — tool selection and atom/bond editing under the pointer
-  (see [Keyboard shortcuts](#keyboard-shortcuts)).
-  New windows focus the canvas. Outside an active note editor, `Tab` and
-  `Shift+Tab` traverse the window controls and return to the canvas; styled
-  context/status buttons show a focus border. A focused zoom-percentage button
-  accepts `Space` to reset to 100% and `Enter` to open Set Zoom. Inside a note
-  editor, the existing text-editing Tab behavior is retained.
+- **Bonds**
+  - **Types**: Single, Double, Triple, Bold, Wedge, and Hash.
+  - **Snapping**: 30° angle snapping with standardized default bond lengths.
+  - **Shortcuts**: Hover over a bond and press `1` (single), `2` (double), `3` (triple), `w` (wedge), `h` (hash), or `d` (dashed).
+  - **Length Adjustment**: Changing bond length rescales the molecular framework, ring fills, and bound marks proportionally around the molecule center.
+
+- **Rings & templates**
+  - **Quick Insertion**: Benzene, cycloalkanes (3- to 8-membered), and chair conformations.
+  - **Ring Fusion**: Drag from an existing bond or press `a` (benzene) / `4`–`8` over a bond to fuse a ring.
+  - **Ring Fill**: Select a completed ring cycle and open the Ring Fill palette to apply colored fills.
+
+- **Arrows**
+  - **Styles**: Reaction arrows, equilibrium (balanced or biased), resonance, curved, dashed, and circular arc arrows (90°, 180°, 270°; hold `Shift` to invert arc direction).
+  - **Settings**: Arrow width and arrowhead size are configurable across the document with real-time preview and full Undo/Redo.
+  - **Endpoint Snapping**: Arrow and line endpoints snap to nearby endpoints within 12 pixels for seamless alignment.
+
+- **Arrow labels**
+  - **Editing**: Double-click an arrow or line to edit conditions above and below.
+  - **Formatting**: Use `_` for subscripts (`MnO_2` → MnO₂) and `^` for superscripts (`\Delta G^\ddagger`). Use braces `{}` for multi-character groups (e.g., `K_{2}CO_{3}`).
+  - **Multiline**: Supports multiline text with real-time preview. Labels automatically inherit document font settings and move with the arrow.
+
+- **Lines**
+  - Draw non-bond lines (solid, dashed, wavy, bold) for energy-level profiles or connectors.
+  - Hold `Shift` while dragging to constrain angles to 15° increments. Clicking without dragging places a standard horizontal level.
+
+- **Brackets & annotations**
+  - Square, round, and curly brackets, plus dagger (`†`) and double dagger (`‡`) markers.
+  - Select and drag bracket strokes to reposition them.
+
+- **Orbitals**
+  - Supports s, p, sp, sp2, sp3, d, and MO bonding/antibonding representations.
+  - Click a selected orbital to access scale and rotation handles. Toggle orbital shading via Phase On/Off.
+
+- **Notes (Text)**
+  - Rich-text notes with customizable font family, size (6–96 pt), weight, color, alignment, and sub/superscripts.
+  - **Note Appearance**: Configure background fill, border color, opacity, padding, and line spacing globally via **Edit ▸ Note Appearance…**.
+
+- **Atom labels**
+  - Supported aliases: `Me`, `Et`, `OH`, `NH2`, `SH`, `Ph`, `PPh3`, `OMe`, `Boc`, `CO2Me`, `t-Bu`, `tBu`, `i-Pr`, `CF3`, `OTs`, `Ts`, `OMs`, `Ms`, `OTf`, `Tf`, `Ns`, `OAc`, `Ac`.
+  - Neutral OH, NH2, and SH linked via a single bond support automated chemical property resolution.
+
+- **Charge marks**
+  - Hover over an atom and press `+` or `-` to increment/decrement formal charge.
+  - Bound marks can be dragged or nudged for optimal visual clarity while remaining chemically bound to their parent atom.
+  - Right-click a mark and choose **Reassign to atom…** to reassign it to another atom.
+  - Charge and radical marks maintain independent color settings from their parent atoms.
+
+- **Coloring**
+  - Select a color swatch before painting. Atoms, bonds, notes, and charge marks can each be colored independently.
+
+- **Grid & snapping**
+  - Cycle through **None → Hex → Square** via the status bar.
+  - Grid spacing is calibrated to half a standard bond length. Arrow endpoints snap intelligently to existing endpoints and grid points.
+
+- **Visual feedback**
+  - **Angle & Length Guides**: Interactive badges display bond angles and lengths while sketching.
+  - **Valence Checking**: Toggle **View ▸ Valence Checking** to highlight questionable valences for common main-group elements (H, B, C, N, O, F).
+
+- **Editing & transformation**
+  - **Selection**: Click individual atoms/bonds or drag a marquee box. Group/ungroup elements using `Ctrl+G` / `Ctrl+Shift+G`.
+  - **Transformation**: Flip horizontally (`Ctrl+Shift+H`), flip vertically (`Ctrl+Shift+V`), or rotate (`Alt+Up/Down` for 15°, `Alt+Left/Right` for 1°).
+  - **Eraser**: Click or drag over elements to delete. Deleting all bonds connected to an unlabeled carbon cleanly removes the residual atom.
+  - **Alignment**: Align structures (left, center, right, top, middle, bottom) and distribute them evenly via the **Edit** menu.
 
 ## The `.chemvas` file format
 
-File ▸ Save / Open works with `.chemvas` files — a JSON-based format holding the
-molecule model, annotations, arrows, bracket annotations, and settings:
+Chemvas saves documents as human-readable JSON files storing molecular models, annotations, arrows, and view settings:
 
 ```json
 { "type": "chemvas", "version": 8, "schema": 1, "min_reader": "0.18.0", "state": { /* ... */ } }
 ```
 
-The writer emits version 8, schema 1; supported version 7 files remain readable.
-V8 adds text rotation and image/shape stacking and requires Chemvas 0.18.0 or later.
-Keep original v7 files when sharing with older installations. Both can carry an optional
-Calculation Plan v2; precomplex candidates and review selections stored by
-Chemvas 0.15.0 and earlier stay readable and are preserved. Document versions before 7
-and Calculation Plan v1 payloads are rejected.
-
-Opening or inserting a drawing preserves overlapping atoms: move or edit them
-on the canvas to correct the layout. Save asks before replacing a file changed
-outside Chemvas, or a recovered document's original file when its saved baseline
-is unknown. Choose No and use Save As to keep both versions. This detects observed
-file changes; it is not a cross-process editing lock.
-
-Chemvas drawings must use the `.chemvas` suffix. Desktop startup arguments, OS
-file-open events, **File ▸ Open**, **Open Recent**, and clean-session reopening
-all reject or ignore `.json` drawing paths; **Save** and **Save As** publish
-drawings only as `.chemvas`. JSON request, patch, report, and machine-artifact
-files used by headless commands remain separate protocols and are unaffected.
+- **Current Version**: Version 8, schema 1 (introduced in Chemvas 0.18.0+).
+- **Backward Compatibility**: Fully opens valid version 7 files. See [document compatibility policy](DOCUMENT_COMPATIBILITY.md).
+- **Safety**: Unsaved changes are never overwritten without confirmation.
 
 ## Autosave & recovery
 
-Chemvas snapshots every open document to a per-user app-data folder every few
-seconds — nothing is written next to your own files. Startup opens a blank
-workspace or the explicitly requested document, without restoring earlier clean
-or crashed sessions. Existing snapshots remain on disk for manual recovery;
-a status-bar notice identifies retained unsaved recovery files. Stopped clean
-sessions with only saved-file references and no recovery payloads are cleaned up.
-During explicit
-recovery, an unsupported original path is discarded and the recovered canvas
-opens unbound as an unsaved document.
-
-Autosave never replaces a complete recovery snapshot with one whose capture
-reported a warning. It keeps the last good snapshot and shows a persistent
-status-bar warning instead; the warning clears only after a later autosave
-succeeds without warnings.
-
-Unchanged ticks avoid disk writes. Saved, clean documents also skip the second
-content digest used by the snapshot store, but every canvas is still collected
-and checked for changes. Large embedded images can therefore still slow idle
-ticks and editing; this is not a constant-time change detector.
-
-In sessions confirmed to have stopped, unreadable dirty snapshots and orphaned
-snapshot payloads are retained with a warning, not silently pruned. If ownership
-cannot be established, damaged sessions may be kept without a warning.
-Multiple dirty recoveries of one file are kept;
-additional versions open as unsaved recovered copies without the original path.
-
-Quit resolves Save / Discard / Cancel for all windows before closing any of
-them, then preserves the complete final saved-file reopen list without
-re-serializing discarded drafts. Discarded untitled drawings are not reopened.
-Cancelling or a failed save leaves the windows open. Restored untitled drawings
-receive distinct names.
-File Open and Open Recent reuse an existing blank drawing when possible.
-Imported drawings with content are not blank targets. OS file-open requests
-during Quit are declined with a status message; retry after cancelling Quit or
-restarting Chemvas. They are not queued for automatic reopening.
-
-If the writable app-data location changes, Chemvas also checks its known
-alternate locations for abandoned recovery snapshots. A persistent warning
-gives their location and recovery steps; these snapshots are neither merged
-nor deleted automatically. Copy a `doc-*.json` snapshot to a new `.chemvas`
-file and open that copy, keeping the original recovery file intact.
-
-Unsaved tabs show a `●` marker, the File menu keeps an **Open Recent** list, and
-reopening an already-open file switches to its window instead of duplicating it.
+- **Continuous Snapshots**: Automatically saves snapshots to the user application data directory every few seconds without touching your working files.
+- **Crash Recovery**: If the application terminates unexpectedly, uncommitted work can be restored from the recovery manager on the next launch.
+- **Session Safety**: Unsaved tabs display a `●` indicator. The File menu maintains an **Open Recent** list for rapid access.
 
 ## Figure export
 
-Plain SVG / PDF / PNG / TIFF with physical-size presets (bond-length or
-84 / 174 mm column fit), independent of zoom. Atom and arrow labels are outlined
-in vector exports, preserving the shaped glyphs and subscript/superscript
-positions. Other text items retain their own rendering behavior. See the
-[worked example](FIRST_SCHEME.md#4-export-the-figure) for output settings and
-version availability.
+Export publication-grade figures in plain SVG, PDF, PNG, or TIFF formats:
 
-TIFF uses lossless LZW compression, preserving the rendered RGBA pixels and
-chosen DPI. White-background output retains its opaque alpha channel; transparent
-output retains transparency.
-
-Figure fitting measures atom labels and attached arrow labels from their painted
-glyphs, excluding empty text-layout margins. Their editing, picking and on-canvas
-placement stay unchanged. Notes retain their layout-box bounds so rich-text
-decorations and automatic list markers are not cropped.
-Arrow labels retain their layout-box bounds when bitmap/color-font tables are detected.
-This fitting change does not add bitmap/color glyph support to outlined exports.
-
-Figure export defaults to plain SVG without Chemvas source metadata. Choose
-**Editable Chemvas SVG** only when you want the SVG to carry the original
-document payload for round-tripping back into Chemvas. Whole-document editable
-SVG uses the same calculation-plan draft checks as Save: it asks before
-omitting stale references or retaining invalid plan/review data. Choose No to
-leave the destination unchanged; a saved draft is not calculation approval.
-With **Selection** scope, the editable payload contains the selected objects,
-their complete copied groups and document settings, not the Calculation Plan
-or unselected objects. It opens as a new drawing using the original sheet
-settings. The export dialog states this distinction even when everything is selected.
-Reopening restores the embedded drawing data; edits to the SVG's visible vectors
-in another application do not update that embedded drawing.
-
-All GUI export presets enforce the same size limits as `render-document`:
-14,400 points per side, and for PNG/TIFF at most 10,000 pixels per side and
-25 million pixels in total. Oversized output is rejected before painting and
-leaves any existing destination unchanged. PDF pages use custom whole-point
-dimensions rather than snapping to nearby standard paper sizes; the drawing
-fits that page with its aspect ratio preserved.
+- **Vector Outlines**: Atom and arrow labels are rendered as vector glyph outlines in SVG and PDF, ensuring perfect typography across all platforms without requiring local font installations.
+- **Physical Column Presets**: Match standard publication column widths (e.g., 84 mm for 1-column, 174 mm for 2-column) at explicit target DPIs (up to 600 DPI).
+- **Editable Chemvas SVG**: Check **Editable Chemvas SVG** to embed full `.chemvas` document data inside the SVG file, allowing the figure to be reopened and edited in Chemvas anytime.
+- **Lossless TIFF**: Exports with lossless LZW compression and full transparency support.
 
 ## Chemistry I/O
 
-RDKit is an optional backend — Chemvas runs without it. The features marked
-*(RDKit)* need `pip install "chemvas[rdkit]"`.
+Features marked *(RDKit)* require the optional backend (`pip install "chemvas[rdkit]"`).
 
 ![Chemistry I/O: open a molfile, Molecule Info, export MOL and 3D XYZ](images/walkthrough-chemistry.gif)
 
 ### SMILES import *(RDKit)*
 
-Type a SMILES string in the shared context-bar field, then press **Insert** or Enter.
-Preview it under the cursor and click to place it on the canvas.
-`Ts` and `Ac` name the tosyl and acetyl abbreviations on
-the canvas, so a SMILES asking for tennessine or actinium is refused rather than
-drawn as the abbreviation.
-
-Absolute tetrahedral stereochemistry (`@` / `@@`) is drawn with wedge/hash
-bonds. Specified double-bond stereochemistry (`/` / `\`), non-tetrahedral
-stereochemistry, and relative or racemic CXSMILES stereo groups remain unsupported
-by SMILES insertion. Isotope labels are also unsupported. Potentially stereogenic
-double bonds with unspecified stereo are inserted with the existing crossed
-`double_either` style: automatic placement must not invent a specific E/Z isomer.
-
-Single, double, and triple bonds are supported, including aromatic structures
-that RDKit can Kekulize into those bond orders. Other bond types, such as dative,
-unspecified, and quadruple bonds, are refused rather than approximated. Aromatic
-input that cannot be represented by Kekulization is also refused.
-
-Explicitly drawn hydrogens count toward normal valence; they do not disable all
-remaining implicit hydrogens. For example, unmarked O–H is completed to water;
-use a radical mark when a hydroxyl radical is intended. Abbreviations require
-supported single-bond attachments. Dotted and dotted-double contacts remain
-editable drawing objects, but chemical identifiers, MOL/XYZ, 3D conversion and
-calculation conversion reject selections containing them instead of treating
-them as covalent bonds.
+- Enter SMILES strings in the context bar to place structures on the canvas.
+- Preserves tetrahedral stereochemistry (`@`/`@@`) with wedge/hash bonds.
+- Unspecified double-bond stereochemistry imports as crossed `double_either` bonds.
 
 ### MOL interchange
 
-Open MDL Molfiles (`.mol`, V2000) as new documents and export the selected
-structure as `.mol`. Import and plain-element export need no RDKit; abbreviation
-labels require optional RDKit expansion. `Ts` and `Ac` are the tosyl and acetyl
-abbreviations on the canvas rather than tennessine and actinium, so a molfile
-that uses either symbol for the element is rejected on import. Property records
-are limited to `M  CHG` / `M  RAD`, wedge/hash stereo to single bonds, and the
-counts-line chiral flag to zero. Singlet `M  RAD` code 1 is rejected until the
-annotation model can preserve spin multiplicity.
-
-Double-bond stereo flag 3 (explicitly unspecified/either) is imported as
-`double_either`, drawn as two crossed lines, and retained on MOL export, including
-abbreviation expansion. Native v7/v8 documents, clipboard v2 selections, editable
-SVG and Undo/Redo preserve this style; older readers that lack it reject those
-documents. It requires bond order 2. Bold, dotted and double-position commands
-refuse to erase the marker; choosing a different bond type explicitly (for
-example, Double or `2`) replaces it and can be undone. The crossed marker is not
-assigned a specific E/Z isomer. Ordinary SMILES cannot preserve the distinction
-between explicit unknown stereo and no stereo annotation, and a generated 3D
-geometry does not resolve it.
+- Import and export standard MDL Molfiles (`.mol`, V2000).
+- Basic MOL export works without RDKit; expanding complex abbreviations requires the RDKit backend.
+- Full fidelity for charge, radical, and `double_either` stereochemical flags.
 
 ### Molecule Info inspector *(RDKit)*
 
 ![Molecule Info dock with aspirin on a macOS canvas](images/editor-inspector.png)
 
-**View ▸ Molecule Info** or the toolbar's cube button opens a right-hand inspector
-that can be resized, closed, or floated by dragging its title bar. It has a 3D preview (drag to
-rotate, scroll to zoom), the molecular formula and weight, and one-click copy of
-the canonical SMILES, InChI, and InChIKey for the current selection. The
-`Export .xyz` button exports the selected molecule. Properties include the atom
-count **including generated hydrogens**, the number of **independent rings**
-(cycle rank, not every possible cycle), and the ACS 1996 drawing style.
-Closing the inspector pauses preview work. Ring Fill colors remain in the
-toolbar's Ring Fill options.
-The initial view fits the projected atom footprints, including depth. Rotation
-and zoom stay inside the molecule viewport, leaving the title, formula and
-weight readable; zooming in can crop the molecule at that viewport's edges.
-Identifiers preserve drawn wedge/hash stereochemistry using the same conversion
-as the preview. Unambiguous ordinary C=C/C=N geometry also supplies E/Z stereo
-to identifiers, 3D XYZ and calculation conversion. Potentially stereogenic
-ordinary bonds with ambiguous, overlapping or nearly collinear substituents are
-refused with their Chemvas IDs; correct the drawing. For intentionally unspecified
-stereo, insert an unspecified SMILES or import a MOL with the explicit either
-marker to obtain crossed `double_either` bonds. This does not add
-axial/atropisomeric stereo or specified E/Z SMILES insertion.
-General abbreviation identifiers remain subject
-to the restriction below, even when their expanded MOL/3D conversion is supported.
-Automatic 3D generation also refuses six-coordinate phosphorus, including PF6-,
-because available force-field parameters can generate collapsed geometry.
-Drawing, native save/reopen, identifiers and MOL remain available for this case.
-Parameter coverage or convergence alone does not certify other generated geometry.
-
-Canonical SMILES omits ordinary drawn hydrogens without removing
-them from the drawing, saved document or calculation graph. Necessary hydrogen
-counts and tetrahedral stereo remain in bracket notation such as `[C@H]`.
-Special hydrogens (including isotopic, mapped and stereo-defining hydrogens) are
-retained by the display conversion. Molecules containing charged or radical
-hydrogens conservatively keep their explicit-hydrogen spelling. These safeguards
-do not add native isotope, atom-map or alkene E/Z import support.
-Identifiers remain unavailable for general abbreviation labels; neutral terminal
-hydrides `OH`, `NH2` and `SH` with one single attachment bond are supported.
-Preview and 3D export can still expand other supported abbreviations.
+Open the inspector via **View ▸ Molecule Info** or the cube toolbar icon:
+- **Interactive 3D Preview**: Drag to rotate, scroll to zoom.
+- **Molecular Properties**: Formula, exact molecular weight, atom count, and ring count.
+- **One-Click Identifiers**: Copy canonical SMILES, InChI, and InChIKey directly to your clipboard.
+- **3D XYZ Export**: Export 3D coordinates generated via energy minimization.
 
 ### 2D→3D `.xyz` export *(RDKit)*
 
-Convert the current molecule or atom/bond selection into 3D coordinates:
-
-- Export scope is the current chemical graph or the current atom/bond selection.
-  Arrows, bracket annotations, and free text are **not** included in `.xyz`.
-- `+`/`-`/radical marks become formal charges / radical electrons; wedge/hash bonds
-  on single bonds become RDKit stereochemistry hints.
-- Alias labels expand into explicit fragments (e.g. `OTs` → the full
-  `-O-S(=O)(=O)-C6H4-CH3` tosylate). Each alias attaches through a single bond;
-  `Ns` is the para (4-nitrobenzenesulfonyl) isomer. Carbon-bound `PPh3` is
-  accepted only through exactly one ordinary covalent single bond and expands as
-  phosphonium `C-[P+](Ph)3`; standalone, non-carbon, multiple, non-single, styled,
-  or explicitly charge/radical-annotated uses fail closed.
-- Unsupported labels, mis-connected aliases, and invalid wedge/hash use fail with an
-  explicit error message instead of guessing.
-- `.xyz` stores element symbols and 3D coordinates only — it is **not** a full
-  round-trip of bond orders, stereochemistry, or reaction semantics.
+- Converts 2D structures into clean 3D Cartesian coordinates (`.xyz`).
+- Automatically expands supported abbreviation groups (e.g., `OTs`, `Boc`, `Ph`) into complete atom-level fragments.
+- Respects wedge/hash stereocenters during 3D conformation generation.
 
 ## Keyboard shortcuts
 
-While editing a free-text note, drag to select text, double-click to select a word,
-or Shift-click to extend a text selection. Formatting controls keep the editor
-active. Choosing another tool commits the note and returns keyboard input to the
-drawing. Undo within the editor affects the current editing session; after leaving
-the editor, document Undo reverses the committed edit. Unsaved markers also track
-typing, formatting, and text Undo before the note loses focus.
-Press `Esc` to commit the note and return to Select without discarding the text.
-Note spacing, tabs, and empty paragraphs are retained when saving/reopening or
-undoing/redoing a committed edit.
+Select tools from the canvas or edit hovered atoms/bonds with the shortcuts below.
 
-In Select, notes and shapes can be moved with the first drag, like arrows.
-Click empty canvas outside the selection to clear it, including selected notes.
-Copy/paste preserves complete groups as independent copies; one Undo removes
-the pasted objects and their groups together. Partial groups supplied by a
-programmatic selection are copied as ungrouped objects.
-
-Choose a tool on an empty area of the canvas, or hover over an atom or bond to
-edit it with the keys below.
-
-- **Empty canvas (tool hotkeys):** Select/Marquee `Space`, Bond `X`, Atom `A`,
-  Text `T`, Arrow `E`, Benzene `J`, Brackets `Shift+T`, Orbitals `Shift+G`,
-  Charge / Radical (Mark) `Shift+E`, Perspective `Alt+D`
-- **Atom hotkeys (hover over an atom):** [element/alias label map](#atom-label-hotkey-map), charge `+`/`-`,
-  edit label `Enter`, sprout `0/1/2/3/a/4/5/6/7/8/9/z/v/u` (`9` = gem-dimethyl)
-- **Bond hotkeys (hover over a bond):** Single `1`, Double `2`, Triple `3`,
-  Bold `b`/`Shift+B`, Wedge `w`, Hash `h`/`Shift+H`, Dashed `d`/`Shift+D`,
-  double-bond position `l`/`c`/`r`, Benzene fusion `a`,
-  Ring fusion `4/5/6/7/8`, Chair fusion `9/0`
-- **Objects:** Flip Horizontal `Ctrl+Shift+H`, Flip Vertical `Ctrl+Shift+V`,
-  both mirror geometry and can invert stereocentres (see Editing above);
-  Rotate selection `Alt+Up/Down` (15°) and `Alt+Left/Right` (1°),
-  Nudge selection `Shift+Arrows` (10 pt); **Edit ▸ Align** (left, center,
-  right, top, middle, bottom) and **Edit ▸ Distribute** (horizontally,
-  vertically) arrange the selected structures and objects as whole units: a
-  molecule moves whole even when only part of it is selected, and a group
-  moves as one
-- **View:** Actual size `F5`, Fit to window `F6`, Magnify `F7`, Reduce `F8`
-- **File / edit:** Save / Open / Undo / Redo (platform defaults), `Ctrl+A` (select
-  all, switches to the Select tool), `Ctrl+C` (copy selection — PNG plus SVG/PDF
-  vector clipboard flavors), `Ctrl+X` (cut selection), `Ctrl+V` (paste the copied
-  selection), `Ctrl+G` / `Ctrl+Shift+G` (group / ungroup selection),
-  `Delete`/`Backspace` (delete selection, or edit/delete the hovered atom/bond),
-  `Esc` (cancel template / SMILES insertion; otherwise cancel the active gesture
-  and return to Select, or commit and leave note editing)
+- **Canvas & Tools**: Select `Space`, Bond `X`, Atom `A`, Text `T`, Arrow `E`, Benzene `J`, Brackets `Shift+T`, Orbitals `Shift+G`, Charge/Radical `Shift+E`, Perspective `Alt+D`
+- **Atom Editing (hover over atom)**: Change element via [Atom-label hotkey map](#atom-label-hotkey-map), charge `+`/`-`, edit label `Enter`, sprout chains `0`–`9` (`9` = gem-dimethyl)
+- **Bond Editing (hover over bond)**: Single `1`, Double `2`, Triple `3`, Bold `b`, Wedge `w`, Hash `h`, Dashed `d`, double-bond alignment `l`/`c`/`r`, Benzene fusion `a`, Ring fusion `4`–`8`
+- **Transformations**: Flip Horizontal `Ctrl+Shift+H`, Flip Vertical `Ctrl+Shift+V`, Rotate `Alt+Up/Down` (15°) / `Alt+Left/Right` (1°), Nudge `Shift+Arrows` (10 pt)
+- **Alignment**: **Edit ▸ Align** (Left, Center, Right, Top, Middle, Bottom) and **Edit ▸ Distribute** (Horizontally, Vertically)
+- **General**: Save `Ctrl+S`, Open `Ctrl+O`, Select All `Ctrl+A`, Group `Ctrl+G`, Ungroup `Ctrl+Shift+G`, Undo `Ctrl+Z`, Redo `Ctrl+Y`, Delete `Delete`/`Backspace`
 
 ### Atom-label hotkey map
 
-These keys replace the hovered atom's label; uppercase entries mean `Shift` plus
-the key. A displayed label is not a guarantee of chemical conversion support.
+Hover over an atom and press a key to quickly replace its element or group:
 
 | Key | Label | With Shift → label |
 | --- | --- | --- |
@@ -564,29 +191,12 @@ the key. A displayed label is not a guarantee of chemical conversion support.
 | `y` | — | `Boc` |
 | `z` | — (sprout) | `N3` |
 
-`NO2`, `N3`, `MgBr`, `Fmoc`, `Cbz`, `SO2`, `R`, `X`, and `D` are drawing labels
-without supported chemical conversion; they do not provide Molecule Info
-identifiers or 3D export. In particular, `D` does not implement isotope support.
-Other abbreviation labels still have the attachment and conversion limits in
-[Chemistry I/O](#chemistry-io).
-
 ### Shortcut compatibility
 
-Many of these bindings are shared with ChemDraw, so familiar drawing habits can
-carry over. The list above defines Chemvas's supported keys; it does not imply
-complete shortcut or file-format compatibility.
+Keybindings are designed to feel natural to ChemDraw users, allowing familiar drawing muscle memory to transfer seamlessly.
 
 ## Roadmap / not yet supported
 
-These are known gaps, not bugs — contributions welcome:
-
-- **SDF (multi-molecule) interchange:** import and export. Single-molecule
-  `.mol` import/export, SMILES export ("copy as SMILES"), and InChI / InChIKey
-  have landed.
-- **Distribution:** one-file desktop binaries (Chemvas is already on PyPI —
-  `pip install chemvas`).
-- **Multi-molecule / reaction-scheme 3D export** and richer template libraries.
-- **Deliberately out of scope for now:** printing (export a PDF instead),
-  persistent preferences (every document starts from the ACS 1996 defaults),
-  general external text/structure clipboard import, and drag-and-drop file open.
-  External clipboard images can already be pasted; see [Image objects](IMAGE_OBJECTS.md).
+- **SDF (multi-molecule) interchange**: Multi-molecule import/export.
+- **Pre-packaged Binaries**: Standalone installers (Chemvas is currently distributed via PyPI: `pip install chemvas`).
+- **Reaction-scheme 3D generation**: Richer multi-step 3D modeling and template libraries.
