@@ -5,14 +5,18 @@ from unittest import mock
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
+from PyQt6 import sip
+from PyQt6.QtCore import QEventLoop, QObject, QTimer
 from PyQt6.QtWidgets import QApplication
 
 from chemvas.bootstrap.main_window import build_main_window
+from chemvas.features.session import is_quit_pending, mark_quitting, reset_quitting
 from chemvas.ui.main_window_ports import (
     active_canvas_for_window,
     services_for_window,
 )
 from chemvas.ui.main_window_tool_routing_service import MainWindowToolRoutingService
+from chemvas.ui.session_recovery_service import SessionRecoveryService
 
 
 class _FakeItem:
@@ -57,10 +61,11 @@ class MainWindowToolRoutingServiceTest(unittest.TestCase):
         )
 
     def tearDown(self) -> None:
-        document_service = services_for_window(self.window).canvas_document_service
-        for canvas in self.window.tab_references.all_canvases():
-            document_service.mark_clean(canvas)
-        self.window.close()
+        if not sip.isdeleted(self.window) and not self.window.is_closing:
+            document_service = services_for_window(self.window).canvas_document_service
+            for canvas in self.window.tab_references.all_canvases():
+                document_service.mark_clean(canvas)
+            self.window.close()
         self.app.processEvents()
 
     def test_color_and_ring_fill_presets_route_selected_items(self) -> None:
@@ -124,7 +129,7 @@ class MainWindowToolRoutingServiceTest(unittest.TestCase):
             [mock.call(self.window), mock.call(self.window)],
         )
         self.tool_mode_controller_for_window.assert_not_called()
-        self.assertEqual(self.color_mutation_service_for_window.call_count, 2)
+        self.assertEqual(self.color_mutation_service_for_window.call_count, 3)
         self.assertEqual(
             self.selected_scene_items_for_window.call_args_list,
             [
@@ -132,3 +137,120 @@ class MainWindowToolRoutingServiceTest(unittest.TestCase):
                 mock.call(self.window, excluded_kinds=set()),
             ],
         )
+
+    def test_deferred_ring_fill_rejects_a_changed_canvas(self) -> None:
+        callbacks = []
+        timer = SimpleNamespace(
+            singleShot=lambda _delay, callback: callbacks.append(callback)
+        )
+        original_service = mock.Mock()
+        next_service = mock.Mock()
+        self.color_mutation_service_for_window.return_value = original_service
+        self.service.apply_ring_fill_preset(self.window, "#f4d06f", qtimer=timer)
+        self.color_mutation_service_for_window.return_value = next_service
+        callbacks.pop()()
+        original_service.apply_ring_fill_color_to_items.assert_not_called()
+        next_service.apply_ring_fill_color_to_items.assert_not_called()
+        self.selected_scene_items_for_window.assert_not_called()
+        self.assertIn("active canvas changed", self.window.statusBar().currentMessage())
+
+    def test_deferred_ring_fill_ignores_a_destroyed_window(self) -> None:
+        callbacks = []
+        timer = SimpleNamespace(
+            singleShot=lambda _delay, callback: callbacks.append(callback)
+        )
+        window = QObject()
+        color_service = mock.Mock()
+        self.color_mutation_service_for_window.return_value = color_service
+        self.service.apply_ring_fill_preset(window, "#f4d06f", qtimer=timer)
+        sip.delete(window)
+        callbacks.pop()()
+        color_service.apply_ring_fill_color_to_items.assert_not_called()
+        self.selected_scene_items_for_window.assert_not_called()
+
+    def test_deferred_presets_do_not_run_after_close_is_accepted(self) -> None:
+        color_service = mock.Mock()
+        self.color_mutation_service_for_window.return_value = color_service
+        self.service.apply_color_preset(self.window, "#123456")
+        self.service.apply_ring_fill_preset(self.window, "#f4d06f")
+        self.assertTrue(self.window.close())
+        self.app.processEvents()
+        color_service.apply_color_to_items.assert_not_called()
+        color_service.apply_ring_fill_color_to_items.assert_not_called()
+        self.selected_scene_items_for_window.assert_not_called()
+
+    def _presets_during_application_quit(self, *, accept: bool) -> None:
+        second = build_main_window()
+        color_service = mock.Mock()
+        self.color_mutation_service_for_window.return_value = color_service
+        confirmations = []
+
+        def confirm(window):
+            confirmations.append(window)
+            if window is self.window:
+                self.service.apply_color_preset(self.window, "#123456")
+                self.service.apply_ring_fill_preset(self.window, "#f4d06f")
+                return True
+            self.assertFalse(self.window.is_closing)
+            self.assertTrue(is_quit_pending())
+            # Like a later window's save prompt, deliver queued events while
+            # the earlier window has already passed close confirmation.
+            loop = QEventLoop()
+            QTimer.singleShot(0, loop.quit)
+            loop.exec()
+            return accept
+
+        recovery = SessionRecoveryService(
+            mock.Mock(),
+            open_windows=lambda: (self.window, second),
+        )
+        try:
+            with (
+                mock.patch.object(
+                    services_for_window(self.window).document_action_service,
+                    "confirm_close_window",
+                    side_effect=confirm,
+                ),
+                mock.patch.object(
+                    services_for_window(second).document_action_service,
+                    "confirm_close_window",
+                    side_effect=confirm,
+                ),
+            ):
+                self.assertTrue(recovery.intercept_application_quit())
+            self.assertEqual(confirmations, [self.window, second])
+            color_service.apply_color_to_items.assert_not_called()
+            color_service.apply_ring_fill_color_to_items.assert_not_called()
+            self.selected_scene_items_for_window.assert_not_called()
+            if not accept:
+                self.assertFalse(is_quit_pending())
+                self.service.apply_color_preset(self.window, "#123456")
+                self.service.apply_ring_fill_preset(self.window, "#f4d06f")
+                self.app.processEvents()
+                color_service.apply_color_to_items.assert_called_once()
+                color_service.apply_ring_fill_color_to_items.assert_called_once()
+        finally:
+            reset_quitting()
+            if not sip.isdeleted(second):
+                second.close()
+            self.app.processEvents()
+
+    def test_presets_stop_while_another_window_confirms_quit(self) -> None:
+        self._presets_during_application_quit(accept=True)
+
+    def test_new_presets_work_after_application_quit_is_cancelled(self) -> None:
+        self._presets_during_application_quit(accept=False)
+
+    def test_deferred_presets_stop_before_confirmed_quit_closes_each_window(self):
+        color_service = mock.Mock()
+        self.color_mutation_service_for_window.return_value = color_service
+        self.service.apply_color_preset(self.window, "#123456")
+        self.service.apply_ring_fill_preset(self.window, "#f4d06f")
+        mark_quitting()
+        try:
+            self.assertFalse(self.window.is_closing)
+            self.app.processEvents()
+            color_service.apply_color_to_items.assert_not_called()
+            color_service.apply_ring_fill_color_to_items.assert_not_called()
+        finally:
+            reset_quitting()
