@@ -5,6 +5,7 @@ from PyQt6.QtCore import QTimer
 from PyQt6.QtGui import QColor
 
 from chemvas.domain.document import VALID_ARROW_KINDS
+from chemvas.features.session import is_quit_pending
 
 
 class MainWindowToolRoutingService:
@@ -36,7 +37,7 @@ class MainWindowToolRoutingService:
             set_color(color)
 
         def apply_color() -> None:
-            if sip.isdeleted(window) or window.is_closing:
+            if sip.isdeleted(window) or window.is_closing or is_quit_pending():
                 return
             if self._color_tool_for_window(window) is not tool:
                 window.statusBar().showMessage(
@@ -62,7 +63,7 @@ class MainWindowToolRoutingService:
         color_service = self._color_mutation_service_for_window(window)
 
         def apply_fill() -> None:
-            if sip.isdeleted(window) or window.is_closing:
+            if sip.isdeleted(window) or window.is_closing or is_quit_pending():
                 return
             if self._color_mutation_service_for_window(window) is not color_service:
                 window.statusBar().showMessage(
