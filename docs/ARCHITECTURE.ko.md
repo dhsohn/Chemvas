@@ -175,6 +175,17 @@ Figure export의 사전 검사와 렌더링은 동기 요청 하나 안에서 fe
   전역 resolver 패치 없이, 필요한 상태·연산만 가진 작은 대역으로 재실행을 검증한다.
   실제 Qt 테스트는 장면 객체의 동일성, 복구, stack 정책, GUI/CLI 동등성을 계속 검증한다.
   이는 실행 경계를 좁힌 것이며 별도 history 엔진이나 문서 savepoint의 대체물이 아니다.
+- `CanvasNoteController`는 포커스 종료와 색상 변경의 미확정 노트 편집 판정 및
+  확정 기준을 함께 소유한다. `NoteTextState`는 annotation-style command와 문서
+  savepoint가 공유하는 값이며 커서 선택, 편집 플래그, 확정 text/HTML을 포함한다.
+  색상 서비스는 새 링 채우기 생성까지 `document_transaction` 안에서 처리하고
+  모은 command를 하나의 history 작업으로 기록한다. 임시 history service나
+  별도의 색상 rollback 구현은 두지 않는다.
+- 노트 입력 중 수정 표시는 편집 세션당 전체 snapshot을 한 번 얻고, 이후에는
+  기존 정본 직렬화기로 편집 중인 노트만 비교한다. 저장 기준에는 비노트 지문과
+  순서가 있는 노트별 지문을 보관하며, 저장·일반 문서 갱신·history 발행·탭 연결에서
+  편집 캐시를 무효화한다. 이 캐시는 UI 표시용이다. 저장·닫기·복구 수집은 알림 없이
+  직접 바뀐 내용까지 전체 문서 digest로 정확히 판정한다.
 - 선택 nudge/정렬 및 Select/Move 드래그 command는 기존 깊이 좌표와 종속 mark/ring fill을 포함한
   선택 영역 geometry의 정확한 before/after를 기록한다. 재생할 때 원자를 먼저,
   종속 scene item을 나중에 복원하고 선택 외곽선을 한 번 갱신한다. 이 command

@@ -1,12 +1,13 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from functools import partial
 from typing import TYPE_CHECKING
 
 from PyQt6.QtCore import QPointF, QRectF, Qt
 from PyQt6.QtGui import (
     QBrush,
+    QColor,
     QFont,
     QFontInfo,
     QPen,
@@ -23,6 +24,7 @@ from chemvas.ui.canvas_window_access import notify_document_change_for
 from chemvas.ui.history_commands import (
     AddSceneItemsCommand,
     DeleteSceneItemsCommand,
+    SetAnnotationStyleCommand,
     UpdateSceneItemCommand,
 )
 from chemvas.ui.input_view_access import (
@@ -32,6 +34,7 @@ from chemvas.ui.input_view_access import (
     set_focused_scene_item_for,
 )
 from chemvas.ui.note_item_access import (
+    NoteTextState,
     committed_note_html_for,
     committed_note_text_for,
     new_note_item_for,
@@ -627,29 +630,72 @@ class CanvasNoteController:
             raise
         return runtime_snapshot
 
+    def _pending_note_edit_command(
+        self, item: QGraphicsTextItem
+    ) -> HistoryCommand | None:
+        """Represent pending typing once, for both blur and color actions."""
+        text = item.toPlainText().strip()
+        committed_text = committed_note_text_for(item)
+        committed_html = committed_note_html_for(item)
+        html_changed = bool(committed_html) and item.toHtml() != committed_html
+        if not text or (text == committed_text.strip() and not html_changed):
+            return None
+        after_state = note_state_dict_for(self.canvas, item)
+        if not committed_text:
+            return AddSceneItemsCommand(item_states=[after_state], items=[item])
+        runtime = NoteTextState.capture(item)
+        before = replace(
+            runtime,
+            html=committed_html,
+            cursor_anchor=0,
+            cursor_position=0,
+            interaction_flags=Qt.TextInteractionFlag.NoTextInteraction,
+        )
+        after = replace(runtime, committed_text=text, committed_html=runtime.html)
+        return SetAnnotationStyleCommand(before, after, lambda state: state.apply(item))
+
+    def apply_note_color(
+        self, item: QGraphicsTextItem, color: QColor
+    ) -> list[HistoryCommand]:
+        """Mutate within the caller's document transaction and return commands."""
+        original = NoteTextState.capture(item)
+        pending = self._pending_note_edit_command(item)
+        commands = [pending] if pending is not None else []
+        if pending is not None:
+            set_committed_note_text_for(item, item.toPlainText().strip())
+            set_committed_note_html_for(item, item.toHtml())
+        before = NoteTextState.capture(item)
+        before_state = note_state_dict_for(self.canvas, item)
+        char_format = QTextCharFormat()
+        char_format.setForeground(color)
+        cursor = item.textCursor()
+        if cursor.hasSelection():
+            cursor.mergeCharFormat(char_format)
+            item.setTextCursor(cursor)
+        else:
+            whole = QTextCursor(item.document())
+            whole.select(QTextCursor.SelectionType.Document)
+            whole.mergeCharFormat(char_format)
+            item.setDefaultTextColor(color)
+        if pending is not None or original.committed_html == original.html:
+            set_committed_note_html_for(item, item.toHtml())
+        if before_state != note_state_dict_for(self.canvas, item):
+            commands.append(
+                SetAnnotationStyleCommand(
+                    before, NoteTextState.capture(item), lambda state: state.apply(item)
+                )
+            )
+        return commands
+
     def handle_note_focus_out(self, item: QGraphicsTextItem) -> None:
         self._end_note_editing(item)
         text = item.toPlainText().strip()
         committed_text = committed_note_text_for(item)
         committed_html = committed_note_html_for(item)
         current_html = item.toHtml()
-        html_changed = bool(committed_html) and current_html != committed_html
         if text:
-            # Typed notes commit trimmed comparison text; restored notes may
-            # retain outer whitespace. Compare consistently without changing
-            # the live text/HTML (HTML still detects real whitespace edits).
-            if text != committed_text.strip() or html_changed:
-                after_state = note_state_dict_for(self.canvas, item)
-                if not committed_text:
-                    command: HistoryCommand = AddSceneItemsCommand(
-                        item_states=[after_state],
-                        items=[item],
-                    )
-                else:
-                    before_state = note_state_dict_for(self.canvas, item)
-                    before_state["text"] = committed_text
-                    before_state["html"] = committed_html
-                    command = UpdateSceneItemCommand(item, before_state, after_state)
+            command = self._pending_note_edit_command(item)
+            if command is not None:
 
                 def commit_note_metadata() -> None:
                     set_committed_note_text_for(item, text)
@@ -732,7 +778,7 @@ class CanvasNoteController:
             selection_for(self.canvas).update_note_selection_box(item)
             if item.hasFocus():
                 # Live editor changes are not document-history commands yet.
-                notify_document_change_for(self.canvas)
+                notify_document_change_for(self.canvas, edited_note=item)
 
         document.contentsChanged.connect(_resize)
         item.setData(22, True)

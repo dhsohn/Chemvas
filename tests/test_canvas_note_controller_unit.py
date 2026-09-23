@@ -550,7 +550,9 @@ class CanvasNoteControllerUnitTest(unittest.TestCase):
 
         item.setPlainText("Mechanism 2")
         controller.handle_note_focus_out(item)
-        self.assertEqual(type(canvas.commands[-1]).__name__, "UpdateSceneItemCommand")
+        self.assertEqual(
+            type(canvas.commands[-1]).__name__, "SetAnnotationStyleCommand"
+        )
         self.assertEqual(committed_note_text_for(item), "Mechanism 2")
 
         item.setPlainText("")

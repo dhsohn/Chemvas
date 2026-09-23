@@ -26,8 +26,6 @@ from chemvas.domain.document import Atom, Bond
 from chemvas.ui.bond_graphics_access import add_bond_graphics_for
 from chemvas.ui.canvas_atom_graphics_state import (
     CanvasAtomGraphicsState,
-    atom_dots_for,
-    atom_items_for,
     set_atom_dots_for,
     set_atom_items_for,
 )
@@ -39,14 +37,16 @@ from chemvas.ui.canvas_bond_graphics_state import (
 from chemvas.ui.canvas_color_mutation_service import (
     CanvasColorMutationService,
     UpdateBondColorCommand,
-    UpdateNoteColorCommand,
 )
 from chemvas.ui.canvas_lifecycle import schedule_canvas_deletion_for
+from chemvas.ui.canvas_note_controller import CanvasNoteController
 from chemvas.ui.canvas_shape_state import CanvasShapeState
 from chemvas.ui.canvas_smiles_input_state import CanvasSmilesInputState
 from chemvas.ui.graphics_items import AtomDotItem
-from chemvas.ui.history_commands import UpdateSceneItemCommand
-from chemvas.ui.history_operations import CanvasHistoryOperations
+from chemvas.ui.history_commands import (
+    SetAnnotationStyleCommand,
+    UpdateSceneItemCommand,
+)
 from chemvas.ui.note_item_access import (
     committed_note_html_for,
     committed_note_text_for,
@@ -84,7 +84,7 @@ def _color_service_for(canvas, *, graph_service=None) -> CanvasColorMutationServ
         )
     return CanvasColorMutationService(
         canvas,
-        history_operations=CanvasHistoryOperations(canvas),
+        note_controller=CanvasNoteController(canvas),
         graph_service=graph_service,
         history_service=canvas.services.history_service,
     )
@@ -208,7 +208,7 @@ class CanvasColorMutationServiceTest(unittest.TestCase):
         history = history_service.state
         service = CanvasColorMutationService(
             canvas,
-            history_operations=CanvasHistoryOperations(canvas),
+            note_controller=CanvasNoteController(canvas),
             graph_service=graph_service,
             history_service=history_service,
         )
@@ -286,57 +286,6 @@ class CanvasColorMutationServiceTest(unittest.TestCase):
         self.assertEqual(atom_item.defaultTextColor().name(), "#00aa00")
         dot_item.setBrush.assert_called_once_with("dot-brush")
         self.assertIsInstance(atom_pushes.pop(), UpdateAtomColorCommand)
-
-        ring_item = QGraphicsPolygonItem(
-            QPolygonF([QPointF(0.0, 0.0), QPointF(1.0, 0.0), QPointF(0.0, 1.0)])
-        )
-        ring_item.setData(0, "ring")
-        ring_item.setData(2, [1, 2])
-        scene.addItem(ring_item)
-        recurse_canvas = SimpleNamespace(
-            scene=lambda: scene,
-            model=SimpleNamespace(
-                atoms={1: Atom("C", 0.0, 0.0), 2: Atom("O", 1.0, 0.0)}
-            ),
-            runtime_state=_runtime_state(),
-            services=canvas_runtime_services(
-                history_service=_history_service(),
-            ),
-        )
-        graph_service = SimpleNamespace(
-            bond_sets_for_atoms=mock.Mock(return_value=({3}, set()))
-        )
-        _set_atom_graphics(recurse_canvas, {1: object()}, {2: object()})
-        set_bond_items_for(recurse_canvas, {3: [object()]})
-        recurse_service = _color_service_for(
-            recurse_canvas, graph_service=graph_service
-        )
-        recurse_service.apply_color_to_item = mock.Mock()
-        recurse_service._apply_ring_structure_color(ring_item, QColor("#336699"))
-        graph_service.bond_sets_for_atoms.assert_called_once_with({1, 2})
-        self.assertEqual(
-            recurse_service.apply_color_to_item.call_args_list,
-            [
-                mock.call(atom_items_for(recurse_canvas)[1], QColor("#336699")),
-                mock.call(atom_dots_for(recurse_canvas)[2], QColor("#336699")),
-                mock.call(bond_items_for(recurse_canvas)[3][0], QColor("#336699")),
-            ],
-        )
-
-        fill_pushes = []
-        fill_canvas = SimpleNamespace(
-            services=canvas_runtime_services(
-                history_service=_history_service(fill_pushes.append)
-            ),
-        )
-        _color_service_for(fill_canvas).apply_ring_fill_color(
-            ring_item, QColor("#123456"), alpha=2.0
-        )
-        self.assertAlmostEqual(ring_item.brush().color().alphaF(), 1.0)
-        self.assertIsInstance(fill_pushes.pop(), UpdateSceneItemCommand)
-
-        _color_service_for(atom_canvas).apply_color_to_item(None, QColor("#ffffff"))
-        _color_service_for(fill_canvas).apply_ring_fill_color(None, QColor("#ffffff"))
 
     def test_coloring_a_ring_pushes_a_single_composite_command(self) -> None:
         scene = QGraphicsScene()
@@ -459,55 +408,6 @@ class CanvasColorMutationServiceTest(unittest.TestCase):
         self.assertNotEqual(live.brush().style(), Qt.BrushStyle.NoBrush)
         self.assertEqual(len(pushes), 1)
 
-    def test_color_batch_rolls_back_prior_items_when_an_intermediate_item_raises(
-        self,
-    ) -> None:
-        pushes = []
-        canvas = SimpleNamespace(
-            services=canvas_runtime_services(
-                history_service=_history_service(pushes.append)
-            ),
-        )
-        service = _color_service_for(canvas)
-        values = {"first": "before", "second": "before"}
-
-        class _ValueCommand:
-            def __init__(self, key: str, before: str, after: str) -> None:
-                self.key = key
-                self.before = before
-                self.after = after
-
-            def undo(self, operations) -> None:
-                self.assert_operations(operations)
-                values[self.key] = self.before
-
-            def redo(self, operations) -> None:
-                self.assert_operations(operations)
-                values[self.key] = self.after
-
-            @staticmethod
-            def assert_operations(operations) -> None:
-                if operations is not service.operations:
-                    raise AssertionError(
-                        "transaction rolled back against the wrong operations"
-                    )
-
-        def mutate(item, color) -> None:
-            if item == "second":
-                raise RuntimeError("injected second-item failure")
-            before = values[item]
-            values[item] = color.name()
-            service.history.push(_ValueCommand(item, before, values[item]))
-
-        service.apply_color_to_item = mock.Mock(side_effect=mutate)
-
-        with self.assertRaisesRegex(RuntimeError, "second-item failure"):
-            service.apply_color_to_items(["first", "second"], QColor("#d84a3a"))
-
-        self.assertEqual(values, {"first": "before", "second": "before"})
-        self.assertEqual(pushes, [])
-        self.assertIs(service.history, canvas.services.history_service)
-
     def test_color_batch_failure_restores_exact_note_editing_runtime(self) -> None:
         canvas = build_canvas_view()
         self.addCleanup(self._dispose_canvas, canvas)
@@ -531,14 +431,14 @@ class CanvasColorMutationServiceTest(unittest.TestCase):
         failing_item = QGraphicsPathItem()
         failing_item.setData(0, "shape")
         canvas.scene().addItem(failing_item)
-        real_apply = service.apply_color_to_item
+        real_apply = service._apply_color
 
         def apply_then_fail(item, color) -> None:
             if item is failing_item:
                 raise RuntimeError("injected later-item failure")
-            real_apply(item, color)
+            return real_apply(item, color)
 
-        service.apply_color_to_item = mock.Mock(side_effect=apply_then_fail)
+        service._apply_color = mock.Mock(side_effect=apply_then_fail)
 
         with self.assertRaisesRegex(RuntimeError, "later-item failure"):
             service.apply_color_to_items([note, failing_item], QColor("#e53935"))
@@ -556,7 +456,7 @@ class CanvasColorMutationServiceTest(unittest.TestCase):
         )
         self.assertEqual(note.textInteractionFlags(), before_flags)
         self.assertFalse(canvas.services.history_service.can_undo())
-        del service.apply_color_to_item
+        del service._apply_color
 
     def test_color_batch_failure_preserves_bond_graphics_identity_and_selection(
         self,
@@ -582,14 +482,14 @@ class CanvasColorMutationServiceTest(unittest.TestCase):
         failing_item.setData(0, "shape")
         canvas.scene().addItem(failing_item)
         service = canvas.services.scene_operations.canvas_color_mutation_service
-        real_apply = service.apply_color_to_item
+        real_apply = service._apply_color
 
         def apply_then_fail(item, color) -> None:
             if item is failing_item:
                 raise RuntimeError("injected later-item failure")
-            real_apply(item, color)
+            return real_apply(item, color)
 
-        service.apply_color_to_item = mock.Mock(side_effect=apply_then_fail)
+        service._apply_color = mock.Mock(side_effect=apply_then_fail)
 
         with self.assertRaisesRegex(RuntimeError, "later-item failure"):
             service.apply_color_to_items([bond_item, failing_item], QColor("#d84a3a"))
@@ -600,7 +500,7 @@ class CanvasColorMutationServiceTest(unittest.TestCase):
         self.assertEqual(bond_item.pen(), before_pen)
         self.assertEqual(canvas.model.bonds[bond_id].color, before_color)
         self.assertFalse(canvas.services.history_service.can_undo())
-        del service.apply_color_to_item
+        del service._apply_color
 
         # Successful history playback is also color-only: it must not rebuild
         # topology graphics or discard their selection state.
@@ -664,7 +564,10 @@ class CanvasColorMutationServiceTest(unittest.TestCase):
         )
         ring_item.setData(0, "ring")
         pushes: list = []
+        scene = QGraphicsScene()
+        scene.addItem(ring_item)
         canvas = SimpleNamespace(
+            scene=lambda: scene,
             services=canvas_runtime_services(
                 history_service=_history_service(pushes.append)
             ),
@@ -694,7 +597,11 @@ class CanvasColorMutationServiceTest(unittest.TestCase):
         for ring in rings:
             ring.setData(0, "ring")
         pushes = []
+        scene = QGraphicsScene()
+        for ring in rings:
+            scene.addItem(ring)
         canvas = SimpleNamespace(
+            scene=lambda: scene,
             services=canvas_runtime_services(
                 history_service=_history_service(pushes.append)
             ),
@@ -742,7 +649,11 @@ class CanvasColorMutationServiceTest(unittest.TestCase):
 
         pushes = []
         history_service = _history_service(pushes.append)
+        scene = QGraphicsScene()
+        scene.addItem(first)
+        scene.addItem(second)
         canvas = SimpleNamespace(
+            scene=lambda: scene,
             services=canvas_runtime_services(
                 history_service=history_service,
                 scene_item_controller=SimpleNamespace(
@@ -788,7 +699,7 @@ class CanvasColorMutationServiceTest(unittest.TestCase):
         self.assertEqual(note.defaultTextColor().name(), "#cc3344")
         self.assertIn("#cc3344", note.toHtml())
         self.assertEqual(push_command.call_count, 1)
-        self.assertIsInstance(push_command.call_args.args[0], UpdateNoteColorCommand)
+        self.assertIsInstance(push_command.call_args.args[0], SetAnnotationStyleCommand)
 
     def test_apply_color_to_note_recolors_only_selected_text(self) -> None:
         scene = QGraphicsScene()
@@ -863,8 +774,7 @@ class CanvasColorMutationServiceTest(unittest.TestCase):
         )
         self.assertEqual(note.textInteractionFlags(), before_flags)
         self.assertIsInstance(
-            canvas.services.history_service.state.history[-1],
-            UpdateNoteColorCommand,
+            canvas.services.history_service.state.history[-1], SetAnnotationStyleCommand
         )
 
         canvas.services.history_service.undo()
@@ -915,14 +825,14 @@ class CanvasColorMutationServiceTest(unittest.TestCase):
 
         history = canvas.services.history_service.state.history
         self.assertEqual(len(history), 1)
-        self.assertIsInstance(history[0], UpdateNoteColorCommand)
+        self.assertIsInstance(history[0], SetAnnotationStyleCommand)
         self.assertEqual(committed_note_html_for(note), note.toHtml())
         after_html = note.toHtml()
 
         canvas.services.interaction.note_controller.handle_note_focus_out(note)
 
         self.assertEqual(len(history), 1)
-        self.assertIsInstance(history[0], UpdateNoteColorCommand)
+        self.assertIsInstance(history[0], SetAnnotationStyleCommand)
 
         canvas.services.history_service.undo()
         self.assertEqual(note.toHtml(), before_html)
@@ -946,27 +856,21 @@ class CanvasColorMutationServiceTest(unittest.TestCase):
         initial_html = note.toHtml()
 
         note.setPlainText("old typed")
-        pending_html = note.toHtml()
         canvas.services.scene_operations.canvas_color_mutation_service.apply_color_to_item(
             note,
             QColor("#cc3344"),
         )
 
         history = canvas.services.history_service.state.history
-        self.assertEqual(len(history), 2)
-        self.assertIsInstance(history[-1], UpdateNoteColorCommand)
+        self.assertEqual(len(history), 1)
+        self.assertIsInstance(history[-1], CompositeCommand)
         final_html = note.toHtml()
         self.assertIn("#cc3344", final_html.lower())
         self.assertEqual(committed_note_text_for(note), "old typed")
         self.assertEqual(committed_note_html_for(note), final_html)
 
         canvas.services.interaction.note_controller.handle_note_focus_out(note)
-        self.assertEqual(len(history), 2)
-
-        canvas.services.history_service.undo()
-        self.assertEqual(note.toPlainText(), "old typed")
-        self.assertEqual(note.toHtml(), pending_html)
-        self.assertEqual(committed_note_html_for(note), pending_html)
+        self.assertEqual(len(history), 1)
 
         canvas.services.history_service.undo()
         self.assertEqual(note.toPlainText(), "old")
@@ -976,17 +880,12 @@ class CanvasColorMutationServiceTest(unittest.TestCase):
 
         canvas.services.history_service.redo()
         self.assertEqual(note.toPlainText(), "old typed")
-        self.assertEqual(note.toHtml(), pending_html)
-        self.assertEqual(committed_note_html_for(note), pending_html)
-
-        canvas.services.history_service.redo()
-        self.assertEqual(note.toPlainText(), "old typed")
         self.assertEqual(note.toHtml(), final_html)
         self.assertEqual(committed_note_text_for(note), "old typed")
         self.assertEqual(committed_note_html_for(note), final_html)
 
         canvas.services.interaction.note_controller.handle_note_focus_out(note)
-        self.assertEqual(len(history), 2)
+        self.assertEqual(len(history), 1)
 
     def test_apply_color_to_item_rejects_invalid_inputs_and_propagates_live_scene_error(
         self,
@@ -1039,7 +938,10 @@ class CanvasColorMutationServiceTest(unittest.TestCase):
         fill.setAlphaF(0.0)
         ring_item.setBrush(QBrush(fill))
         pushes = []
+        scene = QGraphicsScene()
+        scene.addItem(ring_item)
         canvas = SimpleNamespace(
+            scene=lambda: scene,
             services=canvas_runtime_services(
                 history_service=_history_service(pushes.append)
             ),
@@ -1138,47 +1040,3 @@ class CanvasColorMutationServiceTest(unittest.TestCase):
 
         self.assertEqual(dot_item.brush().color().name(), "#fedcba")
         self.assertEqual(pushes, [])
-
-    def test_apply_ring_structure_color_covers_invalid_metadata_and_dispatch(
-        self,
-    ) -> None:
-        scene = QGraphicsScene()
-        invalid_item = QGraphicsPathItem()
-        invalid_item.setData(0, "ring")
-        invalid_item.setData(2, "bad")
-        scene.addItem(invalid_item)
-        empty_item = QGraphicsPathItem()
-        empty_item.setData(0, "ring")
-        empty_item.setData(2, ["x"])
-        scene.addItem(empty_item)
-        ring_item = QGraphicsPathItem()
-        ring_item.setData(0, "ring")
-        ring_item.setData(2, [1, 2, "x"])
-        scene.addItem(ring_item)
-        atom_item = object()
-        fallback_canvas = SimpleNamespace(
-            scene=lambda: scene,
-            model=SimpleNamespace(
-                atoms={1: Atom("C", 0.0, 0.0), 2: Atom("O", 1.0, 0.0)}
-            ),
-            runtime_state=_runtime_state(),
-            services=canvas_runtime_services(
-                history_service=_history_service(),
-            ),
-        )
-        graph_service = SimpleNamespace(
-            bond_sets_for_atoms=mock.Mock(return_value=({7}, set()))
-        )
-        _set_atom_graphics(fallback_canvas, {1: atom_item})
-        set_bond_items_for(fallback_canvas, {7: []})
-        service = _color_service_for(fallback_canvas, graph_service=graph_service)
-        service.apply_color_to_item = mock.Mock()
-
-        service._apply_ring_structure_color(invalid_item, QColor("#123456"))
-        service._apply_ring_structure_color(empty_item, QColor("#123456"))
-        service._apply_ring_structure_color(ring_item, QColor("#123456"))
-
-        graph_service.bond_sets_for_atoms.assert_called_once_with({1, 2})
-        service.apply_color_to_item.assert_called_once_with(
-            atom_item, QColor("#123456")
-        )

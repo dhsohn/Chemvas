@@ -1,9 +1,57 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
+from typing import TYPE_CHECKING
+
+from PyQt6.QtGui import QColor, QTextCursor
+
 from chemvas.ui.canvas_service_ports import note_controller_for_access
+
+if TYPE_CHECKING:
+    from PyQt6.QtCore import Qt
+    from PyQt6.QtWidgets import QGraphicsTextItem
 
 COMMITTED_NOTE_TEXT_ROLE = 0xC001
 COMMITTED_NOTE_HTML_ROLE = 0xC002
+
+
+@dataclass(frozen=True, kw_only=True)
+class NoteTextState:
+    """Text and editor state shared by note commands and document savepoints."""
+
+    html: str
+    cursor_anchor: int
+    cursor_position: int
+    interaction_flags: Qt.TextInteractionFlag
+    default_text_color: QColor
+    committed_text: str
+    committed_html: str
+
+    @classmethod
+    def capture(cls, item: QGraphicsTextItem) -> NoteTextState:
+        cursor = item.textCursor()
+        return cls(
+            html=item.toHtml(),
+            cursor_anchor=cursor.anchor(),
+            cursor_position=cursor.position(),
+            interaction_flags=item.textInteractionFlags(),
+            default_text_color=QColor(item.defaultTextColor()),
+            committed_text=committed_note_text_for(item),
+            committed_html=committed_note_html_for(item),
+        )
+
+    def apply(self, item: QGraphicsTextItem) -> None:
+        # Leave Qt's native undo stack intact when only the cursor changed.
+        if item.toHtml() != self.html:
+            item.setHtml(self.html)
+        item.setDefaultTextColor(QColor(self.default_text_color))
+        item.setTextInteractionFlags(self.interaction_flags)
+        cursor = QTextCursor(item.document())
+        cursor.setPosition(self.cursor_anchor)
+        cursor.setPosition(self.cursor_position, QTextCursor.MoveMode.KeepAnchor)
+        item.setTextCursor(cursor)
+        set_committed_note_text_for(item, self.committed_text)
+        set_committed_note_html_for(item, self.committed_html)
 
 
 def new_note_item_for(canvas):
@@ -74,6 +122,7 @@ def apply_note_style_for(canvas, item) -> None:
 __all__ = [
     "COMMITTED_NOTE_HTML_ROLE",
     "COMMITTED_NOTE_TEXT_ROLE",
+    "NoteTextState",
     "apply_note_style_for",
     "committed_note_html_for",
     "committed_note_text_for",

@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING, Any
 from PyQt6.QtGui import QTextOption
 from PyQt6.QtWidgets import QGraphicsItem, QGraphicsTextItem
 
+from chemvas.ui.note_item_access import NoteTextState
 from chemvas.ui.transactions.scene_runtime import (
     BondPrimitiveGraphicsSnapshot,
     graphics_item_is_deleted,
@@ -336,6 +337,13 @@ class SceneItemExactSnapshot:
                     errors.append(exc)
         primitive = self.primitive_graphics
         if primitive is not None:
+            if primitive.note_text is not None:
+                try:
+                    assert isinstance(primitive.item, QGraphicsTextItem)
+                    if NoteTextState.capture(primitive.item) != primitive.note_text:
+                        raise RuntimeError("transaction note text was re-mutated")
+                except Exception as exc:
+                    errors.append(exc)
             for setter_name, expected in primitive.properties:
                 getter_name = (
                     "toHtml"

@@ -13,13 +13,13 @@ from chemvas.domain.document import (
     extract_document_state,
     serialize_settings,
 )
+from chemvas.ui.canvas_note_controller import CanvasNoteController
 from chemvas.ui.canvas_scene_items_state import arrow_items_for
 from chemvas.ui.canvas_view import CanvasView
 from chemvas.ui.canvas_window_access import (
     restore_canvas_state_for,
     snapshot_canvas_state_for,
 )
-from chemvas.ui.history_operations import CanvasHistoryOperations
 from chemvas.ui.scene_item_state_serialization import arrow_state_dict_for
 
 
@@ -214,7 +214,7 @@ def test_color_operation_recolors_arrows_with_one_undo_step(canvas, kind):
     history = canvas.runtime_state.history_service
     colors = CanvasColorMutationService(
         canvas,
-        history_operations=CanvasHistoryOperations(canvas),
+        note_controller=CanvasNoteController(canvas),
         graph_service=canvas_services_for(canvas).graph_service,
         history_service=history,
     )
@@ -272,7 +272,7 @@ def test_color_tool_empty_space_click_recolors_selected_arrow(canvas):
     item.setSelected(True)
     colors = CanvasColorMutationService(
         canvas,
-        history_operations=CanvasHistoryOperations(canvas),
+        note_controller=CanvasNoteController(canvas),
         graph_service=canvas_services_for(canvas).graph_service,
         history_service=canvas.runtime_state.history_service,
     )
@@ -347,7 +347,7 @@ def test_failed_arrow_color_batch_restores_document(canvas, monkeypatch, failure
     history = canvas.runtime_state.history_service
     colors = CanvasColorMutationService(
         canvas,
-        history_operations=CanvasHistoryOperations(canvas),
+        note_controller=CanvasNoteController(canvas),
         graph_service=canvas_services_for(canvas).graph_service,
         history_service=history,
     )

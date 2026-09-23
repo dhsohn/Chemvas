@@ -60,7 +60,7 @@ def build_scene_operation_services(
     canvas_color_mutation_service = CanvasColorMutationService(
         canvas,
         graph_service=graph_service,
-        history_operations=history_service.operations,
+        note_controller=note_controller,
         history_service=history_service,
     )
     return SceneOperationServiceBundle(

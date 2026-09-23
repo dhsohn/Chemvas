@@ -47,7 +47,7 @@ from chemvas.ui.canvas_tool_settings_state import tool_settings_state_for
 from chemvas.ui.history_commands import (
     AddSceneItemsCommand,
     DeleteSceneItemsCommand,
-    UpdateSceneItemCommand,
+    SetAnnotationStyleCommand,
 )
 from chemvas.ui.history_operations import CanvasHistoryOperations
 from chemvas.ui.input_view_access import (
@@ -362,7 +362,7 @@ class CanvasViewUnitTest(unittest.TestCase):
 
         item.setPlainText("Mechanism 2")
         item.focusOutEvent(QFocusEvent(QEvent.Type.FocusOut))
-        self.assertIsInstance(canvas.commands[-1], UpdateSceneItemCommand)
+        self.assertIsInstance(canvas.commands[-1], SetAnnotationStyleCommand)
         self.assertEqual(committed_note_text_for(item), "Mechanism 2")
 
         item.setPlainText("")

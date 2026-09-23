@@ -18,6 +18,8 @@ from PyQt6.QtWidgets import (
 
 from chemvas.domain.transactions import add_recovery_error_note, run_rollback_step
 from chemvas.ui.canvas_scene_items_state import SCENE_ITEM_COLLECTION_ATTRS
+from chemvas.ui.note_item import NoteItem
+from chemvas.ui.note_item_access import NoteTextState
 from chemvas.ui.scene_item_access import (
     create_scene_item_from_state as _create_scene_item_from_state,
 )
@@ -333,6 +335,7 @@ class BondPrimitiveGraphicsSnapshot:
     item: object
     properties: tuple[tuple[str, object], ...]
     direct_attributes: tuple[tuple[str, object], ...]
+    note_text: NoteTextState | None = None
 
     @classmethod
     def capture(
@@ -341,8 +344,15 @@ class BondPrimitiveGraphicsSnapshot:
     ) -> BondPrimitiveGraphicsSnapshot | None:
         if graphics_item_is_deleted(item):
             return None
+        note_text = NoteTextState.capture(item) if isinstance(item, NoteItem) else None
         properties: list[tuple[str, object]] = []
         for getter_name, setter_name in _BOND_PRIMITIVE_GRAPHICS_PROPERTIES:
+            if note_text is not None and setter_name in {
+                "setHtml",
+                "setDefaultTextColor",
+                "setTextInteractionFlags",
+            }:
+                continue
             getter = _snapshot_attribute(item, getter_name)
             setter = _snapshot_attribute(item, setter_name)
             if not callable(getter) or not callable(setter):
@@ -371,6 +381,7 @@ class BondPrimitiveGraphicsSnapshot:
             item=item,
             properties=tuple(properties),
             direct_attributes=direct_attributes,
+            note_text=note_text,
         )
 
     def restore(self) -> list[BaseException]:
@@ -382,6 +393,12 @@ class BondPrimitiveGraphicsSnapshot:
                     setter_name,
                     value,
                 )
+            except Exception as exc:
+                errors.append(exc)
+        if self.note_text is not None:
+            try:
+                assert isinstance(self.item, QGraphicsTextItem)
+                self.note_text.apply(self.item)
             except Exception as exc:
                 errors.append(exc)
         if self.direct_attributes:
