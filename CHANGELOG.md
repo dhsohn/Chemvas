@@ -17,6 +17,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Streamline documentation across English and Korean guides to focus on clear,
+  action-oriented instructions and remove redundant disclaimers.
 - Reflect toolbar tool changes once, including bond-style choices, through one
   owner of checked actions, status hints and tool options.
 - Keep Molecule Info and its 3D preview when the selected structure is only

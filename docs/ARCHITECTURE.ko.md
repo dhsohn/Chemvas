@@ -2,11 +2,9 @@
 
 [English](ARCHITECTURE.md)
 
-## 한눈에 보는 계층
+## 패키지 계층 구조
 
-누가 누구를 import할 수 있는지에 대한 규범 아닌 스냅샷이다. 화살표는
-import하는 패키지에서 의존 대상 패키지로 향한다. 목표 경계는
-[ADR 0001](adr/0001-feature-oriented-modularization.md)이 정한다.
+각 패키지 간의 import 의존성을 나타낸 구조도입니다. 화살표는 import하는 패키지에서 의존 대상 패키지로 향합니다. 목표 아키텍처 경계는 [ADR 0001](adr/0001-feature-oriented-modularization.md)을 따릅니다.
 
 ```mermaid
 flowchart TB
@@ -29,20 +27,15 @@ flowchart TB
     core --> domain
 ```
 
-## 현재 구현 지도 (규범 아님)
+## 컴포넌트 구조
 
-이 절은 마이그레이션 중인 현재 코드를 설명한다. 목표 패키지 경계와
-의존 방향은 [ADR 0001](adr/0001-feature-oriented-modularization.md)에 정의되어
-있다. 신규 기능은 아래의 평면 `core` / `ui` 배치를 복제하지 않고 ADR을
-따른다.
-- CanvasView (`app/chemvas/ui/canvas_view.py`): 입력 처리, 도구(tool) 디스패치, 선택 상태 관리, 그리고 모델/렌더/히스토리 업데이트의 조율을 담당한다. 저수준 드로잉 프리미티브(low-level drawing primitives)를 직접 소유해서는 안 된다.
-- MoleculeModel (`app/chemvas/domain/document/model.py`): 순수한 원자/결합 데이터와 ID. Qt 의존성이 없다.
-- RDKitAdapter (`app/chemvas/core/rdkit_adapter.py`): SMILES 가져오기, 물성 계산, 3D 좌표 생성, 별칭(alias) 확장, 미리보기 씬(preview scene) 구성을 담당하는 선택적 화학 백엔드. Alias 검증은 scene, XYZ, MOL, calculation-artifact 경로가 중앙에서 공유한다. Carbon-bound `PPh3`는 정확히 하나의 single bond를 가진 phosphonium `C-[P+](Ph)3`로만 확장하며, 모호한 attachment 또는 명시적인 전자 annotation은 fail closed한다. UI 코드는 RDKit을 필수 시작 의존성이 아니라 최선 노력(best-effort) 서비스로 취급해야 한다.
-- Renderer (`app/chemvas/adapters/qt/renderer.py`): 순수
-  `chemvas.features.rendering.acs1996_style` 정책을 사용하는 Qt 펜/브러시와
-  폰트 설정.
-- HistoryCommand (`app/chemvas/core/history.py`): 델타 기반 실행 취소/다시 실행(undo/redo). 다중 엔티티(multi-entity) 연산은 `CompositeCommand`로 그룹화되며, 이는 다시 실행 시 자식 델타 커맨드를 순서대로 적용하고 실행 취소 시 역순으로 적용한다.
-- 장면 렌더링(`scene_render_context.py`, `scene_rendering.py`): 명시적인 `SceneRenderContext`가 scene, 현재 model, style, 공통 drawing state를 분자·annotation 렌더러에 제공한다. `CanvasRuntimeState`는 이 상태를 상속해 편집기 필드만 추가하므로 GUI가 drawing state 사본을 따로 유지하지 않는다. [ADR 0004](adr/0004-view-independent-scene-rendering.md) 참조.
+현재 모듈별 핵심 역할과 책임은 다음과 같습니다. 신규 기능 추가 시에는 [ADR 0001](adr/0001-feature-oriented-modularization.md)의 패키지 분리 원칙을 준수해야 합니다.
+- CanvasView (`app/chemvas/ui/canvas_view.py`): 사용자 입력 처리, 도구(Tool) 디스패치, 선택 상태 관리, 모델/렌더링/히스토리 갱신의 조율을 담당합니다. 저수준 드로잉 처리는 직접 소유하지 않습니다.
+- MoleculeModel (`app/chemvas/domain/document/model.py`): 순수 원자 및 결합 데이터와 ID를 관리하며 Qt 의존성이 없습니다.
+- RDKitAdapter (`app/chemvas/core/rdkit_adapter.py`): SMILES 가져오기, 물성 계산, 3D 좌표 생성, 작용기 약어 확장, 미리보기 생성을 담당하는 선택적 백엔드입니다. 탄소에 결합된 `PPh3`는 단일 결합을 가진 포스포늄 `C-[P+](Ph)3`로만 확장되며, 결합이 모호한 경우 오류를 발생시키며 안전하게 중단합니다. UI 코드는 RDKit을 필수 종속성이 아닌 선택적 서비스로 취급합니다.
+- Renderer (`app/chemvas/adapters/qt/renderer.py`): 순수 스타일 정책(`chemvas.features.rendering.acs1996_style`)을 기반으로 Qt 펜, 브러시, 글꼴을 설정합니다.
+- HistoryCommand (`app/chemvas/core/history.py`): 델타 기반 실행 취소/다시 실행(Undo/Redo)을 처리합니다. 다중 객체 연산은 `CompositeCommand`로 묶여 실행 취소 시 역순으로 안전하게 롤백됩니다.
+- 장면 렌더링 (`scene_render_context.py`, `scene_rendering.py`): 명시적인 `SceneRenderContext`가 씬, 모델, 스타일, 공통 상태를 렌더러에 제공합니다 ([ADR 0004](adr/0004-view-independent-scene-rendering.md) 참고).
 - BondRenderer (`app/chemvas/ui/bond_renderer.py`): drawing context를 사용해 결합 QGraphicsItem을 생성·갱신한다. `SceneGeometry`와 `AtomLabelRenderer`가 뷰와 무관한 기하·label drawing을 소유하고, 편집 서비스는 변경과 history를 맡는다.
 - 화살표와 선(`app/chemvas/ui/canvas_arrow_build_service.py`): `CanvasArrowBuildService`가 레코드 변경과 그로부터 만들어지는 경로·라벨을 소유한다. 직렬화, 이동, 핸들, 끝점 스냅은 공용 drawing state의 동일한 Qt-free `Arrow` 레코드를 읽는다. 메뉴 이벤트에는 표시 문자열 대신 kind ID를 전달한다.
 - Graphics items (`app/chemvas/ui/graphics_items.py`): 선택 불가능한 QGraphicsItem 래퍼(wrapper).

@@ -11,66 +11,46 @@
 
 <p align="center"><b>English</b> · <a href="https://github.com/dhsohn/Chemvas/blob/main/README.ko.md">한국어</a></p>
 
-Chemvas is an **open-source chemical drawing app where chemists and AI agents
-work on the same editable canvas**. Start in the desktop app, let an agent
-continue through a purpose-built CLI, then open the editable result right back
-on the canvas.
+Chemvas is an **open-source chemical drawing application** where chemists and automation scripts share the same editable canvas. Draw intuitively on the desktop canvas, automate edits or inspections through a dedicated CLI, and reopen the results anytime without losing editability.
 
-## Draw it yourself. Hand it to AI. Keep editing.
+## Features
 
-- **Draw it yourself.** Sketch structures, insert SMILES, label reaction arrows,
-  and align molecules on the desktop canvas, with autosave and crash recovery.
-  SMILES insertion needs the optional RDKit backend.
-- **Hand the same drawing to an AI agent.** The CLI can compose documents,
-  inspect stable atom IDs, apply bounded graph patches, check layouts, and render
-  figures without opening the desktop app. Graph Patch binds each proposal to the
-  exact source hash and validates the complete result before writing a new file.
-- **Keep editing the result.** Composed and patched drawings remain native,
-  reopenable `.chemvas` documents. Export SVG, PDF, PNG, or TIFF at explicit
-  physical sizes while keeping the editable drawing alongside the figure.
-
-## Your saved drawings stay usable
-
-Future Chemvas updates will continue to open currently supported, valid v7
-`.chemvas` documents. Newer file formats must preserve that reading support;
-older applications are not guaranteed to open newly saved formats.
-See the [document compatibility policy](https://github.com/dhsohn/Chemvas/blob/main/docs/DOCUMENT_COMPATIBILITY.md).
+- **Intuitive Canvas Drawing**: Sketch structures, insert SMILES, label reaction arrows, and align molecules with real-time feedback, autosave, and session recovery.
+- **Headless Automation & CLI**: Inspect atom IDs, validate layouts, apply programmatic patches, and render publication figures without launching the GUI.
+- **Publication-Ready Figure Export**: Export vector graphics (SVG, PDF) and raster images (PNG, TIFF) at exact publication column widths (e.g., 82 mm, 174 mm) while retaining full canvas editability.
+- **Reliable Document Format**: Saved `.chemvas` documents remain fully editable JSON files (version 8, schema 1). See our [document compatibility policy](https://github.com/dhsohn/Chemvas/blob/main/docs/DOCUMENT_COMPATIBILITY.md).
 
 ## Install
 
-Requires **Python 3.12+**. Install the optional RDKit backend for SMILES insertion,
-Molecule Info (formula and identifiers), 3D XYZ export, abbreviation MOL export,
-**Suggest by structure**, and `pack-step`:
+Requires **Python 3.12+**.
+
+To use chemical informatics features (SMILES insertion, molecular properties, 3D XYZ export, structure-based suggestions, and `pack-step`), install with the optional RDKit backend:
 
 ```bash
 pip install "chemvas[rdkit]"
 chemvas
 ```
 
-`pip install chemvas` skips RDKit. Drawing, `.chemvas` save/open, figure export
-(SVG/PDF/PNG/TIFF, including editable SVG), and plain MOL import/export remain
-available. Local Windows builds:
-[packaging notes](https://github.com/dhsohn/Chemvas/blob/main/packaging/windows/README.md).
+For basic drawing, document editing, and figure export without RDKit:
 
-## Your first reaction scheme
+`pip install chemvas`
+
+For local Windows packaging, see the [Windows packaging guide](https://github.com/dhsohn/Chemvas/blob/main/packaging/windows/README.md).
+
+## Quickstart: Your First Reaction Scheme
 
 ![Chemvas walkthrough: insert structures, label an arrow, align the scheme, and export SVG](https://raw.githubusercontent.com/dhsohn/Chemvas/main/docs/images/demo.gif)
 
-1. Type `OCc1ccccc1` in the shared SMILES field below the toolbar, click **Insert**, then
-   click the canvas. Hover the oxygen, press **Enter**, label it `OH`.
-2. Insert `O=Cc1ccccc1` to the right. Choose **Arrow**, drag between the two
-   structures, then double-click the arrow to label it.
-3. **Edit ▸ Select All**, then **Edit ▸ Align ▸ Middle**.
-4. Save as `.chemvas`. **File ▸ Export Figure…** → **Plain SVG**,
-   **Fit 2-column (174 mm)**.
+1. Type `OCc1ccccc1` in the SMILES field below the toolbar, click **Insert**, then click on the canvas. Hover over the oxygen atom, press **Enter**, and set the label to `OH`.
+2. Insert `O=Cc1ccccc1` to the right. Select the **Arrow** tool, drag between the structures, and double-click the arrow to add condition labels.
+3. Select both molecules (**Edit ▸ Select All**) and align them (**Edit ▸ Align ▸ Middle**).
+4. Save the document (`.chemvas`). Export via **File ▸ Export Figure…** → **Plain SVG**, **Fit 2-column (174 mm)**.
 
-The [step-by-step guide](https://github.com/dhsohn/Chemvas/blob/main/docs/FIRST_SCHEME.md)
-has the label text and the downloadable files. The drawing is an exercise, not
-an experimental result.
+For detailed instructions and example files, see the [step-by-step guide](https://github.com/dhsohn/Chemvas/blob/main/docs/FIRST_SCHEME.md).
 
-## Scripts
+## Automation & CLI
 
-With the downloaded `first-scheme.chemvas`:
+Inspect, validate, and render documents directly from the command line:
 
 ```bash
 chemvas inspect-document first-scheme.chemvas
@@ -78,25 +58,13 @@ chemvas check-layout first-scheme.chemvas
 chemvas render-document first-scheme.chemvas --output first-scheme.pdf --width-mm 174
 ```
 
-Rendering writes a new file and never touches the source. Composition, Graph
-Patch, scheme layout and their limits:
-[document CLI guide](https://github.com/dhsohn/Chemvas/blob/main/docs/AGENT_CLI.md) ·
-[scheme layout](https://github.com/dhsohn/Chemvas/blob/main/docs/SCHEME_LAYOUT.md) ·
-[publication recipe](https://github.com/dhsohn/Chemvas/blob/main/docs/PUBLICATION_SCHEMES.md).
+For more CLI workflows, see the [Agent CLI guide](https://github.com/dhsohn/Chemvas/blob/main/docs/AGENT_CLI.md), [Scheme Layout guide](https://github.com/dhsohn/Chemvas/blob/main/docs/SCHEME_LAYOUT.md), and [Publication Schemes guide](https://github.com/dhsohn/Chemvas/blob/main/docs/PUBLICATION_SCHEMES.md).
 
 ## Documentation
 
-- [Drawing tools and shortcuts](https://github.com/dhsohn/Chemvas/blob/main/docs/REFERENCE.md) ·
-  [Chemistry I/O](https://github.com/dhsohn/Chemvas/blob/main/docs/REFERENCE.md#chemistry-io) ·
-  [Image objects](https://github.com/dhsohn/Chemvas/blob/main/docs/IMAGE_OBJECTS.md) ·
-  [Limits and roadmap](https://github.com/dhsohn/Chemvas/blob/main/docs/REFERENCE.md#roadmap--not-yet-supported)
-- [Calculation handoff (RDKit)](https://github.com/dhsohn/Chemvas/blob/main/docs/AGENT_CLI.md#calculation-states-and-elementary-steps): elementary steps with separately embedded components, one `machine.json` per step.
-- Documents are editable `.chemvas` JSON files (version 8, schema 1).
-  [More examples](https://github.com/dhsohn/Chemvas/tree/main/examples)
-- [Contributing](https://github.com/dhsohn/Chemvas/blob/main/CONTRIBUTING.md) ·
-  [Architecture](https://github.com/dhsohn/Chemvas/blob/main/docs/ARCHITECTURE.md) ·
-  [Changelog](https://github.com/dhsohn/Chemvas/blob/main/CHANGELOG.md) ·
-  [Releasing](https://github.com/dhsohn/Chemvas/blob/main/RELEASING.md) ·
-  [MIT License](https://github.com/dhsohn/Chemvas/blob/main/LICENSE)
+- [Drawing Tools & Shortcuts](https://github.com/dhsohn/Chemvas/blob/main/docs/REFERENCE.md) · [Chemistry I/O](https://github.com/dhsohn/Chemvas/blob/main/docs/REFERENCE.md#chemistry-io) · [Image Objects](https://github.com/dhsohn/Chemvas/blob/main/docs/IMAGE_OBJECTS.md)
+- [Calculation Handoff (RDKit)](https://github.com/dhsohn/Chemvas/blob/main/docs/AGENT_CLI.md#calculation-states-and-elementary-steps): Export reaction steps with embedded components to `machine.json`.
+- [Examples](https://github.com/dhsohn/Chemvas/tree/main/examples): Sample `.chemvas` documents (version 8, schema 1).
+- [Architecture](https://github.com/dhsohn/Chemvas/blob/main/docs/ARCHITECTURE.md) · [Contributing](https://github.com/dhsohn/Chemvas/blob/main/CONTRIBUTING.md) · [Changelog](https://github.com/dhsohn/Chemvas/blob/main/CHANGELOG.md) · [Releasing](https://github.com/dhsohn/Chemvas/blob/main/RELEASING.md) · [License (MIT)](https://github.com/dhsohn/Chemvas/blob/main/LICENSE)
 
-Something got in your way? [Open an issue](https://github.com/dhsohn/Chemvas/issues).
+Feedback and bug reports: [GitHub Issues](https://github.com/dhsohn/Chemvas/issues).
