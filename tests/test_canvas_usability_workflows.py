@@ -382,7 +382,7 @@ def test_escape_cancels_creation_preview_or_finishes_empty_note(drawing, kind):
 def test_grouped_paste_failure_restores_document_and_history(
     drawing, clipboard, monkeypatch
 ):
-    from chemvas.ui import scene_clipboard_paste_service as paste
+    from chemvas.ui import scene_clipboard_controller as paste
 
     window, canvas = drawing
     _copy_pair(window, canvas, grouped=True)
