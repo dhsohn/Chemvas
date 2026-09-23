@@ -3,7 +3,7 @@ import unittest
 from types import SimpleNamespace
 from unittest import mock
 
-from PyQt6.QtCore import QPointF, Qt
+from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QColor
 from PyQt6.QtWidgets import QApplication, QGraphicsScene
 
@@ -453,7 +453,7 @@ class CanvasDocumentStateTest(unittest.TestCase):
         self.assertAlmostEqual(
             items.shape_items[0].brush().color().alphaF(), 0.4, places=3
         )
-        self.assertEqual(items.arrow_items[0].data(2)["control"], QPointF(15, 10))
+        self.assertEqual(context.arrows.record(items.arrow_items[0]).control, (15, 10))
         self.assertEqual(state, original)
         self.assertEqual(context.model, original_model)
         self.assertFalse(hasattr(context, "services"))

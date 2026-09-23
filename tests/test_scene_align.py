@@ -20,7 +20,7 @@ from chemvas.ui.main_window_ports import (
 from chemvas.ui.scene_align_logic import align_deltas, distribute_deltas
 from chemvas.ui.scene_decoration_access import add_arrow_for
 from chemvas.ui.scene_group_operations import group_selection_for
-from chemvas.ui.scene_item_state_serialization import arrow_state_dict
+from chemvas.ui.scene_item_state_serialization import arrow_state_dict_for
 from chemvas.ui.structure_mutation_access import add_atom_for, add_bond_for
 
 
@@ -135,10 +135,12 @@ class AlignGuiTest(unittest.TestCase):
         self.assertAlmostEqual(
             atom_for_id(canvas, atom_b).x - atom_for_id(canvas, atom_a).x, before_gap
         )
-        self.assertEqual(arrow_state_dict(arrow)["start"], (0.0, 0.0))
-        self.assertAlmostEqual(arrow_state_dict(line)["start"][0], 0.0, places=6)
+        self.assertEqual(arrow_state_dict_for(canvas, arrow)["start"], (0.0, 0.0))
+        self.assertAlmostEqual(
+            arrow_state_dict_for(canvas, line)["start"][0], 0.0, places=6
+        )
         self.assertLess(atom_for_id(canvas, atom_a).x, 100.0)
-        self.assertEqual(arrow_state_dict(line)["start"][1], 90.0)
+        self.assertEqual(arrow_state_dict_for(canvas, line)["start"][1], 90.0)
         # Structures align by their ink, on the same ruler as the items.
         self.assertAlmostEqual(
             visible_atom_item_for(canvas, atom_a).sceneBoundingRect().left(),
@@ -148,9 +150,11 @@ class AlignGuiTest(unittest.TestCase):
 
         history.undo()
         self.assertEqual(atom_for_id(canvas, atom_a).x, 100.0)
-        self.assertEqual(arrow_state_dict(line)["start"], (30.0, 90.0))
+        self.assertEqual(arrow_state_dict_for(canvas, line)["start"], (30.0, 90.0))
         history.redo()
-        self.assertAlmostEqual(arrow_state_dict(line)["start"][0], 0.0, places=6)
+        self.assertAlmostEqual(
+            arrow_state_dict_for(canvas, line)["start"][0], 0.0, places=6
+        )
 
     def test_partially_selected_molecule_moves_whole(self) -> None:
         canvas = self.canvas
@@ -195,12 +199,14 @@ class AlignGuiTest(unittest.TestCase):
 
         # The pair kept its internal offset and moved together toward "far".
         self.assertAlmostEqual(
-            arrow_state_dict(note_line)["start"][0]
-            - arrow_state_dict(arrow)["start"][0],
+            arrow_state_dict_for(canvas, note_line)["start"][0]
+            - arrow_state_dict_for(canvas, arrow)["start"][0],
             60.0,
         )
-        self.assertAlmostEqual(arrow_state_dict(note_line)["end"][0], 240.0, places=6)
-        self.assertEqual(arrow_state_dict(far)["start"], (200.0, 100.0))
+        self.assertAlmostEqual(
+            arrow_state_dict_for(canvas, note_line)["end"][0], 240.0, places=6
+        )
+        self.assertEqual(arrow_state_dict_for(canvas, far)["start"], (200.0, 100.0))
 
     def test_distribute_spreads_three_arrows_evenly_and_ignores_pairs(self) -> None:
         canvas = self.canvas
@@ -218,7 +224,8 @@ class AlignGuiTest(unittest.TestCase):
         self._select(*arrows)
         self.assertTrue(controller.distribute_selected_items("horizontal"))
         starts = sorted(
-            arrow_state_dict(item)["start"][0] for item in arrow_items_for(canvas)
+            arrow_state_dict_for(canvas, item)["start"][0]
+            for item in arrow_items_for(canvas)
         )
         gaps = [b - a for a, b in pairwise(starts)]
         self.assertAlmostEqual(gaps[0], gaps[1], places=6)

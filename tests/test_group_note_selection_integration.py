@@ -176,7 +176,9 @@ class GroupedNoteSelectionIntegrationTest(unittest.TestCase):
                 original_positions = {
                     aid: (atom.x, atom.y) for aid, atom in model.atoms.items()
                 }
-                original_item_positions = {arrow: arrow.pos(), note: note.pos()}
+                original_item_positions = {
+                    item: item.sceneBoundingRect().center() for item in (arrow, note)
+                }
                 clipboard = canvas.services.scene_operations.scene_clipboard_controller
                 clipboard.select_pasted_content(original_ids, [arrow, note])
                 self.assertTrue(group_selection_for(canvas))
@@ -221,7 +223,10 @@ class GroupedNoteSelectionIntegrationTest(unittest.TestCase):
                     for bid, bond in enumerate(model.bonds)
                     if bond is not None
                 }
-                before_items = {item: item.pos() for item in copied_group.items}
+                before_items = {
+                    item: item.sceneBoundingRect().center()
+                    for item in copied_group.items
+                }
                 self.app.processEvents()
                 start = canvas.mapFromScene(copied_arrow.sceneBoundingRect().center())
                 delta = QPoint(24, 80)
@@ -242,11 +247,13 @@ class GroupedNoteSelectionIntegrationTest(unittest.TestCase):
                         model.atoms[aid].y, before_positions[aid][1] + 80
                     )
                 for item, before in before_items.items():
-                    self.assertEqual(item.pos(), before + QPointF(delta))
+                    self.assertEqual(
+                        item.sceneBoundingRect().center(), before + QPointF(delta)
+                    )
                 for aid, before in original_positions.items():
                     self.assertEqual((model.atoms[aid].x, model.atoms[aid].y), before)
                 for item, before in original_item_positions.items():
-                    self.assertEqual(item.pos(), before)
+                    self.assertEqual(item.sceneBoundingRect().center(), before)
                 for bid, before in before_lengths.items():
                     bond = model.bonds[bid]
                     self.assertAlmostEqual(

@@ -567,7 +567,14 @@ def test_attached_label_in_actual_dash_gap_is_clear(target_kind) -> None:
         if target_kind == "bond"
         else {},
         bonds=[Bond(7, 42)] if target_kind == "bond" else [],
-        arrows=[_labelled_arrow(), _labelled_arrow(y=0.0, labels={"below": ""})],
+        arrows=[
+            _labelled_arrow(),
+            {
+                key: value
+                for key, value in _labelled_arrow(y=0.0).items()
+                if key != "labels"
+            },
+        ],
     )
     with offscreen_canvas(state, command="test-arrow-label-dash-gap") as (canvas, _):
         label = _attached_label(canvas)

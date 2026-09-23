@@ -13,7 +13,6 @@ from chemvas.features.selection import (
     default_curved_control as default_curved_control_helper,
 )
 from chemvas.ui.canvas_service_ports import (
-    curved_arrow_path_service_for_access,
     handle_mutation_service_for_access,
 )
 from chemvas.ui.canvas_tool_settings_state import tool_settings_state_for
@@ -47,18 +46,6 @@ def update_orbital_rotate_for(canvas, item, pos) -> None:
 
 def update_curved_control_for(canvas, item, pos) -> None:
     handle_mutation_service_for_access(canvas).update_curved_control(item, pos)
-
-
-def update_curved_endpoint_for(canvas, item, pos, endpoint: str) -> None:
-    handle_mutation_service_for_access(canvas).update_curved_endpoint(
-        item, pos, endpoint
-    )
-
-
-def set_curved_arrow_path_for(canvas, item, start, end, control, double: bool) -> None:
-    curved_arrow_path_service_for_access(canvas).set_curved_arrow_path(
-        item, start, end, control, double
-    )
 
 
 def default_curved_control_for(canvas, start, end):
@@ -98,9 +85,7 @@ __all__ = [
     "default_curved_control_for",
     "orbital_snap_enabled_for",
     "orbital_snap_step_for",
-    "set_curved_arrow_path_for",
     "update_curved_control_for",
-    "update_curved_endpoint_for",
     "update_orbital_rotate_for",
     "update_orbital_scale_for",
 ]

@@ -55,7 +55,7 @@ class CanvasHandleControllerTest(unittest.TestCase):
             update_orbital_scale=mock.Mock(),
             update_orbital_rotate=mock.Mock(),
             update_curved_control=mock.Mock(),
-            update_curved_endpoint=mock.Mock(),
+            update_arrow_endpoint=mock.Mock(),
         )
         overlay_service = SimpleNamespace(
             show_orbital_handles=mock.Mock(),
@@ -93,7 +93,7 @@ class CanvasHandleControllerTest(unittest.TestCase):
         mutation_service.update_curved_control.assert_called_once_with(
             "curve", scene_pos
         )
-        mutation_service.update_curved_endpoint.assert_has_calls(
+        mutation_service.update_arrow_endpoint.assert_has_calls(
             [
                 mock.call("curve", scene_pos, "start"),
                 mock.call("curve", scene_pos, "end"),
@@ -112,13 +112,13 @@ class CanvasHandleControllerTest(unittest.TestCase):
             update_orbital_scale=mock.Mock(),
             update_orbital_rotate=mock.Mock(),
             update_curved_control=mock.Mock(),
-            update_curved_endpoint=mock.Mock(),
+            update_arrow_endpoint=mock.Mock(),
         )
         controller = CanvasHandleController(canvas, handle_mutation_service=mutation)
         controller.update_orbital_scale("item", QPointF(1.0, 1.0))
         controller.update_orbital_rotate("item", QPointF(2.0, 2.0))
         controller.update_curved_control("item", QPointF(3.0, 3.0))
-        controller.update_curved_endpoint("item", QPointF(4.0, 4.0), "start")
+        controller.update_arrow_endpoint("item", QPointF(4.0, 4.0), "start")
         mutation.update_orbital_scale.assert_called_once_with("item", QPointF(1.0, 1.0))
         mutation.update_orbital_rotate.assert_called_once_with(
             "item", QPointF(2.0, 2.0)
@@ -126,7 +126,7 @@ class CanvasHandleControllerTest(unittest.TestCase):
         mutation.update_curved_control.assert_called_once_with(
             "item", QPointF(3.0, 3.0)
         )
-        mutation.update_curved_endpoint.assert_called_once_with(
+        mutation.update_arrow_endpoint.assert_called_once_with(
             "item", QPointF(4.0, 4.0), "start"
         )
 

@@ -84,6 +84,7 @@ _DELETE_MUTATED_RUNTIME_FIELDS = (
     "selection_info_state",
     "scene_items_state",
     "shape_state",
+    "arrow_state",
     "ts_bracket_state",
     "group_state",
     "scene_clipboard_state",

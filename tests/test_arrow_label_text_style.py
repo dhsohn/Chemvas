@@ -306,21 +306,21 @@ def test_partial_label_rebuild_failure_restores_exact_scene_and_history(
     appearances = [_appearance(item) for item in (first, second)]
     children = [_labels(item) for item in (first, second)]
     stack = history.capture_stack_snapshot()
-    original = CanvasArrowBuildService.apply_arrow_labels
+    original = CanvasArrowBuildService.render_labels
     calls = 0
 
-    def fail_on_second(builder, item, labels):
+    def fail_on_second(builder, item):
         nonlocal calls
         calls += 1
         if calls == 2:
             raise RuntimeError("label rebuild failed")
-        return original(builder, item, labels)
+        return original(builder, item)
 
     with monkeypatch.context() as patch:
         if phase == "push":
             patch.setattr(history, "push", lambda _command: False)
         else:
-            patch.setattr(CanvasArrowBuildService, "apply_arrow_labels", fail_on_second)
+            patch.setattr(CanvasArrowBuildService, "render_labels", fail_on_second)
         with pytest.raises(RuntimeError):
             if phase in {"undo", "redo"}:
                 getattr(history, phase)()

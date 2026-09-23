@@ -58,6 +58,7 @@ from chemvas.ui.scene_item_state import (
     ring_state_dict_for,
     shape_state_dict_for,
 )
+from chemvas.ui.scene_render_access import scene_render_context_for
 from chemvas.ui.shape_record_access import (
     require_shape_record_for,
     set_shape_record_for,
@@ -511,17 +512,8 @@ class CanvasColorMutationService:
 
     def _apply_arrow_color(self, item, color: QColor) -> None:
         def mutate() -> None:
-            data = item.data(2) or {}
-            data["color"] = color.name()
-            item.setData(2, data)
-            pen = item.pen()
-            pen.setColor(QColor(color.name()))
-            item.setPen(pen)
-            for child in item.childItems():
-                if child.data(0) == "arrow_label" and isinstance(
-                    child, QGraphicsTextItem
-                ):
-                    child.setDefaultTextColor(QColor(color.name()))
+            arrows = scene_render_context_for(self.canvas).arrows
+            arrows.set_record(item, replace(arrows.record(item), color=color.name()))
 
         self._record_scene_item_mutation(
             item, state_for=arrow_state_dict_for, mutation=mutate

@@ -1,3 +1,5 @@
+from dataclasses import replace
+
 """Actual-canvas regression witnesses for input and perspective safety."""
 
 import math
@@ -52,8 +54,8 @@ def test_pointer_wobble_is_a_click_in_view_pixels(canvas, app, kind, zoom, pixel
         assert items == []
     else:
         assert len(items) == 1
-        data = items[0].data(2)
-        assert data["end"] - data["start"] == QPointF(40.0, 0.0)
+        record = canvas.render_context.arrows.record(items[0])
+        assert QPointF(*record.end) - QPointF(*record.start) == QPointF(40.0, 0.0)
 
 
 @pytest.mark.parametrize("noise", [-1e-12, 0.0, 1e-12])
@@ -63,8 +65,12 @@ def test_vertical_arrow_label_side_is_stable_under_roundoff(canvas, noise, down)
     if not down:
         start, end = end, start
     item = add_arrow_for(canvas, start, end, "line")
-    canvas.services.scene_decoration.arrow_build_service.apply_arrow_labels(
-        item, {"above": "A", "below": "B"}
+    canvas.services.scene_decoration.arrow_build_service.set_record(
+        item,
+        replace(
+            canvas.services.scene_decoration.arrow_build_service.record(item),
+            labels=tuple(({"above": "A", "below": "B"} or {}).items()),
+        ),
     )
     children = {child.data(1): child for child in item.childItems()}
     assert children["above"].sceneBoundingRect().center().x() < 0

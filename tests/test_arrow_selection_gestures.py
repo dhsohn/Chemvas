@@ -22,7 +22,7 @@ from chemvas.ui.main_window_ports import (
 )
 from chemvas.ui.scene_decoration_access import add_arrow_for, add_shape_for
 from chemvas.ui.scene_group_operations import group_selection_for
-from chemvas.ui.scene_item_state_serialization import arrow_state_dict
+from chemvas.ui.scene_item_state_serialization import arrow_state_dict_for
 
 
 @pytest.fixture(scope="module")
@@ -51,6 +51,11 @@ def drawing(app):
 
 def _add(canvas, kind="line", y=0.0):
     return add_arrow_for(canvas, QPointF(-70, y), QPointF(70, y), kind)
+
+
+def _rendered_start(item):
+    path = item.mapToScene(item.path())
+    return QPointF(path.elementAt(0).x, path.elementAt(0).y)
 
 
 def _click(canvas, pos, modifiers=Qt.KeyboardModifier.NoModifier):
@@ -98,19 +103,21 @@ def test_first_press_drags_and_round_trips_history(drawing, zoom, kind, moves):
     item = _add(canvas, kind)
     set_zoom_percent_for_window(window, zoom)
     history = history_service_for_window(window)
-    before = arrow_state_dict(item)
+    before = arrow_state_dict_for(canvas, item)
     count = len(history.state.history)
     origin = canvas.mapFromScene(QPointF(0, 0))
     delta = QPoint(24, 14)
     _drag(canvas, origin, origin + delta, moves=moves)
     assert item.isSelected()
-    assert item.pos() == QPointF(24 * 100 / zoom, 14 * 100 / zoom)
+    assert _rendered_start(item) - QPointF(-70, 0) == QPointF(
+        24 * 100 / zoom, 14 * 100 / zoom
+    )
     assert len(history.state.history) == count + 1
-    after = arrow_state_dict(item)
+    after = arrow_state_dict_for(canvas, item)
     history.undo()
-    assert arrow_state_dict(item) == before
+    assert arrow_state_dict_for(canvas, item) == before
     history.redo()
-    assert arrow_state_dict(item) == after
+    assert arrow_state_dict_for(canvas, item) == after
 
 
 @pytest.mark.parametrize("zoom", [50, 100, 200, 400])
@@ -125,19 +132,19 @@ def test_click_jitter_preserves_geometry_redo_and_handle_toggle(drawing, zoom, k
     _drag(canvas, origin, origin + QPoint(24, 14))
     history.undo()
     item.setSelected(True)
-    before = arrow_state_dict(item)
+    before = arrow_state_dict_for(canvas, item)
     undo = list(history.state.history)
     redo = list(history.state.redo_stack)
     assert redo
     origin = canvas.mapFromScene(QPointF(0, 0))
     _drag(canvas, origin, origin + QPoint(1, 0))
-    assert arrow_state_dict(item) == before
+    assert arrow_state_dict_for(canvas, item) == before
     assert history.state.history == undo
     assert history.state.redo_stack == redo
     assert len(active_handles_for(canvas)) == 2
     _drag(canvas, origin, origin + QPoint(1, 0))
     assert not active_handles_for(canvas)
-    assert arrow_state_dict(item) == before
+    assert arrow_state_dict_for(canvas, item) == before
     assert history.state.redo_stack == redo
 
 
@@ -181,7 +188,8 @@ def test_first_press_on_group_member_drags_the_group(drawing):
     count = len(history.state.history)
     origin = canvas.mapFromScene(QPointF(0, 0))
     _drag(canvas, origin, origin + QPoint(24, 14))
-    assert first.pos() == second.pos() == QPointF(24, 14)
+    assert _rendered_start(first) == QPointF(-46, 14)
+    assert _rendered_start(second) == QPointF(-46, 54)
     assert len(history.state.history) == count + 1
 
 
@@ -191,7 +199,7 @@ def test_release_only_movement_of_selected_arrow_is_a_drag_not_a_click(drawing):
     item.setSelected(True)
     origin = canvas.mapFromScene(QPointF(0, 0))
     _drag(canvas, origin, origin + QPoint(24, 14), moves=False)
-    assert item.pos() == QPointF(24, 14)
+    assert _rendered_start(item) - QPointF(-70, 0) == QPointF(24, 14)
     assert not active_handles_for(canvas)
 
 
@@ -213,9 +221,11 @@ def test_slow_drag_accumulates_and_keeps_subthreshold_frames_after_start(drawing
         QTest.mouseMove(canvas.viewport(), origin + QPoint(distance, 0), 20)
         QApplication.processEvents()
         if distance < threshold:
-            assert item.pos() == QPointF()
+            assert _rendered_start(item) - QPointF(-70, 0) == QPointF()
         else:
-            assert item.pos() == QPointF(distance * 100 / zoom, 0)
+            assert _rendered_start(item) - QPointF(-70, 0) == QPointF(
+                distance * 100 / zoom, 0
+            )
     QTest.mouseRelease(
         canvas.viewport(),
         Qt.MouseButton.LeftButton,
@@ -229,22 +239,24 @@ def test_tool_switch_cancels_pending_or_active_arrow_drag(drawing, distance):
     window, canvas = drawing
     item = _add(canvas)
     history = history_service_for_window(window)
-    before = arrow_state_dict(item)
+    before = arrow_state_dict_for(canvas, item)
     undo = list(history.state.history)
     origin = canvas.mapFromScene(QPointF(0, 0))
     QTest.mousePress(canvas.viewport(), Qt.MouseButton.LeftButton, pos=origin)
     QTest.qWait(20)
     QTest.mouseMove(canvas.viewport(), origin + QPoint(distance, 0), 20)
     QApplication.processEvents()
-    assert item.pos() == QPointF(distance if distance > 1 else 0, 0)
+    assert _rendered_start(item) - QPointF(-70, 0) == QPointF(
+        distance if distance > 1 else 0, 0
+    )
     tool_action_for_window(window, "line").trigger()
-    assert arrow_state_dict(item) == before
+    assert arrow_state_dict_for(canvas, item) == before
     assert history.state.history == undo
     # End the synthetic pointer sequence without drawing with the new tool.
     tool_action_for_window(window, "select").trigger()
     QTest.mouseRelease(canvas.viewport(), Qt.MouseButton.LeftButton, pos=origin)
     _drag(canvas, origin, origin + QPoint(24, 14))
-    assert item.pos() == QPointF(24, 14)
+    assert _rendered_start(item) - QPointF(-70, 0) == QPointF(24, 14)
 
 
 def test_near_picking_ignores_hidden_items_and_respects_actual_item_hits(drawing):
@@ -320,7 +332,7 @@ def test_ctrl_click_adds_an_arrow_without_replacing_the_selection(
     first = _add(canvas, kind)
     second = _add(canvas, kind, y=40)
     history = history_service_for_window(window)
-    before = [arrow_state_dict(item) for item in (first, second)]
+    before = [arrow_state_dict_for(canvas, item) for item in (first, second)]
     count = len(history.state.history)
     _click(canvas, canvas.mapFromScene(QPointF(0, 0)))
     point = canvas.mapFromScene(QPointF(0, 40)) + QPoint(0, offset)
@@ -331,5 +343,5 @@ def test_ctrl_click_adds_an_arrow_without_replacing_the_selection(
     _click(canvas, point, Qt.KeyboardModifier.ControlModifier)
     assert first.isSelected() and second.isSelected()
     assert len(active_handles_for(canvas)) == 2
-    assert [arrow_state_dict(item) for item in (first, second)] == before
+    assert [arrow_state_dict_for(canvas, item) for item in (first, second)] == before
     assert len(history.state.history) == count

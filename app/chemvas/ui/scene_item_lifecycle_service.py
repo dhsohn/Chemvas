@@ -20,6 +20,7 @@ from chemvas.ui.scene_item_access import (
     remove_attached_item_from_canvas_scene,
 )
 from chemvas.ui.scene_item_state import ARROW_KINDS
+from chemvas.ui.scene_render_access import scene_render_context_for
 from chemvas.ui.selection_state import (
     remove_selected_note_for,
     selected_notes_for,
@@ -163,6 +164,7 @@ class SceneItemLifecycleService:
         elif kind == "image":
             append_scene_item_for(self.canvas, "image_items", item)
         elif kind in ARROW_KINDS:
+            scene_render_context_for(self.canvas).arrows.record(item)
             append_scene_item_for(self.canvas, "arrow_items", item)
         elif kind == "ts_bracket":
             require_attached_ts_bracket_record_for(self.canvas, item)

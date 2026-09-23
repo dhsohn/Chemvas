@@ -44,7 +44,7 @@ flowchart TB
 - HistoryCommand (`app/chemvas/core/history.py`): 델타 기반 실행 취소/다시 실행(undo/redo). 다중 엔티티(multi-entity) 연산은 `CompositeCommand`로 그룹화되며, 이는 다시 실행 시 자식 델타 커맨드를 순서대로 적용하고 실행 취소 시 역순으로 적용한다.
 - 장면 렌더링(`scene_render_context.py`, `scene_rendering.py`): 명시적인 `SceneRenderContext`가 scene, 현재 model, style, 공통 drawing state를 분자·annotation 렌더러에 제공한다. `CanvasRuntimeState`는 이 상태를 상속해 편집기 필드만 추가하므로 GUI가 drawing state 사본을 따로 유지하지 않는다. [ADR 0004](adr/0004-view-independent-scene-rendering.md) 참조.
 - BondRenderer (`app/chemvas/ui/bond_renderer.py`): drawing context를 사용해 결합 QGraphicsItem을 생성·갱신한다. `SceneGeometry`와 `AtomLabelRenderer`가 뷰와 무관한 기하·label drawing을 소유하고, 편집 서비스는 변경과 history를 맡는다.
-- 화살표(`app/chemvas/ui/canvas_arrow_build_service.py`): scene-decoration bundle이 기존 canvas ports/access를 통해 arrow builder를 직접 노출한다. 곡선 생성과 갱신은 path/head 생성을 공유하지만, handle 편집과 document-state 적용의 서로 다른 metadata·label 정책은 유지한다. 메뉴 이벤트에는 표시 문자열 대신 kind ID를 전달한다.
+- 화살표와 선(`app/chemvas/ui/canvas_arrow_build_service.py`): `CanvasArrowBuildService`가 레코드 변경과 그로부터 만들어지는 경로·라벨을 소유한다. 직렬화, 이동, 핸들, 끝점 스냅은 공용 drawing state의 동일한 Qt-free `Arrow` 레코드를 읽는다. 메뉴 이벤트에는 표시 문자열 대신 kind ID를 전달한다.
 - Graphics items (`app/chemvas/ui/graphics_items.py`): 선택 불가능한 QGraphicsItem 래퍼(wrapper).
 - Label layout (`app/chemvas/features/annotations`): 원자 레이블을 조판 런과 배치로 파싱하는 순수(Qt-free) 공개 API이며 화면과 아웃라인 내보내기 타이포그래피의 단일 소유자다.
 - Figure export (`app/chemvas/features/export`): feature 패키지가 공개 API, Qt-free 대화상자/계획 규칙, 씬 범위 처리, SVG/PDF/raster 렌더러를 소유한다. 외부 호출자는 `chemvas.features.export`만 import하고 렌더러 모듈은 비공개 구현 세부사항으로 남는다. 순수 plan은 패딩이 적용된 소스 사각형과 물리 출력 크기를 포인트 단위로 계산한다. Qt 서비스는 보이는 콘텐츠를 수집하고, 일시적 오버레이를 제외하며, 가능한 경우 항목별 export bounds를 사용하고, 레이블을 아웃라인 처리한 뒤 SVG/PDF/PNG/TIFF로 렌더링한다. `unit_scale` 또는 `target_width_pt`로 줌과 무관한 크기를 결정하고 `scope`와 `background`로 내용과 배경을 선택한다.
@@ -272,10 +272,10 @@ CLI 테스트 실행 부분을 공유하고, 연산별 fixture와 화면 기대�
 제거할 수 있다. CLI의 명시적 스타일 변경은 그 외형 단축키와 같은 의도가 아니다.
 이 차이를 위해 별도의 공통 편집 엔진을 추가하지 않는다.
 
-### 문서 데이터 소유권 (도형과 TS 괄호)
+### 문서 데이터 소유권 (도형, TS 괄호, 화살표와 선)
 
-`MoleculeModel`은 원자와 결합을 Qt 없는 데이터로 소유하고, 도형과 TS 괄호는 레코드다(아래).
-문서가 저장하는 나머지 그려지는 객체 — 고리 채움, 노트, 마크, 화살표와 선,
+`MoleculeModel`은 원자와 결합을 Qt 없는 데이터로 소유하고, 도형, TS 괄호, 화살표와 선은 레코드다(아래).
+문서가 저장하는 나머지 그려지는 객체 — 고리 채움, 노트, 마크,
 오비탈, 이미지 —
 는 아직 문서를 쓸 때
 살아 있는 그래픽 아이템에서 다시 읽으며, history 명령은 그 아이템을 들고 있다.
@@ -340,6 +340,23 @@ reader·상태 적용 분기·입양 경로는 제거되었다. export readabili
 `tests/test_ts_bracket_record_first.py`가 수락 기준을
 담고, `tests/test_ts_bracket_store_sync.py`가 매 동작 뒤에 부착된 괄호 아이템이 정확히
 자기 레코드를 보여 주는지 확인한다.
+
+화살표와 선은 불변 `chemvas.domain.document.Arrow` 레코드와 기존 scene-items state
+모듈의 `CanvasArrowState`를 사용한다. 뷰 없는 export를 포함해 공용
+`SceneRenderState`가 store를 소유한다. `CanvasArrowBuildService.set_record`가
+생성, 복원, 이동, 끝점·제어점 편집, 라벨과 색 변경을 위한 공통 저장·그리기 경로다.
+아이템에는 종류와 런타임 id만 남고, `arrow_state_dict_for`는 페인트나 Qt payload가
+아닌 레코드를 읽는다. 이동 시에는 씬 좌표로 경로를 다시 만든다. 곡선의 기본 제어점
+정규화와 네이티브·클립보드 스키마는 유지한다. 기존 curved-path 서비스와 전달용
+port는 제거되었다.
+
+문서 롤백 필드 목록 두 곳 모두 화살표 store를 포함한다. history가 분리된 아이템을
+보유하는 동안 레코드도 남으며, wrapper가 해제되면 weak finalizer가 store의 현재
+mapping에서 레코드를 지운다. 실패한 추가는 예외가 아이템을 보유해도 새 레코드를
+즉시 버린다. 문서 교체는 store를 비우고, 롤백은 원래 소유자·값·그래픽 객체 identity를
+복구한다. `tests/test_arrow_record_first.py`는 레코드 소유권과 편집·추가 실패를,
+`tests/test_scene_record_lifetime.py`는 직선 화살표·곡선·선의 history 수명과 해제를
+검증한다.
 
 ## 복합 그룹화 (Composite Grouping)
 

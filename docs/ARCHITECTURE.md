@@ -43,7 +43,7 @@ follow the ADR instead of copying the flat `core` / `ui` layout below.
 - HistoryCommand (`app/chemvas/core/history.py`): delta-based undo/redo. Multi-entity operations are grouped with `CompositeCommand`, which applies its child delta commands in order on redo and in reverse on undo.
 - Scene drawing (`scene_render_context.py`, `scene_rendering.py`): an explicit `SceneRenderContext` supplies the scene, current model, style and shared drawing state to molecular and annotation renderers. `CanvasRuntimeState` extends that same state with editor-only fields; the GUI does not keep a second drawing-state copy. See [ADR 0004](adr/0004-view-independent-scene-rendering.md).
 - BondRenderer (`app/chemvas/ui/bond_renderer.py`): bond QGraphicsItem creation/updates using the drawing context. `SceneGeometry` and `AtomLabelRenderer` own view-independent geometry and label drawing; editor services retain edits and history.
-- Arrows (`app/chemvas/ui/canvas_arrow_build_service.py`): the scene-decoration bundle exposes the arrow builder directly through the existing canvas ports/access functions. Initial curved arrows and curved-path updates share its path/head construction; handle editing and document-state application keep their distinct metadata and label policies. Menu events carry kind IDs, not display labels.
+- Arrows and lines (`app/chemvas/ui/canvas_arrow_build_service.py`): `CanvasArrowBuildService` owns record changes and derived paths and labels. Serialization, moves, handles and endpoint snapping read the same Qt-free `Arrow` records in the shared drawing state. Menu events carry kind IDs, not display labels.
 - Graphics items (`app/chemvas/ui/graphics_items.py`): non-selectable QGraphicsItem wrappers.
 - Label layout (`app/chemvas/features/annotations`): pure, Qt-free parsing of a raw atom-label string into typographic runs (subscripts) plus their placement. It is the single source of truth for both on-screen and outlined export typography.
 - Figure export (`app/chemvas/features/export`): the feature package owns its public API, Qt-free dialog/plan rules, scene scoping, and SVG/PDF/raster renderers. External callers import only `chemvas.features.export`; renderer modules are private implementation details. The pure plan computes the padded source rect / physical output size in points. The Qt service collects visible content items, excludes transient overlays, uses item-specific export bounds when available, outlines labels, and renders to SVG, PDF, PNG, or TIFF. `unit_scale` or `target_width_pt` gives deterministic physical sizing independent of zoom; `scope` and `background` choose the exported content and backdrop.
@@ -301,11 +301,11 @@ unknown-stereo marker.
 An explicit CLI style change is not that cosmetic gesture. These distinctions
 do not require another shared edit engine.
 
-### Document data ownership (shapes and TS brackets)
+### Document data ownership (shapes, TS brackets, arrows and lines)
 
-`MoleculeModel` owns atoms and bonds as Qt-free data, and shapes and TS brackets
-are records (below). Every other drawn object a document saves — ring fills,
-notes, marks, arrows and lines, orbitals, images — is still read back from its live graphics item when the document is
+`MoleculeModel` owns atoms and bonds as Qt-free data, and shapes, TS brackets,
+arrows and lines are records (below). Every other drawn object a document saves — ring fills,
+notes, marks, orbitals, images — is still read back from its live graphics item when the document is
 written, and history commands hold those items. The pilot moves one kind at a
 time to the same footing as the molecule, starting with shapes:
 `chemvas.domain.document.Shape` is the Qt-free record, `shape_from_state` and
@@ -378,6 +378,26 @@ construction glyph run to measure the font actually painted. Exact whole-documen
 `tests/test_ts_bracket_record_first.py` holds the
 acceptance criteria and `tests/test_ts_bracket_store_sync.py` checks after
 every operation that each attached bracket item shows exactly its record.
+
+Arrows and lines use the immutable `chemvas.domain.document.Arrow` record and
+`CanvasArrowState` in the existing scene-items state module. The shared
+`SceneRenderState` owns this store, including for view-independent export.
+`CanvasArrowBuildService.set_record` is the common edit and render path for
+creation, restore, movement, endpoint/control edits, labels and color. Items
+carry only their kind and runtime id; `arrow_state_dict_for` reads the record,
+not paint or Qt payloads. Moving an arrow rebuilds it in scene coordinates.
+Default curved controls retain the previous normalization and native and
+clipboard schemas remain unchanged. The former curved-path service and its
+forwarding ports are removed.
+
+Both document rollback field lists include the arrow store. Records remain
+while history retains detached items; weak finalizers read the current store
+mapping and remove records when wrappers are released. Failed adds discard
+their new record immediately, even if an exception retains the item. Document
+replacement clears the store and rollback restores its original owner, values
+and graphics identities. `tests/test_arrow_record_first.py` covers record
+ownership and failed edits/adds; `tests/test_scene_record_lifetime.py` also
+exercises straight arrows, curves and lines through history and finalization.
 
 ## Composite Grouping
 

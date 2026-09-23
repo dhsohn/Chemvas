@@ -1,6 +1,7 @@
 import math
 import os
 import unittest
+from dataclasses import replace
 from types import SimpleNamespace
 from unittest import mock
 
@@ -15,6 +16,7 @@ from PyQt6.QtGui import QColor, QPen, QTransform
 from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import QApplication
 
+from chemvas.adapters.qt.renderer import Renderer
 from chemvas.bootstrap.main_window import build_main_window
 from chemvas.domain.document import (
     ARC_KIND_SWEEPS,
@@ -47,7 +49,7 @@ from chemvas.ui.main_window_ports import (
 )
 from chemvas.ui.preview_tools import ArrowTool
 from chemvas.ui.scene_decoration_access import add_arrow_for
-from chemvas.ui.scene_item_state_serialization import arrow_state_dict
+from chemvas.ui.scene_item_state_serialization import arrow_state_dict_for
 from chemvas.ui.tool_context import ToolContext
 
 
@@ -221,9 +223,7 @@ class ArcBuildTest(unittest.TestCase):
         tip = path.elementAt(path.elementCount() - 2)
         self.assertAlmostEqual(tip.x, 40.0)
         self.assertAlmostEqual(tip.y, 0.0)
-        self.assertEqual(
-            item.data(2), {"start": start, "end": end, "control": None, "double": False}
-        )
+        self.assertIsNone(item.data(2))
 
     def test_arc_labels_sit_at_the_arc_midpoint(self) -> None:
         service = _build_service()
@@ -232,7 +232,10 @@ class ArcBuildTest(unittest.TestCase):
         )
         item.setData(0, "arc_180_left")
 
-        service.apply_arrow_labels(item, {"above": "k"})
+        service.set_record(
+            item,
+            replace(service.record(item), labels=tuple(({"above": "k"} or {}).items())),
+        )
 
         (above,) = [c for c in item.childItems() if c.data(0) == ARROW_LABEL_ROLE]
         self.assertLess(above.sceneBoundingRect().bottom(), -20.0)
@@ -272,14 +275,6 @@ class _FakeEvent:
         return QPointF(self._pos)
 
 
-class _FakeArrowItem:
-    def __init__(self, start: QPointF, end: QPointF) -> None:
-        self._data = {2: {"start": start, "end": end, "control": None, "double": False}}
-
-    def data(self, role):
-        return self._data.get(role)
-
-
 class _FakeToolCanvas:
     DragMode = SimpleNamespace(NoDrag="none")
 
@@ -287,14 +282,17 @@ class _FakeToolCanvas:
         self, *, arrow_type: str = "reaction", line_kind: str = "line"
     ) -> None:
         self.scene_obj = _FakeScene()
-        self.renderer = SimpleNamespace(style=SimpleNamespace(bond_length_px=20.0))
+        self.renderer = Renderer()
+        self.renderer.set_bond_length(20.0)
         self.runtime_state = canvas_runtime_state(
             tool_settings_state=CanvasToolSettingsState(
                 active_arrow_type=arrow_type, active_line_kind=line_kind
             ),
-            scene_items_state=CanvasSceneItemsState(
-                arrow_items=[_FakeArrowItem(QPointF(0.0, 0.0), QPointF(100.0, 0.0))]
-            ),
+            scene_items_state=CanvasSceneItemsState(),
+        )
+        arrows = attach_scene_render_context(self).arrows
+        self.runtime_state.scene_items_state.arrow_items.append(
+            arrows.build_arrow_item(QPointF(), QPointF(100, 0), "line")
         )
         self.preview_calls = []
         self.snap_mark_calls = []
@@ -514,7 +512,7 @@ class KineticToolsGuiTest(unittest.TestCase):
         self._drag(canvas, QPointF(-17.0, 3.0), QPointF(40.0, -40.0))
 
         level, connector = arrow_items_for(canvas)
-        self.assertEqual(arrow_state_dict(connector)["start"], (-20.0, 0.0))
+        self.assertEqual(arrow_state_dict_for(canvas, connector)["start"], (-20.0, 0.0))
 
         tool_mode.set_arrow_type("arc_90_left")
         self._drag(canvas, QPointF(60.0, 60.0), QPointF(120.0, 60.0))
@@ -530,12 +528,13 @@ class KineticToolsGuiTest(unittest.TestCase):
         )
         self.app.processEvents()
         self.assertEqual(arc.data(0), "arc_90_right")
-        self.assertEqual(arrow_state_dict(arc)["kind"], "arc_90_right")
+        self.assertEqual(arrow_state_dict_for(canvas, arc)["kind"], "arc_90_right")
         # The mirror image still rises above the chord, so the path did change
         # side relative to its (now reversed) drag direction.
         self.assertLess(arc.path().boundingRect().top(), 60.0 - 5.0)
         self.assertGreater(
-            arrow_state_dict(arc)["start"][0], arrow_state_dict(arc)["end"][0]
+            arrow_state_dict_for(canvas, arc)["start"][0],
+            arrow_state_dict_for(canvas, arc)["end"][0],
         )
         QTest.keyClick(
             canvas,
@@ -586,4 +585,4 @@ class KineticToolsGuiTest(unittest.TestCase):
 
         prompt.assert_called_once()
         self.assertEqual(arrow_items_for(canvas), [level])
-        self.assertEqual(arrow_state_dict(level)["labels"], {"above": "TS"})
+        self.assertEqual(arrow_state_dict_for(canvas, level)["labels"], {"above": "TS"})

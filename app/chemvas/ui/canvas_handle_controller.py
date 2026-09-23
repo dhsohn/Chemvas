@@ -76,10 +76,10 @@ class CanvasHandleController:
             )
             self.show_endpoint_handles(target)
         elif handle_type == "curved_start":
-            self.update_curved_endpoint(target, scene_pos, "start")
+            self.update_arrow_endpoint(target, scene_pos, "start")
             self.show_curved_handles(target)
         elif handle_type == "curved_end":
-            self.update_curved_endpoint(target, scene_pos, "end")
+            self.update_arrow_endpoint(target, scene_pos, "end")
             self.show_curved_handles(target)
         elif handle_type.startswith("shape_"):
             self.update_shape_resize(target, handle_type, scene_pos)
@@ -100,10 +100,6 @@ class CanvasHandleController:
     def update_shape_resize(self, item, anchor: str, pos: QPointF) -> None:
         if self.handle_mutation_service is not None:
             self.handle_mutation_service.update_shape_resize(item, anchor, pos)
-
-    def update_curved_endpoint(self, item, pos: QPointF, endpoint: str) -> None:
-        if self.handle_mutation_service is not None:
-            self.handle_mutation_service.update_curved_endpoint(item, pos, endpoint)
 
     def update_arrow_endpoint(self, item, pos: QPointF, endpoint: str) -> None:
         if self.handle_mutation_service is not None:

@@ -4,6 +4,7 @@ import math
 
 from PyQt6.QtCore import QPointF
 
+from chemvas.domain.document import VALID_ARROW_KINDS
 from chemvas.features.rendering import (
     nearest_endpoint,
     snapped_to_grid,
@@ -11,6 +12,7 @@ from chemvas.features.rendering import (
 from chemvas.ui.canvas_scene_items_state import arrow_items_for
 from chemvas.ui.canvas_tool_settings_state import tool_settings_state_for
 from chemvas.ui.renderer_style_access import bond_length_px_for
+from chemvas.ui.scene_render_access import scene_render_context_for
 
 # Snapping is an input affordance, so its reach is a distance on screen
 # rather than in the document: an endpoint this many pixels from the cursor
@@ -43,11 +45,8 @@ def arrow_endpoints_for(canvas, *, exclude=None) -> list[tuple[float, float]]:
         if item is exclude:
             # Dragging an endpoint must not snap to the item's own ends.
             continue
-        data = item.data(2) or {}
-        for key in ("start", "end"):
-            point = data.get(key)
-            if isinstance(point, QPointF):
-                points.append((point.x(), point.y()))
+        record = scene_render_context_for(canvas).arrows.record(item)
+        points.extend((record.start, record.end))
     return points
 
 
@@ -99,9 +98,11 @@ def snap_to_endpoint_for(canvas, pos: QPointF, *, exclude=None, avoid=None):
     return None if point == avoid else point
 
 
-def _item_endpoints(item) -> list[QPointF]:
-    data = item.data(2) or {}
-    return [data[key] for key in ("start", "end") if isinstance(data.get(key), QPointF)]
+def _item_endpoints(canvas, item) -> list[QPointF]:
+    if item.data(0) not in VALID_ARROW_KINDS:
+        return []
+    record = scene_render_context_for(canvas).arrows.record(item)
+    return [QPointF(*record.start), QPointF(*record.end)]
 
 
 def connection_for(canvas, items):
@@ -119,14 +120,14 @@ def connection_for(canvas, items):
         (point.x(), point.y())
         for item in arrow_items_for(canvas)
         if id(item) not in moving_ids
-        for point in _item_endpoints(item)
+        for point in _item_endpoints(canvas, item)
     ]
     if not targets:
         return None
     radius = endpoint_snap_radius_for(canvas)
     best: tuple[float, QPointF, QPointF] | None = None
     for item in moving:
-        for point in _item_endpoints(item):
+        for point in _item_endpoints(canvas, item):
             found = nearest_endpoint((point.x(), point.y()), targets, radius=radius)
             if found is None:
                 continue

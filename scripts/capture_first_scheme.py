@@ -39,7 +39,7 @@ from chemvas.ui.main_window_ports import (
     services_for_window,
     tool_action_for_window,
 )
-from chemvas.ui.scene_item_state_serialization import arrow_state_dict
+from chemvas.ui.scene_item_state_serialization import arrow_state_dict_for
 
 
 class FirstScheme(Walkthrough):
@@ -111,7 +111,7 @@ class FirstScheme(Walkthrough):
 
         self.dialog(open_dialog, "Arrow Labels", fill)
         (arrow,) = arrow_items_for(self.canvas)
-        assert arrow_state_dict(arrow)["labels"] == {
+        assert arrow_state_dict_for(self.canvas, arrow)["labels"] == {
             "above": "MnO_2",
             "below": "oxidation",
         }

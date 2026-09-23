@@ -80,11 +80,8 @@ from chemvas.ui.canvas_tool_settings_state import (
     CanvasToolSettingsState,
     tool_settings_state_for,
 )
-from chemvas.ui.curved_arrow_path_service import CurvedArrowPathService
 from chemvas.ui.handle_mutation_access import (
-    set_curved_arrow_path_for,
     update_curved_control_for,
-    update_curved_endpoint_for,
     update_orbital_rotate_for,
     update_orbital_scale_for,
 )
@@ -759,7 +756,9 @@ class CanvasViewAdditionalTest(unittest.TestCase):
         update_orbital_scale_for(view, item, QPointF(3.0, 4.0))
         update_orbital_rotate_for(view, item, QPointF(5.0, 6.0))
         update_curved_control_for(view, item, QPointF(7.0, 8.0))
-        update_curved_endpoint_for(view, item, QPointF(9.0, 10.0), "start")
+        view.services.handles.handle_mutation_service.update_arrow_endpoint(
+            item, QPointF(9.0, 10.0), "start"
+        )
 
         mutation_service.update_orbital_scale.assert_called_once_with(
             item, QPointF(3.0, 4.0)
@@ -770,7 +769,7 @@ class CanvasViewAdditionalTest(unittest.TestCase):
         mutation_service.update_curved_control.assert_called_once_with(
             item, QPointF(7.0, 8.0)
         )
-        mutation_service.update_curved_endpoint.assert_called_once_with(
+        mutation_service.update_arrow_endpoint.assert_called_once_with(
             item, QPointF(9.0, 10.0), "start"
         )
 
@@ -784,7 +783,9 @@ class CanvasViewAdditionalTest(unittest.TestCase):
         update_orbital_scale_for(view, item, QPointF(3.0, 4.0))
         update_orbital_rotate_for(view, item, QPointF(5.0, 6.0))
         update_curved_control_for(view, item, QPointF(7.0, 8.0))
-        update_curved_endpoint_for(view, item, QPointF(9.0, 10.0), "start")
+        view.services.handles.handle_mutation_service.update_arrow_endpoint(
+            item, QPointF(9.0, 10.0), "start"
+        )
 
         mutation_service.update_orbital_scale.assert_called_once_with(
             item, QPointF(3.0, 4.0)
@@ -795,34 +796,8 @@ class CanvasViewAdditionalTest(unittest.TestCase):
         mutation_service.update_curved_control.assert_called_once_with(
             item, QPointF(7.0, 8.0)
         )
-        mutation_service.update_curved_endpoint.assert_called_once_with(
+        mutation_service.update_arrow_endpoint.assert_called_once_with(
             item, QPointF(9.0, 10.0), "start"
-        )
-
-    def test_curved_arrow_path_wrapper_delegates(self) -> None:
-        curved_arrow_path_service = mock.Mock()
-        item = object()
-        view = SimpleNamespace(
-            services=canvas_runtime_services(
-                curved_arrow_path_service=curved_arrow_path_service
-            )
-        )
-
-        set_curved_arrow_path_for(
-            view,
-            item,
-            start=QPointF(0.0, 0.0),
-            end=QPointF(10.0, 0.0),
-            control=QPointF(5.0, 4.0),
-            double=False,
-        )
-
-        curved_arrow_path_service.set_curved_arrow_path.assert_called_once_with(
-            item,
-            QPointF(0.0, 0.0),
-            QPointF(10.0, 0.0),
-            QPointF(5.0, 4.0),
-            False,
         )
 
     def test_scene_decoration_wrappers_delegate(self) -> None:
@@ -952,31 +927,6 @@ class CanvasViewAdditionalTest(unittest.TestCase):
         )
         bond_mutation_service.remove_bond_by_id.assert_called_once_with(5)
         bond_mutation_service.trim_bonds_to_length.assert_called_once_with(6)
-
-    def test_set_curved_arrow_path_uses_the_arrow_geometry_builder(self) -> None:
-        path_item = QGraphicsPathItem()
-        build_service = SimpleNamespace(set_curved_arrow_path=mock.Mock())
-        view = SimpleNamespace(
-            services=canvas_runtime_services(arrow_build_service=build_service)
-        )
-        view.services.handles.curved_arrow_path_service = CurvedArrowPathService(view)
-
-        set_curved_arrow_path_for(
-            view,
-            path_item,
-            start=QPointF(0.0, 0.0),
-            end=QPointF(10.0, 0.0),
-            control=QPointF(5.0, 4.0),
-            double=True,
-        )
-
-        build_service.set_curved_arrow_path.assert_called_once_with(
-            path_item,
-            QPointF(0.0, 0.0),
-            QPointF(10.0, 0.0),
-            QPointF(5.0, 4.0),
-            True,
-        )
 
     def test_atom_item_access_delegates_to_service(self) -> None:
         atom_label_service = mock.Mock()

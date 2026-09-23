@@ -1005,7 +1005,7 @@ def _validate_mark_text(text: object, *, error: str) -> None:
     _validate_utf8(text, error=f"{error} mark text")
 
 
-def _validate_arrow_fields(arrow_state: Mapping[str, object], *, error: str) -> None:
+def validate_arrow_fields(arrow_state: Mapping[str, object], *, error: str) -> None:
     keys = set(arrow_state)
     required_keys = {"kind", "start", "end"}
     optional_keys = {"control", "double", "labels", "color", "mirrored"}
@@ -1263,7 +1263,7 @@ def _validate_mark_states(states: object, atom_ids: set[int]) -> None:
 
 def _validate_arrow_states(states: object) -> None:
     for arrow_state in _validated_scene_state_list(states):
-        _validate_arrow_fields(arrow_state, error="Invalid Chemvas file.")
+        validate_arrow_fields(arrow_state, error="Invalid Chemvas file.")
 
 
 def _validate_ts_bracket_states(states: object) -> None:
@@ -1766,7 +1766,7 @@ def _validate_clipboard_scene_item(item_state: Mapping[str, object]) -> None:
         )
         return
     if kind in VALID_ARROW_KINDS:
-        _validate_arrow_fields(item_state, error="Invalid clipboard payload.")
+        validate_arrow_fields(item_state, error="Invalid clipboard payload.")
         return
     if kind == "ts_bracket":
         validate_ts_bracket_fields(item_state, error="Invalid clipboard payload.")

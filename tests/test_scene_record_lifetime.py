@@ -11,9 +11,10 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 import pytest
 from PyQt6 import sip
-from PyQt6.QtCore import QRectF
+from PyQt6.QtCore import QPointF, QRectF
 from PyQt6.QtWidgets import QApplication
 
+from chemvas.ui.canvas_arrow_build_service import ARROW_ID_ROLE
 from chemvas.ui.canvas_scene_reset_access import clear_scene_for
 from chemvas.ui.canvas_shape_state import shape_state_for
 from chemvas.ui.canvas_ts_bracket_state import ts_bracket_state_for
@@ -32,22 +33,28 @@ def canvas():
     app.processEvents()
 
 
-@pytest.fixture(params=["shape", "ts_bracket"])
+@pytest.fixture(params=["shape", "ts_bracket", "arrow", "curved_double", "line"])
 def kind(request):
     return request.param
 
 
 def _add(canvas, kind, offset=0.0):
     service = canvas.services.scene_decoration.scene_decoration_service
+    if kind not in {"shape", "ts_bracket"}:
+        return service.add_arrow(QPointF(offset, 20), QPointF(offset + 60, 20), kind)
     return getattr(service, f"add_{kind}")(QRectF(offset, 20.0, 60.0, 40.0))
 
 
 def _records(canvas, kind):
+    if kind not in {"shape", "ts_bracket"}:
+        return canvas.runtime_state.arrow_state.records
     state_for = shape_state_for if kind == "shape" else ts_bracket_state_for
     return state_for(canvas).records
 
 
 def _record_id(item, kind):
+    if kind not in {"shape", "ts_bracket"}:
+        return item.data(ARROW_ID_ROLE)
     id_for = shape_id_for_item if kind == "shape" else ts_bracket_id_for_item
     return id_for(item)
 
@@ -176,11 +183,21 @@ def test_failed_new_record_render_leaves_existing_records_unchanged(canvas, kind
     _add(canvas, kind)
     before = dict(_records(canvas, kind))
 
-    with (
+    failure = (
         mock.patch(
             f"chemvas.ui.{kind}_record_access.render_{kind}_item",
             side_effect=RuntimeError("render failed"),
-        ),
+        )
+        if kind in {"shape", "ts_bracket"}
+        else mock.patch.object(
+            canvas.render_context.arrows,
+            "render_record",
+            side_effect=RuntimeError("render failed"),
+        )
+    )
+
+    with (
+        failure,
         pytest.raises(RuntimeError, match="render failed") as error,
     ):
         _add(canvas, kind, 100.0)

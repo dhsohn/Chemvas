@@ -110,13 +110,13 @@ class UIServiceTailCoverageTest(unittest.TestCase):
 
         canvas.ring_items.assert_not_called()
 
-    def test_update_curved_endpoint_ignores_unknown_endpoint_name(self) -> None:
+    def test_update_arrow_endpoint_ignores_unknown_endpoint_name(self) -> None:
         canvas = SimpleNamespace(
             _update_selection_outline=mock.Mock(),
         )
         item = _CurvedEndpointItem()
 
-        HandleMutationService(canvas).update_curved_endpoint(
+        HandleMutationService(canvas).update_arrow_endpoint(
             item, QPointF(2.0, 3.0), "middle"
         )
 

@@ -153,14 +153,6 @@ class CanvasViewMoveHelpersTest(unittest.TestCase):
         orbital_item = _FakeItem("orbital", data1={"center": QPointF(2.0, 3.0)})
         bracket_item = QGraphicsPathItem()
         bracket_item.setData(0, "ts_bracket")
-        arrow_item = _FakeItem(
-            "arrow",
-            data2={
-                "start": QPointF(0.0, 0.0),
-                "end": QPointF(1.0, 1.0),
-                "control": QPointF(2.0, 2.0),
-            },
-        )
         view = SimpleNamespace(
             model=SimpleNamespace(
                 atoms={1: Atom("C", 10.0, 10.0)},
@@ -188,7 +180,6 @@ class CanvasViewMoveHelpersTest(unittest.TestCase):
         with plain_ts_bracket_paint():
             adopt_ts_bracket(view, bracket_item, rect=(1.0, 2.0, 3.0, 4.0))
             move_item_for(view, bracket_item, 2.0, 2.0)
-        move_item_for(view, arrow_item, 1.5, -0.5)
 
         controller.move_atom.assert_has_calls(
             [mock.call(1, 4.0, -2.0), mock.call(2, 4.0, -2.0)]
@@ -208,10 +199,7 @@ class CanvasViewMoveHelpersTest(unittest.TestCase):
             (3.0, 4.0, 6.0, 8.0),
         )
         self.assertEqual(bracket_item.pos(), QPointF(0.0, 0.0))
-        self.assertEqual(arrow_item.data(2)["start"], QPointF(1.5, -0.5))
-        self.assertEqual(arrow_item.data(2)["end"], QPointF(2.5, 0.5))
-        self.assertEqual(arrow_item.data(2)["control"], QPointF(3.5, 1.5))
-        self.assertEqual(view.refresh_selection_outline.call_count, 5)
+        self.assertEqual(view.refresh_selection_outline.call_count, 4)
 
     @plain_shape_pen
     def test_move_item_shifts_active_handles_glued_to_target(self) -> None:
@@ -260,14 +248,6 @@ class CanvasViewMoveHelpersTest(unittest.TestCase):
         non_int_mark = _FakeItem("mark", data1={"atom_id": "bad"})
         missing_mark_atom = _FakeItem("mark", data1={"atom_id": 9})
         orbital_item = _FakeItem("orbital", data1={"center": (2.0, 3.0)})
-        arrow_item = _FakeItem(
-            "arrow",
-            data2={
-                "start": "bad",
-                "end": QPointF(1.0, 1.0),
-                "control": QPointF(2.0, 2.0),
-            },
-        )
         other_item = _FakeItem("other")
         view = SimpleNamespace(
             model=SimpleNamespace(
@@ -294,7 +274,6 @@ class CanvasViewMoveHelpersTest(unittest.TestCase):
         move_item_for(view, non_int_mark, 1.0, 2.0)
         move_item_for(view, missing_mark_atom, 1.0, 2.0)
         move_item_for(view, orbital_item, -3.0, 5.0)
-        move_item_for(view, arrow_item, 1.5, -0.5)
         move_item_for(view, other_item, 0.5, 0.5)
 
         controller.move_atom.assert_not_called()
@@ -304,10 +283,7 @@ class CanvasViewMoveHelpersTest(unittest.TestCase):
         self.assertNotIn("dx", non_int_mark.data(1))
         self.assertNotIn("dx", missing_mark_atom.data(1))
         self.assertEqual(orbital_item.data(1)["center"], (2.0, 3.0))
-        self.assertEqual(arrow_item.data(2)["start"], "bad")
-        self.assertEqual(arrow_item.data(2)["end"], QPointF(1.0, 1.0))
-        self.assertEqual(arrow_item.data(2)["control"], QPointF(3.5, 1.5))
-        self.assertEqual(view.refresh_selection_outline.call_count, 5)
+        self.assertEqual(view.refresh_selection_outline.call_count, 4)
 
     def test_move_atoms_uses_bond_sets_or_falls_back_to_redraw(self) -> None:
         bond_graphic = _FakeItem("bond")

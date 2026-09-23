@@ -7,7 +7,7 @@ from unittest import mock
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PyQt6.QtCore import QPointF, Qt
-from PyQt6.QtGui import QBrush, QColor, QPainterPath, QPen, QPolygonF
+from PyQt6.QtGui import QBrush, QColor, QPolygonF
 from PyQt6.QtWidgets import (
     QApplication,
     QGraphicsItemGroup,
@@ -20,7 +20,6 @@ from chemvas.ui.note_item_access import committed_note_text_for
 from chemvas.ui.scene_item_restore import create_note_item_from_state
 from chemvas.ui.scene_item_state import (
     apply_scene_item_state,
-    arrow_state_dict,
     mark_center_from_state,
     mark_state_dict_for,
     scene_item_history_state,
@@ -147,9 +146,6 @@ class SceneItemStateUnitTest(unittest.TestCase):
             mark_center_setter=lambda item, center: None,
             mark_color_setter=lambda item, color: None,
             ring_fill_brush_getter=lambda: QBrush(QColor("#AA4400")),
-            bond_color="#000000",
-            build_arrow_item=lambda start, end, kind, mirrored: QGraphicsPathItem(),
-            set_curved_arrow_path=lambda *args: None,
             orbital_base_handle_dist=18.0,
         )
 
@@ -172,9 +168,6 @@ class SceneItemStateUnitTest(unittest.TestCase):
             mark_center_setter=lambda item, center: None,
             mark_color_setter=lambda item, color: None,
             ring_fill_brush_getter=lambda: QBrush(QColor("#AA4400")),
-            bond_color="#000000",
-            build_arrow_item=lambda start, end, kind, mirrored: QGraphicsPathItem(),
-            set_curved_arrow_path=lambda *args: None,
             orbital_base_handle_dist=18.0,
         )
 
@@ -194,9 +187,6 @@ class SceneItemStateUnitTest(unittest.TestCase):
             mark_center_setter=lambda item, center: None,
             mark_color_setter=lambda item, color: None,
             ring_fill_brush_getter=lambda: QBrush(QColor("#AA4400")),
-            bond_color="#000000",
-            build_arrow_item=lambda start, end, kind, mirrored: QGraphicsPathItem(),
-            set_curved_arrow_path=lambda *args: None,
             orbital_base_handle_dist=18.0,
         )
 
@@ -230,9 +220,6 @@ class SceneItemStateUnitTest(unittest.TestCase):
             mark_center_setter=lambda item, center: None,
             mark_color_setter=lambda item, color: None,
             ring_fill_brush_getter=lambda: QBrush(QColor("#AA4400")),
-            bond_color="#000000",
-            build_arrow_item=lambda start, end, kind, mirrored: QGraphicsPathItem(),
-            set_curved_arrow_path=lambda *args: None,
             orbital_base_handle_dist=18.0,
         )
         restored = create_note_item_from_state(
@@ -282,9 +269,6 @@ class SceneItemStateUnitTest(unittest.TestCase):
             mark_center_setter=center_setter,
             mark_color_setter=lambda item, color: None,
             ring_fill_brush_getter=lambda: QBrush(QColor("#AA4400")),
-            bond_color="#000000",
-            build_arrow_item=lambda start, end, kind, mirrored: QGraphicsPathItem(),
-            set_curved_arrow_path=lambda *args: None,
             orbital_base_handle_dist=18.0,
         )
 
@@ -341,9 +325,6 @@ class SceneItemStateUnitTest(unittest.TestCase):
             mark_center_setter=lambda item, center: None,
             mark_color_setter=lambda item, color: None,
             ring_fill_brush_getter=lambda: QBrush(QColor("#AA4400")),
-            bond_color="#000000",
-            build_arrow_item=lambda start, end, kind, mirrored: QGraphicsPathItem(),
-            set_curved_arrow_path=lambda *args: None,
             orbital_base_handle_dist=24.0,
         )
 
@@ -377,9 +358,6 @@ class SceneItemStateUnitTest(unittest.TestCase):
             mark_center_setter=lambda item, center: None,
             mark_color_setter=lambda item, color: None,
             ring_fill_brush_getter=lambda: QBrush(QColor("#AA4400")),
-            bond_color="#000000",
-            build_arrow_item=lambda start, end, kind, mirrored: QGraphicsPathItem(),
-            set_curved_arrow_path=lambda *args: None,
             orbital_base_handle_dist=18.0,
         )
 
@@ -393,116 +371,6 @@ class SceneItemStateUnitTest(unittest.TestCase):
             (item.transformOriginPoint().x(), item.transformOriginPoint().y()),
             (2.0, 0.0),
         )
-
-    def test_arrow_state_helpers_handle_missing_points_and_straight_rebuild(
-        self,
-    ) -> None:
-        item = QGraphicsPathItem()
-        item.setData(0, "arrow")
-        item.setData(2, {"start": "bad", "end": None, "control": None, "double": 1})
-
-        state = arrow_state_dict(item)
-
-        self.assertEqual(state["kind"], "arrow")
-        self.assertIsNone(state["start"])
-        self.assertIsNone(state["end"])
-        self.assertTrue(state["double"])
-
-        rebuilt = QGraphicsPathItem()
-        rebuilt_path = QPainterPath()
-        rebuilt_path.moveTo(1.0, 2.0)
-        rebuilt_path.lineTo(6.0, 7.0)
-        rebuilt.setPath(rebuilt_path)
-        rebuilt.setPen(QPen(QColor("#224466")))
-        rebuilt.setBrush(QBrush(QColor("#335577")))
-        build_arrow_item = mock.Mock(return_value=rebuilt)
-
-        apply_scene_item_state(
-            item,
-            {
-                "kind": "equilibrium",
-                "start": (1.0, 2.0),
-                "end": (6.0, 7.0),
-                "double": False,
-            },
-            model_atoms={},
-            note_style_applier=lambda item: None,
-            mark_center_setter=lambda item, center: None,
-            mark_color_setter=lambda item, color: None,
-            ring_fill_brush_getter=lambda: QBrush(QColor("#AA4400")),
-            bond_color="#000000",
-            build_arrow_item=build_arrow_item,
-            set_curved_arrow_path=lambda *args: None,
-            orbital_base_handle_dist=18.0,
-        )
-
-        data = item.data(2)
-        self.assertEqual(item.data(0), "equilibrium")
-        self.assertEqual((data["start"].x(), data["start"].y()), (1.0, 2.0))
-        self.assertEqual((data["end"].x(), data["end"].y()), (6.0, 7.0))
-        self.assertIsNone(data["control"])
-        self.assertEqual(item.pen().color().name(), "#224466")
-        self.assertEqual(item.brush().color().name(), "#335577")
-        build_arrow_item.assert_called_once()
-
-    def test_apply_arrow_state_clears_stale_translation(self) -> None:
-        item = QGraphicsPathItem()
-        item.setData(0, "arrow")
-        # Simulate a prior drag/nudge: move_item shifts pos() via moveBy while
-        # the serialized start/end already hold the new absolute coordinates.
-        item.setPos(15.0, -7.0)
-        rebuilt = QGraphicsPathItem()
-        rebuilt.setPen(QPen(QColor("#224466")))
-        rebuilt.setBrush(QBrush(QColor("#335577")))
-
-        apply_scene_item_state(
-            item,
-            {"kind": "arrow", "start": (1.0, 2.0), "end": (6.0, 7.0), "double": False},
-            model_atoms={},
-            note_style_applier=lambda item: None,
-            mark_center_setter=lambda item, center: None,
-            mark_color_setter=lambda item, color: None,
-            ring_fill_brush_getter=lambda: QBrush(QColor("#AA4400")),
-            bond_color="#000000",
-            build_arrow_item=lambda start, end, kind, mirrored: rebuilt,
-            set_curved_arrow_path=lambda *args: None,
-            orbital_base_handle_dist=18.0,
-        )
-
-        self.assertEqual((item.pos().x(), item.pos().y()), (0.0, 0.0))
-
-    def test_apply_curved_arrow_state_uses_curve_setter(self) -> None:
-        item = QGraphicsPathItem()
-        item.setData(0, "curved_double")
-        set_curved_arrow_path = mock.Mock()
-        build_arrow_item = mock.Mock()
-
-        apply_scene_item_state(
-            item,
-            {
-                "kind": "curved_double",
-                "start": (-4.0, 0.0),
-                "end": (4.0, 0.0),
-                "control": (0.0, 6.0),
-                "double": True,
-            },
-            model_atoms={},
-            note_style_applier=lambda item: None,
-            mark_center_setter=lambda item, center: None,
-            mark_color_setter=lambda item, color: None,
-            ring_fill_brush_getter=lambda: QBrush(QColor("#AA4400")),
-            bond_color="#000000",
-            build_arrow_item=build_arrow_item,
-            set_curved_arrow_path=set_curved_arrow_path,
-            orbital_base_handle_dist=18.0,
-        )
-
-        data = item.data(2)
-        self.assertEqual(item.data(0), "curved_double")
-        self.assertEqual((data["control"].x(), data["control"].y()), (0.0, 6.0))
-        self.assertTrue(data["double"])
-        set_curved_arrow_path.assert_called_once()
-        build_arrow_item.assert_not_called()
 
     def test_scene_item_state_serializes_note_and_apply_handles_none_or_empty_state(
         self,
@@ -529,9 +397,6 @@ class SceneItemStateUnitTest(unittest.TestCase):
             mark_center_setter=lambda item, center: None,
             mark_color_setter=lambda item, color: None,
             ring_fill_brush_getter=lambda: QBrush(QColor("#AA4400")),
-            bond_color="#000000",
-            build_arrow_item=lambda start, end, kind, mirrored: QGraphicsPathItem(),
-            set_curved_arrow_path=lambda *args: None,
             orbital_base_handle_dist=18.0,
         )
         apply_scene_item_state(
@@ -542,9 +407,6 @@ class SceneItemStateUnitTest(unittest.TestCase):
             mark_center_setter=lambda item, center: None,
             mark_color_setter=lambda item, color: None,
             ring_fill_brush_getter=lambda: QBrush(QColor("#AA4400")),
-            bond_color="#000000",
-            build_arrow_item=lambda start, end, kind, mirrored: QGraphicsPathItem(),
-            set_curved_arrow_path=lambda *args: None,
             orbital_base_handle_dist=18.0,
         )
 
@@ -575,9 +437,6 @@ class SceneItemStateUnitTest(unittest.TestCase):
             mark_center_setter=center_setter,
             mark_color_setter=lambda item, color: None,
             ring_fill_brush_getter=lambda: QBrush(QColor("#AA4400")),
-            bond_color="#000000",
-            build_arrow_item=lambda start, end, kind, mirrored: QGraphicsPathItem(),
-            set_curved_arrow_path=lambda *args: None,
             orbital_base_handle_dist=18.0,
         )
 
@@ -595,9 +454,6 @@ class SceneItemStateUnitTest(unittest.TestCase):
             mark_center_setter=lambda item, center: None,
             mark_color_setter=lambda item, color: None,
             ring_fill_brush_getter=lambda: QBrush(QColor("#AA4400")),
-            bond_color="#000000",
-            build_arrow_item=lambda start, end, kind, mirrored: QGraphicsPathItem(),
-            set_curved_arrow_path=lambda *args: None,
             orbital_base_handle_dist=18.0,
         )
 
@@ -619,9 +475,6 @@ class SceneItemStateUnitTest(unittest.TestCase):
             mark_center_setter=lambda item, center: None,
             mark_color_setter=lambda item, color: None,
             ring_fill_brush_getter=lambda: QBrush(QColor("#55AA11")),
-            bond_color="#000000",
-            build_arrow_item=lambda start, end, kind, mirrored: QGraphicsPathItem(),
-            set_curved_arrow_path=lambda *args: None,
             orbital_base_handle_dist=18.0,
         )
         self.assertEqual(len(ring.polygon()), len(original_polygon))
@@ -637,9 +490,6 @@ class SceneItemStateUnitTest(unittest.TestCase):
             mark_center_setter=lambda item, center: None,
             mark_color_setter=lambda item, color: None,
             ring_fill_brush_getter=lambda: QBrush(QColor("#AA4400")),
-            bond_color="#000000",
-            build_arrow_item=lambda start, end, kind, mirrored: QGraphicsPathItem(),
-            set_curved_arrow_path=lambda *args: None,
             orbital_base_handle_dist=24.0,
         )
         self.assertEqual(
@@ -659,9 +509,6 @@ class SceneItemStateUnitTest(unittest.TestCase):
             mark_center_setter=lambda item, center: None,
             mark_color_setter=lambda item, color: None,
             ring_fill_brush_getter=lambda: QBrush(QColor("#AA4400")),
-            bond_color="#000000",
-            build_arrow_item=build_arrow_item,
-            set_curved_arrow_path=lambda *args: None,
             orbital_base_handle_dist=18.0,
         )
         self.assertEqual(
@@ -678,9 +525,6 @@ class SceneItemStateUnitTest(unittest.TestCase):
             mark_center_setter=lambda item, center: None,
             mark_color_setter=lambda item, color: None,
             ring_fill_brush_getter=lambda: QBrush(QColor("#AA4400")),
-            bond_color="#000000",
-            build_arrow_item=build_arrow_item,
-            set_curved_arrow_path=lambda *args: None,
             orbital_base_handle_dist=18.0,
         )
         self.assertEqual(text_item.toPlainText(), "x")

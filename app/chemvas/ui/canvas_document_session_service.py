@@ -128,6 +128,7 @@ _DOCUMENT_MUTATED_RUNTIME_FIELDS = (
     "hover_preview_state",
     "scene_items_state",
     "shape_state",
+    "arrow_state",
     "ts_bracket_state",
     "smiles_input_state",
 )
@@ -579,6 +580,9 @@ class CanvasDocumentSessionService:
         # A new document discards history, and with it every item that could
         # come back; only then are the old records unreachable. Clearing the
         # scene alone (a structure load keeps history) must leave them.
+        from chemvas.ui.scene_render_access import scene_render_context_for
+
+        scene_render_context_for(self.canvas).state.arrow_state.records = {}
         clear_shape_records_for(self.canvas)
         clear_ts_bracket_records_for(self.canvas)
         set_calculation_plan_for(self.canvas, state.get("calculation_plan"))

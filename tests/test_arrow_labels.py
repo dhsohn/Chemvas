@@ -1,10 +1,12 @@
 import os
 import tempfile
 import unittest
+from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
 from unittest import mock
 
+from chemvas.domain.document import arrow_to_state
 from tests.runtime_state import canvas_runtime_state
 from tests.scene_render_context import attach_scene_render_context
 
@@ -12,14 +14,13 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PIL import Image, ImageChops, ImageFilter
 from PyQt6.QtCore import QByteArray, QPointF, QRectF, Qt
-from PyQt6.QtGui import QBrush, QColor, QFont, QImage, QPainter, QPainterPath, QPen
+from PyQt6.QtGui import QColor, QFont, QImage, QPainter, QPainterPath, QPen
 from PyQt6.QtSvg import QSvgRenderer
 from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import (
     QApplication,
     QDialog,
     QGraphicsItem,
-    QGraphicsPathItem,
     QGraphicsScene,
     QLabel,
     QPlainTextEdit,
@@ -64,9 +65,7 @@ from chemvas.ui.main_window_ports import (
     services_for_window,
 )
 from chemvas.ui.move_access import move_item_for
-from chemvas.ui.scene_item_restore import create_arrow_item_from_state
-from chemvas.ui.scene_item_state import apply_scene_item_state
-from chemvas.ui.scene_item_state_serialization import arrow_state_dict
+from chemvas.ui.scene_item_state_serialization import arrow_state_dict_for
 from chemvas.ui.selection_queries import selection_items_for_copy_for
 
 
@@ -266,7 +265,13 @@ class ArrowLabelBuildTest(unittest.TestCase):
             QPointF(0.0, 50.0), QPointF(60.0, 50.0), "arrow"
         )
 
-        service.apply_arrow_labels(item, {"above": "k_1", "below": "k_-1"})
+        service.set_record(
+            item,
+            replace(
+                service.record(item),
+                labels=tuple(({"above": "k_1", "below": "k_-1"} or {}).items()),
+            ),
+        )
 
         children = _label_children(item)
         self.assertEqual(len(children), 2)
@@ -301,7 +306,15 @@ class ArrowLabelBuildTest(unittest.TestCase):
                 )
                 item.setData(0, "arrow")
                 scene.addItem(item)
-                service.apply_arrow_labels(item, {"above": text, "below": "oxidation"})
+                service.set_record(
+                    item,
+                    replace(
+                        service.record(item),
+                        labels=tuple(
+                            ({"above": text, "below": "oxidation"} or {}).items()
+                        ),
+                    ),
+                )
                 label_color = QColor("#195b90")
                 for child in _label_children(item):
                     font = QFont("DejaVu Sans", 12)
@@ -316,7 +329,7 @@ class ArrowLabelBuildTest(unittest.TestCase):
                 items = collect_export_items(scene)
                 source = content_bounds(items).adjusted(-4, -4, 4, 4)
                 before = self._render_labels(scene, source)
-                state = arrow_state_dict(item)
+                state = arrow_to_state(service.record(item))
                 # Passing only the parent exercises selected-arrow clipboard
                 # export: its label descendants must enter outline mode too.
                 svg = render_scene_to_svg_bytes(scene, source=source, items=[item])
@@ -357,7 +370,7 @@ class ArrowLabelBuildTest(unittest.TestCase):
                         self.assertGreater(ink, 0)
                         self.assertLess(missing.histogram()[255] / ink, 0.05)
                 self.assertEqual(self._render_labels(scene, source), before)
-                self.assertEqual(arrow_state_dict(item), state)
+                self.assertEqual(arrow_to_state(service.record(item)), state)
 
     @staticmethod
     def _render_labels(scene, source, *, renderer=None):
@@ -388,7 +401,12 @@ class ArrowLabelBuildTest(unittest.TestCase):
         item = service.build_arrow_item(QPointF(0, 50), QPointF(120, 50), "arrow")
         item.setData(0, "arrow")
         scene.addItem(item)
-        service.apply_arrow_labels(item, {"above": "MnO_2"})
+        service.set_record(
+            item,
+            replace(
+                service.record(item), labels=tuple(({"above": "MnO_2"} or {}).items())
+            ),
+        )
         (child,) = _label_children(item)
         source = content_bounds(collect_export_items(scene))
         before = self._render_labels(scene, source)
@@ -414,7 +432,12 @@ class ArrowLabelBuildTest(unittest.TestCase):
             QPointF(60.0, 50.0), QPointF(0.0, 50.0), "arrow"
         )
 
-        service.apply_arrow_labels(item, {"above": "up"})
+        service.set_record(
+            item,
+            replace(
+                service.record(item), labels=tuple(({"above": "up"} or {}).items())
+            ),
+        )
 
         (above,) = _label_children(item)
         self.assertLess(above.sceneBoundingRect().bottom(), 50.0)
@@ -425,7 +448,13 @@ class ArrowLabelBuildTest(unittest.TestCase):
             QPointF(50.0, 80.0), QPointF(50.0, 0.0), "arrow"
         )
 
-        service.apply_arrow_labels(item, {"above": "left label", "below": "right"})
+        service.set_record(
+            item,
+            replace(
+                service.record(item),
+                labels=tuple(({"above": "left label", "below": "right"} or {}).items()),
+            ),
+        )
 
         above, below = _label_children(item)
         # "Above" is the left side of an upward arrow; neither box crosses x=50.
@@ -443,7 +472,13 @@ class ArrowLabelBuildTest(unittest.TestCase):
             )
             item.setData(0, "equilibrium")
 
-            service.apply_arrow_labels(item, {"above": "K", "below": "K"})
+            service.set_record(
+                item,
+                replace(
+                    service.record(item),
+                    labels=tuple(({"above": "K", "below": "K"} or {}).items()),
+                ),
+            )
 
             # The harpoons are the outermost path elements; read them back.
             path = item.path()
@@ -464,10 +499,16 @@ class ArrowLabelBuildTest(unittest.TestCase):
         item = service.build_arrow_item(
             QPointF(0.0, 0.0), QPointF(60.0, 0.0), "curved_single"
         )
-        control = item.data(2)["control"]
+        control = QPointF(*service.record(item).control)
         self.assertIsInstance(control, QPointF)
 
-        service.apply_arrow_labels(item, {"above": "a", "below": "b"})
+        service.set_record(
+            item,
+            replace(
+                service.record(item),
+                labels=tuple(({"above": "a", "below": "b"} or {}).items()),
+            ),
+        )
 
         curve_mid_y = 0.5 * control.y()
         above, below = _label_children(item)
@@ -477,15 +518,26 @@ class ArrowLabelBuildTest(unittest.TestCase):
     def test_reapplying_replaces_children_and_none_clears_them(self) -> None:
         service = _build_service()
         item = service.build_arrow_item(QPointF(0.0, 0.0), QPointF(60.0, 0.0), "arrow")
-        service.apply_arrow_labels(item, {"above": "a", "below": "b"})
+        service.set_record(
+            item,
+            replace(
+                service.record(item),
+                labels=tuple(({"above": "a", "below": "b"} or {}).items()),
+            ),
+        )
         first = _label_children(item)
 
-        service.apply_arrow_labels(item, {"below": "c"})
+        service.set_record(
+            item,
+            replace(service.record(item), labels=tuple(({"below": "c"} or {}).items())),
+        )
         second = _label_children(item)
         self.assertEqual(len(second), 1)
         self.assertNotIn(second[0], first)
 
-        service.apply_arrow_labels(item, None)
+        service.set_record(
+            item, replace(service.record(item), labels=tuple((None or {}).items()))
+        )
         self.assertEqual(_label_children(item), [])
 
     def test_apply_removes_stale_children_from_their_scene(self) -> None:
@@ -493,10 +545,15 @@ class ArrowLabelBuildTest(unittest.TestCase):
         scene = QGraphicsScene()
         item = service.build_arrow_item(QPointF(0.0, 0.0), QPointF(60.0, 0.0), "arrow")
         scene.addItem(item)
-        service.apply_arrow_labels(item, {"above": "a"})
+        service.set_record(
+            item,
+            replace(service.record(item), labels=tuple(({"above": "a"} or {}).items())),
+        )
         self.assertEqual(len(scene.items()), 2)
 
-        service.apply_arrow_labels(item, None)
+        service.set_record(
+            item, replace(service.record(item), labels=tuple((None or {}).items()))
+        )
 
         self.assertEqual(len(scene.items()), 1)
 
@@ -523,89 +580,6 @@ class ArrowLabelBuildTest(unittest.TestCase):
         self.assertAlmostEqual(forward.elementAt(5).x, 10.0)
         self.assertAlmostEqual(shaft_length(reverse, 0), 20.0)
         self.assertAlmostEqual(shaft_length(reverse, 4), 40.0)
-
-
-class ArrowLabelCodecTest(unittest.TestCase):
-    @classmethod
-    def setUpClass(cls) -> None:
-        cls.app = QApplication.instance() or QApplication([])
-
-    def _plain_item(self) -> QGraphicsPathItem:
-        item = QGraphicsPathItem()
-        item.setData(0, "arrow")
-        item.setData(
-            2,
-            {
-                "start": QPointF(0.0, 0.0),
-                "end": QPointF(10.0, 0.0),
-                "control": None,
-                "double": False,
-                "labels": {"above": "k_1"},
-            },
-        )
-        return item
-
-    def test_state_dict_carries_labels_only_when_present(self) -> None:
-        with_labels = arrow_state_dict(self._plain_item())
-        self.assertEqual(with_labels["labels"], {"above": "k_1"})
-
-        item = self._plain_item()
-        data = item.data(2)
-        del data["labels"]
-        item.setData(2, data)
-        self.assertNotIn("labels", arrow_state_dict(item))
-
-    def test_restore_and_apply_hand_labels_to_the_port(self) -> None:
-        setter = mock.Mock()
-        builder = mock.Mock(return_value=QGraphicsPathItem())
-        state = {
-            "kind": "arrow",
-            "start": (0.0, 0.0),
-            "end": (9.0, 0.0),
-            "labels": {"below": "k_-1"},
-        }
-
-        restored = create_arrow_item_from_state(
-            state,
-            build_arrow_item=builder,
-            set_curved_arrow_path=lambda *_args: None,
-            set_arrow_labels=setter,
-        )
-        assert restored is not None
-        self.assertEqual(restored.data(2)["labels"], {"below": "k_-1"})
-        setter.assert_called_once_with(restored, {"below": "k_-1"})
-
-        setter.reset_mock()
-        apply_scene_item_state(
-            restored,
-            {"kind": "arrow", "start": (0.0, 0.0), "end": (9.0, 0.0), "double": False},
-            model_atoms={},
-            note_style_applier=lambda item: None,
-            mark_center_setter=lambda item, center: None,
-            mark_color_setter=lambda item, color: None,
-            ring_fill_brush_getter=lambda: QBrush(QColor("#000000")),
-            bond_color="#000000",
-            build_arrow_item=builder,
-            set_curved_arrow_path=lambda *args: None,
-            orbital_base_handle_dist=18.0,
-            set_arrow_labels=setter,
-        )
-        self.assertNotIn("labels", restored.data(2))
-        setter.assert_called_once_with(restored, None)
-
-    def test_labels_without_a_port_fail_closed(self) -> None:
-        state = {
-            "kind": "arrow",
-            "start": (0.0, 0.0),
-            "end": (9.0, 0.0),
-            "labels": {"above": "k"},
-        }
-        with self.assertRaises(ValueError):
-            create_arrow_item_from_state(
-                state,
-                build_arrow_item=lambda *_args: QGraphicsPathItem(),
-                set_curved_arrow_path=lambda *_args: None,
-            )
 
 
 class ArrowLabelDialogTest(unittest.TestCase):
@@ -813,7 +787,7 @@ class ArrowLabelGuiTest(unittest.TestCase):
         prompt.assert_called_once()
         self.assertEqual(prompt.call_args.kwargs, {"above": "", "below": ""})
 
-        state = arrow_state_dict(arrow)
+        state = arrow_state_dict_for(canvas, arrow)
         self.assertEqual(state["labels"], expected_labels)
         children = _label_children(arrow)
         self.assertEqual(len(children), 2)
@@ -827,7 +801,7 @@ class ArrowLabelGuiTest(unittest.TestCase):
 
         history = canvas.runtime_state.history_service
         history.undo()
-        self.assertNotIn("labels", arrow_state_dict(arrow))
+        self.assertNotIn("labels", arrow_state_dict_for(canvas, arrow))
         self.assertEqual(_label_children(arrow), [])
         history.redo()
         self.assertEqual(len(_label_children(arrow)), 2)
@@ -845,7 +819,7 @@ class ArrowLabelGuiTest(unittest.TestCase):
             Qt.KeyboardModifier.ControlModifier | Qt.KeyboardModifier.ShiftModifier,
         )
         self.app.processEvents()
-        flipped = arrow_state_dict(arrow)
+        flipped = arrow_state_dict_for(canvas, arrow)
         self.assertGreater(flipped["start"][0], flipped["end"][0])
         self.assertEqual(flipped["labels"], expected_labels)
         self.assertEqual(len(_label_children(arrow)), 2)
@@ -855,7 +829,9 @@ class ArrowLabelGuiTest(unittest.TestCase):
         payload = build_document_payload(snapshot, CANVAS_FILE_VERSION)
         restore_canvas_state_for(canvas, extract_document_state(payload))
         (restored,) = arrow_items_for(canvas)
-        self.assertEqual(arrow_state_dict(restored)["labels"], expected_labels)
+        self.assertEqual(
+            arrow_state_dict_for(canvas, restored)["labels"], expected_labels
+        )
         self.assertEqual(len(_label_children(restored)), 2)
 
     def test_arrow_tool_double_click_edits_the_arrow_without_adding_a_stub(
@@ -874,7 +850,9 @@ class ArrowLabelGuiTest(unittest.TestCase):
 
         prompt.assert_called_once()
         self.assertEqual([item for item in arrow_items_for(canvas)], [arrow])
-        self.assertEqual(arrow_state_dict(arrow)["labels"], {"above": "k_1"})
+        self.assertEqual(
+            arrow_state_dict_for(canvas, arrow)["labels"], {"above": "k_1"}
+        )
 
     def test_labels_survive_rotation_and_copy_items_include_them(self) -> None:
         canvas = active_canvas_for_window(self.window)
@@ -891,7 +869,7 @@ class ArrowLabelGuiTest(unittest.TestCase):
 
         QTest.keyClick(canvas, Qt.Key.Key_Up, Qt.KeyboardModifier.AltModifier)
         self.app.processEvents()
-        rotated = arrow_state_dict(arrow)
+        rotated = arrow_state_dict_for(canvas, arrow)
         self.assertNotAlmostEqual(rotated["end"][1], rotated["start"][1])
         self.assertEqual(rotated["labels"], {"above": "k_1", "below": "k_-1"})
         self.assertEqual(len(_label_children(arrow)), 2)
@@ -916,7 +894,9 @@ class ArrowLabelGuiTest(unittest.TestCase):
 
         (above_after,) = _label_children(arrow)
         self.assertNotAlmostEqual(above_after.scenePos().y(), before.y(), places=1)
-        self.assertEqual(arrow_state_dict(arrow)["labels"], {"above": "k_1"})
+        self.assertEqual(
+            arrow_state_dict_for(canvas, arrow)["labels"], {"above": "k_1"}
+        )
 
     def test_double_click_on_a_label_child_reaches_its_arrow(self) -> None:
         canvas = active_canvas_for_window(self.window)
@@ -939,7 +919,9 @@ class ArrowLabelGuiTest(unittest.TestCase):
         ) as prompt:
             self._double_click(canvas, above.sceneBoundingRect().center())
         self.assertEqual(prompt.call_args.kwargs, {"above": "k_1", "below": ""})
-        self.assertEqual(arrow_state_dict(arrow)["labels"], {"above": "k_1"})
+        self.assertEqual(
+            arrow_state_dict_for(canvas, arrow)["labels"], {"above": "k_1"}
+        )
 
     def test_empty_labels_remove_the_key_and_unchanged_edit_pushes_nothing(
         self,
@@ -951,10 +933,12 @@ class ArrowLabelGuiTest(unittest.TestCase):
         history = canvas.runtime_state.history_service
 
         self.assertFalse(service.set_arrow_labels(arrow, {"above": "", "below": "  "}))
-        self.assertNotIn("labels", arrow_state_dict(arrow))
+        self.assertNotIn("labels", arrow_state_dict_for(canvas, arrow))
         self.assertTrue(service.set_arrow_labels(arrow, {"above": "k_1"}))
         self.assertTrue(service.set_arrow_labels(arrow, {"above": "", "below": ""}))
-        self.assertNotIn("labels", arrow_state_dict(arrow))
+        self.assertNotIn("labels", arrow_state_dict_for(canvas, arrow))
         self.assertEqual(_label_children(arrow), [])
         history.undo()
-        self.assertEqual(arrow_state_dict(arrow)["labels"], {"above": "k_1"})
+        self.assertEqual(
+            arrow_state_dict_for(canvas, arrow)["labels"], {"above": "k_1"}
+        )

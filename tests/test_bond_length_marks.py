@@ -234,7 +234,7 @@ def test_rescale_keeps_bound_mark_color_and_free_annotations_unchanged(drawing):
     bound = add_mark_for_atom_for(canvas, atom_id, QPointF(20, 10), kind="plus")
     apply_mark_color_for(canvas, bound, "#12ab34")
     free = add_mark_for(canvas, QPointF(110, 70), kind="plus")
-    arrow = add_arrow_for(canvas, QPointF(80, 60), QPointF(160, 60), "forward")
+    arrow = add_arrow_for(canvas, QPointF(80, 60), QPointF(160, 60), "arrow")
     free_state = scene_item_state_for(canvas, free)
     arrow_state = scene_item_state_for(canvas, arrow)
     free_font, free_pos = free.font(), free.pos()

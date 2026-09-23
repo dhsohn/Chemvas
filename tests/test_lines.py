@@ -4,6 +4,7 @@ import unittest
 from itertools import pairwise
 from types import SimpleNamespace
 
+from chemvas.domain.document import arrow_to_state
 from tests.runtime_services import canvas_runtime_services
 from tests.runtime_state import canvas_runtime_state
 from tests.scene_render_context import attach_scene_render_context
@@ -45,8 +46,7 @@ from chemvas.ui.main_window_ports import (
 )
 from chemvas.ui.move_access import move_item_for
 from chemvas.ui.scene_item_access import apply_scene_item_state
-from chemvas.ui.scene_item_restore import create_arrow_item_from_state
-from chemvas.ui.scene_item_state_serialization import arrow_state_dict
+from chemvas.ui.scene_item_state_serialization import arrow_state_dict_for
 from chemvas.ui.tool_context import ToolContext
 
 LINE_KINDS = ("line", "line_dashed", "line_wavy", "line_bold")
@@ -163,7 +163,7 @@ class LineBuildServiceTest(unittest.TestCase):
         self.assertEqual(VALID_LINE_KINDS, frozenset(LINE_KINDS))
         self.assertTrue(VALID_LINE_KINDS <= VALID_ARROW_KINDS)
 
-    def test_plain_line_is_a_headless_segment_with_arrow_metadata(self) -> None:
+    def test_plain_line_is_a_headless_segment_with_a_record(self) -> None:
         service = self._make_service()
         start, end = QPointF(0.0, 0.0), QPointF(30.0, 0.0)
 
@@ -174,7 +174,14 @@ class LineBuildServiceTest(unittest.TestCase):
         self.assertEqual(item.pen().style(), Qt.PenStyle.SolidLine)
         self.assertAlmostEqual(item.pen().widthF(), 1.5)
         self.assertEqual(
-            item.data(2), {"start": start, "end": end, "control": None, "double": False}
+            arrow_to_state(service.record(item)),
+            {
+                "kind": "line",
+                "start": (0.0, 0.0),
+                "end": (30.0, 0.0),
+                "control": None,
+                "double": False,
+            },
         )
 
     def test_dashed_line_uses_the_dashed_arrow_pen(self) -> None:
@@ -216,22 +223,18 @@ class LineBuildServiceTest(unittest.TestCase):
     def test_line_state_round_trips_through_serialization_and_restore(self) -> None:
         service = self._make_service()
         for kind in LINE_KINDS:
-            item = service.build_line_item(QPointF(1.0, 2.0), QPointF(9.0, 4.0), kind)
+            item = service.build_arrow_item(QPointF(1.0, 2.0), QPointF(9.0, 4.0), kind)
             item.setData(0, kind)
 
-            state = arrow_state_dict(item)
+            state = arrow_to_state(service.record(item))
             self.assertEqual(state["kind"], kind)
             self.assertEqual(state["start"], (1.0, 2.0))
             self.assertEqual(state["end"], (9.0, 4.0))
 
-            restored = create_arrow_item_from_state(
-                state,
-                build_arrow_item=service.build_arrow_item,
-                set_curved_arrow_path=lambda *_args: None,
-            )
+            restored = service.create_from_state(state)
             assert restored is not None
             self.assertEqual(restored.data(0), kind)
-            self.assertEqual(arrow_state_dict(restored), state)
+            self.assertEqual(arrow_to_state(service.record(restored)), state)
             self.assertEqual(
                 restored.path().elementCount(), item.path().elementCount(), kind
             )
@@ -529,9 +532,9 @@ class LineToolGuiTest(unittest.TestCase):
         # rebuilds the polyline from that data, so both must stay in step.
         wavy = arrow_items_for(canvas)[LINE_KINDS.index("line_wavy")]
         element_count = wavy.path().elementCount()
-        before = arrow_state_dict(wavy)
+        before = arrow_state_dict_for(canvas, wavy)
         move_item_for(canvas, wavy, 7.0, -3.0)
-        moved = arrow_state_dict(wavy)
+        moved = arrow_state_dict_for(canvas, wavy)
         self.assertEqual(
             moved["start"], (before["start"][0] + 7.0, before["start"][1] - 3.0)
         )
@@ -542,7 +545,7 @@ class LineToolGuiTest(unittest.TestCase):
         first = wavy.path().elementAt(0)
         self.assertAlmostEqual(first.x, moved["start"][0])
         self.assertAlmostEqual(first.y, moved["start"][1])
-        self.assertEqual(arrow_state_dict(wavy), moved)
+        self.assertEqual(arrow_state_dict_for(canvas, wavy), moved)
 
         state = snapshot_canvas_state_for(canvas)
         self.assertEqual([arrow["kind"] for arrow in state["arrows"]], list(LINE_KINDS))
@@ -567,10 +570,10 @@ class LineToolGuiTest(unittest.TestCase):
 
         items = arrow_items_for(canvas)
         self.assertEqual(len(items), 1)
-        data = items[0].data(2)
-        self.assertAlmostEqual(data["end"].y(), data["start"].y(), places=3)
+        data = arrow_state_dict_for(canvas, items[0])
+        self.assertAlmostEqual(data["end"][1], data["start"][1], places=3)
         self.assertAlmostEqual(
-            data["end"].x() - data["start"].x(), math.hypot(60.0, 5.0), places=3
+            data["end"][0] - data["start"][0], math.hypot(60.0, 5.0), places=3
         )
 
     def test_line_context_page_offers_the_four_kinds(self) -> None:

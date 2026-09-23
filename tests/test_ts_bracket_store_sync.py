@@ -350,4 +350,4 @@ def test_restating_another_kind_of_item_leaves_the_bracket_store_alone(canvas) -
         services.interaction.move_controller.move_item(item, 5.0, 5.0)
 
     assert ts_bracket_state_for(canvas).records == {}
-    assert ts_bracket_id_for_item(arrow) is None
+    assert ts_bracket_id_for_item(arrow) not in ts_bracket_state_for(canvas).records

@@ -146,32 +146,17 @@ def mark_state_dict_for(canvas, item) -> dict:
     )
 
 
-def arrow_state_dict(item: QGraphicsPathItem) -> dict:
-    data = item.data(2) or {}
-    start = data.get("start")
-    end = data.get("end")
-    control = data.get("control")
-    state = {
-        "kind": item.data(0),
-        "start": (start.x(), start.y()) if isinstance(start, QPointF) else None,
-        "end": (end.x(), end.y()) if isinstance(end, QPointF) else None,
-        "control": (control.x(), control.y()) if isinstance(control, QPointF) else None,
-        "double": bool(data.get("double", False)),
-    }
-    color = data.get("color")
-    if isinstance(color, str):
-        state["color"] = color
-    labels = data.get("labels")
-    if data.get("mirrored"):
-        state["mirrored"] = True
-    if isinstance(labels, dict) and labels:
-        state["labels"] = dict(labels)
-    return state
-
-
 def arrow_state_dict_for(canvas, item) -> dict:
-    del canvas
-    return _typed_state_dict_for(item, QGraphicsPathItem, arrow_state_dict)
+    from chemvas.domain.document import arrow_to_state
+    from chemvas.ui.scene_render_access import scene_render_context_for
+
+    return _typed_state_dict_for(
+        item,
+        QGraphicsPathItem,
+        lambda arrow: arrow_to_state(
+            scene_render_context_for(canvas).arrows.record(arrow)
+        ),
+    )
 
 
 def ts_bracket_state_dict_for(canvas, item) -> dict:
@@ -245,8 +230,6 @@ def scene_item_state(item, *, mark_center_getter: MarkCenterGetter) -> dict:
         return mark_state_dict(item, mark_center_getter=mark_center_getter)
     if kind == "orbital" and isinstance(item, QGraphicsItemGroup):
         return orbital_state_dict(item)
-    if kind in ARROW_KINDS and isinstance(item, QGraphicsPathItem):
-        return arrow_state_dict(item)
     embedded = embedded_scene_item_state(item)
     if embedded:
         return embedded
@@ -262,6 +245,8 @@ def scene_item_state_for(canvas, item) -> dict:
     if item is not None:
         from chemvas.ui.mark_item_access import mark_center_for
 
+        if _item_kind(item) in ARROW_KINDS and isinstance(item, QGraphicsPathItem):
+            return arrow_state_dict_for(canvas, item)
         if _item_kind(item) == "shape" and isinstance(item, QGraphicsPathItem):
             return shape_state_dict_for(canvas, item)
         if _item_kind(item) == "ts_bracket" and isinstance(item, QGraphicsPathItem):
@@ -278,7 +263,6 @@ def scene_item_state_for(canvas, item) -> dict:
 __all__ = [
     "ARROW_KINDS",
     "MarkCenterGetter",
-    "arrow_state_dict",
     "arrow_state_dict_for",
     "atom_state_dict_for",
     "bond_state_dict",

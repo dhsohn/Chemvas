@@ -85,7 +85,6 @@ def test_build_canvas_services_composes_grouped_runtimes(monkeypatch) -> None:
         handle_controller=object(),
         handle_overlay_service=object(),
         handle_mutation_service=object(),
-        curved_arrow_path_service=object(),
     )
     interaction = SimpleNamespace(
         move_controller=move_controller,

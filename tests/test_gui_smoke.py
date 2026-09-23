@@ -3,6 +3,8 @@ import os
 import unittest
 from unittest.mock import patch
 
+from chemvas.ui.scene_item_state_serialization import arrow_state_dict_for
+
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PyQt6.QtCore import QEvent, QPointF, QRectF, Qt
@@ -540,12 +542,12 @@ class GuiShortcutSmokeTest(unittest.TestCase):
         transform.rotate_selected_items(180.0)
         self.app.processEvents()
 
-        data = arrow.data(2)
+        data = arrow_state_dict_for(active_canvas_for_window(self.window), arrow)
         self.assertEqual((arrow.pos().x(), arrow.pos().y()), (0.0, 0.0))
-        self.assertAlmostEqual(data["start"].x(), 30.0)
-        self.assertAlmostEqual(data["start"].y(), 5.0)
-        self.assertAlmostEqual(data["end"].x(), 10.0)
-        self.assertAlmostEqual(data["end"].y(), 5.0)
+        self.assertAlmostEqual(data["start"][0], 30.0)
+        self.assertAlmostEqual(data["start"][1], 5.0)
+        self.assertAlmostEqual(data["end"][0], 10.0)
+        self.assertAlmostEqual(data["end"][1], 5.0)
 
     def test_rotate_selection_orbits_orbital_glyph(self) -> None:
         canvas = active_canvas_for_window(self.window)
@@ -2328,9 +2330,9 @@ class GuiShortcutSmokeTest(unittest.TestCase):
             )
         )
 
-        data = arrow.data(2) or {}
-        start = data.get("start")
-        end = data.get("end")
+        data = arrow_state_dict_for(active_canvas_for_window(self.window), arrow)
+        start = QPointF(*data["start"])
+        end = QPointF(*data["end"])
         self.assertIsNotNone(start)
         self.assertIsNotNone(end)
         near_path_point = QPointF(
@@ -2364,7 +2366,9 @@ class GuiShortcutSmokeTest(unittest.TestCase):
         self.assertIsNotNone(atom_before)
         atom_before_x = atom_before.x
         atom_before_y = atom_before.y
-        arrow_before = dict(arrow.data(2) or {})
+        arrow_before = arrow_state_dict_for(
+            active_canvas_for_window(self.window), arrow
+        )
 
         self._drag_scene_point(
             QPointF(atom_before_x, atom_before_y),
@@ -2375,18 +2379,18 @@ class GuiShortcutSmokeTest(unittest.TestCase):
         self.assertAlmostEqual(atom_after.x, atom_before_x + 24.0, places=3)
         self.assertAlmostEqual(atom_after.y, atom_before_y + 12.0, places=3)
 
-        moved_arrow = arrow.data(2) or {}
+        moved_arrow = arrow_state_dict_for(active_canvas_for_window(self.window), arrow)
         self.assertAlmostEqual(
-            moved_arrow["start"].x(), arrow_before["start"].x() + 24.0, places=3
+            moved_arrow["start"][0], arrow_before["start"][0] + 24.0, places=3
         )
         self.assertAlmostEqual(
-            moved_arrow["start"].y(), arrow_before["start"].y() + 12.0, places=3
+            moved_arrow["start"][1], arrow_before["start"][1] + 12.0, places=3
         )
         self.assertAlmostEqual(
-            moved_arrow["end"].x(), arrow_before["end"].x() + 24.0, places=3
+            moved_arrow["end"][0], arrow_before["end"][0] + 24.0, places=3
         )
         self.assertAlmostEqual(
-            moved_arrow["end"].y(), arrow_before["end"].y() + 12.0, places=3
+            moved_arrow["end"][1], arrow_before["end"][1] + 12.0, places=3
         )
 
         active_canvas_for_window(self.window).runtime_state.history_service.undo()
@@ -2394,19 +2398,17 @@ class GuiShortcutSmokeTest(unittest.TestCase):
         atom_undone = active_canvas_for_window(self.window).model.atoms[atom_id]
         self.assertAlmostEqual(atom_undone.x, atom_before_x, places=3)
         self.assertAlmostEqual(atom_undone.y, atom_before_y, places=3)
-        undone_arrow = arrow.data(2) or {}
-        self.assertAlmostEqual(
-            undone_arrow["start"].x(), arrow_before["start"].x(), places=3
+        undone_arrow = arrow_state_dict_for(
+            active_canvas_for_window(self.window), arrow
         )
         self.assertAlmostEqual(
-            undone_arrow["start"].y(), arrow_before["start"].y(), places=3
+            undone_arrow["start"][0], arrow_before["start"][0], places=3
         )
         self.assertAlmostEqual(
-            undone_arrow["end"].x(), arrow_before["end"].x(), places=3
+            undone_arrow["start"][1], arrow_before["start"][1], places=3
         )
-        self.assertAlmostEqual(
-            undone_arrow["end"].y(), arrow_before["end"].y(), places=3
-        )
+        self.assertAlmostEqual(undone_arrow["end"][0], arrow_before["end"][0], places=3)
+        self.assertAlmostEqual(undone_arrow["end"][1], arrow_before["end"][1], places=3)
 
     def test_copy_paste_duplicates_molecule_and_arrow_selection(self) -> None:
         left = add_atom_for(active_canvas_for_window(self.window), "C", -20.0, 0.0)
@@ -2496,26 +2498,30 @@ class GuiShortcutSmokeTest(unittest.TestCase):
             self.assertAlmostEqual(pasted_y, orig_y + paste_dy, places=3)
 
         pasted_arrow = arrow_items_for(active_canvas_for_window(self.window))[-1]
-        pasted_arrow_data = pasted_arrow.data(2) or {}
-        original_arrow_data = arrow.data(2) or {}
+        pasted_arrow_data = arrow_state_dict_for(
+            active_canvas_for_window(self.window), pasted_arrow
+        )
+        original_arrow_data = arrow_state_dict_for(
+            active_canvas_for_window(self.window), arrow
+        )
         self.assertAlmostEqual(
-            pasted_arrow_data["start"].x(),
-            original_arrow_data["start"].x() + paste_dx,
+            pasted_arrow_data["start"][0],
+            original_arrow_data["start"][0] + paste_dx,
             places=3,
         )
         self.assertAlmostEqual(
-            pasted_arrow_data["start"].y(),
-            original_arrow_data["start"].y() + paste_dy,
+            pasted_arrow_data["start"][1],
+            original_arrow_data["start"][1] + paste_dy,
             places=3,
         )
         self.assertAlmostEqual(
-            pasted_arrow_data["end"].x(),
-            original_arrow_data["end"].x() + paste_dx,
+            pasted_arrow_data["end"][0],
+            original_arrow_data["end"][0] + paste_dx,
             places=3,
         )
         self.assertAlmostEqual(
-            pasted_arrow_data["end"].y(),
-            original_arrow_data["end"].y() + paste_dy,
+            pasted_arrow_data["end"][1],
+            original_arrow_data["end"][1] + paste_dy,
             places=3,
         )
 
@@ -2834,9 +2840,9 @@ class GuiShortcutSmokeTest(unittest.TestCase):
             Qt.Key.Key_H,
             Qt.KeyboardModifier.ControlModifier | Qt.KeyboardModifier.ShiftModifier,
         )
-        data = arrow.data(2) or {}
-        start = data.get("start")
-        end = data.get("end")
+        data = arrow_state_dict_for(active_canvas_for_window(self.window), arrow)
+        start = QPointF(*data["start"])
+        end = QPointF(*data["end"])
         self.assertIsNotNone(start)
         self.assertIsNotNone(end)
         self.assertAlmostEqual(start.x(), 20.0)
@@ -2848,9 +2854,9 @@ class GuiShortcutSmokeTest(unittest.TestCase):
             Qt.Key.Key_V,
             Qt.KeyboardModifier.ControlModifier | Qt.KeyboardModifier.ShiftModifier,
         )
-        data = arrow.data(2) or {}
-        start = data.get("start")
-        end = data.get("end")
+        data = arrow_state_dict_for(active_canvas_for_window(self.window), arrow)
+        start = QPointF(*data["start"])
+        end = QPointF(*data["end"])
         self.assertIsNotNone(start)
         self.assertIsNotNone(end)
         self.assertAlmostEqual(start.x(), 20.0)

@@ -37,6 +37,7 @@ from chemvas.ui.scene_item_state import (
     shape_state_dict_for,
     ts_bracket_state_dict_for,
 )
+from chemvas.ui.scene_render_access import scene_render_context_for
 from chemvas.ui.selection_state import selection_for
 from chemvas.ui.shape_record_access import (
     discard_shape_record_for,
@@ -97,25 +98,17 @@ class SceneDecorationService:
         return item
 
     def add_arrow(self, start: QPointF, end: QPointF, kind: str):
-        with self._scene_add_transaction() as track:
-            item = build_arrow_item_for(self.canvas, start, end, kind)
-            scene_kind = "arrow" if kind == "reaction" else kind
-            item.setData(0, scene_kind)
-            data = item.data(2) or {}
-            if scene_kind in {"curved_single", "curved_double"}:
-                data.update(
-                    {
-                        "start": start,
-                        "end": end,
-                        "double": scene_kind == "curved_double",
-                    }
-                )
-            else:
-                data = {"start": start, "end": end, "control": None, "double": False}
-            item.setData(2, data)
-            track(item)
-            attach_scene_item(self.canvas, item)
-            self._push_add_scene_item(item, arrow_state_dict_for(self.canvas, item))
+        item = None
+        try:
+            with self._scene_add_transaction() as track:
+                item = build_arrow_item_for(self.canvas, start, end, kind)
+                track(item)
+                attach_scene_item(self.canvas, item)
+                self._push_add_scene_item(item, arrow_state_dict_for(self.canvas, item))
+        except Exception:
+            if item is not None:
+                scene_render_context_for(self.canvas).arrows.discard_record(item)
+            raise
         return item
 
     def edit_arrow_labels(self, item) -> bool:
