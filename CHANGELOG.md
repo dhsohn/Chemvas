@@ -17,6 +17,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Reflect toolbar tool changes once, including bond-style choices, through one
+  owner of checked actions, status hints and tool options.
+- Keep Molecule Info and its 3D preview when the selected structure is only
+  translated; relative geometry and electronic annotations still invalidate it.
+- Reuse valence warning results across repaints and coordinate-only edits while
+  checking chemical values to keep direct edits, Undo and recovery accurate.
 - Group the drawing toolbar into five sections, use teal checked icons and
   segmented options, and reduce toolbar/tab padding while keeping button sizes.
 - Keep one shared SMILES field beside the active tool options, with Enter or

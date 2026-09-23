@@ -24,6 +24,44 @@ _COVALENT_NEIGHBORS = frozenset(
 )
 
 
+class ValenceWarningCache:
+    """One derived result, checked against the model's actual chemical values.
+
+    The mutable model also changes through undo and exact rollback. Its graph
+    index version does not cover element/charge edits, so it cannot validate
+    these warnings. Reading a lightweight key still costs O(atoms + bonds),
+    but avoids rebuilding valence totals and classifying the graph on repaint.
+    Coordinates, colours and labels do not affect the policy.
+    """
+
+    def __init__(self) -> None:
+        self._signature: tuple[object, ...] | None = None
+        self._warnings: frozenset[int] = frozenset()
+
+    def warnings_for(self, model: MoleculeModel) -> frozenset[int]:
+        signature = (
+            tuple((atom_id, atom.element) for atom_id, atom in model.atoms.items()),
+            tuple(
+                (bond.a, bond.b, bond.order, "dotted" in bond.style)
+                for bond in model.bonds
+                if bond is not None
+            ),
+            tuple(
+                (
+                    atom_id,
+                    values.get("formal_charge", 0),
+                    values.get("radical_electrons", 0),
+                )
+                for atom_id, values in model.atom_annotations.items()
+            ),
+        )
+        if signature != self._signature:
+            warnings = frozenset(overvalent_atom_ids(model))
+            # Publish together only after a successful calculation.
+            self._signature, self._warnings = signature, warnings
+        return self._warnings
+
+
 def overvalent_atom_ids(model: MoleculeModel) -> set[int]:
     totals = dict.fromkeys(model.atoms, 0)
     partial: set[int] = set()

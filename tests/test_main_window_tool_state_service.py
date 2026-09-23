@@ -8,9 +8,12 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 from PyQt6.QtWidgets import QApplication
 
 from chemvas.bootstrap.main_window import build_main_window
+from chemvas.ui.canvas_callback_state import callback_state_for
 from chemvas.ui.main_window_ports import (
     active_canvas_for_window,
+    clear_context_bar_page_override_for_window,
     services_for_window,
+    set_context_bar_page_override_for_window,
 )
 from chemvas.ui.main_window_tool_state_service import MainWindowToolStateService
 
@@ -33,9 +36,6 @@ class MainWindowToolStateServiceTest(unittest.TestCase):
                 active_canvas_for_window(window)
             ),
         )
-        self.tool_actions_for_window = mock.Mock(
-            side_effect=lambda window: window.ui_references.tool_actions,
-        )
         self.tool_action_for_window = mock.Mock(
             side_effect=lambda window, action_key: (
                 window.ui_references.tool_action_for_key(action_key)
@@ -47,9 +47,17 @@ class MainWindowToolStateServiceTest(unittest.TestCase):
         self.service = MainWindowToolStateService(
             tool_mode_controller_for_window=self.tool_mode_controller_for_window,
             active_tool_name_for_window=self.active_tool_name_for_window,
-            tool_actions_for_window=self.tool_actions_for_window,
             tool_action_for_window=self.tool_action_for_window,
             status_service=self.status_service,
+            refresh_context_bar_for_window=services_for_window(
+                self.window
+            ).context_bar_service.refresh_window,
+            clear_context_bar_page_override_for_window=clear_context_bar_page_override_for_window,
+            set_context_bar_page_override_for_window=set_context_bar_page_override_for_window,
+        )
+
+        callback_state_for(active_canvas_for_window(self.window)).tool_change = lambda: (
+            self.service.sync_tool_actions_from_canvas(self.window)
         )
 
     def _active_tool_name_for_canvas(self, canvas) -> str | None:
@@ -95,12 +103,12 @@ class MainWindowToolStateServiceTest(unittest.TestCase):
 
         self.assertEqual(
             [call.args for call in set_tool.call_args_list],
-            [("bond",), ("bond",), ("select",)],
+            [("bond",), ("select",)],
         )
         set_mark_kind.assert_called_once_with("plus")
         set_bond_style.assert_called_once_with(self.window, "Single")
         self.assertEqual(self.tool_mode_controller_for_window.call_count, 4)
-        self.assertEqual(self.status_service.refresh_status_context.call_count, 4)
+        self.status_service.refresh_status_context.assert_not_called()
 
     def test_set_tool_with_status_refreshes_structured_tool_state(self) -> None:
         self.service.set_tool_with_status(self.window, "select")
@@ -137,7 +145,6 @@ class MainWindowToolStateServiceTest(unittest.TestCase):
             self.window.ui_references.tool_actions["perspective"].isChecked()
         )
         self.assertEqual(self.active_tool_name_for_window.call_count, 3)
-        self.assertEqual(self.tool_actions_for_window.call_count, 3)
         self.assertEqual(self.tool_action_for_window.call_count, 3)
 
     def test_set_bond_style_routes_toolbar_labels_to_canvas(self) -> None:
@@ -155,12 +162,12 @@ class MainWindowToolStateServiceTest(unittest.TestCase):
         self.assertEqual(self.tool_mode_controller_for_window.call_count, 2)
 
     def test_set_mark_kind_routes_option_bar_choice_to_canvas(self) -> None:
-        active_canvas_for_window(
-            self.window
-        ).services.tool_controller.active = SimpleNamespace(name="mark")
         with mock.patch.object(
             active_canvas_for_window(self.window).services.input.tool_mode_controller,
             "set_mark_kind",
+            wraps=active_canvas_for_window(
+                self.window
+            ).services.input.tool_mode_controller.set_mark_kind,
         ) as set_mark_kind:
             self.service.set_mark_kind(self.window, "radical")
 
@@ -168,16 +175,18 @@ class MainWindowToolStateServiceTest(unittest.TestCase):
         self.assertEqual(
             self.window.statusBar().currentMessage(), "Mark: click atom or label"
         )
-        self.status_service.refresh_status_context.assert_called_once_with(self.window)
+        self.status_service.update_tool_status_label.assert_called_once_with(
+            self.window
+        )
         self.tool_mode_controller_for_window.assert_called_once_with(self.window)
 
     def test_set_bracket_type_routes_option_bar_choice_to_canvas(self) -> None:
-        active_canvas_for_window(
-            self.window
-        ).services.tool_controller.active = SimpleNamespace(name="ts_bracket")
         with mock.patch.object(
             active_canvas_for_window(self.window).services.input.tool_mode_controller,
             "set_bracket_type",
+            wraps=active_canvas_for_window(
+                self.window
+            ).services.input.tool_mode_controller.set_bracket_type,
         ) as set_bracket_type:
             self.service.set_bracket_type(self.window, "double_dagger")
 
@@ -185,7 +194,9 @@ class MainWindowToolStateServiceTest(unittest.TestCase):
         self.assertEqual(
             self.window.statusBar().currentMessage(), "Brackets: drag around selection"
         )
-        self.status_service.refresh_status_context.assert_called_once_with(self.window)
+        self.status_service.update_tool_status_label.assert_called_once_with(
+            self.window
+        )
         self.tool_mode_controller_for_window.assert_called_once_with(self.window)
 
     def test_set_arrow_and_orbital_variants_route_mapped_values(self) -> None:

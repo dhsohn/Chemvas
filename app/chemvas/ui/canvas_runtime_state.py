@@ -9,6 +9,7 @@ from PyQt6.QtCore import QObject, QTimer, pyqtSlot
 
 from chemvas.features.graph import CanvasGraphState
 from chemvas.features.hover import HoverState
+from chemvas.features.rendering import ValenceWarningCache
 from chemvas.ui.atom_coords_access import CanvasAtomCoords3DState
 from chemvas.ui.canvas_atom_graphics_state import CanvasAtomGraphicsState
 from chemvas.ui.canvas_bond_graphics_state import CanvasBondGraphicsState
@@ -84,6 +85,7 @@ class CanvasRuntimeState(SceneRenderState):
     callback_state: CanvasCallbackState
     scene_clipboard_state: SceneClipboardState
     smiles_input_state: CanvasSmilesInputState
+    valence_warnings: ValenceWarningCache
 
     @classmethod
     def create(cls, canvas: Any) -> CanvasRuntimeState:
@@ -129,6 +131,7 @@ class CanvasRuntimeState(SceneRenderState):
             scene_items_state=CanvasSceneItemsState(),
             shape_state=CanvasShapeState(),
             smiles_input_state=CanvasSmilesInputState(),
+            valence_warnings=ValenceWarningCache(),
             ts_bracket_state=CanvasTSBracketState(),
         )
 

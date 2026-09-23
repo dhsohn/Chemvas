@@ -50,14 +50,11 @@ class MainWindowToolRoutingServiceTest(unittest.TestCase):
         self.color_tool_for_window = mock.Mock(return_value=None)
         self.selected_scene_items_for_window = mock.Mock(return_value=[])
         self.tool_state_service = mock.Mock()
-        self.context_page_state_service = mock.Mock()
         self.service = MainWindowToolRoutingService(
-            tool_mode_controller_for_window=self.tool_mode_controller_for_window,
             color_mutation_service_for_window=self.color_mutation_service_for_window,
             color_tool_for_window=self.color_tool_for_window,
             selected_scene_items_for_window=self.selected_scene_items_for_window,
             tool_state_service=self.tool_state_service,
-            context_page_state_service=self.context_page_state_service,
         )
 
     def tearDown(self) -> None:
@@ -110,7 +107,7 @@ class MainWindowToolRoutingServiceTest(unittest.TestCase):
         color_tool.set_color.assert_called_once()
         self.assertEqual(color_tool.set_color.call_args.args[0].name(), "#2f6ed3")
         set_tool.assert_not_called()
-        self.context_page_state_service.set_tool_with_status.assert_called_once_with(
+        self.tool_state_service.set_tool_with_status.assert_called_once_with(
             self.window, "color"
         )
         self.assertEqual(

@@ -28,7 +28,7 @@ def test_preview_payload_signature_captures_atoms_bonds_and_annotations() -> Non
     )
 
     assert signature == (
-        ((atom_a, "C", 0.123, 1.988), (atom_b, "O", 12.0, 0.0)),
+        ((atom_a, "C", 0.0, 0.0), (atom_b, "O", 11.8766, -1.9876)),
         ((atom_a, atom_b, 2, "single"),),
         ((atom_b, -1, 1),),
     )

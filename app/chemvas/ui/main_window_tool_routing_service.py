@@ -12,19 +12,15 @@ class MainWindowToolRoutingService:
     def __init__(
         self,
         *,
-        tool_mode_controller_for_window,
         color_mutation_service_for_window,
         color_tool_for_window,
         selected_scene_items_for_window,
         tool_state_service,
-        context_page_state_service,
     ) -> None:
-        self._tool_mode_controller_for_window = tool_mode_controller_for_window
         self._color_mutation_service_for_window = color_mutation_service_for_window
         self._color_tool_for_window = color_tool_for_window
         self._selected_scene_items_for_window = selected_scene_items_for_window
         self._tool_state = tool_state_service
-        self._context_page_state = context_page_state_service
 
     def _selected_scene_items(self, window):
         return self._selected_scene_items_for_window(window, excluded_kinds=set())
@@ -45,7 +41,7 @@ class MainWindowToolRoutingService:
                     6000,
                 )
                 return
-            self._context_page_state.set_tool_with_status(window, "color")
+            self._tool_state.set_tool_with_status(window, "color")
             color_service = self._color_mutation_service_for_window(window)
             items = [
                 item

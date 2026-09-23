@@ -113,7 +113,8 @@ class Preview3D(QWidget):
         self._set_canvas_structure(model, atom_annotations)
 
     def _set_canvas_structure(self, model, atom_annotations) -> None:
-        self.set_structure(model, atom_annotations)
+        if not self.set_structure(model, atom_annotations):
+            return
         if not self._async_enabled:
             identifier_model = model_with_atom_annotations(model, atom_annotations)
             identifiers = self._rdkit.compute_identifiers(identifier_model)
@@ -125,12 +126,12 @@ class Preview3D(QWidget):
                 identifiers.inchikey or "",
             )
 
-    def set_structure(self, model, atom_annotations=None) -> None:
+    def set_structure(self, model, atom_annotations=None) -> bool:
         if self._disposed or self._updates_paused:
-            return
+            return False
         signature = self._payload_signature(model, atom_annotations)
         if signature == self._current_signature:
-            return
+            return False
         # Invalidate an in-flight worker as soon as a newer payload arrives.
         # Waiting until the replacement worker actually starts leaves a debounce
         # window where the old result still matches the current request id and
@@ -151,6 +152,7 @@ class Preview3D(QWidget):
         self._sync_export_xyz_button()
         self._safe_update()
         self._update_timer.start()
+        return True
 
     def clear_preview(self, message: str = "3D preview unavailable") -> None:
         self._update_timer.stop()

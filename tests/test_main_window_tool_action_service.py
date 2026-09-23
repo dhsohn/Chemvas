@@ -67,15 +67,11 @@ class MainWindowToolActionServiceTest(unittest.TestCase):
             return_value=self.window.tool_mode_controller
         )
         self.tool_state_service = mock.Mock()
-        self.context_page_state_service = mock.Mock()
         self.icon_factory_for_window = mock.Mock(return_value=self.window._icon_factory)
         self.status_service = mock.Mock()
         self.service = MainWindowToolActionService(
-            tool_mode_controller_for_window=self.tool_mode_controller_for_window,
             tool_state_service=self.tool_state_service,
-            context_page_state_service=self.context_page_state_service,
             icon_factory_for_window=self.icon_factory_for_window,
-            status_service=self.status_service,
         )
 
     def tearDown(self) -> None:
@@ -111,28 +107,15 @@ class MainWindowToolActionServiceTest(unittest.TestCase):
         action.trigger()
         callback.assert_called_once_with()
 
-    def test_activate_bond_style_tool_selects_bond_and_applies_style(self) -> None:
-        self.service.activate_bond_style_tool(self.window, "Hash")
-
-        self.context_page_state_service.set_tool_with_status.assert_called_once_with(
-            self.window,
-            "bond",
-            reset_bond_style=False,
-        )
-        self.tool_state_service.set_bond_style.assert_called_once_with(
-            self.window, "Hash"
-        )
-
     def test_activate_ring_fill_tool_shows_ring_fill_context(self) -> None:
         self.service.activate_ring_fill_tool(self.window)
 
-        self.context_page_state_service.set_tool_with_status.assert_called_once_with(
+        self.tool_state_service.set_tool_with_status.assert_called_once_with(
             self.window, "select"
         )
-        self.context_page_state_service.show_context_page.assert_called_once_with(
+        self.tool_state_service.show_context_page.assert_called_once_with(
             self.window, "ring_fill"
         )
-        self.status_service.refresh_status_context.assert_called_once_with(self.window)
 
     def test_build_tool_actions_wires_tool_bond_and_mark_callbacks(self) -> None:
         tool_group = QActionGroup(self.window)
@@ -150,26 +133,19 @@ class MainWindowToolActionServiceTest(unittest.TestCase):
         self.assertNotIn("mark_plus", actions)
         self.assertNotIn("mark_minus", actions)
         self.assertNotIn("mark_radical", actions)
-        self.context_page_state_service.set_tool_with_status.assert_any_call(
+        self.tool_state_service.set_tool_with_status.assert_any_call(
             self.window, "select"
         )
-        self.context_page_state_service.set_tool_with_status.assert_any_call(
+        self.tool_state_service.set_tool_with_status.assert_any_call(
             self.window, "color"
         )
-        self.context_page_state_service.set_tool_with_status.assert_any_call(
+        self.tool_state_service.set_tool_with_status.assert_any_call(
             self.window, "mark"
         )
-        self.context_page_state_service.set_tool_with_status.assert_any_call(
-            self.window,
-            "bond",
-            reset_bond_style=False,
-        )
-        self.context_page_state_service.show_context_page.assert_any_call(
+        self.tool_state_service.show_context_page.assert_any_call(
             self.window, "ring_fill"
         )
-        self.assertEqual(
-            self.context_page_state_service.show_context_page.call_count, 1
-        )
+        self.assertEqual(self.tool_state_service.show_context_page.call_count, 1)
         self.tool_state_service.set_bond_style.assert_called_once_with(
             self.window, "Hash"
         )

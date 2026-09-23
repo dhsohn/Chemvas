@@ -14,14 +14,19 @@ PreviewStatusBadge = tuple[str, QColor, QColor, QColor]
 
 
 def preview_payload_signature(model: Any, atom_annotations: Any) -> tuple:
+    # Canvas translation does not change chemistry. Keep relative geometry:
+    # wedge/hash chirality and drawn double-bond stereo depend on the layout.
+    # A stable atom-id anchor also works for disconnected selected fragments.
+    origin = model.atoms[min(model.atoms)] if model.atoms else None
     atom_sig = tuple(
         (
             atom_id,
             atom.element,
-            round(atom.x, 3),
-            round(atom.y, 3),
+            round(atom.x - origin.x, 9),
+            round(atom.y - origin.y, 9),
         )
         for atom_id, atom in sorted(model.atoms.items())
+        if origin is not None
     )
     bond_sig = tuple(
         (
@@ -33,13 +38,16 @@ def preview_payload_signature(model: Any, atom_annotations: Any) -> tuple:
         for bond in model.bonds
         if bond is not None
     )
+    annotations = (
+        model.atom_annotations if atom_annotations is None else atom_annotations
+    )
     annotation_sig = tuple(
         (
             atom_id,
             int(values.get("formal_charge", 0)),
             int(values.get("radical_electrons", 0)),
         )
-        for atom_id, values in sorted((atom_annotations or {}).items())
+        for atom_id, values in sorted(annotations.items())
     )
     return atom_sig, bond_sig, annotation_sig
 

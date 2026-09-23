@@ -60,7 +60,7 @@ from .line_geometry import (
     snapped_to_hex_grid,
     wavy_line_points,
 )
-from .valence import overvalent_atom_ids
+from .valence import ValenceWarningCache, overvalent_atom_ids
 
 __all__ = [
     "BOLD_BOND_STYLES",
@@ -76,6 +76,7 @@ __all__ = [
     "STANDARD_BOND_STYLES",
     "ACS1996Style",
     "LineSegment",
+    "ValenceWarningCache",
     "arc_midpoint",
     "arc_points",
     "base_plain_double_style_for_dotted_variant",

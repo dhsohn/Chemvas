@@ -619,10 +619,10 @@ def test_main_window_does_not_wrap_tool_action_construction() -> None:
     assert "QActionGroup" not in source
 
 
-def test_main_window_context_page_state_service_uses_injected_services_and_public_window_surface() -> (
+def test_tool_ui_context_updates_use_injected_services_and_public_window_surface() -> (
     None
 ):
-    service = APP_ROOT / "chemvas" / "ui" / "main_window_context_page_state_service.py"
+    service = APP_ROOT / "chemvas" / "ui" / "main_window_tool_state_service.py"
     main_window = APP_ROOT / "chemvas" / "shell" / "main_window.py"
     main_window_source = main_window.read_text(encoding="utf-8")
     tree = _parse_source(main_window_source)
@@ -4956,8 +4956,7 @@ def test_window_tool_settings_port_stays_removed() -> None:
     stopped being handed the port, and the port itself stopped having a
     caller. The bare name is safe to ban outright: the live surfaces are
     ``tool_settings_state_for`` and the ``tool_settings_state`` runtime field,
-    neither of which contains it, and ``tool_actions_for_window`` and
-    ``tool_action_for_window`` are different ports that stay.
+    neither of which contains it; ``tool_action_for_window`` is a different port.
     """
     pattern = re.compile(r"\b_?tool_settings_for_window\b")
 
