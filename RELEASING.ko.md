@@ -2,73 +2,28 @@
 
 [English](RELEASING.md)
 
-Chemvas는 GitHub Actions에서 **Trusted Publishing**(OIDC)으로
-[PyPI](https://pypi.org/project/chemvas/)에 게시합니다. API 토큰은 저장하지
-않습니다. `v*` 태그를 push하면
-[`.github/workflows/release.yml`](.github/workflows/release.yml)이 실행되어
-sdist와 wheel을 빌드하고 업로드합니다.
+Chemvas는 GitHub Actions의 Trusted Publishing (OIDC)을 통해 [PyPI](https://pypi.org/project/chemvas/)에 패키지를 배포합니다. `v*` 태그를 푸시하면 [`.github/workflows/release.yml`](.github/workflows/release.yml)이 실행되어 sdist와 wheel을 빌드하고 업로드합니다.
 
-버전의 단일 원본은 `chemvas.__version__`
-([`app/chemvas/__init__.py`](app/chemvas/__init__.py))이며, `pyproject.toml`은
-`dynamic = ["version"]`으로 이를 읽습니다.
+버전 정보는 [`app/chemvas/__init__.py`](app/chemvas/__init__.py)의 `chemvas.__version__`에서 관리됩니다.
 
-## 1회 설정 (PyPI Trusted Publisher)
+## 릴리스 절차
 
-첫 릴리스 전에, `chemvas` 프로젝트가 아직 PyPI에 없는 상태에서 한 번만 합니다.
+1. `app/chemvas/__init__.py`의 `__version__`을 갱신합니다.
+2. [`CHANGELOG.md`](CHANGELOG.md)의 Unreleased 항목을 신규 버전 섹션으로 정리합니다.
+3. PR을 열어 `main`에 머지한 후, `main` 브랜치의 CI가 통과했는지 확인합니다.
+4. 릴리스 태그를 생성하고 푸시합니다:
 
-1. PyPI에 로그인 → **Your account ▸ Publishing ▸ Add a pending publisher**.
-2. 다음을 입력합니다.
-   - **PyPI Project Name:** `chemvas`
-   - **Owner:** `dhsohn`
-   - **Repository name:** `Chemvas`
-   - **Workflow name:** `release.yml`
-   - **Environment name:** `pypi`
-3. (권장) GitHub 저장소에 `pypi`라는 **Environment**를 만들고(Settings ▸
-   Environments) 보호 규칙을 추가합니다. 예: 리뷰어 필수, `main` 브랜치와 `v*`
-   태그로 제한.
+```bash
+git checkout main && git pull
+git tag -a v0.1.0 -m "Chemvas 0.1.0"
+git push origin v0.1.0
+```
 
-`release.yml`의 `environment: pypi`와 `permissions: id-token: write`는 위의
-pending publisher와 일치해야 합니다.
+5. 깨끗한 가상 환경에서 배포된 패키지를 검증합니다:
 
-## 릴리스 컷
-
-1. `app/chemvas/__init__.py`의 `__version__`을 올립니다(예: `0.1.0`).
-2. [`CHANGELOG.md`](CHANGELOG.md)에서 `## [Unreleased]` 제목을
-   `## [0.1.0] - YYYY-MM-DD`로 바꾸고, 그 위에 빈 `## [Unreleased]`를 새로 만들고,
-   하단의 링크 참조를 갱신합니다.
-3. 이 변경으로 PR을 열고 CI가 초록이면 머지합니다. 태그를 달기 전에 `main`으로의
-   push가 촉발한 CI 실행이 바로 그 머지 커밋에서 통과할 때까지 기다립니다. 릴리스
-   provenance 검사는 성공한 `main` push CI를 요구하며, PR의 CI 결과만으로는
-   충족되지 않습니다.
-4. `main`의 머지 커밋에 태그를 달고 push합니다.
-   ```bash
-   git checkout main && git pull
-   git tag -a v0.1.0 -m "Chemvas 0.1.0"
-   git push origin v0.1.0
-   ```
-5. **Release** 워크플로를 지켜봅니다. 성공하면 소스 체크아웃 밖의 빈 디렉터리에서
-   새 가상 환경을 만들어 게시된 버전을 검증합니다. 아래 `0.1.0`은 방금 릴리스한
-   버전으로 바꿉니다. 기존 환경을 재사용하면 버전을 지정하지 않은 설치가 이전
-   버전을 그대로 남길 수 있습니다.
-   ```bash
-   python -m venv .release-check
-   .release-check/bin/python -m pip install "chemvas==0.1.0"
-   .release-check/bin/chemvas --version
-   .release-check/bin/chemvas
-   ```
-   출력된 버전이 태그와 같고 앱이 열리는지 확인합니다. Windows에서는
-   `.release-check\Scripts\python.exe`와 `.release-check\Scripts\chemvas.exe`를
-   사용합니다. 선택적 화학 변환도 검증하려면 `chemvas[rdkit]==0.1.0`을 설치합니다.
-   평소 쓰는 사용자 설치본의 업그레이드는 별도 작업입니다.
-
-## 참고
-
-- 태그 버전(`v0.1.0`)은 `__version__`(`0.1.0`)과 같아야 합니다. PyPI는 기존 버전의
-  재업로드를 거부하므로 릴리스마다 `__version__`을 올립니다.
-- 데스크톱 바이너리(PyInstaller를 통한 `.app`/`.exe`/AppImage,
-  [`packaging/`](packaging/) 참조)는 아직 여기서 게시하지 않습니다. GitHub
-  Release에 첨부하는 것은 계획된 후속 작업입니다.
-- [Windows 준비 안내](packaging/windows/README.ko.md)는 로컬 x64 설치 프로그램
-  빌드와 인수 점검 목록을 제공합니다. 로컬 빌드는 서명되지 않았으며, 설치
-  프로그램을 게시하기 전에 서명, 깨끗한 기계에서의 인수 검사, 번들 의존성 배포
-  검토가 선행되어야 합니다.
+```bash
+python -m venv .release-check
+.release-check/bin/python -m pip install "chemvas==0.1.0"
+.release-check/bin/chemvas --version
+.release-check/bin/chemvas
+```

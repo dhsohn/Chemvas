@@ -1,60 +1,39 @@
-# Packaging assets
+# Packaging Assets
 
 [한국어](README.ko.md)
 
-Platform icon files for desktop bundles, all generated from the single master
-SVG at [`app/chemvas/assets/icon/chemvas.svg`](../app/chemvas/assets/icon/chemvas.svg).
+Platform icons and desktop bundling configurations generated from [`app/chemvas/assets/icon/chemvas.svg`](../app/chemvas/assets/icon/chemvas.svg).
 
-| File | Use |
+| File | Target |
 | --- | --- |
-| `icons/chemvas.icns` | macOS `.app` bundle icon (`CFBundleIconFile`) |
+| `icons/chemvas.icns` | macOS `.app` bundle icon |
 | `icons/chemvas.ico` | Windows executable / installer icon |
-| `icons/chemvas-1024.png` | Master raster for store listings and docs |
+| `icons/chemvas-1024.png` | High-resolution master raster |
 
-The runtime window/taskbar icon does **not** live here — it is the PNG set in
-`app/chemvas/assets/icon/`, which ships inside the wheel and is loaded by
-`chemvas.branding.app_icon()`.
-
-## Regenerating
-
-Edit the master SVG, then re-render everything (runtime PNGs, `.icns`, `.ico`):
+## Regenerating Icons
 
 ```bash
 QT_QPA_PLATFORM=offscreen python scripts/generate_icons.py
 ```
 
-Rasterisation goes through Qt's own SVG renderer (the same one the app uses for
-toolbar glyphs); `.icns` packing uses macOS `iconutil`, `.ico` packing uses
-Pillow. The generated binaries are committed so building a bundle needs no extra
-toolchain.
+## Desktop Bundle (PyInstaller)
 
-## Building a desktop bundle (PyInstaller)
-
-[`chemvas.spec`](chemvas.spec) wires the icons and, on macOS, an `Info.plist`
-that claims the `.chemvas` document type:
+Build a standalone desktop executable using [`chemvas.spec`](chemvas.spec):
 
 ```bash
 python -m pip install -e ".[rdkit]" pyinstaller   # rdkit optional
 pyinstaller packaging/chemvas.spec
 ```
 
-Output is `dist/Chemvas.app` (macOS) or `dist/chemvas/` (Windows/Linux). Opening
-a `.chemvas` file is handled cross-platform: Windows/Linux pass the path in `argv`
-(read by `_startup_document_path`), and macOS delivers a `QEvent.FileOpen` that
-`chemvas.adapters.qt.FileOpenEventFilter` routes to the bootstrap loader.
+Output is placed in `dist/Chemvas.app` (macOS) or `dist/chemvas/` (Windows/Linux).
 
-## Windows installer
+## Windows Installer
 
-The [Windows build guide](windows/README.md) describes the native x64 build,
-GUI and console executables, per-user Inno Setup installer, and `.chemvas`
-Open with registration. Desktop binaries are still local trial artifacts,
-not published releases.
+See the [Windows build guide](windows/README.md) for building the standalone Inno Setup installer.
 
-## Linux desktop integration
+## Linux Desktop Integration
 
-[`linux/chemvas.desktop`](linux/chemvas.desktop) and
-[`linux/chemvas.xml`](linux/chemvas.xml) (the `application/x-chemvas` MIME type)
-register the app and its file type. After placing the bundle on `PATH`:
+Register desktop icons and `.chemvas` MIME associations:
 
 ```bash
 xdg-mime install --novendor packaging/linux/chemvas.xml
