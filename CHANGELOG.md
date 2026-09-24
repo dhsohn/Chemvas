@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.20.0] - 2026-09-25
+
+### Changed
+
 The entries below are internal and change nothing a user or a document can
 observe.
 
@@ -2477,7 +2481,9 @@ housekeeping.
   `.chemvas` document type (double-clicking a file opens it in Chemvas), and a
   Linux `.desktop` entry with an `application/x-chemvas` MIME type.
 
-[Unreleased]: https://github.com/dhsohn/Chemvas/compare/v0.18.0...HEAD
+[Unreleased]: https://github.com/dhsohn/Chemvas/compare/v0.20.0...HEAD
+[0.20.0]: https://github.com/dhsohn/Chemvas/compare/v0.19.0...v0.20.0
+[0.19.0]: https://github.com/dhsohn/Chemvas/compare/v0.18.0...v0.19.0
 [0.18.0]: https://github.com/dhsohn/Chemvas/compare/v0.17.1...v0.18.0
 [0.17.1]: https://github.com/dhsohn/Chemvas/compare/v0.17.0...v0.17.1
 [0.17.0]: https://github.com/dhsohn/Chemvas/compare/v0.16.0...v0.17.0
