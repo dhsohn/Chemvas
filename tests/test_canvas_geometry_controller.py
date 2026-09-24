@@ -10,7 +10,7 @@ from PyQt6.QtCore import QPointF, QRectF
 from PyQt6.QtGui import QFont
 from PyQt6.QtWidgets import QApplication, QGraphicsTextItem
 
-from chemvas.domain.document import Atom, Bond
+from chemvas.domain.document import Atom, Bond, MoleculeModel
 from chemvas.ui.canvas.canvas_atom_graphics_state import (
     CanvasAtomGraphicsState,
 )
@@ -53,7 +53,7 @@ class CanvasGeometryControllerTest(unittest.TestCase):
     def test_ring_center_helpers_skip_invalid_and_missing_atoms(self) -> None:
         ring_item = _FakeRingItem([1, 2, 3])
         canvas = SimpleNamespace(
-            model=SimpleNamespace(
+            model=MoleculeModel(
                 atoms={1: Atom("C", 0.0, 0.0), 3: Atom("C", 6.0, 12.0)}
             ),
             renderer=SimpleNamespace(style=SimpleNamespace(bond_length_px=20.0)),
@@ -94,7 +94,7 @@ class CanvasGeometryControllerTest(unittest.TestCase):
         controller = scene_geometry_for_test_canvas(
             SimpleNamespace(
                 renderer=SimpleNamespace(style=SimpleNamespace(bond_line_width=2.0)),
-                model=SimpleNamespace(atoms={1: Atom("C", 0.0, 0.0)}),
+                model=MoleculeModel(atoms={1: Atom("C", 0.0, 0.0)}),
                 runtime_state=canvas_runtime_state(
                     atom_graphics_state=CanvasAtomGraphicsState()
                 ),

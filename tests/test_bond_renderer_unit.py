@@ -26,6 +26,7 @@ from chemvas.domain.document import (
     VALID_BOND_STYLES,
     Atom,
     Bond,
+    MoleculeModel,
 )
 from chemvas.features.graph import CanvasGraphState
 from chemvas.features.rendering import (
@@ -100,7 +101,7 @@ class _FakeRenderer:
 class _FakeCanvas:
     def __init__(self) -> None:
         self.renderer = _FakeRenderer()
-        self.model = SimpleNamespace(
+        self.model = MoleculeModel(
             atoms={
                 0: Atom("C", 0.0, 0.0),
                 1: Atom("C", 10.0, 0.0),

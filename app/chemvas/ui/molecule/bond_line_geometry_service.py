@@ -50,7 +50,7 @@ class BondLineGeometryService:
         bond_ids = set(self.graph.atom_bond_ids.get(atom_id, ()))
         if other_id is not None:
             for bond_id in list(bond_ids):
-                bond = self.context.bond_for_id(bond_id)
+                bond = self.context.model.bond_for_id(bond_id)
                 if bond is None:
                     continue
                 if {bond.a, bond.b} == {atom_id, other_id}:
@@ -158,7 +158,7 @@ class BondLineGeometryService:
             self.graph.atom_bond_ids.get(b_id, ())
         )
         for bond_id in candidate_bond_ids:
-            bond = self.context.bond_for_id(bond_id)
+            bond = self.context.model.bond_for_id(bond_id)
             if bond is None:
                 continue
             if bond.a == a_id and bond.b != b_id:

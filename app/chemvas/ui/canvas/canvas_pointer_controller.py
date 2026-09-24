@@ -12,7 +12,6 @@ from chemvas.features.rendering import (
     is_positionable_double_bond_style,
     style_for_double_position,
 )
-from chemvas.ui.canvas.canvas_model_access import bond_for_id
 from chemvas.ui.canvas.canvas_window_access import notify_error_for
 from chemvas.ui.canvas.input_view_access import (
     reset_view_transform_for,
@@ -195,7 +194,7 @@ class CanvasPointerController:
 
     def _show_double_bond_context_menu(self, event, *, menu_factory=QMenu) -> bool:
         bond_id = self._context_bond_id(event)
-        bond = bond_for_id(self.canvas, bond_id)
+        bond = self.canvas.model.bond_for_id(bond_id)
         if bond is None or not is_positionable_double_bond_style(
             bond.style, bond.order
         ):

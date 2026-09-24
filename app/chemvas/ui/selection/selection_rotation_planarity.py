@@ -6,7 +6,6 @@ from chemvas.features.selection import (
     flatten_coords_to_plane,
     fragment_plane_normal_for,
 )
-from chemvas.ui.canvas.canvas_model_access import bond_for_id
 
 
 def bond_in_cycle_for(canvas, bond_id: int) -> bool:
@@ -18,7 +17,7 @@ def bond_in_cycle_for(canvas, bond_id: int) -> bool:
     return cached_bond_in_cycle(
         canvas.runtime_state.graph_state,
         bond_id,
-        lambda candidate_id: bond_for_id(canvas, candidate_id),
+        lambda candidate_id: canvas.model.bond_for_id(candidate_id),
     )
 
 
@@ -30,7 +29,7 @@ def atom_in_planar_system_for(canvas, atom_id: int, *, bond_in_cycle=None) -> bo
             return bond_in_cycle_for(canvas, candidate_id)
 
     for bond_id in graph.atom_bond_ids.get(atom_id, ()):
-        bond = bond_for_id(canvas, bond_id)
+        bond = canvas.model.bond_for_id(bond_id)
         if bond is None:
             continue
         if bond.order > 1 or bond_in_cycle(bond_id):
@@ -46,7 +45,7 @@ def bond_is_planar_fragment_edge_for(
         def bond_in_cycle(candidate_id: int) -> bool:
             return bond_in_cycle_for(canvas, candidate_id)
 
-    bond = bond_for_id(canvas, bond_id)
+    bond = canvas.model.bond_for_id(bond_id)
     if bond is None:
         return False
     if bond.order > 1 or bond_in_cycle(bond_id):

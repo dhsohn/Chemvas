@@ -12,7 +12,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 from PyQt6.QtCore import QPointF, QRectF
 from PyQt6.QtWidgets import QApplication
 
-from chemvas.domain.document import Atom, Bond
+from chemvas.domain.document import Atom, Bond, MoleculeModel
 from chemvas.ui.canvas.canvas_atom_graphics_state import (
     CanvasAtomGraphicsState,
     set_atom_items_for,
@@ -62,7 +62,7 @@ class CanvasViewLabelGeometryHelperTest(unittest.TestCase):
         self,
     ) -> None:
         view = SimpleNamespace(
-            model=SimpleNamespace(
+            model=MoleculeModel(
                 bonds=[],
                 atoms={
                     1: Atom("C", 0.0, 0.0),
@@ -98,7 +98,7 @@ class CanvasViewLabelGeometryHelperTest(unittest.TestCase):
         self,
     ) -> None:
         view = SimpleNamespace(
-            model=SimpleNamespace(atoms={7: Atom("C", 0.0, 0.0)}),
+            model=MoleculeModel(atoms={7: Atom("C", 0.0, 0.0)}),
         )
         controller = scene_geometry_for_test_canvas(view)
         controller.visible_label_rect_for_atom = mock.Mock(
@@ -115,7 +115,7 @@ class CanvasViewLabelGeometryHelperTest(unittest.TestCase):
         controller.mark_clearance_for_kind.assert_called_once_with("plus")
 
         missing_atom_view = SimpleNamespace(
-            model=SimpleNamespace(atoms={}),
+            model=MoleculeModel(atoms={}),
             runtime_state=canvas_runtime_state(
                 atom_graphics_state=CanvasAtomGraphicsState()
             ),
@@ -129,7 +129,7 @@ class CanvasViewLabelGeometryHelperTest(unittest.TestCase):
         )
 
         missing_label_view = SimpleNamespace(
-            model=SimpleNamespace(atoms={7: Atom("C", 0.0, 0.0)}),
+            model=MoleculeModel(atoms={7: Atom("C", 0.0, 0.0)}),
         )
         missing_label_controller = scene_geometry_for_test_canvas(missing_label_view)
         missing_label_controller.visible_label_rect_for_atom = mock.Mock(
@@ -229,7 +229,7 @@ class CanvasViewLabelGeometryHelperTest(unittest.TestCase):
 
     def test_ring_center_for_bond_averages_atoms_in_matching_ring(self) -> None:
         view = SimpleNamespace(
-            model=SimpleNamespace(
+            model=MoleculeModel(
                 bonds=[],
                 atoms={
                     1: Atom("C", 0.0, 0.0),
@@ -273,7 +273,7 @@ class CanvasViewLabelGeometryHelperTest(unittest.TestCase):
         }
         renderer = SimpleNamespace(style=SimpleNamespace(bond_length_px=20.0))
         view = SimpleNamespace(
-            model=SimpleNamespace(
+            model=MoleculeModel(
                 bonds=[],
                 atoms={
                     1: Atom("C", 0.0, 0.0),
@@ -295,7 +295,7 @@ class CanvasViewLabelGeometryHelperTest(unittest.TestCase):
         self.assertEqual(center, (2.0, 2.0, 2.0))
 
         sparse_view = SimpleNamespace(
-            model=SimpleNamespace(
+            model=MoleculeModel(
                 bonds=[],
                 atoms={
                     1: Atom("C", 0.0, 0.0),

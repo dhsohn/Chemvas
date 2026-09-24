@@ -27,7 +27,7 @@ from PyQt6.QtWidgets import (
 )
 
 from chemvas.adapters.qt.renderer import Renderer
-from chemvas.domain.document import AnnotationCollection
+from chemvas.domain.document import AnnotationCollection, MoleculeModel
 from chemvas.ui.annotations.graphics import (
     AnnotationGraphics,
 )
@@ -51,7 +51,7 @@ class _FakeCanvas:
         self.bond_renderer = SimpleNamespace(
             update_bond_geometry=self.update_bond_geometry
         )
-        self.model = SimpleNamespace(atoms={})
+        self.model = MoleculeModel(atoms={})
         # Bound to attributes as well as the runtime container: a test asserting
         # on the object it seeded fails if production mutated a different one.
         self.handle_state = CanvasHandleState()

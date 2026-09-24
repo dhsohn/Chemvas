@@ -22,7 +22,7 @@ from chemvas.core.model_commands import (
     SetRingPolygonsCommand,
     UpdateBondLengthCommand,
 )
-from chemvas.domain.document import Atom, Bond
+from chemvas.domain.document import Atom, Bond, MoleculeModel
 from chemvas.features.graph import CanvasGraphState
 from chemvas.ui.canvas.canvas_atom_graphics_state import (
     CanvasAtomGraphicsState,
@@ -631,7 +631,7 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
                 style=style,
                 set_bond_length=mock.Mock(side_effect=_set_renderer_bond_length),
             ),
-            model=SimpleNamespace(
+            model=MoleculeModel(
                 atoms={
                     1: Atom("C", 0.0, 0.0),
                     2: Atom("O", 20.0, 0.0),
@@ -722,7 +722,7 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
                     )
                 ),
             ),
-            model=SimpleNamespace(atoms={}),
+            model=MoleculeModel(atoms={}),
             push_command=mock.Mock(),
             services=canvas_runtime_services(),
             runtime_state=canvas_runtime_state(
@@ -748,7 +748,7 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
                     )
                 ),
             ),
-            model=SimpleNamespace(atoms={1: Atom("C", 1.0, 2.0)}),
+            model=MoleculeModel(atoms={1: Atom("C", 1.0, 2.0)}),
             push_command=mock.Mock(),
             services=canvas_runtime_services(),
             runtime_state=canvas_runtime_state(
@@ -796,7 +796,7 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
         self.assertAlmostEqual(restored[2], 40.0, places=6)
 
         projected_atom = project_point_3d_for(projected_view, (12.0, 13.0, 30.0))
-        projected_view.model = SimpleNamespace(
+        projected_view.model = MoleculeModel(
             atoms={
                 1: Atom("C", projected_atom[0], projected_atom[1]),
                 2: Atom("N", 40.0, 50.0),
@@ -868,7 +868,7 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
         self,
     ) -> None:
         view = SimpleNamespace(
-            model=SimpleNamespace(
+            model=MoleculeModel(
                 bonds=[
                     Bond(1, 2, 2),
                     Bond(2, 3, 1),
@@ -930,7 +930,7 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
         self,
     ) -> None:
         view = SimpleNamespace(
-            model=SimpleNamespace(bonds=[None, Bond(1, 2, 1), Bond(2, 3, 1)]),
+            model=MoleculeModel(bonds=[None, Bond(1, 2, 1), Bond(2, 3, 1)]),
             runtime_state=canvas_runtime_state(
                 graph_state=CanvasGraphState(
                     atom_bond_ids={1: {0, 9}, 2: {0, 1}, 3: {2}}
@@ -1016,7 +1016,7 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
             )
 
         small_component_view = SimpleNamespace(
-            model=SimpleNamespace(bonds=[Bond(1, 2, 2)]),
+            model=MoleculeModel(bonds=[Bond(1, 2, 2)]),
             runtime_state=canvas_runtime_state(graph_state=CanvasGraphState()),
         )
         self.assertEqual(
@@ -1057,9 +1057,7 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
         atom_label_service = SimpleNamespace(position_label=mock.Mock())
         scene_decoration_build_service = SimpleNamespace(set_mark_center=mock.Mock())
         view = SimpleNamespace(
-            model=SimpleNamespace(
-                atoms={1: Atom("C", 0.0, 0.0), 2: Atom("O", 4.0, 5.0)}
-            ),
+            model=MoleculeModel(atoms={1: Atom("C", 0.0, 0.0), 2: Atom("O", 4.0, 5.0)}),
             services=canvas_runtime_services(
                 atom_label_service=atom_label_service,
                 scene_decoration_build_service=scene_decoration_build_service,
@@ -1110,7 +1108,7 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
         self,
     ) -> None:
         view = SimpleNamespace(
-            model=SimpleNamespace(atoms={1: Atom("C", 0.0, 0.0)}),
+            model=MoleculeModel(atoms={1: Atom("C", 0.0, 0.0)}),
             services=canvas_runtime_services(
                 atom_label_service=SimpleNamespace(position_label=mock.Mock()),
                 scene_decoration_build_service=SimpleNamespace(
@@ -1146,7 +1144,7 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
 
     def test_bond_lookup_and_axis_rotation_helpers(self) -> None:
         indexed_view = SimpleNamespace(
-            model=SimpleNamespace(
+            model=MoleculeModel(
                 bonds=[Bond(1, 2, 1), Bond(2, 3, 1), Bond(3, 4, 1), None]
             ),
             runtime_state=canvas_runtime_state(
@@ -1183,7 +1181,7 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
         )
 
         fallback_view = SimpleNamespace(
-            model=SimpleNamespace(bonds=[Bond(1, 2, 1), None, Bond(2, 3, 1)]),
+            model=MoleculeModel(bonds=[Bond(1, 2, 1), None, Bond(2, 3, 1)]),
             runtime_state=canvas_runtime_state(graph_state=CanvasGraphState()),
         )
         self.assertEqual(bond_ids_within_atom_ids_for(fallback_view, {1, 2, 3}), {0, 2})
@@ -1212,7 +1210,7 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
     def test_bond_match_lookup_order_sum_and_normal_helpers(self) -> None:
         bonds = [Bond(1, 2, 2), Bond(2, 1, 3), None, Bond(1, 3, 0)]
         cached_view = SimpleNamespace(
-            model=SimpleNamespace(
+            model=MoleculeModel(
                 bonds=bonds, atoms={1: Atom("C", 0.0, 0.0), 2: Atom("C", 10.0, 0.0)}
             ),
             runtime_state=canvas_runtime_state(
@@ -1223,7 +1221,7 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
             ),
         )
         fallback_view = SimpleNamespace(
-            model=SimpleNamespace(
+            model=MoleculeModel(
                 bonds=bonds, atoms={1: Atom("C", 0.0, 0.0), 2: Atom("C", 10.0, 0.0)}
             ),
             runtime_state=canvas_runtime_state(graph_state=CanvasGraphState()),
@@ -1250,7 +1248,7 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
         self.assertIsNone(
             CanvasGraphService(
                 SimpleNamespace(
-                    model=SimpleNamespace(bonds=[Bond(3, 4, 1), None]),
+                    model=MoleculeModel(bonds=[Bond(3, 4, 1), None]),
                     runtime_state=canvas_runtime_state(
                         graph_state=CanvasGraphState(
                             atom_bond_ids={1: {0, 1}, 2: {0, 1}}
@@ -1278,7 +1276,7 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
 
         attach_scene_render_context(cached_view)
         coincident_view = SimpleNamespace(
-            model=SimpleNamespace(
+            model=MoleculeModel(
                 atoms={1: Atom("C", 1.0, 1.0), 2: Atom("C", 1.0, 1.0)},
             ),
         )

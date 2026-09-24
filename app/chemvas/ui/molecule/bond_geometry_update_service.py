@@ -60,7 +60,7 @@ class BondGeometryUpdateService:
         the existing items, so a length change during a gesture freezes the
         count until something rebuilds the bond.
         """
-        bond = self.context.bond_for_id(bond_id)
+        bond = self.context.model.bond_for_id(bond_id)
         if bond is None:
             return False
         items = self.context.state.bond_graphics_state.bond_items.get(bond_id)
@@ -74,7 +74,7 @@ class BondGeometryUpdateService:
         return len(fresh) != len(items)
 
     def update_bond_geometry(self, bond_id: int) -> None:
-        bond = self.context.bond_for_id(bond_id)
+        bond = self.context.model.bond_for_id(bond_id)
         if bond is None:
             return
         items = self.context.state.bond_graphics_state.bond_items.get(bond_id)

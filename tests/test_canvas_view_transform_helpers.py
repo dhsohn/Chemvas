@@ -11,7 +11,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PyQt6.QtWidgets import QApplication
 
-from chemvas.domain.document import Atom, Bond
+from chemvas.domain.document import Atom, Bond, MoleculeModel
 from chemvas.features.graph import CanvasGraphState
 from chemvas.ui.canvas.canvas_atom_graphics_state import (
     CanvasAtomGraphicsState,
@@ -86,7 +86,7 @@ class CanvasViewTransformHelperTest(unittest.TestCase):
         self,
     ) -> None:
         classified_view = SimpleNamespace(
-            model=SimpleNamespace(
+            model=MoleculeModel(
                 bonds=[
                     Bond(1, 2, 1),
                     Bond(1, 2, 2),
@@ -114,7 +114,7 @@ class CanvasViewTransformHelperTest(unittest.TestCase):
         self.assertEqual(boundary, {2})
 
         fallback_view = SimpleNamespace(
-            model=SimpleNamespace(
+            model=MoleculeModel(
                 bonds=[
                     Bond(5, 6, 1),
                     Bond(6, 7, 2),
@@ -186,7 +186,7 @@ class CanvasViewTransformHelperTest(unittest.TestCase):
 
     def test_expand_connected_atoms_returns_transitive_component(self) -> None:
         view = SimpleNamespace(
-            model=SimpleNamespace(
+            model=MoleculeModel(
                 bonds=[
                     Bond(1, 2, 1),
                     Bond(2, 3, 1),
@@ -208,7 +208,7 @@ class CanvasViewTransformHelperTest(unittest.TestCase):
         non_matching_ring = _FakeRingItem([4, 5, 6])
         invalid_ring = _FakeRingItem("bad")
         view = SimpleNamespace(
-            model=SimpleNamespace(
+            model=MoleculeModel(
                 atoms={
                     1: Atom("C", 0.0, 0.0),
                     2: Atom("C", 2.0, 0.0),

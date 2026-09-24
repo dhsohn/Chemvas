@@ -4,10 +4,6 @@ from typing import TYPE_CHECKING
 
 from PyQt6.QtCore import QPointF
 
-from chemvas.ui.canvas.canvas_model_access import (
-    atom_for_id,
-    bond_ids_from,
-)
 from chemvas.ui.canvas.canvas_smiles_input_state import set_last_smiles_input_for
 from chemvas.ui.molecule.structure_build_committer import StructureBuildCommitter
 from chemvas.ui.molecule.structure_insert_access import (
@@ -92,11 +88,11 @@ def apply_smiles_commit_plan(
                 abort()
                 return False
 
-        for new_bond_id in bond_ids_from(canvas, bonds_start):
+        for new_bond_id in canvas.model.bond_ids_from(bonds_start):
             canvas.bond_renderer.add_bond_graphics(new_bond_id)
 
         for new_id in id_map.values():
-            atom = atom_for_id(canvas, new_id)
+            atom = canvas.model.atom_for_id(new_id)
             if atom is None:
                 abort()
                 return False

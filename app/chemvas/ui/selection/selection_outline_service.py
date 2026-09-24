@@ -7,10 +7,6 @@ from PyQt6.QtCore import QPointF, Qt
 from PyQt6.QtGui import QColor, QPainterPath
 from PyQt6.QtWidgets import QGraphicsLineItem
 
-from chemvas.ui.canvas.canvas_model_access import (
-    atom_for_id,
-    bond_for_id,
-)
 from chemvas.ui.canvas.pick_radius_access import atom_pick_radius_for
 from chemvas.ui.scene.mark_item_access import mark_selection_radius_for
 from chemvas.ui.scene.mark_ownership import mark_is_distant_for
@@ -110,7 +106,7 @@ class SelectionOutlineService:
         explicit_atom_ids, bond_ids = selected_ids_for(self.canvas)
         atom_ids = set(explicit_atom_ids)
         for bond_id in bond_ids:
-            bond = bond_for_id(self.canvas, bond_id)
+            bond = self.canvas.model.bond_for_id(bond_id)
             if bond is not None:
                 atom_ids.add(bond.a)
                 atom_ids.add(bond.b)
@@ -126,14 +122,14 @@ class SelectionOutlineService:
             candidate_bond_ids.update(atom_bond_ids.get(atom_id, ()))
         overlay_bond_ids: set[int] = set()
         for bond_id in candidate_bond_ids:
-            bond = bond_for_id(self.canvas, bond_id)
+            bond = self.canvas.model.bond_for_id(bond_id)
             if bond is not None and bond.a in atom_ids and bond.b in atom_ids:
                 overlay_bond_ids.add(bond_id)
         for component in self.graph_service.connected_components(atom_ids):
             component_bond_ids = {
                 bond_id
                 for bond_id in overlay_bond_ids
-                if (bond := bond_for_id(self.canvas, bond_id)) is not None
+                if (bond := self.canvas.model.bond_for_id(bond_id)) is not None
                 and bond.a in component
                 and bond.b in component
             }
@@ -191,7 +187,7 @@ class SelectionOutlineService:
         atom_id = (mark.data(1) or {}).get("atom_id")
         if not isinstance(atom_id, int):
             return
-        atom = atom_for_id(self.canvas, atom_id)
+        atom = self.canvas.model.atom_for_id(atom_id)
         if atom is None:
             return
         path = QPainterPath()
@@ -213,7 +209,7 @@ class SelectionOutlineService:
 
     def add_mark_owner_overlay(self, mark) -> None:
         atom_id = (mark.data(1) or {}).get("atom_id")
-        atom = atom_for_id(self.canvas, atom_id)
+        atom = self.canvas.model.atom_for_id(atom_id)
         if atom is None:
             return
         outline = selection_object_outline_item(
@@ -254,7 +250,7 @@ class SelectionOutlineService:
         )
 
     def selection_path_for_bond(self, bond_id: int) -> QPainterPath:
-        bond = bond_for_id(self.canvas, bond_id)
+        bond = self.canvas.model.bond_for_id(bond_id)
         if bond is None:
             return QPainterPath()
         items = self.canvas.runtime_state.bond_graphics_state.bond_items.get(
@@ -273,8 +269,8 @@ class SelectionOutlineService:
                 return outer_path
         line_items = [item for item in items if isinstance(item, QGraphicsLineItem)]
         if bond.order >= 2 and line_items and len(line_items) == len(items):
-            atom_a = atom_for_id(self.canvas, bond.a)
-            atom_b = atom_for_id(self.canvas, bond.b)
+            atom_a = self.canvas.model.atom_for_id(bond.a)
+            atom_b = self.canvas.model.atom_for_id(bond.b)
             if atom_a is not None and atom_b is not None:
                 t0, t1 = self.canvas.render_context.geometry.trim_line_for_labels(
                     bond.a, bond.b, atom_a.x, atom_a.y, atom_b.x, atom_b.y
@@ -423,7 +419,7 @@ class SelectionOutlineService:
         atom_labels = self.canvas.runtime_state.atom_graphics_state.atom_items
         bonded_atom_ids: set[int] = set()
         for bond_id in bond_ids:
-            bond = bond_for_id(self.canvas, bond_id)
+            bond = self.canvas.model.bond_for_id(bond_id)
             if bond is not None:
                 bonded_atom_ids.add(bond.a)
                 bonded_atom_ids.add(bond.b)

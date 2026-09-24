@@ -4,7 +4,6 @@ import math
 
 from PyQt6.QtCore import QPointF
 
-from chemvas.ui.canvas.canvas_model_access import atom_for_id
 from chemvas.ui.canvas.canvas_scene_items_state import ring_items_for
 from chemvas.ui.insert.ring_occupancy import (
     graph_ring_polygons_for_bond,
@@ -89,7 +88,7 @@ def default_bond_endpoint_for(
 def sprout_bond_endpoint_for(
     canvas, atom_id: int, *, cyclic: bool = False
 ) -> QPointF | None:
-    atom = atom_for_id(canvas, atom_id)
+    atom = canvas.model.atom_for_id(atom_id)
     default_endpoint = None
     if atom is not None and not cyclic:
         start = QPointF(atom.x, atom.y)

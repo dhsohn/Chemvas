@@ -1,5 +1,6 @@
 from types import SimpleNamespace
 
+from chemvas.domain.document import MoleculeModel
 from chemvas.ui.canvas.canvas_rotation_state import CanvasRotationState
 from chemvas.ui.molecule.atom_coords_access import (
     CanvasAtomCoords3DState,
@@ -15,7 +16,7 @@ from tests.runtime_state import canvas_runtime_state
 def _canvas_with_atom(x: float = 1.0, y: float = 2.0):
     atom = SimpleNamespace(x=x, y=y)
     return SimpleNamespace(
-        model=SimpleNamespace(atoms={1: atom}),
+        model=MoleculeModel(atoms={1: atom}),
         renderer=SimpleNamespace(style=SimpleNamespace(bond_length_px=20.0)),
         runtime_state=canvas_runtime_state(
             atom_coords_3d_state=CanvasAtomCoords3DState(),

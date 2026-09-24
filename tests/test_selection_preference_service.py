@@ -10,7 +10,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 from PyQt6.QtCore import QPointF
 from PyQt6.QtWidgets import QApplication
 
-from chemvas.domain.document import Atom
+from chemvas.domain.document import Atom, MoleculeModel
 from chemvas.features.selection import StructureHit
 from tests.selection_support import _FakeItem, _make_canvas
 
@@ -47,7 +47,7 @@ class SelectionPreferenceServiceTest(unittest.TestCase):
             _make_canvas(
                 atom_items={1: atom_item},
                 item_at_scene_pos=mock.Mock(return_value=atom_item),
-                model=SimpleNamespace(atoms={1: Atom("C", 0.0, 0.0)}, bonds=[]),
+                model=MoleculeModel(atoms={1: Atom("C", 0.0, 0.0)}, bonds=[]),
             ),
         )
 
@@ -61,7 +61,7 @@ class SelectionPreferenceServiceTest(unittest.TestCase):
         canvas = _make_canvas(
             atom_items={2: _FakeItem("atom", data1=2)},
             item_at_scene_pos=mock.Mock(return_value=ring_item),
-            model=SimpleNamespace(
+            model=MoleculeModel(
                 atoms={
                     1: Atom("C", 0.0, 0.0),
                     2: Atom("C", 2.0, 0.0),
@@ -110,7 +110,7 @@ class SelectionPreferenceServiceTest(unittest.TestCase):
         service = _make_service(
             _make_canvas(
                 item_at_scene_pos=mock.Mock(return_value=fallback_item),
-                model=SimpleNamespace(atoms={1: Atom("C", 0.0, 0.0)}, bonds=[]),
+                model=MoleculeModel(atoms={1: Atom("C", 0.0, 0.0)}, bonds=[]),
             ),
         )
 

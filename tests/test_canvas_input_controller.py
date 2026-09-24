@@ -18,7 +18,7 @@ from PyQt6.QtWidgets import (
     QGraphicsView,
 )
 
-from chemvas.domain.document import Atom, Bond
+from chemvas.domain.document import Atom, Bond, MoleculeModel
 from chemvas.features.hover import HoverState
 from chemvas.ui.canvas.canvas_atom_graphics_state import CanvasAtomGraphicsState
 from chemvas.ui.canvas.canvas_input_controller import CanvasInputController
@@ -155,7 +155,7 @@ class _Canvas(QGraphicsView):
         )
         self._ring_for_bond = mock.Mock(return_value=None)
         self.delete_ring = mock.Mock()
-        self.model = SimpleNamespace(
+        self.model = MoleculeModel(
             atoms={
                 7: Atom("C", 0.0, 0.0),
                 8: Atom("O", 1.0, 0.0),

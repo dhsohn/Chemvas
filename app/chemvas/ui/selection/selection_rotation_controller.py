@@ -11,10 +11,6 @@ from chemvas.features.selection import (
     rigid_rotation_angles_from_drag,
     selected_atom_ids_with_bond_endpoints,
 )
-from chemvas.ui.canvas.canvas_model_access import (
-    atom_for_id,
-    bond_for_id,
-)
 from chemvas.ui.canvas.canvas_window_access import notify_error_for
 from chemvas.ui.history.history_commands import SetSceneGeometryCommand
 from chemvas.ui.molecule.atom_coords_access import current_atom_coords_3d_for
@@ -83,10 +79,10 @@ class SelectionRotationController:
         return self.canvas.model.bonds
 
     def atom(self, atom_id: int):
-        return atom_for_id(self.canvas, atom_id)
+        return self.canvas.model.atom_for_id(atom_id)
 
     def bond(self, bond_id: int):
-        return bond_for_id(self.canvas, bond_id)
+        return self.canvas.model.bond_for_id(bond_id)
 
     def atom_positions(self, atom_ids: set[int]) -> dict[int, tuple[float, float]]:
         positions = {}

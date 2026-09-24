@@ -5,11 +5,6 @@ from typing import TYPE_CHECKING, Any
 
 from chemvas.domain.transactions import add_recovery_error_note, restore_snapshot
 from chemvas.features.graph import first_matching_bond_id
-from chemvas.ui.canvas.canvas_model_access import (
-    atom_for_id,
-    bond_for_id,
-    bond_ids_from,
-)
 from chemvas.ui.canvas.canvas_scene_items_state import (
     SCENE_ITEM_COLLECTION_ATTRS,
     remove_scene_item_from_collection_for,
@@ -356,7 +351,7 @@ class StructureBuildCommitter:
         self, a_id: int, b_id: int, order: int = 1, *, style: str = "single"
     ) -> int:
         bond_id = add_bond_for(self.canvas, a_id, b_id, order)
-        bond = bond_for_id(self.canvas, bond_id)
+        bond = self.canvas.model.bond_for_id(bond_id)
         if bond is not None:
             bond.style = style
         return bond_id
@@ -365,7 +360,7 @@ class StructureBuildCommitter:
         return first_matching_bond_id(self.canvas.model.bonds, a_id, b_id)
 
     def add_bond_graphics_range(self, start_bond_id: int) -> None:
-        for bond_id in bond_ids_from(self.canvas, start_bond_id):
+        for bond_id in self.canvas.model.bond_ids_from(start_bond_id):
             self.add_bond_graphics(bond_id)
 
     def add_atom_label(
@@ -386,7 +381,7 @@ class StructureBuildCommitter:
     def label_non_carbon_atoms(self, atom_ids: list[int], elements: list[str]) -> None:
         for atom_id, element in zip(atom_ids, elements, strict=False):
             if element != "C":
-                atom = atom_for_id(self.canvas, atom_id)
+                atom = self.canvas.model.atom_for_id(atom_id)
                 if atom is None:
                     continue
                 add_or_update_atom_label(
@@ -519,7 +514,9 @@ class StructureBuildCommitter:
         for index, order in enumerate(bond_orders):
             a_id = atom_ids[index]
             b_id = atom_ids[(index + 1) % len(atom_ids)]
-            existing_bond = bond_for_id(self.canvas, self.bond_id_between(a_id, b_id))
+            existing_bond = self.canvas.model.bond_for_id(
+                self.bond_id_between(a_id, b_id)
+            )
             if existing_bond is not None:
                 if existing_bond.order >= 2:
                     double_count += 1

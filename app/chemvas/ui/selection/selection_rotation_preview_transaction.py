@@ -15,7 +15,6 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from chemvas.domain.transactions import add_recovery_error_note
-from chemvas.ui.canvas.canvas_model_access import atom_for_id
 from chemvas.ui.canvas.canvas_scene_items_state import ring_items_for_atoms
 from chemvas.ui.molecule.atom_coords_access import (
     pop_atom_coords_3d_for,
@@ -54,7 +53,7 @@ class _RotationPreviewAuthority:
         previous_scalars = (state.free_angle_x, state.free_angle_y, state.total_angle)
         previous: dict[int, tuple[tuple[float, float] | None, Coords3D | None]] = {}
         for atom_id in self.atom_ids:
-            atom = atom_for_id(canvas, atom_id)
+            atom = canvas.model.atom_for_id(atom_id)
             previous[atom_id] = (
                 (atom.x, atom.y) if atom is not None else None,
                 coords_3d.get(atom_id),
@@ -82,7 +81,7 @@ class _RotationPreviewAuthority:
         canvas = self.controller.canvas
         for atom_id, (position, coords) in saved.items():
             if position is not None:
-                atom = atom_for_id(canvas, atom_id)
+                atom = canvas.model.atom_for_id(atom_id)
                 if atom is not None:
                     atom.x, atom.y = position
             if coords is not None:
@@ -99,7 +98,7 @@ class _RotationPreviewAuthority:
         state = self.controller.rotation
         try:
             for atom_id, position in state.start_positions.items():
-                atom = atom_for_id(canvas, atom_id)
+                atom = canvas.model.atom_for_id(atom_id)
                 if atom is not None:
                     atom.x, atom.y = position
             for atom_id, coords in state.start_coords_3d.items():

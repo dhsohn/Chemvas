@@ -8,7 +8,6 @@ from PyQt6.QtGui import QMouseEvent
 from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import QApplication
 
-from chemvas.ui.canvas.canvas_model_access import atom_for_id
 from chemvas.ui.canvas.pick_radius_access import atom_pick_radius_for
 from chemvas.ui.molecule.atom_label_access import add_or_update_atom_label
 from chemvas.ui.molecule.structure_mutation_access import add_bond_for
@@ -49,7 +48,9 @@ def _select_all(window, canvas) -> None:
 
 
 def _positions(canvas, *atom_ids):
-    return [(atom_for_id(canvas, i).x, atom_for_id(canvas, i).y) for i in atom_ids]
+    return [
+        (canvas.model.atom_for_id(i).x, canvas.model.atom_for_id(i).y) for i in atom_ids
+    ]
 
 
 def _outlines(canvas, kind):
@@ -111,7 +112,7 @@ def _assert_rotated(canvas, atom_ids, before, degrees, *, center=ORIGIN):
             center.x() + dx * math.cos(radians) - dy * math.sin(radians),
             center.y() + dx * math.sin(radians) + dy * math.cos(radians),
         )
-        atom = atom_for_id(canvas, atom_id)
+        atom = canvas.model.atom_for_id(atom_id)
         assert abs(atom.x - expected[0]) < 0.6, (atom_id, atom.x, expected)
         assert abs(atom.y - expected[1]) < 0.6, (atom_id, atom.y, expected)
 
@@ -360,7 +361,7 @@ def test_a_ring_double_bond_band_stays_on_the_atom_axis(drawing):
         lengths = sorted(line.length() for line in lines)
         # One line spans the atoms, the other is the shortened inner line.
         assert lengths[0] < lengths[1] - 1.0
-        a, b = atom_for_id(canvas, bond.a), atom_for_id(canvas, bond.b)
+        a, b = canvas.model.atom_for_id(bond.a), canvas.model.atom_for_id(bond.b)
         axis_mid = QPointF((a.x + b.x) / 2.0, (a.y + b.y) / 2.0)
         band_mid = (
             controller.outline_service.selection_path_for_bond(bond_id)

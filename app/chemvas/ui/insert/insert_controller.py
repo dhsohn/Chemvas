@@ -21,10 +21,6 @@ from chemvas.features.selection import (
     StructureHit,
     choose_preferred_structure_hit,
 )
-from chemvas.ui.canvas.canvas_model_access import (
-    atom_for_id,
-    bond_for_id,
-)
 from chemvas.ui.canvas.canvas_window_access import notify_error_for
 from chemvas.ui.canvas.input_view_access import viewport_center_scene_pos_for
 from chemvas.ui.canvas.pick_radius_access import atom_pick_radius_for
@@ -324,11 +320,11 @@ class InsertController:
         distance_point_to_segment = getattr(
             self.hit_testing_service, "distance_point_to_segment", None
         )
-        bond = bond_for_id(self.canvas, bond_id)
+        bond = self.canvas.model.bond_for_id(bond_id)
         if bond is None:
             return None
-        atom_a = atom_for_id(self.canvas, bond.a)
-        atom_b = atom_for_id(self.canvas, bond.b)
+        atom_a = self.canvas.model.atom_for_id(bond.a)
+        atom_b = self.canvas.model.atom_for_id(bond.b)
         if atom_a is None or atom_b is None:
             return None
         if callable(distance_point_to_segment):

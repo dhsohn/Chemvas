@@ -17,7 +17,7 @@ from PyQt6.QtWidgets import QApplication, QGraphicsScene
 
 from chemvas.core.history import CompositeCommand
 from chemvas.core.model_commands import SetRingPolygonsCommand
-from chemvas.domain.document import Atom, Bond
+from chemvas.domain.document import Atom, Bond, MoleculeModel
 from chemvas.features.graph import CanvasGraphState
 from chemvas.ui.canvas.canvas_atom_graphics_state import CanvasAtomGraphicsState
 from chemvas.ui.canvas.canvas_bond_graphics_state import (
@@ -80,7 +80,7 @@ class _FakeRenderer:
 class _FakeCanvas:
     def __init__(self) -> None:
         self.renderer = _FakeRenderer()
-        self.model = SimpleNamespace(
+        self.model = MoleculeModel(
             atoms={
                 0: Atom("C", 0.0, 0.0),
                 1: Atom("C", 10.0, 0.0),
@@ -195,7 +195,7 @@ class RendererCanvasTailCoverageTest(unittest.TestCase):
         pushed = []
         view = SimpleNamespace(
             renderer=_FakeRenderer(),
-            model=SimpleNamespace(
+            model=MoleculeModel(
                 atoms={1: Atom("C", 0.0, 0.0), 2: Atom("C", 10.0, 0.0)}
             ),
             runtime_state=canvas_runtime_state(

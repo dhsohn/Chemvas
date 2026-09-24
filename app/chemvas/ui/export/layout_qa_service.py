@@ -417,7 +417,7 @@ def _molecular_bond_paths(
         path = QPainterPath()
         for item in items:
             path = path.united(_graphics_paint_scene_path(item))
-        bond = context.bond_for_id(bond_id)
+        bond = context.model.bond_for_id(bond_id)
         if bond is not None and not path.isEmpty():
             bond_paths.append((sorted((bond.a, bond.b)), path))
     return bond_paths

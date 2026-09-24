@@ -9,14 +9,6 @@ from chemvas.ui.canvas.canvas_atom_graphics_state import (
     pop_atom_dot_for,
     pop_atom_item_for,
 )
-from chemvas.ui.canvas.canvas_model_access import (
-    atom_for_id,
-    bond_for_id,
-    ensure_next_atom_id_after_for,
-    remove_atom_direct_for,
-    set_atom_annotation_for,
-    set_atom_for_id,
-)
 from chemvas.ui.molecule.atom_coords_access import pop_atom_coords_3d_for
 from chemvas.ui.molecule.atom_label_access import add_or_update_atom_label
 from chemvas.ui.scene.scene_item_access import remove_item_from_canvas_scene
@@ -59,7 +51,7 @@ class CanvasAtomMutationService:
             self.canvas.services.canvas_mark_scene_service.remove_marks_for_atom(
                 atom_id
             )
-        remove_atom_direct_for(self.canvas, atom_id)
+        self.canvas.model.pop_atom(atom_id)
         pop_atom_coords_3d_for(self.canvas, atom_id)
         neighbors = self.graph.atom_neighbors.pop(atom_id, None)
         if neighbors:
@@ -71,7 +63,7 @@ class CanvasAtomMutationService:
         bond_ids = self.graph.atom_bond_ids.pop(atom_id, None)
         if bond_ids:
             for bond_id in list(bond_ids):
-                bond = bond_for_id(self.canvas, bond_id)
+                bond = self.canvas.model.bond_for_id(bond_id)
                 if bond is None:
                     continue
                 other_id = bond.b if bond.a == atom_id else bond.a
@@ -90,11 +82,11 @@ class CanvasAtomMutationService:
             color=state.get("color", "#000000"),
             explicit_label=bool(state.get("explicit_label", False)),
         )
-        set_atom_for_id(self.canvas, atom_id, atom)
-        set_atom_annotation_for(self.canvas, atom_id, state.get("annotation"))
+        self.canvas.model.set_atom(atom_id, atom)
+        self.canvas.model.set_atom_annotation(atom_id, state.get("annotation"))
         self.graph_service.ensure_atom_neighbors(atom_id)
         self.graph_service.ensure_atom_bond_ids(atom_id)
-        ensure_next_atom_id_after_for(self.canvas, atom_id)
+        self.canvas.model.ensure_next_atom_id_after(atom_id)
         self._clear_atom_graphics(atom_id)
         if atom.element.upper() == "C":
             if atom.explicit_label:
@@ -124,7 +116,7 @@ class CanvasAtomMutationService:
         self.hit_testing_service.mark_spatial_index_dirty()
 
     def apply_atom_color(self, atom_id: int, color: str | QColor) -> None:
-        atom = atom_for_id(self.canvas, atom_id)
+        atom = self.canvas.model.atom_for_id(atom_id)
         if atom is None:
             return
         color_value = color if isinstance(color, QColor) else QColor(color)

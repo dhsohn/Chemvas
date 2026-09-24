@@ -11,7 +11,7 @@ from PyQt6.QtCore import QPointF, Qt
 from PyQt6.QtGui import QBrush, QColor
 from PyQt6.QtWidgets import QApplication
 
-from chemvas.domain.document import Atom
+from chemvas.domain.document import Atom, MoleculeModel
 from chemvas.ui.canvas.canvas_ring_fill_scene_service import CanvasRingFillSceneService
 from chemvas.ui.canvas.canvas_scene_items_state import (
     CanvasSceneItemsState,
@@ -45,7 +45,7 @@ class CanvasRingFillSceneServiceTest(unittest.TestCase):
         non_matching_ring = _FakeRingItem([4, 5, 6])
         invalid_ring = _FakeRingItem("bad")
         canvas = SimpleNamespace(
-            model=SimpleNamespace(
+            model=MoleculeModel(
                 atoms={
                     1: Atom("C", 0.0, 0.0),
                     2: Atom("C", 2.0, 0.0),
@@ -78,7 +78,7 @@ class CanvasRingFillSceneServiceTest(unittest.TestCase):
     ) -> None:
         short_ring = _FakeRingItem([1, 2, 99])
         canvas = SimpleNamespace(
-            model=SimpleNamespace(
+            model=MoleculeModel(
                 atoms={
                     1: Atom("C", 0.0, 0.0),
                     2: Atom("C", 2.0, 0.0),
@@ -99,7 +99,7 @@ class CanvasRingFillSceneServiceTest(unittest.TestCase):
         canvas = SimpleNamespace(
             renderer=SimpleNamespace(ring_fill_brush=mock.Mock(return_value=brush)),
             runtime_state=canvas_runtime_state(),
-            model=SimpleNamespace(
+            model=MoleculeModel(
                 atoms={1: Atom("C", 0, 0), 2: Atom("C", 2, 0), 3: Atom("C", 1, 1.5)}
             ),
             _make_selectable=mock.Mock(),

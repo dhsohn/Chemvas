@@ -4,7 +4,7 @@ from contextlib import nullcontext
 from types import SimpleNamespace
 from unittest import mock
 
-from chemvas.domain.document import AnnotationCollection
+from chemvas.domain.document import AnnotationCollection, MoleculeModel
 from chemvas.domain.document.marks import Mark
 from chemvas.ui.scene.note_item_access import new_note_item_for
 from tests.ring_support import seed_ring_items
@@ -405,7 +405,7 @@ class CanvasViewUnitTest(unittest.TestCase):
         self.assertFalse(selection_target_item(_FakeItem("handle")))
 
         fake_view = SimpleNamespace(
-            model=SimpleNamespace(bonds=[Bond(0, 1, 1), None, Bond(1, 2, 2)])
+            model=MoleculeModel(bonds=[Bond(0, 1, 1), None, Bond(1, 2, 2)])
         )
         self.assertEqual(
             selected_bond_atom_ids_for(fake_view, {0, 1, 2, 99}), ((0, 1), (1, 2))
@@ -421,7 +421,7 @@ class CanvasViewUnitTest(unittest.TestCase):
         )
         snapshot_view = SimpleNamespace(
             scene=lambda: scene,
-            model=SimpleNamespace(bonds=[Bond(1, 2, 1)]),
+            model=MoleculeModel(bonds=[Bond(1, 2, 1)]),
             runtime_state=canvas_runtime_state(
                 scene_items_state=CanvasSceneItemsState()
             ),
@@ -524,10 +524,8 @@ class CanvasViewUnitTest(unittest.TestCase):
         build_3d.assert_called_once()
         self.assertEqual(build_3d.call_args.args, ("model", {1}, {2}, {}))
 
-        structure_payload_model = SimpleNamespace(
-            atoms={9: Atom("C", 4.0, 5.0)},
-            bounds=mock.Mock(return_value=(4.0, 5.0, 4.0, 5.0)),
-        )
+        structure_payload_model = MoleculeModel(atoms={9: Atom("C", 4.0, 5.0)})
+        structure_payload_model.bounds = mock.Mock(return_value=(4.0, 5.0, 4.0, 5.0))
         structure_payload_view = SimpleNamespace(
             model=structure_payload_model,
             runtime_state=canvas_runtime_state(
@@ -716,7 +714,7 @@ class CanvasViewUnitTest(unittest.TestCase):
     def test_structure_payload_logic_helpers_cover_selection_expansion_and_annotations(
         self,
     ) -> None:
-        model = SimpleNamespace(bonds=[Bond(1, 2, 1), None])
+        model = MoleculeModel(bonds=[Bond(1, 2, 1), None])
         self.assertEqual(expand_atom_ids_for_structure(model, {1}, {0, 99}), {1, 2})
         self.assertEqual(
             build_atom_annotations({5}, {5: 9}, {5: ["plus"]}),
@@ -730,7 +728,7 @@ class CanvasViewUnitTest(unittest.TestCase):
                     bond_spacing_px=4.0, bond_line_width=1.0, bond_length_px=15.625
                 )
             ),
-            model=SimpleNamespace(atoms={1: Atom("C", 7.0, -2.0)}),
+            model=MoleculeModel(atoms={1: Atom("C", 7.0, -2.0)}),
             runtime_state=canvas_runtime_state(
                 atom_graphics_state=CanvasAtomGraphicsState()
             ),
@@ -765,7 +763,7 @@ class CanvasViewUnitTest(unittest.TestCase):
 
     def test_bond_hotkey_visible_label_and_atom_point_helpers(self) -> None:
         fake_view = SimpleNamespace(
-            model=SimpleNamespace(
+            model=MoleculeModel(
                 atoms={
                     1: Atom("C", 1.0, 2.0),
                     2: Atom("O", 4.0, 5.0),
@@ -790,7 +788,7 @@ class CanvasViewUnitTest(unittest.TestCase):
 
     def test_sprout_bond_endpoint_handles_default_and_cyclic_cases(self) -> None:
         fake_view = SimpleNamespace(
-            model=SimpleNamespace(
+            model=MoleculeModel(
                 atoms={
                     1: Atom("C", 0.0, 0.0),
                     2: Atom("C", 10.0, 0.0),
@@ -820,7 +818,7 @@ class CanvasViewUnitTest(unittest.TestCase):
 
     def test_structure_geometry_wrappers_convert_pure_logic_results(self) -> None:
         fake_view = SimpleNamespace(
-            model=SimpleNamespace(
+            model=MoleculeModel(
                 atoms={
                     1: Atom("C", 0.0, 0.0),
                     2: Atom("C", 10.0, 0.0),
@@ -913,7 +911,7 @@ class CanvasViewUnitTest(unittest.TestCase):
         self,
     ) -> None:
         fake_view = SimpleNamespace(
-            model=SimpleNamespace(atoms={1: Atom("C", 0.0, 0.0)}, bonds=[]),
+            model=MoleculeModel(atoms={1: Atom("C", 0.0, 0.0)}, bonds=[]),
             renderer=SimpleNamespace(style=SimpleNamespace(bond_length_px=20.0)),
         )
 
@@ -927,7 +925,7 @@ class CanvasViewUnitTest(unittest.TestCase):
         self,
     ) -> None:
         fake_view = SimpleNamespace(
-            model=SimpleNamespace(bonds=[Bond(1, 2, 1)]),
+            model=MoleculeModel(bonds=[Bond(1, 2, 1)]),
             runtime_state=canvas_runtime_state(
                 scene_items_state=CanvasSceneItemsState()
             ),

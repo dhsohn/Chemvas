@@ -3,7 +3,7 @@ import unittest
 from types import SimpleNamespace
 from unittest import mock
 
-from chemvas.domain.document import AnnotationCollection
+from chemvas.domain.document import AnnotationCollection, MoleculeModel
 from chemvas.domain.document.marks import Mark
 from tests.runtime_services import canvas_runtime_services
 from tests.runtime_state import canvas_runtime_state
@@ -174,7 +174,7 @@ class CanvasViewSelectionClipboardWrappersTest(unittest.TestCase):
             ]
         )
         view = SimpleNamespace(
-            model=SimpleNamespace(
+            model=MoleculeModel(
                 atoms={
                     1: Atom("C", 0.0, 0.0),
                     2: Atom("O", 3.0, 0.0),
@@ -293,7 +293,7 @@ class CanvasViewSelectionClipboardWrappersTest(unittest.TestCase):
         atom_label = _FakeItem("atom", data1=1)
         atom_dot = _FakeItem("atom", data1=2)
         view = SimpleNamespace(
-            model=SimpleNamespace(bonds=[Bond(1, 2, 1)]),
+            model=MoleculeModel(bonds=[Bond(1, 2, 1)]),
             runtime_state=canvas_runtime_state(
                 atom_graphics_state=CanvasAtomGraphicsState(),
                 bond_graphics_state=CanvasBondGraphicsState(),
@@ -317,7 +317,7 @@ class CanvasViewSelectionClipboardWrappersTest(unittest.TestCase):
         self,
     ) -> None:
         view = SimpleNamespace(
-            model=SimpleNamespace(atoms={1: Atom("C", 0.0, 0.0)}),
+            model=MoleculeModel(atoms={1: Atom("C", 0.0, 0.0)}),
             runtime_state=canvas_runtime_state(
                 mark_state=AnnotationCollection(
                     records={1: Mark(kind="plus", atom_id=2)}, order=[1]
@@ -380,7 +380,7 @@ class CanvasViewSelectionClipboardWrappersTest(unittest.TestCase):
         )
         view = SimpleNamespace(
             scene=lambda: scene,
-            model=SimpleNamespace(
+            model=MoleculeModel(
                 bonds=[
                     Bond(1, 2, 1),
                     None,

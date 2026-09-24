@@ -28,10 +28,6 @@ from chemvas.ui.canvas.canvas_group_state import (
     restore_group_for,
 )
 from chemvas.ui.canvas.canvas_mark_registry import mark_registry_for
-from chemvas.ui.canvas.canvas_model_access import (
-    atom_annotations_for,
-    atom_for_id,
-)
 from chemvas.ui.canvas.canvas_scene_items_state import (
     SCENE_ITEM_COLLECTION_ATTRS,
     document_collection_for,
@@ -125,7 +121,7 @@ class CanvasHistoryOperations:
             # belong to the same exact transaction as the move so a fail-before
             # descriptor still publishes authoritative rollback to history stacks.
             for atom_id in atom_ids:
-                atom = atom_for_id(self.__canvas, atom_id)
+                atom = self.__canvas.model.atom_for_id(atom_id)
                 if atom is None:
                     continue
                 before_positions[atom_id] = (atom.x, atom.y)
@@ -399,7 +395,7 @@ class CanvasHistoryOperations:
         annotations: dict[int, dict[str, int]],
     ) -> None:
         registry = mark_registry_for(self.__canvas)
-        model_annotations = atom_annotations_for(self.__canvas)
+        model_annotations = self.__canvas.model.atom_annotations
         for atom_id, items in marks.items():
             if items:
                 registry.by_atom.setdefault(atom_id, [])[:] = [

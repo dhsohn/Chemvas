@@ -19,7 +19,7 @@ from PyQt6.QtWidgets import (
     QGraphicsTextItem,
 )
 
-from chemvas.domain.document import Atom, Bond
+from chemvas.domain.document import Atom, Bond, MoleculeModel
 from chemvas.ui.canvas.canvas_bond_graphics_state import set_bond_items_for
 from chemvas.ui.selection.selection_outline_service import SelectionOutlineService
 from chemvas.ui.selection.selection_state import (
@@ -112,7 +112,7 @@ class SelectionOutlineServiceTest(unittest.TestCase):
         canvas = _make_canvas(
             scene=active_scene,
             selection_outlines=[old_outline],
-            model=SimpleNamespace(
+            model=MoleculeModel(
                 atoms={1: Atom("C", 0.0, 0.0), 2: Atom("C", 2.0, 0.0)},
                 bonds=[Bond(1, 2, 1)],
             ),
@@ -179,7 +179,7 @@ class SelectionOutlineServiceTest(unittest.TestCase):
         connected_components = mock.Mock(return_value=[{1, 2}])
         canvas = _make_canvas(
             scene=_FakeScene(atom_items),
-            model=SimpleNamespace(
+            model=MoleculeModel(
                 atoms={
                     1: Atom("C", 0.0, 0.0),
                     2: Atom("C", 2.0, 0.0),
@@ -216,7 +216,7 @@ class SelectionOutlineServiceTest(unittest.TestCase):
         canvas = _make_canvas(
             selection_outlines=[outline],
             tool_controller=SimpleNamespace(active=SimpleNamespace(name="perspective")),
-            model=SimpleNamespace(
+            model=MoleculeModel(
                 atoms={1: Atom("C", 2.0, 3.0), 2: Atom("C", 8.0, 9.0)},
                 bonds=[],
             ),
@@ -243,7 +243,7 @@ class SelectionOutlineServiceTest(unittest.TestCase):
                 )
             ),
             scene=lambda: scene,
-            model=SimpleNamespace(
+            model=MoleculeModel(
                 atoms={1: Atom("C", 0.0, 0.0), 2: Atom("O", 10.0, 0.0)},
                 bonds=[Bond(1, 2, 2), None],
             ),
@@ -324,9 +324,7 @@ class SelectionOutlineServiceTest(unittest.TestCase):
                 )
             ),
             scene=lambda: scene,
-            model=SimpleNamespace(
-                atoms={1: Atom("C", 0.0, 0.0)}, bonds=[Bond(1, 1, 1)]
-            ),
+            model=MoleculeModel(atoms={1: Atom("C", 0.0, 0.0)}, bonds=[Bond(1, 1, 1)]),
             services=canvas_runtime_services(
                 geometry_controller=SimpleNamespace(
                     ring_center_for_bond=lambda bond: None,

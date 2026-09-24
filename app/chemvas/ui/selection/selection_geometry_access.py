@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from chemvas.ui.canvas.canvas_model_access import atom_for_id
-
 
 def extend_bounds_with_item_rect(xs: list[float], ys: list[float], item) -> None:
     if item is None:
@@ -15,7 +13,7 @@ def bounds_for_atoms_for(canvas, atom_ids: set[int], include_labels: bool = Fals
     xs = []
     ys = []
     for atom_id in atom_ids:
-        atom = atom_for_id(canvas, atom_id)
+        atom = canvas.model.atom_for_id(atom_id)
         if atom is None:
             continue
         xs.append(atom.x)

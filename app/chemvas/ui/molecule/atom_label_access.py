@@ -1,12 +1,11 @@
 from __future__ import annotations
 
 from chemvas.domain.document import atom_shows_itself
-from chemvas.ui.canvas.canvas_model_access import atom_for_id
 from chemvas.ui.molecule.atom_label_renderer import uses_compact_label_hit_shape
 
 
 def atom_has_visible_label_for(canvas, atom_id: int) -> bool:
-    atom = atom_for_id(canvas, atom_id)
+    atom = canvas.model.atom_for_id(atom_id)
     if atom is None:
         return False
     return (
@@ -56,7 +55,7 @@ def add_or_update_atom_label(
 
 
 def clear_atom_label_for(canvas, atom_id: int) -> None:
-    if atom_for_id(canvas, atom_id) is None:
+    if canvas.model.atom_for_id(atom_id) is None:
         return
     canvas.services.atom_label_service.add_or_update_atom_label(
         atom_id, "C", show_carbon=False

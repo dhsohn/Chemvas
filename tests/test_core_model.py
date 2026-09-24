@@ -1,6 +1,6 @@
 import unittest
 
-from chemvas.domain.document import Atom, MoleculeModel
+from chemvas.domain.document import Atom, Bond, MoleculeModel
 
 
 class MoleculeModelTest(unittest.TestCase):
@@ -76,3 +76,71 @@ class MoleculeModelTest(unittest.TestCase):
         found = model.find_atom_near(10.0, 10.0, max_dist=1.0)
 
         self.assertIsNone(found)
+
+
+class MoleculeModelAccessTest(unittest.TestCase):
+    def test_lookups_tolerate_missing_ids(self) -> None:
+        atom = Atom("O", 3.0, 4.0)
+        bond = Bond(1, 2)
+        model = MoleculeModel(atoms={1: atom}, bonds=[None, bond])
+
+        self.assertIs(model.atom_for_id(1), atom)
+        self.assertIsNone(model.atom_for_id(99))
+        self.assertIsNone(model.atom_for_id(None))
+        self.assertIs(model.bond_for_id(1), bond)
+        self.assertIsNone(model.bond_for_id(0))
+        self.assertIsNone(model.bond_for_id(-1))
+        self.assertIsNone(model.bond_for_id(None))
+        self.assertIsNone(model.bond_for_id(99))
+        self.assertEqual(list(model.bond_ids_from(0)), [0, 1])
+        self.assertTrue(model.has_bond_slot(1))
+        self.assertFalse(model.has_bond_slot(2))
+
+    def test_bond_slots_pad_clear_and_trim_without_renumbering(self) -> None:
+        model = MoleculeModel(atoms={1: Atom("C", 0.0, 0.0), 2: Atom("O", 1.0, 0.0)})
+
+        bond_id = model.add_bond(1, 2, 2)
+        model.set_bond(3, Bond(4, 5, 1))
+        self.assertEqual(bond_id, 0)
+        self.assertEqual(model.bonds, [Bond(1, 2, 2), None, None, Bond(4, 5, 1)])
+
+        model.clear_bond(0)
+        model.clear_bond(99)
+        model.trim_bonds(2)
+        self.assertEqual(model.bonds, [None, None])
+
+    def test_atom_slots_and_next_id(self) -> None:
+        model = MoleculeModel()
+        model.add_atom("C", 1.0, 2.0)
+        model.set_atom(5, Atom("O", 5.0, 6.0))
+        model.ensure_next_atom_id_after(5)
+        self.assertEqual(model.next_atom_id, 6)
+        self.assertEqual(model.created_atom_ids_from(1), [5])
+
+        model.pop_atom(5)
+        model.pop_atom(99)
+        self.assertEqual(set(model.atoms), {0})
+
+    def test_atom_annotations_keep_only_non_zero_known_integers(self) -> None:
+        model = MoleculeModel(atoms={1: Atom("N", 0.0, 0.0)})
+
+        model.set_atom_annotation(
+            1, {"formal_charge": 1, "radical_electrons": 0, "other": 3}
+        )
+        self.assertEqual(model.atom_annotation_for(1), {"formal_charge": 1})
+
+        model.set_atom_annotation(1, {"formal_charge": 0})
+        self.assertIsNone(model.atom_annotation_for(1))
+        self.assertNotIn(1, model.atom_annotations)
+
+        model.set_atom_annotation(1, {"radical_electrons": 2})
+        model.set_atom(1, Atom("C", 0.0, 0.0))
+        self.assertIsNone(model.atom_annotation_for(1))
+
+    def test_center_and_scale_about(self) -> None:
+        model = MoleculeModel(atoms={1: Atom("C", 0.0, 0.0), 2: Atom("C", 4.0, 2.0)})
+
+        self.assertEqual(model.center(), (2.0, 1.0))
+        model.scale_about(2.0, 1.0, 2.0)
+        self.assertEqual((model.atoms[1].x, model.atoms[1].y), (-2.0, -1.0))
+        self.assertEqual((model.atoms[2].x, model.atoms[2].y), (6.0, 3.0))

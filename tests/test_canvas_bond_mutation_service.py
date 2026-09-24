@@ -5,7 +5,7 @@ from unittest import mock
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from chemvas.domain.document import Bond
+from chemvas.domain.document import Bond, MoleculeModel
 from chemvas.features.graph import CanvasGraphState
 from chemvas.ui.canvas.canvas_bond_graphics_state import (
     CanvasBondGraphicsState,
@@ -152,7 +152,7 @@ class CanvasBondMutationServiceTest(unittest.TestCase):
         canvas = SimpleNamespace(
             services=_services(graph=graph, hit_testing=hit_testing),
             scene=lambda: scene,
-            model=SimpleNamespace(bonds=[Bond(1, 2, 1)]),
+            model=MoleculeModel(bonds=[Bond(1, 2, 1)]),
             bond_renderer=SimpleNamespace(
                 redraw_bond=mock.Mock(), update_bond_geometry=mock.Mock()
             ),
@@ -184,7 +184,7 @@ class CanvasBondMutationServiceTest(unittest.TestCase):
         canvas = SimpleNamespace(
             services=_services(graph=graph, hit_testing=hit_testing),
             scene=lambda: _FakeScene(),
-            model=SimpleNamespace(bonds=[]),
+            model=MoleculeModel(bonds=[]),
             bond_renderer=SimpleNamespace(
                 redraw_bond=mock.Mock(), update_bond_geometry=mock.Mock()
             ),
@@ -215,7 +215,7 @@ class CanvasBondMutationServiceTest(unittest.TestCase):
         hit_testing = _hit_testing_service()
         canvas = SimpleNamespace(
             services=_services(graph=graph, hit_testing=hit_testing),
-            model=SimpleNamespace(bonds=[Bond(4, 5, 1)]),
+            model=MoleculeModel(bonds=[Bond(4, 5, 1)]),
             scene=lambda: scene,
             runtime_state=_runtime_state(),
         )
@@ -239,7 +239,7 @@ class CanvasBondMutationServiceTest(unittest.TestCase):
         hit_testing = _hit_testing_service()
         canvas = SimpleNamespace(
             services=_services(graph=graph, hit_testing=hit_testing),
-            model=SimpleNamespace(bonds=[None]),
+            model=MoleculeModel(bonds=[None]),
             scene=lambda: scene,
             runtime_state=_runtime_state(),
         )
@@ -260,7 +260,7 @@ class CanvasBondMutationServiceTest(unittest.TestCase):
         hit_testing = _hit_testing_service()
         canvas = SimpleNamespace(
             services=_services(graph=graph, hit_testing=hit_testing),
-            model=SimpleNamespace(bonds=[Bond(1, 2, 1), None, Bond(2, 3, 2)]),
+            model=MoleculeModel(bonds=[Bond(1, 2, 1), None, Bond(2, 3, 2)]),
             scene=lambda: scene,
             runtime_state=_runtime_state(),
         )
@@ -284,7 +284,7 @@ class CanvasBondMutationServiceTest(unittest.TestCase):
         canvas = SimpleNamespace(
             services=_services(graph=_graph_service(), hit_testing=hit_testing),
             scene=lambda: _FakeScene(),
-            model=SimpleNamespace(bonds=[]),
+            model=MoleculeModel(bonds=[]),
             bond_renderer=SimpleNamespace(add_bond_graphics=mock.Mock()),
             runtime_state=_runtime_state(),
         )
@@ -327,7 +327,7 @@ class CanvasBondMutationServiceStaleIndexTest(unittest.TestCase):
         )
         hit_testing = _hit_testing_service()
         canvas = SimpleNamespace(
-            model=SimpleNamespace(bonds=[Bond(1, 2, 1), Bond(1, 2, 2)]),
+            model=MoleculeModel(bonds=[Bond(1, 2, 1), Bond(1, 2, 2)]),
             scene=lambda: scene,
             runtime_state=canvas_runtime_state(
                 bond_graphics_state=CanvasBondGraphicsState(),

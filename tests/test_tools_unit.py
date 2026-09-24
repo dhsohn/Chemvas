@@ -23,7 +23,7 @@ import chemvas.ui.selection.select_tool as select_tool_module
 import chemvas.ui.tools.bond_tool as bond_tool_module
 import chemvas.ui.tools.move_tool as move_tool_module
 from chemvas.core.model_commands import SetAtomPositionsCommand
-from chemvas.domain.document import Atom, Bond
+from chemvas.domain.document import Atom, Bond, MoleculeModel
 from chemvas.features.hover import HoverState
 from chemvas.ui.annotations.state import scene_item_state_for
 from chemvas.ui.canvas.canvas_atom_graphics_state import (
@@ -227,7 +227,7 @@ class _FakeSelectCanvas:
         self.drag_mode = None
         self.scene_obj = _FakeScene()
         self.handle_state = CanvasHandleState()
-        self.model = SimpleNamespace(
+        self.model = MoleculeModel(
             atoms={atom_id: Atom("C", float(atom_id), 0.0) for atom_id in range(1, 5)},
             bonds=[],
         )
@@ -451,7 +451,7 @@ class _FakeBondCanvas:
         self.atom_near = None
         self.item = None
         self.preferred_item = None
-        self.model = SimpleNamespace(
+        self.model = MoleculeModel(
             atoms={
                 1: Atom("C", 10.0, 0.0),
                 2: Atom("C", 0.0, 10.0),
@@ -539,7 +539,7 @@ class _FakeMoveCanvas(_FakeSelectCanvas):
         self.selected_items_for_transform = []
         self.selected_atom_ids = set()
         self.selected_bond_ids = set()
-        self.model = SimpleNamespace(
+        self.model = MoleculeModel(
             atoms=self.model.atoms,
             bonds=[
                 Bond(1, 2, 1),

@@ -18,7 +18,7 @@ from chemvas.core.model_commands import (
     AddBondCommand,
     UpdateBondCommand,
 )
-from chemvas.domain.document import Atom, Bond
+from chemvas.domain.document import Atom, Bond, MoleculeModel
 from chemvas.ui.canvas.canvas_atom_graphics_state import CanvasAtomGraphicsState
 from chemvas.ui.canvas.canvas_group_state import CanvasGroupState
 from chemvas.ui.canvas.canvas_history_recording_service import (
@@ -120,7 +120,7 @@ def _make_canvas(
     return SimpleNamespace(
         push_command=push_command,
         services=canvas_runtime_services(history_service=history_service),
-        model=SimpleNamespace(
+        model=MoleculeModel(
             atoms=dict(atoms or {}),
             bonds=list(bonds or []),
             next_atom_id=next_atom_id,
@@ -178,7 +178,7 @@ class CanvasHistoryRecordingServiceTest(unittest.TestCase):
         class Canvas:
             def __init__(self) -> None:
                 self.value = "after"
-                self.model = SimpleNamespace(
+                self.model = MoleculeModel(
                     atoms={},
                     bonds=[],
                     next_atom_id=0,

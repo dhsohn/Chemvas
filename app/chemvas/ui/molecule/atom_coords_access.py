@@ -4,7 +4,6 @@ import math
 from dataclasses import dataclass, field
 from typing import Any
 
-from chemvas.ui.canvas.canvas_model_access import atom_for_id
 from chemvas.ui.molecule.bond_graphics_access import project_point_3d_for
 from chemvas.ui.scene.scene_geometry import current_atom_coords_in_scene
 
@@ -39,7 +38,7 @@ def clear_atom_coords_3d_for(canvas: Any) -> None:
 def stored_atom_coords_3d_matches_projection_for(
     canvas: Any, atom_id: int, coords: AtomCoords3D
 ) -> bool:
-    atom = atom_for_id(canvas, atom_id)
+    atom = canvas.model.atom_for_id(atom_id)
     if atom is None:
         return False
     proj_x, proj_y = project_point_3d_for(canvas, coords)

@@ -3,7 +3,7 @@ import unittest
 from types import SimpleNamespace
 from unittest import mock
 
-from chemvas.domain.document import AnnotationCollection
+from chemvas.domain.document import AnnotationCollection, MoleculeModel
 from chemvas.ui.canvas.canvas_scene_items_state import (
     append_scene_item_for,
     remove_scene_item_from_collection_for,
@@ -111,7 +111,7 @@ class SceneDecorationServiceTest(unittest.TestCase):
                 mark_registry.add_for_atom(atom_id, item)
 
         canvas = SimpleNamespace(
-            model=SimpleNamespace(atoms={7: object()}, atom_annotations={}),
+            model=MoleculeModel(atoms={7: object()}, atom_annotations={}),
             runtime_state=canvas_runtime_state(
                 tool_settings_state=CanvasToolSettingsState(mark_kind="plus"),
                 scene_items_state=scene_items_state,

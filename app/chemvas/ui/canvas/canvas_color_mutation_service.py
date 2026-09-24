@@ -27,10 +27,6 @@ from chemvas.ui.annotations.state import (
     shape_state_dict_for,
 )
 from chemvas.ui.canvas.canvas_atom_graphics_state import visible_atom_item_for
-from chemvas.ui.canvas.canvas_model_access import (
-    atom_for_id,
-    bond_for_id,
-)
 from chemvas.ui.canvas.canvas_scene_items_state import require_scene_record_id
 from chemvas.ui.canvas.canvas_window_access import notify_error_for
 from chemvas.ui.canvas.graphics_items import AtomDotItem
@@ -52,7 +48,7 @@ if TYPE_CHECKING:
 
 def apply_bond_color_in_place(canvas, bond_id: int, color: QColor | str) -> None:
     """Apply a value inside the caller's document/history transaction."""
-    bond = bond_for_id(canvas, bond_id)
+    bond = canvas.model.bond_for_id(bond_id)
     color_value = QColor(color)
     if bond is None or not color_value.isValid():
         return
@@ -156,7 +152,9 @@ class CanvasColorMutationService:
         if kind == "bond":
             bond_id = item.data(1)
             bond = (
-                bond_for_id(self.canvas, bond_id) if isinstance(bond_id, int) else None
+                self.canvas.model.bond_for_id(bond_id)
+                if isinstance(bond_id, int)
+                else None
             )
             if bond is None or bond.color == color.name():
                 return []
@@ -244,7 +242,9 @@ class CanvasColorMutationService:
 
     def _apply_atom_color(self, item, color: QColor) -> list[HistoryCommand]:
         atom_id = item.data(1)
-        atom = atom_for_id(self.canvas, atom_id if isinstance(atom_id, int) else None)
+        atom = self.canvas.model.atom_for_id(
+            atom_id if isinstance(atom_id, int) else None
+        )
         if atom is None:
             self._apply_atom_item_graphic(item, color)
             return []
@@ -291,7 +291,7 @@ class CanvasColorMutationService:
                 if kind == "atom":
                     selected_atoms.add(entity_id)
                 elif kind == "bond":
-                    bond = bond_for_id(self.canvas, entity_id)
+                    bond = self.canvas.model.bond_for_id(entity_id)
                     if bond is not None:
                         selected_bond_ids.add(entity_id)
             created = []
@@ -309,7 +309,7 @@ class CanvasColorMutationService:
                 # A complete atom selection OR a complete bond selection qualifies.
                 # Combining their endpoints would invent unselected cycle edges.
                 selected_rings = find_rings(atom_selection_bonds) + find_rings(
-                    bond_for_id(self.canvas, bond_id)
+                    self.canvas.model.bond_for_id(bond_id)
                     for bond_id in sorted(selected_bond_ids)
                 )
                 unique_rings = {frozenset(ring): ring for ring in selected_rings}
@@ -370,7 +370,7 @@ class CanvasColorMutationService:
             atom_id
             for atom_id in ring_atom_ids
             if isinstance(atom_id, int)
-            and atom_for_id(self.canvas, atom_id) is not None
+            and self.canvas.model.atom_for_id(atom_id) is not None
         }
         if not atom_ids:
             return ()

@@ -9,7 +9,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PyQt6.QtCore import Qt
 
-from chemvas.domain.document import Atom, Bond
+from chemvas.domain.document import Atom, Bond, MoleculeModel
 from chemvas.features.hover import HoverState
 from chemvas.ui.canvas.canvas_chemdraw_shortcut_service import (
     CanvasChemdrawShortcutService,
@@ -251,7 +251,7 @@ class CanvasChemDrawShortcutServiceTest(unittest.TestCase):
     def test_atom_hotkey_routes_to_prompt_marks_labels_and_sprouts(self) -> None:
         calls: list[tuple] = []
         canvas = SimpleNamespace(
-            model=SimpleNamespace(atoms={1: Atom("C", 1.0, 2.0)}, bonds=[]),
+            model=MoleculeModel(atoms={1: Atom("C", 1.0, 2.0)}, bonds=[]),
             _shortcut_modifiers=shortcut_modifiers_for,
             services=canvas_runtime_services(
                 canvas_mark_scene_service=SimpleNamespace(
@@ -379,7 +379,7 @@ class CanvasChemDrawShortcutServiceTest(unittest.TestCase):
             )
         )
         canvas = SimpleNamespace(
-            model=SimpleNamespace(
+            model=MoleculeModel(
                 atoms={1: Atom("C", 1.0, 2.0), 2: Atom("O", 4.0, 5.0)},
                 bonds=[
                     Bond(1, 2, 1),

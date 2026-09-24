@@ -12,7 +12,6 @@ from chemvas.core.history import (
     command_requires_exact_history_transaction,
 )
 from chemvas.ui.annotations.state import mark_state_dict_for, scene_item_state_for
-from chemvas.ui.canvas.canvas_model_access import atom_for_id
 from chemvas.ui.canvas.canvas_scene_items_state import mark_items_for
 from chemvas.ui.export.export_render_service import export_scene
 from chemvas.ui.molecule.structure_mutation_access import add_bond_for
@@ -43,7 +42,7 @@ def drawing():
 )
 def test_bound_mark_rescales_in_place_and_undo_redo_restores_exact_state(drawing, kind):
     canvas, atom_id = drawing
-    atom = atom_for_id(canvas, atom_id)
+    atom = canvas.model.atom_for_id(atom_id)
     offset = QPointF(4.125, -6.375)
     item = add_mark_for_atom_for(
         canvas,

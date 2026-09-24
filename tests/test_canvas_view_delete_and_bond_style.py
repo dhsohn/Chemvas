@@ -15,7 +15,7 @@ from chemvas.core.model_commands import (
     DeleteAtomsCommand,
     DeleteBondCommand,
 )
-from chemvas.domain.document import Atom, Bond
+from chemvas.domain.document import Atom, Bond, MoleculeModel
 from chemvas.features.graph import CanvasGraphState
 from chemvas.ui.canvas.canvas_atom_graphics_state import CanvasAtomGraphicsState
 from chemvas.ui.canvas.canvas_bond_graphics_state import (
@@ -102,10 +102,10 @@ class CanvasViewDeleteAndBondStyleTest(unittest.TestCase):
         )
         move_controller = SimpleNamespace(redraw_connected_bonds=mock.Mock())
         mark_item = _StateItem({"mark": 1})
+        model = MoleculeModel(atoms={1: Atom("C", 0.0, 0.0)}, bonds=[])
+        model.next_atom_id = 5
         view = SimpleNamespace(
-            model=SimpleNamespace(
-                atoms={1: Atom("C", 0.0, 0.0)}, bonds=[], next_atom_id=5
-            ),
+            model=model,
             runtime_state=canvas_runtime_state(
                 smiles_input_state=CanvasSmilesInputState(last_smiles_input="C"),
                 mark_registry=CanvasMarkRegistry({1: [mark_item]}),
@@ -175,7 +175,7 @@ class CanvasViewDeleteAndBondStyleTest(unittest.TestCase):
         )
         move_controller = SimpleNamespace(redraw_connected_bonds=mock.Mock())
         view = SimpleNamespace(
-            model=SimpleNamespace(
+            model=MoleculeModel(
                 atoms={
                     1: Atom("C", 0.0, 0.0),
                     2: Atom("O", 1.0, 0.0),
@@ -234,7 +234,7 @@ class CanvasViewDeleteAndBondStyleTest(unittest.TestCase):
         remove_bond_by_id = mock.Mock()
         move_controller = SimpleNamespace(redraw_connected_bonds=mock.Mock())
         view = SimpleNamespace(
-            model=SimpleNamespace(bonds=bonds),
+            model=MoleculeModel(bonds=bonds),
             runtime_state=canvas_runtime_state(
                 smiles_input_state=CanvasSmilesInputState(last_smiles_input="CC"),
                 mark_registry=CanvasMarkRegistry(),
@@ -307,7 +307,7 @@ class CanvasViewDeleteAndBondStyleTest(unittest.TestCase):
         move_controller = SimpleNamespace(redraw_connected_bonds=mock.Mock())
         record_bond_update = mock.Mock()
         view = SimpleNamespace(
-            model=SimpleNamespace(bonds=[wedge_bond, plain_bond]),
+            model=MoleculeModel(bonds=[wedge_bond, plain_bond]),
             scene=lambda: scene,
             runtime_state=canvas_runtime_state(
                 smiles_input_state=CanvasSmilesInputState(last_smiles_input="C=C"),
@@ -369,7 +369,7 @@ class CanvasViewDeleteAndBondStyleTest(unittest.TestCase):
         move_controller = SimpleNamespace(redraw_connected_bonds=mock.Mock())
         record_bond_update = mock.Mock()
         view = SimpleNamespace(
-            model=SimpleNamespace(bonds=[styled_bond, cycled_bond]),
+            model=MoleculeModel(bonds=[styled_bond, cycled_bond]),
             scene=lambda: scene,
             runtime_state=canvas_runtime_state(
                 smiles_input_state=CanvasSmilesInputState(last_smiles_input="CN"),

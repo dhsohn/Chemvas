@@ -6,7 +6,6 @@ from PyQt6.QtCore import QPointF
 from PyQt6.QtGui import QPolygonF
 
 from chemvas.ui.annotations.materialize import create_ring_item_from_state
-from chemvas.ui.canvas.canvas_model_access import atom_for_id
 from chemvas.ui.canvas.canvas_scene_items_state import ring_items_for
 from chemvas.ui.scene.scene_selectability import make_item_selectable
 
@@ -38,7 +37,7 @@ def rebuild_ring_fill_polygons(
             continue
         points = []
         for atom_id in ring_atom_ids:
-            atom = atom_for_id(canvas, atom_id)
+            atom = canvas.model.atom_for_id(atom_id)
             if atom is None:
                 continue
             points.append(QPointF(atom.x, atom.y))

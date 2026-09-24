@@ -26,7 +26,6 @@ from chemvas.core.model_commands import SetAtomPositionsCommand
 from chemvas.domain.transactions import add_recovery_error_note
 from chemvas.ui.annotations.state import scene_item_history_state, scene_item_state_for
 from chemvas.ui.canvas.canvas_mark_registry import mark_registry_for
-from chemvas.ui.canvas.canvas_model_access import bond_for_id
 from chemvas.ui.canvas.canvas_scene_items_state import (
     require_scene_record_id,
     ring_items_for_atoms,
@@ -60,7 +59,7 @@ def atom_ids_with_bonds(canvas, atom_ids: set[int], bond_ids: set[int]) -> set[i
     if getattr(canvas, "model", None) is None:
         return expanded
     for bond_id in bond_ids:
-        bond = bond_for_id(canvas, bond_id)
+        bond = canvas.model.bond_for_id(bond_id)
         if bond is not None:
             expanded.add(bond.a)
             expanded.add(bond.b)
