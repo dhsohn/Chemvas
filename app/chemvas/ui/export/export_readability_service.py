@@ -25,13 +25,12 @@ from PyQt6.QtWidgets import (
 from chemvas.features.export import (
     ExportPlan,
     MinimumFontSizeError,
-    collect_export_items,
-    export_item_closure,
     svg_viewport_size_points,
 )
 from chemvas.ui.annotations.records import require_ts_bracket_record
 from chemvas.ui.canvas.canvas_scene_items_state import items_in_document_order
 from chemvas.ui.canvas.graphics_items import AtomLabelItem, ExportTextItem
+from chemvas.ui.export.export_scope import collect_export_items, export_item_closure
 from chemvas.ui.scene.scene_item_access import item_is_unavailable_for_scene_operation
 
 if TYPE_CHECKING:

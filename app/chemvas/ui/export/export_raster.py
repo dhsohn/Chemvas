@@ -5,9 +5,9 @@ from typing import TYPE_CHECKING, Any, cast
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QImage, QPainter
 
-from .painting import METERS_PER_INCH, paint_scene_region
-from .plan import POINTS_PER_INCH, ExportPlan
-from .scope import exported_scene
+from chemvas.features.export import POINTS_PER_INCH, ExportPlan
+from chemvas.ui.export.export_painting import METERS_PER_INCH, paint_scene_region
+from chemvas.ui.export.export_scope import exported_scene
 
 if TYPE_CHECKING:
     from collections.abc import Sequence

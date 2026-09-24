@@ -205,7 +205,7 @@ def test_calculation_boundary_rejects_new_consumers_and_allows_registrations() -
             "chemvas.core.document_io",
             "chemvas.features.document_patch.service",
             "chemvas.ui.canvas.canvas_document_state",
-            "chemvas.features.export.service",
+            "chemvas.ui.export.export_render_service",
         ):
             edge = ImportEdge(consumer, operation, CHEMVAS_ROOT / "injected.py", 1)
             assert _calculation_boundary_violations((edge,)) == (edge,)
@@ -225,12 +225,11 @@ def test_domain_has_no_framework_or_adapter_dependencies() -> None:
     assert violations == []
 
 
-def test_hover_feature_policy_is_qt_and_adapter_free() -> None:
-    hover_package = "chemvas.features.hover"
+def test_features_are_qt_and_adapter_free() -> None:
     violations = [
         _formatted(edge)
         for edge in _import_edges()
-        if (edge.source == hover_package or edge.source.startswith(f"{hover_package}."))
+        if _layer(edge.source) == "features"
         and edge.dependency.startswith(("PyQt6", "rdkit", "chemvas.adapters"))
     ]
 

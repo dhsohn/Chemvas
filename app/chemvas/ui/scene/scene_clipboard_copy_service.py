@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from chemvas.features.export import exported_scene
+from chemvas.ui.export.export_scope import exported_scene
 from chemvas.ui.scene.scene_clipboard_copy_io import build_clipboard_mime_data
 from chemvas.ui.scene.scene_clipboard_transaction_logic import (
     build_clipboard_copy_plan,

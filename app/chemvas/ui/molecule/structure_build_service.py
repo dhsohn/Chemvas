@@ -3,7 +3,6 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from chemvas.domain.transactions import add_recovery_error_note
-from chemvas.features.insertion import resolve_bond_placement_context
 from chemvas.ui.canvas.canvas_model_access import (
     atom_for_id,
     bond_for_id,
@@ -31,6 +30,7 @@ from chemvas.ui.molecule.structure_growth_build_actions import (
 from chemvas.ui.molecule.structure_growth_build_service import (
     StructureGrowthBuildService,
 )
+from chemvas.ui.molecule.structure_growth_geometry import resolve_bond_placement_context
 from chemvas.ui.scene.scene_group_operations import group_connection_allowed_for
 
 if TYPE_CHECKING:

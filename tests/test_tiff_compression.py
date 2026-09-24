@@ -10,8 +10,8 @@ from PyQt6.QtWidgets import QApplication, QGraphicsScene
 
 from chemvas.bootstrap.document_cli_shared import offscreen_canvas
 from chemvas.features.document_composition import compose_document_state
-from chemvas.features.export import export_scene
-from chemvas.features.export.raster import save_tiff_with_pillow
+from chemvas.ui.export.export_raster import save_tiff_with_pillow
+from chemvas.ui.export.export_render_service import export_scene
 
 
 @pytest.fixture(scope="module", autouse=True)

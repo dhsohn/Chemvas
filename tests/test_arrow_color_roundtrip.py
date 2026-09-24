@@ -117,11 +117,8 @@ def test_native_document_restore_preserves_arrow_color_and_pen_style(canvas, kin
 def test_arrow_labels_render_in_explicit_color_but_keep_default_text_style(
     canvas, kind
 ):
-    from chemvas.features.export import (
-        collect_export_items,
-        content_bounds,
-        render_scene_to_svg_bytes,
-    )
+    from chemvas.ui.export.export_render_service import render_scene_to_svg_bytes
+    from chemvas.ui.export.export_scope import collect_export_items, content_bounds
 
     state = _document([_arrow(kind, labels={"above": "k_{1}", "below": "fast"})])
     state["settings"]["text_color"] = "#654321"

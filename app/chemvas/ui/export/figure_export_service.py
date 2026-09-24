@@ -10,12 +10,14 @@ from chemvas.core.document_io import atomic_write_via_temp
 from chemvas.features.export import (
     ExportPlan,
     points_for_mm,
-    render_export_plan,
-    resolve_export_plan,
     supports_minimum_font_check,
 )
 from chemvas.ui.export.export_guard_service import validate_export_budget
 from chemvas.ui.export.export_readability_service import assess_export_readability
+from chemvas.ui.export.export_render_service import (
+    render_export_plan,
+    resolve_export_plan,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Sequence

@@ -6,11 +6,6 @@ from typing import TYPE_CHECKING
 from PyQt6.QtCore import QRectF
 
 from chemvas.domain.transactions import add_recovery_error_note
-from chemvas.features.export import (
-    collect_export_items,
-    content_bounds,
-    export_item_closure,
-)
 from chemvas.ui.canvas.canvas_window_access import notify_error_for
 from chemvas.ui.canvas.input_view_access import (
     CanvasSceneRectStateSnapshot,
@@ -23,6 +18,11 @@ from chemvas.ui.canvas.sheet_setup_state import (
     set_sheet_setup_state_for,
     sheet_rects,
     sheet_setup_values_for,
+)
+from chemvas.ui.export.export_scope import (
+    collect_export_items,
+    content_bounds,
+    export_item_closure,
 )
 
 if TYPE_CHECKING:

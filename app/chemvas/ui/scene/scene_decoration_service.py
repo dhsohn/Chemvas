@@ -8,11 +8,7 @@ from PyQt6.QtWidgets import QGraphicsTextItem
 
 from chemvas.domain.document import ARROW_LABEL_SIDES, Shape, TSBracket
 from chemvas.domain.transactions import run_rollback_step
-from chemvas.features.annotations import (
-    normalized_bracket_kind,
-    normalized_shape_kind,
-    normalized_stroke_style,
-)
+from chemvas.features.annotations import normalized_bracket_kind
 from chemvas.ui.annotations.materialize import create_orbital_item_from_state
 from chemvas.ui.annotations.records import (
     discard_shape_record_for,
@@ -21,6 +17,10 @@ from chemvas.ui.annotations.records import (
     set_ts_bracket_record_for,
     shape_id_for_item,
     ts_bracket_id_for_item,
+)
+from chemvas.ui.annotations.shape_geometry import (
+    normalized_shape_kind,
+    normalized_stroke_style,
 )
 from chemvas.ui.annotations.state import (
     arrow_state_dict_for,

@@ -201,6 +201,18 @@ module = [
     "chemvas.ui.tools.text_tool_logic",
     "chemvas.ui.transactions.document",
     "chemvas.ui.transactions.object_graph_snapshot",
+    # Moved out of ``features`` with their Qt imports (ADR 0015); strict since.
+    "chemvas.ui.annotations.shape_geometry",
+    "chemvas.ui.export.export_painting",
+    "chemvas.ui.export.export_raster",
+    "chemvas.ui.export.export_render_service",
+    "chemvas.ui.export.export_scope",
+    "chemvas.ui.export.export_vector",
+    "chemvas.ui.insert.ring_occupancy",
+    "chemvas.ui.molecule.structure_growth_geometry",
+    "chemvas.ui.selection.selection_center",
+    "chemvas.ui.selection.selection_handles",
+    "chemvas.ui.selection.selection_outline_paths",
 ]
 disallow_any_generics = true
 disallow_incomplete_defs = true

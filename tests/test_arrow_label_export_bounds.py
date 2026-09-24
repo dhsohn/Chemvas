@@ -14,13 +14,10 @@ from PyQt6.QtWidgets import QApplication, QGraphicsRectItem, QGraphicsScene
 
 from chemvas.domain.document import AnnotationCollection
 from chemvas.features.annotations import arrow_label_html
-from chemvas.features.export import (
-    content_bounds,
-    item_export_bounds,
-    resolve_export_plan,
-)
 from chemvas.ui.annotations.items import NoteItem
 from chemvas.ui.canvas.graphics_items import ArrowLabelItem
+from chemvas.ui.export.export_render_service import resolve_export_plan
+from chemvas.ui.export.export_scope import content_bounds, item_export_bounds
 from tests.subprocess_support import source_subprocess_env
 
 
@@ -217,7 +214,7 @@ from PyQt6.QtGui import QFont, QImage, QPainter
 from PyQt6.QtWidgets import QApplication, QGraphicsScene
 
 from chemvas.features.annotations import arrow_label_html
-from chemvas.features.export import item_export_bounds
+from chemvas.ui.export.export_scope import item_export_bounds
 from chemvas.ui.canvas.graphics_items import ArrowLabelItem
 
 app = QApplication([])

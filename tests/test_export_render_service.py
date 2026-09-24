@@ -14,16 +14,18 @@ from PyQt6.QtWidgets import (
     QGraphicsScene,
 )
 
-from chemvas.features.export import (
-    ExportPlan,
-    collect_export_items,
-    content_bounds,
+from chemvas.features.export import ExportPlan
+from chemvas.ui.canvas.graphics_items import AtomDotItem, AtomLabelItem
+from chemvas.ui.export.export_render_service import (
     export_scene,
-    item_export_bounds,
     render_scene_to_pdf_bytes,
     render_scene_to_svg_bytes,
 )
-from chemvas.ui.canvas.graphics_items import AtomDotItem, AtomLabelItem
+from chemvas.ui.export.export_scope import (
+    collect_export_items,
+    content_bounds,
+    item_export_bounds,
+)
 
 
 class ExportRenderServiceTest(unittest.TestCase):
@@ -79,7 +81,7 @@ class ExportRenderServiceTest(unittest.TestCase):
     def test_svg_viewport_extraction_preserves_bytes_at_rounding_boundaries(
         self,
     ) -> None:
-        from chemvas.features.export import vector
+        from chemvas.ui.export import export_vector as vector
 
         def previous_configuration(generator, plan, title):
             generator.setResolution(72)
@@ -128,7 +130,7 @@ class ExportRenderServiceTest(unittest.TestCase):
         with (
             tempfile.TemporaryDirectory() as tmp,
             mock.patch(
-                "chemvas.features.export.service.resolve_export_plan",
+                "chemvas.ui.export.export_render_service.resolve_export_plan",
                 return_value=(items, plan),
                 create=True,
             ) as resolve_plan,

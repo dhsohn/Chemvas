@@ -13,14 +13,13 @@ from PyQt6.QtWidgets import (
 )
 
 from chemvas.domain.document import VALID_ARROW_KINDS
-from chemvas.features.annotations import (
-    normalized_bracket_kind,
-    normalized_shape_kind,
-    normalized_stroke_style,
-    sanitize_note_html,
-)
+from chemvas.features.annotations import normalized_bracket_kind, sanitize_note_html
 from chemvas.ui.annotations.items import ImageItem, NoteItem, OrbitalItem, RingFillItem
 from chemvas.ui.annotations.marks import MarkItem
+from chemvas.ui.annotations.shape_geometry import (
+    normalized_shape_kind,
+    normalized_stroke_style,
+)
 from chemvas.ui.canvas.canvas_model_access import (
     atom_annotation_for,
     atom_for_id,

@@ -134,7 +134,7 @@ def test_non_png_does_not_invent_raster_dimensions():
 def test_pdf_height_limit_matches_written_page_geometry(width, height):
     from PyQt6.QtWidgets import QApplication, QGraphicsScene
 
-    from chemvas.features.export.vector import render_pdf_bytes
+    from chemvas.ui.export.export_vector import render_pdf_bytes
 
     _app = QApplication.instance() or QApplication([])
     scene = QGraphicsScene()

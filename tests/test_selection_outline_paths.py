@@ -13,7 +13,7 @@ from PyQt6.QtWidgets import (
     QGraphicsTextItem,
 )
 
-from chemvas.features.selection import (
+from chemvas.ui.selection.selection_outline_paths import (
     selection_line_stroke_path,
     selection_path_for_bond_item,
     selection_path_for_object_item,

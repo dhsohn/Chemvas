@@ -20,10 +20,10 @@ from PyQt6.QtWidgets import (
     QStyleOptionGraphicsItem,
 )
 
-from chemvas.features.export import EXPORT_EXCLUDED_KINDS, item_export_bounds
 from chemvas.ui.annotations.arrows import ARROW_LABEL_ROLE
 from chemvas.ui.canvas.canvas_scene_items_state import items_in_document_order
 from chemvas.ui.canvas.graphics_items import note_paint_scene_path
+from chemvas.ui.export.export_scope import EXPORT_EXCLUDED_KINDS, item_export_bounds
 from chemvas.ui.scene.scene_item_access import item_is_unavailable_for_scene_operation
 
 if TYPE_CHECKING:

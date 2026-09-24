@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING
 
 from PyQt6.QtCore import QPointF
 
-from chemvas.features.insertion import (
+from chemvas.ui.molecule.structure_growth_geometry import (
     BondPlacementContext,
     mirrored_local_points,
     other_atom_id_from_bond_result,

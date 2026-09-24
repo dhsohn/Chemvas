@@ -4,7 +4,7 @@ import unittest
 from PyQt6.QtCore import QPointF
 
 from chemvas.domain.document import Atom, Bond
-from chemvas.features.insertion import (
+from chemvas.ui.molecule.structure_growth_geometry import (
     alternating_ring_bond_specs,
     crown_ether_elements,
     fused_benzene_centers,

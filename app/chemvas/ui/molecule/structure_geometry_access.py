@@ -4,12 +4,12 @@ import math
 
 from PyQt6.QtCore import QPointF
 
-from chemvas.features.insertion import (
+from chemvas.ui.canvas.canvas_model_access import atom_for_id
+from chemvas.ui.canvas.canvas_scene_items_state import ring_items_for
+from chemvas.ui.insert.ring_occupancy import (
     graph_ring_polygons_for_bond,
     ring_polygon_points_for_bond,
 )
-from chemvas.ui.canvas.canvas_model_access import atom_for_id
-from chemvas.ui.canvas.canvas_scene_items_state import ring_items_for
 from chemvas.ui.molecule.atom_label_renderer import connected_atom_unit_vectors
 from chemvas.ui.molecule.structure_geometry_logic import (
     compute_regular_ring_points_for_atom,

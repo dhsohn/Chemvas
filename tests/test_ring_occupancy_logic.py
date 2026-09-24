@@ -3,7 +3,7 @@ import unittest
 from PyQt6.QtCore import QPointF
 
 from chemvas.domain.document import Bond
-from chemvas.features.insertion import (
+from chemvas.ui.insert.ring_occupancy import (
     point_inside_any_ring,
     ring_polygon_points_for_bond,
 )

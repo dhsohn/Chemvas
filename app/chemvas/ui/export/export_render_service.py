@@ -11,15 +11,15 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from .plan import ExportPlan, build_export_plan
-from .raster import export_raster_file
-from .scope import (
+from chemvas.features.export import ExportPlan, build_export_plan
+from chemvas.ui.export.export_raster import export_raster_file
+from chemvas.ui.export.export_scope import (
     EXPORT_EXCLUDED_KINDS,
     collect_export_items,
     content_bounds,
     item_export_bounds,
 )
-from .vector import (
+from chemvas.ui.export.export_vector import (
     export_pdf_file,
     export_svg_file,
     render_pdf_bytes,

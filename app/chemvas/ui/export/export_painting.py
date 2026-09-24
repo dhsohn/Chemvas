@@ -8,7 +8,7 @@ from PyQt6.QtGui import QPainter
 if TYPE_CHECKING:
     from PyQt6.QtWidgets import QGraphicsScene
 
-    from .plan import ExportPlan
+    from chemvas.features.export import ExportPlan
 
 METERS_PER_INCH = 0.0254
 

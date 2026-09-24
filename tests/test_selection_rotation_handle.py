@@ -8,15 +8,15 @@ from PyQt6.QtGui import QMouseEvent
 from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import QApplication
 
-from chemvas.features.selection import (
-    HANDLE_SCREEN_PX,
-    ROTATION_HANDLE_STEM_PX,
-    ROTATION_HANDLE_TYPE,
-)
 from chemvas.ui.canvas.canvas_model_access import atom_for_id
 from chemvas.ui.canvas.pick_radius_access import atom_pick_radius_for
 from chemvas.ui.molecule.atom_label_access import add_or_update_atom_label
 from chemvas.ui.molecule.structure_mutation_access import add_bond_for
+from chemvas.ui.selection.selection_handles import (
+    HANDLE_SCREEN_PX,
+    ROTATION_HANDLE_STEM_PX,
+    ROTATION_HANDLE_TYPE,
+)
 from chemvas.ui.window.main_window_ports import (
     history_service_for_window,
     select_all_for_window,

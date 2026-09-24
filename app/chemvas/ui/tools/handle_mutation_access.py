@@ -1,15 +1,15 @@
 from __future__ import annotations
 
-from chemvas.features.selection import (
+from chemvas.ui.selection.selection_handles import (
     clamp_curved_midpoint as clamp_curved_midpoint_helper,
 )
-from chemvas.features.selection import (
+from chemvas.ui.selection.selection_handles import (
     control_from_midpoint as control_from_midpoint_helper,
 )
-from chemvas.features.selection import (
+from chemvas.ui.selection.selection_handles import (
     curved_midpoint as curved_midpoint_helper,
 )
-from chemvas.features.selection import (
+from chemvas.ui.selection.selection_handles import (
     default_curved_control as default_curved_control_helper,
 )
 

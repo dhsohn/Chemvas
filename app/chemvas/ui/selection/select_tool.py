@@ -7,15 +7,12 @@ from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import QApplication, QGraphicsView
 
 from chemvas.domain.document import VALID_ARROW_KINDS, VALID_CURVED_ARROW_KINDS
-from chemvas.features.selection import (
-    ROTATION_HANDLE_TYPE,
-    SelectionPressContext,
-    plan_selection_press,
-)
+from chemvas.features.selection import SelectionPressContext, plan_selection_press
 from chemvas.ui.annotations.state import scene_item_state_for
 from chemvas.ui.canvas.canvas_scene_items_state import require_scene_record_id
 from chemvas.ui.history.history_commands import UpdateSceneItemCommand
 from chemvas.ui.selection.selection_drag_tool import SelectionDragMixin
+from chemvas.ui.selection.selection_handles import ROTATION_HANDLE_TYPE
 from chemvas.ui.selection.selection_queries import (
     clear_scene_selection_for,
     selection_snapshot_for,

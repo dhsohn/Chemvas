@@ -11,15 +11,15 @@ from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import QApplication, QGraphicsRectItem
 
 from chemvas.bootstrap.main_window import build_main_window
-from chemvas.features.export import (
-    collect_export_items,
-    content_bounds,
-    export_item_closure,
-)
 from chemvas.ui.canvas import sheet_setup_access
 from chemvas.ui.canvas.input_view_access import (
     fit_canvas_to_view_for,
     set_zoom_for,
+)
+from chemvas.ui.export.export_scope import (
+    collect_export_items,
+    content_bounds,
+    export_item_closure,
 )
 from chemvas.ui.molecule.structure_mutation_access import add_bond_between_points_for
 from chemvas.ui.selection.select_all_access import select_all_scene_items_for

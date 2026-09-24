@@ -14,11 +14,8 @@ MAX_RASTER_PIXELS = 25_000_000
 
 
 def _rendered_height_points(plan: ExportPlan, output_format: str, dpi: int) -> float:
-    from chemvas.features.export import (
-        POINTS_PER_INCH,
-        pdf_page_size,
-        svg_viewport_size_points,
-    )
+    from chemvas.features.export import POINTS_PER_INCH, svg_viewport_size_points
+    from chemvas.ui.export.export_vector import pdf_page_size
 
     if output_format == "pdf":
         return float(pdf_page_size(plan).sizePoints().height())

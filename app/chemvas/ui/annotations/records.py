@@ -18,7 +18,7 @@ from chemvas.domain.document import (
     ts_bracket_from_state,
     ts_bracket_to_state,
 )
-from chemvas.features.annotations import shape_path
+from chemvas.ui.annotations.shape_geometry import shape_path
 from chemvas.ui.scene.scene_record_ids import (
     bind_scene_record,
     new_scene_record_id,

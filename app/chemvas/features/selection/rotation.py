@@ -1,21 +1,26 @@
 from __future__ import annotations
 
 import math
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Protocol
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping
 
-    from PyQt6.QtCore import QPointF
-
     from chemvas.domain.document import Atom
+
+
+class Point2D(Protocol):
+    """Anything with Qt's ``QPointF`` accessors; the feature stays Qt-free."""
+
+    def x(self) -> float: ...
+    def y(self) -> float: ...
 
 
 def rotated_atom_positions(
     atom_ids: Iterable[int],
     *,
     atoms: Mapping[int, Atom],
-    center: QPointF,
+    center: Point2D,
     angle_radians: float,
 ) -> dict[int, tuple[float, float]]:
     cos_a = math.cos(angle_radians)

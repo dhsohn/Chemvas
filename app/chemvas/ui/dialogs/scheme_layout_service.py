@@ -7,7 +7,6 @@ from typing import TYPE_CHECKING, Any
 from PyQt6.QtCore import QPointF, QRectF, Qt
 from PyQt6.QtWidgets import QGraphicsRectItem
 
-from chemvas.features.export import content_bounds, export_item_closure
 from chemvas.features.scheme_layout import (
     MAX_LAYOUT_ROWS,
     LayoutBlock,
@@ -20,6 +19,7 @@ from chemvas.ui.canvas.canvas_document_state import document_item_lists_for
 from chemvas.ui.canvas.canvas_mark_registry import mark_registry_for
 from chemvas.ui.canvas.canvas_scene_items_state import ring_items_for
 from chemvas.ui.canvas.graphics_items import note_paint_scene_path
+from chemvas.ui.export.export_scope import content_bounds, export_item_closure
 
 if TYPE_CHECKING:
     from PyQt6.QtWidgets import QGraphicsItem, QGraphicsTextItem

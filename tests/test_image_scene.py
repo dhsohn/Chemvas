@@ -32,7 +32,6 @@ from chemvas.domain.document import (
     image_state_from_bytes,
 )
 from chemvas.domain.document import images as image_policy
-from chemvas.features.selection import ROTATION_HANDLE_TYPE
 from chemvas.ui.annotations.items import ImageItem
 from chemvas.ui.annotations.state import scene_item_state_for
 from chemvas.ui.canvas.canvas_document_state import snapshot_canvas_document_state
@@ -45,6 +44,7 @@ from chemvas.ui.history.history_commands import (
 from chemvas.ui.molecule.structure_mutation_access import add_bond_between_points_for
 from chemvas.ui.scene.scene_group_operations import group_selection_for
 from chemvas.ui.selection.select_all_access import select_all_scene_items_for
+from chemvas.ui.selection.selection_handles import ROTATION_HANDLE_TYPE
 from chemvas.ui.transactions import document_transaction
 from tests.canvas_factory import build_canvas_view
 

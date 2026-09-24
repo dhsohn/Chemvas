@@ -22,10 +22,11 @@ from PyQt6.QtWidgets import (
 )
 
 from chemvas.domain.document import AnnotationCollection
-from chemvas.features.export import ExportPlan, render_scene_to_svg_bytes
-from chemvas.features.export.raster import export_raster_file
-from chemvas.features.export.scope import exported_scene
+from chemvas.features.export import ExportPlan
 from chemvas.ui.annotations.items import NoteItem
+from chemvas.ui.export.export_raster import export_raster_file
+from chemvas.ui.export.export_render_service import render_scene_to_svg_bytes
+from chemvas.ui.export.export_scope import exported_scene
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -185,7 +186,7 @@ def test_note_export_respects_parent_clipping_and_restores_after_failure() -> No
         _assert_same_ink(before, _render(scene, source))
     with (
         patch(
-            "chemvas.features.export.vector.paint_scene_region",
+            "chemvas.ui.export.export_vector.paint_scene_region",
             side_effect=RuntimeError("paint failed"),
         ),
         pytest.raises(RuntimeError, match="paint failed"),

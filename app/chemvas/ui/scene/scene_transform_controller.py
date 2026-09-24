@@ -10,7 +10,7 @@ from PyQt6.QtCore import QPointF, QRectF
 from chemvas.core.model_commands import SetAtomPositionsCommand
 from chemvas.domain.document import VALID_EQUILIBRIUM_KINDS
 from chemvas.features.rendering import refresh_bond_graphics
-from chemvas.features.selection import rotated_atom_positions, rotation_drag_angle
+from chemvas.features.selection import rotated_atom_positions
 from chemvas.ui.annotations.state import (
     ARROW_KINDS,
     bond_state_dict,
@@ -63,6 +63,7 @@ from chemvas.ui.scene.scene_transform_apply_logic import (
     apply_component_flip_transform,
     apply_standalone_flip_transform,
 )
+from chemvas.ui.selection.selection_handles import rotation_drag_angle
 from chemvas.ui.selection.selection_queries import (
     independent_selection_items,
     selected_atom_ids_for_transform_for,

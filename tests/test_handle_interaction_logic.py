@@ -7,7 +7,7 @@ from PyQt6.QtCore import QPointF, Qt
 from PyQt6.QtGui import QTransform
 from PyQt6.QtWidgets import QApplication, QGraphicsItem, QGraphicsScene
 
-from chemvas.features.selection import (
+from chemvas.ui.selection.selection_handles import (
     EDGE_HANDLE_SCREEN_PX,
     HANDLE_ACCENT_COLOR,
     HANDLE_SCREEN_PX,

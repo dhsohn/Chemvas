@@ -10,6 +10,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 The entries below are internal and change nothing a user or a document can
 observe.
 
+- `features` is Qt-free. The eleven modules that imported PyQt6 (selection
+  centre, handles and outline paths; export painting, raster, scope, vector
+  and the render service; insertion ring occupancy and structure growth
+  geometry; shape geometry) move to the `ui` package that uses them, the
+  feature packages stop re-exporting them, and `test_package_dependencies`
+  asserts the whole layer, not only `features.hover`, imports neither PyQt6
+  nor the adapters ([ADR 0015](docs/adr/0015-owners-and-qt-free-features.md)).
 - One spelling per canvas- and window-owned value: 130 single-statement
   forwarders such as `atom_items_for(canvas)`, `services_for_window(window)`
   and `remove_marks_for_atom_for(canvas, atom_id)` are inlined at their call
