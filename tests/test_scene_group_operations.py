@@ -3,7 +3,6 @@ import unittest
 from unittest import mock
 
 from chemvas.ui.canvas.canvas_scene_items_state import require_scene_record_id
-from chemvas.ui.selection.selection_state import selection_for
 from tests.mark_support import register_mark_double
 from tests.note_support import register_note_double
 from tests.ring_support import register_ring_double
@@ -27,14 +26,10 @@ from chemvas.ui.canvas.canvas_atom_graphics_state import (
     CanvasAtomGraphicsState,
     set_atom_item_for,
 )
-from chemvas.ui.canvas.canvas_bond_graphics_state import (
-    CanvasBondGraphicsState,
-    bond_items_for,
-)
+from chemvas.ui.canvas.canvas_bond_graphics_state import CanvasBondGraphicsState
 from chemvas.ui.canvas.canvas_callback_state import CanvasCallbackState
 from chemvas.ui.canvas.canvas_group_state import (
     CanvasGroupState,
-    group_state_for,
     register_group_for,
 )
 from chemvas.ui.canvas.canvas_mark_registry import CanvasMarkRegistry, mark_registry_for
@@ -54,10 +49,7 @@ from chemvas.ui.scene.scene_group_operations import (
     selected_group_rects_for,
     ungroup_selection_for,
 )
-from chemvas.ui.selection.selection_state import (
-    add_selected_note_for,
-    selected_notes_for,
-)
+from chemvas.ui.selection.selection_state import add_selected_note_for
 
 
 class _History:
@@ -120,7 +112,7 @@ def _add_bond(canvas, a: int, b: int, *, selected: bool = False):
     bond_id = canvas.model.add_bond(a, b)
     item = canvas.add_scene_item("bond", selected=selected)
     item.setData(1, bond_id)
-    bond_items_for(canvas)[bond_id] = [item]
+    canvas.runtime_state.bond_graphics_state.bond_items[bond_id] = [item]
     return bond_id, item
 
 
@@ -170,7 +162,7 @@ class SceneGroupOperationsTest(unittest.TestCase):
         _add_bond(canvas, atom_a, atom_b, selected=True)
 
         self.assertFalse(group_selection_for(canvas))
-        self.assertEqual(group_state_for(canvas).groups, {})
+        self.assertEqual(canvas.runtime_state.group_state.groups, {})
         self.assertEqual(canvas.history.commands, [])
 
     def test_group_selection_rejects_empty_selection(self) -> None:
@@ -188,7 +180,7 @@ class SceneGroupOperationsTest(unittest.TestCase):
 
         self.assertTrue(group_selection_for(canvas))
 
-        groups = group_state_for(canvas).groups
+        groups = canvas.runtime_state.group_state.groups
         self.assertEqual(len(groups), 1)
         group = next(iter(groups.values()))
         self.assertEqual(group.atom_ids, {atom_a})
@@ -210,7 +202,7 @@ class SceneGroupOperationsTest(unittest.TestCase):
             group_selection_for(canvas)
 
         self.assertIs(caught.exception, primary)
-        self.assertEqual(group_state_for(canvas).groups, {})
+        self.assertEqual(canvas.runtime_state.group_state.groups, {})
         self.assertEqual(canvas.history.commands, [])
 
     def test_group_selection_includes_standalone_marks(self) -> None:
@@ -220,7 +212,7 @@ class SceneGroupOperationsTest(unittest.TestCase):
 
         self.assertTrue(group_selection_for(canvas))
 
-        group = next(iter(group_state_for(canvas).groups.values()))
+        group = next(iter(canvas.runtime_state.group_state.groups.values()))
         self.assertEqual(group.atom_ids, {atom_a})
         self.assertEqual(set(group.item_ids), {require_scene_record_id(mark)})
 
@@ -234,7 +226,7 @@ class SceneGroupOperationsTest(unittest.TestCase):
         _add_bond(canvas, atom_a, atom_b, selected=True)
 
         self.assertFalse(group_selection_for(canvas))
-        self.assertEqual(group_state_for(canvas).groups, {})
+        self.assertEqual(canvas.runtime_state.group_state.groups, {})
 
     def test_group_selection_is_noop_for_identical_membership(self) -> None:
         canvas = _Canvas()
@@ -257,7 +249,7 @@ class SceneGroupOperationsTest(unittest.TestCase):
 
         self.assertTrue(group_selection_for(canvas))
 
-        state = group_state_for(canvas)
+        state = canvas.runtime_state.group_state
         self.assertEqual(len(state.groups), 1)
         merged = next(iter(state.groups.values()))
         self.assertEqual(merged.atom_ids, {atom_a, atom_b, atom_c})
@@ -285,7 +277,7 @@ class SceneGroupOperationsTest(unittest.TestCase):
 
         self.assertTrue(group_selection_for(canvas))
 
-        state = group_state_for(canvas)
+        state = canvas.runtime_state.group_state
         self.assertEqual(len(state.groups), 1)
         merged = next(iter(state.groups.values()))
         # atom_a was not selected, but grouping {b, c} over the {a, b} group
@@ -305,7 +297,7 @@ class SceneGroupOperationsTest(unittest.TestCase):
 
         self.assertFalse(group_selection_for(canvas))
         self.assertEqual(canvas.history.commands, [])
-        group = next(iter(group_state_for(canvas).groups.values()))
+        group = next(iter(canvas.runtime_state.group_state.groups.values()))
         self.assertEqual(group.atom_ids, {atom_a, atom_b, atom_c})
 
     def test_ungroup_selection_removes_intersecting_groups_with_undo(self) -> None:
@@ -319,7 +311,7 @@ class SceneGroupOperationsTest(unittest.TestCase):
 
         self.assertTrue(ungroup_selection_for(canvas))
 
-        state = group_state_for(canvas)
+        state = canvas.runtime_state.group_state
         self.assertEqual(state.groups, {})
         command = canvas.history.commands[-1]
         self.assertIsInstance(command, UngroupSceneItemsCommand)
@@ -349,7 +341,7 @@ class SceneGroupOperationsTest(unittest.TestCase):
         )
         item_a.setSelected(True)
 
-        selection_for(canvas).expand_selection_to_groups()
+        canvas.services.selection.expand_selection_to_groups()
 
         self.assertTrue(item_b.isSelected())
         self.assertTrue(bond_item.isSelected())
@@ -360,7 +352,7 @@ class SceneGroupOperationsTest(unittest.TestCase):
         self.assertEqual(
             canvas.selection_controller.update_selection_outline.call_count, 2
         )
-        self.assertFalse(group_state_for(canvas).expanding)
+        self.assertFalse(canvas.runtime_state.group_state.expanding)
 
     def test_expand_selection_is_noop_when_group_fully_selected(self) -> None:
         canvas = _Canvas()
@@ -372,7 +364,7 @@ class SceneGroupOperationsTest(unittest.TestCase):
         item_a.setSelected(True)
         arrow.setSelected(True)
 
-        selection_for(canvas).expand_selection_to_groups()
+        canvas.services.selection.expand_selection_to_groups()
 
         canvas.selection_controller.update_selection_outline.assert_not_called()
 
@@ -391,7 +383,7 @@ class SceneGroupOperationsTest(unittest.TestCase):
         atom_b, item_b = _add_atom(canvas, 50.0, 0.0)
         item_b.setSelected(True)
 
-        selection_for(canvas).expand_selection_to_groups()
+        canvas.services.selection.expand_selection_to_groups()
 
         # The lingering note must not re-anchor the group...
         self.assertFalse(item_a.isSelected())
@@ -412,7 +404,7 @@ class SceneGroupOperationsTest(unittest.TestCase):
         _, item = _add_atom(canvas)
         item.setSelected(True)
 
-        selection_for(canvas).expand_selection_to_groups()
+        canvas.services.selection.expand_selection_to_groups()
 
         canvas.selection_controller.toggle_note_selection.assert_not_called()
 
@@ -425,7 +417,7 @@ class SceneGroupOperationsTest(unittest.TestCase):
         )
         item_a.setSelected(True)
 
-        selection_for(canvas).expand_selection_to_groups()
+        canvas.services.selection.expand_selection_to_groups()
 
         self.assertFalse(item_b.isSelected())
         canvas.selection_controller.update_selection_outline.assert_not_called()
@@ -574,7 +566,7 @@ class SceneGroupOperationsTest(unittest.TestCase):
 
         # Notes-only groups have no scene shrink path, so a Qt-selected note
         # must not scene-expand them (sticky-marquee prevention).
-        selection_for(canvas).expand_selection_to_groups()
+        canvas.services.selection.expand_selection_to_groups()
 
         canvas.selection_controller.select_note.assert_not_called()
 
@@ -594,7 +586,7 @@ class SceneGroupOperationsTest(unittest.TestCase):
         # the Qt flags must drop too or an invisible selection would remain.
         service.clear_note_selection()
 
-        self.assertEqual(selected_notes_for(canvas), [])
+        self.assertEqual(canvas.runtime_state.selection_state.selected_notes, [])
         self.assertFalse(note_a.isSelected())
         self.assertFalse(note_b.isSelected())
         self.assertEqual(selected_group_rects_for(canvas), [])
@@ -612,7 +604,7 @@ class SceneGroupOperationsTest(unittest.TestCase):
 
         service.toggle_note_selection(note_a)
 
-        self.assertEqual(selected_notes_for(canvas), [])
+        self.assertEqual(canvas.runtime_state.selection_state.selected_notes, [])
         self.assertFalse(note_a.isSelected())
         self.assertFalse(note_b.isSelected())
 
@@ -636,12 +628,12 @@ class SceneGroupOperationsTest(unittest.TestCase):
             canvas, set(), [require_scene_record_id(item) for item in [note_a, note_b]]
         )
 
-        selection_for(canvas).expand_note_selection_to_groups(note_a)
+        canvas.services.selection.expand_note_selection_to_groups(note_a)
 
         canvas.selection_controller.select_note.assert_called_once_with(
             note_b, additive=True
         )
-        self.assertFalse(group_state_for(canvas).expanding)
+        self.assertFalse(canvas.runtime_state.group_state.expanding)
 
     def test_expand_note_selection_selects_mixed_group_and_skips_reentry(self) -> None:
         canvas = _Canvas()
@@ -661,11 +653,11 @@ class SceneGroupOperationsTest(unittest.TestCase):
         with mock.patch.object(service, "update_note_selection_box"):
             service.select_note(note, additive=True)
 
-        self.assertIn(note, selected_notes_for(canvas))
+        self.assertIn(note, canvas.runtime_state.selection_state.selected_notes)
         self.assertTrue(atom_item.isSelected())
         self.assertTrue(arrow.isSelected())
         canvas.selection_controller.select_note.assert_any_call(other, additive=True)
-        self.assertFalse(group_state_for(canvas).expanding)
+        self.assertFalse(canvas.runtime_state.group_state.expanding)
 
         notes_only_canvas = _Canvas()
         note_a = _add_note(notes_only_canvas, selected=True)
@@ -675,9 +667,9 @@ class SceneGroupOperationsTest(unittest.TestCase):
             set(),
             [require_scene_record_id(item) for item in [note_a, note_b]],
         )
-        group_state_for(notes_only_canvas).expanding = True
+        notes_only_canvas.runtime_state.group_state.expanding = True
 
-        selection_for(notes_only_canvas).expand_note_selection_to_groups(note_a)
+        notes_only_canvas.services.selection.expand_note_selection_to_groups(note_a)
         notes_only_canvas.selection_controller.select_note.assert_not_called()
 
     def test_deselecting_mixed_group_note_deselects_whole_group(self) -> None:
@@ -703,14 +695,16 @@ class SceneGroupOperationsTest(unittest.TestCase):
 
         self.assertFalse(item_a.isSelected())
         self.assertFalse(arrow.isSelected())
-        self.assertNotIn(note, selected_notes_for(canvas))
-        self.assertNotIn(other_note, selected_notes_for(canvas))
+        self.assertNotIn(note, canvas.runtime_state.selection_state.selected_notes)
+        self.assertNotIn(
+            other_note, canvas.runtime_state.selection_state.selected_notes
+        )
         # The notes' Qt selection flags must clear too, or they would keep
         # triggering the group box.
         self.assertFalse(note.isSelected())
         self.assertFalse(other_note.isSelected())
         self.assertEqual(selected_group_rects_for(canvas), [])
-        self.assertFalse(group_state_for(canvas).expanding)
+        self.assertFalse(canvas.runtime_state.group_state.expanding)
 
     def test_deselecting_mixed_group_note_clears_qt_selected_bound_mark(self) -> None:
         canvas = _Canvas()
@@ -747,7 +741,7 @@ class SceneGroupOperationsTest(unittest.TestCase):
         service.clear_note_selection()
 
         self.assertFalse(item_a.isSelected())
-        self.assertEqual(selected_notes_for(canvas), [])
+        self.assertEqual(canvas.runtime_state.selection_state.selected_notes, [])
         self.assertEqual(selected_group_rects_for(canvas), [])
         # Ungrouped scene selection is untouched.
         self.assertTrue(item_b.isSelected())
@@ -804,7 +798,7 @@ class SceneGroupOperationsTest(unittest.TestCase):
             canvas, {atom_a}, [require_scene_record_id(item) for item in [arrow]]
         )
 
-        selection_for(canvas).expand_selection_to_groups()
+        canvas.services.selection.expand_selection_to_groups()
 
         self.assertTrue(item_a.isSelected())
         self.assertTrue(arrow.isSelected())

@@ -8,8 +8,6 @@ from PyQt6.QtGui import QPolygonF
 from PyQt6.QtWidgets import QApplication
 
 from chemvas.adapters.qt.renderer import Renderer
-from chemvas.ui.canvas.canvas_atom_graphics_state import atom_items_for
-from chemvas.ui.canvas.canvas_bond_graphics_state import bond_items_for_id
 from chemvas.ui.canvas.canvas_view import CanvasView
 from tests.test_atom_glyph_bond_clearance import _label_controller
 
@@ -59,7 +57,9 @@ def _assert_inside(canvas, ids, edges):
         bond = canvas.model.bonds[edge]
         if bond.order != 2:
             continue
-        line = bond_items_for_id(canvas, edge)[1].line()
+        line = canvas.runtime_state.bond_graphics_state.bond_items.get(edge, [])[
+            1
+        ].line()
         for point in (line.p1(), line.center(), line.p2()):
             assert polygon.containsPoint(point, Qt.FillRule.OddEvenFill), (edge, point)
 
@@ -108,8 +108,10 @@ def test_native_vertical_ph_line_clears_both_labels(canvas):
     b = services.canvas_atom_mutation_service.add_atom("Ph", 0, 70)
     edge = services.canvas_bond_mutation_service.add_bond(a, b)
     canvas.bond_renderer.add_bond_graphics(edge)
-    line = bond_items_for_id(canvas, edge)[0].line()
-    first, last = (atom_items_for(canvas)[i] for i in (a, b))
+    line = canvas.runtime_state.bond_graphics_state.bond_items.get(edge, [])[0].line()
+    first, last = (
+        canvas.runtime_state.atom_graphics_state.atom_items[i] for i in (a, b)
+    )
     assert line.y1() > first.mapToScene(first.glyph_path()).boundingRect().bottom()
     assert line.y2() < last.mapToScene(last.glyph_path()).boundingRect().top()
 
@@ -221,15 +223,46 @@ def test_failed_ring_edit_then_different_cycle_does_not_reuse_topology(canvas):
 def test_acyclic_growth_and_style_changes_do_not_refresh_remote_ring_bonds(
     canvas, monkeypatch
 ):
-    from unittest.mock import Mock
-
-    from chemvas.ui.canvas import canvas_bond_mutation_service as module
-
     ids, edges = _ring(canvas)
     mutation = canvas.services.canvas_bond_mutation_service
     atoms = canvas.services.canvas_atom_mutation_service
-    scans = Mock(wraps=module.bonds_for)
-    monkeypatch.setattr(module, "bonds_for", scans)
+
+    class _Delegate:
+        """Forward every attribute to the wrapped object except overrides."""
+
+        def __init__(self, target, **overrides) -> None:
+            self.__dict__["_target"] = target
+            self.__dict__.update(overrides)
+
+        def __getattr__(self, name):
+            return getattr(self._target, name)
+
+    class _ScannedBonds(_Delegate):
+        """The model's live bond list, counting full scans by the service."""
+
+        scan_count = 0
+
+        def __iter__(self):
+            self.__dict__["scan_count"] = self.scan_count + 1
+            return iter(self._target)
+
+        def __len__(self):
+            return len(self._target)
+
+        def __getitem__(self, index):
+            return self._target[index]
+
+        def __setitem__(self, index, value):
+            self._target[index] = value
+
+    # Only the mutation service's own view of the model is instrumented, so the
+    # count reflects its remote ring-bond refresh rather than unrelated readers.
+    scans = _ScannedBonds(canvas.model.bonds)
+    monkeypatch.setattr(
+        mutation,
+        "canvas",
+        _Delegate(canvas, model=_Delegate(canvas.model, bonds=scans)),
+    )
     previous = ids[0]
     for index in range(30):
         atom = atoms.add_atom("C", 80 + index * 20, 0)
@@ -239,8 +272,8 @@ def test_acyclic_growth_and_style_changes_do_not_refresh_remote_ring_bonds(
             edge, {"a": previous, "b": atom, "order": 1, "color": "#123456"}
         )
         previous = atom
-    assert scans.call_count == 0
+    assert scans.scan_count == 0
     # Retarget a cyclic edge at unchanged cycle rank: a different ring must
     # still refresh remote double-bond geometry.
     mutation.restore_bond_from_state(edges[-1], {"a": ids[-1], "b": ids[1], "order": 1})
-    assert scans.call_count == 1
+    assert scans.scan_count == 1

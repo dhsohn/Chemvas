@@ -24,7 +24,6 @@ from chemvas.ui.canvas.canvas_bond_graphics_state import set_bond_items_for
 from chemvas.ui.selection.selection_outline_service import SelectionOutlineService
 from chemvas.ui.selection.selection_state import (
     SelectionState,
-    selection_outlines_for,
     set_selection_outlines_for,
 )
 from tests.selection_support import (
@@ -101,7 +100,7 @@ class SelectionOutlineServiceTest(unittest.TestCase):
         )
         _outline_service(empty_canvas).update_selection_outline()
         self.assertEqual(empty_scene.removed_items, [empty_outline])
-        self.assertEqual(selection_outlines_for(empty_canvas), [])
+        self.assertEqual(empty_canvas.runtime_state.selection_state.outlines, [])
         empty_canvas.selection_info_callback.assert_called_once_with("", "")
 
         atom_item = _FakeItem("atom", data1=1)
@@ -351,4 +350,4 @@ class SelectionOutlineServiceTest(unittest.TestCase):
         service.add_selection_component_overlay({1}, {0}, QColor("#334455"))
         service.add_selection_center_marker(QPointF(5.0, 5.0))
 
-        self.assertEqual(len(selection_outlines_for(canvas)), 4)
+        self.assertEqual(len(canvas.runtime_state.selection_state.outlines), 4)

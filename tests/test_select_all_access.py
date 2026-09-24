@@ -24,10 +24,7 @@ from chemvas.ui.canvas.canvas_atom_graphics_state import (
     set_atom_dot_for,
     set_atom_item_for,
 )
-from chemvas.ui.canvas.canvas_bond_graphics_state import (
-    CanvasBondGraphicsState,
-    bond_items_for,
-)
+from chemvas.ui.canvas.canvas_bond_graphics_state import CanvasBondGraphicsState
 from chemvas.ui.canvas.canvas_scene_items_state import (
     CanvasSceneItemsState,
     append_scene_item_for,
@@ -77,7 +74,7 @@ class SelectAllAccessTest(unittest.TestCase):
         set_atom_item_for(canvas, 0, atom_item)
         bond_item = canvas.add_scene_item("bond")
         bond_item.setData(1, 0)
-        bond_items_for(canvas)[0] = [bond_item]
+        canvas.runtime_state.bond_graphics_state.bond_items[0] = [bond_item]
         arrow_item = canvas.add_scene_item("arrow")
         append_scene_item_for(canvas, "arrow_items", arrow_item)
         shape_item = canvas.add_scene_item("shape")

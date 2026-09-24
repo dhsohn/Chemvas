@@ -23,14 +23,8 @@ from chemvas.ui.canvas.canvas_mark_scene_service import CanvasMarkSceneService
 from chemvas.ui.canvas.canvas_tool_settings_state import CanvasToolSettingsState
 from chemvas.ui.canvas.graphics_items import AtomDotItem, AtomLabelItem
 from chemvas.ui.scene.mark_item_access import (
-    build_mark_item_for,
-    mark_center_for,
     mark_center_for_pointer_for,
     mark_selection_radius_for,
-    remove_mark_item_for,
-    remove_marks_for_atom_for,
-    set_mark_center_for,
-    sync_marks_for_atom_for,
 )
 from chemvas.ui.scene.scene_decoration_access import (
     add_mark_for,
@@ -77,27 +71,33 @@ class CanvasViewMarkHelperTest(unittest.TestCase):
         )
         selection_radius = mark_selection_radius_for(view)
 
-        radical = build_mark_item_for(view, "radical")
+        radical = view.services.scene_decoration_build_service.build_mark_item(
+            "radical"
+        )
         self.assertIsInstance(radical, AtomDotItem)
         self.assertAlmostEqual(radical.rect().left(), -1.4)
         self.assertAlmostEqual(radical.rect().width(), 2.8)
         self.assertEqual(radical.brush().color(), QColor(16, 32, 48))
         self.assertEqual(radical.pen().style(), Qt.PenStyle.NoPen)
 
-        plus = build_mark_item_for(view, "plus")
+        plus = view.services.scene_decoration_build_service.build_mark_item("plus")
         self.assertIsInstance(plus, AtomLabelItem)
         self.assertEqual(plus.toPlainText(), "+")
         self.assertEqual(plus.defaultTextColor(), QColor(16, 32, 48))
         self.assertEqual(plus.font().family(), view.renderer.atom_font().family())
         self.assertEqual(plus._hit_radius, selection_radius)
 
-        minus = build_mark_item_for(view, "minus")
+        minus = view.services.scene_decoration_build_service.build_mark_item("minus")
         self.assertIsInstance(minus, AtomLabelItem)
         self.assertEqual(minus.toPlainText(), "-")
         self.assertEqual(minus._hit_radius, selection_radius)
 
-        circled_plus = build_mark_item_for(view, "circled_plus")
-        circled_minus = build_mark_item_for(view, "circled_minus")
+        circled_plus = view.services.scene_decoration_build_service.build_mark_item(
+            "circled_plus"
+        )
+        circled_minus = view.services.scene_decoration_build_service.build_mark_item(
+            "circled_minus"
+        )
         self.assertIsInstance(circled_plus, QGraphicsPathItem)
         self.assertIsInstance(circled_minus, QGraphicsPathItem)
         self.assertEqual(circled_plus.pen().color(), QColor(16, 32, 48))
@@ -107,7 +107,9 @@ class CanvasViewMarkHelperTest(unittest.TestCase):
             circled_plus.path().boundingRect().width(),
         )
 
-        self.assertIsNone(build_mark_item_for(view, "unsupported"))
+        self.assertIsNone(
+            view.services.scene_decoration_build_service.build_mark_item("unsupported")
+        )
 
     def test_mark_offset_from_click_handles_zero_length_and_label_aware_target(
         self,
@@ -202,9 +204,16 @@ class CanvasViewMarkHelperTest(unittest.TestCase):
         build_service.build_mark_item.return_value = mark_item
         build_service.mark_center.return_value = center
 
-        self.assertIs(build_mark_item_for(view, "plus"), mark_item)
-        self.assertEqual(mark_center_for(view, mark_item), center)
-        set_mark_center_for(view, mark_item, QPointF(8.0, 9.0))
+        self.assertIs(
+            view.services.scene_decoration_build_service.build_mark_item("plus"),
+            mark_item,
+        )
+        self.assertEqual(
+            view.services.scene_decoration_build_service.mark_center(mark_item), center
+        )
+        view.services.scene_decoration_build_service.set_mark_center(
+            mark_item, QPointF(8.0, 9.0)
+        )
 
         build_service.build_mark_item.assert_called_once_with("plus")
         build_service.mark_center.assert_called_once_with(mark_item)
@@ -234,9 +243,9 @@ class CanvasViewMarkHelperTest(unittest.TestCase):
             materialize_mark_for_atom_for(view, 7, QPointF(12.0, 13.0), kind="plus"),
             mark_item,
         )
-        remove_mark_item_for(view, mark_item)
-        remove_marks_for_atom_for(view, 7)
-        sync_marks_for_atom_for(view, 7)
+        view.services.canvas_mark_scene_service.remove_mark_item(mark_item)
+        view.services.canvas_mark_scene_service.remove_marks_for_atom(7)
+        view.services.canvas_mark_scene_service.sync_marks_for_atom(7)
         self.assertEqual(
             mark_center_for_pointer_for(view, QPointF(12.0, 13.0), 7, kind="minus"),
             center,

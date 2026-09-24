@@ -31,8 +31,6 @@ from chemvas.ui.canvas.canvas_runtime_services import CanvasRuntimeServices
 from chemvas.ui.canvas.canvas_scene_reset_service import CanvasSceneResetService
 from chemvas.ui.canvas.canvas_style_controller import CanvasStyleController
 from chemvas.ui.canvas.canvas_tool_mode_controller import CanvasToolModeController
-from chemvas.ui.canvas.canvas_tool_settings_state import tool_settings_state_for
-from chemvas.ui.canvas.canvas_view_ports import scene_pos_from_event_for_view
 from chemvas.ui.insert.insert_controller import InsertController
 from chemvas.ui.molecule.atom_label_service import AtomLabelService
 from chemvas.ui.molecule.structure_build_service import StructureBuildService
@@ -47,7 +45,6 @@ from chemvas.ui.selection.selection_queries import selected_scene_items_for
 from chemvas.ui.selection.selection_rotation_controller import (
     SelectionRotationController,
 )
-from chemvas.ui.selection.selection_state import selection_for
 from chemvas.ui.tools.handle_mutation_service import HandleMutationService
 from chemvas.ui.tools.handle_overlay_service import HandleOverlayService
 from chemvas.ui.tools.hover import HoverController
@@ -69,7 +66,7 @@ def build_canvas_services(
 
     hit_testing_service = CanvasHitTestingService(
         canvas,
-        scene_pos_mapper=lambda event: scene_pos_from_event_for_view(canvas, event),
+        scene_pos_mapper=lambda event: canvas.mapToScene(event.position().toPoint()),
         viewport_transform=lambda: canvas.viewportTransform(),
     )
     selection = SelectionController(
@@ -177,10 +174,12 @@ def build_canvas_services(
             canvas,
             excluded_kinds=excluded_kinds,
         ),
-        select_single_structure_item=lambda item: selection_for(
-            canvas
-        ).select_single_structure_item(item),
-        atom_symbol_provider=lambda: tool_settings_state_for(canvas).atom_symbol,
+        select_single_structure_item=lambda item: (
+            canvas.services.selection.select_single_structure_item(item)
+        ),
+        atom_symbol_provider=lambda: (
+            canvas.runtime_state.tool_settings_state.atom_symbol
+        ),
         history_service=history_service,
         set_drag_mode=canvas.setDragMode,
         rubber_band_drag_mode=canvas.DragMode.RubberBandDrag,

@@ -25,8 +25,6 @@ from chemvas.ui.molecule.structure_mutation_access import add_benzene_ring_for
 from chemvas.ui.scene.scene_clipboard_access import (
     build_selection_clipboard_payload_for_canvas,
 )
-from chemvas.ui.scene.scene_decoration_access import add_arrow_for
-from chemvas.ui.scene.scene_item_access import apply_scene_item_state
 from tests.canvas_factory import build_canvas_view
 from tests.gui_workflow_support import app as app
 from tests.gui_workflow_support import drawing as drawing
@@ -148,7 +146,9 @@ def test_fill_recovers_existing_record_instead_of_duplicating_ring(canvas, loss)
 def test_failed_cycle_delete_preserves_records_and_redo(canvas, publication):
     session = canvas.services.canvas_document_session_service
     history = canvas.services.history_service
-    add_arrow_for(canvas, QPointF(100, 100), QPointF(160, 100), "arrow")
+    canvas.services.scene_decoration_service.add_arrow(
+        QPointF(100, 100), QPointF(160, 100), "arrow"
+    )
     history.undo()
     before = session.snapshot_state()
     ring = ring_items_for(canvas)[0]
@@ -171,8 +171,8 @@ def test_failed_cycle_delete_preserves_records_and_redo(canvas, publication):
 def test_ring_geometry_uses_current_model_and_exact_opacity(canvas):
     ring = ring_items_for(canvas)[0]
     canvas.model.atoms[0].x += 12.125
-    apply_scene_item_state(
-        canvas, ring, {"kind": "ring", "color": "#ABCDEF", "alpha": 0.3000000002}
+    canvas.services.scene_item_controller.apply_scene_item_state(
+        ring, {"kind": "ring", "color": "#ABCDEF", "alpha": 0.3000000002}
     )
     state = ring_state_dict(ring)
     assert state["points"][0] == (canvas.model.atoms[0].x, canvas.model.atoms[0].y)
@@ -197,10 +197,8 @@ def test_delete_middle_ring_restores_original_order_and_exact_appearance(canvas)
     add_benzene_ring_for(canvas, QPointF(240, 0))
     rings = ring_items_for(canvas)
     for index, ring in enumerate(rings):
-        apply_scene_item_state(
-            canvas,
-            ring,
-            {"kind": "ring", "color": "#112233", "alpha": 0.1 + index / 10},
+        canvas.services.scene_item_controller.apply_scene_item_state(
+            ring, {"kind": "ring", "color": "#112233", "alpha": 0.1 + index / 10}
         )
     session = canvas.services.canvas_document_session_service
     before = session.snapshot_state()

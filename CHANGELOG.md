@@ -8,6 +8,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 The entries below are internal and change nothing a user or a document can
+observe.
+
+- One spelling per canvas- and window-owned value: 130 single-statement
+  forwarders such as `atom_items_for(canvas)`, `services_for_window(window)`
+  and `remove_marks_for_atom_for(canvas, atom_id)` are inlined at their call
+  sites and removed; callers read `canvas.runtime_state.<state>.<field>`,
+  `window.<attribute>` or call the owning service directly
+  ([ADR 0014](docs/adr/0014-one-spelling-for-canvas-and-window-state.md)).
+  Tests patch the owner instead of the removed seam. The `*_for_window`
+  operations with logic stay in `main_window_ports`.
+
+The entries below are internal and change nothing a user or a document can
 observe, except one behavioral unification noted first.
 
 - The context bar's rotate, flip, align, distribute and bond-length controls

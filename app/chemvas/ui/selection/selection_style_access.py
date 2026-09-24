@@ -2,24 +2,10 @@ from __future__ import annotations
 
 from PyQt6.QtCore import QPointF, QRectF
 
-from chemvas.ui.canvas.canvas_atom_graphics_state import (
-    atom_dots_for,
-    atom_items_for,
-    visible_atom_item_for,
-)
-from chemvas.ui.canvas.canvas_bond_graphics_state import bond_items_for
+from chemvas.ui.canvas.canvas_atom_graphics_state import visible_atom_item_for
 from chemvas.ui.canvas.canvas_model_access import atom_for_id
 from chemvas.ui.canvas.pick_radius_access import atom_pick_radius_for
 from chemvas.ui.selection.selection_queries import clear_scene_selection_for
-from chemvas.ui.selection.selection_state import selection_for, selection_state_for
-
-
-def selection_color_for(canvas):
-    return selection_state_for(canvas).color
-
-
-def suspend_selection_outline_for(canvas) -> bool:
-    return bool(selection_state_for(canvas).suspend_outline)
 
 
 def restore_selection_from_ids_for(
@@ -27,17 +13,19 @@ def restore_selection_from_ids_for(
 ) -> None:
     if not clear_scene_selection_for(canvas):
         return
-    atom_items = atom_items_for(canvas)
-    atom_dots = atom_dots_for(canvas)
+    atom_items = canvas.runtime_state.atom_graphics_state.atom_items
+    atom_dots = canvas.runtime_state.atom_graphics_state.atom_dots
     for atom_id in atom_ids:
         item = atom_items.get(atom_id) or atom_dots.get(atom_id)
         if item is not None:
             item.setSelected(True)
     for bond_id in bond_ids:
-        for item in bond_items_for(canvas).get(bond_id, []):
+        for item in canvas.runtime_state.bond_graphics_state.bond_items.get(
+            bond_id, []
+        ):
             item.setSelected(True)
     try:
-        controller = selection_for(canvas)
+        controller = canvas.services.selection
     except AttributeError:
         controller = None
     update_selection_outline = getattr(controller, "update_selection_outline", None)
@@ -92,7 +80,5 @@ __all__ = [
     "atom_center_point_for",
     "restore_selection_from_ids_for",
     "selection_bond_overlay_width_for",
-    "selection_color_for",
     "selection_indicator_rect_for_atom_for",
-    "suspend_selection_outline_for",
 ]

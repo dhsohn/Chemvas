@@ -25,10 +25,7 @@ from PyQt6.QtWidgets import (
 from chemvas.core.model_commands import SetAtomPositionsCommand
 from chemvas.domain.document.groups import SceneGroup
 from chemvas.ui.canvas.canvas_callback_state import CanvasCallbackState
-from chemvas.ui.canvas.canvas_group_state import (
-    CanvasGroupState,
-    group_state_for,
-)
+from chemvas.ui.canvas.canvas_group_state import CanvasGroupState
 from chemvas.ui.canvas.canvas_history_service import CanvasHistoryService
 from chemvas.ui.canvas.canvas_history_state import CanvasHistoryState
 from chemvas.ui.history.history_commands import (
@@ -53,6 +50,7 @@ from chemvas.ui.transactions.scene_runtime_restore import (
     _topology_depths,
     restore_scene_runtime,
 )
+from tests.runtime_services import canvas_runtime_services
 from tests.runtime_state import canvas_runtime_state
 
 
@@ -189,6 +187,24 @@ class _Canvas:
 
     def scene(self) -> _Scene:
         return self._scene
+
+
+def _patch_apply_scene_item_state(canvas, **kwargs):
+    """Patch the scene item controller that history operations apply through.
+
+    Lightweight canvases get a bare service graph so the controller owner can
+    be patched on the canvas itself rather than on a module seam.
+    """
+    if getattr(canvas, "services", None) is None:
+        canvas.services = canvas_runtime_services(
+            scene_item_controller=SimpleNamespace()
+        )
+    return mock.patch.object(
+        canvas.services.scene_item_controller,
+        "apply_scene_item_state",
+        create=True,
+        **kwargs,
+    )
 
 
 def _install_scene_runtime_state(canvas: _Canvas) -> None:
@@ -947,8 +963,8 @@ def test_actual_qt_runtime_consumers_restore_parent_topology_and_z_value(
             raise RuntimeError("move damaged scene topology")
 
         with (
-            mock.patch(
-                "chemvas.ui.history.history_operations.apply_scene_item_state",
+            _patch_apply_scene_item_state(
+                canvas,
                 side_effect=fail_move,
             ),
             pytest.raises(RuntimeError, match="move damaged scene topology"),
@@ -1298,9 +1314,9 @@ def test_explicit_scene_item_history_success_never_scans_global_item_bounds(
 
         def run() -> None:
             with (
-                mock.patch(
-                    "chemvas.ui.history.history_operations.apply_scene_item_state",
-                    side_effect=lambda _canvas, target, state: target.setPos(
+                _patch_apply_scene_item_state(
+                    canvas,
+                    side_effect=lambda target, state: target.setPos(
                         state["x"],
                         0.0,
                     ),
@@ -1566,7 +1582,7 @@ def test_geometry_command_restores_second_item_after_partial_mutation(
     primary = RuntimeError("geometry failed after partial mutation")
     attempted = []
 
-    def apply_with_failure(_canvas, item, state) -> None:
+    def apply_with_failure(item, state) -> None:
         attempted.append(item)
         item.x = state["x"]
         if failure_point == "metadata":
@@ -1576,8 +1592,8 @@ def test_geometry_command_restores_second_item_after_partial_mutation(
         item.metadata_x = state["metadata_x"]
 
     with (
-        mock.patch(
-            "chemvas.ui.history.history_operations.apply_scene_item_state",
+        _patch_apply_scene_item_state(
+            canvas,
             side_effect=apply_with_failure,
         ),
         mock.patch(
@@ -1592,13 +1608,13 @@ def test_geometry_command_restores_second_item_after_partial_mutation(
     assert attempted == (items if method_name == "redo" else list(reversed(items)))
     assert [(item.x, item.metadata_x) for item in items] == before
 
-    def apply_successfully(_canvas, item, state) -> None:
+    def apply_successfully(item, state) -> None:
         item.x = state["x"]
         item.metadata_x = state["metadata_x"]
 
     with (
-        mock.patch(
-            "chemvas.ui.history.history_operations.apply_scene_item_state",
+        _patch_apply_scene_item_state(
+            canvas,
             side_effect=apply_successfully,
         ),
         mock.patch(
@@ -1730,13 +1746,13 @@ def test_geometry_exact_restore_keeps_data_identity_and_history_retryable(
     service = CanvasHistoryService(operations, state, replay_context=nullcontext)
     primary = RuntimeError("geometry failed after replacing item data")
 
-    def apply_then_fail(_canvas, current_item, target) -> None:
+    def apply_then_fail(current_item, target) -> None:
         current_item.setData(data_role, dict(target))
         raise primary
 
     with (
-        mock.patch(
-            "chemvas.ui.history.history_operations.apply_scene_item_state",
+        _patch_apply_scene_item_state(
+            canvas,
             side_effect=apply_then_fail,
         ),
         mock.patch(
@@ -1754,9 +1770,9 @@ def test_geometry_exact_restore_keeps_data_identity_and_history_retryable(
     assert redo_stack == [redo_sentinel, command]
 
     with (
-        mock.patch(
-            "chemvas.ui.history.history_operations.apply_scene_item_state",
-            side_effect=lambda _canvas, target, payload: target.setData(
+        _patch_apply_scene_item_state(
+            canvas,
+            side_effect=lambda target, payload: target.setData(
                 data_role, dict(payload)
             ),
         ),
@@ -1787,9 +1803,7 @@ def test_geometry_capture_failure_keeps_document_and_fails_closed() -> None:
     service = CanvasHistoryService(operations, state, replay_context=nullcontext)
     with (
         mock.patch.object(canvas.scene(), "items", side_effect=primary),
-        mock.patch(
-            "chemvas.ui.history.history_operations.apply_scene_item_state"
-        ) as apply_state,
+        _patch_apply_scene_item_state(canvas) as apply_state,
         pytest.raises(RuntimeError) as caught,
     ):
         service.redo()
@@ -1832,12 +1846,12 @@ def test_geometry_restores_exact_outline_runtime_after_persistent_refresh_failur
         ],
     )
 
-    def apply_state(_canvas, target, state) -> None:
+    def apply_state(target, state) -> None:
         target.x, target.y = state["x"], state["y"]
 
     with (
-        mock.patch(
-            "chemvas.ui.history.history_operations.apply_scene_item_state",
+        _patch_apply_scene_item_state(
+            canvas,
             side_effect=apply_state,
         ),
         mock.patch(
@@ -1879,15 +1893,15 @@ def test_geometry_exact_restore_is_final_after_partial_absolute_item_apply(
         ],
     )
 
-    def apply_then_fail(_canvas, current_item, state) -> None:
+    def apply_then_fail(current_item, state) -> None:
         current_item.x = 0.0
         current_item.geometry_x = state["absolute_x"]
         current_item.metadata_x = state["absolute_x"]
         raise RuntimeError("absolute item apply failed")
 
     with (
-        mock.patch(
-            "chemvas.ui.history.history_operations.apply_scene_item_state",
+        _patch_apply_scene_item_state(
+            canvas,
             side_effect=apply_then_fail,
         ),
         mock.patch(
@@ -1920,7 +1934,7 @@ def test_update_scene_item_command_compensates_current_child_failure(
     apply_failed = False
     refresh_failed = False
 
-    def apply_state(_canvas, _item, state) -> None:
+    def apply_state(_item, state) -> None:
         nonlocal apply_failed
         canvas.value = state["value"]
         if failure_point == "apply" and state is target_state and not apply_failed:
@@ -1934,8 +1948,8 @@ def test_update_scene_item_command_compensates_current_child_failure(
             raise RuntimeError("refresh failed after scene apply")
 
     with (
-        mock.patch(
-            "chemvas.ui.history.history_operations.apply_scene_item_state",
+        _patch_apply_scene_item_state(
+            canvas,
             side_effect=apply_state,
         ),
         mock.patch(
@@ -1963,7 +1977,7 @@ def test_update_scene_item_restores_old_outline_objects_when_refresh_rebuild_fai
     canvas.runtime_state.selection_state.outlines = outlines
     partial_outlines: list[_SceneItem] = []
 
-    def apply_state(_canvas, _item, state) -> None:
+    def apply_state(_item, state) -> None:
         canvas.value = state["value"]
 
     def refresh_then_fail(_canvas) -> None:
@@ -1979,8 +1993,8 @@ def test_update_scene_item_restores_old_outline_objects_when_refresh_rebuild_fai
         history_item_id(canvas, _SceneItem("target")), {"value": 1}, {"value": 2}
     )
     with (
-        mock.patch(
-            "chemvas.ui.history.history_operations.apply_scene_item_state",
+        _patch_apply_scene_item_state(
+            canvas,
             side_effect=apply_state,
         ),
         mock.patch(
@@ -2070,7 +2084,7 @@ def test_change_atom_label_command_compensates_smiles_failure_after_label_mutati
 
 
 def _group_snapshot(canvas) -> tuple[dict[int, SceneGroup], int, bool]:
-    state = group_state_for(canvas)
+    state = canvas.runtime_state.group_state
     return dict(state.groups), state.next_group_id, state.expanding
 
 
@@ -2088,7 +2102,7 @@ def test_group_redo_rolls_back_when_second_absorbed_group_removal_mutates_then_r
 ):
     canvas = _group_canvas()
     operations = CanvasHistoryOperations(canvas)
-    state = group_state_for(canvas)
+    state = canvas.runtime_state.group_state
     absorbed = [
         (1, SceneGroup({1}, [])),
         (2, SceneGroup({2}, [])),
@@ -2100,7 +2114,7 @@ def test_group_redo_rolls_back_when_second_absorbed_group_removal_mutates_then_r
         {1, 2, 3}, [history_item_id(canvas, item) for item in []], absorbed=absorbed
     )
 
-    def remove_with_failure(_canvas, group_id):
+    def remove_with_failure(_operations, group_id):
         removed = state.groups.pop(group_id, None)
         if group_id == 2:
             raise RuntimeError("remove group failed after mutation")
@@ -2108,7 +2122,8 @@ def test_group_redo_rolls_back_when_second_absorbed_group_removal_mutates_then_r
 
     with (
         mock.patch(
-            "chemvas.ui.history.history_operations.remove_group_for",
+            "chemvas.ui.history.history_operations.CanvasHistoryOperations.remove_group",
+            autospec=True,
             side_effect=remove_with_failure,
         ),
         mock.patch(
@@ -2128,7 +2143,7 @@ def test_group_undo_rolls_back_when_second_absorbed_group_restore_mutates_then_r
 ):
     canvas = _group_canvas()
     operations = CanvasHistoryOperations(canvas)
-    state = group_state_for(canvas)
+    state = canvas.runtime_state.group_state
     absorbed = [
         (1, SceneGroup({1}, [])),
         (2, SceneGroup({2}, [])),
@@ -2172,7 +2187,7 @@ def test_group_command_restores_exact_outline_runtime_after_persistent_refresh_f
     canvas = _Canvas()
     operations = CanvasHistoryOperations(canvas)
     _install_scene_runtime_state(canvas)
-    state = group_state_for(canvas)
+    state = canvas.runtime_state.group_state
     absorbed_group = SceneGroup({1}, [])
     state.groups[1] = absorbed_group
     groups_object = state.groups
@@ -2213,7 +2228,7 @@ def test_ungroup_command_rolls_back_when_second_group_mutates_then_raises(
 ) -> None:
     canvas = _group_canvas()
     operations = CanvasHistoryOperations(canvas)
-    state = group_state_for(canvas)
+    state = canvas.runtime_state.group_state
     removed = [
         (1, SceneGroup({1}, [])),
         (2, SceneGroup({2}, [])),
@@ -2224,7 +2239,7 @@ def test_ungroup_command_rolls_back_when_second_group_mutates_then_raises(
     before = _group_snapshot(canvas)
     command = UngroupSceneItemsCommand(removed)
 
-    def remove_with_failure(_canvas, group_id):
+    def remove_with_failure(_operations, group_id):
         group = state.groups.pop(group_id, None)
         if group_id == 2:
             raise RuntimeError("remove group failed after mutation")
@@ -2235,18 +2250,25 @@ def test_ungroup_command_rolls_back_when_second_group_mutates_then_raises(
         if group_id == 2:
             raise RuntimeError("restore group failed after mutation")
 
-    operation = remove_with_failure if method_name == "redo" else restore_with_failure
-    operation_name = (
-        "remove_group_for" if method_name == "redo" else "restore_group_for"
-    )
     error_pattern = (
         "remove group failed" if method_name == "redo" else "restore group failed"
     )
-    with (
+    # Removal is owned by the operations object; restoration still goes through
+    # the module-level port.
+    failure = (
         mock.patch(
-            f"chemvas.ui.history.history_operations.{operation_name}",
-            side_effect=operation,
-        ),
+            "chemvas.ui.history.history_operations.CanvasHistoryOperations.remove_group",
+            autospec=True,
+            side_effect=remove_with_failure,
+        )
+        if method_name == "redo"
+        else mock.patch(
+            "chemvas.ui.history.history_operations.restore_group_for",
+            side_effect=restore_with_failure,
+        )
+    )
+    with (
+        failure,
         mock.patch(
             "chemvas.ui.history.history_operations.CanvasHistoryOperations.refresh_selection_outline",
             autospec=True,
@@ -2280,7 +2302,7 @@ def test_group_rollback_note_names_the_operation_not_the_history_slot(
 
     canvas = _group_canvas()
     operations = CanvasHistoryOperations(canvas)
-    state = group_state_for(canvas)
+    state = canvas.runtime_state.group_state
     group = SceneGroup({1}, [])
     state.groups[1] = group
     if command_kind == "group":
@@ -2298,7 +2320,9 @@ def test_group_rollback_note_names_the_operation_not_the_history_slot(
 
     with (
         mock.patch(
-            "chemvas.ui.history.history_operations.remove_group_for", side_effect=fail
+            "chemvas.ui.history.history_operations.CanvasHistoryOperations.remove_group",
+            autospec=True,
+            side_effect=fail,
         ),
         mock.patch(
             "chemvas.ui.history.history_operations.restore_group_for", side_effect=fail
@@ -2329,7 +2353,7 @@ def test_ungroup_command_restores_exact_outline_runtime_after_persistent_refresh
     canvas = _Canvas()
     operations = CanvasHistoryOperations(canvas)
     _install_scene_runtime_state(canvas)
-    state = group_state_for(canvas)
+    state = canvas.runtime_state.group_state
     removed_group = SceneGroup({1}, [])
     state.groups[1] = removed_group
     groups_object = state.groups
@@ -2380,7 +2404,7 @@ def test_explicit_group_and_label_history_success_never_scans_global_item_bounds
     operations = CanvasHistoryOperations(canvas)
     explicit_rect = QRectF(-100.0, -100.0, 200.0, 200.0)
     set_explicit_scene_rect(scene, explicit_rect)
-    state = group_state_for(canvas)
+    state = canvas.runtime_state.group_state
     group = SceneGroup({7}, [])
 
     if operation == "group_redo":

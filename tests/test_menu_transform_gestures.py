@@ -3,15 +3,9 @@
 import pytest
 from PyQt6.QtCore import QPointF
 
-from chemvas.ui.canvas.canvas_window_access import snapshot_canvas_state_for
-from chemvas.ui.scene.scene_decoration_access import add_arrow_for
 from chemvas.ui.window.main_window_menu_bar import (
     ALIGN_MENU_SPECS,
     DISTRIBUTE_MENU_SPECS,
-)
-from chemvas.ui.window.main_window_ports import (
-    redo_action_for_window,
-    undo_action_for_window,
 )
 from tests.gui_workflow_support import app as app
 from tests.gui_workflow_support import drawing as drawing
@@ -36,16 +30,22 @@ def test_menu_transform_cancels_move_and_retains_one_exact_undo(
 ):
     window, canvas = drawing
     point, item = populate(canvas, "arrow")
-    add_arrow_for(canvas, QPointF(50.1, 80.2), QPointF(97.8, 89.6), "arrow")
-    add_arrow_for(canvas, QPointF(-33.8, 130.4), QPointF(120.6, 152.1), "arrow")
+    canvas.services.scene_decoration_service.add_arrow(
+        QPointF(50.1, 80.2), QPointF(97.8, 89.6), "arrow"
+    )
+    canvas.services.scene_decoration_service.add_arrow(
+        QPointF(-33.8, 130.4), QPointF(120.6, 152.1), "arrow"
+    )
     history = canvas.services.history_service
-    add_arrow_for(canvas, QPointF(150, -70), QPointF(180, -70), "arrow")
+    canvas.services.scene_decoration_service.add_arrow(
+        QPointF(150, -70), QPointF(180, -70), "arrow"
+    )
     history.undo()
     assert history.can_redo()
-    before = snapshot_canvas_state_for(canvas)
+    before = canvas.services.canvas_document_session_service.snapshot_state()
     length = len(history.state.history)
     end = start_drag(canvas, "arrow", point, item)
-    assert snapshot_canvas_state_for(canvas) != before
+    assert canvas.services.canvas_document_session_service.snapshot_state() != before
 
     menu = next(
         action.menu()
@@ -59,7 +59,7 @@ def test_menu_transform_cancels_move_and_retains_one_exact_undo(
     action = next(action for action in menu.actions() if action.text() == action_name)
     assert action.isEnabled()
     action.trigger()
-    after = snapshot_canvas_state_for(canvas)
+    after = canvas.services.canvas_document_session_service.snapshot_state()
     assert after != before
     assert len(history.state.history) == length + 1
     assert not history.can_redo()
@@ -67,9 +67,9 @@ def test_menu_transform_cancels_move_and_retains_one_exact_undo(
 
     release(canvas, end)
     assert not qt_errors
-    assert snapshot_canvas_state_for(canvas) == after
+    assert canvas.services.canvas_document_session_service.snapshot_state() == after
     history.verify_stack_snapshot(stacks)
-    undo_action_for_window(window).trigger()
-    assert snapshot_canvas_state_for(canvas) == before
-    redo_action_for_window(window).trigger()
-    assert snapshot_canvas_state_for(canvas) == after
+    window.ui_references.undo_action.trigger()
+    assert canvas.services.canvas_document_session_service.snapshot_state() == before
+    window.ui_references.redo_action.trigger()
+    assert canvas.services.canvas_document_session_service.snapshot_state() == after

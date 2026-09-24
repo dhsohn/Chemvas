@@ -236,10 +236,6 @@ def test_overlapping_native_note_and_image_paint_identically_after_reload_and_un
 
     from chemvas.ui.history.history_commands import DeleteSceneItemsCommand
     from chemvas.ui.history.history_operations import CanvasHistoryOperations
-    from chemvas.ui.scene.scene_item_access import (
-        create_scene_item_from_state,
-        remove_scene_item,
-    )
 
     state = _empty()
     state["notes"] = [{"text": "SCALE BAR", "x": 5, "y": 5}]
@@ -247,8 +243,8 @@ def test_overlapping_native_note_and_image_paint_identically_after_reload_and_un
         operations = CanvasHistoryOperations(canvas)
         opaque = BytesIO()
         Image.new("RGB", (80, 40), "white").save(opaque, format="PNG")
-        item = create_scene_item_from_state(
-            canvas, image_state_from_bytes(opaque.getvalue())
+        item = canvas.services.scene_item_controller.create_scene_item_from_state(
+            image_state_from_bytes(opaque.getvalue())
         )
 
         def render():
@@ -263,7 +259,7 @@ def test_overlapping_native_note_and_image_paint_identically_after_reload_and_un
         deletion = DeleteSceneItemsCommand.capture(
             operations, [item.image_state()], [item]
         )
-        remove_scene_item(canvas, item)
+        canvas.services.scene_item_controller.remove_scene_item(item)
         canvas.services.history_service.push(deletion)
         canvas.services.history_service.undo()
         assert render() == before

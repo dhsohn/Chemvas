@@ -29,9 +29,7 @@ from chemvas.features.graph import (
 )
 from chemvas.ui.canvas.canvas_model_access import (
     atom_for_id,
-    atoms_for,
     bond_for_id,
-    bonds_for,
 )
 
 if TYPE_CHECKING:
@@ -126,7 +124,7 @@ class CanvasGraphService:
     ) -> int | None:
         bond_id = bond_id_between_indexed_atoms(
             self.graph.atom_bond_ids,
-            bonds_for(self.canvas),
+            self.canvas.model.bonds,
             a_id,
             b_id,
             bond_for_id=lambda bond_id: bond_for_id(self.canvas, bond_id),
@@ -152,8 +150,8 @@ class CanvasGraphService:
     def rebuild_bond_adjacency(self) -> None:
         self.graph.atom_neighbors, self.graph.atom_bond_ids = (
             build_bond_adjacency_index(
-                atoms_for(self.canvas),
-                bonds_for(self.canvas),
+                self.canvas.model.atoms,
+                self.canvas.model.bonds,
             )
         )
         self.graph.bump_version()
@@ -244,12 +242,12 @@ class CanvasGraphService:
         return bond_sets_for_atom_ids(
             atom_ids,
             self.graph.atom_bond_ids,
-            bonds_for(self.canvas),
+            self.canvas.model.bonds,
             bond_for_id=lambda bond_id: bond_for_id(self.canvas, bond_id),
         )
 
     def expand_connected_atoms(self, atom_ids: set[int]) -> set[int]:
-        return reachable_from(atom_ids, adjacency_for_bonds(bonds_for(self.canvas)))
+        return reachable_from(atom_ids, adjacency_for_bonds(self.canvas.model.bonds))
 
 
 __all__ = ["CanvasGraphService"]

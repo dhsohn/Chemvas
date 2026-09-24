@@ -23,10 +23,6 @@ from chemvas.ui.canvas.canvas_handle_controller import CanvasHandleController
 from chemvas.ui.canvas.canvas_scene_items_state import CanvasSceneItemsState
 from chemvas.ui.canvas.canvas_tool_settings_state import CanvasToolSettingsState
 from chemvas.ui.selection.selection_state import SelectionState
-from chemvas.ui.tools.handle_mutation_access import (
-    update_orbital_rotate_for,
-    update_orbital_scale_for,
-)
 from chemvas.ui.tools.handle_mutation_service import HandleMutationService
 from chemvas.ui.tools.handle_overlay_service import HandleOverlayService
 from chemvas.ui.tools.handle_state import CanvasHandleState
@@ -257,16 +253,24 @@ class CanvasViewHandleHelpersTest(unittest.TestCase):
 
         centered_item = make_orbital(center=(10.0, 5.0), base_handle_dist=10.0)
 
-        update_orbital_scale_for(view, centered_item, QPointF(15.0, 5.0))
-        update_orbital_rotate_for(view, centered_item, QPointF(10.0, 15.0))
+        view.services.handle_mutation_service.update_orbital_scale(
+            centered_item, QPointF(15.0, 5.0)
+        )
+        view.services.handle_mutation_service.update_orbital_rotate(
+            centered_item, QPointF(10.0, 15.0)
+        )
 
         self.assertAlmostEqual(centered_item.scale(), 0.5)
         self.assertAlmostEqual(centered_item.rotation(), 90.0)
 
         fallback_item = make_orbital(center=(10.0, 5.0), base_handle_dist=32.0)
 
-        update_orbital_scale_for(view, fallback_item, QPointF(42.0, 5.0))
-        update_orbital_rotate_for(view, fallback_item, QPointF(42.0, 5.0))
+        view.services.handle_mutation_service.update_orbital_scale(
+            fallback_item, QPointF(42.0, 5.0)
+        )
+        view.services.handle_mutation_service.update_orbital_rotate(
+            fallback_item, QPointF(42.0, 5.0)
+        )
 
         self.assertAlmostEqual(fallback_item.scale(), 1.0)
         self.assertAlmostEqual(fallback_item.rotation(), 0.0)

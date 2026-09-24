@@ -31,13 +31,8 @@ from chemvas.domain.document import (
 )
 from chemvas.features.document_composition import compose_document_state
 from chemvas.features.export import ExportPlan
-from chemvas.ui.canvas.canvas_atom_graphics_state import atom_dots_for, atom_items_for
-from chemvas.ui.canvas.canvas_bond_graphics_state import bond_items_for_id
 from chemvas.ui.canvas.canvas_calculation_plan_state import CanvasCalculationPlanState
-from chemvas.ui.canvas.canvas_document_metadata_state import (
-    CanvasDocumentMetadataState,
-    document_source_sha256_for,
-)
+from chemvas.ui.canvas.canvas_document_metadata_state import CanvasDocumentMetadataState
 from chemvas.ui.canvas.canvas_document_session_service import (
     CanvasDocumentSessionService,
     _DetachedSceneSnapshot,
@@ -63,10 +58,9 @@ from chemvas.ui.history.history_commands import (
 )
 from chemvas.ui.history.history_operations import CanvasHistoryOperations
 from chemvas.ui.molecule.atom_coords_access import CanvasAtomCoords3DState
-from chemvas.ui.molecule.bond_graphics_access import add_bond_graphics_for
-from chemvas.ui.molecule.structure_mutation_access import add_atom_for, add_bond_for
+from chemvas.ui.molecule.structure_mutation_access import add_bond_for
 from chemvas.ui.selection.selection_info_state import SelectionInfoState
-from chemvas.ui.selection.selection_state import SelectionState, selection_state_for
+from chemvas.ui.selection.selection_state import SelectionState
 from chemvas.ui.transactions.scene_rect import (
     set_explicit_scene_rect,
     set_explicit_view_scene_rect,
@@ -804,6 +798,9 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
             rebuild_bond_adjacency=mock.Mock(),
             mark_spatial_index_dirty=mock.Mock(),
         )
+        canvas.services.scene_item_controller = SimpleNamespace(
+            apply_scene_item_state=lambda item, state: item.setPos(state["x"], 0.0)
+        )
         _attach_history_service(canvas)
         service = _session_service(canvas)
         command = UpdateSceneItemCommand(
@@ -834,10 +831,6 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
             ),
             mock.patch(
                 "chemvas.ui.canvas.canvas_document_session_service.restore_document_groups"
-            ),
-            mock.patch(
-                "chemvas.ui.history.history_operations.apply_scene_item_state",
-                side_effect=lambda _canvas, item, state: item.setPos(state["x"], 0.0),
             ),
             mock.patch(
                 "chemvas.ui.history.history_operations.CanvasHistoryOperations.refresh_selection_outline",
@@ -1047,19 +1040,23 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
         canvas = build_canvas_view()
         self.addCleanup(canvas.close)
         self.addCleanup(canvas.services.canvas_scene_reset_service.clear_scene)
-        label_atom_id = add_atom_for(canvas, "N", 0.0, 0.0)
-        dot_atom_id = add_atom_for(canvas, "C", 20.0, 0.0)
+        label_atom_id = canvas.services.canvas_atom_mutation_service.add_atom(
+            "N", 0.0, 0.0
+        )
+        dot_atom_id = canvas.services.canvas_atom_mutation_service.add_atom(
+            "C", 20.0, 0.0
+        )
         bond_id = add_bond_for(canvas, label_atom_id, dot_atom_id)
-        add_bond_graphics_for(canvas, bond_id)
+        canvas.bond_renderer.add_bond_graphics(bond_id)
         selected_items = [
-            atom_items_for(canvas)[label_atom_id],
-            atom_dots_for(canvas)[dot_atom_id],
-            bond_items_for_id(canvas, bond_id)[0],
+            canvas.runtime_state.atom_graphics_state.atom_items[label_atom_id],
+            canvas.runtime_state.atom_graphics_state.atom_dots[dot_atom_id],
+            canvas.runtime_state.bond_graphics_state.bond_items.get(bond_id, [])[0],
         ]
         for item in selected_items:
             item.setSelected(True)
 
-        selection_style = selection_state_for(canvas)
+        selection_style = canvas.runtime_state.selection_state
         selection_style.suspend_outline = True
         selection_info = canvas.runtime_state.selection_info_state
         selection_callback = mock.Mock()
@@ -1142,7 +1139,7 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
                 canvas = build_canvas_view()
                 self.addCleanup(canvas.close)
                 self.addCleanup(canvas.services.canvas_scene_reset_service.clear_scene)
-                add_atom_for(canvas, "N", 0.0, 0.0)
+                canvas.services.canvas_atom_mutation_service.add_atom("N", 0.0, 0.0)
                 history = canvas.services.history_service
                 undo = history.state.history
                 redo = history.state.redo_stack
@@ -1216,7 +1213,9 @@ class CanvasDocumentSessionServiceTest(unittest.TestCase):
         snapshot_state.assert_called_once_with()
         write_document.assert_called_once_with("/tmp/example.chemvas", {"state": 1}, 7)
         self.assertEqual(warnings, ["adjusted"])
-        self.assertEqual(document_source_sha256_for(canvas), "a" * 64)
+        self.assertEqual(
+            canvas.runtime_state.document_metadata_state.source_sha256, "a" * 64
+        )
 
     def test_save_rejects_noncanonical_document_suffix_before_snapshot(self) -> None:
         canvas = SimpleNamespace(

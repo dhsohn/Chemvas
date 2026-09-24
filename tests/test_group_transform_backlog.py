@@ -21,22 +21,14 @@ from chemvas.features.selection import (
     ROTATION_HANDLE_TYPE,
 )
 from chemvas.ui.annotations.state import scene_item_state_for
-from chemvas.ui.canvas.canvas_callback_state import callback_state_for
-from chemvas.ui.canvas.canvas_group_state import group_state_for, register_group_for
-from chemvas.ui.canvas.canvas_window_access import (
-    restore_canvas_state_for,
-    snapshot_canvas_state_for,
-)
-from chemvas.ui.molecule.structure_mutation_access import add_atom_for, add_bond_for
+from chemvas.ui.canvas.canvas_group_state import register_group_for
+from chemvas.ui.molecule.structure_mutation_access import add_bond_for
 from chemvas.ui.scene.scene_decoration_access import (
-    add_arrow_for,
     add_shape_for,
     add_ts_bracket_for,
 )
 from chemvas.ui.scene.scene_group_operations import group_selection_for
-from chemvas.ui.scene.scene_item_access import create_scene_item_from_state
 from chemvas.ui.selection.select_all_access import select_all_scene_items_for
-from chemvas.ui.selection.selection_state import selection_for, selection_outlines_for
 from chemvas.ui.selection.selection_style_access import restore_selection_from_ids_for
 from tests.canvas_factory import build_canvas_view
 
@@ -59,7 +51,9 @@ def canvas(app):
 
 def _chain(canvas, *, offset=0):
     ids = [
-        add_atom_for(canvas, "C", offset + index * 20, (index % 2) * 10)
+        canvas.services.canvas_atom_mutation_service.add_atom(
+            "C", offset + index * 20, (index % 2) * 10
+        )
         for index in range(4)
     ]
     for a, b in pairwise(ids):
@@ -79,8 +73,8 @@ def _decoration(canvas, kind):
         return add_ts_bracket_for(canvas, QRectF(110, 70, 30, 20))
     stream = BytesIO()
     Image.new("RGB", (3, 2), (220, 30, 20)).save(stream, format="PNG")
-    return create_scene_item_from_state(
-        canvas, image_state_from_bytes(stream.getvalue(), x=110, y=70, width=30)
+    return canvas.services.scene_item_controller.create_scene_item_from_state(
+        image_state_from_bytes(stream.getvalue(), x=110, y=70, width=30)
     )
 
 
@@ -108,7 +102,7 @@ def test_rotation_transforms_decorations_and_roundtrips(canvas, kind, grouped, d
     center = controller._rotation_center(set(ids), [item])
     old_rect = item.sceneBoundingRect()
     before_item = scene_item_state_for(canvas, item)
-    before = snapshot_canvas_state_for(canvas)
+    before = canvas.services.canvas_document_session_service.snapshot_state()
     if drag:
         session = controller.begin_rotation_drag(center + QPointF(100, 0))
         assert session is not None
@@ -134,25 +128,27 @@ def test_rotation_transforms_decorations_and_roundtrips(canvas, kind, grouped, d
         assert after_item["data_base64"] == before_item["data_base64"]
     if kind == "note":
         assert after_item["text"] == before_item["text"]
-    after = snapshot_canvas_state_for(canvas)
+    after = canvas.services.canvas_document_session_service.snapshot_state()
     canvas.runtime_state.history_service.undo()
-    assert snapshot_canvas_state_for(canvas) == before
+    assert canvas.services.canvas_document_session_service.snapshot_state() == before
     canvas.runtime_state.history_service.redo()
-    assert snapshot_canvas_state_for(canvas) == after
+    assert canvas.services.canvas_document_session_service.snapshot_state() == after
 
 
 @pytest.mark.parametrize("horizontal", [True, False])
 def test_flip_uses_one_pivot_for_molecule_arrow_and_upright_item(canvas, horizontal):
     ids = _chain(canvas)
     image = _decoration(canvas, "image")
-    arrow = add_arrow_for(canvas, QPointF(60, 30), QPointF(100, 30), "arrow")
+    arrow = canvas.services.scene_decoration_service.add_arrow(
+        QPointF(60, 30), QPointF(100, 30), "arrow"
+    )
     select_all_scene_items_for(canvas)
     assert group_selection_for(canvas)
     controller = canvas.services.scene_transform_controller
     center = controller._rotation_center(set(ids), [arrow, image])
     old_image = image.sceneBoundingRect().center()
     old_arrow = scene_item_state_for(canvas, arrow)
-    before = snapshot_canvas_state_for(canvas)
+    before = canvas.services.canvas_document_session_service.snapshot_state()
     controller.flip_selected_items(horizontal)
     expected = (
         QPointF(2 * center.x() - old_image.x(), old_image.y())
@@ -175,23 +171,25 @@ def test_flip_uses_one_pivot_for_molecule_arrow_and_upright_item(canvas, horizon
         assert current.y == pytest.approx(
             old["y"] if horizontal else 2 * center.y() - old["y"]
         )
-    after = snapshot_canvas_state_for(canvas)
+    after = canvas.services.canvas_document_session_service.snapshot_state()
     canvas.runtime_state.history_service.undo()
-    assert snapshot_canvas_state_for(canvas) == before
+    assert canvas.services.canvas_document_session_service.snapshot_state() == before
     canvas.runtime_state.history_service.redo()
-    assert snapshot_canvas_state_for(canvas) == after
+    assert canvas.services.canvas_document_session_service.snapshot_state() == after
 
 
 def test_grouping_partial_molecule_records_and_moves_whole_component(canvas):
     ids = _chain(canvas)
-    level = add_arrow_for(canvas, QPointF(100, 40), QPointF(140, 40), "line")
+    level = canvas.services.scene_decoration_service.add_arrow(
+        QPointF(100, 40), QPointF(140, 40), "line"
+    )
     restore_selection_from_ids_for(canvas, {ids[0]}, set())
     level.setSelected(True)
-    before_group = snapshot_canvas_state_for(canvas)
+    before_group = canvas.services.canvas_document_session_service.snapshot_state()
     assert group_selection_for(canvas)
-    group = next(iter(group_state_for(canvas).groups.values()))
+    group = next(iter(canvas.runtime_state.group_state.groups.values()))
     assert group.atom_ids == set(ids)
-    grouped = snapshot_canvas_state_for(canvas)
+    grouped = canvas.services.canvas_document_session_service.snapshot_state()
     before_positions = {
         aid: (canvas.model.atoms[aid].x, canvas.model.atoms[aid].y) for aid in ids
     }
@@ -202,16 +200,18 @@ def test_grouping_partial_molecule_records_and_moves_whole_component(canvas):
             y + 4,
         )
     canvas.runtime_state.history_service.undo()
-    assert snapshot_canvas_state_for(canvas) == grouped
+    assert canvas.services.canvas_document_session_service.snapshot_state() == grouped
     canvas.runtime_state.history_service.undo()
-    assert snapshot_canvas_state_for(canvas) == before_group
-    restore_canvas_state_for(canvas, grouped)
+    assert (
+        canvas.services.canvas_document_session_service.snapshot_state() == before_group
+    )
+    canvas.services.canvas_document_session_service.restore_state(grouped)
     restore_selection_from_ids_for(canvas, set(), set())
     restored_level = resolve_projection(
-        canvas, next(iter(group_state_for(canvas).groups.values())).item_ids[0]
+        canvas, next(iter(canvas.runtime_state.group_state.groups.values())).item_ids[0]
     )
     restored_level.setSelected(True)
-    selection_for(canvas).expand_selection_to_groups()
+    canvas.services.selection.expand_selection_to_groups()
     canvas.services.scene_transform_controller.translate_selected_items(0, 4)
     for atom_id, (x, y) in before_positions.items():
         assert (canvas.model.atoms[atom_id].x, canvas.model.atoms[atom_id].y) == (
@@ -223,7 +223,7 @@ def test_grouping_partial_molecule_records_and_moves_whole_component(canvas):
 def test_direct_partial_atom_move_remains_a_reshape(canvas):
     ids = _chain(canvas)
     restore_selection_from_ids_for(canvas, {ids[0]}, set())
-    before = snapshot_canvas_state_for(canvas)
+    before = canvas.services.canvas_document_session_service.snapshot_state()
     canvas.services.scene_transform_controller.translate_selected_items(0, 4)
     assert canvas.model.atoms[ids[0]].y == 4
     for atom_id in ids[1:]:
@@ -233,9 +233,13 @@ def test_direct_partial_atom_move_remains_a_reshape(canvas):
 def test_regroup_expands_absorbed_legacy_groups_to_component_closure(canvas):
     first = _chain(canvas)
     second = _chain(canvas, offset=200)
-    unrelated = add_atom_for(canvas, "N", 500, 0)
-    line = add_arrow_for(canvas, QPointF(150, 80), QPointF(190, 80), "line")
-    other = add_arrow_for(canvas, QPointF(350, 80), QPointF(390, 80), "arrow")
+    unrelated = canvas.services.canvas_atom_mutation_service.add_atom("N", 500, 0)
+    line = canvas.services.scene_decoration_service.add_arrow(
+        QPointF(150, 80), QPointF(190, 80), "line"
+    )
+    other = canvas.services.scene_decoration_service.add_arrow(
+        QPointF(350, 80), QPointF(390, 80), "arrow"
+    )
     register_group_for(
         canvas, {first[0], second[0]}, [require_scene_record_id(item) for item in []]
     )
@@ -248,20 +252,20 @@ def test_regroup_expands_absorbed_legacy_groups_to_component_closure(canvas):
     caption = _decoration(canvas, "shape")
     restore_selection_from_ids_for(canvas, {first[-1]}, set())
     caption.setSelected(True)
-    before = snapshot_canvas_state_for(canvas)
+    before = canvas.services.canvas_document_session_service.snapshot_state()
     assert group_selection_for(canvas)
-    state = group_state_for(canvas)
+    state = canvas.runtime_state.group_state
     assert len(state.groups) == 2
     assert state.groups[untouched_id].atom_ids == {unrelated}
     combined = next(group for gid, group in state.groups.items() if gid != untouched_id)
     assert combined.atom_ids == set(first + second)
     assert set(combined.item_ids) == {caption.data(3), line.data(3)}
-    after = snapshot_canvas_state_for(canvas)
+    after = canvas.services.canvas_document_session_service.snapshot_state()
     history = canvas.services.history_service
     history.undo()
-    assert snapshot_canvas_state_for(canvas) == before
+    assert canvas.services.canvas_document_session_service.snapshot_state() == before
     history.redo()
-    assert snapshot_canvas_state_for(canvas) == after
+    assert canvas.services.canvas_document_session_service.snapshot_state() == after
     assert not group_selection_for(canvas)
 
 
@@ -284,15 +288,16 @@ def test_upright_group_transform_failure_is_atomic_and_retryable(canvas, kind, p
         transform()
         if phase == "redo":
             history.undo()
-    before = snapshot_canvas_state_for(canvas)
+    before = canvas.services.canvas_document_session_service.snapshot_state()
     scene_items = set(canvas.scene().items())
     selection = set(canvas.scene().selectedItems())
     stacks = history.capture_stack_snapshot()
     if phase == "push":
         failure = mock.patch.object(history, "push", return_value=False)
     elif phase in {"undo", "redo"}:
-        failure = mock.patch(
-            "chemvas.ui.history.history_operations.apply_scene_item_state",
+        failure = mock.patch.object(
+            canvas.services.scene_item_controller,
+            "apply_scene_item_state",
             side_effect=RuntimeError("item render failed"),
         )
     else:
@@ -308,7 +313,7 @@ def test_upright_group_transform_failure_is_atomic_and_retryable(canvas, kind, p
     action = getattr(history, phase) if phase in {"undo", "redo"} else transform
     with failure, pytest.raises(RuntimeError):
         action()
-    assert snapshot_canvas_state_for(canvas) == before
+    assert canvas.services.canvas_document_session_service.snapshot_state() == before
     assert set(canvas.scene().items()) == scene_items
     assert set(canvas.scene().selectedItems()) == selection
     history.verify_stack_snapshot(stacks)
@@ -326,7 +331,7 @@ def test_partial_molecule_group_failure_restores_exact_state(canvas, failure_mod
     restore_selection_from_ids_for(canvas, {ids[0]}, set())
     shape.setSelected(True)
     history = canvas.services.history_service
-    before = snapshot_canvas_state_for(canvas)
+    before = canvas.services.canvas_document_session_service.snapshot_state()
     before_scene = set(canvas.scene().items())
     before_selection = set(canvas.scene().selectedItems())
     stacks = history.capture_stack_snapshot()
@@ -343,14 +348,14 @@ def test_partial_molecule_group_failure_restores_exact_state(canvas, failure_mod
             side_effect=fail_after_register,
         )
     elif failure_mode == "selection":
-        real_expand = selection_for(canvas).expand_selection_to_groups
+        real_expand = canvas.services.selection.expand_selection_to_groups
 
         def fail_after_expand():
             real_expand()
             raise RuntimeError("selection failed after publication")
 
         failure = mock.patch.object(
-            selection_for(canvas),
+            canvas.services.selection,
             "expand_selection_to_groups",
             side_effect=fail_after_expand,
         )
@@ -362,7 +367,7 @@ def test_partial_molecule_group_failure_restores_exact_state(canvas, failure_mod
         )
     with failure, pytest.raises(RuntimeError):
         group_selection_for(canvas)
-    assert snapshot_canvas_state_for(canvas) == before
+    assert canvas.services.canvas_document_session_service.snapshot_state() == before
     assert set(canvas.scene().items()) == before_scene
     assert set(canvas.scene().selectedItems()) == before_selection
     history.verify_stack_snapshot(stacks)
@@ -375,15 +380,17 @@ def test_explicit_regroup_repairs_a_legacy_fragment_only_group(canvas):
         canvas, {ids[0], ids[1]}, [require_scene_record_id(item) for item in []]
     )
     restore_selection_from_ids_for(canvas, {ids[0]}, set())
-    before = snapshot_canvas_state_for(canvas)
+    before = canvas.services.canvas_document_session_service.snapshot_state()
     assert group_selection_for(canvas)
-    assert next(iter(group_state_for(canvas).groups.values())).atom_ids == set(ids)
-    after = snapshot_canvas_state_for(canvas)
+    assert next(iter(canvas.runtime_state.group_state.groups.values())).atom_ids == set(
+        ids
+    )
+    after = canvas.services.canvas_document_session_service.snapshot_state()
     history = canvas.services.history_service
     history.undo()
-    assert snapshot_canvas_state_for(canvas) == before
+    assert canvas.services.canvas_document_session_service.snapshot_state() == before
     history.redo()
-    assert snapshot_canvas_state_for(canvas) == after
+    assert canvas.services.canvas_document_session_service.snapshot_state() == after
     assert not group_selection_for(canvas)
 
 
@@ -404,12 +411,12 @@ def test_real_rotation_handle_preserves_group_and_baseline_redo(
     controller.translate_selected_items(7, 0)
     history.undo()
     app.processEvents()
-    before = snapshot_canvas_state_for(canvas)
+    before = canvas.services.canvas_document_session_service.snapshot_state()
     stacks = history.capture_stack_snapshot()
     center = controller._rotation_center(set(ids), [item])
     knobs = [
         item
-        for item in selection_outlines_for(canvas)
+        for item in canvas.runtime_state.selection_state.outlines
         if item.data(1) == ROTATION_HANDLE_TYPE
     ]
     assert len(knobs) == 1
@@ -418,11 +425,11 @@ def test_real_rotation_handle_preserves_group_and_baseline_redo(
     )
     end = canvas.mapFromScene(_turn(canvas.mapToScene(start), center))
     errors = []
-    callback_state_for(canvas).error = errors.append
+    canvas.runtime_state.callback_state.error = errors.append
     viewport = canvas.viewport()
     QTest.mousePress(viewport, Qt.MouseButton.LeftButton, pos=start)
     QTest.mouseMove(viewport, end, 30)
-    assert snapshot_canvas_state_for(canvas) != before
+    assert canvas.services.canvas_document_session_service.snapshot_state() != before
     if outcome == "cancel":
         QTest.keyClick(viewport, Qt.Key.Key_Escape)
     elif outcome == "return":
@@ -432,13 +439,17 @@ def test_real_rotation_handle_preserves_group_and_baseline_redo(
     app.processEvents()
     assert errors == []
     if outcome == "commit":
-        after = snapshot_canvas_state_for(canvas)
+        after = canvas.services.canvas_document_session_service.snapshot_state()
         assert after != before
         assert item.rotation() == (pytest.approx(90, abs=1) if kind == "note" else 0)
         history.undo()
-        assert snapshot_canvas_state_for(canvas) == before
+        assert (
+            canvas.services.canvas_document_session_service.snapshot_state() == before
+        )
         history.redo()
-        assert snapshot_canvas_state_for(canvas) == after
+        assert canvas.services.canvas_document_session_service.snapshot_state() == after
     else:
-        assert snapshot_canvas_state_for(canvas) == before
+        assert (
+            canvas.services.canvas_document_session_service.snapshot_state() == before
+        )
         history.verify_stack_snapshot(stacks)

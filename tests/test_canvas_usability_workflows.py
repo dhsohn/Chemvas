@@ -11,22 +11,17 @@ from chemvas.features.annotations import sanitize_note_html
 from chemvas.shell.window_registry import open_windows
 from chemvas.ui.annotations.projections import group_projections
 from chemvas.ui.annotations.state import arrow_state_dict_for, scene_item_state_for
-from chemvas.ui.canvas.canvas_group_state import group_state_for
 from chemvas.ui.canvas.canvas_scene_items_state import (
     arrow_items_for,
     note_items_for,
     shape_items_for,
 )
-from chemvas.ui.canvas.canvas_window_access import snapshot_canvas_state_for
 from chemvas.ui.scene.scene_clipboard_controller import SceneClipboardController
 from chemvas.ui.scene.scene_clipboard_logic import build_selection_clipboard_payload
 from chemvas.ui.selection.selection_queries import selection_status_count_for
-from chemvas.ui.selection.selection_state import selected_notes_for
-from chemvas.ui.tools.handle_state import active_handles_for
 from chemvas.ui.window.main_window_ports import (
     active_canvas_for_window,
     history_service_for_window,
-    services_for_window,
 )
 from tests.gui_workflow_support import _click, _key, _redo, _tool
 from tests.gui_workflow_support import app as app
@@ -65,10 +60,10 @@ def _arrow(window, canvas):
 
 
 def _save(window, canvas, path):
-    assert services_for_window(window).document_action_service.save_canvas_to_path(
+    assert window.services.document_action_service.save_canvas_to_path(
         window, str(path)
     )
-    assert not services_for_window(window).canvas_document_service.is_dirty(canvas)
+    assert not window.services.canvas_document_service.is_dirty(canvas)
 
 
 def test_note_spaces_survive_document_undo_redo(drawing, tmp_path):
@@ -110,7 +105,7 @@ def test_note_spaces_survive_file_open(drawing, tmp_path, monkeypatch):
         assert not target.isWindowModified()
     finally:
         for target in opened:
-            services_for_window(target).canvas_document_service.mark_clean(
+            target.services.canvas_document_service.mark_clean(
                 active_canvas_for_window(target)
             )
             target.close()
@@ -128,7 +123,7 @@ def test_unselected_annotation_moves_on_first_drag(drawing, tmp_path, kind):
         _click(canvas, QPointF(160, 130))
         item = shape_items_for(canvas)[-1]
     _save(window, canvas, tmp_path / "annotation.chemvas")
-    baseline = snapshot_canvas_state_for(canvas)
+    baseline = canvas.services.canvas_document_session_service.snapshot_state()
     center = item.sceneBoundingRect().center()
     history = history_service_for_window(window)
     count = len(history.state.history)
@@ -136,7 +131,7 @@ def test_unselected_annotation_moves_on_first_drag(drawing, tmp_path, kind):
     assert item.sceneBoundingRect().center() == center + QPointF(30, 15)
     assert len(history.state.history) == count + 1
     _ctrl(canvas, Qt.Key.Key_Z)
-    assert snapshot_canvas_state_for(canvas) == baseline
+    assert canvas.services.canvas_document_session_service.snapshot_state() == baseline
     assert not window.isWindowModified()
     _redo(canvas)
     assert item.sceneBoundingRect().center() == center + QPointF(30, 15)
@@ -173,16 +168,16 @@ def test_first_drag_moves_notes_only_group_as_unit(
     _tool(window, "select")
     _ctrl(canvas, Qt.Key.Key_A)
     _ctrl(canvas, Qt.Key.Key_G)
-    group = next(iter(group_state_for(canvas).groups.values()))
+    group = next(iter(canvas.runtime_state.group_state.groups.values()))
     assert set(group.item_ids) == {first.data(3), second.data(3)}
     arrow = _arrow(window, canvas)
     _click(canvas, QPointF(160, 130))
     if previous_selection == "arrow":
         _click(canvas, QPointF(20, -20))
         assert arrow.isSelected()
-    assert not selected_notes_for(canvas)
+    assert not canvas.runtime_state.selection_state.selected_notes
     _save(window, canvas, tmp_path / "note-group.chemvas")
-    baseline = snapshot_canvas_state_for(canvas)
+    baseline = canvas.services.canvas_document_session_service.snapshot_state()
     arrow_before = arrow_state_dict_for(canvas, arrow)
     notes = (first, second)
     centers = [note.sceneBoundingRect().center() for note in notes]
@@ -191,12 +186,14 @@ def test_first_drag_moves_notes_only_group_as_unit(
     history = history_service_for_window(window)
     count = len(history.state.history)
     _drag(canvas, start, start + delta, cancel=cancel)
-    assert set(selected_notes_for(canvas)) == set(notes)
+    assert set(canvas.runtime_state.selection_state.selected_notes) == set(notes)
     assert not arrow.isSelected()
     assert arrow_state_dict_for(canvas, arrow) == arrow_before
     assert set(group.item_ids) == {item.data(3) for item in notes}
     if cancel:
-        assert snapshot_canvas_state_for(canvas) == baseline
+        assert (
+            canvas.services.canvas_document_session_service.snapshot_state() == baseline
+        )
         assert len(history.state.history) == count
         assert not window.isWindowModified()
         return
@@ -204,12 +201,12 @@ def test_first_drag_moves_notes_only_group_as_unit(
         center + delta for center in centers
     ]
     assert len(history.state.history) == count + 1
-    moved = snapshot_canvas_state_for(canvas)
+    moved = canvas.services.canvas_document_session_service.snapshot_state()
     _ctrl(canvas, Qt.Key.Key_Z)
-    assert snapshot_canvas_state_for(canvas) == baseline
+    assert canvas.services.canvas_document_session_service.snapshot_state() == baseline
     assert not window.isWindowModified()
     _redo(canvas)
-    assert snapshot_canvas_state_for(canvas) == moved
+    assert canvas.services.canvas_document_session_service.snapshot_state() == moved
 
 
 def _copy_pair(window, canvas, *, grouped):
@@ -228,7 +225,7 @@ def test_blank_click_clears_all_pasted_note_selection(drawing, clipboard, groupe
     _copy_pair(window, canvas, grouped=grouped)
     _click(canvas, QPointF(160, 130))
     assert selection_status_count_for(canvas) == 0
-    assert not selected_notes_for(canvas)
+    assert not canvas.runtime_state.selection_state.selected_notes
     assert not canvas.scene().selectedItems()
 
 
@@ -240,19 +237,19 @@ def test_selecting_new_target_does_not_drag_unrelated_note(drawing, clipboard):
     # Click a different arrow without first clicking the blank canvas.
     _drag(canvas, QPointF(20, -20), QPointF(90, -20))
     assert note.pos() == before
-    assert not selected_notes_for(canvas)
+    assert not canvas.runtime_state.selection_state.selected_notes
 
 
 def test_group_copy_paste_preserves_independent_group_and_undo(drawing, clipboard):
     window, canvas = drawing
     _copy_pair(window, canvas, grouped=True)
-    assert len(group_state_for(canvas).groups) == 2
-    pasted = snapshot_canvas_state_for(canvas)
+    assert len(canvas.runtime_state.group_state.groups) == 2
+    pasted = canvas.services.canvas_document_session_service.snapshot_state()
     _ctrl(canvas, Qt.Key.Key_Z)
-    assert len(group_state_for(canvas).groups) == 1
+    assert len(canvas.runtime_state.group_state.groups) == 1
     assert len(note_items_for(canvas)) == 1
     _redo(canvas)
-    assert snapshot_canvas_state_for(canvas) == pasted
+    assert canvas.services.canvas_document_session_service.snapshot_state() == pasted
     _click(canvas, QPointF(160, 130))
     copied_note = note_items_for(canvas)[-1]
     original_note = note_items_for(canvas)[0]
@@ -329,8 +326,8 @@ def test_repeated_paste_remaps_mixed_groups_without_touching_originals(
     _tool(window, "select")
     _ctrl(canvas, Qt.Key.Key_A)
     _ctrl(canvas, Qt.Key.Key_G)
-    baseline = snapshot_canvas_state_for(canvas)
-    original = next(iter(group_state_for(canvas).groups.values()))
+    baseline = canvas.services.canvas_document_session_service.snapshot_state()
+    original = next(iter(canvas.runtime_state.group_state.groups.values()))
     assert len(original.atom_ids) == 2
     assert {item.data(0) for item in group_projections(canvas, original.item_ids)} == {
         "note",
@@ -341,26 +338,26 @@ def test_repeated_paste_remaps_mixed_groups_without_touching_originals(
     _ctrl(canvas, Qt.Key.Key_C)
     _ctrl(canvas, Qt.Key.Key_V)
     _ctrl(canvas, Qt.Key.Key_V)
-    groups = list(group_state_for(canvas).groups.values())
+    groups = list(canvas.runtime_state.group_state.groups.values())
     assert len(groups) == 3
     assert len(set.union(*(g.atom_ids for g in groups))) == 6
     assert len({item for g in groups for item in g.item_ids}) == 12
-    after = snapshot_canvas_state_for(canvas)
+    after = canvas.services.canvas_document_session_service.snapshot_state()
     _ctrl(canvas, Qt.Key.Key_Z)
     _ctrl(canvas, Qt.Key.Key_Z)
-    assert snapshot_canvas_state_for(canvas) == baseline
+    assert canvas.services.canvas_document_session_service.snapshot_state() == baseline
     _redo(canvas)
     _redo(canvas)
-    assert snapshot_canvas_state_for(canvas) == after
+    assert canvas.services.canvas_document_session_service.snapshot_state() == after
     _ctrl(canvas, Qt.Key.Key_A)
     _ctrl(canvas, Qt.Key.Key_C)
     _ctrl(canvas, Qt.Key.Key_V)
-    groups = list(group_state_for(canvas).groups.values())
+    groups = list(canvas.runtime_state.group_state.groups.values())
     assert len(groups) == 6
     assert len(set.union(*(g.atom_ids for g in groups))) == 12
     assert len({item for g in groups for item in g.item_ids}) == 24
     _ctrl(canvas, Qt.Key.Key_Z)
-    assert snapshot_canvas_state_for(canvas) == after
+    assert canvas.services.canvas_document_session_service.snapshot_state() == after
 
 
 @pytest.mark.parametrize("kind", ["note", "shape", "arrow"])
@@ -385,7 +382,7 @@ def test_grouped_paste_failure_restores_document_and_history(
 
     window, canvas = drawing
     _copy_pair(window, canvas, grouped=True)
-    before = snapshot_canvas_state_for(canvas)
+    before = canvas.services.canvas_document_session_service.snapshot_state()
     history = history_service_for_window(window)
     stacks = (tuple(history.state.history), tuple(history.state.redo_stack))
 
@@ -403,7 +400,7 @@ def test_grouped_paste_failure_restores_document_and_history(
     controller = canvas.services.scene_clipboard_controller
     with pytest.raises(RuntimeError, match="paste recording failed"):
         controller.paste_selection_from_clipboard()
-    assert snapshot_canvas_state_for(canvas) == before
+    assert canvas.services.canvas_document_session_service.snapshot_state() == before
     assert (tuple(history.state.history), tuple(history.state.redo_stack)) == stacks
 
 
@@ -423,7 +420,7 @@ def test_copied_groups_survive_save_open(drawing, clipboard, tmp_path, monkeypat
         assert len(opened) == 1
         target = next(iter(opened))
         restored = active_canvas_for_window(target)
-        assert len(group_state_for(restored).groups) == 2
+        assert len(restored.runtime_state.group_state.groups) == 2
         _tool(target, "select")
         note = note_items_for(restored)[-1]
         pos = QPointF(note.pos())
@@ -431,7 +428,7 @@ def test_copied_groups_survive_save_open(drawing, clipboard, tmp_path, monkeypat
         assert note.pos() == pos + QPointF(70, 0)
     finally:
         for target in opened:
-            services_for_window(target).canvas_document_service.mark_clean(
+            target.services.canvas_document_service.mark_clean(
                 active_canvas_for_window(target)
             )
             target.close()
@@ -443,12 +440,12 @@ def test_escape_cancels_arrow_endpoint_drag(drawing, tmp_path):
     _save(window, canvas, tmp_path / "handle.chemvas")
     _click(canvas, QPointF(20, -20))
     _click(canvas, QPointF(20, -20))
-    handle = active_handles_for(canvas)[0]
+    handle = canvas.runtime_state.handle_state.active_handles[0]
     before = arrow_state_dict_for(canvas, arrow)
     start = handle.sceneBoundingRect().center()
     _drag(canvas, start, start + QPointF(30, 15), cancel=True)
     assert arrow_state_dict_for(canvas, arrow) == before
-    assert not active_handles_for(canvas)
+    assert not canvas.runtime_state.handle_state.active_handles
     assert not window.isWindowModified()
 
 

@@ -15,7 +15,6 @@ from chemvas.features.rendering import (
 )
 from chemvas.ui.annotations.state import bond_state_dict
 from chemvas.ui.canvas.canvas_model_access import bond_for_id
-from chemvas.ui.canvas.canvas_smiles_input_state import last_smiles_input_for
 from chemvas.ui.canvas.canvas_window_access import notify_error_for
 from chemvas.ui.scene.scene_group_operations import group_connection_allowed_for
 
@@ -159,7 +158,7 @@ class StructureBondBuildService:
                 before_state,
                 after_state,
                 before_smiles_input,
-                last_smiles_input_for(self.canvas),
+                self.canvas.runtime_state.smiles_input_state.last_smiles_input,
             )
         except Exception as original_error:
             # A named function rather than a ``partial`` over

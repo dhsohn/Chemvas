@@ -3,20 +3,15 @@ from __future__ import annotations
 import math
 
 from chemvas.ui.molecule.bond_graphics_build_service import apply_color_to_bond_item
-from chemvas.ui.molecule.bond_renderer_access import bond_renderer_for
 from chemvas.ui.scene.scene_geometry import SceneGeometry, project_point_in_scene
 
 
-def add_bond_graphics_for(canvas, bond_id: int) -> None:
-    bond_renderer_for(canvas).add_bond_graphics(bond_id)
-
-
 def parallel_bond_segments_for(canvas, *args):
-    return bond_renderer_for(canvas).parallel_bond_segments(*args)
+    return canvas.bond_renderer.parallel_bond_segments(*args)
 
 
 def ring_double_segments_for(canvas, *args):
-    return bond_renderer_for(canvas).ring_double_segments(*args)
+    return canvas.bond_renderer.ring_double_segments(*args)
 
 
 def line_normal_components(
@@ -81,20 +76,11 @@ def bond_offset_unit_3d_for(
     return canvas.render_context.geometry.bond_offset_unit_3d(a_id, b_id, target)
 
 
-def ring_center_for_bond_for(canvas, bond):
-    return canvas.render_context.geometry.ring_center_for_bond(bond)
-
-
-def ring_center_3d_for_bond_for(canvas, bond):
-    return canvas.render_context.geometry.ring_center_3d_for_bond(bond)
-
-
 def apply_color_to_bond_item_for(canvas, item, color) -> None:
     apply_color_to_bond_item(item, color)
 
 
 __all__ = [
-    "add_bond_graphics_for",
     "apply_color_to_bond_item_for",
     "bond_offset_unit_3d_for",
     "line_normal_components",
@@ -102,7 +88,5 @@ __all__ = [
     "orient_normal_toward_target",
     "parallel_bond_segments_for",
     "project_point_3d_for",
-    "ring_center_3d_for_bond_for",
-    "ring_center_for_bond_for",
     "ring_double_segments_for",
 ]

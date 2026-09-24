@@ -13,19 +13,13 @@ from chemvas.features.selection import (
     ROTATION_HANDLE_STEM_PX,
     ROTATION_HANDLE_TYPE,
 )
-from chemvas.ui.canvas.canvas_bond_graphics_state import bond_items_for_id
 from chemvas.ui.canvas.canvas_model_access import atom_for_id
-from chemvas.ui.canvas.canvas_window_access import snapshot_canvas_state_for
 from chemvas.ui.canvas.pick_radius_access import atom_pick_radius_for
 from chemvas.ui.molecule.atom_label_access import add_or_update_atom_label
-from chemvas.ui.molecule.bond_graphics_access import add_bond_graphics_for
-from chemvas.ui.molecule.structure_mutation_access import add_atom_for, add_bond_for
-from chemvas.ui.scene.scene_decoration_access import add_arrow_for
-from chemvas.ui.selection.selection_state import selection_for, selection_outlines_for
+from chemvas.ui.molecule.structure_mutation_access import add_bond_for
 from chemvas.ui.window.main_window_ports import (
     history_service_for_window,
     select_all_for_window,
-    services_for_window,
     set_zoom_percent_for_window,
 )
 from tests.gui_workflow_support import _key, _redo
@@ -38,10 +32,10 @@ def _ctrl(canvas, key):
 
 
 def _bonded_pair(canvas):
-    a = add_atom_for(canvas, "C", -20.0, 0.0)
-    b = add_atom_for(canvas, "C", 20.0, 0.0)
+    a = canvas.services.canvas_atom_mutation_service.add_atom("C", -20.0, 0.0)
+    b = canvas.services.canvas_atom_mutation_service.add_atom("C", 20.0, 0.0)
     bond_id = add_bond_for(canvas, a, b)
-    add_bond_graphics_for(canvas, bond_id)
+    canvas.bond_renderer.add_bond_graphics(bond_id)
     return a, b
 
 
@@ -50,7 +44,7 @@ def _select_all(window, canvas) -> None:
     # loaded CI runner the selection signal can land after the assertion.
     select_all_for_window(window)
     QApplication.processEvents()
-    selection_for(canvas).update_selection_outline()
+    canvas.services.selection.update_selection_outline()
     QApplication.processEvents()
 
 
@@ -61,7 +55,7 @@ def _positions(canvas, *atom_ids):
 def _outlines(canvas, kind):
     return [
         item
-        for item in selection_outlines_for(canvas)
+        for item in canvas.runtime_state.selection_state.outlines
         if (item.data(2) or {}).get("kind") == kind
     ]
 
@@ -69,7 +63,7 @@ def _outlines(canvas, kind):
 def _knob(canvas):
     knobs = [
         item
-        for item in selection_outlines_for(canvas)
+        for item in canvas.runtime_state.selection_state.outlines
         if item.data(1) == ROTATION_HANDLE_TYPE
     ]
     assert len(knobs) == 1
@@ -138,18 +132,22 @@ def test_two_bonded_atoms_get_a_frame_and_a_rotation_knob(drawing):
 
 def test_a_lone_atom_gets_no_frame(drawing):
     window, canvas = drawing
-    add_atom_for(canvas, "C", 0.0, 0.0)
+    canvas.services.canvas_atom_mutation_service.add_atom("C", 0.0, 0.0)
     _select_all(window, canvas)
 
     assert _outlines(canvas, "frame") == []
     assert [
-        item for item in selection_outlines_for(canvas) if item.data(0) == "handle"
+        item
+        for item in canvas.runtime_state.selection_state.outlines
+        if item.data(0) == "handle"
     ] == []
 
 
 def test_a_single_arrow_gets_a_frame(drawing):
     window, canvas = drawing
-    add_arrow_for(canvas, QPointF(-30.0, 0.0), QPointF(30.0, 0.0), "arrow")
+    canvas.services.scene_decoration_service.add_arrow(
+        QPointF(-30.0, 0.0), QPointF(30.0, 0.0), "arrow"
+    )
     _select_all(window, canvas)
 
     assert len(_outlines(canvas, "frame")) == 1
@@ -182,9 +180,9 @@ def test_escape_cancels_a_rotation_drag(drawing, tmp_path):
     set_zoom_percent_for_window(window, 200)
     a, b = _bonded_pair(canvas)
     _select_all(window, canvas)
-    document_action = services_for_window(window).document_action_service
+    document_action = window.services.document_action_service
     assert document_action.save_canvas_to_path(window, str(tmp_path / "turn.chemvas"))
-    baseline = snapshot_canvas_state_for(canvas)
+    baseline = canvas.services.canvas_document_session_service.snapshot_state()
     history = history_service_for_window(window)
     count = len(history.state.history)
 
@@ -196,7 +194,7 @@ def test_escape_cancels_a_rotation_drag(drawing, tmp_path):
 
     _drag_knob(canvas, 60.0, cancel=True, after_move=turned)
 
-    assert snapshot_canvas_state_for(canvas) == baseline
+    assert canvas.services.canvas_document_session_service.snapshot_state() == baseline
     assert len(history.state.history) == count
     assert not window.isWindowModified()
 
@@ -205,7 +203,7 @@ def test_a_click_on_the_knob_without_moving_changes_nothing(drawing, tmp_path):
     window, canvas = drawing
     a, b = _bonded_pair(canvas)
     _select_all(window, canvas)
-    document_action = services_for_window(window).document_action_service
+    document_action = window.services.document_action_service
     assert document_action.save_canvas_to_path(window, str(tmp_path / "still.chemvas"))
     before = _positions(canvas, a, b)
     history = history_service_for_window(window)
@@ -222,10 +220,10 @@ def test_a_drag_back_to_its_start_restores_the_positions_exactly(drawing):
     window, canvas = drawing
     set_zoom_percent_for_window(window, 200)
     # Coordinates that floating-point rotation by zero does not reproduce.
-    a = add_atom_for(canvas, "C", -20.1, 0.3)
-    b = add_atom_for(canvas, "C", 19.7, 0.3)
+    a = canvas.services.canvas_atom_mutation_service.add_atom("C", -20.1, 0.3)
+    b = canvas.services.canvas_atom_mutation_service.add_atom("C", 19.7, 0.3)
     bond_id = add_bond_for(canvas, a, b)
-    add_bond_graphics_for(canvas, bond_id)
+    canvas.bond_renderer.add_bond_graphics(bond_id)
     _select_all(window, canvas)
     before = _positions(canvas, a, b)
     history = history_service_for_window(window)
@@ -309,12 +307,12 @@ def test_bonded_carbons_share_one_band_without_atom_bubbles(drawing):
 
 def test_a_labelled_atom_and_a_lone_atom_keep_their_own_marks(drawing):
     window, canvas = drawing
-    carbon = add_atom_for(canvas, "C", -20.0, 0.0)
-    oxygen = add_atom_for(canvas, "O", 20.0, 0.0)
+    carbon = canvas.services.canvas_atom_mutation_service.add_atom("C", -20.0, 0.0)
+    oxygen = canvas.services.canvas_atom_mutation_service.add_atom("O", 20.0, 0.0)
     add_or_update_atom_label(canvas, oxygen, "O", record=False)
     bond_id = add_bond_for(canvas, carbon, oxygen)
-    add_bond_graphics_for(canvas, bond_id)
-    add_atom_for(canvas, "C", 80.0, 0.0)
+    canvas.bond_renderer.add_bond_graphics(bond_id)
+    canvas.services.canvas_atom_mutation_service.add_atom("C", 80.0, 0.0)
     _select_all(window, canvas)
 
     components = sorted(
@@ -336,11 +334,8 @@ def test_a_ring_double_bond_band_stays_on_the_atom_axis(drawing):
     # each double bond's second line inside the ring from the cycle alone,
     # with no ring item to name a centre.
     atom_ids = [
-        add_atom_for(
-            canvas,
-            "C",
-            30.0 * math.cos(k * math.pi / 3.0),
-            30.0 * math.sin(k * math.pi / 3.0),
+        canvas.services.canvas_atom_mutation_service.add_atom(
+            "C", 30.0 * math.cos(k * math.pi / 3.0), 30.0 * math.sin(k * math.pi / 3.0)
         )
         for k in range(6)
     ]
@@ -348,14 +343,19 @@ def test_a_ring_double_bond_band_stays_on_the_atom_axis(drawing):
     for k in range(6):
         order = 2 if k % 2 == 0 else 1
         bond_id = add_bond_for(canvas, atom_ids[k], atom_ids[(k + 1) % 6], order)
-        add_bond_graphics_for(canvas, bond_id)
+        canvas.bond_renderer.add_bond_graphics(bond_id)
         if order == 2:
             double_bond_ids.append(bond_id)
     controller = canvas.services.selection
 
     for bond_id in double_bond_ids:
         bond = canvas.model.bonds[bond_id]
-        lines = [item.line() for item in bond_items_for_id(canvas, bond_id)]
+        lines = [
+            item.line()
+            for item in canvas.runtime_state.bond_graphics_state.bond_items.get(
+                bond_id, []
+            )
+        ]
         assert len(lines) == 2
         lengths = sorted(line.length() for line in lines)
         # One line spans the atoms, the other is the shortened inner line.
@@ -375,7 +375,9 @@ def test_a_ring_double_bond_band_stays_on_the_atom_axis(drawing):
 
 def test_showing_handles_leaves_the_item_pen_alone(drawing):
     window, canvas = drawing
-    arrow = add_arrow_for(canvas, QPointF(-30.0, 0.0), QPointF(30.0, 0.0), "arrow")
+    arrow = canvas.services.scene_decoration_service.add_arrow(
+        QPointF(-30.0, 0.0), QPointF(30.0, 0.0), "arrow"
+    )
     pen_before = arrow.pen()
 
     canvas.services.handle_overlay_service.show_endpoint_handles(arrow)

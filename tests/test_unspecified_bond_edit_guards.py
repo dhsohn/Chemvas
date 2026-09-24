@@ -14,10 +14,8 @@ from chemvas.ui.canvas.canvas_chemdraw_shortcut_service import (
     CanvasChemdrawShortcutService,
 )
 from chemvas.ui.canvas.canvas_tool_settings_state import CanvasToolSettingsState
-from chemvas.ui.canvas.canvas_window_access import snapshot_canvas_state_for
 from chemvas.ui.molecule.structure_mutation_access import add_bond_between_points_for
 from chemvas.ui.tools.bond_tool import BondTool
-from chemvas.ui.window.main_window_ports import services_for_window
 from tests.gui_workflow_support import app as app
 from tests.gui_workflow_support import drawing as drawing
 from tests.test_canvas_chemdraw_shortcut_service import _FakeKeyEvent
@@ -150,15 +148,15 @@ def _unknown_with_redo(drawing, tmp_path):
     window, canvas = drawing
     _load(canvas, style="double_either", order=2)
     canvas.services.scene_transform_controller.apply_bond_style(0, "single", 1)
-    redo_state = snapshot_canvas_state_for(canvas)
+    redo_state = canvas.services.canvas_document_session_service.snapshot_state()
     history = canvas.services.history_service
     history.undo()
-    assert services_for_window(window).document_action_service.save_canvas_to_path(
+    assert window.services.document_action_service.save_canvas_to_path(
         window, str(tmp_path / "unknown-double.chemvas")
     )
     assert not window.isWindowModified()
     return (
-        snapshot_canvas_state_for(canvas),
+        canvas.services.canvas_document_session_service.snapshot_state(),
         history.capture_stack_snapshot(),
         redo_state,
     )
@@ -167,14 +165,16 @@ def _unknown_with_redo(drawing, tmp_path):
 def _assert_refused(drawing, before, stacks, redo_state):
     window, canvas = drawing
     assert "Choose Double (2)" in window.statusBar().currentMessage()
-    assert snapshot_canvas_state_for(canvas) == before
+    assert canvas.services.canvas_document_session_service.snapshot_state() == before
     assert not window.isWindowModified()
     history = canvas.services.history_service
     history.verify_stack_snapshot(stacks)
     history.redo()
-    assert snapshot_canvas_state_for(canvas) == redo_state
+    assert (
+        canvas.services.canvas_document_session_service.snapshot_state() == redo_state
+    )
     history.undo()
-    assert snapshot_canvas_state_for(canvas) == before
+    assert canvas.services.canvas_document_session_service.snapshot_state() == before
 
 
 @pytest.mark.parametrize("tooltip", ["Bold bond (B)", "Dotted bond"])
@@ -256,15 +256,15 @@ def test_actual_explicit_bond_button_can_resolve_unknown_with_exact_undo(
     _load(canvas, style="double_either", order=2)
     _tool(window, "bond")
     _button(window, f"{name} bond ({order})")
-    before = snapshot_canvas_state_for(canvas)
+    before = canvas.services.canvas_document_session_service.snapshot_state()
     _click(canvas, QPointF())
     assert (canvas.model.bonds[0].style, canvas.model.bonds[0].order) == (
         name.lower(),
         order,
     )
-    after = snapshot_canvas_state_for(canvas)
+    after = canvas.services.canvas_document_session_service.snapshot_state()
     history = canvas.services.history_service
     history.undo()
-    assert snapshot_canvas_state_for(canvas) == before
+    assert canvas.services.canvas_document_session_service.snapshot_state() == before
     history.redo()
-    assert snapshot_canvas_state_for(canvas) == after
+    assert canvas.services.canvas_document_session_service.snapshot_state() == after

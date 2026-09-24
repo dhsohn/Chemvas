@@ -22,11 +22,7 @@ from chemvas.core.document_io import read_document, write_document
 from chemvas.domain.document import CANVAS_FILE_VERSION
 from chemvas.domain.document.perspective import unproject_point_3d
 from chemvas.features.document_composition import compose_document_state
-from chemvas.ui.canvas.canvas_bond_graphics_state import bond_items_for_id
-from chemvas.ui.canvas.canvas_group_state import group_state_for
 from chemvas.ui.canvas.canvas_scene_items_state import ring_items_for
-from chemvas.ui.molecule.atom_coords_access import atom_coords_3d_for
-from chemvas.ui.scene.mark_item_access import mark_center_for
 from chemvas.ui.selection.selection_queries import selected_ids_for
 from tests.document_patch_workflow_support import run_patch
 from tests.gui_workflow_support import app as app
@@ -114,7 +110,7 @@ def _prepare(drawing, app, monkeypatch, style, order, reverse=False):
     canvas.services.tool_mode_controller.set_tool("select")
     canvas.centerOn(220, 210)
     canvas.scene().clearSelection()
-    bond_items_for_id(canvas, 0)[0].setSelected(True)
+    canvas.runtime_state.bond_graphics_state.bond_items.get(0, [])[0].setSelected(True)
     canvas.setFocus()
     app.processEvents()
     position = canvas.mapFromScene(QPointF(170, 140))
@@ -149,7 +145,7 @@ def _sentinels(canvas):
         data = deepcopy(item.data(1))
         for key in ("text", "dx", "dy"):
             data.setdefault(key, None)
-        center = mark_center_for(canvas, item)
+        center = canvas.services.scene_decoration_build_service.mark_center(item)
         key = (data["atom_id"], data["kind"], data["color"])
         assert key not in marks
         marks[key] = ((center.x(), center.y()), data)
@@ -159,12 +155,12 @@ def _sentinels(canvas):
         for item in ring_items_for(canvas)
     ]
     assert len(rings) == 1
-    return marks, rings, dict(atom_coords_3d_for(canvas))
+    return marks, rings, dict(canvas.runtime_state.atom_coords_3d_state.atom_coords_3d)
 
 
 def _glyph(canvas, style, order, reverse=False):
     """Inspect actual Qt primitives, not the model or the renderer's planner."""
-    items = bond_items_for_id(canvas, 0)
+    items = canvas.runtime_state.bond_graphics_state.bond_items.get(0, [])
     assert items and all(
         item.isVisible() and item.scene() is canvas.scene() for item in items
     )
@@ -276,7 +272,7 @@ def test_bond_shortcut_matches_cli_literal_edit_and_reopening(
     before = documents.snapshot_state()
     expected = _expected(before, target_style, target_order)
     sentinels = _sentinels(canvas)
-    groups = dict(group_state_for(canvas).groups)
+    groups = dict(canvas.runtime_state.group_state.groups)
     before_glyph = _glyph(canvas, initial_style, initial_order, reverse)
     source = tmp_path / "source.chemvas"
     write_document(source, before, CANVAS_FILE_VERSION)
@@ -334,9 +330,9 @@ def test_bond_shortcut_matches_cli_literal_edit_and_reopening(
             assert _glyph(canvas, style, order, reverse) == glyph
             assert _sentinels(canvas) == sentinels
             assert selected_ids_for(canvas) == (set(), {0})
-            assert group_state_for(canvas).groups.keys() == groups.keys()
+            assert canvas.runtime_state.group_state.groups.keys() == groups.keys()
             assert all(
-                group_state_for(canvas).groups[key] is group
+                canvas.runtime_state.group_state.groups[key] is group
                 for key, group in groups.items()
             )
     saved = tmp_path / "gui-saved.chemvas"

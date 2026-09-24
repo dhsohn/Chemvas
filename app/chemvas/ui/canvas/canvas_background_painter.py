@@ -6,9 +6,8 @@ from PyQt6.QtCore import QLineF, Qt
 from PyQt6.QtGui import QColor, QPen
 
 from chemvas.features.rendering import hex_grid_cells
-from chemvas.ui.canvas.canvas_tool_settings_state import tool_settings_state_for
 from chemvas.ui.canvas.sheet_setup_access import sheet_rect_for
-from chemvas.ui.tools.endpoint_snap_access import grid_snap_enabled_for, grid_step_for
+from chemvas.ui.tools.endpoint_snap_access import grid_step_for
 
 # Below this on-screen spacing the grid reads as a grey wash rather than as a
 # guide, so it is left unpainted while the snapping itself keeps working.
@@ -39,7 +38,7 @@ def draw_canvas_background_for(canvas, painter, rect) -> None:
 
 
 def _draw_grid(canvas, painter, rect, sheet_rect) -> None:
-    if not grid_snap_enabled_for(canvas):
+    if not canvas.runtime_state.tool_settings_state.grid_snap_enabled:
         return
     step = grid_step_for(canvas)
     if step <= 0.0:
@@ -55,7 +54,7 @@ def _draw_grid(canvas, painter, rect, sheet_rect) -> None:
     scale = min(abs(transform.m11()), abs(transform.m22())) or 1.0
     if step * scale < MIN_GRID_SPACING_PX:
         return
-    settings = tool_settings_state_for(canvas)
+    settings = canvas.runtime_state.tool_settings_state
     color = QColor("#8c8c87")
     color.setAlphaF(settings.grid_opacity)
     pen = QPen(color)

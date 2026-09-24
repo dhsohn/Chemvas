@@ -10,11 +10,7 @@ from PyQt6.QtWidgets import QGraphicsItem, QGraphicsPolygonItem
 
 from chemvas.domain.document.groups import SceneGroup
 from chemvas.domain.transactions import add_recovery_error_note
-from chemvas.ui.canvas.canvas_group_state import (
-    group_state_for,
-    remove_group_for,
-    restore_group_for,
-)
+from chemvas.ui.canvas.canvas_group_state import restore_group_for
 from chemvas.ui.canvas.canvas_scene_items_state import (
     require_scene_record_id,
 )
@@ -45,7 +41,7 @@ def _shrink_group_members(
     item_ids: set[int],
 ) -> SceneGroup | None:
     """Replace the remaining membership, retaining the original Undo object."""
-    groups = group_state_for(canvas).groups
+    groups = canvas.runtime_state.group_state.groups
     original = groups.get(group_id)
     if original is None:
         return None
@@ -56,7 +52,7 @@ def _shrink_group_members(
     if remaining.atom_ids or remaining.item_ids:
         restore_group_for(canvas, group_id, remaining)
     else:
-        remove_group_for(canvas, group_id)
+        canvas.runtime_state.group_state.groups.pop(group_id, None)
     return original
 
 
@@ -473,7 +469,7 @@ class SceneDeleteTransactionSession:
             )
             if group is not None:
                 removed.append((group_id, group))
-            if group_id not in group_state_for(self.controller.canvas).groups:
+            if group_id not in self.controller.canvas.runtime_state.group_state.groups:
                 self._forget_group(group_id)
                 continue
             # Keep the surviving group discoverable on subsequent erase hits.

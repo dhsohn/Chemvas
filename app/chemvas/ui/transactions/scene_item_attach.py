@@ -24,7 +24,6 @@ from chemvas.ui.canvas.canvas_scene_items_state import (
     DOCUMENT_COLLECTION_STATES,
     document_collection_for,
     require_scene_record_id,
-    scene_items_state_for,
 )
 from chemvas.ui.scene.scene_item_access import item_is_unavailable_for_scene_operation
 from chemvas.ui.transactions.scene_rect import SceneRectSnapshot
@@ -287,7 +286,7 @@ class _DocumentRegistrationSnapshot:
     ) -> _DocumentRegistrationSnapshot:
         document = document_collection_for(canvas.runtime_state, collection_name)
         record_id = require_scene_record_id(item)
-        views = getattr(scene_items_state_for(canvas), collection_name)
+        views = getattr(canvas.runtime_state.scene_items_state, collection_name)
         return cls(
             document,
             collection_name,
@@ -353,7 +352,7 @@ class SceneItemAttachSnapshot:
             attach_ports = SceneItemAttachPorts.capture(scene, item)
         kind = attach_ports.item_kind_for_attach()
 
-        collection_owner = scene_items_state_for(canvas)
+        collection_owner = canvas.runtime_state.scene_items_state
         collection_name = _KIND_COLLECTION.get(kind) if isinstance(kind, str) else None
         collection = None
         if collection_name is not None:

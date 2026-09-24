@@ -8,15 +8,12 @@ from PyQt6.QtCore import QPointF
 from chemvas.domain.transactions import add_recovery_error_note
 from chemvas.ui.canvas.canvas_model_access import (
     atom_for_id,
-    bond_count_for,
     bond_for_id,
     bond_ids_from,
 )
 from chemvas.ui.canvas.canvas_smiles_input_state import set_last_smiles_input_for
-from chemvas.ui.molecule.bond_graphics_access import add_bond_graphics_for
 from chemvas.ui.molecule.structure_build_committer import StructureBuildCommitter
 from chemvas.ui.molecule.structure_insert_access import (
-    add_atom_with_merge_for,
     add_insert_ring_from_points_for,
     build_insert_benzene_ring_for,
     has_insert_mutation_since_for,
@@ -98,8 +95,12 @@ def apply_template_commit_resolution(
             set_last_smiles_input_for(canvas, after_smiles_input)
             atom_ids: list[int] = []
             for point in points:
-                atom_ids.append(add_atom_with_merge_for(canvas, point, "C", merge))
-            bonds_start = bond_count_for(canvas)
+                atom_ids.append(
+                    canvas.services.structure_build_service.add_atom_with_merge(
+                        point, "C", merge
+                    )
+                )
+            bonds_start = len(canvas.model.bonds)
             for index in range(len(atom_ids)):
                 a_id = atom_ids[index]
                 b_id = atom_ids[(index + 1) % len(atom_ids)]
@@ -107,7 +108,7 @@ def apply_template_commit_resolution(
                     continue
                 add_bond_for(canvas, a_id, b_id)
             for new_bond_id in bond_ids_from(canvas, bonds_start):
-                add_bond_graphics_for(canvas, new_bond_id)
+                canvas.bond_renderer.add_bond_graphics(new_bond_id)
             committer.add_ring_fill(points, atom_ids)
         else:
             set_last_smiles_input_for(canvas, after_smiles_input)

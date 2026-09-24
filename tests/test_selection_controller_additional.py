@@ -27,9 +27,6 @@ from chemvas.ui.canvas.canvas_bond_graphics_state import (
 )
 from chemvas.ui.selection.selection_state import (
     SelectionState,
-    selected_notes_for,
-    selection_outlines_for,
-    set_selected_notes_for,
     set_selection_outlines_for,
 )
 from tests.selection_support import (
@@ -530,32 +527,38 @@ class SelectionControllerAdditionalTest(unittest.TestCase):
         canvas.runtime_state.selection_state = SelectionState(
             color=QColor("#1f5eff"),
         )
-        set_selected_notes_for(canvas, [note_a])
+        canvas.runtime_state.selection_state.selected_notes = [note_a]
         controller = _make_selection_controller(canvas)
         canvas.clear_note_selection = controller.clear_note_selection
         canvas.services = canvas_runtime_services(selection=controller)
 
         controller.select_note(note_b, additive=False)
-        self.assertEqual(selected_notes_for(canvas), [note_b])
+        self.assertEqual(canvas.runtime_state.selection_state.selected_notes, [note_b])
         self.assertTrue(note_a.data(21) is None or not note_a.data(21).isVisible())
         self.assertTrue(note_b.data(21).isVisible())
 
         controller.select_note(note_a, additive=True)
-        self.assertEqual(selected_notes_for(canvas), [note_b, note_a])
+        self.assertEqual(
+            canvas.runtime_state.selection_state.selected_notes, [note_b, note_a]
+        )
 
         controller.select_note(note_a, additive=True)
-        self.assertEqual(selected_notes_for(canvas), [note_b, note_a])
+        self.assertEqual(
+            canvas.runtime_state.selection_state.selected_notes, [note_b, note_a]
+        )
 
         controller.toggle_note_selection(note_b)
-        self.assertEqual(selected_notes_for(canvas), [note_a])
+        self.assertEqual(canvas.runtime_state.selection_state.selected_notes, [note_a])
         self.assertFalse(note_b.data(21).isVisible())
 
         controller.toggle_note_selection(note_b)
-        self.assertEqual(selected_notes_for(canvas), [note_a, note_b])
+        self.assertEqual(
+            canvas.runtime_state.selection_state.selected_notes, [note_a, note_b]
+        )
         self.assertTrue(note_b.data(21).isVisible())
 
         controller.clear_note_selection()
-        self.assertEqual(selected_notes_for(canvas), [])
+        self.assertEqual(canvas.runtime_state.selection_state.selected_notes, [])
         self.assertFalse(note_a.data(21).isVisible())
 
     def test_selection_rects_and_hit_test_build_request_from_snapshot(self) -> None:
@@ -646,7 +649,7 @@ class SelectionControllerAdditionalTest(unittest.TestCase):
         )
         _make_selection_controller(empty_canvas).update_selection_outline()
         self.assertEqual(empty_scene.removed_items, [empty_outline])
-        self.assertEqual(selection_outlines_for(empty_canvas), [])
+        self.assertEqual(empty_canvas.runtime_state.selection_state.outlines, [])
         empty_canvas.selection_info_callback.assert_called_once_with("", "")
 
         filtered_scene = _FakeScene([_FakeItem("handle")])
@@ -911,7 +914,7 @@ class SelectionControllerAdditionalTest(unittest.TestCase):
         controller.outline_service.add_selection_object_overlay(
             _FakeItem("arrow"), QColor("#abcdef")
         )
-        self.assertEqual(selection_outlines_for(canvas), [])
+        self.assertEqual(canvas.runtime_state.selection_state.outlines, [])
 
         controller.outline_service.selection_path_for_object_item = mock.Mock(
             return_value=controller.outline_service.selection_line_stroke_path(
@@ -921,7 +924,7 @@ class SelectionControllerAdditionalTest(unittest.TestCase):
         controller.outline_service.add_selection_object_overlay(
             _FakeItem("arrow"), QColor("#abcdef")
         )
-        self.assertEqual(len(selection_outlines_for(canvas)), 1)
+        self.assertEqual(len(canvas.runtime_state.selection_state.outlines), 1)
 
         controller.outline_service.selection_path_for_bond = mock.Mock(
             return_value=QPainterPath()
@@ -931,7 +934,7 @@ class SelectionControllerAdditionalTest(unittest.TestCase):
         controller.outline_service.add_selection_component_overlay(
             {1}, {0}, QColor("#334455")
         )
-        self.assertEqual(len(selection_outlines_for(canvas)), 1)
+        self.assertEqual(len(canvas.runtime_state.selection_state.outlines), 1)
 
         non_empty_bond_path = controller.outline_service.selection_line_stroke_path(
             QPointF(0.0, 0.0), QPointF(10.0, 0.0), 4.0
@@ -942,7 +945,7 @@ class SelectionControllerAdditionalTest(unittest.TestCase):
         controller.outline_service.add_selection_component_overlay(
             {1}, {0}, QColor("#334455")
         )
-        self.assertEqual(len(selection_outlines_for(canvas)), 2)
+        self.assertEqual(len(canvas.runtime_state.selection_state.outlines), 2)
 
         self.assertEqual(
             controller.outline_service.selection_center_for_atoms({1, 2}),
@@ -950,4 +953,4 @@ class SelectionControllerAdditionalTest(unittest.TestCase):
         )
         self.assertTrue(controller.outline_service.selection_center_marker_enabled())
         controller.outline_service.add_selection_center_marker(QPointF(5.0, 5.0))
-        self.assertEqual(len(selection_outlines_for(canvas)), 4)
+        self.assertEqual(len(canvas.runtime_state.selection_state.outlines), 4)

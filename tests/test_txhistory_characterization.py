@@ -19,12 +19,8 @@ import pytest
 from PyQt6.QtWidgets import QApplication, QGraphicsRectItem, QGraphicsScene
 
 from chemvas.ui.canvas.canvas_history_service import CanvasHistoryService
-from chemvas.ui.canvas.canvas_model_access import (
-    bond_count_for,
-    next_atom_id_for,
-)
 from chemvas.ui.molecule.atom_label_access import add_or_update_atom_label
-from chemvas.ui.molecule.structure_mutation_access import add_atom_for, add_bond_for
+from chemvas.ui.molecule.structure_mutation_access import add_bond_for
 from chemvas.ui.selection.select_all_access import select_all_scene_items_for
 from chemvas.ui.transactions.scene_rect import (
     SceneRectSnapshot,
@@ -59,10 +55,14 @@ def _history(canvas) -> CanvasHistoryService:
 def _record_molecule(canvas, *, offset: float = 0.0) -> tuple[int, int]:
     """Draw a two-atom molecule with one bond and record one undo entry."""
 
-    before_next_atom_id = next_atom_id_for(canvas)
-    before_bond_count = bond_count_for(canvas)
-    first = add_atom_for(canvas, "C", 0.0 + offset, 0.0)
-    second = add_atom_for(canvas, "O", 40.0 + offset, 0.0)
+    before_next_atom_id = int(canvas.model.next_atom_id)
+    before_bond_count = len(canvas.model.bonds)
+    first = canvas.services.canvas_atom_mutation_service.add_atom(
+        "C", 0.0 + offset, 0.0
+    )
+    second = canvas.services.canvas_atom_mutation_service.add_atom(
+        "O", 40.0 + offset, 0.0
+    )
     add_bond_for(canvas, first, second, 1)
     canvas.services.canvas_history_recording_service.record_additions(
         before_next_atom_id, before_bond_count, None
@@ -388,7 +388,7 @@ def test_failed_document_open_leaves_no_half_applied_document(canvas, app) -> No
         assert after_failure["model"] == blank["model"]
         assert len(target.model.atoms) == 0
         # The canvas must remain fully usable after the failed open.
-        add_atom_for(target, "N", 5.0, 5.0)
+        target.services.canvas_atom_mutation_service.add_atom("N", 5.0, 5.0)
         assert len(target.model.atoms) == 1
     finally:
         target.services.canvas_scene_reset_service.clear_scene()

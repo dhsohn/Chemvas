@@ -7,11 +7,7 @@ from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import QApplication
 
 from chemvas.bootstrap.main_window import build_main_window
-from chemvas.ui.window.main_window_ports import (
-    active_canvas_for_window,
-    preview_for_window,
-    services_for_window,
-)
+from chemvas.ui.window.main_window_ports import active_canvas_for_window
 
 
 class MainWindowCanvasTabsTest(unittest.TestCase):
@@ -28,7 +24,7 @@ class MainWindowCanvasTabsTest(unittest.TestCase):
         QTest.qWait(20)
 
     def tearDown(self) -> None:
-        document_service = services_for_window(self.window).canvas_document_service
+        document_service = self.window.services.canvas_document_service
         for canvas in self.window.tab_references.all_canvases():
             document_service.mark_clean(canvas)
         self.window.close()
@@ -38,9 +34,9 @@ class MainWindowCanvasTabsTest(unittest.TestCase):
     def test_new_canvas_creates_independent_document_tab(self) -> None:
         first_canvas = active_canvas_for_window(self.window)
 
-        second_canvas = services_for_window(
+        second_canvas = self.window.services.canvas_document_service.new_canvas(
             self.window
-        ).canvas_document_service.new_canvas(self.window)
+        )
 
         self.assertIsNot(first_canvas, second_canvas)
         self.assertEqual(self.window.tab_references.canvas_count(), 2)
@@ -55,20 +51,18 @@ class MainWindowCanvasTabsTest(unittest.TestCase):
 
     def test_preview_panel_tracks_active_canvas_rdkit_adapter(self) -> None:
         first_canvas = active_canvas_for_window(self.window)
-        self.assertIs(preview_for_window(self.window).rdkit_adapter, first_canvas.rdkit)
+        self.assertIs(self.window.preview_3d.rdkit_adapter, first_canvas.rdkit)
 
-        second_canvas = services_for_window(
+        second_canvas = self.window.services.canvas_document_service.new_canvas(
             self.window
-        ).canvas_document_service.new_canvas(self.window)
+        )
         self.app.processEvents()
         QTest.qWait(10)
 
-        self.assertIs(
-            preview_for_window(self.window).rdkit_adapter, second_canvas.rdkit
-        )
+        self.assertIs(self.window.preview_3d.rdkit_adapter, second_canvas.rdkit)
 
         self.window.tab_references.canvas_tabs.setCurrentIndex(0)
         self.app.processEvents()
         QTest.qWait(10)
 
-        self.assertIs(preview_for_window(self.window).rdkit_adapter, first_canvas.rdkit)
+        self.assertIs(self.window.preview_3d.rdkit_adapter, first_canvas.rdkit)

@@ -103,10 +103,9 @@ class OpenDocumentRoutingTest(unittest.TestCase):
             open_windows,
             reset_window_registry,
         )
-        from chemvas.ui.window.main_window_ports import services_for_window
 
         for window in list(open_windows()):
-            documents = services_for_window(window).canvas_document_service
+            documents = window.services.canvas_document_service
             for canvas in window.tab_references.all_canvases():
                 documents.mark_clean(canvas)
             window.close()
@@ -131,10 +130,7 @@ class OpenDocumentRoutingTest(unittest.TestCase):
 
         from chemvas.bootstrap.window_registry import open_new_window
         from chemvas.shell.window_registry import open_windows
-        from chemvas.ui.window.main_window_ports import (
-            active_canvas_for_window,
-            services_for_window,
-        )
+        from chemvas.ui.window.main_window_ports import active_canvas_for_window
 
         for route in ("Open...", "Open Recent"):
             with self.subTest(route=route):
@@ -170,7 +166,7 @@ class OpenDocumentRoutingTest(unittest.TestCase):
                     ).trigger()
                 self.assertEqual(open_windows(), (window,))
                 self.assertEqual(
-                    services_for_window(window).canvas_document_service.file_path(
+                    window.services.canvas_document_service.file_path(
                         active_canvas_for_window(window)
                     ),
                     self.example,
@@ -183,26 +179,20 @@ class OpenDocumentRoutingTest(unittest.TestCase):
 
         from chemvas.bootstrap.window_registry import open_new_window
         from chemvas.shell.window_registry import open_windows
-        from chemvas.ui.canvas.canvas_window_access import snapshot_canvas_state_for
         from chemvas.ui.molecule.structure_mutation_access import (
             add_bond_between_points_for,
         )
-        from chemvas.ui.window.main_window_ports import (
-            active_canvas_for_window,
-            services_for_window,
-        )
+        from chemvas.ui.window.main_window_ports import active_canvas_for_window
 
         window = open_new_window()
         canvas = active_canvas_for_window(window)
         add_bond_between_points_for(canvas, QPointF(0, 0), QPointF(40, 0))
         history = canvas.services.history_service
         history.undo()
-        before = snapshot_canvas_state_for(canvas)
+        before = canvas.services.canvas_document_session_service.snapshot_state()
         before_history = history.capture_stack_snapshot()
         self.assertIsNotNone(
-            services_for_window(window).canvas_document_service.reusable_open_target(
-                window
-            )
+            window.services.canvas_document_service.reusable_open_target(window)
         )
         menu = next(
             action.menu()
@@ -224,10 +214,16 @@ class OpenDocumentRoutingTest(unittest.TestCase):
             ).trigger()
 
         self.assertEqual(open_windows(), (window,))
-        self.assertEqual(snapshot_canvas_state_for(canvas), before)
+        self.assertEqual(
+            canvas.services.canvas_document_session_service.snapshot_state(), before
+        )
         self.assertEqual(history.capture_stack_snapshot(), before_history)
         history.redo()
-        self.assertTrue(snapshot_canvas_state_for(canvas)["model"]["bonds"])
+        self.assertTrue(
+            canvas.services.canvas_document_session_service.snapshot_state()["model"][
+                "bonds"
+            ]
+        )
 
     def test_missing_svg_open_routes_show_filesystem_reason_without_mutation(
         self,
@@ -236,7 +232,6 @@ class OpenDocumentRoutingTest(unittest.TestCase):
 
         from chemvas.bootstrap.window_registry import open_new_window
         from chemvas.shell.window_registry import open_windows
-        from chemvas.ui.canvas.canvas_window_access import snapshot_canvas_state_for
         from chemvas.ui.molecule.structure_mutation_access import (
             add_bond_between_points_for,
         )
@@ -250,7 +245,7 @@ class OpenDocumentRoutingTest(unittest.TestCase):
         history = canvas.services.history_service
         history.undo()
         self.assertTrue(history.can_redo())
-        before = snapshot_canvas_state_for(canvas)
+        before = canvas.services.canvas_document_session_service.snapshot_state()
         stacks = history.capture_stack_snapshot()
         menu = next(
             action.menu()
@@ -306,7 +301,10 @@ class OpenDocumentRoutingTest(unittest.TestCase):
                         ),
                     )
                     self.assertEqual(open_windows(), (window,))
-                    self.assertEqual(snapshot_canvas_state_for(canvas), before)
+                    self.assertEqual(
+                        canvas.services.canvas_document_session_service.snapshot_state(),
+                        before,
+                    )
                     self.assertEqual(history.capture_stack_snapshot(), stacks)
                     self.assertFalse(path.exists())
 
@@ -323,11 +321,7 @@ class OpenDocumentRoutingTest(unittest.TestCase):
         from chemvas.domain.document import CANVAS_FILE_VERSION, deserialize_model_state
         from chemvas.features.document_composition import compose_document_state
         from chemvas.shell.window_registry import open_windows
-        from chemvas.ui.canvas.canvas_window_access import snapshot_canvas_state_for
-        from chemvas.ui.window.main_window_ports import (
-            active_canvas_for_window,
-            services_for_window,
-        )
+        from chemvas.ui.window.main_window_ports import active_canvas_for_window
 
         state = compose_document_state(
             {
@@ -371,10 +365,12 @@ class OpenDocumentRoutingTest(unittest.TestCase):
                 ):
                     action.trigger()
                 canvas = active_canvas_for_window(window)
-                documents = services_for_window(window).canvas_document_service
+                documents = window.services.canvas_document_service
                 self.assertFalse(documents.is_dirty(canvas))
                 self.assertIsNone(documents.file_path(canvas))
-                before = snapshot_canvas_state_for(canvas)
+                before = (
+                    canvas.services.canvas_document_session_service.snapshot_state()
+                )
                 self.assertTrue(before["model"]["atoms"])
                 with mock.patch.object(
                     QFileDialog, "getOpenFileName", return_value=("", "")
@@ -386,7 +382,10 @@ class OpenDocumentRoutingTest(unittest.TestCase):
                 ):
                     action.trigger()
                 self.assertEqual(len(open_windows()), 2)
-                self.assertEqual(snapshot_canvas_state_for(canvas), before)
+                self.assertEqual(
+                    canvas.services.canvas_document_session_service.snapshot_state(),
+                    before,
+                )
                 for opened in open_windows():
                     opened.close()
                 self.app.processEvents()
@@ -394,10 +393,9 @@ class OpenDocumentRoutingTest(unittest.TestCase):
     def test_opens_new_window_when_current_holds_a_document(self) -> None:
         from chemvas.bootstrap.window_registry import open_new_window
         from chemvas.shell.window_registry import open_windows
-        from chemvas.ui.window.main_window_ports import services_for_window
 
         window = open_new_window()
-        services_for_window(window).document_action_service.load_canvas_from_path(
+        window.services.document_action_service.load_canvas_from_path(
             window, self.example
         )
         self.assertEqual(len(open_windows()), 1)
@@ -429,21 +427,17 @@ class OpenDocumentRoutingTest(unittest.TestCase):
         )
         from chemvas.domain.document import CANVAS_FILE_VERSION
         from chemvas.shell.window_registry import open_windows
-        from chemvas.ui.canvas.canvas_window_access import snapshot_canvas_state_for
         from chemvas.ui.molecule.structure_mutation_access import (
             add_bond_between_points_for,
         )
-        from chemvas.ui.scene.scene_decoration_access import add_arrow_for
         from chemvas.ui.window.main_window_ports import (
             active_canvas_for_window,
-            services_for_window,
             set_zoom_percent_for_window,
-            tool_action_for_window,
             tool_mode_controller_for_window,
         )
 
         reference = open_new_window()
-        reference_services = services_for_window(reference)
+        reference_services = reference.services
         reference_canvas = active_canvas_for_window(reference)
         add_bond_between_points_for(reference_canvas, QPointF(-20, 0), QPointF(20, 0))
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -453,7 +447,7 @@ class OpenDocumentRoutingTest(unittest.TestCase):
                     reference, str(reference_path)
                 )
             )
-            state = snapshot_canvas_state_for(reference_canvas)
+            state = reference_canvas.services.canvas_document_session_service.snapshot_state()
             path = Path(temp_dir) / f"opened{suffix}"
             if suffix == ".mol":
                 path.write_text(write_molfile(reference_canvas.model), encoding="utf-8")
@@ -477,19 +471,19 @@ class OpenDocumentRoutingTest(unittest.TestCase):
             reference_page = (
                 reference_services.context_bar_service._stack.currentWidget()
             )
-            reference_document = snapshot_canvas_state_for(reference_canvas)
+            reference_document = reference_canvas.services.canvas_document_session_service.snapshot_state()
 
             open_document(str(path))
             self.app.processEvents()
 
             self.assertEqual(len(open_windows()), 2)
             target = open_windows()[-1]
-            target_services = services_for_window(target)
+            target_services = target.services
             target_canvas = active_canvas_for_window(target)
             self.assertEqual(len(target_canvas.model.atoms), 2)
             tool_mode_controller_for_window(target).set_tool("arrow")
-            arrow = add_arrow_for(
-                target_canvas, QPointF(0, 70), QPointF(100, 70), "arrow"
+            arrow = target_canvas.services.scene_decoration_service.add_arrow(
+                QPointF(0, 70), QPointF(100, 70), "arrow"
             )
             arrow.setSelected(True)
             set_zoom_percent_for_window(target, 150)
@@ -499,7 +493,9 @@ class OpenDocumentRoutingTest(unittest.TestCase):
             self.assertEqual(target_status["tool"], "Tool: Arrow")
             self.assertEqual(target_status["selection"], "Selection: 1")
             self.assertEqual(target_status["zoom"], "150%")
-            self.assertTrue(tool_action_for_window(target, "arrow").isChecked())
+            self.assertTrue(
+                target.ui_references.tool_action_for_key("arrow").isChecked()
+            )
             self.assertIs(
                 target_services.context_bar_service._stack.currentWidget(),
                 target_services.context_bar_service._pages["arrow"],
@@ -517,7 +513,8 @@ class OpenDocumentRoutingTest(unittest.TestCase):
                 reference_page,
             )
             self.assertEqual(
-                snapshot_canvas_state_for(reference_canvas), reference_document
+                reference_canvas.services.canvas_document_session_service.snapshot_state(),
+                reference_document,
             )
             self.assertFalse(reference.isWindowModified())
 
@@ -534,10 +531,9 @@ class OpenDocumentRoutingTest(unittest.TestCase):
     def test_reopening_the_same_file_switches_instead_of_duplicating(self) -> None:
         from chemvas.bootstrap.window_registry import open_new_window
         from chemvas.shell.window_registry import open_windows
-        from chemvas.ui.window.main_window_ports import services_for_window
 
         window = open_new_window()
-        services_for_window(window).document_action_service.load_canvas_from_path(
+        window.services.document_action_service.load_canvas_from_path(
             window, self.example
         )
         self.assertEqual(len(open_windows()), 1)
@@ -551,7 +547,6 @@ class OpenDocumentRoutingTest(unittest.TestCase):
     def test_reopening_symlink_and_hard_link_aliases_does_not_duplicate(self) -> None:
         from chemvas.bootstrap.window_registry import open_new_window
         from chemvas.shell.window_registry import open_windows
-        from chemvas.ui.window.main_window_ports import services_for_window
 
         with tempfile.TemporaryDirectory() as temp_dir:
             source = Path(temp_dir) / "source.chemvas"
@@ -562,7 +557,7 @@ class OpenDocumentRoutingTest(unittest.TestCase):
             os.link(source, hard_link)
 
             window = open_new_window()
-            services_for_window(window).document_action_service.load_canvas_from_path(
+            window.services.document_action_service.load_canvas_from_path(
                 window, str(source)
             )
 
@@ -574,7 +569,6 @@ class OpenDocumentRoutingTest(unittest.TestCase):
 
     def test_save_as_rejects_a_symlink_alias_owned_by_another_window(self) -> None:
         from chemvas.bootstrap.window_registry import open_new_window
-        from chemvas.ui.window.main_window_ports import services_for_window
 
         with tempfile.TemporaryDirectory() as temp_dir:
             source = Path(temp_dir) / "source.chemvas"
@@ -584,15 +578,13 @@ class OpenDocumentRoutingTest(unittest.TestCase):
             original_bytes = source.read_bytes()
 
             owner_window = open_new_window()
-            services_for_window(
-                owner_window
-            ).document_action_service.load_canvas_from_path(owner_window, str(source))
+            owner_window.services.document_action_service.load_canvas_from_path(
+                owner_window, str(source)
+            )
             saving_window = open_new_window()
             message_box = mock.Mock()
 
-            saved = services_for_window(
-                saving_window
-            ).document_action_service.save_canvas_to_path(
+            saved = saving_window.services.document_action_service.save_canvas_to_path(
                 saving_window,
                 str(alias),
                 message_box=message_box,

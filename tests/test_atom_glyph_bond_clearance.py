@@ -9,11 +9,7 @@ from PyQt6.QtGui import QFont, QPainterPath, QPainterPathStroker, QPen
 from PyQt6.QtWidgets import QApplication
 
 from chemvas.adapters.qt.renderer import Renderer
-from chemvas.ui.canvas.canvas_atom_graphics_state import (
-    CanvasAtomGraphicsState,
-    atom_items_for,
-)
-from chemvas.ui.canvas.canvas_bond_graphics_state import bond_items_for_id
+from chemvas.ui.canvas.canvas_atom_graphics_state import CanvasAtomGraphicsState
 from chemvas.ui.canvas.canvas_view import CanvasView
 from chemvas.ui.canvas.graphics_items import AtomLabelItem
 from chemvas.ui.export.layout_qa_service import _atom_label_scene_path
@@ -36,11 +32,11 @@ def test_native_oxygen_bond_clears_ink_without_document_box_gap(app):
         b = services.canvas_atom_mutation_service.add_atom("C", 40, 0)
         bond = services.canvas_bond_mutation_service.add_bond(a, b)
         canvas.bond_renderer.add_bond_graphics(bond)
-        item = atom_items_for(canvas)[a]
+        item = canvas.runtime_state.atom_graphics_state.atom_items[a]
         controller = canvas.render_context.geometry
         bounds, hit, pos = item.boundingRect(), item.shape(), item.pos()
         model_positions = {k: (v.x, v.y) for k, v in canvas.model.atoms.items()}
-        line_item = bond_items_for_id(canvas, bond)[0]
+        line_item = canvas.runtime_state.bond_graphics_state.bond_items.get(bond, [])[0]
         line = line_item.line()
         ink = _atom_label_scene_path(item)
         # Native baseline: x1=10.32375 at length 40 (document margins).

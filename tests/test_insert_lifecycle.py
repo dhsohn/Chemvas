@@ -199,12 +199,11 @@ def test_invalid_smiles_still_cancels_active_ring_preview(canvas, smiles) -> Non
 def test_ring_placement_repeats_and_smiles_placement_ends_with_undo_redo(
     canvas,
 ) -> None:
-    from chemvas.ui.canvas.canvas_window_access import snapshot_canvas_state_for
 
     controller = canvas.services.insert_controller
     history = canvas.services.history_service
     state = canvas.runtime_state.insert_state
-    before = snapshot_canvas_state_for(canvas)
+    before = canvas.services.canvas_document_session_service.snapshot_state()
     controller.begin_ring_template_insert(5)
     for pos in (QPointF(-150.0, 0.0), QPointF(150.0, 0.0)):
         controller.render_template_preview(pos)
@@ -213,7 +212,7 @@ def test_ring_placement_repeats_and_smiles_placement_ends_with_undo_redo(
         assert state.template_active
         assert not state.template_preview_items
     assert len(canvas.model.atoms) == 10
-    rings = snapshot_canvas_state_for(canvas)
+    rings = canvas.services.canvas_document_session_service.snapshot_state()
     model = MoleculeModel(atoms={0: Atom("O", 0.0, 0.0)})
     with mock.patch.object(canvas.rdkit, "smiles_to_2d", return_value=model):
         controller.begin_smiles_insert("O")
@@ -222,12 +221,12 @@ def test_ring_placement_repeats_and_smiles_placement_ends_with_undo_redo(
     assert not state.smiles_preview_items
     assert state.smiles_preview_picture is None
     assert len(canvas.model.atoms) == 11
-    after = snapshot_canvas_state_for(canvas)
+    after = canvas.services.canvas_document_session_service.snapshot_state()
     history.undo()
-    assert snapshot_canvas_state_for(canvas) == rings
+    assert canvas.services.canvas_document_session_service.snapshot_state() == rings
     history.undo()
     history.undo()
-    assert snapshot_canvas_state_for(canvas) == before
+    assert canvas.services.canvas_document_session_service.snapshot_state() == before
     for _ in range(3):
         history.redo()
-    assert snapshot_canvas_state_for(canvas) == after
+    assert canvas.services.canvas_document_session_service.snapshot_state() == after

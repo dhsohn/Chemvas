@@ -17,16 +17,12 @@ from chemvas.ui.annotations.state import (
 )
 from chemvas.ui.canvas.canvas_model_access import (
     atom_for_id,
-    bond_count_for,
     bond_for_id,
-    next_atom_id_for,
 )
-from chemvas.ui.canvas.canvas_smiles_input_state import last_smiles_input_for
 from chemvas.ui.history.history_commands import (
     AddSceneItemsCommand,
     GroupSceneItemsCommand,
 )
-from chemvas.ui.molecule.atom_coords_access import atom_coords_3d_for
 from chemvas.ui.scene.scene_group_operations import (
     group_extensions_for_added_bonds,
     group_updates_for_atom_merge,
@@ -95,7 +91,7 @@ class CanvasHistoryRecordingService:
         added_groups: list[GroupSceneItemsCommand] | None = None,
     ) -> None:
         commands: list[HistoryCommand] = []
-        after_next_atom_id = next_atom_id_for(self.canvas)
+        after_next_atom_id = int(self.canvas.model.next_atom_id)
         if after_next_atom_id > before_next_atom_id:
             atom_states = {
                 atom_id: atom_state_dict_for(self.canvas, atom_id)
@@ -103,7 +99,9 @@ class CanvasHistoryRecordingService:
                 if atom_for_id(self.canvas, atom_id) is not None
             }
             if atom_states:
-                stored_coords_3d = atom_coords_3d_for(self.canvas)
+                stored_coords_3d = (
+                    self.canvas.runtime_state.atom_coords_3d_state.atom_coords_3d
+                )
                 atom_coords_3d = {
                     atom_id: stored_coords_3d[atom_id]
                     for atom_id in atom_states
@@ -115,11 +113,11 @@ class CanvasHistoryRecordingService:
                         before_next_atom_id=before_next_atom_id,
                         after_next_atom_id=after_next_atom_id,
                         before_smiles_input=before_smiles_input,
-                        after_smiles_input=last_smiles_input_for(self.canvas),
+                        after_smiles_input=self.canvas.runtime_state.smiles_input_state.last_smiles_input,
                         atom_coords_3d=atom_coords_3d or None,
                     )
                 )
-        for bond_id in range(before_bond_count, bond_count_for(self.canvas)):
+        for bond_id in range(before_bond_count, len(self.canvas.model.bonds)):
             bond = bond_for_id(self.canvas, bond_id)
             if bond is None:
                 continue
@@ -130,7 +128,7 @@ class CanvasHistoryRecordingService:
                     bond_state=bond_state,
                     previous_bond_count=bond_id,
                     before_smiles_input=before_smiles_input,
-                    after_smiles_input=last_smiles_input_for(self.canvas),
+                    after_smiles_input=self.canvas.runtime_state.smiles_input_state.last_smiles_input,
                 )
             )
         if added_scene_items:
@@ -152,7 +150,7 @@ class CanvasHistoryRecordingService:
         command = commands[0] if len(commands) == 1 else CompositeCommand(commands)
         self._push_history(
             command,
-            added_bond_ids=range(before_bond_count, bond_count_for(self.canvas)),
+            added_bond_ids=range(before_bond_count, len(self.canvas.model.bonds)),
         )
 
     def record_bond_update(

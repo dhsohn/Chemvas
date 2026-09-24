@@ -2,9 +2,6 @@ from __future__ import annotations
 
 from chemvas.ui.window.main_window_ports import (
     active_tool_name_for_window,
-    clear_context_bar_page_override_for_window,
-    set_context_bar_page_override_for_window,
-    tool_action_for_window,
     tool_mode_controller_for_window,
 )
 from chemvas.ui.window.main_window_toolbar_logic import (
@@ -40,11 +37,11 @@ class MainWindowToolStateService:
         self._tool_mode_controller(window).set_bond_style(style, order)
 
     def sync_tool_actions_from_canvas(self, window) -> None:
-        clear_context_bar_page_override_for_window(window)
+        window.runtime_state.clear_context_bar_page_override()
         active = active_tool_name_for_window(window)
         action_key = tool_action_key_for_canvas_state(active)
         action = (
-            tool_action_for_window(window, action_key)
+            window.ui_references.tool_action_for_key(action_key)
             if action_key is not None
             else None
         )
@@ -55,8 +52,8 @@ class MainWindowToolStateService:
         self._refresh_context_bar_for_window(window)
 
     def show_context_page(self, window, page_key: str) -> None:
-        set_context_bar_page_override_for_window(window, page_key)
-        action = tool_action_for_window(window, page_key)
+        window.runtime_state.set_context_bar_page_override(page_key)
+        action = window.ui_references.tool_action_for_key(page_key)
         if action is not None and action.isCheckable():
             action.setChecked(True)
         self._status.update_tool_status_label(window)

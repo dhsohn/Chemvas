@@ -37,7 +37,6 @@ from chemvas.features.rendering import (
 from chemvas.features.rendering.acs1996_style import ACS1996Style
 from chemvas.ui.canvas.canvas_bond_graphics_state import (
     CanvasBondGraphicsState,
-    bond_items_for,
     set_bond_items_for,
 )
 from chemvas.ui.canvas.canvas_rotation_state import CanvasRotationState
@@ -48,7 +47,6 @@ from chemvas.ui.canvas.graphics_items import (
 )
 from chemvas.ui.molecule.atom_coords_access import (
     CanvasAtomCoords3DState,
-    atom_coords_3d_for,
     set_atom_coords_3d_for,
 )
 from chemvas.ui.molecule.bond_geometry_plan_service import (
@@ -144,7 +142,7 @@ class _FakeCanvas:
 
     @property
     def bond_items(self):
-        return bond_items_for(self)
+        return self.runtime_state.bond_graphics_state.bond_items
 
     @bond_items.setter
     def bond_items(self, value) -> None:
@@ -152,7 +150,7 @@ class _FakeCanvas:
 
     @property
     def atom_coords_3d(self):
-        return atom_coords_3d_for(self)
+        return self.runtime_state.atom_coords_3d_state.atom_coords_3d
 
     @atom_coords_3d.setter
     def atom_coords_3d(self, value) -> None:

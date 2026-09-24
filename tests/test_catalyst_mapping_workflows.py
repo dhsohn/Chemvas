@@ -13,14 +13,9 @@ from chemvas.bootstrap.main_window import build_main_window
 from chemvas.core.document_io import read_document
 from chemvas.core.rdkit_adapter import RDKitAdapter
 from chemvas.domain.document import MoleculeModel, serialize_model_state
-from chemvas.ui.canvas.canvas_window_access import snapshot_canvas_state_for
 from chemvas.ui.dialogs.calculation_plan_actions import edit_calculation_plan_for_window
 from chemvas.ui.dialogs.calculation_step_dialog import CalculationStepDialog
-from chemvas.ui.scene.scene_decoration_access import add_arrow_for
-from chemvas.ui.window.main_window_ports import (
-    active_canvas_for_window,
-    services_for_window,
-)
+from chemvas.ui.window.main_window_ports import active_canvas_for_window
 from tests.calculation_plan_support import _document_state
 
 pytestmark = pytest.mark.skipif(
@@ -125,19 +120,23 @@ def test_actual_dialog_suggests_substrate_without_mutating_until_save(
     state = _draft_state(model, catalysts, reactant, product)
     window = build_main_window()
     canvas = active_canvas_for_window(window)
-    services = services_for_window(window)
+    services = window.services
     window.resize(1120, 780)
     window.show()
     assert QTest.qWaitForWindowExposed(window, 5000)
     documents = canvas.services.canvas_document_session_service
     try:
         documents.apply_state(state)
-        add_arrow_for(canvas, QPointF(0, 100), QPointF(40, 100), "arrow")
+        canvas.services.scene_decoration_service.add_arrow(
+            QPointF(0, 100), QPointF(40, 100), "arrow"
+        )
         history = canvas.services.history_service
         history.undo()
         assert history.can_redo()
         services.canvas_document_service.mark_clean(canvas)
-        before = deepcopy(snapshot_canvas_state_for(canvas))
+        before = deepcopy(
+            canvas.services.canvas_document_session_service.snapshot_state()
+        )
         before_model = canvas.model
         before_atoms = dict(canvas.model.atoms)
         stacks = history.capture_stack_snapshot()
@@ -166,7 +165,10 @@ def test_actual_dialog_suggests_substrate_without_mutating_until_save(
                 )
                 assert dialog._mapping_by_reactant == expected
                 assert "Suggested 3 mapping(s)" in dialog.suggestion_status.text()
-                assert snapshot_canvas_state_for(canvas) == before
+                assert (
+                    canvas.services.canvas_document_session_service.snapshot_state()
+                    == before
+                )
                 assert canvas.model is before_model
                 assert all(
                     canvas.model.atoms[key] is atom
@@ -194,10 +196,15 @@ def test_actual_dialog_suggests_substrate_without_mutating_until_save(
         assert changed is accept
         assert original.read_bytes() == original_bytes
         if not accept:
-            assert snapshot_canvas_state_for(canvas) == before
+            assert (
+                canvas.services.canvas_document_session_service.snapshot_state()
+                == before
+            )
             history.verify_stack_snapshot(stacks)
             return
-        after = deepcopy(snapshot_canvas_state_for(canvas))
+        after = deepcopy(
+            canvas.services.canvas_document_session_service.snapshot_state()
+        )
         assert after != before
         assert {
             key: value for key, value in after.items() if key != "calculation_plan"
@@ -205,13 +212,15 @@ def test_actual_dialog_suggests_substrate_without_mutating_until_save(
         assert len(history.state.history) == len(stacks.history) + 1
         assert not history.can_redo()
         history.undo()
-        assert snapshot_canvas_state_for(canvas) == before
+        assert (
+            canvas.services.canvas_document_session_service.snapshot_state() == before
+        )
         history.redo()
-        assert snapshot_canvas_state_for(canvas) == after
+        assert canvas.services.canvas_document_session_service.snapshot_state() == after
         destination = tmp_path / "mapped.chemvas"
         documents.save_to_file(str(destination))
         documents.apply_state(read_document(destination).state)
-        assert snapshot_canvas_state_for(canvas) == after
+        assert canvas.services.canvas_document_session_service.snapshot_state() == after
         assert original.read_bytes() == original_bytes
     finally:
         canvas.scene().clearFocus()

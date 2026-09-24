@@ -65,7 +65,6 @@ def _molecular_state(*, charge: int = 0, attached_to_endpoint: bool = False):
 
 def test_atom_nonincident_bond_collision_is_identified_without_mutation() -> None:
     from chemvas.bootstrap.document_cli_shared import offscreen_canvas
-    from chemvas.ui.canvas.canvas_atom_graphics_state import atom_items_for
 
     state = _molecular_state()
     original = copy.deepcopy(state)
@@ -80,7 +79,7 @@ def test_atom_nonincident_bond_collision_is_identified_without_mutation() -> Non
         ]
         assert service.snapshot_state() == before
         assert state == original
-        atom_items_for(canvas)[2].moveBy(0.0, 50.0)
+        canvas.runtime_state.atom_graphics_state.atom_items[2].moveBy(0.0, 50.0)
         assert check_canvas_layout(canvas)["counts"]["atom-bond-overlap"] == 0
 
 
@@ -109,7 +108,6 @@ def test_attached_charge_bond_collision_includes_its_own_incident_bond(
 
 def test_atom_own_incident_bond_is_excluded_even_when_its_ink_crosses() -> None:
     from chemvas.bootstrap.document_cli_shared import offscreen_canvas
-    from chemvas.ui.canvas.canvas_bond_graphics_state import bond_items_for
 
     state = _molecular_state()
     state["model"]["atoms"][0].update(element="H", x=0.0)
@@ -117,7 +115,9 @@ def test_atom_own_incident_bond_is_excluded_even_when_its_ink_crosses() -> None:
     with offscreen_canvas(state, command="test-own-bond-exclusion") as (canvas, _):
         # Deliberately extend the real painted line through its own endpoint
         # glyph, so this tests exclusion rather than normal label trimming.
-        bond_items_for(canvas)[0][0].setLine(-40.0, 0.0, 40.0, 0.0)
+        canvas.runtime_state.bond_graphics_state.bond_items[0][0].setLine(
+            -40.0, 0.0, 40.0, 0.0
+        )
         assert check_canvas_layout(canvas)["counts"]["atom-bond-overlap"] == 0
 
 
@@ -127,8 +127,6 @@ def test_molecular_ink_checks_ignore_hidden_or_transparent_paint(
     kind: str, hidden_by: str
 ) -> None:
     from chemvas.bootstrap.document_cli_shared import offscreen_canvas
-    from chemvas.ui.canvas.canvas_atom_graphics_state import atom_items_for
-    from chemvas.ui.canvas.canvas_bond_graphics_state import bond_items_for
     from chemvas.ui.canvas.canvas_scene_items_state import mark_items_for
 
     state = _molecular_state(charge=1 if kind == "charge" else 0)
@@ -138,9 +136,9 @@ def test_molecular_ink_checks_ignore_hidden_or_transparent_paint(
         item = (
             mark_items_for(canvas)[0]
             if kind == "charge"
-            else bond_items_for(canvas)[0][0]
+            else canvas.runtime_state.bond_graphics_state.bond_items[0][0]
             if kind == "bond"
-            else atom_items_for(canvas)[2]
+            else canvas.runtime_state.atom_graphics_state.atom_items[2]
         )
         if hidden_by == "visibility":
             item.setVisible(False)
@@ -158,12 +156,11 @@ def test_molecular_ink_checks_ignore_hidden_or_transparent_paint(
 @pytest.mark.parametrize("charge", [0, 1])
 def test_actual_molecular_dash_gap_is_not_a_collision(charge: int) -> None:
     from chemvas.bootstrap.document_cli_shared import offscreen_canvas
-    from chemvas.ui.canvas.canvas_bond_graphics_state import bond_items_for
 
     state = _molecular_state(charge=charge)
     code = "charge-bond-overlap" if charge else "atom-bond-overlap"
     with offscreen_canvas(state, command="test-molecular-dash-gap") as (canvas, _):
-        line = bond_items_for(canvas)[0][0]
+        line = canvas.runtime_state.bond_graphics_state.bond_items[0][0]
         line.setLine(-12.0, 0.0, 68.0, 0.0)
         pen = QPen(QColor("black"), 2.0)
         pen.setDashPattern([1.0, 20.0])
@@ -178,13 +175,12 @@ def test_actual_molecular_dash_gap_is_not_a_collision(charge: int) -> None:
 @pytest.mark.parametrize("charge", [0, 1])
 def test_actual_molecular_dot_gap_is_not_a_collision(charge: int) -> None:
     from chemvas.bootstrap.document_cli_shared import offscreen_canvas
-    from chemvas.ui.canvas.canvas_bond_graphics_state import bond_items_for
 
     state = _molecular_state(charge=charge)
     state["model"]["bonds"][0]["style"] = "dotted"
     code = "charge-bond-overlap" if charge else "atom-bond-overlap"
     with offscreen_canvas(state, command="test-molecular-dot-gap") as (canvas, _):
-        item = bond_items_for(canvas)[0][0]
+        item = canvas.runtime_state.bond_graphics_state.bond_items[0][0]
         path = QPainterPath()
         path.addEllipse(QPointF(-15.0, 0.0), 2.0, 2.0)
         path.addEllipse(QPointF(15.0, 0.0), 2.0, 2.0)
@@ -374,11 +370,6 @@ def test_sheet_containment_covers_each_native_item_and_edge_without_mutation(
 ):
     from chemvas.bootstrap.document_cli_shared import offscreen_canvas
     from chemvas.features.document_composition import compose_document_state
-    from chemvas.ui.canvas.canvas_atom_graphics_state import (
-        atom_dots_for,
-        atom_items_for,
-    )
-    from chemvas.ui.canvas.canvas_bond_graphics_state import bond_items_for
     from chemvas.ui.canvas.canvas_scene_items_state import (
         arrow_items_for,
         mark_items_for,
@@ -389,7 +380,6 @@ def test_sheet_containment_covers_each_native_item_and_edge_without_mutation(
         ts_bracket_items_for,
     )
     from chemvas.ui.canvas.sheet_setup_access import sheet_rect_for
-    from chemvas.ui.scene.scene_item_access import create_scene_item_from_state
 
     state = compose_document_state(
         {
@@ -437,24 +427,23 @@ def test_sheet_containment_covers_each_native_item_and_edge_without_mutation(
         }
     )
     with offscreen_canvas(state, command="test-sheet-item") as (canvas, service):
-        create_scene_item_from_state(
-            canvas,
+        canvas.services.scene_item_controller.create_scene_item_from_state(
             {
                 "kind": "orbital",
                 "orbital_kind": "p",
                 "center": (150.0, 0.0),
                 "scale": 1.0,
                 "rotation": 35.0,
-            },
+            }
         )
         arrow = arrow_items_for(canvas)[0]
         label = next(
             child for child in arrow.childItems() if child.data(0) == "arrow_label"
         )
         item = {
-            "atom": atom_items_for(canvas)[3],
-            "dot": atom_dots_for(canvas)[4],
-            "bond": bond_items_for(canvas)[0][0],
+            "atom": canvas.runtime_state.atom_graphics_state.atom_items[3],
+            "dot": canvas.runtime_state.atom_graphics_state.atom_dots[4],
+            "bond": canvas.runtime_state.bond_graphics_state.bond_items[0][0],
             "note": note_items_for(canvas)[0],
             "shape": shape_items_for(canvas)[0],
             "ring": ring_items_for(canvas)[0],
@@ -527,7 +516,6 @@ def test_sheet_containment_counts_multistroke_bond_once(style, order):
 def test_sheet_boundary_includes_painted_stroke_not_just_endpoints(delta, expected):
     from chemvas.bootstrap.document_cli_shared import offscreen_canvas
     from chemvas.features.document_composition import compose_document_state
-    from chemvas.ui.canvas.canvas_bond_graphics_state import bond_items_for
     from chemvas.ui.canvas.sheet_setup_access import sheet_rect_for
 
     state = compose_document_state(
@@ -542,7 +530,7 @@ def test_sheet_boundary_includes_painted_stroke_not_just_endpoints(delta, expect
         }
     )
     with offscreen_canvas(state, command="test-sheet-stroke-edge") as (canvas, _):
-        item = bond_items_for(canvas)[0][0]
+        item = canvas.runtime_state.bond_graphics_state.bond_items[0][0]
         item.moveBy(
             0, sheet_rect_for(canvas).bottom() - item.pen().widthF() / 2 + delta
         )

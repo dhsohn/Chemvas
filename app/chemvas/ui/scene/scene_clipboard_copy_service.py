@@ -3,13 +3,6 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from chemvas.features.export import exported_scene
-from chemvas.ui.canvas.canvas_format_access import clipboard_selection_mime_for
-from chemvas.ui.canvas.canvas_scene_state import canvas_scene_for
-from chemvas.ui.canvas.input_view_access import device_pixel_ratio_for
-from chemvas.ui.scene.scene_clipboard_access import (
-    set_clipboard_paste_count_for,
-    set_clipboard_paste_source_json_for,
-)
 from chemvas.ui.scene.scene_clipboard_copy_io import build_clipboard_mime_data
 from chemvas.ui.scene.scene_clipboard_transaction_logic import (
     build_clipboard_copy_plan,
@@ -36,21 +29,21 @@ def copy_selection_to_clipboard_for_canvas(
         items,
         payload=payload,
         bond_line_width=bond_line_width,
-        device_pixel_ratio=device_pixel_ratio_for(canvas),
+        device_pixel_ratio=float(canvas.devicePixelRatioF()),
     )
     if plan is None:
         return False
-    with exported_scene(canvas_scene_for(canvas), items):
+    with exported_scene(canvas.scene(), items):
         mime_data = build_clipboard_mime_data(
             canvas,
             items=items,
             plan=plan,
-            payload_mime_type=clipboard_selection_mime_for(canvas),
+            payload_mime_type=str(canvas.CLIPBOARD_SELECTION_MIME),
             bond_line_width=bond_line_width,
         )
     paste_source_json, paste_count = clipboard_copy_cache_values(plan.payload_json)
-    set_clipboard_paste_source_json_for(canvas, paste_source_json)
-    set_clipboard_paste_count_for(canvas, paste_count)
+    canvas.runtime_state.scene_clipboard_state.paste_source_json = paste_source_json
+    canvas.runtime_state.scene_clipboard_state.paste_count = int(paste_count)
     clipboard.setMimeData(mime_data)
     return True
 

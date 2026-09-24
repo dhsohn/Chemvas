@@ -10,14 +10,11 @@ from chemvas.shell.icon_factory import MainWindowIconFactory
 from chemvas.shell.palette import PALETTE
 from chemvas.ui.canvas.canvas_document_state import snapshot_canvas_document_state
 from chemvas.ui.canvas.canvas_feedback_renderer import draw_canvas_feedback_for
-from chemvas.ui.canvas.canvas_tool_settings_state import tool_settings_state_for
 from chemvas.ui.molecule.structure_mutation_access import add_bond_between_points_for
 from chemvas.ui.preview3d.preview_3d_state import preview_info_items
 from chemvas.ui.window.main_window_ports import (
     insert_controller_for_window,
-    preview_for_window,
     select_all_for_window,
-    services_for_window,
     set_grid_snap_for_window,
 )
 from tests.gui_workflow_support import _click, _tool
@@ -62,7 +59,7 @@ def test_inspector_toggle_float_and_close_keep_one_preview(drawing):
     window, _canvas = drawing
     dock = window.findChild(QDockWidget, "inspectorDock")
     button = window.findChild(QToolButton, "inspectorToggleButton")
-    preview = preview_for_window(window)
+    preview = window.preview_3d
     assert not dock.isVisible()
     button.click()
     QApplication.processEvents()
@@ -84,7 +81,7 @@ def test_grid_controls_cycle_and_preserve_the_document(drawing):
     window, canvas = drawing
     before = snapshot_canvas_document_state(canvas)
     button = window.findChild(QToolButton, "statusGridButton")
-    settings = tool_settings_state_for(canvas)
+    settings = canvas.runtime_state.tool_settings_state
     for text, enabled, style in (
         ("Grid: Hex", True, "hex"),
         ("Grid: Square", True, "square"),
@@ -119,16 +116,16 @@ def test_grid_and_valence_controls_follow_the_active_canvas(drawing):
     valence = window.findChild(QAction, "valenceCheckingAction")
     grid.click()
     valence.trigger()
-    second = services_for_window(window).canvas_document_service.new_canvas(window)
+    second = window.services.canvas_document_service.new_canvas(window)
     QApplication.processEvents()
     assert grid.text() == "Grid: None"
-    assert tool_settings_state_for(second).valence_checking
+    assert second.runtime_state.tool_settings_state.valence_checking
     set_grid_snap_for_window(window, True)
     assert grid.text() == "Grid: Square"
     window.tab_references.canvas_tabs.setCurrentIndex(0)
     QApplication.processEvents()
     assert grid.text() == "Grid: Hex"
-    assert not tool_settings_state_for(first).valence_checking
+    assert not first.runtime_state.tool_settings_state.valence_checking
 
 
 def _scene_image(canvas):
@@ -177,7 +174,7 @@ def test_valence_overlay_is_visible_but_absent_from_document_and_scene_export(dr
     assert _scene_image(canvas) == exported
     assert snapshot_canvas_document_state(canvas) == before
     action.trigger()
-    assert tool_settings_state_for(canvas).valence_checking
+    assert canvas.runtime_state.tool_settings_state.valence_checking
     canvas.services.history_service.undo()
     QApplication.processEvents()
     assert _red_pixels_near_origin(canvas) == 0
@@ -236,7 +233,7 @@ def test_smiles_enter_places_and_inspects_real_molecule_then_exports_xyz(
     assert len(canvas.model.atoms) == 13
     select_all_for_window(window)
     window.findChild(QToolButton, "inspectorToggleButton").click()
-    preview = preview_for_window(window)
+    preview = window.preview_3d
     for _ in range(300):
         QTest.qWait(50)
         if preview._scene is not None:

@@ -9,10 +9,7 @@ from PyQt6.QtGui import QTransform
 from PyQt6.QtWidgets import QApplication, QGraphicsView
 
 from chemvas.ui.canvas.canvas_view import CanvasView
-from chemvas.ui.canvas.input_view_access import (
-    input_view_state_for,
-    should_override_chemdraw_shortcut_for,
-)
+from chemvas.ui.canvas.input_view_access import should_override_chemdraw_shortcut_for
 from tests.canvas_factory import build_canvas_view
 
 
@@ -57,7 +54,9 @@ class CanvasViewEventShortcutTest(unittest.TestCase):
 
     def _new_view(self):
         view = build_canvas_view()
-        input_view_state_for(view).base_transform = QTransform().translate(3.0, 4.0)
+        view.runtime_state.input_view_state.base_transform = QTransform().translate(
+            3.0, 4.0
+        )
         view.setTransform(QTransform().scale(2.0, 2.0))
         view.services.tool_controller.active = None
         return view
@@ -90,7 +89,7 @@ class CanvasViewEventShortcutTest(unittest.TestCase):
                     self.assertTrue(CanvasView.event(view, event))
                     event.accept.assert_called_once_with()
                     self.assertTrue(
-                        input_view_state_for(view).base_transform.isIdentity()
+                        view.runtime_state.input_view_state.base_transform.isIdentity()
                     )
                     self.assertTrue(view.transform().isIdentity())
                     self.assertEqual(base_event.call_count, 0)
@@ -115,7 +114,9 @@ class CanvasViewEventShortcutTest(unittest.TestCase):
                 )
                 self.assertFalse(CanvasView.event(view, event))
                 event.accept.assert_not_called()
-                self.assertFalse(input_view_state_for(view).base_transform.isIdentity())
+                self.assertFalse(
+                    view.runtime_state.input_view_state.base_transform.isIdentity()
+                )
                 self.assertFalse(view.transform().isIdentity())
                 self.assertEqual(base_event.call_count, 1)
 

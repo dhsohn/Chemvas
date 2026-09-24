@@ -24,10 +24,9 @@ from chemvas.ui.canvas.canvas_scene_items_state import (
 )
 from chemvas.ui.canvas.canvas_smiles_input_state import (
     CanvasSmilesInputState,
-    last_smiles_input_for,
     set_last_smiles_input_for,
 )
-from chemvas.ui.canvas.sheet_setup_state import SheetSetupState, sheet_setup_state_for
+from chemvas.ui.canvas.sheet_setup_state import SheetSetupState
 from chemvas.ui.insert.insert_controller import (
     MAX_SMILES_INPUT_LENGTH,
     InsertController,
@@ -403,7 +402,7 @@ class InsertControllerTest(unittest.TestCase):
 
     def test_insert_preview_and_commit_skip_positions_outside_sheet(self) -> None:
         canvas = _FakeCanvas()
-        sheet_setup_state_for(canvas).rect = QRectF(-10.0, -10.0, 20.0, 20.0)
+        canvas.runtime_state.sheet_setup_state.rect = QRectF(-10.0, -10.0, 20.0, 20.0)
         controller = _controller_for(canvas)
         controller.clear_template_preview = Mock()
         controller.clear_smiles_preview = Mock()
@@ -643,7 +642,9 @@ class InsertControllerTest(unittest.TestCase):
         self.assertEqual(
             [call.args[0] for call in canvas._add_bond_graphics.call_args_list], [1]
         )
-        self.assertEqual(last_smiles_input_for(canvas), "CO")
+        self.assertEqual(
+            canvas.runtime_state.smiles_input_state.last_smiles_input, "CO"
+        )
         controller.cancel_smiles_insert.assert_called_once_with()
         canvas._record_additions.assert_called_once_with(
             before_next_atom_id=1,
@@ -744,7 +745,7 @@ class InsertControllerTest(unittest.TestCase):
         self.assertEqual(canvas.insert_state.template_ring_size, 5)
         self.assertEqual(canvas.insert_state.template_ring_style, "regular")
         self.assertEqual(canvas.insert_state.template_preview_items, [])
-        self.assertIsNone(last_smiles_input_for(canvas))
+        self.assertIsNone(canvas.runtime_state.smiles_input_state.last_smiles_input)
         canvas._record_additions.assert_called_once_with(
             before_next_atom_id=0,
             before_bond_count=0,
@@ -789,7 +790,7 @@ class InsertControllerTest(unittest.TestCase):
         self.assertEqual(canvas.insert_state.template_ring_size, 6)
         self.assertEqual(canvas.insert_state.template_ring_style, "benzene")
         self.assertEqual(canvas.insert_state.template_preview_items, [])
-        self.assertIsNone(last_smiles_input_for(canvas))
+        self.assertIsNone(canvas.runtime_state.smiles_input_state.last_smiles_input)
 
     def test_commit_template_insert_routes_atom_benzene_plan_to_unrecorded_builder(
         self,
@@ -894,7 +895,7 @@ class InsertControllerTest(unittest.TestCase):
         self.assertEqual(canvas.insert_state.template_ring_size, 6)
         self.assertEqual(canvas.insert_state.template_ring_style, "chair")
         self.assertEqual(canvas.insert_state.template_preview_items, [])
-        self.assertIsNone(last_smiles_input_for(canvas))
+        self.assertIsNone(canvas.runtime_state.smiles_input_state.last_smiles_input)
         canvas._record_additions.assert_called_once_with(
             before_next_atom_id=3,
             before_bond_count=1,

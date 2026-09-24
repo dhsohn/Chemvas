@@ -23,23 +23,17 @@ from chemvas.domain.document import Atom, Bond, MoleculeModel
 from chemvas.features.hover import HoverState
 from chemvas.ui.canvas.canvas_atom_graphics_state import (
     CanvasAtomGraphicsState,
-    atom_dots_for,
-    atom_items_for,
     set_atom_dots_for,
     set_atom_items_for,
 )
 from chemvas.ui.canvas.canvas_bond_graphics_state import (
     CanvasBondGraphicsState,
-    bond_items_for,
-    bond_items_for_id,
     set_bond_items_for,
 )
 from chemvas.ui.canvas.canvas_group_state import CanvasGroupState
 from chemvas.ui.canvas.canvas_history_state import CanvasHistoryState
-from chemvas.ui.canvas.canvas_model_access import set_next_atom_id_for
 from chemvas.ui.canvas.canvas_smiles_input_state import (
     CanvasSmilesInputState,
-    last_smiles_input_for,
     set_last_smiles_input_for,
 )
 from chemvas.ui.canvas.canvas_view import CanvasView
@@ -47,7 +41,6 @@ from chemvas.ui.canvas.graphics_items import AtomLabelItem
 from chemvas.ui.history.history_commands import ChangeAtomLabelCommand
 from chemvas.ui.molecule.atom_coords_access import (
     CanvasAtomCoords3DState,
-    atom_coords_3d_for,
     set_atom_coords_3d_for,
 )
 from chemvas.ui.molecule.atom_label_service import AtomLabelService
@@ -133,7 +126,7 @@ class _FakeCanvas:
 
     @property
     def atom_items(self):
-        return atom_items_for(self)
+        return self.runtime_state.atom_graphics_state.atom_items
 
     @atom_items.setter
     def atom_items(self, value) -> None:
@@ -141,7 +134,7 @@ class _FakeCanvas:
 
     @property
     def atom_dots(self):
-        return atom_dots_for(self)
+        return self.runtime_state.atom_graphics_state.atom_dots
 
     @atom_dots.setter
     def atom_dots(self, value) -> None:
@@ -149,7 +142,7 @@ class _FakeCanvas:
 
     @property
     def bond_items(self):
-        return bond_items_for(self)
+        return self.runtime_state.bond_graphics_state.bond_items
 
     @bond_items.setter
     def bond_items(self, value) -> None:
@@ -351,7 +344,9 @@ class AtomLabelServiceTest(unittest.TestCase):
 
         self.assertEqual(merge_ids, [2])
         self.assertEqual(merge_info["atom_coords_3d"], {2: (0.2, 0.2, 4.0)})
-        after_merge_coords = dict(atom_coords_3d_for(canvas))
+        after_merge_coords = dict(
+            canvas.runtime_state.atom_coords_3d_state.atom_coords_3d
+        )
         self.assertNotIn(2, after_merge_coords)
 
         command = DeleteAtomsCommand(
@@ -372,27 +367,33 @@ class AtomLabelServiceTest(unittest.TestCase):
             )
 
         def restore_coords(_positions, *, coords_3d=None, **_kwargs) -> None:
-            atom_coords_3d_for(canvas).update(coords_3d or {})
+            canvas.runtime_state.atom_coords_3d_state.atom_coords_3d.update(
+                coords_3d or {}
+            )
 
         def remove_atom(atom_id, *, remove_marks=True) -> None:
             del remove_marks
             canvas.model.atoms.pop(atom_id, None)
-            atom_coords_3d_for(canvas).pop(atom_id, None)
+            canvas.runtime_state.atom_coords_3d_state.atom_coords_3d.pop(atom_id, None)
 
         history_port = SimpleNamespace(
             restore_atom_from_state_for_history=restore_atom,
-            set_next_atom_id_for_history=lambda value: set_next_atom_id_for(
-                canvas, value
+            set_next_atom_id_for_history=lambda value: setattr(
+                canvas.model, "next_atom_id", value
             ),
             set_atom_positions_for_history=restore_coords,
             remove_atom_for_history=remove_atom,
             set_last_smiles_input_for_history=lambda _value: None,
         )
         command.undo(history_port)
-        self.assertEqual(atom_coords_3d_for(canvas)[2], (0.2, 0.2, 4.0))
+        self.assertEqual(
+            canvas.runtime_state.atom_coords_3d_state.atom_coords_3d[2], (0.2, 0.2, 4.0)
+        )
         command.redo(history_port)
 
-        self.assertEqual(atom_coords_3d_for(canvas), after_merge_coords)
+        self.assertEqual(
+            canvas.runtime_state.atom_coords_3d_state.atom_coords_3d, after_merge_coords
+        )
 
     def test_merge_overlapping_atoms_keeps_special_style_on_same_order_duplicate(
         self,
@@ -825,7 +826,7 @@ class AtomLabelServiceTest(unittest.TestCase):
         neighbor_id = atom_mutation.add_atom("C", 20.0, 0.0)
         bond_id = bond_mutation.add_bond(label_id, neighbor_id)
         canvas.bond_renderer.add_bond_graphics(bond_id)
-        item = atom_items_for(canvas)[label_id]
+        item = canvas.runtime_state.atom_graphics_state.atom_items[label_id]
         self.assertEqual(item.toPlainText(), "F3C")
 
         move_controller.move_atoms({neighbor_id}, -40.0, 0.0)
@@ -853,7 +854,9 @@ class AtomLabelServiceTest(unittest.TestCase):
         right_id = atom_mutation.add_atom("C", 20.0, 0.0)
         left_bond_id = bond_mutation.add_bond(label_id, left_id)
         canvas.bond_renderer.add_bond_graphics(left_bond_id)
-        left_item = bond_items_for_id(canvas, left_bond_id)[0]
+        left_item = canvas.runtime_state.bond_graphics_state.bond_items.get(
+            left_bond_id, []
+        )[0]
 
         def left_segment() -> tuple[float, float, float, float]:
             line = left_item.line()
@@ -887,7 +890,11 @@ class AtomLabelServiceTest(unittest.TestCase):
         )
         self.assertNotEqual(two_bond_segment, one_bond_segment)
         self.assertEqual(two_bond_segment, expected_left_segment())
-        self.assertIsNone(atom_items_for(canvas)[label_id].anchor_scene_rect())
+        self.assertIsNone(
+            canvas.runtime_state.atom_graphics_state.atom_items[
+                label_id
+            ].anchor_scene_rect()
+        )
         canvas.bond_renderer.add_bond_graphics(right_bond_id)
 
         with patch.object(
@@ -904,7 +911,11 @@ class AtomLabelServiceTest(unittest.TestCase):
         )
         self.assertNotEqual(moved_segment, two_bond_segment)
         self.assertEqual(moved_segment, expected_left_segment())
-        self.assertIsNotNone(atom_items_for(canvas)[label_id].anchor_scene_rect())
+        self.assertIsNotNone(
+            canvas.runtime_state.atom_graphics_state.atom_items[
+                label_id
+            ].anchor_scene_rect()
+        )
 
         move_controller.move_atoms({right_id}, 20.0, 20.0)
         self.assertEqual(left_segment(), two_bond_segment)
@@ -922,7 +933,11 @@ class AtomLabelServiceTest(unittest.TestCase):
         )
         self.assertNotEqual(deleted_segment, two_bond_segment)
         self.assertEqual(deleted_segment, expected_left_segment())
-        self.assertIsNotNone(atom_items_for(canvas)[label_id].anchor_scene_rect())
+        self.assertIsNotNone(
+            canvas.runtime_state.atom_graphics_state.atom_items[
+                label_id
+            ].anchor_scene_rect()
+        )
 
         with patch.object(
             canvas.bond_renderer,
@@ -945,9 +960,11 @@ class AtomLabelServiceTest(unittest.TestCase):
         second_id = atom_mutation.add_atom("CF3", 20.0, 0.0)
         bond_id = bond_mutation.add_bond(first_id, second_id)
         canvas.bond_renderer.add_bond_graphics(bond_id)
-        first_label = atom_items_for(canvas)[first_id]
-        second_label = atom_items_for(canvas)[second_id]
-        bond_item = bond_items_for_id(canvas, bond_id)[0]
+        first_label = canvas.runtime_state.atom_graphics_state.atom_items[first_id]
+        second_label = canvas.runtime_state.atom_graphics_state.atom_items[second_id]
+        bond_item = canvas.runtime_state.bond_graphics_state.bond_items.get(
+            bond_id, []
+        )[0]
         self.assertEqual(first_label.toPlainText(), "F3C")
         self.assertEqual(second_label.toPlainText(), "CF3")
 
@@ -993,7 +1010,7 @@ class AtomLabelServiceTest(unittest.TestCase):
         neighbor_id = atom_mutation.add_atom("C", 0.0, -20.0)
         bond_id = bond_mutation.add_bond(label_id, neighbor_id)
         canvas.bond_renderer.add_bond_graphics(bond_id)
-        item = atom_items_for(canvas)[label_id]
+        item = canvas.runtime_state.atom_graphics_state.atom_items[label_id]
         before_anchor = item.anchor_scene_rect()
         before_stack_rect = item._stack_element_rect
 
@@ -1281,7 +1298,9 @@ class AtomLabelServiceTest(unittest.TestCase):
         self.assertEqual(existing_item.toPlainText(), "NH")
         self.assertEqual(existing_item.data(0), "atom")
         self.assertEqual(existing_item.data(1), 1)
-        self.assertEqual(last_smiles_input_for(canvas), "preserve")
+        self.assertEqual(
+            canvas.runtime_state.smiles_input_state.last_smiles_input, "preserve"
+        )
         self.assertEqual(canvas.scene_obj.removed_items, [])
 
     def test_add_or_update_atom_label_adds_carbon_dot_without_existing_label(
@@ -1351,7 +1370,7 @@ class AtomLabelServiceTest(unittest.TestCase):
 
         self.assertEqual(canvas.model.atoms[1].element, "N")
         self.assertFalse(canvas.model.atoms[1].explicit_label)
-        self.assertIsNone(last_smiles_input_for(canvas))
+        self.assertIsNone(canvas.runtime_state.smiles_input_state.last_smiles_input)
         self.assertEqual(canvas.atom_items[1].toPlainText(), "N")
         self.assertEqual(len(canvas.pushed_commands), 1)
         composite = canvas.pushed_commands[0]

@@ -10,14 +10,8 @@ from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import QApplication
 
 from chemvas.bootstrap.main_window import build_main_window
-from chemvas.ui.canvas.canvas_bond_graphics_state import bond_items_for_id
-from chemvas.ui.canvas.canvas_document_metadata_state import document_file_path_for
-from chemvas.ui.canvas.canvas_window_access import snapshot_canvas_state_for
 from chemvas.ui.molecule.structure_mutation_access import add_bond_between_points_for
-from chemvas.ui.window.main_window_ports import (
-    active_canvas_for_window,
-    services_for_window,
-)
+from chemvas.ui.window.main_window_ports import active_canvas_for_window
 
 
 class MainWindowCanvasDocumentServiceTest(unittest.TestCase):
@@ -34,7 +28,7 @@ class MainWindowCanvasDocumentServiceTest(unittest.TestCase):
         self.window.show()
         self.app.processEvents()
         QTest.qWait(20)
-        self.service = services_for_window(self.window).canvas_document_service
+        self.service = self.window.services.canvas_document_service
 
     def tearDown(self) -> None:
         for canvas in self.window.tab_references.all_canvases():
@@ -48,7 +42,7 @@ class MainWindowCanvasDocumentServiceTest(unittest.TestCase):
 
         self.assertEqual(self.window.tab_references.canvas_count(), 1)
         self.assertEqual(self.window.tab_references.canvas_tabs.tabText(0), "Canvas 1")
-        self.assertIsNone(document_file_path_for(canvas))
+        self.assertIsNone(canvas.runtime_state.document_metadata_state.file_path)
         self.assertFalse(self.service.is_dirty(canvas))
 
     def test_new_canvas_creates_independent_clean_canvas_with_template_settings(
@@ -69,11 +63,9 @@ class MainWindowCanvasDocumentServiceTest(unittest.TestCase):
     def test_open_state_reuses_only_clean_untitled_single_canvas(self) -> None:
         first = active_canvas_for_window(self.window)
         add_bond_between_points_for(first, QPointF(-20.0, 0.0), QPointF(20.0, 0.0))
-        state = snapshot_canvas_state_for(first)
+        state = first.services.canvas_document_session_service.snapshot_state()
         self.assertTrue(
-            services_for_window(
-                self.window
-            ).document_action_service.save_canvas_to_path(
+            self.window.services.document_action_service.save_canvas_to_path(
                 self.window,
                 str(self.directory / "first.chemvas"),
             )
@@ -89,15 +81,17 @@ class MainWindowCanvasDocumentServiceTest(unittest.TestCase):
         self.assertEqual(
             self.window.tab_references.canvas_tabs.tabText(1), "opened.chemvas"
         )
-        self.assertEqual(document_file_path_for(opened), opened_path)
+        self.assertEqual(
+            opened.runtime_state.document_metadata_state.file_path, opened_path
+        )
 
     def test_document_service_rejects_noncanonical_backing_paths(self) -> None:
         canvas = active_canvas_for_window(self.window)
-        state = snapshot_canvas_state_for(canvas)
+        state = canvas.services.canvas_document_session_service.snapshot_state()
 
         with self.assertRaisesRegex(ValueError, r"\.chemvas filename extension"):
             self.service.set_file_path(canvas, "/tmp/retired.json")
-        self.assertIsNone(document_file_path_for(canvas))
+        self.assertIsNone(canvas.runtime_state.document_metadata_state.file_path)
 
         with self.assertRaisesRegex(ValueError, r"\.chemvas filename extension"):
             self.service.open_state(
@@ -105,7 +99,7 @@ class MainWindowCanvasDocumentServiceTest(unittest.TestCase):
                 state=state,
                 file_path="/tmp/retired.json",
             )
-        self.assertIsNone(document_file_path_for(canvas))
+        self.assertIsNone(canvas.runtime_state.document_metadata_state.file_path)
         self.assertEqual(self.window.tab_references.canvas_count(), 1)
 
         with self.assertRaisesRegex(ValueError, r"\.chemvas filename extension"):
@@ -135,7 +129,7 @@ class MainWindowCanvasDocumentServiceTest(unittest.TestCase):
             QPointF(-20.0, 0.0),
             QPointF(20.0, 0.0),
         )
-        bond_item = bond_items_for_id(canvas, 0)[0]
+        bond_item = canvas.runtime_state.bond_graphics_state.bond_items.get(0, [])[0]
         bond_item.setSelected(True)
         scene = canvas.scene()
         selection_events: list[None] = []

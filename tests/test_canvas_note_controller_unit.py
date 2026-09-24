@@ -37,11 +37,7 @@ from chemvas.ui.canvas.canvas_text_style_state import (
 from chemvas.ui.history.history_commands import UpdateSceneItemCommand
 from chemvas.ui.history.history_operations import CanvasHistoryOperations
 from chemvas.ui.scene.note_item_access import committed_note_text_for
-from chemvas.ui.selection.selection_state import (
-    SelectionState,
-    selected_notes_for,
-    set_selected_notes_for,
-)
+from chemvas.ui.selection.selection_state import SelectionState
 
 
 def _history_service(canvas, push=None):
@@ -288,7 +284,7 @@ class CanvasNoteControllerUnitTest(unittest.TestCase):
         note.setData(0, "note")
         note.setPlainText("memo")
         scene.addItem(note)
-        set_selected_notes_for(canvas, [note])
+        canvas.runtime_state.selection_state.selected_notes = [note]
         controller = _note_controller(canvas)
 
         controller.set_text_alignment("right")
@@ -374,7 +370,7 @@ class CanvasNoteControllerUnitTest(unittest.TestCase):
             ),
             services=canvas_runtime_services(selection=selection_controller),
         )
-        set_selected_notes_for(canvas, [item])
+        canvas.runtime_state.selection_state.selected_notes = [item]
         _attach_history_service(canvas)
         controller = _note_controller(canvas)
 
@@ -471,7 +467,7 @@ class CanvasNoteControllerUnitTest(unittest.TestCase):
         canvas.services.selection = SimpleNamespace(
             update_note_selection_box=mock.Mock()
         )
-        set_selected_notes_for(canvas, [])
+        canvas.runtime_state.selection_state.selected_notes = []
         note = new_note_item_for(canvas)
         history_item_id(canvas, note)
         note.setData(0, "note")
@@ -505,7 +501,7 @@ class CanvasNoteControllerUnitTest(unittest.TestCase):
                 scene_items_state=CanvasSceneItemsState(),
             ),
         )
-        set_selected_notes_for(canvas, [item])
+        canvas.runtime_state.selection_state.selected_notes = [item]
         controller = _selection_controller_for(canvas)
 
         controller.update_note_selection_box(item)
@@ -513,7 +509,7 @@ class CanvasNoteControllerUnitTest(unittest.TestCase):
         self.assertIsNotNone(selection_box)
         self.assertTrue(selection_box.isVisible())
 
-        set_selected_notes_for(canvas, [])
+        canvas.runtime_state.selection_state.selected_notes = []
         controller.update_note_selection_box(item)
         self.assertFalse(selection_box.isVisible())
 
@@ -526,7 +522,7 @@ class CanvasNoteControllerUnitTest(unittest.TestCase):
                 scene_items_state=CanvasSceneItemsState()
             ),
         )
-        set_selected_notes_for(canvas, [])
+        canvas.runtime_state.selection_state.selected_notes = []
 
         def _note_state_dict(item) -> dict:
             return {
@@ -586,7 +582,7 @@ class CanvasNoteControllerUnitTest(unittest.TestCase):
                 scene_items_state=CanvasSceneItemsState()
             ),
         )
-        set_selected_notes_for(canvas, [])
+        canvas.runtime_state.selection_state.selected_notes = []
 
         def fail_push(_command) -> None:
             raise RuntimeError("history")
@@ -625,7 +621,7 @@ class CanvasNoteControllerUnitTest(unittest.TestCase):
                 scene_items_state=CanvasSceneItemsState()
             ),
         )
-        set_selected_notes_for(canvas, [])
+        canvas.runtime_state.selection_state.selected_notes = []
 
         def _note_state_dict(item) -> dict:
             return {
@@ -678,7 +674,7 @@ class CanvasNoteControllerUnitTest(unittest.TestCase):
                 scene_items_state=CanvasSceneItemsState()
             ),
         )
-        set_selected_notes_for(canvas, [])
+        canvas.runtime_state.selection_state.selected_notes = []
         canvas.push_command = canvas.commands.append
         toggle_note_selection = mock.Mock()
         canvas.services = canvas_runtime_services(
@@ -697,14 +693,14 @@ class CanvasNoteControllerUnitTest(unittest.TestCase):
         item.setPlainText("kept")
         item.set_committed_text("kept")
         item.set_committed_html(item.toHtml())
-        selected_notes_for(canvas).append(item)
+        canvas.runtime_state.selection_state.selected_notes.append(item)
 
         controller.handle_note_focus_out(item)
 
         # The note-service toggle handles grouped companions and the outline
         # refresh; the controller must not strip the note from state directly.
         toggle_note_selection.assert_called_once_with(item)
-        self.assertIn(item, selected_notes_for(canvas))
+        self.assertIn(item, canvas.runtime_state.selection_state.selected_notes)
 
     def test_handle_note_focus_out_routes_emptied_note_deletion_through_note_service(
         self,
@@ -718,7 +714,7 @@ class CanvasNoteControllerUnitTest(unittest.TestCase):
                 scene_items_state=CanvasSceneItemsState()
             ),
         )
-        set_selected_notes_for(canvas, [])
+        canvas.runtime_state.selection_state.selected_notes = []
         canvas.push_command = canvas.commands.append
         toggle_note_selection = mock.Mock()
         update_selection_outline = mock.Mock()
@@ -739,7 +735,7 @@ class CanvasNoteControllerUnitTest(unittest.TestCase):
         item.setPlainText("")
         item.set_committed_text("previous")
         item.set_committed_html("<p>previous</p>")
-        selected_notes_for(canvas).append(item)
+        canvas.runtime_state.selection_state.selected_notes.append(item)
 
         # Editing an existing note down to empty deletes it; the deselection
         # must still route through the note service so grouped companions drop.
@@ -763,7 +759,7 @@ class CanvasNoteControllerUnitTest(unittest.TestCase):
                 scene_items_state=CanvasSceneItemsState()
             ),
         )
-        set_selected_notes_for(canvas, [])
+        canvas.runtime_state.selection_state.selected_notes = []
         canvas.push_command = canvas.commands.append
         canvas.services = canvas_runtime_services(
             scene_item_controller=SimpleNamespace(
@@ -778,11 +774,11 @@ class CanvasNoteControllerUnitTest(unittest.TestCase):
         controller = _note_controller(canvas)
         item = new_note_item_for(canvas)
         history_item_id(canvas, item)
-        selected_notes_for(canvas).append(item)
+        canvas.runtime_state.selection_state.selected_notes.append(item)
 
         controller.handle_note_focus_out(item)
 
-        self.assertNotIn(item, selected_notes_for(canvas))
+        self.assertNotIn(item, canvas.runtime_state.selection_state.selected_notes)
         self.assertEqual(canvas.updated_boxes, [item])
         self.assertEqual(canvas.removed_items, [item])
 
@@ -804,7 +800,7 @@ class CanvasNoteControllerUnitTest(unittest.TestCase):
                 ),
             ),
         )
-        set_selected_notes_for(canvas, [])
+        canvas.runtime_state.selection_state.selected_notes = []
         canvas.push_command = canvas.commands.append
         canvas.services.selection = SimpleNamespace(
             update_note_selection_box=canvas.updated_boxes.append,

@@ -8,29 +8,18 @@ from PyQt6.QtGui import QTransform
 from PyQt6.QtWidgets import QGraphicsPathItem
 
 from chemvas.domain.document import VALID_ARROW_KINDS
-from chemvas.ui.canvas.canvas_bond_graphics_state import bond_items_for_id
 from chemvas.ui.canvas.canvas_model_access import (
     atom_for_id,
-    atoms_for,
     bond_for_id,
-    bonds_for,
-    has_atoms_for,
 )
 from chemvas.ui.canvas.graphics_items import AtomDotItem
-from chemvas.ui.canvas.pick_radius_access import (
-    atom_pick_radius_for,
-    bond_pick_radius_for,
-)
+from chemvas.ui.canvas.pick_radius_access import atom_pick_radius_for
 from chemvas.ui.canvas.spatial_index_state import (
-    atom_ids_in_spatial_cell_for,
-    bond_ids_in_spatial_cell_for,
     has_fresh_spatial_index_for,
     mark_spatial_index_dirty_for,
     set_spatial_index_for,
     spatial_cell_size_or_for,
 )
-from chemvas.ui.scene.mark_item_access import mark_center_for
-from chemvas.ui.scene.scene_item_access import canvas_scene_for
 
 if TYPE_CHECKING:
     from chemvas.ui.canvas.canvas_view import CanvasView
@@ -43,7 +32,7 @@ ARROW_PICK_SCREEN_PX = 6.0
 def scene_items_at_pos_for_canvas(canvas, pos):
     # Handles keep their size on screen (ItemIgnoresTransformations), so the
     # scene needs the view's transform to place their shapes for picking.
-    return canvas_scene_for(canvas).items(
+    return canvas.scene().items(
         pos,
         Qt.ItemSelectionMode.IntersectsItemShape,
         Qt.SortOrder.DescendingOrder,
@@ -52,7 +41,7 @@ def scene_items_at_pos_for_canvas(canvas, pos):
 
 
 def scene_items_in_rect_for_canvas(canvas, rect):
-    return canvas_scene_for(canvas).items(
+    return canvas.scene().items(
         rect,
         Qt.ItemSelectionMode.IntersectsItemBoundingRect,
         Qt.SortOrder.DescendingOrder,
@@ -150,7 +139,9 @@ class CanvasHitTestingService:
             if atom_item is None or prefer_marks:
                 return mark_item
             atom = atom_for_id(self.canvas, atom_item.data(1))
-            center = mark_center_for(self.canvas, mark_item)
+            center = self.canvas.services.scene_decoration_build_service.mark_center(
+                mark_item
+            )
             if atom is not None and math.hypot(
                 center.x() - pos.x(), center.y() - pos.y()
             ) < math.hypot(atom.x - pos.x(), atom.y - pos.y()):
@@ -158,9 +149,15 @@ class CanvasHitTestingService:
         if atom_item is not None:
             return atom_item
         if bond_item is None:
-            nearby_bond_id = self.find_bond_near(pos, bond_pick_radius_for(self.canvas))
+            nearby_bond_id = self.find_bond_near(
+                pos, self.canvas.renderer.style.bond_length_px * 0.528
+            )
             if nearby_bond_id is not None:
-                nearby_items = bond_items_for_id(self.canvas, nearby_bond_id)
+                nearby_items = (
+                    self.canvas.runtime_state.bond_graphics_state.bond_items.get(
+                        nearby_bond_id, []
+                    )
+                )
                 if nearby_items:
                     return nearby_items[0]
         if bond_item is not None or ring_item is not None:
@@ -225,20 +222,20 @@ class CanvasHitTestingService:
         if has_fresh_spatial_index_for(
             self.canvas,
             cell_size,
-            atom_count=len(atoms_for(self.canvas)),
-            bond_slot_count=len(bonds_for(self.canvas)),
+            atom_count=len(self.canvas.model.atoms),
+            bond_slot_count=len(self.canvas.model.bonds),
         ):
             return
         self.rebuild_spatial_index(cell_size)
 
     def rebuild_spatial_index(self, cell_size: float) -> None:
         atom_grid: dict[tuple[int, int], set[int]] = {}
-        for atom_id, atom in atoms_for(self.canvas).items():
+        for atom_id, atom in self.canvas.model.atoms.items():
             key = self.cell_coords(atom.x, atom.y, cell_size)
             atom_grid.setdefault(key, set()).add(atom_id)
 
         bond_grid: dict[tuple[int, int], set[int]] = {}
-        for bond_id, bond in enumerate(bonds_for(self.canvas)):
+        for bond_id, bond in enumerate(self.canvas.model.bonds):
             if bond is None:
                 continue
             a = atom_for_id(self.canvas, bond.a)
@@ -260,15 +257,15 @@ class CanvasHitTestingService:
             atom_grid=atom_grid,
             bond_grid=bond_grid,
             cell_size=cell_size,
-            atom_count=len(atoms_for(self.canvas)),
-            bond_slot_count=len(bonds_for(self.canvas)),
+            atom_count=len(self.canvas.model.atoms),
+            bond_slot_count=len(self.canvas.model.bonds),
         )
 
     def mark_spatial_index_dirty(self) -> None:
         mark_spatial_index_dirty_for(self.canvas)
 
     def find_atom_near(self, x: float, y: float, max_dist: float) -> int | None:
-        if not has_atoms_for(self.canvas):
+        if not bool(self.canvas.model.atoms):
             return None
         self.ensure_spatial_index()
         cell_size = spatial_cell_size_or_for(self.canvas, self.grid_cell_size())
@@ -280,7 +277,11 @@ class CanvasHitTestingService:
         nearest_dist_sq = max_dist * max_dist
         for cx in range(ix - cell_radius, ix + cell_radius + 1):
             for cy in range(iy - cell_radius, iy + cell_radius + 1):
-                for atom_id in atom_ids_in_spatial_cell_for(self.canvas, (cx, cy)):
+                for (
+                    atom_id
+                ) in self.canvas.runtime_state.spatial_index_state.atom_grid.get(
+                    (cx, cy), ()
+                ):
                     atom = atom_for_id(self.canvas, atom_id)
                     if atom is None:
                         continue
@@ -298,7 +299,7 @@ class CanvasHitTestingService:
         return nearest_id
 
     def find_bond_near(self, pos: QPointF, max_dist: float) -> int | None:
-        if not bonds_for(self.canvas):
+        if not self.canvas.model.bonds:
             return None
         self.ensure_spatial_index()
         cell_size = spatial_cell_size_or_for(self.canvas, self.grid_cell_size())
@@ -311,7 +312,11 @@ class CanvasHitTestingService:
         seen: set[int] = set()
         for cx in range(ix - cell_radius, ix + cell_radius + 1):
             for cy in range(iy - cell_radius, iy + cell_radius + 1):
-                for bond_id in bond_ids_in_spatial_cell_for(self.canvas, (cx, cy)):
+                for (
+                    bond_id
+                ) in self.canvas.runtime_state.spatial_index_state.bond_grid.get(
+                    (cx, cy), ()
+                ):
                     if bond_id in seen:
                         continue
                     seen.add(bond_id)
@@ -358,7 +363,9 @@ class CanvasHitTestingService:
         return atom_id, math.hypot(atom.x - pos.x(), atom.y - pos.y())
 
     def nearest_bond_hit(self, pos: QPointF) -> tuple[int, float] | None:
-        bond_id = self.find_bond_near(pos, bond_pick_radius_for(self.canvas))
+        bond_id = self.find_bond_near(
+            pos, self.canvas.renderer.style.bond_length_px * 0.528
+        )
         if bond_id is None:
             return None
         bond = bond_for_id(self.canvas, bond_id)
@@ -384,7 +391,7 @@ class CanvasHitTestingService:
             pos,
             max(
                 self.canvas.renderer.style.bond_length_px * 0.35,
-                bond_pick_radius_for(self.canvas),
+                self.canvas.renderer.style.bond_length_px * 0.528,
             ),
         )
 

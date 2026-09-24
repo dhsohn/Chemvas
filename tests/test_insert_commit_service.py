@@ -28,7 +28,6 @@ from chemvas.ui.canvas.canvas_scene_items_state import (
 )
 from chemvas.ui.canvas.canvas_smiles_input_state import (
     CanvasSmilesInputState,
-    last_smiles_input_for,
     set_last_smiles_input_for,
 )
 from chemvas.ui.insert import insert_commit_rollback as insert_rollback_module
@@ -42,7 +41,6 @@ from chemvas.ui.insert.insert_template_commit_service import (
 )
 from chemvas.ui.molecule.atom_coords_access import (
     CanvasAtomCoords3DState,
-    atom_coords_3d_for,
     set_atom_coords_3d_for,
 )
 from chemvas.ui.molecule.structure_insert_access import (
@@ -307,7 +305,9 @@ class InsertCommitServiceTest(unittest.TestCase):
             )
 
         restore.assert_called_once()
-        self.assertEqual(last_smiles_input_for(canvas), "before")
+        self.assertEqual(
+            canvas.runtime_state.smiles_input_state.last_smiles_input, "before"
+        )
         self.assertTrue(
             any(
                 "insert exact restore failed" in note
@@ -356,7 +356,7 @@ class InsertCommitServiceTest(unittest.TestCase):
         rollback_insert_mutation_for(canvas, before_next_atom_id=0, before_bond_count=0)
 
         self.assertEqual(canvas.model.atoms, {})
-        self.assertEqual(atom_coords_3d_for(canvas), {})
+        self.assertEqual(canvas.runtime_state.atom_coords_3d_state.atom_coords_3d, {})
 
     def test_rollback_insert_mutation_continues_after_one_atom_removal_fails(
         self,
@@ -435,7 +435,9 @@ class InsertCommitServiceTest(unittest.TestCase):
         self.assertEqual(canvas.added_graphics, [0])
         self.assertEqual(canvas.carbon_dots, [0])
         self.assertEqual(canvas.labels, [(1, "N", False, False)])
-        self.assertEqual(last_smiles_input_for(canvas), "new")
+        self.assertEqual(
+            canvas.runtime_state.smiles_input_state.last_smiles_input, "new"
+        )
         self.assertEqual(
             canvas.record_calls,
             [
@@ -505,7 +507,7 @@ class InsertCommitServiceTest(unittest.TestCase):
             )
 
         self.assertFalse(applied)
-        self.assertIsNone(last_smiles_input_for(canvas))
+        self.assertIsNone(canvas.runtime_state.smiles_input_state.last_smiles_input)
         self.assertEqual(canvas.record_calls, [])
 
     def test_apply_smiles_commit_plan_restores_explicit_none_when_capture_fails(
@@ -545,7 +547,7 @@ class InsertCommitServiceTest(unittest.TestCase):
             )
 
         self.assertIs(raised.exception, original_error)
-        self.assertIsNone(last_smiles_input_for(canvas))
+        self.assertIsNone(canvas.runtime_state.smiles_input_state.last_smiles_input)
         self.assertEqual(canvas.model.atoms, {})
         self.assertEqual(canvas.record_calls, [])
 
@@ -641,7 +643,9 @@ class InsertCommitServiceTest(unittest.TestCase):
         self.assertEqual(canvas.model.bonds, [])
         self.assertEqual(canvas.created_marks, [])
         self.assertEqual(canvas.record_calls, [])
-        self.assertEqual(last_smiles_input_for(canvas), "old")
+        self.assertEqual(
+            canvas.runtime_state.smiles_input_state.last_smiles_input, "old"
+        )
 
     def test_apply_template_commit_resolution_handles_free_and_bond_paths(self) -> None:
         free_canvas = _FakeCanvas()
@@ -677,7 +681,9 @@ class InsertCommitServiceTest(unittest.TestCase):
         self.assertEqual(
             free_canvas.record_calls[0]["before_smiles_input"], "before-free"
         )
-        self.assertIsNone(last_smiles_input_for(free_canvas))
+        self.assertIsNone(
+            free_canvas.runtime_state.smiles_input_state.last_smiles_input
+        )
 
         bond_canvas = _FakeCanvas()
         bond_canvas.model.atoms = {
@@ -751,7 +757,9 @@ class InsertCommitServiceTest(unittest.TestCase):
         self.assertEqual(canvas.model.atoms, {})
         self.assertEqual(canvas.model.bonds, [])
         self.assertEqual(canvas.record_calls, [])
-        self.assertEqual(last_smiles_input_for(canvas), "before")
+        self.assertEqual(
+            canvas.runtime_state.smiles_input_state.last_smiles_input, "before"
+        )
 
     def test_apply_template_commit_resolution_uses_benzene_path_and_rejects_invalid_points(
         self,
@@ -778,7 +786,7 @@ class InsertCommitServiceTest(unittest.TestCase):
         self.assertTrue(applied)
         self.assertEqual(canvas.add_atom_calls, [("C", 8.0, 9.0)] * 6)
         self.assertEqual(len(canvas.add_bond_calls), 6)
-        self.assertIsNone(last_smiles_input_for(canvas))
+        self.assertIsNone(canvas.runtime_state.smiles_input_state.last_smiles_input)
 
         blocked = _FakeCanvas()
         blocked.services.structure_build_service.build_benzene_ring = (
@@ -1065,7 +1073,9 @@ class InsertCommitServiceTest(unittest.TestCase):
         self.assertEqual(canvas.model.atoms, {})
         self.assertEqual(canvas.model.bonds, [])
         self.assertEqual(canvas.model.next_atom_id, 0)
-        self.assertEqual(last_smiles_input_for(canvas), "before")
+        self.assertEqual(
+            canvas.runtime_state.smiles_input_state.last_smiles_input, "before"
+        )
         self.assertEqual(canvas.record_calls, [])
 
     def test_apply_smiles_commit_does_not_retry_a_failed_canonical_abort(self) -> None:

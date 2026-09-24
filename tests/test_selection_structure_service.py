@@ -15,7 +15,6 @@ from chemvas.ui.canvas.canvas_bond_graphics_state import (
 from chemvas.ui.canvas.canvas_scene_items_state import (
     CanvasSceneItemsState,
 )
-from chemvas.ui.selection.selection_state import selected_notes_for
 from tests.ring_support import seed_ring_items
 from tests.runtime_services import canvas_runtime_services
 from tests.runtime_state import canvas_runtime_state
@@ -182,7 +181,7 @@ def test_select_structure_for_item_selects_connected_atoms_bonds_and_rings() -> 
     assert bond_graphic.isSelected()
     assert ring_item.isSelected()
     assert not unrelated_ring_item.isSelected()
-    assert not selected_notes_for(service.canvas)
+    assert not service.canvas.runtime_state.selection_state.selected_notes
 
 
 def test_select_structure_for_item_selects_overlay_without_outline_refresh() -> None:
@@ -199,4 +198,4 @@ def test_select_structure_for_item_selects_overlay_without_outline_refresh() -> 
     service.outline_service.update_selection_outline.assert_not_called()
     assert scene.clear_selection_calls == 1
     assert note_item.isSelected()
-    assert not selected_notes_for(service.canvas)
+    assert not service.canvas.runtime_state.selection_state.selected_notes

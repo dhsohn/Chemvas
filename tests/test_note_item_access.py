@@ -10,7 +10,6 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 from PyQt6.QtWidgets import QApplication, QGraphicsTextItem
 
 from chemvas.ui.scene.note_item_access import (
-    apply_note_style_for,
     committed_note_text_for,
     set_committed_note_text_for,
 )
@@ -71,9 +70,9 @@ def test_note_style_access_requires_and_delegates_to_note_controller() -> None:
     )
     item = object()
 
-    apply_note_style_for(canvas, item)
+    canvas.services.note_controller.apply_note_style(item)
 
     assert calls == [("apply", item)]
 
     with pytest.raises(AttributeError):
-        apply_note_style_for(SimpleNamespace(), item)
+        SimpleNamespace().services.note_controller.apply_note_style(item)

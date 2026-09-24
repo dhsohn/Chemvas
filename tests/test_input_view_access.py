@@ -4,15 +4,11 @@ from unittest import mock
 from PyQt6.QtCore import QRectF
 
 from chemvas.ui.canvas.input_view_access import (
-    device_pixel_ratio_for,
-    focus_canvas_for,
     focused_scene_item_for,
-    global_pos_from_event_for,
     scene_pos_from_global_pos_for,
     scroll_view_by_for,
     set_focused_scene_item_for,
     set_scene_rect_for,
-    update_viewport_for,
     viewport_center_scene_pos_for,
 )
 
@@ -110,7 +106,7 @@ def test_focused_scene_item_for_handles_missing_scene() -> None:
 def test_focus_canvas_for_calls_canvas_focus() -> None:
     canvas = SimpleNamespace(setFocus=mock.Mock())
 
-    focus_canvas_for(canvas, "reason")
+    canvas.setFocus("reason")
 
     canvas.setFocus.assert_called_once_with("reason")
 
@@ -125,7 +121,7 @@ def test_scene_rect_and_viewport_helpers_delegate_to_canvas_view() -> None:
     rect = QRectF(1.0, 2.0, 3.0, 4.0)
 
     set_scene_rect_for(canvas, rect)
-    update_viewport_for(canvas)
+    canvas.viewport().update()
 
     canvas.setSceneRect.assert_called_once_with(rect)
     canvas.viewport.assert_called_once_with()
@@ -169,7 +165,7 @@ def test_scene_pos_from_global_pos_returns_none_outside_viewport() -> None:
 def test_global_pos_from_event_reads_qt6_global_position() -> None:
     event = SimpleNamespace(globalPosition=mock.Mock(return_value=_Point("qt6-global")))
 
-    assert global_pos_from_event_for(SimpleNamespace(), event) == "qt6-global"
+    assert event.globalPosition().toPoint() == "qt6-global"
 
     event.globalPosition.assert_called_once_with()
 
@@ -177,7 +173,7 @@ def test_global_pos_from_event_reads_qt6_global_position() -> None:
 def test_device_pixel_ratio_for_reads_view_ratio() -> None:
     canvas = SimpleNamespace(devicePixelRatioF=mock.Mock(return_value=2))
 
-    assert device_pixel_ratio_for(canvas) == 2.0
+    assert float(canvas.devicePixelRatioF()) == 2.0
 
     canvas.devicePixelRatioF.assert_called_once_with()
 

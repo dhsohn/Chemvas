@@ -13,11 +13,8 @@ from chemvas.ui.canvas.input_view_access import (
     chemdraw_shortcut_text_for,
     should_override_chemdraw_shortcut_for,
 )
-from chemvas.ui.molecule.structure_mutation_access import add_atom_for, add_bond_for
-from chemvas.ui.window.main_window_ports import (
-    active_canvas_for_window,
-    services_for_window,
-)
+from chemvas.ui.molecule.structure_mutation_access import add_bond_for
+from chemvas.ui.window.main_window_ports import active_canvas_for_window
 
 
 @pytest.fixture(scope="module")
@@ -40,7 +37,7 @@ def drawing(app):
     canvas.centerOn(0, 0)
     canvas.setFocus()
     yield window, canvas
-    services_for_window(window).canvas_document_service.mark_clean(canvas)
+    window.services.canvas_document_service.mark_clean(canvas)
     window.close()
     app.processEvents()
 
@@ -90,7 +87,7 @@ def test_atom_hotkeys_follow_shift_not_caps_lock(
     drawing, pointer, caps, shift, letter, plain, shifted
 ):
     _window, canvas = drawing
-    atom_id = add_atom_for(canvas, "C", 0, 0)
+    atom_id = canvas.services.canvas_atom_mutation_service.add_atom("C", 0, 0)
     pointer(canvas, QPointF())
     assert canvas.runtime_state.hover_preview_state.atom_id == atom_id
     event = _letter_event(letter, shift=shift, caps=caps)
@@ -103,7 +100,7 @@ def test_atom_hotkeys_follow_shift_not_caps_lock(
 @pytest.mark.parametrize("letter", ["a", "z"])
 def test_atom_sprouts_are_not_caps_lock_alias_labels(drawing, pointer, caps, letter):
     _window, canvas = drawing
-    atom_id = add_atom_for(canvas, "C", 0, 0)
+    atom_id = canvas.services.canvas_atom_mutation_service.add_atom("C", 0, 0)
     pointer(canvas, QPointF())
     event = _letter_event(letter, caps=caps)
     assert should_override_chemdraw_shortcut_for(canvas, event)
@@ -130,8 +127,8 @@ def test_bond_hotkeys_and_override_follow_shift_not_caps_lock(
     drawing, pointer, caps, letter, shift, style, order
 ):
     _window, canvas = drawing
-    a = add_atom_for(canvas, "C", -40, 0)
-    b = add_atom_for(canvas, "C", 40, 0)
+    a = canvas.services.canvas_atom_mutation_service.add_atom("C", -40, 0)
+    b = canvas.services.canvas_atom_mutation_service.add_atom("C", 40, 0)
     bond_id = add_bond_for(canvas, a, b)
     canvas.services.structure_build_service.render_model()
     pointer(canvas, QPointF())
@@ -146,8 +143,8 @@ def test_bond_hotkeys_and_override_follow_shift_not_caps_lock(
 @pytest.mark.parametrize("caps", [False, True])
 def test_caps_lock_bond_fusion_overrides_the_tool_shortcut(drawing, pointer, caps):
     window, canvas = drawing
-    a = add_atom_for(canvas, "C", -20, 0)
-    b = add_atom_for(canvas, "C", 20, 0)
+    a = canvas.services.canvas_atom_mutation_service.add_atom("C", -20, 0)
+    b = canvas.services.canvas_atom_mutation_service.add_atom("C", 20, 0)
     bond_id = add_bond_for(canvas, a, b)
     canvas.services.structure_build_service.render_model()
     pointer(canvas, QPointF())
@@ -155,10 +152,7 @@ def test_caps_lock_bond_fusion_overrides_the_tool_shortcut(drawing, pointer, cap
     assert should_override_chemdraw_shortcut_for(canvas, _letter_event("a", caps=caps))
     QApplication.sendEvent(canvas, _letter_event("a", caps=caps))
     assert sum(atom is not None for atom in canvas.model.atoms) == 6
-    assert (
-        services_for_window(window).context_bar_service.active_tool_name(window)
-        == "select"
-    )
+    assert window.services.context_bar_service.active_tool_name(window) == "select"
 
 
 @pytest.mark.parametrize("text", ["+", "-", "1", "!", "é", "ß", "한", "", "ab"])
@@ -178,7 +172,7 @@ def test_modified_uppercase_letters_do_not_relabel_hovered_atoms(
     drawing, pointer, modifiers
 ):
     _window, canvas = drawing
-    atom_id = add_atom_for(canvas, "C", 0, 0)
+    atom_id = canvas.services.canvas_atom_mutation_service.add_atom("C", 0, 0)
     pointer(canvas, QPointF())
     event = QKeyEvent(QEvent.Type.KeyPress, Qt.Key.Key_O, modifiers, "O")
     assert not should_override_chemdraw_shortcut_for(canvas, event)
@@ -192,7 +186,7 @@ def test_note_editor_keeps_caps_text_and_ime_commit_without_atom_hotkeys(
     drawing, pointer
 ):
     _window, canvas = drawing
-    atom_id = add_atom_for(canvas, "C", 0, 0)
+    atom_id = canvas.services.canvas_atom_mutation_service.add_atom("C", 0, 0)
     pointer(canvas, QPointF())
     controller = canvas.services.note_controller
     note = controller.create_text_note(QPointF(-80, 60), "")

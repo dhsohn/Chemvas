@@ -20,16 +20,12 @@ from chemvas.features.graph import CanvasGraphState
 from chemvas.ui.canvas.canvas_atom_graphics_state import CanvasAtomGraphicsState
 from chemvas.ui.canvas.canvas_bond_graphics_state import (
     CanvasBondGraphicsState,
-    bond_items_for,
     set_bond_items_for,
 )
 from chemvas.ui.canvas.canvas_group_state import CanvasGroupState
 from chemvas.ui.canvas.canvas_mark_registry import CanvasMarkRegistry
 from chemvas.ui.canvas.canvas_scene_items_state import CanvasSceneItemsState
-from chemvas.ui.canvas.canvas_smiles_input_state import (
-    CanvasSmilesInputState,
-    last_smiles_input_for,
-)
+from chemvas.ui.canvas.canvas_smiles_input_state import CanvasSmilesInputState
 from chemvas.ui.history.history_commands import DeleteSceneItemsCommand
 from chemvas.ui.history.history_operations import CanvasHistoryOperations
 from chemvas.ui.molecule.atom_coords_access import CanvasAtomCoords3DState
@@ -161,7 +157,7 @@ class CanvasViewDeleteAndBondStyleTest(unittest.TestCase):
         self.assertFalse(atom_command.remove_marks)
         self.assertEqual(atom_command.before_next_atom_id, 5)
         self.assertEqual(atom_command.after_next_atom_id, 4)
-        self.assertIsNone(last_smiles_input_for(view))
+        self.assertIsNone(view.runtime_state.smiles_input_state.last_smiles_input)
         remove_bond_by_id.assert_not_called()
         view.push_command.assert_called_once_with(command)
 
@@ -333,8 +329,10 @@ class CanvasViewDeleteAndBondStyleTest(unittest.TestCase):
         set_bond_items_for(view, {0: [original_selected_item, "old-b"], 1: ["old-c"]})
         view.bond_renderer = SimpleNamespace(
             add_bond_graphics=mock.Mock(
-                side_effect=lambda bond_id: bond_items_for(view).__setitem__(
-                    bond_id, [replacement_item]
+                side_effect=lambda bond_id: (
+                    view.runtime_state.bond_graphics_state.bond_items.__setitem__(
+                        bond_id, [replacement_item]
+                    )
                 )
             )
         )
@@ -345,7 +343,9 @@ class CanvasViewDeleteAndBondStyleTest(unittest.TestCase):
         controller.flip_bond_direction(0)
 
         self.assertEqual((wedge_bond.a, wedge_bond.b), (2, 1))
-        self.assertEqual(bond_items_for(view)[0], [replacement_item])
+        self.assertEqual(
+            view.runtime_state.bond_graphics_state.bond_items[0], [replacement_item]
+        )
         self.assertTrue(replacement_item.isSelected())
         scene.removeItem.assert_has_calls(
             [mock.call(original_selected_item), mock.call("old-b")]
@@ -396,9 +396,11 @@ class CanvasViewDeleteAndBondStyleTest(unittest.TestCase):
         set_bond_items_for(view, {0: [original_style_item], 1: [original_cycle_item]})
         view.bond_renderer = SimpleNamespace(
             add_bond_graphics=mock.Mock(
-                side_effect=lambda bond_id: bond_items_for(view).__setitem__(
-                    bond_id,
-                    [styled_replacement if bond_id == 0 else cycled_replacement],
+                side_effect=lambda bond_id: (
+                    view.runtime_state.bond_graphics_state.bond_items.__setitem__(
+                        bond_id,
+                        [styled_replacement if bond_id == 0 else cycled_replacement],
+                    )
                 )
             )
         )
@@ -407,7 +409,9 @@ class CanvasViewDeleteAndBondStyleTest(unittest.TestCase):
         controller.apply_bond_style(0, "double", 2)
 
         self.assertEqual((styled_bond.style, styled_bond.order), ("double", 2))
-        self.assertEqual(bond_items_for(view)[0], [styled_replacement])
+        self.assertEqual(
+            view.runtime_state.bond_graphics_state.bond_items[0], [styled_replacement]
+        )
         self.assertTrue(styled_replacement.isSelected())
         view.bond_renderer.add_bond_graphics.assert_called_once_with(0)
         move_controller.redraw_connected_bonds.assert_has_calls(
@@ -422,7 +426,9 @@ class CanvasViewDeleteAndBondStyleTest(unittest.TestCase):
 
         cycle_style.assert_called_once_with("single", 1, allow_double_variants=False)
         self.assertEqual((cycled_bond.style, cycled_bond.order), ("aromatic", 3))
-        self.assertEqual(bond_items_for(view)[1], [cycled_replacement])
+        self.assertEqual(
+            view.runtime_state.bond_graphics_state.bond_items[1], [cycled_replacement]
+        )
         self.assertTrue(cycled_replacement.isSelected())
         self.assertEqual(
             view.bond_renderer.add_bond_graphics.call_args_list[-1], mock.call(1)

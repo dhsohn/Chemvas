@@ -12,36 +12,11 @@ from chemvas.features.selection import (
 from chemvas.features.selection import (
     default_curved_control as default_curved_control_helper,
 )
-from chemvas.ui.canvas.canvas_tool_settings_state import tool_settings_state_for
-
-
-def orbital_snap_enabled_for(canvas) -> bool:
-    return tool_settings_state_for(canvas).orbital_snap_enabled
-
-
-def orbital_snap_step_for(canvas) -> int:
-    return tool_settings_state_for(canvas).orbital_snap_step
-
-
-def curved_snap_enabled_for(canvas) -> bool:
-    return tool_settings_state_for(canvas).curved_snap
 
 
 def curved_snap_distance_for(canvas) -> float:
-    step = tool_settings_state_for(canvas).curved_snap_step
+    step = canvas.runtime_state.tool_settings_state.curved_snap_step
     return canvas.renderer.style.bond_length_px * step
-
-
-def update_orbital_scale_for(canvas, item, pos) -> None:
-    canvas.services.handle_mutation_service.update_orbital_scale(item, pos)
-
-
-def update_orbital_rotate_for(canvas, item, pos) -> None:
-    canvas.services.handle_mutation_service.update_orbital_rotate(item, pos)
-
-
-def update_curved_control_for(canvas, item, pos) -> None:
-    canvas.services.handle_mutation_service.update_curved_control(item, pos)
 
 
 def default_curved_control_for(canvas, start, end):
@@ -57,7 +32,7 @@ def control_from_midpoint_for(canvas, start, end, mid):
 
 
 def clamp_curved_midpoint_for(canvas, start, end, mid):
-    state = tool_settings_state_for(canvas)
+    state = canvas.runtime_state.tool_settings_state
     snap_enabled = state.curved_snap
     snap_distance = None
     if snap_enabled:
@@ -77,11 +52,5 @@ __all__ = [
     "control_from_midpoint_for",
     "curved_midpoint_for",
     "curved_snap_distance_for",
-    "curved_snap_enabled_for",
     "default_curved_control_for",
-    "orbital_snap_enabled_for",
-    "orbital_snap_step_for",
-    "update_curved_control_for",
-    "update_orbital_rotate_for",
-    "update_orbital_scale_for",
 ]

@@ -2,14 +2,12 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, cast
 
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QTransform
 from PyQt6.QtWidgets import QGraphicsView
 
 from chemvas.domain.transactions import add_recovery_error_note
-from chemvas.ui.canvas.canvas_callback_state import callback_state_for
 from chemvas.ui.transactions.scene_rect import (
     SceneRectStateSnapshot,
     ViewSceneRectStateSnapshot,
@@ -17,19 +15,12 @@ from chemvas.ui.transactions.scene_rect import (
     set_explicit_view_scene_rect,
 )
 
-if TYPE_CHECKING:
-    from chemvas.ui.canvas.input_view_state import InputViewState
-
 # View magnification limits and the per-step multiplier shared by the toolbar
 # buttons and the Ctrl+= / Ctrl+- shortcuts. Ctrl+wheel uses a finer factor.
 ZOOM_MIN = 0.2
 ZOOM_MAX = 5.0
 ZOOM_STEP = 1.25
 _MISSING_CAPTURE_ATTRIBUTE = object()
-
-
-def input_view_state_for(canvas) -> InputViewState:
-    return cast("InputViewState", canvas.runtime_state.input_view_state)
 
 
 def _capture_optional_attribute(target: object, name: str) -> object:
@@ -138,7 +129,7 @@ def chemdraw_shortcut_text_for(event) -> str:
 
 
 def reset_view_transform_for(canvas) -> None:
-    state = input_view_state_for(canvas)
+    state = canvas.runtime_state.input_view_state
     state.base_transform = QTransform()
     state.perspective_shear = 0.0
     state.perspective_scale_y = 1.0
@@ -148,7 +139,7 @@ def reset_view_transform_for(canvas) -> None:
 
 
 def update_view_transform_for(canvas) -> None:
-    state = input_view_state_for(canvas)
+    state = canvas.runtime_state.input_view_state
     transform = QTransform(state.base_transform)
     if state.zoom != 1.0:
         transform.scale(state.zoom, state.zoom)
@@ -171,10 +162,6 @@ def focused_scene_item_for(canvas):
     if not callable(scene):
         return None
     return scene().focusItem()
-
-
-def focus_canvas_for(canvas, reason) -> None:
-    canvas.setFocus(reason)
 
 
 def set_scene_rect_for(canvas, rect) -> None:
@@ -214,10 +201,6 @@ def set_scene_rect_for(canvas, rect) -> None:
         raise
 
 
-def update_viewport_for(canvas) -> None:
-    canvas.viewport().update()
-
-
 def set_focused_scene_item_for(canvas, item) -> None:
     scene = getattr(canvas, "scene", None)
     if callable(scene):
@@ -232,14 +215,6 @@ def scene_pos_from_global_pos_for(canvas, global_pos):
     return canvas.mapToScene(viewport_pos)
 
 
-def global_pos_from_event_for(_canvas, event):
-    return event.globalPosition().toPoint()
-
-
-def device_pixel_ratio_for(canvas) -> float:
-    return float(canvas.devicePixelRatioF())
-
-
 def scroll_view_by_for(canvas, dx: int, dy: int) -> bool:
     if not dx and not dy:
         return False
@@ -250,22 +225,18 @@ def scroll_view_by_for(canvas, dx: int, dy: int) -> bool:
     return True
 
 
-def zoom_factor_for(canvas) -> float:
-    return float(input_view_state_for(canvas).zoom)
-
-
 def zoom_percent_for(canvas) -> int:
-    return max(1, round(zoom_factor_for(canvas) * 100))
+    return max(1, round(float(canvas.runtime_state.input_view_state.zoom) * 100))
 
 
 def _notify_zoom_changed_for(canvas) -> None:
-    callback = callback_state_for(canvas).zoom
+    callback = canvas.runtime_state.callback_state.zoom
     if callback is not None:
         callback(zoom_percent_for(canvas))
 
 
 def set_zoom_for(canvas, factor: float, *, under_mouse: bool = False) -> float:
-    state = input_view_state_for(canvas)
+    state = canvas.runtime_state.input_view_state
     factor = max(ZOOM_MIN, min(ZOOM_MAX, float(factor)))
     state.zoom = factor
     if under_mouse:
@@ -282,13 +253,21 @@ def set_zoom_for(canvas, factor: float, *, under_mouse: bool = False) -> float:
 
 
 def zoom_in_for(canvas, *, step: float = ZOOM_STEP, under_mouse: bool = False) -> float:
-    return set_zoom_for(canvas, zoom_factor_for(canvas) * step, under_mouse=under_mouse)
+    return set_zoom_for(
+        canvas,
+        float(canvas.runtime_state.input_view_state.zoom) * step,
+        under_mouse=under_mouse,
+    )
 
 
 def zoom_out_for(
     canvas, *, step: float = ZOOM_STEP, under_mouse: bool = False
 ) -> float:
-    return set_zoom_for(canvas, zoom_factor_for(canvas) / step, under_mouse=under_mouse)
+    return set_zoom_for(
+        canvas,
+        float(canvas.runtime_state.input_view_state.zoom) / step,
+        under_mouse=under_mouse,
+    )
 
 
 def reset_zoom_for(canvas) -> float:
@@ -302,7 +281,7 @@ def fit_canvas_to_view_for(canvas, *, margin: float = 0.92) -> float:
     )
 
     if not refresh_canvas_scroll_range_for(canvas):
-        return zoom_factor_for(canvas)
+        return float(canvas.runtime_state.input_view_state.zoom)
     sheet = sheet_rect_for(canvas)
     viewport = canvas.viewport().rect()
     if (
@@ -311,14 +290,14 @@ def fit_canvas_to_view_for(canvas, *, margin: float = 0.92) -> float:
         or viewport.width() <= 0
         or viewport.height() <= 0
     ):
-        return zoom_factor_for(canvas)
+        return float(canvas.runtime_state.input_view_state.zoom)
     factor = (
         min(viewport.width() / sheet.width(), viewport.height() / sheet.height())
         * margin
     )
     set_zoom_for(canvas, factor)
     canvas.centerOn(sheet.center())
-    return zoom_factor_for(canvas)
+    return float(canvas.runtime_state.input_view_state.zoom)
 
 
 def should_override_chemdraw_shortcut_for(canvas, event) -> bool:
@@ -424,12 +403,8 @@ __all__ = [
     "ZOOM_STEP",
     "CanvasSceneRectStateSnapshot",
     "chemdraw_shortcut_text_for",
-    "device_pixel_ratio_for",
     "fit_canvas_to_view_for",
-    "focus_canvas_for",
     "focused_scene_item_for",
-    "global_pos_from_event_for",
-    "input_view_state_for",
     "reset_view_transform_for",
     "reset_zoom_for",
     "scene_pos_from_global_pos_for",
@@ -442,9 +417,7 @@ __all__ = [
     "structure_edit_shortcut_matches",
     "touch_interaction_for",
     "update_view_transform_for",
-    "update_viewport_for",
     "viewport_center_scene_pos_for",
-    "zoom_factor_for",
     "zoom_in_for",
     "zoom_out_for",
     "zoom_percent_for",

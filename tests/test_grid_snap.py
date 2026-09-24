@@ -18,19 +18,12 @@ from chemvas.ui.canvas.canvas_background_painter import (
 )
 from chemvas.ui.canvas.canvas_scene_items_state import arrow_items_for
 from chemvas.ui.canvas.sheet_setup_access import sheet_rect_for
-from chemvas.ui.scene.scene_decoration_access import add_arrow_for
 from chemvas.ui.tools.endpoint_snap_access import (
-    grid_snap_enabled_for,
     grid_step_for,
-    set_grid_snap_enabled_for,
     snap_drawing_point_for,
     snap_to_endpoint_for,
 )
-from chemvas.ui.tools.handle_state import active_handles_for
-from chemvas.ui.window.main_window_ports import (
-    active_canvas_for_window,
-    services_for_window,
-)
+from chemvas.ui.window.main_window_ports import active_canvas_for_window
 
 
 class GridGeometryTest(unittest.TestCase):
@@ -59,7 +52,7 @@ class GridSnapCanvasTest(unittest.TestCase):
         QTest.qWait(20)
 
     def tearDown(self) -> None:
-        document_service = services_for_window(self.window).canvas_document_service
+        document_service = self.window.services.canvas_document_service
         for canvas in self.window.tab_references.all_canvases():
             document_service.mark_clean(canvas)
         self.window.close()
@@ -106,20 +99,24 @@ class GridSnapCanvasTest(unittest.TestCase):
         QTest.qWait(10)
 
     def test_the_grid_step_follows_the_bond_length_and_is_off_by_default(self) -> None:
-        self.assertFalse(grid_snap_enabled_for(self.canvas))
+        self.assertFalse(
+            self.canvas.runtime_state.tool_settings_state.grid_snap_enabled
+        )
         self.assertAlmostEqual(grid_step_for(self.canvas), 10.0)
 
     def test_a_drawing_point_passes_through_until_the_grid_is_on(self) -> None:
         raw = QPointF(13.0, -6.0)
         self.assertEqual(snap_drawing_point_for(self.canvas, raw), raw)
 
-        set_grid_snap_enabled_for(self.canvas, True)
+        self.canvas.runtime_state.tool_settings_state.grid_snap_enabled = True
 
         self.assertEqual(snap_drawing_point_for(self.canvas, raw), QPointF(10.0, -10.0))
 
     def test_an_endpoint_snap_still_wins_over_the_grid(self) -> None:
-        add_arrow_for(self.canvas, QPointF(-33.0, 7.0), QPointF(40.0, 0.0), "arrow")
-        set_grid_snap_enabled_for(self.canvas, True)
+        self.canvas.services.scene_decoration_service.add_arrow(
+            QPointF(-33.0, 7.0), QPointF(40.0, 0.0), "arrow"
+        )
+        self.canvas.runtime_state.tool_settings_state.grid_snap_enabled = True
 
         # (-33, 7) is not on the grid, but it is an existing endpoint.
         snapped = snap_drawing_point_for(self.canvas, QPointF(-31.0, 8.0))
@@ -127,7 +124,7 @@ class GridSnapCanvasTest(unittest.TestCase):
         self.assertEqual(snapped, QPointF(-33.0, 7.0))
 
     def test_drawing_a_line_lands_on_the_grid(self) -> None:
-        set_grid_snap_enabled_for(self.canvas, True)
+        self.canvas.runtime_state.tool_settings_state.grid_snap_enabled = True
         self.canvas.services.tool_mode_controller.set_line_kind("line_bold")
 
         self._drag(QPointF(-37.0, 3.0), QPointF(24.0, -6.0))
@@ -138,15 +135,16 @@ class GridSnapCanvasTest(unittest.TestCase):
         self.assertEqual(state["end"], (20.0, -10.0))
 
     def test_an_endpoint_handle_drag_lands_on_the_grid(self) -> None:
-        item = add_arrow_for(
-            self.canvas, QPointF(-40.0, 0.0), QPointF(40.0, 0.0), "arrow"
+        item = self.canvas.services.scene_decoration_service.add_arrow(
+            QPointF(-40.0, 0.0), QPointF(40.0, 0.0), "arrow"
         )
-        set_grid_snap_enabled_for(self.canvas, True)
+        self.canvas.runtime_state.tool_settings_state.grid_snap_enabled = True
         handles = self.canvas.services
         handles.handle_overlay_service.show_endpoint_handles(item)
 
         handles.handle_controller.update_handle_drag(
-            active_handles_for(self.canvas)[1], QPointF(63.0, 24.0)
+            self.canvas.runtime_state.handle_state.active_handles[1],
+            QPointF(63.0, 24.0),
         )
 
         self.assertEqual(arrow_state_dict_for(self.canvas, item)["end"], (60.0, 20.0))
@@ -155,7 +153,7 @@ class GridSnapCanvasTest(unittest.TestCase):
         # The press point is snapped, so a click must compare snapped to
         # snapped; comparing it against the raw release point used to commit a
         # stub arrow and to swallow the level preset.
-        set_grid_snap_enabled_for(self.canvas, True)
+        self.canvas.runtime_state.tool_settings_state.grid_snap_enabled = True
         tool_mode = self.canvas.services.tool_mode_controller
 
         tool_mode.set_arrow_type("reaction")
@@ -170,7 +168,7 @@ class GridSnapCanvasTest(unittest.TestCase):
         self.assertEqual(state["end"], (-90.0, 50.0))
 
     def test_a_drag_shorter_than_one_grid_step_reads_as_a_click(self) -> None:
-        set_grid_snap_enabled_for(self.canvas, True)
+        self.canvas.runtime_state.tool_settings_state.grid_snap_enabled = True
         self.canvas.services.tool_mode_controller.set_line_kind("line_bold")
 
         self._drag(QPointF(-83.0, -37.0), QPointF(-81.0, -35.0))
@@ -181,7 +179,7 @@ class GridSnapCanvasTest(unittest.TestCase):
         self.assertEqual(state["end"], (-40.0, -40.0))
 
     def test_the_shift_angle_lock_outranks_the_grid(self) -> None:
-        set_grid_snap_enabled_for(self.canvas, True)
+        self.canvas.runtime_state.tool_settings_state.grid_snap_enabled = True
         self.canvas.services.tool_mode_controller.set_line_kind("line_bold")
         start, end = QPointF(40.0, 40.0), QPointF(97.0, 63.0)
         start_pos = self.canvas.mapFromScene(start)
@@ -213,8 +211,10 @@ class GridSnapCanvasTest(unittest.TestCase):
         self.assertNotAlmostEqual(state["end"][1] % grid_step_for(self.canvas), 0.0)
 
     def test_a_cursor_exactly_on_an_off_grid_endpoint_keeps_it(self) -> None:
-        add_arrow_for(self.canvas, QPointF(-33.0, 7.0), QPointF(40.0, 0.0), "arrow")
-        set_grid_snap_enabled_for(self.canvas, True)
+        self.canvas.services.scene_decoration_service.add_arrow(
+            QPointF(-33.0, 7.0), QPointF(40.0, 0.0), "arrow"
+        )
+        self.canvas.runtime_state.tool_settings_state.grid_snap_enabled = True
 
         # The cursor is on the endpoint, so the endpoint stage must report a
         # hit rather than leaving the grid to drag the point off it.
@@ -223,8 +223,10 @@ class GridSnapCanvasTest(unittest.TestCase):
         self.assertEqual(snapped, QPointF(-33.0, 7.0))
 
     def test_an_endpoint_is_never_the_end_a_drag_started_from(self) -> None:
-        add_arrow_for(self.canvas, QPointF(0.0, 0.0), QPointF(40.0, 0.0), "line")
-        set_grid_snap_enabled_for(self.canvas, True)
+        self.canvas.services.scene_decoration_service.add_arrow(
+            QPointF(0.0, 0.0), QPointF(40.0, 0.0), "line"
+        )
+        self.canvas.runtime_state.tool_settings_state.grid_snap_enabled = True
         start = QPointF(0.0, 0.0)
 
         self.assertIsNone(
@@ -236,10 +238,10 @@ class GridSnapCanvasTest(unittest.TestCase):
         # The press takes the endpoint, so putting the release through the
         # funnel again — where that endpoint is the one point it may not take —
         # answered with a grid intersection and committed a stub.
-        add_arrow_for(
-            self.canvas, QPointF(-103.0, -107.0), QPointF(-33.0, -107.0), "arrow"
+        self.canvas.services.scene_decoration_service.add_arrow(
+            QPointF(-103.0, -107.0), QPointF(-33.0, -107.0), "arrow"
         )
-        set_grid_snap_enabled_for(self.canvas, True)
+        self.canvas.runtime_state.tool_settings_state.grid_snap_enabled = True
         self.canvas.services.tool_mode_controller.set_arrow_type("reaction")
 
         self._click(QPointF(-103.0, -107.0))
@@ -256,26 +258,29 @@ class GridSnapCanvasTest(unittest.TestCase):
     def test_a_click_on_an_existing_endpoint_is_a_click_with_the_grid_off(self) -> None:
         # The endpoint stage runs whether or not the grid does, so the same
         # click committed a stub the size of the cursor's own offset.
-        add_arrow_for(
-            self.canvas, QPointF(-103.0, -107.0), QPointF(-33.0, -107.0), "arrow"
+        self.canvas.services.scene_decoration_service.add_arrow(
+            QPointF(-103.0, -107.0), QPointF(-33.0, -107.0), "arrow"
         )
         self.canvas.services.tool_mode_controller.set_arrow_type("reaction")
 
-        self.assertFalse(grid_snap_enabled_for(self.canvas))
+        self.assertFalse(
+            self.canvas.runtime_state.tool_settings_state.grid_snap_enabled
+        )
         self._click(QPointF(-101.0, -106.0))
 
         self.assertEqual(len(arrow_items_for(self.canvas)), 1)
 
     def test_a_curved_endpoint_handle_lands_on_the_grid(self) -> None:
-        item = add_arrow_for(
-            self.canvas, QPointF(200.0, 0.0), QPointF(260.0, 0.0), "curved_single"
+        item = self.canvas.services.scene_decoration_service.add_arrow(
+            QPointF(200.0, 0.0), QPointF(260.0, 0.0), "curved_single"
         )
-        set_grid_snap_enabled_for(self.canvas, True)
+        self.canvas.runtime_state.tool_settings_state.grid_snap_enabled = True
         handles = self.canvas.services
         handles.handle_overlay_service.show_curved_handles(item)
 
         handles.handle_controller.update_handle_drag(
-            active_handles_for(self.canvas)[0], QPointF(203.0, 7.0)
+            self.canvas.runtime_state.handle_state.active_handles[0],
+            QPointF(203.0, 7.0),
         )
 
         self.assertEqual(
@@ -307,7 +312,7 @@ class GridSnapCanvasTest(unittest.TestCase):
     def test_a_squashed_vertical_scale_also_hides_the_grid(self) -> None:
         # Perspective squashes only the vertical scale; the denser axis has to
         # decide, or the rows collapse into the wash the guard exists to stop.
-        set_grid_snap_enabled_for(self.canvas, True)
+        self.canvas.runtime_state.tool_settings_state.grid_snap_enabled = True
         squashed = QTransform().scale(
             1.0, (MIN_GRID_SPACING_PX / grid_step_for(self.canvas)) * 0.5
         )
@@ -322,7 +327,7 @@ class GridSnapCanvasTest(unittest.TestCase):
         painter.end()
         squashed_colors = self._distinct_colors(pixmap)
 
-        set_grid_snap_enabled_for(self.canvas, False)
+        self.canvas.runtime_state.tool_settings_state.grid_snap_enabled = False
         pixmap = QPixmap(120, 120)
         pixmap.fill()
         painter = QPainter(pixmap)
@@ -340,7 +345,7 @@ class GridSnapCanvasTest(unittest.TestCase):
         plain = self._distinct_colors(self._paint_background(scale=1.0))
         plain_dense = self._distinct_colors(self._paint_background(scale=dense_scale))
 
-        set_grid_snap_enabled_for(self.canvas, True)
+        self.canvas.runtime_state.tool_settings_state.grid_snap_enabled = True
 
         self.assertGreater(
             self._distinct_colors(self._paint_background(scale=1.0)), plain
@@ -382,25 +387,25 @@ class GridSnapMenuTest(unittest.TestCase):
         canvas = active_canvas_for_window(self.window)
         self.assertTrue(action.isCheckable())
         self.assertFalse(action.isChecked())
-        self.assertFalse(grid_snap_enabled_for(canvas))
+        self.assertFalse(canvas.runtime_state.tool_settings_state.grid_snap_enabled)
 
         action.trigger()
         self.assertTrue(action.isChecked())
-        self.assertTrue(grid_snap_enabled_for(canvas))
+        self.assertTrue(canvas.runtime_state.tool_settings_state.grid_snap_enabled)
 
         action.trigger()
-        self.assertFalse(grid_snap_enabled_for(canvas))
+        self.assertFalse(canvas.runtime_state.tool_settings_state.grid_snap_enabled)
 
     def test_the_checkbox_follows_the_canvas_the_user_is_on(self) -> None:
-        services = services_for_window(self.window)
+        services = self.window.services
         first = active_canvas_for_window(self.window)
         self._grid_action().trigger()
-        self.assertTrue(grid_snap_enabled_for(first))
+        self.assertTrue(first.runtime_state.tool_settings_state.grid_snap_enabled)
 
         services.canvas_document_service.new_canvas(self.window)
         self.app.processEvents()
         second = active_canvas_for_window(self.window)
         self.assertIsNot(second, first)
 
-        self.assertFalse(grid_snap_enabled_for(second))
+        self.assertFalse(second.runtime_state.tool_settings_state.grid_snap_enabled)
         self.assertFalse(self._grid_action().isChecked())

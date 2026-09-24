@@ -14,11 +14,8 @@ from chemvas.ui.canvas.canvas_document_metadata_state import (
     mark_document_clean_for,
 )
 from chemvas.ui.canvas.canvas_scene_items_state import ring_items_for
-from chemvas.ui.canvas.canvas_window_access import snapshot_canvas_state_for
-from chemvas.ui.molecule.atom_coords_access import atom_coords_3d_for
-from chemvas.ui.molecule.structure_mutation_access import add_atom_for, add_bond_for
+from chemvas.ui.molecule.structure_mutation_access import add_bond_for
 from chemvas.ui.scene.scene_decoration_access import (
-    add_arrow_for,
     add_mark_for,
     add_mark_for_atom_for,
 )
@@ -30,22 +27,21 @@ from tests.native_canvas_support import canvas as canvas
 
 def prepare(canvas):
     ids = [
-        add_atom_for(canvas, "C", x, y)
+        canvas.services.canvas_atom_mutation_service.add_atom("C", x, y)
         for x, y in [(-180.0, -52.666666666666664), (-140.0, -28.33333333333333)]
     ]
     add_bond_for(canvas, *ids)
     canvas.services.structure_build_service.render_model()
-    arrow = add_arrow_for(
-        canvas,
-        QPointF(10.0, -52.666666666666664),
-        QPointF(90.0, -28.33333333333333),
-        "arrow",
+    arrow = canvas.services.scene_decoration_service.add_arrow(
+        QPointF(10.0, -52.666666666666664), QPointF(90.0, -28.33333333333333), "arrow"
     )
     bound = add_mark_for_atom_for(canvas, ids[0], QPointF(-180.1, -75.3), kind="plus")
     free = add_mark_for(canvas, QPointF(20.1, 80.3), kind="minus")
     canvas.services.note_controller.create_text_note(QPointF(60.1, 40.3), "A note")
     # Existing Redo must survive a cancelled drag, but a committed drag replaces it.
-    extra = add_arrow_for(canvas, QPointF(130, 100), QPointF(170, 100), "arrow")
+    extra = canvas.services.scene_decoration_service.add_arrow(
+        QPointF(130, 100), QPointF(170, 100), "arrow"
+    )
     history = canvas.services.history_service
     history.undo()
     assert extra.scene() is None
@@ -77,28 +73,32 @@ def test_drag_undo_restores_exact_document_and_clean_digest(
     canvas, tool_name, scope, delta
 ):
     tool = drag(canvas, tool_name, scope)
-    before = snapshot_canvas_state_for(canvas)
+    before = canvas.services.canvas_document_session_service.snapshot_state()
     mark_document_clean_for(canvas, before)
     history = canvas.services.history_service
     length = len(history.state.history)
     frame(tool, delta)
     tool._commit_selection_drag()
-    after = snapshot_canvas_state_for(canvas)
+    after = canvas.services.canvas_document_session_service.snapshot_state()
     assert after != before
     assert len(history.state.history) == length + 1
     assert not history.can_redo()
     for _ in range(3):
         history.undo()
-        assert snapshot_canvas_state_for(canvas) == before
-        assert not document_is_dirty_for(canvas, snapshot_canvas_state_for(canvas))
+        assert (
+            canvas.services.canvas_document_session_service.snapshot_state() == before
+        )
+        assert not document_is_dirty_for(
+            canvas, canvas.services.canvas_document_session_service.snapshot_state()
+        )
         history.redo()
-        assert snapshot_canvas_state_for(canvas) == after
+        assert canvas.services.canvas_document_session_service.snapshot_state() == after
 
 
 @pytest.mark.parametrize("finish", ["cancel", "return", "push-fail"])
 def test_uncommitted_drag_preserves_existing_redo(canvas, finish):
     tool = drag(canvas, "select", "mixed")
-    before = snapshot_canvas_state_for(canvas)
+    before = canvas.services.canvas_document_session_service.snapshot_state()
     history = canvas.services.history_service
     stacks = history.capture_stack_snapshot()
     frame(tool, (46.6, -43.9))
@@ -111,7 +111,7 @@ def test_uncommitted_drag_preserves_existing_redo(canvas, finish):
         with mock.patch.object(history, "push", return_value=False):
             with pytest.raises(RuntimeError, match="did not commit"):
                 tool._commit_selection_drag()
-    assert snapshot_canvas_state_for(canvas) == before
+    assert canvas.services.canvas_document_session_service.snapshot_state() == before
     history.verify_stack_snapshot(stacks)
 
 
@@ -121,7 +121,7 @@ def test_actual_pointer_drag_roundtrip_is_exact(canvas, app, tool_name):
     select_all_scene_items_for(canvas)
     canvas.services.tool_mode_controller.set_tool(tool_name)
     canvas.scale(1.3, 1.3)
-    before = snapshot_canvas_state_for(canvas)
+    before = canvas.services.canvas_document_session_service.snapshot_state()
     mark_document_clean_for(canvas, before)
     start = canvas.mapFromScene(QPointF(-180.0, -52.666666666666664))
     end = start + QPoint(61, -57)
@@ -129,13 +129,15 @@ def test_actual_pointer_drag_roundtrip_is_exact(canvas, app, tool_name):
     QTest.mouseMove(canvas.viewport(), end)
     QTest.mouseRelease(canvas.viewport(), Qt.MouseButton.LeftButton, pos=end)
     app.processEvents()
-    after = snapshot_canvas_state_for(canvas)
+    after = canvas.services.canvas_document_session_service.snapshot_state()
     assert after != before
     canvas.services.history_service.undo()
-    assert snapshot_canvas_state_for(canvas) == before
-    assert not document_is_dirty_for(canvas, snapshot_canvas_state_for(canvas))
+    assert canvas.services.canvas_document_session_service.snapshot_state() == before
+    assert not document_is_dirty_for(
+        canvas, canvas.services.canvas_document_session_service.snapshot_state()
+    )
     canvas.services.history_service.redo()
-    assert snapshot_canvas_state_for(canvas) == after
+    assert canvas.services.canvas_document_session_service.snapshot_state() == after
 
 
 def test_direct_move_arrow_uses_exact_geometry(canvas):
@@ -153,19 +155,19 @@ def test_direct_move_arrow_uses_exact_geometry(canvas):
         assert tool.on_mouse_press(event)
     assert tool._drag_item is arrow
     assert not tool._drag_selection
-    before = snapshot_canvas_state_for(canvas)
+    before = canvas.services.canvas_document_session_service.snapshot_state()
     frame(tool, (46.6, -43.9))
     tool._commit_direct_item_drag()
-    after = snapshot_canvas_state_for(canvas)
+    after = canvas.services.canvas_document_session_service.snapshot_state()
     canvas.services.history_service.undo()
-    assert snapshot_canvas_state_for(canvas) == before
+    assert canvas.services.canvas_document_session_service.snapshot_state() == before
     canvas.services.history_service.redo()
-    assert snapshot_canvas_state_for(canvas) == after
+    assert canvas.services.canvas_document_session_service.snapshot_state() == after
 
 
 def test_drag_restores_exact_depth_inventory(canvas):
     tool = drag(canvas, "select", "atoms")
-    coords = atom_coords_3d_for(canvas)
+    coords = canvas.runtime_state.atom_coords_3d_state.atom_coords_3d
     # Both a stored coordinate and an absent entry must keep their identities.
     coords[0] = (-180.0, -52.666666666666664, 0.0)
     before = dict(coords)
@@ -174,9 +176,9 @@ def test_drag_restores_exact_depth_inventory(canvas):
     after = dict(coords)
     assert before != after
     canvas.services.history_service.undo()
-    assert atom_coords_3d_for(canvas) == before
+    assert canvas.runtime_state.atom_coords_3d_state.atom_coords_3d == before
     canvas.services.history_service.redo()
-    assert atom_coords_3d_for(canvas) == after
+    assert canvas.runtime_state.atom_coords_3d_state.atom_coords_3d == after
 
 
 @pytest.mark.parametrize("kind", ["atom", "bond"])
@@ -196,7 +198,7 @@ def test_direct_move_updates_ring_fill_and_restores_exact_scene(canvas, app, kin
         point = (point + QPointF(other.x, other.y)) / 2
     start = canvas.mapFromScene(point)
     end = start + QPoint(47, 29)
-    before = snapshot_canvas_state_for(canvas)
+    before = canvas.services.canvas_document_session_service.snapshot_state()
     before_ring = scene_item_state_for(canvas, ring_items_for(canvas)[0])
     QTest.mousePress(canvas.viewport(), Qt.MouseButton.LeftButton, pos=start)
     tool = canvas.services.tool_controller.active
@@ -204,13 +206,13 @@ def test_direct_move_updates_ring_fill_and_restores_exact_scene(canvas, app, kin
     assert not tool._drag_selection
     QTest.mouseMove(canvas.viewport(), end, delay=20)
     QTest.mouseRelease(canvas.viewport(), Qt.MouseButton.LeftButton, pos=end)
-    after = snapshot_canvas_state_for(canvas)
+    after = canvas.services.canvas_document_session_service.snapshot_state()
     after_ring = scene_item_state_for(canvas, ring_items_for(canvas)[0])
     assert after != before
     assert after_ring["points"] != before_ring["points"]
     canvas.services.history_service.undo()
-    assert snapshot_canvas_state_for(canvas) == before
+    assert canvas.services.canvas_document_session_service.snapshot_state() == before
     assert scene_item_state_for(canvas, ring_items_for(canvas)[0]) == before_ring
     canvas.services.history_service.redo()
-    assert snapshot_canvas_state_for(canvas) == after
+    assert canvas.services.canvas_document_session_service.snapshot_state() == after
     assert scene_item_state_for(canvas, ring_items_for(canvas)[0]) == after_ring

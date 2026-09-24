@@ -9,18 +9,8 @@ from PyQt6.QtWidgets import QApplication
 
 from chemvas.bootstrap.main_window import build_main_window
 from chemvas.ui.annotations.state import scene_item_state_for
-from chemvas.ui.molecule.structure_mutation_access import add_atom_for
-from chemvas.ui.scene.mark_item_access import mark_center_for
-from chemvas.ui.scene.scene_decoration_access import (
-    add_arrow_for,
-    materialize_mark_for_atom_for,
-)
-from chemvas.ui.scene.scene_item_access import apply_scene_item_state
-from chemvas.ui.tools.handle_mutation_access import update_curved_control_for
-from chemvas.ui.window.main_window_ports import (
-    active_canvas_for_window,
-    services_for_window,
-)
+from chemvas.ui.scene.scene_decoration_access import materialize_mark_for_atom_for
+from chemvas.ui.window.main_window_ports import active_canvas_for_window
 
 
 class SceneItemStateCodecTest(unittest.TestCase):
@@ -37,7 +27,7 @@ class SceneItemStateCodecTest(unittest.TestCase):
         QTest.qWait(20)
 
     def tearDown(self) -> None:
-        document_service = services_for_window(self.window).canvas_document_service
+        document_service = self.window.services.canvas_document_service
         for canvas in self.window.tab_references.all_canvases():
             document_service.mark_clean(canvas)
         self.window.close()
@@ -47,7 +37,9 @@ class SceneItemStateCodecTest(unittest.TestCase):
     def test_mark_scene_item_state_round_trips_and_prefers_atom_offset_center(
         self,
     ) -> None:
-        atom_id = add_atom_for(active_canvas_for_window(self.window), "C", 12.0, -8.0)
+        atom_id = active_canvas_for_window(
+            self.window
+        ).services.canvas_atom_mutation_service.add_atom("C", 12.0, -8.0)
         mark_item = materialize_mark_for_atom_for(
             active_canvas_for_window(self.window),
             atom_id,
@@ -65,9 +57,13 @@ class SceneItemStateCodecTest(unittest.TestCase):
         state["x"] = -999.0
         state["y"] = -999.0
 
-        apply_scene_item_state(active_canvas_for_window(self.window), mark_item, state)
+        active_canvas_for_window(
+            self.window
+        ).services.scene_item_controller.apply_scene_item_state(mark_item, state)
 
-        center = mark_center_for(active_canvas_for_window(self.window), mark_item)
+        center = active_canvas_for_window(
+            self.window
+        ).services.scene_decoration_build_service.mark_center(mark_item)
         self.assertAlmostEqual(center.x(), 50.0 + state["dx"])
         self.assertAlmostEqual(center.y(), 25.0 + state["dy"])
 
@@ -80,14 +76,15 @@ class SceneItemStateCodecTest(unittest.TestCase):
         self.assertAlmostEqual(restored_state["y"], center.y())
 
     def test_curved_double_arrow_scene_item_state_round_trips_after_apply(self) -> None:
-        arrow_item = add_arrow_for(
-            active_canvas_for_window(self.window),
-            QPointF(-30.0, 0.0),
-            QPointF(30.0, 0.0),
-            "curved_double",
+        arrow_item = active_canvas_for_window(
+            self.window
+        ).services.scene_decoration_service.add_arrow(
+            QPointF(-30.0, 0.0), QPointF(30.0, 0.0), "curved_double"
         )
-        update_curved_control_for(
-            active_canvas_for_window(self.window), arrow_item, QPointF(0.0, -24.0)
+        active_canvas_for_window(
+            self.window
+        ).services.handle_mutation_service.update_curved_control(
+            arrow_item, QPointF(0.0, -24.0)
         )
 
         state = scene_item_state_for(active_canvas_for_window(self.window), arrow_item)
@@ -103,8 +100,10 @@ class SceneItemStateCodecTest(unittest.TestCase):
         updated_state["end"] = (40.0, 5.0)
         updated_state["control"] = (10.0, 28.0)
 
-        apply_scene_item_state(
-            active_canvas_for_window(self.window), arrow_item, updated_state
+        active_canvas_for_window(
+            self.window
+        ).services.scene_item_controller.apply_scene_item_state(
+            arrow_item, updated_state
         )
 
         restored_state = scene_item_state_for(

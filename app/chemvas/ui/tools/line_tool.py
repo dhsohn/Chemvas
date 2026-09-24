@@ -5,8 +5,6 @@ from typing import override
 from PyQt6.QtCore import QPointF, Qt
 
 from chemvas.features.rendering import snapped_line_end
-from chemvas.ui.canvas.canvas_tool_settings_state import tool_settings_state_for
-from chemvas.ui.scene.scene_decoration_access import add_arrow_for, preview_arrow_for
 from chemvas.ui.scene.scene_decoration_build_access import mark_snapped_points_for
 from chemvas.ui.tools.endpoint_snap_access import (
     snap_drawing_point_for,
@@ -29,7 +27,7 @@ class LineTool(PreviewDragTool):
         self._angle_locked = False
 
     def _line_kind(self) -> str:
-        return tool_settings_state_for(self.canvas).active_line_kind
+        return self.canvas.runtime_state.tool_settings_state.active_line_kind
 
     def _read_angle_lock(self, event) -> None:
         self._angle_locked = bool(event.modifiers() & Qt.KeyboardModifier.ShiftModifier)
@@ -74,7 +72,9 @@ class LineTool(PreviewDragTool):
     @override
     def _build_preview(self, current_pos):
         end = self._end_point(current_pos)
-        item = preview_arrow_for(self.canvas, self._start_pos, end, self._line_kind())
+        item = self.canvas.services.arrow_build_service.preview_arrow(
+            self._start_pos, end, self._line_kind()
+        )
         mark_snapped_points_for(self.canvas, item, [self._start_pos, end])
         return item
 
@@ -90,7 +90,9 @@ class LineTool(PreviewDragTool):
                 self.canvas.renderer.style.bond_length_px * LEVEL_PRESET_BOND_LENGTHS
             )
             end = QPointF(self._start_pos.x() + length, self._start_pos.y())
-        add_arrow_for(self.canvas, self._start_pos, end, self._line_kind())
+        self.canvas.services.scene_decoration_service.add_arrow(
+            self._start_pos, end, self._line_kind()
+        )
 
 
 __all__ = ["LEVEL_PRESET_BOND_LENGTHS", "LINE_ANGLE_STEP_DEGREES", "LineTool"]

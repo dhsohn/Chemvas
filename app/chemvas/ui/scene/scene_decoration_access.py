@@ -3,14 +3,6 @@ from __future__ import annotations
 from chemvas.features.annotations import DEFAULT_BRACKET_KIND
 
 
-def add_arrow_for(canvas, start, end, kind: str):
-    return canvas.services.scene_decoration_service.add_arrow(start, end, kind)
-
-
-def edit_arrow_labels_for(canvas, item) -> bool:
-    return canvas.services.scene_decoration_service.edit_arrow_labels(item)
-
-
 def add_mark_for(canvas, pos, *, kind: str | None = None):
     # Standalone marks only; an atom-bound mark goes through
     # add_mark_for_atom_for or materialize_mark_for_atom_for so the mark owner
@@ -28,10 +20,6 @@ def materialize_mark_for_atom_for(canvas, atom_id: int, click_pos, *, kind: str 
     return canvas.services.canvas_mark_scene_service.materialize_mark_for_atom(
         atom_id, click_pos, kind=kind
     )
-
-
-def preview_arrow_for(canvas, start, end, kind: str):
-    return canvas.services.arrow_build_service.preview_arrow(start, end, kind)
 
 
 def add_ts_bracket_for(canvas, rect, bracket_kind: str = DEFAULT_BRACKET_KIND):
@@ -97,22 +85,14 @@ def preview_shape_for(
     )
 
 
-def add_orbital_for(canvas, center):
-    return canvas.services.scene_decoration_service.add_orbital(center)
-
-
 __all__ = [
-    "add_arrow_for",
     "add_mark_for",
     "add_mark_for_atom_for",
-    "add_orbital_for",
     "add_shape_for",
     "add_shape_from_points_for",
     "add_ts_bracket_for",
     "add_ts_bracket_from_points_for",
-    "edit_arrow_labels_for",
     "materialize_mark_for_atom_for",
-    "preview_arrow_for",
     "preview_shape_for",
     "preview_ts_bracket_for",
 ]

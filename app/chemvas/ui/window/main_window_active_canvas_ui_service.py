@@ -2,19 +2,13 @@ from __future__ import annotations
 
 from PyQt6.QtCore import QTimer
 
-from chemvas.ui.canvas.canvas_document_metadata_state import invalidate_note_chrome_for
 from chemvas.ui.canvas.canvas_view import CanvasView
 from chemvas.ui.canvas.sheet_setup_access import refresh_canvas_scroll_range_for
 from chemvas.ui.selection.selection_info_access import emit_selection_info_for
 from chemvas.ui.window.main_window_canvas_logic import bind_active_canvas_callbacks
 from chemvas.ui.window.main_window_ports import (
     active_canvas_for_window,
-    all_canvases_for_window,
-    atom_input_for_window,
     current_zoom_percent_for_window,
-    preview_for_window,
-    set_last_canvas_tab_index_for_window,
-    tab_references_for_window,
     tool_mode_controller_for_window,
 )
 
@@ -37,9 +31,9 @@ class MainWindowActiveCanvasUIService:
 
     def bind_active_canvas(self, window) -> None:
         active_canvas = active_canvas_for_window(window)
-        preview_for_window(window).set_rdkit_adapter(active_canvas.rdkit)
+        window.preview_3d.set_rdkit_adapter(active_canvas.rdkit)
         bind_active_canvas_callbacks(
-            all_canvases_for_window(window),
+            window.tab_references.all_canvases(),
             active_canvas,
             selection_info_callback=lambda _formula, _mw: self.handle_selection_info(
                 window
@@ -58,7 +52,9 @@ class MainWindowActiveCanvasUIService:
         )
 
     def _on_history_change(self, window) -> None:
-        invalidate_note_chrome_for(active_canvas_for_window(window))
+        active_canvas_for_window(
+            window
+        ).runtime_state.document_metadata_state.note_chrome_session = None
         self._action_availability.update_action_availability(window)
         # Undo/redo can change the bond length without re-showing the bond page,
         # so keep its spin box in sync to avoid writing a stale value later.
@@ -76,7 +72,7 @@ class MainWindowActiveCanvasUIService:
     def handle_selection_info(self, window) -> None:
         try:
             canvas = active_canvas_for_window(window)
-            preview_for_window(window).refresh_selected_from_canvas(canvas)
+            window.preview_3d.refresh_selected_from_canvas(canvas)
             self._status.update_selection_status_label(window)
             self._action_availability.update_action_availability(window)
         except RuntimeError:
@@ -90,7 +86,7 @@ class MainWindowActiveCanvasUIService:
         # Inactive canvases have no history callback; catch up on activation.
         refresh_canvas_scroll_range_for(active_canvas_for_window(window))
         self._action_availability.sync_grid_snap_action(window)
-        atom_input = atom_input_for_window(window)
+        atom_input = window.ui_references.atom_input
         if atom_input is not None:
             atom_input.blockSignals(True)
             atom_input.setText(
@@ -125,11 +121,11 @@ class MainWindowActiveCanvasUIService:
     def _on_canvas_tab_changed(self, window, index: int) -> None:
         if index < 0:
             return
-        tab_refs = tab_references_for_window(window)
+        tab_refs = window.tab_references
         widget = tab_refs.canvas_tabs.widget(index)
         if not isinstance(widget, CanvasView):
             return
-        set_last_canvas_tab_index_for_window(window, index)
+        window.runtime_state.last_canvas_tab_index = index
         self.refresh_active_canvas_ui(window)
 
 

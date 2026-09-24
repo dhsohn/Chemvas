@@ -9,7 +9,6 @@ from PyQt6.QtWidgets import QApplication
 from chemvas.bootstrap.document_cli_shared import offscreen_canvas
 from chemvas.features.document_composition import compose_document_state
 from chemvas.ui.annotations.state import mark_state_dict_for
-from chemvas.ui.canvas.canvas_atom_graphics_state import atom_dots_for, atom_items_for
 from chemvas.ui.canvas.canvas_document_state import snapshot_canvas_document_state
 from chemvas.ui.molecule.atom_label_access import (
     add_or_update_atom_label,
@@ -17,7 +16,6 @@ from chemvas.ui.molecule.atom_label_access import (
 )
 from chemvas.ui.molecule.structure_mutation_access import add_bond_for
 from chemvas.ui.scene.scene_decoration_access import add_mark_for_atom_for
-from chemvas.ui.scene.scene_item_access import remove_scene_item
 
 KINDS = ("plus", "minus", "radical", "circled_plus", "circled_minus")
 
@@ -85,10 +83,10 @@ def _assert_visible(canvas, atom_id=0):
     atom = canvas.model.atoms[atom_id]
     assert atom.element == "C"
     assert atom.explicit_label
-    label = atom_items_for(canvas)[atom_id]
+    label = canvas.runtime_state.atom_graphics_state.atom_items[atom_id]
     assert label.toPlainText() == "C"
     assert label.defaultTextColor().name() == atom.color
-    assert atom_id not in atom_dots_for(canvas)
+    assert atom_id not in canvas.runtime_state.atom_graphics_state.atom_dots
     assert not label.export_scene_bounding_rect().isEmpty()
 
 
@@ -114,7 +112,7 @@ def test_last_mark_deletion_reveals_only_its_owner_in_one_edit(canvas, kind, rou
     assert set(canvas.model.atoms) == {0, 1, 2}
     assert (canvas.model.atoms[0].x, canvas.model.atoms[0].y) == original
     assert not canvas.model.atoms[1].explicit_label
-    assert 1 not in atom_items_for(canvas)
+    assert 1 not in canvas.runtime_state.atom_graphics_state.atom_items
     assert not canvas.model.atom_annotations
     _roundtrip(canvas, before, after)
 
@@ -170,9 +168,9 @@ def test_load_and_low_level_removal_and_undo_add_do_not_repair_old_state(canvas)
     canvas.services.history_service.undo()
     assert snapshot_canvas_document_state(canvas) == raw
     canvas.services.history_service.redo()
-    remove_scene_item(canvas, mark)
+    canvas.services.scene_item_controller.remove_scene_item(mark)
     assert snapshot_canvas_document_state(canvas) == raw
-    assert not atom_items_for(canvas).get(0)
+    assert not canvas.runtime_state.atom_graphics_state.atom_items.get(0)
 
 
 def test_reassign_to_current_owner_is_noop_and_preserves_redo(canvas):
@@ -218,23 +216,24 @@ def test_initial_promotion_reuses_the_callers_single_savepoint(canvas, route):
 def test_explicitly_selected_atom_is_deleted_not_recreated(canvas):
     _mark(canvas)
     before = snapshot_canvas_document_state(canvas)
-    atom_dots_for(canvas)[0].setSelected(True)
+    canvas.runtime_state.atom_graphics_state.atom_dots[0].setSelected(True)
     assert canvas.services.scene_delete_controller.delete_selected_items()
     assert 0 not in canvas.model.atoms
-    assert 0 not in atom_items_for(canvas)
+    assert 0 not in canvas.runtime_state.atom_graphics_state.atom_items
     assert not snapshot_canvas_document_state(canvas)["marks"]
     _roundtrip(canvas, before, snapshot_canvas_document_state(canvas))
 
 
 def test_selecting_bond_and_mark_preserves_existing_orphan_cleanup(canvas):
-    from chemvas.ui.canvas.canvas_bond_graphics_state import bond_items_for_id
 
     bond_id = add_bond_for(canvas, 0, 1)
     canvas.services.structure_build_service.render_model()
     mark = _mark(canvas)
     before = snapshot_canvas_document_state(canvas)
     mark.setSelected(True)
-    bond_items_for_id(canvas, bond_id)[0].setSelected(True)
+    canvas.runtime_state.bond_graphics_state.bond_items.get(bond_id, [])[0].setSelected(
+        True
+    )
     assert canvas.services.scene_delete_controller.delete_selected_items()
     assert set(canvas.model.atoms) == {2}
     _roundtrip(canvas, before, snapshot_canvas_document_state(canvas))
@@ -253,22 +252,23 @@ def test_hidden_explicit_carbon_label_no_longer_protects_an_orphan(canvas, route
     # Label a bonded carbon "C", hide that label with Delete, then delete the
     # bond. The carbon is implicit again, so the bond deletion removes it
     # instead of stranding an invisible atom the sheet cannot show.
-    from chemvas.ui.canvas.canvas_bond_graphics_state import bond_items_for_id
 
     bond_id = add_bond_for(canvas, 0, 1)
     canvas.services.structure_build_service.render_model()
     add_or_update_atom_label(canvas, 1, "C", show_carbon=True)
     assert canvas.model.atoms[1].explicit_label
-    assert 1 in atom_items_for(canvas)
+    assert 1 in canvas.runtime_state.atom_graphics_state.atom_items
     canvas.runtime_state.hover_preview_state.atom_id = 1
     canvas.services.input_controller._delete_hover_target(_DeleteKey())
     assert not canvas.model.atoms[1].explicit_label
-    assert 1 not in atom_items_for(canvas)
+    assert 1 not in canvas.runtime_state.atom_graphics_state.atom_items
     canvas.services.history_service.clear()
     before = snapshot_canvas_document_state(canvas)
     controller = canvas.services.scene_delete_controller
     if route == "selected":
-        bond_items_for_id(canvas, bond_id)[0].setSelected(True)
+        canvas.runtime_state.bond_graphics_state.bond_items.get(bond_id, [])[
+            0
+        ].setSelected(True)
         assert controller.delete_selected_items()
     else:
         canvas.runtime_state.hover_preview_state.atom_id = None
@@ -282,7 +282,7 @@ def test_clearing_an_explicit_carbon_label_makes_it_implicit(canvas):
     add_or_update_atom_label(canvas, 1, "C", show_carbon=True)
     clear_atom_label_for(canvas, 1)
     assert not canvas.model.atoms[1].explicit_label
-    assert 1 not in atom_items_for(canvas)
+    assert 1 not in canvas.runtime_state.atom_graphics_state.atom_items
 
 
 def test_delete_on_a_lone_labelled_atom_removes_it(canvas):
@@ -292,7 +292,7 @@ def test_delete_on_a_lone_labelled_atom_removes_it(canvas):
     canvas.runtime_state.hover_preview_state.atom_id = 2
     canvas.services.input_controller._delete_hover_target(_DeleteKey())
     assert 2 not in canvas.model.atoms
-    assert 2 not in atom_items_for(canvas)
+    assert 2 not in canvas.runtime_state.atom_graphics_state.atom_items
     _roundtrip(canvas, before, snapshot_canvas_document_state(canvas))
 
 

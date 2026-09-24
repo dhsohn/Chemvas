@@ -9,20 +9,16 @@ from chemvas.features.selection import (
     rotate_point_around_axis,
     unproject_point_3d,
 )
-from chemvas.ui.canvas.canvas_atom_graphics_state import atom_dots_for, atom_items_for
 from chemvas.ui.canvas.canvas_mark_registry import mark_registry_for
 from chemvas.ui.canvas.canvas_model_access import (
     atom_for_id,
     bond_for_id,
-    bonds_for,
 )
 from chemvas.ui.canvas.canvas_ring_fill_scene_access import (
     update_ring_fills_for_atoms_for,
 )
 from chemvas.ui.molecule.atom_coords_access import set_atom_coords_3d_for_id
-from chemvas.ui.molecule.atom_label_access import atom_label_service
 from chemvas.ui.molecule.bond_graphics_access import project_point_3d_for
-from chemvas.ui.scene.mark_item_access import set_mark_center_for
 from chemvas.ui.selection.selection_rotation_planarity import (
     atom_in_planar_system_for,
     bond_in_cycle_for,
@@ -47,7 +43,7 @@ def bond_ids_within_atom_ids_for(canvas, atom_ids: set[int]) -> set[int]:
     if not bond_ids:
         return {
             bond_id
-            for bond_id, bond in enumerate(bonds_for(canvas))
+            for bond_id, bond in enumerate(canvas.model.bonds)
             if bond is not None and bond.a in atom_ids and bond.b in atom_ids
         }
     selected_bond_ids: set[int] = set()
@@ -89,7 +85,7 @@ def apply_projected_atom_positions_for(
     atom_ids: set[int],
     coords_3d: dict[int, tuple[float, float, float]],
 ) -> None:
-    label_service = atom_label_service(canvas)
+    label_service = canvas.services.atom_label_service
     for atom_id in atom_ids:
         point = coords_3d.get(atom_id)
         if point is None:
@@ -107,7 +103,7 @@ def apply_projected_atom_positions_for(
 def sync_atom_scene_items_for(canvas, atom_ids: set[int]) -> None:
     """Reposition label/dot/mark items to their atoms' current coordinates."""
 
-    label_service = atom_label_service(canvas)
+    label_service = canvas.services.atom_label_service
     for atom_id in atom_ids:
         _sync_atom_scene_items_for(canvas, atom_id, label_service)
 
@@ -116,10 +112,10 @@ def _sync_atom_scene_items_for(canvas, atom_id: int, label_service) -> None:
     atom = atom_for_id(canvas, atom_id)
     if atom is None:
         return
-    label = atom_items_for(canvas).get(atom_id)
+    label = canvas.runtime_state.atom_graphics_state.atom_items.get(atom_id)
     if label is not None:
         label_service.position_label(label, atom.x, atom.y)
-    dot = atom_dots_for(canvas).get(atom_id)
+    dot = canvas.runtime_state.atom_graphics_state.atom_dots.get(atom_id)
     if dot is not None:
         dot.setPos(atom.x, atom.y)
     marks = mark_registry_for(canvas).get_for_atom(atom_id)
@@ -130,9 +126,13 @@ def _sync_atom_scene_items_for(canvas, atom_id: int, label_service) -> None:
         dx = data.get("dx")
         dy = data.get("dy")
         if isinstance(dx, (int, float)) and isinstance(dy, (int, float)):
-            set_mark_center_for(canvas, mark, QPointF(atom.x + dx, atom.y + dy))
+            canvas.services.scene_decoration_build_service.set_mark_center(
+                mark, QPointF(atom.x + dx, atom.y + dy)
+            )
         else:
-            set_mark_center_for(canvas, mark, QPointF(atom.x, atom.y))
+            canvas.services.scene_decoration_build_service.set_mark_center(
+                mark, QPointF(atom.x, atom.y)
+            )
 
 
 def rotate_point_around_axis_for(

@@ -16,33 +16,21 @@ from chemvas.ui.annotations.state import (
     bond_state_dict,
     scene_item_state_for,
 )
-from chemvas.ui.canvas.canvas_format_access import (
-    clipboard_selection_mime_for,
-    clipboard_selection_version_for,
-)
+from chemvas.ui.canvas.canvas_format_access import clipboard_selection_version_for
 from chemvas.ui.canvas.canvas_group_state import register_group_for
 from chemvas.ui.canvas.canvas_mark_registry import mark_registry_for
 from chemvas.ui.canvas.canvas_model_access import (
     atom_for_id,
-    bond_count_for,
-    bonds_for,
-    next_atom_id_for,
     set_atom_annotation_for,
 )
 from chemvas.ui.canvas.canvas_scene_items_state import require_scene_record_id
-from chemvas.ui.canvas.canvas_smiles_input_state import last_smiles_input_for
 from chemvas.ui.history.history_commands import GroupSceneItemsCommand
 from chemvas.ui.insert.insert_commit_rollback import rollback_insert_mutation
-from chemvas.ui.molecule.atom_coords_access import atom_coords_3d_for
 from chemvas.ui.molecule.atom_label_access import add_or_update_atom_label
-from chemvas.ui.molecule.structure_mutation_access import add_atom_for, add_bond_for
+from chemvas.ui.molecule.structure_mutation_access import add_bond_for
 from chemvas.ui.scene.image_actions import image_bytes_from_mime, insert_image_bytes
 from chemvas.ui.scene.scene_clipboard_access import (
     build_selection_clipboard_payload_for_canvas,
-    clipboard_paste_count_for,
-    clipboard_paste_source_json_for,
-    set_clipboard_paste_count_for,
-    set_clipboard_paste_source_json_for,
 )
 from chemvas.ui.scene.scene_clipboard_copy_io import (
     CLIPBOARD_PDF_MIME,
@@ -68,7 +56,6 @@ from chemvas.ui.scene.scene_clipboard_transaction_logic import (
 from chemvas.ui.scene.scene_item_access import (
     create_scene_item_from_state as create_scene_item_from_state_helper,
 )
-from chemvas.ui.scene.scene_item_access import remove_scene_item
 from chemvas.ui.scene.scene_paste_apply_logic import apply_paste_payload
 from chemvas.ui.selection.selection_queries import (
     selected_ids_for,
@@ -123,7 +110,7 @@ class SceneClipboardController:
             selected_items=selected_items,
             explicit_atom_ids=explicit_atom_ids,
             selected_bond_ids=bond_ids,
-            bonds=bonds_for(self.canvas),
+            bonds=self.canvas.model.bonds,
             atom_state_getter=partial(atom_state_dict_for, self.canvas),
             bond_state_getter=bond_state_dict,
             scene_item_state_getter=partial(scene_item_state_for, self.canvas),
@@ -134,7 +121,7 @@ class SceneClipboardController:
         mime_data = self._clipboard().mimeData()
         payload_candidates = clipboard_payload_candidates(
             mime_data,
-            mime_type=clipboard_selection_mime_for(self.canvas),
+            mime_type=str(self.canvas.CLIPBOARD_SELECTION_MIME),
         )
         return decode_clipboard_selection_payload(
             payload_candidates,
@@ -174,7 +161,7 @@ class SceneClipboardController:
         if payload_provider is None:
             mime = self._clipboard().mimeData()
             if mime is not None and not mime.hasFormat(
-                clipboard_selection_mime_for(self.canvas)
+                str(self.canvas.CLIPBOARD_SELECTION_MIME)
             ):
                 try:
                     data = image_bytes_from_mime(mime)
@@ -202,8 +189,10 @@ class SceneClipboardController:
     ) -> bool:
         canvas = self.canvas
         payload, payload_json = payload_provider()
-        previous_source_json = clipboard_paste_source_json_for(canvas)
-        previous_paste_count = clipboard_paste_count_for(canvas)
+        previous_source_json = (
+            canvas.runtime_state.scene_clipboard_state.paste_source_json
+        )
+        previous_paste_count = canvas.runtime_state.scene_clipboard_state.paste_count
         plan = build_clipboard_paste_plan(
             payload=payload,
             payload_json=payload_json,
@@ -211,9 +200,9 @@ class SceneClipboardController:
             previous_paste_count=previous_paste_count,
             bond_length_px=canvas.renderer.style.bond_length_px,
             clipboard_paste_offset=clipboard_paste_offset,
-            before_next_atom_id=next_atom_id_for(canvas),
-            before_bond_count=bond_count_for(canvas),
-            before_smiles_input=last_smiles_input_for(canvas),
+            before_next_atom_id=int(canvas.model.next_atom_id),
+            before_bond_count=len(canvas.model.bonds),
+            before_smiles_input=canvas.runtime_state.smiles_input_state.last_smiles_input,
         )
         if plan is None:
             return False
@@ -260,7 +249,7 @@ class SceneClipboardController:
                 perspective=plan.perspective,
                 dx=plan.dx,
                 dy=plan.dy,
-                add_atom=partial(add_atom_for, canvas),
+                add_atom=canvas.services.canvas_atom_mutation_service.add_atom,
                 apply_atom_color=canvas.services.history_service.operations.apply_atom_color_for_history,
                 set_atom_annotation=partial(set_atom_annotation_for, canvas),
                 add_or_update_atom_label=partial(add_or_update_atom_label, canvas),
@@ -302,13 +291,17 @@ class SceneClipboardController:
                 added_scene_items=added_scene_items,
                 added_groups=added_groups,
             )
-            set_clipboard_paste_source_json_for(canvas, plan.paste_source_json)
-            set_clipboard_paste_count_for(canvas, plan.paste_count)
+            canvas.runtime_state.scene_clipboard_state.paste_source_json = (
+                plan.paste_source_json
+            )
+            canvas.runtime_state.scene_clipboard_state.paste_count = int(
+                plan.paste_count
+            )
             exact_transaction.release()
         except Exception as error:
             for item in reversed(tracked_scene_items):
                 try:
-                    remove_scene_item(canvas, item)
+                    canvas.services.scene_item_controller.remove_scene_item(item)
                 except Exception as cleanup_error:
                     add_recovery_error_note(
                         error,
@@ -341,7 +334,9 @@ class SceneClipboardController:
                     phase="restoring the selection from before the paste",
                 )
             try:
-                set_clipboard_paste_source_json_for(canvas, previous_source_json)
+                canvas.runtime_state.scene_clipboard_state.paste_source_json = (
+                    previous_source_json
+                )
             except Exception as cleanup_error:
                 add_recovery_error_note(
                     error,
@@ -349,7 +344,9 @@ class SceneClipboardController:
                     phase="restoring the clipboard paste source",
                 )
             try:
-                set_clipboard_paste_count_for(canvas, previous_paste_count)
+                canvas.runtime_state.scene_clipboard_state.paste_count = int(
+                    previous_paste_count
+                )
             except Exception as cleanup_error:
                 add_recovery_error_note(
                     error,
@@ -386,7 +383,7 @@ class SceneClipboardController:
         rotation = canvas.runtime_state.rotation_state
         target_center = rotation.projection_center_3d
         target_anchor = rotation.projection_anchor_2d
-        stored_coords = atom_coords_3d_for(canvas)
+        stored_coords = canvas.runtime_state.atom_coords_3d_state.atom_coords_3d
         for atom_id, coords in coords_3d.items():
             atom = atom_for_id(canvas, atom_id)
             if atom is None:

@@ -114,15 +114,10 @@ def set_committed_note_html_for(item, html: str) -> None:
     )
 
 
-def apply_note_style_for(canvas, item) -> None:
-    canvas.services.note_controller.apply_note_style(item)
-
-
 __all__ = [
     "COMMITTED_NOTE_HTML_ROLE",
     "COMMITTED_NOTE_TEXT_ROLE",
     "NoteTextState",
-    "apply_note_style_for",
     "committed_note_html_for",
     "committed_note_text_for",
     "new_note_item_for",

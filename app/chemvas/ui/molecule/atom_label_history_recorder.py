@@ -13,11 +13,7 @@ from chemvas.ui.annotations.state import bond_state_dict
 from chemvas.ui.canvas.canvas_history_recording_service import (
     CanvasHistoryRecordingService,
 )
-from chemvas.ui.canvas.canvas_model_access import (
-    bond_for_id,
-    next_atom_id_for,
-)
-from chemvas.ui.canvas.canvas_smiles_input_state import last_smiles_input_for
+from chemvas.ui.canvas.canvas_model_access import bond_for_id
 from chemvas.ui.history.history_commands import ChangeAtomLabelCommand
 
 
@@ -52,7 +48,9 @@ class AtomLabelHistoryRecorder:
         merge_ids: list[int],
         merge_info: dict,
     ) -> None:
-        after_smiles_input = last_smiles_input_for(self.canvas)
+        after_smiles_input = (
+            self.canvas.runtime_state.smiles_input_state.last_smiles_input
+        )
         commands: list[HistoryCommand] = []
         if (
             before_element != after_element
@@ -132,8 +130,8 @@ class AtomLabelHistoryRecorder:
                 DeleteAtomsCommand(
                     atom_states=atom_states,
                     mark_states=[],
-                    before_next_atom_id=next_atom_id_for(self.canvas),
-                    after_next_atom_id=next_atom_id_for(self.canvas),
+                    before_next_atom_id=int(self.canvas.model.next_atom_id),
+                    after_next_atom_id=int(self.canvas.model.next_atom_id),
                     before_smiles_input=before_smiles_input,
                     after_smiles_input=after_smiles_input,
                     remove_marks=False,

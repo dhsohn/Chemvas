@@ -25,10 +25,7 @@ from chemvas.features.document_patch import apply_document_patch
 from chemvas.features.insertion import plan_smiles_commit
 from chemvas.shell.window_registry import open_windows
 from chemvas.ui.insert.insert_commit_service import InsertCommitService
-from chemvas.ui.window.main_window_ports import (
-    active_canvas_for_window,
-    services_for_window,
-)
+from chemvas.ui.window.main_window_ports import active_canvas_for_window
 from tests.canvas_factory import build_canvas_view
 from tests.gui_workflow_support import _click, _tool
 from tests.gui_workflow_support import qt_errors as qt_errors
@@ -277,7 +274,7 @@ def test_insert_overlapping_heteroatom_preserves_original_and_undo(canvas, opera
 def document_windows(app, qt_errors):
     yield
     for window in list(open_windows()):
-        services = services_for_window(window)
+        services = window.services
         for canvas in window.tab_references.all_canvases():
             canvas.services.tool_controller.prepare_for_document_edit()
             canvas.scene().clearFocus()
@@ -364,7 +361,7 @@ def test_frozen_v7_gui_open_edit_undo_save_as_and_reopen(
         canvas = active_canvas_for_window(window)
         canvas.centerOn(0, 0)
         app.processEvents()
-        services = services_for_window(window)
+        services = window.services
         documents = canvas.services.canvas_document_session_service
         before = documents.snapshot_state()
         _assert_frozen_v7_content(literal["state"], before)

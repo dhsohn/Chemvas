@@ -10,15 +10,10 @@ from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import QApplication, QDialog, QDialogButtonBox, QMenu
 
 from chemvas.bootstrap.main_window import build_main_window
-from chemvas.ui.canvas.canvas_window_access import snapshot_canvas_state_for
 from chemvas.ui.dialogs.mark_reassignment_dialog import MarkReassignmentDialog
-from chemvas.ui.molecule.structure_mutation_access import add_atom_for
-from chemvas.ui.scene.mark_item_access import mark_center_for
 from chemvas.ui.scene.scene_decoration_access import add_mark_for_atom_for
-from chemvas.ui.selection.selection_state import selection_outlines_for
 from chemvas.ui.window.main_window_ports import (
     active_canvas_for_window,
-    services_for_window,
     set_zoom_percent_for_window,
 )
 
@@ -40,16 +35,16 @@ def drawing(app):
     set_zoom_percent_for_window(window, 200)
     canvas.centerOn(0, 0)
     canvas.services.tool_mode_controller.set_tool("select")
-    owner = add_atom_for(canvas, "N", -60, 0)
-    target = add_atom_for(canvas, "O", 60, 0)
+    owner = canvas.services.canvas_atom_mutation_service.add_atom("N", -60, 0)
+    target = canvas.services.canvas_atom_mutation_service.add_atom("O", 60, 0)
     mark = add_mark_for_atom_for(canvas, owner, QPointF(-50, -10), kind="plus")
-    center = mark_center_for(canvas, mark)
+    center = canvas.services.scene_decoration_build_service.mark_center(mark)
     canvas.services.move_controller.move_item(mark, -center.x(), -center.y())
     canvas.services.history_service.clear()
-    services_for_window(window).canvas_document_service.mark_clean(canvas)
+    window.services.canvas_document_service.mark_clean(canvas)
     app.processEvents()
     yield window, canvas, mark, owner, target
-    services_for_window(window).canvas_document_service.mark_clean(canvas)
+    window.services.canvas_document_service.mark_clean(canvas)
     window.close()
     app.processEvents()
 
@@ -57,7 +52,7 @@ def drawing(app):
 def _owner_outline(canvas):
     outlines = [
         item
-        for item in selection_outlines_for(canvas)
+        for item in canvas.runtime_state.selection_state.outlines
         if (item.data(2) or {}).get("kind") == "mark_owner"
     ]
     assert len(outlines) == 1
@@ -65,7 +60,9 @@ def _owner_outline(canvas):
 
 
 def _select_mark(canvas, mark):
-    position = canvas.mapFromScene(mark_center_for(canvas, mark))
+    position = canvas.mapFromScene(
+        canvas.services.scene_decoration_build_service.mark_center(mark)
+    )
     QTest.mouseClick(canvas.viewport(), Qt.MouseButton.LeftButton, pos=position)
     assert mark.isSelected()
     return position
@@ -74,7 +71,7 @@ def _select_mark(canvas, mark):
 def test_real_drag_keeps_owner_highlight_stationary_and_undo_exact(drawing, app):
     _window, canvas, mark, owner, _target = drawing
     start = _select_mark(canvas, mark)
-    before = snapshot_canvas_state_for(canvas)
+    before = canvas.services.canvas_document_session_service.snapshot_state()
     original_atom = canvas.model.atoms[owner]
     owner_position = QPointF(original_atom.x, original_atom.y)
     end = canvas.mapFromScene(QPointF(30, 25))
@@ -84,27 +81,29 @@ def test_real_drag_keeps_owner_highlight_stationary_and_undo_exact(drawing, app)
     assert mark.data(1)["atom_id"] == owner
     outline = _owner_outline(canvas)
     assert outline.sceneBoundingRect().contains(owner_position)
-    assert outline.sceneBoundingRect().contains(mark_center_for(canvas, mark))
+    assert outline.sceneBoundingRect().contains(
+        canvas.services.scene_decoration_build_service.mark_center(mark)
+    )
     assert "far" in outline.toolTip().lower()
     QTest.mouseRelease(canvas.viewport(), Qt.MouseButton.LeftButton, pos=end)
-    after = snapshot_canvas_state_for(canvas)
+    after = canvas.services.canvas_document_session_service.snapshot_state()
     assert after["model"] == before["model"]
     assert after["marks"] != before["marks"]
     history = canvas.services.history_service
     history.undo()
-    assert snapshot_canvas_state_for(canvas) == before
+    assert canvas.services.canvas_document_session_service.snapshot_state() == before
     history.redo()
-    assert snapshot_canvas_state_for(canvas) == after
+    assert canvas.services.canvas_document_session_service.snapshot_state() == after
 
 
 def test_real_nudge_and_deselect_preserve_binding_and_clear_owner_overlay(drawing):
     _window, canvas, mark, owner, _target = drawing
     _select_mark(canvas, mark)
-    before = snapshot_canvas_state_for(canvas)
+    before = canvas.services.canvas_document_session_service.snapshot_state()
     QTest.keyClick(
         canvas.viewport(), Qt.Key.Key_Right, Qt.KeyboardModifier.ShiftModifier
     )
-    after = snapshot_canvas_state_for(canvas)
+    after = canvas.services.canvas_document_session_service.snapshot_state()
     assert after["model"] == before["model"]
     assert after["marks"] != before["marks"]
     assert mark.data(1)["atom_id"] == owner
@@ -117,10 +116,10 @@ def test_real_nudge_and_deselect_preserve_binding_and_clear_owner_overlay(drawin
     assert not mark.isSelected()
     assert not [
         item
-        for item in selection_outlines_for(canvas)
+        for item in canvas.runtime_state.selection_state.outlines
         if (item.data(2) or {}).get("kind") == "mark_owner"
     ]
-    assert snapshot_canvas_state_for(canvas) == after
+    assert canvas.services.canvas_document_session_service.snapshot_state() == after
 
 
 @pytest.mark.parametrize("outcome", ["accept", "cancel", "unchanged"])
@@ -143,15 +142,19 @@ def _context_menu_reassignment(drawing, app, outcome, *, overlap_target=False):
     if overlap_target:
         # A supported placement edit can put the glyph exactly on another atom;
         # it must remain accessible without first moving it away from that atom.
-        center = mark_center_for(canvas, mark)
+        center = canvas.services.scene_decoration_build_service.mark_center(mark)
         atom = canvas.model.atoms[target]
         canvas.services.move_controller.move_item(
             mark, atom.x - center.x(), atom.y - center.y()
         )
-        assert mark_center_for(canvas, mark) == QPointF(atom.x, atom.y)
+        assert canvas.services.scene_decoration_build_service.mark_center(
+            mark
+        ) == QPointF(atom.x, atom.y)
         assert mark.data(1)["atom_id"] == owner
-        position = canvas.mapFromScene(mark_center_for(canvas, mark))
-    before = snapshot_canvas_state_for(canvas)
+        position = canvas.mapFromScene(
+            canvas.services.scene_decoration_build_service.mark_center(mark)
+        )
+    before = canvas.services.canvas_document_session_service.snapshot_state()
     before_position = mark.pos()
     scroll = (canvas.horizontalScrollBar().value(), canvas.verticalScrollBar().value())
     history = canvas.services.history_service
@@ -168,13 +171,16 @@ def _context_menu_reassignment(drawing, app, outcome, *, overlap_target=False):
             dialog.atoms.setCurrentIndex(dialog.atoms.findData(candidate))
             preview = [
                 item
-                for item in selection_outlines_for(canvas)
+                for item in canvas.runtime_state.selection_state.outlines
                 if (item.data(2) or {}).get("kind") == "mark_candidate"
             ]
             assert len(preview) == 1
             assert preview[0].data(2)["atom_id"] == candidate
             assert not preview[0].path().isEmpty()
-            assert snapshot_canvas_state_for(canvas) == before
+            assert (
+                canvas.services.canvas_document_session_service.snapshot_state()
+                == before
+            )
             assert mark.data(1)["atom_id"] == owner
             history.verify_stack_snapshot(before_stacks)
             standard = (
@@ -226,7 +232,7 @@ def _context_menu_reassignment(drawing, app, outcome, *, overlap_target=False):
     assert completed == ["menu", "dialog"]
     assert not [
         item
-        for item in selection_outlines_for(canvas)
+        for item in canvas.runtime_state.selection_state.outlines
         if (item.data(2) or {}).get("kind") == "mark_candidate"
     ]
     assert (
@@ -234,19 +240,18 @@ def _context_menu_reassignment(drawing, app, outcome, *, overlap_target=False):
         canvas.verticalScrollBar().value(),
     ) == scroll
     assert mark.pos() == before_position
-    after = snapshot_canvas_state_for(canvas)
+    after = canvas.services.canvas_document_session_service.snapshot_state()
     if outcome == "accept":
         assert mark.data(1)["atom_id"] == target
         assert _owner_outline(canvas).data(2)["atom_id"] == target
-        assert (
-            f"#{target}"
-            in services_for_window(window).status_service.selection_label.text()
-        )
+        assert f"#{target}" in window.services.status_service.selection_label.text()
         assert len(history.state.history) == 1
         history.undo()
-        assert snapshot_canvas_state_for(canvas) == before
+        assert (
+            canvas.services.canvas_document_session_service.snapshot_state() == before
+        )
         history.redo()
-        assert snapshot_canvas_state_for(canvas) == after
+        assert canvas.services.canvas_document_session_service.snapshot_state() == after
     else:
         assert after == before
         history.verify_stack_snapshot(before_stacks)

@@ -28,21 +28,9 @@ from chemvas.shell.window_registry import (
     reserve_document_name,
 )
 from chemvas.shell.window_registry import open_windows as default_open_windows
-from chemvas.ui.canvas.canvas_document_metadata_state import (
-    document_dirty_status_for,
-    document_display_name_for,
-    document_file_path_for,
-    set_document_source_sha256_for,
-)
-from chemvas.ui.canvas.canvas_window_access import (
-    snapshot_canvas_state_with_warnings_for,
-)
+from chemvas.ui.canvas.canvas_document_metadata_state import document_dirty_status_for
 from chemvas.ui.session.app_data_paths import existing_session_roots, sessions_dir
 from chemvas.ui.session.session_snapshot_store import new_session_store
-from chemvas.ui.window.main_window_ports import all_canvases_for_window
-from chemvas.ui.window.main_window_ports import (
-    services_for_window as default_services_for_window,
-)
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -74,9 +62,11 @@ def collect_open_documents() -> list[DocDescriptor]:
     """Snapshot every open canvas, rejecting any adjusted or incomplete state."""
     documents: list[DocDescriptor] = []
     for window in default_open_windows():
-        for canvas in all_canvases_for_window(window):
-            state, warnings = snapshot_canvas_state_with_warnings_for(canvas)
-            display_name = document_display_name_for(canvas)
+        for canvas in window.tab_references.all_canvases():
+            state, warnings = (
+                canvas.services.canvas_document_session_service.snapshot_state_with_warnings()
+            )
+            display_name = canvas.runtime_state.document_metadata_state.display_name
             if warnings:
                 detail = " ".join(warnings)
                 raise AutosaveSnapshotError(f"{display_name}: {detail}")
@@ -84,13 +74,17 @@ def collect_open_documents() -> list[DocDescriptor]:
             documents.append(
                 DocDescriptor(
                     state=state,
-                    file_path=document_file_path_for(canvas),
+                    file_path=canvas.runtime_state.document_metadata_state.file_path,
                     display_name=display_name,
                     dirty=dirty,
                     state_digest=state_digest,
                 )
             )
     return documents
+
+
+def _window_services(window: Any) -> Any:
+    return window.services
 
 
 class SessionRecoveryService:
@@ -100,7 +94,7 @@ class SessionRecoveryService:
         *,
         open_new_window: Callable[..., Any],
         open_windows=default_open_windows,
-        services_for_window=default_services_for_window,
+        services_for_window=_window_services,
         current_documents=collect_open_documents,
         interval_ms: int = AUTOSAVE_INTERVAL_MS,
         recovery_warnings: tuple[str, ...] = (),
@@ -152,7 +146,9 @@ class SessionRecoveryService:
                 display_name=display_name,
             )
             if document.source_sha256 is not None:
-                set_document_source_sha256_for(canvas, document.source_sha256)
+                canvas.runtime_state.document_metadata_state.source_sha256 = (
+                    document.source_sha256
+                )
             if document.dirty:
                 services.canvas_document_service.mark_dirty(canvas)
                 services.canvas_document_service.refresh_tab_title(window, canvas)
@@ -238,12 +234,12 @@ class SessionRecoveryService:
             confirmed_documents = [
                 DocDescriptor(
                     state={},
-                    file_path=document_file_path_for(canvas),
-                    display_name=document_display_name_for(canvas),
+                    file_path=canvas.runtime_state.document_metadata_state.file_path,
+                    display_name=canvas.runtime_state.document_metadata_state.display_name,
                     dirty=False,
                 )
                 for window in windows
-                for canvas in all_canvases_for_window(window)
+                for canvas in window.tab_references.all_canvases()
             ]
             if not self.snapshot_now(documents=confirmed_documents):
                 # Keep the previous snapshots and every live document. The

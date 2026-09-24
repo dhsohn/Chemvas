@@ -7,7 +7,6 @@ from chemvas.bootstrap.main_window_runtime import (
     bootstrap_main_window,
     build_main_window_runtime,
 )
-from chemvas.ui.window.main_window_ports import preview_for_window, services_for_window
 from chemvas.ui.window.main_window_state import MainWindowState
 from chemvas.ui.window.main_window_tab_references import MainWindowTabReferences
 from chemvas.ui.window.main_window_ui_references import MainWindowUiReferences
@@ -124,8 +123,8 @@ def test_bootstrap_main_window_initializes_runtime_references_and_services() -> 
     window._tab_refs = runtime.tab_refs
     window.services = runtime.services
     window.preview_3d = runtime.preview_3d
-    assert services_for_window(window) is services
-    assert preview_for_window(window) is preview
+    assert window.services is services
+    assert window.preview_3d is preview
 
     bootstrap_main_window(window, runtime)
 

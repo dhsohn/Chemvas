@@ -4,14 +4,8 @@ from typing import TYPE_CHECKING
 
 from PyQt6.QtWidgets import QInputDialog
 
-from chemvas.ui.canvas.canvas_model_access import (
-    atom_for_id,
-    required_atom_for,
-)
-from chemvas.ui.canvas.canvas_smiles_input_state import (
-    clear_last_smiles_input_for,
-    last_smiles_input_for,
-)
+from chemvas.ui.canvas.canvas_model_access import atom_for_id
+from chemvas.ui.canvas.canvas_smiles_input_state import clear_last_smiles_input_for
 from chemvas.ui.molecule.atom_label_history_recorder import AtomLabelHistoryRecorder
 from chemvas.ui.molecule.atom_label_merge_service import AtomLabelMergeService
 from chemvas.ui.scene.scene_group_operations import group_connection_allowed_for
@@ -128,7 +122,7 @@ class AtomLabelService:
     ) -> None:
         text = text.strip()
         show_carbon = bool(show_carbon)
-        atom = required_atom_for(self.canvas, atom_id)
+        atom = self.canvas.model.atoms[atom_id]
         if allow_merge and text and (text.upper() != "C" or show_carbon):
             merge_ids = self.merge_service._overlapping_atom_ids(atom_id)
             if merge_ids and not group_connection_allowed_for(
@@ -137,7 +131,9 @@ class AtomLabelService:
                 return
         before_element = atom.element
         before_explicit_label = atom.explicit_label
-        before_smiles_input = last_smiles_input_for(self.canvas)
+        before_smiles_input = (
+            self.canvas.runtime_state.smiles_input_state.last_smiles_input
+        )
         previous_atom_item = self.atom_item_for_id(atom_id)
         was_selected = bool(
             previous_atom_item is not None and previous_atom_item.isSelected()

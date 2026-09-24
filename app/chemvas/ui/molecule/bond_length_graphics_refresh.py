@@ -3,29 +3,11 @@ from __future__ import annotations
 from PyQt6.QtCore import QPointF, QRectF, Qt
 from PyQt6.QtGui import QFont, QPen
 
-from chemvas.ui.canvas.canvas_atom_graphics_state import atom_dots_for, atom_items_for
-from chemvas.ui.canvas.canvas_bond_graphics_state import (
-    bond_items_for,
-    bond_items_for_id,
-)
 from chemvas.ui.canvas.canvas_mark_registry import mark_registry_for
-from chemvas.ui.canvas.canvas_model_access import (
-    atoms_for,
-    bonds_for,
-)
 from chemvas.ui.canvas.graphics_items import AtomDotItem, AtomLabelItem
 from chemvas.ui.canvas.pick_radius_access import atom_pick_radius_for
-from chemvas.ui.molecule.atom_label_access import (
-    atom_label_service,
-    uses_compact_label_hit_shape_for,
-)
+from chemvas.ui.molecule.atom_label_access import uses_compact_label_hit_shape_for
 from chemvas.ui.molecule.bond_renderer_access import update_bond_geometry_for
-from chemvas.ui.scene.mark_item_access import (
-    mark_center_for,
-    refresh_mark_item_geometry_for,
-    set_mark_center_for,
-)
-from chemvas.ui.selection.selection_state import selection_for
 
 
 def _optional_graphics_callable(item, name: str):
@@ -63,17 +45,17 @@ def _expected_label_position(canvas, label: AtomLabelItem, atom) -> QPointF:
 
 
 def _refresh_atom_graphics(canvas) -> None:
-    labels = atom_items_for(canvas)
-    dots = atom_dots_for(canvas)
+    labels = canvas.runtime_state.atom_graphics_state.atom_items
+    dots = canvas.runtime_state.atom_graphics_state.atom_dots
     if not labels and not dots:
         return
-    label_service = atom_label_service(canvas) if labels else None
+    label_service = canvas.services.atom_label_service if labels else None
     font = canvas.renderer.atom_font()
     label_hit_padding = canvas.renderer.style.bond_length_px * 0.12
     pick_radius = atom_pick_radius_for(canvas)
     dot_radius = max(0.6, canvas.renderer.style.bond_line_width * 0.6)
 
-    for atom_id, atom in atoms_for(canvas).items():
+    for atom_id, atom in canvas.model.atoms.items():
         label = labels.get(atom_id)
         if label is not None:
             if isinstance(label, AtomLabelItem):
@@ -181,13 +163,13 @@ def _refresh_atom_graphics(canvas) -> None:
 
 
 def _refresh_bond_graphics(canvas) -> None:
-    if not bond_items_for(canvas):
+    if not canvas.runtime_state.bond_graphics_state.bond_items:
         return
     line_width = canvas.renderer.bond_line_width()
-    for bond_id, bond in enumerate(bonds_for(canvas)):
+    for bond_id, bond in enumerate(canvas.model.bonds):
         if bond is None:
             continue
-        items = bond_items_for_id(canvas, bond_id)
+        items = canvas.runtime_state.bond_graphics_state.bond_items.get(bond_id, [])
         for item in items:
             # Read each optional port once. A property that exists but raises
             # AttributeError is a live failure, not an absent styling API.
@@ -220,17 +202,19 @@ def refresh_bond_length_graphics_for(canvas) -> None:
     _refresh_atom_graphics(canvas)
     _refresh_bond_graphics(canvas)
     for atom_id, marks in mark_registry_for(canvas).items():
-        atom = atoms_for(canvas).get(atom_id)
+        atom = canvas.model.atoms.get(atom_id)
         if atom is None:
             continue
         for item in marks:
             data = item.data(1)
-            center = mark_center_for(canvas, item)
+            center = canvas.services.scene_decoration_build_service.mark_center(item)
             if data.get("dx") is not None and data.get("dy") is not None:
                 center = QPointF(atom.x + data["dx"], atom.y + data["dy"])
-            refresh_mark_item_geometry_for(canvas, item, data["kind"])
-            set_mark_center_for(canvas, item, center)
-    selection_for(canvas).update_selection_outline()
+            canvas.services.scene_decoration_build_service.refresh_mark_item_geometry(
+                item, data["kind"]
+            )
+            canvas.services.scene_decoration_build_service.set_mark_center(item, center)
+    canvas.services.selection.update_selection_outline()
 
 
 __all__ = ["refresh_bond_length_graphics_for"]

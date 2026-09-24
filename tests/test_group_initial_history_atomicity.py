@@ -13,16 +13,13 @@ from chemvas.ui.canvas.canvas_document_metadata_state import (
     document_is_dirty_for,
     mark_document_clean_for,
 )
-from chemvas.ui.canvas.canvas_group_state import group_state_for, register_group_for
-from chemvas.ui.canvas.canvas_window_access import snapshot_canvas_state_for
+from chemvas.ui.canvas.canvas_group_state import register_group_for
 from chemvas.ui.history.history_commands import (
     GroupSceneItemsCommand,
     UngroupSceneItemsCommand,
 )
-from chemvas.ui.molecule.structure_mutation_access import add_atom_for, add_bond_for
+from chemvas.ui.molecule.structure_mutation_access import add_bond_for
 from chemvas.ui.scene import scene_group_operations
-from chemvas.ui.scene.scene_decoration_access import add_arrow_for
-from chemvas.ui.selection.selection_state import selection_for
 from chemvas.ui.selection.selection_style_access import restore_selection_from_ids_for
 from chemvas.ui.transactions.document import DocumentSavepoint
 from tests.canvas_factory import build_canvas_view
@@ -41,8 +38,10 @@ def canvas(app):
     all_ids = []
     for offset in (0.0, 100.0, 200.0):
         ids = [
-            add_atom_for(view, "C", offset, 10.0),
-            add_atom_for(view, "O", offset + 20.0, 20.0),
+            view.services.canvas_atom_mutation_service.add_atom("C", offset, 10.0),
+            view.services.canvas_atom_mutation_service.add_atom(
+                "O", offset + 20.0, 20.0
+            ),
         ]
         add_bond_for(view, *ids)
         all_ids.extend(ids)
@@ -54,13 +53,17 @@ def canvas(app):
         )
     view.services.structure_build_service.render_model()
     # A real pre-existing Redo, including the detached arrow it references.
-    arrow = add_arrow_for(view, QPointF(0, 90), QPointF(40, 90), "arrow")
+    arrow = view.services.scene_decoration_service.add_arrow(
+        QPointF(0, 90), QPointF(40, 90), "arrow"
+    )
     view.services.history_service.undo()
     assert arrow.scene() is None
     assert view.services.history_service.can_redo()
     restore_selection_from_ids_for(view, set(all_ids[:4]), set())
-    selection_for(view).expand_selection_to_groups()
-    mark_document_clean_for(view, snapshot_canvas_state_for(view))
+    view.services.selection.expand_selection_to_groups()
+    mark_document_clean_for(
+        view, view.services.canvas_document_session_service.snapshot_state()
+    )
     yield view
     view.services.canvas_scene_reset_service.clear_scene()
     view.close()
@@ -68,10 +71,10 @@ def canvas(app):
 
 
 def _observe(canvas):
-    groups = group_state_for(canvas)
+    groups = canvas.runtime_state.group_state
     history = canvas.services.history_service
     return {
-        "document": snapshot_canvas_state_for(canvas),
+        "document": canvas.services.canvas_document_session_service.snapshot_state(),
         "groups": groups.groups,
         "members": [
             (
@@ -106,9 +109,14 @@ def _observe(canvas):
 
 
 def _assert_restored(canvas, before):
-    assert snapshot_canvas_state_for(canvas) == before["document"]
-    assert not document_is_dirty_for(canvas, snapshot_canvas_state_for(canvas))
-    groups = group_state_for(canvas)
+    assert (
+        canvas.services.canvas_document_session_service.snapshot_state()
+        == before["document"]
+    )
+    assert not document_is_dirty_for(
+        canvas, canvas.services.canvas_document_session_service.snapshot_state()
+    )
+    groups = canvas.runtime_state.group_state
     assert groups.groups is before["groups"]
     assert list(groups.groups) == [member[0] for member in before["members"]]
     for key, group, atom_ids, atoms, items, members in before["members"]:
@@ -154,7 +162,7 @@ def test_initial_group_failure_restores_once_without_inverse_and_can_retry(
     before = _observe(canvas)
     primary = RuntimeError("initial group publication failed")
     real_push = history.push
-    real_refresh = selection_for(canvas).update_selection_outline
+    real_refresh = canvas.services.selection.update_selection_outline
 
     def append_then_raise(command):
         assert real_push(command) is True
@@ -166,7 +174,7 @@ def test_initial_group_failure_restores_once_without_inverse_and_can_retry(
 
     if failure == "selection":
         injection = mock.patch.object(
-            selection_for(canvas),
+            canvas.services.selection,
             "update_selection_outline",
             side_effect=refresh_then_raise,
         )
@@ -211,19 +219,24 @@ def test_initial_group_failure_restores_once_without_inverse_and_can_retry(
 
     history.state.enabled = True
     assert action(canvas)
-    after = snapshot_canvas_state_for(canvas)
+    after = canvas.services.canvas_document_session_service.snapshot_state()
     assert after != before["document"]
     assert document_is_dirty_for(canvas, after)
     assert len(history.state.history) == len(before["stacks"].history) + 1
     assert not history.can_redo()
-    assert len(group_state_for(canvas).groups) == (2 if name == "group" else 1)
+    assert len(canvas.runtime_state.group_state.groups) == (2 if name == "group" else 1)
     history.undo()
-    assert snapshot_canvas_state_for(canvas) == before["document"]
+    assert (
+        canvas.services.canvas_document_session_service.snapshot_state()
+        == before["document"]
+    )
     for key, original, *_rest in before["members"]:
-        assert group_state_for(canvas).groups[key] is original
-    assert not document_is_dirty_for(canvas, snapshot_canvas_state_for(canvas))
+        assert canvas.runtime_state.group_state.groups[key] is original
+    assert not document_is_dirty_for(
+        canvas, canvas.services.canvas_document_session_service.snapshot_state()
+    )
     history.redo()
-    assert snapshot_canvas_state_for(canvas) == after
+    assert canvas.services.canvas_document_session_service.snapshot_state() == after
 
 
 @pytest.mark.parametrize("name", ["group", "ungroup"])
@@ -268,10 +281,12 @@ def test_initial_group_noop_keeps_document_and_existing_redo(canvas, name):
     if name == "group":
         # The already-grouped selection adds no members.
         restore_selection_from_ids_for(canvas, {0, 1}, set())
-        selection_for(canvas).expand_selection_to_groups()
+        canvas.services.selection.expand_selection_to_groups()
     else:
-        group_state_for(canvas).groups.clear()
-    mark_document_clean_for(canvas, snapshot_canvas_state_for(canvas))
+        canvas.runtime_state.group_state.groups.clear()
+    mark_document_clean_for(
+        canvas, canvas.services.canvas_document_session_service.snapshot_state()
+    )
     before = _observe(canvas)
     action, _command_type = _operation(name)
     with mock.patch.object(canvas.services.history_service, "push") as push:

@@ -11,66 +11,38 @@ from chemvas.features.insertion import build_atom_annotations
 from chemvas.ui.canvas.canvas_scene_items_state import ring_items_for
 
 
-def atoms_for(canvas: Any) -> Any:
-    return canvas.model.atoms
-
-
-def add_atom_to_model_for(canvas: Any, element: str, x: float, y: float) -> int:
-    return canvas.model.add_atom(element, x, y)
-
-
-def bonds_for(canvas: Any) -> Any:
-    return canvas.model.bonds
-
-
 def add_bond_to_model_for(canvas: Any, a_id: int, b_id: int, order: int = 1) -> int:
     return canvas.model.add_bond(a_id, b_id, order)
 
 
-def next_atom_id_for(canvas: Any) -> int:
-    return int(canvas.model.next_atom_id)
-
-
-def set_next_atom_id_for(canvas: Any, atom_id: int) -> None:
-    canvas.model.next_atom_id = atom_id
-
-
 def ensure_next_atom_id_after_for(canvas: Any, atom_id: int) -> None:
-    if atom_id >= next_atom_id_for(canvas):
-        set_next_atom_id_for(canvas, atom_id + 1)
-
-
-def bond_count_for(canvas: Any) -> int:
-    return len(bonds_for(canvas))
+    if atom_id >= int(canvas.model.next_atom_id):
+        canvas.model.next_atom_id = atom_id + 1
 
 
 def bond_ids_from(canvas: Any, start: int) -> range:
-    return range(start, bond_count_for(canvas))
+    return range(start, len(canvas.model.bonds))
 
 
 def has_bond_slot_for(canvas: Any, bond_id: int) -> bool:
-    return 0 <= bond_id < bond_count_for(canvas)
+    return 0 <= bond_id < len(canvas.model.bonds)
 
 
 def atom_for_id(canvas: Any, atom_id: int | None) -> Any | None:
     if atom_id is None:
         return None
-    return atoms_for(canvas).get(atom_id)
-
-
-def required_atom_for(canvas: Any, atom_id: int) -> Any:
-    return atoms_for(canvas)[atom_id]
+    return canvas.model.atoms.get(atom_id)
 
 
 def set_atom_for_id(canvas: Any, atom_id: int, atom: Any) -> None:
-    atoms_for(canvas)[atom_id] = atom
+    canvas.model.atoms[atom_id] = atom
     clear_atom_annotation_for(canvas, atom_id)
 
 
 def bond_for_id(canvas: Any, bond_id: int | None) -> Any | None:
     if bond_id is None or bond_id < 0:
         return None
-    bonds = bonds_for(canvas)
+    bonds = canvas.model.bonds
     try:
         return bonds[bond_id]
     except (IndexError, KeyError, TypeError):
@@ -79,13 +51,13 @@ def bond_for_id(canvas: Any, bond_id: int | None) -> Any | None:
 
 def created_atom_ids_from(canvas: Any, before_next_atom_id: int) -> list[int]:
     return sorted(
-        (atom_id for atom_id in atoms_for(canvas) if atom_id >= before_next_atom_id),
+        (atom_id for atom_id in canvas.model.atoms if atom_id >= before_next_atom_id),
         reverse=True,
     )
 
 
 def remove_atom_direct_for(canvas: Any, atom_id: int) -> None:
-    atoms_for(canvas).pop(atom_id, None)
+    canvas.model.atoms.pop(atom_id, None)
     clear_atom_annotation_for(canvas, atom_id)
 
 
@@ -150,13 +122,13 @@ def sync_atom_annotation_from_marks_for(
 
 
 def clear_bond_for_id(canvas: Any, bond_id: int) -> None:
-    bonds = bonds_for(canvas)
+    bonds = canvas.model.bonds
     if 0 <= bond_id < len(bonds):
         bonds[bond_id] = None
 
 
 def set_bond_for_id(canvas: Any, bond_id: int, bond: Any) -> None:
-    bonds = bonds_for(canvas)
+    bonds = canvas.model.bonds
     if bond_id < len(bonds):
         bonds[bond_id] = bond
         return
@@ -165,17 +137,13 @@ def set_bond_for_id(canvas: Any, bond_id: int, bond: Any) -> None:
 
 
 def trim_bonds_direct_for(canvas: Any, length: int) -> None:
-    bonds = bonds_for(canvas)
+    bonds = canvas.model.bonds
     if len(bonds) > length:
         del bonds[length:]
 
 
-def has_atoms_for(canvas: Any) -> bool:
-    return bool(atoms_for(canvas))
-
-
 def rescale_model_for(canvas, scale: float) -> None:
-    atoms = atoms_for(canvas)
+    atoms = canvas.model.atoms
     xs = [atom.x for atom in atoms.values()]
     ys = [atom.y for atom in atoms.values()]
     center_x = sum(xs) / len(xs)
@@ -196,30 +164,22 @@ def rescale_model_for(canvas, scale: float) -> None:
 
 
 __all__ = [
-    "add_atom_to_model_for",
     "add_bond_to_model_for",
     "atom_annotation_for",
     "atom_annotations_for",
     "atom_for_id",
-    "atoms_for",
-    "bond_count_for",
     "bond_for_id",
     "bond_ids_from",
-    "bonds_for",
     "clear_atom_annotation_for",
     "clear_bond_for_id",
     "created_atom_ids_from",
     "ensure_next_atom_id_after_for",
-    "has_atoms_for",
     "has_bond_slot_for",
-    "next_atom_id_for",
     "remove_atom_direct_for",
-    "required_atom_for",
     "rescale_model_for",
     "set_atom_annotation_for",
     "set_atom_for_id",
     "set_bond_for_id",
-    "set_next_atom_id_for",
     "sync_atom_annotation_from_marks_for",
     "trim_bonds_direct_for",
 ]

@@ -10,7 +10,6 @@ from PyQt6.QtCore import QPointF
 from PyQt6.QtWidgets import QApplication
 
 from chemvas.ui.canvas import canvas_document_metadata_state as metadata
-from chemvas.ui.canvas.canvas_window_access import snapshot_canvas_state_for
 from chemvas.ui.session import session_recovery_service as recovery
 from chemvas.ui.session import session_snapshot_store as snapshots
 from tests.canvas_factory import build_canvas_view
@@ -31,8 +30,10 @@ def drawing(app, monkeypatch, tmp_path):
     )
     monkeypatch.setattr(recovery, "default_open_windows", lambda: [window])
     metadata.set_document_file_path_for(canvas, str(tmp_path / "source.chemvas"))
-    metadata.mark_document_clean_for(canvas, snapshot_canvas_state_for(canvas))
-    metadata.set_document_source_sha256_for(canvas, "source-file-byte-hash")
+    metadata.mark_document_clean_for(
+        canvas, canvas.services.canvas_document_session_service.snapshot_state()
+    )
+    canvas.runtime_state.document_metadata_state.source_sha256 = "source-file-byte-hash"
     store = snapshots.SessionSnapshotStore(
         tmp_path / "sessions", session_id="current", pid=123, process_identity="test"
     )
@@ -87,7 +88,10 @@ def test_fresh_collection_hashes_at_most_once_and_idle_files_are_unchanged(
             before = _files(store)
         else:
             assert _files(store) == before
-    assert metadata.document_source_sha256_for(canvas) == "source-file-byte-hash"
+    assert (
+        canvas.runtime_state.document_metadata_state.source_sha256
+        == "source-file-byte-hash"
+    )
 
 
 @pytest.mark.parametrize("phase", ["snapshot", "manifest", "prune"])
@@ -98,7 +102,7 @@ def test_same_snapshot_digest_keeps_failed_write_retry_and_later_edits(
     store.save_documents(recovery.collect_open_documents())
     previous = (store.session_dir / "session.json").read_bytes()
     canvas.runtime_state.tool_settings_state.arrow_line_width = 3.25
-    expected = snapshot_canvas_state_for(canvas)
+    expected = canvas.services.canvas_document_session_service.snapshot_state()
     method = {
         "snapshot": "_write_snapshot",
         "manifest": "_write_manifest",
@@ -123,7 +127,9 @@ def test_same_snapshot_digest_keeps_failed_write_retry_and_later_edits(
     canvas.runtime_state.tool_settings_state.arrow_line_width = 4.25
     store.save_documents(recovery.collect_open_documents())
     assert _persisted_state(store)["settings"]["arrow_line_width"] == 4.25
-    metadata.mark_document_clean_for(canvas, snapshot_canvas_state_for(canvas))
+    metadata.mark_document_clean_for(
+        canvas, canvas.services.canvas_document_session_service.snapshot_state()
+    )
     clean = recovery.collect_open_documents()
     assert not clean[0].dirty
     store.save_documents(clean)
@@ -131,13 +137,13 @@ def test_same_snapshot_digest_keeps_failed_write_retry_and_later_edits(
 
 
 def test_warning_snapshot_remains_rejected_before_digest_or_store(drawing, monkeypatch):
-    _canvas, store = drawing
+    canvas, store = drawing
     before = _files(store)
     digest = _digests(monkeypatch)
     monkeypatch.setattr(
-        recovery,
-        "snapshot_canvas_state_with_warnings_for",
-        lambda _canvas: ({}, ["incomplete snapshot"]),
+        canvas.services.canvas_document_session_service,
+        "snapshot_state_with_warnings",
+        lambda: ({}, ["incomplete snapshot"]),
     )
     with pytest.raises(recovery.AutosaveSnapshotError, match="incomplete snapshot"):
         store.save_documents(recovery.collect_open_documents())
@@ -151,7 +157,9 @@ def test_pending_note_text_without_drawing_history_is_recollected(drawing, monke
         QPointF(10, 20), "Saved text"
     )
     saved_html = note.toHtml()
-    metadata.mark_document_clean_for(canvas, snapshot_canvas_state_for(canvas))
+    metadata.mark_document_clean_for(
+        canvas, canvas.services.canvas_document_session_service.snapshot_state()
+    )
     history = canvas.services.history_service.capture_stack_snapshot()
     digest = _digests(monkeypatch)
     for text in ("Pending text", "Pending text changed again"):
@@ -171,9 +179,9 @@ def test_graph_edit_undo_redo_and_save_keep_content_based_dirty_state(
     drawing, monkeypatch
 ):
     canvas, store = drawing
-    before = snapshot_canvas_state_for(canvas)
+    before = canvas.services.canvas_document_session_service.snapshot_state()
     canvas.services.structure_build_service.add_benzene_ring(QPointF(200, 150))
-    after = snapshot_canvas_state_for(canvas)
+    after = canvas.services.canvas_document_session_service.snapshot_state()
     assert after != before
     digest = _digests(monkeypatch)
     for _ in range(2):
@@ -182,13 +190,15 @@ def test_graph_edit_undo_redo_and_save_keep_content_based_dirty_state(
         assert digest.call_count == 1
         assert _persisted_state(store) == json.loads(json.dumps(after))
         canvas.services.history_service.undo()
-        assert snapshot_canvas_state_for(canvas) == before
+        assert (
+            canvas.services.canvas_document_session_service.snapshot_state() == before
+        )
         docs = recovery.collect_open_documents()
         assert not docs[0].dirty
         store.save_documents(docs)
         assert not list(store.session_dir.glob("doc-*.json"))
         canvas.services.history_service.redo()
-        assert snapshot_canvas_state_for(canvas) == after
+        assert canvas.services.canvas_document_session_service.snapshot_state() == after
     metadata.mark_document_clean_for(canvas, after)
     docs = recovery.collect_open_documents()
     assert not docs[0].dirty
@@ -197,12 +207,15 @@ def test_graph_edit_undo_redo_and_save_keep_content_based_dirty_state(
     assert recovery.collect_open_documents()[0].dirty
     canvas.services.history_service.redo()
     assert not recovery.collect_open_documents()[0].dirty
-    assert metadata.document_source_sha256_for(canvas) == "source-file-byte-hash"
+    assert (
+        canvas.runtime_state.document_metadata_state.source_sha256
+        == "source-file-byte-hash"
+    )
 
 
 def test_uninitialized_blank_document_still_never_hashes(drawing, monkeypatch):
     canvas, store = drawing
-    metadata.document_metadata_state_for(canvas).clean_digest = None
+    canvas.runtime_state.document_metadata_state.clean_digest = None
     metadata.set_document_file_path_for(canvas, None)
     digest = _digests(monkeypatch)
     docs = recovery.collect_open_documents()
@@ -215,14 +228,14 @@ def test_uninitialized_blank_document_still_never_hashes(drawing, monkeypatch):
 def test_reused_digest_does_not_bypass_strict_snapshot_write(drawing, monkeypatch):
     canvas, store = drawing
     before = _files(store)
-    invalid = snapshot_canvas_state_for(canvas)
+    invalid = canvas.services.canvas_document_session_service.snapshot_state()
     invalid["settings"]["arrow_line_width"] = -1
     digest = _digests(monkeypatch)
     with monkeypatch.context() as invalid_snapshot:
         invalid_snapshot.setattr(
-            recovery,
-            "snapshot_canvas_state_with_warnings_for",
-            lambda _canvas: (invalid, []),
+            canvas.services.canvas_document_session_service,
+            "snapshot_state_with_warnings",
+            lambda: (invalid, []),
         )
         docs = recovery.collect_open_documents()
         assert docs[0].dirty

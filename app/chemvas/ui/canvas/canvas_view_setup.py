@@ -6,7 +6,6 @@ from PyQt6.QtWidgets import QGraphicsScene, QGraphicsView
 
 from chemvas.core.rdkit_adapter import RDKitAdapter
 from chemvas.domain.document import MoleculeModel
-from chemvas.ui.canvas.canvas_callback_state import callback_state_for
 from chemvas.ui.canvas.canvas_runtime_state import attach_canvas_runtime_state
 from chemvas.ui.canvas.canvas_services import (
     attach_canvas_services,
@@ -58,7 +57,7 @@ def initialize_canvas_view(canvas, *, renderer) -> None:
         history_service=runtime_state.history_service,
     )
     attach_canvas_services(canvas, services)
-    callbacks = callback_state_for(canvas)
+    callbacks = canvas.runtime_state.callback_state
     callbacks.scene_selection_group = services.selection.expand_selection_to_groups
     callbacks.scene_selection_outline = services.selection.update_selection_outline
     canvas.scene().selectionChanged.connect(canvas.handle_scene_selection_group_changed)

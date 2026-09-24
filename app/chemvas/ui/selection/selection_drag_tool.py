@@ -25,13 +25,8 @@ from PyQt6.QtCore import QPointF
 from chemvas.core.model_commands import SetAtomPositionsCommand
 from chemvas.domain.transactions import add_recovery_error_note
 from chemvas.ui.annotations.state import scene_item_history_state, scene_item_state_for
-from chemvas.ui.canvas.canvas_atom_graphics_state import atom_dots_for, atom_items_for
-from chemvas.ui.canvas.canvas_bond_graphics_state import bond_items_for_id
 from chemvas.ui.canvas.canvas_mark_registry import mark_registry_for
-from chemvas.ui.canvas.canvas_model_access import (
-    atoms_for,
-    bond_for_id,
-)
+from chemvas.ui.canvas.canvas_model_access import bond_for_id
 from chemvas.ui.canvas.canvas_scene_items_state import (
     require_scene_record_id,
     ring_items_for_atoms,
@@ -40,14 +35,10 @@ from chemvas.ui.history.history_commands import (
     SetSceneGeometryCommand,
     UpdateSceneItemCommand,
 )
-from chemvas.ui.molecule.atom_coords_access import atom_coords_3d_for
 from chemvas.ui.molecule.bond_renderer_access import update_bond_geometry_for
 from chemvas.ui.scene.scene_decoration_build_access import show_connect_mark_for
 from chemvas.ui.selection.selection_queries import independent_selection_items
-from chemvas.ui.selection.selection_state import selection_for, selection_outlines_for
-from chemvas.ui.selection.selection_style_access import suspend_selection_outline_for
 from chemvas.ui.tools.endpoint_snap_access import connection_for
-from chemvas.ui.tools.handle_state import active_handles_for
 from chemvas.ui.tools.tool_overlay_logic import clear_temporary_tool_overlay
 from chemvas.ui.transactions.document import DocumentSavepoint, MoveGestureScope
 
@@ -302,7 +293,9 @@ class SelectionDragMixin:
         else:
             drag_bond_ids = set()
             drag_boundary_bond_ids = set()
-        outline_was_suspended = suspend_selection_outline_for(self.canvas)
+        outline_was_suspended = bool(
+            self.canvas.runtime_state.selection_state.suspend_outline
+        )
 
         self._begin_drag_transaction()
         self._drag_selection = True
@@ -370,8 +363,8 @@ class SelectionDragMixin:
             relayout_atom_ids,
             bond_ids,
         )
-        atom_labels = atom_items_for(canvas)
-        atom_dots = atom_dots_for(canvas)
+        atom_labels = canvas.runtime_state.atom_graphics_state.atom_items
+        atom_dots = canvas.runtime_state.atom_graphics_state.atom_dots
         for atom_id in affected_atom_ids:
             add(atom_labels.get(atom_id))
             add(atom_dots.get(atom_id))
@@ -380,13 +373,15 @@ class SelectionDragMixin:
             for mark in marks.get_for_atom(atom_id) or ():
                 add(mark)
         for bond_id in bond_ids:
-            for bond_item in bond_items_for_id(canvas, bond_id):
+            for bond_item in canvas.runtime_state.bond_graphics_state.bond_items.get(
+                bond_id, []
+            ):
                 add(bond_item)
         for ring_item in self._drag_affected_ring_items or ():
             add(ring_item)
-        for outline in selection_outlines_for(canvas):
+        for outline in canvas.runtime_state.selection_state.outlines:
             add(outline)
-        for handle in active_handles_for(canvas):
+        for handle in canvas.runtime_state.handle_state.active_handles:
             add(handle)
         for selection_item in self._selection_items:
             add(selection_item)
@@ -417,8 +412,8 @@ class SelectionDragMixin:
         """
         if token.before_positions is not None:
             return
-        atoms = atoms_for(self.canvas)
-        coords = atom_coords_3d_for(self.canvas)
+        atoms = self.canvas.model.atoms
+        coords = self.canvas.runtime_state.atom_coords_3d_state.atom_coords_3d
         token.before_positions = {
             atom_id: (atoms[atom_id].x, atoms[atom_id].y) for atom_id in atom_ids
         }
@@ -493,8 +488,8 @@ class SelectionDragMixin:
         token = self._require_drag_token()
         if token.before_positions is None or token.before_item_states is None:
             raise RuntimeError("The drag has no recorded starting geometry.")
-        atoms = atoms_for(self.canvas)
-        coords = atom_coords_3d_for(self.canvas)
+        atoms = self.canvas.model.atoms
+        coords = self.canvas.runtime_state.atom_coords_3d_state.atom_coords_3d
         atom_commands = []
         if token.before_positions:
             atom_commands.append(
@@ -545,7 +540,7 @@ class SelectionDragMixin:
                 )
                 self._suspended_outline = False
             if self._moved and self._drag_has_net_movement():
-                selection_for(self.canvas).update_selection_outline()
+                self.canvas.services.selection.update_selection_outline()
                 command = self._build_move_command()
                 if command is not None:
                     self._push_drag_history(owner, command)

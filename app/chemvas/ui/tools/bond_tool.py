@@ -11,9 +11,7 @@ from chemvas.features.rendering import (
     style_for_existing_bond_overlay,
 )
 from chemvas.ui.canvas.canvas_model_access import bond_for_id
-from chemvas.ui.canvas.canvas_tool_settings_state import tool_settings_state_for
 from chemvas.ui.canvas.canvas_window_access import notify_error_for
-from chemvas.ui.canvas.input_view_access import update_viewport_for
 from chemvas.ui.molecule.bond_preview_access import (
     add_bond_preview_items_for,
     build_bond_preview_items_for,
@@ -26,7 +24,6 @@ from chemvas.ui.selection.selection_queries import (
     clear_scene_selection_for,
     scene_selected_items_for,
 )
-from chemvas.ui.selection.selection_state import selected_notes_for, selection_for
 from chemvas.ui.tools.bond_tool_logic import (
     resolve_bond_endpoint_target,
     resolve_bond_press_target,
@@ -70,7 +67,7 @@ class BondTool(Tool):
     def _clear_preview_items(self) -> None:
         if self._angle_guide is not None:
             self._angle_guide = None
-            update_viewport_for(self.canvas)
+            self.canvas.viewport().update()
         if not self._preview_items:
             self._preview_signature = None
             return
@@ -80,7 +77,7 @@ class BondTool(Tool):
         self._preview_signature = None
 
     def _set_preview_items(self, start: QPointF, end: QPointF) -> None:
-        settings = tool_settings_state_for(self.canvas)
+        settings = self.canvas.runtime_state.tool_settings_state
         signature = f"{settings.active_bond_style}:{settings.active_bond_order}"
         if self._preview_items and self._preview_signature == signature:
             if update_bond_preview_items_for(
@@ -107,7 +104,7 @@ class BondTool(Tool):
         bond = bond_for_id(self.canvas, bond_id)
         if bond is None:
             return False
-        settings = tool_settings_state_for(self.canvas)
+        settings = self.canvas.runtime_state.tool_settings_state
         active_bond_style = settings.active_bond_style
         if bond.style == "double_either" and (
             active_bond_style in BOLD_BOND_STYLES or active_bond_style == "dotted"
@@ -167,8 +164,8 @@ class BondTool(Tool):
     def _clear_existing_selection(self) -> None:
         if scene_selected_items_for(self.canvas):
             clear_scene_selection_for(self.canvas)
-        if selected_notes_for(self.canvas):
-            selection_for(self.canvas).clear_note_selection()
+        if self.canvas.runtime_state.selection_state.selected_notes:
+            self.canvas.services.selection.clear_note_selection()
 
     @override
     def on_mouse_press(self, event) -> bool:
@@ -223,7 +220,7 @@ class BondTool(Tool):
             if target_atom is None and snapped != self._start_pos
             else None
         )
-        update_viewport_for(self.canvas)
+        self.canvas.viewport().update()
         return True
 
     @override
@@ -242,7 +239,7 @@ class BondTool(Tool):
                 self.canvas, self._start_pos, self._start_atom_id
             )
         self._clear_preview_items()
-        settings = tool_settings_state_for(self.canvas)
+        settings = self.canvas.runtime_state.tool_settings_state
         add_bond_between_points_for(
             self.canvas,
             self._start_pos,
@@ -289,7 +286,7 @@ class BondTool(Tool):
             end=(end.x(), end.y()),
             atom_id=atom_id,
             start_atom_id=self._start_atom_id,
-            snap_angle_step=tool_settings_state_for(self.canvas).snap_angle_step,
+            snap_angle_step=self.canvas.runtime_state.tool_settings_state.snap_angle_step,
             bond_length=self.canvas.renderer.style.bond_length_px,
         )
         return QPointF(*target)

@@ -10,8 +10,7 @@ from chemvas.ui.annotations.records import record_shape_state, record_ts_bracket
 from chemvas.ui.annotations.state import (
     apply_scene_item_state as apply_scene_item_state_helper,
 )
-from chemvas.ui.canvas.canvas_model_access import atoms_for
-from chemvas.ui.scene.note_item_access import apply_note_style_for, new_note_item_for
+from chemvas.ui.scene.note_item_access import new_note_item_for
 from chemvas.ui.scene.scene_item_lifecycle_service import SceneItemLifecycleService
 
 if TYPE_CHECKING:
@@ -70,8 +69,10 @@ class SceneItemController:
         apply_scene_item_state_helper(
             item,
             state,
-            model_atoms=atoms_for(self.canvas),
-            note_style_applier=lambda note: apply_note_style_for(self.canvas, note),
+            model_atoms=self.canvas.model.atoms,
+            note_style_applier=lambda note: (
+                self.canvas.services.note_controller.apply_note_style(note)
+            ),
             mark_center_setter=decorations.set_mark_center,
             mark_color_setter=decorations.apply_mark_color,
         )

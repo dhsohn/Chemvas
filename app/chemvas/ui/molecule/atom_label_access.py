@@ -1,33 +1,18 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
 from chemvas.domain.document import atom_shows_itself
-from chemvas.ui.canvas.canvas_atom_graphics_state import atom_items_for
 from chemvas.ui.canvas.canvas_model_access import atom_for_id
 from chemvas.ui.molecule.atom_label_renderer import uses_compact_label_hit_shape
-
-if TYPE_CHECKING:
-    from chemvas.ui.molecule.atom_label_service import AtomLabelService
-
-
-def atom_label_service(canvas) -> AtomLabelService:
-    return canvas.services.atom_label_service
-
-
-def atom_item_for_id_for(canvas, atom_id: int):
-    return canvas.services.atom_label_service.atom_item_for_id(atom_id)
-
-
-def implicit_carbon_dot_brush_for(canvas):
-    return canvas.services.atom_label_service.implicit_carbon_dot_brush()
 
 
 def atom_has_visible_label_for(canvas, atom_id: int) -> bool:
     atom = atom_for_id(canvas, atom_id)
     if atom is None:
         return False
-    return atom_shows_itself(atom) or atom_id in atom_items_for(canvas)
+    return (
+        atom_shows_itself(atom)
+        or atom_id in canvas.runtime_state.atom_graphics_state.atom_items
+    )
 
 
 def uses_compact_label_hit_shape_for(canvas, text: str) -> bool:
@@ -67,7 +52,7 @@ def add_or_update_atom_label(
             kwargs["show_carbon"] = True
         if literal_label is not None:
             kwargs["literal_label"] = literal_label
-    atom_label_service(canvas).add_or_update_atom_label(atom_id, text, **kwargs)
+    canvas.services.atom_label_service.add_or_update_atom_label(atom_id, text, **kwargs)
 
 
 def clear_atom_label_for(canvas, atom_id: int) -> None:
@@ -78,17 +63,9 @@ def clear_atom_label_for(canvas, atom_id: int) -> None:
     )
 
 
-def prompt_atom_label_for(canvas, atom_id: int) -> None:
-    canvas.services.atom_label_service.prompt_atom_label(atom_id)
-
-
 __all__ = [
     "add_or_update_atom_label",
     "atom_has_visible_label_for",
-    "atom_item_for_id_for",
-    "atom_label_service",
     "clear_atom_label_for",
-    "implicit_carbon_dot_brush_for",
-    "prompt_atom_label_for",
     "uses_compact_label_hit_shape_for",
 ]

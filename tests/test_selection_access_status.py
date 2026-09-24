@@ -11,7 +11,6 @@ from chemvas.ui.selection.selection_queries import (
     selection_status_item_identity,
     set_scene_items_selected_for,
 )
-from chemvas.ui.selection.selection_state import set_selected_notes_for
 from tests.runtime_services import canvas_runtime_services
 from tests.runtime_state import canvas_runtime_state
 
@@ -90,7 +89,7 @@ def test_selection_status_count_dedupes_structures_and_includes_selected_notes()
         scene=mock.Mock(return_value=scene),
         runtime_state=canvas_runtime_state(scene_items_state=CanvasSceneItemsState()),
     )
-    set_selected_notes_for(canvas, [note, outside_note])
+    canvas.runtime_state.selection_state.selected_notes = [note, outside_note]
 
     assert selection_status_count_for(canvas) == 5
 
@@ -108,7 +107,7 @@ def test_selection_status_count_dedupes_a_note_in_both_selection_sources() -> No
         scene=lambda: scene,
         runtime_state=canvas_runtime_state(scene_items_state=CanvasSceneItemsState()),
     )
-    set_selected_notes_for(canvas, [note])
+    canvas.runtime_state.selection_state.selected_notes = [note]
 
     assert selection_status_count_for(canvas) == 1
 

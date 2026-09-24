@@ -12,7 +12,6 @@ from PyQt6.QtWidgets import QApplication, QGraphicsItem
 from chemvas.adapters.qt.renderer import Renderer
 from chemvas.ui.canvas.canvas_atom_graphics_state import visible_atom_item_for
 from chemvas.ui.canvas.canvas_view import CanvasView
-from chemvas.ui.molecule.atom_coords_access import atom_coords_3d_for
 from chemvas.ui.molecule.bond_graphics_access import project_point_3d_for
 from tests.scene_operation_support import (
     _make_note_item,
@@ -250,7 +249,7 @@ class SceneOpsControllerPasteEdgesTest(unittest.TestCase):
 
         self.assertEqual(canvas.model.atoms, {})
         self.assertEqual(canvas.model.bonds, [])
-        self.assertEqual(atom_coords_3d_for(canvas), {})
+        self.assertEqual(canvas.runtime_state.atom_coords_3d_state.atom_coords_3d, {})
         self.assertEqual(canvas.scene_clipboard_state.paste_source_json, "old-source")
         self.assertEqual(canvas.scene_clipboard_state.paste_count, 3)
         self.assertEqual(canvas.removed_scene_items, canvas.created_items)
@@ -292,7 +291,7 @@ class SceneOpsControllerPasteEdgesTest(unittest.TestCase):
 
         self.assertTrue(controller.paste_selection_from_clipboard())
 
-        coords_3d = atom_coords_3d_for(canvas)
+        coords_3d = canvas.runtime_state.atom_coords_3d_state.atom_coords_3d
         self.assertEqual(set(coords_3d), {0, 1})
         self.assertEqual(coords_3d[0][2], -6.0)
         self.assertEqual(coords_3d[1][2], -3.0)

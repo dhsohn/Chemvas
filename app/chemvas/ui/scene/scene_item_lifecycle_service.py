@@ -13,21 +13,12 @@ from chemvas.ui.canvas.canvas_scene_items_state import (
     remove_scene_item_from_collection_for,
 )
 from chemvas.ui.molecule.bond_renderer_access import update_bond_geometry_for
-from chemvas.ui.scene.mark_item_access import (
-    remove_mark_item_for,
-    sync_marks_for_atom_for,
-)
 from chemvas.ui.scene.scene_item_access import (
     canvas_scene_for_item_operation,
     item_is_unavailable_for_scene_operation,
     remove_attached_item_from_canvas_scene,
 )
-from chemvas.ui.selection.selection_state import (
-    remove_selected_note_for,
-    selected_notes_for,
-    selection_for,
-)
-from chemvas.ui.tools.handle_state import handle_target_for
+from chemvas.ui.selection.selection_state import remove_selected_note_for
 from chemvas.ui.transactions.scene_item_attach import (
     SceneItemAttachPorts,
     SceneItemAttachSnapshot,
@@ -276,7 +267,7 @@ class SceneItemLifecycleService:
         atom_id = data.get("atom_id") if isinstance(data, dict) else None
         if not isinstance(atom_id, int):
             return
-        sync_marks_for_atom_for(self.canvas, atom_id)
+        self.canvas.services.canvas_mark_scene_service.sync_marks_for_atom(atom_id)
 
     def remove_scene_item(self, item) -> None:
         if item is None:
@@ -285,15 +276,21 @@ class SceneItemLifecycleService:
         if kind == "mark":
             data = item.data(1) or {}
             atom_id = data.get("atom_id") if isinstance(data, dict) else None
-            remove_mark_item_for(self.canvas, item)
+            self.canvas.services.canvas_mark_scene_service.remove_mark_item(item)
             if isinstance(atom_id, int) and not self.marks.get_for_atom(atom_id):
                 self.marks.by_atom.pop(atom_id, None)
             return
-        was_selected_note = kind == "note" and item in selected_notes_for(self.canvas)
+        was_selected_note = (
+            kind == "note"
+            and item in self.canvas.runtime_state.selection_state.selected_notes
+        )
         self._remove_scene_item_registration(item, kind)
         if kind == "note":
-            selection_for(self.canvas).update_note_selection_box(item)
-        if kind in HANDLE_BEARING_KINDS and item is handle_target_for(self.canvas):
+            self.canvas.services.selection.update_note_selection_box(item)
+        if (
+            kind in HANDLE_BEARING_KINDS
+            and item is self.canvas.runtime_state.handle_state.target
+        ):
             self.canvas.services.handle_overlay_service.clear_handles()
         removed = remove_attached_item_from_canvas_scene(self.canvas, item)
         if was_selected_note:
@@ -301,7 +298,7 @@ class SceneItemLifecycleService:
             # which redraws the outline; notes carry their own selection state,
             # so an erased selected note must refresh explicitly or a stale
             # group box would linger.
-            selection_for(self.canvas).update_selection_outline()
+            self.canvas.services.selection.update_selection_outline()
         if removed is None:
             return
         if kind == "ring":

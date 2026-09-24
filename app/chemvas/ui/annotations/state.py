@@ -21,7 +21,6 @@ from chemvas.features.annotations import (
 )
 from chemvas.ui.annotations.items import ImageItem, NoteItem, OrbitalItem, RingFillItem
 from chemvas.ui.annotations.marks import MarkItem
-from chemvas.ui.canvas.canvas_atom_graphics_state import atom_items_for
 from chemvas.ui.canvas.canvas_model_access import (
     atom_annotation_for,
     atom_for_id,
@@ -71,7 +70,10 @@ def atom_state_dict_for(canvas, atom_id: int) -> dict:
     if atom is None:
         return {}
     explicit = bool(atom.explicit_label)
-    if atom.element.upper() == "C" and atom_id in atom_items_for(canvas):
+    if (
+        atom.element.upper() == "C"
+        and atom_id in canvas.runtime_state.atom_graphics_state.atom_items
+    ):
         explicit = True
     state = {
         "element": atom.element,
@@ -145,10 +147,12 @@ def mark_state_dict_for(canvas, item) -> dict:
     embedded = embedded_scene_item_state(item)
     if embedded:
         return embedded
-    from chemvas.ui.scene.mark_item_access import mark_center_for
 
     return mark_state_dict(
-        item, mark_center_getter=lambda mark_item: mark_center_for(canvas, mark_item)
+        item,
+        mark_center_getter=lambda mark_item: (
+            canvas.services.scene_decoration_build_service.mark_center(mark_item)
+        ),
     )
 
 
@@ -237,8 +241,6 @@ def _item_kind(item) -> object:
 
 def scene_item_state_for(canvas, item) -> dict:
     if item is not None:
-        from chemvas.ui.scene.mark_item_access import mark_center_for
-
         if _item_kind(item) in ARROW_KINDS and isinstance(item, QGraphicsPathItem):
             return arrow_state_dict_for(canvas, item)
         if _item_kind(item) == "shape" and isinstance(item, QGraphicsPathItem):
@@ -247,7 +249,9 @@ def scene_item_state_for(canvas, item) -> dict:
             return ts_bracket_state_dict_for(canvas, item)
         state = scene_item_state(
             item,
-            mark_center_getter=lambda mark_item: mark_center_for(canvas, mark_item),
+            mark_center_getter=lambda mark_item: (
+                canvas.services.scene_decoration_build_service.mark_center(mark_item)
+            ),
         )
         if state:
             return state

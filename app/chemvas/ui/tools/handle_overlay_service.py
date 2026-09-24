@@ -18,18 +18,13 @@ from chemvas.features.selection import (
     shape_resize_handle_positions as shape_resize_handle_positions_helper,
 )
 from chemvas.ui.annotations.records import require_shape_record_for, shape_rect_of
-from chemvas.ui.scene.scene_item_access import (
-    add_item_to_canvas_scene,
-    canvas_scene_for,
-)
+from chemvas.ui.scene.scene_item_access import add_item_to_canvas_scene
 from chemvas.ui.tools.endpoint_snap_access import snapped_points_among_for
 from chemvas.ui.tools.handle_mutation_access import (
     curved_midpoint_for,
     default_curved_control_for,
-    update_curved_control_for,
 )
 from chemvas.ui.tools.handle_state import (
-    active_handles_for,
     set_active_handles_for,
     set_handle_target_for,
 )
@@ -43,10 +38,13 @@ class HandleOverlayService:
         self.canvas = canvas
 
     def clear_handles(self) -> None:
+        scene = self.canvas.scene()
+        if scene is None:
+            return
         set_active_handles_for(
             self.canvas,
             clear_handle_items(
-                canvas_scene_for(self.canvas), active_handles_for(self.canvas)
+                scene, self.canvas.runtime_state.handle_state.active_handles
             ),
         )
         set_handle_target_for(self.canvas, None)
@@ -108,7 +106,9 @@ class HandleOverlayService:
             if not isinstance(control, QPointF):
                 control = default_curved_control_for(self.canvas, start, end)
             mid = curved_midpoint_for(self.canvas, start, control, end)
-            update_curved_control_for(self.canvas, item, mid)
+            self.canvas.services.handle_mutation_service.update_curved_control(
+                item, mid
+            )
             updated_control = self.canvas.render_context.arrows.record(item).control
             assert updated_control is not None
             mid = curved_midpoint_for(

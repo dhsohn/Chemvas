@@ -1,13 +1,9 @@
 from __future__ import annotations
 
-from chemvas.ui.tools.endpoint_snap_access import grid_snap_enabled_for
 from chemvas.ui.window.main_window_ports import (
     active_canvas_or_none_for_window,
-    grid_snap_action_for_window,
     history_service_for_window,
-    redo_action_for_window,
     text_history_availability_for_window,
-    undo_action_for_window,
 )
 
 
@@ -29,19 +25,23 @@ class MainWindowActionAvailabilityService:
             )
 
         for action, enabled in (
-            (undo_action_for_window(window), can_undo),
-            (redo_action_for_window(window), can_redo),
+            (window.ui_references.undo_action, can_undo),
+            (window.ui_references.redo_action, can_redo),
         ):
             if action is not None:
                 action.setEnabled(enabled)
 
     def sync_grid_snap_action(self, window) -> None:
         """Show the grid state of the canvas the user is actually looking at."""
-        action = grid_snap_action_for_window(window)
+        action = window.ui_references.grid_snap_action
         if action is None:
             return
         canvas = active_canvas_or_none_for_window(window)
-        enabled = grid_snap_enabled_for(canvas) if canvas is not None else False
+        enabled = (
+            canvas.runtime_state.tool_settings_state.grid_snap_enabled
+            if canvas is not None
+            else False
+        )
         blocked = action.blockSignals(True)
         action.setChecked(enabled)
         action.blockSignals(blocked)

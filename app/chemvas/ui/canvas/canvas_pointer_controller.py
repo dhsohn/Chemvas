@@ -15,19 +15,16 @@ from chemvas.features.rendering import (
 from chemvas.ui.canvas.canvas_model_access import bond_for_id
 from chemvas.ui.canvas.canvas_window_access import notify_error_for
 from chemvas.ui.canvas.input_view_access import (
-    global_pos_from_event_for,
     reset_view_transform_for,
     scroll_view_by_for,
     set_zoom_for,
     touch_interaction_for,
-    zoom_factor_for,
 )
 from chemvas.ui.canvas.sheet_setup_access import (
     OFF_SHEET_EDIT_GUIDANCE,
     scene_pos_in_sheet_for,
 )
 from chemvas.ui.dialogs.mark_reassignment_dialog import reassign_mark_with_dialog
-from chemvas.ui.scene.scene_decoration_access import edit_arrow_labels_for
 
 _DRAWING_TOOL_NAMES = frozenset(
     {
@@ -191,7 +188,7 @@ class CanvasPointerController:
         self.hover.clear_hover_highlight()
         menu = menu_factory(self.canvas)
         action = menu.addAction("Reassign to atom…")
-        if menu.exec(global_pos_from_event_for(self.canvas, event)) is action:
+        if menu.exec(event.globalPosition().toPoint()) is action:
             reassign_mark_with_dialog(self.canvas, item)
         self._accept_event(event)
         return True
@@ -224,7 +221,7 @@ class CanvasPointerController:
                     )
                 )
             )
-        menu.exec(global_pos_from_event_for(self.canvas, event))
+        menu.exec(event.globalPosition().toPoint())
         return True
 
     def _context_bond_id(self, event) -> int | None:
@@ -251,7 +248,7 @@ class CanvasPointerController:
         item = self.hit_testing_service.item_at_event(event)
         if item is None or item.data(0) not in VALID_ARROW_KINDS:
             return False
-        edit_arrow_labels_for(self.canvas, item)
+        self.canvas.services.scene_decoration_service.edit_arrow_labels(item)
         return True
 
     def mouse_double_click_event(self, event, *, base_mouse_double_click_event) -> None:
@@ -365,7 +362,8 @@ class CanvasPointerController:
                 # (angle == 120), and proportionally finer for trackpads.
                 set_zoom_for(
                     self.canvas,
-                    zoom_factor_for(self.canvas) * (1.0015**angle),
+                    float(self.canvas.runtime_state.input_view_state.zoom)
+                    * (1.0015**angle),
                     under_mouse=True,
                 )
             event.accept()

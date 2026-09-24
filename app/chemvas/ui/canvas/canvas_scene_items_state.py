@@ -40,10 +40,6 @@ SCENE_ITEM_COLLECTION_ATTRS = (
 )
 
 
-def scene_items_state_for(canvas: Any) -> CanvasSceneItemsState:
-    return cast("CanvasSceneItemsState", canvas.runtime_state.scene_items_state)
-
-
 DOCUMENT_COLLECTION_STATES = {
     "mark_items": "mark_state",
     "note_items": "note_state",
@@ -86,8 +82,8 @@ def require_scene_record_id(item: Any) -> int:
 def append_scene_item_for(canvas: Any, name: str, item: Any) -> None:
     record_id = require_scene_record_id(item)
     document_collection_for(canvas.runtime_state, name).add(record_id)
-    getattr(scene_items_state_for(canvas), name)[record_id] = item
-    scene_items_state_for(canvas).projections[record_id] = item
+    getattr(canvas.runtime_state.scene_items_state, name)[record_id] = item
+    canvas.runtime_state.scene_items_state.projections[record_id] = item
 
 
 def remove_scene_item_from_collection_for(canvas: Any, name: str, item: Any) -> bool:
@@ -95,12 +91,12 @@ def remove_scene_item_from_collection_for(canvas: Any, name: str, item: Any) -> 
     if type(record_id) is not int:
         return False
     removed = document_collection_for(canvas.runtime_state, name).remove(record_id)
-    getattr(scene_items_state_for(canvas), name).pop(record_id, None)
+    getattr(canvas.runtime_state.scene_items_state, name).pop(record_id, None)
     return removed
 
 
 def clear_scene_item_collections_for(canvas: Any) -> None:
-    state = scene_items_state_for(canvas)
+    state = canvas.runtime_state.scene_items_state
     for name in SCENE_ITEM_COLLECTION_ATTRS:
         document_collection_for(canvas.runtime_state, name).clear()
         setattr(state, name, {})
@@ -217,7 +213,6 @@ __all__ = [
     "restore_scene_item_order_for",
     "ring_items_for",
     "scene_item_collection_for",
-    "scene_items_state_for",
     "shape_items_for",
     "ts_bracket_items_for",
 ]

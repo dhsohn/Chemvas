@@ -15,9 +15,7 @@ from PyQt6.QtWidgets import QApplication
 from chemvas.domain.document import image_state_from_bytes, validate_image_states
 from chemvas.domain.document import images as image_policy
 from chemvas.ui.annotations.items import ImageItem
-from chemvas.ui.canvas.canvas_window_access import snapshot_canvas_state_for
 from chemvas.ui.scene.image_actions import insert_image_bytes
-from chemvas.ui.scene.scene_item_access import create_scene_item_from_state
 from chemvas.ui.selection.select_all_access import select_all_scene_items_for
 from tests.canvas_factory import build_canvas_view
 
@@ -54,14 +52,16 @@ def test_successive_insert_inspects_only_the_new_source(canvas):
         # The incoming bytes and ImageItem materialization remain strict.
         assert inspect.call_count == 2
         assert all(call.args[0] == data for call in inspect.call_args_list)
-    after = snapshot_canvas_state_for(canvas)
+    after = canvas.services.canvas_document_session_service.snapshot_state()
     history = canvas.services.history_service
     for _ in items:
         history.undo()
-    assert "images" not in snapshot_canvas_state_for(canvas)
+    assert (
+        "images" not in canvas.services.canvas_document_session_service.snapshot_state()
+    )
     for _ in items:
         history.redo()
-    assert snapshot_canvas_state_for(canvas) == after
+    assert canvas.services.canvas_document_session_service.snapshot_state() == after
 
 
 def test_native_paste_revalidates_incoming_images_not_existing(canvas):
@@ -71,7 +71,7 @@ def test_native_paste_revalidates_incoming_images_not_existing(canvas):
     controller = canvas.services.scene_clipboard_controller
     payload = controller.selection_payload_for_clipboard()
     assert payload is not None
-    before = snapshot_canvas_state_for(canvas)
+    before = canvas.services.canvas_document_session_service.snapshot_state()
     with mock.patch.object(
         image_policy, "_inspect_image_bytes", wraps=image_policy._inspect_image_bytes
     ) as inspect:
@@ -79,11 +79,11 @@ def test_native_paste_revalidates_incoming_images_not_existing(canvas):
             payload_provider=lambda: (payload, json.dumps(payload))
         )
     assert inspect.call_count == 6
-    pasted = snapshot_canvas_state_for(canvas)
+    pasted = canvas.services.canvas_document_session_service.snapshot_state()
     canvas.services.history_service.undo()
-    assert snapshot_canvas_state_for(canvas) == before
+    assert canvas.services.canvas_document_session_service.snapshot_state() == before
     canvas.services.history_service.redo()
-    assert snapshot_canvas_state_for(canvas) == pasted
+    assert canvas.services.canvas_document_session_service.snapshot_state() == pasted
 
 
 def test_aggregate_budget_refuses_before_new_raster_decode_or_history(
@@ -93,7 +93,7 @@ def test_aggregate_budget_refuses_before_new_raster_decode_or_history(
     assert select_all_scene_items_for(canvas)
     controller = canvas.services.scene_clipboard_controller
     payload = controller.selection_payload_for_clipboard()
-    before = snapshot_canvas_state_for(canvas)
+    before = canvas.services.canvas_document_session_service.snapshot_state()
     stack = canvas.services.history_service.capture_stack_snapshot()
     monkeypatch.setattr(image_policy, "MAX_DOCUMENT_IMAGES", 1)
     with mock.patch.object(
@@ -104,7 +104,7 @@ def test_aggregate_budget_refuses_before_new_raster_decode_or_history(
                 payload_provider=lambda: (payload, json.dumps(payload))
             )
     inspect.assert_not_called()
-    assert snapshot_canvas_state_for(canvas) == before
+    assert canvas.services.canvas_document_session_service.snapshot_state() == before
     canvas.services.history_service.verify_stack_snapshot(stack)
 
 
@@ -119,13 +119,13 @@ def test_untrusted_paste_still_validates_all_incoming_sources(canvas, change):
     payload = controller.selection_payload_for_clipboard()
     assert payload is not None
     payload["scene_items"][0].update(change)
-    before = snapshot_canvas_state_for(canvas)
+    before = canvas.services.canvas_document_session_service.snapshot_state()
     stack = canvas.services.history_service.capture_stack_snapshot()
     with pytest.raises(ValueError):
         controller.paste_selection_from_clipboard(
             payload_provider=lambda: (payload, json.dumps(payload))
         )
-    assert snapshot_canvas_state_for(canvas) == before
+    assert canvas.services.canvas_document_session_service.snapshot_state() == before
     canvas.services.history_service.verify_stack_snapshot(stack)
 
 
@@ -140,14 +140,13 @@ def test_whole_document_validation_remains_strict_for_every_image():
 
 def test_rotation_preview_and_history_do_not_decode_unchanged_sources(canvas):
     items = [
-        create_scene_item_from_state(
-            canvas,
-            image_state_from_bytes(_png(color), x=index * 90, width=48, height=24),
+        canvas.services.scene_item_controller.create_scene_item_from_state(
+            image_state_from_bytes(_png(color), x=index * 90, width=48, height=24)
         )
         for index, color in enumerate(("red", "blue"))
     ]
     assert select_all_scene_items_for(canvas)
-    before = snapshot_canvas_state_for(canvas)
+    before = canvas.services.canvas_document_session_service.snapshot_state()
     pixels = [item.image() for item in items]
     history = canvas.services.history_service
     stacks = history.capture_stack_snapshot()
@@ -164,7 +163,7 @@ def test_rotation_preview_and_history_do_not_decode_unchanged_sources(canvas):
                 session.center + QPointF(200 * math.cos(angle), 200 * math.sin(angle)),
             )
     assert inspect.call_count == 0
-    after = snapshot_canvas_state_for(canvas)
+    after = canvas.services.canvas_document_session_service.snapshot_state()
     assert after != before
     history.verify_stack_snapshot(stacks)
     command = controller.rotation_drag_command(session)
@@ -179,7 +178,7 @@ def test_rotation_preview_and_history_do_not_decode_unchanged_sources(canvas):
         assert [item.image_state() for item in items] == after["images"]
     assert inspect.call_count == 0
     history.verify_stack_snapshot(stacks, history=(*stacks.history, command))
-    assert snapshot_canvas_state_for(canvas) == after
+    assert canvas.services.canvas_document_session_service.snapshot_state() == after
     assert [item.image() for item in items] == pixels
     for old, new in zip(before["images"], after["images"], strict=True):
         assert {key: value for key, value in old.items() if key not in {"x", "y"}} == {

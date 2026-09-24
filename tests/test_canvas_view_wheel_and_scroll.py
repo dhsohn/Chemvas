@@ -10,7 +10,6 @@ from PyQt6.QtGui import QTransform
 from PyQt6.QtWidgets import QApplication, QGraphicsView
 
 from chemvas.ui.canvas.canvas_view import CanvasView
-from chemvas.ui.canvas.input_view_access import input_view_state_for
 from tests.canvas_factory import build_canvas_view
 
 
@@ -49,7 +48,9 @@ class CanvasViewWheelAndScrollTest(unittest.TestCase):
 
     def _new_view(self):
         view = build_canvas_view()
-        input_view_state_for(view).base_transform = QTransform().translate(3.0, 4.0)
+        view.runtime_state.input_view_state.base_transform = QTransform().translate(
+            3.0, 4.0
+        )
         view.setTransform(QTransform().scale(2.0, 2.0))
         view.runtime_state.selection_info_state.last_interaction_time = 0.0
         hbar = SimpleNamespace(value=mock.Mock(return_value=120), setValue=mock.Mock())
@@ -70,7 +71,9 @@ class CanvasViewWheelAndScrollTest(unittest.TestCase):
             self.assertGreater(
                 view.runtime_state.selection_info_state.last_interaction_time, 0.0
             )
-            self.assertTrue(input_view_state_for(view).base_transform.isIdentity())
+            self.assertTrue(
+                view.runtime_state.input_view_state.base_transform.isIdentity()
+            )
             self.assertTrue(view.transform().isIdentity())
             hbar.setValue.assert_called_once_with(105)
             vbar.setValue.assert_called_once_with(247)
@@ -91,7 +94,9 @@ class CanvasViewWheelAndScrollTest(unittest.TestCase):
             self.assertGreater(
                 view.runtime_state.selection_info_state.last_interaction_time, 0.0
             )
-            self.assertTrue(input_view_state_for(view).base_transform.isIdentity())
+            self.assertTrue(
+                view.runtime_state.input_view_state.base_transform.isIdentity()
+            )
             self.assertTrue(view.transform().isIdentity())
             hbar.setValue.assert_called_once_with(116)
             vbar.setValue.assert_called_once_with(243)
@@ -110,7 +115,9 @@ class CanvasViewWheelAndScrollTest(unittest.TestCase):
             self.assertGreater(
                 view.runtime_state.selection_info_state.last_interaction_time, 0.0
             )
-            self.assertTrue(input_view_state_for(view).base_transform.isIdentity())
+            self.assertTrue(
+                view.runtime_state.input_view_state.base_transform.isIdentity()
+            )
             self.assertTrue(view.transform().isIdentity())
             hbar.setValue.assert_not_called()
             vbar.setValue.assert_not_called()
@@ -122,7 +129,7 @@ class CanvasViewWheelAndScrollTest(unittest.TestCase):
             QGraphicsView, "wheelEvent", new=mock.Mock(return_value=None)
         ) as base_wheel:
             view, hbar, vbar = self._new_view()
-            input_view_state_for(view).zoom = 1.0
+            view.runtime_state.input_view_state.zoom = 1.0
 
             zoom_in = _FakeWheelEvent(
                 QPoint(0, 0),
@@ -130,17 +137,17 @@ class CanvasViewWheelAndScrollTest(unittest.TestCase):
                 modifiers=Qt.KeyboardModifier.ControlModifier,
             )
             CanvasView.wheelEvent(view, zoom_in)
-            self.assertGreater(input_view_state_for(view).zoom, 1.0)
+            self.assertGreater(view.runtime_state.input_view_state.zoom, 1.0)
             zoom_in.accept.assert_called_once_with()
 
-            zoomed = input_view_state_for(view).zoom
+            zoomed = view.runtime_state.input_view_state.zoom
             zoom_out = _FakeWheelEvent(
                 QPoint(0, 0),
                 QPoint(0, -120),
                 modifiers=Qt.KeyboardModifier.ControlModifier,
             )
             CanvasView.wheelEvent(view, zoom_out)
-            self.assertLess(input_view_state_for(view).zoom, zoomed)
+            self.assertLess(view.runtime_state.input_view_state.zoom, zoomed)
 
             hbar.setValue.assert_not_called()
             vbar.setValue.assert_not_called()

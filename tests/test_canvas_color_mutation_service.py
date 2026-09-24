@@ -35,7 +35,6 @@ from chemvas.ui.canvas.canvas_atom_graphics_state import (
 )
 from chemvas.ui.canvas.canvas_bond_graphics_state import (
     CanvasBondGraphicsState,
-    bond_items_for,
     set_bond_items_for,
 )
 from chemvas.ui.canvas.canvas_color_mutation_service import (
@@ -50,7 +49,6 @@ from chemvas.ui.history.history_commands import (
     SetAnnotationStyleCommand,
     UpdateSceneItemCommand,
 )
-from chemvas.ui.molecule.bond_graphics_access import add_bond_graphics_for
 from chemvas.ui.molecule.structure_mutation_access import add_benzene_ring_for
 from chemvas.ui.scene.note_item_access import (
     committed_note_html_for,
@@ -169,7 +167,7 @@ class CanvasColorMutationServiceTest(unittest.TestCase):
         ring = next(item for item in canvas.scene().items() if item.data(0) == "ring")
         transform = canvas.services.scene_transform_controller
         transform.apply_bond_style(0, "dotted_double", 2)
-        self.assertEqual(len(bond_items_for(canvas)[0]), 2)
+        self.assertEqual(len(canvas.runtime_state.bond_graphics_state.bond_items[0]), 2)
         service = canvas.services.canvas_color_mutation_service
 
         service.apply_color_to_items([ring], QColor("#cc3344"))
@@ -471,8 +469,8 @@ class CanvasColorMutationServiceTest(unittest.TestCase):
         atom_a = canvas.services.canvas_atom_mutation_service.add_atom("C", 0.0, 0.0)
         atom_b = canvas.services.canvas_atom_mutation_service.add_atom("C", 40.0, 0.0)
         bond_id = canvas.services.canvas_bond_mutation_service.add_bond(atom_a, atom_b)
-        add_bond_graphics_for(canvas, bond_id)
-        bond_item = bond_items_for(canvas)[bond_id][0]
+        canvas.bond_renderer.add_bond_graphics(bond_id)
+        bond_item = canvas.runtime_state.bond_graphics_state.bond_items[bond_id][0]
         bond_item.setSelected(True)
         before_pen = bond_item.pen()
         before_color = canvas.model.bonds[bond_id].color
@@ -493,7 +491,9 @@ class CanvasColorMutationServiceTest(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "later-item failure"):
             service.apply_color_to_items([bond_item, failing_item], QColor("#d84a3a"))
 
-        self.assertIs(bond_items_for(canvas)[bond_id][0], bond_item)
+        self.assertIs(
+            canvas.runtime_state.bond_graphics_state.bond_items[bond_id][0], bond_item
+        )
         self.assertIs(bond_item.scene(), canvas.scene())
         self.assertTrue(bond_item.isSelected())
         self.assertEqual(bond_item.pen(), before_pen)
@@ -504,18 +504,24 @@ class CanvasColorMutationServiceTest(unittest.TestCase):
         # Successful history playback is also color-only: it must not rebuild
         # topology graphics or discard their selection state.
         service.apply_color_to_item(bond_item, QColor("#d84a3a"))
-        self.assertIs(bond_items_for(canvas)[bond_id][0], bond_item)
+        self.assertIs(
+            canvas.runtime_state.bond_graphics_state.bond_items[bond_id][0], bond_item
+        )
         self.assertTrue(bond_item.isSelected())
 
         canvas.services.history_service.undo()
-        self.assertIs(bond_items_for(canvas)[bond_id][0], bond_item)
+        self.assertIs(
+            canvas.runtime_state.bond_graphics_state.bond_items[bond_id][0], bond_item
+        )
         self.assertIs(bond_item.scene(), canvas.scene())
         self.assertTrue(bond_item.isSelected())
         self.assertEqual(canvas.model.bonds[bond_id].color, before_color)
         self.assertEqual(bond_item.pen(), before_pen)
 
         canvas.services.history_service.redo()
-        self.assertIs(bond_items_for(canvas)[bond_id][0], bond_item)
+        self.assertIs(
+            canvas.runtime_state.bond_graphics_state.bond_items[bond_id][0], bond_item
+        )
         self.assertIs(bond_item.scene(), canvas.scene())
         self.assertTrue(bond_item.isSelected())
         self.assertEqual(canvas.model.bonds[bond_id].color, "#d84a3a")

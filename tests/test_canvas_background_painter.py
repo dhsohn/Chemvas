@@ -10,11 +10,26 @@ import chemvas.ui.canvas.canvas_background_painter as background_painter
 from chemvas.ui.canvas.canvas_tool_settings_state import CanvasToolSettingsState
 
 
+class _CountingToolSettings:
+    """Tool settings whose grid flag counts how often the painter reads it."""
+
+    def __init__(self, *, grid_snap_enabled: bool) -> None:
+        self._grid_snap_enabled = grid_snap_enabled
+        self.grid_snap_reads = 0
+
+    @property
+    def grid_snap_enabled(self) -> bool:
+        self.grid_snap_reads += 1
+        return self._grid_snap_enabled
+
+
+def _canvas_with_grid(settings) -> SimpleNamespace:
+    return SimpleNamespace(runtime_state=SimpleNamespace(tool_settings_state=settings))
+
+
 def test_draw_canvas_background_paints_workspace_shadow_and_sheet(monkeypatch) -> None:
-    canvas = SimpleNamespace()
-    monkeypatch.setattr(
-        background_painter, "grid_snap_enabled_for", mock.Mock(return_value=False)
-    )
+    settings = _CountingToolSettings(grid_snap_enabled=False)
+    canvas = _canvas_with_grid(settings)
     painter = mock.Mock()
     viewport_rect = QRectF(-100.0, -80.0, 200.0, 160.0)
     sheet_rect = QRectF(-20.0, -10.0, 40.0, 20.0)
@@ -37,27 +52,19 @@ def test_draw_canvas_background_paints_workspace_shadow_and_sheet(monkeypatch) -
     assert pen.color() == QColor("#dededa")
     assert pen.widthF() == 1.0
     # With the grid off the painter asks once and draws no lines.
-    background_painter.grid_snap_enabled_for.assert_called_once_with(canvas)
+    assert settings.grid_snap_reads == 1
     painter.drawLines.assert_not_called()
 
 
 def test_draw_canvas_background_draws_square_grid_lines_when_the_grid_is_on(
     monkeypatch,
 ) -> None:
-    canvas = SimpleNamespace()
-    monkeypatch.setattr(
-        background_painter,
-        "tool_settings_state_for",
-        lambda _canvas: CanvasToolSettingsState(),
-    )
+    canvas = _canvas_with_grid(CanvasToolSettingsState(grid_snap_enabled=True))
     painter = mock.Mock()
     painter.transform.return_value = QTransform()
     sheet_rect = QRectF(0.0, 0.0, 40.0, 30.0)
     monkeypatch.setattr(
         background_painter, "sheet_rect_for", mock.Mock(return_value=sheet_rect)
-    )
-    monkeypatch.setattr(
-        background_painter, "grid_snap_enabled_for", mock.Mock(return_value=True)
     )
     monkeypatch.setattr(
         background_painter, "grid_step_for", mock.Mock(return_value=10.0)
@@ -80,7 +87,7 @@ def test_draw_canvas_background_draws_square_grid_lines_when_the_grid_is_on(
 
 
 def test_draw_canvas_background_skips_a_grid_too_dense_to_read(monkeypatch) -> None:
-    canvas = SimpleNamespace()
+    canvas = _canvas_with_grid(CanvasToolSettingsState(grid_snap_enabled=True))
     painter = mock.Mock()
     dense = (background_painter.MIN_GRID_SPACING_PX / 10.0) * 0.5
     painter.transform.return_value = QTransform().scale(dense, dense)
@@ -88,9 +95,6 @@ def test_draw_canvas_background_skips_a_grid_too_dense_to_read(monkeypatch) -> N
         background_painter,
         "sheet_rect_for",
         mock.Mock(return_value=QRectF(0.0, 0.0, 400.0, 300.0)),
-    )
-    monkeypatch.setattr(
-        background_painter, "grid_snap_enabled_for", mock.Mock(return_value=True)
     )
     monkeypatch.setattr(
         background_painter, "grid_step_for", mock.Mock(return_value=10.0)

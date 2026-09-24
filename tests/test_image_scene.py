@@ -36,7 +36,6 @@ from chemvas.features.selection import ROTATION_HANDLE_TYPE
 from chemvas.ui.annotations.items import ImageItem
 from chemvas.ui.annotations.state import scene_item_state_for
 from chemvas.ui.canvas.canvas_document_state import snapshot_canvas_document_state
-from chemvas.ui.canvas.canvas_group_state import group_state_for
 from chemvas.ui.canvas.canvas_lifecycle import schedule_canvas_deletion_for
 from chemvas.ui.canvas.canvas_scene_items_state import image_items_for
 from chemvas.ui.history.history_commands import (
@@ -45,12 +44,7 @@ from chemvas.ui.history.history_commands import (
 )
 from chemvas.ui.molecule.structure_mutation_access import add_bond_between_points_for
 from chemvas.ui.scene.scene_group_operations import group_selection_for
-from chemvas.ui.scene.scene_item_access import (
-    create_scene_item_from_state,
-    remove_scene_item,
-)
 from chemvas.ui.selection.select_all_access import select_all_scene_items_for
-from chemvas.ui.selection.selection_state import selection_outlines_for
 from chemvas.ui.transactions import document_transaction
 from tests.canvas_factory import build_canvas_view
 
@@ -91,7 +85,7 @@ def image_bytes(fmt="PNG"):
 def test_full_raster_bytes_and_native_document_roundtrip(canvas, fmt):
     original = image_bytes(fmt)
     state = image_state_from_bytes(original, x=40, y=60, width=120, opacity=0.75)
-    item = create_scene_item_from_state(canvas, state)
+    item = canvas.services.scene_item_controller.create_scene_item_from_state(state)
     assert isinstance(item, ImageItem)
     assert item.sceneBoundingRect() == QRectF(40, 60, 120, 80)
     assert image_items_for(canvas) == [item]
@@ -123,13 +117,15 @@ def test_paint_preserves_full_image_and_alpha(app):
 
 def test_selection_move_properties_delete_and_history(canvas):
     operations = canvas.services.history_service.operations
-    item = create_scene_item_from_state(canvas, image_state_from_bytes(image_bytes()))
+    item = canvas.services.scene_item_controller.create_scene_item_from_state(
+        image_state_from_bytes(image_bytes())
+    )
     history = canvas.services.history_service
     assert select_all_scene_items_for(canvas)
     assert item.isSelected()
     assert any(
         outline.data(2).get("object_kind") == "image"
-        for outline in selection_outlines_for(canvas)
+        for outline in canvas.runtime_state.selection_state.outlines
     )
     transform = canvas.services.scene_transform_controller
     assert transform.translate_selected_items(20, 30)
@@ -153,7 +149,7 @@ def test_selection_move_properties_delete_and_history(canvas):
     assert item.image_state() == before
     history.redo()
     deletion = DeleteSceneItemsCommand.capture(operations, [after], [item])
-    remove_scene_item(canvas, item)
+    canvas.services.scene_item_controller.remove_scene_item(item)
     history.push(deletion)
     assert not image_items_for(canvas)
     history.undo()
@@ -165,9 +161,11 @@ def test_selection_move_properties_delete_and_history(canvas):
 
 
 def test_native_selection_copy_paste_keeps_images_and_groups(canvas):
-    first = create_scene_item_from_state(canvas, image_state_from_bytes(image_bytes()))
-    second = create_scene_item_from_state(
-        canvas, image_state_from_bytes(image_bytes("JPEG"), x=50)
+    first = canvas.services.scene_item_controller.create_scene_item_from_state(
+        image_state_from_bytes(image_bytes())
+    )
+    second = canvas.services.scene_item_controller.create_scene_item_from_state(
+        image_state_from_bytes(image_bytes("JPEG"), x=50)
     )
     assert select_all_scene_items_for(canvas)
     assert group_selection_for(canvas)
@@ -194,13 +192,15 @@ def test_native_selection_copy_paste_keeps_images_and_groups(canvas):
     history = canvas.services.history_service
     history.undo()
     assert image_items_for(canvas) == [first, second]
-    assert len(group_state_for(canvas).groups) == 1
+    assert len(canvas.runtime_state.group_state.groups) == 1
     history.redo()
     assert len(image_items_for(canvas)) == 4
 
 
 def test_geometry_failure_restores_exact_image_and_registration(canvas):
-    item = create_scene_item_from_state(canvas, image_state_from_bytes(image_bytes()))
+    item = canvas.services.scene_item_controller.create_scene_item_from_state(
+        image_state_from_bytes(image_bytes())
+    )
     before = item.image_state()
     with pytest.raises(RuntimeError, match="injected"):
         with document_transaction(
@@ -210,7 +210,7 @@ def test_geometry_failure_restores_exact_image_and_registration(canvas):
                 {**before, "width": 240.0, "opacity": 0.25, "lock_aspect": False}
             )
             item.moveBy(300, -20)
-            remove_scene_item(canvas, item)
+            canvas.services.scene_item_controller.remove_scene_item(item)
             raise RuntimeError("injected after geometry and registration changes")
     assert image_items_for(canvas) == [item]
     assert item.scene() is canvas.scene()
@@ -271,9 +271,8 @@ def test_rotation_pointer_preview_preserves_images_and_single_history(
     # while the images' positions rotate with the mixed selection.
     add_bond_between_points_for(canvas, QPointF(-20, 0), QPointF(20, 0))
     items = [
-        create_scene_item_from_state(
-            canvas,
-            image_state_from_bytes(image_bytes(fmt), x=x, y=20, width=72),
+        canvas.services.scene_item_controller.create_scene_item_from_state(
+            image_state_from_bytes(image_bytes(fmt), x=x, y=20, width=72)
         )
         for fmt, x in (("PNG", -90), ("JPEG", 90))
     ]
@@ -332,8 +331,8 @@ def test_rotation_pointer_preview_preserves_images_and_single_history(
 def test_pointer_drag_and_keyboard_delete_use_native_history(canvas, app, tool):
     canvas.resize(800, 600)
     canvas.services.tool_controller.set_active(tool)
-    item = create_scene_item_from_state(
-        canvas, image_state_from_bytes(image_bytes(), x=40.0, y=50.0, width=120.0)
+    item = canvas.services.scene_item_controller.create_scene_item_from_state(
+        image_state_from_bytes(image_bytes(), x=40.0, y=50.0, width=120.0)
     )
     canvas.show()
     canvas.centerOn(item)

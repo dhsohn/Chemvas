@@ -19,10 +19,8 @@ from PyQt6.QtWidgets import (
 
 from chemvas.core.document_io import read_document
 from chemvas.domain.document import image_state_from_bytes
-from chemvas.ui.canvas.canvas_group_state import group_state_for, register_group_for
-from chemvas.ui.canvas.canvas_window_access import snapshot_canvas_state_for
+from chemvas.ui.canvas.canvas_group_state import register_group_for
 from chemvas.ui.scene.image_actions import ImagePropertiesDialog
-from chemvas.ui.scene.scene_item_access import create_scene_item_from_state
 from tests.gui_workflow_support import app as app
 from tests.gui_workflow_support import fresh_window as fresh_window
 from tests.gui_workflow_support import qt_errors as qt_errors
@@ -36,8 +34,8 @@ def _panels(canvas, count=2):
             output, format="PNG"
         )
         panels.append(
-            create_scene_item_from_state(
-                canvas, image_state_from_bytes(output.getvalue(), x=120 * index)
+            canvas.services.scene_item_controller.create_scene_item_from_state(
+                image_state_from_bytes(output.getvalue(), x=120 * index)
             )
         )
     group_id = register_group_for(
@@ -62,8 +60,8 @@ def test_choose_grouped_panel_changes_only_target_and_reopens(
 ):
     window, canvas = fresh_window
     panels, group_id = _panels(canvas)
-    original_group = group_state_for(canvas).groups[group_id]
-    before = snapshot_canvas_state_for(canvas)
+    original_group = canvas.runtime_state.group_state.groups[group_id]
+    before = canvas.services.canvas_document_session_service.snapshot_state()
     calls = []
 
     def choose(_parent, title, label, values, current=0, editable=True):
@@ -91,18 +89,18 @@ def test_choose_grouped_panel_changes_only_target_and_reopens(
     assert panels[chosen].opacity() == 0.35
     assert panels[1 - chosen].opacity() == 1
     assert all(item.isSelected() for item in panels)
-    assert group_state_for(canvas).groups[group_id] is original_group
-    after = snapshot_canvas_state_for(canvas)
+    assert canvas.runtime_state.group_state.groups[group_id] is original_group
+    after = canvas.services.canvas_document_session_service.snapshot_state()
     assert len(canvas.services.history_service.state.history) == 1
     canvas.services.history_service.undo()
-    assert snapshot_canvas_state_for(canvas) == before
+    assert canvas.services.canvas_document_session_service.snapshot_state() == before
     canvas.services.history_service.redo()
-    assert snapshot_canvas_state_for(canvas) == after
+    assert canvas.services.canvas_document_session_service.snapshot_state() == after
     path = tmp_path / "panels.chemvas"
     session = canvas.services.canvas_document_session_service
     assert session.save_to_file(str(path)) == []
     session.apply_state(read_document(path).state)
-    assert snapshot_canvas_state_for(canvas) == after
+    assert canvas.services.canvas_document_session_service.snapshot_state() == after
 
 
 @pytest.mark.parametrize(
@@ -113,9 +111,9 @@ def test_grouped_properties_cancel_noop_and_failure_are_exact(
 ):
     window, canvas = fresh_window
     panels, group_id = _panels(canvas)
-    original_group = group_state_for(canvas).groups[group_id]
+    original_group = canvas.runtime_state.group_state.groups[group_id]
     history = canvas.services.history_service
-    before = snapshot_canvas_state_for(canvas)
+    before = canvas.services.canvas_document_session_service.snapshot_state()
     stacks = history.capture_stack_snapshot()
     calls = []
     warnings = []
@@ -144,9 +142,9 @@ def test_grouped_properties_cancel_noop_and_failure_are_exact(
         ["choose"] if outcome == "choose_cancel" else ["choose", "properties"]
     )
     assert bool(warnings) == (outcome == "push_false")
-    assert snapshot_canvas_state_for(canvas) == before
+    assert canvas.services.canvas_document_session_service.snapshot_state() == before
     history.verify_stack_snapshot(stacks)
-    assert group_state_for(canvas).groups[group_id] is original_group
+    assert canvas.runtime_state.group_state.groups[group_id] is original_group
     assert all(item.isSelected() for item in panels)
 
 
@@ -172,8 +170,8 @@ def test_single_image_still_opens_directly(fresh_window, monkeypatch):
 def test_real_chooser_and_property_dialog_preserve_group(fresh_window, app):
     window, canvas = fresh_window
     panels, group_id = _panels(canvas)
-    before = snapshot_canvas_state_for(canvas)
-    original_group = group_state_for(canvas).groups[group_id]
+    before = canvas.services.canvas_document_session_service.snapshot_state()
+    original_group = canvas.runtime_state.group_state.groups[group_id]
     events = []
 
     def edit_panel():
@@ -217,7 +215,7 @@ def test_real_chooser_and_property_dialog_preserve_group(fresh_window, app):
     _action(window).trigger()
     assert events == ["chosen", "edited"]
     assert panels[0].opacity() == 1 and panels[1].opacity() == 0.35
-    assert group_state_for(canvas).groups[group_id] is original_group
+    assert canvas.runtime_state.group_state.groups[group_id] is original_group
     assert all(item.isSelected() for item in panels)
     canvas.services.history_service.undo()
-    assert snapshot_canvas_state_for(canvas) == before
+    assert canvas.services.canvas_document_session_service.snapshot_state() == before

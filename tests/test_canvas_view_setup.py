@@ -3,28 +3,10 @@ from __future__ import annotations
 from types import SimpleNamespace
 from unittest import mock
 
-import pytest
-
 import chemvas.ui.canvas.canvas_view_setup as setup
 from chemvas.domain.document import MoleculeModel
-from chemvas.ui.canvas.canvas_callback_state import (
-    CanvasCallbackState,
-    callback_state_for,
-)
+from chemvas.ui.canvas.canvas_callback_state import CanvasCallbackState
 from tests.runtime_services import canvas_runtime_services
-
-
-def test_callback_state_for_requires_runtime_state() -> None:
-    runtime_state = CanvasCallbackState()
-    shadow_state = CanvasCallbackState()
-    canvas = SimpleNamespace(
-        runtime_state=SimpleNamespace(callback_state=runtime_state),
-        callback_state=shadow_state,
-    )
-
-    assert callback_state_for(canvas) is runtime_state
-    with pytest.raises(AttributeError):
-        callback_state_for(SimpleNamespace(callback_state=shadow_state))
 
 
 def test_initialize_canvas_view_configures_view_runtime_and_services(
@@ -38,8 +20,9 @@ def test_initialize_canvas_view_configures_view_runtime_and_services(
         insert_state="insert-state",
         history_service="history-service",
         tool_settings_state=SimpleNamespace(arrow_line_width=0.0),
+        callback_state=CanvasCallbackState(),
     )
-    callback_state = CanvasCallbackState()
+    callback_state = runtime_state.callback_state
     services = canvas_runtime_services(
         selection=SimpleNamespace(
             update_selection_outline=mock.Mock(), expand_selection_to_groups=mock.Mock()
@@ -59,11 +42,13 @@ def test_initialize_canvas_view_configures_view_runtime_and_services(
         "RDKitAdapter",
         mock.Mock(side_effect=lambda: calls.append("rdkit") or "rdkit"),
     )
-    monkeypatch.setattr(
-        setup,
-        "attach_canvas_runtime_state",
-        lambda canvas: calls.append("runtime") or runtime_state,
-    )
+
+    def attach_runtime_state(target):
+        calls.append("runtime")
+        target.runtime_state = runtime_state
+        return runtime_state
+
+    monkeypatch.setattr(setup, "attach_canvas_runtime_state", attach_runtime_state)
     monkeypatch.setattr(
         setup, "apply_sheet_scene_rect_for", lambda canvas: calls.append("scene-rect")
     )
@@ -80,9 +65,6 @@ def test_initialize_canvas_view_configures_view_runtime_and_services(
         setup, "build_canvas_services", mock.Mock(return_value=services)
     )
     monkeypatch.setattr(setup, "attach_canvas_services", mock.Mock())
-    monkeypatch.setattr(
-        setup, "callback_state_for", mock.Mock(return_value=callback_state)
-    )
     monkeypatch.setattr(setup, "QGraphicsScene", mock.Mock(return_value="scene"))
     renderer = SimpleNamespace(style=SimpleNamespace(bond_line_width=2.5))
     setup.initialize_canvas_view(canvas, renderer=renderer)

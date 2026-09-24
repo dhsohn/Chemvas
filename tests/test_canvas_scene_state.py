@@ -2,10 +2,7 @@ from __future__ import annotations
 
 from unittest import mock
 
-from chemvas.ui.canvas.canvas_scene_state import (
-    canvas_scene_for,
-    optional_canvas_scene_for,
-)
+from chemvas.ui.canvas.canvas_scene_state import optional_canvas_scene_for
 
 
 def test_canvas_scene_state_returns_canvas_scene() -> None:
@@ -13,7 +10,7 @@ def test_canvas_scene_state_returns_canvas_scene() -> None:
     canvas = mock.Mock()
     canvas.scene.return_value = scene
 
-    assert canvas_scene_for(canvas) is scene
+    assert canvas.scene() is scene
     assert optional_canvas_scene_for(canvas) is scene
 
 

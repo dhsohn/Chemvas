@@ -12,7 +12,6 @@ from PyQt6.QtTest import QTest
 
 from chemvas.bootstrap import document_render
 from chemvas.core.document_io import read_document
-from chemvas.ui.canvas.canvas_atom_graphics_state import atom_items_for
 from chemvas.ui.canvas.canvas_document_state import snapshot_canvas_document_state
 from chemvas.ui.canvas.input_view_access import set_zoom_for
 from chemvas.ui.scene.scene_clipboard_copy_service import (
@@ -63,8 +62,10 @@ def test_live_atom_edit_export_copy_and_undo_preserve_document(
     stacks = list(state.history), list(state.redo_stack)
     plan = documents.plan_figure_export(sizing="col1")
     glyph_top = (
-        atom_items_for(canvas)[atom_id]
-        .mapToScene(atom_items_for(canvas)[atom_id].glyph_path())
+        canvas.runtime_state.atom_graphics_state.atom_items[atom_id]
+        .mapToScene(
+            canvas.runtime_state.atom_graphics_state.atom_items[atom_id].glyph_path()
+        )
         .boundingRect()
         .top()
     )

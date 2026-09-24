@@ -12,15 +12,13 @@ from PyQt6.QtWidgets import QApplication
 
 from chemvas.core.document_io import read_document
 from chemvas.ui.annotations.state import scene_item_state_for
-from chemvas.ui.canvas.canvas_atom_graphics_state import atom_dots_for, atom_items_for
 from chemvas.ui.molecule.atom_coords_access import (
-    atom_coords_3d_for,
     current_atom_coords_3d_for,
     set_atom_coords_3d_for_id,
     stored_atom_coords_3d_matches_projection_for,
 )
 from chemvas.ui.molecule.bond_graphics_access import project_point_3d_for
-from chemvas.ui.molecule.structure_mutation_access import add_atom_for, add_bond_for
+from chemvas.ui.molecule.structure_mutation_access import add_bond_for
 from tests.canvas_factory import build_canvas_view
 
 
@@ -45,7 +43,9 @@ def _chains(canvas):
     chains = []
     for origin in (-250.0, 180.0):
         atoms = [
-            add_atom_for(canvas, "C", origin + index * 30.0, (index % 2) * 18.0)
+            canvas.services.canvas_atom_mutation_service.add_atom(
+                "C", origin + index * 30.0, (index % 2) * 18.0
+            )
             for index in range(6)
         ]
         bonds = [add_bond_for(canvas, a, b) for a, b in pairwise(atoms)]
@@ -57,7 +57,10 @@ def _chains(canvas):
 def _select(canvas, atoms):
     canvas.scene().clearSelection()
     for atom_id in atoms:
-        item = atom_items_for(canvas).get(atom_id) or atom_dots_for(canvas)[atom_id]
+        item = (
+            canvas.runtime_state.atom_graphics_state.atom_items.get(atom_id)
+            or canvas.runtime_state.atom_graphics_state.atom_dots[atom_id]
+        )
         item.setSelected(True)
 
 
@@ -86,12 +89,15 @@ def _positions(canvas, atoms):
 
 
 def _depths(canvas, atoms):
-    return {aid: atom_coords_3d_for(canvas)[aid][2] for aid in atoms}
+    return {
+        aid: canvas.runtime_state.atom_coords_3d_state.atom_coords_3d[aid][2]
+        for aid in atoms
+    }
 
 
 def _assert_live_depth(canvas, atoms):
     for aid in atoms:
-        coords = atom_coords_3d_for(canvas)[aid]
+        coords = canvas.runtime_state.atom_coords_3d_state.atom_coords_3d[aid]
         assert stored_atom_coords_3d_matches_projection_for(canvas, aid, coords)
         assert current_atom_coords_3d_for(canvas, aid) == coords
 
@@ -114,7 +120,7 @@ def test_other_component_depth_survives_preview_save_reopen_and_exact_history(
     _rotate(canvas, first)
     documents = canvas.services.canvas_document_session_service
     before = documents.snapshot_state()
-    before_cache = dict(atom_coords_3d_for(canvas))
+    before_cache = dict(canvas.runtime_state.atom_coords_3d_state.atom_coords_3d)
     positions = _positions(canvas, first[0])
     depths = _depths(canvas, first[0])
     mark_before = scene_item_state_for(canvas, mark)
@@ -132,24 +138,24 @@ def test_other_component_depth_survives_preview_save_reopen_and_exact_history(
     assert scene_item_state_for(canvas, mark) == mark_before
     controller.end_selection_3d_rotation()
     after = documents.snapshot_state()
-    after_cache = dict(atom_coords_3d_for(canvas))
+    after_cache = dict(canvas.runtime_state.atom_coords_3d_state.atom_coords_3d)
     assert set(after["perspective"]["atom_coords_3d"]) == expected_cached_ids
     assert set(first[0]) <= expected_cached_ids
     assert len(history.state.history) == count + 1
     history.undo()
     assert documents.snapshot_state() == before
-    assert atom_coords_3d_for(canvas) == before_cache
+    assert canvas.runtime_state.atom_coords_3d_state.atom_coords_3d == before_cache
     assert scene_item_state_for(canvas, mark) == mark_before
     history.redo()
     assert documents.snapshot_state() == after
-    assert atom_coords_3d_for(canvas) == after_cache
+    assert canvas.runtime_state.atom_coords_3d_state.atom_coords_3d == after_cache
     assert scene_item_state_for(canvas, mark) == mark_before
 
     output = tmp_path / "two-molecules.chemvas"
     documents.save_to_file(str(output))
     documents.apply_state(read_document(output).state)
     assert documents.snapshot_state() == after
-    assert atom_coords_3d_for(canvas) == after_cache
+    assert canvas.runtime_state.atom_coords_3d_state.atom_coords_3d == after_cache
     _assert_live_depth(canvas, expected_cached_ids)
 
 
@@ -196,7 +202,7 @@ def test_reframing_failure_restores_existing_begin_savepoint(canvas):
     _rotate(canvas, first)
     documents = canvas.services.canvas_document_session_service
     before = documents.snapshot_state()
-    before_cache = dict(atom_coords_3d_for(canvas))
+    before_cache = dict(canvas.runtime_state.atom_coords_3d_state.atom_coords_3d)
     history = canvas.services.history_service
     stacks = history.capture_stack_snapshot()
 
@@ -214,7 +220,7 @@ def test_reframing_failure_restores_existing_begin_savepoint(canvas):
     ):
         _begin(canvas, second)
     assert documents.snapshot_state() == before
-    assert atom_coords_3d_for(canvas) == before_cache
+    assert canvas.runtime_state.atom_coords_3d_state.atom_coords_3d == before_cache
     history.verify_stack_snapshot(stacks)
     _rotate(canvas, second, 40.0)
     _assert_live_depth(canvas, first[0] + second[0])
@@ -226,7 +232,7 @@ def test_cancel_or_failed_commit_restores_all_original_coordinates(canvas, endin
     _rotate(canvas, first)
     documents = canvas.services.canvas_document_session_service
     before = documents.snapshot_state()
-    before_cache = dict(atom_coords_3d_for(canvas))
+    before_cache = dict(canvas.runtime_state.atom_coords_3d_state.atom_coords_3d)
     history = canvas.services.history_service
     stacks = history.capture_stack_snapshot()
     controller = _begin(canvas, second)
@@ -250,7 +256,7 @@ def test_cancel_or_failed_commit_restores_all_original_coordinates(canvas, endin
         ):
             controller.end_selection_3d_rotation()
     assert documents.snapshot_state() == before
-    assert atom_coords_3d_for(canvas) == before_cache
+    assert canvas.runtime_state.atom_coords_3d_state.atom_coords_3d == before_cache
     history.verify_stack_snapshot(stacks)
 
 
@@ -259,10 +265,10 @@ def test_reframing_does_not_heal_an_already_stale_coordinate(canvas):
     _rotate(canvas, first)
     aid = first[0][0]
     canvas.model.atoms[aid].x += 100.0
-    stored = atom_coords_3d_for(canvas)[aid]
+    stored = canvas.runtime_state.atom_coords_3d_state.atom_coords_3d[aid]
     previous_error = project_point_3d_for(canvas, stored)[0] - canvas.model.atoms[aid].x
     _rotate(canvas, second, 40.0)
-    stored = atom_coords_3d_for(canvas)[aid]
+    stored = canvas.runtime_state.atom_coords_3d_state.atom_coords_3d[aid]
     assert project_point_3d_for(canvas, stored)[0] - canvas.model.atoms[
         aid
     ].x == pytest.approx(previous_error)

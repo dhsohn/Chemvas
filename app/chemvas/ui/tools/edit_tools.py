@@ -7,7 +7,6 @@ from PyQt6.QtGui import QColor
 
 from chemvas.domain.document import VALID_ARROW_KINDS
 from chemvas.domain.transactions import add_recovery_error_note
-from chemvas.ui.canvas.canvas_smiles_input_state import last_smiles_input_for
 from chemvas.ui.canvas.canvas_window_access import notify_error_for
 from chemvas.ui.scene.scene_item_access import item_is_in_canvas_scene
 from chemvas.ui.tools.delete_tool_logic import (
@@ -196,7 +195,9 @@ class DeleteTool(Tool):
                 self._finish_active_session()
         try:
             self._delete_session = self.context.begin_delete_tool_session()
-            self._before_smiles_input = last_smiles_input_for(self.canvas)
+            self._before_smiles_input = (
+                self.canvas.runtime_state.smiles_input_state.last_smiles_input
+            )
             self._erasing = True
             self._erase_or_rollback(event)
         except Exception as original_error:
@@ -231,7 +232,7 @@ class DeleteTool(Tool):
             command = build_delete_tool_history_command(
                 self._commands,
                 before_smiles_input=self._before_smiles_input,
-                after_smiles_input=last_smiles_input_for(self.canvas),
+                after_smiles_input=self.canvas.runtime_state.smiles_input_state.last_smiles_input,
             )
             if command is None:
                 self._rollback_active_session()

@@ -16,13 +16,10 @@ from chemvas.features.scheme_layout import (
     wrap_layout_row,
 )
 from chemvas.ui.annotations.state import scene_item_state_for
-from chemvas.ui.canvas.canvas_atom_graphics_state import atom_items_for
-from chemvas.ui.canvas.canvas_bond_graphics_state import bond_items_for
 from chemvas.ui.canvas.canvas_document_state import document_item_lists_for
 from chemvas.ui.canvas.canvas_mark_registry import mark_registry_for
 from chemvas.ui.canvas.canvas_scene_items_state import ring_items_for
 from chemvas.ui.canvas.graphics_items import note_paint_scene_path
-from chemvas.ui.scene.scene_item_access import apply_scene_item_state
 
 if TYPE_CHECKING:
     from PyQt6.QtWidgets import QGraphicsItem, QGraphicsTextItem
@@ -135,10 +132,10 @@ def _molecular_bounds(
     atom_ids: set[int],
     extra: list[QGraphicsItem] | None = None,
 ) -> QRectF:
-    labels = atom_items_for(canvas)
+    labels = canvas.runtime_state.atom_graphics_state.atom_items
     graphics: list[QGraphicsItem] = [labels[a] for a in atom_ids if a in labels]
     model = canvas.model
-    for bond_id, pieces in bond_items_for(canvas).items():
+    for bond_id, pieces in canvas.runtime_state.bond_graphics_state.bond_items.items():
         bond = model.bonds[bond_id]
         if bond is not None and bond.a in atom_ids:
             graphics.extend(pieces)
@@ -539,7 +536,9 @@ def arrange_canvas(
     for index, color in plan.arrow_colors.items():
         arrow = items["arrows"][index]
         state = scene_item_state_for(canvas, arrow)
-        apply_scene_item_state(canvas, arrow, {**state, "color": color})
+        canvas.services.scene_item_controller.apply_scene_item_state(
+            arrow, {**state, "color": color}
+        )
     for block_request, dx, dy in plan.atom_moves:
         move_controller.move_atoms(
             set(block_request.atoms), dx, dy, update_selection=False

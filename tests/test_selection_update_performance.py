@@ -13,13 +13,10 @@ from chemvas.ui.canvas.canvas_document_metadata_state import (
     document_is_dirty_for,
     mark_document_clean_for,
 )
-from chemvas.ui.canvas.canvas_window_access import snapshot_canvas_state_for
-from chemvas.ui.molecule.structure_mutation_access import add_atom_for, add_bond_for
+from chemvas.ui.molecule.structure_mutation_access import add_bond_for
 from chemvas.ui.scene import scene_geometry as glyph_geometry
-from chemvas.ui.scene.scene_item_access import create_scene_item_from_state
 from chemvas.ui.selection.select_all_access import select_all_scene_items_for
 from chemvas.ui.selection.selection_queries import selected_ids_for
-from chemvas.ui.selection.selection_state import selected_notes_for, selection_state_for
 from chemvas.ui.selection.selection_update_batch import batch_selection_updates
 from tests.canvas_factory import build_canvas_view
 
@@ -43,8 +40,8 @@ def _chain(canvas, count=18, *, labels=False):
     before_atom = canvas.model.next_atom_id
     before_bond = len(canvas.model.bonds)
     ids = [
-        add_atom_for(
-            canvas, "O" if labels and i in {0, count - 1} else "C", i * 20, i % 2 * 15
+        canvas.services.canvas_atom_mutation_service.add_atom(
+            "O" if labels and i in {0, count - 1} else "C", i * 20, i % 2 * 15
         )
         for i in range(count)
     ]
@@ -65,12 +62,12 @@ def _outline(canvas):
 def test_select_all_builds_outline_once_with_notes(canvas, count):
     _chain(canvas)
     notes = [
-        create_scene_item_from_state(
-            canvas, {"kind": "note", "text": f"Step {i}", "x": i * 40, "y": 60}
+        canvas.services.scene_item_controller.create_scene_item_from_state(
+            {"kind": "note", "text": f"Step {i}", "x": i * 40, "y": 60}
         )
         for i in range(count)
     ]
-    before = snapshot_canvas_state_for(canvas)
+    before = canvas.services.canvas_document_session_service.snapshot_state()
     history = canvas.services.history_service.capture_stack_snapshot()
     outline = _outline(canvas)
     with mock.patch.object(
@@ -78,17 +75,17 @@ def test_select_all_builds_outline_once_with_notes(canvas, count):
     ) as paths:
         assert select_all_scene_items_for(canvas)
     assert paths.call_count == len(canvas.model.bonds)
-    assert set(notes) == set(selected_notes_for(canvas))
-    assert snapshot_canvas_state_for(canvas) == before
+    assert set(notes) == set(canvas.runtime_state.selection_state.selected_notes)
+    assert canvas.services.canvas_document_session_service.snapshot_state() == before
     canvas.services.history_service.verify_stack_snapshot(history)
 
 
 @pytest.mark.parametrize("count", [4, 18])
 def test_selected_addition_undo_does_not_build_decreasing_outlines(canvas, count):
-    before = snapshot_canvas_state_for(canvas)
+    before = canvas.services.canvas_document_session_service.snapshot_state()
     mark_document_clean_for(canvas, before)
     _chain(canvas, count)
-    drawn = snapshot_canvas_state_for(canvas)
+    drawn = canvas.services.canvas_document_session_service.snapshot_state()
     assert select_all_scene_items_for(canvas)
     outline = _outline(canvas)
     history = canvas.services.history_service
@@ -97,13 +94,15 @@ def test_selected_addition_undo_does_not_build_decreasing_outlines(canvas, count
     ) as paths:
         history.undo()
     assert paths.call_count == 0
-    assert snapshot_canvas_state_for(canvas) == before
-    assert not document_is_dirty_for(canvas, snapshot_canvas_state_for(canvas))
+    assert canvas.services.canvas_document_session_service.snapshot_state() == before
+    assert not document_is_dirty_for(
+        canvas, canvas.services.canvas_document_session_service.snapshot_state()
+    )
     assert not canvas.scene().selectedItems()
     assert not canvas.scene().signalsBlocked()
-    assert not selection_state_for(canvas).suspend_outline
+    assert not canvas.runtime_state.selection_state.suspend_outline
     history.redo()
-    assert snapshot_canvas_state_for(canvas) == drawn
+    assert canvas.services.canvas_document_session_service.snapshot_state() == drawn
 
 
 @pytest.mark.parametrize("kind", ["rotate", "flip", "knob"])
@@ -144,7 +143,7 @@ def test_rotation_reuses_unchanged_glyph_clearance_geometry(canvas):
 @pytest.mark.parametrize("fail", [False, True])
 def test_nested_batch_restores_prior_flags_without_early_repaint(canvas, fail):
     _chain(canvas, 4)
-    style = selection_state_for(canvas)
+    style = canvas.runtime_state.selection_state
     style.suspend_outline = True
     canvas.scene().blockSignals(True)
     outline = _outline(canvas)
@@ -171,7 +170,7 @@ def test_failed_undo_batch_preserves_exact_scene_stacks_and_retry(canvas, phase)
     _chain(canvas, 6)
     assert select_all_scene_items_for(canvas)
     history = canvas.services.history_service
-    before = snapshot_canvas_state_for(canvas)
+    before = canvas.services.canvas_document_session_service.snapshot_state()
     selected = set(canvas.scene().selectedItems())
     scene_items = set(canvas.scene().items())
     stacks = history.capture_stack_snapshot()
@@ -196,25 +195,25 @@ def test_failed_undo_batch_preserves_exact_scene_stacks_and_retry(canvas, phase)
         )
     with patch, pytest.raises(RuntimeError, match="batch failed"):
         history.undo()
-    assert snapshot_canvas_state_for(canvas) == before
+    assert canvas.services.canvas_document_session_service.snapshot_state() == before
     assert set(canvas.scene().selectedItems()) == selected
     assert set(canvas.scene().items()) == scene_items
     history.verify_stack_snapshot(stacks)
     assert not canvas.scene().signalsBlocked()
-    assert not selection_state_for(canvas).suspend_outline
+    assert not canvas.runtime_state.selection_state.suspend_outline
     history.undo()
     assert not canvas.model.atoms
     history.redo()
-    assert snapshot_canvas_state_for(canvas) == before
+    assert canvas.services.canvas_document_session_service.snapshot_state() == before
 
 
 def test_actual_selected_paste_undo_is_bounded_and_redo_exact(canvas):
     _chain(canvas, 18)
-    create_scene_item_from_state(
-        canvas, {"kind": "note", "text": "Synthetic step", "x": 10, "y": 60}
+    canvas.services.scene_item_controller.create_scene_item_from_state(
+        {"kind": "note", "text": "Synthetic step", "x": 10, "y": 60}
     )
     assert select_all_scene_items_for(canvas)
-    before = snapshot_canvas_state_for(canvas)
+    before = canvas.services.canvas_document_session_service.snapshot_state()
     mark_document_clean_for(canvas, before)
     controller = canvas.services.scene_clipboard_controller
     payload = controller.selection_payload_for_clipboard()
@@ -222,7 +221,7 @@ def test_actual_selected_paste_undo_is_bounded_and_redo_exact(canvas):
     assert controller.paste_selection_from_clipboard(
         payload_provider=lambda: (payload, json.dumps(payload))
     )
-    pasted = snapshot_canvas_state_for(canvas)
+    pasted = canvas.services.canvas_document_session_service.snapshot_state()
     assert len(canvas.model.atoms) == 36
     history = canvas.services.history_service
     outline = _outline(canvas)
@@ -231,17 +230,19 @@ def test_actual_selected_paste_undo_is_bounded_and_redo_exact(canvas):
     ) as paths:
         history.undo()
     assert paths.call_count == 0
-    assert snapshot_canvas_state_for(canvas) == before
-    assert not document_is_dirty_for(canvas, snapshot_canvas_state_for(canvas))
+    assert canvas.services.canvas_document_session_service.snapshot_state() == before
+    assert not document_is_dirty_for(
+        canvas, canvas.services.canvas_document_session_service.snapshot_state()
+    )
     history.redo()
-    assert snapshot_canvas_state_for(canvas) == pasted
+    assert canvas.services.canvas_document_session_service.snapshot_state() == pasted
 
 
 def _paste_fixture(canvas, note_count):
     atom_ids = set(_chain(canvas))
     notes = [
-        create_scene_item_from_state(
-            canvas, {"kind": "note", "text": f"Step {i}", "x": i * 40, "y": 60}
+        canvas.services.scene_item_controller.create_scene_item_from_state(
+            {"kind": "note", "text": f"Step {i}", "x": i * 40, "y": 60}
         )
         for i in range(note_count)
     ]
@@ -258,7 +259,7 @@ def test_forward_paste_builds_one_outline_and_keeps_exact_history(canvas, note_c
     controller, provider, original_atoms, original_notes = _paste_fixture(
         canvas, note_count
     )
-    before = snapshot_canvas_state_for(canvas)
+    before = canvas.services.canvas_document_session_service.snapshot_state()
     mark_document_clean_for(canvas, before)
     history = canvas.services.history_service
     stacks = history.capture_stack_snapshot()
@@ -280,9 +281,11 @@ def test_forward_paste_builds_one_outline_and_keeps_exact_history(canvas, note_c
     assert len(canvas.model.atoms) == 36
     assert len(canvas.model.bonds) == 34
     assert selected_ids_for(canvas)[0] == set(canvas.model.atoms) - original_atoms
-    assert len(selected_notes_for(canvas)) == note_count
-    assert not set(original_notes).intersection(selected_notes_for(canvas))
-    pasted = snapshot_canvas_state_for(canvas)
+    assert len(canvas.runtime_state.selection_state.selected_notes) == note_count
+    assert not set(original_notes).intersection(
+        canvas.runtime_state.selection_state.selected_notes
+    )
+    pasted = canvas.services.canvas_document_session_service.snapshot_state()
     assert document_is_dirty_for(canvas, pasted)
     after_stacks = history.capture_stack_snapshot()
     assert len(after_stacks.history) == len(stacks.history) + 1
@@ -290,11 +293,11 @@ def test_forward_paste_builds_one_outline_and_keeps_exact_history(canvas, note_c
         stacks, history=(*stacks.history, after_stacks.history[-1])
     )
     history.undo()
-    assert snapshot_canvas_state_for(canvas) == before
+    assert canvas.services.canvas_document_session_service.snapshot_state() == before
     assert not document_is_dirty_for(canvas, before)
     history.verify_stack_snapshot(stacks, redo_stack=(after_stacks.history[-1],))
     history.redo()
-    assert snapshot_canvas_state_for(canvas) == pasted
+    assert canvas.services.canvas_document_session_service.snapshot_state() == pasted
     history.verify_stack_snapshot(after_stacks)
 
 
@@ -302,7 +305,7 @@ def test_forward_paste_builds_one_outline_and_keeps_exact_history(canvas, note_c
 @pytest.mark.parametrize("suspended", [False, True])
 def test_forward_paste_preserves_outer_selection_batch(canvas, blocked, suspended):
     controller, provider, _, _ = _paste_fixture(canvas, 3)
-    style = selection_state_for(canvas)
+    style = canvas.runtime_state.selection_state
     style.suspend_outline = suspended
     canvas.scene().blockSignals(blocked)
     outline = _outline(canvas)
@@ -314,7 +317,7 @@ def test_forward_paste_preserves_outer_selection_batch(canvas, blocked, suspende
         assert style.suspend_outline is suspended
         assert canvas.scene().signalsBlocked() is blocked
         assert refresh.call_count == (0 if suspended else 1)
-        assert len(selected_notes_for(canvas)) == 3
+        assert len(canvas.runtime_state.selection_state.selected_notes) == 3
     finally:
         style.suspend_outline = False
         canvas.scene().blockSignals(False)
@@ -327,16 +330,16 @@ def test_failed_forward_paste_restores_exact_scene_stacks_and_retry(
     canvas, phase, nested
 ):
     controller, provider, _, _ = _paste_fixture(canvas, 3)
-    before = snapshot_canvas_state_for(canvas)
+    before = canvas.services.canvas_document_session_service.snapshot_state()
     mark_document_clean_for(canvas, before)
     selected = set(canvas.scene().selectedItems())
-    notes = list(selected_notes_for(canvas))
+    notes = list(canvas.runtime_state.selection_state.selected_notes)
     scene_items = set(canvas.scene().items())
     history = canvas.services.history_service
     stacks = history.capture_stack_snapshot()
     clipboard = canvas.runtime_state.scene_clipboard_state
     paste_state = (clipboard.paste_source_json, clipboard.paste_count)
-    style = selection_state_for(canvas)
+    style = canvas.runtime_state.selection_state
     style.suspend_outline = nested
     canvas.scene().blockSignals(nested)
     selection = canvas.services.selection
@@ -368,18 +371,18 @@ def test_failed_forward_paste_restores_exact_scene_stacks_and_retry(
         style.suspend_outline = False
         canvas.scene().blockSignals(False)
     assert caught.value is error
-    assert snapshot_canvas_state_for(canvas) == before
+    assert canvas.services.canvas_document_session_service.snapshot_state() == before
     assert not document_is_dirty_for(canvas, before)
     assert set(canvas.scene().selectedItems()) == selected
-    assert list(selected_notes_for(canvas)) == notes
+    assert list(canvas.runtime_state.selection_state.selected_notes) == notes
     assert set(canvas.scene().items()) == scene_items
     assert (clipboard.paste_source_json, clipboard.paste_count) == paste_state
     history.verify_stack_snapshot(stacks)
     assert not canvas.scene().signalsBlocked()
-    assert not selection_state_for(canvas).suspend_outline
+    assert not canvas.runtime_state.selection_state.suspend_outline
     assert controller.paste_selection_from_clipboard(payload_provider=provider)
     history.undo()
-    assert snapshot_canvas_state_for(canvas) == before
+    assert canvas.services.canvas_document_session_service.snapshot_state() == before
 
 
 def test_batch_refresh_publishes_final_selection_info_once(canvas):
@@ -402,8 +405,8 @@ def test_real_canvas_keys_and_rotation_knob_keep_exact_history(canvas, app, tmp_
 
     _chain(canvas, 6, labels=True)
     for i in range(4):
-        create_scene_item_from_state(
-            canvas, {"kind": "note", "text": f"Step {i}", "x": i * 40, "y": 70}
+        canvas.services.scene_item_controller.create_scene_item_from_state(
+            {"kind": "note", "text": f"Step {i}", "x": i * 40, "y": 70}
         )
     canvas.resize(800, 600)
     canvas.show()
@@ -411,10 +414,10 @@ def test_real_canvas_keys_and_rotation_knob_keep_exact_history(canvas, app, tmp_
     canvas.setFocus()
     app.processEvents()
     canvas.services.tool_mode_controller.set_tool("select")
-    before = snapshot_canvas_state_for(canvas)
+    before = canvas.services.canvas_document_session_service.snapshot_state()
     mark_document_clean_for(canvas, before)
     QTest.keyClick(canvas, Qt.Key.Key_A, Qt.KeyboardModifier.ControlModifier)
-    assert len(selected_notes_for(canvas)) == 4
+    assert len(canvas.runtime_state.selection_state.selected_notes) == 4
     assert canvas.grab().save(str(tmp_path / "selected-before.png"))
     knob = next(
         item for item in canvas.scene().items() if item.data(1) == ROTATION_HANDLE_TYPE
@@ -427,11 +430,11 @@ def test_real_canvas_keys_and_rotation_knob_keep_exact_history(canvas, app, tmp_
         canvas.viewport(), Qt.MouseButton.LeftButton, pos=start + QPoint(30, 5)
     )
     app.processEvents()
-    after = snapshot_canvas_state_for(canvas)
+    after = canvas.services.canvas_document_session_service.snapshot_state()
     assert after != before
     assert canvas.grab().save(str(tmp_path / "rotated-after.png"))
     QTest.keyClick(canvas, Qt.Key.Key_Z, Qt.KeyboardModifier.ControlModifier)
-    assert snapshot_canvas_state_for(canvas) == before
+    assert canvas.services.canvas_document_session_service.snapshot_state() == before
     assert not document_is_dirty_for(canvas, before)
     canvas.services.history_service.redo()
-    assert snapshot_canvas_state_for(canvas) == after
+    assert canvas.services.canvas_document_session_service.snapshot_state() == after

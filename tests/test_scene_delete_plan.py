@@ -13,7 +13,6 @@ from chemvas.core.model_commands import (
     DeleteBondCommand,
 )
 from chemvas.domain.document import Atom, Bond, MoleculeModel
-from chemvas.ui.canvas.canvas_smiles_input_state import last_smiles_input_for
 from chemvas.ui.history.history_commands import DeleteSceneItemsCommand
 from chemvas.ui.scene.scene_delete_plan import (
     build_delete_selection_plan,
@@ -474,7 +473,7 @@ class SceneDeletePlanTest(unittest.TestCase):
         self.assertEqual(canvas.remove_bond_calls, [0])
         # The oxygen endpoint keeps its element label and survives orphaning.
         self.assertEqual(canvas.remove_atom_calls, [(1, False)])
-        self.assertIsNone(last_smiles_input_for(canvas))
+        self.assertIsNone(canvas.runtime_state.smiles_input_state.last_smiles_input)
 
         delete_bond_commands = [
             child for child in command.commands if isinstance(child, DeleteBondCommand)

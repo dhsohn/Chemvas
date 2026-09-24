@@ -28,12 +28,8 @@ from chemvas.domain.document import (
 )
 from chemvas.features.document_composition import compose_document_state
 from chemvas.features.document_patch import apply_document_patch
-from chemvas.ui.canvas.canvas_bond_graphics_state import bond_items_for_id
 from chemvas.ui.selection.select_all_access import select_all_scene_items_for
-from chemvas.ui.window.main_window_ports import (
-    active_canvas_for_window,
-    services_for_window,
-)
+from chemvas.ui.window.main_window_ports import active_canvas_for_window
 from tests.canvas_factory import build_canvas_view
 
 
@@ -129,7 +125,10 @@ def test_canvas_draws_crossed_lines_instead_of_parallel_lines(canvas):
     state = compose_document_state(raw)
     state["model"]["bonds"][0]["style"] = "double_either"
     canvas.services.canvas_document_session_service.apply_state(state)
-    first, second = [item.line() for item in bond_items_for_id(canvas, 0)]
+    first, second = [
+        item.line()
+        for item in canvas.runtime_state.bond_graphics_state.bond_items.get(0, [])
+    ]
     kind, crossing = first.intersects(second)
     assert kind == QLineF.IntersectionType.BoundedIntersection
     assert crossing == QPointF(15, 0)
@@ -144,13 +143,16 @@ def test_fully_label_trimmed_double_does_not_gain_a_crossbar(canvas, end):
     canvas.services.canvas_document_session_service.apply_state(
         compose_document_state(raw)
     )
-    assert all(item.line().isNull() for item in bond_items_for_id(canvas, 0))
+    assert all(
+        item.line().isNull()
+        for item in canvas.runtime_state.bond_graphics_state.bond_items.get(0, [])
+    )
 
 
 def _lines(canvas):
     return [
         (item.line().x1(), item.line().y1(), item.line().x2(), item.line().y2())
-        for item in bond_items_for_id(canvas, 0)
+        for item in canvas.runtime_state.bond_graphics_state.bond_items.get(0, [])
     ]
 
 
@@ -226,14 +228,17 @@ def test_desktop_mol_import_edit_undo_and_export(app, tmp_path, monkeypatch):
     window.resize(1100, 800)
     window.show()
     assert QTest.qWaitForWindowExposed(window, 5000)
-    services = services_for_window(window)
+    services = window.services
     try:
         assert services.document_action_service.load_canvas_from_path(window, str(path))
         canvas = active_canvas_for_window(window)
         documents = canvas.services.canvas_document_session_service
         before = documents.snapshot_state()
         assert canvas.model.bonds[0].style == "double_either"
-        first, second = [item.line() for item in bond_items_for_id(canvas, 0)]
+        first, second = [
+            item.line()
+            for item in canvas.runtime_state.bond_graphics_state.bond_items.get(0, [])
+        ]
         assert (
             first.intersects(second)[0] == QLineF.IntersectionType.BoundedIntersection
         )

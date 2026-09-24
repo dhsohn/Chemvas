@@ -9,7 +9,6 @@ from PyQt6.QtWidgets import QApplication
 
 from chemvas.bootstrap.window_registry import open_new_window
 from chemvas.shell.window_registry import forget_window
-from chemvas.ui.canvas.canvas_window_access import snapshot_canvas_state_for
 from chemvas.ui.molecule.structure_mutation_access import add_bond_between_points_for
 from chemvas.ui.session import session_snapshot_store as session_store_module
 from chemvas.ui.session.app_data_paths import sessions_dir
@@ -18,10 +17,7 @@ from chemvas.ui.session.session_recovery_service import (
     collect_open_documents,
 )
 from chemvas.ui.session.session_snapshot_store import SessionSnapshotStore
-from chemvas.ui.window.main_window_ports import (
-    active_canvas_for_window,
-    services_for_window,
-)
+from chemvas.ui.window.main_window_ports import active_canvas_for_window
 
 
 class SessionRecoveryIntegrationTest(unittest.TestCase):
@@ -38,7 +34,7 @@ class SessionRecoveryIntegrationTest(unittest.TestCase):
         cls.app.setQuitOnLastWindowClosed(False)
 
     def _document_service(self, window):
-        return services_for_window(window).canvas_document_service
+        return window.services.canvas_document_service
 
     def test_crash_then_relaunch_restores_the_unsaved_drawing(self) -> None:
         # --- previous session: draw something, then autosave a snapshot -------
@@ -82,7 +78,7 @@ class SessionRecoveryIntegrationTest(unittest.TestCase):
 
             self.assertEqual(recovered, 1)
             restored_canvas = active_canvas_for_window(new_window)
-            restored_state = snapshot_canvas_state_for(restored_canvas)
+            restored_state = restored_canvas.services.canvas_document_session_service.snapshot_state()
             # The drawn bond (and its two atoms) survived the crash round-trip...
             self.assertTrue(restored_state["model"]["atoms"])
             # ...and the restored document is flagged unsaved for the user.

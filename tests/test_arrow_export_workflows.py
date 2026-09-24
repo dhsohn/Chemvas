@@ -14,14 +14,15 @@ from chemvas.ui.canvas.canvas_document_state import snapshot_canvas_document_sta
 from chemvas.ui.scene.scene_clipboard_copy_service import (
     copy_selection_to_clipboard_for_canvas,
 )
-from chemvas.ui.scene.scene_decoration_access import add_arrow_for
 from chemvas.ui.selection.select_all_access import select_all_scene_items_for
 from tests.native_canvas_support import app as app
 from tests.native_canvas_support import canvas as canvas
 
 
 def _labelled_arrow(canvas):
-    arrow = add_arrow_for(canvas, QPointF(-40, 0), QPointF(40, 0), "arrow")
+    arrow = canvas.services.scene_decoration_service.add_arrow(
+        QPointF(-40, 0), QPointF(40, 0), "arrow"
+    )
     before = snapshot_canvas_document_state(canvas)
     assert canvas.services.scene_decoration_service.set_arrow_labels(
         arrow, {"above": "K_{2}CO_{3}\nDMSO, rt", "below": "\n68%, 96% ee\n"}

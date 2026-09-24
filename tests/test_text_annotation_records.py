@@ -19,11 +19,7 @@ from chemvas.ui.annotations.state import (
     note_state_dict,
 )
 from chemvas.ui.canvas.canvas_lifecycle import schedule_canvas_deletion_for
-from chemvas.ui.molecule.structure_mutation_access import add_atom_for
-from chemvas.ui.scene.mark_item_access import (
-    mark_kinds_by_atom_for,
-    sync_marks_for_atom_for,
-)
+from chemvas.ui.scene.mark_item_access import mark_kinds_by_atom_for
 from chemvas.ui.scene.scene_clipboard_access import (
     build_selection_clipboard_payload_for_canvas,
 )
@@ -89,7 +85,7 @@ def test_native_text_format_undo_and_blocked_replacement_publish_document_values
 )
 @pytest.mark.parametrize("loss", ["detach", "destroy", "release"])
 def test_lost_mark_view_preserves_copy_and_electronic_annotation(canvas, kind, loss):
-    atom_id = add_atom_for(canvas, "N", 10.25, -13.5)
+    atom_id = canvas.services.canvas_atom_mutation_service.add_atom("N", 10.25, -13.5)
     mark = add_mark_for_atom_for(canvas, atom_id, QPointF(22.5, -17.25), kind=kind)
     state = mark.mark_state()
     record_id = mark.record_id
@@ -116,7 +112,7 @@ def test_lost_mark_view_preserves_copy_and_electronic_annotation(canvas, kind, l
         del mark
         gc.collect()
     assert mark_kinds_by_atom_for(canvas) == {atom_id: [kind]}
-    sync_marks_for_atom_for(canvas, atom_id)
+    canvas.services.canvas_mark_scene_service.sync_marks_for_atom(atom_id)
     assert canvas.model.atom_annotations[atom_id] == annotation
     assert canvas.services.canvas_document_session_service.snapshot_state() == before
     payload = build_selection_clipboard_payload_for_canvas(

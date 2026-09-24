@@ -15,7 +15,6 @@ from chemvas.ui.canvas.canvas_window_access import notify_error_for
 from chemvas.ui.canvas.input_view_access import (
     CanvasSceneRectStateSnapshot,
     set_scene_rect_for,
-    update_viewport_for,
 )
 from chemvas.ui.canvas.sheet_setup_logic import (
     SHEET_MARGIN_PX,
@@ -23,7 +22,6 @@ from chemvas.ui.canvas.sheet_setup_logic import (
 from chemvas.ui.canvas.sheet_setup_state import (
     set_sheet_setup_state_for,
     sheet_rects,
-    sheet_setup_state_for,
     sheet_setup_values_for,
 )
 
@@ -46,7 +44,7 @@ class _SheetSetupSavepoint:
 
     @classmethod
     def capture(cls, canvas) -> _SheetSetupSavepoint:
-        state = sheet_setup_state_for(canvas)
+        state = canvas.runtime_state.sheet_setup_state
         return cls(
             state=state,
             size_name=state.size_name,
@@ -130,7 +128,7 @@ def _apply_sheet_scene_rect_unchecked(canvas) -> None:
                     -SHEET_MARGIN_PX, -SHEET_MARGIN_PX, SHEET_MARGIN_PX, SHEET_MARGIN_PX
                 )
             )
-    sheet_setup_state_for(canvas).rect = sheet_rect
+    canvas.runtime_state.sheet_setup_state.rect = sheet_rect
     set_scene_rect_for(canvas, scene_rect)
 
 
@@ -156,7 +154,7 @@ def refresh_canvas_scroll_range_for(canvas) -> bool:
 
 
 def sheet_rect_for(canvas) -> QRectF:
-    return QRectF(sheet_setup_state_for(canvas).rect)
+    return QRectF(canvas.runtime_state.sheet_setup_state.rect)
 
 
 def scene_pos_in_sheet_for(canvas, pos) -> bool:
@@ -170,7 +168,7 @@ def set_sheet_setup_for(canvas, size_name: str, orientation: str) -> None:
     def apply() -> None:
         set_sheet_setup_state_for(canvas, size_name, orientation)
         _apply_sheet_scene_rect_unchecked(canvas)
-        update_viewport_for(canvas)
+        canvas.viewport().update()
 
     _run_sheet_setup_transaction(canvas, apply)
 

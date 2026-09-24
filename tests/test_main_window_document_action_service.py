@@ -24,16 +24,11 @@ from chemvas.shell.window_registry import (
     open_windows,
     register_window,
 )
-from chemvas.ui.canvas.canvas_document_metadata_state import document_file_path_for
 from chemvas.ui.canvas.canvas_mark_registry import mark_registry_for
-from chemvas.ui.canvas.canvas_window_access import snapshot_canvas_state_for
 from chemvas.ui.molecule.structure_mutation_access import add_bond_between_points_for
 from chemvas.ui.molecule.structure_payload_access import build_3d_conversion_payload_for
 from chemvas.ui.scene.mark_item_access import mark_kinds_by_atom_for
-from chemvas.ui.scene.scene_decoration_access import (
-    add_arrow_for,
-    materialize_mark_for_atom_for,
-)
+from chemvas.ui.scene.scene_decoration_access import materialize_mark_for_atom_for
 from chemvas.ui.window import (
     main_window_document_action_service as document_action_module,
 )
@@ -45,7 +40,6 @@ from chemvas.ui.window.main_window_path_logic import (
 from chemvas.ui.window.main_window_ports import (
     active_canvas_for_window,
     history_service_for_window,
-    services_for_window,
 )
 
 
@@ -60,11 +54,11 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
         self.window.show()
         self.app.processEvents()
         QTest.qWait(20)
-        self.service = services_for_window(self.window).document_action_service
+        self.service = self.window.services.document_action_service
 
     def tearDown(self) -> None:
         for canvas in self.window.tab_references.all_canvases():
-            services_for_window(self.window).canvas_document_service.mark_clean(canvas)
+            self.window.services.canvas_document_service.mark_clean(canvas)
         self.window.close()
         self.app.processEvents()
         QTest.qWait(10)
@@ -93,7 +87,7 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
         question.assert_called_once()
         self.assertTrue(self.window.isVisible())
         self.assertTrue(
-            services_for_window(self.window).canvas_document_service.is_dirty(
+            self.window.services.canvas_document_service.is_dirty(
                 active_canvas_for_window(self.window)
             )
         )
@@ -114,19 +108,19 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
             self.assertTrue(result)
             self.assertTrue(path.exists())
             canvas = active_canvas_for_window(self.window)
-            self.assertEqual(document_file_path_for(canvas), str(path))
+            self.assertEqual(
+                canvas.runtime_state.document_metadata_state.file_path, str(path)
+            )
             self.assertEqual(
                 self.window.tab_references.canvas_tabs.tabText(0), "new.chemvas"
             )
             self.assertFalse(
-                services_for_window(self.window).canvas_document_service.is_dirty(
-                    canvas
-                )
+                self.window.services.canvas_document_service.is_dirty(canvas)
             )
 
     def test_save_as_keeps_sheet_status_current_without_tool_switch(self) -> None:
         canvas = active_canvas_for_window(self.window)
-        status = services_for_window(self.window).status_service
+        status = self.window.services.status_service
         add_bond_between_points_for(canvas, QPointF(-20, 0), QPointF(20, 0))
         other_status = {
             key: value
@@ -164,7 +158,7 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
 
     def test_sheet_status_follows_edit_undo_redo_and_save(self) -> None:
         canvas = active_canvas_for_window(self.window)
-        status = services_for_window(self.window).status_service
+        status = self.window.services.status_service
         history = history_service_for_window(self.window)
         self.window.statusBar().showMessage("Keep this feedback")
 
@@ -185,7 +179,7 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
 
     def test_failed_save_preserves_sheet_status_and_document_state(self) -> None:
         canvas = active_canvas_for_window(self.window)
-        status = services_for_window(self.window).status_service
+        status = self.window.services.status_service
         with tempfile.TemporaryDirectory() as temp_dir:
             original_path = Path(temp_dir) / "original.chemvas"
             failed_path = Path(temp_dir) / "failed.chemvas"
@@ -194,12 +188,15 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
             )
             original_bytes = original_path.read_bytes()
             add_bond_between_points_for(canvas, QPointF(-20, 0), QPointF(20, 0))
-            before_document = snapshot_canvas_state_for(canvas)
+            before_document = (
+                canvas.services.canvas_document_session_service.snapshot_state()
+            )
             before_status = status.status_context_texts()
             message_box = mock.Mock()
 
-            with mock.patch(
-                "chemvas.ui.window.main_window_document_action_service.save_canvas_to_file_for",
+            with mock.patch.object(
+                canvas.services.canvas_document_session_service,
+                "save_to_file",
                 side_effect=OSError("write failed"),
             ):
                 result = self.service.save_canvas_to_path(
@@ -209,13 +206,17 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
             self.assertFalse(result)
             self.assertFalse(failed_path.exists())
             self.assertEqual(original_path.read_bytes(), original_bytes)
-            self.assertEqual(document_file_path_for(canvas), str(original_path))
-            self.assertEqual(snapshot_canvas_state_for(canvas), before_document)
+            self.assertEqual(
+                canvas.runtime_state.document_metadata_state.file_path,
+                str(original_path),
+            )
+            self.assertEqual(
+                canvas.services.canvas_document_session_service.snapshot_state(),
+                before_document,
+            )
             self.assertEqual(status.status_context_texts(), before_status)
             self.assertTrue(
-                services_for_window(self.window).canvas_document_service.is_dirty(
-                    canvas
-                )
+                self.window.services.canvas_document_service.is_dirty(canvas)
             )
             message_box.warning.assert_called_once()
 
@@ -227,7 +228,7 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
             add_bond_between_points_for(canvas, QPointF(-20, 0), QPointF(20, 0))
             external_bytes = path.read_bytes() + b"\n"
             path.write_bytes(external_bytes)
-            before = snapshot_canvas_state_for(canvas)
+            before = canvas.services.canvas_document_session_service.snapshot_state()
             message_box = mock.Mock()
             message_box.question.return_value = QMessageBox.StandardButton.No
 
@@ -238,7 +239,9 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
             )
             message_box.question.assert_called_once()
             self.assertEqual(path.read_bytes(), external_bytes)
-            self.assertEqual(snapshot_canvas_state_for(canvas), before)
+            self.assertEqual(
+                canvas.services.canvas_document_session_service.snapshot_state(), before
+            )
             message_box.question.return_value = QMessageBox.StandardButton.Yes
             self.assertTrue(
                 self.service.save_canvas_to_path(
@@ -254,18 +257,23 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
             message_box.question.assert_not_called()
 
     def test_save_does_not_adopt_another_writers_post_save_bytes(self) -> None:
-        from chemvas.ui.canvas.canvas_window_access import save_canvas_to_file_for
 
         with tempfile.TemporaryDirectory() as temp_dir:
             path = Path(temp_dir) / "shared.chemvas"
 
-            def write_then_external_change(canvas, write_path):
-                warnings = save_canvas_to_file_for(canvas, write_path)
+            session_service = active_canvas_for_window(
+                self.window
+            ).services.canvas_document_session_service
+            real_save_to_file = session_service.save_to_file
+
+            def write_then_external_change(write_path):
+                warnings = real_save_to_file(write_path)
                 path.write_bytes(path.read_bytes() + b"\n")
                 return warnings
 
-            with mock.patch(
-                "chemvas.ui.window.main_window_document_action_service.save_canvas_to_file_for",
+            with mock.patch.object(
+                session_service,
+                "save_to_file",
                 side_effect=write_then_external_change,
             ):
                 self.assertTrue(
@@ -288,7 +296,11 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
         canvas = active_canvas_for_window(self.window)
         with tempfile.TemporaryDirectory() as temp_dir:
             path = Path(temp_dir) / "shared.chemvas"
-            write_document(path, snapshot_canvas_state_for(canvas), CANVAS_FILE_VERSION)
+            write_document(
+                path,
+                canvas.services.canvas_document_session_service.snapshot_state(),
+                CANVAS_FILE_VERSION,
+            )
             self.assertTrue(self.service.load_canvas_from_path(self.window, str(path)))
             message_box = mock.Mock()
             message_box.question.return_value = QMessageBox.StandardButton.No
@@ -300,11 +312,11 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
             message_box.question.assert_not_called()
             # Recovery opens a state, not the original file bytes. Its baseline
             # is unknown, so Save must never silently replace the bound path.
-            documents = services_for_window(self.window).canvas_document_service
+            documents = self.window.services.canvas_document_service
             documents.replace_canvas_with_state(
                 self.window,
                 canvas,
-                state=snapshot_canvas_state_for(canvas),
+                state=canvas.services.canvas_document_session_service.snapshot_state(),
                 file_path=str(path),
             )
             documents.mark_dirty(canvas)
@@ -323,7 +335,7 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
         from tests.calculation_plan_support import _document_state, _plan
 
         canvas = active_canvas_for_window(self.window)
-        documents = services_for_window(self.window).canvas_document_service
+        documents = self.window.services.canvas_document_service
         for stale in (False, True):
             with self.subTest(stale=stale), tempfile.TemporaryDirectory() as temp_dir:
                 state = _document_state()
@@ -390,9 +402,9 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
                 "chemvas.ui.window.main_window_document_action_service.find_open_document",
                 return_value=(other_window, other_canvas),
             ) as find_open_document,
-            mock.patch(
-                "chemvas.ui.window.main_window_document_action_service.save_canvas_to_file_for"
-            ) as save_canvas_to_file_for,
+            mock.patch.object(
+                canvas.services.canvas_document_session_service, "save_to_file"
+            ) as save_to_file,
         ):
             result = self.service.save_canvas_to_path(
                 self.window,
@@ -403,7 +415,7 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
 
         self.assertFalse(result)
         find_open_document.assert_called_once_with(owned_path, exclude_canvas=canvas)
-        save_canvas_to_file_for.assert_not_called()
+        save_to_file.assert_not_called()
         message_box.warning.assert_called_once_with(
             self.window,
             "Save Error",
@@ -426,7 +438,9 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
             self.assertTrue(alias.is_symlink())
             self.assertNotEqual(target.read_text(encoding="utf-8"), "old")
             self.assertEqual(
-                document_file_path_for(active_canvas_for_window(self.window)),
+                active_canvas_for_window(
+                    self.window
+                ).runtime_state.document_metadata_state.file_path,
                 str(alias),
             )
 
@@ -490,7 +504,9 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
             abs_path = str(Path(temp_dir) / "rel.chemvas")
             write_document(
                 abs_path,
-                snapshot_canvas_state_for(active_canvas_for_window(self.window)),
+                active_canvas_for_window(
+                    self.window
+                ).services.canvas_document_session_service.snapshot_state(),
                 CANVAS_FILE_VERSION,
             )
             cwd = os.getcwd()
@@ -503,7 +519,9 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
                 os.chdir(cwd)
 
         self.assertTrue(ok)
-        stored = document_file_path_for(active_canvas_for_window(self.window))
+        stored = active_canvas_for_window(
+            self.window
+        ).runtime_state.document_metadata_state.file_path
         # A relative CLI path must be resolved so the session/recent entries
         # survive a restore from a different working directory.
         self.assertIsNotNone(stored)
@@ -516,7 +534,9 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
             path = str(Path(temp_dir) / "open.chemvas")
             write_document(
                 path,
-                snapshot_canvas_state_for(active_canvas_for_window(self.window)),
+                active_canvas_for_window(
+                    self.window
+                ).services.canvas_document_session_service.snapshot_state(),
                 CANVAS_FILE_VERSION,
             )
             calls: list[int] = []
@@ -533,7 +553,7 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
         self.assertEqual(calls, [1])
 
     def test_close_canvas_tab_refreshes_the_autosave_snapshot(self) -> None:
-        services_for_window(self.window).canvas_document_service.new_canvas(self.window)
+        self.window.services.canvas_document_service.new_canvas(self.window)
         calls: list[int] = []
         with mock.patch(
             "chemvas.ui.window.main_window_document_action_service.request_snapshot",
@@ -561,9 +581,12 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
     def test_save_canvas_to_path_rejects_noncanonical_document_suffix(self) -> None:
         message_box = mock.Mock()
 
-        with mock.patch(
-            "chemvas.ui.window.main_window_document_action_service.save_canvas_to_file_for"
-        ) as save_canvas_to_file_for:
+        with mock.patch.object(
+            active_canvas_for_window(
+                self.window
+            ).services.canvas_document_session_service,
+            "save_to_file",
+        ) as save_to_file:
             result = self.service.save_canvas_to_path(
                 self.window,
                 "/tmp/legacy.json",
@@ -571,7 +594,7 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
             )
 
         self.assertFalse(result)
-        save_canvas_to_file_for.assert_not_called()
+        save_to_file.assert_not_called()
         message_box.warning.assert_called_once_with(
             self.window,
             "Save Error",
@@ -581,8 +604,11 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
     def test_save_canvas_to_path_reports_document_adjustments(self) -> None:
         message_box = mock.Mock()
 
-        with mock.patch(
-            "chemvas.ui.window.main_window_document_action_service.save_canvas_to_file_for",
+        with mock.patch.object(
+            active_canvas_for_window(
+                self.window
+            ).services.canvas_document_session_service,
+            "save_to_file",
             return_value=["1 invalid bond was omitted."],
         ):
             result = self.service.save_canvas_to_path(
@@ -599,7 +625,7 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
 
     def test_save_canvas_prefers_current_path_and_falls_back_to_save_as(self) -> None:
         canvas = active_canvas_for_window(self.window)
-        services_for_window(self.window).canvas_document_service.set_file_path(
+        self.window.services.canvas_document_service.set_file_path(
             canvas, "/tmp/existing.chemvas"
         )
 
@@ -622,9 +648,7 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
         )
         save_canvas_as.assert_not_called()
 
-        services_for_window(self.window).canvas_document_service.set_file_path(
-            canvas, None
-        )
+        self.window.services.canvas_document_service.set_file_path(canvas, None)
         with (
             mock.patch.object(
                 self.service, "save_canvas_to_path", return_value=True
@@ -646,7 +670,7 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
         self,
     ) -> None:
         canvas = active_canvas_for_window(self.window)
-        services_for_window(self.window).canvas_document_service.set_file_path(
+        self.window.services.canvas_document_service.set_file_path(
             canvas, "/tmp/current.chemvas"
         )
         file_dialog = mock.Mock()
@@ -754,9 +778,11 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
     ) -> None:
         canvas = active_canvas_for_window(self.window)
         add_bond_between_points_for(canvas, QPointF(-20, 0), QPointF(20, 0))
-        arrow = add_arrow_for(canvas, QPointF(0, 50), QPointF(80, 50), "arrow")
+        arrow = canvas.services.scene_decoration_service.add_arrow(
+            QPointF(0, 50), QPointF(80, 50), "arrow"
+        )
         canvas.scene().clearSelection()
-        before = snapshot_canvas_state_for(canvas)
+        before = canvas.services.canvas_document_session_service.snapshot_state()
         self.window.statusBar().showMessage("Keep this feedback")
 
         for annotation_selected in (False, True):
@@ -785,7 +811,10 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
                     canvas, "Export Error", message
                 )
                 status_sink.assert_called_once_with(f"Export failed: {message}")
-                self.assertEqual(snapshot_canvas_state_for(canvas), before)
+                self.assertEqual(
+                    canvas.services.canvas_document_session_service.snapshot_state(),
+                    before,
+                )
                 self.assertEqual(
                     self.window.statusBar().currentMessage(), "Keep this feedback"
                 )
@@ -798,7 +827,7 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
             canvas, atom_id, QPointF(-20, -10), kind="plus"
         )
         self.assertIsNotNone(mark)
-        before = snapshot_canvas_state_for(canvas)
+        before = canvas.services.canvas_document_session_service.snapshot_state()
 
         with tempfile.TemporaryDirectory() as temp_dir:
             for kind, expected_atoms, expected_bonds in (
@@ -837,7 +866,10 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
                     self.assertEqual(
                         list(exported.atom_annotations.values()), [{"formal_charge": 1}]
                     )
-                    self.assertEqual(snapshot_canvas_state_for(canvas), before)
+                    self.assertEqual(
+                        canvas.services.canvas_document_session_service.snapshot_state(),
+                        before,
+                    )
 
     def test_export_paths_do_not_reprompt_a_dialog_confirmed_target(self) -> None:
         # The normalizers round-trip through Path(), so the returned string can
@@ -1030,7 +1062,7 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
     ) -> None:
         canvas = active_canvas_for_window(self.window)
         add_bond_between_points_for(canvas, QPointF(-20, -30), QPointF(20, 30))
-        before = snapshot_canvas_state_for(canvas)
+        before = canvas.services.canvas_document_session_service.snapshot_state()
         with tempfile.TemporaryDirectory() as temp_dir:
             for fmt in ("svg", "pdf", "png", "tiff"):
                 for existing in (False, True):
@@ -1076,7 +1108,10 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
                             self.assertEqual(path.read_bytes(), sentinel)
                         else:
                             self.assertFalse(path.exists())
-                        self.assertEqual(snapshot_canvas_state_for(canvas), before)
+                        self.assertEqual(
+                            canvas.services.canvas_document_session_service.snapshot_state(),
+                            before,
+                        )
 
     def test_export_figure_cancel_does_not_request_path_or_session(self) -> None:
         file_dialog = mock.Mock()
@@ -1139,7 +1174,9 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
     def test_load_canvas_from_path_reuses_clean_untitled_canvas(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             path = Path(temp_dir) / "input.chemvas"
-            state = snapshot_canvas_state_for(active_canvas_for_window(self.window))
+            state = active_canvas_for_window(
+                self.window
+            ).services.canvas_document_session_service.snapshot_state()
             write_document(path, state, version=CANVAS_FILE_VERSION)
 
             result = self.service.load_canvas_from_path(self.window, str(path))
@@ -1150,14 +1187,19 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
             self.window.tab_references.canvas_tabs.tabText(0), "input.chemvas"
         )
         self.assertEqual(
-            document_file_path_for(active_canvas_for_window(self.window)), str(path)
+            active_canvas_for_window(
+                self.window
+            ).runtime_state.document_metadata_state.file_path,
+            str(path),
         )
 
     def test_load_canvas_from_path_rejects_legacy_json_document(self) -> None:
         message_box = mock.Mock()
         with tempfile.TemporaryDirectory() as temp_dir:
             path = Path(temp_dir) / "recent-legacy.json"
-            state = snapshot_canvas_state_for(active_canvas_for_window(self.window))
+            state = active_canvas_for_window(
+                self.window
+            ).services.canvas_document_session_service.snapshot_state()
             write_document(path, state, version=CANVAS_FILE_VERSION)
 
             with mock.patch(
@@ -1174,7 +1216,11 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
             "Load Error",
             "Unsupported file type. Open a .chemvas, .svg, or .mol file.",
         )
-        self.assertIsNone(document_file_path_for(active_canvas_for_window(self.window)))
+        self.assertIsNone(
+            active_canvas_for_window(
+                self.window
+            ).runtime_state.document_metadata_state.file_path
+        )
 
     def test_load_canvas_from_path_imports_mol_as_untitled_document(self) -> None:
         source = MoleculeModel()
@@ -1214,7 +1260,7 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
         # must not enter the recent-files list.
         record_recent.assert_not_called()
         canvas = active_canvas_for_window(self.window)
-        self.assertIsNone(document_file_path_for(canvas))
+        self.assertIsNone(canvas.runtime_state.document_metadata_state.file_path)
         self.assertEqual(
             self.window.tab_references.canvas_tabs.tabText(0), "ethanol.mol"
         )
@@ -1245,13 +1291,13 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
             write_molfile(export_model, atom_annotations=export_annotations)
         )
         self.assertEqual(reparsed.atom_annotations, expected_annotations)
-        self.assertFalse(
-            services_for_window(self.window).canvas_document_service.is_dirty(canvas)
-        )
+        self.assertFalse(self.window.services.canvas_document_service.is_dirty(canvas))
         self.assertTrue(
             all(
                 "_auto_position" not in mark
-                for mark in snapshot_canvas_state_for(canvas)["marks"]
+                for mark in canvas.services.canvas_document_session_service.snapshot_state()[
+                    "marks"
+                ]
             )
         )
         live_bonds = [bond for bond in model.bonds if bond is not None]
@@ -1303,7 +1349,9 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
                             ["C", "O"],
                         )
                         self.assertEqual(len(canvas.model.bonds), 1)
-                        self.assertIsNone(document_file_path_for(canvas))
+                        self.assertIsNone(
+                            canvas.runtime_state.document_metadata_state.file_path
+                        )
                         self.assertEqual(path.read_bytes(), raw)
 
     def test_mol_structural_encoding_error_preserves_drawing_and_redo(self) -> None:
@@ -1312,7 +1360,7 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
         history = history_service_for_window(self.window)
         history.undo()
         self.assertTrue(history.can_redo())
-        before = snapshot_canvas_state_for(canvas)
+        before = canvas.services.canvas_document_session_service.snapshot_state()
         stacks = history.capture_stack_snapshot()
         lines = write_molfile(MoleculeModel()).encode().split(b"\n")
         lines[3] += b"\xff"
@@ -1336,12 +1384,14 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
             "structural data on line 4 is not valid UTF-8",
             message_box.warning.call_args.args[2],
         )
-        self.assertEqual(snapshot_canvas_state_for(canvas), before)
+        self.assertEqual(
+            canvas.services.canvas_document_session_service.snapshot_state(), before
+        )
         history.verify_stack_snapshot(stacks)
 
     def test_mol_annotation_mark_failure_restores_the_previous_document(self) -> None:
         canvas = active_canvas_for_window(self.window)
-        before = snapshot_canvas_state_for(canvas)
+        before = canvas.services.canvas_document_session_service.snapshot_state()
         source = MoleculeModel()
         atom_id = source.add_atom("N", 0.0, 0.0)
         message_box = mock.Mock()
@@ -1378,7 +1428,9 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
         self.assertEqual(mark_calls, 2)
         message_box.warning.assert_called_once()
         self.assertIn("atom annotation", message_box.warning.call_args.args[2])
-        self.assertEqual(snapshot_canvas_state_for(canvas), before)
+        self.assertEqual(
+            canvas.services.canvas_document_session_service.snapshot_state(), before
+        )
 
     def test_load_canvas_from_path_rejects_invalid_mol_without_a_new_window(
         self,
@@ -1408,7 +1460,9 @@ class MainWindowDocumentActionServiceTest(unittest.TestCase):
         self.assertEqual(self.window.tab_references.canvas_count(), 1)
 
     def test_load_canvas_rejects_workbook_payload_without_importing(self) -> None:
-        state = snapshot_canvas_state_for(active_canvas_for_window(self.window))
+        state = active_canvas_for_window(
+            self.window
+        ).services.canvas_document_session_service.snapshot_state()
         read_document = mock.Mock(
             return_value=SimpleNamespace(
                 state={

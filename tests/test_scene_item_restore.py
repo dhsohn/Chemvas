@@ -18,14 +18,8 @@ from chemvas.ui.canvas.canvas_scene_items_state import (
     ts_bracket_items_for,
 )
 from chemvas.ui.canvas.canvas_text_style_state import set_text_style_for
-from chemvas.ui.molecule.structure_mutation_access import add_atom_for
-from chemvas.ui.scene.mark_item_access import mark_center_for
 from chemvas.ui.scene.note_item_access import committed_note_text_for
-from chemvas.ui.scene.scene_item_access import create_scene_item_from_state
-from chemvas.ui.window.main_window_ports import (
-    active_canvas_for_window,
-    services_for_window,
-)
+from chemvas.ui.window.main_window_ports import active_canvas_for_window
 
 
 class SceneItemRestoreTest(unittest.TestCase):
@@ -42,7 +36,7 @@ class SceneItemRestoreTest(unittest.TestCase):
         QTest.qWait(20)
 
     def tearDown(self) -> None:
-        document_service = services_for_window(self.window).canvas_document_service
+        document_service = self.window.services.canvas_document_service
         for canvas in self.window.tab_references.all_canvases():
             document_service.mark_clean(canvas)
         self.window.close()
@@ -52,7 +46,9 @@ class SceneItemRestoreTest(unittest.TestCase):
     def test_create_scene_item_from_state_restores_atom_bound_mark_registration(
         self,
     ) -> None:
-        atom_id = add_atom_for(active_canvas_for_window(self.window), "C", 12.0, -8.0)
+        atom_id = active_canvas_for_window(
+            self.window
+        ).services.canvas_atom_mutation_service.add_atom("C", 12.0, -8.0)
         state = {
             "kind": "mark",
             "mark_kind": "minus",
@@ -63,9 +59,9 @@ class SceneItemRestoreTest(unittest.TestCase):
             "y": -500.0,
         }
 
-        item = create_scene_item_from_state(
-            active_canvas_for_window(self.window), state
-        )
+        item = active_canvas_for_window(
+            self.window
+        ).services.scene_item_controller.create_scene_item_from_state(state)
 
         self.assertIsNotNone(item)
         self.assertIn(item, mark_items_for(active_canvas_for_window(self.window)))
@@ -73,7 +69,9 @@ class SceneItemRestoreTest(unittest.TestCase):
             item,
             mark_registry_for(active_canvas_for_window(self.window)).by_atom[atom_id],
         )
-        center = mark_center_for(active_canvas_for_window(self.window), item)
+        center = active_canvas_for_window(
+            self.window
+        ).services.scene_decoration_build_service.mark_center(item)
         self.assertAlmostEqual(center.x(), 28.0)
         self.assertAlmostEqual(center.y(), -14.0)
 
@@ -87,9 +85,9 @@ class SceneItemRestoreTest(unittest.TestCase):
         set_text_style_for(active_canvas_for_window(self.window), "text_italic", True)
         state = {"kind": "note", "text": "Mechanism", "x": 18.0, "y": -12.0}
 
-        item = create_scene_item_from_state(
-            active_canvas_for_window(self.window), state
-        )
+        item = active_canvas_for_window(
+            self.window
+        ).services.scene_item_controller.create_scene_item_from_state(state)
 
         self.assertIsNotNone(item)
         self.assertIn(item, note_items_for(active_canvas_for_window(self.window)))
@@ -113,9 +111,9 @@ class SceneItemRestoreTest(unittest.TestCase):
             "double": True,
         }
 
-        item = create_scene_item_from_state(
-            active_canvas_for_window(self.window), state
-        )
+        item = active_canvas_for_window(
+            self.window
+        ).services.scene_item_controller.create_scene_item_from_state(state)
 
         self.assertIsNotNone(item)
         self.assertIn(item, arrow_items_for(active_canvas_for_window(self.window)))
@@ -137,9 +135,9 @@ class SceneItemRestoreTest(unittest.TestCase):
             "bracket_kind": "square_pair",
         }
 
-        item = create_scene_item_from_state(
-            active_canvas_for_window(self.window), state
-        )
+        item = active_canvas_for_window(
+            self.window
+        ).services.scene_item_controller.create_scene_item_from_state(state)
         restored_state = scene_item_state_for(
             active_canvas_for_window(self.window), item
         )
@@ -166,9 +164,9 @@ class SceneItemRestoreTest(unittest.TestCase):
             "rotation": 27.0,
         }
 
-        item = create_scene_item_from_state(
-            active_canvas_for_window(self.window), state
-        )
+        item = active_canvas_for_window(
+            self.window
+        ).services.scene_item_controller.create_scene_item_from_state(state)
 
         self.assertIsNotNone(item)
         self.assertIn(item, orbital_items_for(active_canvas_for_window(self.window)))

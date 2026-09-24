@@ -14,9 +14,7 @@ from PyQt6.QtGui import QColor, QImage, QPainter, QPicture, QPixmap
 from PyQt6.QtWidgets import QApplication, QWidget
 
 from chemvas.domain.document import Atom, Bond, MoleculeModel
-from chemvas.ui.canvas.canvas_window_access import snapshot_canvas_state_for
 from chemvas.ui.insert.preview_scene_renderer import PREVIEW_OPACITY, SmilesPreviewItem
-from chemvas.ui.scene.scene_decoration_access import add_arrow_for
 from tests.canvas_factory import build_canvas_view
 
 
@@ -155,11 +153,15 @@ def _canvas_insertion(ratio, *, real_smiles=False):
         assert canvas.viewport().devicePixelRatioF() == ratio
         controller = canvas.services.insert_controller
         history = canvas.services.history_service
-        add_arrow_for(canvas, QPointF(-80, -70), QPointF(-50, -70), "line")
-        add_arrow_for(canvas, QPointF(-80, -50), QPointF(-50, -50), "line")
+        canvas.services.scene_decoration_service.add_arrow(
+            QPointF(-80, -70), QPointF(-50, -70), "line"
+        )
+        canvas.services.scene_decoration_service.add_arrow(
+            QPointF(-80, -50), QPointF(-50, -50), "line"
+        )
         history.undo()
         stacks = history.capture_stack_snapshot()
-        before = snapshot_canvas_state_for(canvas)
+        before = canvas.services.canvas_document_session_service.snapshot_state()
         model = MoleculeModel(
             atoms={0: Atom("C", -12, 0), 1: Atom("O", 12, 0)},
             bonds=[Bond(0, 1)],
@@ -187,10 +189,12 @@ def _canvas_insertion(ratio, *, real_smiles=False):
         hidden = canvas.viewport().grab().toImage()
         item.setVisible(True)
         assert shown != hidden, (ratio, "lower-right canvas ghost is invisible")
-        assert snapshot_canvas_state_for(canvas) == before
+        assert (
+            canvas.services.canvas_document_session_service.snapshot_state() == before
+        )
         history.verify_stack_snapshot(stacks)
         controller.commit_smiles_insert(position)
-        after = snapshot_canvas_state_for(canvas)
+        after = canvas.services.canvas_document_session_service.snapshot_state()
         assert not state.smiles_active
         assert len(canvas.model.atoms) == len(model.atoms)
         for source_id, atom in canvas.model.atoms.items():
@@ -200,9 +204,11 @@ def _canvas_insertion(ratio, *, real_smiles=False):
                 source.y + (position.y() - center.y()),
             )
         history.undo()
-        assert snapshot_canvas_state_for(canvas) == before
+        assert (
+            canvas.services.canvas_document_session_service.snapshot_state() == before
+        )
         history.redo()
-        assert snapshot_canvas_state_for(canvas) == after
+        assert canvas.services.canvas_document_session_service.snapshot_state() == after
         return shown
     finally:
         canvas.services.canvas_scene_reset_service.clear_scene()

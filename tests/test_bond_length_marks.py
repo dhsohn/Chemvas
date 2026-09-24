@@ -15,24 +15,11 @@ from chemvas.features.export import export_scene
 from chemvas.ui.annotations.state import mark_state_dict_for, scene_item_state_for
 from chemvas.ui.canvas.canvas_model_access import atom_for_id
 from chemvas.ui.canvas.canvas_scene_items_state import mark_items_for
-from chemvas.ui.canvas.canvas_window_access import (
-    restore_canvas_state_for,
-    save_canvas_to_file_for,
-    snapshot_canvas_state_for,
-)
-from chemvas.ui.molecule.bond_graphics_access import add_bond_graphics_for
-from chemvas.ui.molecule.structure_mutation_access import add_atom_for, add_bond_for
-from chemvas.ui.scene.mark_item_access import (
-    apply_mark_color_for,
-    build_mark_item_for,
-    mark_center_for,
-)
+from chemvas.ui.molecule.structure_mutation_access import add_bond_for
 from chemvas.ui.scene.scene_decoration_access import (
-    add_arrow_for,
     add_mark_for,
     add_mark_for_atom_for,
 )
-from chemvas.ui.scene.scene_item_access import apply_scene_item_state
 from chemvas.ui.window.main_window_context_bar_widgets import bond_length_input
 from tests.canvas_factory import build_canvas_view
 
@@ -42,9 +29,9 @@ def drawing():
     app = QApplication.instance() or QApplication([])
     app.setQuitOnLastWindowClosed(False)
     canvas = build_canvas_view()
-    first = add_atom_for(canvas, "N", 10.1, 20.3)
-    second = add_atom_for(canvas, "C", 30.1, 20.3)
-    add_bond_graphics_for(canvas, add_bond_for(canvas, first, second))
+    first = canvas.services.canvas_atom_mutation_service.add_atom("N", 10.1, 20.3)
+    second = canvas.services.canvas_atom_mutation_service.add_atom("C", 30.1, 20.3)
+    canvas.bond_renderer.add_bond_graphics(add_bond_for(canvas, first, second))
     yield canvas, first
     canvas.services.canvas_scene_reset_service.clear_scene()
     canvas.close()
@@ -66,14 +53,14 @@ def test_bound_mark_rescales_in_place_and_undo_redo_restores_exact_state(drawing
     )
     state = mark_state_dict_for(canvas, item)
     state.update(dx=offset.x(), dy=offset.y())
-    apply_scene_item_state(canvas, item, state)
+    canvas.services.scene_item_controller.apply_scene_item_state(item, state)
     # A real manual correction retains the exact graphics position; it need
     # not be reproduced bit-for-bit by atom + offset arithmetic.
     canvas.services.move_controller.move_item(
         item, 0.1 - item.pos().x(), 0.3 - item.pos().y()
     )
     item.setSelected(True)
-    before = snapshot_canvas_state_for(canvas)
+    before = canvas.services.canvas_document_session_service.snapshot_state()
     before_position = QPointF(item.pos())
     original_data = dict(item.data(1))
     history = canvas.services.history_service
@@ -83,10 +70,10 @@ def test_bound_mark_rescales_in_place_and_undo_redo_restores_exact_state(drawing
     assert item.isSelected()
     assert item.data(1)["dx"] == original_data["dx"] * 3
     assert item.data(1)["dy"] == original_data["dy"] * 3
-    center = mark_center_for(canvas, item)
+    center = canvas.services.scene_decoration_build_service.mark_center(item)
     assert center.x() == pytest.approx(atom.x + original_data["dx"] * 3)
     assert center.y() == pytest.approx(atom.y + original_data["dy"] * 3)
-    fresh = build_mark_item_for(canvas, kind)
+    fresh = canvas.services.scene_decoration_build_service.build_mark_item(kind)
     if isinstance(item, QGraphicsTextItem):
         assert item.font() == fresh.font()
     elif kind == "radical":
@@ -94,16 +81,18 @@ def test_bound_mark_rescales_in_place_and_undo_redo_restores_exact_state(drawing
     else:
         assert item.path() == fresh.path()
         assert item.pen().widthF() == fresh.pen().widthF()
-    after = snapshot_canvas_state_for(canvas)
+    after = canvas.services.canvas_document_session_service.snapshot_state()
     after_position = QPointF(item.pos())
     after_mark = mark_state_dict_for(canvas, item)
     for _ in range(3):
         history.undo()
-        assert snapshot_canvas_state_for(canvas) == before
+        assert (
+            canvas.services.canvas_document_session_service.snapshot_state() == before
+        )
         assert item.pos() == before_position
         assert item.isSelected()
         history.redo()
-        assert snapshot_canvas_state_for(canvas) == after
+        assert canvas.services.canvas_document_session_service.snapshot_state() == after
         assert item.pos() == after_position
         assert mark_state_dict_for(canvas, item) == after_mark
 
@@ -114,11 +103,13 @@ def test_manual_mark_correction_history_is_exact_near_atom_origin(drawing):
     history = canvas.services.history_service
     for delta in (0.01, 0.123456789, -0.1, 0.0007, -8.789):
         canvas.services.move_controller.move_item(item, delta, -delta)
-        before = snapshot_canvas_state_for(canvas)
+        before = canvas.services.canvas_document_session_service.snapshot_state()
         before_position = QPointF(item.pos())
         canvas.services.geometry_controller.set_bond_length(33.7)
         history.undo()
-        assert snapshot_canvas_state_for(canvas) == before
+        assert (
+            canvas.services.canvas_document_session_service.snapshot_state() == before
+        )
         assert item.pos() == before_position
 
 
@@ -129,15 +120,18 @@ def test_bound_mark_with_legal_absolute_anchor_undo_preserves_missing_offsets(
     item = add_mark_for_atom_for(canvas, atom_id, QPointF(20, 10), kind="plus")
     state = mark_state_dict_for(canvas, item)
     state.update(dx=None, dy=None, x=42.123, y=-9.456)
-    apply_scene_item_state(canvas, item, state)
+    canvas.services.scene_item_controller.apply_scene_item_state(item, state)
     assert (
-        save_canvas_to_file_for(canvas, str(tmp_path / "absolute-anchor.chemvas")) == []
+        canvas.services.canvas_document_session_service.save_to_file(
+            str(tmp_path / "absolute-anchor.chemvas")
+        )
+        == []
     )
-    before = snapshot_canvas_state_for(canvas)
+    before = canvas.services.canvas_document_session_service.snapshot_state()
     position = QPointF(item.pos())
     canvas.services.geometry_controller.set_bond_length(60)
     canvas.services.history_service.undo()
-    assert snapshot_canvas_state_for(canvas) == before
+    assert canvas.services.canvas_document_session_service.snapshot_state() == before
     assert item.pos() == position
 
 
@@ -151,7 +145,7 @@ def test_partial_bond_length_failure_restores_mark_document_and_both_stacks(
     item = add_mark_for_atom_for(canvas, atom_id, QPointF(20, 10), kind="plus")
     item.setSelected(True)
     history = canvas.services.history_service
-    before = snapshot_canvas_state_for(canvas)
+    before = canvas.services.canvas_document_session_service.snapshot_state()
     position, font = QPointF(item.pos()), item.font()
     stacks = history.capture_stack_snapshot()
     if phase == "font-noop":
@@ -172,14 +166,14 @@ def test_partial_bond_length_failure_restores_mark_document_and_both_stacks(
         patch = mock.patch.object(history, "push", side_effect=append_then_raise)
     with patch, pytest.raises(RuntimeError):
         canvas.services.geometry_controller.set_bond_length(60)
-    assert snapshot_canvas_state_for(canvas) == before
+    assert canvas.services.canvas_document_session_service.snapshot_state() == before
     assert item.pos() == position
     assert item.font() == font
     assert item.isSelected()
     history.verify_stack_snapshot(stacks)
     canvas.services.geometry_controller.set_bond_length(60)
     history.undo()
-    assert snapshot_canvas_state_for(canvas) == before
+    assert canvas.services.canvas_document_session_service.snapshot_state() == before
 
 
 @pytest.mark.parametrize("phase", ["undo", "redo"])
@@ -192,16 +186,17 @@ def test_bond_length_history_failure_restores_exact_current_frame_and_is_retryab
     canvas.services.geometry_controller.set_bond_length(60)
     if phase == "redo":
         history.undo()
-    before = snapshot_canvas_state_for(canvas)
+    before = canvas.services.canvas_document_session_service.snapshot_state()
     position, font = QPointF(item.pos()), item.font()
     stacks = history.capture_stack_snapshot()
-    with mock.patch(
-        "chemvas.ui.history.history_operations.apply_scene_item_state",
+    with mock.patch.object(
+        canvas.services.scene_item_controller,
+        "apply_scene_item_state",
         side_effect=RuntimeError("injected replay"),
     ):
         with pytest.raises(RuntimeError, match="injected replay"):
             getattr(history, phase)()
-    assert snapshot_canvas_state_for(canvas) == before
+    assert canvas.services.canvas_document_session_service.snapshot_state() == before
     assert item.pos() == position
     assert item.font() == font
     history.verify_stack_snapshot(stacks)
@@ -233,9 +228,11 @@ def test_disabled_history_retains_existing_non_recording_policy_and_command_cove
 def test_rescale_keeps_bound_mark_color_and_free_annotations_unchanged(drawing):
     canvas, atom_id = drawing
     bound = add_mark_for_atom_for(canvas, atom_id, QPointF(20, 10), kind="plus")
-    apply_mark_color_for(canvas, bound, "#12ab34")
+    canvas.services.scene_decoration_build_service.apply_mark_color(bound, "#12ab34")
     free = add_mark_for(canvas, QPointF(110, 70), kind="plus")
-    arrow = add_arrow_for(canvas, QPointF(80, 60), QPointF(160, 60), "arrow")
+    arrow = canvas.services.scene_decoration_service.add_arrow(
+        QPointF(80, 60), QPointF(160, 60), "arrow"
+    )
     free_state = scene_item_state_for(canvas, free)
     arrow_state = scene_item_state_for(canvas, arrow)
     free_font, free_pos = free.font(), free.pos()
@@ -257,16 +254,20 @@ def test_rescaled_figure_pixels_match_saved_reopened_document(drawing, tmp_path,
     canvas, atom_id = drawing
     add_mark_for_atom_for(canvas, atom_id, QPointF(20, 10), kind=kind)
     canvas.services.geometry_controller.set_bond_length(60)
-    before = snapshot_canvas_state_for(canvas)
+    before = canvas.services.canvas_document_session_service.snapshot_state()
     path = tmp_path / "rescaled.chemvas"
-    assert save_canvas_to_file_for(canvas, str(path)) == []
+    assert canvas.services.canvas_document_session_service.save_to_file(str(path)) == []
     export_scene(
         canvas.scene(), str(tmp_path / "live.png"), fmt="png", margin=8, dpi=96
     )
     restored = build_canvas_view()
     try:
-        restore_canvas_state_for(restored, read_document(path).state)
-        assert snapshot_canvas_state_for(restored) == before
+        restored.services.canvas_document_session_service.restore_state(
+            read_document(path).state
+        )
+        assert (
+            restored.services.canvas_document_session_service.snapshot_state() == before
+        )
         assert len(mark_items_for(restored)) == 1
         export_scene(
             restored.scene(),
@@ -292,7 +293,7 @@ def test_actual_length_field_noop_then_typing_is_one_exact_undoable_rescale(
     geometry = canvas.services.geometry_controller
     geometry.set_bond_length(initial)
     history = canvas.services.history_service
-    before = snapshot_canvas_state_for(canvas)
+    before = canvas.services.canvas_document_session_service.snapshot_state()
     stacks = history.capture_stack_snapshot()
     widget, spin = bond_length_input(initial, geometry.set_bond_length)
     widget.show()
@@ -300,13 +301,22 @@ def test_actual_length_field_noop_then_typing_is_one_exact_undoable_rescale(
         assert QTest.qWaitForWindowExposed(widget)
         spin.setFocus()
         QTest.keyClick(spin, Qt.Key.Key_Return)
-        assert snapshot_canvas_state_for(canvas) == before
+        assert (
+            canvas.services.canvas_document_session_service.snapshot_state() == before
+        )
         history.verify_stack_snapshot(stacks)
         spin.selectAll()
         QTest.keyClicks(spin, "500")
         QTest.keyClick(spin, Qt.Key.Key_Return)
-        assert snapshot_canvas_state_for(canvas)["settings"]["bond_length_px"] == 500
+        assert (
+            canvas.services.canvas_document_session_service.snapshot_state()[
+                "settings"
+            ]["bond_length_px"]
+            == 500
+        )
         history.undo()
-        assert snapshot_canvas_state_for(canvas) == before
+        assert (
+            canvas.services.canvas_document_session_service.snapshot_state() == before
+        )
     finally:
         widget.close()

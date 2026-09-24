@@ -22,7 +22,6 @@ from chemvas.ui.selection.selection_queries import (
     selected_scene_notes_for,
     set_scene_items_selected_for,
 )
-from chemvas.ui.selection.selection_state import set_selected_notes_for
 from tests.runtime_state import canvas_runtime_state
 
 
@@ -101,7 +100,7 @@ def test_selected_scene_notes_for_filters_notes_attached_to_canvas_scene() -> No
         scene=mock.Mock(return_value=scene),
         runtime_state=canvas_runtime_state(scene_items_state=CanvasSceneItemsState()),
     )
-    set_selected_notes_for(canvas, [note, outside_note])
+    canvas.runtime_state.selection_state.selected_notes = [note, outside_note]
 
     assert selected_scene_notes_for(canvas) == [note]
 
@@ -114,7 +113,7 @@ def test_selected_scene_notes_for_ignores_deleted_notes_and_canvas() -> None:
         scene=mock.Mock(return_value=scene),
         runtime_state=canvas_runtime_state(scene_items_state=CanvasSceneItemsState()),
     )
-    set_selected_notes_for(canvas, [deleted_note])
+    canvas.runtime_state.selection_state.selected_notes = [deleted_note]
 
     assert selected_scene_notes_for(canvas) == []
     assert (

@@ -8,13 +8,8 @@ import pytest
 from PyQt6.QtCore import QPointF
 from PyQt6.QtWidgets import QApplication
 
-from chemvas.ui.canvas.canvas_ring_fill_scene_access import create_ring_fill_item_for
 from chemvas.ui.canvas.canvas_scene_items_state import ring_items_for
-from chemvas.ui.canvas.canvas_smiles_input_state import (
-    last_smiles_input_for,
-    set_last_smiles_input_for,
-)
-from chemvas.ui.scene.scene_item_access import attach_scene_item
+from chemvas.ui.canvas.canvas_smiles_input_state import set_last_smiles_input_for
 from chemvas.ui.transactions.document import DocumentSavepoint
 from tests.canvas_factory import build_canvas_view
 
@@ -123,7 +118,7 @@ def test_failed_build_restores_original_document_items_and_stacks(
     assert history.state.redo_stack is redo_list
     assert tuple(history_list) == history_before
     assert tuple(redo_list) == redo_before
-    assert last_smiles_input_for(canvas) == "previous input"
+    assert canvas.runtime_state.smiles_input_state.last_smiles_input == "previous input"
 
 
 def test_recorded_build_preserves_explicit_smiles_predecessor_on_undo(canvas):
@@ -136,11 +131,14 @@ def test_recorded_build_preserves_explicit_smiles_predecessor_on_undo(canvas):
         return []
 
     service.run_recorded_build(build, before_smiles_input="logical predecessor")
-    assert last_smiles_input_for(canvas) is None
+    assert canvas.runtime_state.smiles_input_state.last_smiles_input is None
     canvas.services.history_service.undo()
-    assert last_smiles_input_for(canvas) == "logical predecessor"
+    assert (
+        canvas.runtime_state.smiles_input_state.last_smiles_input
+        == "logical predecessor"
+    )
     canvas.services.history_service.redo()
-    assert last_smiles_input_for(canvas) is None
+    assert canvas.runtime_state.smiles_input_state.last_smiles_input is None
 
 
 @pytest.mark.parametrize("partial_detach", [False, True])
@@ -162,15 +160,14 @@ def test_failed_build_capture_finishes_document_cleanup_after_lifecycle_failure(
     atom_ids = list(document.records[order[0]].atom_ids)
 
     def mutate_then_fail(*args, **kwargs):
-        item = create_ring_fill_item_for(
-            canvas,
+        item = canvas.services.canvas_ring_fill_scene_service.create_ring_fill_item(
             [
                 QPointF(canvas.model.atoms[i].x, canvas.model.atoms[i].y)
                 for i in atom_ids
             ],
             atom_ids,
         )
-        attach_scene_item(canvas, item)
+        canvas.services.scene_item_controller.attach_scene_item(item)
         added.append(item)
         raise primary
 

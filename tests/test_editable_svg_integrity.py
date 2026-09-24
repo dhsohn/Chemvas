@@ -32,8 +32,6 @@ from chemvas.ui.canvas.canvas_calculation_plan_state import (
     calculation_plan_for,
     set_calculation_plan_for,
 )
-from chemvas.ui.canvas.canvas_document_metadata_state import document_file_path_for
-from chemvas.ui.canvas.canvas_window_access import snapshot_canvas_state_for
 from chemvas.ui.molecule.structure_mutation_access import add_bond_for
 from chemvas.ui.window.main_window_document_dialogs import (
     FigureExportOptions,
@@ -42,7 +40,6 @@ from chemvas.ui.window.main_window_document_dialogs import (
 from chemvas.ui.window.main_window_ports import (
     active_canvas_for_window,
     history_service_for_window,
-    services_for_window,
 )
 from tests.calculation_plan_support import _document_state, _plan
 from tests.calculation_workflow_support import _legacy_reviewed_precomplex_payload
@@ -64,7 +61,7 @@ def window(application):
     try:
         yield window
     finally:
-        services = services_for_window(window)
+        services = window.services
         services.canvas_document_service.mark_clean(active_canvas_for_window(window))
         window.close()
         application.processEvents()
@@ -72,7 +69,7 @@ def window(application):
 
 def _install(window, state):
     canvas = active_canvas_for_window(window)
-    services_for_window(window).canvas_document_service.replace_canvas_with_state(
+    window.services.canvas_document_service.replace_canvas_with_state(
         window, canvas, state=state, file_path=None, display_name="Synthetic drawing"
     )
     return canvas
@@ -96,7 +93,7 @@ def _export(window, destination, message_box, options=None):
         "chemvas.ui.window.main_window_document_action_service.prompt_export_options",
         return_value=options or _options(),
     ):
-        services_for_window(window).document_action_service.export_figure(
+        window.services.document_action_service.export_figure(
             window, file_dialog=picker, message_box=message_box
         )
 
@@ -109,7 +106,7 @@ def _problem(window, kind):
     set_calculation_plan_for(canvas, plan)
     if kind == "stale":
         add_bond_for(canvas, 0, 2)
-    services_for_window(window).canvas_document_service.mark_dirty(canvas)
+    window.services.canvas_document_service.mark_dirty(canvas)
     return canvas
 
 
@@ -118,7 +115,7 @@ def test_editable_whole_svg_requires_same_default_no_draft_consent_as_save(
     window, tmp_path, kind
 ):
     canvas = _problem(window, kind)
-    before = snapshot_canvas_state_for(canvas)
+    before = canvas.services.canvas_document_session_service.snapshot_state()
     raw_plan = deepcopy(calculation_plan_for(canvas))
     history = history_service_for_window(window)
     stacks = history.capture_stack_snapshot()
@@ -141,10 +138,10 @@ def test_editable_whole_svg_requires_same_default_no_draft_consent_as_save(
     render.assert_not_called()
     message_box.warning.assert_not_called()
     assert output.read_bytes() == b"existing destination"
-    assert snapshot_canvas_state_for(canvas) == before
+    assert canvas.services.canvas_document_session_service.snapshot_state() == before
     assert calculation_plan_for(canvas) == raw_plan
-    assert document_file_path_for(canvas) is None
-    assert services_for_window(window).canvas_document_service.is_dirty(canvas)
+    assert canvas.runtime_state.document_metadata_state.file_path is None
+    assert window.services.canvas_document_service.is_dirty(canvas)
     history.verify_stack_snapshot(stacks)
 
     message_box.question.return_value = QMessageBox.StandardButton.Yes
@@ -156,17 +153,17 @@ def test_editable_whole_svg_requires_same_default_no_draft_consent_as_save(
         assert "calculation_plan" not in restored
     else:
         assert restored["calculation_plan"] == raw_plan
-    assert snapshot_canvas_state_for(canvas) == before
+    assert canvas.services.canvas_document_session_service.snapshot_state() == before
     assert calculation_plan_for(canvas) == raw_plan
-    assert document_file_path_for(canvas) is None
-    assert services_for_window(window).canvas_document_service.is_dirty(canvas)
+    assert canvas.runtime_state.document_metadata_state.file_path is None
+    assert window.services.canvas_document_service.is_dirty(canvas)
     history.verify_stack_snapshot(stacks)
 
 
 @pytest.mark.parametrize("kind", ["stale", "charge"])
 def test_real_export_draft_notice_escape_preserves_destination(window, tmp_path, kind):
     canvas = _problem(window, kind)
-    before = snapshot_canvas_state_for(canvas)
+    before = canvas.services.canvas_document_session_service.snapshot_state()
     raw_plan = deepcopy(calculation_plan_for(canvas))
     output = tmp_path / "cancelled.svg"
     output.write_bytes(b"original SVG destination")
@@ -194,7 +191,7 @@ def test_real_export_draft_notice_escape_preserves_destination(window, tmp_path,
     assert observed[0][2] == QMessageBox.StandardButton.No
     assert "Export anyway?" in observed[0][1]
     assert output.read_bytes() == b"original SVG destination"
-    assert snapshot_canvas_state_for(canvas) == before
+    assert canvas.services.canvas_document_session_service.snapshot_state() == before
     assert calculation_plan_for(canvas) == raw_plan
 
 
@@ -202,7 +199,7 @@ def test_accepted_draft_export_failure_keeps_destination_and_live_drawing(
     window, tmp_path
 ):
     canvas = _problem(window, "charge")
-    before = snapshot_canvas_state_for(canvas)
+    before = canvas.services.canvas_document_session_service.snapshot_state()
     history = history_service_for_window(window)
     stacks = history.capture_stack_snapshot()
     output = tmp_path / "drawing.svg"
@@ -219,7 +216,7 @@ def test_accepted_draft_export_failure_keeps_destination_and_live_drawing(
     assert "synthetic metadata failure" in message_box.warning.call_args.args[2]
     assert output.read_bytes() == b"existing destination"
     assert sorted(path.name for path in tmp_path.iterdir()) == ["drawing.svg"]
-    assert snapshot_canvas_state_for(canvas) == before
+    assert canvas.services.canvas_document_session_service.snapshot_state() == before
     history.verify_stack_snapshot(stacks)
 
 
@@ -237,9 +234,9 @@ def test_moved_legacy_precomplex_plan_exports_editable_svg_without_plan_prompt(
     canvas.setFocus()
     QTest.keySequence(canvas, QKeySequence(QKeySequence.StandardKey.SelectAll))
     QTest.keyClick(canvas, Qt.Key.Key_Right, Qt.KeyboardModifier.ShiftModifier)
-    before = snapshot_canvas_state_for(canvas)
+    before = canvas.services.canvas_document_session_service.snapshot_state()
     assert before["model"]["atoms"] != state["model"]["atoms"]
-    services_for_window(window).canvas_document_service.mark_dirty(canvas)
+    window.services.canvas_document_service.mark_dirty(canvas)
     message_box = Mock()
     output = tmp_path / "drawing.svg"
 
@@ -264,12 +261,13 @@ def test_cancelled_export_never_checks_or_warns_about_a_plan(window, stage):
             "chemvas.ui.window.main_window_document_action_service.prompt_export_options",
             return_value=None if stage == "options" else _options(),
         ),
-        patch(
-            "chemvas.ui.window.main_window_document_action_service.snapshot_canvas_state_for",
+        patch.object(
+            canvas.services.canvas_document_session_service,
+            "snapshot_state",
             side_effect=AssertionError("cancel must not snapshot"),
         ) as snapshot,
     ):
-        services_for_window(window).document_action_service.export_figure(
+        window.services.document_action_service.export_figure(
             window, file_dialog=picker, message_box=message_box
         )
     snapshot.assert_not_called()
@@ -427,7 +425,7 @@ def test_selected_group_survives_actual_svg_export_and_gui_reopen(window, tmp_pa
     canvas = _install(window, state)
     canvas.setFocus()
     QTest.keySequence(canvas, QKeySequence(QKeySequence.StandardKey.SelectAll))
-    before = snapshot_canvas_state_for(canvas)
+    before = canvas.services.canvas_document_session_service.snapshot_state()
     message_box = Mock()
     output = tmp_path / "selected.svg"
     _export(window, output, message_box, _options(scope="selection"))
@@ -435,30 +433,35 @@ def test_selected_group_survives_actual_svg_export_and_gui_reopen(window, tmp_pa
     restored = extract_chemvas_document_from_svg(output).state
     assert restored["groups"] == before["groups"]
     assert restored["settings"] == before["settings"]
-    assert snapshot_canvas_state_for(canvas) == before
-    assert services_for_window(window).document_action_service.load_canvas_from_path(
+    assert canvas.services.canvas_document_session_service.snapshot_state() == before
+    assert window.services.document_action_service.load_canvas_from_path(
         window, str(output), message_box=message_box
     )
     canvas = active_canvas_for_window(window)
-    reopened = snapshot_canvas_state_for(canvas)
+    reopened = canvas.services.canvas_document_session_service.snapshot_state()
     assert reopened["groups"] == before["groups"]
     assert reopened["settings"] == before["settings"]
     canvas.setFocus()
     QTest.keySequence(canvas, QKeySequence(QKeySequence.StandardKey.SelectAll))
     QTest.keyClick(canvas, Qt.Key.Key_Right, Qt.KeyboardModifier.ShiftModifier)
-    moved = snapshot_canvas_state_for(canvas)
+    moved = canvas.services.canvas_document_session_service.snapshot_state()
     assert moved["notes"][0]["x"] > reopened["notes"][0]["x"]
     assert moved["model"]["atoms"][0]["x"] > reopened["model"]["atoms"][0]["x"]
     assert moved["groups"] == reopened["groups"]
     QTest.keySequence(canvas, QKeySequence(QKeySequence.StandardKey.Undo))
-    assert snapshot_canvas_state_for(canvas) == reopened
+    assert canvas.services.canvas_document_session_service.snapshot_state() == reopened
     QTest.keySequence(canvas, QKeySequence(QKeySequence.StandardKey.Redo))
-    assert snapshot_canvas_state_for(canvas) == moved
+    assert canvas.services.canvas_document_session_service.snapshot_state() == moved
     saved = tmp_path / "edited.chemvas"
-    actions = services_for_window(window).document_action_service
+    actions = window.services.document_action_service
     assert actions.save_canvas_to_path(window, str(saved), message_box=message_box)
     assert actions.load_canvas_from_path(window, str(saved), message_box=message_box)
-    assert snapshot_canvas_state_for(active_canvas_for_window(window)) == moved
+    assert (
+        active_canvas_for_window(
+            window
+        ).services.canvas_document_session_service.snapshot_state()
+        == moved
+    )
     message_box.warning.assert_not_called()
 
 

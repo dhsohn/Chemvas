@@ -199,23 +199,22 @@ class CanvasHitTestingServiceTest(unittest.TestCase):
                     model=SimpleNamespace(atoms={1: Atom("N", 0.0, 0.0)}),
                     viewportTransform=QTransform,
                     scene=lambda items=items: _FakeScene(items),
+                    services=SimpleNamespace(
+                        scene_decoration_build_service=SimpleNamespace(
+                            mark_center=lambda _item: point
+                        )
+                    ),
                 )
                 service = CanvasHitTestingService(
                     canvas,
                     scene_pos_mapper=lambda _event: point,
                     viewport_transform=QTransform,
                 )
-                with mock.patch(
-                    "chemvas.ui.canvas.canvas_hit_testing_service.mark_center_for",
-                    return_value=point,
-                ):
-                    self.assertIs(
-                        service.item_at_event(object()), foreground or atom_item
-                    )
-                    self.assertIs(
-                        service.item_at_event(object(), prefer_marks=True),
-                        foreground or mark_item,
-                    )
+                self.assertIs(service.item_at_event(object()), foreground or atom_item)
+                self.assertIs(
+                    service.item_at_event(object(), prefer_marks=True),
+                    foreground or mark_item,
+                )
 
     def test_item_lookup_uses_scene_access_helper_without_canvas_scene_facade(
         self,

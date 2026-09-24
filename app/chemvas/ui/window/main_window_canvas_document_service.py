@@ -4,28 +4,18 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from chemvas.ui.canvas.canvas_document_metadata_state import (
-    document_display_name_for,
-    document_file_path_for,
     document_is_dirty_for,
-    invalidate_note_chrome_for,
     mark_document_clean_for,
     mark_document_dirty_for,
     note_chrome_dirty_for,
-    set_document_display_name_for,
     set_document_file_path_for,
     validate_document_file_path,
 )
 from chemvas.ui.canvas.canvas_lifecycle import schedule_canvas_deletion_for
-from chemvas.ui.canvas.canvas_window_access import (
-    restore_canvas_state_for,
-    snapshot_canvas_state_for,
-)
 from chemvas.ui.window.main_window_canvas_logic import copy_canvas_template_settings
 from chemvas.ui.window.main_window_ports import (
     active_canvas_or_none_for_window,
     next_canvas_name_for_window,
-    set_last_canvas_tab_index_for_window,
-    tab_references_for_window,
 )
 from chemvas.ui.window.tab_title_logic import decorate_tab_title, window_title
 
@@ -68,21 +58,25 @@ class MainWindowCanvasDocumentService:
         validate_document_file_path(file_path)
         canvas = self.create_canvas(window, template=template)
         if state is not None:
-            restore_canvas_state_for(canvas, state)
+            canvas.services.canvas_document_session_service.restore_state(state)
         resolved_display_name = display_name or (
             self.display_name_for_path(file_path) if file_path else name
         )
         if not resolved_display_name:
             resolved_display_name = next_canvas_name_for_window(window)
-        set_document_display_name_for(canvas, resolved_display_name)
+        canvas.runtime_state.document_metadata_state.display_name = (
+            resolved_display_name
+        )
         set_document_file_path_for(canvas, file_path)
-        mark_document_clean_for(canvas, snapshot_canvas_state_for(canvas))
+        mark_document_clean_for(
+            canvas, canvas.services.canvas_document_session_service.snapshot_state()
+        )
 
-        tab_refs = tab_references_for_window(window)
+        tab_refs = window.tab_references
         index = tab_refs.canvas_tabs.addTab(canvas, resolved_display_name)
         if select:
             tab_refs.canvas_tabs.setCurrentIndex(index)
-            set_last_canvas_tab_index_for_window(window, index)
+            window.runtime_state.last_canvas_tab_index = index
         self._active_canvas_ui.bind_active_canvas(window)
         return canvas
 
@@ -105,15 +99,17 @@ class MainWindowCanvasDocumentService:
         display_name: str | None = None,
     ) -> None:
         validate_document_file_path(file_path)
-        restore_canvas_state_for(canvas, state)
+        canvas.services.canvas_document_session_service.restore_state(state)
         resolved_name = (
             display_name
             or self.display_name_for_path(file_path)
-            or document_display_name_for(canvas)
+            or canvas.runtime_state.document_metadata_state.display_name
         )
-        set_document_display_name_for(canvas, resolved_name)
+        canvas.runtime_state.document_metadata_state.display_name = resolved_name
         set_document_file_path_for(canvas, file_path)
-        mark_document_clean_for(canvas, snapshot_canvas_state_for(canvas))
+        mark_document_clean_for(
+            canvas, canvas.services.canvas_document_session_service.snapshot_state()
+        )
         self.refresh_tab_title(window, canvas)
         self._active_canvas_ui.refresh_active_canvas_ui(window)
 
@@ -134,11 +130,11 @@ class MainWindowCanvasDocumentService:
                 file_path=file_path,
                 display_name=display_name,
             )
-            tab_refs = tab_references_for_window(window)
+            tab_refs = window.tab_references
             index = tab_refs.active_canvas_tab_index(target)
             if index >= 0:
                 tab_refs.canvas_tabs.setCurrentIndex(index)
-                set_last_canvas_tab_index_for_window(window, index)
+                window.runtime_state.last_canvas_tab_index = index
             return target
         return self.add_canvas(
             window,
@@ -149,14 +145,14 @@ class MainWindowCanvasDocumentService:
         )
 
     def reusable_open_target(self, window) -> CanvasView | None:
-        tab_refs = tab_references_for_window(window)
+        tab_refs = window.tab_references
         canvases = tab_refs.all_canvases()
         if len(canvases) != 1:
             return None
         canvas = canvases[0]
-        if document_file_path_for(canvas) is not None:
+        if canvas.runtime_state.document_metadata_state.file_path is not None:
             return None
-        state = snapshot_canvas_state_for(canvas)
+        state = canvas.services.canvas_document_session_service.snapshot_state()
         if document_is_dirty_for(canvas, state):
             return None
         # Imported MOL/editable SVG documents can be clean but unbound. Only
@@ -171,7 +167,7 @@ class MainWindowCanvasDocumentService:
         return canvas
 
     def remove_canvas(self, window, canvas: CanvasView) -> None:
-        tab_refs = tab_references_for_window(window)
+        tab_refs = window.tab_references
         index = tab_refs.active_canvas_tab_index(canvas)
         if index < 0:
             return
@@ -184,14 +180,18 @@ class MainWindowCanvasDocumentService:
             return
         new_index = min(index, tab_refs.canvas_tabs.count() - 1)
         tab_refs.canvas_tabs.setCurrentIndex(new_index)
-        set_last_canvas_tab_index_for_window(window, new_index)
+        window.runtime_state.last_canvas_tab_index = new_index
         self._active_canvas_ui.refresh_active_canvas_ui(window)
 
     def is_dirty(self, canvas: CanvasView) -> bool:
-        return document_is_dirty_for(canvas, snapshot_canvas_state_for(canvas))
+        return document_is_dirty_for(
+            canvas, canvas.services.canvas_document_session_service.snapshot_state()
+        )
 
     def mark_clean(self, canvas: CanvasView) -> None:
-        mark_document_clean_for(canvas, snapshot_canvas_state_for(canvas))
+        mark_document_clean_for(
+            canvas, canvas.services.canvas_document_session_service.snapshot_state()
+        )
 
     def mark_dirty(self, canvas: CanvasView) -> None:
         """Force a document to read as unsaved — used when restoring recovered
@@ -199,27 +199,31 @@ class MainWindowCanvasDocumentService:
         mark_document_dirty_for(canvas)
 
     def file_path(self, canvas: CanvasView) -> str | None:
-        return document_file_path_for(canvas)
+        return canvas.runtime_state.document_metadata_state.file_path
 
     def set_file_path(self, canvas: CanvasView, path: str | None) -> None:
         set_document_file_path_for(canvas, path)
 
     def set_display_name(self, canvas: CanvasView, name: str) -> None:
-        set_document_display_name_for(canvas, name)
+        canvas.runtime_state.document_metadata_state.display_name = name
 
     def display_name(self, canvas: CanvasView) -> str:
-        return document_display_name_for(canvas)
+        return canvas.runtime_state.document_metadata_state.display_name
 
     def refresh_tab_title(
         self, window, canvas: CanvasView, *, edited_note=None
     ) -> None:
-        tab_refs = tab_references_for_window(window)
+        tab_refs = window.tab_references
         if edited_note is None:
-            invalidate_note_chrome_for(canvas)
+            canvas.runtime_state.document_metadata_state.note_chrome_session = None
             dirty = self.is_dirty(canvas)
         else:
             dirty = note_chrome_dirty_for(
-                canvas, edited_note, snapshot_canvas_state_for
+                canvas,
+                edited_note,
+                lambda target: (
+                    target.services.canvas_document_session_service.snapshot_state()
+                ),
             )
         index = tab_refs.active_canvas_tab_index(canvas)
         if index >= 0:

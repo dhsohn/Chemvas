@@ -209,7 +209,6 @@ def test_recreated_annotation_keeps_stacking_among_molecular_graphics(canvas, z)
     import weakref
 
     from chemvas.ui.annotations.projections import find_projection
-    from chemvas.ui.molecule.bond_graphics_access import add_bond_graphics_for
     from tests.test_annotation_document_ownership import (
         _assert_history_has_no_live_graphics,
     )
@@ -220,7 +219,7 @@ def test_recreated_annotation_keeps_stacking_among_molecular_graphics(canvas, z)
     atoms = canvas.services.canvas_atom_mutation_service
     a = atoms.add_atom("N", 0, 0)
     b = atoms.add_atom("O", 40, 0)
-    add_bond_graphics_for(canvas, add_bond_for(canvas, a, b, 2))
+    canvas.bond_renderer.add_bond_graphics(add_bond_for(canvas, a, b, 2))
     history = canvas.services.history_service
     history.clear()
 

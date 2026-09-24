@@ -17,7 +17,6 @@ from PyQt6.QtWidgets import (
 )
 
 from chemvas.bootstrap.main_window import build_main_window
-from chemvas.ui.canvas.canvas_window_access import snapshot_canvas_state_for
 from chemvas.ui.canvas.sheet_setup_access import set_sheet_setup_for, sheet_setup_for
 from chemvas.ui.window.main_window_document_dialogs import (
     FigureExportOptions,
@@ -29,7 +28,6 @@ from chemvas.ui.window.main_window_menu_bar import run_sheet_setup_dialog
 from chemvas.ui.window.main_window_ports import (
     active_canvas_for_window,
     history_service_for_window,
-    services_for_window,
 )
 
 
@@ -43,7 +41,7 @@ class MainWindowDocumentDialogsTest(unittest.TestCase):
         self.window = build_main_window()
 
     def tearDown(self) -> None:
-        document_service = services_for_window(self.window).canvas_document_service
+        document_service = self.window.services.canvas_document_service
         for canvas in self.window.tab_references.all_canvases():
             document_service.mark_clean(canvas)
         self.window.close()
@@ -305,7 +303,7 @@ class MainWindowDocumentDialogsTest(unittest.TestCase):
         self,
     ) -> None:
         canvas = active_canvas_for_window(self.window)
-        services = services_for_window(self.window)
+        services = self.window.services
         history = history_service_for_window(self.window).state
         before_history = (tuple(history.history), tuple(history.redo_stack))
         self.window.statusBar().showMessage("Keep this feedback")
@@ -337,7 +335,7 @@ class MainWindowDocumentDialogsTest(unittest.TestCase):
         self.assertTrue(services.canvas_document_service.is_dirty(canvas))
 
     def test_sheet_change_chrome_tracks_saved_orientation_checkpoint(self) -> None:
-        services = services_for_window(self.window)
+        services = self.window.services
         canvas = active_canvas_for_window(self.window)
         with tempfile.TemporaryDirectory() as temp_dir:
             path = str(Path(temp_dir) / "portrait.chemvas")
@@ -361,14 +359,19 @@ class MainWindowDocumentDialogsTest(unittest.TestCase):
 
     def test_same_sheet_settings_and_cancel_preserve_document_and_chrome(self) -> None:
         canvas = active_canvas_for_window(self.window)
-        status = services_for_window(self.window).status_service
-        before_document = snapshot_canvas_state_for(canvas)
+        status = self.window.services.status_service
+        before_document = (
+            canvas.services.canvas_document_session_service.snapshot_state()
+        )
         before_status = status.status_context_texts()
         before_title = self.window.windowTitle()
         for orientation, accepted in (("landscape", True), ("portrait", False)):
             with self.subTest(orientation=orientation, accepted=accepted):
                 self._choose_sheet_orientation(orientation, accepted=accepted)
-                self.assertEqual(snapshot_canvas_state_for(canvas), before_document)
+                self.assertEqual(
+                    canvas.services.canvas_document_session_service.snapshot_state(),
+                    before_document,
+                )
                 self.assertEqual(status.status_context_texts(), before_status)
                 self.assertEqual(self.window.windowTitle(), before_title)
                 self.assertFalse(self.window.isWindowModified())

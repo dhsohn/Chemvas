@@ -13,14 +13,10 @@ from chemvas.ui.annotations.state import arrow_state_dict_for
 from chemvas.ui.canvas.canvas_atom_graphics_state import visible_atom_item_for
 from chemvas.ui.canvas.canvas_model_access import atom_for_id
 from chemvas.ui.canvas.canvas_scene_items_state import arrow_items_for
-from chemvas.ui.molecule.structure_mutation_access import add_atom_for, add_bond_for
+from chemvas.ui.molecule.structure_mutation_access import add_bond_for
 from chemvas.ui.scene.scene_align_logic import align_deltas, distribute_deltas
-from chemvas.ui.scene.scene_decoration_access import add_arrow_for
 from chemvas.ui.scene.scene_group_operations import group_selection_for
-from chemvas.ui.window.main_window_ports import (
-    active_canvas_for_window,
-    services_for_window,
-)
+from chemvas.ui.window.main_window_ports import active_canvas_for_window
 
 
 class AlignLogicTest(unittest.TestCase):
@@ -95,7 +91,7 @@ class AlignGuiTest(unittest.TestCase):
         QTest.qWait(20)
 
     def tearDown(self) -> None:
-        document_service = services_for_window(self.window).canvas_document_service
+        document_service = self.window.services.canvas_document_service
         for canvas in self.window.tab_references.all_canvases():
             document_service.mark_clean(canvas)
         self.window.close()
@@ -110,11 +106,15 @@ class AlignGuiTest(unittest.TestCase):
 
     def test_align_moves_structures_and_items_as_units_with_one_undo(self) -> None:
         canvas = self.canvas
-        atom_a = add_atom_for(canvas, "C", 100.0, 40.0)
-        atom_b = add_atom_for(canvas, "O", 120.0, 40.0)
+        atom_a = canvas.services.canvas_atom_mutation_service.add_atom("C", 100.0, 40.0)
+        atom_b = canvas.services.canvas_atom_mutation_service.add_atom("O", 120.0, 40.0)
         add_bond_for(canvas, atom_a, atom_b)
-        arrow = add_arrow_for(canvas, QPointF(0.0, 0.0), QPointF(40.0, 0.0), "arrow")
-        line = add_arrow_for(canvas, QPointF(30.0, 90.0), QPointF(70.0, 90.0), "line")
+        arrow = canvas.services.scene_decoration_service.add_arrow(
+            QPointF(0.0, 0.0), QPointF(40.0, 0.0), "arrow"
+        )
+        line = canvas.services.scene_decoration_service.add_arrow(
+            QPointF(30.0, 90.0), QPointF(70.0, 90.0), "line"
+        )
         self._select(
             visible_atom_item_for(canvas, atom_a),
             visible_atom_item_for(canvas, atom_b),
@@ -155,10 +155,15 @@ class AlignGuiTest(unittest.TestCase):
 
     def test_partially_selected_molecule_moves_whole(self) -> None:
         canvas = self.canvas
-        chain = [add_atom_for(canvas, "C", x, 0.0) for x in (100.0, 120.0, 140.0)]
+        chain = [
+            canvas.services.canvas_atom_mutation_service.add_atom("C", x, 0.0)
+            for x in (100.0, 120.0, 140.0)
+        ]
         add_bond_for(canvas, chain[0], chain[1])
         add_bond_for(canvas, chain[1], chain[2])
-        arrow = add_arrow_for(canvas, QPointF(0.0, 60.0), QPointF(40.0, 60.0), "arrow")
+        arrow = canvas.services.scene_decoration_service.add_arrow(
+            QPointF(0.0, 60.0), QPointF(40.0, 60.0), "arrow"
+        )
         # Only the two outer atoms are selected; the middle one must follow.
         self._select(
             visible_atom_item_for(canvas, chain[0]),
@@ -176,12 +181,14 @@ class AlignGuiTest(unittest.TestCase):
 
     def test_group_moves_as_one_object(self) -> None:
         canvas = self.canvas
-        arrow = add_arrow_for(canvas, QPointF(0.0, 0.0), QPointF(40.0, 0.0), "arrow")
-        note_line = add_arrow_for(
-            canvas, QPointF(60.0, 30.0), QPointF(100.0, 30.0), "line"
+        arrow = canvas.services.scene_decoration_service.add_arrow(
+            QPointF(0.0, 0.0), QPointF(40.0, 0.0), "arrow"
         )
-        far = add_arrow_for(
-            canvas, QPointF(200.0, 100.0), QPointF(240.0, 100.0), "arrow"
+        note_line = canvas.services.scene_decoration_service.add_arrow(
+            QPointF(60.0, 30.0), QPointF(100.0, 30.0), "line"
+        )
+        far = canvas.services.scene_decoration_service.add_arrow(
+            QPointF(200.0, 100.0), QPointF(240.0, 100.0), "arrow"
         )
         self._select(arrow, note_line)
         self.assertTrue(group_selection_for(canvas))
@@ -204,7 +211,9 @@ class AlignGuiTest(unittest.TestCase):
     def test_distribute_spreads_three_arrows_evenly_and_ignores_pairs(self) -> None:
         canvas = self.canvas
         arrows = [
-            add_arrow_for(canvas, QPointF(x, 0.0), QPointF(x + 20.0, 0.0), "arrow")
+            canvas.services.scene_decoration_service.add_arrow(
+                QPointF(x, 0.0), QPointF(x + 20.0, 0.0), "arrow"
+            )
             for x in (0.0, 25.0, 200.0)
         ]
         controller = canvas.services.scene_transform_controller

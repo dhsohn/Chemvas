@@ -13,7 +13,6 @@ from chemvas.ui.annotations.graphics import (
     AnnotationGraphics,
 )
 from chemvas.ui.canvas.canvas_tool_settings_state import set_tool_setting_for
-from chemvas.ui.scene.scene_decoration_access import preview_arrow_for
 from tests.canvas_factory import build_canvas_view
 
 
@@ -32,8 +31,8 @@ class AnnotationGraphicsTest(unittest.TestCase):
         self.app.processEvents()
 
     def test_preview_helpers_add_items_to_scene(self) -> None:
-        arrow = preview_arrow_for(
-            self.canvas, QPointF(0.0, 0.0), QPointF(12.0, 0.0), "reaction"
+        arrow = self.canvas.services.arrow_build_service.preview_arrow(
+            QPointF(0.0, 0.0), QPointF(12.0, 0.0), "reaction"
         )
         bracket = self.service.preview_ts_bracket(QPointF(1.0, 2.0), QPointF(3.0, 4.0))
 
@@ -71,13 +70,12 @@ class AnnotationGraphicsTest(unittest.TestCase):
         )
 
     def test_shape_stroke_none_is_drawable_borderless_with_dashed_preview(self) -> None:
-        from chemvas.ui.canvas.canvas_tool_settings_state import tool_settings_state_for
 
         # "none" becomes the active drawing default (not just a mutation of the
         # current selection), so background panels can be drawn borderless.
         self.canvas.services.tool_mode_controller.set_shape_stroke("none")
         self.assertEqual(
-            tool_settings_state_for(self.canvas).active_shape_stroke, "none"
+            self.canvas.runtime_state.tool_settings_state.active_shape_stroke, "none"
         )
 
         item = self.service.build_shape_item(

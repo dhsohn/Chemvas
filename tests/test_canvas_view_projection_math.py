@@ -26,15 +26,10 @@ from chemvas.domain.document import Atom, Bond
 from chemvas.features.graph import CanvasGraphState
 from chemvas.ui.canvas.canvas_atom_graphics_state import (
     CanvasAtomGraphicsState,
-    atom_dots_for,
-    atom_items_for,
     set_atom_dots_for,
     set_atom_items_for,
 )
-from chemvas.ui.canvas.canvas_bond_graphics_state import (
-    CanvasBondGraphicsState,
-    bond_items_for_id,
-)
+from chemvas.ui.canvas.canvas_bond_graphics_state import CanvasBondGraphicsState
 from chemvas.ui.canvas.canvas_geometry_controller import CanvasGeometryController
 from chemvas.ui.canvas.canvas_graph_service import CanvasGraphService
 from chemvas.ui.canvas.canvas_mark_registry import CanvasMarkRegistry
@@ -50,12 +45,10 @@ from chemvas.ui.history.history_commands import (
 )
 from chemvas.ui.molecule.atom_coords_access import (
     CanvasAtomCoords3DState,
-    atom_coords_3d_for,
     current_atom_coords_3d_for,
     set_atom_coords_3d_for,
 )
 from chemvas.ui.molecule.bond_graphics_access import (
-    add_bond_graphics_for,
     apply_color_to_bond_item_for,
     bond_offset_unit_3d_for,
     line_normal_components,
@@ -65,8 +58,7 @@ from chemvas.ui.molecule.bond_graphics_access import (
     project_point_3d_for,
     ring_double_segments_for,
 )
-from chemvas.ui.molecule.bond_renderer_access import bond_renderer_for
-from chemvas.ui.molecule.structure_mutation_access import add_atom_for, add_bond_for
+from chemvas.ui.molecule.structure_mutation_access import add_bond_for
 from chemvas.ui.selection.selection_rotation_access import (
     apply_projected_atom_positions_for,
     atom_in_planar_system_for,
@@ -182,19 +174,25 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
             target.close()
 
         self.addCleanup(close_canvas)
-        label_atom_id = add_atom_for(canvas, "N", 0.0, 0.0)
-        dot_atom_id = add_atom_for(canvas, "C", 20.0, 0.0)
+        label_atom_id = canvas.services.canvas_atom_mutation_service.add_atom(
+            "N", 0.0, 0.0
+        )
+        dot_atom_id = canvas.services.canvas_atom_mutation_service.add_atom(
+            "C", 20.0, 0.0
+        )
         bond_id = add_bond_for(canvas, label_atom_id, dot_atom_id)
-        add_bond_graphics_for(canvas, bond_id)
+        canvas.bond_renderer.add_bond_graphics(bond_id)
         return canvas, label_atom_id, dot_atom_id, bond_id
 
     def test_bond_length_history_preserves_graphics_selection_and_prior_item_command(
         self,
     ) -> None:
         canvas, label_atom_id, dot_atom_id, bond_id = self._real_bond_length_canvas()
-        label_item = atom_items_for(canvas)[label_atom_id]
-        dot_item = atom_dots_for(canvas)[dot_atom_id]
-        bond_item = bond_items_for_id(canvas, bond_id)[0]
+        label_item = canvas.runtime_state.atom_graphics_state.atom_items[label_atom_id]
+        dot_item = canvas.runtime_state.atom_graphics_state.atom_dots[dot_atom_id]
+        bond_item = canvas.runtime_state.bond_graphics_state.bond_items.get(
+            bond_id, []
+        )[0]
         original_ids = (id(label_item), id(dot_item), id(bond_item))
         original_font_size = label_item.font().pointSizeF()
         original_dot_hit_width = dot_item.boundingRect().width()
@@ -214,9 +212,13 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
 
         self.assertEqual(
             (
-                id(atom_items_for(canvas)[label_atom_id]),
-                id(atom_dots_for(canvas)[dot_atom_id]),
-                id(bond_items_for_id(canvas, bond_id)[0]),
+                id(canvas.runtime_state.atom_graphics_state.atom_items[label_atom_id]),
+                id(canvas.runtime_state.atom_graphics_state.atom_dots[dot_atom_id]),
+                id(
+                    canvas.runtime_state.bond_graphics_state.bond_items.get(
+                        bond_id, []
+                    )[0]
+                ),
             ),
             original_ids,
         )
@@ -232,9 +234,13 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
         self.assertEqual(canvas.renderer.style.bond_length_px, 20.0)
         self.assertEqual(
             (
-                id(atom_items_for(canvas)[label_atom_id]),
-                id(atom_dots_for(canvas)[dot_atom_id]),
-                id(bond_items_for_id(canvas, bond_id)[0]),
+                id(canvas.runtime_state.atom_graphics_state.atom_items[label_atom_id]),
+                id(canvas.runtime_state.atom_graphics_state.atom_dots[dot_atom_id]),
+                id(
+                    canvas.runtime_state.bond_graphics_state.bond_items.get(
+                        bond_id, []
+                    )[0]
+                ),
             ),
             original_ids,
         )
@@ -245,15 +251,16 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
             all(item.isSelected() for item in (label_item, dot_item, bond_item))
         )
 
-        with mock.patch(
-            "chemvas.ui.history.history_operations.apply_scene_item_state",
-            side_effect=lambda _canvas, item, state: item.setOpacity(state["opacity"]),
+        with mock.patch.object(
+            canvas.services.scene_item_controller,
+            "apply_scene_item_state",
+            side_effect=lambda item, state: item.setOpacity(state["opacity"]),
         ):
             canvas.services.history_service.undo()
 
         self.assertIs(
             find_projection(canvas, prior_command.item_id),
-            bond_items_for_id(canvas, bond_id)[0],
+            canvas.runtime_state.bond_graphics_state.bond_items.get(bond_id, [])[0],
         )
         self.assertEqual(bond_item.opacity(), 1.0)
 
@@ -268,9 +275,15 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
                 canvas, label_atom_id, dot_atom_id, bond_id = (
                     self._real_bond_length_canvas()
                 )
-                label_item = atom_items_for(canvas)[label_atom_id]
-                dot_item = atom_dots_for(canvas)[dot_atom_id]
-                bond_item = bond_items_for_id(canvas, bond_id)[0]
+                label_item = canvas.runtime_state.atom_graphics_state.atom_items[
+                    label_atom_id
+                ]
+                dot_item = canvas.runtime_state.atom_graphics_state.atom_dots[
+                    dot_atom_id
+                ]
+                bond_item = canvas.runtime_state.bond_graphics_state.bond_items.get(
+                    bond_id, []
+                )[0]
                 original_style = canvas.renderer.style
                 original_font = label_item.font()
                 original_dot_rect = dot_item.rect()
@@ -303,9 +316,11 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
         operations = canvas.services.history_service.operations
         canvas.services.geometry_controller.set_bond_length(30.0)
         canvas.services.history_service.clear()
-        label_item = atom_items_for(canvas)[label_atom_id]
-        dot_item = atom_dots_for(canvas)[dot_atom_id]
-        bond_item = bond_items_for_id(canvas, bond_id)[0]
+        label_item = canvas.runtime_state.atom_graphics_state.atom_items[label_atom_id]
+        dot_item = canvas.runtime_state.atom_graphics_state.atom_dots[dot_atom_id]
+        bond_item = canvas.runtime_state.bond_graphics_state.bond_items.get(
+            bond_id, []
+        )[0]
         for item in (label_item, dot_item, bond_item):
             item.setSelected(True)
         original_ids = (id(label_item), id(dot_item), id(bond_item))
@@ -336,9 +351,13 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
         self.assertEqual(canvas.renderer.style.bond_length_px, 30.0)
         self.assertEqual(
             (
-                id(atom_items_for(canvas)[label_atom_id]),
-                id(atom_dots_for(canvas)[dot_atom_id]),
-                id(bond_items_for_id(canvas, bond_id)[0]),
+                id(canvas.runtime_state.atom_graphics_state.atom_items[label_atom_id]),
+                id(canvas.runtime_state.atom_graphics_state.atom_dots[dot_atom_id]),
+                id(
+                    canvas.runtime_state.bond_graphics_state.bond_items.get(
+                        bond_id, []
+                    )[0]
+                ),
             ),
             original_ids,
         )
@@ -359,9 +378,11 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
         self,
     ) -> None:
         canvas, label_atom_id, dot_atom_id, bond_id = self._real_bond_length_canvas()
-        label_item = atom_items_for(canvas)[label_atom_id]
-        dot_item = atom_dots_for(canvas)[dot_atom_id]
-        bond_item = bond_items_for_id(canvas, bond_id)[0]
+        label_item = canvas.runtime_state.atom_graphics_state.atom_items[label_atom_id]
+        dot_item = canvas.runtime_state.atom_graphics_state.atom_dots[dot_atom_id]
+        bond_item = canvas.runtime_state.bond_graphics_state.bond_items.get(
+            bond_id, []
+        )[0]
         for item in (label_item, dot_item, bond_item):
             item.setSelected(True)
         original_ids = (id(label_item), id(dot_item), id(bond_item))
@@ -398,9 +419,13 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
         )
         self.assertEqual(
             (
-                id(atom_items_for(canvas)[label_atom_id]),
-                id(atom_dots_for(canvas)[dot_atom_id]),
-                id(bond_items_for_id(canvas, bond_id)[0]),
+                id(canvas.runtime_state.atom_graphics_state.atom_items[label_atom_id]),
+                id(canvas.runtime_state.atom_graphics_state.atom_dots[dot_atom_id]),
+                id(
+                    canvas.runtime_state.bond_graphics_state.bond_items.get(
+                        bond_id, []
+                    )[0]
+                ),
             ),
             original_ids,
         )
@@ -422,9 +447,11 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
         self,
     ) -> None:
         canvas, label_atom_id, dot_atom_id, bond_id = self._real_bond_length_canvas()
-        label_item = atom_items_for(canvas)[label_atom_id]
-        dot_item = atom_dots_for(canvas)[dot_atom_id]
-        bond_item = bond_items_for_id(canvas, bond_id)[0]
+        label_item = canvas.runtime_state.atom_graphics_state.atom_items[label_atom_id]
+        dot_item = canvas.runtime_state.atom_graphics_state.atom_dots[dot_atom_id]
+        bond_item = canvas.runtime_state.bond_graphics_state.bond_items.get(
+            bond_id, []
+        )[0]
         for item in (label_item, dot_item, bond_item):
             item.setSelected(True)
         original_style = canvas.renderer.style
@@ -462,9 +489,17 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
             ),
             original_metrics,
         )
-        self.assertIs(atom_items_for(canvas)[label_atom_id], label_item)
-        self.assertIs(atom_dots_for(canvas)[dot_atom_id], dot_item)
-        self.assertIs(bond_items_for_id(canvas, bond_id)[0], bond_item)
+        self.assertIs(
+            canvas.runtime_state.atom_graphics_state.atom_items[label_atom_id],
+            label_item,
+        )
+        self.assertIs(
+            canvas.runtime_state.atom_graphics_state.atom_dots[dot_atom_id], dot_item
+        )
+        self.assertIs(
+            canvas.runtime_state.bond_graphics_state.bond_items.get(bond_id, [])[0],
+            bond_item,
+        )
         self.assertTrue(
             all(item.isSelected() for item in (label_item, dot_item, bond_item))
         )
@@ -476,7 +511,7 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
         canvas, label_atom_id, _dot_atom_id, _bond_id = self._real_bond_length_canvas()
         operations = canvas.services.history_service.operations
         canvas.services.geometry_controller.set_bond_length(30.0)
-        label_item = atom_items_for(canvas)[label_atom_id]
+        label_item = canvas.runtime_state.atom_graphics_state.atom_items[label_atom_id]
         label_item.setSelected(True)
         original_style = canvas.renderer.style
         original_font = label_item.font()
@@ -503,7 +538,10 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
         self.assertGreaterEqual(calls, 1)
         self.assertIs(canvas.renderer.style, original_style)
         self.assertEqual(canvas.renderer.style.bond_length_px, 30.0)
-        self.assertIs(atom_items_for(canvas)[label_atom_id], label_item)
+        self.assertIs(
+            canvas.runtime_state.atom_graphics_state.atom_items[label_atom_id],
+            label_item,
+        )
         self.assertEqual(label_item.font(), original_font)
         self.assertEqual(label_item.boundingRect(), original_bounds)
         self.assertEqual(label_item.shape().boundingRect(), original_shape_bounds)
@@ -514,9 +552,11 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
         self,
     ) -> None:
         canvas, label_atom_id, dot_atom_id, bond_id = self._real_bond_length_canvas()
-        label_item = atom_items_for(canvas)[label_atom_id]
-        dot_item = atom_dots_for(canvas)[dot_atom_id]
-        bond_item = bond_items_for_id(canvas, bond_id)[0]
+        label_item = canvas.runtime_state.atom_graphics_state.atom_items[label_atom_id]
+        dot_item = canvas.runtime_state.atom_graphics_state.atom_dots[dot_atom_id]
+        bond_item = canvas.runtime_state.bond_graphics_state.bond_items.get(
+            bond_id, []
+        )[0]
         for item in (label_item, dot_item, bond_item):
             item.setSelected(True)
 
@@ -559,9 +599,13 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
         )
         self.assertEqual(
             (
-                id(atom_items_for(canvas)[label_atom_id]),
-                id(atom_dots_for(canvas)[dot_atom_id]),
-                id(bond_items_for_id(canvas, bond_id)[0]),
+                id(canvas.runtime_state.atom_graphics_state.atom_items[label_atom_id]),
+                id(canvas.runtime_state.atom_graphics_state.atom_dots[dot_atom_id]),
+                id(
+                    canvas.runtime_state.bond_graphics_state.bond_items.get(
+                        bond_id, []
+                    )[0]
+                ),
             ),
             original_ids,
         )
@@ -628,7 +672,8 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
         self.assertAlmostEqual(view.model.atoms[1].x, -5.0)
         self.assertAlmostEqual(view.model.atoms[2].x, 25.0)
         self.assertEqual(
-            atom_coords_3d_for(view), {1: (-4.625, 0.0, 6.0), 2: (24.625, 0.0, 6.0)}
+            view.runtime_state.atom_coords_3d_state.atom_coords_3d,
+            {1: (-4.625, 0.0, 6.0), 2: (24.625, 0.0, 6.0)},
         )
         self.assertEqual(current_atom_coords_3d_for(view, 1), (-4.625, 0.0, 6.0))
         rotation_state = view.runtime_state.rotation_state
@@ -1044,8 +1089,12 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
                 },
             )
 
-        self.assertEqual(atom_coords_3d_for(view)[1], (1.0, 2.0, 3.0))
-        self.assertEqual(atom_coords_3d_for(view)[2], (5.0, 7.0, 11.0))
+        self.assertEqual(
+            view.runtime_state.atom_coords_3d_state.atom_coords_3d[1], (1.0, 2.0, 3.0)
+        )
+        self.assertEqual(
+            view.runtime_state.atom_coords_3d_state.atom_coords_3d[2], (5.0, 7.0, 11.0)
+        )
         self.assertEqual((view.model.atoms[1].x, view.model.atoms[1].y), (11.0, -3.0))
         self.assertEqual((view.model.atoms[2].x, view.model.atoms[2].y), (15.0, 2.0))
         atom_label_service.position_label.assert_called_once_with(label, 11.0, -3.0)
@@ -1090,7 +1139,9 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
                     2: (4.0, 5.0, 6.0),
                 },
             )
-        self.assertEqual(atom_coords_3d_for(view)[2], (4.0, 5.0, 6.0))
+        self.assertEqual(
+            view.runtime_state.atom_coords_3d_state.atom_coords_3d[2], (4.0, 5.0, 6.0)
+        )
         self.assertEqual((view.model.atoms[1].x, view.model.atoms[1].y), (1.0, 2.0))
 
     def test_bond_lookup_and_axis_rotation_helpers(self) -> None:
@@ -1270,8 +1321,8 @@ class CanvasViewProjectionMathTest(unittest.TestCase):
             ring_double_segments_for(view, "a", "b", center, 7, 8, (0.0, 0.0, 1.0)),
             ring_segments,
         )
-        bond_renderer_for(view).update_bond_geometry(4)
-        add_bond_graphics_for(view, 5)
+        view.bond_renderer.update_bond_geometry(4)
+        view.bond_renderer.add_bond_graphics(5)
         renderer.parallel_bond_segments.assert_called_once_with(
             1.0, 2.0, 3.0, 4.0, 2, 7, 8
         )

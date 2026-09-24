@@ -30,7 +30,6 @@ from chemvas.ui.canvas.canvas_document_metadata_state import (
 from chemvas.ui.canvas.canvas_document_state import (
     snapshot_canvas_document_state_with_warnings,
 )
-from chemvas.ui.canvas.canvas_group_state import group_state_for
 from chemvas.ui.dialogs.scheme_layout_dialog import (
     GroupLayoutChoice,
     SchemeLayoutDialog,
@@ -39,11 +38,7 @@ from chemvas.ui.dialogs.scheme_layout_dialog import (
 )
 from chemvas.ui.dialogs.scheme_layout_service import plan_canvas_layout
 from chemvas.ui.scene.scene_decoration_access import add_mark_for_atom_for
-from chemvas.ui.scene.scene_item_access import create_scene_item_from_state
-from chemvas.ui.window.main_window_ports import (
-    active_canvas_for_window,
-    services_for_window,
-)
+from chemvas.ui.window.main_window_ports import active_canvas_for_window
 
 
 @pytest.fixture(scope="module", autouse=True)
@@ -148,8 +143,7 @@ def test_fractional_layout_undo_restores_exact_raw_state_and_clean_marker(kind):
         mark = add_mark_for_atom_for(
             canvas, 4, QPointF(atom.x + 7.1, atom.y - 3.4), kind=kind
         )
-        create_scene_item_from_state(
-            canvas,
+        canvas.services.scene_item_controller.create_scene_item_from_state(
             {
                 "atom_ids": [0, 1, 2],
                 "points": [
@@ -158,13 +152,13 @@ def test_fractional_layout_undo_restores_exact_raw_state_and_clean_marker(kind):
                 "color": "#ffeeaa",
                 "alpha": 0.3,
                 "kind": "ring",
-            },
+            }
         )
         history = canvas.services.history_service
         history.clear()
         before = _snapshot(canvas)
         mark_position = mark.pos()
-        groups = dict(group_state_for(canvas).groups)
+        groups = dict(canvas.runtime_state.group_state.groups)
         mark_document_clean_for(canvas, before)
         assert not document_is_dirty_for(canvas, before)
         request = grouped_layout_request(
@@ -180,11 +174,11 @@ def test_fractional_layout_undo_restores_exact_raw_state_and_clean_marker(kind):
             assert _snapshot(canvas) == before
             assert mark.pos() == mark_position
             assert not document_is_dirty_for(canvas, _snapshot(canvas))
-            assert group_state_for(canvas).groups == groups
+            assert canvas.runtime_state.group_state.groups == groups
             history.redo()
             assert _snapshot(canvas) == after
             assert document_is_dirty_for(canvas, _snapshot(canvas))
-            assert group_state_for(canvas).groups == groups
+            assert canvas.runtime_state.group_state.groups == groups
 
 
 def test_already_arranged_layout_preserves_existing_redo_and_raw_state():
@@ -198,9 +192,10 @@ def test_already_arranged_layout_preserves_existing_redo_and_raw_state():
         )
         arranged = _snapshot(canvas)
         history = canvas.services.history_service
-        from chemvas.ui.scene.scene_decoration_access import add_arrow_for
 
-        extra = add_arrow_for(canvas, QPointF(500, 100), QPointF(540, 100), "arrow")
+        extra = canvas.services.scene_decoration_service.add_arrow(
+            QPointF(500, 100), QPointF(540, 100), "arrow"
+        )
         history.undo()
         assert extra.scene() is None
         assert _snapshot(canvas) == arranged
@@ -217,8 +212,6 @@ def test_already_arranged_layout_preserves_existing_redo_and_raw_state():
 def test_failed_layout_history_restores_exact_geometry_and_existing_stacks(
     monkeypatch, phase
 ):
-    from chemvas.ui.history import history_operations as history_commands
-
     with offscreen_canvas(
         _fractional_source(), command="test-arrange-history-failure"
     ) as (canvas, _):
@@ -235,7 +228,7 @@ def test_failed_layout_history_restores_exact_geometry_and_existing_stacks(
             history.undo()
         before = _snapshot(canvas)
         stacks = history.capture_stack_snapshot()
-        groups = dict(group_state_for(canvas).groups)
+        groups = dict(canvas.runtime_state.group_state.groups)
 
         def fail(*args, **kwargs):
             raise RuntimeError("injected layout history error")
@@ -261,12 +254,16 @@ def test_failed_layout_history_restores_exact_geometry_and_existing_stacks(
             else:
                 # The command has already restored atoms when item application
                 # fails: only the existing exact savepoint may recover it.
-                injected.setattr(history_commands, "apply_scene_item_state", fail)
+                injected.setattr(
+                    canvas.services.scene_item_controller,
+                    "apply_scene_item_state",
+                    fail,
+                )
                 with pytest.raises(RuntimeError, match="injected layout"):
                     (history.undo if phase == "undo" else history.redo)()
         assert _snapshot(canvas) == before
         assert history.capture_stack_snapshot() == stacks
-        assert group_state_for(canvas).groups == groups
+        assert canvas.runtime_state.group_state.groups == groups
         if phase == "undo":
             history.undo()
             assert _snapshot(canvas) == original
@@ -288,7 +285,7 @@ def test_saved_window_arrange_button_and_shortcut_undo_clear_modified_title(
     windows = [window]
     try:
         canvas = active_canvas_for_window(window)
-        services = services_for_window(window)
+        services = window.services
         canvas.services.canvas_document_session_service.apply_state(
             _fractional_source()
         )
@@ -301,7 +298,7 @@ def test_saved_window_arrange_button_and_shortcut_undo_clear_modified_title(
         application.processEvents()
         window = build_main_window()
         windows.append(window)
-        services = services_for_window(window)
+        services = window.services
         assert services.document_action_service.load_canvas_from_path(window, str(path))
         canvas = active_canvas_for_window(window)
         window.show()
@@ -351,7 +348,7 @@ def test_saved_window_arrange_button_and_shortcut_undo_clear_modified_title(
         assert path.read_bytes() == original_bytes
     finally:
         for window in windows:
-            services = services_for_window(window)
+            services = window.services
             services.canvas_document_service.mark_clean(
                 active_canvas_for_window(window)
             )
@@ -384,7 +381,7 @@ def _snapshot(canvas):
 def test_layout_is_one_undoable_edit_preserving_groups_and_unassigned_items():
     with offscreen_canvas(_source(), command="test-scheme-gui") as (canvas, _):
         before = _snapshot(canvas)
-        groups = dict(group_state_for(canvas).groups)
+        groups = dict(canvas.runtime_state.group_state.groups)
         request = grouped_layout_request(before, _choices())
         plan = plan_canvas_layout(canvas, before, request)
         assert _snapshot(canvas) == before
@@ -394,7 +391,7 @@ def test_layout_is_one_undoable_edit_preserving_groups_and_unassigned_items():
         assert report["block_count"] == 2
         assert after != before
         assert after["groups"] == before["groups"]
-        assert group_state_for(canvas).groups == groups
+        assert canvas.runtime_state.group_state.groups == groups
         assert after["notes"][2] == before["notes"][2]
         history = canvas.services.history_service
         assert len(history.state.history) == 1

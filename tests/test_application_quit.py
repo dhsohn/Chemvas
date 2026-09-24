@@ -24,7 +24,7 @@ from chemvas.core.document_io import read_document, write_document
 from chemvas.domain.document import CANVAS_FILE_VERSION
 from chemvas.features.session import is_quit_pending, is_quitting
 from chemvas.ui.session.app_data_paths import sessions_dir
-from chemvas.ui.window.main_window_ports import active_canvas_for_window, preview_for_window, services_for_window
+from chemvas.ui.window.main_window_ports import active_canvas_for_window
 from chemvas.ui.session.session_recovery_service import SessionRecoveryService
 from chemvas.ui.session.session_snapshot_store import new_session_store
 from chemvas.ui.molecule.structure_mutation_access import add_bond_between_points_for
@@ -43,7 +43,7 @@ for name in "abc":
     window = open_new_window(windows[-1] if windows else None)
     canvas = active_canvas_for_window(window)
     add_bond_between_points_for(canvas, QPointF(0, 0), QPointF(40, 0))
-    assert services_for_window(window).document_action_service.save_canvas_to_path(window, str(root / (name + ".chemvas")))
+    assert window.services.document_action_service.save_canvas_to_path(window, str(root / (name + ".chemvas")))
     windows.append(window)
 for window in (() if mode == "clean" else (windows[0], windows[2])):
     add_bond_between_points_for(active_canvas_for_window(window), QPointF(0, 80), QPointF(40, 80))
@@ -92,7 +92,7 @@ class Answer(QObject):
 answer = Answer(app)
 app.installEventFilter(answer)
 if mode in {"worker", "file-open-worker"}:
-    preview = preview_for_window(windows[0])
+    preview = windows[0].preview_3d
     def delayed_shutdown():
         if mode == "file-open-worker":
             QTimer.singleShot(10, incoming_event)
@@ -104,7 +104,7 @@ if mode in {"worker", "file-open-worker"}:
 cancelled_modes = {"cancel", "failed-save", "failed-snapshot", "save-as-cancel", "file-open-cancel"}
 if mode in cancelled_modes:
     if mode == "failed-save":
-        services_for_window(windows[0]).document_action_service.save_canvas = lambda *a, **k: False
+        windows[0].services.document_action_service.save_canvas = lambda *a, **k: False
     if mode == "failed-snapshot":
         def fail_save(docs):
             raise OSError("injected full disk")
@@ -116,13 +116,13 @@ if mode in cancelled_modes:
         manifest = json.loads((store.session_dir / "session.json").read_text())
         assert not manifest["clean_exit"]
         if mode == "failed-snapshot":
-            label = services_for_window(windows[0]).status_service.autosave_error_label
+            label = windows[0].services.status_service.autosave_error_label
             assert label.isVisible() and "injected full disk" in label.toolTip()
         if mode == "file-open-cancel":
             QApplication.sendEvent(app, SyntheticFileOpen())
             assert len(open_windows()) == 4
             canvas = active_canvas_for_window(open_windows()[-1])
-            assert services_for_window(open_windows()[-1]).canvas_document_service.file_path(canvas) == str(incoming)
+            assert open_windows()[-1].services.canvas_document_service.file_path(canvas) == str(incoming)
         print("cancelled safely", flush=True)
         os._exit(0)
 
@@ -205,7 +205,7 @@ from chemvas.features.calculation_bundle import validate_calculation_plan
 from chemvas.features.session import is_quit_pending, is_quitting
 from chemvas.ui.session.app_data_paths import sessions_dir
 from chemvas.ui.canvas.canvas_calculation_plan_state import calculation_plan_for
-from chemvas.ui.window.main_window_ports import active_canvas_for_window, services_for_window
+from chemvas.ui.window.main_window_ports import active_canvas_for_window
 from chemvas.ui.session.session_recovery_service import SessionRecoveryService
 from chemvas.ui.session.session_snapshot_store import new_session_store
 from chemvas.ui.molecule.structure_mutation_access import add_bond_between_points_for, add_bond_for
@@ -223,12 +223,12 @@ first = active_canvas_for_window(windows[0])
 state = _document_state()
 state["calculation_plan"] = _plan()
 validate_calculation_plan(state, state["calculation_plan"])
-documents = services_for_window(windows[0]).canvas_document_service
+documents = windows[0].services.canvas_document_service
 documents.replace_canvas_with_state(windows[0], first, state=state, file_path=None)
 for name, window in zip("abc", windows):
     if name != "a":
         add_bond_between_points_for(active_canvas_for_window(window), QPointF(0, 0), QPointF(40, 0))
-    assert services_for_window(window).document_action_service.save_canvas_to_path(window, str(root / (name + ".chemvas")))
+    assert window.services.document_action_service.save_canvas_to_path(window, str(root / (name + ".chemvas")))
 original_file = (root / "a.chemvas").read_bytes()
 if mode == "untitled-discard":
     documents.set_file_path(first, None)

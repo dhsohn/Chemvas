@@ -6,13 +6,9 @@ from PyQt6.QtCore import QPointF, Qt
 from PyQt6.QtWidgets import QApplication
 
 from chemvas.domain.document import VALID_ARC_KINDS, mirrored_arc_kind
-from chemvas.ui.canvas.canvas_tool_settings_state import tool_settings_state_for
 from chemvas.ui.scene.scene_decoration_access import (
-    add_arrow_for,
-    add_orbital_for,
     add_shape_from_points_for,
     add_ts_bracket_from_points_for,
-    preview_arrow_for,
     preview_shape_for,
     preview_ts_bracket_for,
 )
@@ -127,7 +123,7 @@ class ArrowTool(PreviewDragTool):
         kind = (
             self.mode
             if self.mode != "auto"
-            else tool_settings_state_for(self.canvas).active_arrow_type
+            else self.canvas.runtime_state.tool_settings_state.active_arrow_type
         )
         if self._mirror_arc and kind in VALID_ARC_KINDS:
             return mirrored_arc_kind(kind)
@@ -166,7 +162,9 @@ class ArrowTool(PreviewDragTool):
     @override
     def _build_preview(self, current_pos):
         end = self._end_point(current_pos)
-        item = preview_arrow_for(self.canvas, self._start_pos, end, self._arrow_type())
+        item = self.canvas.services.arrow_build_service.preview_arrow(
+            self._start_pos, end, self._arrow_type()
+        )
         mark_snapped_points_for(self.canvas, item, [self._start_pos, end])
         return item
 
@@ -177,7 +175,9 @@ class ArrowTool(PreviewDragTool):
             # A click without a drag would add a headless stub; it also lets a
             # double-click reach the arrow under the cursor instead of a stub.
             return
-        add_arrow_for(self.canvas, self._start_pos, end, self._arrow_type())
+        self.canvas.services.scene_decoration_service.add_arrow(
+            self._start_pos, end, self._arrow_type()
+        )
 
 
 class TSBracketTool(PreviewDragTool):
@@ -185,7 +185,7 @@ class TSBracketTool(PreviewDragTool):
         super().__init__("ts_bracket", canvas, context=context)
 
     def _bracket_type(self) -> str:
-        return tool_settings_state_for(self.canvas).active_bracket_type
+        return self.canvas.runtime_state.tool_settings_state.active_bracket_type
 
     @override
     def _build_preview(self, current_pos):
@@ -205,10 +205,10 @@ class ShapeTool(PreviewDragTool):
         super().__init__("shape", canvas, context=context)
 
     def _shape_kind(self) -> str:
-        return tool_settings_state_for(self.canvas).active_shape_type
+        return self.canvas.runtime_state.tool_settings_state.active_shape_type
 
     def _stroke_style(self) -> str:
-        return tool_settings_state_for(self.canvas).active_shape_stroke
+        return self.canvas.runtime_state.tool_settings_state.active_shape_stroke
 
     @override
     def _build_preview(self, current_pos):
@@ -244,7 +244,7 @@ class OrbitalTool(Tool):
         if event.button() != Qt.MouseButton.LeftButton:
             return False
         pos = self.context.scene_pos_from_event(event)
-        add_orbital_for(self.canvas, pos)
+        self.canvas.services.scene_decoration_service.add_orbital(pos)
         return True
 
 

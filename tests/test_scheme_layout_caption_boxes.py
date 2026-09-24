@@ -13,7 +13,6 @@ from chemvas.core.document_io import read_document, write_document
 from chemvas.domain.document import CANVAS_FILE_VERSION
 from chemvas.features.document_composition import compose_document_state
 from chemvas.features.scheme_layout import validate_layout_request
-from chemvas.ui.canvas.canvas_bond_graphics_state import bond_items_for
 from chemvas.ui.canvas.canvas_document_state import document_item_lists_for
 from chemvas.ui.canvas.graphics_items import note_paint_scene_path
 from chemvas.ui.dialogs.scheme_layout_service import arrange_canvas, plan_canvas_layout
@@ -106,7 +105,9 @@ def test_arranged_caption_boxes_clear_bonds_and_each_other_after_reopen(
             pieces = [
                 piece
                 for bond_id in range(column * 6, column * 6 + 6)
-                for piece in bond_items_for(canvas)[bond_id]
+                for piece in canvas.runtime_state.bond_graphics_state.bond_items[
+                    bond_id
+                ]
             ]
             bottom = max(piece.sceneBoundingRect().bottom() for piece in pieces)
             for level in range(2):

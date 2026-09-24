@@ -19,12 +19,9 @@ from chemvas.core.document_io import read_document
 from chemvas.features.document_composition import compose_document_state
 from chemvas.ui.canvas.canvas_scene_items_state import note_items_for
 from chemvas.ui.export.layout_qa_service import check_canvas_layout
-from chemvas.ui.selection.selection_state import selected_notes_for
 from chemvas.ui.window.main_window_ports import (
     active_canvas_for_window,
-    services_for_window,
     set_zoom_percent_for_window,
-    tool_action_for_window,
 )
 
 
@@ -110,7 +107,7 @@ def opened_native(path):
     assert QTest.qWaitForWindowExposed(window, 5000)
     if QApplication.platformName() != "offscreen":
         assert QTest.qWaitForWindowActive(window, 5000)
-    actions = services_for_window(window).document_action_service
+    actions = window.services.document_action_service
     assert actions.load_canvas_from_path(window, str(path))
     canvas = active_canvas_for_window(window)
     set_zoom_percent_for_window(window, 200)
@@ -121,14 +118,14 @@ def opened_native(path):
         yield window, canvas, actions
     finally:
         canvas.scene().clearFocus()
-        services_for_window(window).canvas_document_service.mark_clean(canvas)
+        window.services.canvas_document_service.mark_clean(canvas)
         window.close()
         QApplication.processEvents()
         QTest.qWait(20)
 
 
 def click_tool(window, name):
-    action = tool_action_for_window(window, name)
+    action = window.ui_references.tool_action_for_key(name)
     button = next(
         button
         for button in window.findChildren(QToolButton)
@@ -172,7 +169,10 @@ def exercise_saved_editable_document(directory, *, capture=False):
         origin = canvas.mapFromScene(QPointF(-60.0, 0.0))
         QTest.mouseClick(canvas.viewport(), Qt.MouseButton.LeftButton, pos=origin)
         QApplication.processEvents()
-        assert note_items_for(canvas)[0] in selected_notes_for(canvas)
+        assert (
+            note_items_for(canvas)[0]
+            in canvas.runtime_state.selection_state.selected_notes
+        )
         QTest.mousePress(canvas.viewport(), Qt.MouseButton.LeftButton, pos=origin)
         QTest.mouseMove(canvas.viewport(), origin + QPoint(40, 20), 30)
         QTest.mouseRelease(

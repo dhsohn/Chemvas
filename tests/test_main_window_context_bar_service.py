@@ -19,8 +19,6 @@ def _context_bar_service(
     page_builder=None,
     active_tool_name_for_window=None,
     active_canvas_or_none_for_window=None,
-    context_bar_page_override_for_window=None,
-    set_atom_input_for_window=None,
     bond_length_px_for_window=None,
 ) -> MainWindowContextBarService:
     """Build the service with the window ports patched on its module."""
@@ -30,9 +28,6 @@ def _context_bar_service(
         or mock.Mock(return_value=None),
         "active_canvas_or_none_for_window": active_canvas_or_none_for_window
         or mock.Mock(return_value=None),
-        "context_bar_page_override_for_window": context_bar_page_override_for_window
-        or mock.Mock(return_value=None),
-        "set_atom_input_for_window": set_atom_input_for_window or mock.Mock(),
         "bond_length_px_for_window": bond_length_px_for_window
         or mock.Mock(return_value=20.0),
     }
@@ -55,19 +50,18 @@ def test_active_tool_name_uses_injected_window_port(monkeypatch) -> None:
 
 def test_refresh_window_uses_injected_active_tool_name(monkeypatch) -> None:
     active_tool_name_for_window = mock.Mock(return_value="bond")
-    context_bar_page_override_for_window = mock.Mock(return_value="ring_fill")
     service = _context_bar_service(
         monkeypatch,
         active_tool_name_for_window=active_tool_name_for_window,
-        context_bar_page_override_for_window=context_bar_page_override_for_window,
     )
     service.refresh = mock.Mock()
-    window = SimpleNamespace()
+    window = SimpleNamespace(
+        runtime_state=SimpleNamespace(context_bar_page_override="ring_fill")
+    )
 
     service.refresh_window(window)
 
     active_tool_name_for_window.assert_called_once_with(window)
-    context_bar_page_override_for_window.assert_called_once_with(window)
     service.refresh.assert_called_once_with(window, "bond", page_key="ring_fill")
 
 

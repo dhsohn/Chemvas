@@ -23,24 +23,12 @@ from chemvas.ui.annotations.state import (
     bond_state_dict,
     mark_state_dict_for,
 )
-from chemvas.ui.canvas.canvas_atom_graphics_state import atom_dots_for, atom_items_for
-from chemvas.ui.canvas.canvas_bond_graphics_state import bond_items_for_id
-from chemvas.ui.canvas.canvas_callback_state import callback_state_for
-from chemvas.ui.canvas.canvas_group_state import (
-    group_state_for,
-    register_group_for,
-    remove_group_for,
-)
+from chemvas.ui.canvas.canvas_group_state import register_group_for
 from chemvas.ui.canvas.canvas_mark_registry import mark_registry_for
 from chemvas.ui.canvas.canvas_scene_items_state import note_items_for, ring_items_for
-from chemvas.ui.canvas.canvas_smiles_input_state import (
-    last_smiles_input_for,
-    set_last_smiles_input_for,
-)
+from chemvas.ui.canvas.canvas_smiles_input_state import set_last_smiles_input_for
 from chemvas.ui.canvas.canvas_view import CanvasView
 from chemvas.ui.history.history_commands import UngroupSceneItemsCommand
-from chemvas.ui.molecule.atom_coords_access import atom_coords_3d_for
-from chemvas.ui.molecule.bond_graphics_access import add_bond_graphics_for
 from chemvas.ui.molecule.structure_mutation_access import add_benzene_ring_for
 from chemvas.ui.tools.edit_tools import DeleteTool
 from chemvas.ui.transactions.document import (
@@ -171,7 +159,7 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
                 self.assertIsNotNone(mark)
                 assert mark is not None
                 set_last_smiles_input_for(canvas, "N")
-                atom_coords = atom_coords_3d_for(canvas)
+                atom_coords = canvas.runtime_state.atom_coords_3d_state.atom_coords_3d
                 atom_coords[atom_id] = (10.0, 20.0, 3.0)
                 canvas.model.atom_annotations[atom_id] = {"formal_charge": 1}
 
@@ -184,7 +172,9 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
                 atom_before = atom_state_dict_for(canvas, atom_id)
                 mark_before = mark_state_dict_for(canvas, mark)
                 atom_object_before = canvas.model.atoms[atom_id]
-                atom_item_before = atom_items_for(canvas)[atom_id]
+                atom_item_before = canvas.runtime_state.atom_graphics_state.atom_items[
+                    atom_id
+                ]
                 scene_order_before = list(canvas.scene().items())
                 atom_coords_object = atom_coords
                 atom_coords_before = dict(atom_coords)
@@ -226,17 +216,30 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
                 self.assertEqual(restored_marks, [mark])
                 self.assertEqual(mark_state_dict_for(canvas, mark), mark_before)
                 self.assertIs(mark.scene(), canvas.scene())
-                self.assertIn(atom_id, atom_items_for(canvas))
-                self.assertIs(atom_items_for(canvas)[atom_id], atom_item_before)
+                self.assertIn(
+                    atom_id, canvas.runtime_state.atom_graphics_state.atom_items
+                )
+                self.assertIs(
+                    canvas.runtime_state.atom_graphics_state.atom_items[atom_id],
+                    atom_item_before,
+                )
                 self.assertIs(atom_item_before.scene(), canvas.scene())
-                self.assertIs(atom_coords_3d_for(canvas), atom_coords_object)
-                self.assertEqual(atom_coords_3d_for(canvas), atom_coords_before)
+                self.assertIs(
+                    canvas.runtime_state.atom_coords_3d_state.atom_coords_3d,
+                    atom_coords_object,
+                )
+                self.assertEqual(
+                    canvas.runtime_state.atom_coords_3d_state.atom_coords_3d,
+                    atom_coords_before,
+                )
                 self.assertIs(canvas.model.atom_annotations, annotations_object)
                 self.assertEqual(canvas.model.atom_annotations, annotations_before)
                 self.assertIs(graph.atom_neighbors, neighbors_object)
                 self.assertIs(graph.atom_neighbors[atom_id], atom_neighbor_set)
                 self.assertEqual(list(canvas.scene().items()), scene_order_before)
-                self.assertEqual(last_smiles_input_for(canvas), "N")
+                self.assertEqual(
+                    canvas.runtime_state.smiles_input_state.last_smiles_input, "N"
+                )
                 self.assertIs(history_state.history, history_object)
                 self.assertIs(history_state.redo_stack, redo_object)
                 self.assertEqual(history_state.history, [history_item])
@@ -253,11 +256,13 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
                 atom_a = atom_service.add_atom("N", 0.0, 0.0)
                 atom_b = atom_service.add_atom("O", 40.0, 0.0)
                 bond_id = bond_service.add_bond(atom_a, atom_b, 2)
-                add_bond_graphics_for(canvas, bond_id)
+                canvas.bond_renderer.add_bond_graphics(bond_id)
                 set_last_smiles_input_for(canvas, "N=O")
 
                 bond_before = bond_state_dict(canvas.model.bonds[bond_id])
-                graphics_before = list(bond_items_for_id(canvas, bond_id))
+                graphics_before = list(
+                    canvas.runtime_state.bond_graphics_state.bond_items.get(bond_id, [])
+                )
                 self.assertTrue(graphics_before)
                 graphics_mapping = canvas.runtime_state.bond_graphics_state.bond_items
                 scene_order_before = list(canvas.scene().items())
@@ -307,7 +312,9 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
                 self.assertIsNotNone(restored_bond)
                 assert restored_bond is not None
                 self.assertEqual(bond_state_dict(restored_bond), bond_before)
-                restored_graphics = bond_items_for_id(canvas, bond_id)
+                restored_graphics = (
+                    canvas.runtime_state.bond_graphics_state.bond_items.get(bond_id, [])
+                )
                 self.assertIs(
                     canvas.runtime_state.bond_graphics_state.bond_items,
                     graphics_mapping,
@@ -317,7 +324,9 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
                     all(item.scene() is canvas.scene() for item in restored_graphics)
                 )
                 self.assertEqual(list(canvas.scene().items()), scene_order_before)
-                self.assertEqual(last_smiles_input_for(canvas), "N=O")
+                self.assertEqual(
+                    canvas.runtime_state.smiles_input_state.last_smiles_input, "N=O"
+                )
                 self.assertEqual(canvas.services.history_service.state.history, [])
                 self.assertEqual(remove_calls, 1)
                 self.assertLessEqual(redraw_calls, 1)
@@ -696,7 +705,9 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
             [bond_state_dict(bond) for bond in canvas.model.bonds if bond is not None],
             bonds_before,
         )
-        self.assertEqual(last_smiles_input_for(canvas), "CCC")
+        self.assertEqual(
+            canvas.runtime_state.smiles_input_state.last_smiles_input, "CCC"
+        )
         self.assertEqual(canvas.pushed_commands, [])
 
     def test_multi_atom_second_failure_restores_attempted_atoms_without_touching_future_atom(
@@ -749,7 +760,9 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
             atoms_before,
         )
         self.assertEqual(canvas.model.next_atom_id, 4)
-        self.assertEqual(last_smiles_input_for(canvas), "CON")
+        self.assertEqual(
+            canvas.runtime_state.smiles_input_state.last_smiles_input, "CON"
+        )
         self.assertEqual(canvas.pushed_commands, [])
 
     def test_multi_scene_second_failure_restores_attempted_items_and_skips_future_item(
@@ -798,12 +811,16 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
         atom_a = atom_service.add_atom("C", 0.0, 0.0)
         atom_b = atom_service.add_atom("C", 40.0, 0.0)
         bond_id = bond_service.add_bond(atom_a, atom_b)
-        add_bond_graphics_for(canvas, bond_id)
-        bond_item = bond_items_for_id(canvas, bond_id)[0]
+        canvas.bond_renderer.add_bond_graphics(bond_id)
+        bond_item = canvas.runtime_state.bond_graphics_state.bond_items.get(
+            bond_id, []
+        )[0]
         bond_item.setSelected(True)
 
         scene_before = list(canvas.scene().items())
-        graphics_before = list(bond_items_for_id(canvas, bond_id))
+        graphics_before = list(
+            canvas.runtime_state.bond_graphics_state.bond_items.get(bond_id, [])
+        )
         cleanup_calls: list[tuple[str, bool | None]] = []
         original_suspend = canvas.services.style_controller.suspend_selection_outline
 
@@ -835,7 +852,10 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
             [("suspend", True), ("suspend", False), ("refresh", None)],
         )
         self.assertIsNotNone(canvas.model.bonds[bond_id])
-        self.assertEqual(bond_items_for_id(canvas, bond_id), graphics_before)
+        self.assertEqual(
+            canvas.runtime_state.bond_graphics_state.bond_items.get(bond_id, []),
+            graphics_before,
+        )
         self.assertTrue(bond_item.isSelected())
         self.assertEqual(list(canvas.scene().items()), scene_before)
         self.assertFalse(canvas.runtime_state.selection_state.suspend_outline)
@@ -850,8 +870,10 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
         atom_a = atom_service.add_atom("C", 0.0, 0.0)
         atom_b = atom_service.add_atom("C", 40.0, 0.0)
         bond_id = bond_service.add_bond(atom_a, atom_b)
-        add_bond_graphics_for(canvas, bond_id)
-        bond_item = bond_items_for_id(canvas, bond_id)[0]
+        canvas.bond_renderer.add_bond_graphics(bond_id)
+        bond_item = canvas.runtime_state.bond_graphics_state.bond_items.get(
+            bond_id, []
+        )[0]
         bond_item.setSelected(True)
 
         scene_before = list(canvas.scene().items())
@@ -912,7 +934,7 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
             item_controller.attach_scene_item(item)
             item.setSelected(True)
 
-        group_state = group_state_for(canvas)
+        group_state = canvas.runtime_state.group_state
         groups_object = group_state.groups
         group_id = register_group_for(
             canvas, set(), [require_scene_record_id(item) for item in items]
@@ -961,7 +983,7 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
     ) -> None:
         canvas = self._new_canvas()
         atom_id = canvas.services.canvas_atom_mutation_service.add_atom("N", 10.0, 20.0)
-        group_state = group_state_for(canvas)
+        group_state = canvas.runtime_state.group_state
         groups_object = group_state.groups
         group_id = register_group_for(
             canvas, {atom_id}, [require_scene_record_id(item) for item in []]
@@ -999,7 +1021,7 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
         direct_canvas = self._new_canvas()
         direct_ring = make_ring(canvas=direct_canvas)
         direct_canvas.services.scene_item_controller.attach_scene_item(direct_ring)
-        direct_group_state = group_state_for(direct_canvas)
+        direct_group_state = direct_canvas.runtime_state.group_state
         direct_group_id = register_group_for(
             direct_canvas,
             set(),
@@ -1028,7 +1050,7 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
         self.assertIsNotNone(broken_ring)
         assert broken_ring is not None
         broken_canvas.services.history_service.clear()
-        broken_group_state = group_state_for(broken_canvas)
+        broken_group_state = broken_canvas.runtime_state.group_state
         broken_group_id = register_group_for(
             broken_canvas,
             set(),
@@ -1068,7 +1090,7 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
                     item_controller.attach_scene_item(item)
                     item.setSelected(True)
 
-                group_state = group_state_for(canvas)
+                group_state = canvas.runtime_state.group_state
                 groups_object = group_state.groups
                 group_id = register_group_for(
                     canvas,
@@ -1094,7 +1116,9 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
                         _group_object=group_object,
                     ):
                         self.assertIs(canvas_arg, _canvas)
-                        removed = remove_group_for(canvas_arg, group_id_to_remove)
+                        removed = canvas_arg.runtime_state.group_state.groups.pop(
+                            group_id_to_remove, None
+                        )
                         self.assertIs(removed, _group_object)
                         _group_object.atom_ids = set()
                         _group_object.item_ids = []
@@ -1334,7 +1358,7 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
                     20.0,
                 )
                 atom = canvas.model.atoms[atom_id]
-                atom_registry = atom_items_for(canvas)
+                atom_registry = canvas.runtime_state.atom_graphics_state.atom_items
                 atom_item = atom_registry[atom_id]
                 atom_item.setSelected(True)
                 set_last_smiles_input_for(canvas, "N")
@@ -1377,12 +1401,19 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
 
                 self.assertIs(canvas.model.atoms, atoms_object)
                 self.assertIs(canvas.model.atoms[atom_id], atom)
-                self.assertIs(atom_items_for(canvas), atom_registry)
-                self.assertIs(atom_items_for(canvas)[atom_id], atom_item)
+                self.assertIs(
+                    canvas.runtime_state.atom_graphics_state.atom_items, atom_registry
+                )
+                self.assertIs(
+                    canvas.runtime_state.atom_graphics_state.atom_items[atom_id],
+                    atom_item,
+                )
                 self.assertIs(atom_item.scene(), canvas.scene())
                 self.assertTrue(atom_item.isSelected())
                 self.assertEqual(list(canvas.scene().items()), scene_before)
-                self.assertEqual(last_smiles_input_for(canvas), "N")
+                self.assertEqual(
+                    canvas.runtime_state.smiles_input_state.last_smiles_input, "N"
+                )
                 self.assertIs(history.state.history, history_object)
                 self.assertIs(history.state.redo_stack, redo_object)
                 self.assertEqual(history.state.history, [history_item])
@@ -1398,7 +1429,7 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
     ) -> None:
         canvas = self._new_canvas()
         atom_id = canvas.services.canvas_atom_mutation_service.add_atom("N", 0.0, 0.0)
-        atom_item = atom_items_for(canvas)[atom_id]
+        atom_item = canvas.runtime_state.atom_graphics_state.atom_items[atom_id]
         shape_item = _document_shape(canvas)
         canvas.services.scene_item_controller.attach_scene_item(shape_item)
         atom_item.setSelected(True)
@@ -1439,7 +1470,7 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
         atom_a = canvas.services.canvas_atom_mutation_service.add_atom("C", 0.0, 0.0)
         atom_b = canvas.services.canvas_atom_mutation_service.add_atom("C", 20.0, 0.0)
         bond_id = canvas.services.canvas_bond_mutation_service.add_bond(atom_a, atom_b)
-        add_bond_graphics_for(canvas, bond_id)
+        canvas.bond_renderer.add_bond_graphics(bond_id)
 
         session = canvas.services.scene_delete_controller.begin_delete_tool_session()
         command = session.delete_bond(bond_id)
@@ -1455,7 +1486,9 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
         self.assertNotIn(atom_a, canvas.model.atoms)
         self.assertNotIn(atom_b, canvas.model.atoms)
         self.assertIsNone(canvas.model.bonds[bond_id])
-        self.assertFalse(bond_items_for_id(canvas, bond_id))
+        self.assertFalse(
+            canvas.runtime_state.bond_graphics_state.bond_items.get(bond_id, [])
+        )
 
         canvas.services.history_service.undo()
 
@@ -1465,7 +1498,9 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
         self.assertIsNotNone(restored_bond)
         assert restored_bond is not None
         self.assertEqual((restored_bond.a, restored_bond.b), (atom_a, atom_b))
-        self.assertTrue(bond_items_for_id(canvas, bond_id))
+        self.assertTrue(
+            canvas.runtime_state.bond_graphics_state.bond_items.get(bond_id, [])
+        )
 
     def test_delete_session_atom_erase_removes_invisible_orphaned_neighbor(
         self,
@@ -1474,7 +1509,7 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
         atom_a = canvas.services.canvas_atom_mutation_service.add_atom("C", 0.0, 0.0)
         atom_b = canvas.services.canvas_atom_mutation_service.add_atom("C", 20.0, 0.0)
         bond_id = canvas.services.canvas_bond_mutation_service.add_bond(atom_a, atom_b)
-        add_bond_graphics_for(canvas, bond_id)
+        canvas.bond_renderer.add_bond_graphics(bond_id)
 
         session = canvas.services.scene_delete_controller.begin_delete_tool_session()
         command = session.delete_atom(atom_a)
@@ -1512,9 +1547,11 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
             for index in range(64)
         ]
         for atom_id in atom_ids:
-            atom_items_for(canvas)[atom_id].setSelected(True)
+            canvas.runtime_state.atom_graphics_state.atom_items[atom_id].setSelected(
+                True
+            )
 
-        callbacks = callback_state_for(canvas)
+        callbacks = canvas.runtime_state.callback_state
         original_outline_callback = callbacks.scene_selection_outline
         outline_calls = 0
 
@@ -1534,7 +1571,7 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
 
         self.assertEqual(outline_calls, 1)
         self.assertIs(
-            callback_state_for(canvas).scene_selection_outline,
+            canvas.runtime_state.callback_state.scene_selection_outline,
             counted_outline_callback,
         )
 
@@ -1547,9 +1584,9 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
             0.0,
             0.0,
         )
-        atom_dots_for(canvas)[atom_id].setSelected(True)
+        canvas.runtime_state.atom_graphics_state.atom_dots[atom_id].setSelected(True)
         scene_before = list(canvas.scene().items())
-        callbacks = callback_state_for(canvas)
+        callbacks = canvas.runtime_state.callback_state
         original_outline_callback = callbacks.scene_selection_outline
         outline_calls = 0
 
@@ -1573,7 +1610,7 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
     ) -> None:
         canvas = self._new_canvas()
         canvas.services.canvas_atom_mutation_service.add_atom("N", 0.0, 0.0)
-        original_callbacks = callback_state_for(canvas)
+        original_callbacks = canvas.runtime_state.callback_state
         group_callback = original_callbacks.scene_selection_group
         outline_callback = original_callbacks.scene_selection_outline
         ports = _FailingCallbackPorts(group_callback, outline_callback)
@@ -1626,7 +1663,7 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
                     0.0,
                     0.0,
                 )
-                atom_item = atom_items_for(canvas)[atom_id]
+                atom_item = canvas.runtime_state.atom_graphics_state.atom_items[atom_id]
                 atom_item.setSelected(True)
                 html_before = atom_item.toHtml()
                 scene_before = list(canvas.scene().items())
@@ -1656,7 +1693,7 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
     def test_delete_tool_success_commits_one_restorable_history_step(self) -> None:
         canvas = self._new_canvas()
         atom_id = canvas.services.canvas_atom_mutation_service.add_atom("N", 0.0, 0.0)
-        atom_item = atom_items_for(canvas)[atom_id]
+        atom_item = canvas.runtime_state.atom_graphics_state.atom_items[atom_id]
         shape_item = _document_shape(canvas)
         canvas.services.scene_item_controller.attach_scene_item(shape_item)
         context = canvas.services.tool_controller.context
@@ -1683,7 +1720,9 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
 
         history.undo()
         self.assertIn(atom_id, canvas.model.atoms)
-        restored_atom_item = atom_items_for(canvas)[atom_id]
+        restored_atom_item = canvas.runtime_state.atom_graphics_state.atom_items[
+            atom_id
+        ]
         self.assertIs(restored_atom_item.scene(), canvas.scene())
         self.assertEqual(canvas.model.atoms[atom_id].element, "N")
         self.assertIs(shape_item.scene(), canvas.scene())
@@ -1699,7 +1738,7 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
         atom_a = canvas.services.canvas_atom_mutation_service.add_atom("N", 0.0, 0.0)
         atom_b = canvas.services.canvas_atom_mutation_service.add_atom("O", 20.0, 0.0)
         bond_id = canvas.services.canvas_bond_mutation_service.add_bond(atom_a, atom_b)
-        add_bond_graphics_for(canvas, bond_id)
+        canvas.bond_renderer.add_bond_graphics(bond_id)
         graph = canvas.runtime_state.graph_state
         graph.atom_bond_ids[atom_a] = {999}
 
@@ -1748,7 +1787,7 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
         group_id = register_group_for(
             canvas, set(), [require_scene_record_id(item) for item in [shape_item]]
         )
-        group = group_state_for(canvas).groups[group_id]
+        group = canvas.runtime_state.group_state.groups[group_id]
 
         tool = DeleteTool(canvas, context=canvas.services.tool_controller.context)
         with (
@@ -1767,16 +1806,16 @@ class SceneDeleteInitialAtomicityTest(unittest.TestCase):
 
         history = canvas.services.history_service
         self.assertIsNone(shape_item.scene())
-        self.assertNotIn(group_id, group_state_for(canvas).groups)
+        self.assertNotIn(group_id, canvas.runtime_state.group_state.groups)
 
         history.undo()
         self.assertIs(shape_item.scene(), canvas.scene())
-        self.assertIs(group_state_for(canvas).groups[group_id], group)
+        self.assertIs(canvas.runtime_state.group_state.groups[group_id], group)
         self.assertEqual(group.item_ids, [require_scene_record_id(shape_item)])
 
         history.redo()
         self.assertIsNone(shape_item.scene())
-        self.assertNotIn(group_id, group_state_for(canvas).groups)
+        self.assertNotIn(group_id, canvas.runtime_state.group_state.groups)
 
     def test_delete_tool_session_indexes_only_ring_dependencies_affected_by_atom(
         self,

@@ -6,10 +6,7 @@ from chemvas.features.selection import (
     flatten_coords_to_plane,
     fragment_plane_normal_for,
 )
-from chemvas.ui.canvas.canvas_model_access import (
-    bond_for_id,
-    bonds_for,
-)
+from chemvas.ui.canvas.canvas_model_access import bond_for_id
 
 
 def bond_in_cycle_for(canvas, bond_id: int) -> bool:
@@ -67,7 +64,7 @@ def planar_fragment_components_for(
     canvas, atom_ids: set[int], *, bond_in_cycle=None
 ) -> list[set[int]]:
     adjacency: dict[int, set[int]] = {}
-    for bond_id, bond in enumerate(bonds_for(canvas)):
+    for bond_id, bond in enumerate(canvas.model.bonds):
         if bond is None:
             continue
         if bond.a not in atom_ids or bond.b not in atom_ids:

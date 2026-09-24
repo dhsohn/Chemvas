@@ -7,7 +7,6 @@ from PyQt6.QtWidgets import QApplication, QGraphicsRectItem
 from chemvas.bootstrap.main_window import build_main_window
 from chemvas.ui.canvas.sheet_setup_access import sheet_setup_for
 from chemvas.ui.insert.preview_scene_renderer import SmilesPreviewItem
-from chemvas.ui.scene.scene_decoration_access import add_arrow_for
 from chemvas.ui.window.main_window_ports import (
     active_canvas_for_window,
     set_sheet_setup_for_window,
@@ -20,7 +19,9 @@ _APP.setQuitOnLastWindowClosed(False)
 def test_sheet_change_is_one_undoable_edit_without_removing_content():
     window = build_main_window()
     canvas = active_canvas_for_window(window)
-    arrow = add_arrow_for(canvas, QPointF(330, 0), QPointF(410, 0), "arrow")
+    arrow = canvas.services.scene_decoration_service.add_arrow(
+        QPointF(330, 0), QPointF(410, 0), "arrow"
+    )
     history = canvas.services.history_service
     count = len(history.state.history)
     set_sheet_setup_for_window(window, "A4", "portrait")
@@ -102,7 +103,9 @@ def test_sheet_bounds_ignore_transient_previews_but_keep_real_content(
     assert QTest.qWaitForWindowExposed(window, 5000)
     canvas = active_canvas_for_window(window)
     if off_sheet_content:
-        arrow = add_arrow_for(canvas, QPointF(1400, 0), QPointF(1500, 0), "arrow")
+        arrow = canvas.services.scene_decoration_service.add_arrow(
+            QPointF(1400, 0), QPointF(1500, 0), "arrow"
+        )
         # Real content's role-less descendants (e.g. painted label parts)
         # must still contribute through the retained parent's closure.
         child = QGraphicsRectItem(QRectF(1600, 0, 40, 40), arrow)

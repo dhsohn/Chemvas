@@ -11,15 +11,11 @@ from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import QApplication
 
 from chemvas.bootstrap.main_window import build_main_window
-from chemvas.ui.canvas.canvas_window_access import snapshot_canvas_state_for
 from chemvas.ui.canvas.input_view_access import set_zoom_for
 from chemvas.ui.molecule.structure_mutation_access import add_bond_between_points_for
 from chemvas.ui.selection.select_all_access import select_all_scene_items_for
 from chemvas.ui.selection.selection_queries import clear_scene_selection_for
-from chemvas.ui.window.main_window_ports import (
-    active_canvas_for_window,
-    services_for_window,
-)
+from chemvas.ui.window.main_window_ports import active_canvas_for_window
 
 
 @pytest.fixture(scope="module")
@@ -40,14 +36,14 @@ def drawing(app):
         add_bond_between_points_for(canvas, QPointF(x, 0), QPointF(x + 80, 0))
     canvas.services.tool_mode_controller.set_tool("select")
     canvas.services.history_service.clear()
-    services_for_window(window).canvas_document_service.mark_clean(canvas)
+    window.services.canvas_document_service.mark_clean(canvas)
     set_zoom_for(canvas, 0.2)
     canvas.centerOn(0, 0)
     app.processEvents()
     yield window, canvas
     canvas.runtime_state.insert_state.template_active = False
     canvas.runtime_state.insert_state.smiles_active = False
-    services_for_window(window).canvas_document_service.mark_clean(canvas)
+    window.services.canvas_document_service.mark_clean(canvas)
     window.close()
     app.processEvents()
 
@@ -82,7 +78,7 @@ def test_blocked_left_click_shows_real_status_without_mutating(drawing, mode):
         setattr(canvas.runtime_state.insert_state, f"{mode}_active", True)
     else:
         canvas.services.tool_mode_controller.set_tool(mode)
-    before = snapshot_canvas_state_for(canvas)
+    before = canvas.services.canvas_document_session_service.snapshot_state()
     stacks = canvas.services.history_service.capture_stack_snapshot()
     window.statusBar().clearMessage()
     QTest.mouseClick(
@@ -91,15 +87,15 @@ def test_blocked_left_click_shows_real_status_without_mutating(drawing, mode):
         pos=canvas.mapFromScene(QPointF(2500, 200)),
     )
     _assert_guidance(window)
-    assert snapshot_canvas_state_for(canvas) == before
+    assert canvas.services.canvas_document_session_service.snapshot_state() == before
     assert canvas.services.history_service.capture_stack_snapshot() == stacks
-    assert not services_for_window(window).canvas_document_service.is_dirty(canvas)
+    assert not window.services.canvas_document_service.is_dirty(canvas)
 
 
 def test_drawing_drag_cancel_reports_once_even_when_release_returns_inside(drawing):
     window, canvas = drawing
     canvas.services.tool_mode_controller.set_tool("bond")
-    before = snapshot_canvas_state_for(canvas)
+    before = canvas.services.canvas_document_session_service.snapshot_state()
     messages = []
     window.statusBar().messageChanged.connect(messages.append)
     window.statusBar().clearMessage()
@@ -119,7 +115,7 @@ def test_drawing_drag_cancel_reports_once_even_when_release_returns_inside(drawi
         Qt.MouseButton.LeftButton,
         pos=canvas.mapFromScene(QPointF(80, 200)),
     )
-    assert snapshot_canvas_state_for(canvas) == before
+    assert canvas.services.canvas_document_session_service.snapshot_state() == before
     assert not canvas.services.history_service.can_undo()
 
     # The canceled gesture must not disable the next in-sheet drawing.
@@ -128,9 +124,9 @@ def test_drawing_drag_cancel_reports_once_even_when_release_returns_inside(drawi
         Qt.MouseButton.LeftButton,
         pos=canvas.mapFromScene(QPointF(0, 200)),
     )
-    assert snapshot_canvas_state_for(canvas) != before
+    assert canvas.services.canvas_document_session_service.snapshot_state() != before
     canvas.services.history_service.undo()
-    assert snapshot_canvas_state_for(canvas) == before
+    assert canvas.services.canvas_document_session_service.snapshot_state() == before
     window.statusBar().clearMessage()
     QTest.mouseClick(
         canvas.viewport(),
@@ -144,7 +140,7 @@ def test_drawing_drag_cancel_reports_once_even_when_release_returns_inside(drawi
 def test_drawing_release_outside_without_move_is_explained_and_canceled(drawing):
     window, canvas = drawing
     canvas.services.tool_mode_controller.set_tool("bond")
-    before = snapshot_canvas_state_for(canvas)
+    before = canvas.services.canvas_document_session_service.snapshot_state()
     window.statusBar().clearMessage()
     QTest.mousePress(
         canvas.viewport(),
@@ -157,7 +153,7 @@ def test_drawing_release_outside_without_move_is_explained_and_canceled(drawing)
         pos=canvas.mapFromScene(QPointF(2500, 200)),
     )
     _assert_guidance(window)
-    assert snapshot_canvas_state_for(canvas) == before
+    assert canvas.services.canvas_document_session_service.snapshot_state() == before
     assert not canvas.services.history_service.can_undo()
 
 
@@ -173,7 +169,7 @@ def test_offsheet_structure_shortcut_reports_without_creating_hover(
     # Bind the cursor read used by real hover/key routing. Wayland cannot warp
     # hardware pointers; monkeypatch restores this class method after each test.
     monkeypatch.setattr(QCursor, "pos", lambda: canvas.viewport().mapToGlobal(point))
-    before = snapshot_canvas_state_for(canvas)
+    before = canvas.services.canvas_document_session_service.snapshot_state()
     window.statusBar().clearMessage()
     for _ in range(3):
         _move(canvas, QPointF(target, 0))
@@ -181,7 +177,7 @@ def test_offsheet_structure_shortcut_reports_without_creating_hover(
     assert "inside" not in window.statusBar().currentMessage().lower()
     QTest.keyClick(canvas.viewport(), key)
     _assert_guidance(window)
-    assert snapshot_canvas_state_for(canvas) == before
+    assert canvas.services.canvas_document_session_service.snapshot_state() == before
     assert not canvas.services.history_service.can_undo()
     assert canvas.runtime_state.hover_preview_state.atom_id is None
     assert canvas.runtime_state.hover_preview_state.bond_id is None
@@ -220,20 +216,20 @@ def test_existing_selection_delete_and_nudge_remain_allowed_offsheet(
     point = canvas.mapFromScene(QPointF(2600, 0))
     monkeypatch.setattr(QCursor, "pos", lambda: canvas.viewport().mapToGlobal(point))
     select_all_scene_items_for(canvas)
-    before = snapshot_canvas_state_for(canvas)
+    before = canvas.services.canvas_document_session_service.snapshot_state()
     window.statusBar().clearMessage()
     QTest.keyClick(
         canvas.viewport(), Qt.Key.Key_Right, Qt.KeyboardModifier.ShiftModifier
     )
-    assert snapshot_canvas_state_for(canvas) != before
+    assert canvas.services.canvas_document_session_service.snapshot_state() != before
     assert "inside" not in window.statusBar().currentMessage().lower()
     canvas.services.history_service.undo()
-    assert snapshot_canvas_state_for(canvas) == before
+    assert canvas.services.canvas_document_session_service.snapshot_state() == before
     QTest.keyClick(canvas.viewport(), Qt.Key.Key_Delete)
     assert not canvas.model.atoms
     assert "inside" not in window.statusBar().currentMessage().lower()
     canvas.services.history_service.undo()
-    assert snapshot_canvas_state_for(canvas) == before
+    assert canvas.services.canvas_document_session_service.snapshot_state() == before
 
 
 def test_in_sheet_hover_edit_and_exact_undo_remain_available(drawing, monkeypatch):
@@ -241,13 +237,13 @@ def test_in_sheet_hover_edit_and_exact_undo_remain_available(drawing, monkeypatc
     clear_scene_selection_for(canvas)
     point = canvas.mapFromScene(QPointF(0, 0))
     monkeypatch.setattr(QCursor, "pos", lambda: canvas.viewport().mapToGlobal(point))
-    before = snapshot_canvas_state_for(canvas)
+    before = canvas.services.canvas_document_session_service.snapshot_state()
     window.statusBar().clearMessage()
     QTest.keyClick(canvas.viewport(), Qt.Key.Key_N)
     assert canvas.model.atoms[0].element == "N"
     assert "inside" not in window.statusBar().currentMessage().lower()
     canvas.services.history_service.undo()
-    assert snapshot_canvas_state_for(canvas) == before
+    assert canvas.services.canvas_document_session_service.snapshot_state() == before
 
 
 @pytest.mark.parametrize("key", [Qt.Key.Key_Shift, Qt.Key.Key_Space, Qt.Key.Key_F7])
@@ -257,11 +253,11 @@ def test_offsheet_structure_tool_and_view_keys_are_not_refused(
     window, canvas = drawing
     point = canvas.mapFromScene(QPointF(2600, 0))
     monkeypatch.setattr(QCursor, "pos", lambda: canvas.viewport().mapToGlobal(point))
-    before = snapshot_canvas_state_for(canvas)
+    before = canvas.services.canvas_document_session_service.snapshot_state()
     window.statusBar().clearMessage()
     QTest.keyClick(canvas.viewport(), key)
     assert "inside" not in window.statusBar().currentMessage().lower()
-    assert snapshot_canvas_state_for(canvas) == before
+    assert canvas.services.canvas_document_session_service.snapshot_state() == before
     assert not canvas.services.history_service.can_undo()
 
 
@@ -271,7 +267,7 @@ def test_eraser_held_move_reaches_offsheet_structure_with_exact_history(
 ):
     window, canvas = drawing
     canvas.services.tool_mode_controller.set_tool("delete")
-    before = snapshot_canvas_state_for(canvas)
+    before = canvas.services.canvas_document_session_service.snapshot_state()
     window.statusBar().clearMessage()
     QTest.mousePress(
         canvas.viewport(),
@@ -279,7 +275,7 @@ def test_eraser_held_move_reaches_offsheet_structure_with_exact_history(
         pos=canvas.mapFromScene(QPointF(0, 200)),
     )
     _move(canvas, QPointF(2640, 0), Qt.MouseButton.LeftButton)
-    assert snapshot_canvas_state_for(canvas) != before
+    assert canvas.services.canvas_document_session_service.snapshot_state() != before
     assert not canvas.services.history_service.can_undo()
     assert "inside" not in window.statusBar().currentMessage().lower()
     if cancel:
@@ -294,5 +290,5 @@ def test_eraser_held_move_reaches_offsheet_structure_with_exact_history(
     else:
         assert canvas.services.history_service.can_undo()
         canvas.services.history_service.undo()
-    assert snapshot_canvas_state_for(canvas) == before
-    assert not services_for_window(window).canvas_document_service.is_dirty(canvas)
+    assert canvas.services.canvas_document_session_service.snapshot_state() == before
+    assert not window.services.canvas_document_service.is_dirty(canvas)

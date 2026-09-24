@@ -32,13 +32,8 @@ from walkthrough_capture import LEFT_BUTTON, NO_MODIFIER, Walkthrough, run_with_
 from chemvas.ui.annotations.state import arrow_state_dict_for
 from chemvas.ui.canvas.canvas_atom_graphics_state import visible_atom_item_for
 from chemvas.ui.canvas.canvas_scene_items_state import arrow_items_for
-from chemvas.ui.canvas.canvas_window_access import save_canvas_to_file_for
 from chemvas.ui.window.main_window_document_dialogs import prompt_export_options
-from chemvas.ui.window.main_window_ports import (
-    document_session_service_for_window,
-    services_for_window,
-    tool_action_for_window,
-)
+from chemvas.ui.window.main_window_ports import document_session_service_for_window
 
 
 class FirstScheme(Walkthrough):
@@ -204,7 +199,7 @@ class FirstScheme(Walkthrough):
         assert len(self.canvas.model.atoms) == 16
         assert len(self.canvas.model.bonds) == 16
 
-        tool_action_for_window(self.window, "arrow").trigger()
+        self.window.ui_references.tool_action_for_key("arrow").trigger()
         QTest.mousePress(
             self.canvas.viewport(), LEFT_BUTTON, NO_MODIFIER, self.move(-45, 0)
         )
@@ -216,7 +211,7 @@ class FirstScheme(Walkthrough):
         QTest.mouseRelease(
             self.canvas.viewport(), LEFT_BUTTON, NO_MODIFIER, self.point(45, 0)
         )
-        tool_action_for_window(self.window, "select").trigger()
+        self.window.ui_references.tool_action_for_key("select").trigger()
         self.label_arrow()
         self.capture("02 / Add reaction labels", "Labels stay attached to the arrow.")
 
@@ -235,11 +230,11 @@ class FirstScheme(Walkthrough):
         self.move(0, 85)
         self.capture("03 / Align the scheme", "Molecules move as whole structures.")
 
-        warnings = save_canvas_to_file_for(
-            self.canvas, str(self.output / "first-scheme.chemvas")
+        warnings = self.canvas.services.canvas_document_session_service.save_to_file(
+            str(self.output / "first-scheme.chemvas")
         )
         assert not warnings, warnings
-        services_for_window(self.window).canvas_document_service.mark_clean(self.canvas)
+        self.window.services.canvas_document_service.mark_clean(self.canvas)
         self.window.statusBar().clearMessage()
         self.cursor = None
         if not self.window.grab().save(str(self.output / "demo.png")):

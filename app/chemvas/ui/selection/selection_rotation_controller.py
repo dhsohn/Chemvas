@@ -13,16 +13,11 @@ from chemvas.features.selection import (
 )
 from chemvas.ui.canvas.canvas_model_access import (
     atom_for_id,
-    atoms_for,
     bond_for_id,
-    bonds_for,
 )
 from chemvas.ui.canvas.canvas_window_access import notify_error_for
 from chemvas.ui.history.history_commands import SetSceneGeometryCommand
-from chemvas.ui.molecule.atom_coords_access import (
-    atom_coords_3d_for,
-    current_atom_coords_3d_for,
-)
+from chemvas.ui.molecule.atom_coords_access import current_atom_coords_3d_for
 from chemvas.ui.selection.selection_info_access import emit_selection_info_for
 from chemvas.ui.selection.selection_queries import (
     scene_selected_items_for,
@@ -47,7 +42,6 @@ from chemvas.ui.selection.selection_rotation_session import (
     begin_selection_rotation_session,
     explicit_rotation_atom_ids_from_items,
 )
-from chemvas.ui.selection.selection_state import selection_for
 from chemvas.ui.selection.selection_style_access import (
     restore_selection_from_ids_for,
 )
@@ -82,11 +76,11 @@ class SelectionRotationController:
 
     @property
     def atoms(self):
-        return atoms_for(self.canvas)
+        return self.canvas.model.atoms
 
     @property
     def bonds(self):
-        return bonds_for(self.canvas)
+        return self.canvas.model.bonds
 
     def atom(self, atom_id: int):
         return atom_for_id(self.canvas, atom_id)
@@ -178,7 +172,7 @@ class SelectionRotationController:
             )
         else:
             update_ring_fills_for_atoms_for(self.canvas, atom_ids)
-        selection_for(self.canvas).update_selection_outline()
+        self.canvas.services.selection.update_selection_outline()
 
     def rotate_point_around_axis(self, coords, axis_start, axis_end, angle: float):
         return rotate_point_around_axis_for(
@@ -347,7 +341,9 @@ class SelectionRotationController:
             before_coords_3d = dict(state.start_coords_3d)
             before_projection_center_3d = state.start_projection_center_3d
             before_projection_anchor_2d = state.start_projection_anchor_2d
-            current_coords_3d = atom_coords_3d_for(self.canvas)
+            current_coords_3d = (
+                self.canvas.runtime_state.atom_coords_3d_state.atom_coords_3d
+            )
             after_coords_3d = {
                 atom_id: current_coords_3d[atom_id]
                 for atom_id in state.coord_atom_ids
@@ -407,7 +403,7 @@ class SelectionRotationController:
                 )
                 if callable(update_geometries):
                     update_geometries(rotated_atoms, rebuild_stale_bond_topology=True)
-                    selection_for(self.canvas).update_selection_outline()
+                    self.canvas.services.selection.update_selection_outline()
         except Exception as original_error:
             # Fail closed: close the session and surface the error. Before the
             # push commits, revert the document to the gesture start (the

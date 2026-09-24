@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, cast
+from typing import Any
 
 
 @dataclass(slots=True)
@@ -10,50 +10,40 @@ class CanvasAtomGraphicsState:
     atom_dots: dict[int, Any] = field(default_factory=dict)
 
 
-def atom_graphics_state_for(canvas: Any) -> CanvasAtomGraphicsState:
-    return cast("CanvasAtomGraphicsState", canvas.runtime_state.atom_graphics_state)
-
-
-def atom_items_for(canvas: Any) -> dict[int, Any]:
-    return atom_graphics_state_for(canvas).atom_items
-
-
-def atom_dots_for(canvas: Any) -> dict[int, Any]:
-    return atom_graphics_state_for(canvas).atom_dots
-
-
 def set_atom_items_for(canvas: Any, items: dict[int, Any]) -> None:
-    state = atom_graphics_state_for(canvas)
+    state = canvas.runtime_state.atom_graphics_state
     state.atom_items = items
 
 
 def set_atom_dots_for(canvas: Any, dots: dict[int, Any]) -> None:
-    state = atom_graphics_state_for(canvas)
+    state = canvas.runtime_state.atom_graphics_state
     state.atom_dots = dots
 
 
 def visible_atom_item_for(canvas: Any, atom_id: int):
-    return atom_items_for(canvas).get(atom_id) or atom_dots_for(canvas).get(atom_id)
+    return canvas.runtime_state.atom_graphics_state.atom_items.get(
+        atom_id
+    ) or canvas.runtime_state.atom_graphics_state.atom_dots.get(atom_id)
 
 
 def set_atom_item_for(canvas: Any, atom_id: int, item: Any) -> None:
-    items = atom_items_for(canvas)
+    items = canvas.runtime_state.atom_graphics_state.atom_items
     items[atom_id] = item
 
 
 def set_atom_dot_for(canvas: Any, atom_id: int, item: Any) -> None:
-    dots = atom_dots_for(canvas)
+    dots = canvas.runtime_state.atom_graphics_state.atom_dots
     dots[atom_id] = item
 
 
 def pop_atom_item_for(canvas: Any, atom_id: int):
-    items = atom_items_for(canvas)
+    items = canvas.runtime_state.atom_graphics_state.atom_items
     item = items.pop(atom_id, None)
     return item
 
 
 def pop_atom_dot_for(canvas: Any, atom_id: int):
-    dots = atom_dots_for(canvas)
+    dots = canvas.runtime_state.atom_graphics_state.atom_dots
     item = dots.pop(atom_id, None)
     return item
 
@@ -65,9 +55,6 @@ def clear_atom_graphics_for(canvas: Any) -> None:
 
 __all__ = [
     "CanvasAtomGraphicsState",
-    "atom_dots_for",
-    "atom_graphics_state_for",
-    "atom_items_for",
     "clear_atom_graphics_for",
     "pop_atom_dot_for",
     "pop_atom_item_for",

@@ -10,18 +10,11 @@ from chemvas.features.graph import (
 from chemvas.ui.annotations.projections import group_projections
 from chemvas.ui.annotations.state import ARROW_KINDS
 from chemvas.ui.canvas.canvas_atom_graphics_state import visible_atom_item_for
-from chemvas.ui.canvas.canvas_bond_graphics_state import bond_items_for_id
 from chemvas.ui.canvas.canvas_group_state import (
     group_ids_for_members_for,
-    group_state_for,
     register_group_for,
-    remove_group_for,
 )
 from chemvas.ui.canvas.canvas_mark_registry import mark_registry_for
-from chemvas.ui.canvas.canvas_model_access import (
-    atoms_for,
-    bonds_for,
-)
 from chemvas.ui.canvas.canvas_scene_items_state import (
     require_scene_record_id,
     ring_items_for,
@@ -43,7 +36,6 @@ from chemvas.ui.selection.selection_queries import (
     selected_scene_items_for,
     selected_scene_notes_for,
 )
-from chemvas.ui.selection.selection_state import selection_for
 from chemvas.ui.selection.selection_style_access import (
     selection_indicator_rect_for_atom_for,
 )
@@ -60,10 +52,10 @@ GROUP_CONNECTION_MESSAGE = (
 
 
 def group_connection_allowed_for(canvas, atom_ids: set[int]) -> bool:
-    groups = group_state_for(canvas).groups
+    groups = canvas.runtime_state.group_state.groups
     if len(groups) < 2:
         return True
-    connected = reachable_from(atom_ids, adjacency_for_bonds(bonds_for(canvas)))
+    connected = reachable_from(atom_ids, adjacency_for_bonds(canvas.model.bonds))
     if len(group_ids_for_members_for(canvas, connected, [])) < 2:
         return True
     notify_error_for(canvas, GROUP_CONNECTION_MESSAGE)
@@ -72,10 +64,10 @@ def group_connection_allowed_for(canvas, atom_ids: set[int]) -> bool:
 
 def group_extensions_for_added_bonds(canvas, bond_ids) -> list[GroupSceneItemsCommand]:
     """Plan same-id membership updates only for newly connected components."""
-    groups = group_state_for(canvas).groups
+    groups = canvas.runtime_state.group_state.groups
     if not groups:
         return []
-    bonds = bonds_for(canvas)
+    bonds = canvas.model.bonds
     touched = {
         atom_id
         for bond_id in bond_ids
@@ -113,10 +105,10 @@ def group_updates_for_atom_merge(
     canvas, survivor_id: int, removed_atom_ids: set[int]
 ) -> list[GroupSceneItemsCommand]:
     """Retain one group's identity after a preflighted overlapping-atom merge."""
-    groups = group_state_for(canvas).groups
+    groups = canvas.runtime_state.group_state.groups
     if not groups or not removed_atom_ids:
         return []
-    component = reachable_from({survivor_id}, adjacency_for_bonds(bonds_for(canvas)))
+    component = reachable_from({survivor_id}, adjacency_for_bonds(canvas.model.bonds))
     owners = group_ids_for_members_for(canvas, component | removed_atom_ids, [])
     if len(owners) > 1:
         raise ValueError(GROUP_CONNECTION_MESSAGE)
@@ -159,7 +151,7 @@ def _bound_mark_atom_id(canvas, item) -> int | None:
         return None
     data = item.data(1)
     atom_id = data.get("atom_id") if isinstance(data, dict) else None
-    if isinstance(atom_id, int) and atom_id in atoms_for(canvas):
+    if isinstance(atom_id, int) and atom_id in canvas.model.atoms:
         return atom_id
     return None
 
@@ -183,7 +175,7 @@ def _selected_group_members_for(canvas) -> tuple[set[int], list]:
     atom_ids = {
         atom_id
         for atom_id in selected_atom_ids_for_transform_for(canvas)
-        if atom_id in atoms_for(canvas)
+        if atom_id in canvas.model.atoms
     }
     # A selected atom-bound mark stands in for its atom (charges travel with the
     # atom), so grouping/ungrouping via the mark reaches the atom's group.
@@ -201,7 +193,7 @@ def _selected_group_members_for(canvas) -> tuple[set[int], list]:
 def _selection_unit_count_for(canvas, atom_ids: set[int], items: list) -> int:
     components = connected_components_for_nodes(
         atom_ids,
-        adjacency_for_bonds(bonds_for(canvas)),
+        adjacency_for_bonds(canvas.model.bonds),
     )
     return len(components) + len(items)
 
@@ -214,9 +206,9 @@ def group_selection_for(canvas) -> bool:
     # A persistent group owns whole molecules. Literal partial-atom selection
     # remains available for direct reshaping, but must not create a group whose
     # later drag stretches bonds to ungrouped atoms in the same molecule.
-    adjacency = adjacency_for_bonds(bonds_for(canvas))
+    adjacency = adjacency_for_bonds(canvas.model.bonds)
     atom_ids = reachable_from(atom_ids, adjacency)
-    state = group_state_for(canvas)
+    state = canvas.runtime_state.group_state
     overlapping = group_ids_for_members_for(canvas, atom_ids, items)
     if not overlapping and _selection_unit_count_for(canvas, atom_ids, items) < 2:
         notify_error_for(
@@ -261,26 +253,26 @@ def group_selection_for(canvas) -> bool:
         atom_ids=set(merged_atom_ids), item_ids=list(merged_items), absorbed=absorbed
     )
     for absorbed_id, _ in absorbed:
-        remove_group_for(canvas, absorbed_id)
+        canvas.runtime_state.group_state.groups.pop(absorbed_id, None)
     command.group_id = register_group_for(canvas, merged_atom_ids, merged_items)
     _push_group_command(canvas, command)
-    selection_for(canvas).expand_selection_to_groups()
-    selection_for(canvas).update_selection_outline()
+    canvas.services.selection.expand_selection_to_groups()
+    canvas.services.selection.update_selection_outline()
     return True
 
 
 @_atomic_group_change
 def ungroup_selection_for(canvas) -> bool:
     atom_ids, items = _selected_group_members_for(canvas)
-    state = group_state_for(canvas)
+    state = canvas.runtime_state.group_state
     overlapping = group_ids_for_members_for(canvas, atom_ids, items)
     if not overlapping:
         return False
     removed = [(group_id, state.groups[group_id]) for group_id in sorted(overlapping)]
     for group_id, _ in removed:
-        remove_group_for(canvas, group_id)
+        canvas.runtime_state.group_state.groups.pop(group_id, None)
     _push_group_command(canvas, UngroupSceneItemsCommand(removed=removed))
-    selection_for(canvas).update_selection_outline()
+    canvas.services.selection.update_selection_outline()
     return True
 
 
@@ -295,12 +287,14 @@ def _structure_items_for_atom_ids(canvas, atom_ids: set[int]) -> list:
         # as part of the structure; a lingering Qt-selected charge mark would
         # otherwise keep re-triggering its atom's group after a deselect.
         items.extend(registry.get_for_atom(atom_id) or [])
-    for bond_id, bond in enumerate(bonds_for(canvas)):
+    for bond_id, bond in enumerate(canvas.model.bonds):
         if bond is None:
             continue
         if bond.a not in atom_ids or bond.b not in atom_ids:
             continue
-        items.extend(bond_items_for_id(canvas, bond_id))
+        items.extend(
+            canvas.runtime_state.bond_graphics_state.bond_items.get(bond_id, [])
+        )
     for ring_item in ring_items_for(canvas):
         ring_atom_ids = ring_item.data(2)
         if (
@@ -314,7 +308,7 @@ def _structure_items_for_atom_ids(canvas, atom_ids: set[int]) -> list:
 
 def group_selection_targets_for(canvas, targets: list) -> list:
     """Extend shift-click toggle targets so grouped objects toggle as a unit."""
-    state = group_state_for(canvas)
+    state = canvas.runtime_state.group_state
     if not state.groups or not targets:
         return targets
     atom_ids: set[int] = set()
@@ -326,7 +320,7 @@ def group_selection_targets_for(canvas, targets: list) -> list:
         mark_atom_id = _bound_mark_atom_id(canvas, item)
         if mark_atom_id is not None:
             atom_ids.add(mark_atom_id)
-    bonds = bonds_for(canvas)
+    bonds = canvas.model.bonds
     for bond_id in bond_ids:
         if 0 <= bond_id < len(bonds) and bonds[bond_id] is not None:
             atom_ids.update((bonds[bond_id].a, bonds[bond_id].b))
@@ -351,7 +345,7 @@ def group_selection_targets_for(canvas, targets: list) -> list:
 
 
 def _group_has_scene_members(canvas, group) -> bool:
-    if group.atom_ids & set(atoms_for(canvas)):
+    if group.atom_ids & set(canvas.model.atoms):
         return True
     return any(
         member.data(0) != "note" for member in group_projections(canvas, group.item_ids)
@@ -366,13 +360,13 @@ def selected_group_rects_for(canvas) -> list:
     selection (matching the expansion trigger); only notes-only groups key off
     the explicit note selection, since they have no scene-selectable members.
     """
-    state = group_state_for(canvas)
+    state = canvas.runtime_state.group_state
     if not state.groups:
         return []
     atom_ids = {
         atom_id
         for atom_id in selected_atom_ids_for_transform_for(canvas)
-        if atom_id in atoms_for(canvas)
+        if atom_id in canvas.model.atoms
     }
     trigger_items = [
         item
@@ -411,7 +405,7 @@ def selected_group_rects_for(canvas) -> list:
                 group_ids.add(group_id)
     if not group_ids:
         return []
-    live_atom_ids = set(atoms_for(canvas))
+    live_atom_ids = set(canvas.model.atoms)
     pad = canvas.renderer.style.bond_length_px * 0.18
     rects = []
     for group_id in sorted(group_ids):
@@ -437,7 +431,7 @@ def notes_only_group_member_notes_for(canvas, note) -> list:
     expand through the scene selectionChanged hook), or while a group
     expansion is already applying a selection change.
     """
-    state = group_state_for(canvas)
+    state = canvas.runtime_state.group_state
     if state.expanding or not state.groups:
         return []
     for group in state.groups.values():

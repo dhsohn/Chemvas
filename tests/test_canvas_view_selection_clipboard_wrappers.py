@@ -5,7 +5,6 @@ from unittest import mock
 
 from chemvas.domain.document import AnnotationCollection
 from chemvas.domain.document.marks import Mark
-from chemvas.ui.selection.selection_state import set_selected_notes_for
 from tests.runtime_services import canvas_runtime_services
 from tests.runtime_state import canvas_runtime_state
 
@@ -110,7 +109,10 @@ class CanvasViewSelectionClipboardWrappersTest(unittest.TestCase):
                 scene_items_state=CanvasSceneItemsState()
             ),
         )
-        set_selected_notes_for(view, [included_note, other_scene_note])
+        view.runtime_state.selection_state.selected_notes = [
+            included_note,
+            other_scene_note,
+        ]
 
         selected_items = selected_items_for_transform_for(view)
 
@@ -132,7 +134,10 @@ class CanvasViewSelectionClipboardWrappersTest(unittest.TestCase):
                 scene_items_state=CanvasSceneItemsState()
             ),
         )
-        set_selected_notes_for(view, [selected_note, other_scene_note])
+        view.runtime_state.selection_state.selected_notes = [
+            selected_note,
+            other_scene_note,
+        ]
 
         self.assertEqual(selected_scene_notes_for(view), [selected_note])
         self.assertEqual(

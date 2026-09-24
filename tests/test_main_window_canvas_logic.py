@@ -3,21 +3,16 @@ from contextlib import nullcontext
 from types import SimpleNamespace
 from unittest import mock
 
-from chemvas.ui.canvas.canvas_callback_state import (
-    CanvasCallbackState,
-    callback_state_for,
-)
+from chemvas.ui.canvas.canvas_callback_state import CanvasCallbackState
 from chemvas.ui.canvas.canvas_history_service import CanvasHistoryService
 from chemvas.ui.canvas.canvas_history_state import CanvasHistoryState
 from chemvas.ui.canvas.canvas_text_style_state import (
     CanvasTextStyleState,
     set_text_style_for,
-    text_style_state_for,
 )
 from chemvas.ui.canvas.canvas_tool_settings_state import (
     CanvasToolSettingsState,
     set_tool_setting_for,
-    tool_settings_state_for,
 )
 from chemvas.ui.canvas.sheet_setup_access import sheet_setup_for
 from chemvas.ui.canvas.sheet_setup_state import SheetSetupState
@@ -106,11 +101,11 @@ class MainWindowCanvasLogicTest(unittest.TestCase):
 
         target.renderer.set_bond_length.assert_called_once_with(24.0)
         self.assertEqual(sheet_setup_for(target), ("A4", "portrait"))
-        tool_settings = tool_settings_state_for(target)
+        tool_settings = target.runtime_state.tool_settings_state
         self.assertEqual(tool_settings.arrow_line_width, 2.5)
         self.assertEqual(tool_settings.arrow_head_scale, 0.35)
         self.assertTrue(tool_settings.orbital_phase_enabled)
-        text_style = text_style_state_for(target)
+        text_style = target.runtime_state.text_style_state
         self.assertEqual(text_style.text_font_size, 14)
         self.assertEqual(text_style.text_font_weight, 600)
         self.assertTrue(text_style.text_italic)
@@ -139,21 +134,22 @@ class MainWindowCanvasLogicTest(unittest.TestCase):
             active_canvas.runtime_state.selection_info_state.callback,
             selection_info_callback,
         )
-        self.assertIsNone(callback_state_for(active_canvas).error)
+        self.assertIsNone(active_canvas.runtime_state.callback_state.error)
         self.assertIs(
-            callback_state_for(active_canvas).tool_change, tool_change_callback
+            active_canvas.runtime_state.callback_state.tool_change, tool_change_callback
         )
-        self.assertIs(callback_state_for(active_canvas).zoom, zoom_callback)
+        self.assertIs(active_canvas.runtime_state.callback_state.zoom, zoom_callback)
         self.assertIs(
-            callback_state_for(active_canvas).document_change, document_change_callback
+            active_canvas.runtime_state.callback_state.document_change,
+            document_change_callback,
         )
         self.assertIs(
             active_canvas.runtime_state.history_state.change_callback,
             history_change_callback,
         )
         self.assertIsNone(inactive_canvas.runtime_state.selection_info_state.callback)
-        self.assertIsNone(callback_state_for(inactive_canvas).error)
-        self.assertIsNone(callback_state_for(inactive_canvas).tool_change)
-        self.assertIsNone(callback_state_for(inactive_canvas).zoom)
-        self.assertIsNone(callback_state_for(inactive_canvas).document_change)
+        self.assertIsNone(inactive_canvas.runtime_state.callback_state.error)
+        self.assertIsNone(inactive_canvas.runtime_state.callback_state.tool_change)
+        self.assertIsNone(inactive_canvas.runtime_state.callback_state.zoom)
+        self.assertIsNone(inactive_canvas.runtime_state.callback_state.document_change)
         self.assertIsNone(inactive_canvas.runtime_state.history_state.change_callback)

@@ -9,19 +9,7 @@ from PyQt6.QtWidgets import QApplication, QLineEdit, QToolButton
 
 from chemvas.bootstrap.main_window import build_main_window
 from chemvas.core.document_io import ChemvasDocument
-from chemvas.ui.canvas.canvas_atom_graphics_state import atom_items_for
-from chemvas.ui.canvas.canvas_document_metadata_state import (
-    document_file_path_for,
-    document_source_sha256_for,
-)
-from chemvas.ui.canvas.canvas_window_access import snapshot_canvas_state_for
-from chemvas.ui.molecule.structure_mutation_access import add_atom_for
-from chemvas.ui.window.main_window_ports import (
-    active_canvas_for_window,
-    preview_for_window,
-    preview_window_for_window,
-    services_for_window,
-)
+from chemvas.ui.window.main_window_ports import active_canvas_for_window
 
 
 class MainWindowPanelActionsTest(unittest.TestCase):
@@ -35,7 +23,7 @@ class MainWindowPanelActionsTest(unittest.TestCase):
 
     def tearDown(self) -> None:
         for canvas in self.window.tab_references.all_canvases():
-            services_for_window(self.window).canvas_document_service.mark_clean(canvas)
+            self.window.services.canvas_document_service.mark_clean(canvas)
         self.window.close()
         self.app.processEvents()
 
@@ -71,11 +59,11 @@ class MainWindowPanelActionsTest(unittest.TestCase):
         )
 
     def test_xyz_path_helpers_follow_current_file_and_suffix_rules(self) -> None:
-        services_for_window(self.window).canvas_document_service.set_file_path(
+        self.window.services.canvas_document_service.set_file_path(
             active_canvas_for_window(self.window),
             "/tmp/current.chemvas",
         )
-        service = services_for_window(self.window).document_action_service
+        service = self.window.services.document_action_service
 
         self.assertFalse(hasattr(self.window, "default_save_dialog_path"))
         self.assertFalse(hasattr(self.window, "default_xyz_export_path"))
@@ -110,9 +98,9 @@ class MainWindowPanelActionsTest(unittest.TestCase):
         save_action = self._find_action("Save")
         save_as_called = mock.Mock()
         save_path = mock.Mock()
-        document_service = services_for_window(self.window).document_action_service
+        document_service = self.window.services.document_action_service
 
-        services_for_window(self.window).canvas_document_service.set_file_path(
+        self.window.services.canvas_document_service.set_file_path(
             active_canvas_for_window(self.window),
             "/tmp/existing.chemvas",
         )
@@ -126,7 +114,7 @@ class MainWindowPanelActionsTest(unittest.TestCase):
 
         save_path.reset_mock()
         save_as_called.reset_mock()
-        services_for_window(self.window).canvas_document_service.set_file_path(
+        self.window.services.canvas_document_service.set_file_path(
             active_canvas_for_window(self.window), None
         )
         save_action.trigger()
@@ -137,12 +125,12 @@ class MainWindowPanelActionsTest(unittest.TestCase):
         self,
     ) -> None:
         save_as_action = self._find_action("Save As...")
-        services_for_window(self.window).canvas_document_service.set_file_path(
+        self.window.services.canvas_document_service.set_file_path(
             active_canvas_for_window(self.window),
             "/tmp/current.chemvas",
         )
         save_path = mock.Mock()
-        document_service = services_for_window(self.window).document_action_service
+        document_service = self.window.services.document_action_service
 
         with mock.patch(
             "chemvas.ui.window.main_window_document_action_service.QFileDialog.getSaveFileName",
@@ -163,7 +151,9 @@ class MainWindowPanelActionsTest(unittest.TestCase):
         load_action = self._find_action("Open...")
         input_path = os.path.abspath("/tmp/input.chemvas")
         original_canvas = active_canvas_for_window(self.window)
-        state = snapshot_canvas_state_for(original_canvas)
+        state = (
+            original_canvas.services.canvas_document_session_service.snapshot_state()
+        )
         source_sha256 = "a" * 64
         existing = set(open_windows())
 
@@ -192,11 +182,15 @@ class MainWindowPanelActionsTest(unittest.TestCase):
         loaded_window = self.window
         self.assertIs(active_canvas_for_window(loaded_window), original_canvas)
         self.assertEqual(
-            document_file_path_for(active_canvas_for_window(loaded_window)),
+            active_canvas_for_window(
+                loaded_window
+            ).runtime_state.document_metadata_state.file_path,
             input_path,
         )
         self.assertEqual(
-            document_source_sha256_for(active_canvas_for_window(loaded_window)),
+            active_canvas_for_window(
+                loaded_window
+            ).runtime_state.document_metadata_state.source_sha256,
             source_sha256,
         )
         self.assertEqual(
@@ -216,7 +210,7 @@ class MainWindowPanelActionsTest(unittest.TestCase):
                 "chemvas.ui.window.main_window_document_action_service.QMessageBox.warning"
             ) as warning,
         ):
-            services_for_window(self.window).canvas_document_service.set_file_path(
+            self.window.services.canvas_document_service.set_file_path(
                 active_canvas_for_window(self.window),
                 "/tmp/previous.chemvas",
             )
@@ -226,7 +220,9 @@ class MainWindowPanelActionsTest(unittest.TestCase):
             self.window, "Load Error", "Failed to load file:\nbad file"
         )
         self.assertEqual(
-            document_file_path_for(active_canvas_for_window(self.window)),
+            active_canvas_for_window(
+                self.window
+            ).runtime_state.document_metadata_state.file_path,
             "/tmp/previous.chemvas",
         )
 
@@ -245,7 +241,7 @@ class MainWindowPanelActionsTest(unittest.TestCase):
                 "chemvas.ui.window.main_window_document_action_service.QMessageBox.warning"
             ) as warning,
         ):
-            services_for_window(self.window).canvas_document_service.set_file_path(
+            self.window.services.canvas_document_service.set_file_path(
                 active_canvas_for_window(self.window),
                 "/tmp/previous.chemvas",
             )
@@ -253,7 +249,9 @@ class MainWindowPanelActionsTest(unittest.TestCase):
 
         warning.assert_called_once()
         self.assertEqual(
-            document_file_path_for(active_canvas_for_window(self.window)),
+            active_canvas_for_window(
+                self.window
+            ).runtime_state.document_metadata_state.file_path,
             "/tmp/previous.chemvas",
         )
 
@@ -262,12 +260,12 @@ class MainWindowPanelActionsTest(unittest.TestCase):
     ) -> None:
         self.assertIsNone(self.window.findChild(QToolButton, "export_xyz_button"))
         canvas = active_canvas_for_window(self.window)
-        atom_id = add_atom_for(canvas, "N", 0.0, 0.0)
-        atom_items_for(canvas)[atom_id].setSelected(True)
+        atom_id = canvas.services.canvas_atom_mutation_service.add_atom("N", 0.0, 0.0)
+        canvas.runtime_state.atom_graphics_state.atom_items[atom_id].setSelected(True)
         self._find_action("Molecule Info").trigger()
         self.app.processEvents()
-        preview = preview_for_window(self.window)
-        preview_window = preview_window_for_window(self.window)
+        preview = self.window.preview_3d
+        preview_window = self.window.ui_references.preview_window
         preview._scene = object()
         preview._sync_export_xyz_button()
         export_button = self._find_button(object_name="preview_export_xyz_button")
@@ -327,7 +325,7 @@ class MainWindowPanelActionsTest(unittest.TestCase):
         self.window.show()
         self.assertIsNone(self.window.findChild(QToolButton, "preview_panel_button"))
         preview_action = self._find_action("Molecule Info")
-        preview_window = preview_window_for_window(self.window)
+        preview_window = self.window.ui_references.preview_window
         self.assertIsNotNone(preview_window)
         self.assertFalse(preview_window.isVisible())
 
@@ -382,9 +380,9 @@ class MainWindowPanelActionsTest(unittest.TestCase):
         active_canvas_for_window(self.window).runtime_state.history_state.redo_stack = [
             object()
         ]
-        services_for_window(
+        self.window.services.action_availability_service.update_action_availability(
             self.window
-        ).action_availability_service.update_action_availability(self.window)
+        )
         self.assertTrue(undo_action.isEnabled())
         self.assertTrue(redo_action.isEnabled())
 

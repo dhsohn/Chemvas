@@ -55,16 +55,9 @@ from chemvas.ui.annotations.state import arrow_state_dict_for
 from chemvas.ui.canvas.canvas_scene_items_state import arrow_items_for
 from chemvas.ui.canvas.canvas_text_style_state import CanvasTextStyleState
 from chemvas.ui.canvas.canvas_tool_settings_state import CanvasToolSettingsState
-from chemvas.ui.canvas.canvas_window_access import (
-    restore_canvas_state_for,
-    snapshot_canvas_state_for,
-)
 from chemvas.ui.dialogs.arrow_label_dialog import prompt_arrow_labels
 from chemvas.ui.selection.selection_queries import selection_items_for_copy_for
-from chemvas.ui.window.main_window_ports import (
-    active_canvas_for_window,
-    services_for_window,
-)
+from chemvas.ui.window.main_window_ports import active_canvas_for_window
 
 
 class ArrowLabelSyntaxTest(unittest.TestCase):
@@ -670,7 +663,7 @@ class ArrowLabelDialogTest(unittest.TestCase):
 
     def test_preview_escapes_markup_and_cancel_keeps_the_document_unchanged(self):
         canvas = active_canvas_for_window(self.window)
-        before = snapshot_canvas_state_for(canvas)
+        before = canvas.services.canvas_document_session_service.snapshot_state()
 
         def drive_dialog(dialog: QDialog):
             above = dialog.findChild(QPlainTextEdit, "arrowLabelAboveInput")
@@ -700,7 +693,9 @@ class ArrowLabelDialogTest(unittest.TestCase):
             "chemvas.ui.dialogs.arrow_label_dialog.QDialog.exec", new=drive_dialog
         ):
             self.assertIsNone(prompt_arrow_labels(canvas, above="", below=""))
-        self.assertEqual(snapshot_canvas_state_for(canvas), before)
+        self.assertEqual(
+            canvas.services.canvas_document_session_service.snapshot_state(), before
+        )
 
 
 class ArrowLabelGuiTest(unittest.TestCase):
@@ -717,7 +712,7 @@ class ArrowLabelGuiTest(unittest.TestCase):
         QTest.qWait(20)
 
     def tearDown(self) -> None:
-        document_service = services_for_window(self.window).canvas_document_service
+        document_service = self.window.services.canvas_document_service
         for canvas in self.window.tab_references.all_canvases():
             document_service.mark_clean(canvas)
         self.window.close()
@@ -828,10 +823,12 @@ class ArrowLabelGuiTest(unittest.TestCase):
         self.assertEqual(flipped["labels"], expected_labels)
         self.assertEqual(len(_label_children(arrow)), 2)
 
-        snapshot = snapshot_canvas_state_for(canvas)
+        snapshot = canvas.services.canvas_document_session_service.snapshot_state()
         self.assertEqual(snapshot["arrows"][0]["labels"], expected_labels)
         payload = build_document_payload(snapshot, CANVAS_FILE_VERSION)
-        restore_canvas_state_for(canvas, extract_document_state(payload))
+        canvas.services.canvas_document_session_service.restore_state(
+            extract_document_state(payload)
+        )
         (restored,) = arrow_items_for(canvas)
         self.assertEqual(
             arrow_state_dict_for(canvas, restored)["labels"], expected_labels

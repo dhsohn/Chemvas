@@ -4,16 +4,13 @@ import math
 
 from PyQt6.QtCore import QPointF
 
-from chemvas.ui.canvas.canvas_tool_settings_state import tool_settings_state_for
 from chemvas.ui.molecule.bond_preview_renderer import (
     add_bond_preview_items,
     build_bond_preview_items,
     clear_bond_preview_items,
     update_bond_preview_items,
 )
-from chemvas.ui.molecule.bond_renderer_access import bond_renderer_for
 from chemvas.ui.molecule.structure_geometry_access import default_bond_endpoint_for
-from chemvas.ui.scene.scene_item_access import canvas_scene_for
 
 
 def _preview_atom_ids(atom_ids: tuple) -> tuple[int | None, int | None]:
@@ -28,7 +25,7 @@ def _bond_preview_style_for(
     style: str | None = None,
     order: int | None = None,
 ) -> tuple[str, int]:
-    settings = tool_settings_state_for(canvas)
+    settings = canvas.runtime_state.tool_settings_state
     return (
         style or settings.active_bond_style,
         settings.active_bond_order if order is None else order,
@@ -48,16 +45,16 @@ def build_bond_preview_items_for(
         a_id=a_id,
         b_id=b_id,
         canvas_renderer=canvas.renderer,
-        bond_renderer=bond_renderer_for(canvas),
+        bond_renderer=canvas.bond_renderer,
     )
 
 
 def clear_bond_preview_items_for(canvas, items: list) -> list:
-    return clear_bond_preview_items(canvas_scene_for(canvas), items)
+    return clear_bond_preview_items(canvas.scene(), items)
 
 
 def add_bond_preview_items_for(canvas, items: list) -> list:
-    return add_bond_preview_items(canvas_scene_for(canvas), items)
+    return add_bond_preview_items(canvas.scene(), items)
 
 
 def update_bond_preview_items_for(
@@ -83,7 +80,7 @@ def update_bond_preview_items_for(
         a_id=a_id,
         b_id=b_id,
         canvas_renderer=canvas.renderer,
-        bond_renderer=bond_renderer_for(canvas),
+        bond_renderer=canvas.bond_renderer,
     )
 
 
@@ -99,7 +96,7 @@ def bond_hover_endpoint_for(
     dy = pos.y() - start.y()
     length = math.hypot(dx, dy)
     angle = 0.0 if length <= 1e-6 else math.degrees(math.atan2(dy, dx))
-    step = tool_settings_state_for(canvas).snap_angle_step or 30
+    step = canvas.runtime_state.tool_settings_state.snap_angle_step or 30
     snap_angle = round(angle / step) * step
     bond_len = canvas.renderer.style.bond_length_px
     rad = math.radians(snap_angle)

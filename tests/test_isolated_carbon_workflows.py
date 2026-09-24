@@ -12,20 +12,13 @@ from PyQt6.QtGui import QCursor, QImage, QKeySequence, QMouseEvent
 from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import QApplication, QDialog, QDialogButtonBox, QMenu, QToolButton
 
-from chemvas.ui.canvas.canvas_atom_graphics_state import atom_items_for
-from chemvas.ui.canvas.canvas_format_access import clipboard_selection_mime_for
 from chemvas.ui.canvas.canvas_scene_items_state import mark_items_for
-from chemvas.ui.canvas.canvas_window_access import snapshot_canvas_state_for
 from chemvas.ui.dialogs.mark_reassignment_dialog import MarkReassignmentDialog
-from chemvas.ui.molecule.structure_mutation_access import add_atom_for
-from chemvas.ui.scene.mark_item_access import apply_mark_color_for, mark_center_for
 from chemvas.ui.scene.scene_clipboard_controller import SceneClipboardController
 from chemvas.ui.scene.scene_decoration_access import add_mark_for_atom_for
 from chemvas.ui.window.main_window_ports import (
     active_canvas_for_window,
-    services_for_window,
     set_zoom_percent_for_window,
-    tool_action_for_window,
 )
 
 
@@ -51,13 +44,13 @@ def drawing(app):
     app.processEvents()
     yield window, canvas
     canvas.scene().clearFocus()
-    services_for_window(window).canvas_document_service.mark_clean(canvas)
+    window.services.canvas_document_service.mark_clean(canvas)
     window.close()
     app.processEvents()
 
 
 def _tool(window, name):
-    action = tool_action_for_window(window, name)
+    action = window.ui_references.tool_action_for_key(name)
     button = next(
         item
         for item in window.findChildren(QToolButton)
@@ -97,16 +90,18 @@ def _hover_key(canvas, scene_pos, key):
 
 def _seed(drawing, kind="plus"):
     window, canvas = drawing
-    owner = add_atom_for(canvas, "C", 0, 0)
+    owner = canvas.services.canvas_atom_mutation_service.add_atom("C", 0, 0)
     mark = add_mark_for_atom_for(canvas, owner, QPointF(30, -30), kind=kind)
-    apply_mark_color_for(canvas, mark, "#Ab2374")
-    center = mark_center_for(canvas, mark)
+    canvas.services.scene_decoration_build_service.apply_mark_color(mark, "#Ab2374")
+    center = canvas.services.scene_decoration_build_service.mark_center(mark)
     canvas.services.move_controller.move_item(mark, 30 - center.x(), -30 - center.y())
-    assert mark_center_for(canvas, mark) == QPointF(30, -30)
+    assert canvas.services.scene_decoration_build_service.mark_center(mark) == QPointF(
+        30, -30
+    )
     assert not canvas.model.atoms[owner].explicit_label
-    assert owner not in atom_items_for(canvas)
+    assert owner not in canvas.runtime_state.atom_graphics_state.atom_items
     canvas.services.history_service.clear()
-    services_for_window(window).canvas_document_service.mark_clean(canvas)
+    window.services.canvas_document_service.mark_clean(canvas)
     return owner, mark
 
 
@@ -114,7 +109,7 @@ def _visible_carbon(canvas, owner):
     atom = canvas.model.atoms[owner]
     assert atom.element == "C"
     assert atom.explicit_label
-    label = atom_items_for(canvas)[owner]
+    label = canvas.runtime_state.atom_graphics_state.atom_items[owner]
     assert label.isVisible()
     assert label.toPlainText() == "C"
     assert not label.glyph_path().isEmpty()
@@ -123,20 +118,22 @@ def _visible_carbon(canvas, owner):
 
 def _history_roundtrip(canvas, before):
     history = canvas.services.history_service
-    after = snapshot_canvas_state_for(canvas)
+    after = canvas.services.canvas_document_session_service.snapshot_state()
     assert len(history.state.history) == 1
     for _ in range(2):
         history.undo()
-        assert snapshot_canvas_state_for(canvas) == before
+        assert (
+            canvas.services.canvas_document_session_service.snapshot_state() == before
+        )
         history.redo()
-        assert snapshot_canvas_state_for(canvas) == after
+        assert canvas.services.canvas_document_session_service.snapshot_state() == after
     return after
 
 
 def _save_reopen_edit(drawing, owner, tmp_path):
     window, canvas = drawing
     _visible_carbon(canvas, owner)
-    before = snapshot_canvas_state_for(canvas)
+    before = canvas.services.canvas_document_session_service.snapshot_state()
     session = canvas.services.canvas_document_session_service
     first, second = tmp_path / "live.png", tmp_path / "reopened.png"
     session.export_figure(str(first), fmt="png")
@@ -144,7 +141,7 @@ def _save_reopen_edit(drawing, owner, tmp_path):
     assert not image.isNull()
     rgba = image.convertToFormat(QImage.Format.Format_RGBA8888)
     assert any(rgba.constBits().asstring(rgba.sizeInBytes())[3::4])
-    actions = services_for_window(window).document_action_service
+    actions = window.services.document_action_service
     path = tmp_path / "visible-carbon.chemvas"
     assert actions.save_canvas_to_path(window, str(path))
     # A different synthetic filename prevents Open from merely activating the
@@ -156,7 +153,7 @@ def _save_reopen_edit(drawing, owner, tmp_path):
     canvas = active_canvas_for_window(window)
     assert canvas is not original_canvas
     session = canvas.services.canvas_document_session_service
-    assert snapshot_canvas_state_for(canvas) == before
+    assert canvas.services.canvas_document_session_service.snapshot_state() == before
     label = _visible_carbon(canvas, owner)
     session.export_figure(str(second), fmt="png")
     assert image == QImage(str(second))
@@ -173,7 +170,7 @@ def _save_reopen_edit(drawing, owner, tmp_path):
     )
     assert canvas.model.atoms[owner].element == "N"
     canvas.services.history_service.undo()
-    assert snapshot_canvas_state_for(canvas) == before
+    assert canvas.services.canvas_document_session_service.snapshot_state() == before
     _visible_carbon(canvas, owner)
 
 
@@ -184,8 +181,8 @@ def test_real_mark_removal_retains_visible_carbon_and_one_exact_undo(
 ):
     window, canvas = drawing
     owner, mark = _seed(drawing, kind)
-    before = snapshot_canvas_state_for(canvas)
-    center = mark_center_for(canvas, mark)
+    before = canvas.services.canvas_document_session_service.snapshot_state()
+    center = canvas.services.scene_decoration_build_service.mark_center(mark)
     clipboard = Mock()
     if route == "cut":
         # Exercise real Cut and MIME generation, without touching the desktop
@@ -209,7 +206,7 @@ def test_real_mark_removal_retains_visible_carbon_and_one_exact_undo(
     if route == "cut":
         clipboard.setMimeData.assert_called_once()
         mime = clipboard.setMimeData.call_args.args[0]
-        assert mime.hasFormat(clipboard_selection_mime_for(canvas))
+        assert mime.hasFormat(str(canvas.CLIPBOARD_SELECTION_MIME))
     assert not mark_items_for(canvas)
     assert set(canvas.model.atoms) == {owner}
     assert not canvas.model.atom_annotations
@@ -226,7 +223,7 @@ def test_real_opposite_charge_shortcut_retains_carbon(
 ):
     _window, canvas = drawing
     owner, _mark = _seed(drawing, kind)
-    before = snapshot_canvas_state_for(canvas)
+    before = canvas.services.canvas_document_session_service.snapshot_state()
     _hover_key(canvas, QPointF(), key)
     app.processEvents()
     assert not mark_items_for(canvas)
@@ -256,7 +253,7 @@ def test_reported_bond_charge_atom_delete_charge_cancel_flow(drawing, app, tmp_p
     assert not canvas.model.atoms[owner].explicit_label
     assert len(mark_items_for(canvas)) == 1
     canvas.services.history_service.clear()
-    before = snapshot_canvas_state_for(canvas)
+    before = canvas.services.canvas_document_session_service.snapshot_state()
     _hover_key(canvas, owner_position, Qt.Key.Key_Minus)
     app.processEvents()
     assert not mark_items_for(canvas)
@@ -268,30 +265,32 @@ def test_reported_bond_charge_atom_delete_charge_cancel_flow(drawing, app, tmp_p
 def test_eraser_cancel_restores_implicit_carbon_mark_and_history(drawing, app):
     window, canvas = drawing
     owner, mark = _seed(drawing)
-    before = snapshot_canvas_state_for(canvas)
+    before = canvas.services.canvas_document_session_service.snapshot_state()
     history = canvas.services.history_service
     stacks = history.capture_stack_snapshot()
     _tool(window, "delete")
-    position = canvas.mapFromScene(mark_center_for(canvas, mark))
+    position = canvas.mapFromScene(
+        canvas.services.scene_decoration_build_service.mark_center(mark)
+    )
     QTest.mousePress(canvas.viewport(), Qt.MouseButton.LeftButton, pos=position)
     _visible_carbon(canvas, owner)
     assert not history.can_undo()
     QTest.keyClick(canvas.viewport(), Qt.Key.Key_Escape)
     QTest.mouseRelease(canvas.viewport(), Qt.MouseButton.LeftButton, pos=position)
     app.processEvents()
-    assert snapshot_canvas_state_for(canvas) == before
+    assert canvas.services.canvas_document_session_service.snapshot_state() == before
     assert history.capture_stack_snapshot() == stacks
     assert not canvas.model.atoms[owner].explicit_label
-    assert not services_for_window(window).canvas_document_service.is_dirty(canvas)
+    assert not window.services.canvas_document_service.is_dirty(canvas)
 
 
 def test_rebonding_does_not_hide_the_retained_explicit_carbon(drawing, app):
     window, canvas = drawing
     owner, mark = _seed(drawing)
-    _click(canvas, mark_center_for(canvas, mark))
+    _click(canvas, canvas.services.scene_decoration_build_service.mark_center(mark))
     QTest.keyClick(canvas.viewport(), Qt.Key.Key_Delete)
     _visible_carbon(canvas, owner)
-    before = snapshot_canvas_state_for(canvas)
+    before = canvas.services.canvas_document_session_service.snapshot_state()
     _tool(window, "bond")
     start = canvas.mapFromScene(QPointF())
     end = canvas.mapFromScene(QPointF(45, 0))
@@ -301,11 +300,11 @@ def test_rebonding_does_not_hide_the_retained_explicit_carbon(drawing, app):
     app.processEvents()
     assert any(bond and owner in {bond.a, bond.b} for bond in canvas.model.bonds)
     _visible_carbon(canvas, owner)
-    after = snapshot_canvas_state_for(canvas)
+    after = canvas.services.canvas_document_session_service.snapshot_state()
     canvas.services.history_service.undo()
-    assert snapshot_canvas_state_for(canvas) == before
+    assert canvas.services.canvas_document_session_service.snapshot_state() == before
     canvas.services.history_service.redo()
-    assert snapshot_canvas_state_for(canvas) == after
+    assert canvas.services.canvas_document_session_service.snapshot_state() == after
     _visible_carbon(canvas, owner)
 
 
@@ -363,7 +362,11 @@ def _reassign_through_menu(canvas, app, mark, target, accept):
     watchdog.start(5000)
     QTimer.singleShot(0, choose_action)
     try:
-        _click(canvas, mark_center_for(canvas, mark), Qt.MouseButton.RightButton)
+        _click(
+            canvas,
+            canvas.services.scene_decoration_build_service.mark_center(mark),
+            Qt.MouseButton.RightButton,
+        )
     finally:
         watchdog.stop()
     assert not errors
@@ -377,15 +380,17 @@ def test_real_reassignment_promotes_only_after_accepting_new_owner(
 ):
     window, canvas = drawing
     owner, mark = _seed(drawing, kind)
-    target = add_atom_for(canvas, "O", 100, 30)
+    target = canvas.services.canvas_atom_mutation_service.add_atom("O", 100, 30)
     canvas.services.history_service.clear()
-    services_for_window(window).canvas_document_service.mark_clean(canvas)
-    before = snapshot_canvas_state_for(canvas)
+    window.services.canvas_document_service.mark_clean(canvas)
+    before = canvas.services.canvas_document_session_service.snapshot_state()
     position, color = mark.pos(), mark.data(1)["color"]
     _reassign_through_menu(canvas, app, mark, target, accept)
     assert mark.pos() == position and mark.data(1)["color"] == color
     if not accept:
-        assert snapshot_canvas_state_for(canvas) == before
+        assert (
+            canvas.services.canvas_document_session_service.snapshot_state() == before
+        )
         assert not canvas.services.history_service.can_undo()
         assert not canvas.model.atoms[owner].explicit_label
         return
@@ -405,13 +410,15 @@ def test_eraser_stationary_frames_do_not_erase_newly_revealed_carbon(
 ):
     window, canvas = drawing
     owner, mark = _seed(drawing)
-    center = mark_center_for(canvas, mark)
+    center = canvas.services.scene_decoration_build_service.mark_center(mark)
     # Closer to the mark than the old atom dot, but inside the future C's hit
     # footprint. Coincident centers intentionally pick the atom, not the mark.
     canvas.services.move_controller.move_item(mark, 3.0 - center.x(), -center.y())
-    before = snapshot_canvas_state_for(canvas)
+    before = canvas.services.canvas_document_session_service.snapshot_state()
     _tool(window, "delete")
-    position = canvas.mapFromScene(mark_center_for(canvas, mark))
+    position = canvas.mapFromScene(
+        canvas.services.scene_decoration_build_service.mark_center(mark)
+    )
     QTest.mousePress(canvas.viewport(), Qt.MouseButton.LeftButton, pos=position)
     _visible_carbon(canvas, owner)
     for _ in range(2):

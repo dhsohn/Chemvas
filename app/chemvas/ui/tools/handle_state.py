@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import cast
 
 
 @dataclass(slots=True)
@@ -10,33 +9,18 @@ class CanvasHandleState:
     target: object | None = None
 
 
-def handle_state_for(canvas) -> CanvasHandleState:
-    return cast("CanvasHandleState", canvas.runtime_state.handle_state)
-
-
-def active_handles_for(canvas):
-    return handle_state_for(canvas).active_handles
-
-
 def set_active_handles_for(canvas, handles) -> None:
-    state = handle_state_for(canvas)
+    state = canvas.runtime_state.handle_state
     state.active_handles = handles
 
 
-def handle_target_for(canvas):
-    return handle_state_for(canvas).target
-
-
 def set_handle_target_for(canvas, target) -> None:
-    state = handle_state_for(canvas)
+    state = canvas.runtime_state.handle_state
     state.target = target
 
 
 __all__ = [
     "CanvasHandleState",
-    "active_handles_for",
-    "handle_state_for",
-    "handle_target_for",
     "set_active_handles_for",
     "set_handle_target_for",
 ]

@@ -7,16 +7,12 @@ from PyQt6.QtCore import QEvent, QPointF, Qt
 from PyQt6.QtGui import QKeyEvent, QKeySequence
 from PyQt6.QtTest import QTest
 
-from chemvas.ui.canvas.canvas_window_access import snapshot_canvas_state_for
-from chemvas.ui.scene.scene_decoration_access import add_arrow_for
 from chemvas.ui.selection.select_all_access import select_all_scene_items_for
 from chemvas.ui.transactions.document import DocumentSavepoint
 from chemvas.ui.window.main_window_ports import (
     cut_selection_for_window,
     group_selection_for_window,
     paste_selection_for_window,
-    redo_action_for_window,
-    undo_action_for_window,
 )
 from tests.gui_workflow_support import app as app
 from tests.gui_workflow_support import drawing as drawing
@@ -27,11 +23,11 @@ from tests.gui_workflow_support import qt_errors as qt_errors
 def invoke(window, canvas, operation, route):
     if route == "window":
         if operation == "undo":
-            action = undo_action_for_window(window)
+            action = window.ui_references.undo_action
             assert action.isEnabled()
             action.trigger()
         elif operation == "redo":
-            action = redo_action_for_window(window)
+            action = window.ui_references.redo_action
             assert action.isEnabled()
             action.trigger()
         else:
@@ -79,20 +75,24 @@ def test_undo_during_gesture_preserves_redo_after_late_release(
     drawing, qt_errors, kind, route
 ):
     window, canvas = drawing
-    empty = snapshot_canvas_state_for(canvas)
+    empty = canvas.services.canvas_document_session_service.snapshot_state()
     point, item = populate(canvas, kind)
-    original = snapshot_canvas_state_for(canvas)
+    original = canvas.services.canvas_document_session_service.snapshot_state()
     assert original != empty
     end = start_drag(canvas, kind, point, item)
     invoke(window, canvas, "undo", route)
-    after_action = snapshot_canvas_state_for(canvas)
+    after_action = canvas.services.canvas_document_session_service.snapshot_state()
     stacks = canvas.services.history_service.capture_stack_snapshot()
     release(canvas, end)
     assert not qt_errors
-    assert snapshot_canvas_state_for(canvas) == after_action == empty
+    assert (
+        canvas.services.canvas_document_session_service.snapshot_state()
+        == after_action
+        == empty
+    )
     canvas.services.history_service.verify_stack_snapshot(stacks)
     invoke(window, canvas, "redo", route)
-    assert snapshot_canvas_state_for(canvas) == original
+    assert canvas.services.canvas_document_session_service.snapshot_state() == original
 
 
 @pytest.mark.parametrize(
@@ -102,19 +102,23 @@ def test_delete_or_cut_cancels_move_before_mutating_selection(
     drawing, qt_errors, operation, route
 ):
     window, canvas = drawing
-    empty = snapshot_canvas_state_for(canvas)
+    empty = canvas.services.canvas_document_session_service.snapshot_state()
     point, item = populate(canvas, "arrow")
-    original = snapshot_canvas_state_for(canvas)
+    original = canvas.services.canvas_document_session_service.snapshot_state()
     end = start_drag(canvas, "arrow", point, item)
     invoke(window, canvas, operation, route)
-    after_action = snapshot_canvas_state_for(canvas)
+    after_action = canvas.services.canvas_document_session_service.snapshot_state()
     stacks = canvas.services.history_service.capture_stack_snapshot()
     release(canvas, end)
     assert not qt_errors
-    assert snapshot_canvas_state_for(canvas) == after_action == empty
+    assert (
+        canvas.services.canvas_document_session_service.snapshot_state()
+        == after_action
+        == empty
+    )
     canvas.services.history_service.verify_stack_snapshot(stacks)
     canvas.services.history_service.undo()
-    assert snapshot_canvas_state_for(canvas) == original
+    assert canvas.services.canvas_document_session_service.snapshot_state() == original
 
 
 @pytest.mark.parametrize("route", ["window", "canvas"])
@@ -125,9 +129,9 @@ def test_history_action_during_move_of_still_existing_atoms_is_exact(
     window, canvas = drawing
     point, _ = populate(canvas, "molecule")
     select_all_scene_items_for(canvas)
-    original = snapshot_canvas_state_for(canvas)
+    original = canvas.services.canvas_document_session_service.snapshot_state()
     canvas.services.scene_transform_controller.translate_selected_items(8.1, -4.3)
-    edited = snapshot_canvas_state_for(canvas)
+    edited = canvas.services.canvas_document_session_service.snapshot_state()
     if operation == "redo":
         canvas.services.history_service.undo()
         expected = edited
@@ -139,14 +143,14 @@ def test_history_action_during_move_of_still_existing_atoms_is_exact(
     stacks = canvas.services.history_service.capture_stack_snapshot()
     release(canvas, end)
     assert not qt_errors
-    assert snapshot_canvas_state_for(canvas) == expected
+    assert canvas.services.canvas_document_session_service.snapshot_state() == expected
     canvas.services.history_service.verify_stack_snapshot(stacks)
     history = canvas.services.history_service
     while history.can_undo():
         history.undo()
     while history.can_redo():
         history.redo()
-    assert snapshot_canvas_state_for(canvas) == edited
+    assert canvas.services.canvas_document_session_service.snapshot_state() == edited
 
 
 @pytest.mark.parametrize("route", ["window", "canvas"])
@@ -184,16 +188,18 @@ def test_failed_eraser_cancel_cannot_publish_on_late_release(
     window, canvas = drawing
     point, item = populate(canvas, "molecule")
     history = canvas.services.history_service
-    add_arrow_for(canvas, QPointF(130, 90), QPointF(175, 90), "arrow")
+    canvas.services.scene_decoration_service.add_arrow(
+        QPointF(130, 90), QPointF(175, 90), "arrow"
+    )
     history.undo()
-    original = snapshot_canvas_state_for(canvas)
+    original = canvas.services.canvas_document_session_service.snapshot_state()
     stacks = history.capture_stack_snapshot()
     assert stacks.redo_stack
     end = start_drag(canvas, "delete", point, item)
     tool = canvas.services.tool_controller.active
     session = tool._delete_session
     assert session is not None and session.active and tool._changed
-    pending = snapshot_canvas_state_for(canvas)
+    pending = canvas.services.canvas_document_session_service.snapshot_state()
     assert pending != original
     commands = tuple(tool._commands)
     restore = DocumentSavepoint.restore
@@ -220,7 +226,7 @@ def test_failed_eraser_cancel_cannot_publish_on_late_release(
     history.verify_stack_snapshot(stacks)
     release(canvas, end)
     assert not qt_errors
-    assert snapshot_canvas_state_for(canvas) == pending
+    assert canvas.services.canvas_document_session_service.snapshot_state() == pending
     history.verify_stack_snapshot(stacks)
     assert tool._delete_session is session and session.active
     assert tuple(tool._commands) == commands
@@ -235,10 +241,10 @@ def test_failed_eraser_cancel_cannot_publish_on_late_release(
         QTest.mouseRelease(canvas.viewport(), Qt.MouseButton.LeftButton, pos=empty)
     assert not session.active
     assert not tool.has_active_gesture
-    assert snapshot_canvas_state_for(canvas) == original
+    assert canvas.services.canvas_document_session_service.snapshot_state() == original
     history.verify_stack_snapshot(stacks)
     release(canvas, end)
-    assert snapshot_canvas_state_for(canvas) == original
+    assert canvas.services.canvas_document_session_service.snapshot_state() == original
     history.verify_stack_snapshot(stacks)
 
 
@@ -271,7 +277,7 @@ def test_other_keyboard_document_edits_do_not_keep_stale_gesture(
     point, item = populate(canvas, "arrow")
     populate(canvas, "molecule")
     select_all_scene_items_for(canvas)
-    original = snapshot_canvas_state_for(canvas)
+    original = canvas.services.canvas_document_session_service.snapshot_state()
     if operation == "paste":
         assert canvas.services.scene_clipboard_controller.copy_selection_to_clipboard()
     end = start_drag(canvas, "arrow", point, item)
@@ -292,23 +298,23 @@ def test_other_keyboard_document_edits_do_not_keep_stale_gesture(
         }[operation]
         event = QKeyEvent(QEvent.Type.KeyPress, key, modifiers)
         canvas.services.input_controller.key_press_event(event)
-    expected = snapshot_canvas_state_for(canvas)
+    expected = canvas.services.canvas_document_session_service.snapshot_state()
     assert expected != original
     stacks = canvas.services.history_service.capture_stack_snapshot()
     release(canvas, end)
     assert not qt_errors
-    assert snapshot_canvas_state_for(canvas) == expected
+    assert canvas.services.canvas_document_session_service.snapshot_state() == expected
     canvas.services.history_service.verify_stack_snapshot(stacks)
     canvas.services.history_service.undo()
-    assert snapshot_canvas_state_for(canvas) == original
+    assert canvas.services.canvas_document_session_service.snapshot_state() == original
     canvas.services.history_service.redo()
-    assert snapshot_canvas_state_for(canvas) == expected
+    assert canvas.services.canvas_document_session_service.snapshot_state() == expected
 
 
 def test_shift_modifier_does_not_cancel_active_rotation(drawing, qt_errors):
     _window, canvas = drawing
     point, item = populate(canvas, "molecule")
-    before = snapshot_canvas_state_for(canvas)
+    before = canvas.services.canvas_document_session_service.snapshot_state()
     end = start_drag(canvas, "rotation", point, item)
     tool = canvas.services.tool_controller.active
     session = tool._rotation_session
@@ -318,6 +324,6 @@ def test_shift_modifier_does_not_cancel_active_rotation(drawing, qt_errors):
     QTest.keyRelease(canvas, Qt.Key.Key_Shift)
     release(canvas, end)
     assert not qt_errors
-    assert snapshot_canvas_state_for(canvas) != before
+    assert canvas.services.canvas_document_session_service.snapshot_state() != before
     canvas.services.history_service.undo()
-    assert snapshot_canvas_state_for(canvas) == before
+    assert canvas.services.canvas_document_session_service.snapshot_state() == before

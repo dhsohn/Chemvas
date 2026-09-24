@@ -18,7 +18,6 @@ from chemvas.domain.transactions import add_recovery_error_note
 from chemvas.ui.canvas.canvas_model_access import atom_for_id
 from chemvas.ui.canvas.canvas_scene_items_state import ring_items_for_atoms
 from chemvas.ui.molecule.atom_coords_access import (
-    atom_coords_3d_for,
     pop_atom_coords_3d_for,
     set_atom_coords_3d_for_id,
 )
@@ -51,7 +50,7 @@ class _RotationPreviewAuthority:
 
         canvas = self.controller.canvas
         state = self.controller.rotation
-        coords_3d = atom_coords_3d_for(canvas)
+        coords_3d = canvas.runtime_state.atom_coords_3d_state.atom_coords_3d
         previous_scalars = (state.free_angle_x, state.free_angle_y, state.total_angle)
         previous: dict[int, tuple[tuple[float, float] | None, Coords3D | None]] = {}
         for atom_id in self.atom_ids:

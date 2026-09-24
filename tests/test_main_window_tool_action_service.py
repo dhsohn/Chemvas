@@ -11,7 +11,6 @@ from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QActionGroup, QIcon, QPixmap
 from PyQt6.QtWidgets import QApplication, QMainWindow
 
-from chemvas.ui.window import main_window_tool_action_service as module
 from chemvas.ui.window.main_window_tool_action_service import (
     MainWindowToolActionService,
 )
@@ -50,6 +49,9 @@ class _HarnessWindow(QMainWindow):
             icon_mark_minus=self._blank_icon,
             icon_mark_radical=self._blank_icon,
         )
+        self.ui_references = SimpleNamespace(
+            require_icon_factory=mock.Mock(return_value=self._icon_factory)
+        )
 
     def show_status_message(self, message: str) -> None:
         self.statusBar().showMessage(message)
@@ -70,13 +72,8 @@ class MainWindowToolActionServiceTest(unittest.TestCase):
             return_value=self.window.tool_mode_controller
         )
         self.tool_state_service = mock.Mock()
-        self.icon_factory_for_window = mock.Mock(return_value=self.window._icon_factory)
+        self.require_icon_factory = self.window.ui_references.require_icon_factory
         self.status_service = mock.Mock()
-        patcher = mock.patch.object(
-            module, "icon_factory_for_window", self.icon_factory_for_window
-        )
-        patcher.start()
-        self.addCleanup(patcher.stop)
         self.service = MainWindowToolActionService(
             tool_state_service=self.tool_state_service,
         )
@@ -93,7 +90,7 @@ class MainWindowToolActionServiceTest(unittest.TestCase):
         icon = QIcon(pixmap)
 
         with mock.patch.object(
-            self.icon_factory_for_window.return_value, "icon_select", return_value=icon
+            self.require_icon_factory.return_value, "icon_select", return_value=icon
         ) as icon_method:
             _, action = self.service.build_checkable_tool_action(
                 self.window,
@@ -106,7 +103,7 @@ class MainWindowToolActionServiceTest(unittest.TestCase):
             )
 
         icon_method.assert_called_once_with()
-        self.icon_factory_for_window.assert_called_once_with(self.window)
+        self.require_icon_factory.assert_called_once_with()
         self.assertFalse(action.icon().isNull())
         self.assertEqual(action.toolTip(), "Pick atoms")
         self.assertEqual(action.statusTip(), "Pick atoms")

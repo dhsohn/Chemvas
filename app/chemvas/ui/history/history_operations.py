@@ -24,16 +24,13 @@ from chemvas.ui.canvas.canvas_callback_state import (
 from chemvas.ui.canvas.canvas_color_mutation_service import apply_bond_color_in_place
 from chemvas.ui.canvas.canvas_group_state import (
     CanvasGroupState,
-    group_state_for,
     register_group_for,
-    remove_group_for,
     restore_group_for,
 )
 from chemvas.ui.canvas.canvas_mark_registry import mark_registry_for
 from chemvas.ui.canvas.canvas_model_access import (
     atom_annotations_for,
     atom_for_id,
-    set_next_atom_id_for,
 )
 from chemvas.ui.canvas.canvas_scene_items_state import (
     SCENE_ITEM_COLLECTION_ATTRS,
@@ -46,23 +43,17 @@ from chemvas.ui.history.history_atom_position_restore import (
     set_atom_positions_for_history,
 )
 from chemvas.ui.history.history_commands import DeletedSceneItemOrder
-from chemvas.ui.molecule.atom_coords_access import (
-    atom_coords_3d_for_id,
-    pop_atom_coords_3d_for,
-)
+from chemvas.ui.molecule.atom_coords_access import pop_atom_coords_3d_for
 from chemvas.ui.molecule.atom_label_access import add_or_update_atom_label
 from chemvas.ui.molecule.bond_length_graphics_refresh import (
     refresh_bond_length_graphics_for,
 )
 from chemvas.ui.scene.annotation_style_service import apply_annotation_style_for
 from chemvas.ui.scene.scene_item_access import (
-    apply_scene_item_state,
-    create_scene_item_from_state,
     remove_scene_item,
     restore_scene_item,
 )
 from chemvas.ui.scene.scene_signal_blocking import blocked_scene_signals
-from chemvas.ui.selection.selection_state import selection_for
 from chemvas.ui.transactions.document import DocumentSavepoint
 from chemvas.ui.transactions.scene_runtime import capture_scene_runtime
 from chemvas.ui.transactions.scene_runtime_restore import (
@@ -138,7 +129,11 @@ class CanvasHistoryOperations:
                 if atom is None:
                     continue
                 before_positions[atom_id] = (atom.x, atom.y)
-                coords_3d = atom_coords_3d_for_id(self.__canvas, atom_id)
+                coords_3d = (
+                    self.__canvas.runtime_state.atom_coords_3d_state.atom_coords_3d.get(
+                        atom_id
+                    )
+                )
                 if coords_3d is not None:
                     before_coords_3d[atom_id] = coords_3d
             self.__canvas.services.move_controller.move_atoms(
@@ -223,7 +218,7 @@ class CanvasHistoryOperations:
         set_last_smiles_input_for(self.__canvas, value)
 
     def set_next_atom_id_for_history(self, atom_id: int) -> None:
-        set_next_atom_id_for(self.__canvas, atom_id)
+        self.__canvas.model.next_atom_id = atom_id
 
     def restore_bond_length_for_history(self, length_px: float) -> None:
         self.__canvas.renderer.set_bond_length(length_px)
@@ -248,8 +243,10 @@ class CanvasHistoryOperations:
         )
 
     def restore_mark_from_state_for_history(self, mark_state: dict):
-        return create_scene_item_from_state(
-            self.__canvas, {**mark_state, "kind": "mark"}
+        return (
+            self.__canvas.services.scene_item_controller.create_scene_item_from_state(
+                {**mark_state, "kind": "mark"}
+            )
         )
 
     def restore_bond_from_state_for_history(
@@ -267,7 +264,7 @@ class CanvasHistoryOperations:
 
     def apply_scene_item_state(self, item_id: int, state: dict) -> None:
         item = restore_active_projection(self.__canvas, item_id, state)
-        apply_scene_item_state(self.__canvas, item, state)
+        self.__canvas.services.scene_item_controller.apply_scene_item_state(item, state)
 
     def clear_handles_for_target(self, item_id: int) -> None:
         """Drop handles placed from the geometry this command replaced.
@@ -283,7 +280,7 @@ class CanvasHistoryOperations:
         self.__canvas.services.handle_overlay_service.clear_handles()
 
     def refresh_selection_outline(self) -> None:
-        selection_for(self.__canvas).update_selection_outline()
+        self.__canvas.services.selection.update_selection_outline()
 
     def capture_scene_runtime(self) -> SceneRuntimeSnapshot:
         return capture_scene_runtime(self.__canvas)
@@ -382,10 +379,10 @@ class CanvasHistoryOperations:
                 attached[index].stackBefore(attached[index + 1])
 
     def group_state(self) -> CanvasGroupState:
-        return group_state_for(self.__canvas)
+        return self.__canvas.runtime_state.group_state
 
     def remove_group(self, group_id: int) -> SceneGroup | None:
-        return remove_group_for(self.__canvas, group_id)
+        return self.__canvas.runtime_state.group_state.groups.pop(group_id, None)
 
     def register_group(self, atom_ids: set[int], items: list) -> int:
         return register_group_for(self.__canvas, atom_ids, items)

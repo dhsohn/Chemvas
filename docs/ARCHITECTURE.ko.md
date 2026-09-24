@@ -229,3 +229,4 @@ flowchart LR
 - [ADR 0011: 그룹과 히스토리의 문서 ID](adr/0011-document-identities-for-groups-and-history.md)
 - [ADR 0012: 평탄한 편집기 런타임과 `ui` 하위 패키지](adr/0012-flat-editor-runtime-and-ui-packages.md)
 - [ADR 0013: 모듈 분할, 창 포트, `core` 범위](adr/0013-editor-followups-splits-ports-core-scope.md)
+- [ADR 0014: 캔버스·창 상태의 단일 표기](adr/0014-one-spelling-for-canvas-and-window-state.md)

@@ -13,10 +13,6 @@ from PyQt6.QtWidgets import (
 )
 
 from chemvas.core.document_io import read_document
-from chemvas.ui.canvas.canvas_text_style_state import text_style_state_for
-from chemvas.ui.canvas.canvas_window_access import snapshot_canvas_state_for
-from chemvas.ui.selection.selection_state import selected_notes_for, selection_for
-from chemvas.ui.window.main_window_ports import services_for_window
 from tests.gui_workflow_support import _tool
 from tests.gui_workflow_support import app as app
 from tests.gui_workflow_support import drawing as drawing
@@ -252,7 +248,7 @@ def test_real_file_menu_save_preserves_live_editing_and_serializes_text(
     window, canvas = drawing
     _controller, note = _note(drawing, "Caption")
     path = tmp_path / "menu-saved.chemvas"
-    actions = services_for_window(window).document_action_service
+    actions = window.services.document_action_service
     assert actions.save_canvas_to_path(window, str(path))
     _select(note, 7, 7)
     QTest.keyClicks(canvas, " changed")
@@ -272,7 +268,7 @@ def test_real_file_menu_cancel_keeps_note_text_and_document(
     _controller, note = _note(drawing, "Caption")
     _select(note, 7, 7)
     QTest.keyClicks(canvas, " changed")
-    before = snapshot_canvas_state_for(canvas)
+    before = canvas.services.canvas_document_session_service.snapshot_state()
     calls = []
     if command == "Open...":
         monkeypatch.setattr(
@@ -292,24 +288,24 @@ def test_real_file_menu_cancel_keeps_note_text_and_document(
     assert calls == [True]
     assert window.isVisible()
     assert note.toPlainText() == "Caption changed"
-    assert snapshot_canvas_state_for(canvas) == before
+    assert canvas.services.canvas_document_session_service.snapshot_state() == before
 
 
 def test_real_font_menu_without_target_updates_only_future_note_default(drawing):
     window, canvas = drawing
     _tool(window, "note")
     controller = canvas.services.note_controller
-    before = snapshot_canvas_state_for(canvas)
+    before = canvas.services.canvas_document_session_service.snapshot_state()
     history = canvas.services.history_service
     count = len(history.state.history)
     _font_menu(window, "Courier New")
-    assert text_style_state_for(canvas).text_font_family == "Courier New"
+    assert canvas.runtime_state.text_style_state.text_font_family == "Courier New"
     assert len(history.state.history) == count + 1
-    after = snapshot_canvas_state_for(canvas)
+    after = canvas.services.canvas_document_session_service.snapshot_state()
     history.undo()
-    assert snapshot_canvas_state_for(canvas) == before
+    assert canvas.services.canvas_document_session_service.snapshot_state() == before
     history.redo()
-    assert snapshot_canvas_state_for(canvas) == after
+    assert canvas.services.canvas_document_session_service.snapshot_state() == after
     note = controller.create_text_note(QPointF(0, 0), "New note")
     assert note.font().family() == "Courier New"
 
@@ -359,7 +355,7 @@ def test_all_text_buttons_reach_selected_notes_once_and_roundtrip(
     window, canvas = drawing
     controller, note = _note(drawing, "Caption")
     controller.finish_note_edit()
-    selection = selection_for(canvas)
+    selection = canvas.services.selection
     selection.clear_note_selection()
     canvas.scene().clearSelection()
     if selection_route != "qt-only":
@@ -367,33 +363,39 @@ def test_all_text_buttons_reach_selected_notes_once_and_roundtrip(
     if selection_route != "note-registry":
         note.setSelected(True)
     assert not note.hasFocus()
-    before = snapshot_canvas_state_for(canvas)
+    before = canvas.services.canvas_document_session_service.snapshot_state()
     history = canvas.services.history_service
     count = len(history.state.history)
-    selected_before = (note.isSelected(), tuple(selected_notes_for(canvas)))
+    selected_before = (
+        note.isSelected(),
+        tuple(canvas.runtime_state.selection_state.selected_notes),
+    )
     _button(window, tooltip)
     assert html_marker in note.toHtml()
     assert len(history.state.history) == count + 1
-    assert (note.isSelected(), tuple(selected_notes_for(canvas))) == selected_before
-    after = snapshot_canvas_state_for(canvas)
+    assert (
+        note.isSelected(),
+        tuple(canvas.runtime_state.selection_state.selected_notes),
+    ) == selected_before
+    after = canvas.services.canvas_document_session_service.snapshot_state()
     history.undo()
-    assert snapshot_canvas_state_for(canvas) == before
+    assert canvas.services.canvas_document_session_service.snapshot_state() == before
     history.redo()
-    assert snapshot_canvas_state_for(canvas) == after
+    assert canvas.services.canvas_document_session_service.snapshot_state() == after
     path = tmp_path / "formatted.chemvas"
-    actions = services_for_window(window).document_action_service
+    actions = window.services.document_action_service
     assert actions.save_canvas_to_path(window, str(path))
     canvas.services.canvas_document_session_service.apply_state(
         read_document(path).state
     )
-    assert snapshot_canvas_state_for(canvas) == after
+    assert canvas.services.canvas_document_session_service.snapshot_state() == after
 
 
 def test_actual_marquee_then_text_page_formats_without_sticky_note_selection(drawing):
     window, canvas = drawing
     controller, note = _note(drawing, "Marquee caption")
     controller.finish_note_edit()
-    selection_for(canvas).clear_note_selection()
+    canvas.services.selection.clear_note_selection()
     _tool(window, "select")
     rect = note.sceneBoundingRect().adjusted(-15, -15, 15, 15)
     start, end = (
@@ -403,12 +405,12 @@ def test_actual_marquee_then_text_page_formats_without_sticky_note_selection(dra
     QTest.mousePress(canvas.viewport(), Qt.MouseButton.LeftButton, pos=start)
     QTest.mouseMove(canvas.viewport(), end, delay=10)
     QTest.mouseRelease(canvas.viewport(), Qt.MouseButton.LeftButton, pos=end)
-    assert note.isSelected() and not selected_notes_for(canvas)
+    assert note.isSelected() and not canvas.runtime_state.selection_state.selected_notes
     _tool(window, "note")
     assert not note.hasFocus()
     _button(window, "Bold the selected text")
     assert "font-weight:700" in note.toHtml()
-    assert note.isSelected() and not selected_notes_for(canvas)
+    assert note.isSelected() and not canvas.runtime_state.selection_state.selected_notes
     # A new marquee replaces the Qt-only selection; formatting must not pin it.
     _tool(window, "select")
     start, end = (
@@ -418,7 +420,10 @@ def test_actual_marquee_then_text_page_formats_without_sticky_note_selection(dra
     QTest.mousePress(canvas.viewport(), Qt.MouseButton.LeftButton, pos=start)
     QTest.mouseMove(canvas.viewport(), end, delay=10)
     QTest.mouseRelease(canvas.viewport(), Qt.MouseButton.LeftButton, pos=end)
-    assert not note.isSelected() and not selected_notes_for(canvas)
+    assert (
+        not note.isSelected()
+        and not canvas.runtime_state.selection_state.selected_notes
+    )
     assert not controller.text_format_targets()
 
 
@@ -426,11 +431,11 @@ def test_actual_marquee_then_text_page_formats_without_sticky_note_selection(dra
 def test_text_button_without_target_explains_how_to_apply_it(drawing, tooltip, _marker):
     window, canvas = drawing
     _tool(window, "note")
-    before = snapshot_canvas_state_for(canvas)
+    before = canvas.services.canvas_document_session_service.snapshot_state()
     history = canvas.services.history_service.capture_stack_snapshot()
     _button(window, tooltip)
     assert "Select a note or edit its text" in window.statusBar().currentMessage()
-    assert snapshot_canvas_state_for(canvas) == before
+    assert canvas.services.canvas_document_session_service.snapshot_state() == before
     canvas.services.history_service.verify_stack_snapshot(history)
 
 
@@ -442,9 +447,9 @@ def test_selected_note_formatting_failure_keeps_all_notes_and_history_exact(
     controller, first = _note(drawing, "first")
     controller.finish_note_edit()
     second = controller.create_text_note(QPointF(0, 50), "second")
-    selection_for(canvas).select_note(first, additive=False)
+    canvas.services.selection.select_note(first, additive=False)
     second.setSelected(True)
-    before = snapshot_canvas_state_for(canvas)
+    before = canvas.services.canvas_document_session_service.snapshot_state()
     history = canvas.services.history_service
     stack = history.capture_stack_snapshot()
     old_update = controller.update_note_box
@@ -467,9 +472,12 @@ def test_selected_note_formatting_failure_keeps_all_notes_and_history_exact(
         )
     with pytest.raises(RuntimeError):
         controller.adjust_text_size(1)
-    assert snapshot_canvas_state_for(canvas) == before
+    assert canvas.services.canvas_document_session_service.snapshot_state() == before
     history.verify_stack_snapshot(stack)
-    assert first in selected_notes_for(canvas) and second.isSelected()
+    assert (
+        first in canvas.runtime_state.selection_state.selected_notes
+        and second.isSelected()
+    )
 
 
 def test_partial_unicode_size_uses_inherited_size_and_preserves_unselected_text(
@@ -509,7 +517,7 @@ def test_selected_note_formatting_respects_intentionally_disabled_history(drawin
     _window, canvas = drawing
     controller, note = _note(drawing, "Caption")
     controller.finish_note_edit()
-    selection_for(canvas).select_note(note, additive=False)
+    canvas.services.selection.select_note(note, additive=False)
     history = canvas.services.history_service
     history.set_enabled(False)
     before = history.capture_stack_snapshot()
@@ -529,15 +537,15 @@ def test_clamped_selected_note_size_is_a_noop_and_keeps_redo(drawing, size, delt
     fmt.setFontPointSize(size)
     _format_range(note, 0, 7, fmt)
     controller.finish_note_edit()
-    selection_for(canvas).select_note(note, additive=False)
+    canvas.services.selection.select_note(note, additive=False)
     controller.toggle_text_bold()
     assert "font-weight:700" in note.toHtml()
     history = canvas.services.history_service
     history.undo()
     assert "font-weight:700" not in note.toHtml()
     assert history.state.redo_stack
-    before = snapshot_canvas_state_for(canvas)
+    before = canvas.services.canvas_document_session_service.snapshot_state()
     stack = history.capture_stack_snapshot()
     controller.adjust_text_size(delta)
-    assert snapshot_canvas_state_for(canvas) == before
+    assert canvas.services.canvas_document_session_service.snapshot_state() == before
     history.verify_stack_snapshot(stack)

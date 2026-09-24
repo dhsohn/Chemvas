@@ -16,7 +16,6 @@ from chemvas.domain.document import (
 from chemvas.ui.annotations.state import arrow_state_dict_for
 from chemvas.ui.canvas.canvas_lifecycle import schedule_canvas_deletion_for
 from chemvas.ui.canvas.canvas_scene_items_state import arrow_items_for
-from chemvas.ui.scene.scene_item_access import apply_scene_item_state, attach_scene_item
 from chemvas.ui.transactions.document import document_transaction
 from tests.canvas_factory import build_canvas_view
 
@@ -67,8 +66,8 @@ def test_undo_redo_and_failed_edit_restore_exact_records_and_items(canvas, kind)
         with document_transaction(
             canvas, history_service=canvas.services.history_service
         ):
-            apply_scene_item_state(
-                canvas, item, {**before, "end": (200, 100), "color": "#123456"}
+            canvas.services.scene_item_controller.apply_scene_item_state(
+                item, {**before, "end": (200, 100), "color": "#123456"}
             )
             raise RuntimeError("failed edit")
     assert arrow_items_for(canvas) == [item]
@@ -89,7 +88,7 @@ def test_missing_record_cannot_be_attached_or_serialized(canvas):
     item = QGraphicsPathItem()
     item.setData(0, "arrow")
     with pytest.raises(RuntimeError, match="without a record"):
-        attach_scene_item(canvas, item)
+        canvas.services.scene_item_controller.attach_scene_item(item)
     assert item.scene() is None
     assert arrow_items_for(canvas) == []
     with pytest.raises(RuntimeError, match="no record"):
@@ -136,7 +135,7 @@ def test_curve_endpoint_edit_preserves_control_and_control_edit_redraws(canvas):
             "labels": {"above": "k_1"},
         }
     )
-    attach_scene_item(canvas, item)
+    canvas.services.scene_item_controller.attach_scene_item(item)
     mutation = canvas.services.handle_mutation_service
     mutation.update_arrow_endpoint(item, QPointF(-2, 0), "start")
     assert arrows.record(item).start == (-2, 0)

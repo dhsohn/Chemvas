@@ -26,36 +26,21 @@ from chemvas.ui.annotations.state import (
     ring_state_dict_for,
     scene_item_state_for,
 )
-from chemvas.ui.canvas.canvas_callback_state import (
-    callback_state_for,
-)
-from chemvas.ui.canvas.canvas_group_state import (
-    group_ids_for_members_for,
-    group_state_for,
-)
+from chemvas.ui.canvas.canvas_group_state import group_ids_for_members_for
 from chemvas.ui.canvas.canvas_mark_registry import mark_registry_for
-from chemvas.ui.canvas.canvas_model_access import (
-    atom_for_id,
-    bonds_for,
-    next_atom_id_for,
-)
+from chemvas.ui.canvas.canvas_model_access import atom_for_id
 from chemvas.ui.canvas.canvas_scene_items_state import (
     require_scene_record_id,
     ring_items_for,
     scene_item_collection_for,
 )
-from chemvas.ui.canvas.canvas_smiles_input_state import (
-    clear_last_smiles_input_for,
-    last_smiles_input_for,
-)
+from chemvas.ui.canvas.canvas_smiles_input_state import clear_last_smiles_input_for
 from chemvas.ui.history.history_commands import (
     DeleteSceneItemsCommand,
     GroupSceneItemsCommand,
     UngroupSceneItemsCommand,
 )
-from chemvas.ui.molecule.atom_coords_access import atom_coords_3d_for
 from chemvas.ui.molecule.atom_label_access import atom_has_visible_label_for
-from chemvas.ui.scene.mark_item_access import reveal_unmarked_isolated_carbons_for
 from chemvas.ui.scene.scene_delete_apply_logic import apply_delete_selection_plan
 from chemvas.ui.scene.scene_delete_plan import (
     build_delete_selection_plan,
@@ -77,7 +62,6 @@ from chemvas.ui.scene.scene_single_item_mutation_logic import (
     delete_ring_with_history,
 )
 from chemvas.ui.selection.selection_queries import selected_scene_items_for
-from chemvas.ui.selection.selection_state import selection_for
 from chemvas.ui.transactions.document import (
     DocumentSavepoint,
     document_transaction,
@@ -111,11 +95,11 @@ class SceneDeleteController:
 
     @property
     def _bonds(self):
-        return bonds_for(self.canvas)
+        return self.canvas.model.bonds
 
     @property
     def _next_atom_id(self) -> int:
-        return next_atom_id_for(self.canvas)
+        return int(self.canvas.model.next_atom_id)
 
     def _has_atom(self, atom_id: int) -> bool:
         return atom_for_id(self.canvas, atom_id) is not None
@@ -211,7 +195,7 @@ class SceneDeleteController:
         originals: dict[int, SceneGroup] = {}
         for group_id, group in removed_groups:
             originals.setdefault(group_id, group)
-        groups = group_state_for(self.canvas).groups
+        groups = self.canvas.runtime_state.group_state.groups
         group_commands: list[HistoryCommand] = []
         for group_id, original in originals.items():
             remaining = groups.get(group_id)
@@ -333,7 +317,7 @@ class SceneDeleteController:
         group_members_by_id: dict[int, tuple[set[int], set[int]]] = {}
         group_ids_by_atom: dict[int, set[int]] = {}
         group_ids_by_item: dict[int, set[int]] = {}
-        for group_id, group in group_state_for(self.canvas).groups.items():
+        for group_id, group in self.canvas.runtime_state.group_state.groups.items():
             atom_ids = set(group.atom_ids)
             item_ids = set(group.item_ids)
             group_members_by_id[group_id] = (atom_ids, item_ids)
@@ -355,7 +339,7 @@ class SceneDeleteController:
 
         # Read both callback values exactly once before the scene-rect guard is
         # opened. A live getter failure must not strand a guarded snapshot.
-        observer_state = callback_state_for(self.canvas)
+        observer_state = self.canvas.runtime_state.callback_state
         observer_ports = (
             _ObserverPort.capture(observer_state, "scene_selection_group"),
             _ObserverPort.capture(observer_state, "scene_selection_outline"),
@@ -485,7 +469,9 @@ class SceneDeleteController:
             removed_groups = self._remove_overlapping_groups(
                 atom_ids={atom_id}, items=list(self.marks.by_atom.get(atom_id, ()))
             )
-        before_smiles_input = last_smiles_input_for(self.canvas)
+        before_smiles_input = (
+            self.canvas.runtime_state.smiles_input_state.last_smiles_input
+        )
         neighbor_atom_ids = self._neighbor_atom_ids(atom_id, bond_ids=bond_ids)
         command = self._atom_delete_command(
             atom_id,
@@ -535,7 +521,9 @@ class SceneDeleteController:
             bonds=self._bonds,
             marks_by_atom=self.marks.by_atom,
             before_smiles_input=before_smiles_input,
-            current_smiles_input_getter=lambda: last_smiles_input_for(self.canvas),
+            current_smiles_input_getter=lambda: (
+                self.canvas.runtime_state.smiles_input_state.last_smiles_input
+            ),
             clear_smiles_input=lambda: clear_last_smiles_input_for(self.canvas),
             mark_state_getter=self._mark_state,
             bond_state_getter=self._bond_state,
@@ -548,8 +536,10 @@ class SceneDeleteController:
             scene_delete_command_factory=partial(
                 DeleteSceneItemsCommand.capture, self.history.operations
             ),
-            atom_coords_3d_getter=lambda atom_id: atom_coords_3d_for(self.canvas).get(
-                atom_id
+            atom_coords_3d_getter=lambda atom_id: (
+                self.canvas.runtime_state.atom_coords_3d_state.atom_coords_3d.get(
+                    atom_id
+                )
             ),
             bond_ids=bond_ids,
         )
@@ -639,7 +629,9 @@ class SceneDeleteController:
         if not isinstance(bond_id, int):
             return None
         removed_groups: list[tuple[int, SceneGroup]] = []
-        before_smiles_input = last_smiles_input_for(self.canvas)
+        before_smiles_input = (
+            self.canvas.runtime_state.smiles_input_state.last_smiles_input
+        )
         bonds = self._bonds
         bond = bonds[bond_id] if 0 <= bond_id < len(bonds) else None
         endpoint_atom_ids = (
@@ -649,7 +641,9 @@ class SceneDeleteController:
             bond_id,
             bonds=self._bonds,
             before_smiles_input=before_smiles_input,
-            current_smiles_input_getter=lambda: last_smiles_input_for(self.canvas),
+            current_smiles_input_getter=lambda: (
+                self.canvas.runtime_state.smiles_input_state.last_smiles_input
+            ),
             clear_smiles_input=lambda: clear_last_smiles_input_for(self.canvas),
             bond_state_getter=self._bond_state,
             remove_bond_by_id=self._remove_bond,
@@ -726,7 +720,9 @@ class SceneDeleteController:
         self._remove_scene_item(item)
         atom_id = state.get("atom_id") if state.get("kind") == "mark" else None
         if isinstance(atom_id, int):
-            labels = reveal_unmarked_isolated_carbons_for(self.canvas, {atom_id})
+            labels = self.canvas.services.canvas_mark_scene_service.reveal_unmarked_isolated_carbons(
+                {atom_id}
+            )
             if labels:
                 command = CompositeCommand([command, *labels])
         return self._with_group_cleanup(command, removed_groups)
@@ -744,7 +740,7 @@ class SceneDeleteController:
             ),
             (
                 "refreshing the selection outline after a delete",
-                lambda: selection_for(self.canvas).update_selection_outline(),
+                lambda: self.canvas.services.selection.update_selection_outline(),
             ),
         )
         for phase, action in actions:
@@ -781,7 +777,9 @@ class SceneDeleteController:
                 atom_ids=set(plan.atom_ids),
                 items=plan.scene_items,
             )
-            before_smiles_input = last_smiles_input_for(self.canvas)
+            before_smiles_input = (
+                self.canvas.runtime_state.smiles_input_state.last_smiles_input
+            )
             if plan.clear_smiles_input:
                 clear_last_smiles_input_for(self.canvas)
             mark_owner_ids = {
@@ -794,7 +792,9 @@ class SceneDeleteController:
                 plan,
                 bonds=self._bonds,
                 before_smiles_input=before_smiles_input,
-                current_smiles_input_getter=lambda: last_smiles_input_for(self.canvas),
+                current_smiles_input_getter=lambda: (
+                    self.canvas.runtime_state.smiles_input_state.last_smiles_input
+                ),
                 bond_state_getter=self._bond_state,
                 remove_bond_by_id=self._remove_bond,
                 redraw_connected_bonds=self._redraw_connected_bonds,
@@ -809,13 +809,17 @@ class SceneDeleteController:
                 scene_delete_command_factory=partial(
                     DeleteSceneItemsCommand.capture, self.history.operations
                 ),
-                atom_coords_3d_getter=lambda atom_id: atom_coords_3d_for(
-                    self.canvas
-                ).get(atom_id),
+                atom_coords_3d_getter=lambda atom_id: (
+                    self.canvas.runtime_state.atom_coords_3d_state.atom_coords_3d.get(
+                        atom_id
+                    )
+                ),
             )
             if mark_owner_ids:
                 commands.extend(
-                    reveal_unmarked_isolated_carbons_for(self.canvas, mark_owner_ids)
+                    self.canvas.services.canvas_mark_scene_service.reveal_unmarked_isolated_carbons(
+                        mark_owner_ids
+                    )
                 )
 
             if any(

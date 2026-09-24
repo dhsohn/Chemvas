@@ -9,8 +9,6 @@ from PyQt6.QtWidgets import QApplication
 
 from chemvas.adapters.qt.renderer import Renderer
 from chemvas.features.rendering import ACS1996Style
-from chemvas.ui.canvas.canvas_atom_graphics_state import atom_items_for
-from chemvas.ui.canvas.canvas_bond_graphics_state import bond_items_for_id
 from chemvas.ui.canvas.canvas_view import CanvasView
 from chemvas.ui.export.layout_qa_service import (
     _atom_label_scene_path,
@@ -52,9 +50,15 @@ def test_scaled_bond_paint_leaves_half_pen_width_around_endpoint_ink(
         canvas.bond_renderer.redraw_bond(bond_id)
         glyph = QPainterPath()
         for aid in (a_id, b_id):
-            glyph = glyph.united(_atom_label_scene_path(atom_items_for(canvas)[aid]))
+            glyph = glyph.united(
+                _atom_label_scene_path(
+                    canvas.runtime_state.atom_graphics_state.atom_items[aid]
+                )
+            )
         paint = QPainterPath()
-        for item in bond_items_for_id(canvas, bond_id):
+        for item in canvas.runtime_state.bond_graphics_state.bond_items.get(
+            bond_id, []
+        ):
             paint = paint.united(_graphics_paint_scene_path(item))
         assert not glyph.isEmpty()
         assert not paint.isEmpty()

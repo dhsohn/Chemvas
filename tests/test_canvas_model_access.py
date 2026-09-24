@@ -2,24 +2,17 @@ from types import SimpleNamespace
 
 from chemvas.domain.document import Atom, Bond, MoleculeModel
 from chemvas.ui.canvas.canvas_model_access import (
-    add_atom_to_model_for,
     add_bond_to_model_for,
     atom_for_id,
-    atoms_for,
-    bond_count_for,
     bond_for_id,
     bond_ids_from,
-    bonds_for,
     clear_bond_for_id,
     created_atom_ids_from,
     ensure_next_atom_id_after_for,
-    has_atoms_for,
     has_bond_slot_for,
-    next_atom_id_for,
     remove_atom_direct_for,
     set_atom_for_id,
     set_bond_for_id,
-    set_next_atom_id_for,
     trim_bonds_direct_for,
 )
 
@@ -31,12 +24,12 @@ def test_model_collection_accessors_return_underlying_model_collections() -> Non
     canvas = SimpleNamespace(model=model)
 
     assert canvas.model is model
-    assert atoms_for(canvas) is model.atoms
-    assert bonds_for(canvas) is model.bonds
-    assert next_atom_id_for(canvas) == 2
-    assert bond_count_for(canvas) == 1
+    assert canvas.model.atoms is model.atoms
+    assert canvas.model.bonds is model.bonds
+    assert int(canvas.model.next_atom_id) == 2
+    assert len(canvas.model.bonds) == 1
     assert list(bond_ids_from(canvas, 0)) == [0]
-    assert has_atoms_for(canvas) is True
+    assert bool(canvas.model.atoms) is True
 
 
 def test_atom_and_bond_lookup_helpers_tolerate_missing_ids() -> None:
@@ -58,7 +51,7 @@ def test_atom_and_bond_lookup_helpers_tolerate_missing_ids() -> None:
 def test_has_atoms_for_is_false_for_empty_model() -> None:
     canvas = SimpleNamespace(model=SimpleNamespace(atoms={}, bonds=[]))
 
-    assert has_atoms_for(canvas) is False
+    assert bool(canvas.model.atoms) is False
 
 
 def test_model_mutation_helpers_trim_remove_and_restore_next_atom_id() -> None:
@@ -79,7 +72,7 @@ def test_model_mutation_helpers_trim_remove_and_restore_next_atom_id() -> None:
     trim_bonds_direct_for(canvas, 1)
     clear_bond_for_id(canvas, 0)
     remove_atom_direct_for(canvas, 3)
-    set_next_atom_id_for(canvas, 2)
+    canvas.model.next_atom_id = 2
 
     assert canvas.model.bonds == [None]
     assert set(canvas.model.atoms) == {0, 2}
@@ -103,7 +96,7 @@ def test_bond_mutation_helpers_add_extend_set_and_validate_slots() -> None:
 def test_atom_mutation_helpers_add_set_and_advance_next_atom_id() -> None:
     canvas = SimpleNamespace(model=MoleculeModel())
 
-    atom_id = add_atom_to_model_for(canvas, "C", 1.0, 2.0)
+    atom_id = canvas.model.add_atom("C", 1.0, 2.0)
     set_atom_for_id(canvas, 5, Atom("O", 5.0, 6.0))
     ensure_next_atom_id_after_for(canvas, 5)
 

@@ -13,7 +13,6 @@ from chemvas.ui.selection.selection_drag_tool import (
     independent_selection_items,
 )
 from chemvas.ui.selection.selection_queries import selection_snapshot_for
-from chemvas.ui.selection.selection_state import selection_for
 from chemvas.ui.tools.tool_base import Tool
 from chemvas.ui.tools.tool_overlay_logic import activate_tool_no_drag
 
@@ -94,7 +93,7 @@ class MoveTool(SelectionDragMixin, Tool):
         def commit(owner) -> None:
             if not self._moved or not self._drag_has_net_movement() or item is None:
                 return
-            selection_for(self.canvas).update_selection_outline()
+            self.canvas.services.selection.update_selection_outline()
             self._ensure_drag_owner(
                 owner,
                 phase="refreshing its directly moved item",

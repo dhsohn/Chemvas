@@ -12,8 +12,6 @@ from chemvas.ui.annotations.state import note_state_dict_for
 from chemvas.ui.canvas.canvas_document_state import snapshot_canvas_document_state
 from chemvas.ui.canvas.canvas_lifecycle import schedule_canvas_deletion_for
 from chemvas.ui.scene.note_item_access import NoteTextState
-from chemvas.ui.scene.scene_decoration_access import add_arrow_for
-from chemvas.ui.scene.scene_item_access import create_scene_item_from_state
 from tests.canvas_factory import build_canvas_view
 
 
@@ -29,14 +27,16 @@ def canvas(qt_application):
 def test_same_color_on_restored_note_preserves_redo(canvas, text):
     color = QColor("#000000")
     service = canvas.services.canvas_color_mutation_service
-    source = create_scene_item_from_state(
-        canvas, {"kind": "note", "text": text, "x": 0.0, "y": 0.0}
+    source = canvas.services.scene_item_controller.create_scene_item_from_state(
+        {"kind": "note", "text": text, "x": 0.0, "y": 0.0}
     )
     service.apply_color_to_items([source], color)
     saved = note_state_dict_for(canvas, source)
-    note = create_scene_item_from_state(canvas, saved)
+    note = canvas.services.scene_item_controller.create_scene_item_from_state(saved)
     history = canvas.services.history_service
-    add_arrow_for(canvas, QPointF(0, 40), QPointF(100, 40), "arrow")
+    canvas.services.scene_decoration_service.add_arrow(
+        QPointF(0, 40), QPointF(100, 40), "arrow"
+    )
     history.undo()
     before = snapshot_canvas_document_state(canvas)
     stack = history.capture_stack_snapshot()
@@ -50,11 +50,13 @@ def test_same_color_on_restored_note_preserves_redo(canvas, text):
 
 @pytest.mark.parametrize("pending", [False, True])
 def test_failed_publication_restores_note_editor_and_redo(canvas, monkeypatch, pending):
-    note = create_scene_item_from_state(
-        canvas, {"kind": "note", "text": "memo", "x": 0.0, "y": 0.0}
+    note = canvas.services.scene_item_controller.create_scene_item_from_state(
+        {"kind": "note", "text": "memo", "x": 0.0, "y": 0.0}
     )
     history = canvas.services.history_service
-    add_arrow_for(canvas, QPointF(0, 40), QPointF(100, 40), "arrow")
+    canvas.services.scene_decoration_service.add_arrow(
+        QPointF(0, 40), QPointF(100, 40), "arrow"
+    )
     history.undo()
     if pending:
         note.setPlainText("memo typed")
@@ -87,8 +89,8 @@ def test_failed_publication_restores_note_editor_and_redo(canvas, monkeypatch, p
 def test_failed_color_playback_restores_editor_and_allows_retry(
     canvas, monkeypatch, operation
 ):
-    note = create_scene_item_from_state(
-        canvas, {"kind": "note", "text": "memo", "x": 0.0, "y": 0.0}
+    note = canvas.services.scene_item_controller.create_scene_item_from_state(
+        {"kind": "note", "text": "memo", "x": 0.0, "y": 0.0}
     )
     note.setPlainText("memo typed")
     service = canvas.services.canvas_color_mutation_service

@@ -14,7 +14,6 @@ from PyQt6.QtWidgets import (
 
 from chemvas.ui.window import main_window_panel_service as module
 from chemvas.ui.window.main_window_panel_service import MainWindowPanelService
-from chemvas.ui.window.main_window_ports import preview_window_for_window
 from chemvas.ui.window.main_window_ui_references import MainWindowUiReferences
 
 
@@ -45,8 +44,8 @@ class MainWindowPanelServiceTest(unittest.TestCase):
         window.ui_references = MainWindowUiReferences()
         self.addCleanup(window.close)
         preview_3d = _PreviewWidget()
+        window.preview_3d = preview_3d
         document_action_service = mock.Mock()
-        self._patch_port("preview_for_window", mock.Mock(return_value=preview_3d))
         self._patch_port("active_canvas_for_window", mock.Mock())
         service = MainWindowPanelService(
             document_action_service=document_action_service,
@@ -54,7 +53,7 @@ class MainWindowPanelServiceTest(unittest.TestCase):
 
         service.init_panels(window, panel_bar=QToolBar(window))
 
-        preview_window = preview_window_for_window(window)
+        preview_window = window.ui_references.preview_window
         self.assertIsNotNone(preview_window)
         self.assertIs(preview_3d.parent(), preview_window.widget())
         self.assertFalse(preview_window.isVisible())
@@ -72,15 +71,14 @@ class MainWindowPanelServiceTest(unittest.TestCase):
         self,
     ) -> None:
         preview = mock.Mock()
-        preview_for_window = mock.Mock(return_value=preview)
         active_canvas_for_window = mock.Mock(
             return_value=SimpleNamespace(rdkit=object())
         )
-        self._patch_port("preview_for_window", preview_for_window)
         self._patch_port("active_canvas_for_window", active_canvas_for_window)
-        self._patch_port("apply_preview_window_assembly_for_window", mock.Mock())
         service = MainWindowPanelService(document_action_service=mock.Mock())
-        missing_window = SimpleNamespace(ui_references=MainWindowUiReferences())
+        missing_window = SimpleNamespace(
+            ui_references=MainWindowUiReferences(), preview_3d=preview
+        )
 
         service.open_preview_window(missing_window)
 
@@ -89,7 +87,8 @@ class MainWindowPanelServiceTest(unittest.TestCase):
         preview_window = mock.Mock()
         preview_window.isVisible.return_value = True
         window = SimpleNamespace(
-            ui_references=SimpleNamespace(preview_window=preview_window)
+            ui_references=SimpleNamespace(preview_window=preview_window),
+            preview_3d=preview,
         )
 
         service.open_preview_window(window)

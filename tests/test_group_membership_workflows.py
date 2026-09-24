@@ -4,9 +4,7 @@ from PyQt6.QtCore import QPointF, Qt
 from PyQt6.QtTest import QTest
 
 from chemvas.core.document_io import read_document
-from chemvas.ui.canvas.canvas_group_state import group_state_for
-from chemvas.ui.canvas.canvas_window_access import snapshot_canvas_state_for
-from chemvas.ui.molecule.structure_mutation_access import add_atom_for, add_bond_for
+from chemvas.ui.molecule.structure_mutation_access import add_bond_for
 from chemvas.ui.selection.select_all_access import select_all_scene_items_for
 from tests.gui_workflow_support import _click, _tool
 from tests.gui_workflow_support import app as app
@@ -20,7 +18,7 @@ def test_bond_drag_extends_group_then_keyboard_move_undo_reopen(
 ):
     window, canvas = fresh_window
     _a, _b, group_id = _group(canvas)
-    before = snapshot_canvas_state_for(canvas)
+    before = canvas.services.canvas_document_session_service.snapshot_state()
     _tool(window, "bond")
     start, end = (
         canvas.mapFromScene(QPointF(30, 0)),
@@ -31,8 +29,10 @@ def test_bond_drag_extends_group_then_keyboard_move_undo_reopen(
     QTest.mouseRelease(canvas.viewport(), Qt.MouseButton.LeftButton, pos=end)
     app.processEvents()
     assert len(canvas.model.atoms) == 3
-    assert group_state_for(canvas).groups[group_id].atom_ids == set(canvas.model.atoms)
-    drawn = snapshot_canvas_state_for(canvas)
+    assert canvas.runtime_state.group_state.groups[group_id].atom_ids == set(
+        canvas.model.atoms
+    )
+    drawn = canvas.services.canvas_document_session_service.snapshot_state()
     drawn_positions = {
         atom_id: (atom.x, atom.y) for atom_id, atom in canvas.model.atoms.items()
     }
@@ -40,7 +40,7 @@ def test_bond_drag_extends_group_then_keyboard_move_undo_reopen(
     newest = canvas.model.atoms[max(canvas.model.atoms)]
     _click(canvas, QPointF(newest.x, newest.y))
     QTest.keyClick(canvas, Qt.Key.Key_Right, Qt.KeyboardModifier.ShiftModifier)
-    moved = snapshot_canvas_state_for(canvas)
+    moved = canvas.services.canvas_document_session_service.snapshot_state()
     deltas = {
         (atom.x - drawn_positions[atom_id][0], atom.y - drawn_positions[atom_id][1])
         for atom_id, atom in canvas.model.atoms.items()
@@ -48,38 +48,38 @@ def test_bond_drag_extends_group_then_keyboard_move_undo_reopen(
     assert len(deltas) == 1 and deltas != {(0, 0)}
     assert moved["groups"] == drawn["groups"]
     QTest.keyClick(canvas, Qt.Key.Key_Z, Qt.KeyboardModifier.ControlModifier)
-    assert snapshot_canvas_state_for(canvas) == drawn
+    assert canvas.services.canvas_document_session_service.snapshot_state() == drawn
     QTest.keyClick(canvas, Qt.Key.Key_Z, Qt.KeyboardModifier.ControlModifier)
-    assert snapshot_canvas_state_for(canvas) == before
+    assert canvas.services.canvas_document_session_service.snapshot_state() == before
     for _ in range(2):
         QTest.keyClick(
             canvas,
             Qt.Key.Key_Z,
             Qt.KeyboardModifier.ControlModifier | Qt.KeyboardModifier.ShiftModifier,
         )
-    assert snapshot_canvas_state_for(canvas) == moved
+    assert canvas.services.canvas_document_session_service.snapshot_state() == moved
     path = tmp_path / "grouped-sprout.chemvas"
     documents = canvas.services.canvas_document_session_service
     assert documents.save_to_file(str(path)) == []
     documents.apply_state(read_document(path).state)
-    assert next(iter(group_state_for(canvas).groups.values())).atom_ids == set(
+    assert next(iter(canvas.runtime_state.group_state.groups.values())).atom_ids == set(
         canvas.model.atoms
     )
 
 
 def test_single_molecule_group_shortcut_shows_status_guidance(fresh_window, app):
     window, canvas = fresh_window
-    a = add_atom_for(canvas, "C", 0, 0)
-    b = add_atom_for(canvas, "C", 30, 0)
+    a = canvas.services.canvas_atom_mutation_service.add_atom("C", 0, 0)
+    b = canvas.services.canvas_atom_mutation_service.add_atom("C", 30, 0)
     add_bond_for(canvas, a, b)
     canvas.services.structure_build_service.render_model()
     _tool(window, "select")
     select_all_scene_items_for(canvas)
-    before = snapshot_canvas_state_for(canvas)
+    before = canvas.services.canvas_document_session_service.snapshot_state()
     history = canvas.services.history_service.capture_stack_snapshot()
     QTest.keyClick(canvas, Qt.Key.Key_G, Qt.KeyboardModifier.ControlModifier)
     app.processEvents()
     assert "Group needs at least two objects" in window.statusBar().currentMessage()
     assert "caption" in window.statusBar().currentMessage()
-    assert snapshot_canvas_state_for(canvas) == before
+    assert canvas.services.canvas_document_session_service.snapshot_state() == before
     canvas.services.history_service.verify_stack_snapshot(history)

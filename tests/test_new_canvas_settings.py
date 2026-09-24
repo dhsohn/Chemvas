@@ -8,19 +8,10 @@ from PyQt6.QtWidgets import QApplication
 
 from chemvas.bootstrap.window_registry import open_new_window
 from chemvas.shell.window_registry import open_windows
-from chemvas.ui.canvas.canvas_document_metadata_state import document_file_path_for
-from chemvas.ui.canvas.canvas_text_style_state import (
-    set_text_style_for,
-    text_style_state_for,
-)
+from chemvas.ui.canvas.canvas_text_style_state import set_text_style_for
 from chemvas.ui.canvas.canvas_tool_settings_state import set_tool_setting_for
-from chemvas.ui.canvas.canvas_window_access import snapshot_canvas_state_for
 from chemvas.ui.canvas.sheet_setup_access import set_sheet_setup_for
-from chemvas.ui.molecule.structure_mutation_access import add_atom_for
-from chemvas.ui.window.main_window_ports import (
-    active_canvas_for_window,
-    services_for_window,
-)
+from chemvas.ui.window.main_window_ports import active_canvas_for_window
 
 
 @pytest.fixture(scope="module")
@@ -37,9 +28,7 @@ def source(app):
     canvas = active_canvas_for_window(window)
     yield window, canvas
     for item in reversed(open_windows()):
-        services_for_window(item).canvas_document_service.mark_clean(
-            active_canvas_for_window(item)
-        )
+        item.services.canvas_document_service.mark_clean(active_canvas_for_window(item))
         item.close()
     app.processEvents()
 
@@ -88,30 +77,28 @@ def _new_canvas(window):
 def test_new_canvas_inherits_all_document_settings_without_content(source, tmp_path):
     window, canvas = source
     _customize(canvas)
-    add_atom_for(canvas, "O", 0, 0)
-    services = services_for_window(window)
+    canvas.services.canvas_atom_mutation_service.add_atom("O", 0, 0)
+    services = window.services
     services.document_action_service.save_canvas_to_path(
         window, str(tmp_path / "source.chemvas")
     )
-    before = snapshot_canvas_state_for(canvas)
+    before = canvas.services.canvas_document_session_service.snapshot_state()
     history = tuple(canvas.services.history_service.state.history)
 
     created_window, created = _new_canvas(window)
-    after = snapshot_canvas_state_for(created)
+    after = created.services.canvas_document_session_service.snapshot_state()
     assert after["settings"] == before["settings"]
     assert not created.model.atoms and not created.model.bonds
     assert not created.services.history_service.state.history
     assert not created.services.history_service.state.redo_stack
-    assert document_file_path_for(created) is None
-    assert not services_for_window(created_window).canvas_document_service.is_dirty(
-        created
-    )
-    assert snapshot_canvas_state_for(canvas) == before
+    assert created.runtime_state.document_metadata_state.file_path is None
+    assert not created_window.services.canvas_document_service.is_dirty(created)
+    assert canvas.services.canvas_document_session_service.snapshot_state() == before
     assert tuple(canvas.services.history_service.state.history) == history
     assert created_window is not window
 
     path = tmp_path / "inherited.chemvas"
-    services_for_window(created_window).document_action_service.save_canvas_to_path(
+    created_window.services.document_action_service.save_canvas_to_path(
         created_window, str(path)
     )
     from chemvas.core.document_io import read_document
@@ -124,11 +111,11 @@ def test_new_canvas_text_colors_are_independent_and_inheritance_is_transitive(so
     _customize(canvas)
     created_window, created = _new_canvas(window)
     assert (
-        snapshot_canvas_state_for(created)["settings"]
-        == snapshot_canvas_state_for(canvas)["settings"]
+        created.services.canvas_document_session_service.snapshot_state()["settings"]
+        == canvas.services.canvas_document_session_service.snapshot_state()["settings"]
     )
-    source_colors = text_style_state_for(canvas)
-    created_colors = text_style_state_for(created)
+    source_colors = canvas.runtime_state.text_style_state
+    created_colors = created.runtime_state.text_style_state
     for field in ("text_color", "note_box_color", "note_border_color"):
         original = QColor(getattr(source_colors, field))
         getattr(created_colors, field).setNamedColor("#abcdef")
@@ -136,14 +123,19 @@ def test_new_canvas_text_colors_are_independent_and_inheritance_is_transitive(so
     created.renderer.set_bond_length(31.0)
     _, third = _new_canvas(created_window)
     assert (
-        snapshot_canvas_state_for(third)["settings"]
-        == snapshot_canvas_state_for(created)["settings"]
+        third.services.canvas_document_session_service.snapshot_state()["settings"]
+        == created.services.canvas_document_session_service.snapshot_state()["settings"]
     )
 
 
 def test_plain_window_creation_does_not_inherit_reference_settings(source):
     window, canvas = source
-    defaults = snapshot_canvas_state_for(canvas)["settings"]
+    defaults = canvas.services.canvas_document_session_service.snapshot_state()[
+        "settings"
+    ]
     _customize(canvas)
     created = active_canvas_for_window(open_new_window(window))
-    assert snapshot_canvas_state_for(created)["settings"] == defaults
+    assert (
+        created.services.canvas_document_session_service.snapshot_state()["settings"]
+        == defaults
+    )

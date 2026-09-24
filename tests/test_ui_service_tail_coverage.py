@@ -33,10 +33,6 @@ from chemvas.ui.scene.note_item_access import (
 )
 from chemvas.ui.scene.scene_flip_state import flip_scene_item_state
 from chemvas.ui.scene.scene_paste_apply_logic import apply_paste_payload
-from chemvas.ui.selection.selection_state import (
-    selected_notes_for,
-    set_selected_notes_for,
-)
 from chemvas.ui.tools.handle_mutation_service import HandleMutationService
 from chemvas.ui.window.main_window_panel_toolbar import MainWindowPanelToolbarCallbacks
 
@@ -251,14 +247,14 @@ class UIServiceTailCoverageTest(unittest.TestCase):
                 ),
             ),
         )
-        set_selected_notes_for(canvas, [item])
+        canvas.runtime_state.selection_state.selected_notes = [item]
         canvas.scene().addItem(item)
         controller = CanvasNoteController(canvas)
 
         controller.handle_note_focus_out(item)
         # An unchanged note pushes no command, but clicking away deselects it.
         canvas.push_command.assert_not_called()
-        self.assertNotIn(item, selected_notes_for(canvas))
+        self.assertNotIn(item, canvas.runtime_state.selection_state.selected_notes)
 
         controller.begin_note_edit(item)
         # Re-editing a now-deselected note selects it again.

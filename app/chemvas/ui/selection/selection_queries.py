@@ -4,19 +4,14 @@ from PyQt6 import sip
 from PyQt6.QtCore import QObject, QPointF, Qt
 
 from chemvas.features.selection import build_selection_snapshot
-from chemvas.ui.canvas.canvas_atom_graphics_state import atom_dots_for, atom_items_for
-from chemvas.ui.canvas.canvas_bond_graphics_state import bond_items_for_id
 from chemvas.ui.canvas.canvas_mark_registry import mark_registry_for
 from chemvas.ui.canvas.canvas_model_access import (
     atom_for_id,
-    atoms_for,
     bond_for_id,
-    bonds_for,
 )
 from chemvas.ui.canvas.canvas_scene_items_state import ring_items_for
-from chemvas.ui.scene.scene_item_access import canvas_scene_for, item_is_in_scene
+from chemvas.ui.scene.scene_item_access import item_is_in_scene
 from chemvas.ui.scene.scene_signal_blocking import blocked_scene_signals
-from chemvas.ui.selection.selection_state import selected_notes_for
 
 TRANSFORM_SELECTION_EXCLUDED_KINDS = {
     "handle",
@@ -42,7 +37,7 @@ def append_ring_selection_atom_ids(canvas, atom_ids: set[int], ring_atom_ids) ->
 
 
 def append_polygon_selection_atom_ids(canvas, atom_ids: set[int], polygon) -> None:
-    for atom_id, atom in atoms_for(canvas).items():
+    for atom_id, atom in canvas.model.atoms.items():
         if polygon.containsPoint(QPointF(atom.x, atom.y), Qt.FillRule.WindingFill):
             atom_ids.add(atom_id)
 
@@ -93,7 +88,7 @@ def selected_ids_from_items_for(
 
 def selected_mark_atom_ids_for(canvas) -> set[int]:
     try:
-        model_atoms = atoms_for(canvas)
+        model_atoms = canvas.model.atoms
     except AttributeError:
         model_atoms = {}
     atom_ids: set[int] = set()
@@ -264,10 +259,10 @@ def selection_items_for_copy_for(canvas) -> list:
             add_with_children(child)
 
     def add_atom_graphics(atom_id: int) -> None:
-        atom_item = atom_items_for(canvas).get(atom_id)
+        atom_item = canvas.runtime_state.atom_graphics_state.atom_items.get(atom_id)
         if atom_item is not None:
             add_with_children(atom_item)
-        atom_dot = atom_dots_for(canvas).get(atom_id)
+        atom_dot = canvas.runtime_state.atom_graphics_state.atom_dots.get(atom_id)
         if atom_dot is not None:
             add_with_children(atom_dot)
 
@@ -277,7 +272,11 @@ def selection_items_for_copy_for(canvas) -> list:
             bond_id = item.data(1)
             if isinstance(bond_id, int):
                 bond = bond_for_id(canvas, bond_id)
-                for bond_item in bond_items_for_id(canvas, bond_id):
+                for (
+                    bond_item
+                ) in canvas.runtime_state.bond_graphics_state.bond_items.get(
+                    bond_id, []
+                ):
                     add_with_children(bond_item)
                 if bond is not None:
                     atom_ids.update((bond.a, bond.b))
@@ -291,12 +290,16 @@ def selection_items_for_copy_for(canvas) -> list:
     if atom_ids:
         for atom_id in sorted(atom_ids):
             add_atom_graphics(atom_id)
-        for bond_id, bond in enumerate(bonds_for(canvas)):
+        for bond_id, bond in enumerate(canvas.model.bonds):
             if bond is not None and bond.a in atom_ids and bond.b in atom_ids:
-                for bond_item in bond_items_for_id(canvas, bond_id):
+                for (
+                    bond_item
+                ) in canvas.runtime_state.bond_graphics_state.bond_items.get(
+                    bond_id, []
+                ):
                     add_with_children(bond_item)
         for ring in ring_items_for(canvas):
-            if not item_is_in_scene(canvas_scene_for(canvas), ring):
+            if not item_is_in_scene(canvas.scene(), ring):
                 continue
             ring_ids = ring.data(2)
             if (
@@ -311,7 +314,7 @@ def selection_items_for_copy_for(canvas) -> list:
         marks = mark_registry_for(canvas)
         for atom_id in sorted(atom_ids):
             for mark in marks.get_for_atom(atom_id) or ():
-                if item_is_in_scene(canvas_scene_for(canvas), mark):
+                if item_is_in_scene(canvas.scene(), mark):
                     add_with_children(mark)
     return items
 
@@ -387,7 +390,7 @@ def selected_scene_notes_for(canvas):
     if scene_obj is None:
         return []
     notes = []
-    for note in selected_notes_for(canvas):
+    for note in canvas.runtime_state.selection_state.selected_notes:
         try:
             attached_scene = note.scene()
         except RuntimeError:

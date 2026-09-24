@@ -6,7 +6,6 @@ from PyQt6 import sip
 from PyQt6.QtGui import QColor, QPainterPath
 from PyQt6.QtWidgets import QComboBox, QDialog, QDialogButtonBox, QLabel, QVBoxLayout
 
-from chemvas.ui.canvas.canvas_model_access import atoms_for
 from chemvas.ui.canvas.canvas_window_access import notify_error_for
 from chemvas.ui.scene.mark_ownership import mark_owner_text_for
 from chemvas.ui.scene.scene_item_access import (
@@ -14,10 +13,7 @@ from chemvas.ui.scene.scene_item_access import (
     remove_item_from_canvas_scene,
 )
 from chemvas.ui.selection.selection_outline_items import selection_object_outline_item
-from chemvas.ui.selection.selection_state import (
-    append_selection_outline_for,
-    selection_outlines_for,
-)
+from chemvas.ui.selection.selection_state import append_selection_outline_for
 from chemvas.ui.selection.selection_style_access import (
     selection_indicator_rect_for_atom_for,
 )
@@ -44,7 +40,7 @@ class MarkReassignmentDialog(QDialog):
         owner = (item.data(1) or {}).get("atom_id")
         if owner is None:
             self.atoms.addItem("Free mark (unchanged)", None)
-        for atom_id, atom in sorted(atoms_for(canvas).items()):
+        for atom_id, atom in sorted(canvas.model.atoms.items()):
             suffix = " — current owner" if atom_id == owner else ""
             self.atoms.addItem(
                 f"{atom.element} #{atom_id}  ({atom.x:.2f}, {atom.y:.2f}){suffix}",
@@ -105,7 +101,7 @@ class MarkReassignmentDialog(QDialog):
             return accepted, self.atoms.currentData()
         finally:
             if not sip.isdeleted(canvas):
-                outlines = selection_outlines_for(canvas)
+                outlines = canvas.runtime_state.selection_state.outlines
                 if self._preview in outlines:
                     outlines.remove(self._preview)
                 if not sip.isdeleted(self._preview):

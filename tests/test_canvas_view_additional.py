@@ -10,7 +10,6 @@ from chemvas.ui.history.history_atom_position_restore import (
     set_atom_positions_for_history,
 )
 from chemvas.ui.history.history_operations import CanvasHistoryOperations
-from chemvas.ui.selection.selection_state import selection_for
 from tests.ring_support import make_ring, seed_ring_items
 from tests.runtime_services import canvas_runtime_services
 from tests.runtime_state import canvas_runtime_state
@@ -32,14 +31,11 @@ from chemvas.domain.document import Atom, Bond, MoleculeModel
 from chemvas.ui.annotations.state import atom_state_dict_for, scene_item_state_for
 from chemvas.ui.canvas.canvas_atom_graphics_state import (
     CanvasAtomGraphicsState,
-    atom_dots_for,
-    atom_items_for,
     set_atom_dots_for,
     set_atom_items_for,
 )
 from chemvas.ui.canvas.canvas_bond_graphics_state import (
     CanvasBondGraphicsState,
-    bond_items_for,
     set_bond_items_for,
 )
 from chemvas.ui.canvas.canvas_callback_state import CanvasCallbackState
@@ -55,7 +51,6 @@ from chemvas.ui.canvas.canvas_history_service import CanvasHistoryService
 from chemvas.ui.canvas.canvas_history_state import CanvasHistoryState
 from chemvas.ui.canvas.canvas_mark_registry import CanvasMarkRegistry
 from chemvas.ui.canvas.canvas_ring_fill_scene_access import (
-    create_ring_fill_item_for,
     update_ring_fills_for_atoms_for,
 )
 from chemvas.ui.canvas.canvas_rotation_state import CanvasRotationState
@@ -66,57 +61,30 @@ from chemvas.ui.canvas.canvas_smiles_input_state import CanvasSmilesInputState
 from chemvas.ui.canvas.canvas_text_style_state import (
     CanvasTextStyleState,
     set_text_style_for,
-    text_style_state_for,
 )
 from chemvas.ui.canvas.canvas_tool_mode_controller import CanvasToolModeController
-from chemvas.ui.canvas.canvas_tool_settings_state import (
-    CanvasToolSettingsState,
-    tool_settings_state_for,
-)
-from chemvas.ui.canvas.pick_radius_access import (
-    atom_pick_radius_for,
-    bond_pick_radius_for,
-)
+from chemvas.ui.canvas.canvas_tool_settings_state import CanvasToolSettingsState
+from chemvas.ui.canvas.pick_radius_access import atom_pick_radius_for
 from chemvas.ui.history.history_commands import UpdateSceneItemCommand
-from chemvas.ui.molecule.atom_coords_access import (
-    CanvasAtomCoords3DState,
-    atom_coords_3d_for,
-)
+from chemvas.ui.molecule.atom_coords_access import CanvasAtomCoords3DState
 from chemvas.ui.molecule.atom_label_access import (
     add_or_update_atom_label,
-    atom_item_for_id_for,
     clear_atom_label_for,
-    prompt_atom_label_for,
 )
 from chemvas.ui.molecule.structure_mutation_access import (
-    add_atom_for,
     add_benzene_ring_for,
     add_bond_between_points_for,
     add_bond_for,
 )
 from chemvas.ui.scene.scene_decoration_access import (
-    add_arrow_for,
     add_mark_for,
-    add_orbital_for,
     add_ts_bracket_for,
-    preview_arrow_for,
     preview_ts_bracket_for,
 )
 from chemvas.ui.scene.scene_decoration_build_access import (
     build_arrow_item_for,
-    build_curved_arrow_path_for,
-    build_orbital_items_for,
     build_ts_bracket_item_for,
     ts_bracket_path_for,
-)
-from chemvas.ui.scene.scene_item_access import (
-    apply_scene_item_state,
-    attach_scene_item,
-    bond_ids_for_ring_item,
-    create_scene_item_from_state,
-    refresh_bond_geometry_for_ring_item,
-    remove_scene_item,
-    restore_scene_item,
 )
 from chemvas.ui.selection.selection_info_state import SelectionInfoState
 from chemvas.ui.selection.selection_queries import (
@@ -125,16 +93,7 @@ from chemvas.ui.selection.selection_queries import (
     selected_items_for_transform_for,
     selection_items_for_copy_for,
 )
-from chemvas.ui.selection.selection_state import (
-    SelectionState,
-    selected_notes_for,
-    set_selected_notes_for,
-)
-from chemvas.ui.tools.handle_mutation_access import (
-    update_curved_control_for,
-    update_orbital_rotate_for,
-    update_orbital_scale_for,
-)
+from chemvas.ui.selection.selection_state import SelectionState
 
 
 def _selection_controller_for(view):
@@ -436,7 +395,9 @@ class CanvasViewAdditionalTest(unittest.TestCase):
             tool_view.services.insert_controller.cancel_smiles_insert.call_count,
             3,
         )
-        self.assertEqual(tool_settings_state_for(tool_view).mark_kind, "circled_plus")
+        self.assertEqual(
+            tool_view.runtime_state.tool_settings_state.mark_kind, "circled_plus"
+        )
         self.assertEqual(tool_view.refresh_selection_outline.call_count, 3)
         self.assertEqual(
             tool_view.runtime_state.callback_state.tool_change.call_count, 3
@@ -486,13 +447,24 @@ class CanvasViewAdditionalTest(unittest.TestCase):
 
         self.assertEqual(scene_item_state_for(view, None), {})
         for kind in ("ring", "note", "mark", "arrow", "ts_bracket", "orbital"):
-            self.assertEqual(create_scene_item_from_state(view, {"kind": kind}), "item")
-        self.assertEqual(bond_ids_for_ring_item(view, "ring-item"), {9})
-        refresh_bond_geometry_for_ring_item(view, "ring-item")
-        attach_scene_item(view, "attached-item")
-        restore_scene_item(view, "scene-item")
-        remove_scene_item(view, "scene-item")
-        apply_scene_item_state(view, "scene-item", {"kind": "note"})
+            self.assertEqual(
+                view.services.scene_item_controller.create_scene_item_from_state(
+                    {"kind": kind}
+                ),
+                "item",
+            )
+        self.assertEqual(
+            view.services.scene_item_controller.bond_ids_for_ring_item("ring-item"), {9}
+        )
+        view.services.scene_item_controller.refresh_bond_geometry_for_ring_item(
+            "ring-item"
+        )
+        view.services.scene_item_controller.attach_scene_item("attached-item")
+        view.services.scene_item_controller.restore_scene_item("scene-item")
+        view.services.scene_item_controller.remove_scene_item("scene-item")
+        view.services.scene_item_controller.apply_scene_item_state(
+            "scene-item", {"kind": "note"}
+        )
 
         add_or_update_atom_label(
             view,
@@ -538,7 +510,7 @@ class CanvasViewAdditionalTest(unittest.TestCase):
 
         clear_atom_label_for(view, 1)
         clear_atom_label_for(view, 99)
-        prompt_atom_label_for(view, 2)
+        view.services.atom_label_service.prompt_atom_label(2)
 
         atom_label_service.add_or_update_atom_label.assert_called_once_with(
             1, "C", show_carbon=False
@@ -677,11 +649,11 @@ class CanvasViewAdditionalTest(unittest.TestCase):
             services=canvas_runtime_services(selection=selection_controller)
         )
 
-        selection_for(view).select_note(item, additive=True)
-        selection_for(view).toggle_note_selection(item)
-        selection_for(view).clear_note_selection()
-        selection_for(view).update_note_selection_box(item)
-        selection_for(view).update_selection_outline()
+        view.services.selection.select_note(item, additive=True)
+        view.services.selection.toggle_note_selection(item)
+        view.services.selection.clear_note_selection()
+        view.services.selection.update_note_selection_box(item)
+        view.services.selection.update_selection_outline()
         view.services.selection.shift_selection_outlines(1.5, -2.0)
 
         selection_controller.select_note.assert_called_once_with(item, additive=True)
@@ -698,9 +670,15 @@ class CanvasViewAdditionalTest(unittest.TestCase):
             services=canvas_runtime_services(handle_mutation_service=mutation_service)
         )
 
-        update_orbital_scale_for(view, item, QPointF(3.0, 4.0))
-        update_orbital_rotate_for(view, item, QPointF(5.0, 6.0))
-        update_curved_control_for(view, item, QPointF(7.0, 8.0))
+        view.services.handle_mutation_service.update_orbital_scale(
+            item, QPointF(3.0, 4.0)
+        )
+        view.services.handle_mutation_service.update_orbital_rotate(
+            item, QPointF(5.0, 6.0)
+        )
+        view.services.handle_mutation_service.update_curved_control(
+            item, QPointF(7.0, 8.0)
+        )
         view.services.handle_mutation_service.update_arrow_endpoint(
             item, QPointF(9.0, 10.0), "start"
         )
@@ -725,9 +703,15 @@ class CanvasViewAdditionalTest(unittest.TestCase):
             services=canvas_runtime_services(handle_mutation_service=mutation_service)
         )
 
-        update_orbital_scale_for(view, item, QPointF(3.0, 4.0))
-        update_orbital_rotate_for(view, item, QPointF(5.0, 6.0))
-        update_curved_control_for(view, item, QPointF(7.0, 8.0))
+        view.services.handle_mutation_service.update_orbital_scale(
+            item, QPointF(3.0, 4.0)
+        )
+        view.services.handle_mutation_service.update_orbital_rotate(
+            item, QPointF(5.0, 6.0)
+        )
+        view.services.handle_mutation_service.update_curved_control(
+            item, QPointF(7.0, 8.0)
+        )
         view.services.handle_mutation_service.update_arrow_endpoint(
             item, QPointF(9.0, 10.0), "start"
         )
@@ -762,14 +746,19 @@ class CanvasViewAdditionalTest(unittest.TestCase):
             "mark",
         )
         self.assertEqual(
-            add_arrow_for(view, QPointF(0.0, 0.0), QPointF(4.0, 5.0), "reaction"),
+            view.services.scene_decoration_service.add_arrow(
+                QPointF(0.0, 0.0), QPointF(4.0, 5.0), "reaction"
+            ),
             "arrow",
         )
         self.assertEqual(
             add_ts_bracket_for(view, QRectF(QPointF(0.0, 0.0), QPointF(3.0, 6.0))),
             "ts",
         )
-        self.assertEqual(add_orbital_for(view, QPointF(9.0, 8.0)), "orbital")
+        self.assertEqual(
+            view.services.scene_decoration_service.add_orbital(QPointF(9.0, 8.0)),
+            "orbital",
+        )
 
         decoration_service.add_mark.assert_called_once_with(
             QPointF(1.0, 2.0), kind="plus"
@@ -798,7 +787,7 @@ class CanvasViewAdditionalTest(unittest.TestCase):
         rect = QRectF(1.0, 2.0, 3.0, 4.0)
 
         self.assertIs(
-            preview_arrow_for(view, start, end, "reaction"),
+            view.services.arrow_build_service.preview_arrow(start, end, "reaction"),
             arrow_service.preview_arrow.return_value,
         )
         self.assertIs(
@@ -806,7 +795,9 @@ class CanvasViewAdditionalTest(unittest.TestCase):
             arrow_service.build_arrow_item.return_value,
         )
         self.assertIs(
-            build_curved_arrow_path_for(view, start, end, control, True),
+            view.services.arrow_build_service.build_curved_arrow_path(
+                start, end, control, True
+            ),
             arrow_service.build_curved_arrow_path.return_value,
         )
         self.assertIs(
@@ -822,7 +813,9 @@ class CanvasViewAdditionalTest(unittest.TestCase):
             decoration_service.preview_ts_bracket.return_value,
         )
         self.assertIs(
-            build_orbital_items_for(view, start, "sp2"),
+            view.services.scene_decoration_build_service.build_orbital_items(
+                start, "sp2"
+            ),
             decoration_service.build_orbital_items.return_value,
         )
 
@@ -881,7 +874,7 @@ class CanvasViewAdditionalTest(unittest.TestCase):
             services=canvas_runtime_services(atom_label_service=atom_label_service)
         )
 
-        self.assertIs(atom_item_for_id_for(view, 5), atom_item)
+        self.assertIs(view.services.atom_label_service.atom_item_for_id(5), atom_item)
         atom_label_service.atom_item_for_id.assert_called_once_with(5)
 
     def test_history_recording_wrappers_delegate_to_service(self) -> None:
@@ -972,7 +965,12 @@ class CanvasViewAdditionalTest(unittest.TestCase):
             )
         )
 
-        self.assertEqual(add_atom_for(mutation_view, "N", 1.5, -2.5), 7)
+        self.assertEqual(
+            mutation_view.services.canvas_atom_mutation_service.add_atom(
+                "N", 1.5, -2.5
+            ),
+            7,
+        )
         CanvasHistoryOperations(mutation_view).remove_atom_for_history(
             1, remove_marks=False
         )
@@ -1037,12 +1035,14 @@ class CanvasViewAdditionalTest(unittest.TestCase):
             )
         )
         self.assertEqual(atom_pick_radius_for(radius_view), 6.4)
-        self.assertEqual(bond_pick_radius_for(radius_view), 10.56)
+        self.assertEqual(radius_view.renderer.style.bond_length_px * 0.528, 10.56)
 
         with self.assertRaises(AttributeError):
             atom_pick_radius_for(SimpleNamespace())
         with self.assertRaises(AttributeError):
-            bond_pick_radius_for(SimpleNamespace(renderer=SimpleNamespace()))
+            SimpleNamespace(
+                renderer=SimpleNamespace()
+            ).renderer.style.bond_length_px * 0.528
 
     def test_style_and_text_setting_helpers_guard_inputs_and_apply_presets(
         self,
@@ -1057,7 +1057,7 @@ class CanvasViewAdditionalTest(unittest.TestCase):
         note = note_controller.create_text_note(QPointF(), "Caption")
         style_controller = style_view.services.style_controller
         tool_mode_controller = style_view.services.tool_mode_controller
-        text_style = text_style_state_for(style_view)
+        text_style = style_view.runtime_state.text_style_state
 
         style_controller.set_text_color(QColor("#ff00aa"))
         self.assertEqual(text_style.text_color.name(), "#ff00aa")
@@ -1132,13 +1132,13 @@ class CanvasViewAdditionalTest(unittest.TestCase):
                 history_service=SimpleNamespace(push=mock.Mock())
             ),
         )
-        set_selected_notes_for(note_view, [])
-        note_view.clear_note_selection = lambda: selection_for(
-            note_view
-        ).clear_note_selection()
-        note_view.select_note = lambda target, additive=False: selection_for(
-            note_view
-        ).select_note(target, additive=additive)
+        note_view.runtime_state.selection_state.selected_notes = []
+        note_view.clear_note_selection = lambda: (
+            note_view.services.selection.clear_note_selection()
+        )
+        note_view.select_note = lambda target, additive=False: (
+            note_view.services.selection.select_note(target, additive=additive)
+        )
         selection_controller = _selection_controller_for(note_view)
         note_controller = CanvasNoteController(note_view)
         note_view.services = canvas_runtime_services(
@@ -1146,8 +1146,8 @@ class CanvasViewAdditionalTest(unittest.TestCase):
             note_controller=note_controller,
         )
 
-        selection_for(note_view).select_note(item, additive=False)
-        self.assertEqual(selected_notes_for(note_view), [item])
+        note_view.services.selection.select_note(item, additive=False)
+        self.assertEqual(note_view.runtime_state.selection_state.selected_notes, [item])
         selection_box = item.data(21)
         self.assertIsNotNone(selection_box)
         self.assertTrue(selection_box.isVisible())
@@ -1164,20 +1164,20 @@ class CanvasViewAdditionalTest(unittest.TestCase):
         self.assertEqual(item.toPlainText(), "Updated")
 
         note_view.services.note_controller.begin_note_edit(item)
-        self.assertIn(item, selected_notes_for(note_view))
+        self.assertIn(item, note_view.runtime_state.selection_state.selected_notes)
         note_view.setFocus.assert_called()
         self.assertIs(scene.focusItem(), item)
         self.assertNotEqual(
             item.textInteractionFlags(), Qt.TextInteractionFlag.NoTextInteraction
         )
 
-        selection_for(note_view).toggle_note_selection(item)
-        self.assertEqual(selected_notes_for(note_view), [])
+        note_view.services.selection.toggle_note_selection(item)
+        self.assertEqual(note_view.runtime_state.selection_state.selected_notes, [])
         self.assertFalse(item.data(21).isVisible())
 
-        selection_for(note_view).select_note(item, additive=False)
-        selection_for(note_view).clear_note_selection()
-        self.assertEqual(selected_notes_for(note_view), [])
+        note_view.services.selection.select_note(item, additive=False)
+        note_view.services.selection.clear_note_selection()
+        self.assertEqual(note_view.runtime_state.selection_state.selected_notes, [])
         self.assertFalse(item.data(21).isVisible())
 
         set_text_style_for(note_view, "note_box_enabled", False)
@@ -1219,10 +1219,10 @@ class CanvasViewAdditionalTest(unittest.TestCase):
                 scene_items_state=CanvasSceneItemsState()
             ),
         )
-        set_selected_notes_for(
-            transform_view,
-            [selected_note, _FakeItem("note", scene_token=object())],
-        )
+        transform_view.runtime_state.selection_state.selected_notes = [
+            selected_note,
+            _FakeItem("note", scene_token=object()),
+        ]
         transformed_items = selected_items_for_transform_for(transform_view)
         self.assertEqual([item.data(0) for item in transformed_items], ["atom", "note"])
 
@@ -1292,9 +1292,10 @@ class CanvasViewAdditionalTest(unittest.TestCase):
                 bond_graphics_state=CanvasBondGraphicsState(),
             ),
         )
-        set_selected_notes_for(
-            copy_view, [note, _FakeItem("note", scene_token=object())]
-        )
+        copy_view.runtime_state.selection_state.selected_notes = [
+            note,
+            _FakeItem("note", scene_token=object()),
+        ]
         set_bond_items_for(copy_view, {5: [bond_graphic]})
         copied_items = selection_items_for_copy_for(copy_view)
         self.assertEqual(
@@ -1354,8 +1355,12 @@ class CanvasViewAdditionalTest(unittest.TestCase):
         )
 
         self.assertEqual((view.model.atoms[1].x, view.model.atoms[1].y), (2.0, 3.0))
-        self.assertEqual(atom_coords_3d_for(view)[1], (2.0, 3.0, 1.0))
-        self.assertEqual(atom_coords_3d_for(view)[2], (7.0, 8.0, 9.0))
+        self.assertEqual(
+            view.runtime_state.atom_coords_3d_state.atom_coords_3d[1], (2.0, 3.0, 1.0)
+        )
+        self.assertEqual(
+            view.runtime_state.atom_coords_3d_state.atom_coords_3d[2], (7.0, 8.0, 9.0)
+        )
         view.services.atom_label_service.position_label.assert_called_once_with(
             label_item, 2.0, 3.0
         )
@@ -1452,10 +1457,8 @@ class CanvasViewAdditionalTest(unittest.TestCase):
 
         update_ring_fills_for_atoms_for(view, {1, 2, 3})
         self.assertIs(
-            create_ring_fill_item_for(
-                view,
-                [QPointF(0.0, 0.0), QPointF(2.0, 0.0), QPointF(1.0, 1.5)],
-                [1, 2, 3],
+            view.services.canvas_ring_fill_scene_service.create_ring_fill_item(
+                [QPointF(0.0, 0.0), QPointF(2.0, 0.0), QPointF(1.0, 1.5)], [1, 2, 3]
             ),
             ring_item,
         )
@@ -1700,9 +1703,9 @@ class CanvasViewAdditionalTest(unittest.TestCase):
         self.assertEqual(
             recurse_service._resolve_ring_structure_targets(ring_item),
             (
-                atom_items_for(recurse_view)[1],
-                atom_dots_for(recurse_view)[2],
-                bond_items_for(recurse_view)[3][0],
+                recurse_view.runtime_state.atom_graphics_state.atom_items[1],
+                recurse_view.runtime_state.atom_graphics_state.atom_dots[2],
+                recurse_view.runtime_state.bond_graphics_state.bond_items[3][0],
             ),
         )
         graph_service.bond_sets_for_atoms.assert_called_once_with({1, 2})

@@ -20,11 +20,9 @@ from PyQt6.QtTest import QTest
 from PyQt6.QtWidgets import QApplication, QDialog, QToolButton, QWidget
 
 from chemvas.bootstrap.main_window import build_main_window
-from chemvas.ui.selection.selection_state import selection_outlines_for
 from chemvas.ui.window.main_window_ports import (
     active_canvas_for_window,
     set_zoom_percent_for_window,
-    tool_action_for_window,
 )
 
 if TYPE_CHECKING:
@@ -191,7 +189,7 @@ class Walkthrough:
     # -- window controls -----------------------------------------------------
 
     def set_tool(self, key: str) -> None:
-        tool_action_for_window(self.window, key).trigger()
+        self.window.ui_references.tool_action_for_key(key).trigger()
         self.app.processEvents()
 
     def action(self, text: str) -> QAction:
@@ -256,7 +254,7 @@ class Walkthrough:
 
         knobs = [
             item
-            for item in selection_outlines_for(self.canvas)
+            for item in self.canvas.runtime_state.selection_state.outlines
             if item.data(1) == ROTATION_HANDLE_TYPE
         ]
         if len(knobs) != 1:
@@ -293,9 +291,8 @@ class Walkthrough:
         self.app.processEvents()
 
     def close(self) -> None:
-        from chemvas.ui.window.main_window_ports import services_for_window
 
-        services_for_window(self.window).canvas_document_service.mark_clean(self.canvas)
+        self.window.services.canvas_document_service.mark_clean(self.canvas)
         self.window.close()
         self.app.processEvents()
 

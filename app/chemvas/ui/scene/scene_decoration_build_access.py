@@ -67,26 +67,8 @@ def build_shape_item_for(
     )
 
 
-def shape_pen_for(canvas, stroke_style: str):
-    return canvas.services.scene_decoration_build_service.shape_pen(stroke_style)
-
-
-def build_orbital_items_for(canvas, center, kind: str):
-    return canvas.services.scene_decoration_build_service.build_orbital_items(
-        center, kind
-    )
-
-
-def build_curved_arrow_path_for(canvas, start, end, control, double: bool):
-    return canvas.services.arrow_build_service.build_curved_arrow_path(
-        start, end, control, double
-    )
-
-
 __all__ = [
     "build_arrow_item_for",
-    "build_curved_arrow_path_for",
-    "build_orbital_items_for",
     "build_shape_item_for",
     "build_ts_bracket_item_for",
     "mark_snapped_points_for",
